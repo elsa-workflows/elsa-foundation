@@ -384,8 +384,17 @@ public sealed partial class JavaScriptExpressionToolingProvider
                     }
                     break;
                 case MemberExpression member when TryGetMutationPath(member, out var path):
-                    if (path == "globalThis.Math" && !nodeScopes[member].IsBound("globalThis"))
-                        MathRootMayBeReplaced = true;
+                    if (!nodeScopes[member].IsBound("globalThis"))
+                    {
+                        MathRootMayBeReplaced |= path == "globalThis.Math";
+                        GlobalThisMayBeReplaced |= path == "globalThis.globalThis";
+                    }
+                    break;
+                case MemberExpression { Computed: true } member
+                    when Unwrap(member.Object) is Identifier { Name: "globalThis" } && !nodeScopes[member].IsBound("globalThis"):
+                    // An unresolved direct key could replace either writable intrinsic root; do not evaluate it.
+                    MathRootMayBeReplaced = true;
+                    GlobalThisMayBeReplaced = true;
                     break;
                 case RestElement rest:
                     RecordPotentialReplacement(rest.Argument);

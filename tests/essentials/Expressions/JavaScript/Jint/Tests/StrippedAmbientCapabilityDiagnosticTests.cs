@@ -26,6 +26,16 @@ public sealed class StrippedAmbientCapabilityDiagnosticTests
     [InlineData("Math.random()", "Math.random")]
     [InlineData("\"multi \" +\n    Math.random()", "Math.random")]
     [InlineData("Math.abs(1) + Math.random()", "Math.random")]
+    [InlineData("typeof (('x').missing ?? Date.now)", "Date")]
+    [InlineData("(() => { Math = null; return typeof (globalThis.Math ?? Date.now); })()", "Date")]
+    [InlineData("(() => { globalThis.Math = null; return typeof (globalThis.Math ?? Date.now); })()", "Date")]
+    [InlineData("(() => { globalThis.globalThis = { Date: {} }; return typeof globalThis.Date?.[Math.random()]; })()", "Math.random")]
+    [InlineData("(() => { globalThis['globalThis'] = { Date: {} }; return typeof globalThis.Date?.[Math.random()]; })()", "Math.random")]
+    [InlineData("(() => { globalThis.globalThis = null; return typeof (globalThis ?? Date.now); })()", "Date")]
+    [InlineData("(() => { globalThis[`globalThis`] = null; return typeof (globalThis ?? Date.now); })()", "Date")]
+    [InlineData("(() => { globalThis[`Math`] = null; return typeof (globalThis.Math ?? Date.now); })()", "Date")]
+    [InlineData("(() => { const key = 'Math'; globalThis[key] = null; return typeof (globalThis.Math ?? Date.now); })()", "Date")]
+    [InlineData("typeof ((Date?.now + 'x').missing ?? Math.random())", "Math.random")]
     [InlineData("(() => { globalThis = { Date: {} }; return typeof globalThis.Date?.[Math.random()]; })()", "Math.random")]
     public async Task Reaching_for_a_stripped_ambient_capability_yields_an_actionable_error(string source, string capability)
     {
@@ -82,6 +92,13 @@ public sealed class StrippedAmbientCapabilityDiagnosticTests
     [Theory]
     [InlineData("typeof (Date?.now ?? 'fallback')", "string")]
     [InlineData("typeof (Date?.now + 'fallback')", "string")]
+    [InlineData("typeof ('fallback' ?? Date.now)", "string")]
+    [InlineData("typeof (false ?? Math.random())", "boolean")]
+    [InlineData("typeof (0 ?? Date.now)", "number")]
+    [InlineData("typeof (null ?? Date?.now)", "undefined")]
+    [InlineData("typeof (Date?.now ?? null)?.[Math.random()]", "undefined")]
+    [InlineData("typeof (Date?.now ?? null)?.(Math.random())", "undefined")]
+    [InlineData("typeof (globalThis ?? Date.now)", "object")]
     public async Task Optional_typeof_probes_can_compose_with_literal_operands(string source, string expected)
     {
         var result = await EvaluateAsync(source);
@@ -109,6 +126,11 @@ public sealed class StrippedAmbientCapabilityDiagnosticTests
     [InlineData("globalThis['Math'] = {}, globalThis.Math.random()")]
     [InlineData("globalThis = { Math: {} }, globalThis.Math.random()")]
     [InlineData("globalThis = { Date: {} }, globalThis.Date.now()")]
+    [InlineData("globalThis.globalThis = { Date: {} }, globalThis.Date.now()")]
+    [InlineData("globalThis['globalThis'] = { Date: {} }, globalThis.Date.now()")]
+    [InlineData("globalThis[`globalThis`] = { Date: {} }, globalThis.Date.now()")]
+    [InlineData("globalThis[`Math`] = {}, globalThis.Math.random()")]
+    [InlineData("(() => { const key = 'Math'; globalThis[key] = {}; return Math.random(); })()")]
     public async Task An_unrelated_runtime_error_is_not_reframed_as_a_capability_error(string source)
     {
         // Unrelated JavaScript failures are author/runtime errors, not stripped-capability reaches; they must keep

@@ -47,8 +47,10 @@ public sealed partial class JavaScriptExpressionToolingProvider
                     return AnalyzeNullishCoalescing(logical, facts);
                 case BinaryExpression { Operator: Operator.Addition } binary:
                     return AnalyzeAddition(binary, facts, inOptionalChain);
-                case Literal { Kind: TokenKind.NullLiteral or TokenKind.BooleanLiteral or TokenKind.StringLiteral or TokenKind.NumericLiteral }:
-                    return TypeofProbeValue.PrimitiveLiteral;
+                case Literal { Kind: TokenKind.NullLiteral }:
+                    return TypeofProbeValue.NullLiteral;
+                case Literal { Kind: TokenKind.BooleanLiteral or TokenKind.StringLiteral or TokenKind.NumericLiteral }:
+                    return TypeofProbeValue.NonNullishPrimitive;
                 default:
                     return TypeofProbeValue.Unknown;
             }
@@ -70,7 +72,7 @@ public sealed partial class JavaScriptExpressionToolingProvider
             if (target is TypeofProbeValue.Unresolvable or TypeofProbeValue.Unsafe)
                 return TypeofProbeValue.Unsafe;
 
-            if (target == TypeofProbeValue.Undefined)
+            if (target is TypeofProbeValue.Undefined or TypeofProbeValue.NullLiteral)
             {
                 if (!member.Optional)
                     return TypeofProbeValue.Unsafe;
@@ -82,11 +84,12 @@ public sealed partial class JavaScriptExpressionToolingProvider
                 return TypeofProbeValue.ShortCircuited;
             }
 
-            if (target != TypeofProbeValue.Present)
-                return target;
-
             facts.Merge(objectFacts);
-            if (TryGetStaticPath(member, out var staticPath) && staticPath == "globalThis.Math" && !mutations.GlobalThisMayBeReplaced)
+            if (target != TypeofProbeValue.Present)
+                return TypeofProbeValue.Unknown;
+
+            if (TryGetStaticPath(member, out var staticPath) && staticPath == "globalThis.Math" &&
+                !mutations.GlobalThisMayBeReplaced && !mutations.MathRootMayBeReplaced)
             {
                 facts.SafeNodes.Add(member);
                 return TypeofProbeValue.Present;
@@ -114,7 +117,7 @@ public sealed partial class JavaScriptExpressionToolingProvider
             if (callee is TypeofProbeValue.Unresolvable or TypeofProbeValue.Unsafe)
                 return TypeofProbeValue.Unsafe;
 
-            if (callee == TypeofProbeValue.Undefined)
+            if (callee is TypeofProbeValue.Undefined or TypeofProbeValue.NullLiteral)
             {
                 if (!call.Optional)
                     return TypeofProbeValue.Unsafe;
@@ -133,22 +136,25 @@ public sealed partial class JavaScriptExpressionToolingProvider
         {
             var leftFacts = new TypeofProbeFacts();
             var left = AnalyzeTypeofProbe(logical.Left, leftFacts, inOptionalChain: false);
+            facts.Merge(leftFacts);
             if (left is TypeofProbeValue.Unsafe or TypeofProbeValue.Unresolvable)
                 return TypeofProbeValue.Unsafe;
 
-            if (left != TypeofProbeValue.Undefined)
+            if (left is TypeofProbeValue.NonNullishPrimitive or TypeofProbeValue.Present)
             {
-                facts.Merge(leftFacts);
-                return TypeofProbeValue.Unknown;
+                facts.SkippedNodes.Add(logical.Right);
+                return left;
             }
+
+            if (left is not (TypeofProbeValue.Undefined or TypeofProbeValue.NullLiteral))
+                return TypeofProbeValue.Unknown;
 
             var rightFacts = new TypeofProbeFacts();
             var right = AnalyzeTypeofProbe(logical.Right, rightFacts, inOptionalChain: false);
-            facts.Merge(leftFacts);
+            facts.Merge(rightFacts);
             if (right is TypeofProbeValue.Unsafe or TypeofProbeValue.Unresolvable)
                 return TypeofProbeValue.Unsafe;
 
-            facts.Merge(rightFacts);
             return right;
         }
 
@@ -156,28 +162,20 @@ public sealed partial class JavaScriptExpressionToolingProvider
         {
             var leftFacts = new TypeofProbeFacts();
             var left = AnalyzeTypeofProbe(binary.Left, leftFacts, inOptionalChain);
+            facts.Merge(leftFacts);
             if (left is TypeofProbeValue.Unsafe or TypeofProbeValue.Unresolvable)
                 return TypeofProbeValue.Unsafe;
 
             var rightFacts = new TypeofProbeFacts();
             var right = AnalyzeTypeofProbe(binary.Right, rightFacts, inOptionalChain);
+            facts.Merge(rightFacts);
             if (right is TypeofProbeValue.Unsafe or TypeofProbeValue.Unresolvable)
-            {
-                if (left == TypeofProbeValue.Undefined)
-                    facts.Merge(leftFacts);
                 return TypeofProbeValue.Unsafe;
-            }
 
-            if (left is (TypeofProbeValue.Undefined or TypeofProbeValue.PrimitiveLiteral) &&
-                right is (TypeofProbeValue.Undefined or TypeofProbeValue.PrimitiveLiteral))
-            {
-                facts.Merge(leftFacts);
-                facts.Merge(rightFacts);
-                return TypeofProbeValue.PrimitiveLiteral;
-            }
+            if (left is (TypeofProbeValue.Undefined or TypeofProbeValue.NullLiteral or TypeofProbeValue.NonNullishPrimitive) &&
+                right is (TypeofProbeValue.Undefined or TypeofProbeValue.NullLiteral or TypeofProbeValue.NonNullishPrimitive))
+                return TypeofProbeValue.NonNullishPrimitive;
 
-            if (left == TypeofProbeValue.Undefined)
-                facts.Merge(leftFacts);
             return TypeofProbeValue.Unknown;
         }
 
@@ -234,7 +232,8 @@ public sealed partial class JavaScriptExpressionToolingProvider
             Unknown,
             Present,
             Undefined,
-            PrimitiveLiteral,
+            NullLiteral,
+            NonNullishPrimitive,
             ShortCircuited,
             Unresolvable,
             Unsafe

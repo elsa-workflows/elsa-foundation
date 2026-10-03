@@ -180,6 +180,27 @@ public sealed class ExpressionToolingProviderContractTests
     [InlineData("typeof Math.random?.(Date.now())", false)]
     [InlineData("typeof (Date?.now ?? 'fallback')", false)]
     [InlineData("typeof (Date?.now + 'fallback')", false)]
+    [InlineData("typeof ('fallback' ?? Date.now)", false)]
+    [InlineData("typeof (false ?? Math.random())", false)]
+    [InlineData("typeof (0 ?? Date.now)", false)]
+    [InlineData("typeof (null ?? Date?.now)", false)]
+    [InlineData("typeof (Date?.now ?? null)?.[Math.random()]", false)]
+    [InlineData("typeof (Date?.now ?? null)?.(Math.random())", false)]
+    [InlineData("typeof (null ?? Date.now)", true)]
+    [InlineData("typeof (globalThis ?? Date.now)", false)]
+    [InlineData("typeof (('x').missing ?? Date.now)", true)]
+    [InlineData("typeof (('x')?.missing ?? Date.now)", true)]
+    [InlineData("(() => { Math = null; return typeof (globalThis.Math ?? Date.now); })()", true)]
+    [InlineData("(() => { globalThis.Math = null; return typeof (globalThis.Math ?? Date.now); })()", true)]
+    [InlineData("(() => { globalThis.globalThis = { Date: {} }; return typeof globalThis.Date?.[Math.random()]; })()", true)]
+    [InlineData("(() => { globalThis['globalThis'] = { Date: {} }; return typeof globalThis.Date?.[Math.random()]; })()", true)]
+    [InlineData("(() => { globalThis.globalThis = null; return typeof (globalThis ?? Date.now); })()", true)]
+    [InlineData("(() => { globalThis[`globalThis`] = null; return typeof (globalThis ?? Date.now); })()", true)]
+    [InlineData("(() => { globalThis[`Math`] = null; return typeof (globalThis.Math ?? Date.now); })()", true)]
+    [InlineData("(() => { globalThis[('globalThis')] = null; return typeof (globalThis ?? Date.now); })()", true)]
+    [InlineData("(() => { const key = 'Math'; globalThis[key] = null; return typeof (globalThis.Math ?? Date.now); })()", true)]
+    [InlineData("((globalThis) => { globalThis[`Math`] = null; return typeof (Math ?? Date.now); })({})", false)]
+    [InlineData("typeof ((Date?.now + 'x').missing ?? Math.random())", true)]
     [InlineData("typeof Date.now?.()", true)]
     [InlineData("typeof globalThis?.Date.now", true)]
     [InlineData("typeof (Date?.now).toString", true)]
@@ -189,6 +210,8 @@ public sealed class ExpressionToolingProviderContractTests
     [InlineData("typeof (() => Math.random())?.()", true)]
     [InlineData("typeof (Date?.now ?? Math.random())", true)]
     [InlineData("typeof (Date?.now + Math.random())", true)]
+    [InlineData("typeof (('fallback' ?? Date.now) + Math.random())", true)]
+    [InlineData("typeof ('x' + (Date?.now + Math.random()))", true)]
     [InlineData("typeof window?.location", true)]
     [InlineData("Math[key]()", false)]
     [InlineData("globalThis[ambientName]()", false)]
@@ -255,6 +278,21 @@ public sealed class ExpressionToolingProviderContractTests
         }
         else
             Assert.Empty(result.Payload.Diagnostics);
+    }
+
+    [Theory]
+    [InlineData("typeof ((Date?.now + 'x').missing ?? Math.random())")]
+    [InlineData("typeof (('fallback' ?? Date.now) + Math.random())")]
+    [InlineData("typeof ('x' + (Date?.now + Math.random()))")]
+    public async Task JavaScript_composed_probes_report_the_executed_capability_range(string source)
+    {
+        var provider = new JavaScriptExpressionToolingProvider();
+        var result = await provider.ValidateAsync(new(CreateScope("JavaScript", []), source), CancellationToken.None);
+        var diagnostic = Assert.Single(result.Payload!.Diagnostics);
+        var start = source.IndexOf("Math.random", StringComparison.Ordinal);
+
+        Assert.Equal("JavaScript/AmbientCapability", diagnostic.Code);
+        Assert.Equal(new ExpressionToolingRange(new(0, start), new(0, start + "Math.random".Length)), diagnostic.Range);
     }
 
     [Fact]

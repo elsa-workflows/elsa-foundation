@@ -188,8 +188,17 @@ internal static class StrippedAmbientCapabilityExceptionClassifier
                     GlobalThisMayBeReplaced |= identifier.Name == "globalThis";
                     break;
                 case MemberExpression member when TryGetMutationPath(member, out var path):
-                    if (path == "globalThis.Math" && !boundNames.Contains("globalThis"))
-                        MathRootMayBeReplaced = true;
+                    if (!boundNames.Contains("globalThis"))
+                    {
+                        MathRootMayBeReplaced |= path == "globalThis.Math";
+                        GlobalThisMayBeReplaced |= path == "globalThis.globalThis";
+                    }
+                    break;
+                case MemberExpression { Computed: true } member
+                    when Unwrap(member.Object) is Identifier { Name: "globalThis" } && !boundNames.Contains("globalThis"):
+                    // Unknown direct keys may replace either writable root; ambiguity retains the native error.
+                    MathRootMayBeReplaced = true;
+                    GlobalThisMayBeReplaced = true;
                     break;
                 case RestElement rest:
                     RecordPotentialReplacement(rest.Argument);

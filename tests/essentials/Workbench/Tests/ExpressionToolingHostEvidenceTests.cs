@@ -195,6 +195,10 @@ public sealed class ExpressionToolingHostEvidenceTests
                 ("Math.random()", "JavaScript/AmbientCapability"),
                 ("typeof Date?.now(Math.random())", (string?)null),
                 ("typeof globalThis.Date?.[Math.random()]", (string?)null),
+                ("typeof (Date?.now ?? 'fallback')", (string?)null),
+                ("typeof ('fallback' ?? Date.now)", (string?)null),
+                ("typeof (null ?? Date.now)", "JavaScript/AmbientCapability"),
+                ("typeof (('x').missing ?? Date.now)", "JavaScript/AmbientCapability"),
                 ("typeof (Date?.now).toString", "JavaScript/AmbientCapability"),
                 ("(() => { globalThis = { Date: {} }; return typeof globalThis.Date?.[Math.random()]; })()", "JavaScript/AmbientCapability"),
                 ("(() => { return JSON.stringify({ total: Math.abs(-2) }); })()", (string?)null)
