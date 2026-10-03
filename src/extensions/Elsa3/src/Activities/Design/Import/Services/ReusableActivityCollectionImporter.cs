@@ -21,8 +21,9 @@ namespace Elsa3.Activities.Design.Import.Services;
 /// <see cref="Elsa3ImportedActivityStructure.Nodes"/> and judges each through <see cref="ICredentialLiteralValidator"/>.
 /// </para>
 /// <para>
-/// The apply is all or nothing, so a refused binding refuses the whole apply before any workflow or activity is committed
-/// (the uploaded collection is already in the import ledger, which stored it at upload): one
+/// The apply is all or nothing, so a refused binding refuses the whole apply before any workflow or activity is committed,
+/// and <see cref="ReusableActivityImportOperationService"/> then deletes the upload, because this refusal does not leave it
+/// usable: one
 /// <see cref="CredentialLiteralRefusedException"/> names the rule, and the node and the input of every refused binding,
 /// never the value. As everywhere the rule runs, a binding is matched to its input by reference key, and a node whose
 /// activity version the catalog does not hold is not judged.

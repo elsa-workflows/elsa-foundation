@@ -73,7 +73,7 @@ FR-008's seven definition entry points and the Elsa 3 collection import, admitte
 | `WorkflowsVersionReconciler` (`Elsa.Workflows.Design.Reconciliation`), per item | file-based reconciliation, git import | that item only: nothing is written for it, its claim is dropped, a value-free warning is logged, and the pass goes on |
 | `GitWorkflowExporter` (`Elsa.Workflows.Design.Reconciliation.Git`), per version | git export | that version only: no file, commit or tag, a value-free warning, and the pass goes on |
 | `RuntimeInputBindingCompiler.CompileAll` (`Elsa.Workflows.Publishing`), per node | publish, publish-on-reconcile, draft test runs | `CredentialLiteralRefusedException`, ahead of `VF-ACT-011`, reported as a compile error (400) |
-| `ReusableActivityCollectionImporter` (`Elsa3.Activities.Design.Import`), every node it maps, per apply | Elsa 3 collection import | the whole apply, which is all or nothing: one `CredentialLiteralRefusedException` before the commit, so no workflow or activity is committed (400, the messages in the problem's `detail`); the uploaded collection stays in the import ledger, which stored it at upload |
+| `ReusableActivityCollectionImporter` (`Elsa3.Activities.Design.Import`), every node it maps, per apply | Elsa 3 collection import | the whole apply, which is all or nothing: one `CredentialLiteralRefusedException` before the commit, so no workflow or activity is committed (400, the messages in the problem's `detail`); the refusal also deletes the upload the import ledger stored (#2357) |
 
 Every caller of the first three and the last takes the rule's contract, `ICredentialLiteralValidator`
 (`Elsa.Workflows.Design.Validations.Core`). A Design API caller admits the incoming or stored state through

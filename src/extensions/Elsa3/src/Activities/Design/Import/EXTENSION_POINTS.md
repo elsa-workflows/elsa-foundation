@@ -132,8 +132,9 @@ value. The mapping stores each input binding under the declared input's referenc
 property name has, which is the key the rule matches; two properties that bind one input, or a property that matches
 several declared inputs only ignoring case, refuse the apply with 400. A property that names no declared input or
 output is not mapped. As at every entry point, a node whose activity the catalog does not hold is not judged;
-publication refuses a version holding one. The upload itself is stored verbatim in the import ledger, where the rule
-does not apply (spec 188 credential-literal contract, Known gaps).
+publication refuses a version holding one. The rule does not apply to the upload itself; a refused apply deletes it,
+as Upload retention above states, and until the apply is decided it rests in the ledger (spec 188 credential-literal
+contract, Known gaps).
 
 ### `IActivityCollectionJsonSource` *(Feature contract — `Elsa3.Activities.Design.Import`)*
 - **Kind:** Source (opens a stream of activity JSON — pull pattern).
