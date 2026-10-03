@@ -84,7 +84,10 @@ without current counts cannot establish current health from their historical tot
 
 Incident stores provide aggregate health counts; EF reads its existing status projection without loading fault
 or captured-value content. EF implements the optional `IWorkflowHealthQuery` capability with a same-scope incident
-predicate before its database count and keyset page. The explicit allow-all development adapter can return
+predicate before its database count and keyset page. Native paging is used only when that capability confirms
+compatibility with the selected incident store; EF requires both stores to share their context and access
+accessor. Mixed compositions use the selected incident store through the bounded fallback, so an unused EF
+incident table cannot determine health membership, totals or cursors. The explicit allow-all development adapter can return
 that page directly when no sensitive correlation filter is present. Production and custom inspection contexts
 authorize candidates before composing the visible count and cursor page; EF first narrows those candidates by
 health. This authorization path still scans all matching provider pages and retains authorized matches in
