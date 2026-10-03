@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "last_publish_commit": "edffd0a4ea18a17c4faa2c3f8ce073f48bc09af6",
+  "last_publish_commit": "2893c03c65d6d76e60163dd861647b105aee359b",
   "packages": [
     {
       "package_id": "Elsa.Activities.Bpmn",
@@ -669,13 +669,13 @@
     },
     {
       "package_id": "Elsa3.Activities.Design.Import",
-      "version": "4.0.5-preview",
-      "commit": "530d50534addfe10cb2cb832156f436662b91014"
+      "version": "4.0.6-preview",
+      "commit": "2893c03c65d6d76e60163dd861647b105aee359b"
     },
     {
       "package_id": "Elsa3.Activities.Design.Import.Persistence.EntityFrameworkCore",
-      "version": "4.0.11-preview",
-      "commit": "530d50534addfe10cb2cb832156f436662b91014"
+      "version": "4.0.12-preview",
+      "commit": "2893c03c65d6d76e60163dd861647b105aee359b"
     },
     {
       "package_id": "Elsa3.Mapping",
