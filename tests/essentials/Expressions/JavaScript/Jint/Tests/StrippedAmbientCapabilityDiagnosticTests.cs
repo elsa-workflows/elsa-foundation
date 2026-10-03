@@ -23,14 +23,24 @@ public sealed class StrippedAmbientCapabilityDiagnosticTests
     [Theory]
     [InlineData("\"x \" + new Date().toISOString()", "Date")]
     [InlineData("\"n \" + Math.random()", "Math.random")]
+    [InlineData("Math.random()", "Math.random")]
+    [InlineData("\"multi \" +\n    Math.random()", "Math.random")]
+    [InlineData("Math.abs(1) + Math.random()", "Math.random")]
+    [InlineData("typeof (('x').missing ?? Date.now)", "Date")]
+    [InlineData("(() => { Math = null; return typeof (globalThis.Math ?? Date.now); })()", "Date")]
+    [InlineData("(() => { globalThis.Math = null; return typeof (globalThis.Math ?? Date.now); })()", "Date")]
+    [InlineData("(() => { globalThis.globalThis = { Date: {} }; return typeof globalThis.Date?.[Math.random()]; })()", "Math.random")]
+    [InlineData("(() => { globalThis['globalThis'] = { Date: {} }; return typeof globalThis.Date?.[Math.random()]; })()", "Math.random")]
+    [InlineData("(() => { globalThis.globalThis = null; return typeof (globalThis ?? Date.now); })()", "Date")]
+    [InlineData("(() => { globalThis[`globalThis`] = null; return typeof (globalThis ?? Date.now); })()", "Date")]
+    [InlineData("(() => { globalThis[`Math`] = null; return typeof (globalThis.Math ?? Date.now); })()", "Date")]
+    [InlineData("(() => { const key = 'Math'; globalThis[key] = null; return typeof (globalThis.Math ?? Date.now); })()", "Date")]
+    [InlineData("typeof ((Date?.now + 'x').missing ?? Math.random())", "Math.random")]
+    [InlineData("(() => { globalThis = { Date: {} }; return typeof globalThis.Date?.[Math.random()]; })()", "Math.random")]
     public async Task Reaching_for_a_stripped_ambient_capability_yields_an_actionable_error(string source, string capability)
     {
-        await using var provider = BuildProvider();
-        await using var scope = provider.CreateAsyncScope();
-        var evaluator = scope.ServiceProvider.GetRequiredService<IPortableExpressionEvaluator>();
-
         var exception = await Assert.ThrowsAsync<JavaScriptBindingEvaluationException>(
-            () => evaluator.EvaluateAsync(Request(source)).AsTask());
+            () => EvaluateAsync(source));
 
         Assert.Contains(capability, exception.Message, StringComparison.Ordinal);
         Assert.Contains("deterministic binding sandbox", exception.Message, StringComparison.Ordinal);
@@ -42,28 +52,100 @@ public sealed class StrippedAmbientCapabilityDiagnosticTests
     [Fact]
     public async Task A_profile_legal_expression_that_does_not_touch_a_stripped_capability_still_evaluates()
     {
-        await using var provider = BuildProvider();
-        await using var scope = provider.CreateAsyncScope();
-        var evaluator = scope.ServiceProvider.GetRequiredService<IPortableExpressionEvaluator>();
-
-        var result = await evaluator.EvaluateAsync(Request("\"a \" + 1"));
+        var result = await EvaluateAsync("\"a \" + 1");
 
         Assert.Equal("a 1", result.GetString());
     }
 
-    [Fact]
-    public async Task An_unrelated_runtime_error_is_not_reframed_as_a_capability_error()
+    [Theory]
+    [InlineData("(Math = { random: () => 7 }, Math.random())")]
+    [InlineData("(globalThis.Math = { random: () => 7 }, globalThis.Math.random())")]
+    [InlineData("(globalThis['Math'] = { random: () => 7 }, globalThis.Math.random())")]
+    [InlineData("(globalThis = { Math: { random: () => 7 } }, globalThis.Math.random())")]
+    [InlineData("(globalThis = { Date: { now: () => 7 } }, globalThis.Date.now())")]
+    public async Task Explicit_root_replacement_expressions_still_evaluate_without_sandbox_attribution(string source)
+    {
+        var result = await EvaluateAsync(source);
+
+        Assert.Equal(7, result.GetInt32());
+    }
+
+    [Theory]
+    [InlineData("typeof Math?.random")]
+    [InlineData("typeof globalThis?.Math.random")]
+    [InlineData("typeof Date?.now")]
+    [InlineData("typeof globalThis?.Date?.now")]
+    [InlineData("typeof globalThis.Date?.now")]
+    [InlineData("typeof Date?.()")]
+    [InlineData("typeof Date?.now()")]
+    [InlineData("typeof Date?.now(Math.random())")]
+    [InlineData("typeof Date?.[Math.random()]")]
+    [InlineData("typeof globalThis.Date?.[Math.random()]")]
+    [InlineData("typeof Math.random?.(Date.now())")]
+    public async Task Optional_typeof_probes_short_circuit_without_ambient_access(string source)
+    {
+        var result = await EvaluateAsync(source);
+
+        Assert.Equal("undefined", result.GetString());
+    }
+
+    [Theory]
+    [InlineData("typeof (Date?.now ?? 'fallback')", "string")]
+    [InlineData("typeof (Date?.now + 'fallback')", "string")]
+    [InlineData("typeof ('fallback' ?? Date.now)", "string")]
+    [InlineData("typeof (false ?? Math.random())", "boolean")]
+    [InlineData("typeof (0 ?? Date.now)", "number")]
+    [InlineData("typeof (null ?? Date?.now)", "undefined")]
+    [InlineData("typeof (Date?.now ?? null)?.[Math.random()]", "undefined")]
+    [InlineData("typeof (Date?.now ?? null)?.(Math.random())", "undefined")]
+    [InlineData("typeof (globalThis ?? Date.now)", "object")]
+    public async Task Optional_typeof_probes_can_compose_with_literal_operands(string source, string expected)
+    {
+        var result = await EvaluateAsync(source);
+
+        Assert.Equal(expected, result.GetString());
+    }
+
+    [Theory]
+    [InlineData("nope.value")]
+    [InlineData("({ Date: missingName })")]
+    [InlineData("/* Math.random() */ missingName")]
+    [InlineData("({ text: 'Date', value: missingName })")]
+    [InlineData("(() => { typeof Date; return missingName; })()")]
+    [InlineData("(() => { const Math = { random: () => missingName }; return Math.random(); })()")]
+    [InlineData("((Math) => Math.random())({})")]
+    [InlineData("((Date) => new Date())(undefined)")]
+    [InlineData("(missingName, Math.random())")]
+    [InlineData("(Math.random, missingName)")]
+    [InlineData("(false && Math.random(), missingName)")]
+    [InlineData("Math[\"ran\" + \"dom\"]()")]
+    [InlineData("(null).Date")]
+    [InlineData("({ Date: undefined }).Date()")]
+    [InlineData("Math = {}, Math.random()")]
+    [InlineData("globalThis.Math = {}, globalThis.Math.random()")]
+    [InlineData("globalThis['Math'] = {}, globalThis.Math.random()")]
+    [InlineData("globalThis = { Math: {} }, globalThis.Math.random()")]
+    [InlineData("globalThis = { Date: {} }, globalThis.Date.now()")]
+    [InlineData("globalThis.globalThis = { Date: {} }, globalThis.Date.now()")]
+    [InlineData("globalThis['globalThis'] = { Date: {} }, globalThis.Date.now()")]
+    [InlineData("globalThis[`globalThis`] = { Date: {} }, globalThis.Date.now()")]
+    [InlineData("globalThis[`Math`] = {}, globalThis.Math.random()")]
+    [InlineData("(() => { const key = 'Math'; globalThis[key] = {}; return Math.random(); })()")]
+    public async Task An_unrelated_runtime_error_is_not_reframed_as_a_capability_error(string source)
+    {
+        // Unrelated JavaScript failures are author/runtime errors, not stripped-capability reaches; they must keep
+        // surfacing as native errors rather than being mislabelled as sandbox/determinism problems.
+        var exception = await Assert.ThrowsAnyAsync<Exception>(
+            () => EvaluateAsync(source));
+
+        Assert.IsNotType<JavaScriptBindingEvaluationException>(exception);
+    }
+
+    private static async Task<JsonElement> EvaluateAsync(string source)
     {
         await using var provider = BuildProvider();
         await using var scope = provider.CreateAsyncScope();
-        var evaluator = scope.ServiceProvider.GetRequiredService<IPortableExpressionEvaluator>();
-
-        // Referencing an undeclared identifier is a plain author error, not a stripped-capability reach; it must
-        // keep surfacing as its native error rather than being mislabelled a sandbox/determinism problem.
-        var exception = await Assert.ThrowsAnyAsync<Exception>(
-            () => evaluator.EvaluateAsync(Request("nope.value")).AsTask());
-
-        Assert.IsNotType<JavaScriptBindingEvaluationException>(exception);
+        return await scope.ServiceProvider.GetRequiredService<IPortableExpressionEvaluator>().EvaluateAsync(Request(source));
     }
 
     private static ServiceProvider BuildProvider()
