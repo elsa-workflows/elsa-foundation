@@ -385,9 +385,9 @@ public sealed class PoisonedSchedulerWorkIncidentObserver : IWorkflowSchedulerDr
         // under the deterministic commit id for this repair scope. Separate scopes let a later projection repair
         // proceed even when an earlier compatibility path committed only the activity association.
         var repairedAt = incident.CreatedAt;
-        var projection = !needsInspectionRepair || _inspectionAccumulator is null
+        var projection = !needsInspectionRepair
             ? null
-            : await _inspectionAccumulator.BuildProjectionAsync(
+            : await _inspectionAccumulator!.BuildProjectionAsync(
                 associatedState,
                 checkpointId,
                 repairedAt,
@@ -404,7 +404,7 @@ public sealed class PoisonedSchedulerWorkIncidentObserver : IWorkflowSchedulerDr
                 State: associatedState,
                 Metadata: incident.Metadata));
         var inspectionChanges = new List<RuntimeStateChange<ActivityExecutionInspectionProjection>>();
-        if (projection is not null && needsInspectionRepair)
+        if (projection is not null)
             inspectionChanges.Add(new RuntimeStateChange<ActivityExecutionInspectionProjection>(
                 StateId: incident.ActivityExecutionId,
                 Operation: RuntimeStateChangeOperation.Upsert,
