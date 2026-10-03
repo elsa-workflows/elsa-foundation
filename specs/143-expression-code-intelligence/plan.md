@@ -109,6 +109,8 @@ tests/Elsa/
 3. Add parser-position classification and richer signature/known-shape diagnostics without changing v1 outcome, revision, authorization, cancellation or no-store semantics.
 4. Prove independent composition and degraded states. Studio remains responsible for editor/UI conformance and consumes only the existing engine-neutral contracts.
 
+Task #2379 implements T029-T030 under research D12: add the optional default-null Core catalog accessor, compose/filter it in the common scoped Design context service before revisions/paging, and share an effective binding-pure Liquid profile with runtime/tooling. Keep engine-specific objects and factories in the owning module. Legacy runtime construction is retained; standalone completion callers must provide authorized catalog metadata. This intentional tooling-context narrowing is documented and tested, not a new runtime grant or v1 HTTP change. Root reviews isolated context/catalog and Liquid implementation slices, then runs the complete integrated gate for T031. No manual assistive-technology acceptance, merge or delivery is inferred.
+
 ## Complexity Tracking
 
 No constitution violations require tracking.

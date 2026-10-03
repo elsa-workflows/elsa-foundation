@@ -12,6 +12,7 @@ public interface IExpressionToolingProvider
     string ExpressionType { get; }
     ExpressionToolingContractVersion SupportedVersion { get; }
     ExpressionToolingCapabilities DeclaredCapabilities { get; }
+    ExpressionToolingCatalog? DeclaredCatalog => null;
 
     ValueTask<ExpressionToolingOutcome<ExpressionToolingCapabilities>>
         GetCapabilitiesAsync(ExpressionToolingRequestScope scope, CancellationToken cancellationToken);
@@ -28,6 +29,8 @@ public interface IExpressionToolingProvider
 ```
 
 ### Invariants
+
+- Program #2310 / Task #2379 adds `ExpressionToolingCatalog(string Revision, IReadOnlyList<ExpressionSymbol> Symbols)` as immutable metadata on the selected provider. Its default-null accessor preserves older implementations; this contract expansion is minor under framework §4.2. D12 defines validation, bounds, policy composition and revision semantics. No runtime factory, live value or engine type belongs in this Core catalog.
 
 - `ExpressionType` matches the registered expression descriptor type exactly and is unique after host composition.
 - Every request carries the current contract version, document identity/revision, and a Design-built, policy-filtered context snapshot.
@@ -65,6 +68,8 @@ public interface IExpressionAuthoringContextService
 ```
 
 The Design service resolves the draft/activity/property location, expected type, visible workflow inputs, lexical variables, definitely available activity results, and authored metadata. It applies caller authorization and host policy before paging client context responses. Providers receive the same bounded, post-policy catalog before client paging, so completion, hover, and validation can resolve a visible symbol beyond the current response page; providers independently bound their returned candidates. It produces bounded symbols and inline member shapes to depth four; v1 providers declare lazy members unsupported. It does not accept client-supplied symbol lists, permission claims, expected types, or workflow graph state as authority.
+
+Under D12, optional selected-provider metadata is composed in the common scoped service after a source validates location and before stale comparison/paging. Apply existing symbol filters only to new profile candidates, reserve profile IDs before source entries, and preserve source revisions when no catalog is declared. Providers never append their declared catalog after this authority boundary. Direct in-process consumers must supply their own authorized context; an empty context is not permission to restore filtered symbols.
 
 ## Full-draft validation contract
 
