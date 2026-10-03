@@ -49,7 +49,7 @@ Independent check: root cause and input lead summary; full evidence remains avai
 
 - [x] T018 Update backend/Studio behavior docs and contract evidence in `docs/runtime-fault-behavior.md`, affected API README and Studio module docs.
 - [ ] T019 Run scoped suites/typecheck/lint/build, architecture/maps and root diff review; record results in `docs/reports/incident-troubleshooting/acceptance.md`.
-- [ ] T020 Add real HTTP regression for missing JS input and authoritative health paging in `e2e-tests/` and run against rebuilt normally composed isolated Workbench.
+- [x] T020 Add real HTTP regression for missing JS input and authoritative health paging in `e2e-tests/` and run against rebuilt normally composed isolated Workbench.
 - [ ] T021 Repeat rebuilt real Studio story/control/layout/theme/keyboard matrix; save after screenshots in `docs/reports/incident-troubleshooting/screenshots/` and acceptance report.
 - [ ] T022 Obtain independent code/evidence review and fix findings; record review and targeted mutation/revert bite proof in `docs/reports/incident-troubleshooting/acceptance.md`.
 - [ ] T023 Commit/push/open and attach PRs via approved Git route; publish exact-head gates, merge green and verify post-merge CI/Maps; update `docs/program-goals/incident-troubleshooting.md` and issue/Project hierarchy.
