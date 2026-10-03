@@ -170,8 +170,12 @@ public sealed class PoisonedSchedulerWorkIncidentObserverTests
     [Fact]
     public async Task OnDrainedAsync_WhenInitialActivityReadFails_RepairsCanonicalIncidentOnLaterFaultedDrain()
     {
-        var activityStore = new FailOnceActivityExecutionStateStore(_harness.ActivityStore);
-        var harness = new Harness(_now, activityExecutionStateStore: activityStore);
+        var backingActivityStore = new InMemoryActivityExecutionStateStore();
+        var activityStore = new FailOnceActivityExecutionStateStore(backingActivityStore);
+        var harness = new Harness(
+            _now,
+            activityExecutionStateStore: activityStore,
+            activityStore: backingActivityStore);
         await harness.SaveActivity();
         await harness.RecordPoison(
             RuntimeSchedulerPoisonDisposition.Poisoned,
@@ -497,7 +501,7 @@ public sealed class PoisonedSchedulerWorkIncidentObserverTests
         public InMemoryWorkflowSchedulerPoisonStore PoisonStore { get; } = new();
         public InMemoryIncidentStateStore IncidentStore { get; } = new();
         public InMemoryWorkflowExecutionStateStore WorkflowStore { get; } = new();
-        public InMemoryActivityExecutionStateStore ActivityStore { get; } = new();
+        public InMemoryActivityExecutionStateStore ActivityStore { get; }
         public InMemoryActivityExecutionInspectionStore InspectionStore { get; }
         public InMemoryRuntimeCheckpointCommitStore CommitStore { get; }
         public RuntimeCheckpointCommitter CheckpointCommitter { get; }
@@ -513,9 +517,11 @@ public sealed class PoisonedSchedulerWorkIncidentObserverTests
             IIncidentStateStore? commitIncidentStore = null,
             IActivityExecutionStateStore? activityExecutionStateStore = null,
             IActivityExecutionInspectionStore? activityExecutionInspectionStore = null,
-            InMemoryActivityExecutionInspectionStore? inspectionStore = null)
+            InMemoryActivityExecutionInspectionStore? inspectionStore = null,
+            InMemoryActivityExecutionStateStore? activityStore = null)
         {
             _now = now;
+            ActivityStore = activityStore ?? new InMemoryActivityExecutionStateStore();
             InspectionStore = inspectionStore ?? new InMemoryActivityExecutionInspectionStore();
             CommitStore = new InMemoryRuntimeCheckpointCommitStore(
                 WorkflowStore,
