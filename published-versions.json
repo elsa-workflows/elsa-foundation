@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "last_publish_commit": "b956a232e643d3df1730def06a87731f989799e8",
+  "last_publish_commit": "2010d08ef3647f3698465b820820bd60acfb4ac3",
   "packages": [
     {
       "package_id": "Elsa.Activities.Bpmn",
@@ -84,13 +84,13 @@
     },
     {
       "package_id": "Elsa.Activities.Primitives",
-      "version": "4.0.4-preview",
-      "commit": "aa48eaca25c6d4c81cfb2474026df876a0f0593e"
+      "version": "4.0.5-preview",
+      "commit": "2010d08ef3647f3698465b820820bd60acfb4ac3"
     },
     {
       "package_id": "Elsa.Activities.Runtime",
-      "version": "4.0.9-preview",
-      "commit": "dd3f78f340791bcf63055fd3155b9cde26385579"
+      "version": "4.0.10-preview",
+      "commit": "2010d08ef3647f3698465b820820bd60acfb4ac3"
     },
     {
       "package_id": "Elsa.Activities.Runtime.Core",
@@ -604,8 +604,8 @@
     },
     {
       "package_id": "Elsa.Workflows.Runtime",
-      "version": "4.0.18-preview",
-      "commit": "7dcc31545e09b645943f5844986419a68b36b473"
+      "version": "4.0.19-preview",
+      "commit": "2010d08ef3647f3698465b820820bd60acfb4ac3"
     },
     {
       "package_id": "Elsa.Workflows.Runtime.Api",
@@ -614,8 +614,8 @@
     },
     {
       "package_id": "Elsa.Workflows.Runtime.Core",
-      "version": "4.0.18-preview",
-      "commit": "8a2ebc67e075646811393945a593232f62f41afd"
+      "version": "4.0.19-preview",
+      "commit": "2010d08ef3647f3698465b820820bd60acfb4ac3"
     },
     {
       "package_id": "Elsa.Workflows.Runtime.Distributed",
