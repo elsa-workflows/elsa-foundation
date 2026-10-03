@@ -140,7 +140,9 @@ public interface IReusableActivityImportOperationService
     /// idempotency conflict, collision or persistence exception below, a schema write refusal and a cancellation
     /// leave the upload in place for a corrected or repeated request. The delete does not observe the caller's
     /// cancellation, and a delete that fails never replaces the outcome: it is logged and the row stays until a
-    /// replay of the key (after a completed apply) or the expiry sweep (in a tenant partition) deletes it.
+    /// replay of the key (after a completed apply), a later read that finds it expired, or the expiry sweep (in a
+    /// tenant partition) deletes it. A refused upload in the global partition whose handle is never used again has
+    /// none of these.
     /// </remarks>
     /// <exception cref="ReusableActivityImportNotFoundException">The collection does not exist in the current access scope.</exception>
     /// <exception cref="ReusableActivityImportExpiredException">The immutable collection has expired; the read that finds it expired deletes it.</exception>

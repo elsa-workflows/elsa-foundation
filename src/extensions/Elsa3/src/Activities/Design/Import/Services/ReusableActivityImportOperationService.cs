@@ -310,8 +310,8 @@ public sealed class ReusableActivityImportOperationService(
     /// caller's cancellation does not stop it: a client that disconnects after a refusal must not leave the refused
     /// upload, and whatever literal it holds, in place. For the same reason a failed delete never replaces that
     /// outcome (the receipt, the refusal, the 410). It is logged, and the row stays until something deletes it: a
-    /// replay of the key repeats the delete after a completed apply, and in a tenant partition the expiry sweep
-    /// deletes it once its lifetime runs out.
+    /// replay of the key after a completed apply, a later read that finds it expired, or, in a tenant partition,
+    /// the expiry sweep.
     /// </summary>
     private async ValueTask DiscardCollectionAsync(string handle, ReusableActivityImportAccessScope accessScope)
     {

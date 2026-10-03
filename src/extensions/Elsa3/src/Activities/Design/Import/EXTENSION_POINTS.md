@@ -96,16 +96,19 @@ deleted from the import ledger. `ReusableActivityImportOperationService` owns th
   `ReusableActivityImportOptions.ExpiredCollectionSweepInterval` (15 minutes by default) it visits each persistence
   scope the host supplies (`IPersistenceScopeRunner`) and deletes at most `ExpiredCollectionSweepBatchSize` (100)
   expired uploads in each. Every node runs it; the delete is idempotent. It leaves a row at a schema version this
-  build does not read (ADR 0077): such a row was written by a newer build, whose own sweep deletes it. It does not
+  build does not read (ADR 0077): such a row was written by a newer build and is left to a build that reads it. It does not
   visit the global partition, which no host-supplied scope names: an upload stored under a global persistence
   context is deleted by its apply or by the read that finds it expired.
 
 The outcome is decided when these deletes run, so they do not observe the caller's cancellation: a client that
 disconnects after a refusal does not leave the refused upload behind. A delete that fails leaves the outcome the caller
 asked for in place (the receipt, the refusal, the 410) and is logged. The row then stays until something deletes it:
-after a completed apply, a replay of the idempotency key repeats the delete; in a tenant partition, the sweep deletes
-the row once its lifetime runs out. An upload in the global partition whose delete fails is not retried. Between its upload and its apply or expiry the document is at rest in the ledger, as a reviewed import needs
-it to be. The rule bounds that time; it does not encrypt the column, and it does not reach database backups.
+after a completed apply, a replay of the idempotency key repeats the delete; any later read of the handle that finds it
+expired deletes it; and in a tenant partition, the sweep deletes it once its lifetime runs out. So the one row nothing
+retries is a refused or expired upload in the global partition whose handle is never used again.
+
+Between its upload and its apply or expiry the document is at rest in the ledger, as a reviewed import needs it to be.
+The rule bounds that time; it does not encrypt the column, and it does not reach database backups.
 
 ### `IActivityCollectionJsonSource` *(Feature contract — `Elsa3.Activities.Design.Import`)*
 - **Kind:** Source (opens a stream of activity JSON — pull pattern).

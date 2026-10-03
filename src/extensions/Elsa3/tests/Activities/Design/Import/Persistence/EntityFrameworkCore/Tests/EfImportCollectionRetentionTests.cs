@@ -109,6 +109,7 @@ public sealed class EfImportCollectionRetentionTests : IAsyncLifetime
     [Theory]
     [InlineData("stale plan")]
     [InlineData("non-closed selection")]
+    [InlineData("unknown selection")]
     [InlineData("idempotency conflict")]
     [InlineData("identity collision")]
     [InlineData("persistence failure")]
@@ -116,10 +117,10 @@ public sealed class EfImportCollectionRetentionTests : IAsyncLifetime
     [InlineData("cancellation")]
     public async Task An_outcome_the_caller_can_continue_from_keeps_the_upload(string outcome)
     {
-        // The first two are refused by the importer itself; the rest are what the commit port can throw.
+        // The first three are refused by the importer itself; the rest are what the commit port can throw.
         Exception? failure = outcome switch
         {
-            "stale plan" or "non-closed selection" => null,
+            "stale plan" or "non-closed selection" or "unknown selection" => null,
             "idempotency conflict" => new ReusableActivityImportIdempotencyConflictException("keeps"),
             "identity collision" => new ReusableActivityImportCollisionException("The identity is owned by different content."),
             "persistence failure" => new ReusableActivityImportPersistenceException("commit", "keeps", new IOException("connection lost")),
@@ -134,7 +135,7 @@ public sealed class EfImportCollectionRetentionTests : IAsyncLifetime
         var thrown = await Record.ExceptionAsync(async () => await service.ApplyAsync(
             handle,
             outcome == "stale plan" ? "stale-plan" : planId,
-            outcome == "non-closed selection" ? ["b-v1"] : ["a-v1", "b-v1"],
+            outcome switch { "non-closed selection" => ["b-v1"], "unknown selection" => ["a-v1", "b-v1", "c-v1"], _ => ["a-v1", "b-v1"] },
             "keeps",
             Scope));
 

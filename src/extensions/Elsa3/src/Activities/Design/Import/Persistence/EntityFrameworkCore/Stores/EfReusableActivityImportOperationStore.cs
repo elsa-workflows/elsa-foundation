@@ -137,9 +137,9 @@ public sealed class EfReusableActivityImportOperationStore(
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(maxCount);
         var tenantKey = AmbientTenantKey();
         var cutoff = expiresAtOrBefore.UtcTicks;
-        string[] readableVersions = [.. Elsa3ImportEfModule.Chain.ReadableVersions];
         try
         {
+            string[] readableVersions = [.. Elsa3ImportEfModule.Chain.ReadableVersions];
             var candidates = await db.Collections.AsNoTracking()
                 .Where(row => row.TenantKey == tenantKey && row.ExpiresAtUtcTicks <= cutoff && readableVersions.Contains(row.SchemaVersion))
                 .OrderBy(row => row.ExpiresAtUtcTicks).ThenBy(row => row.UserIdHash).ThenBy(row => row.HandleHash)
