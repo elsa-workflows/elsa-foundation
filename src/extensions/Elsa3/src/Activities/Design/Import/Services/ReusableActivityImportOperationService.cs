@@ -4,6 +4,7 @@ using Elsa.Primitives.Exceptions;
 using Elsa3.Activities.Design.Import.Contracts;
 using Elsa3.Activities.Design.Import.Models;
 using Elsa3.Models;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
 namespace Elsa3.Activities.Design.Import.Services;
@@ -32,7 +33,8 @@ public sealed class ReusableActivityImportOperationService(
     IReusableActivityImportOperationStore store,
     IReusableActivityCollectionImporter importer,
     IOptions<ReusableActivityImportOptions> options,
-    TimeProvider timeProvider) : IReusableActivityImportOperationService
+    TimeProvider timeProvider,
+    ILogger<ReusableActivityImportOperationService> logger) : IReusableActivityImportOperationService
 {
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
     private readonly ReusableActivityImportOptions _options = ValidateOptions(options.Value);
@@ -304,24 +306,38 @@ public sealed class ReusableActivityImportOperationService(
     }
 
     /// <summary>
-    /// Deletes a decided or expired upload from the ledger. It does not take the caller's cancellation token: a
-    /// commit that became durable is reported as applied whatever the caller cancelled since, and the upload that
-    /// commit consumed is deleted on the same terms.
+    /// Deletes a decided or expired upload from the ledger. The outcome is already decided when this runs, so the
+    /// caller's cancellation does not stop it: a client that disconnects after a refusal must not leave the refused
+    /// upload, and whatever literal it holds, in place. For the same reason a failed delete never replaces that
+    /// outcome (the receipt, the refusal, the 410). It is logged and the row stays; what deletes it later is set out
+    /// under "Upload retention" in the import's <c>EXTENSION_POINTS.md</c>.
     /// </summary>
-    private ValueTask<bool> DiscardCollectionAsync(string handle, ReusableActivityImportAccessScope accessScope) =>
-        store.DeleteCollectionAsync(handle, accessScope, CancellationToken.None);
+    private async ValueTask DiscardCollectionAsync(string handle, ReusableActivityImportAccessScope accessScope)
+    {
+        try
+        {
+            await store.DeleteCollectionAsync(handle, accessScope, CancellationToken.None);
+        }
+        catch (Exception exception) when (exception is not (OutOfMemoryException or StackOverflowException or AccessViolationException))
+        {
+            logger.LogError(exception, "The decided or expired Elsa 3 import collection upload {Handle} could not be deleted from the import ledger", handle);
+        }
+    }
 
     /// <summary>
     /// True for the apply outcomes the caller can continue from with the same upload: a corrected plan or selection,
     /// a resolved identity collision, or a repeat after a persistence failure, a schema write refusal or a
     /// cancellation. A persistence failure includes a commit whose outcome is unknown, where the repeat needs the
-    /// collection again. Every other outcome refuses the upload's content, such as a mapped literal on an input
-    /// declared a credential (spec 188, FR-008), and that upload is deleted. Unknown outcomes fall on the deleting
-    /// side on purpose: deleting an upload costs its owner a new upload, keeping one may keep a credential at rest.
+    /// collection again. An idempotency conflict inside the commit means a concurrent request won the same key with
+    /// other content; when that request applied another upload, this one is still usable under a new key. Every
+    /// other outcome refuses the upload's content, such as a mapped literal on an input declared a credential (spec
+    /// 188, FR-008), and that upload is deleted. Unknown outcomes fall on the deleting side on purpose: deleting an
+    /// upload costs its owner a new upload, keeping one may keep a credential at rest.
     /// </summary>
     private static bool LeavesUploadUsable(Exception exception) => exception is
         OperationCanceledException or
         ReusableActivityImportValidationException or
+        ReusableActivityImportIdempotencyConflictException or
         ReusableActivityImportCollisionException or
         ReusableActivityImportPersistenceException or
         SchemaWriteRefusedException;
