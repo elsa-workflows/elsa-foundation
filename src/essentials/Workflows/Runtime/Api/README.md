@@ -43,6 +43,8 @@ Dispatch inspection is allowlist-only: it exposes lifecycle/linkage, child artif
 
 Provenance is deliberately read-only here. Publishing owns creation and retirement of publication/test-run references, while Runtime owns artifact retention and garbage collection.
 
+Executable detail includes a compact BPMN graph projection only for the persisted `elsa.bpmn.structure` schema `1.0.0`: `bpmnStructure.elements` carries element IDs, element types, bound child-node IDs, and names; `bpmnStructure.sequenceFlows` carries flow IDs, source/target references, names, outcome conditions, and default-flow flags. The API reads these fields directly from the versioned JSON payload without loading the BPMN activity module. It omits arbitrary properties, expressions, event definitions, and diagram data; other structure kinds or BPMN schemas return `bpmnStructure: null`.
+
 Activation slots are the runtime-owned ledger for the live activation of a `(definitionId, slotName)` pair.
 The read-only views expose the slot identity, active activation, source ownership, revision, and update time;
 they do not join to publishing records. Runtime deliberately exposes no deactivation endpoint.
