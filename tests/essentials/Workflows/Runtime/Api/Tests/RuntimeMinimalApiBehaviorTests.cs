@@ -551,7 +551,7 @@ public sealed class RuntimeMinimalApiBehaviorTests
 
         public RouteEndpoint FindEndpoint(string route) => app.Services.GetRequiredService<EndpointDataSource>().Endpoints
             .OfType<RouteEndpoint>()
-            .Single(candidate => candidate.RoutePattern.RawText == route);
+            .Single(candidate => candidate.RoutePattern.RawText?.TrimStart('/') == route.TrimStart('/'));
 
         public async Task<DefaultHttpContext> InvokeMappedAsync(string route, Action<DefaultHttpContext> configure)
         {
