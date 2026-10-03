@@ -49,6 +49,10 @@ A shell supplies its keys as settings of the `Secrets` feature. `Keys` maps a ke
 `EncryptionKey` and `Keys` are declared secret, so the feature catalog masks them. Supply them through a secret
 store or environment variables outside development, never in committed configuration.
 
+`Elsa.Workbench` commits a development-only `EncryptionKey` in `shells.json` so a fresh checkout can store secrets.
+`shells.Production.json` blanks it, so a Production host has no key until one is supplied, for example as
+`CShells__Shells__default__Features__Secrets__EncryptionKey`.
+
 A setting that is left unset is not applied, so a host that configures `SecretsOptions` itself keeps its keys when
 the shell sets none. A key id declared by both the host and the shell is refused as a duplicate.
 
