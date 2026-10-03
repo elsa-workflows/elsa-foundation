@@ -8,7 +8,7 @@ Records direct project references only.
 
 - Source projects: 141
 - Test projects: 139
-- Direct project references: 1334
+- Direct project references: 1335
 
 ## Projects
 
