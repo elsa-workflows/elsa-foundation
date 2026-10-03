@@ -29,7 +29,7 @@ Pre-design and post-design: no new gate exception, package family, authenticatio
 specs/191-worker-http-profile/
   spec.md, plan.md, research.md, data-model.md, quickstart.md, tasks.md
   contracts/worker-profile.md
-  checklists/requirements.md
+  implementation-evidence.md
 src/essentials/Modularity/Planning/
   Catalog/FoundationSelectionCatalog.cs
   Catalogs/foundation-selection-catalog-v3.json
