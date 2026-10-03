@@ -19,6 +19,9 @@ public sealed class EfIncidentStateStore(
 {
     private const int ProviderPageSize = RuntimeStorePageRequest.MaximumLimit;
 
+    internal bool UsesSameBackingStore(RuntimeDbContext candidateContext, IPersistenceAccessContextAccessor candidateAccessor) =>
+        ReferenceEquals(context, candidateContext) && ReferenceEquals(accessContextAccessor, candidateAccessor);
+
     public async ValueTask<bool> TryAddAsync(
         IncidentState state,
         CancellationToken cancellationToken = default)

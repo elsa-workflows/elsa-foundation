@@ -353,7 +353,7 @@ public sealed class WorkflowInstanceServicesTests
     {
         await _workflowStore.SaveAsync(Workflow("wf-1", WorkflowExecutionStatus.Running, "definition-1"));
         await _incidentStore.SaveAsync(HealthIncident("wf-1", IncidentStatus.Blocking));
-        var store = new HealthQueryWorkflowExecutionStateStore(_workflowStore);
+        var store = new HealthQueryWorkflowExecutionStateStore(_workflowStore, _incidentStore);
         var handler = NewListInstanceHandler(store);
         var request = new ListWorkflowInstances(null, "definition-1", null, 1, IncidentHealth: "blocking");
         var first = await handler.ListAsync(request, CancellationToken.None);
@@ -373,13 +373,56 @@ public sealed class WorkflowInstanceServicesTests
     {
         await _workflowStore.SaveAsync(Workflow("allowed", WorkflowExecutionStatus.Running, "definition-1", "secret-correlation"));
         await _incidentStore.SaveAsync(HealthIncident("allowed", IncidentStatus.Blocking));
-        var store = new HealthQueryWorkflowExecutionStateStore(_workflowStore);
+        var store = new HealthQueryWorkflowExecutionStateStore(_workflowStore, _incidentStore);
         var handler = new WorkflowInstanceListService(store, _activityStore, _incidentStore,
             constrainedScope ? new RestrictedInspectionContext() : AllowAll);
         var result = await handler.ListAsync(new ListWorkflowInstances(null, null, correlation, 1, IncidentHealth: "blocking"), CancellationToken.None);
         Assert.Equal(1, result.TotalCount);
         Assert.Equal(IncidentHealth.Blocking, store.LastHealth);
         Assert.Equal(100, store.LastQuery!.PageSize);
+    }
+
+    [Theory]
+    [InlineData("active", false, "wf-blocking,wf-open")]
+    [InlineData("blocking", false, "wf-blocking")]
+    [InlineData("none", false, "wf-healthy,wf-resolved,wf-suppressed")]
+    [InlineData("active", true, "wf-blocking,wf-open")]
+    [InlineData("blocking", true, "wf-blocking")]
+    [InlineData("none", true, "wf-healthy,wf-resolved,wf-suppressed")]
+    public async Task ListWorkflowInstances_RejectsNativeHealthPagingWhenSelectedIncidentStoreDoesNotMatch(
+        string health,
+        bool constrainedAuthorization,
+        string expectedIds)
+    {
+        var selectedHealth = new (string Id, IncidentStatus? Status)[]
+        {
+            ("wf-blocking", IncidentStatus.Blocking),
+            ("wf-open", IncidentStatus.Open),
+            ("wf-healthy", null),
+            ("wf-resolved", IncidentStatus.Resolved),
+            ("wf-suppressed", IncidentStatus.Suppressed)
+        };
+        foreach (var (id, status) in selectedHealth)
+        {
+            await _workflowStore.SaveAsync(Workflow(id, WorkflowExecutionStatus.Running, "definition-1", updatedAt: Now(-1)));
+            if (status is { } value)
+                await _incidentStore.SaveAsync(HealthIncident(id, value));
+        }
+
+        // This native query represents a different incident source (for example, an unused EF table).
+        // The selected in-memory incident store remains authoritative, so the service must use its fallback.
+        var store = new HealthQueryWorkflowExecutionStateStore(_workflowStore, new InMemoryIncidentStateStore());
+        IActivityInspectionContextAsync authorization = constrainedAuthorization
+            ? new RestrictedInspectionContext("all-tenants")
+            : AllowAll;
+        var handler = new WorkflowInstanceListService(store, _activityStore, _incidentStore, authorization);
+
+        var result = await handler.ListAsync(new ListWorkflowInstances(null, null, null, 10, IncidentHealth: health), CancellationToken.None);
+
+        Assert.Equal(expectedIds.Split(','), result.Items.Select(item => item.WorkflowExecutionId).Order(StringComparer.Ordinal));
+        Assert.Equal(expectedIds.Split(',').Length, result.TotalCount);
+        Assert.Null(store.LastHealth);
+        Assert.True(store.QueryPageCalled);
     }
 
     [Fact]
@@ -455,7 +498,7 @@ public sealed class WorkflowInstanceServicesTests
     {
         await _workflowStore.SaveAsync(Workflow("foreign", WorkflowExecutionStatus.Running, "definition-1"));
         await _incidentStore.SaveAsync(HealthIncident("foreign", IncidentStatus.Blocking));
-        var store = new HealthQueryWorkflowExecutionStateStore(_workflowStore);
+        var store = new HealthQueryWorkflowExecutionStateStore(_workflowStore, _incidentStore);
         var handler = new WorkflowInstanceListService(store, _activityStore, _incidentStore, new RestrictedInspectionContext("all-tenants"));
         foreach (var health in new string?[] { null, "blocking" })
         {
@@ -687,11 +730,16 @@ public sealed class WorkflowInstanceServicesTests
             inner.DeleteAsync(workflowExecutionId, cancellationToken);
     }
 
-    private sealed class HealthQueryWorkflowExecutionStateStore(IWorkflowExecutionStateStore inner)
+    private sealed class HealthQueryWorkflowExecutionStateStore(
+        IWorkflowExecutionStateStore inner,
+        IIncidentStateStore supportedIncidentStore)
         : BoundedQueryOnlyWorkflowExecutionStateStore(inner), IWorkflowHealthQuery
     {
         public IncidentHealth? LastHealth { get; private set; }
         public WorkflowExecutionStatePageQuery? LastQuery { get; private set; }
+
+        public bool SupportsIncidentStore(IIncidentStateStore selectedIncidentStore) =>
+            ReferenceEquals(selectedIncidentStore, supportedIncidentStore);
 
         public async ValueTask<WorkflowExecutionStatePage> QueryHealthPageAsync(WorkflowExecutionStatePageQuery query, IncidentHealth health, CancellationToken cancellationToken = default)
         {

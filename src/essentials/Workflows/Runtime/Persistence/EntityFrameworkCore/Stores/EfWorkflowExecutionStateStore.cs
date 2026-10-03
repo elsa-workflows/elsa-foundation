@@ -105,6 +105,10 @@ public sealed class EfWorkflowExecutionStateStore(
         CancellationToken cancellationToken = default) =>
         QueryHistoryPageAsync(query, health, cancellationToken);
 
+    public bool SupportsIncidentStore(IIncidentStateStore selectedIncidentStore) =>
+        selectedIncidentStore is EfIncidentStateStore incidents &&
+        incidents.UsesSameBackingStore(context, accessContextAccessor);
+
     private async ValueTask<WorkflowExecutionStatePage> QueryHistoryPageAsync(
         WorkflowExecutionStatePageQuery query,
         IncidentHealth? health,

@@ -66,14 +66,19 @@ public sealed class WorkflowInstanceListService(
         }
 
         query.Validate();
+        var healthQuery = incidentHealth is not null &&
+                          workflowExecutionStateStore is IWorkflowHealthQuery candidateHealthQuery &&
+                          candidateHealthQuery.SupportsIncidentStore(incidentStateStore)
+            ? candidateHealthQuery
+            : null;
         WorkflowExecutionStatePage page;
         if (authorization is AllowAllActivityExecutionInspectionAuthorizationContext && incidentHealth is null)
             page = await workflowExecutionStateStore.QueryPageAsync(query, cancellationToken);
         else if (authorization is AllowAllActivityExecutionInspectionAuthorizationContext && query.CorrelationId is null &&
-                 incidentHealth is not null && workflowExecutionStateStore is IWorkflowHealthQuery healthQuery)
+                 incidentHealth is not null && healthQuery is not null)
             page = await healthQuery.QueryHealthPageAsync(query, Enum.Parse<IncidentHealth>(incidentHealth, ignoreCase: true), cancellationToken);
         else
-            page = await QueryAuthorizedPageAsync(query, incidentHealth, cancellationToken);
+            page = await QueryAuthorizedPageAsync(query, incidentHealth, healthQuery, cancellationToken);
         // Every store in a request resolves the same scoped persistence context, so the per-row reads are issued one
         // at a time. Overlapping them - across rows or within a row - starts a second operation on that one context,
         // which relational providers reject, so the page is composed sequentially rather than fanned out.
@@ -100,6 +105,7 @@ public sealed class WorkflowInstanceListService(
     private async ValueTask<WorkflowExecutionStatePage> QueryAuthorizedPageAsync(
         WorkflowExecutionStatePageQuery query,
         string? incidentHealth,
+        IWorkflowHealthQuery? healthQuery,
         CancellationToken cancellationToken)
     {
         // Health and inspection authorization are not predicates in the provider-neutral page query. Apply both
@@ -110,7 +116,7 @@ public sealed class WorkflowInstanceListService(
         do
         {
             var candidateQuery = query with { PageSize = PagedMaxTake, Cursor = candidateCursor };
-            var candidates = incidentHealth is not null && workflowExecutionStateStore is IWorkflowHealthQuery healthQuery
+            var candidates = incidentHealth is not null && healthQuery is not null
                 ? await healthQuery.QueryHealthPageAsync(candidateQuery, Enum.Parse<IncidentHealth>(incidentHealth, ignoreCase: true), cancellationToken)
                 : await workflowExecutionStateStore.QueryPageAsync(candidateQuery, cancellationToken);
             foreach (var state in candidates.Items)
