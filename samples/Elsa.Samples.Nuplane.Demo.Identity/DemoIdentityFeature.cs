@@ -3,6 +3,7 @@ using CShells.Features;
 using CShells.Lifecycle;
 using Elsa.Api.AspNetCore;
 using Elsa.Foundation.Identity.Api;
+using Elsa.Foundation.Identity.Api.Extensions;
 using Elsa.Foundation.Identity.AspNetCoreIdentity;
 using Elsa.Foundation.Identity.AspNetCoreIdentity.EntityFrameworkCore;
 using Elsa.Foundation.Identity.AspNetCoreIdentity.EntityFrameworkCore.DependencyInjection;
@@ -64,6 +65,20 @@ public sealed class DemoIdentityFeature : IWebShellFeature, IMiddlewareShellFeat
     public bool IsDevelopmentOrDemo { get; set; } = true;
 
     [ManifestSetting(
+        DisplayName = "OpenIddict signing key",
+        Description = "Optional base64-encoded PKCS#8 RSA private key. Set a stable key to keep access tokens valid after a process restart; leave empty for the process-stable development key.",
+        Category = "Security",
+        Secret = true)]
+    public string? SigningKey { get; set; }
+
+    [ManifestSetting(
+        DisplayName = "OpenIddict encryption key",
+        Description = "Optional key material for OpenIddict encryption credentials. When empty, the signing key is used as the derivation source.",
+        Category = "Security",
+        Secret = true)]
+    public string? EncryptionKey { get; set; }
+
+    [ManifestSetting(
         DisplayName = "Identity issuer",
         Description = "Absolute issuer written to first-party access tokens. Set this to the Foundation Host origin.",
         Category = "Identity")]
@@ -100,6 +115,11 @@ public sealed class DemoIdentityFeature : IWebShellFeature, IMiddlewareShellFeat
             throw new InvalidOperationException($"{FeatureName}:AllowedOrigins must contain at least one absolute origin.");
 
         services.AddElsaEndpoints();
+        // AddFoundationIdentityAbstractions registers the policy engine, while these ASP.NET Core marker
+        // services are what make UseAuthorization below valid in a shell-owned pipeline.
+        services.AddAuthentication();
+        services.AddAuthorization();
+        services.AddFoundationIdentityApi();
 
         var seed = BuildInitialAdmin();
         services.AddFoundationAspNetCoreIdentityEntityFrameworkCore(
@@ -114,7 +134,8 @@ public sealed class DemoIdentityFeature : IWebShellFeature, IMiddlewareShellFeat
             {
                 options.IsDefault = true;
                 options.AllowedReturnUrlOrigins = origins;
-            });
+            })
+            .AddEfModuleMigrations<IdentityIamDbContext>("Sqlite");
 
         services.AddIdentityProviderConfigurationEntityFrameworkCore(new IdentityProviderConfigurationEntityFrameworkCoreOptions
         {
@@ -130,6 +151,8 @@ public sealed class DemoIdentityFeature : IWebShellFeature, IMiddlewareShellFeat
             options.IsDevelopmentOrDemo = IsDevelopmentOrDemo;
             options.ConnectionString = OpenIddictConnectionString;
             options.Issuer = Issuer;
+            options.SigningKey = SigningKey;
+            options.EncryptionKey = EncryptionKey;
         });
 
         services.AddDbContext<DemoOpenIddictDbContext>((_, builder) =>

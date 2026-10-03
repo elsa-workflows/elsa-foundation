@@ -1,0 +1,77 @@
+{
+  "CShells": {
+    "Shells": {
+      "default": {
+        "Name": "default",
+        "Features": {
+          "ActivitiesPrimitives": {},
+          "ActivitiesSequence": {},
+          "ActivitiesFlowchart": {},
+          "ActivitiesGraphDesign": {},
+          "ActivitiesGraphRuntime": {},
+          "ActivitiesRuntime": {},
+          "ActivitiesDesignApi": {},
+          "ActivitiesDesignEntityFrameworkCore": {},
+          "ActivitiesDesignReconciliation": {},
+          "ClrActivityReconciliation": {},
+          "ApiCapabilities": {},
+          "Expressions": {},
+          "ExpressionsApi": {},
+          "WorkflowsDesignApi": {},
+          "WorkflowDesignValidations": {},
+          "WorkflowsDesignEntityFrameworkCore": {},
+          "WorkflowsPublishing": {},
+          "WorkflowsPublishingApi": {},
+          "WorkflowsPublishingEntityFrameworkCore": {},
+          "WorkflowsRuntimeApi": {
+            "WorkflowAlterationPayloadProtectionActiveKeyId": "toolbox-demo",
+            "WorkflowAlterationPayloadProtectionKeys": {
+              "toolbox-demo": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="
+            }
+          },
+          "WorkflowsRuntimeEntityFrameworkCore": {
+            "RecoveryContinuationSigningKey": "toolbox-demo-only-recovery-key-2026",
+            "HierarchyCursorSigningKey": "toolbox-demo-only-hierarchy-key-2026"
+          },
+          "WorkflowsRuntimeTriggers": {},
+          "WorkflowsRuntimeRecurringTriggers": {},
+          "WorkflowsRuntimeTracing": {},
+          "WorkflowsDashboard": {},
+          "WorkflowsDashboardEntityFrameworkCore": {},
+          "AttentionApi": {},
+          "WorkflowsExecutionEvidence": {},
+          "StudioPreferences": {},
+          "StudioPreferencesApi": {},
+          "StudioPreferencesEntityFrameworkCore": {},
+          "Serialization": {},
+          "Primitives": {},
+          "Mediator": {},
+          "Events": {},
+          "Tasks": {},
+          "MemoryCache": {},
+          "FileSystemDistributedLocking": {},
+          "Renewals": {},
+          "RenewalsEntityFrameworkCore": {},
+          "RenewalsActivities": {},
+          "FoundationDemoDesignerActivities": {},
+          "FoundationDemoIdentity": {
+            "SeedAdminUserName": "admin",
+            "SeedAdminPassword": "Password123!",
+            "SeedAdminEmail": "admin@elsa.local",
+            "SeedAdminRoleName": "administrator",
+            "Issuer": "http://localhost:5311/",
+            "AllowedOrigins": [
+              "http://localhost:5313",
+              "http://127.0.0.1:5313"
+            ]
+          }
+        },
+        "Configuration": {
+          "WebRouting": {
+            "Path": ""
+          }
+        }
+      }
+    }
+  }
+}

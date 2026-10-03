@@ -1,0 +1,57 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <IsPackable>false</IsPackable>
+    <TargetFramework>net10.0</TargetFramework>
+    <!-- A portable Nuplane feed needs the package dependency graph even where the SDK
+         would prune a package supplied by its shared framework (for example System.Text.Json). -->
+    <RestoreEnablePackagePruning>false</RestoreEnablePackagePruning>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../../../../src/essentials/Primitives/Hosting/Elsa.Primitives.Hosting.csproj" />
+    <!-- OpenIddict's lower dependency bound resolves to 10.0.7 without this demo-feed pin.
+         10.0.10 addresses the XML security advisories reported during preparation. -->
+    <PackageReference Include="System.Security.Cryptography.Xml" VersionOverride="10.0.10" />
+    <PackageReference Include="System.Text.Json" VersionOverride="10.0.10" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="../../../../src/essentials/Activities/Primitives/Elsa.Activities.Primitives.csproj" />
+    <ProjectReference Include="../../../../src/essentials/Activities/Sequence/Elsa.Activities.Sequence.csproj" />
+    <ProjectReference Include="../../../../src/essentials/Activities/Flowchart/Elsa.Activities.Flowchart.csproj" />
+    <ProjectReference Include="../../../../src/essentials/Activities/Graph/Design/Elsa.Activities.Graph.Design.csproj" />
+    <ProjectReference Include="../../../../src/essentials/Activities/Graph/Runtime/Elsa.Activities.Graph.Runtime.csproj" />
+    <ProjectReference Include="../../../../src/essentials/Activities/Runtime/Elsa.Activities.Runtime.csproj" />
+    <ProjectReference Include="../../../../src/essentials/Activities/Design/Api/Elsa.Activities.Design.Api.csproj" />
+    <ProjectReference Include="../../../../src/essentials/Activities/Design/Persistence/EntityFrameworkCore/Elsa.Activities.Design.Persistence.EntityFrameworkCore.csproj" />
+    <ProjectReference Include="../../../../src/essentials/Activities/Design/Reconciliation/Clr/Elsa.Activities.Design.Reconciliation.Clr.csproj" />
+    <ProjectReference Include="../../../../src/essentials/Api/Capabilities/Elsa.Api.Capabilities.csproj" />
+    <ProjectReference Include="../../../../src/essentials/Expressions/Api/Elsa.Expressions.Api.csproj" />
+    <ProjectReference Include="../../../../src/essentials/Expressions/Elsa.Expressions.csproj" />
+    <ProjectReference Include="../../../../src/essentials/Events/Elsa.Events.csproj" />
+    <ProjectReference Include="../../../../src/essentials/Mediator/Elsa.Mediator.csproj" />
+    <ProjectReference Include="../../../../src/essentials/Activities/Design/Reconciliation/Elsa.Activities.Design.Reconciliation.csproj" />
+    <ProjectReference Include="../../../../src/essentials/Workflows/Design/Validations/Elsa.Workflows.Design.Validations.csproj" />
+    <ProjectReference Include="../../../../src/essentials/Workflows/Design/Api/Elsa.Workflows.Design.Api.csproj" />
+    <ProjectReference Include="../../../../src/essentials/Workflows/Design/Persistence/EntityFrameworkCore/Elsa.Workflows.Design.Persistence.EntityFrameworkCore.csproj" />
+    <ProjectReference Include="../../../../src/essentials/Workflows/Publishing/Api/Elsa.Workflows.Publishing.Api.csproj" />
+    <ProjectReference Include="../../../../src/essentials/Workflows/Publishing/Persistence/EntityFrameworkCore/Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore.csproj" />
+    <ProjectReference Include="../../../../src/essentials/Workflows/Runtime/Api/Elsa.Workflows.Runtime.Api.csproj" />
+    <ProjectReference Include="../../../../src/essentials/Workflows/Runtime/Resumption/Elsa.Workflows.Runtime.Resumption.csproj" />
+    <ProjectReference Include="../../../../src/essentials/Workflows/Runtime/Scheduling/Elsa.Workflows.Runtime.Scheduling.csproj" />
+    <ProjectReference Include="../../../../src/essentials/Workflows/Runtime/Persistence/EntityFrameworkCore/Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.csproj" />
+    <ProjectReference Include="../../../../src/essentials/Workflows/ExecutionEvidence/Elsa.Workflows.ExecutionEvidence.csproj" />
+    <ProjectReference Include="../../../../src/essentials/Workflows/Dashboard/Persistence/EntityFrameworkCore/Elsa.Workflows.Dashboard.Persistence.EntityFrameworkCore.csproj" />
+    <ProjectReference Include="../../../../src/essentials/Attention/Api/Elsa.Attention.Api.csproj" />
+    <ProjectReference Include="../../../../src/essentials/Studio/Preferences/Api/Elsa.Studio.Preferences.Api.csproj" />
+    <ProjectReference Include="../../../../src/essentials/Studio/Preferences/Persistence/EntityFrameworkCore/Elsa.Studio.Preferences.Persistence.EntityFrameworkCore.csproj" />
+    <ProjectReference Include="../../../../src/essentials/Foundation/Identity/Api/Elsa.Foundation.Identity.Api.csproj" />
+    <ProjectReference Include="../../../../src/essentials/Foundation/Identity/AspNetCoreIdentity/EntityFrameworkCore/Elsa.Foundation.Identity.AspNetCoreIdentity.EntityFrameworkCore.csproj" />
+    <ProjectReference Include="../../../../src/essentials/Foundation/Identity/OpenIddict/Elsa.Foundation.Identity.OpenIddict.csproj" />
+    <ProjectReference Include="../../../../src/essentials/Foundation/Identity/Oidc/Elsa.Foundation.Identity.Oidc.csproj" />
+    <ProjectReference Include="../../../../src/essentials/Serialization/SystemText/Elsa.Serialization.SystemText.csproj" />
+    <ProjectReference Include="../../../../src/essentials/Serialization/Newtonsoft/Elsa.Serialization.Newtonsoft.csproj" />
+    <ProjectReference Include="../../../../src/essentials/Caching/Memory/Elsa.Caching.Memory.csproj" />
+    <ProjectReference Include="../../../../src/essentials/Locking/FileSystem/Elsa.Locking.FileSystem.csproj" />
+    <ProjectReference Include="../../../../src/essentials/Tasks/Elsa.Tasks.csproj" />
+    <ProjectReference Include="../../../../samples/Elsa.Samples.Nuplane.Demo.Identity/Elsa.Samples.Nuplane.Demo.Identity.csproj" />
+  </ItemGroup>
+</Project>

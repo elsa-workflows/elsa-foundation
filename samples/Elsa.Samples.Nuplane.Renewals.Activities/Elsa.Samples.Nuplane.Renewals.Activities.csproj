@@ -1,0 +1,65 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    The workflow-designer half of the schema-rollout demo: a "Register renewal" activity that writes through the Renewals module's
+    RenewalStore. It ships in lockstep with Elsa.Samples.Nuplane.Renewals: DemoVersion=1 (the default) is release 1.0.0, whose
+    activity has a PolicyReference input, and DemoVersion=2 is release 1.1.0, whose activity also has a ProposedPremium input stored in the
+    column release 1.1.0 of Renewals adds. As in the Renewals project, V1/ and V2/ hold everything that differs, and the
+    DemoVersion global property also selects the Renewals release this package depends on.
+
+    The separate package lets a host compose the renewal domain independently of the workflow activity. For the integrated
+    Studio demo, Foundation.Host acquires both packages and the workflow feature closure through Nuplane.
+  -->
+  <PropertyGroup>
+    <DemoVersion Condition="'$(DemoVersion)' == ''">1</DemoVersion>
+    <Version Condition="'$(DemoVersion)' == '2'">1.1.0</Version>
+    <Version Condition="'$(DemoVersion)' != '2'">1.0.0</Version>
+    <BaseOutputPath>bin/v$(DemoVersion)/</BaseOutputPath>
+    <IntermediateOutputPath>obj/v$(DemoVersion)/$(Configuration)/</IntermediateOutputPath>
+  </PropertyGroup>
+
+  <PropertyGroup>
+    <IsPackable>true</IsPackable>
+    <PackageId>Elsa.Samples.Nuplane.Renewals.Activities</PackageId>
+    <Authors>Elsa Workflows</Authors>
+    <Description>Sample Nuplane-loaded workflow activity for the schema-rollout demo: "Register renewal" writes a renewal through the Renewals module, and in release 1.1.0 also its premium.</Description>
+    <PackageTags>elsa;cshells;nuplane;sample;activities;schema-rollout</PackageTags>
+    <PackageReadmeFile>PACKAGE.md</PackageReadmeFile>
+    <NoWarn>$(NoWarn);NU5104;NU5128</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\essentials\Activities\Sequence\Elsa.Activities.Sequence.csproj" />
+    <ProjectReference Include="..\..\src\essentials\Activities\Flowchart\Elsa.Activities.Flowchart.csproj" />
+    <ProjectReference Include="..\..\src\essentials\Activities\Design\Reconciliation\Clr\Elsa.Activities.Design.Reconciliation.Clr.csproj" />
+    <Compile Remove="V2/**" Condition="'$(DemoVersion)' != '2'" />
+    <Compile Remove="V1/**" Condition="'$(DemoVersion)' == '2'" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="CShells.Abstractions" GeneratePathProperty="true" />
+    <PackageReference Include="Elsa.Specifications.PackageManifest.Generator" PrivateAssets="all" />
+  </ItemGroup>
+
+  <Target Name="AddCShellsAbstractionsToPackageManifestReferences" BeforeTargets="GenerateElsaPackageManifest">
+    <ItemGroup>
+      <ReferencePath Include="$(TargetDir)*.dll" Condition="'$(TargetDir)' != '' and Exists('$(TargetDir)')" />
+      <ReferencePath Include="$(PkgCShells_Abstractions)/lib/$(TargetFramework)/CShells.Abstractions.dll" Condition="'$(PkgCShells_Abstractions)' != '' and Exists('$(PkgCShells_Abstractions)/lib/$(TargetFramework)/CShells.Abstractions.dll')" />
+    </ItemGroup>
+  </Target>
+
+  <ItemGroup>
+    <!-- The repository README links to files a feed does not carry, so the package has a short readme of its own. -->
+    <None Include="PACKAGE.md" Pack="true" PackagePath="\" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- The Renewals release of the same DemoVersion: a dependency of the package, acquired from the same feed. -->
+    <ProjectReference Include="..\Elsa.Samples.Nuplane.Renewals\Elsa.Samples.Nuplane.Renewals.csproj" />
+    <!-- The activity contracts are the workflow host's own, shared with every package it loads. -->
+    <ProjectReference Include="..\..\src\essentials\Activities\Design\Core\Elsa.Activities.Design.Core.csproj" PrivateAssets="all" />
+    <ProjectReference Include="..\..\src\essentials\Activities\Runtime\Core\Elsa.Activities.Runtime.Core.csproj" PrivateAssets="all" />
+    <ProjectReference Include="..\..\src\essentials\Primitives\Primitives\Elsa.Primitives.csproj" PrivateAssets="all" />
+  </ItemGroup>
+
+</Project>

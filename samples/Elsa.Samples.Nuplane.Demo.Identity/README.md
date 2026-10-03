@@ -47,11 +47,20 @@ The package declares the `ef-provider` capability for SQLite. A Foundation Host 
 the full package closure, including this package's Foundation Identity dependencies, `Microsoft.EntityFrameworkCore.Sqlite`,
 and `OpenIddict.EntityFrameworkCore`. The host's shared EF Core and Elsa contract assemblies must remain the single copies.
 
-The demo flag requires `ASPNETCORE_ENVIRONMENT=Development`; it uses an ephemeral OpenIddict signing key and relaxed
-local cookie transport. The seeded password is a demo secret and should be supplied through shell configuration or an
-environment-specific overlay. Foundation Host data protection should be configured with its existing host-level settings
-when cookies need to survive process recreation or be shared by the two demo hosts.
+The demo flag requires `ASPNETCORE_ENVIRONMENT=Development`; with no `SigningKey`, Elsa uses its existing
+process-stable development key and relaxed local cookie transport. That key survives shell/package reloads in the same
+Foundation Host process, but access tokens issued before a process restart require a new sign-in. Set the existing
+`SigningKey` setting to a stable base64 PKCS#8 RSA private key when the demo must survive a process restart; an optional
+`EncryptionKey` can be supplied separately. The seeded password is a demo secret and should be supplied through shell
+configuration or an environment-specific overlay. Foundation Host data protection should be configured with its
+existing host-level settings when cookies need to survive process recreation or be shared by the two demo hosts.
 
 On shell activation, the IAM/provider-configuration EF modules run through the standard Elsa migration lifecycle, and the
 portable OpenIddict context ensures its own schema. The OpenIddict database is deliberately separate because EF's
 `EnsureCreated` must not be pointed at the already-populated IAM database.
+
+The feature deliberately stays in legacy connection-string mode. It owns two EF modules, so it must not carry
+`EfPersistenceResourceParticipant`: named-resource enrollment requires one module and one context identity per feature.
+The EF tooling still discovers both `Identity.Iam` and `Identity.ProviderConfiguration` through `UsesEfModule`; use the
+host-selected module operation with an explicit identity database connection when preparing them. The CLI's `all`
+selection means every EF module in the host closure, so it is not an identity-only target.
