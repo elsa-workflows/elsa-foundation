@@ -37,7 +37,7 @@ public sealed class ExpressionToolingProviderContractTests
     public async Task Providers_return_only_context_symbols_and_never_need_an_evaluator()
     {
         var provider = new JavaScriptExpressionToolingProvider();
-        var scope = CreateScope("JavaScript", [new("input-name", "input", ExpressionSymbolKind.WorkflowInput, Documentation: "Visible input")]);
+        var scope = CreateJavaScriptScope([new("input-name", "input", ExpressionSymbolKind.WorkflowInput, Documentation: "Visible input")]);
 
         var completion = await provider.GetCompletionsAsync(new(scope, "args.inp", new(0, 8)), CancellationToken.None);
 
@@ -60,7 +60,7 @@ public sealed class ExpressionToolingProviderContractTests
                     new("City", new("String", ExpressionValueKind.Scalar, false))
                 ]))
             ]);
-        var scope = CreateScope("JavaScript", [new("customer", "customer", ExpressionSymbolKind.WorkflowInput, customerShape)]);
+        var scope = CreateJavaScriptScope([new("customer", "customer", ExpressionSymbolKind.WorkflowInput, customerShape)]);
 
         var completion = await provider.GetCompletionsAsync(
             new(scope, "args.customer.Addr", new(0, "args.customer.Addr".Length)),
@@ -85,7 +85,7 @@ public sealed class ExpressionToolingProviderContractTests
             "Customer",
             ExpressionValueKind.Object,
             Members: [new("name", new("String", ExpressionValueKind.Scalar, false), "Customer name.")]);
-        var scope = CreateScope("JavaScript", [
+        var scope = CreateJavaScriptScope([
             new("current-value", "currentValue", ExpressionSymbolKind.Variable, new("Int32")),
             new("customer", "customer", ExpressionSymbolKind.Variable, customerShape)
         ]);
@@ -111,7 +111,7 @@ public sealed class ExpressionToolingProviderContractTests
     public async Task JavaScript_exposes_frozen_empty_args_and_selected_standard_global_metadata()
     {
         var provider = new JavaScriptExpressionToolingProvider();
-        var scope = CreateScope("JavaScript", []);
+        var scope = CreateJavaScriptScope([]);
 
         var root = await provider.GetCompletionsAsync(new(scope, string.Empty, new(0, 0)), CancellationToken.None);
         var pow = await provider.GetCompletionsAsync(new(scope, "Math.po", new(0, 7)), CancellationToken.None);
@@ -136,10 +136,47 @@ public sealed class ExpressionToolingProviderContractTests
     }
 
     [Fact]
+    public void JavaScript_declares_a_stable_immutable_runtime_tooling_catalog()
+    {
+        var first = new JavaScriptExpressionToolingProvider().DeclaredCatalog;
+        var second = new JavaScriptExpressionToolingProvider().DeclaredCatalog;
+
+        Assert.NotNull(first);
+        Assert.Same(JavaScriptRuntimeProfile.DeclaredToolingCatalog, first);
+        Assert.Equal(first.Revision, second!.Revision);
+        Assert.False(string.IsNullOrWhiteSpace(first.Revision));
+        Assert.Contains(first.Symbols, symbol => symbol.SymbolId == "javascript:profile:Math");
+        Assert.Contains(first.Symbols, symbol => symbol.SymbolId == "javascript:profile:JSON.parse" && symbol.Signatures is not null);
+        var symbols = Assert.IsAssignableFrom<IList<ExpressionSymbol>>(first.Symbols);
+        Assert.Throws<NotSupportedException>(() => symbols[0] = new("replacement", "replacement", ExpressionSymbolKind.Function));
+    }
+
+    [Fact]
+    public async Task JavaScript_does_not_restore_profile_symbols_omitted_from_authoritative_context()
+    {
+        var provider = new JavaScriptExpressionToolingProvider();
+        var catalog = JavaScriptRuntimeProfile.DeclaredToolingCatalog.Symbols;
+        var authorized = new[]
+        {
+            catalog.Single(symbol => symbol.SymbolId == "javascript:profile:Math"),
+            catalog.Single(symbol => symbol.SymbolId == "javascript:profile:JSON")
+        };
+        var scope = CreateScope("JavaScript", authorized);
+
+        var mathCompletion = await provider.GetCompletionsAsync(new(scope, "Math.po", new(0, 7)), CancellationToken.None);
+        var mathHover = await provider.GetHoverAsync(new(scope, "Math.pow", new(0, 8)), CancellationToken.None);
+        var jsonCompletion = await provider.GetCompletionsAsync(new(scope, "JSON.pa", new(0, 7)), CancellationToken.None);
+
+        Assert.Equal(ExpressionToolingOutcomeState.SupportedEmpty, mathCompletion.State);
+        Assert.Equal(ExpressionToolingOutcomeState.SupportedEmpty, mathHover.State);
+        Assert.Equal(ExpressionToolingOutcomeState.SupportedEmpty, jsonCompletion.State);
+    }
+
+    [Fact]
     public async Task JavaScript_does_not_duplicate_runtime_getVariable_for_a_variable_with_the_same_generated_name()
     {
         var provider = new JavaScriptExpressionToolingProvider();
-        var scope = CreateScope("JavaScript", [new("variable", "variable", ExpressionSymbolKind.Variable)]);
+        var scope = CreateJavaScriptScope([new("variable", "variable", ExpressionSymbolKind.Variable)]);
 
         var root = await provider.GetCompletionsAsync(new(scope, string.Empty, new(0, 0)), CancellationToken.None);
 
@@ -150,7 +187,7 @@ public sealed class ExpressionToolingProviderContractTests
     public async Task JavaScript_getter_metadata_preserves_runtime_support_for_digit_leading_variable_keys()
     {
         var provider = new JavaScriptExpressionToolingProvider();
-        var scope = CreateScope("JavaScript", [new("numeric-key", "123", ExpressionSymbolKind.Variable)]);
+        var scope = CreateJavaScriptScope([new("numeric-key", "123", ExpressionSymbolKind.Variable)]);
 
         var completion = await provider.GetCompletionsAsync(new(scope, "get12", new(0, 5)), CancellationToken.None);
 
@@ -306,7 +343,7 @@ public sealed class ExpressionToolingProviderContractTests
             "Producer output.");
 
         var javascript = new JavaScriptExpressionToolingProvider();
-        var javascriptScope = CreateScope("JavaScript", [symbol]);
+        var javascriptScope = CreateJavaScriptScope([symbol]);
         var javascriptCompletion = await javascript.GetCompletionsAsync(
             new(javascriptScope, "args.producer.", new(0, "args.producer.".Length)),
             CancellationToken.None);
@@ -468,4 +505,7 @@ public sealed class ExpressionToolingProviderContractTests
         var context = new ExpressionAuthoringContext(ExpressionToolingContractVersion.V1, document, "context", "catalog", symbols, new());
         return new(ExpressionToolingContractVersion.V1, document, context);
     }
+
+    private static ExpressionToolingRequestScope CreateJavaScriptScope(IReadOnlyList<ExpressionSymbol> symbols) =>
+        CreateScope("JavaScript", JavaScriptRuntimeProfile.DeclaredToolingCatalog.Symbols.Concat(symbols).ToArray());
 }

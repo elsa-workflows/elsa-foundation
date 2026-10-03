@@ -51,8 +51,8 @@ The Draft-validation contributor (`IDraftValidator`) lives in [`Elsa.Workflows.D
 
 - **Kind:** Authoritative location-to-metadata contributor.
 - **Registration:** add implementations as `IExpressionAuthoringContextSource`; the scoped
-  `IExpressionAuthoringContextService` selects the first owning source and bounds/paginates its
-  output.
+  `IExpressionAuthoringContextService` selects the first owning source, composes the selected
+  expression provider's optional declared profile, then bounds/searches/pages the resulting catalog.
 - **Boundary:** validate the requested draft/node/property against authored Design state, apply
   authorization and host policy before returning metadata, and never evaluate expressions or
   disclose runtime values.
@@ -70,13 +70,20 @@ The Draft-validation contributor (`IDraftValidator`) lives in [`Elsa.Workflows.D
 ### `IExpressionAuthoringSymbolFilter` *(Core — `Elsa.Workflows.Design.Core`)*
 
 - **Kind:** Streaming Permission and Host Policy symbol filter (add-don't-replace).
-- **Registration:** add filters as `IExpressionAuthoringSymbolFilter`; each candidate is passed
-  through the chain before it enters the bounded context catalog.
+- **Registration:** add filters as `IExpressionAuthoringSymbolFilter`; the persisted source filters
+  its source symbols, while the scoped context service applies the same chain only to selected-provider
+  profile candidates. Source symbols are not filtered twice.
 - **Boundary:** return `null` to omit a restricted symbol, never add runtime values, and pair
   policy-dependent symbol filtering with an `IExpressionAuthoringContextFilter` that stamps the
   corresponding opaque `PolicyFingerprint`.
-- **Scale:** filtering is applied while candidates are enumerated, so the source retains at most
-  the 5,500 authorized symbols required by the provider boundary and can stop work at that bound.
+- **Scale:** a declared provider profile has at most 500 unique stable IDs. Profile candidates are
+  filtered first and reserve space before source entries; the combined provider context is capped at
+  5,500 symbols. A profile ID replaces matching source IDs even when policy denies that candidate.
+  Distinct IDs with the same display name remain separate.
+- **Revision:** when a profile is composed, its opaque revision is incorporated independently into
+  the context and symbol-catalog revisions before stale checks and paging. Permission and policy
+  revision fields from the source remain intact; a provider without a profile leaves source revisions
+  unchanged.
 
 ### `IActivityInputOptionsProvider` *(Core — `Elsa.Workflows.Design.Core`)*
 
