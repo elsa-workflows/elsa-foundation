@@ -2,7 +2,22 @@
 
 Program [#2334](https://github.com/elsa-workflows/elsa-foundation/issues/2334), feature [#2336](https://github.com/elsa-workflows/elsa-foundation/issues/2336), canonical [spec192](../../../specs/192-incident-troubleshooting/spec.md).
 
-Status: implementation and verification in progress. No delivery acceptance claimed.
+Status: implementation and automated/HTTP qualification passed at the references below. Final current-source browser acceptance, merge and resulting-main qualification remain pending. No completed delivery is claimed.
+
+## Latest qualification
+
+| Surface | Qualified source | Evidence | Remaining gate |
+|---|---|---|---|
+| Foundation | Product `6a00584e865c868b228dd766c582d5ca554da6ec`; qualified PR head `397fb28a7147b60f535774ab58ae2764a90470b2` | Current backend combined regressions 129/129, normal-host HTTP and retained control proof; required CI/architecture/core-only/maps and exact-head review passed | Evidence-only update must qualify on its own PR head; merge and resulting-main checks |
+| Studio | `733dc511230480137f6da06a32e02a67d1b1b499` | Root affected suites 208/208; affected/module 162/162, typecheck/lint/bundle, normal Release Web build and all eight PR checks passed; exact review has no findings | Final browser matrix/screenshots; merge and resulting-main checks |
+
+[Studio qualification record](studio-733dc5-qualification.json) contains exact check/review references. [Final regression proof](studio-733dc5-verification.txt) preserves the valid repeated-activation predecessor failure and restored passing suites; the earlier unmounted-button test is excluded. [Current Studio build attestation](studio-733dc5-build-attestation.json) identifies the normal host assemblies and assets. These qualified references are verification checkpoints, not a claim that either PR has merged.
+
+Chrome automation is held by an open extension UI. The tool requires the user to dismiss it and reply continue before final manual acceptance can resume. Screenshots 14–21 remain explicitly predecessor evidence. No current-source visual acceptance or real viewport-panning proof is inferred from tests or retained fixtures.
+
+## Evidence recording follow-through
+
+T019 scoped verification and T022 independent code/evidence review are recorded as complete; T021 final browser acceptance and T023 merge/resulting-main qualification remain open. Promoting this record and completing those two task checkboxes made only the generated spec-status tally stale. The narrow `maps` refresh changes it from 19/4 to 21/2; the generated findings report and manifest are unchanged. Root reviewed the findings, and the authoritative `dotnet run --project tools/maps/Elsa.Maps.Generator -c Release -p:RestoreLockedMode=true -- check` passed after refresh. The report's local references, exact eight successful Studio check SHAs, matching no-findings review and current DLL/46 JavaScript hashes were checked before commit. A bounded independent audit found no material documentation correction, confirmed the exact qualification records and byte-matching retained attestations, and accepted the completed/pending task split. No runtime or Studio code changed in this evidence follow-through.
 
 ## Before state
 
@@ -22,22 +37,22 @@ Status: implementation and verification in progress. No delivery acceptance clai
 
 | Scenario | Regression evidence | Real browser/HTTP evidence | Status |
 |---|---|---|---|
-| Undefined JS input and durable exact association | Pending | Pending rebuilt host | Pending |
-| Failed input vs absent/unavailable evidence | Pending | Pending | Pending |
-| Active/blocking/healthy filtering across pages | Pending | Pending REST script | Pending |
-| Healthy and resolved/suppressed history | Pending | Pending | Pending |
-| Nonblocking and retry policy/lifecycle | Pending | Pending composed/fixture scope attribution | Pending |
-| Exact repeated occurrence and nested scopes | Pending | Pending | Pending |
-| Runtime Flowchart/Sequence/BPMN cue mapping | Pending | Pending | Pending |
-| Incident/activity reciprocal navigation | Pending | Pending | Pending |
-| Unassociated engine incident | Pending | Pending | Pending |
-| Permission/loading/older-server evidence | Pending | Pending | Pending |
-| Pane layouts, keyboard and current themes | Pending | Pending screenshots | Pending |
-| Dispatch accepted with incident feedback | Pending | Pending | Pending |
+| Undefined JS input and durable exact association | 129/129 current backend combined regressions | Normal source6a HTTP passes; final Studio cross-surface browser counts pending | HTTP passed; browser pending |
+| Failed input vs absent/unavailable evidence | Backend capture/authorization controls; Studio input suite passed | Source6a HTTP proves captureFailed with no fabricated payload; predecessor screenshot15 | Final browser pending |
+| Active/blocking/healthy filtering across pages | Backend query/cursor/ABI and CI passed | Source6a real page-size-one traversal on both routes passed | HTTP passed; final list UI pending |
+| Healthy and resolved/suppressed history | Runtime health/Studio overlay controls passed | Actual healthy source6a run; retained resolved fixture0 active; predecessor healthy screenshot17 | Final browser pending |
+| Nonblocking and retry policy/lifecycle | Policy/poison controls passed; Studio health controls passed | Retained nonblocking1/1/0 and synthetic retry0/0/0 controls pass; these are presentation fixtures, not engine transitions | Final browser pending |
+| Exact repeated occurrence and nested scopes | Current exact association, race and placement regressions passed | Actual nested runtime failure and actual For two-occurrence run with a seeded historical incident; REST controls pass | Final browser pending |
+| Runtime Flowchart/Sequence/BPMN cue mapping | Current pinned graph and BPMN suites passed | Predecessor real Flowchart/Sequence; no final-source BPMN browser proof | Final browser pending |
+| Incident/activity reciprocal navigation | Current Workbench, cue and layout regressions passed | Predecessor screenshot/control; final nested/maximized proof pending | Final browser pending |
+| Unassociated engine incident | Run-level/no-guessed-association controls passed | Persisted unassociated Open fixture1/1/0 passes REST | Final browser pending |
+| Permission/loading/older-server evidence | Current permission, unsupported, recovery and race controls passed | No final real-browser reduced-permission claim | Compiled controls passed |
+| Pane layouts, keyboard and current themes | Current layout/cue/BPMN focus regressions passed | Predecessor screenshots14/19/20/21; final responsive/theme matrix pending | Final browser pending |
+| Dispatch accepted with incident feedback | Dispatch/component regressions and normal HTTP passed | Predecessor real browser dispatch screenshot18; final repeat pending | Final browser pending |
 
 ## Delivery gates
 
-Affected suites/typecheck/lint/build, architecture/maps, independent exact-head review, mutation/revert proof, PR CI and post-merge main CI/Maps are pending. Existing unrelated Foundation main-red CI #2293 is retained for independent reconciliation; this program does not claim its cause fixed.
+Affected suites/typecheck/lint/build, architecture/maps, independent review and targeted predecessor-failure proof passed at the qualified references above. This evidence-only update remains subject to its own PR-head checks. Final manual browser acceptance, merges and post-merge main CI/Maps remain pending. Existing unrelated Foundation main-red CI #2293 is retained for independent reconciliation; this program does not claim its cause fixed.
 
 No user/peer host was restarted and no production deployment is in scope. The saved human preferences in both primary checkouts select organization branches and draft PRs; those ignored local preferences have been copied into the program worktrees. No new Git workflow choice is required.
 
@@ -221,3 +236,50 @@ Normal Release Workbench rebuild passed **93 warnings/0 errors**, `/tmp/incident
 Studio `495752635ca0d5304b95b0dbda3620663a147c84` resolves [the later cache-refresh finding](https://github.com/elsa-workflows/elsa-foundation-studio/pull/556#discussion_r4172989781) with a separate load generation. Initial load success/error and both on-demand and Load more association cache writes reject results from a prior refresh; changing navigation within the same load can still cache valid evidence. Two Workbench races failed against exact predecessor a7 (`/tmp/incident-studio-4172989781-mutation-red.log`), then restored integration/workflowInstances passed **26/26**, `/tmp/incident-studio-4172989781-integration-final.log`. Typecheck/scoped ESLint and the bundle budget passed (`/tmp/incident-studio-4172989781-{typecheck,eslint,bundle}.log`). Root reviewed the source/test diff, pushed, [replied with proof](https://github.com/elsa-workflows/elsa-foundation-studio/pull/556#discussion_r4173066314), resolved the thread and explicitly requested review. All CI at the preceding a7 head passed; current495 CI/review remain pending.
 
 The ordinary495 Release Web rebuild passed **0 warnings/0 errors**, `/tmp/incident-final-495752-studio-web-build.log`. Root stopped only verified owned PID73855; [the new build attestation](studio-495752-build-attestation.json) records the replacement host and 46 JavaScript hashes. Chrome's required extension dismissal response is still outstanding. Current-source browser acceptance, exact-head gates, merges and resulting-main qualification are not complete.
+
+
+## Current integration checkpoint — Studio dc9f13 / Foundation 397
+
+Foundation `397fb28a7147b60f535774ab58ae2764a90470b2` passed all required PR checks, including [CI37121908182](https://github.com/elsa-workflows/elsa-foundation/actions/runs/37121908182), architecture/core-only gates and [Maps37121907934](https://github.com/elsa-workflows/elsa-foundation/actions/runs/37121907934). The main-only alert job was skipped on this PR. Exact-head Copilot review at 12:13:39 UTC has no findings. Product source remains 6a; its ordinary rebuilt host and real HTTP/control proof above remain valid. Backend tasks [2338](https://github.com/elsa-workflows/elsa-foundation/issues/2338#issuecomment-5969185246) and [2339](https://github.com/elsa-workflows/elsa-foundation/issues/2339#issuecomment-5969185681) are now PR gates passed and remain In Progress.
+
+Studio `dc9f13fa41f78b2eae985096deedf6b2c4c53c32` reconciles successful exact-lookup bookkeeping, older same-load batch results and pinned identity collisions. Success clears only the exact execution's pending/failure state and preserves other unresolved IDs. A late batch cannot requeue that success or overwrite its newer summary. Canvas status/cues and explicit-node navigation use the pinned executable mapping before raw authored fallback. Root reviewed all five files and passed ten affected suites **150/150**, `/tmp/incident-final-dc9f13-integrated-tests.log`. All six new tests fail against exact495 predecessor and pass restored (`/tmp/incident-studio-495-all-review-regressions-red.log`); worker focused suites **76/76**, typecheck/scoped ESLint/build and unchanged **126.21/127.50 kB** bundle budget passed (`/tmp/incident-studio-495-final-recheck-{tests,typecheck,eslint,build}.log`). Both inline findings received direct proof replies, were resolved, and explicit Copilot re-review was requested after the verified push.
+
+Ordinary Studio Release Web build passed **0 warnings/0 errors**, `/tmp/incident-final-dc9f13-studio-web-build.log`. Root stopped only verified owned PID87417 and started PID 26953; [dc9f13 build attestation](studio-dc9f13-build-attestation.json) records source, DLL and 46 JavaScript hashes. The host responds at private 7130. Current Studio CI/re-review are pending at this checkpoint. Final current-source browser matrix is still waiting for the user to dismiss Chrome's extension UI and reply continue. No merge, resulting-main qualification or program completion is claimed.
+
+
+## Studio accessible summaries and frozen BPMN review follow-up
+
+Exact dc9f13 review at 12:40:19 UTC resolved both identity findings and recorded four previously missed overview concerns. Root validated three and declined the keyboard concern after tracing installed `@xyflow/react` 12.11.0 NodeWrapper and `@xyflow/system` 0.0.77: `isInputDOMNode` already returns true for a `.nokey` ancestor, and both cue buttons already use that class. No artificial parent-keydown regression or keyboard mutation was added. [The correction disposition](https://github.com/elsa-workflows/elsa-foundation-studio/pull/556#issuecomment-5969313418) records the source evidence.
+
+Studio product `92cd67b412fb233c8d521daf081db62932b0f0e0` fixes accessible run health/status, exposes visible incident activity/input/cause/health as the selection button name, and passes frozen occurrence presentation through the real run-viewer BPMN adapter. Explicit BPMN element names and absent-presentation catalog fallback remain unchanged. Root reviewed all six files and passed eleven affected suites **205/205**, `/tmp/incident-final-92cd67-integrated-tests.log`. Root independently substituted exact dc9f13 production with the final 92cd67 tests retained: exactly 4 behavior regressions fail and 97 other tests pass; restored source passes 101/101 with byte restoration verified (`/tmp/incident-final-92cd67-{exact-red,restored-green}.log`). Worker typecheck/scoped lint and unchanged bundle limits passed. Normal Release Web build passed 0 warnings/errors (`/tmp/incident-final-92cd67-studio-web-build.log`); only verified owned PID 26953 was stopped, replacement PID 55947 is attested in [92cd67 build attestation](studio-92cd67-build-attestation.json) with 46 JavaScript hashes. This is product `92cd67` proof, not a final-browser acceptance claim.
+
+CI at `92cd67` found a stale module-test selector expecting the former exact row accessible label (1498 tests passed, one failed). Test-only head `a4cfc70998c17fb5ba48631c4292d8408c90a047` updates that expectation; the complete module suite passes 128/128 and scoped ESLint passes. Product source remains `92cd67`. Its required CI checks now pass at the new head, including [CI37124730012](https://github.com/elsa-workflows/elsa-foundation-studio/actions/runs/37124730012), Chromium, container build and analysis. Re-review was requested after the verified push but initially blocked by GraphQL quota; a REST attempt created no review-request event and was not counted. The standard reviewer request succeeded after reset, with a confirmed timeline event at 13:05:19 UTC. The exact-head reviewer job is pending at this checkpoint.
+
+A status-comment handle mention unintentionally started a separate coding-agent run 37124808085. Root cancelled that run and removed the mention; remote/head stayed exactly a4cfc and no source change was accepted. This cancelled job is not counted as a passed check. Final browser acceptance still needs the Chrome extension UI dismissed by the user. Both PRs remain draft; merge and post-merge qualification are outstanding.
+
+
+## Studio same-execution lookup and bookmark-count review follow-up
+
+Exact a4cfc Copilot review 5400945930 at 13:12:26 UTC had no new-line findings but two actionable previously missed findings. Studio `55c0aee5749e4fb01440016b578d7b6bb0851778` fixes both: on-demand inspection requests are sequenced independently per exact activity execution before any asynchronous capability check, and bounded activity metadata uses authoritative bookmarkCount with compatibility-only IDs. Explicit zero remains zero, explicit null is unavailable, absent count falls back only to an available legacy ID array, and no evidence is unavailable. Exact inspection derives counts from its actual bookmarks.
+
+The final same-ID regression starts two real in-flight deferred requests and resolves the newer Completed/1-incident/2-bookmark response before the older Faulted/2-incident/1-bookmark response. The newer summary remains. Exact a4cfc source with final tests failed that assertion, projected bookmark-count rendering and exact-inspection count mapping (`/tmp/incident-studio-a4cfc-exact-red-current-tests.log`). Restored affected suites passed 71/71; root's combined eleven-suite run passed **207/207** (`/tmp/incident-final-55c0ae-integrated-tests.log`). The module fixture lacking both counts and IDs correctly expects Unavailable; module **128/128**, typecheck, scoped ESLint and bundle budgets passed (`/tmp/incident-studio-a4cfc-{module,typecheck,scoped-eslint,bundle}.log`). Root reviewed the five-file diff and confirmed a clean worktree, no competing incident PR and exact remote SHA before [posting the finding dispositions](https://github.com/elsa-workflows/elsa-foundation-studio/pull/556#issuecomment-5969668108) and explicitly requesting a new reviewer pass.
+
+Normal Release Web rebuild passed **0 warnings/0 errors** (`/tmp/incident-final-55c0ae-studio-web-build.log`). Root stopped only verified owned PID 55947 and started owned PID 92605; [55c0ae build attestation](studio-55c0ae-build-attestation.json) records the exact source, DLL and 46 JavaScript hashes. The host responds HTTP 200 at private localhost:7130. Backend remains ordinary 6a005 product at owned PID 83064 with retained v3 fixtures and passed real HTTP proof. Current 55c0aee CI and exact-head review are pending at this checkpoint. Final manual browser acceptance remains unavailable until the user dismisses Chrome's extension UI and replies continue. Both PRs remain draft, with merge, resulting-main qualification and program closure still outstanding.
+
+
+Exact 55c0aee automated CI passed all required checks: [CI 37126583576](https://github.com/elsa-workflows/elsa-foundation-studio/actions/runs/37126583576), [container 37126583420](https://github.com/elsa-workflows/elsa-foundation-studio/actions/runs/37126583420) and [analysis 37126581062](https://github.com/elsa-workflows/elsa-foundation-studio/actions/runs/37126581062). An independent bounded audit found no material source/evidence mismatch and matched the attested DLL and WorkflowInstances JavaScript hashes; it accurately retained final browser acceptance as pending. Exact-head review 5401061017 at 13:40:34 UTC identified one additional valid navigation problem: reactivating the same affected node can leave the fitView/focus effect unchanged after viewport movement. Root verified batching of the null/same-ID reset and assigned the bounded request-signal/regression follow-up to the sole Studio writer. [The recorded round](https://github.com/elsa-workflows/elsa-foundation-studio/pull/556#issuecomment-5969731614) makes this finding explicit. No clean final review or completed delivery is claimed.
+
+
+## Repeated explicit canvas activation review follow-up
+
+Studio `733dc511230480137f6da06a32e02a67d1b1b499` fixes review5401061017 with one shared explicit-target focus request signal. The canvas fit/focus effect observes that signal, so the same target can be framed again after returning to Issues. Ordinary explicit activity selections use the same helper; guarded async refinements retain current-navigation checks and request focus only for a newly resolved node. Clearing focus, load generation and navigation cancellation remain unchanged.
+
+Root reviewed the complete two-file diff and passed all eleven affected suites **208/208**, `/tmp/incident-final-733dc5-integrated-tests.log`. The final regression activates Show affected activity, verifies actual DOM focus, blurs, returns to Issues, asserts the second action is mounted, clicks it and checks the second fitView plus actual restored focus. Exact55 source fails with one framing call instead of two; restored affected/module suites pass **162/162** (`/tmp/incident-studio-repeat-focus-red-exact55.log`, `/tmp/incident-studio-repeat-focus-affected-tests.log`). Typecheck, scoped ESLint and bundle guard passed, `/tmp/incident-studio-repeat-focus-{typecheck,lint,bundle}.log`. The earlier initial test clicked an unmounted second action; that RED was invalid and is excluded from acceptance proof. A no-op viewport mock was removed because it did not prove viewport movement; actual pan behavior remains a final browser check.
+
+Root pushed and verified the exact remote733 SHA, [recorded the finding disposition](https://github.com/elsa-workflows/elsa-foundation-studio/pull/556#issuecomment-5969851506), and explicitly requested fresh Copilot review. Normal Release Web rebuild passed **0 warnings/0 errors**, `/tmp/incident-final-733dc5-studio-web-build.log`; root stopped only verified owned predecessor PID92605 and started owned PID12837. [733dc5 build attestation](studio-733dc5-build-attestation.json) records source/DLL/46 JavaScript hashes; HTTPS7130 responds200. Foundation remains unchanged at397 with all required gates and exact no-findings review passed, product6a host83064. Current733 CI/review remain pending. Chrome's user-dismissal-required blocker has not been bypassed; final browser/screenshots, merge/post-merge gates and program closure remain incomplete.
+
+
+The bounded independent final733 focus audit found no material issue, verified that the shared request reaches the actual effect with async guards preserved, confirmed the valid repeated mounted-action test, and independently matched the attested DLL/WorkflowInstances JavaScript hashes. Current733 automated CI now passes Chromium, shuffled Workflows/typecheck/lint/bundle, container build, analyses and security; the exact-head reviewer job is still running. Final browser acceptance, review completion, merge/post-merge qualification and program closure remain gates.
+
+
+Exact733 Copilot review5401161344 at14:09:37 UTC reports **no findings**, with final manual browser acceptance/resulting-main qualification explicitly outstanding. All automated733 CI checks passed. No current code/review follow-up remains. Final manual browser acceptance still requires the user Chrome extension dismissal/continue reply; neither PR has merged.
