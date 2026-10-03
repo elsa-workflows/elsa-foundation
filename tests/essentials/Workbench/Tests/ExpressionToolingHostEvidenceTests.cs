@@ -41,7 +41,7 @@ public sealed class ExpressionToolingHostEvidenceTests
         var writeLine = await ReadActivityVersionAsync(client, WriteLineTypeKey);
         var sequence = await ReadActivityVersionAsync(client, SequenceTypeKey);
         var output = Assert.Single(readLine.ContractOutputs);
-        Assert.Equal("Result", output.Name);
+        Assert.Equal("Line", output.Name);
         Assert.Equal("String", output.Type);
         var textInput = Assert.Single(writeLine.ContractInputs);
         Assert.Equal("text", textInput.ReferenceKey);
