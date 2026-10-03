@@ -80,6 +80,16 @@ public sealed class StrippedAmbientCapabilityDiagnosticTests
     }
 
     [Theory]
+    [InlineData("typeof (Date?.now ?? 'fallback')", "string")]
+    [InlineData("typeof (Date?.now + 'fallback')", "string")]
+    public async Task Optional_typeof_probes_can_compose_with_literal_operands(string source, string expected)
+    {
+        var result = await EvaluateAsync(source);
+
+        Assert.Equal(expected, result.GetString());
+    }
+
+    [Theory]
     [InlineData("nope.value")]
     [InlineData("({ Date: missingName })")]
     [InlineData("/* Math.random() */ missingName")]

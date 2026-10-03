@@ -436,7 +436,7 @@ public sealed partial class JavaScriptExpressionToolingProvider
         }
     }
 
-    private sealed class AmbientCapabilityVisitor(
+    private sealed partial class AmbientCapabilityVisitor(
         IReadOnlyDictionary<Node, Scope> nodeScopes,
         string source,
         string revision,
@@ -465,11 +465,12 @@ public sealed partial class JavaScriptExpressionToolingProvider
 
         protected override object? VisitUnaryExpression(UnaryExpression node)
         {
-            if (node.Operator == Operator.TypeOf && TryProveTypeofProbe(node.Argument, out var safeNodes, out var skippedNodes))
+            if (node.Operator == Operator.TypeOf)
             {
-                foreach (var safeNode in safeNodes)
+                var facts = AnalyzeTypeofProbe(node.Argument);
+                foreach (var safeNode in facts.SafeNodes)
                     _safeTypeofOperands.Add(safeNode);
-                foreach (var skippedNode in skippedNodes)
+                foreach (var skippedNode in facts.SkippedNodes)
                     _skippedTypeofSubtrees.Add(skippedNode);
                 try
                 {
@@ -477,168 +478,14 @@ public sealed partial class JavaScriptExpressionToolingProvider
                 }
                 finally
                 {
-                    foreach (var safeNode in safeNodes)
+                    foreach (var safeNode in facts.SafeNodes)
                         _safeTypeofOperands.Remove(safeNode);
-                    foreach (var skippedNode in skippedNodes)
+                    foreach (var skippedNode in facts.SkippedNodes)
                         _skippedTypeofSubtrees.Remove(skippedNode);
                 }
                 return node;
             }
             return base.VisitUnaryExpression(node);
-        }
-
-        private bool TryProveTypeofProbe(JsExpression expression, out HashSet<Node> safeNodes, out HashSet<Node> skippedNodes)
-        {
-            var facts = new TypeofProbeFacts();
-            var result = AnalyzeTypeofProbe(expression, facts, inOptionalChain: false);
-            safeNodes = facts.SafeNodes;
-            skippedNodes = facts.SkippedNodes;
-            return result is TypeofProbeValue.Undefined or TypeofProbeValue.Unresolvable;
-        }
-
-        private TypeofProbeValue AnalyzeTypeofProbe(JsExpression expression, TypeofProbeFacts facts, bool inOptionalChain)
-        {
-            switch (expression)
-            {
-                case ParenthesizedExpression parenthesized:
-                {
-                    var result = AnalyzeTypeofProbe(parenthesized.Expression, facts, inOptionalChain: false);
-                    return result == TypeofProbeValue.ShortCircuited ? TypeofProbeValue.Undefined : result;
-                }
-                case ChainExpression chain:
-                {
-                    var result = AnalyzeTypeofProbe(chain.Expression, facts, inOptionalChain: true);
-                    return result == TypeofProbeValue.ShortCircuited ? TypeofProbeValue.Undefined : result;
-                }
-                case Identifier identifier:
-                    return AnalyzeTypeofIdentifier(identifier, facts);
-                case MemberExpression member:
-                {
-                    var target = AnalyzeTypeofProbe(member.Object, facts, inOptionalChain);
-                    if (target == TypeofProbeValue.ShortCircuited && inOptionalChain)
-                    {
-                        facts.SafeNodes.Add(member);
-                        if (member.Computed)
-                            facts.SkippedNodes.Add(member.Property);
-                        return TypeofProbeValue.ShortCircuited;
-                    }
-
-                    if (target == TypeofProbeValue.Unresolvable)
-                        return TypeofProbeValue.Unsafe;
-
-                    if (target == TypeofProbeValue.Undefined)
-                    {
-                        if (!member.Optional)
-                            return TypeofProbeValue.Unsafe;
-
-                        facts.SafeNodes.Add(member);
-                        if (member.Computed)
-                            facts.SkippedNodes.Add(member.Property);
-                        return TypeofProbeValue.ShortCircuited;
-                    }
-
-                    if (target != TypeofProbeValue.Present)
-                        return target;
-
-                    if (TryGetStaticPath(member, out var staticPath) && staticPath == "globalThis.Math" && !mutations.GlobalThisMayBeReplaced)
-                    {
-                        facts.SafeNodes.Add(member);
-                        return TypeofProbeValue.Present;
-                    }
-
-                    if (IsUnavailableProperty(member))
-                    {
-                        facts.SafeNodes.Add(member);
-                        return TypeofProbeValue.Undefined;
-                    }
-
-                    return TypeofProbeValue.Unknown;
-                }
-                case CallExpression call:
-                {
-                    var callee = AnalyzeTypeofProbe(call.Callee, facts, inOptionalChain);
-                    if (callee == TypeofProbeValue.ShortCircuited && inOptionalChain)
-                    {
-                        facts.SafeNodes.Add(call);
-                        AddCallArgumentsToSkipped(call, facts);
-                        return TypeofProbeValue.ShortCircuited;
-                    }
-
-                    if (callee == TypeofProbeValue.Unresolvable)
-                        return TypeofProbeValue.Unsafe;
-
-                    if (callee == TypeofProbeValue.Undefined)
-                    {
-                        if (!call.Optional)
-                            return TypeofProbeValue.Unsafe;
-
-                        facts.SafeNodes.Add(call);
-                        AddCallArgumentsToSkipped(call, facts);
-                        return TypeofProbeValue.ShortCircuited;
-                    }
-
-                    return callee == TypeofProbeValue.Unsafe ? TypeofProbeValue.Unsafe : TypeofProbeValue.Unknown;
-                }
-                default:
-                    return TypeofProbeValue.Unknown;
-            }
-        }
-
-        private TypeofProbeValue AnalyzeTypeofIdentifier(Identifier identifier, TypeofProbeFacts facts)
-        {
-            if (nodeScopes[identifier].IsBound(identifier.Name))
-                return TypeofProbeValue.Unknown;
-
-            if (identifier.Name == "globalThis")
-                return mutations.GlobalThisMayBeReplaced ? TypeofProbeValue.Unknown : TypeofProbeValue.Present;
-
-            if (JavaScriptRuntimeProfile.DisabledAmbientGlobalNames.Contains(identifier.Name, StringComparer.Ordinal))
-            {
-                facts.SafeNodes.Add(identifier);
-                return TypeofProbeValue.Undefined;
-            }
-
-            if (FindCapability(identifier.Name) is not null)
-            {
-                // typeof an unresolved identifier is safe; optional chaining on that identifier is not.
-                facts.SafeNodes.Add(identifier);
-                return TypeofProbeValue.Unresolvable;
-            }
-
-            if (identifier.Name == "Math")
-                return mutations.MathRootMayBeReplaced ? TypeofProbeValue.Unknown : TypeofProbeValue.Present;
-
-            return TypeofProbeValue.Unknown;
-        }
-
-        private bool IsUnavailableProperty(MemberExpression member)
-        {
-            if (!TryGetStaticPath(member, out var path) || FindCapability(path) is not { } capability)
-                return false;
-
-            return !ShouldWithholdDiagnostic(capability);
-        }
-
-        private static void AddCallArgumentsToSkipped(CallExpression call, TypeofProbeFacts facts)
-        {
-            foreach (var argument in call.Arguments)
-                facts.SkippedNodes.Add(argument);
-        }
-
-        private sealed class TypeofProbeFacts
-        {
-            public HashSet<Node> SafeNodes { get; } = new(ReferenceEqualityComparer.Instance);
-            public HashSet<Node> SkippedNodes { get; } = new(ReferenceEqualityComparer.Instance);
-        }
-
-        private enum TypeofProbeValue
-        {
-            Unknown,
-            Present,
-            Undefined,
-            ShortCircuited,
-            Unresolvable,
-            Unsafe
         }
 
         protected override object? VisitMemberExpression(MemberExpression node)
