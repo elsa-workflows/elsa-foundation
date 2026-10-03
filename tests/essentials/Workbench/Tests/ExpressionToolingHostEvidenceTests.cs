@@ -193,6 +193,10 @@ public sealed class ExpressionToolingHostEvidenceTests
                 ("<span />", "JavaScript/Syntax"),
                 ("const value = 1; value", "JavaScript/Syntax"),
                 ("Math.random()", "JavaScript/AmbientCapability"),
+                ("typeof Date?.now(Math.random())", (string?)null),
+                ("typeof globalThis.Date?.[Math.random()]", (string?)null),
+                ("typeof (Date?.now).toString", "JavaScript/AmbientCapability"),
+                ("(() => { globalThis = { Date: {} }; return typeof globalThis.Date?.[Math.random()]; })()", "JavaScript/AmbientCapability"),
                 ("(() => { return JSON.stringify({ total: Math.abs(-2) }); })()", (string?)null)
             })
             {

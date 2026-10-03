@@ -616,12 +616,7 @@ public sealed partial class JavaScriptExpressionToolingProvider
             if (!TryGetStaticPath(member, out var path) || FindCapability(path) is not { } capability)
                 return false;
 
-            if (capability.DisplayName == "Math.random" && mutations.MathRootMayBeReplaced)
-                return false;
-            if (path.StartsWith("globalThis.", StringComparison.Ordinal) && mutations.GlobalThisMayBeReplaced)
-                return false;
-
-            return true;
+            return !ShouldWithholdDiagnostic(capability);
         }
 
         private static void AddCallArgumentsToSkipped(CallExpression call, TypeofProbeFacts facts)
