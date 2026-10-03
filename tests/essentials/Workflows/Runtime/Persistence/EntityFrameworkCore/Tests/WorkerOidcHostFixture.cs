@@ -52,18 +52,36 @@ internal sealed class WorkerOidcHostFixture : IAsyncDisposable
 
     public string IamDatabasePath => Path.Combine(_root, "iam.db");
 
+    public WorkerProfileCandidate PrimaryCandidate { get; private set; } = null!;
+
+    public WorkerProfileCandidate? ControlCandidate { get; private set; }
+
     public static async Task<WorkerOidcHostFixture> CreateAsync()
     {
         var root = Path.Combine(Path.GetTempPath(), $"elsa-worker-oidc-{Guid.NewGuid():N}");
         Directory.CreateDirectory(root);
         Directory.CreateDirectory(Path.Combine(root, "locks"));
+        WorkerOidcIssuer? issuer = null;
+        WorkerOidcHostFixture? fixture = null;
         try
         {
-            return new WorkerOidcHostFixture(root, await WorkerOidcIssuer.StartAsync());
+            issuer = await WorkerOidcIssuer.StartAsync();
+            fixture = new WorkerOidcHostFixture(root, issuer);
+            fixture.PrimaryCandidate = await WorkerProfileCandidate.CreatePrimaryAsync(
+                root, issuer.Authority, fixture.RuntimeDatabasePath, fixture.IamDatabasePath, Path.Combine(root, "locks"));
+            return fixture;
         }
         catch
         {
-            Directory.Delete(root, recursive: true);
+            if (fixture is not null)
+                await fixture.DisposeAsync();
+            else
+            {
+                if (issuer is not null)
+                    await issuer.DisposeAsync();
+                if (Directory.Exists(root))
+                    Directory.Delete(root, recursive: true);
+            }
             throw;
         }
     }
@@ -79,18 +97,27 @@ internal sealed class WorkerOidcHostFixture : IAsyncDisposable
 
     public string TamperSignature(string token) => _issuer.TamperSignature(token);
 
-    public async Task<WorkerOidcHostProcess> StartHostAsync(string? persistenceScope = null)
+    public async Task<WorkerProfileCandidate> CreateControlCandidateAsync()
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
+        if (ControlCandidate is not null)
+            return ControlCandidate;
+        ControlCandidate = await PrimaryCandidate.CreateControlAsync(
+            _root, Authority, RuntimeDatabasePath, IamDatabasePath, Path.Combine(_root, "locks"));
+        return ControlCandidate;
+    }
+
+    public async Task<WorkerOidcHostProcess> StartHostAsync(
+        WorkerProfileCandidate? candidate = null,
+        string? persistenceScope = null)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        candidate ??= PrimaryCandidate;
         var startup = new WorkerOidcHostStartup(
-            Authority,
-            Audience,
-            ProviderId,
-            TenantId,
-            persistenceScope ?? TenantId,
-            IamDatabasePath,
-            RuntimeDatabasePath,
-            Path.Combine(_root, "locks"));
+            candidate.CandidateDirectory,
+            candidate.ShellId,
+            candidate.Environment,
+            persistenceScope ?? TenantId);
         var assemblyPath = WorkerHostAssemblyPath();
         var artifactSha256 = await HashFileSha256Async(assemblyPath);
         var process = await WorkerOidcHostProcess.StartAsync(
@@ -195,14 +222,10 @@ internal sealed class WorkerOidcHostFixture : IAsyncDisposable
 }
 
 internal sealed record WorkerOidcHostStartup(
-    string Authority,
-    string Audience,
-    string ProviderId,
-    string TenantId,
-    string PersistenceScope,
-    string IamDatabasePath,
-    string RuntimeDatabasePath,
-    string LocksDirectory);
+    string CandidateDirectory,
+    string ShellId,
+    string Environment,
+    string PersistenceScope);
 
 internal sealed class WorkerOidcHostProcess : IAsyncDisposable
 {

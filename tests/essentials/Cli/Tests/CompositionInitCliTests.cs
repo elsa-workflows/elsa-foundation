@@ -28,6 +28,28 @@ public sealed class CompositionInitCliTests
         "WorkflowsRuntimeResumption",
         "WorkflowsRuntimeTriggers"
     ];
+    private static readonly string[] s_workerMembers =
+    [
+        "ActivitiesControlFlow",
+        "ActivitiesPrimitives",
+        "ActivitiesRuntime",
+        "ActivitiesSequence",
+        "ApiCapabilities",
+        "Events",
+        "Expressions",
+        "FileSystemDistributedLocking",
+        "FoundationIdentityAbstractions",
+        "FoundationIdentityOidc",
+        "IdentityIamEntityFrameworkCore",
+        "Mediator",
+        "Primitives",
+        "Serialization",
+        "Tasks",
+        "WorkflowsRuntimeApi",
+        "WorkflowsRuntimeEntityFrameworkCore",
+        "WorkflowsRuntimeResumption",
+        "WorkflowsRuntimeTriggers"
+    ];
 
     [Fact]
     public void Init_writes_a_pinned_composition_that_default_plan_inspects_exactly()
@@ -44,7 +66,7 @@ public sealed class CompositionInitCliTests
         using var compositionDocument = JsonDocument.Parse(File.ReadAllText(outputPath));
         var composition = compositionDocument.RootElement;
         var catalog = FoundationSelectionCatalog.Load();
-        var profile = Assert.Single(catalog.Profiles);
+        var profile = Assert.Single(catalog.Profiles, x => x.Id == "embedded-runtime");
         Assert.Equal(catalog.Id, composition.GetProperty("catalog").GetProperty("id").GetString());
         Assert.Equal(catalog.Version, composition.GetProperty("catalog").GetProperty("version").GetString());
         Assert.Equal(catalog.Digest, composition.GetProperty("catalog").GetProperty("digest").GetString());
@@ -76,6 +98,59 @@ public sealed class CompositionInitCliTests
     }
 
     [Fact]
+    public void Init_worker_profile_writes_exact_members_and_plan_provenance()
+    {
+        using var temp = new TempDirectory("elsa-composition-worker-init-");
+        var outputPath = temp.File("composition.json");
+        var init = DotnetElsa.Run("composition", "init", "--profile", "worker-http@1", "--output", outputPath);
+
+        Assert.Equal(ToolExitCode.Success, init.ExitCode);
+        Assert.Contains("worker-http@1", init.Output, StringComparison.Ordinal);
+        using var compositionDocument = JsonDocument.Parse(File.ReadAllText(outputPath));
+        var composition = compositionDocument.RootElement;
+        var catalog = FoundationSelectionCatalog.Load();
+        var profile = Assert.Single(catalog.Profiles, x => x.Id == "worker-http");
+        Assert.Equal("3", catalog.Version);
+        Assert.Equal("e46f8092771171ad63b0ca81bf307f5ad7ad7a9ca4929dd311bfac6af3cf8fa1", profile.Digest);
+        Assert.Equal(catalog.Id, composition.GetProperty("catalog").GetProperty("id").GetString());
+        Assert.Equal(catalog.Version, composition.GetProperty("catalog").GetProperty("version").GetString());
+        Assert.Equal(catalog.Digest, composition.GetProperty("catalog").GetProperty("digest").GetString());
+        Assert.Equal("foundation", composition.GetProperty("profile").GetProperty("origin").GetString());
+        Assert.Equal("worker-http", composition.GetProperty("profile").GetProperty("id").GetString());
+        Assert.Equal("1", composition.GetProperty("profile").GetProperty("version").GetString());
+        Assert.Equal(profile.Digest, composition.GetProperty("profile").GetProperty("digest").GetString());
+        Assert.Equal(s_workerMembers, Strings(composition.GetProperty("accepted").GetProperty("featureIds")));
+
+        var plan = DotnetElsa.Run("composition", "plan", "--composition", outputPath, "--format", "json");
+        Assert.Equal(ToolExitCode.Success, plan.ExitCode);
+        using var planDocument = JsonDocument.Parse(plan.Output);
+        var root = planDocument.RootElement;
+        Assert.Equal(s_workerMembers, Strings(root.GetProperty("candidate").GetProperty("featureIds")));
+        Assert.Equal(s_workerMembers, Strings(root.GetProperty("accepted").GetProperty("featureIds")));
+        var reasons = root.GetProperty("reasons").EnumerateArray().ToArray();
+        Assert.Equal(19, reasons.Length);
+        Assert.All(reasons, reason =>
+        {
+            Assert.Equal("profile", reason.GetProperty("sourceKind").GetString());
+            Assert.Equal("worker-http", reason.GetProperty("sourceId").GetString());
+            Assert.Equal("1", reason.GetProperty("sourceVersion").GetString());
+        });
+        var dependencies = root.GetProperty("dependencyEvidence").EnumerateArray().ToArray();
+        Assert.Equal(4, dependencies.Length);
+        Assert.All(dependencies, edge =>
+        {
+            Assert.Equal("reviewed-definition", edge.GetProperty("evidenceKind").GetString());
+            Assert.Equal("worker-http", edge.GetProperty("evidenceSource").GetString());
+            Assert.Equal("required", edge.GetProperty("mode").GetString());
+        });
+        Assert.Contains(root.GetProperty("findings").EnumerateArray(), finding =>
+            finding.GetProperty("code").GetString() == "inventory-unverified");
+        Assert.Contains(root.GetProperty("findings").EnumerateArray(), finding =>
+            finding.GetProperty("code").GetString() == "persistence-unverified");
+        Assert.DoesNotContain("runtimeReady", plan.Output, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
     public void Init_with_diagnostics_group_keeps_exact_selection_provenance_and_required_edges()
     {
         using var temp = new TempDirectory("elsa-composition-init-");
@@ -87,8 +162,8 @@ public sealed class CompositionInitCliTests
         using var compositionDocument = JsonDocument.Parse(File.ReadAllText(outputPath));
         var composition = compositionDocument.RootElement;
         var catalog = FoundationSelectionCatalog.Load();
-        var group = Assert.Single(catalog.Groups);
-        Assert.Equal("2", composition.GetProperty("catalog").GetProperty("version").GetString());
+        var group = Assert.Single(catalog.Groups, x => x.Id == "diagnostics-ef");
+        Assert.Equal("3", composition.GetProperty("catalog").GetProperty("version").GetString());
         Assert.Equal(group.Digest, Assert.Single(composition.GetProperty("groups").EnumerateArray())
             .GetProperty("digest").GetString());
         var expected = s_expectedMembers.Concat(group.Members).OrderBy(id => id, StringComparer.Ordinal).ToArray();
@@ -199,10 +274,13 @@ public sealed class CompositionInitCliTests
             DotnetElsa.Run("composition", "init", "--profile", "embedded-runtime@1", "--output", compositionPath).ExitCode);
 
         var catalog = FoundationSelectionCatalog.Load();
-        var profile = Assert.Single(catalog.Profiles);
+        var profile = Assert.Single(catalog.Profiles, x => x.Id == "embedded-runtime");
         var changedDraft = profile with { Description = profile.Description + " changed" };
         var changedProfile = changedDraft with { Digest = SelectionDigest.ComputeDefinitionDigest(changedDraft) };
-        var changedCatalogDraft = catalog with { Profiles = [changedProfile] };
+        var changedCatalogDraft = catalog with
+        {
+            Profiles = [.. catalog.Profiles.Select(existing => existing.Id == profile.Id ? changedProfile : existing)]
+        };
         var changedCatalog = changedCatalogDraft with { Digest = SelectionDigest.ComputeCatalogDigest(changedCatalogDraft) };
         File.WriteAllText(catalogPath, JsonSerializer.Serialize(changedCatalog,
             new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase }));

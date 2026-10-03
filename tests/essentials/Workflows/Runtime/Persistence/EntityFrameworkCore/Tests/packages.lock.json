@@ -210,6 +210,14 @@
           "xunit.extensibility.core": "[2.9.3]"
         }
       },
+      "dotnet-elsa": {
+        "type": "Project",
+        "dependencies": {
+          "Elsa.Cli.Worker": "[4.0.0-dev, )",
+          "Elsa.Modularity.Planning": "[4.0.0-dev, )",
+          "System.CommandLine": "[2.0.8, )"
+        }
+      },
       "elsa.activities.controlflow": {
         "type": "Project",
         "dependencies": {
@@ -312,6 +320,9 @@
         "type": "Project"
       },
       "elsa.caching.core": {
+        "type": "Project"
+      },
+      "elsa.cli.worker": {
         "type": "Project"
       },
       "elsa.cluster.core": {
@@ -656,6 +667,12 @@
           "SQLitePCLRaw.config.e_sqlite3": "3.0.3",
           "SourceGear.sqlite3": "3.50.4.5"
         }
+      },
+      "System.CommandLine": {
+        "type": "CentralTransitive",
+        "requested": "[2.0.8, )",
+        "resolved": "2.0.8",
+        "contentHash": "FbpgF8p/ClXnoXEWLjQB34kNh5rsLewEgIgLyVzLDucAOQ4cNs7ec9Cam7gdKPruSb6zp4Mx8htZGTL4/5PJPg=="
       }
     }
   }
