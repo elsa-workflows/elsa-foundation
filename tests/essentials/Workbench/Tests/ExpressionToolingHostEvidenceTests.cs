@@ -78,7 +78,7 @@ public sealed class ExpressionToolingHostEvidenceTests
                 }
             }
         });
-        Assert.Equal(HttpStatusCode.Created, definitionResponse.StatusCode);
+        Assert.Equal(HttpStatusCode.OK, definitionResponse.StatusCode);
         using var definition = JsonDocument.Parse(await definitionResponse.Content.ReadAsStringAsync());
         var draftId = definition.RootElement.GetProperty("draft").GetProperty("id").GetString()!;
 
@@ -109,7 +109,8 @@ public sealed class ExpressionToolingHostEvidenceTests
             Assert.Contains(symbols, symbol => symbol.GetProperty("name").GetString() == "customerName");
             Assert.Contains(symbols, symbol => symbol.GetProperty("name").GetString() == "globalLabel");
             Assert.Contains(symbols, symbol => symbol.GetProperty("name").GetString() == "scopedLabel");
-            Assert.Contains(symbols, symbol => symbol.GetProperty("name").GetString() == $"predecessor.{output.Name}");
+            var predecessorOutput = Assert.Single(symbols, symbol => symbol.GetProperty("name").GetString() == $"predecessor.{output.Name}");
+            Assert.Equal(output.Type, predecessorOutput.GetProperty("valueShape").GetProperty("displayName").GetString());
 
             var completionSource = syntax == "JavaScript" ? "args.predecessor." : "predecessor.";
             using var completionResponse = await client.PostAsJsonAsync("/design/workflows/expression-tooling/completions", SourceBody(draftId, syntax, textInput.ReferenceKey, completionSource, contextRevision, completionSource.Length));
@@ -118,7 +119,8 @@ public sealed class ExpressionToolingHostEvidenceTests
             var completionResult = completionDocument.RootElement.GetProperty("result");
             Assert.Equal(0, completionResult.GetProperty("state").GetInt32());
             AssertRevisionEnvelope(completionResult, contextRevision);
-            Assert.Contains(completionResult.GetProperty("payload").GetProperty("items").EnumerateArray(), item => item.GetProperty("label").GetString() == output.Name);
+            var outputCompletion = Assert.Single(completionResult.GetProperty("payload").GetProperty("items").EnumerateArray(), item => item.GetProperty("label").GetString() == output.Name);
+            Assert.Equal(output.Type, outputCompletion.GetProperty("detail").GetString());
 
             var hoverSource = syntax == "JavaScript" ? $"args.predecessor.{output.Name}" : $"predecessor.{output.Name}";
             using var hoverResponse = await client.PostAsJsonAsync("/design/workflows/expression-tooling/hover", SourceBody(draftId, syntax, textInput.ReferenceKey, hoverSource, contextRevision, hoverSource.Length, hover: true));
@@ -127,7 +129,9 @@ public sealed class ExpressionToolingHostEvidenceTests
             var hoverResult = hoverDocument.RootElement.GetProperty("result");
             Assert.Equal(0, hoverResult.GetProperty("state").GetInt32());
             AssertRevisionEnvelope(hoverResult, contextRevision);
-            Assert.Contains("predecessor.", hoverResult.GetProperty("payload").GetProperty("contents").GetString(), StringComparison.Ordinal);
+            var hoverContents = hoverResult.GetProperty("payload").GetProperty("contents").GetString()!;
+            Assert.Contains(output.Name, hoverContents, StringComparison.Ordinal);
+            Assert.Contains("Activity output", hoverContents, StringComparison.Ordinal);
 
             var invalid = syntax == "JavaScript" ? "if (" : "{{ customerName";
             using var validationResponse = await client.PostAsJsonAsync("/design/workflows/expression-tooling/validate", SourceBody(draftId, syntax, textInput.ReferenceKey, invalid, contextRevision));
