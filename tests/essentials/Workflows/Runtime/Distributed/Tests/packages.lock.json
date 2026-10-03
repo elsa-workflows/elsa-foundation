@@ -81,6 +81,11 @@
           "Newtonsoft.Json": "13.0.3"
         }
       },
+      "Nuplane.Abstractions": {
+        "type": "Transitive",
+        "resolved": "0.0.11-preview.94",
+        "contentHash": "YtytvT0fC6hyfz1GonNjNdw13jN1Ps3Zl0A+OK8/cZxuL/dUGQbVnWlV82vJkQo6TTmegXRXZx1gOvfGkpXm0g=="
+      },
       "Validation": {
         "type": "Transitive",
         "resolved": "2.5.51",
@@ -176,6 +181,16 @@
           "Elsa.Cluster.Core": "[4.0.0-dev, )"
         }
       },
+      "elsa.cluster.readability": {
+        "type": "Project",
+        "dependencies": {
+          "CShells.Abstractions": "[0.0.30-preview.159, )",
+          "Elsa.Cluster.Core": "[4.0.0-dev, )",
+          "Elsa.Cluster.InProcess": "[4.0.0-dev, )",
+          "Elsa.Persistence.Schema": "[4.0.0-dev, )",
+          "Nuplane.Loading.Abstractions": "[0.0.11-preview.94, )"
+        }
+      },
       "elsa.cluster.testing": {
         "type": "Project",
         "dependencies": {
@@ -218,6 +233,9 @@
         "dependencies": {
           "Elsa.Pipelines.Core": "[4.0.0-dev, )"
         }
+      },
+      "elsa.persistence.schema": {
+        "type": "Project"
       },
       "elsa.pipelines.core": {
         "type": "Project"
@@ -345,6 +363,15 @@
         "requested": "[13.0.4, )",
         "resolved": "13.0.4",
         "contentHash": "pdgNNMai3zv51W5aq268sujXUyx7SNdE2bj1wZcWjAQrKMFZV260lbqYop1d2GM67JI1huLRwxo9ZqnfF/lC6A=="
+      },
+      "Nuplane.Loading.Abstractions": {
+        "type": "CentralTransitive",
+        "requested": "[0.0.11-preview.94, )",
+        "resolved": "0.0.11-preview.94",
+        "contentHash": "vjTnc+rW+guSOUq1CXpmxp3KKBLxOpazOVHV0nHOji7w5lS7+GLRzYvEyPs/LARwxo9weJO3ie8gF5/F10UIgg==",
+        "dependencies": {
+          "Nuplane.Abstractions": "0.0.11-preview.94"
+        }
       },
       "Xunit.SkippableFact": {
         "type": "CentralTransitive",

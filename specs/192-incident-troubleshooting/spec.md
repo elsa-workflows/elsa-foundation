@@ -4,7 +4,7 @@
 
 **Created**: 2026-10-02
 
-**Status**: Approved — product owner requested end-to-end delivery of the reviewed QA plan.
+**Status**: In progress — product owner requested end-to-end delivery of the reviewed QA plan; program #2334.
 
 **Input**: Make runtime incidents obvious and intuitive when inspecting a workflow run, starting with an activity input that references an undefined variable.
 

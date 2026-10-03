@@ -3,6 +3,7 @@ using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Exceptions;
+using Elsa.Workflows.Runtime.Core.Extensions;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Services.Checkpoints;
 using Elsa.Workflows.Runtime.Services.Scheduler;
@@ -70,7 +71,7 @@ public sealed class WorkflowStartActivitySchedulerWorkHandler : IWorkflowSchedul
     /// <summary>Direct (no-pipeline) dispatch: run the handler and commit its checkpoint inline (when one is produced).</summary>
     public async ValueTask HandleAsync(RuntimeSchedulerWorkItem workItem, CancellationToken cancellationToken = default)
     {
-        var commit = await ExecuteWithServicesAsync(workItem, ambientServices: null, cancellationToken);
+        var commit = await ExecuteWithServicesAsync(workItem, ambientServices: null, persistenceScope: null, cancellationToken);
 
         if (commit is not null)
             await _checkpointCommitter.CommitAsync(commit, cancellationToken);
@@ -80,7 +81,7 @@ public sealed class WorkflowStartActivitySchedulerWorkHandler : IWorkflowSchedul
     public async ValueTask HandleAsync(RuntimeSchedulerWorkItem workItem, IRuntimePipelineContext pipelineContext, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(pipelineContext);
-        var commit = await ExecuteWithServicesAsync(workItem, pipelineContext.Workspace.AmbientServices, cancellationToken);
+        var commit = await ExecuteWithServicesAsync(workItem, pipelineContext.Workspace.AmbientServices, pipelineContext.Workspace.PersistenceScope, cancellationToken);
         if (commit is not null)
             pipelineContext.Workspace.StageCheckpointCommit(commit);
     }
@@ -88,12 +89,14 @@ public sealed class WorkflowStartActivitySchedulerWorkHandler : IWorkflowSchedul
     private async ValueTask<RuntimeCheckpointCommit?> ExecuteWithServicesAsync(
         RuntimeSchedulerWorkItem workItem,
         IServiceProvider? ambientServices,
+        PersistenceScope? persistenceScope,
         CancellationToken cancellationToken)
     {
         if (ambientServices is not null)
             return await ExecuteAsync(workItem, ambientServices, cancellationToken);
 
-        await using var scope = _serviceScopeFactory.CreateAsyncScope();
+        // Bound to the partition the dispatcher staged; direct dispatch knows none and gets the host's scope.
+        await using var scope = await _serviceScopeFactory.CreateAsyncScopeAsync(persistenceScope);
         return await ExecuteAsync(workItem, scope.ServiceProvider, cancellationToken);
     }
 

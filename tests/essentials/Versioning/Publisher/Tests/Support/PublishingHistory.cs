@@ -25,7 +25,7 @@ public abstract class PublishingHistory : SyntheticHistory
         Repo.Commit("Label main's packages");
 
         // Inside .git: removed with the repository, and never part of a commit.
-        Repo.Git("init", "--quiet", "--bare", "--initial-branch=main", OriginPath);
+        Repo.Init(OriginPath, bare: true);
         Repo.Git("remote", "add", GitPublishState.DefaultRemote, OriginPath);
         PushMain();
         State = new GitPublishState(Repo.Root);

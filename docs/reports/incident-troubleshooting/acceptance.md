@@ -1,6 +1,6 @@
 # Incident troubleshooting delivery evidence
 
-Program [#2334](https://github.com/elsa-workflows/elsa-foundation/issues/2334), feature [#2336](https://github.com/elsa-workflows/elsa-foundation/issues/2336), canonical [spec191](../../../specs/191-incident-troubleshooting/spec.md).
+Program [#2334](https://github.com/elsa-workflows/elsa-foundation/issues/2334), feature [#2336](https://github.com/elsa-workflows/elsa-foundation/issues/2336), canonical [spec192](../../../specs/192-incident-troubleshooting/spec.md).
 
 Status: implementation and verification in progress. No delivery acceptance claimed.
 
@@ -86,4 +86,15 @@ Studio's first lint/typecheck job passed its lint/typecheck and shuffled tests b
 
 The complete Foundation PR check set at `098d78d00` subsequently passed, including all selected EF container suites; the main-only alert job was correctly skipped on the PR. Local focused verification at the same source passed API 129/129, Runtime 145/145, Activities 14/14 and EF 44/44 (`/tmp/incident-integrated-runtime-v2.log`). That `dotnet test` invocation did not rebuild the non-test Workbench application; a separate application build remains required before changed-code HTTP/browser acceptance. The typed request/projection review correction is integrated as `cd06755ff` and is not covered by those earlier passes.
 
-Root reviewed both bounded follow-up diffs before integration. Native-health composition regressions exercise contradictory EF vs selected in-memory incidents, each health predicate, both authorization paths and page-size-one cursor traversal; no new project references or lock files were needed. The normal-wrapper combined focused rerun is queued at source `8fa607206`. Authoritative map freshness passed again with the new compatibility contract (`/tmp/incident-review-maps-check.log`); no generated map changed.
+Root reviewed both bounded follow-up diffs before integration. Native-health composition regressions exercise contradictory EF vs selected in-memory incidents, each health predicate, both authorization paths and page-size-one cursor traversal; no new project references or lock files were needed. The normal-wrapper combined focused rerun at source `8fa607206` was cancelled while queued; it executed no tests. Exact-head CI subsequently compiled and checked these corrections. Authoritative map freshness passed again with the new compatibility contract (`/tmp/incident-review-maps-check.log`); no generated map changed.
+
+
+## Current review and integration checkpoint
+
+At Foundation `56f898f05e78897491cdebebe6b04aff258d1d94`, every PR check passed, including [CI37085245239](https://github.com/elsa-workflows/elsa-foundation/actions/runs/37085245239) and [Maps37085245040](https://github.com/elsa-workflows/elsa-foundation/actions/runs/37085245040). The main Build & test job passed Runtime 1994/1994, API 129/129, EF 869/869, Activities 352/352 and Architecture 635/635; the selected container suites and separate architecture/core gates also passed. This verifies the selected-store witness, typed request materialization boundary, cancellation/fatal propagation and failed-capture disclosure fixes.
+
+Studio `368127abd18a3494eda07d749ef7b8359719b743` passed all PR checks ([CI37086697661](https://github.com/elsa-workflows/elsa-foundation-studio/actions/runs/37086697661), browser tests and Docker build). Final local four-file tests passed 70/70, final typecheck passed and final Workflows bundle passed 126.21/127.50 kB. These checks cover the exact lookup failure distinctions, BPMN focus, stable input reference and unsupported-filter wording.
+
+Subsequent review found two Foundation public positional-record ABI regressions and five Studio gaps involving mixed-health counts, duplicate authored identities, frozen incident labels and direct Issues navigation. Corrections and their new regressions remain in progress. Moving the new health filter to an init property requires explicit HTTP binding and metadata because the pinned NativeEndpoints binder describes/binds constructor parameters only. Real mapped GET tests must prove the corrected filter.
+
+Root reconciled newer main changes including scheduler partition scope and intrinsic runtime placement. Concurrent publication allocated spec191 to the Worker HTTP profile before this program merged; the incident spec is corrected to spec192 and inbound links updated to prevent a new number collision. The program scope is unchanged. The queued Workbench build of the earlier source was cancelled before compilation so the acceptance application can be built from the reconciled final source. No changed-code HTTP/browser acceptance or merged delivery is claimed yet.

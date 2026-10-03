@@ -1,16 +1,16 @@
 # Tasks: Workflow Incident Troubleshooting
 
-**Input**: `specs/191-incident-troubleshooting/` specification, plan, research, data model and contract.
+**Input**: `specs/192-incident-troubleshooting/` specification, plan, research, data model and contract.
 
 ## Phase 1 — Setup
 
 - [x] T001 Preserve QA report/screenshots and establish Program/Epic/Feature in `docs/program-goals/incident-troubleshooting.md` and `docs/reports/incident-troubleshooting/`.
-- [x] T002 Record approved policy/scope and additive contracts in `specs/191-incident-troubleshooting/{spec,plan,research,data-model}.md` and `contracts/incident-troubleshooting.md`.
+- [x] T002 Record approved policy/scope and additive contracts in `specs/192-incident-troubleshooting/{spec,plan,research,data-model}.md` and `contracts/incident-troubleshooting.md`.
 
 ## Phase 2 — Foundation
 
-- [x] T003 Claim scoped task issues and create isolated Foundation/Studio worktrees; record ownership/dependencies in `specs/191-incident-troubleshooting/tasks.md`.
-- [x] T004 Finalize centrally defined causal/input-failure metadata keys and wire evidence mapping in `specs/191-incident-troubleshooting/contracts/incident-troubleshooting.md`.
+- [x] T003 Claim scoped task issues and create isolated Foundation/Studio worktrees; record ownership/dependencies in `specs/192-incident-troubleshooting/tasks.md`.
+- [x] T004 Finalize centrally defined causal/input-failure metadata keys and wire evidence mapping in `specs/192-incident-troubleshooting/contracts/incident-troubleshooting.md`.
 
 ## Phase 3 — US1: Recognize incident health (P1)
 

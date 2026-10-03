@@ -3,6 +3,7 @@ using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Middleware;
 using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Workflows.Runtime.Services.Pipelines;
 
 namespace Elsa.Workflows.Runtime.Tests;
 
@@ -32,6 +33,17 @@ public abstract class RuntimePipelineTestSupport
             sequence: index,
             payload: payload ?? document.RootElement.Clone());
     }
+
+    /// <summary>A dispatcher whose own DI scope is bound to <paramref name="persistenceScope"/>, the default scope unless given.</summary>
+    protected static RuntimeExecutionPipelineDispatcher NewDispatcher(
+        IRuntimeWorkflowExecutionPipeline workflowPipeline,
+        IRuntimeActivityExecutionPipeline activityPipeline,
+        string persistenceScope = PersistenceScope.DefaultValue) =>
+        new(
+            new RuntimeSchedulerPipelineSelector(),
+            workflowPipeline,
+            activityPipeline,
+            new FixedPersistenceAccess(PersistenceAccessContext.Scoped(new PersistenceScope(persistenceScope))));
 
     protected static WorkflowExecutableIdentity NewIdentity() =>
         new("artifact-1", "definition-1", "version-1", "1.0.0", "sha256:test");
@@ -140,5 +152,30 @@ public abstract class RuntimePipelineTestSupport
             WorkItemIds.Add(workItem.WorkItemId);
             return ValueTask.CompletedTask;
         }
+    }
+
+    /// <summary>A pipeline-aware handler that records what the dispatcher staged on the workspace for it.</summary>
+    protected sealed class WorkspaceCapturingHandler : IWorkflowSchedulerWorkHandler, IRuntimePipelineWorkHandler
+    {
+        public string Name => nameof(WorkspaceCapturingHandler);
+        public IServiceProvider? ObservedAmbientServices { get; private set; }
+        public PersistenceScope? ObservedPersistenceScope { get; private set; }
+
+        public bool CanHandle(RuntimeSchedulerWorkItem workItem) => true;
+
+        public ValueTask HandleAsync(RuntimeSchedulerWorkItem workItem, CancellationToken cancellationToken = default) =>
+            ValueTask.CompletedTask;
+
+        public ValueTask HandleAsync(RuntimeSchedulerWorkItem workItem, IRuntimePipelineContext pipelineContext, CancellationToken cancellationToken = default)
+        {
+            ObservedAmbientServices = pipelineContext.Workspace.AmbientServices;
+            ObservedPersistenceScope = pipelineContext.Workspace.PersistenceScope;
+            return ValueTask.CompletedTask;
+        }
+    }
+
+    private sealed class FixedPersistenceAccess(PersistenceAccessContext current) : IPersistenceAccessContextAccessor
+    {
+        public PersistenceAccessContext Current => current;
     }
 }

@@ -32,7 +32,7 @@ Make a run with incidents visibly actionable and provide a coherent journey from
 ## Linked Surfaces
 
 - [Project 54](https://github.com/orgs/elsa-workflows/projects/54): cross-repository scheduling/readiness/verification.
-- [Specification](../../specs/191-incident-troubleshooting/spec.md): approved observable behavior.
+- [Specification](../../specs/192-incident-troubleshooting/spec.md): approved observable behavior.
 - [QA assessment](../reports/incident-troubleshooting/analysis-and-plan.md): original before-state screenshots and source investigation.
 - [Runtime fault behavior](../runtime-fault-behavior.md): authoritative existing intervention/lifecycle policy.
 

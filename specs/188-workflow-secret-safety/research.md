@@ -131,7 +131,9 @@ partition's work items cannot find their own rows, and on any store an instance 
 (`pipelineContext.Workspace.AmbientServices`; the synchronous HTTP endpoint passes `context.RequestServices`), the
 handlers activate in those services instead; that path was not verified for several tenants. T026 and T093 therefore
 prove the two-tenant scenario with one host per tenant, whose persistence scope is that tenant, over one secret store;
-T090 lists the follow-up.
+T090 lists the follow-up. Resolved after slice 4 by #2341: the dispatcher stages the command's partition and the
+handlers and the CLR activator bind their fresh scope to it, so one host can run several partitions; moving T026
+and T093 to one two-tenant host is tracked on that issue.
 
 ## R3: Resolution point and the withheld snapshot
 

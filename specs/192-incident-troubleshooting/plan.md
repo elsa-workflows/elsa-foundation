@@ -24,7 +24,7 @@ Required delivery gates: affected backend/API/provider suites, relevant REST e2e
 
 ## Project Structure
 
-Canonical artifacts: `specs/191-incident-troubleshooting/{spec,plan,research,data-model,quickstart,tasks}.md`, `contracts/incident-troubleshooting.md`; program `docs/program-goals/incident-troubleshooting.md`; evidence `docs/reports/incident-troubleshooting/`.
+Canonical artifacts: `specs/192-incident-troubleshooting/{spec,plan,research,data-model,quickstart,tasks}.md`, `contracts/incident-troubleshooting.md`; program `docs/program-goals/incident-troubleshooting.md`; evidence `docs/reports/incident-troubleshooting/`.
 
 Backend code: `src/essentials/Workflows/Runtime/{Core,Services,Api,Persistence/EntityFrameworkCore}/`; tests mirror those layers under `tests/essentials/Workflows/Runtime/`; black-box resilience/inspection suites under `e2e-tests/`.
 
