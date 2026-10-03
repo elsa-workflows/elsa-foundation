@@ -519,6 +519,36 @@ public sealed class WorkflowInstanceServicesTests
     }
 
     [Theory]
+    [InlineData(false, false)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public async Task ListWorkflowInstances_RejectsRewrittenHealthPrefixOnFallbackCursor(bool restricted, bool nativeCandidates)
+    {
+        foreach (var id in new[] { "allowed-a", "allowed-b" })
+        {
+            await _workflowStore.SaveAsync(Workflow(id, WorkflowExecutionStatus.Running, "definition-1"));
+            await _incidentStore.SaveAsync(HealthIncident(id, IncidentStatus.Blocking));
+        }
+        IWorkflowExecutionStateStore store = nativeCandidates
+            ? new MatchingHealthQueryWorkflowExecutionStateStore(_workflowStore, _incidentStore, ["allowed-a", "allowed-b"])
+            : _workflowStore;
+        var handler = new WorkflowInstanceListService(
+            store, _activityStore, _incidentStore,
+            restricted ? new RestrictedInspectionContext() : AllowAll);
+        var request = new ListWorkflowInstances(null, null, null, 1) { IncidentHealth = "active" };
+        var first = await handler.ListAsync(request, CancellationToken.None);
+        Assert.True(first.HasNext);
+        Assert.StartsWith("health.active.", first.NextCursor);
+        var rewrittenCursor = "health.blocking." + first.NextCursor!["health.active.".Length..];
+
+        var error = await Assert.ThrowsAsync<ArgumentException>(() => handler.ListAsync(
+            request with { IncidentHealth = "blocking", Cursor = rewrittenCursor }, CancellationToken.None));
+        Assert.Equal("cursor", error.ParamName);
+        var next = await handler.ListAsync(request with { Cursor = first.NextCursor }, CancellationToken.None);
+        Assert.NotEqual(Assert.Single(first.Items).WorkflowExecutionId, Assert.Single(next.Items).WorkflowExecutionId);
+    }
+
+    [Theory]
     [InlineData(null, 2)]
     [InlineData("secret-correlation", 1)]
     public async Task ListWorkflowInstances_HealthCountsAndPagesExcludeUnauthorizedRuns(string? correlation, int expected)

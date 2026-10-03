@@ -101,8 +101,8 @@ adapters validate and translate the selected context at their own persistence bo
 
 ### `IWorkflowHealthQuery` *(Core — `Elsa.Workflows.Runtime.Core`)*
 - **Kind:** Optional provider capability implemented by the selected workflow-execution state store.
-- **Signature:** `QueryHealthPageAsync(WorkflowExecutionStatePageQuery, IncidentHealth, CancellationToken)`.
-- **Usage:** apply current Active, Blocking or None incident health in the same persistence scope before counting and keyset paging. Cursors must bind to health, ordinary filters and scope. The API uses these pages as candidates and still applies request inspection authorization; only its explicit allow-all development adapter can return the provider page directly. Providers without the capability retain bounded candidate traversal and authorization-safe health filtering.
+- **Signature:** `SupportsIncidentStore(IIncidentStateStore)` and `QueryHealthPageAsync(WorkflowExecutionStatePageQuery, IncidentHealth, CancellationToken)`.
+- **Usage:** `SupportsIncidentStore` must witness that the selected incident store shares the provider's actual persistence scope; a provider must return false for an unrelated incident backend so the API uses the selected-store fallback. Apply current Active, Blocking or None incident health in the same persistence scope before counting and keyset paging. Cursors must bind to health, ordinary filters and scope. The API uses these pages as candidates and still applies request inspection authorization; only its explicit allow-all development adapter can return the provider page directly. Providers without the capability retain bounded candidate traversal and authorization-safe health filtering.
 - **Default implementation:** `EfWorkflowExecutionStateStore`, using existing incident status and workflow identity projections without fault/value content or a schema change.
 
 ### `IWorkflowExecutableReferenceGarbageCollector` *(Core — `Elsa.Workflows.Runtime.Core`)*

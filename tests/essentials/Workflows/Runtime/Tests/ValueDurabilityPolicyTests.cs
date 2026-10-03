@@ -698,6 +698,44 @@ public sealed class ValueDurabilityPolicyTests
     }
 
     [Fact]
+    public async Task Portable_expression_result_policy_preparation_failure_reports_materialization_and_redacts_conservatively()
+    {
+        var expression = new RuntimeExpressionBinding(
+            "test",
+            "value",
+            parameters: new Dictionary<string, ExpressionParameterBinding>
+            {
+                ["value"] = new ActivityResultExpressionParameterBinding("producer", "$result")
+            });
+        var binding = new RuntimeInputBinding(
+            "message",
+            StringType,
+            ValueProtectionPolicy.InstanceInline,
+            RuntimeInputBindingSource.Expression,
+            expression: expression);
+
+        var exception = await Assert.ThrowsAsync<ExpressionInputFailureException>(() =>
+            new RuntimeActivityInputMaterializer(
+                    new RuntimeInputBindingResolver(),
+                    new StringTypeRegistry(),
+                    new EchoPortableEvaluator(),
+                    externalPayloadStore: null)
+                .MaterializeSnapshotAsync(
+                    NewTypedNode(binding, ActivityValuePolicy.Default),
+                    "invocation-1",
+                    NewResolutionContext(),
+                    Now)
+                .AsTask());
+
+        Assert.Equal(ExpressionInputFailureException.InputMaterializationFailed, exception.InputFailureCode);
+        Assert.Equal("message", exception.InputKey);
+        Assert.Equal(ExpressionInputFailureException.MaterializationPhase, exception.EvaluationPhase);
+        Assert.Equal(
+            "Elsa.Workflows.Runtime.Services.Values.RedactedPortableExpressionException",
+            exception.InnerException?.GetType().FullName);
+    }
+
+    [Fact]
     public async Task Portable_expression_request_construction_failure_reports_its_materialization_phase()
     {
         var reference = new DurableValueExternalReference("request-payloads", "requests/request-1", new Dictionary<string, string>());

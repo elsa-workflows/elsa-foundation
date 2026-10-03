@@ -110,7 +110,10 @@ public sealed class WorkflowInstanceListService(
     {
         // Health and inspection authorization are not predicates in the provider-neutral page query. Apply both
         // before canonical keyset paging so unauthorized/nonmatching runs never enter items, counts or cursors.
-        var authorizedStore = new InMemoryWorkflowExecutionStateStore();
+        // The outer health prefix is only routing context. Bind the predicate into the opaque inner cursor too,
+        // so changing that prefix cannot continue an authorization/fallback page under a different result set.
+        var authorizedStore = new InMemoryWorkflowExecutionStateStore(
+            incidentHealth is null ? null : $"incident-health:{incidentHealth}");
         var requiresSensitiveValues = query.CorrelationId is not null;
         string? candidateCursor = null;
         do
