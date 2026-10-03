@@ -167,7 +167,8 @@ public sealed class ExpressionAuthoringContextService : IExpressionAuthoringCont
         foreach (var candidate in catalog.Symbols)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            if (candidate is null || string.IsNullOrWhiteSpace(candidate.SymbolId) || !profileIds.Add(candidate.SymbolId))
+            if (candidate is null || string.IsNullOrWhiteSpace(candidate.SymbolId) ||
+                string.IsNullOrWhiteSpace(candidate.Name) || !profileIds.Add(candidate.SymbolId))
                 throw new InvalidOperationException("The declared tooling profile contains an invalid symbol identity.");
         }
 
@@ -184,7 +185,7 @@ public sealed class ExpressionAuthoringContextService : IExpressionAuthoringCont
                 cancellationToken.ThrowIfCancellationRequested();
                 if (filtered is null)
                     break;
-                if (!string.Equals(filtered.SymbolId, candidate.SymbolId, StringComparison.Ordinal))
+                if (string.IsNullOrWhiteSpace(filtered.Name) || !string.Equals(filtered.SymbolId, candidate.SymbolId, StringComparison.Ordinal))
                     throw new InvalidOperationException("A symbol policy filter changed a declared profile identity.");
             }
 

@@ -263,6 +263,8 @@ public sealed class ExpressionAuthoringContextCatalogTests
     [InlineData("empty-revision")]
     [InlineData("duplicate-id")]
     [InlineData("empty-id")]
+    [InlineData("empty-name")]
+    [InlineData("null-name")]
     [InlineData("too-many")]
     [InlineData("null-symbols")]
     public async Task Invalid_declared_profiles_fail_unavailable_without_partial_context(string profileCase)
@@ -272,6 +274,8 @@ public sealed class ExpressionAuthoringContextCatalogTests
             "empty-revision" => new(" ", [Symbol("profile", "profile")]),
             "duplicate-id" => new("profile-r1", [Symbol("duplicate", "one"), Symbol("duplicate", "two")]),
             "empty-id" => new("profile-r1", [Symbol(" ", "empty-id")]),
+            "empty-name" => new("profile-r1", [Symbol("profile", " ")]),
+            "null-name" => new("profile-r1", [Symbol("profile", null!)]),
             "too-many" => new("profile-r1", Enumerable.Range(0, 501).Select(index => Symbol($"profile:{index}", $"profile{index}")).ToArray()),
             "null-symbols" => new("profile-r1", null!),
             _ => throw new ArgumentOutOfRangeException(nameof(profileCase))
@@ -285,6 +289,22 @@ public sealed class ExpressionAuthoringContextCatalogTests
         Assert.Null(result.Payload);
         Assert.Null(result.DocumentRevision);
         Assert.Null(result.ContextRevision);
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData(" ")]
+    public async Task Invalid_names_returned_by_a_profile_filter_fail_closed_before_search(string? name)
+    {
+        var filter = new SymbolFilter((symbol, _, _, _) => ValueTask.FromResult<ExpressionSymbol?>(symbol with { Name = name! }));
+        var service = new ExpressionAuthoringContextService([new Source()],
+            new Resolver(_ => new Provider(() => new("profile-r1", [Symbol("profile", "valid")]))), [filter]);
+
+        var result = await service.ResolveAsync(Request(search: "valid"), new(true), CancellationToken.None);
+
+        Assert.Equal(ExpressionToolingOutcomeState.Unavailable, result.State);
+        Assert.Equal(ProfileUnavailable, result.Code);
+        Assert.Null(result.Payload);
     }
 
     [Theory]
