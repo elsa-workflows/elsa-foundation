@@ -189,6 +189,39 @@ public sealed class PoisonedSchedulerWorkIncidentObserver : IWorkflowSchedulerDr
         var metadata = NewMetadata(incidentId, record);
         var activityExecutionId = ValueOrNull(metadata, RuntimeMetadataKeys.ActivityExecutionId);
         var executableNodeId = ValueOrNull(metadata, RuntimeMetadataKeys.ExecutableNodeId);
+        ActivityExecutionState? activityState = null;
+        if (activityExecutionId is not null && _activityExecutionStateStore is not null)
+        {
+            try
+            {
+                activityState = await _activityExecutionStateStore.FindAsync(
+                    workflowExecutionId,
+                    activityExecutionId,
+                    cancellationToken);
+                if (activityState is not null && executableNodeId is null)
+                {
+                    executableNodeId = activityState.Execution.ExecutableNodeId;
+                    metadata[RuntimeMetadataKeys.ExecutableNodeId] = executableNodeId;
+                }
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                throw;
+            }
+            catch (Exception exception) when (IsCatchableObserverFailure(exception))
+            {
+                // Some activity-bound scheduler payloads identify the canonical execution without carrying its
+                // executable node. Resolve that node from persisted state when available, but keep incident
+                // surfacing best-effort if the optional projection lookup is unavailable.
+                activityState = null;
+                _logger.LogWarning(
+                    exception,
+                    "Failed to resolve poisoned scheduler work item {WorkItemId} to activity execution {ActivityExecutionId}; recording the incident without an activity projection.",
+                    record.WorkItemId,
+                    activityExecutionId);
+            }
+        }
+
         var incident = new IncidentState(
             incidentId: incidentId,
             workflowExecutionId: workflowExecutionId,
@@ -216,42 +249,38 @@ public sealed class PoisonedSchedulerWorkIncidentObserver : IWorkflowSchedulerDr
         var activityStateChanges = new List<RuntimeStateChange<ActivityExecutionState>>();
         var activityInspectionChanges = new List<RuntimeStateChange<ActivityExecutionInspectionProjection>>();
         var checkpointActivityExecutionIds = new List<string>();
-        if (activityExecutionId is not null && _activityExecutionStateStore is not null)
+        if (activityExecutionId is not null && activityState is not null &&
+            (executableNodeId is null || StringComparer.Ordinal.Equals(activityState.Execution.ExecutableNodeId, executableNodeId)))
         {
             try
             {
-                var activityState = await _activityExecutionStateStore.FindAsync(workflowExecutionId, activityExecutionId, cancellationToken);
-                if (activityState is not null &&
-                    (executableNodeId is null || StringComparer.Ordinal.Equals(activityState.Execution.ExecutableNodeId, executableNodeId)))
-                {
-                    var associatedState = activityState.IncidentIds.Contains(incidentId, StringComparer.Ordinal)
-                        ? activityState
-                        : activityState with { IncidentIds = activityState.IncidentIds.Append(incidentId).ToArray() };
-                    var inputFailure = BuildInputFailureSnapshot(incident, occurredAt);
-                    var projection = _inspectionAccumulator is null
-                        ? null
-                        : await _inspectionAccumulator.BuildProjectionAsync(
-                            associatedState,
-                            checkpointId,
-                            occurredAt,
-                            incidents: [ActivityExecutionIncidentSummary.From(incident)],
-                            valueSnapshots: inputFailure is null ? [] : [inputFailure],
-                            metadata: metadata,
-                            cancellationToken: cancellationToken);
+                var associatedState = activityState.IncidentIds.Contains(incidentId, StringComparer.Ordinal)
+                    ? activityState
+                    : activityState with { IncidentIds = activityState.IncidentIds.Append(incidentId).ToArray() };
+                var inputFailure = BuildInputFailureSnapshot(incident, occurredAt);
+                var projection = _inspectionAccumulator is null
+                    ? null
+                    : await _inspectionAccumulator.BuildProjectionAsync(
+                        associatedState,
+                        checkpointId,
+                        occurredAt,
+                        incidents: [ActivityExecutionIncidentSummary.From(incident)],
+                        valueSnapshots: inputFailure is null ? [] : [inputFailure],
+                        metadata: metadata,
+                        cancellationToken: cancellationToken);
 
-                    checkpointActivityExecutionIds.Add(activityExecutionId);
-                    activityStateChanges.Add(new RuntimeStateChange<ActivityExecutionState>(
+                checkpointActivityExecutionIds.Add(activityExecutionId);
+                activityStateChanges.Add(new RuntimeStateChange<ActivityExecutionState>(
+                    StateId: activityExecutionId,
+                    Operation: RuntimeStateChangeOperation.Upsert,
+                    State: associatedState,
+                    Metadata: metadata));
+                if (projection is not null)
+                    activityInspectionChanges.Add(new RuntimeStateChange<ActivityExecutionInspectionProjection>(
                         StateId: activityExecutionId,
                         Operation: RuntimeStateChangeOperation.Upsert,
-                        State: associatedState,
+                        State: projection,
                         Metadata: metadata));
-                    if (projection is not null)
-                        activityInspectionChanges.Add(new RuntimeStateChange<ActivityExecutionInspectionProjection>(
-                            StateId: activityExecutionId,
-                            Operation: RuntimeStateChangeOperation.Upsert,
-                            State: projection,
-                            Metadata: metadata));
-                }
             }
             catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
             {

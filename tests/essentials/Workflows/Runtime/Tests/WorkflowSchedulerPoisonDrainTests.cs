@@ -2,6 +2,8 @@ using System.Text.Json;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Workflows.Runtime.Services.ActivityExecutions;
+using Elsa.Workflows.Runtime.Services.Checkpoints;
 using Elsa.Workflows.Runtime.Services.Executions;
 using Elsa.Workflows.Runtime.Services.Incidents;
 using Elsa.Workflows.Runtime.Services.Scheduler;
@@ -164,8 +166,6 @@ public sealed class WorkflowSchedulerPoisonDrainTests
     [InlineData(WorkflowExecutionCommandKind.StartActivity)]
     [InlineData(WorkflowExecutionCommandKind.InvokeActivity)]
     [InlineData(WorkflowExecutionCommandKind.NotifyParentActivity)]
-    [InlineData(WorkflowExecutionCommandKind.RetryActivityBoundary)]
-    [InlineData(WorkflowExecutionCommandKind.CancelActivityScope)]
     public async Task DrainAsync_ActivityCommandPoison_PreservesPayloadAddress(WorkflowExecutionCommandKind commandKind)
     {
         var fixture = NewAssociatedWorkDrain(
@@ -178,6 +178,73 @@ public sealed class WorkflowSchedulerPoisonDrainTests
         var record = Assert.Single(await fixture.PoisonStore.ListAsync("wfexec-1"));
         Assert.Equal("activity-1", record.Metadata[RuntimeMetadataKeys.ActivityExecutionId]);
         Assert.Equal("node-1", record.Metadata[RuntimeMetadataKeys.ExecutableNodeId]);
+    }
+
+    [Theory]
+    [InlineData(WorkflowExecutionCommandKind.RetryActivityBoundary)]
+    [InlineData(WorkflowExecutionCommandKind.CancelActivityScope)]
+    public async Task DrainAsync_BoundaryCommandPoison_ResolvesNodeFromCanonicalActivityState(WorkflowExecutionCommandKind commandKind)
+    {
+        var queue = new InMemoryWorkflowSchedulerWorkQueue();
+        var poisonStore = new InMemoryWorkflowSchedulerPoisonStore();
+        var activityStore = new InMemoryActivityExecutionStateStore();
+        await activityStore.SaveAsync(NewActivityState());
+
+        var payload = commandKind switch
+        {
+            WorkflowExecutionCommandKind.RetryActivityBoundary => JsonSerializer.SerializeToElement(
+                new RetryActivityBoundaryCommand(
+                    "activity-1",
+                    "activity-1-retry",
+                    new WorkflowExecutableIdentity("artifact-1", "definition-1", "version-1", "1.0.0", "sha256:test"),
+                    "retry after policy")),
+            WorkflowExecutionCommandKind.CancelActivityScope => JsonSerializer.SerializeToElement(
+                new CancelActivityScopeCommand("activity-1", "activity-1", "operator request")),
+            _ => throw new ArgumentOutOfRangeException(nameof(commandKind), commandKind, null)
+        };
+        await queue.EnqueueAsync(NewWorkItem(1, commandKind, payload));
+        var drainer = TestSchedulerDrainer.Create(
+            queue,
+            [new AlwaysFaultingSchedulerWorkHandler(), new NoopWorkflowSchedulerWorkHandler()],
+            new FakeTimeProvider(_now),
+            poisonStore: poisonStore,
+            retryPolicy: new NoopRuntimeDomainRetryPolicy());
+
+        var drainResult = await drainer.DrainAsync(new RuntimeSchedulerDrainRequest("wfexec-1"));
+        Assert.True(drainResult.StoppedOnFault);
+        var poison = Assert.Single(await poisonStore.ListAsync("wfexec-1"));
+        Assert.Equal("activity-1", poison.Metadata[RuntimeMetadataKeys.ActivityExecutionId]);
+        // These real command contracts intentionally carry the execution ID but no node ID.
+        Assert.False(poison.Metadata.ContainsKey(RuntimeMetadataKeys.ExecutableNodeId));
+
+        var workflowStore = new InMemoryWorkflowExecutionStateStore();
+        var incidentStore = new InMemoryIncidentStateStore();
+        var commitStore = new InMemoryRuntimeCheckpointCommitStore(
+            workflowStore,
+            activityExecutionStateStore: activityStore,
+            incidentStateStore: incidentStore,
+            rootWriteLeaseManager: PassThroughWorkflowExecutableRootWriteLeaseManager.Instance);
+        var checkpointCommitter = new RuntimeCheckpointCommitter(
+            new ImmediateRuntimeCheckpointPersistencePolicy(),
+            commitStore,
+            new AsyncLocalRuntimeExecutionOwnershipContextAccessor(),
+            [],
+            []);
+        var observer = new PoisonedSchedulerWorkIncidentObserver(
+            poisonStore,
+            incidentStore,
+            checkpointCommitter,
+            new FakeTimeProvider(_now),
+            activityExecutionStateStore: activityStore,
+            inspectionAccumulator: null);
+
+        await observer.OnDrainedAsync(NewEnvelope(), drainResult);
+
+        var incident = Assert.Single(await incidentStore.ListAsync("wfexec-1"));
+        Assert.Equal("activity-1", incident.ActivityExecutionId);
+        Assert.Equal("node-1", incident.ExecutableNodeId);
+        Assert.Equal("node-1", incident.Metadata[RuntimeMetadataKeys.ExecutableNodeId]);
+        Assert.Contains(incident.IncidentId, (await activityStore.FindAsync("wfexec-1", "activity-1"))!.IncidentIds);
     }
 
     [Fact]
@@ -376,6 +443,47 @@ public sealed class WorkflowSchedulerPoisonDrainTests
             activityExecutionId: "activity-1",
             reason: RuntimeStartActivityCommandPayload.ScheduledActivityReason));
         return NewWorkItem(index, WorkflowExecutionCommandKind.StartActivity, payload);
+    }
+
+    private ActivityExecutionState NewActivityState() => new(
+        Execution: new ActivityExecution("activity-1", "wfexec-1", "node-1", "authored-1", "Elsa.WriteLine", "1.0"),
+        Status: ActivityExecutionStatus.Scheduled,
+        SubStatus: null,
+        ExecutionSequence: 1,
+        ScheduledAt: _now,
+        StartedAt: null,
+        CompletedAt: null,
+        SchedulingActivityExecutionId: null,
+        ParentActivityExecutionId: null,
+        BranchId: null,
+        IterationId: null,
+        Provenance: ActivitySchedulingProvenance.Empty,
+        CallStackDepth: null,
+        BookmarkIds: [],
+        IncidentIds: [],
+        FaultCount: 0,
+        AggregateFaultCount: 0,
+        Metadata: new Dictionary<string, string>());
+
+    private WorkflowExecutionCommandEnvelope NewEnvelope()
+    {
+        var command = new WorkflowExecutionCommand(
+            CommandId: "command-1",
+            WorkflowExecutionId: "wfexec-1",
+            Kind: WorkflowExecutionCommandKind.RunSchedulerWork,
+            EnqueuedAt: _now,
+            Payload: null,
+            Metadata: new Dictionary<string, string>());
+
+        return new(
+            envelopeId: "envelope-1",
+            workflowExecutionId: "wfexec-1",
+            command: command,
+            idempotencyKey: "wfexec-1:command-1",
+            deliveryMode: WorkflowExecutionCommandDeliveryMode.AtLeastOnce,
+            enqueuedAt: _now,
+            sequence: 1,
+            metadata: new Dictionary<string, string>());
     }
 
     private static JsonElement NewActivityAddressPayload()
