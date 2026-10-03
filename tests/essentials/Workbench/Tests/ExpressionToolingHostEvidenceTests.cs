@@ -27,14 +27,20 @@ public sealed class ExpressionToolingHostEvidenceTests
         using var login = await client.PostAsJsonAsync("/_elsa/identity/login", new { username = "admin", password = "Password123!" });
         Assert.Equal(HttpStatusCode.OK, login.StatusCode);
 
+        var toolingLinks = new Dictionary<string, string>(StringComparer.Ordinal);
         using (var capabilityResponse = await client.GetAsync("/capabilities"))
         {
             Assert.Equal(HttpStatusCode.OK, capabilityResponse.StatusCode);
             using var capabilities = JsonDocument.Parse(await capabilityResponse.Content.ReadAsStringAsync());
             var tooling = Assert.Single(capabilities.RootElement.GetProperty("capabilities").EnumerateArray(), capability =>
                 capability.GetProperty("id").GetString() == "expressions.tooling.v1");
-            Assert.Contains(tooling.GetProperty("links").EnumerateArray(), link => link.GetProperty("rel").GetString() == "expression-tooling-context");
-            Assert.Contains(tooling.GetProperty("links").EnumerateArray(), link => link.GetProperty("rel").GetString() == "expression-tooling-completions");
+            foreach (var relation in new[] { "expression-tooling-context", "expression-tooling-completions", "expression-tooling-hover", "expression-tooling-validate" })
+            {
+                var link = Assert.Single(tooling.GetProperty("links").EnumerateArray(), link => link.GetProperty("rel").GetString() == relation);
+                var href = link.GetProperty("href").GetString();
+                Assert.False(string.IsNullOrWhiteSpace(href));
+                toolingLinks.Add(relation, href!);
+            }
         }
 
         var readLine = await ReadActivityVersionAsync(client, ReadLineTypeKey);
@@ -91,12 +97,12 @@ public sealed class ExpressionToolingHostEvidenceTests
         Assert.True(File.Exists(Path.Combine(workbench.ContentRoot, "elsa.db")), "The real Workbench EF design persistence resource did not create elsa.db.");
 
         using (var anonymous = new HttpClient { BaseAddress = workbench.Client.BaseAddress })
-        using (var denied = await anonymous.PostAsJsonAsync("/design/workflows/expression-tooling/context", ContextBody(draftId, "JavaScript", textInput.ReferenceKey)))
+        using (var denied = await anonymous.PostAsJsonAsync(toolingLinks["expression-tooling-context"], ContextBody(draftId, "JavaScript", textInput.ReferenceKey)))
             Assert.Equal(HttpStatusCode.Unauthorized, denied.StatusCode);
 
         foreach (var syntax in new[] { "JavaScript", "Liquid" })
         {
-            using var contextResponse = await client.PostAsJsonAsync("/design/workflows/expression-tooling/context", ContextBody(draftId, syntax, textInput.ReferenceKey));
+            using var contextResponse = await client.PostAsJsonAsync(toolingLinks["expression-tooling-context"], ContextBody(draftId, syntax, textInput.ReferenceKey));
             Assert.Equal(HttpStatusCode.OK, contextResponse.StatusCode);
             using var contextDocument = JsonDocument.Parse(await contextResponse.Content.ReadAsStringAsync());
             var result = contextDocument.RootElement.GetProperty("result");
@@ -113,7 +119,7 @@ public sealed class ExpressionToolingHostEvidenceTests
             Assert.Equal(output.Type, predecessorOutput.GetProperty("valueShape").GetProperty("displayName").GetString());
 
             var completionSource = syntax == "JavaScript" ? "args.predecessor." : "predecessor.";
-            using var completionResponse = await client.PostAsJsonAsync("/design/workflows/expression-tooling/completions", SourceBody(draftId, syntax, textInput.ReferenceKey, completionSource, contextRevision, completionSource.Length));
+            using var completionResponse = await client.PostAsJsonAsync(toolingLinks["expression-tooling-completions"], SourceBody(draftId, syntax, textInput.ReferenceKey, completionSource, contextRevision, completionSource.Length));
             Assert.Equal(HttpStatusCode.OK, completionResponse.StatusCode);
             using var completionDocument = JsonDocument.Parse(await completionResponse.Content.ReadAsStringAsync());
             var completionResult = completionDocument.RootElement.GetProperty("result");
@@ -123,7 +129,7 @@ public sealed class ExpressionToolingHostEvidenceTests
             Assert.Equal(output.Type, outputCompletion.GetProperty("detail").GetString());
 
             var hoverSource = syntax == "JavaScript" ? $"args.predecessor.{output.Name}" : $"predecessor.{output.Name}";
-            using var hoverResponse = await client.PostAsJsonAsync("/design/workflows/expression-tooling/hover", SourceBody(draftId, syntax, textInput.ReferenceKey, hoverSource, contextRevision, hoverSource.Length, hover: true));
+            using var hoverResponse = await client.PostAsJsonAsync(toolingLinks["expression-tooling-hover"], SourceBody(draftId, syntax, textInput.ReferenceKey, hoverSource, contextRevision, hoverSource.Length, hover: true));
             Assert.Equal(HttpStatusCode.OK, hoverResponse.StatusCode);
             using var hoverDocument = JsonDocument.Parse(await hoverResponse.Content.ReadAsStringAsync());
             var hoverResult = hoverDocument.RootElement.GetProperty("result");
@@ -134,7 +140,7 @@ public sealed class ExpressionToolingHostEvidenceTests
             Assert.Contains("Activity output", hoverContents, StringComparison.Ordinal);
 
             var invalid = syntax == "JavaScript" ? "if (" : "{{ customerName";
-            using var validationResponse = await client.PostAsJsonAsync("/design/workflows/expression-tooling/validate", SourceBody(draftId, syntax, textInput.ReferenceKey, invalid, contextRevision));
+            using var validationResponse = await client.PostAsJsonAsync(toolingLinks["expression-tooling-validate"], SourceBody(draftId, syntax, textInput.ReferenceKey, invalid, contextRevision));
             Assert.Equal(HttpStatusCode.OK, validationResponse.StatusCode);
             using var validationDocument = JsonDocument.Parse(await validationResponse.Content.ReadAsStringAsync());
             var validationResult = validationDocument.RootElement.GetProperty("result");

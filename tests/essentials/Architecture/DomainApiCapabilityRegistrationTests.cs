@@ -100,6 +100,7 @@ public sealed class DomainApiCapabilityRegistrationTests
         Assert.DoesNotContain(
             await new WorkflowDesignOperationalCapabilitySource(
                 expressionTooling: context,
+                expressionToolingProviders: [],
                 expressionToolingResolver: new ExpressionToolingProviderResolver([])).GetCapabilitiesAsync(),
             declaration => declaration.CapabilityId == "expressions.tooling.v1");
 
