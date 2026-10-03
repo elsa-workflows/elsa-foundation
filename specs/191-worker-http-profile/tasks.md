@@ -42,9 +42,9 @@ Input: [spec](spec.md), [plan](plan.md), [contract](contracts/worker-profile.md)
 
 - [X] T016 Document exact selection, host-owned prerequisites, real CLI flow and bounded actor evidence in `docs/reference/worker-http-profile.md`; link canonical contracts rather than duplicate architecture meanings.
 - [X] T017 Synchronize completed Spec190 T028 from its final public closure in `specs/190-worker-oidc-normalization/tasks.md`, `specs/190-worker-oidc-normalization/implementation-evidence.md` and the active Worker successor in `docs/program-goals/feature-composition-readiness.md`.
-- [ ] T018 Run final restored full Planning/CLI/Runtime EF suites serially plus affected retained checks, architecture and filter freshness; deliberately refresh/check maps/review findings/stage changed outputs explicitly; record commands/source/platform/counts/skips in `specs/191-worker-http-profile/implementation-evidence.md`.
-- [ ] T019 Root review the full integrated delta and proof; open one gated PR with #2326; obtain actual exact-head review, resolve/reply findings and applicable hosted checks; record evidence in `specs/191-worker-http-profile/implementation-evidence.md` and public issue/PR comments.
-- [ ] T020 Verify required resulting-main workflows/source-package/image identity, synchronize issue/Project/parent and release claim; mark lifecycle only from completed proof in `specs/191-worker-http-profile/implementation-evidence.md` and `docs/program-goals/feature-composition-readiness.md`.
+- [X] T018 Run final restored full Planning/CLI/Runtime EF suites serially plus affected retained checks, architecture and filter freshness; deliberately refresh/check maps/review findings/stage changed outputs explicitly; record commands/source/platform/counts/skips in `specs/191-worker-http-profile/implementation-evidence.md`.
+- [X] T019 Root review the full integrated delta and proof; open one gated PR with #2326; obtain actual exact-head review, resolve/reply findings and applicable hosted checks; record evidence in `specs/191-worker-http-profile/implementation-evidence.md` and public issue/PR comments.
+- [X] T020 Verify required resulting-main workflows/source-package/image identity, synchronize issue/Project/parent and release claim; mark lifecycle only from completed proof in `specs/191-worker-http-profile/implementation-evidence.md` and `docs/program-goals/feature-composition-readiness.md`.
 
 ## Dependencies and bounded parallel work
 
