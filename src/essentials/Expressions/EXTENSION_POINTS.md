@@ -29,6 +29,15 @@ Shipped implementations are `PortableJavaScriptExpressionHandler` and
 - **Boundary:** receives a revisioned, Design-filtered metadata snapshot; it must not evaluate
   source, access runtime values, or retain source. Duplicate types fail deterministic resolver
   construction. The optional tooling capability is absent when no language provider is composed.
+- **Declared catalog:** `DeclaredCatalog` may expose an immutable `ExpressionToolingCatalog`
+  containing Core symbols and an opaque profile revision; its default is `null` for legacy
+  providers. The scoped Design context service adds only the selected provider's declared symbols,
+  applies the existing symbol filters to those profile candidates, and then searches or pages the
+  combined catalog. Profiles are limited to 500 unique nonempty symbol IDs and the combined
+  context to 5,500 symbols. Providers must use the symbols in the filtered context and must not
+  reinsert profile entries that were omitted by policy. Context and symbol-catalog revisions
+  incorporate the profile revision independently; a provider without a catalog leaves both source
+  revisions unchanged.
 
 ### `IVariableTypeDescriptorProvider` *(Core — `Elsa.Expressions.Core`)*
 

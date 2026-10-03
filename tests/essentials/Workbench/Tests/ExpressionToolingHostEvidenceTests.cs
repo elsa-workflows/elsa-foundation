@@ -141,7 +141,16 @@ public sealed class ExpressionToolingHostEvidenceTests
             var predecessorOutput = Assert.Single(symbols, symbol => symbol.GetProperty("name").GetString() == $"predecessor.{output.Name}");
             Assert.Equal(output.Type, predecessorOutput.GetProperty("valueShape").GetProperty("displayName").GetString());
 
-            var completionSource = syntax == "JavaScript" ? "args.predecessor." : "predecessor.";
+            var profileName = syntax == "JavaScript" ? "Math.abs" : "append";
+            var profileSymbol = Assert.Single(symbols, symbol => symbol.GetProperty("name").GetString() == profileName);
+            var profileSignature = Assert.Single(profileSymbol.GetProperty("signatures").EnumerateArray());
+            Assert.Equal(syntax == "JavaScript" ? "x" : "value",
+                Assert.Single(profileSignature.GetProperty("parameters").EnumerateArray()).GetString());
+            Assert.False(string.IsNullOrWhiteSpace(profileSignature.GetProperty("returnShape").GetProperty("displayName").GetString()));
+            if (syntax == "Liquid")
+                Assert.DoesNotContain(symbols, symbol => symbol.GetProperty("name").GetString() is "date" or "format_date" or "time_zone" or "include" or "render");
+
+            var completionSource = syntax == "JavaScript" ? "args.predecessor." : "{{ predecessor.";
             using var completionResponse = await PostToolingAsync(toolingLinks["expression-tooling-completions"], SourceBody(draftId, syntax, textInput.ReferenceKey, completionSource, contextRevision, completionSource.Length));
             Assert.Equal(HttpStatusCode.OK, completionResponse.StatusCode);
             using var completionDocument = JsonDocument.Parse(await completionResponse.Content.ReadAsStringAsync());
@@ -151,7 +160,7 @@ public sealed class ExpressionToolingHostEvidenceTests
             var outputCompletion = Assert.Single(completionResult.GetProperty("payload").GetProperty("items").EnumerateArray(), item => item.GetProperty("label").GetString() == output.Name);
             Assert.Equal(output.Type, outputCompletion.GetProperty("detail").GetString());
 
-            var hoverSource = syntax == "JavaScript" ? $"args.predecessor.{output.Name}" : $"predecessor.{output.Name}";
+            var hoverSource = syntax == "JavaScript" ? $"args.predecessor.{output.Name}" : $"{{{{ predecessor.{output.Name}";
             using var hoverResponse = await PostToolingAsync(toolingLinks["expression-tooling-hover"], SourceBody(draftId, syntax, textInput.ReferenceKey, hoverSource, contextRevision, hoverSource.Length, hover: true));
             Assert.Equal(HttpStatusCode.OK, hoverResponse.StatusCode);
             using var hoverDocument = JsonDocument.Parse(await hoverResponse.Content.ReadAsStringAsync());
@@ -171,7 +180,39 @@ public sealed class ExpressionToolingHostEvidenceTests
             AssertRevisionEnvelope(validationResult, contextRevision);
             Assert.NotEmpty(validationResult.GetProperty("payload").GetProperty("diagnostics").EnumerateArray());
 
-            if (syntax != "JavaScript") continue;
+            if (syntax == "Liquid")
+            {
+                foreach (var (source, label, kind) in new[]
+                {
+                    ("{{ customerName | upc", "upcase", 4),
+                    ("{% if", "if", 5)
+                })
+                {
+                    using var profileResponse = await PostToolingAsync(toolingLinks["expression-tooling-completions"],
+                        SourceBody(draftId, syntax, textInput.ReferenceKey, source, contextRevision, source.Length));
+                    Assert.Equal(HttpStatusCode.OK, profileResponse.StatusCode);
+                    using var profileDocument = JsonDocument.Parse(await profileResponse.Content.ReadAsStringAsync());
+                    var profileResult = profileDocument.RootElement.GetProperty("result");
+                    Assert.Equal(0, profileResult.GetProperty("state").GetInt32());
+                    AssertRevisionEnvelope(profileResult, contextRevision);
+                    var item = Assert.Single(profileResult.GetProperty("payload").GetProperty("items").EnumerateArray(),
+                        item => item.GetProperty("label").GetString() == label);
+                    Assert.Equal(kind, item.GetProperty("kind").GetInt32());
+                    Assert.False(string.IsNullOrWhiteSpace(item.GetProperty("documentation").GetString()));
+                }
+
+                const string filterSource = "{{ customerName | upcase }}";
+                using var filterResponse = await PostToolingAsync(toolingLinks["expression-tooling-hover"],
+                    SourceBody(draftId, syntax, textInput.ReferenceKey, filterSource, contextRevision,
+                        filterSource.IndexOf("upcase", StringComparison.Ordinal) + 3, hover: true));
+                Assert.Equal(HttpStatusCode.OK, filterResponse.StatusCode);
+                using var filterDocument = JsonDocument.Parse(await filterResponse.Content.ReadAsStringAsync());
+                var filterResult = filterDocument.RootElement.GetProperty("result");
+                Assert.Equal(0, filterResult.GetProperty("state").GetInt32());
+                AssertRevisionEnvelope(filterResult, contextRevision);
+                Assert.Contains("upcase(): String", filterResult.GetProperty("payload").GetProperty("contents").GetString(), StringComparison.Ordinal);
+                continue;
+            }
 
             // The composed provider must describe the same deterministic runtime surface,
             // through real advertised routes and both cookie and rotating-bearer paths.

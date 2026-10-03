@@ -38,6 +38,7 @@ Elsa.Expressions.Core.Contracts.IExpressionEvaluatorOptions
 Elsa.Expressions.Core.Contracts.IExpressionEvaluatorOptions.Arguments.get -> System.Collections.Generic.IDictionary<string!, object!>!
 Elsa.Expressions.Core.Contracts.IExpressionToolingProvider
 Elsa.Expressions.Core.Contracts.IExpressionToolingProvider.DeclaredCapabilities.get -> Elsa.Expressions.Core.Models.ExpressionToolingCapabilities!
+Elsa.Expressions.Core.Contracts.IExpressionToolingProvider.DeclaredCatalog.get -> Elsa.Expressions.Core.Models.ExpressionToolingCatalog?
 Elsa.Expressions.Core.Contracts.IExpressionToolingProvider.ExpressionType.get -> string!
 Elsa.Expressions.Core.Contracts.IExpressionToolingProvider.GetCapabilitiesAsync(Elsa.Expressions.Core.Models.ExpressionToolingRequestScope! scope, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask<Elsa.Expressions.Core.Models.ExpressionToolingOutcome<Elsa.Expressions.Core.Models.ExpressionToolingCapabilities!>!>
 Elsa.Expressions.Core.Contracts.IExpressionToolingProvider.GetCompletionsAsync(Elsa.Expressions.Core.Models.ExpressionCompletionRequest! request, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask<Elsa.Expressions.Core.Models.ExpressionToolingOutcome<Elsa.Expressions.Core.Models.ExpressionToolingItems!>!>
@@ -284,6 +285,15 @@ Elsa.Expressions.Core.Models.ExpressionSymbolKind.Namespace = 6 -> Elsa.Expressi
 Elsa.Expressions.Core.Models.ExpressionSymbolKind.Tag = 5 -> Elsa.Expressions.Core.Models.ExpressionSymbolKind
 Elsa.Expressions.Core.Models.ExpressionSymbolKind.Variable = 0 -> Elsa.Expressions.Core.Models.ExpressionSymbolKind
 Elsa.Expressions.Core.Models.ExpressionSymbolKind.WorkflowInput = 1 -> Elsa.Expressions.Core.Models.ExpressionSymbolKind
+Elsa.Expressions.Core.Models.ExpressionToolingCatalog
+Elsa.Expressions.Core.Models.ExpressionToolingCatalog.<Clone>$() -> Elsa.Expressions.Core.Models.ExpressionToolingCatalog!
+Elsa.Expressions.Core.Models.ExpressionToolingCatalog.Deconstruct(out string! Revision, out System.Collections.Generic.IReadOnlyList<Elsa.Expressions.Core.Models.ExpressionSymbol!>! Symbols) -> void
+Elsa.Expressions.Core.Models.ExpressionToolingCatalog.Equals(Elsa.Expressions.Core.Models.ExpressionToolingCatalog? other) -> bool
+Elsa.Expressions.Core.Models.ExpressionToolingCatalog.ExpressionToolingCatalog(string! Revision, System.Collections.Generic.IReadOnlyList<Elsa.Expressions.Core.Models.ExpressionSymbol!>! Symbols) -> void
+Elsa.Expressions.Core.Models.ExpressionToolingCatalog.Revision.get -> string!
+Elsa.Expressions.Core.Models.ExpressionToolingCatalog.Revision.init -> void
+Elsa.Expressions.Core.Models.ExpressionToolingCatalog.Symbols.get -> System.Collections.Generic.IReadOnlyList<Elsa.Expressions.Core.Models.ExpressionSymbol!>!
+Elsa.Expressions.Core.Models.ExpressionToolingCatalog.Symbols.init -> void
 Elsa.Expressions.Core.Models.ExpressionToolingCapabilities
 Elsa.Expressions.Core.Models.ExpressionToolingCapabilities.<Clone>$() -> Elsa.Expressions.Core.Models.ExpressionToolingCapabilities!
 Elsa.Expressions.Core.Models.ExpressionToolingCapabilities.Deconstruct(out bool SupportsCompletions, out bool SupportsHover, out bool SupportsValidation, out bool SupportsSymbolPaging, out bool SupportsLazyMembers, out int MaximumSymbols) -> void
@@ -574,6 +584,9 @@ override Elsa.Expressions.Core.Models.ExpressionParameterBinding.ToString() -> s
 override Elsa.Expressions.Core.Models.ExpressionSymbol.Equals(object? obj) -> bool
 override Elsa.Expressions.Core.Models.ExpressionSymbol.GetHashCode() -> int
 override Elsa.Expressions.Core.Models.ExpressionSymbol.ToString() -> string!
+override Elsa.Expressions.Core.Models.ExpressionToolingCatalog.Equals(object? obj) -> bool
+override Elsa.Expressions.Core.Models.ExpressionToolingCatalog.GetHashCode() -> int
+override Elsa.Expressions.Core.Models.ExpressionToolingCatalog.ToString() -> string!
 override Elsa.Expressions.Core.Models.ExpressionToolingCapabilities.Equals(object? obj) -> bool
 override Elsa.Expressions.Core.Models.ExpressionToolingCapabilities.GetHashCode() -> int
 override Elsa.Expressions.Core.Models.ExpressionToolingCapabilities.ToString() -> string!
@@ -661,6 +674,8 @@ static Elsa.Expressions.Core.Models.ExpressionParameterBinding.operator !=(Elsa.
 static Elsa.Expressions.Core.Models.ExpressionParameterBinding.operator ==(Elsa.Expressions.Core.Models.ExpressionParameterBinding? left, Elsa.Expressions.Core.Models.ExpressionParameterBinding? right) -> bool
 static Elsa.Expressions.Core.Models.ExpressionSymbol.operator !=(Elsa.Expressions.Core.Models.ExpressionSymbol? left, Elsa.Expressions.Core.Models.ExpressionSymbol? right) -> bool
 static Elsa.Expressions.Core.Models.ExpressionSymbol.operator ==(Elsa.Expressions.Core.Models.ExpressionSymbol? left, Elsa.Expressions.Core.Models.ExpressionSymbol? right) -> bool
+static Elsa.Expressions.Core.Models.ExpressionToolingCatalog.operator !=(Elsa.Expressions.Core.Models.ExpressionToolingCatalog? left, Elsa.Expressions.Core.Models.ExpressionToolingCatalog? right) -> bool
+static Elsa.Expressions.Core.Models.ExpressionToolingCatalog.operator ==(Elsa.Expressions.Core.Models.ExpressionToolingCatalog? left, Elsa.Expressions.Core.Models.ExpressionToolingCatalog? right) -> bool
 static Elsa.Expressions.Core.Models.ExpressionToolingCapabilities.operator !=(Elsa.Expressions.Core.Models.ExpressionToolingCapabilities? left, Elsa.Expressions.Core.Models.ExpressionToolingCapabilities? right) -> bool
 static Elsa.Expressions.Core.Models.ExpressionToolingCapabilities.operator ==(Elsa.Expressions.Core.Models.ExpressionToolingCapabilities? left, Elsa.Expressions.Core.Models.ExpressionToolingCapabilities? right) -> bool
 static Elsa.Expressions.Core.Models.ExpressionToolingContractVersion.operator !=(Elsa.Expressions.Core.Models.ExpressionToolingContractVersion left, Elsa.Expressions.Core.Models.ExpressionToolingContractVersion right) -> bool

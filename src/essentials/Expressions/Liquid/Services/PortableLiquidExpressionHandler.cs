@@ -10,8 +10,24 @@ namespace Elsa.Expressions.Liquid.Services;
 /// <summary>
 /// Evaluates pure Liquid bindings from their complete, explicitly declared JSON parameter snapshot.
 /// </summary>
-public sealed class PortableLiquidExpressionHandler(FluidParser parser) : IPortableExpressionHandler
+public sealed class PortableLiquidExpressionHandler : IPortableExpressionHandler
 {
+    private readonly FluidParser parser;
+    private readonly LiquidExpressionProfile profile;
+
+    public PortableLiquidExpressionHandler(FluidParser parser) : this(parser, LiquidExpressionProfile.Default)
+    {
+    }
+
+    public PortableLiquidExpressionHandler(FluidParser parser, LiquidExpressionProfile profile)
+    {
+        ArgumentNullException.ThrowIfNull(parser);
+        ArgumentNullException.ThrowIfNull(profile);
+        this.parser = parser;
+        this.profile = profile;
+        this.profile.ConfigureParser(parser);
+    }
+
     private static readonly HashSet<string> NumericAliases =
     [
         "Byte", "SByte", "Int16", "UInt16", "Int32", "UInt32", "Int64", "UInt64", "Single", "Double", "Decimal"
@@ -35,18 +51,9 @@ public sealed class PortableLiquidExpressionHandler(FluidParser parser) : IPorta
 
         // A model-less context has no workflow/activity context, service provider, configuration, or
         // event pipeline. Only the immutable parameter roots copied below are visible to Fluid.
-        var options = new TemplateOptions
-        {
-            Now = static () => DateTimeOffset.UnixEpoch,
-            TimeZone = TimeZoneInfo.Utc,
-            Undefined = path => throw new InvalidOperationException(
-                $"Liquid binding expression referenced undeclared parameter '{path}'.")
-        };
-        foreach (var filter in new[] { "date", "format_date", "time_zone" })
-        {
-            options.Filters.AddFilter(filter, static (_, _, _) =>
-                throw new InvalidOperationException("Liquid time and time-zone filters are unavailable in the binding-pure-v1 capability profile."));
-        }
+        var options = profile.CreateTemplateOptions();
+        options.Undefined = path => throw new InvalidOperationException(
+            $"Liquid binding expression referenced undeclared parameter '{path}'.");
         var context = new TemplateContext(options, StringComparer.Ordinal)
         {
             CultureInfo = CultureInfo.InvariantCulture

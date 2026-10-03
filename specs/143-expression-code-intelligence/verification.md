@@ -1,12 +1,82 @@
 # Expression Code Intelligence Foundation — Verification
 
-Last reconciled: 2026-10-03 for Program #2310 M2 local conformance verification; committed-head CI/review, delivery and final human acceptance pending
+Last reconciled: 2026-10-03 for Program #2310 M2 automated gate and M3 integrated candidate; M3 final producer-consumer/CI/review, delivery and human acceptance pending
 
 ## Program #2310 status
 
-T026-T027 pass at the exact M1 pair recorded below. T028 is implemented with the local M2 evidence below; its committed-head CI/review gate is pending. Effective Liquid metadata and the final coordinated language-depth gate (T029-T031) remain open. Historical baseline evidence remains separate. All program PRs remain draft and unmerged; final human acceptance is outstanding.
+T026-T027 pass at the exact M1 pair recorded below. T028 passes the exact M2 automated gate at Foundation7457b7a4/Studio00677684 under the documented unavailable-review fallback. Task #2379 implements effective Liquid metadata and policy-filtered runtime catalogs under D12; final coordinated language-depth proof (T029-T031) remains open. Historical baseline evidence remains separate. All program PRs remain draft and unmerged; final human acceptance is outstanding.
 
 ## Passing evidence
+
+### M3 integrated candidate — Task #2379, 2026-10-03
+
+Root integrates the common catalog and Liquid slices at `96d25b0e5`, based on the exact M2 producer
+`7457b7a4564892bab4b28bd0d07fac9709462d56`. The only cherry-pick conflict is adjacent language-specific
+fixture helpers; both are retained. No runtime or test objective is discarded. Local integrated
+checks pass focused profile/provider/catalog contracts 141/141, complete Expressions 235/235,
+Design 528/528 and Design API 143/143. Broader final checks and paired-host proof are still pending
+at this checkpoint; predecessor/worker passes are not substituted for final evidence.
+
+Common metadata is composed after authorization and source identity checks, filtered once through
+the existing profile policy chain, bounded before client paging and included independently in
+context/catalog revisions. Profile IDs reserve authority even when denied; source entries are not
+filtered twice. Legacy providers default to no declared catalog. JavaScript and Liquid do not
+reinsert profile entries omitted from authoritative context.
+
+The module-owned immutable Liquid profile shares runtime parser/options configuration and tooling
+metadata without placing Fluid/services/values in Core. Default Fluid 2.31.0 registry parity, fresh
+objects, denied time/file-backed features and a trusted custom runtime/tooling pair have focused
+tests. Legacy scoped parser overrides and the public parser constructor remain supported without
+inventing their metadata. Root review catches and fixes a multi-language registration regression;
+the retained composition test executes JavaScript and Liquid together. The cursor analyzer is quiet
+in strings and raw/comment blocks and distinguishes values, filters and tags; unknown shapes and
+unproved arity do not become semantic errors. The existing ranking test retains its competing value.
+
+Root reviews both slices and delegates independent read-only common-slice review to the Liquid
+worker. Current-head CI/Maps/external review, architecture, REST and rebuilt coordinated Studio
+proof remain required. All PRs remain draft/unmerged, and no human/assistive-technology acceptance
+or delivery is claimed.
+
+The independent review identifies a malformed profile/filter name that can escape the unavailable
+boundary during search. Four controls reproduce the defect (4 failures/5 passes), including a null
+filter-name `NullReferenceException`; name validation before and after filtering fixes it. The final
+complete Design run passes 532/532. Jint 126/126, Publishing API 714/714 and scoped Architecture17/17
+also pass at this checkpoint (the scoped architecture run precedes this final name-only correction).
+The map check correctly identifies stale test and feature-dependency snapshots. Narrow `maps` and
+`feature-dependency` generation changes only those two maps; the manifest and generated findings
+reports remain byte-identical. The generated findings report is reviewed, not treated as a
+constitution verdict. Final freshness and current corrected-head checks continue.
+
+Root's corrected candidate passes complete Design 532/532, Design API 143/143, Publishing API
+714/714 and scoped Architecture 17/17. Expressions 235/235 and Jint 126/126 pass in this integrated
+tree before the final name-validation-only correction. Final map freshness passes:
+`Generated maps still describe the tree.` The two changed snapshots are included explicitly;
+the byte-identical manifest needs no restamp. Full local Architecture is not claimed.
+
+The rebuilt Debug Workbench passes all three authenticated persisted-host cases, including both
+cookie and rotating-bearer paths plus missing Liquid. Added assertions exercise actual rich context
+signatures/return shapes, omitted time/file-backed Liquid entries, interpolation member assistance,
+filter/tag cursor completion and filter hover via advertised routes. Against that same rebuilt
+Workbench, fresh isolated SQLite JavaScript REST passes all 10 cases. Its owned process stops;
+the isolated content root and logs are retained for diagnosis. Root evidence is retained in
+`/private/tmp/elsa-2379-root-*-final.log` and `elsa-2379-root-workbench-first.log`.
+
+Studio #560's paired rebuilt browser gate, final committed-head CI/Maps and automated review remain
+pending. This producer checkpoint does not close coordinated T031, human acceptance or delivery.
+
+### M2 final exact-head automated gate, 2026-10-03
+
+Foundation `7457b7a4564892bab4b28bd0d07fac9709462d56` passes complete
+[CI 37137966461](https://github.com/elsa-workflows/elsa-foundation/actions/runs/37137966461) and
+[Maps 37137968339](https://github.com/elsa-workflows/elsa-foundation/actions/runs/37137968339).
+Studio `00677684dcd32d5152f16df5b5fafd644df85d9a` passes every job in
+[CI 37138361061](https://github.com/elsa-workflows/elsa-foundation-studio/actions/runs/37138361061),
+including generic Chromium 67/67 and rebuilt paired normal-host 4/4. Root repeats the exact-pair
+normal-host command and passes 4/4 after rebuilding both applications. Copilot's last actual
+Foundation review remains 5401237320 at 59ef0300; its findings are corrected, but re-requests do not
+produce a current-head review. Root/independent exact-delta review plus all final automated/live
+gates exercises the program-lead unavailable-review fallback, not external approval. This satisfies
+the M2 implementation dependency, not merge/delivery or current-head human acceptance.
 
 ### M2 absence-probe correction and final local review, 2026-10-03
 

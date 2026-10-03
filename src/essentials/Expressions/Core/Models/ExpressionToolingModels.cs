@@ -96,6 +96,12 @@ public sealed record ExpressionSymbol(
     IReadOnlyList<ExpressionCallableSignature>? Signatures = null,
     string? ChildrenLink = null);
 
+/// <summary>
+/// Immutable declared profile metadata. The owning provider supplies a stable opaque revision;
+/// consumers apply authorization and symbol policy before exposing these symbols.
+/// </summary>
+public sealed record ExpressionToolingCatalog(string Revision, IReadOnlyList<ExpressionSymbol> Symbols);
+
 public sealed record ExpressionToolingCapabilities(
     bool SupportsCompletions = true,
     bool SupportsHover = true,

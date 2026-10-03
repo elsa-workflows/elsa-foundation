@@ -20,6 +20,7 @@ public sealed partial class JavaScriptExpressionToolingProvider : IExpressionToo
 
     public string ExpressionType => JavaScriptExpressionDescriptor.JavaScriptExpressionTypeName;
     public ExpressionToolingContractVersion SupportedVersion => ExpressionToolingContractVersion.V1;
+    public ExpressionToolingCatalog? DeclaredCatalog => JavaScriptRuntimeProfile.DeclaredToolingCatalog;
 
     public ValueTask<ExpressionToolingOutcome<ExpressionToolingCapabilities>> GetCapabilitiesAsync(ExpressionToolingRequestScope scope, CancellationToken cancellationToken)
     {
@@ -99,10 +100,9 @@ public sealed partial class JavaScriptExpressionToolingProvider : IExpressionToo
         var variables = context.RootSymbols
             .Where(symbol => symbol.Kind == ExpressionSymbolKind.Variable)
             .ToArray();
-        var projected = JavaScriptRuntimeProfile.SupportedStandardGlobals.ToList();
-        projected.AddRange(context.RootSymbols
+        var projected = context.RootSymbols
             .Where(symbol => symbol.Kind is ExpressionSymbolKind.Function or ExpressionSymbolKind.Namespace or ExpressionSymbolKind.Extension)
-            );
+            .ToList();
         projected.Add(new(
             "javascript:args",
             JavaScriptRuntimeProfile.ArgumentsName,
