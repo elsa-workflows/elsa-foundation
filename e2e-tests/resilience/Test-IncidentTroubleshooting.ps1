@@ -92,4 +92,24 @@ foreach ($health in @('active', 'blocking')) {
 }
 $none = Get-InstancesPage -Ctx $ctx -Query @{ from = $from; incidentHealth = 'none'; take = 1 }
 Assert-IncidentQA ($none.totalCount -eq 1 -and $none.items[0].workflowExecutionId -eq $healthy.instance.workflowExecutionId) 'healthy filter included incident-bearing runs or excluded the control'
-Write-Host "SUCCESS - persisted causal input failure, preserved intervention policy and whole-set incident-health paging ($runLabel)" -ForegroundColor Green
+# The public positional request keeps its original constructor. Verify the adjunct filter reaches both
+# transport routes, rather than only passing direct service tests with an initialized body property.
+foreach ($health in @('active', 'blocking', 'none')) {
+    $legacy = @(Get-InstancesRaw -Ctx $ctx -Query @{ from = $from; incidentHealth = $health; take = 10 })
+    $expectedCount = if ($health -eq 'none') { 1 } else { 2 }
+    Assert-IncidentQA ($legacy.Count -eq $expectedCount) "legacy $health query was ignored or incorrectly applied"
+    if ($health -eq 'none') {
+        Assert-IncidentQA ($legacy[0].workflowExecutionId -eq $healthy.instance.workflowExecutionId) 'legacy healthy query returned an incident-bearing run'
+    } else {
+        Assert-IncidentQA (@($legacy | Where-Object activeIncidentCount -ne 1).Count -eq 0) "legacy $health query returned a healthy run"
+    }
+}
+foreach ($route in @('instances', 'instances/page')) {
+    try {
+        Invoke-RestMethod "$($ctx.BaseUrl)/runtime/workflows/$($route)?incidentHealth=unknown" -WebSession $ctx.Session | Out-Null
+        throw "Incident troubleshooting: invalid health query succeeded on $route"
+    } catch {
+        if ($null -eq $_.Exception.Response -or [int]$_.Exception.Response.StatusCode -ne 400) { throw }
+    }
+}
+Write-Host "SUCCESS - persisted causal input failure, preserved intervention policy and whole-set incident-health paging on both routes ($runLabel)" -ForegroundColor Green
