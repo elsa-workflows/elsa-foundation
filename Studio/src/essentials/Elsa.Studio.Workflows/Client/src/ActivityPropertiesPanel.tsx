@@ -72,10 +72,16 @@ import { clearDictionaryEditorSessionScope } from "./dictionaryEditorSession";
 import { useDialogFocus } from "./workflow-editor/useDialogFocus";
 import { createActivityExpressionDocument } from "./activityExpressionDocument";
 
-const inlineSyntaxEditorIds = new Set([
+const inlineTextEditorIds = new Set([
   "studio.property.singleline",
   "studio.property.text-fallback",
   "studio.property.checkbox"
+]);
+const inlineSyntaxEditorIds = new Set([
+  ...inlineTextEditorIds,
+  "studio.property.number",
+  "studio.property.timespan",
+  "studio.property.dropdown"
 ]);
 const inlineTextTypeNames = new Set(["string", "system.string", "text", "uri", "system.uri"]);
 // The built-in masked editor: the only editor a masked literal is given.
@@ -519,7 +525,7 @@ function PropertyRow({
     : null;
   const isCollectionEditor = dictionaryType != null || collectionType != null || structuredCollectionType != null;
   const useInlineSyntaxPicker = Boolean(wrapped && !isCollectionEditor && (
-    editingMode === "text" || editingMode === "structured" || isSingleLineTextInput(input, editor?.id)
+    editingMode === "text" || editingMode === "structured" || isSingleLineInput(input, editor?.id)
   ));
   const useDictionarySyntaxPicker = Boolean(wrapped && dictionaryType != null);
   const useToggleLayout = editor?.id === "studio.property.checkbox" && editingMode === "literal";
@@ -529,6 +535,7 @@ function PropertyRow({
     (!isCollectionEditor && editingMode === "structured" && !!inlineExpressionEditor?.surfaces.expanded) ||
     (!isCollectionEditor && editingMode === "literal" && isExpandableTextInput(input, editor?.id))
   ));
+  const useControlLayout = useInlineSyntaxPicker && editingMode === "literal" && !useToggleLayout && !canExpandEditor;
   const [expandRequested, setExpandRequested] = useState(false);
   // The expanded editor is open only while the row may expand, whatever opened it and whatever changed since.
   const expanded = expandRequested && canExpandEditor;
@@ -783,7 +790,7 @@ function PropertyRow({
         />
       ) : null}
       {useInlineSyntaxPicker ? (
-        <div className={useToggleLayout ? "wf-expression-field wf-expression-field--toggle" : "wf-expression-field"}>
+        <div className={`wf-expression-field${useToggleLayout ? " wf-expression-field--toggle" : useControlLayout ? " wf-expression-field--control" : ""}`}>
           <div className="wf-expression-editor">
             {renderedValueEditor}
             {renderExpressionDiagnostics(inlineDiagnostics)}
@@ -1675,19 +1682,16 @@ function groupInputs(inputs: StudioActivityInputDescriptor[], metadata: Resolved
     );
 }
 
-function isSingleLineTextInput(input: StudioActivityInputDescriptor, editorId: string | undefined) {
+function isSingleLineInput(input: StudioActivityInputDescriptor, editorId: string | undefined) {
   if (input.uiHint?.toLowerCase() === "multiline") return false;
-  if (editorId && !inlineSyntaxEditorIds.has(editorId)) return false;
-  if (editorId === "studio.property.checkbox") return true;
-
-  const normalizedType = input.typeName.split(",", 1)[0]?.trim().toLowerCase();
-  return inlineTextTypeNames.has(normalizedType) || input.uiHint?.toLowerCase() === "singleline";
+  // Without a Contribution, renderEditor uses a single-line input for any scalar type.
+  return !editorId || inlineSyntaxEditorIds.has(editorId);
 }
 
 function isExpandableTextInput(input: StudioActivityInputDescriptor, editorId: string | undefined) {
   const uiHint = input.uiHint?.toLowerCase();
   if (uiHint === "checkbox" || uiHint === "dropdown") return false;
-  if (editorId && !inlineSyntaxEditorIds.has(editorId) && uiHint !== "multiline") return false;
+  if (editorId && !inlineTextEditorIds.has(editorId) && uiHint !== "multiline") return false;
 
   const normalizedType = input.typeName.split(",", 1)[0]?.trim().toLowerCase();
   return inlineTextTypeNames.has(normalizedType) ||

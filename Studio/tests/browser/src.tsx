@@ -18,6 +18,9 @@ import { ActivityDefinitionDraftCodeView } from "../../src/essentials/Elsa.Studi
 import { ActivityDefinitionDiagnosticsPanel } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/ActivityDefinitionDiagnosticsPanel";
 import { ActivityDefinitionTestRunDialog } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/ActivityDefinitionTestRunDialog";
 import { WorkflowLazyBoundary } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/WorkflowLazyBoundary";
+import { WorkflowEditorToolbar } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/workflow-editor/WorkflowEditorToolbar";
+import { builtInPropertyEditors } from "../../src/apps/Elsa.Studio.Web/Client/src/app/propertyEditors";
+import { Download, PackageOpen, Sparkles, Upload } from "lucide-react";
 import { WorkflowDefinitions } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/workflow-editor/WorkflowDefinitions";
 import { setDialogs } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/workflow-editor/dialogs";
 import { useRunDetailLayout } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/workflow-editor/useRunDetailLayout";
@@ -68,6 +71,7 @@ import "./fixture.css";
 const searchParams = new URLSearchParams(window.location.search);
 const scrollingFixture = searchParams.get("mode") === "scroll";
 const dictionaryFixture = searchParams.get("mode") === "dictionary";
+const scalarInputsFixture = searchParams.get("mode") === "scalar-inputs";
 const lazyBoundaryFixture = searchParams.get("mode") === "lazy-boundary";
 const runDetailFixture = searchParams.get("mode") === "run-detail";
 const moveDefinitionsFixture = searchParams.get("mode") === "move-definitions";
@@ -93,6 +97,55 @@ const endpointContext = createEndpointContext(window.location.origin);
 const DeferredWorkflowPanel = lazy(() => new Promise<{ default: React.ComponentType }>(resolve => {
   window.setTimeout(() => resolve({ default: () => <section aria-label="Deferred workflow designer">Workflow designer ready</section> }), 3_000);
 }));
+
+function WorkflowToolbarFixture() {
+  const [status, setStatus] = useState("");
+  const [autosave, setAutosave] = useState(true);
+  const [selectedAction, setSelectedAction] = useState("");
+  const selectAction = (label: string) => () => setSelectedAction(label);
+  return (
+    <main className="wf-editor browser-toolbar-workbench">
+      <WorkflowEditorToolbar
+        name={searchParams.get("name") ?? "Policy Renewal"}
+        status={status}
+        saving={status.startsWith("Autosaving")}
+        busy={false}
+        autosaveEnabled={autosave}
+        onAutosaveChange={setAutosave}
+        canUndo
+        canRedo={false}
+        canAutoLayout
+        onUndo={selectAction("Undo")}
+        onRedo={selectAction("Redo")}
+        onAutoLayout={selectAction("Auto-layout")}
+        onBack={selectAction("Definitions")}
+        onSave={selectAction("Save")}
+        onPublish={selectAction("Review & publish")}
+        onRun={selectAction("Run")}
+        canRun
+        runTitle="Run a transient test of the current design"
+        moreActions={[
+          { label: "Weaver", actions: [
+            { label: "Review risks", icon: <Sparkles size={15} />, disabled: true, title: "Weaver is unavailable", onSelect: selectAction("Review risks") },
+            { label: "Propose update", icon: <Sparkles size={15} />, onSelect: selectAction("Propose update") }
+          ] },
+          { label: "Import & export", actions: [
+            { label: "Export JSON", icon: <Download size={15} />, onSelect: selectAction("Export JSON") },
+            { label: "Export artifact", icon: <PackageOpen size={15} />, disabled: true, title: "Publish this workflow first", onSelect: selectAction("Export artifact") },
+            { label: "Import BPMN", icon: <Upload size={15} />, onSelect: selectAction("Import BPMN") },
+            { label: "Export BPMN", icon: <Download size={15} />, onSelect: selectAction("Export BPMN") }
+          ] }
+        ]}
+      />
+      <section className="browser-toolbar-controls" aria-label="Toolbar test controls">
+        <label>Save status<select aria-label="Save status" value={status} onChange={event => setStatus(event.target.value)}>
+          {["", "Autosaving...", "Autosaved", "Saving before review...", "Published to an unusually long publication channel"].map(value => <option key={value} value={value}>{value || "Empty"}</option>)}
+        </select></label>
+        <p>Selected action: {selectedAction || "None"}</p>
+      </section>
+    </main>
+  );
+}
 
 function ActivityDefinitionRoutesFixture() {
   const [path, setPath] = useState(() => `${window.location.pathname}${window.location.search}`);
@@ -493,11 +546,38 @@ const dictionaryDescriptor: StudioActivityDescriptor = {
   ports: []
 };
 
+const scalarInputDescriptor: StudioActivityDescriptor = {
+  typeName: "Contoso.RegisterRenewal",
+  displayName: "Register renewal",
+  inputs: [
+    { name: "PolicyReference", displayName: "Policy reference", typeName: "System.String" },
+    { name: "ProposedPremium", displayName: "Proposed premium", typeName: "System.Decimal" },
+    { name: "RenewalCount", displayName: "Renewal count", typeName: "System.Int32" },
+    { name: "Rate", displayName: "Rate", typeName: "System.Double" },
+    { name: "Duration", displayName: "Duration", typeName: "System.TimeSpan" },
+    { name: "Priority", displayName: "Priority", typeName: "System.String", uiSpecifications: { options: [{ label: "Normal", value: "normal" }, { label: "High", value: "high" }] } },
+    { name: "Identifier", displayName: "Identifier", typeName: "System.Guid" },
+    { name: "Notes", displayName: "Notes", typeName: "System.String", uiHint: "multiline" },
+    { name: "References", displayName: "References", typeName: "System.String", collectionKind: "List", uiHint: "singleline" }
+  ].map(input => ({ ...input, isWrapped: true, defaultSyntax: "Literal", isBrowsable: true })),
+  outputs: [],
+  ports: []
+};
+
+const scalarInputValues: Record<string, unknown> = {
+  PolicyReference: "abc", ProposedPremium: 100.5, RenewalCount: 1, Rate: 0.5,
+  Duration: "00:00:30", Priority: "normal", Identifier: "", Notes: "", References: []
+};
+
 function Fixture() {
   const [activity, setActivity] = useState<ActivityNode>({
     nodeId: "http-endpoint-1",
     activityVersionId: "http-endpoint-v1",
-    inputs: [{ referenceKey: "Path", value: { value: "/orders", expressionType: "Literal" } }],
+    ...(scalarInputsFixture ? Object.fromEntries(scalarInputDescriptor.inputs.map(input => [
+      input.name[0]!.toLowerCase() + input.name.slice(1),
+      { typeName: input.typeName, expression: { type: "Literal", value: scalarInputValues[input.name] } }
+    ])) : {}),
+    inputs: scalarInputsFixture ? [] : [{ referenceKey: "Path", value: { value: "/orders", expressionType: "Literal" } }],
     outputs: [],
     structure: null,
     ...(dictionaryFixture ? {
@@ -518,7 +598,7 @@ function Fixture() {
     } : {})
   });
 
-  const activeDescriptor = dictionaryFixture ? dictionaryDescriptor : descriptor;
+  const activeDescriptor = scalarInputsFixture ? scalarInputDescriptor : dictionaryFixture ? dictionaryDescriptor : descriptor;
 
   return (
     <main className="wf-editor browser-fixture">
@@ -526,13 +606,13 @@ function Fixture() {
         <h1>Workflow designer</h1>
         <p>The inspector intentionally clips its own content to reproduce the original stacking defect.</p>
       </div>
-      <aside className={`wf-inspector browser-inspector${scrollingFixture ? " browser-inspector--scroll" : ""}`} aria-label="Activity inspector">
-        <h2>{dictionaryFixture ? "HTTP Request" : "HTTP Endpoint"}</h2>
-        <div className="browser-inspector-spacer" aria-hidden="true" />
+      <aside className={`wf-inspector browser-inspector${scalarInputsFixture ? " browser-inspector--scalar" : ""}${scrollingFixture ? " browser-inspector--scroll" : ""}`} aria-label="Activity inspector">
+        <h2>{activeDescriptor.displayName}</h2>
+        {scalarInputsFixture ? null : <div className="browser-inspector-spacer" aria-hidden="true" />}
         <ActivityPropertiesPanel
           activity={activity}
           descriptor={activeDescriptor}
-          editors={[]}
+          editors={scalarInputsFixture ? builtInPropertyEditors : []}
           expressionEditors={[]}
           expressionDescriptors={expressionDescriptors}
           expressionDescriptorStatus="ready"
@@ -1509,7 +1589,9 @@ if (darkVariant) {
   }
 }
 createRoot(document.getElementById("root")!).render(
-  publicationReviewFixture
+  searchParams.get("mode") === "workflow-toolbar"
+    ? <WorkflowToolbarFixture />
+    : publicationReviewFixture
     ? <PublicationReviewFixture />
     : activityGraphAuthoringFixture
     ? <ActivityDefinitionGraphAuthoringFixture />

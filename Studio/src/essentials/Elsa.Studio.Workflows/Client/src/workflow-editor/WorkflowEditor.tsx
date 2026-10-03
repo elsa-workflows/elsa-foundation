@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
-import { Boxes, Check, ChevronRight, Code2, Download, GitBranch, ListTree, Network, Package, PackageOpen, Play, Plus, Redo2, Save, SlidersHorizontal, Sparkles, Undo2, Upload, Workflow as WorkflowIcon } from "lucide-react";
+import { Boxes, Code2, Download, ListTree, Package, PackageOpen, Play, Plus, SlidersHorizontal, Sparkles, Upload, Workflow as WorkflowIcon } from "lucide-react";
 import { authSessionEndedEvent, authSessionStartedEvent, expressionEditorSessionEndedEvent, useStudioThemeLayout, type StudioActivityPropertyEditorContribution, type StudioAiContributionApi, type StudioEndpointContext, type StudioExpressionEditorContribution, type StudioExpressionToolingClient, type StudioWorkflowDesignerPanelContribution, type StudioWorkflowRunInputEditorContribution } from "@elsa-workflows/studio-sdk";
 import type { ActivityCatalogItem, ActivityNode, WorkflowDraft } from "../workflowTypes";
 import {
@@ -39,6 +39,7 @@ import {
   normalizeWorkflowError
 } from "./editorHelpers";
 import { WorkflowAlert } from "./WorkflowAlert";
+import { WorkflowEditorToolbar } from "./WorkflowEditorToolbar";
 import { ConnectMenu } from "./graph";
 import { PanelTabList, compareWorkflowPanelTabs } from "./PanelTabList";
 import { ScopeBreadcrumb } from "./ScopeBreadcrumb";
@@ -975,125 +976,100 @@ export function WorkflowEditor({
 
   return (
     <section className="wf-editor">
-      <div className="wf-editor-top">
-        <button type="button" className="wf-link-button" onClick={onBack}>Definitions</button>
-        <ChevronRight size={14} />
-        <strong>{details.definition.name}</strong>
-        <span className="wf-chip">Draft</span>
-        {visibleStatus ? <span className="wf-status"><Check size={13} /> {visibleStatus}</span> : null}
-        <div className="wf-editor-actions">
-          <div className="wf-canvas-tools" role="group" aria-label="Canvas tools">
-            <button
-              type="button"
-              className="wf-icon-button"
-              aria-label="Undo"
-              title="Undo (Ctrl+Z)"
-              disabled={!canUndoNow}
-              onClick={undo}>
-              <Undo2 size={16} />
-            </button>
-            <button
-              type="button"
-              className="wf-icon-button"
-              aria-label="Redo"
-              title="Redo (Ctrl+Shift+Z)"
-              disabled={!canRedoNow}
-              onClick={redo}>
-              <Redo2 size={16} />
-            </button>
-            <button
-              type="button"
-              className="wf-icon-button"
-              aria-label="Auto-layout"
-              title="Auto-layout the canvas"
-              disabled={!canAutoLayout}
-              onClick={autoLayout}>
-              <Network size={16} />
-            </button>
-          </div>
-          <label className="wf-autosave-toggle">
-            <input className="wf-switch-input" type="checkbox" checked={autosaveEnabled} onChange={event => setAutosaveEnabled(event.target.checked)} />
-            <span>Autosave</span>
-          </label>
-          {findRisksAction ? (
-            <button
-              type="button"
-              disabled={!aiProviderAvailable}
-              title={aiProviderAvailable ? "Ask Weaver to review this draft for risks" : weaverUnavailableTitle}
-              onClick={() => dispatchAiAction(ai, findRisksAction, { definition: details.definition, draft })}>
-              <Sparkles size={15} /> Risks
-            </button>
-          ) : null}
-          {proposeUpdateAction ? (
-            <button
-              type="button"
-              disabled={!aiProviderAvailable}
-              title={aiProviderAvailable ? "Ask Weaver to propose a reviewed update" : weaverUnavailableTitle}
-              onClick={() => dispatchAiAction(ai, proposeUpdateAction, { definition: details.definition, draft })}>
-              <Sparkles size={15} /> Propose
-            </button>
-          ) : null}
-          {canUseBpmnInterchange ? (
-            <>
-              <input
-                ref={bpmnFileInputRef}
-                type="file"
-                accept=".bpmn,.xml"
-                style={{ display: "none" }}
-                aria-label="Import BPMN file"
-                onChange={event => {
-                  const file = event.target.files?.[0];
-                  event.target.value = "";
-                  if (file) void importBpmn(file);
-                }}
-              />
-              <button type="button" title="Import a BPMN 2.0 document, replacing this process" disabled={busy} onClick={() => bpmnFileInputRef.current?.click()}>
-                <Upload size={15} /> Import BPMN
-              </button>
-              <button type="button" title="Export as BPMN 2.0 XML with diagram interchange" onClick={() => void exportBpmn()}>
-                <Download size={15} /> Export BPMN
-              </button>
-            </>
-          ) : null}
-          <button type="button" title="Export workflow as JSON" onClick={exportJson}><Download size={15} /> Export</button>
-          {executableArtifactExport.supported ? (
-            <button
-              type="button"
-              disabled={busy || !publishedExecutable}
-              title={publishedExecutable
-                ? "Download the compiled executable artifact for a runtime engine"
-                : "Publish this workflow first: only a published version has a compiled executable artifact"}
-              onClick={() => void exportExecutableArtifact()}>
-              <PackageOpen size={15} /> {operation === "exportingArtifact" ? "Exporting…" : "Export artifact"}
-            </button>
-          ) : null}
-          <button type="button" disabled={busy} onClick={() => void save()}><Save size={15} /> Save</button>
-          <button
-            type="button"
-            disabled={busy}
-            title={saving ? "Finishing the current save; the review will open once it settles." : undefined}
-            onClick={() => void preparePublication()}
-          >
-            <GitBranch size={15} /> {saving ? "Saving…" : "Review & publish"}
-          </button>
-          {renderedTestRun ? (
-            <TestRunStatus
-              testRun={renderedTestRun}
-              onOpenDetails={() => {
-                setActiveRightPanelId("runtime");
-                setInspectorCollapsed(false);
-              }}
-            />
-          ) : null}
-          <button
-            type="button"
-            disabled={!canRunTest}
-            title={draft.state.rootActivity ? "Run a transient test of the current design" : "Add a root activity before running"}
-            onClick={() => void run()}>
-            <Play size={15} /> Run
-          </button>
-        </div>
-      </div>
+      <WorkflowEditorToolbar
+        name={details.definition.name}
+        status={visibleStatus}
+        saving={saving}
+        busy={busy}
+        autosaveEnabled={autosaveEnabled}
+        onAutosaveChange={setAutosaveEnabled}
+        canUndo={canUndoNow}
+        canRedo={canRedoNow}
+        canAutoLayout={canAutoLayout}
+        onUndo={undo}
+        onRedo={redo}
+        onAutoLayout={autoLayout}
+        onBack={onBack}
+        onSave={() => void save()}
+        onPublish={() => void preparePublication()}
+        onRun={() => void run()}
+        canRun={canRunTest}
+        runTitle={draft.state.rootActivity ? "Run a transient test of the current design" : "Add a root activity before running"}
+        runStatus={renderedTestRun ? (
+          <TestRunStatus
+            testRun={renderedTestRun}
+            onOpenDetails={() => {
+              setActiveRightPanelId("runtime");
+              setInspectorCollapsed(false);
+            }}
+          />
+        ) : null}
+        moreActions={[
+          {
+            label: "Weaver",
+            actions: [
+              ...(findRisksAction ? [{
+                label: "Review risks",
+                icon: <Sparkles size={15} />,
+                disabled: !aiProviderAvailable,
+                title: aiProviderAvailable ? "Ask Weaver to review this draft for risks" : weaverUnavailableTitle,
+                onSelect: () => dispatchAiAction(ai, findRisksAction, { definition: details.definition, draft })
+              }] : []),
+              ...(proposeUpdateAction ? [{
+                label: "Propose update",
+                icon: <Sparkles size={15} />,
+                disabled: !aiProviderAvailable,
+                title: aiProviderAvailable ? "Ask Weaver to propose a reviewed update" : weaverUnavailableTitle,
+                onSelect: () => dispatchAiAction(ai, proposeUpdateAction, { definition: details.definition, draft })
+              }] : [])
+            ]
+          },
+          {
+            label: "Import & export",
+            actions: [
+              { label: "Export JSON", icon: <Download size={15} />, onSelect: exportJson },
+              ...(executableArtifactExport.supported ? [{
+                label: operation === "exportingArtifact" ? "Exporting artifact…" : "Export artifact",
+                icon: <PackageOpen size={15} />,
+                disabled: busy || !publishedExecutable,
+                title: publishedExecutable
+                  ? "Download the compiled executable artifact for a runtime engine"
+                  : "Publish this workflow first: only a published version has a compiled executable artifact",
+                onSelect: () => void exportExecutableArtifact()
+              }] : []),
+              ...(canUseBpmnInterchange ? [
+                {
+                  label: "Import BPMN",
+                  icon: <Upload size={15} />,
+                  disabled: busy,
+                  title: "Import a BPMN 2.0 document, replacing this process",
+                  onSelect: () => bpmnFileInputRef.current?.click()
+                },
+                {
+                  label: "Export BPMN",
+                  icon: <Download size={15} />,
+                  title: "Export as BPMN 2.0 XML with diagram interchange",
+                  onSelect: () => void exportBpmn()
+                }
+              ] : [])
+            ]
+          }
+        ]}
+      />
+      {canUseBpmnInterchange ? (
+        <input
+          ref={bpmnFileInputRef}
+          type="file"
+          accept=".bpmn,.xml"
+          style={{ display: "none" }}
+          aria-label="Import BPMN file"
+          onChange={event => {
+            const file = event.target.files?.[0];
+            event.target.value = "";
+            if (file) void importBpmn(file);
+          }}
+        />
+      ) : null}
 
       {error ? (
         <WorkflowAlert

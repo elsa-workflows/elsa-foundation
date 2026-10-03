@@ -527,8 +527,9 @@ describe("workflows module", () => {
 
     const { container, unmount } = await renderRegisteredRoute("/workflows/definitions?definition=definition-1");
 
-    await waitForText(container, "Autosave");
-    expect(autosaveInput(container)?.checked).toBe(true);
+    await waitForText(container, "Review & publish");
+    await click(container.querySelector<HTMLButtonElement>('[aria-label="More workflow actions"]')!);
+    expect(document.querySelector('[role="menuitemcheckbox"]')?.getAttribute("aria-checked")).toBe("true");
 
     await unmount();
   }, 15_000);
@@ -540,8 +541,9 @@ describe("workflows module", () => {
       api.runtime.workflows = { autosaveEnabledByDefault: false };
     });
 
-    await waitForText(container, "Autosave");
-    expect(autosaveInput(container)?.checked).toBe(false);
+    await waitForText(container, "Review & publish");
+    await click(container.querySelector<HTMLButtonElement>('[aria-label="More workflow actions"]')!);
+    expect(document.querySelector('[role="menuitemcheckbox"]')?.getAttribute("aria-checked")).toBe("false");
 
     await unmount();
   });
@@ -1630,7 +1632,7 @@ describe("workflows module", () => {
     await fill(inputByLabel(container, "Display name"), "Customer onboarding");
     await click(buttonByText(dialog(container), "Create"));
 
-    await waitForText(container, "Autosave");
+    await waitForText(container, "Review & publish");
     expect(container.textContent).toContain("No validation errors");
 
     await unmount();
@@ -2146,7 +2148,7 @@ describe("workflows module", () => {
 
       try {
         if (scenario.surface === "artifacts") {
-          await waitForText(container, "Autosave");
+          await waitForText(container, "Review & publish");
           await click(buttonByText(container, "Artifacts"));
         }
         await waitForText(container, scenario.surface === "inspector" ? "Executable Inspector" : scenario.artifactId);
@@ -4819,7 +4821,7 @@ async function renderArtifactsPanel(slots: ActivationSlotFixture[], capabilities
   });
   vi.stubGlobal("fetch", fetchMock);
   const rendered = await renderRegisteredRoute("/workflows/definitions?definition=definition-1", undefined, false, capabilities);
-  await waitForText(rendered.container, "Autosave");
+  await waitForText(rendered.container, "Review & publish");
   await click(buttonByText(rendered.container, "Artifacts"));
   return { ...rendered, fetchMock };
 }
@@ -5329,11 +5331,6 @@ function textareaByLabel(container: HTMLElement, label: string) {
   return Array.from(container.querySelectorAll<HTMLTextAreaElement>("textarea"))
     .find(input => input.getAttribute("aria-label") === label) ?? null;
 }
-
-function autosaveInput(container: HTMLElement) {
-  return container.querySelector<HTMLInputElement>(".wf-autosave-toggle .wf-switch-input");
-}
-
 function selectByLabel(container: HTMLElement, label: string) {
   return Array.from(container.querySelectorAll<HTMLSelectElement>("select"))
     .find(input => input.getAttribute("aria-label") === label) ?? null;

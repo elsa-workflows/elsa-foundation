@@ -32,6 +32,24 @@ body {
   font-family: var(--font-sans);
 }
 
+.browser-toolbar-workbench {
+  min-height: 100vh;
+}
+
+.browser-toolbar-controls {
+  padding: 24px;
+}
+
+.browser-toolbar-controls label {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.browser-toolbar-controls select {
+  max-width: 100%;
+}
+
 .browser-publication-workbench {
   min-height: 100vh;
   background: var(--studio-app-bg);
@@ -93,6 +111,13 @@ body {
 }
 
 .browser-inspector--scroll {
+  overflow-y: auto;
+}
+
+.browser-inspector--scalar {
+  top: 20px;
+  height: auto;
+  width: min(360px, calc(100vw - 40px));
   overflow-y: auto;
 }
 

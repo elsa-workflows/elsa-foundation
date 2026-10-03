@@ -296,26 +296,7 @@
   margin-left: auto;
 }
 
-.wf-autosave-toggle {
-  display: inline-flex;
-  min-height: 32px;
-  align-items: center;
-  gap: 7px;
-  border: 1px solid var(--wf-border);
-  border-radius: var(--wf-radius);
-  background: var(--wf-panel);
-  color: var(--wf-text);
-  cursor: pointer;
-  font-size: 13px;
-  padding: 0 10px;
-  white-space: nowrap;
-}
-
-.wf-autosave-toggle:hover {
-  background: var(--wf-panel-muted);
-}
-
-/* Shared on/off switch, used by the designer's autosave toggle and the availability page. */
+/* Shared on/off switch, used by the availability page. */
 .wf-switch-input {
   position: relative;
   width: 34px;
@@ -2664,6 +2645,183 @@
   padding: 0 14px;
 }
 
+.wf-editor-toolbar {
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  padding-block: 8px;
+}
+
+.wf-editor-identity {
+  display: flex;
+  flex: 1 1 240px;
+  min-width: 0;
+  align-items: center;
+  gap: 8px;
+}
+
+.wf-editor-identity > button,
+.wf-editor-identity > svg {
+  flex-shrink: 0;
+}
+
+.wf-editor-heading {
+  min-width: 0;
+}
+
+.wf-editor-heading > strong {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.wf-editor-metadata {
+  display: flex;
+  min-height: 22px;
+  align-items: center;
+  gap: 8px;
+  margin-top: 2px;
+}
+
+.wf-editor-metadata .wf-chip {
+  padding: 1px 6px;
+  font-size: 11px;
+}
+
+/* Always mounted, including before the first save. Status never participates in action sizing. */
+.wf-editor-save-status {
+  display: inline-flex;
+  flex: 0 0 16ch;
+  width: 16ch;
+  min-height: 16px;
+  min-width: 0;
+  align-items: center;
+  gap: 4px;
+  color: var(--studio-success-fg);
+  font-size: 11px;
+}
+
+.wf-editor-save-status > svg {
+  flex-shrink: 0;
+}
+
+.wf-editor-save-status > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.wf-editor-save-status[data-pending] {
+  color: var(--studio-text-muted);
+}
+
+.wf-editor-toolbar .wf-editor-actions {
+  flex: 0 0 auto;
+  flex-wrap: wrap;
+}
+
+.wf-editor-toolbar .wf-editor-actions > button {
+  white-space: nowrap;
+}
+
+.wf-editor-toolbar .wf-review-button {
+  border-color: color-mix(in srgb, var(--studio-accent) 40%, var(--studio-border));
+}
+
+.wf-editor-toolbar .wf-run-button {
+  border-color: var(--studio-accent);
+  background: var(--studio-accent);
+  color: var(--studio-accent-text);
+  font-weight: 600;
+}
+
+.wf-editor-toolbar .wf-run-button:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--studio-accent) 88%, var(--studio-text));
+}
+
+.wf-editor-toolbar .wf-run-button:disabled {
+  background: var(--studio-surface-muted);
+  border-color: var(--studio-border);
+}
+
+.wf-editor-toolbar button:focus-visible,
+.wf-editor-actions-popover button:focus-visible {
+  outline: 2px solid var(--studio-focus);
+  outline-offset: 2px;
+}
+
+.wf-editor-actions-popover {
+  overflow: auto;
+  padding: 6px;
+  border: 1px solid var(--studio-border);
+  border-radius: var(--studio-radius);
+  background: var(--studio-surface);
+  color: var(--studio-text);
+  box-shadow: var(--studio-shadow-sm);
+  font-family: var(--studio-font-ui);
+  font-size: 13px;
+}
+
+.wf-editor-actions-popover [role="group"] + [role="group"] {
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px solid var(--studio-border);
+}
+
+.wf-editor-menu-heading {
+  display: block;
+  padding: 4px 8px;
+  color: var(--studio-text-muted);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.wf-editor-actions-popover button {
+  display: flex;
+  width: 100%;
+  min-height: 36px;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border: 0;
+  border-radius: var(--studio-radius);
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.wf-editor-actions-popover button:hover:not(:disabled),
+.wf-editor-actions-popover button:focus-visible {
+  background: var(--studio-accent-soft);
+}
+
+.wf-editor-actions-popover button:disabled {
+  color: var(--studio-text-muted);
+  cursor: not-allowed;
+}
+
+.wf-editor-menu-value {
+  margin-left: auto;
+  color: var(--studio-text-muted);
+  font-size: 12px;
+}
+
+@media (max-width: 600px) {
+  .wf-editor-toolbar .wf-editor-actions {
+    flex: 1 1 100%;
+    margin-left: 0;
+  }
+
+  .wf-editor-toolbar .wf-canvas-tools {
+    flex: 1 1 100%;
+    margin-right: 0;
+    padding-right: 0;
+    border-right: 0;
+  }
+}
+
 .wf-chip,
 .wf-status {
   display: inline-flex;
@@ -4800,7 +4958,38 @@ button.wf-reference-select {
   min-width: 0;
 }
 
-.wf-expression-field .wf-expression-editor > input[type="text"] {
+/* Scalar controls share a row without overlaying native select arrows or stretching across errors. */
+.wf-expression-field--control {
+  display: flex;
+  align-items: flex-start;
+}
+
+.wf-expression-field--control .wf-expression-editor {
+  flex: 1 1 auto;
+}
+
+.wf-expression-field--control .wf-expression-editor > input,
+.wf-expression-field--control .wf-expression-editor > select {
+  box-sizing: border-box;
+  height: 32px;
+  border-top-right-radius: 0;
+  border-bottom-right-radius: 0;
+  padding-right: 9px;
+}
+
+.wf-expression-field--control .wf-syntax-picker.inline {
+  position: relative;
+  inset: auto;
+  flex: 0 0 94px;
+}
+
+.wf-expression-field--control .wf-syntax-picker-trigger.inline {
+  min-height: 32px;
+  border-color: var(--wf-border);
+  border-left: 0;
+}
+
+.wf-expression-field:not(.wf-expression-field--control) .wf-expression-editor > input[type="text"] {
   padding-right: 134px;
 }
 
