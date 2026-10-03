@@ -654,11 +654,15 @@ Leaf-owned contracts for clustered workflow-execution placement and cross-node c
 `RuntimeSchedulerWorkHandlerBase<TPayload>` (project `Elsa.Workflows.Runtime`, same namespace) is the
 optional dispatch scaffold for payload-typed handlers that also implement `IRuntimePipelineWorkHandler`:
 it deserializes the payload once (throwing validation errors before any scope is created) and runs the
-handler body against the pipeline's ambient services or a fresh scope. A derivation supplies `Name`,
+handler body against the pipeline's ambient services or a fresh scope. The fresh scope is bound to the
+partition the dispatcher staged (`RuntimePipelineWorkspace.PersistenceScope`), so the body works in the
+partition the work item belongs to; direct no-pipeline dispatch knows no partition and its scope carries
+the host's persistence scope. A derivation supplies `Name`,
 `CanHandle`, `DeserializePayload`, and `HandleWithServicesAsync`. Shipped derivations:
 `WorkflowInvokeActivitySchedulerWorkHandler`, `WorkflowParentActivityCompletionSchedulerWorkHandler`,
 `WorkflowNotifyParentActivitySchedulerWorkHandler` *(all cross-domain — `Elsa.Activities.Runtime`)*.
-A handler that must not gain pipeline dispatch (the resume handler) implements the interfaces directly.
+A handler that must not run in the drain's ambient services (the resume handler) implements the
+interfaces directly: it always creates its own scope and takes only the staged partition from the workspace.
 
 ### `IFallbackWorkflowSchedulerWorkHandler` *(Core — `Elsa.Workflows.Runtime.Core`)*
 - **Kind:** Contributor marker (handlers consume drained scheduler work items only after ordinary handlers decline them).
@@ -724,7 +728,7 @@ Cursor failures carry the cursor class, boundary/query/access binding results, a
 - **Kind:** Contributor opt-in (a migrated scheduler work handler's context-aware overload).
 - **Signature:** `HandleAsync(RuntimeSchedulerWorkItem workItem, IRuntimePipelineContext pipelineContext, CancellationToken)`.
 - **Usage:** ADR 0029 Move 2 slot-invoked handler model. A scheduler work handler additionally implements this interface to run inside the pipeline's `Invoke` slot with the per-dispatch context threaded **explicitly** (no ambient/AsyncLocal accessor). The handler either **stages** its assembled `RuntimeCheckpointCommit`(s) on `IRuntimePipelineContext.Workspace` for the `Checkpoint` slot to commit **in order, one committer call per staged entry** (never folded — folding is the coalescing decorators' job), or, for the nested-invoke handlers whose commits must go through a dynamically-resolved provider, commits **inline** in the `Invoke` slot and stages nothing. Handlers that have not migrated keep only `IWorkflowSchedulerWorkHandler` and run their plain path unchanged. `RuntimeExecutionPipelineDispatcher` stages the selected handler on the workspace and any migrated handler is picked up by a runtime cast.
-- **Staging surface:** `RuntimePipelineWorkspace` — `StageCheckpointCommit(...)` / `PendingCheckpointCommits` (ordered list), the `PendingCheckpointCommit` single-commit convenience, and `AmbientServices` (the explicit carrier for the drain's request-scoped provider that RT-7 substituted for the removed ambient service locator).
+- **Staging surface:** `RuntimePipelineWorkspace` — `StageCheckpointCommit(...)` / `PendingCheckpointCommits` (ordered list), the `PendingCheckpointCommit` single-commit convenience, `AmbientServices` (the explicit carrier for the drain's request-scoped provider that RT-7 substituted for the removed ambient service locator), and `PersistenceScope` (the partition of the dispatcher's own DI scope, which is the command's partition; a handler that creates a scope of its own binds it to this partition with `IServiceScopeFactory.CreateAsyncScopeAsync(PersistenceScope?)` instead of inheriting the host's persistence scope, #2341).
 - **Known implementations (shipped):** workflow `Cancel` + `Checkpoint`; activity `CreateBookmark`, `ScheduleActivity`, `StartActivity` (stage), and the nested-invoke `InvokeActivity` + `ParentActivityCompletion` (inline-commit, stage nothing).
 
 ### `IWorkflowDispatchDurabilityEvidence` *(Core — `Elsa.Workflows.Runtime.Core`)*
