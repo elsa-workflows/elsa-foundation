@@ -125,8 +125,12 @@ public sealed class WorkflowInstanceListService(
                     (requiresSensitiveValues && !await authorization.CanInspectSensitiveValuesAsync(state, cancellationToken)))
                     continue;
 
-                if (incidentHealth is not null)
+                if (incidentHealth is not null && healthQuery is null)
                 {
+                    // Native health pages have already applied this predicate against the selected incident store.
+                    // Recounting each candidate here both repeats the provider work and turns authorization-safe
+                    // pagination into an avoidable per-candidate query pattern. Keep the selected-store check only
+                    // for the compatibility fallback, where the provider cannot prove health membership.
                     var health = await incidentStateStore.CountHealthAsync(state.WorkflowExecutionId, cancellationToken);
                     var matches = incidentHealth switch
                     {
