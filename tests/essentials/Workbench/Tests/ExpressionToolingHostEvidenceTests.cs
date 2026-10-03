@@ -1,4 +1,5 @@
 using System.Net;
+using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json;
 using System.Text.Json.Nodes;
@@ -13,8 +14,10 @@ public sealed class ExpressionToolingHostEvidenceTests
     private const string WriteLineTypeKey = "Elsa.Activities.Primitives.Activities.WriteLine";
     private const string SequenceTypeKey = "Elsa.Activities.Sequence.Activities.Sequence";
 
-    [Fact]
-    public async Task Stock_workbench_persists_draft_and_composes_Javascript_and_Liquid_tooling()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Stock_workbench_persists_draft_and_composes_Javascript_and_Liquid_tooling(bool rotateBearer)
     {
         await using var workbench = await WorkbenchProcess.StartAsync(WorkbenchShell.Development);
         var catalog = (await workbench.ReadFeatureCatalogAsync()).ToDictionary(feature => feature.Id, StringComparer.Ordinal);
@@ -26,6 +29,26 @@ public sealed class ExpressionToolingHostEvidenceTests
         using var client = new HttpClient(clientHandler) { BaseAddress = workbench.Client.BaseAddress };
         using var login = await client.PostAsJsonAsync("/_elsa/identity/login", new { username = "admin", password = "Password123!" });
         Assert.Equal(HttpStatusCode.OK, login.StatusCode);
+        using var bearerHandler = new HttpClientHandler { UseCookies = false };
+        using var bearerClient = new HttpClient(bearerHandler) { BaseAddress = client.BaseAddress };
+        var issuedTokenFingerprints = new HashSet<string>(StringComparer.Ordinal);
+
+        async Task<HttpResponseMessage> PostToolingAsync(string path, object body)
+        {
+            if (!rotateBearer)
+                return await client.PostAsJsonAsync(path, body);
+
+            // Match Studio's normal cookie-to-bearer exchange on every API operation. Never persist or log tokens.
+            using var tokenResponse = await client.GetAsync("/_elsa/identity/token");
+            Assert.Equal(HttpStatusCode.OK, tokenResponse.StatusCode);
+            using var tokenDocument = JsonDocument.Parse(await tokenResponse.Content.ReadAsStringAsync());
+            var token = tokenDocument.RootElement.GetProperty("accessToken").GetString()!;
+            var fingerprint = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(token)));
+            Assert.True(issuedTokenFingerprints.Add(fingerprint), "The bearer regression must issue a different token for every tooling operation.");
+            using var request = new HttpRequestMessage(HttpMethod.Post, path) { Content = JsonContent.Create(body) };
+            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+            return await bearerClient.SendAsync(request);
+        }
 
         var toolingLinks = new Dictionary<string, string>(StringComparer.Ordinal);
         using (var capabilityResponse = await client.GetAsync("/capabilities"))
@@ -102,7 +125,7 @@ public sealed class ExpressionToolingHostEvidenceTests
 
         foreach (var syntax in new[] { "JavaScript", "Liquid" })
         {
-            using var contextResponse = await client.PostAsJsonAsync(toolingLinks["expression-tooling-context"], ContextBody(draftId, syntax, textInput.ReferenceKey));
+            using var contextResponse = await PostToolingAsync(toolingLinks["expression-tooling-context"], ContextBody(draftId, syntax, textInput.ReferenceKey));
             Assert.Equal(HttpStatusCode.OK, contextResponse.StatusCode);
             using var contextDocument = JsonDocument.Parse(await contextResponse.Content.ReadAsStringAsync());
             var result = contextDocument.RootElement.GetProperty("result");
@@ -119,7 +142,7 @@ public sealed class ExpressionToolingHostEvidenceTests
             Assert.Equal(output.Type, predecessorOutput.GetProperty("valueShape").GetProperty("displayName").GetString());
 
             var completionSource = syntax == "JavaScript" ? "args.predecessor." : "predecessor.";
-            using var completionResponse = await client.PostAsJsonAsync(toolingLinks["expression-tooling-completions"], SourceBody(draftId, syntax, textInput.ReferenceKey, completionSource, contextRevision, completionSource.Length));
+            using var completionResponse = await PostToolingAsync(toolingLinks["expression-tooling-completions"], SourceBody(draftId, syntax, textInput.ReferenceKey, completionSource, contextRevision, completionSource.Length));
             Assert.Equal(HttpStatusCode.OK, completionResponse.StatusCode);
             using var completionDocument = JsonDocument.Parse(await completionResponse.Content.ReadAsStringAsync());
             var completionResult = completionDocument.RootElement.GetProperty("result");
@@ -129,7 +152,7 @@ public sealed class ExpressionToolingHostEvidenceTests
             Assert.Equal(output.Type, outputCompletion.GetProperty("detail").GetString());
 
             var hoverSource = syntax == "JavaScript" ? $"args.predecessor.{output.Name}" : $"predecessor.{output.Name}";
-            using var hoverResponse = await client.PostAsJsonAsync(toolingLinks["expression-tooling-hover"], SourceBody(draftId, syntax, textInput.ReferenceKey, hoverSource, contextRevision, hoverSource.Length, hover: true));
+            using var hoverResponse = await PostToolingAsync(toolingLinks["expression-tooling-hover"], SourceBody(draftId, syntax, textInput.ReferenceKey, hoverSource, contextRevision, hoverSource.Length, hover: true));
             Assert.Equal(HttpStatusCode.OK, hoverResponse.StatusCode);
             using var hoverDocument = JsonDocument.Parse(await hoverResponse.Content.ReadAsStringAsync());
             var hoverResult = hoverDocument.RootElement.GetProperty("result");
@@ -140,7 +163,7 @@ public sealed class ExpressionToolingHostEvidenceTests
             Assert.Contains("Activity output", hoverContents, StringComparison.Ordinal);
 
             var invalid = syntax == "JavaScript" ? "if (" : "{{ customerName";
-            using var validationResponse = await client.PostAsJsonAsync(toolingLinks["expression-tooling-validate"], SourceBody(draftId, syntax, textInput.ReferenceKey, invalid, contextRevision));
+            using var validationResponse = await PostToolingAsync(toolingLinks["expression-tooling-validate"], SourceBody(draftId, syntax, textInput.ReferenceKey, invalid, contextRevision));
             Assert.Equal(HttpStatusCode.OK, validationResponse.StatusCode);
             using var validationDocument = JsonDocument.Parse(await validationResponse.Content.ReadAsStringAsync());
             var validationResult = validationDocument.RootElement.GetProperty("result");
