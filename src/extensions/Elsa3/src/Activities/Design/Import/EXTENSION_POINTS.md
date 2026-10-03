@@ -102,10 +102,12 @@ deleted from the import ledger. `ReusableActivityImportOperationService` owns th
 
 The outcome is decided when these deletes run, so they do not observe the caller's cancellation: a client that
 disconnects after a refusal does not leave the refused upload behind. A delete that fails leaves the outcome the caller
-asked for in place (the receipt, the refusal, the 410) and is logged. The row then stays until something deletes it:
-after a completed apply, a replay of the idempotency key repeats the delete; any later read of the handle that finds it
-expired deletes it; and in a tenant partition, the sweep deletes it once its lifetime runs out. So the one row nothing
-retries is a refused or expired upload in the global partition whose handle is never used again.
+asked for in place (the receipt, the refusal, the 410) and is logged. The row then stays, and until its expiry it is
+still readable and can still be applied, so a refused upload whose delete failed keeps its content at rest until
+something deletes it: after a completed apply, a replay of the idempotency key repeats the delete; any later read of
+the handle that finds it expired deletes it; and in a tenant partition, the sweep deletes it once its lifetime runs
+out. So the one row nothing retries is a refused or expired upload in the global partition whose handle is never used
+again. This paragraph is the one statement of that behavior; the code's documentation points here.
 
 Between its upload and its apply or expiry the document is at rest in the ledger, as a reviewed import needs it to be.
 The rule bounds that time; it does not encrypt the column, and it does not reach database backups.

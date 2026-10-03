@@ -309,9 +309,8 @@ public sealed class ReusableActivityImportOperationService(
     /// Deletes a decided or expired upload from the ledger. The outcome is already decided when this runs, so the
     /// caller's cancellation does not stop it: a client that disconnects after a refusal must not leave the refused
     /// upload, and whatever literal it holds, in place. For the same reason a failed delete never replaces that
-    /// outcome (the receipt, the refusal, the 410). It is logged, and the row stays until something deletes it: a
-    /// replay of the key after a completed apply, a later read that finds it expired, or, in a tenant partition,
-    /// the expiry sweep.
+    /// outcome (the receipt, the refusal, the 410). It is logged and the row stays; what deletes it later is set out
+    /// under "Upload retention" in the import's <c>EXTENSION_POINTS.md</c>.
     /// </summary>
     private async ValueTask DiscardCollectionAsync(string handle, ReusableActivityImportAccessScope accessScope)
     {
