@@ -78,7 +78,8 @@ internal static class WorkerRunner
     {
         cancellationToken.ThrowIfCancellationRequested();
         var closure = await PrepareCandidateClosureAsync(
-            request.HostDirectory!, request.HostName!, request.DepsFile!, request.PackageRoots, cancellationToken);
+            request.HostDirectory!, request.HostName!, request.DepsFile!, request.PackageRoots,
+            request.Candidate!.Environment!, cancellationToken);
         var directory = closure.Directory;
         var name = closure.Name;
         var observation = closure.Observation;
@@ -97,7 +98,8 @@ internal static class WorkerRunner
     {
         cancellationToken.ThrowIfCancellationRequested();
         var closure = await PrepareCandidateClosureAsync(
-            request.HostDirectory!, request.HostName!, request.DepsFile!, request.PackageRoots!, cancellationToken);
+            request.HostDirectory!, request.HostName!, request.DepsFile!, request.PackageRoots!,
+            request.Candidate!.Environment!, cancellationToken);
         var directory = closure.Directory;
         var name = closure.Name;
         var observation = closure.Observation;
@@ -135,6 +137,7 @@ internal static class WorkerRunner
         string hostName,
         string depsFile,
         IReadOnlyList<string> packageRoots,
+        string environment,
         CancellationToken cancellationToken)
     {
         var directory = Path.GetFullPath(hostDirectory);
@@ -167,7 +170,7 @@ internal static class WorkerRunner
         observation.VerifyUnchanged();
 
         // The same loader decides its state/probe route and observes the selected install metadata before loading.
-        var packages = await NuplanePackageSet.LoadAsync(packageRoots, directory, cancellationToken, observation);
+        var packages = await NuplanePackageSet.LoadAsync(packageRoots, directory, environment, cancellationToken, observation);
         if (packages.Failures.Count != 0)
             throw WorkerRefusal.Resolution("candidate-package-unavailable", "The selected host package closure could not be loaded.");
         HostClosure.Preload(deps);
@@ -197,7 +200,8 @@ internal static class WorkerRunner
         // before the set is read, because what it writes is exactly what the read then finds; without
         // --restore it does nothing at all and no other flag sets it (ADR 0076 D10).
         await HostPackageRestore.RunAsync(request, deps, cancellationToken);
-        var packages = await NuplanePackageSet.LoadAsync(request.PackageRoots, request.HostDirectory!, cancellationToken);
+        var packages = await NuplanePackageSet.LoadAsync(
+            request.PackageRoots, request.HostDirectory!, request.Environment!, cancellationToken);
         foreach (var failure in packages.Failures.OrderBy(entry => entry.Key, StringComparer.Ordinal))
             Console.Error.WriteLine($"warning: package '{failure.Key}' could not be loaded: {failure.Value}");
 

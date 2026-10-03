@@ -1,4 +1,5 @@
 using Elsa.Cli.Worker;
+using System.Reflection;
 using System.Text.Json;
 using Xunit;
 
@@ -43,6 +44,47 @@ public sealed class NuplanePackageRootTests : IDisposable
         Assert.Equal(ToolExitCode.Success, run.ExitCode);
         Assert.Contains("Acme.Widgets", run.Output, StringComparison.Ordinal);
         Assert.Contains("__EFMigrationsHistory_AcmeWidgets", run.Output, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// A package can carry byte-for-byte copies of host contracts. They bind to the right identity only when
+    /// the CLI forwards the host's configured Nuplane sharing policy to the host-integrated loader.
+    /// </summary>
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Host_shared_assembly_policy_is_used_for_probe_and_state_loads(bool useStateFile)
+    {
+        using var host = new RestoreHost();
+        var installPath = NuplanePackageRootFixture.InstallInto(packages.Path, "Acme.Widgets", "1.4.2", complete: true);
+        var libraryDirectory = Path.Join(installPath, "lib", "net10.0");
+        var persistenceAssemblyPath = Path.Join(host.Path, "Elsa.Persistence.EntityFramework.dll");
+        Assert.True(File.Exists(persistenceAssemblyPath), "The Nuplane fixture host must carry the persistence contract assembly.");
+        File.Copy(persistenceAssemblyPath, Path.Join(libraryDirectory, Path.GetFileName(persistenceAssemblyPath)));
+        if (useStateFile)
+            NuplanePackageRootFixture.WriteStateFile(packages.Path, "Acme.Widgets", "1.4.2", installPath);
+
+        // With no settings, the default loader options preserve the private contract copy. Reflection sees
+        // its EfModuleAttribute as a different CLR type, so the host discovers no module.
+        File.Delete(Path.Join(host.Path, HostAppSettings.BaseFileName));
+        File.Delete(Path.Join(host.Path, HostAppSettings.OverlayFileName("Development")));
+        var withoutSharing = List(host.Path);
+        Assert.Equal(ToolExitCode.Success, withoutSharing.ExitCode);
+        Assert.Contains("0 module(s).", withoutSharing.Output, StringComparison.Ordinal);
+
+        var persistenceMajorVersion = AssemblyName.GetAssemblyName(persistenceAssemblyPath).Version!.Major;
+        WriteSharedAssemblyPolicy(host.Path, persistenceAssemblyPath, "Development", persistenceMajorVersion);
+        var withSharing = List(host.Path);
+        Assert.Equal(ToolExitCode.Success, withSharing.ExitCode);
+        Assert.Contains("Acme.Widgets", withSharing.Output, StringComparison.Ordinal);
+
+        // Nuplane's binder records a dropped/malformed shared-identity entry and its options validator
+        // rejects the host policy instead of silently reverting to an empty sharing list.
+        WriteSharedAssemblyPolicy(host.Path, persistenceAssemblyPath, "Development", "invalid");
+        var malformedPolicy = List(host.Path);
+        Assert.Equal(ToolExitCode.ResolutionFailure, malformedPolicy.ExitCode);
+        Assert.Contains("packages-loader-policy-invalid", malformedPolicy.Error, StringComparison.Ordinal);
+        Assert.DoesNotContain("Acme.Widgets", malformedPolicy.Text, StringComparison.Ordinal);
     }
 
     /// <summary>
@@ -189,4 +231,34 @@ public sealed class NuplanePackageRootTests : IDisposable
     /// <summary>Lays out one package the way Nuplane's own install store does: feed, id, version, and a completion marker.</summary>
     private void Install(string package, string version, bool complete) =>
         NuplanePackageRootFixture.InstallInto(packages.Path, package, version, complete);
+
+    private CliRun List(string hostDirectory) =>
+        DotnetElsa.Run(
+            "persistence", "list",
+            "--host", hostDirectory,
+            "--environment", "Development",
+            "--packages", packages.Path);
+
+    private static void WriteSharedAssemblyPolicy(string hostDirectory, string assemblyPath, string environment, object majorVersion)
+    {
+        var identity = AssemblyName.GetAssemblyName(assemblyPath);
+        var token = identity.GetPublicKeyToken();
+        var publicKeyToken = token is { Length: > 0 } ? Convert.ToHexString(token) : null;
+        var settings = new
+        {
+            Nuplane = new
+            {
+                Loading = new
+                {
+                    SharedAssemblies = new[]
+                    {
+                        new { identity.Name, PublicKeyToken = publicKeyToken, MajorVersion = majorVersion }
+                    }
+                }
+            }
+        };
+        File.WriteAllText(
+            Path.Join(hostDirectory, HostAppSettings.OverlayFileName(environment)),
+            JsonSerializer.Serialize(settings));
+    }
 }

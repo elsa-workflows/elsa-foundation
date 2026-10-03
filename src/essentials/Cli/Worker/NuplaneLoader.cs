@@ -1,6 +1,9 @@
 using Nuplane;
 using Nuplane.Abstractions;
 using Nuplane.Loading;
+using Nuplane.Loading.Hosting.Builder;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
 using System.Runtime.CompilerServices;
 
 namespace Elsa.Cli.Worker;
@@ -50,18 +53,22 @@ internal static class NuplaneLoader
     /// </summary>
     [MethodImpl(MethodImplOptions.NoInlining)]
     public static async Task<NuplaneLoadResult> FromStateAsync(string stateFile, CancellationToken cancellationToken,
-        Action<IReadOnlyList<InstalledPackage>>? beforeLoad = null)
+        string hostDirectory, string environment,
+        Action<IReadOnlyList<InstalledPackage>>? beforePolicyRead = null,
+        Action? afterPolicyRead = null)
     {
         var active = await ReadStateAsync(stateFile, cancellationToken);
         if (active.Count == 0)
             return new([], new Dictionary<string, string>());
 
         var observed = active.Select(Describe).ToArray();
-        beforeLoad?.Invoke(observed);
+        beforePolicyRead?.Invoke(observed);
+        var options = LoadOptionsForHost(hostDirectory, environment);
+        afterPolicyRead?.Invoke();
 
         // No TargetFrameworkOverride: a worker launched on the host's own runtimeconfig already runs the
         // host's target framework, so overriding it would select assets the host itself would not.
-        var result = await NuplaneHostIntegratedLoader.LoadFromStateAsync(stateFile, options: null, cancellationToken);
+        var result = await NuplaneHostIntegratedLoader.LoadFromStateAsync(stateFile, options, cancellationToken);
         return new(observed, result.FailedByPackageId);
     }
 
@@ -70,8 +77,14 @@ internal static class NuplaneLoader
     /// groups by graph generation identity rather than by the state's activation records (FR-006).
     /// </summary>
     [MethodImpl(MethodImplOptions.NoInlining)]
-    public static async Task<NuplaneLoadResult> FromPackagesAsync(IReadOnlyList<InstalledPackage> installed, CancellationToken cancellationToken)
+    public static async Task<NuplaneLoadResult> FromPackagesAsync(IReadOnlyList<InstalledPackage> installed,
+        string hostDirectory, string environment, CancellationToken cancellationToken,
+        Action? beforePolicyRead = null, Action? afterPolicyRead = null)
     {
+        beforePolicyRead?.Invoke();
+        var options = LoadOptionsForHost(hostDirectory, environment);
+        afterPolicyRead?.Invoke();
+
         // One graph identity for the whole set: every package a caller pointed at is meant to resolve every
         // other one, which is what a single graph gives. The identity is constant rather than generated, so
         // two runs over the same directory load the same way.
@@ -94,8 +107,47 @@ internal static class NuplaneLoader
                 Discoverable: true))
             .ToArray();
 
-        var result = await NuplaneHostIntegratedLoader.LoadActivePackagesAsync(active, options: null, cancellationToken);
+        var result = await NuplaneHostIntegratedLoader.LoadActivePackagesAsync(active, options, cancellationToken);
         return new(installed, result.FailedByPackageId);
+    }
+
+    /// <summary>
+    /// Uses the host's configured sharing policy for the offline load. Hosts without either settings file
+    /// need no configuration assemblies here and retain Nuplane's default load options.
+    /// </summary>
+    private static HostIntegratedLoadOptions LoadOptionsForHost(string hostDirectory, string environment) =>
+        HostAppSettings.Exist(hostDirectory, environment)
+            ? LoadConfiguredOptions(hostDirectory, environment)
+            : new();
+
+    /// <summary>
+    /// The settings and options APIs are resolved only for a host that actually carries appsettings files.
+    /// Building the provider and reading IOptions does not start hosted services or Nuplane reconciliation.
+    /// </summary>
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    private static HostIntegratedLoadOptions LoadConfiguredOptions(string hostDirectory, string environment)
+    {
+        try
+        {
+            var configuration = HostAppSettings.Read(hostDirectory, environment);
+            using var configurationLifetime = configuration as IDisposable;
+            using var services = new ServiceCollection()
+                .AddNuplane(builder => builder.AutoloadPackages(configuration.GetSection("Nuplane").GetSection("Loading")))
+                .BuildServiceProvider();
+
+            var shared = services.GetRequiredService<IOptions<LoadingOptions>>().Value.SharedAssemblies;
+            var options = new HostIntegratedLoadOptions();
+            foreach (var identity in shared)
+                options.SharedAssemblies.Add(identity);
+            return options;
+        }
+        catch (Exception failure) when (failure is not WorkerRefusal && WorkerRunner.IsNonFatal(failure))
+        {
+            // Do not echo settings values or binder diagnostics: host settings can contain private values.
+            throw WorkerRefusal.Resolution(
+                "packages-loader-policy-invalid",
+                "The host's Nuplane loading policy could not be read or validated.");
+        }
     }
 
     private static async Task<IReadOnlyList<ActivePackage>> ReadStateAsync(string stateFile, CancellationToken cancellationToken)
