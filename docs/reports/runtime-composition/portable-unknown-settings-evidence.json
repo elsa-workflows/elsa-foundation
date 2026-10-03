@@ -1,0 +1,367 @@
+{
+  "kind": "bounded-discovery-evidence",
+  "issue": 2327,
+  "sourceInspectionCommit": "4db78fbc1989aca36073376ae2637dc811059fea",
+  "productionBehaviorChanged": false,
+  "cliArtifact": {
+    "package": "dotnet-elsa",
+    "version": "4.0.10-preview",
+    "repositoryCommit": "edffd0a4ea18a17c4faa2c3f8ce073f48bc09af6",
+    "nupkgSha256": "74fe11835d3b8beeb749b2ca0b20abd5b238367304d44f2d52ee9fdf5ee4dd96"
+  },
+  "fileCommandCases": [
+    {
+      "case": "import-reviewed",
+      "exit": 0,
+      "prompt_answered": true,
+      "timed_out": false,
+      "private_canaries_absent_from_output": true,
+      "codes": []
+    },
+    {
+      "case": "accept-reopened",
+      "exit": 0,
+      "prompt_answered": true,
+      "timed_out": false,
+      "private_canaries_absent_from_output": true,
+      "codes": []
+    },
+    {
+      "case": "same-source",
+      "exit": 0,
+      "prompt_answered": true,
+      "timed_out": false,
+      "private_canaries_absent_from_output": true,
+      "codes": []
+    },
+    {
+      "case": "missing-source",
+      "exit": 3,
+      "prompt_answered": false,
+      "timed_out": false,
+      "private_canaries_absent_from_output": true,
+      "codes": [
+        "bridge-source-missing"
+      ]
+    },
+    {
+      "case": "different-source",
+      "exit": 0,
+      "prompt_answered": true,
+      "timed_out": false,
+      "private_canaries_absent_from_output": true,
+      "codes": []
+    },
+    {
+      "case": "changed-between-invocations",
+      "exit": 0,
+      "prompt_answered": true,
+      "timed_out": false,
+      "private_canaries_absent_from_output": true,
+      "codes": []
+    },
+    {
+      "case": "changed-after-preview",
+      "exit": 3,
+      "prompt_answered": true,
+      "timed_out": false,
+      "private_canaries_absent_from_output": true,
+      "codes": [
+        "bridge-source-changed"
+      ]
+    },
+    {
+      "case": "accept-already-authored-opaque",
+      "exit": 0,
+      "prompt_answered": true,
+      "timed_out": false,
+      "private_canaries_absent_from_output": true,
+      "codes": []
+    },
+    {
+      "case": "generate-unreviewed-authored",
+      "exit": 2,
+      "prompt_answered": false,
+      "timed_out": false,
+      "private_canaries_absent_from_output": true,
+      "codes": [
+        "bridge-portable-unsafe"
+      ]
+    },
+    {
+      "case": "explicit-false-nested-reviewed",
+      "exit": 0,
+      "prompt_answered": true,
+      "timed_out": false,
+      "private_canaries_absent_from_output": true,
+      "codes": []
+    },
+    {
+      "case": "explicit-false-accept",
+      "exit": 0,
+      "prompt_answered": true,
+      "timed_out": false,
+      "private_canaries_absent_from_output": true,
+      "codes": []
+    },
+    {
+      "case": "explicit-false-generate",
+      "exit": 0,
+      "prompt_answered": true,
+      "timed_out": false,
+      "private_canaries_absent_from_output": true,
+      "codes": []
+    },
+    {
+      "case": "no-review-import",
+      "exit": 0,
+      "prompt_answered": true,
+      "timed_out": false,
+      "private_canaries_absent_from_output": true,
+      "codes": []
+    },
+    {
+      "case": "nonempty-array-portable-refusal",
+      "exit": 2,
+      "prompt_answered": false,
+      "timed_out": false,
+      "private_canaries_absent_from_output": true,
+      "codes": [
+        "bridge-portable-unsafe"
+      ]
+    },
+    {
+      "case": "origin-unavailable-private-handoff",
+      "exit": 0,
+      "prompt_answered": true,
+      "timed_out": false,
+      "private_canaries_absent_from_output": true,
+      "codes": []
+    }
+  ],
+  "publicArtifactScans": {
+    "streamFiles": 21,
+    "unreviewedCanariesAbsent": true,
+    "privateSourcePathsAbsent": true,
+    "safeImportedAndAcceptedArtifactsScanned": 5,
+    "deliberatelyOpaqueAcceptedControlRetainsPrivateValue": true,
+    "sameSourceCandidateCompleteParsedJsonEquality": true,
+    "originRestoredAfterUnavailableControl": true
+  },
+  "workbenchInspection": {
+    "actualCopiedArtifactHashes": {
+      "Elsa.Workbench.dll": "32e3f7ecf5ea8832c4a60386614ba8b86bc8b5c62724f26e395d5645aa640605",
+      "Elsa.Workbench.deps.json": "19b2e98904e94a2897a8939be4c2a3e2ee6f6bd8cf46ec98a60b2f1d4c0b14cf",
+      "Elsa.Workbench.runtimeconfig.json": "eff38a9750f7cca2407b1d639a963d56ffea92088e6da971bbbfa74e3dcd7224"
+    },
+    "copyByteIdentityVerified": true,
+    "historicalBuildCommit": "not-reconstructed",
+    "cases": [
+      {
+        "case": "inspect-file-only",
+        "exit": 0,
+        "private_canaries_absent": true,
+        "private_paths_absent": true,
+        "database_absent": true,
+        "configurationResolution": {
+          "source": "captured-workbench-json-v1",
+          "shell": "default",
+          "environment": "Production",
+          "resolution": "resolved",
+          "selection": {
+            "acceptedFeatureIds": [
+              "DiagnosticsStructuredLogs",
+              "DiagnosticsStructuredLogsEntityFrameworkCore",
+              "ModularityApi",
+              "RuntimeFaultStackTrace"
+            ],
+            "requestedFeatureIds": [
+              "DiagnosticsStructuredLogs",
+              "DiagnosticsStructuredLogsEntityFrameworkCore",
+              "ModularityApi",
+              "RuntimeFaultStackTrace"
+            ],
+            "effectiveFeatureIds": [
+              "DiagnosticsStructuredLogs",
+              "DiagnosticsStructuredLogsEntityFrameworkCore",
+              "ModularityApi",
+              "RuntimeFaultStackTrace"
+            ],
+            "disabledFeatureIds": [],
+            "implicitFeatureIds": []
+          },
+          "participants": [
+            {
+              "feature": "DiagnosticsStructuredLogsEntityFrameworkCore",
+              "module": "Diagnostics.StructuredLogs",
+              "selection": "ShellDefault",
+              "resource": "primary",
+              "provider": "Sqlite",
+              "connectionReference": "Local",
+              "selectorScope": "shell-composed",
+              "resourceScope": "root",
+              "exactFileProvenance": "unavailable"
+            }
+          ],
+          "configuredValueAffinity": "checked",
+          "targetVerification": "not-performed",
+          "runtimeParity": "unobserved",
+          "packageReachability": "unverified",
+          "connectivity": "unverified",
+          "schemaReadiness": "unverified",
+          "migrationReadiness": "unverified",
+          "activation": "unobserved",
+          "externalInputs": "unverified",
+          "unresolved": [
+            "exact-file-provenance-unavailable"
+          ]
+        },
+        "top_level_keys": [
+          "plan",
+          "configurationResolution"
+        ]
+      },
+      {
+        "case": "inspect-intended-environment",
+        "exit": 0,
+        "private_canaries_absent": true,
+        "private_paths_absent": true,
+        "database_absent": true,
+        "configurationResolution": {
+          "source": "captured-workbench-json-explicit-environment-v1",
+          "shell": "default",
+          "environment": "Production",
+          "resolution": "resolved",
+          "selection": {
+            "acceptedFeatureIds": [
+              "DiagnosticsStructuredLogs",
+              "DiagnosticsStructuredLogsEntityFrameworkCore",
+              "ModularityApi",
+              "RuntimeFaultStackTrace"
+            ],
+            "requestedFeatureIds": [
+              "DiagnosticsStructuredLogs",
+              "DiagnosticsStructuredLogsEntityFrameworkCore",
+              "ModularityApi",
+              "RuntimeFaultStackTrace"
+            ],
+            "effectiveFeatureIds": [
+              "DiagnosticsStructuredLogs",
+              "DiagnosticsStructuredLogsEntityFrameworkCore",
+              "ModularityApi",
+              "RuntimeFaultStackTrace"
+            ],
+            "disabledFeatureIds": [],
+            "implicitFeatureIds": []
+          },
+          "participants": [
+            {
+              "feature": "DiagnosticsStructuredLogsEntityFrameworkCore",
+              "module": "Diagnostics.StructuredLogs",
+              "selection": "ShellDefault",
+              "resource": "primary",
+              "provider": "Sqlite",
+              "connectionReference": "Local",
+              "selectorScope": "shell-composed",
+              "resourceScope": "root",
+              "exactFileProvenance": "unavailable"
+            }
+          ],
+          "configuredValueAffinity": "checked",
+          "targetVerification": "not-performed",
+          "runtimeParity": "unobserved",
+          "packageReachability": "unverified",
+          "connectivity": "unverified",
+          "schemaReadiness": "unverified",
+          "migrationReadiness": "unverified",
+          "activation": "unobserved",
+          "externalInputs": "supplied-intended",
+          "unresolved": [
+            "exact-file-provenance-unavailable"
+          ]
+        },
+        "top_level_keys": [
+          "plan",
+          "configurationResolution"
+        ]
+      },
+      {
+        "case": "origin-unavailable-handoff-inspection",
+        "exit": 0,
+        "origin_directory_unavailable": true,
+        "origin_bundle_full_json_preserved": true,
+        "destination_source_files_unchanged": true,
+        "private_canaries_absent": true,
+        "private_paths_absent": true,
+        "fixture_databases_absent": true,
+        "configurationResolution": {
+          "source": "captured-workbench-json-explicit-environment-v1",
+          "shell": "default",
+          "environment": "Production",
+          "resolution": "resolved",
+          "selection": {
+            "acceptedFeatureIds": [
+              "DiagnosticsStructuredLogs",
+              "DiagnosticsStructuredLogsEntityFrameworkCore",
+              "ModularityApi",
+              "RuntimeFaultStackTrace"
+            ],
+            "requestedFeatureIds": [
+              "DiagnosticsStructuredLogs",
+              "DiagnosticsStructuredLogsEntityFrameworkCore",
+              "ModularityApi",
+              "RuntimeFaultStackTrace"
+            ],
+            "effectiveFeatureIds": [
+              "DiagnosticsStructuredLogs",
+              "DiagnosticsStructuredLogsEntityFrameworkCore",
+              "ModularityApi",
+              "RuntimeFaultStackTrace"
+            ],
+            "disabledFeatureIds": [],
+            "implicitFeatureIds": []
+          },
+          "participants": [
+            {
+              "feature": "DiagnosticsStructuredLogsEntityFrameworkCore",
+              "module": "Diagnostics.StructuredLogs",
+              "selection": "ShellDefault",
+              "resource": "primary",
+              "provider": "Sqlite",
+              "connectionReference": "Local",
+              "selectorScope": "shell-composed",
+              "resourceScope": "root",
+              "exactFileProvenance": "unavailable"
+            }
+          ],
+          "configuredValueAffinity": "checked",
+          "targetVerification": "not-performed",
+          "runtimeParity": "unobserved",
+          "packageReachability": "unverified",
+          "connectivity": "unverified",
+          "schemaReadiness": "unverified",
+          "migrationReadiness": "unverified",
+          "activation": "unobserved",
+          "externalInputs": "supplied-intended",
+          "unresolved": [
+            "exact-file-provenance-unavailable"
+          ]
+        },
+        "not_claimed": "No production required-input protocol or secret-transport policy is implemented"
+      }
+    ]
+  },
+  "limits": [
+    "No unknown-feature-setting runtime consumption proof",
+    "No complete nonempty-array portable import",
+    "No origin association in authored v1",
+    "No generic acceptance safety certificate",
+    "No database, activation, deployment or physical readiness proof",
+    "Product ownership/transport decision pending",
+    "Manual fake-data private handoff does not implement required-input ownership, destination merging or real secret transport"
+  ],
+  "executionNotes": [
+    "Bounded serial CLI processes; no local builds, new test suite or provider matrix",
+    "Initial completed private runner followed by accidental existing-output refusal; final cases use fresh unique directories"
+  ]
+}
