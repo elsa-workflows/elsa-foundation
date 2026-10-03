@@ -28,12 +28,8 @@ public sealed class StrippedAmbientCapabilityDiagnosticTests
     [InlineData("Math.abs(1) + Math.random()", "Math.random")]
     public async Task Reaching_for_a_stripped_ambient_capability_yields_an_actionable_error(string source, string capability)
     {
-        await using var provider = BuildProvider();
-        await using var scope = provider.CreateAsyncScope();
-        var evaluator = scope.ServiceProvider.GetRequiredService<IPortableExpressionEvaluator>();
-
         var exception = await Assert.ThrowsAsync<JavaScriptBindingEvaluationException>(
-            () => evaluator.EvaluateAsync(Request(source)).AsTask());
+            () => EvaluateAsync(source));
 
         Assert.Contains(capability, exception.Message, StringComparison.Ordinal);
         Assert.Contains("deterministic binding sandbox", exception.Message, StringComparison.Ordinal);
@@ -45,13 +41,32 @@ public sealed class StrippedAmbientCapabilityDiagnosticTests
     [Fact]
     public async Task A_profile_legal_expression_that_does_not_touch_a_stripped_capability_still_evaluates()
     {
-        await using var provider = BuildProvider();
-        await using var scope = provider.CreateAsyncScope();
-        var evaluator = scope.ServiceProvider.GetRequiredService<IPortableExpressionEvaluator>();
-
-        var result = await evaluator.EvaluateAsync(Request("\"a \" + 1"));
+        var result = await EvaluateAsync("\"a \" + 1");
 
         Assert.Equal("a 1", result.GetString());
+    }
+
+    [Theory]
+    [InlineData("(Math = { random: () => 7 }, Math.random())")]
+    [InlineData("(globalThis.Math = { random: () => 7 }, globalThis.Math.random())")]
+    [InlineData("(globalThis['Math'] = { random: () => 7 }, globalThis.Math.random())")]
+    [InlineData("(globalThis = { Math: { random: () => 7 } }, globalThis.Math.random())")]
+    [InlineData("(globalThis = { Date: { now: () => 7 } }, globalThis.Date.now())")]
+    public async Task Explicit_root_replacement_expressions_still_evaluate_without_sandbox_attribution(string source)
+    {
+        var result = await EvaluateAsync(source);
+
+        Assert.Equal(7, result.GetInt32());
+    }
+
+    [Theory]
+    [InlineData("typeof Math?.random")]
+    [InlineData("typeof globalThis?.Math.random")]
+    public async Task Optional_typeof_probes_for_available_roots_still_evaluate(string source)
+    {
+        var result = await EvaluateAsync(source);
+
+        Assert.Equal("undefined", result.GetString());
     }
 
     [Theory]
@@ -69,18 +84,26 @@ public sealed class StrippedAmbientCapabilityDiagnosticTests
     [InlineData("Math[\"ran\" + \"dom\"]()")]
     [InlineData("(null).Date")]
     [InlineData("({ Date: undefined }).Date()")]
+    [InlineData("Math = {}, Math.random()")]
+    [InlineData("globalThis.Math = {}, globalThis.Math.random()")]
+    [InlineData("globalThis['Math'] = {}, globalThis.Math.random()")]
+    [InlineData("globalThis = { Math: {} }, globalThis.Math.random()")]
+    [InlineData("globalThis = { Date: {} }, globalThis.Date.now()")]
     public async Task An_unrelated_runtime_error_is_not_reframed_as_a_capability_error(string source)
     {
-        await using var provider = BuildProvider();
-        await using var scope = provider.CreateAsyncScope();
-        var evaluator = scope.ServiceProvider.GetRequiredService<IPortableExpressionEvaluator>();
-
         // Unrelated JavaScript failures are author/runtime errors, not stripped-capability reaches; they must keep
         // surfacing as native errors rather than being mislabelled as sandbox/determinism problems.
         var exception = await Assert.ThrowsAnyAsync<Exception>(
-            () => evaluator.EvaluateAsync(Request(source)).AsTask());
+            () => EvaluateAsync(source));
 
         Assert.IsNotType<JavaScriptBindingEvaluationException>(exception);
+    }
+
+    private static async Task<JsonElement> EvaluateAsync(string source)
+    {
+        await using var provider = BuildProvider();
+        await using var scope = provider.CreateAsyncScope();
+        return await scope.ServiceProvider.GetRequiredService<IPortableExpressionEvaluator>().EvaluateAsync(Request(source));
     }
 
     private static ServiceProvider BuildProvider()

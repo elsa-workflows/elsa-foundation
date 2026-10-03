@@ -34,7 +34,10 @@ internal static class StrippedAmbientCapabilityExceptionClassifier
         var bindings = new BoundNameCollector();
         bindings.Visit(expression);
 
-        var references = new FailingCapabilityCollector(failureLocation, bindings.Names);
+        var mutations = new IntrinsicMutationCollector(bindings.Names);
+        mutations.Visit(expression);
+
+        var references = new FailingCapabilityCollector(failureLocation, bindings.Names, mutations);
         references.Visit(expression);
         if (references.Matches.Count != 1)
             return false;
@@ -69,7 +72,10 @@ internal static class StrippedAmbientCapabilityExceptionClassifier
         return true;
     }
 
-    private sealed class FailingCapabilityCollector(SourceLocation failureLocation, IReadOnlySet<string> boundNames) : AstVisitor
+    private sealed class FailingCapabilityCollector(
+        SourceLocation failureLocation,
+        IReadOnlySet<string> boundNames,
+        IntrinsicMutationCollector mutations) : AstVisitor
     {
         private readonly HashSet<string> _matches = new(StringComparer.Ordinal);
 
@@ -120,8 +126,117 @@ internal static class StrippedAmbientCapabilityExceptionClassifier
         private void AddCapability(string path)
         {
             var capability = FindCapability(path);
-            if (capability is not null)
-                _matches.Add(capability.DisplayName);
+            if (capability is null)
+                return;
+
+            // These syntax-only identity guards are intentionally expression-wide rather than flow-sensitive:
+            // native errors remain native even for a later/dead root replacement. Replacing globalThis affects
+            // only qualified paths; replacing Math affects only the stripped Math.random claim.
+            if ((capability.Path.StartsWith("globalThis.", StringComparison.Ordinal) && mutations.GlobalThisMayBeReplaced) ||
+                (capability.DisplayName == "Math.random" && mutations.MathRootMayBeReplaced))
+                return;
+
+            _matches.Add(capability.DisplayName);
+        }
+    }
+
+    private sealed class IntrinsicMutationCollector(IReadOnlySet<string> boundNames) : AstVisitor
+    {
+        public bool MathRootMayBeReplaced { get; private set; }
+        public bool GlobalThisMayBeReplaced { get; private set; }
+
+        public override object? Visit(Node node)
+        {
+            if (node is UpdateExpression update)
+                RecordPotentialReplacement(update.Argument);
+            return base.Visit(node);
+        }
+
+        protected override object? VisitAssignmentExpression(AssignmentExpression node)
+        {
+            RecordPotentialReplacement(node.Left);
+            return base.VisitAssignmentExpression(node);
+        }
+
+        protected override object? VisitUnaryExpression(UnaryExpression node)
+        {
+            if (node.Operator == Operator.Delete)
+                RecordPotentialReplacement(node.Argument);
+            return base.VisitUnaryExpression(node);
+        }
+
+        protected override object? VisitForInStatement(ForInStatement node)
+        {
+            if (node.Left is not VariableDeclaration)
+                RecordPotentialReplacement(node.Left);
+            return base.VisitForInStatement(node);
+        }
+
+        protected override object? VisitForOfStatement(ForOfStatement node)
+        {
+            if (node.Left is not VariableDeclaration)
+                RecordPotentialReplacement(node.Left);
+            return base.VisitForOfStatement(node);
+        }
+
+        private void RecordPotentialReplacement(Node target)
+        {
+            switch (target)
+            {
+                case Identifier identifier when !boundNames.Contains(identifier.Name):
+                    MathRootMayBeReplaced |= identifier.Name == "Math";
+                    GlobalThisMayBeReplaced |= identifier.Name == "globalThis";
+                    break;
+                case MemberExpression member when TryGetMutationPath(member, out var path):
+                    if (path == "globalThis.Math" && !boundNames.Contains("globalThis"))
+                        MathRootMayBeReplaced = true;
+                    break;
+                case RestElement rest:
+                    RecordPotentialReplacement(rest.Argument);
+                    break;
+                case AssignmentPattern assignment:
+                    RecordPotentialReplacement(assignment.Left);
+                    break;
+                case ArrayPattern array:
+                    foreach (var element in array.Elements)
+                        if (element is not null)
+                            RecordPotentialReplacement(element);
+                    break;
+                case ObjectPattern objectPattern:
+                    foreach (var property in objectPattern.Properties)
+                        if (property is AssignmentProperty assignmentProperty)
+                            RecordPotentialReplacement(assignmentProperty.Value);
+                        else
+                            RecordPotentialReplacement(property);
+                    break;
+            }
+        }
+
+        private static bool TryGetMutationPath(Expression expression, out string path)
+        {
+            expression = StrippedAmbientCapabilityExceptionClassifier.Unwrap(expression);
+            switch (expression)
+            {
+                case Identifier identifier:
+                    path = identifier.Name;
+                    return true;
+                case MemberExpression member when TryGetMutationPath(member.Object, out var prefix):
+                    var propertyName = member.Property switch
+                    {
+                        Identifier property when !member.Computed => property.Name,
+                        Literal { Value: string literal } when member.Computed => literal,
+                        _ => null
+                    };
+                    if (propertyName is not null)
+                    {
+                        path = $"{prefix}.{propertyName}";
+                        return true;
+                    }
+                    break;
+            }
+
+            path = string.Empty;
+            return false;
         }
     }
 
@@ -207,6 +322,7 @@ internal static class StrippedAmbientCapabilityExceptionClassifier
 
     private static bool TryGetStaticPath(Expression expression, out string rootName, out string path)
     {
+        expression = Unwrap(expression);
         switch (expression)
         {
             case Identifier identifier:
@@ -223,6 +339,14 @@ internal static class StrippedAmbientCapabilityExceptionClassifier
                 return false;
         }
     }
+
+    private static Expression Unwrap(Expression expression) =>
+        expression switch
+        {
+            ParenthesizedExpression parenthesized => Unwrap(parenthesized.Expression),
+            ChainExpression chain => Unwrap(chain.Expression),
+            _ => expression
+        };
 
     private static JavaScriptAmbientCapability? FindCapability(string path)
     {

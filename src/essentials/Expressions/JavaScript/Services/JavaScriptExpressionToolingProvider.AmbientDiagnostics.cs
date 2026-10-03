@@ -16,10 +16,21 @@ public sealed partial class JavaScriptExpressionToolingProvider
         var collector = new ScopeCollector();
         collector.Visit(expression);
 
-        var analyzer = new AmbientCapabilityVisitor(collector.NodeScopes, source, revision);
+        var mutations = new IntrinsicRootMutationCollector(collector.NodeScopes);
+        mutations.Visit(expression);
+
+        var analyzer = new AmbientCapabilityVisitor(collector.NodeScopes, source, revision, mutations);
         analyzer.Visit(expression);
         return analyzer.Diagnostics;
     }
+
+    private static JsExpression Unwrap(JsExpression expression) =>
+        expression switch
+        {
+            ParenthesizedExpression parenthesized => Unwrap(parenthesized.Expression),
+            ChainExpression chain => Unwrap(chain.Expression),
+            _ => expression
+        };
 
     private sealed class Scope
     {
@@ -320,10 +331,116 @@ public sealed partial class JavaScriptExpressionToolingProvider
         }
     }
 
+    private sealed class IntrinsicRootMutationCollector(IReadOnlyDictionary<Node, Scope> nodeScopes) : AstVisitor
+    {
+        // This is a conservative syntax-only identity guard, not control-flow analysis. A root write anywhere in
+        // the expression prevents claiming that qualified paths still denote the selected intrinsic roots.
+        public bool MathRootMayBeReplaced { get; private set; }
+        public bool GlobalThisMayBeReplaced { get; private set; }
+
+        public override object? Visit(Node node)
+        {
+            if (node is UpdateExpression update)
+                RecordPotentialReplacement(update.Argument);
+            return base.Visit(node);
+        }
+
+        protected override object? VisitAssignmentExpression(AssignmentExpression node)
+        {
+            RecordPotentialReplacement(node.Left);
+            return base.VisitAssignmentExpression(node);
+        }
+
+        protected override object? VisitUnaryExpression(UnaryExpression node)
+        {
+            if (node.Operator == Operator.Delete)
+                RecordPotentialReplacement(node.Argument);
+            return base.VisitUnaryExpression(node);
+        }
+
+        protected override object? VisitForInStatement(ForInStatement node)
+        {
+            if (node.Left is not VariableDeclaration)
+                RecordPotentialReplacement(node.Left);
+            return base.VisitForInStatement(node);
+        }
+
+        protected override object? VisitForOfStatement(ForOfStatement node)
+        {
+            if (node.Left is not VariableDeclaration)
+                RecordPotentialReplacement(node.Left);
+            return base.VisitForOfStatement(node);
+        }
+
+        private void RecordPotentialReplacement(Node target)
+        {
+            switch (target)
+            {
+                case Identifier identifier:
+                    if (!nodeScopes[identifier].IsBound(identifier.Name))
+                    {
+                        MathRootMayBeReplaced |= identifier.Name == "Math";
+                        GlobalThisMayBeReplaced |= identifier.Name == "globalThis";
+                    }
+                    break;
+                case MemberExpression member when TryGetMutationPath(member, out var path):
+                    if (path == "globalThis.Math" && !nodeScopes[member].IsBound("globalThis"))
+                        MathRootMayBeReplaced = true;
+                    break;
+                case RestElement rest:
+                    RecordPotentialReplacement(rest.Argument);
+                    break;
+                case AssignmentPattern assignment:
+                    RecordPotentialReplacement(assignment.Left);
+                    break;
+                case ArrayPattern array:
+                    foreach (var element in array.Elements)
+                        if (element is not null)
+                            RecordPotentialReplacement(element);
+                    break;
+                case ObjectPattern objectPattern:
+                    foreach (var property in objectPattern.Properties)
+                        if (property is AssignmentProperty assignmentProperty)
+                            RecordPotentialReplacement(assignmentProperty.Value);
+                        else
+                            RecordPotentialReplacement(property);
+                    break;
+            }
+        }
+
+        private static bool TryGetMutationPath(JsExpression expression, out string path)
+        {
+            expression = JavaScriptExpressionToolingProvider.Unwrap(expression);
+            switch (expression)
+            {
+                case Identifier identifier:
+                    path = identifier.Name;
+                    return true;
+                case MemberExpression member when TryGetMutationPath(member.Object, out var prefix):
+                    var propertyName = member.Property switch
+                    {
+                        Identifier property when !member.Computed => property.Name,
+                        Literal { Value: string literal } when member.Computed => literal,
+                        _ => null
+                    };
+                    if (propertyName is not null)
+                    {
+                        path = $"{prefix}.{propertyName}";
+                        return true;
+                    }
+                    break;
+            }
+
+            path = string.Empty;
+            return false;
+        }
+    }
+
     private sealed class AmbientCapabilityVisitor(
         IReadOnlyDictionary<Node, Scope> nodeScopes,
         string source,
-        string revision) : AstVisitor
+        string revision,
+        IntrinsicRootMutationCollector mutations) : AstVisitor
     {
         private readonly HashSet<Node> _safeTypeofOperands = new(ReferenceEqualityComparer.Instance);
 
@@ -363,12 +480,45 @@ public sealed partial class JavaScriptExpressionToolingProvider
         {
             if (!_safeTypeofOperands.Contains(node) &&
                 !node.Computed &&
-                IsUnavailablePath(node, out _))
+                IsUnavailablePath(node, out var capability) &&
+                !ShouldWithholdDiagnostic(capability))
                 AddDiagnostic(node);
 
             Visit(node.Object);
             if (node.Computed)
                 Visit(node.Property);
+            return node;
+        }
+
+        protected override object? VisitLabeledStatement(LabeledStatement node)
+        {
+            Visit(node.Body);
+            return node;
+        }
+
+        protected override object? VisitBreakStatement(BreakStatement node) => node;
+
+        protected override object? VisitContinueStatement(ContinueStatement node) => node;
+
+        protected override object? VisitForInStatement(ForInStatement node)
+        {
+            if (node.Left is VariableDeclaration)
+                Visit(node.Left);
+            else
+                VisitAssignmentTarget(node.Left);
+            Visit(node.Right);
+            Visit(node.Body);
+            return node;
+        }
+
+        protected override object? VisitForOfStatement(ForOfStatement node)
+        {
+            if (node.Left is VariableDeclaration)
+                Visit(node.Left);
+            else
+                VisitAssignmentTarget(node.Left);
+            Visit(node.Right);
+            Visit(node.Body);
             return node;
         }
 
@@ -390,6 +540,10 @@ public sealed partial class JavaScriptExpressionToolingProvider
             }
             return base.VisitAssignmentExpression(node);
         }
+
+        private bool ShouldWithholdDiagnostic(JavaScriptAmbientCapability capability) =>
+            (capability.Path.StartsWith("globalThis.", StringComparison.Ordinal) && mutations.GlobalThisMayBeReplaced) ||
+            (capability.DisplayName == "Math.random" && mutations.MathRootMayBeReplaced);
 
         protected override object? VisitAssignmentPattern(AssignmentPattern node)
         {
@@ -625,9 +779,6 @@ public sealed partial class JavaScriptExpressionToolingProvider
                     return false;
             }
         }
-
-        private static JsExpression Unwrap(JsExpression expression) =>
-            expression is ParenthesizedExpression parenthesized ? Unwrap(parenthesized.Expression) : expression;
 
         private static JavaScriptAmbientCapability? FindCapability(string path) =>
             JavaScriptRuntimeProfile.UnavailableAmbientCapabilities
