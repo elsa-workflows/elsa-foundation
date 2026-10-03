@@ -109,9 +109,11 @@ public sealed class RuntimeMinimalApiBehaviorTests
     }
 
     [Theory]
-    [InlineData("/runtime/workflows/instances")]
-    [InlineData("/runtime/workflows/instances/page")]
-    public async Task Instance_list_health_query_is_not_silently_ignored_when_invalid(string path)
+    [InlineData("/runtime/workflows/instances", "incidentHealth=unknown")]
+    [InlineData("/runtime/workflows/instances/page", "incidentHealth=unknown")]
+    [InlineData("/runtime/workflows/instances", "incidentHealth=active&incidentHealth=blocking")]
+    [InlineData("/runtime/workflows/instances/page", "incidentHealth=active&incidentHealth=blocking")]
+    public async Task Instance_list_health_query_is_not_silently_ignored_when_invalid(string path, string query)
     {
         ListWorkflowInstances? capturedRequest = null;
         await using var host = await StartAsync(
@@ -124,10 +126,10 @@ public sealed class RuntimeMinimalApiBehaviorTests
                         throw new ArgumentException("Invalid incident health filter.", nameof(request.IncidentHealth));
                 })));
 
-        using var response = await host.Client.GetAsync($"{path}?incidentHealth=unknown");
+        using var response = await host.Client.GetAsync($"{path}?{query}");
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
-        Assert.Equal("unknown", capturedRequest?.IncidentHealth);
+        Assert.Equal(query.Contains('&') ? "active,blocking" : "unknown", capturedRequest?.IncidentHealth);
     }
 
     /// <remarks>

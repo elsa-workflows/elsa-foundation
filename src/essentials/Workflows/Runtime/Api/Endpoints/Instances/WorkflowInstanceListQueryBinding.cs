@@ -19,6 +19,6 @@ internal static class WorkflowInstanceListQueryBinding
         if (!query.TryGetValue(nameof(ListWorkflowInstances.IncidentHealth), out var values))
             return request;
 
-        return request with { IncidentHealth = values.Count == 0 ? null : values[0] };
+        return request with { IncidentHealth = values.Count == 0 ? null : values.ToString() };
     }
 }
