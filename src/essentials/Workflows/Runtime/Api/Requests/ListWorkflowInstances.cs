@@ -13,10 +13,15 @@ public sealed record ListWorkflowInstances(
     string? ArtifactId = null,
     DateTimeOffset? From = null,
     DateTimeOffset? To = null,
-    string? RunKind = null,
-    string? IncidentHealth = null)
+    string? RunKind = null)
     : IRequest<WorkflowInstanceListView>
 {
+    /// <summary>
+    /// Filters by current incident health. This stays outside the positional constructor to preserve the original
+    /// constructor and deconstruction signatures; the HTTP list endpoints bind the query value explicitly.
+    /// </summary>
+    public string? IncidentHealth { get; init; }
+
     internal WorkflowInstanceListPagingContract PagingContract { get; private init; } = WorkflowInstanceListPagingContract.Paged;
 
     /// <summary>

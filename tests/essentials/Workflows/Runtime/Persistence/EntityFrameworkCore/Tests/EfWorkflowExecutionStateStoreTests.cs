@@ -281,7 +281,7 @@ public sealed class EfWorkflowExecutionStateStoreTests
             selectedIncidents,
             authorization);
 
-        var request = new ListWorkflowInstances(null, null, null, 1, IncidentHealth: health);
+        var request = new ListWorkflowInstances(null, null, null, 1) { IncidentHealth = health };
         var summaries = new List<WorkflowInstanceSummaryView>();
         string? cursor = null;
         var expectedCount = expectedIds.Split(',').Length;
