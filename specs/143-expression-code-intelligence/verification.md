@@ -1,6 +1,10 @@
 # Expression Code Intelligence Foundation — Verification
 
-Last reconciled: 2026-07-28
+Last reconciled: 2026-10-02 for Program #2310 planning; current-head extension evidence pending
+
+## Program #2310 status
+
+The passing evidence below is historical baseline evidence. It does not prove the current normal host, effective runtime Liquid metadata, runtime-compatible JavaScript help, or the real persisted producer-consumer lifecycle requested by Program #2310. T026-T031 and the corresponding live Studio journey remain open.
 
 ## Passing evidence
 
