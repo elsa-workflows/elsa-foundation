@@ -29,6 +29,8 @@ public class ActivitiesPrimitivesFeature : IShellFeature
 {
     public void ConfigureServices(IServiceCollection services)
     {
+        // The CLR activator binds each activity's scope to the partition of the scope it activates in.
+        services.AddPersistenceCore();
         services.TryAddEnumerable(ServiceDescriptor.Scoped<IActivityActivationStrategy, ClrActivityActivator>());
         // A distinct type, not the shared generic capability record: TryAddEnumerable de-duplicates by
         // implementation type, so two capabilities of one class silently collapse into whichever composed first.
