@@ -69,10 +69,13 @@ foreach ($run in $failed) {
     $incident = @($stored.incidents | Where-Object failureType -eq 'SchedulerWorkPoisoned')
     Assert-IncidentQA ($writer.Count -eq 1 -and $incident.Count -eq 1) 'expected one writer occurrence and one poison incident'
     Assert-IncidentQA ($stored.instance.status -eq 'Running' -and $writer[0].status -eq 'Scheduled') 'intervention lifecycle changed'
+    Assert-IncidentQA ($writer[0].incidentCount -eq 1) 'activity summary lost its historical incident count'
     Assert-IncidentQA ($incident[0].status -eq 'Blocking' -and $incident[0].resolutionOutcome.actionKind -eq 'WaitForIntervention') 'blocking intervention policy changed'
     Assert-IncidentQA ($incident[0].activityExecutionId -eq $writer[0].activityExecutionId -and $incident[0].executableNodeId -eq 'writer') 'incident lost its exact activity/node association'
     Assert-IncidentQA ($incident[0].metadata.'runtime.inputKey' -eq 'text') 'incident lost the failing input key'
     $detail = Invoke-RestMethod "$($ctx.BaseUrl)/runtime/workflows/instances/$($stored.instance.workflowExecutionId)/activity-executions/$($writer[0].activityExecutionId)" -WebSession $ctx.Session
+    Assert-IncidentQA (@($detail.incidents).Count -eq 1 -and $detail.incidents[0].incidentId -eq $incident[0].incidentId) 'exact activity inspection lost its incident association'
+    Assert-IncidentQA ($null -eq $detail.attempt) 'pre-input failure fabricated an activity attempt'
     $failure = @($detail.valueSnapshots | Where-Object { $_.inputKey -eq 'text' -and $_.failure.code -eq 'ExpressionEvaluationFailed' })
     Assert-IncidentQA ($failure.Count -eq 1 -and $failure[0].failure.incidentId -eq $incident[0].incidentId) 'failed evaluation evidence did not reference its incident'
     Assert-IncidentQA ($failure[0].captureState -eq 'captureFailed') 'failed evaluation was presented as a successful or absent capture'
