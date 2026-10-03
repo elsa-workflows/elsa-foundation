@@ -17,3 +17,9 @@ Graph action resolves the selected exact execution/incident, opens incident deta
 ## Presentation
 
 Use current semantic tokens and existing shared components. Label current blocking health as Needs intervention while retaining Running/Scheduled status. Active nonblocking evidence uses a less urgent cue; resolved-only historical evidence stays discoverable without current alarm. Lead error summary with activity/input/root cause, retain expandable technical details/copy. Accepted-but-faulted test dispatch is warning feedback with an incident review action.
+
+## Pinned BPMN topology
+
+The executable node view adds optional `bpmnStructure` for `elsa.bpmn.structure` schema `1.0.0`. Its `elements` project only `elementId`, `elementType`, optional `childNodeId` and `name`; `sequenceFlows` project only `flowId`, `sourceRef`, `targetRef`, optional `name`, `conditionOutcome` and `isDefault`. This follows the existing compact routing topology boundary: no authored payload, literals, event properties, secrets, or geometry are exposed. Non-BPMN and unsupported schemas return null. Malformed entries are omitted safely. The existing authenticated `workflow-runtime.read` executable inspection gate applies.
+
+Studio preserves event-only topology and remaps each recognized compiled child binding through the exact executable graph identity map used for child slots. Repeated authored IDs retain distinct executable placements. An unknown binding stays unassociated; an older host that omits topology cannot provide a complete BPMN canvas. No topology or incident associations are invented. Geometry and frozen activity labels continue to use the existing sidecar/presentation evidence.

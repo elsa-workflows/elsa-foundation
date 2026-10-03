@@ -2,18 +2,16 @@
 
 Program [#2334](https://github.com/elsa-workflows/elsa-foundation/issues/2334), feature [#2336](https://github.com/elsa-workflows/elsa-foundation/issues/2336), canonical [spec192](../../../specs/192-incident-troubleshooting/spec.md).
 
-Status: implementation and automated/HTTP qualification passed at the references below. Final current-source browser acceptance, merge and resulting-main qualification remain pending. No completed delivery is claimed.
+Status: active integration and final browser acceptance. New browser-found BPMN/rendering corrections supersede earlier qualified heads; no merged delivery is claimed. T021 and T023 remain open.
 
 ## Latest qualification
 
-| Surface | Qualified source | Evidence | Remaining gate |
+| Surface | Current candidate | Evidence | Remaining gate |
 |---|---|---|---|
-| Foundation | Product `6a00584e865c868b228dd766c582d5ca554da6ec`; qualified PR head `397fb28a7147b60f535774ab58ae2764a90470b2` | Current backend combined regressions 129/129, normal-host HTTP and retained control proof; required CI/architecture/core-only/maps and exact-head review passed | Evidence-only update must qualify on its own PR head; merge and resulting-main checks |
-| Studio | `733dc511230480137f6da06a32e02a67d1b1b499` | Root affected suites 208/208; affected/module 162/162, typecheck/lint/bundle, normal Release Web build and all eight PR checks passed; exact review has no findings | Final browser matrix/screenshots; merge and resulting-main checks |
+| Foundation | Product `25327dd148bd1ef92898cc01ba84c618fc60fe89` | Compact BPMN projector; inspector 34/34 and full API 139/139; normal Workbench build; actual persisted BPMN HTTP 3 elements/2 flows/exact child incident binding; current causal/paging REST and retained controls pass; rebuilt architecture635/635 and maps check pass | Exact new PR-head review/CI, merge and resulting-main checks |
+| Studio | `cf8409a6` with the phone fixes | Full Workflows 1508/1508, typecheck/scoped lint, module budget and Web assets build; normal Release Web build; real 390px/700px incident panel fit | Browser found BPMN dimensions lost after selection/rerender; correction, final browser matrix, exact new PR-head gates and delivery remain pending |
 
-[Studio qualification record](studio-733dc5-qualification.json) contains exact check/review references. [Final regression proof](studio-733dc5-verification.txt) preserves the valid repeated-activation predecessor failure and restored passing suites; the earlier unmounted-button test is excluded. [Current Studio build attestation](studio-733dc5-build-attestation.json) identifies the normal host assemblies and assets. These qualified references are verification checkpoints, not a claim that either PR has merged.
-
-Chrome automation is held by an open extension UI. The tool requires the user to dismiss it and reply continue before final manual acceptance can resume. Screenshots 14–21 remain explicitly predecessor evidence. No current-source visual acceptance or real viewport-panning proof is inferred from tests or retained fixtures.
+Earlier qualification at Foundation `bdba80b65` (47 check results: 46 success, main-only alert skipped; exact Copilot review 5401235344 with no findings) and Studio `733dc511` (eight successful checks, exact Copilot review 5401161344 with no findings) remains historical evidence. It does not qualify the new product delta. Chrome browser control resumed successfully; there is no current extension handoff gate.
 
 ## Evidence recording follow-through
 
@@ -283,3 +281,17 @@ The bounded independent final733 focus audit found no material issue, verified t
 
 
 Exact733 Copilot review5401161344 at14:09:37 UTC reports **no findings**, with final manual browser acceptance/resulting-main qualification explicitly outstanding. All automated733 CI checks passed. No current code/review follow-up remains. Final manual browser acceptance still requires the user Chrome extension dismissal/continue reply; neither PR has merged.
+
+## Resumed browser integration checkpoint — 2026-10-03
+
+Actual browser tests at Studio733/backend6a confirmed the list health filters, root failed input and consistent incident counts, keyboard Enter/Space cue activation, expandable/copyable full error, repeated viewport framing, collapsed/maximized panel recovery, nested Sequence descent, exact repeated occurrence, nonblocking/resolved/unassociated/healthy presentation, and a normal designer test dispatch (`1440MPQ7x4K`, AcceptedButFaulted, direct `?tab=issues`). Synthetic retry and resolved controls remain persisted presentation fixtures, not engine transition evidence. CUA's read-only DOM scope could not verify native focus ownership; compiled focus integration remains the focus evidence. The actual viewer selection and viewport changes were observed separately.
+
+The same QA found two material gaps. At 390px/700px, navigation and implicit grid width obscured the incident panel; local Studio commits `0981cd5e`/`b308ade0` repaired the CSS cascade and minimum grid width. At 390px on rebuilt `cf8409a6`, navigation height is 53.8px and the run workbench width is 390px; at 700px, the 400px incident overlay fits within x300–700. [Phone evidence](screenshots/36-final-cf8409-phone-issues-dim.jpg) shows the root cause and actions clearly. Exact predecessor CSS failures and restored Web116/116 + responsive CSS1/1 prove the change; the latest full Workflows1508/1508 is recorded above.
+
+A real published/executed BPMN process (`1440dj72dQT`, artifact `artifact-35aa72a04ed2`) initially had a blank canvas because the executable API omitted its topology. The additive compact projection and Studio reconstruction are now committed. Two backend tests failed against exact `bdba80b65` before implementation, then inspector34/34 passed. Three client wire-projection tests failed against exact `0981cd5e`, then the full client suite passed. The new `buildInstanceCanvas` test checks the actual wire-to-graph-to-overlay incident and click target, plus healthy events. Unknown compiled bindings are deliberately not guessed. An independent source review found no material projection/privacy/identity or responsive cascade defect.
+
+Ordinary rebuilt Workbench `25327dd14` (96 warnings, zero errors) and Studio `cf8409a6` (zero warnings/errors) were restarted only after verifying owned PID/assembly paths. Retained isolated SQLite was preserved. The real BPMN HTTP inspection returns three elements, two flows, and the exact task binding matching incident activity `1440djCQ5N9`; no raw properties/payload are exposed. Current HTTP causal/paging regression and five retained control cases pass. The designer test-run artifact is transient and becomes unavailable after the normal backend restart; Studio truthfully displays the graph/source unavailable state for that test run. The published BPMN artifact remains retrievable and is used for final persistent-graph acceptance.
+
+Browser interaction then exposed a second BPMN gap: rebuilt controlled node objects lose measured dimensions and React Flow makes their DOM nodes `visibility:hidden` after navigation/rerenders. [Rendering failure](screenshots/35-final-cf8409-bpmn-desktop-dim.jpg) records this separately from topology availability. A bounded Studio correction is active; no complete BPMN or final browser acceptance is claimed. Screenshots22–32 are pre-correction checkpoints (25/26/32 responsive failures,31 missing topology,29 unsettled theme transition); screenshots34/35 record the still-incomplete BPMN rendering checkpoint. The uncropped phone capture33 was unusable and is excluded; screenshot36 is the readable replacement.
+
+The first architecture invocation used an older existing test DLL (`--no-build`) and failed the Secrets source inventory assertion; it is not counted as a gate. Rebuilding the architecture test project against the current tree reconciled that stale binary and passed **635/635**, `/tmp/incident-final-25327-architecture-rebuilt.log`. [Portable outcomes](bpmn-responsive-checkpoint-verification.txt), [backend attestation](backend-25327-build-attestation.json), and [Studio checkpoint attestation](studio-cf8409-build-attestation.json) retain the exact scoped evidence. All127 backend assembly and70 Studio assembly/asset hashes were rechecked with zero mismatches after qualification.
