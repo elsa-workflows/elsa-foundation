@@ -9781,6 +9781,11 @@
         },
         {
           "type": "internal",
+          "id": "Elsa.Workflows.Design.Validations.Core",
+          "path": "src/essentials/Workflows/Design/Validations/Core/Elsa.Workflows.Design.Validations.Core.csproj"
+        },
+        {
+          "type": "internal",
           "id": "Elsa.Workflows.Runtime.Core",
           "path": "src/essentials/Workflows/Runtime/Core/Elsa.Workflows.Runtime.Core.csproj"
         },
@@ -10246,6 +10251,11 @@
           "type": "internal",
           "id": "Elsa.Serialization.SystemText",
           "path": "src/essentials/Serialization/SystemText/Elsa.Serialization.SystemText.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Workflows.Design.Validations",
+          "path": "src/essentials/Workflows/Design/Validations/Elsa.Workflows.Design.Validations.csproj"
         },
         {
           "type": "internal",
