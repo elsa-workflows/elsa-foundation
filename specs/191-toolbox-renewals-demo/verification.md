@@ -1,0 +1,11 @@
+# Toolbox demo verification
+
+The 3 October 2026 actual Studio/cockpit browser journey passed on Foundation.Host, with no Workbench runtime. Studio created and executed the original renewal workflow, explicitly upgraded one node from 1.0.0 to 1.1.0, executed numeric proposed premium 1250 and executed the untouched 1.0.0 compatibility workflow afterwards.
+
+Cockpit publication used real packages and Nuplane state. Validate refused the pending migration; applying it and reloading retained Host A PID68814 / Host B PID70752 and SHA-256 `dbae4d813e1fc8269a23b179ed34f37ebc26d546ca0054b90f7bc60f59cdc81d`. The premium feature stayed dormant until both live readers supported schema 2.0.0. Original row IDs, policy references and creation timestamps remained intact, with null premiums.
+
+The full evidence report and captured screenshots live with the external presentation/cockpit assets under `/Users/sipke/Documents/Codex/2026-10-03/modules-without-restart/output/`. `browser-journey.json` records actual workflow/run/node IDs and state snapshots; `schema-membership-dormant.txt` records the real waiting reader. The static presentation fallback is explicitly recorded evidence.
+
+Targeted CLI tests:77 passed. Host sharing architecture guards:32 passed. Bootstrap boundary tests:4 passed. Studio catalog-refresh tests:11 passed; typecheck, frontend builds and .NET build passed. Actual NuGet composition contains73 source/102 external packages. The final cockpit-driven API rehearsal ae3487af182aeed6 passed22/22 checks with diagnostics removed in2m35s; A PID88769 and B PID90280 stayed unchanged. Its report is output/evidence/api-rehearsal-final-2026-10-03.json in the external assets.
+
+Limits: SQLite was rehearsed, not PostgreSQL. Demo observer routes are anonymous and synthetic-data-only on loopback, while Studio/design/runtime use Foundation identity. Automated browser Fullscreen API requests were declined; native browser fullscreen is the documented fallback. Studio browser proof used transient test runs; the API rehearsal covers published artifacts. Prepared artifacts retain dirty-tree build provenance. Final repeat/reset, maps and delivery commits are recorded in the external evidence report.
