@@ -4,7 +4,7 @@
 
 **Created**: 2026-10-02
 
-**Status**: Implemented — delivery [#2326](https://github.com/elsa-workflows/elsa-foundation/issues/2326).
+**Status**: Implemented — [PR #2370](https://github.com/elsa-workflows/elsa-foundation/pull/2370) merged as `edffd0a4ea18a17c4faa2c3f8ce073f48bc09af6`; resulting-main publication and closeout evidence are recorded on [#2326](https://github.com/elsa-workflows/elsa-foundation/issues/2326).
 
 **Input**: Program [#1959](https://github.com/elsa-workflows/elsa-foundation/issues/1959), epic [#1961](https://github.com/elsa-workflows/elsa-foundation/issues/1961), whole delivery task [#2326](https://github.com/elsa-workflows/elsa-foundation/issues/2326). Publish a reviewed Worker starting point and prove that the developer-generated candidate drives the real worker's feature selection and settings. Completed prerequisite [#2308](https://github.com/elsa-workflows/elsa-foundation/issues/2308) supplies the production bearer normalization boundary.
 
