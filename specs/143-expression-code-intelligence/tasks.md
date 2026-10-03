@@ -2,7 +2,7 @@
 
 Baseline implementation tasks are complete. File names below reflect the landed design rather than the provisional names in the initial plan.
 
-Tasks T001-T025 describe the implemented baseline. Program #2310 adds T026-T031; those tasks remain incomplete until current-head producer-consumer and normal-host evidence passes.
+Tasks T001-T025 describe the implemented baseline. Program #2310 adds T026-T031. T026-T027 have exact-head producer-consumer and normal-host evidence. T028 is implemented with reviewed local conformance evidence; its committed-head CI/review gate is pending. T029-T031 remain open.
 
 ## Contracts and composition
 
@@ -46,12 +46,12 @@ Tasks T001-T025 describe the implemented baseline. Program #2310 adds T026-T031;
 
 ## Program #2310 continuation: User Story 4 — Real composed APIs
 
-- [ ] T026 [US4] Add a real Workbench-process persisted-draft authoring integration test under `tests/essentials/Workbench/Tests/`, reusing `WorkbenchProcess`, the stock authenticated shell, and its isolated SQLite content root; discover actual activity version/output metadata through the authoring API, then cover capability discovery, context, completion, hover and validation for JavaScript and Liquid.
-- [ ] T027 [US4] Add architecture-only independent-provider composition and missing-provider capability-advertisement cases under `tests/Elsa/Architecture/` after T026 establishes the real-host path; unavailable, unauthorized, incompatible, stale and cancellation behavior stays in the owning provider/API suites.
+- [x] T026 [US4] Add a real Workbench-process persisted-draft authoring integration test under `tests/essentials/Workbench/Tests/`, reusing `WorkbenchProcess`, the stock authenticated shell, and its isolated SQLite content root; discover actual activity version/output metadata through the authoring API, then cover capability discovery, context, completion, hover and validation for JavaScript and Liquid.
+- [x] T027 [US4] Add architecture-only independent-provider composition and missing-provider capability-advertisement cases under `tests/Elsa/Architecture/` after T026 establishes the real-host path; unavailable, unauthorized, incompatible, stale and cancellation behavior stays in the owning provider/API suites.
 
 ## Program #2310 continuation: User Story 2 — Runtime-owned language assistance
 
-- [ ] T028 [US2] Align Foundation JavaScript tooling globals, signatures and diagnostics with the runtime expression profile in `src/essentials/Expressions/JavaScript/` and provider contract tests after T026 passes; Studio spec 094 T030 owns local parser grammar.
+- [x] T028 [US2] Align Foundation JavaScript tooling globals, signatures and diagnostics with the runtime expression profile in `src/essentials/Expressions/JavaScript/` and provider contract tests after T026 passes; Studio spec 094 T030 owns local parser grammar.
 - [ ] T029 [P] [US2] Extract the effective binding-pure Liquid filter/tag profile and consume it from both runtime evaluation and `LiquidExpressionToolingProvider` in `src/essentials/Expressions/Liquid/` with parity tests after T026 passes.
 - [ ] T030 [US2] Add Liquid cursor-context completion plus known-shape signature/diagnostic conformance in `src/essentials/Expressions/Liquid/Services/LiquidExpressionToolingProvider.cs` and provider contract tests after T029.
 - [ ] T031 [US2] Record exact-head focused, affected-suite, architecture, maps and real producer-consumer evidence in `specs/143-expression-code-intelligence/verification.md`.
@@ -60,5 +60,5 @@ Tasks T001-T025 describe the implemented baseline. Program #2310 adds T026-T031;
 
 - T026 is the first executable implementation leaf and owns the end-to-end real-host cases.
 - T027 follows T026 and remains architecture-only so it does not duplicate the real-host harness.
-- T028-T029 remain Not Ready until T026 passes; T030 depends on T029.
+- T026-T027 pass at Foundation `f81be4be` with coordinated Studio `c9479fba` proof; see `verification.md`. T028-T029 are unblocked; T030 depends on T029.
 - T031 closes the Foundation contribution only after T027-T030 and the coordinated Studio consumer checks pass.

@@ -99,28 +99,26 @@ public sealed partial class JavaScriptExpressionToolingProvider : IExpressionToo
         var variables = context.RootSymbols
             .Where(symbol => symbol.Kind == ExpressionSymbolKind.Variable)
             .ToArray();
-        var projected = context.RootSymbols
+        var projected = JavaScriptRuntimeProfile.SupportedStandardGlobals.ToList();
+        projected.AddRange(context.RootSymbols
             .Where(symbol => symbol.Kind is ExpressionSymbolKind.Function or ExpressionSymbolKind.Namespace or ExpressionSymbolKind.Extension)
-            .ToList();
-        if (values.Length > 0)
-        {
-            projected.Add(new(
-                "javascript:args",
-                "args",
-                ExpressionSymbolKind.Namespace,
-                new("Readonly arguments", ExpressionValueKind.Object, false, Members: values
-                    .Select(symbol => new ExpressionValueMember(
-                        symbol.Name,
-                        symbol.ValueShape ?? new(),
-                        symbol.Documentation))
-                    .ToArray()),
-                "Immutable expression parameters."));
-        }
+            );
+        projected.Add(new(
+            "javascript:args",
+            JavaScriptRuntimeProfile.ArgumentsName,
+            ExpressionSymbolKind.Namespace,
+            new("Readonly arguments", ExpressionValueKind.Object, false, Members: values
+                .Select(symbol => new ExpressionValueMember(
+                    symbol.Name,
+                    symbol.ValueShape ?? new(),
+                    symbol.Documentation))
+                .ToArray()),
+            JavaScriptRuntimeProfile.ArgumentsDocumentation));
         if (variables.Length > 0)
         {
             projected.Add(new(
                 "javascript:variables",
-                "variables",
+                JavaScriptRuntimeProfile.VariablesName,
                 ExpressionSymbolKind.Namespace,
                 new("Readonly variables", ExpressionValueKind.Object, false, Members: variables
                     .Select(symbol => new ExpressionValueMember(
@@ -128,33 +126,26 @@ public sealed partial class JavaScriptExpressionToolingProvider : IExpressionToo
                         symbol.ValueShape ?? new(),
                         symbol.Documentation))
                     .ToArray()),
-                "Immutable visible workflow variables."));
-            projected.Add(new(
-                "javascript:getVariable",
-                "getVariable",
-                ExpressionSymbolKind.Function,
-                Documentation: "Reads a visible workflow variable by name.",
-                Signatures:
-                [
-                    new("getVariable(name)", ["name"], new("Any"))
-                ]));
-            projected.AddRange(variables
-                .Where(symbol => IsIdentifier(symbol.Name))
-                .Select(symbol => new ExpressionSymbol(
-                    $"javascript:getter:{symbol.SymbolId}",
-                    $"get{char.ToUpperInvariant(symbol.Name[0])}{symbol.Name[1..]}",
+                JavaScriptRuntimeProfile.VariablesDocumentation));
+            projected.Add(JavaScriptRuntimeProfile.GetVariableFunction);
+            var getterNames = new HashSet<string>(JavaScriptRuntimeProfile.ReservedVariableGetterNames, StringComparer.Ordinal);
+            foreach (var variable in variables.OrderBy(symbol => symbol.Name, StringComparer.Ordinal))
+            {
+                var getterName = JavaScriptRuntimeProfile.GetGeneratedVariableGetterName(variable.Name);
+                if (getterName is null || !getterNames.Add(getterName))
+                    continue;
+
+                projected.Add(new(
+                    $"javascript:getter:{variable.SymbolId}",
+                    getterName,
                     ExpressionSymbolKind.Function,
-                    symbol.ValueShape,
-                    $"Reads the '{symbol.Name}' workflow variable.",
-                    [new($"get{char.ToUpperInvariant(symbol.Name[0])}{symbol.Name[1..]}()", ReturnShape: symbol.ValueShape)])));
+                    variable.ValueShape,
+                    $"Reads the '{variable.Name}' workflow variable.",
+                    [new($"{getterName}()", ReturnShape: variable.ValueShape)]));
+            }
         }
         return context with { RootSymbols = projected };
     }
-
-    private static bool IsIdentifier(string value) =>
-        value.Length > 0 &&
-        (char.IsLetter(value[0]) || value[0] is '_' or '$') &&
-        value.Skip(1).All(character => char.IsLetterOrDigit(character) || character is '_' or '$');
 
     private static (string Source, ExpressionToolingPosition Position) NormalizeEmptyAccessorCalls(
         string source,
@@ -180,8 +171,8 @@ public sealed partial class JavaScriptExpressionToolingProvider : IExpressionToo
             // Runtime evaluates the authored source as a parenthesized strict-mode expression.
             // Parse in the same grammar so the consequential-operation gate cannot approve a
             // statement body that Jint will reject (or reject a valid anonymous expression).
-            new Parser().ParseExpression(source, strict: true);
-            return [];
+            var expression = new Parser().ParseExpression(source, strict: true);
+            return FindAmbientCapabilityDiagnostics(expression, source, revision);
         }
         catch (ParseErrorException exception)
         {

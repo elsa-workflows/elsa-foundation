@@ -50,7 +50,7 @@ another caller or emitted in telemetry.
 ```json
 {
   "result": {
-    "state": "success",
+    "state": 0,
     "contractVersion": { "major": 1, "minor": 0 },
     "documentRevision": "evaluated-revision",
     "contextRevision": "evaluated-context-revision",
@@ -60,9 +60,14 @@ another caller or emitted in telemetry.
 ```
 
 The DTOs for descriptors, context, symbols/completions, hover, and validation all wrap an
-`ExpressionToolingOutcome<T>` in the top-level `result` property. The serializer emits
-camelCase enum values: `success`, `supportedEmpty`, `unavailable`, `unauthorized`,
-`incompatible`, `stale`, or `canceled`. Non-success outcomes contain only safe
+`ExpressionToolingOutcome<T>` in the top-level `result` property. The normal Foundation
+v1 host emits enum ordinals: `success` = 0, `supportedEmpty` = 1, `unavailable` = 2,
+`unauthorized` = 3, `incompatible` = 4, `stale` = 5, and `canceled` = 6. Studio also
+accepts these named camelCase equivalents from hosts configured for string enums.
+Symbol kinds, value kinds and diagnostic severity likewise use their explicit v1
+ordinal mappings, documented in the coordinated Studio OpenAPI contract. This is
+documentation of the existing wire format, not a contract-version change.
+Non-success outcomes contain only safe
 state/code/version/revision metadata; they cannot contain symbols, source, live values, or a
 partial context.
 

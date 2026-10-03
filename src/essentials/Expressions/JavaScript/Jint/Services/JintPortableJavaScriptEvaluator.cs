@@ -1,5 +1,4 @@
 using System.Text.Json;
-using System.Text.RegularExpressions;
 using Elsa.Expressions.Core.Models;
 using Elsa.Expressions.JavaScript.Core.Contracts;
 using Elsa.Expressions.JavaScript.Jint.Options;
@@ -16,15 +15,14 @@ namespace Elsa.Expressions.JavaScript.Jint.Services;
 /// </summary>
 internal sealed class JintPortableJavaScriptEvaluator(IOptions<FeatureOptions> featureOptions) : IPortableJavaScriptEvaluator
 {
+    private const string EvaluationPrefix = "\"use strict\"; (";
+
     /// <summary>
     /// Ambient capabilities that <see cref="IsolatedJintEngine.DisableAmbientCapabilities"/> strips from the
     /// deterministic binding sandbox. Referencing any of them (e.g. <c>new Date()</c>, <c>Math.random()</c>)
     /// makes the engine throw an opaque native <see cref="JavaScriptException"/> such as
     /// "Date is not a constructor". Naming them lets the evaluator turn that into an actionable authoring error.
     /// </summary>
-    private static readonly string[] StrippedAmbientCapabilities =
-        ["Date", "Temporal", "Intl", "Math.random", "crypto", "performance", "process"];
-
     public ValueTask<JsonElement> EvaluateAsync(ExpressionEvaluationRequest request)
     {
         ArgumentNullException.ThrowIfNull(request);
@@ -44,7 +42,7 @@ internal sealed class JintPortableJavaScriptEvaluator(IOptions<FeatureOptions> f
         JsValue result;
         try
         {
-            result = engine.Evaluate($"\"use strict\"; ({definition.Source})");
+            result = engine.Evaluate($"{EvaluationPrefix}{definition.Source})");
         }
         catch (JavaScriptException exception)
         {
@@ -52,13 +50,12 @@ internal sealed class JintPortableJavaScriptEvaluator(IOptions<FeatureOptions> f
             // work item with no indication of why. When the expression reached for an ambient capability the
             // deterministic sandbox deliberately withholds, rethrow with an actionable message naming it. The
             // original error is preserved as the inner exception; the failure is not swallowed.
-            var reached = ReferencedStrippedCapabilities(definition.Source);
-            if (reached.Length == 0)
+            if (!StrippedAmbientCapabilityExceptionClassifier.TryClassify(definition.Source, exception, EvaluationPrefix.Length, out var reached))
                 throw;
 
             throw new JavaScriptBindingEvaluationException(
                 $"JavaScript binding expression '{definition.Source}' referenced ambient capability " +
-                $"[{string.Join(", ", reached)}], which is unavailable in the deterministic binding sandbox " +
+                $"[{reached}], which is unavailable in the deterministic binding sandbox " +
                 $"(profile '{ExpressionCapabilityProfiles.BindingPureV1}'). Time, randomness, locale, and " +
                 "environment data must be supplied as workflow inputs or variables instead of read from ambient " +
                 $"JavaScript globals. Original evaluator error: {exception.Message}",
@@ -71,15 +68,6 @@ internal sealed class JintPortableJavaScriptEvaluator(IOptions<FeatureOptions> f
         return ValueTask.FromResult(JintResultMaterializer.Materialize(engine, result, featureOptions.Value));
     }
 
-    private static string[] ReferencedStrippedCapabilities(string source) =>
-        StrippedAmbientCapabilities
-            .Where(capability => IdentifierReference(capability).IsMatch(source))
-            .ToArray();
-
-    // Matches the capability as a whole JS member/identifier token (so "Date" matches `new Date()` and
-    // `Math.random` matches `Math.random()` but neither matches a substring like "myDate" or "updated").
-    private static Regex IdentifierReference(string capability) =>
-        new($@"(?<![\w$.]){Regex.Escape(capability)}(?![\w$])", RegexOptions.CultureInvariant);
 }
 
 /// <summary>

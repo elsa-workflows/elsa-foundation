@@ -170,6 +170,50 @@ public sealed class ExpressionToolingHostEvidenceTests
             Assert.Equal(0, validationResult.GetProperty("state").GetInt32());
             AssertRevisionEnvelope(validationResult, contextRevision);
             Assert.NotEmpty(validationResult.GetProperty("payload").GetProperty("diagnostics").EnumerateArray());
+
+            if (syntax != "JavaScript") continue;
+
+            // The composed provider must describe the same deterministic runtime surface,
+            // through real advertised routes and both cookie and rotating-bearer paths.
+            const string mathPrefix = "Math.";
+            using var mathResponse = await PostToolingAsync(toolingLinks["expression-tooling-completions"],
+                SourceBody(draftId, syntax, textInput.ReferenceKey, mathPrefix, contextRevision, mathPrefix.Length));
+            Assert.Equal(HttpStatusCode.OK, mathResponse.StatusCode);
+            using var mathDocument = JsonDocument.Parse(await mathResponse.Content.ReadAsStringAsync());
+            var mathResult = mathDocument.RootElement.GetProperty("result");
+            Assert.Equal(0, mathResult.GetProperty("state").GetInt32());
+            AssertRevisionEnvelope(mathResult, contextRevision);
+            var mathItems = mathResult.GetProperty("payload").GetProperty("items").EnumerateArray().ToArray();
+            Assert.Contains(mathItems, item => item.GetProperty("label").GetString() == "abs");
+            Assert.DoesNotContain(mathItems, item => item.GetProperty("label").GetString() == "random");
+
+            foreach (var (source, diagnosticCode) in new[]
+            {
+                ("(value: number) => value", "JavaScript/Syntax"),
+                ("<span />", "JavaScript/Syntax"),
+                ("const value = 1; value", "JavaScript/Syntax"),
+                ("Math.random()", "JavaScript/AmbientCapability"),
+                ("(() => { return JSON.stringify({ total: Math.abs(-2) }); })()", (string?)null)
+            })
+            {
+                using var profileResponse = await PostToolingAsync(toolingLinks["expression-tooling-validate"],
+                    SourceBody(draftId, syntax, textInput.ReferenceKey, source, contextRevision));
+                Assert.Equal(HttpStatusCode.OK, profileResponse.StatusCode);
+                using var profileDocument = JsonDocument.Parse(await profileResponse.Content.ReadAsStringAsync());
+                var profileResult = profileDocument.RootElement.GetProperty("result");
+                AssertRevisionEnvelope(profileResult, contextRevision);
+                var diagnostics = profileResult.GetProperty("payload").GetProperty("diagnostics").EnumerateArray().ToArray();
+                if (diagnosticCode is null)
+                {
+                    Assert.Equal(1, profileResult.GetProperty("state").GetInt32());
+                    Assert.Empty(diagnostics);
+                }
+                else
+                {
+                    Assert.Equal(0, profileResult.GetProperty("state").GetInt32());
+                    Assert.Contains(diagnostics, diagnostic => diagnostic.GetProperty("code").GetString() == diagnosticCode);
+                }
+            }
         }
     }
 

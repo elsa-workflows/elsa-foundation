@@ -48,6 +48,52 @@ public sealed class ExplicitExpressionParametersTests
     }
 
     [Fact]
+    public async Task Empty_args_and_selected_standard_globals_match_the_authoring_profile()
+    {
+        await using var provider = BuildProvider();
+        await using var scope = provider.CreateAsyncScope();
+        var evaluator = scope.ServiceProvider.GetRequiredService<IPortableExpressionEvaluator>();
+
+        var result = await evaluator.EvaluateAsync(Request(
+            "[typeof args, Object.isFrozen(args), Object.keys(args).length, Math.abs(-4), JSON.stringify({ value: 3 }), typeof Math.random, typeof globalThis.Math.random, typeof window, typeof document, typeof require, typeof Buffer, typeof globalThis.window, typeof globalThis.document, typeof globalThis.require, typeof globalThis.Buffer].join(':')",
+            new Dictionary<string, JsonElement>()));
+
+        Assert.Equal("object:true:0:4:{\"value\":3}:undefined:undefined:undefined:undefined:undefined:undefined:undefined:undefined:undefined:undefined", result.GetString());
+    }
+
+    [Fact]
+    public async Task A_variable_named_variable_does_not_replace_or_duplicate_the_getVariable_helper()
+    {
+        await using var provider = BuildProvider();
+        await using var scope = provider.CreateAsyncScope();
+        var evaluator = scope.ServiceProvider.GetRequiredService<IPortableExpressionEvaluator>();
+        var request = Request(
+            "getVariable('variable') + ':' + typeof getVariable",
+            new Dictionary<string, JsonElement>(),
+            new Dictionary<string, JsonElement> { ["variable"] = JsonSerializer.SerializeToElement(17) });
+
+        var result = await evaluator.EvaluateAsync(request);
+
+        Assert.Equal("17:function", result.GetString());
+    }
+
+    [Fact]
+    public async Task Digit_leading_variable_keys_keep_their_runtime_generated_getter()
+    {
+        await using var provider = BuildProvider();
+        await using var scope = provider.CreateAsyncScope();
+        var evaluator = scope.ServiceProvider.GetRequiredService<IPortableExpressionEvaluator>();
+        var request = Request(
+            "get123()",
+            new Dictionary<string, JsonElement>(),
+            new Dictionary<string, JsonElement> { ["123"] = JsonSerializer.SerializeToElement(23) });
+
+        var result = await evaluator.EvaluateAsync(request);
+
+        Assert.Equal(23, result.GetInt32());
+    }
+
+    [Fact]
     public async Task Returns_structured_results_as_json()
     {
         await using var provider = BuildProvider();
@@ -347,7 +393,8 @@ public sealed class ExplicitExpressionParametersTests
 
     private static ExpressionEvaluationRequest Request(
         string source,
-        IReadOnlyDictionary<string, JsonElement> values)
+        IReadOnlyDictionary<string, JsonElement> values,
+        IReadOnlyDictionary<string, JsonElement>? variables = null)
     {
         var bindings = values.ToDictionary(
             item => item.Key,
@@ -360,6 +407,6 @@ public sealed class ExplicitExpressionParametersTests
             bindings,
             JsonSerializer.SerializeToElement(new { }),
             ExpressionCapabilityProfiles.BindingPureV1);
-        return new ExpressionEvaluationRequest(definition, values, CancellationToken.None);
+        return new ExpressionEvaluationRequest(definition, values, variables, CancellationToken.None);
     }
 }

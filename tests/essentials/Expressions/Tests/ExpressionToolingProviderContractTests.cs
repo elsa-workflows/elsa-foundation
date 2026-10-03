@@ -1,5 +1,6 @@
 using Elsa.Expressions.Core.Contracts;
 using Elsa.Expressions.Core.Models;
+using Elsa.Expressions.JavaScript.Core.Models;
 using Elsa.Expressions.JavaScript.Services;
 using Elsa.Expressions.Liquid.Services;
 using Elsa.Expressions.Services;
@@ -104,6 +105,113 @@ public sealed class ExpressionToolingProviderContractTests
         Assert.Equal("currentValue", Assert.Single(member.Payload!.Items).Label);
         Assert.Equal("name", Assert.Single(getterMember.Payload!.Items).Label);
         Assert.Contains("Customer name.", getterHover.Payload!.Contents, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task JavaScript_exposes_frozen_empty_args_and_selected_standard_global_metadata()
+    {
+        var provider = new JavaScriptExpressionToolingProvider();
+        var scope = CreateScope("JavaScript", []);
+
+        var root = await provider.GetCompletionsAsync(new(scope, string.Empty, new(0, 0)), CancellationToken.None);
+        var pow = await provider.GetCompletionsAsync(new(scope, "Math.po", new(0, 7)), CancellationToken.None);
+        var parse = await provider.GetCompletionsAsync(new(scope, "JSON.pa", new(0, 8)), CancellationToken.None);
+        var stringify = await provider.GetCompletionsAsync(new(scope, "JSON.str", new(0, 8)), CancellationToken.None);
+
+        Assert.Contains(root.Payload!.Items, item => item.Label == "args");
+        Assert.Contains(root.Payload.Items, item => item.Label == "Math");
+        Assert.Contains(root.Payload.Items, item => item.Label == "JSON");
+        Assert.Equal("pow(base, exponent): Number", Assert.Single(pow.Payload!.Items).Detail);
+        Assert.Equal("parse(text, reviver?): Any", Assert.Single(parse.Payload!.Items).Detail);
+        Assert.Equal("stringify(value, replacer?, space?): String?", Assert.Single(stringify.Payload!.Items).Detail);
+
+        var powSignature = Assert.Single(JavaScriptRuntimeProfile.SupportedStandardGlobals.Single(symbol => symbol.Name == "Math.pow").Signatures!);
+        Assert.Equal(new[] { "base", "exponent" }, powSignature.Parameters);
+        var parseReturn = Assert.Single(JavaScriptRuntimeProfile.SupportedStandardGlobals.Single(symbol => symbol.Name == "JSON.parse").Signatures!).ReturnShape;
+        Assert.Equal(ExpressionValueKind.Unknown, parseReturn!.Kind);
+        Assert.True(parseReturn.IsNullable);
+        var stringifyReturn = Assert.Single(JavaScriptRuntimeProfile.SupportedStandardGlobals.Single(symbol => symbol.Name == "JSON.stringify").Signatures!).ReturnShape;
+        Assert.Equal(ExpressionValueKind.Scalar, stringifyReturn!.Kind);
+        Assert.True(stringifyReturn.IsNullable);
+    }
+
+    [Fact]
+    public async Task JavaScript_does_not_duplicate_runtime_getVariable_for_a_variable_with_the_same_generated_name()
+    {
+        var provider = new JavaScriptExpressionToolingProvider();
+        var scope = CreateScope("JavaScript", [new("variable", "variable", ExpressionSymbolKind.Variable)]);
+
+        var root = await provider.GetCompletionsAsync(new(scope, string.Empty, new(0, 0)), CancellationToken.None);
+
+        Assert.Single(root.Payload!.Items, item => item.Label == "getVariable");
+    }
+
+    [Fact]
+    public async Task JavaScript_getter_metadata_preserves_runtime_support_for_digit_leading_variable_keys()
+    {
+        var provider = new JavaScriptExpressionToolingProvider();
+        var scope = CreateScope("JavaScript", [new("numeric-key", "123", ExpressionSymbolKind.Variable)]);
+
+        var completion = await provider.GetCompletionsAsync(new(scope, "get12", new(0, 5)), CancellationToken.None);
+
+        Assert.Equal("get123", Assert.Single(completion.Payload!.Items).Label);
+    }
+
+    [Theory]
+    [InlineData("Date.now()", true)]
+    [InlineData("Math.random()", true)]
+    [InlineData("globalThis.Math.random()", true)]
+    [InlineData("typeof Date", false)]
+    [InlineData("typeof Math.random", false)]
+    [InlineData("typeof globalThis.Math.random", false)]
+    [InlineData("typeof Date.now", true)]
+    [InlineData("window.location.href", true)]
+    [InlineData("globalThis.document.title", true)]
+    [InlineData("Math[key]()", false)]
+    [InlineData("globalThis[ambientName]()", false)]
+    [InlineData("require('module')", true)]
+    [InlineData("Buffer.from('text')", true)]
+    [InlineData("/* Date.now() */ 'Math.random'", false)]
+    [InlineData("({ Date: 'Date', text: 'Math.random' }).Date", false)]
+    [InlineData("(() => { const { Date } = {}; return Date.now(); })()", false)]
+    [InlineData("(() => { const { value = Math.random() } = {}; return value; })()", true)]
+    [InlineData("({ Date } = {})", true)]
+    [InlineData("({ value: Math.random } = {})", true)]
+    [InlineData("((Date) => Date.now())({ now: () => 1 })", false)]
+    [InlineData("((Math) => Math.random())({ random: () => 1 })", false)]
+    [InlineData("((Date) => Date)(Date.now())", true)]
+    [InlineData("((() => { const Date = {}; return Date; })(), Date.now())", true)]
+    [InlineData("(() => { { let Date = {}; Date.now(); } Date.now(); })()", true)]
+    [InlineData("(() => { switch (1) { case 1: let Date = {}; Date.now(); } Date.now(); })()", true)]
+    [InlineData("(() => { switch (1) { case 1: Date.now(); let Date = {}; } })()", false)]
+    [InlineData("(function () { return Math.random(); var Math = {}; })()", false)]
+    [InlineData("(function (Date = Math.random()) { var Math = {}; return Date; })()", true)]
+    [InlineData("(() => { try { throw {}; } catch (Date) { return Date.now(); } })()", false)]
+    [InlineData("(() => { try { throw {}; } catch ({ [Date]: value }) { return value; } })()", true)]
+    [InlineData("(() => { function Date() {} return Date.now(); })()", false)]
+    [InlineData("(() => { class Date { static now() {} } return Date.now(); })()", false)]
+    [InlineData("(() => { class Example { static { Math.random(); var Math = {}; } } })()", false)]
+    [InlineData("(() => { class Example { static { var Math = {}; } } Math.random(); })()", true)]
+    [InlineData("((function Date() { return Date.now(); }), Date.now())", true)]
+    [InlineData("((class Date { value() { return Date.now(); } }), Date.now())", true)]
+    public async Task JavaScript_reports_only_proven_unavailable_ambient_references(string source, bool expectedDiagnostic)
+    {
+        var provider = new JavaScriptExpressionToolingProvider();
+        var scope = CreateScope("JavaScript", []);
+
+        var result = await provider.ValidateAsync(new(scope, source), CancellationToken.None);
+
+        Assert.Equal(expectedDiagnostic, result.Payload!.Diagnostics.Any(diagnostic => diagnostic.Code == "JavaScript/AmbientCapability"));
+        if (expectedDiagnostic)
+        {
+            var diagnostic = Assert.Single(result.Payload.Diagnostics);
+            Assert.Equal("JavaScript/AmbientCapability", diagnostic.Code);
+            Assert.Equal(ExpressionDiagnosticSeverity.Error, diagnostic.Severity);
+            Assert.Equal("revision", diagnostic.DocumentRevision);
+            Assert.NotNull(diagnostic.Range);
+        }
+        else
+            Assert.Empty(result.Payload.Diagnostics);
     }
 
     [Fact]

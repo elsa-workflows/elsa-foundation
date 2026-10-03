@@ -2,6 +2,7 @@ using System.Buffers;
 using System.Globalization;
 using System.Text.Encodings.Web;
 using System.Text.Json;
+using Elsa.Expressions.JavaScript.Core.Models;
 using Elsa.Expressions.JavaScript.Jint.Options;
 using Jint;
 using Jint.Native;
@@ -85,7 +86,7 @@ internal static class IsolatedJintEngine
         }
 
         args.PreventExtensions();
-        engine.Global.DefineOwnProperty("args", new PropertyDescriptor(args, writable: false, enumerable: true, configurable: false));
+        engine.Global.DefineOwnProperty(JavaScriptRuntimeProfile.ArgumentsName, new PropertyDescriptor(args, writable: false, enumerable: true, configurable: false));
     }
 
     /// <summary>
@@ -118,17 +119,17 @@ internal static class IsolatedJintEngine
         }
 
         container.PreventExtensions();
-        engine.Global.DefineOwnProperty("variables", new PropertyDescriptor(container, writable: false, enumerable: true, configurable: false));
+        engine.Global.DefineOwnProperty(JavaScriptRuntimeProfile.VariablesName, new PropertyDescriptor(container, writable: false, enumerable: true, configurable: false));
 
-        var getVariable = new ClrFunction(engine, "getVariable", (_, callArguments) =>
+        var getVariable = new ClrFunction(engine, JavaScriptRuntimeProfile.GetVariableName, (_, callArguments) =>
             callArguments.Length >= 1 && callArguments[0].IsString() && values.TryGetValue(callArguments[0].AsString(), out var resolved)
                 ? resolved
                 : JsValue.Undefined);
-        engine.Global.DefineOwnProperty("getVariable", new PropertyDescriptor(getVariable, writable: false, enumerable: false, configurable: false));
+        engine.Global.DefineOwnProperty(JavaScriptRuntimeProfile.GetVariableName, new PropertyDescriptor(getVariable, writable: false, enumerable: false, configurable: false));
 
         foreach (var (name, _) in ordered)
         {
-            var getterName = ToGetterName(name);
+            var getterName = JavaScriptRuntimeProfile.GetGeneratedVariableGetterName(name);
             if (getterName is null || engine.Global.HasOwnProperty(getterName))
                 continue;
             var captured = values[name];
@@ -137,27 +138,16 @@ internal static class IsolatedJintEngine
         }
     }
 
-    /// <summary>
-    /// Produces the Elsa 3 convenience getter name (<c>get&lt;PascalCaseName&gt;</c>) for a variable, or
-    /// <see langword="null"/> when the variable name is not a bare JavaScript identifier (in which case only
-    /// <c>variables['name']</c> and <c>getVariable('name')</c> remain available for it).
-    /// </summary>
-    private static string? ToGetterName(string name)
-    {
-        if (name.Length == 0 || !name.All(character => char.IsLetterOrDigit(character) || character is '_' or '$'))
-            return null;
-        return $"get{char.ToUpperInvariant(name[0])}{name[1..]}";
-    }
-
     private static void DisableAmbientCapabilities(Engine engine)
     {
         // Time, randomness, locale, and environment data enter through pinned args, never intrinsics.
-        foreach (var name in new[] { "Date", "Temporal", "Intl" })
+        foreach (var name in JavaScriptRuntimeProfile.DisabledAmbientGlobalNames)
             engine.Global.DefineOwnProperty(name, new PropertyDescriptor(JsValue.Undefined, writable: false, enumerable: false, configurable: false));
 
-        engine.GetValue("Math").AsObject().DefineOwnProperty(
-            "random",
-            new PropertyDescriptor(JsValue.Undefined, writable: false, enumerable: false, configurable: false));
+        foreach (var memberPath in JavaScriptRuntimeProfile.DisabledAmbientMemberPaths)
+            engine.GetValue(memberPath.ObjectName).AsObject().DefineOwnProperty(
+                memberPath.MemberName,
+                new PropertyDescriptor(JsValue.Undefined, writable: false, enumerable: false, configurable: false));
     }
 
     private static JsValue CreateValue(Engine engine, JsonElement element) => element.ValueKind switch

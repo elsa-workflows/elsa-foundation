@@ -23,6 +23,9 @@ public sealed class StrippedAmbientCapabilityDiagnosticTests
     [Theory]
     [InlineData("\"x \" + new Date().toISOString()", "Date")]
     [InlineData("\"n \" + Math.random()", "Math.random")]
+    [InlineData("Math.random()", "Math.random")]
+    [InlineData("\"multi \" +\n    Math.random()", "Math.random")]
+    [InlineData("Math.abs(1) + Math.random()", "Math.random")]
     public async Task Reaching_for_a_stripped_ambient_capability_yields_an_actionable_error(string source, string capability)
     {
         await using var provider = BuildProvider();
@@ -51,17 +54,31 @@ public sealed class StrippedAmbientCapabilityDiagnosticTests
         Assert.Equal("a 1", result.GetString());
     }
 
-    [Fact]
-    public async Task An_unrelated_runtime_error_is_not_reframed_as_a_capability_error()
+    [Theory]
+    [InlineData("nope.value")]
+    [InlineData("({ Date: missingName })")]
+    [InlineData("/* Math.random() */ missingName")]
+    [InlineData("({ text: 'Date', value: missingName })")]
+    [InlineData("(() => { typeof Date; return missingName; })()")]
+    [InlineData("(() => { const Math = { random: () => missingName }; return Math.random(); })()")]
+    [InlineData("((Math) => Math.random())({})")]
+    [InlineData("((Date) => new Date())(undefined)")]
+    [InlineData("(missingName, Math.random())")]
+    [InlineData("(Math.random, missingName)")]
+    [InlineData("(false && Math.random(), missingName)")]
+    [InlineData("Math[\"ran\" + \"dom\"]()")]
+    [InlineData("(null).Date")]
+    [InlineData("({ Date: undefined }).Date()")]
+    public async Task An_unrelated_runtime_error_is_not_reframed_as_a_capability_error(string source)
     {
         await using var provider = BuildProvider();
         await using var scope = provider.CreateAsyncScope();
         var evaluator = scope.ServiceProvider.GetRequiredService<IPortableExpressionEvaluator>();
 
-        // Referencing an undeclared identifier is a plain author error, not a stripped-capability reach; it must
-        // keep surfacing as its native error rather than being mislabelled a sandbox/determinism problem.
+        // Unrelated JavaScript failures are author/runtime errors, not stripped-capability reaches; they must keep
+        // surfacing as native errors rather than being mislabelled as sandbox/determinism problems.
         var exception = await Assert.ThrowsAnyAsync<Exception>(
-            () => evaluator.EvaluateAsync(Request("nope.value")).AsTask());
+            () => evaluator.EvaluateAsync(Request(source)).AsTask());
 
         Assert.IsNotType<JavaScriptBindingEvaluationException>(exception);
     }

@@ -1,12 +1,34 @@
 # Expression Code Intelligence Foundation — Verification
 
-Last reconciled: 2026-10-03 for Program #2310 partial implementation evidence; normal-host acceptance pending
+Last reconciled: 2026-10-03 for Program #2310 M2 local conformance verification; committed-head CI/review, delivery and final human acceptance pending
 
 ## Program #2310 status
 
-The passing evidence below is historical baseline evidence. It does not prove the current normal host, effective runtime Liquid metadata, runtime-compatible JavaScript help, or the real persisted producer-consumer lifecycle requested by Program #2310. T026-T031 and the corresponding live Studio journey remain open.
+T026-T027 pass at the exact M1 pair recorded below. T028 is implemented with the local M2 evidence below; its committed-head CI/review gate is pending. Effective Liquid metadata and the final coordinated language-depth gate (T029-T031) remain open. Historical baseline evidence remains separate. All program PRs remain draft and unmerged; final human acceptance is outstanding.
 
 ## Passing evidence
+
+### M2 reviewed local candidate, 2026-10-03
+
+Branch `claude/2352-javascript-runtime-conformance` is based on reviewed M1 `f81be4be`. A shared immutable JavaScript Core profile now owns curated deterministic Math/JSON signatures, the always-present frozen `args` surface, conditional visible-variable helpers and generated-getter naming, and known unavailable ambient capability metadata. Jint consumes the same names/getter/strip metadata without changing sandbox grants or exposing runtime services to authoring. The metadata is deliberately not an exhaustive ECMAScript catalogue. Provider diagnostics use parsed reference positions and lexical scope, ignore keys/comments/local shadows and safe `typeof` absence probes, and leave unknown computed paths undiagnosed.
+
+- Root locked Release runs pass Expressions 149/149, Jint 64/64, Design 507/507, Design API 142/142 and Publishing API 714/714. The Jint rerun after extracting shared request setup also passes 64/64.
+- Scoped Architecture passes 16/16 domain-capability/value-flow tests and the separate Core implementation-shape guard 1/1. This is scoped local evidence, not a claim that the full local Architecture suite passed.
+- Rebuilt real Workbench persisted-host tests pass 3/3, including cookie and rotating-bearer JavaScript completion/strict-expression/ambient diagnostics, recovery to a valid Math/JSON function expression, and the independent missing-Liquid control. An earlier attempt collided with the browser command building the same Workbench output; the sequential rerun passes without a code or gate relaxation.
+- The coordinated rebuilt Studio branch `codex/552-javascript-expression-conformance` passes the canonical normal-host Chromium command 4/4 in 3.2 minutes, with fresh SQLite, real authentication, exact-source saved readback, post-save revision correlation, zero console errors and owned teardown. It proves TypeScript/JSX/statements and ambient-capability diagnostics plus valid-expression recovery through the actual producer/consumer path.
+- Temporarily removing ambient diagnostics causes 20 provider regression failures; production code is restored and the complete Expressions rerun passes 149/149.
+- The existing JavaScript REST e2e suite passes 10/10 against a newly rebuilt Debug Workbench, on a fresh isolated SQLite content root and free loopback port. The helper stops only its owned process. Deliberate map regeneration changes only `docs/maps/spec-status-map.md` for completed task counts; both generated findings reports are reviewed and unchanged, and the final freshness check passes.
+- Final independent source audit identifies a pre-existing runtime error-attribution defect: regex scanning the whole source blames unrelated failures on a withheld capability mentioned only in a comment, key, literal, safe absence probe or local shadow. Five new controls fail before correction. Jint now parses only for failure attribution, maps the actual failing syntax location across its expression wrapper, and requires a static capability path; dynamic/ambiguous paths and any same-root binding anywhere retain the original native error. This deliberately conservative runtime guard is not a second authoring scope solver and adds no dependency/project edge. Root reviews the correction and the final complete Jint suite passes 80/80, including 20 attribution cases and the original #921 positive controls. After this correction, the paired command rebuilds both hosts/clients and passes browser 4/4 in 2.4 minutes, the real persisted-host fixture passes 3/3, the freshly rebuilt Debug Workbench JavaScript REST suite passes 10/10, and map freshness passes again. No prior failing attempt is counted as green.
+
+These are local candidate-tree checks. Exact committed-head CI, Maps and Copilot review remain pending. M2 is not accepted or shipped, and M3/M4 are not complete.
+
+### M1 exact-head automated gate, 2026-10-03
+
+Foundation `f81be4beed6973378eb678b2327d789c19d8095e` passes [CI 37116214636](https://github.com/elsa-workflows/elsa-foundation/actions/runs/37116214636), including full hosted Architecture, and [Maps 37116216477](https://github.com/elsa-workflows/elsa-foundation/actions/runs/37116216477). Copilot review 5400291420 has no findings. Root local real-Workbench persisted assistance passes 3/3, Design API 142/142, composition 11/11, JavaScript REST e2e 10/10 and map freshness. The full local Architecture attempt was not green because unrelated full-tree/Debug restore prerequisites were absent; hosted Architecture passes instead.
+
+Coordinated Studio `c9479fba29613b6c58335c05e1d26fb40a51514e` passes every job in [CI 37123111128](https://github.com/elsa-workflows/elsa-foundation-studio/actions/runs/37123111128), including the paired source-built normal-host Chromium suite, 4/4 against that exact Foundation head. It proves persisted workflow JavaScript/Liquid assistance in compact and expanded modes, Activity Definition canonical save/read/reload, and independently removed editor/provider controls, with real authentication, fresh SQLite, zero console errors and owned teardown. Root local rebuilt browser also passes 4/4. Exact-head Copilot 5400803545 has no actionable findings and all M1 review threads are resolved. Studio null preservation is separate adapter/API round-trip evidence, not a new live null browser case.
+
+This closes the automated T026-T027 dependency and unblocks M2. It does not prove arbitrary main compatibility, M2-M4 completion, current-head manual assistive-technology acceptance, final human acceptance, or delivery. PRs #2373 and elsa-foundation-studio#557 remain draft and unmerged. Earlier checkpoints below retain their historical failures and pending states.
 
 ### Program #2310 implementation checkpoint, 2026-10-03
 
