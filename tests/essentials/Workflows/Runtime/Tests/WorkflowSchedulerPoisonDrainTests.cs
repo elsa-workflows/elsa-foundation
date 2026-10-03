@@ -181,14 +181,19 @@ public sealed class WorkflowSchedulerPoisonDrainTests
     }
 
     [Theory]
-    [InlineData(WorkflowExecutionCommandKind.RetryActivityBoundary)]
-    [InlineData(WorkflowExecutionCommandKind.CancelActivityScope)]
-    public async Task DrainAsync_BoundaryCommandPoison_ResolvesNodeFromCanonicalActivityState(WorkflowExecutionCommandKind commandKind)
+    [InlineData(WorkflowExecutionCommandKind.RetryActivityBoundary, false)]
+    [InlineData(WorkflowExecutionCommandKind.RetryActivityBoundary, true)]
+    [InlineData(WorkflowExecutionCommandKind.CancelActivityScope, false)]
+    [InlineData(WorkflowExecutionCommandKind.CancelActivityScope, true)]
+    public async Task DrainAsync_BoundaryCommandPoison_ResolvesNodeFromCanonicalActivityState(
+        WorkflowExecutionCommandKind commandKind,
+        bool failFirstActivityRead)
     {
         var queue = new InMemoryWorkflowSchedulerWorkQueue();
         var poisonStore = new InMemoryWorkflowSchedulerPoisonStore();
         var activityStore = new InMemoryActivityExecutionStateStore();
         await activityStore.SaveAsync(NewActivityState());
+        var observedActivityStore = new FailOnceActivityExecutionStateStore(activityStore, failFirstActivityRead);
 
         var payload = commandKind switch
         {
@@ -235,16 +240,53 @@ public sealed class WorkflowSchedulerPoisonDrainTests
             incidentStore,
             checkpointCommitter,
             new FakeTimeProvider(_now),
-            activityExecutionStateStore: activityStore,
+            activityExecutionStateStore: observedActivityStore,
             inspectionAccumulator: null);
 
         await observer.OnDrainedAsync(NewEnvelope(), drainResult);
 
+        var originalIncident = Assert.Single(await incidentStore.ListAsync("wfexec-1"));
+        Assert.Equal("activity-1", originalIncident.ActivityExecutionId);
+        if (failFirstActivityRead)
+        {
+            Assert.Null(originalIncident.ExecutableNodeId);
+            Assert.False(originalIncident.Metadata.ContainsKey(RuntimeMetadataKeys.ExecutableNodeId));
+            Assert.Empty((await activityStore.FindAsync("wfexec-1", "activity-1"))!.IncidentIds);
+            Assert.Empty(commitStore.ListCommits().Single().Commit.StateChanges.ActivityExecutions);
+        }
+        else
+        {
+            Assert.Equal("node-1", originalIncident.ExecutableNodeId);
+            Assert.Equal("node-1", originalIncident.Metadata[RuntimeMetadataKeys.ExecutableNodeId]);
+            Assert.Contains(originalIncident.IncidentId, (await activityStore.FindAsync("wfexec-1", "activity-1"))!.IncidentIds);
+            Assert.Single(commitStore.ListCommits().Single().Commit.StateChanges.ActivityExecutions);
+        }
+
+        await observer.OnDrainedAsync(NewEnvelope(), drainResult);
+        await observer.OnDrainedAsync(NewEnvelope(), drainResult);
+
         var incident = Assert.Single(await incidentStore.ListAsync("wfexec-1"));
-        Assert.Equal("activity-1", incident.ActivityExecutionId);
+        Assert.Equal(originalIncident.IncidentId, incident.IncidentId);
         Assert.Equal("node-1", incident.ExecutableNodeId);
         Assert.Equal("node-1", incident.Metadata[RuntimeMetadataKeys.ExecutableNodeId]);
+        Assert.Equal(originalIncident.Severity, incident.Severity);
+        Assert.Equal(originalIncident.Status, incident.Status);
+        Assert.Equal(originalIncident.ResolutionOutcome, incident.ResolutionOutcome);
+        Assert.Equal(originalIncident.CreatedAt, incident.CreatedAt);
+        Assert.Equal(originalIncident.ResolvedAt, incident.ResolvedAt);
+        Assert.Equal(originalIncident.Message, incident.Message);
         Assert.Contains(incident.IncidentId, (await activityStore.FindAsync("wfexec-1", "activity-1"))!.IncidentIds);
+        Assert.Equal(3, observedActivityStore.FindAttempts);
+        Assert.Equal(failFirstActivityRead ? 2 : 1, commitStore.ListCommits().Count);
+        if (failFirstActivityRead)
+        {
+            var repairCommit = commitStore.ListCommits()
+                .Select(item => item.Commit)
+                .Single(commit => commit.CommitId.Contains("scheduler-poison-repair", StringComparison.Ordinal));
+            Assert.Equal("activity-1", Assert.Single(repairCommit.Checkpoint.ActivityExecutionIds));
+            Assert.Equal(incident.IncidentId, Assert.Single(repairCommit.StateChanges.Incidents).StateId);
+            Assert.NotEqual(commitStore.ListCommits().Select(item => item.Commit.Checkpoint.CheckpointId).First(), repairCommit.Checkpoint.CheckpointId);
+        }
     }
 
     [Fact]
@@ -490,6 +532,41 @@ public sealed class WorkflowSchedulerPoisonDrainTests
     {
         using var document = JsonDocument.Parse("""{"activityExecutionId":"activity-1","executableNodeId":"node-1"}""");
         return document.RootElement.Clone();
+    }
+
+    private sealed class FailOnceActivityExecutionStateStore(IActivityExecutionStateStore inner, bool failFirstRead) : IActivityExecutionStateStore
+    {
+        private bool _hasFailed = !failFirstRead;
+
+        public int FindAttempts { get; private set; }
+
+        public ValueTask<ActivityExecutionState> SaveAsync(ActivityExecutionState state, CancellationToken cancellationToken = default) =>
+            inner.SaveAsync(state, cancellationToken);
+
+        public ValueTask<ActivityExecutionState?> FindAsync(
+            string workflowExecutionId,
+            string activityExecutionId,
+            CancellationToken cancellationToken = default)
+        {
+            FindAttempts++;
+            if (!_hasFailed)
+            {
+                _hasFailed = true;
+                return ValueTask.FromException<ActivityExecutionState?>(new InvalidOperationException("transient activity read failure"));
+            }
+
+            return inner.FindAsync(workflowExecutionId, activityExecutionId, cancellationToken);
+        }
+
+        public ValueTask<RuntimeStorePage<ActivityExecutionState>> ListPageAsync(
+            ActivityExecutionStatePageQuery query,
+            CancellationToken cancellationToken = default) =>
+            inner.ListPageAsync(query, cancellationToken);
+
+        public ValueTask<RuntimeStorePage<ActivityExecutionState>> ListByParentPageAsync(
+            ActivityExecutionStateParentPageQuery query,
+            CancellationToken cancellationToken = default) =>
+            inner.ListByParentPageAsync(query, cancellationToken);
     }
 
     private static ExpressionInputFailureException NewExpressionFailure(string rootCause) => new(

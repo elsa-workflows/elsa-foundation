@@ -20,8 +20,10 @@ namespace Elsa.Workflows.Runtime.Services.Incidents;
 ///
 /// <para>Only <see cref="RuntimeSchedulerPoisonDisposition.Poisoned"/> records are surfaced — a
 /// <see cref="RuntimeSchedulerPoisonDisposition.RetryScheduled"/> record is still being re-driven by the retry
-/// policy and must not fault the workflow. Incident ids are deterministic per work item and an existing incident
-/// is never overwritten, so an operator-resolved incident stays resolved and repeated drains are idempotent.</para>
+/// policy and must not fault the workflow. Incident ids are deterministic per work item. Reconciliation can enrich
+/// only a missing activity address when the exact persisted activity execution supplies it; it preserves the
+/// incident's lifecycle and resolution fields, so an operator-resolved incident stays resolved and repeated drains
+/// are idempotent.</para>
 ///
 /// <para>This is the tail of the <b>handler</b>-fault path only; an activity fault takes an entirely different route and
 /// ends in an authored incident strategy. Both are mapped in <c>docs/runtime-fault-behavior.md</c>.</para>
@@ -342,9 +344,44 @@ public sealed class PoisonedSchedulerWorkIncidentObserver : IWorkflowSchedulerDr
             incident.ActivityExecutionId,
             cancellationToken);
         if (activityState is null ||
+            !StringComparer.Ordinal.Equals(activityState.Execution.WorkflowExecutionId, incident.WorkflowExecutionId) ||
+            !StringComparer.Ordinal.Equals(activityState.Execution.ActivityExecutionId, incident.ActivityExecutionId) ||
             (incident.ExecutableNodeId is not null &&
              !StringComparer.Ordinal.Equals(activityState.Execution.ExecutableNodeId, incident.ExecutableNodeId)))
             return;
+
+        // RetryActivityBoundary and CancelActivityScope payloads carry the concrete activity execution id but
+        // intentionally omit the executable node id. If the best-effort read failed while the canonical incident
+        // was first committed, recover only the missing address from that exact persisted activity execution.
+        // Preserve a conflicting non-empty metadata identity rather than choosing between two existing values.
+        var executableNodeId = activityState.Execution.ExecutableNodeId;
+        if (string.IsNullOrWhiteSpace(executableNodeId))
+            return;
+        var metadataNodeId = ValueOrNull(incident.Metadata, RuntimeMetadataKeys.ExecutableNodeId);
+        var hasConflictingMetadataNode = metadataNodeId is not null &&
+            !StringComparer.Ordinal.Equals(metadataNodeId, executableNodeId);
+        var needsIdentityRepair = !hasConflictingMetadataNode &&
+            (incident.ExecutableNodeId is null || metadataNodeId is null);
+        var reconciledIncident = incident;
+        if (needsIdentityRepair)
+        {
+            var metadata = incident.Metadata.ToDictionary(item => item.Key, item => item.Value, StringComparer.Ordinal);
+            if (metadataNodeId is null)
+                metadata[RuntimeMetadataKeys.ExecutableNodeId] = executableNodeId;
+            reconciledIncident = new IncidentState(
+                incident.IncidentId,
+                incident.WorkflowExecutionId,
+                incident.ActivityExecutionId,
+                incident.ExecutableNodeId ?? executableNodeId,
+                incident.Severity,
+                incident.Status,
+                incident.ResolutionOutcome,
+                incident.FailureType,
+                incident.Message,
+                incident.CreatedAt,
+                incident.ResolvedAt,
+                metadata);
+        }
 
         var existingProjection = _inspectionAccumulator is null || _activityExecutionInspectionStore is null
             ? null
@@ -364,8 +401,9 @@ public sealed class PoisonedSchedulerWorkIncidentObserver : IWorkflowSchedulerDr
             (_activityExecutionInspectionStore is null ||
              existingProjection is null ||
              !alreadyHasIncidentSummary ||
-             !alreadyHasEvaluationEvidence);
-        if (!needsAssociationRepair && !needsInspectionRepair)
+             !alreadyHasEvaluationEvidence ||
+             needsIdentityRepair);
+        if (!needsAssociationRepair && !needsInspectionRepair && !needsIdentityRepair)
             return;
 
         var associatedState = alreadyAssociated
@@ -378,8 +416,10 @@ public sealed class PoisonedSchedulerWorkIncidentObserver : IWorkflowSchedulerDr
             (true, true) => "association-inspection",
             (true, false) => "association",
             (false, true) => "inspection",
-            _ => throw new InvalidOperationException("A poison incident repair must update at least one projection.")
+            (false, false) => "identity"
         };
+        if (needsIdentityRepair && !StringComparer.Ordinal.Equals(repairScope, "identity"))
+            repairScope += "-identity";
         var checkpointId = $"checkpoint:{incident.WorkflowExecutionId}:scheduler-poison-repair-{repairScope}:{workItemFingerprint}";
         // Use the canonical incident's timestamp so a retry after an ambiguous commit produces the same payload
         // under the deterministic commit id for this repair scope. Separate scopes let a later projection repair
@@ -391,9 +431,9 @@ public sealed class PoisonedSchedulerWorkIncidentObserver : IWorkflowSchedulerDr
                 associatedState,
                 checkpointId,
                 repairedAt,
-                incidents: [ActivityExecutionIncidentSummary.From(incident)],
+                incidents: [ActivityExecutionIncidentSummary.From(reconciledIncident)],
                 valueSnapshots: inputFailure is null ? [] : [inputFailure],
-                metadata: incident.Metadata,
+                metadata: reconciledIncident.Metadata,
                 cancellationToken: cancellationToken);
 
         var activityStateChanges = new List<RuntimeStateChange<ActivityExecutionState>>();
@@ -402,14 +442,21 @@ public sealed class PoisonedSchedulerWorkIncidentObserver : IWorkflowSchedulerDr
                 StateId: incident.ActivityExecutionId,
                 Operation: RuntimeStateChangeOperation.Upsert,
                 State: associatedState,
-                Metadata: incident.Metadata));
+                Metadata: reconciledIncident.Metadata));
         var inspectionChanges = new List<RuntimeStateChange<ActivityExecutionInspectionProjection>>();
         if (projection is not null)
             inspectionChanges.Add(new RuntimeStateChange<ActivityExecutionInspectionProjection>(
                 StateId: incident.ActivityExecutionId,
                 Operation: RuntimeStateChangeOperation.Upsert,
                 State: projection,
-                Metadata: incident.Metadata));
+                Metadata: reconciledIncident.Metadata));
+        var incidentChanges = new List<RuntimeStateChange<IncidentState>>();
+        if (needsIdentityRepair)
+            incidentChanges.Add(new RuntimeStateChange<IncidentState>(
+                StateId: incident.IncidentId,
+                Operation: RuntimeStateChangeOperation.Upsert,
+                State: reconciledIncident,
+                Metadata: reconciledIncident.Metadata));
 
         var commit = new RuntimeCheckpointCommit(
             CommitId: $"commit:{incident.WorkflowExecutionId}:scheduler-poison-repair-{repairScope}:{workItemFingerprint}",
@@ -419,18 +466,18 @@ public sealed class PoisonedSchedulerWorkIncidentObserver : IWorkflowSchedulerDr
                 WorkflowExecutionId: incident.WorkflowExecutionId,
                 OccurredAt: repairedAt,
                 ActivityExecutionIds: [incident.ActivityExecutionId],
-                Metadata: incident.Metadata),
+                Metadata: reconciledIncident.Metadata),
             StateChanges: new RuntimeCheckpointStateChangeSet(
                 workflowExecution: null,
                 scheduler: null,
                 activityExecutions: activityStateChanges,
                 bookmarks: [],
                 durableValues: [],
-                incidents: [],
+                incidents: incidentChanges,
                 operational: [],
                 activityExecutionInspections: inspectionChanges),
             PostCommitIntents: [],
-            Metadata: incident.Metadata);
+            Metadata: reconciledIncident.Metadata);
 
         await _checkpointCommitter.CommitAsync(commit, cancellationToken);
     }

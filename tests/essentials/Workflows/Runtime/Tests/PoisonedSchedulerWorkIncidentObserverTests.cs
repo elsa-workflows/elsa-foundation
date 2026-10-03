@@ -46,7 +46,9 @@ public sealed class PoisonedSchedulerWorkIncidentObserverTests
 
     private static IReadOnlyDictionary<string, string> BuildCanonicalInputIncidentMetadata(string incidentId)
     {
-        var metadata = InputFailureMetadata().ToDictionary(item => item.Key, item => item.Value, StringComparer.Ordinal);
+        var metadata = InputFailureMetadata()
+            .Where(item => !StringComparer.Ordinal.Equals(item.Key, RuntimeMetadataKeys.ExecutableNodeId))
+            .ToDictionary(item => item.Key, item => item.Value, StringComparer.Ordinal);
         var fault = RedactedInputFailure();
         metadata[RuntimeMetadataKeys.IncidentId] = incidentId;
         metadata[RuntimeMetadataKeys.CheckpointReason] = PoisonedSchedulerWorkIncidentObserver.IncidentFailureType;
@@ -240,7 +242,7 @@ public sealed class PoisonedSchedulerWorkIncidentObserverTests
             incidentId: incidentId,
             workflowExecutionId: "wfexec-1",
             activityExecutionId: "activity-1",
-            executableNodeId: "node-1",
+            executableNodeId: null,
             severity: IncidentSeverity.Critical,
             status: IncidentStatus.Resolved,
             resolutionOutcome: new IncidentResolutionOutcome("Acme.OperatorResolution", resolvedAt, strategy: null, systemSource: "TestResolution"),
@@ -249,6 +251,7 @@ public sealed class PoisonedSchedulerWorkIncidentObserverTests
             createdAt: _now.AddMinutes(-5),
             resolvedAt: resolvedAt,
             metadata: BuildCanonicalInputIncidentMetadata(incidentId));
+        Assert.False(incident.Metadata.ContainsKey(RuntimeMetadataKeys.ExecutableNodeId));
         await harness.IncidentStore.SaveAsync(incident);
         await harness.RecordPoison(RuntimeSchedulerPoisonDisposition.Poisoned, metadata: ActivityAddressMetadata());
 
@@ -278,10 +281,18 @@ public sealed class PoisonedSchedulerWorkIncidentObserverTests
 
         var unchangedIncident = await harness.IncidentStore.FindAsync("wfexec-1", incidentId);
         Assert.Equal(IncidentStatus.Resolved, unchangedIncident!.Status);
+        Assert.Equal("node-1", unchangedIncident.ExecutableNodeId);
+        Assert.Equal("node-1", unchangedIncident.Metadata[RuntimeMetadataKeys.ExecutableNodeId]);
+        Assert.Equal(incident.Severity, unchangedIncident.Severity);
+        Assert.Equal(incident.CreatedAt, unchangedIncident.CreatedAt);
+        Assert.Equal(incident.ResolvedAt, unchangedIncident.ResolvedAt);
+        Assert.Equal(incident.ResolutionOutcome, unchangedIncident.ResolutionOutcome);
+        Assert.Equal(incident.Message, unchangedIncident.Message);
         Assert.Equal([incidentId], (await harness.ActivityStore.FindAsync("wfexec-1", "activity-1"))!.IncidentIds);
         Assert.Equal(successfulProjection, await harness.InspectionStore.FindAsync("wfexec-1", "activity-1"));
         var associationCommit = Assert.Single(harness.CommitStore.ListCommits()).Commit;
         Assert.Empty(associationCommit.StateChanges.ActivityExecutionInspections);
+        Assert.Equal(IncidentStatus.Resolved, Assert.Single(associationCommit.StateChanges.Incidents).State.Status);
 
         // The next worker can now repair inspection evidence with its normal accumulator. Its distinct deterministic
         // checkpoint identity must allow this projection-only repair after the association-only commit above.
@@ -294,7 +305,12 @@ public sealed class PoisonedSchedulerWorkIncidentObserverTests
         var persistedIncident = await harness.IncidentStore.FindAsync("wfexec-1", incidentId);
         Assert.NotNull(persistedIncident);
         Assert.Equal(IncidentStatus.Resolved, persistedIncident!.Status);
+        Assert.Equal("node-1", persistedIncident.ExecutableNodeId);
+        Assert.Equal("node-1", persistedIncident.Metadata[RuntimeMetadataKeys.ExecutableNodeId]);
+        Assert.Equal(incident.Severity, persistedIncident.Severity);
+        Assert.Equal(incident.CreatedAt, persistedIncident.CreatedAt);
         Assert.Equal(resolvedAt, persistedIncident.ResolvedAt);
+        Assert.Equal(incident.ResolutionOutcome, persistedIncident.ResolutionOutcome);
         Assert.Equal("Acme.OperatorResolution", persistedIncident.ResolutionOutcome!.ActionKind);
         Assert.Equal(incident.Message, persistedIncident.Message);
 
@@ -310,6 +326,7 @@ public sealed class PoisonedSchedulerWorkIncidentObserverTests
         Assert.Equal(successfulProjection.ValueSnapshots.Single(), projection!.ValueSnapshots.Single(snapshot => snapshot.EvaluationId == "successful-evaluation"));
         var failure = Assert.Single(projection.ValueSnapshots.Where(snapshot => snapshot.EvaluationId == incidentId));
         Assert.Equal("ExpressionEvaluationFailed", failure.Failure!.Code);
+        Assert.Equal("node-1", Assert.Single(projection.Incidents).Metadata[RuntimeMetadataKeys.ExecutableNodeId]);
         Assert.Equal(1, projection.Incidents.Count(summary => summary.IncidentId == incidentId));
         var commits = harness.CommitStore.ListCommits().Select(item => item.Commit).ToArray();
         Assert.Equal(2, commits.Length);
@@ -318,6 +335,43 @@ public sealed class PoisonedSchedulerWorkIncidentObserverTests
         Assert.Single(inspectionCommit.StateChanges.ActivityExecutionInspections);
         Assert.NotEqual(associationCommit.CommitId, inspectionCommit.CommitId);
         Assert.NotEqual(associationCommit.Checkpoint.CheckpointId, inspectionCommit.Checkpoint.CheckpointId);
+    }
+
+    [Fact]
+    public async Task OnDrainedAsync_WhenExistingIncidentHasConflictingNodeMetadata_DoesNotOverwriteIt()
+    {
+        await _harness.SaveActivity();
+        var incidentId = PoisonedSchedulerWorkIncidentObserver.IncidentId("workitem-1");
+        var createdAt = _now.AddMinutes(-5);
+        var incident = new IncidentState(
+            incidentId: incidentId,
+            workflowExecutionId: "wfexec-1",
+            activityExecutionId: "activity-1",
+            executableNodeId: null,
+            severity: IncidentSeverity.Warning,
+            status: IncidentStatus.Open,
+            resolutionOutcome: null,
+            failureType: PoisonedSchedulerWorkIncidentObserver.IncidentFailureType,
+            message: "existing incident with a conflicting non-empty node address",
+            createdAt: createdAt,
+            resolvedAt: null,
+            metadata: new Dictionary<string, string>
+            {
+                [RuntimeMetadataKeys.ActivityExecutionId] = "activity-1",
+                [RuntimeMetadataKeys.ExecutableNodeId] = "existing-node"
+            });
+        await _harness.IncidentStore.SaveAsync(incident);
+        await _harness.RecordPoison(RuntimeSchedulerPoisonDisposition.Poisoned, metadata: ActivityAddressMetadata());
+
+        await _harness.Observer.OnDrainedAsync(_harness.Envelope, _harness.FaultedDrainResult);
+
+        var persisted = await _harness.IncidentStore.FindAsync("wfexec-1", incidentId);
+        Assert.NotNull(persisted);
+        Assert.Null(persisted!.ExecutableNodeId);
+        Assert.Equal("existing-node", persisted.Metadata[RuntimeMetadataKeys.ExecutableNodeId]);
+        Assert.Equal(incident.Status, persisted.Status);
+        Assert.Equal(incident.CreatedAt, persisted.CreatedAt);
+        Assert.Equal(incident.Message, persisted.Message);
     }
 
     [Fact]
