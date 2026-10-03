@@ -196,7 +196,10 @@ def prepare_host(name):
             raise RuntimeError('Host cannot provide its declared shared contract: ' + shared_id)
         if shared_id not in provided: provided.append(shared_id)
     write_json(host / 'appsettings.Development.json', {
-        'Nuplane': {'HostProvidedPackages': provided, 'Setup': {'Feeds': [{'Name': 'renewal-demo', 'DirectoryPath': str(feed), 'IncludePatterns': ['*'], 'Directory': {'Watch': True, 'DebounceWindow': '00:00:01'}}, {'Name': 'closure', 'DirectoryPath': str(DEMO / 'closure')}], 'PollInterval': '00:00:05'}, 'Capabilities': {'ef-provider': 'Sqlite'}},
+        # Startup acquisition and directory watching remain active. The cockpit
+        # requests each release reconcile explicitly; five-second scheduled cycles
+        # can otherwise fill Nuplane's FIFO during baseline setup on a busy machine.
+        'Nuplane': {'HostProvidedPackages': provided, 'Setup': {'AutomaticReconciliation': False, 'Feeds': [{'Name': 'renewal-demo', 'DirectoryPath': str(feed), 'IncludePatterns': ['*'], 'Directory': {'Watch': True, 'DebounceWindow': '00:00:01'}}, {'Name': 'closure', 'DirectoryPath': str(DEMO / 'closure')}]}, 'Capabilities': {'ef-provider': 'Sqlite'}},
         'Elsa': {'Shells': {'ReloadOnPackageChange': False}, 'ModuleManagement': {'Enabled': True}, 'DataProtection': {'ApplicationName': 'Toolbox.Renewals.Demo', 'EntityFrameworkCore': {'Enabled': True, 'Provider': 'Sqlite'}}, 'Cluster': {'Membership': {'HostId': 'toolbox-renewals-' + name, 'EntityFrameworkCore': {'Enabled': True, 'Provider': 'Sqlite'}, 'HeartbeatInterval': '00:00:02', 'ExpiryPeriod': '00:00:10', 'SkewAllowance': '00:00:02'}}, 'Persistence': {'EntityFramework': {'Migrate': {'Policy': 'Validate'}, 'Finalization': {'EvaluationInterval': '00:00:02', 'RefreshInterval': '00:00:02'}}}},
         # Keep the live story legible without hiding activation or migration errors.
         # Reconciliation state and CLI results are also captured by the cockpit.
