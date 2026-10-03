@@ -24,6 +24,12 @@ public sealed class PoisonedSchedulerWorkIncidentObserverTests
 
     public PoisonedSchedulerWorkIncidentObserverTests() => _harness = new(_now);
 
+    private static IReadOnlyDictionary<string, string> ActivityAddressMetadata() => new Dictionary<string, string>
+    {
+        [RuntimeMetadataKeys.ActivityExecutionId] = "activity-1",
+        [RuntimeMetadataKeys.ExecutableNodeId] = "node-1"
+    };
+
     [Fact]
     public async Task OnDrainedAsync_WithPoisonedRecordAndFaultedDrain_CommitsBlockingIncident()
     {
@@ -124,6 +130,61 @@ public sealed class PoisonedSchedulerWorkIncidentObserverTests
         var successfulView = ActivityExecutionInspectionValueSnapshotView.From(successfulNoValue, canInspectSensitiveValues: false);
         Assert.Equal("metadataOnly", successfulView.CaptureState);
         Assert.Null(successfulView.Failure);
+    }
+
+    [Fact]
+    public async Task OnDrainedAsync_WhenOptionalActivityProjectionReadFails_StillCommitsIncident()
+    {
+        var harness = new Harness(
+            _now,
+            activityExecutionStateStore: new ThrowingActivityExecutionStateStore(new InvalidOperationException("projection unavailable")));
+        await harness.RecordPoison(RuntimeSchedulerPoisonDisposition.Poisoned, metadata: ActivityAddressMetadata());
+
+        await harness.Observer.OnDrainedAsync(harness.Envelope, harness.FaultedDrainResult);
+
+        var incident = Assert.Single(await harness.IncidentStore.ListAsync("wfexec-1"));
+        Assert.Equal("activity-1", incident.ActivityExecutionId);
+        var commit = Assert.Single(harness.CommitStore.ListCommits()).Commit;
+        Assert.Empty(commit.Checkpoint.ActivityExecutionIds);
+        Assert.Empty(commit.StateChanges.ActivityExecutions);
+        Assert.Empty(commit.StateChanges.ActivityExecutionInspections);
+    }
+
+    [Fact]
+    public async Task OnDrainedAsync_WhenOptionalActivityProjectionIsCancelled_PropagatesCallerCancellation()
+    {
+        using var cancellationSource = new CancellationTokenSource();
+        var cancellation = new OperationCanceledException(cancellationSource.Token);
+        var harness = new Harness(
+            _now,
+            activityExecutionStateStore: new ThrowingActivityExecutionStateStore(cancellation, cancellationSource));
+        await harness.RecordPoison(RuntimeSchedulerPoisonDisposition.Poisoned, metadata: ActivityAddressMetadata());
+
+        var actual = await Record.ExceptionAsync(() => harness.Observer
+            .OnDrainedAsync(harness.Envelope, harness.FaultedDrainResult, cancellationSource.Token)
+            .AsTask());
+
+        Assert.Same(cancellation, actual);
+        Assert.Single(await harness.PoisonStore.ListAsync("wfexec-1"));
+        Assert.Empty(await harness.IncidentStore.ListAsync("wfexec-1"));
+    }
+
+    [Fact]
+    public async Task OnDrainedAsync_WhenOptionalActivityProjectionThrowsFatalFailure_PropagatesFatalFailure()
+    {
+        var fatal = new OutOfMemoryException("fatal projection failure");
+        var harness = new Harness(
+            _now,
+            activityExecutionStateStore: new ThrowingActivityExecutionStateStore(fatal));
+        await harness.RecordPoison(RuntimeSchedulerPoisonDisposition.Poisoned, metadata: ActivityAddressMetadata());
+
+        var actual = await Record.ExceptionAsync(() => harness.Observer
+            .OnDrainedAsync(harness.Envelope, harness.FaultedDrainResult)
+            .AsTask());
+
+        Assert.Same(fatal, actual);
+        Assert.Single(await harness.PoisonStore.ListAsync("wfexec-1"));
+        Assert.Empty(await harness.IncidentStore.ListAsync("wfexec-1"));
     }
 
     [Fact]
@@ -279,7 +340,10 @@ public sealed class PoisonedSchedulerWorkIncidentObserverTests
         public RuntimeSchedulerDrainResult FaultedDrainResult { get; }
         public RuntimeSchedulerDrainResult FaultFreeDrainResult { get; }
 
-        public Harness(DateTimeOffset now, IIncidentStateStore? commitIncidentStore = null)
+        public Harness(
+            DateTimeOffset now,
+            IIncidentStateStore? commitIncidentStore = null,
+            IActivityExecutionStateStore? activityExecutionStateStore = null)
         {
             _now = now;
             CommitStore = new InMemoryRuntimeCheckpointCommitStore(
@@ -298,7 +362,7 @@ public sealed class PoisonedSchedulerWorkIncidentObserverTests
                 IncidentStore,
                 committer,
                 timeProvider,
-                activityExecutionStateStore: ActivityStore,
+                activityExecutionStateStore: activityExecutionStateStore ?? ActivityStore,
                 inspectionAccumulator: inspectionAccumulator);
             FaultObserver = new BlockingIncidentWorkflowFaultObserver(
                 IncidentStore,
@@ -399,6 +463,33 @@ public sealed class PoisonedSchedulerWorkIncidentObserverTests
                 sequence: 1,
                 metadata: new Dictionary<string, string>());
         }
+    }
+
+    private sealed class ThrowingActivityExecutionStateStore(
+        Exception failure,
+        CancellationTokenSource? cancellationSource = null) : IActivityExecutionStateStore
+    {
+        public ValueTask<ActivityExecutionState> SaveAsync(ActivityExecutionState state, CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException("The projection-failure fixture only reads activity state.");
+
+        public ValueTask<ActivityExecutionState?> FindAsync(
+            string workflowExecutionId,
+            string activityExecutionId,
+            CancellationToken cancellationToken = default)
+        {
+            cancellationSource?.Cancel();
+            return ValueTask.FromException<ActivityExecutionState?>(failure);
+        }
+
+        public ValueTask<RuntimeStorePage<ActivityExecutionState>> ListPageAsync(
+            ActivityExecutionStatePageQuery query,
+            CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException("The projection-failure fixture only reads activity state.");
+
+        public ValueTask<RuntimeStorePage<ActivityExecutionState>> ListByParentPageAsync(
+            ActivityExecutionStateParentPageQuery query,
+            CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException("The projection-failure fixture only reads activity state.");
     }
 
     /// <summary>Simulates a projection-column overflow (GW-PHYSICAL-037): every incident write throws.</summary>

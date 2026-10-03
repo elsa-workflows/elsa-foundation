@@ -698,6 +698,43 @@ public sealed class ValueDurabilityPolicyTests
     }
 
     [Fact]
+    public async Task Portable_expression_request_construction_failure_reports_its_materialization_phase()
+    {
+        var reference = new DurableValueExternalReference("request-payloads", "requests/request-1", new Dictionary<string, string>());
+        var expression = new RuntimeExpressionBinding(
+            "test",
+            "value",
+            parameters: new Dictionary<string, ExpressionParameterBinding>
+            {
+                ["value"] = new WorkflowRequestExpressionParameterBinding("request")
+            });
+        var binding = new RuntimeInputBinding(
+            "message",
+            StringType,
+            ValueProtectionPolicy.InstanceInline,
+            RuntimeInputBindingSource.Expression,
+            expression: expression);
+        var context = NewResolutionContext(workflowInputEnvelopes: new Dictionary<string, ValueEnvelope>
+        {
+            ["request"] = ValueEnvelope.External(new ValueTypeDescriptor("Request"), reference, ExternalPolicy("request-payloads"))
+        });
+
+        var exception = await Assert.ThrowsAsync<ExpressionInputFailureException>(() =>
+            new RuntimeActivityInputMaterializer(
+                    new RuntimeInputBindingResolver(),
+                    new StringTypeRegistry(),
+                    new EchoPortableEvaluator(),
+                    new DisposedJsonPayloadStore())
+                .MaterializeSnapshotAsync(NewTypedNode(binding, ActivityValuePolicy.Default), "invocation-1", context, Now)
+                .AsTask());
+
+        Assert.Equal(ExpressionInputFailureException.InputMaterializationFailed, exception.InputFailureCode);
+        Assert.Equal("message", exception.InputKey);
+        Assert.Equal(ExpressionInputFailureException.MaterializationPhase, exception.EvaluationPhase);
+        Assert.IsType<ObjectDisposedException>(exception.InnerException);
+    }
+
+    [Fact]
     public async Task Sensitive_expression_failure_does_not_retain_the_evaluator_exception()
     {
         const string secret = "customer-secret-token";
@@ -939,6 +976,22 @@ public sealed class ValueDurabilityPolicyTests
             DurableValueExternalReference reference,
             CancellationToken cancellationToken = default) =>
             ValueTask.FromResult(payloads[reference.Locator].Clone());
+    }
+
+    private sealed class DisposedJsonPayloadStore : IExternalPayloadStore
+    {
+        public ValueTask<DurableValueExternalReference> WriteAsync(
+            ExternalPayloadWriteRequest request,
+            CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException("The request-construction regression only reads an existing payload.");
+
+        public ValueTask<JsonElement> ReadAsync(
+            DurableValueExternalReference reference,
+            CancellationToken cancellationToken = default)
+        {
+            using var document = JsonDocument.Parse("\"request-value\"");
+            return ValueTask.FromResult(document.RootElement);
+        }
     }
 
     private sealed class EchoPortableEvaluator : IPortableExpressionEvaluator

@@ -76,14 +76,14 @@ internal sealed class RuntimePortableExpressionEvaluator(
                 $"Ambient variable read on portable expression input '{inputName}' on executable node '{nodeId}'");
         }
 
-        PortableExpressionParameters parameters;
-        IReadOnlyDictionary<string, JsonElement>? ambientVariables;
+        ExpressionEvaluationRequest request;
         try
         {
-            parameters = await MaterializeParametersAsync(expression, resolutionContext, nodeId, inputName, cancellationToken);
-            ambientVariables = referencedAmbient.Count == 0
+            var parameters = await MaterializeParametersAsync(expression, resolutionContext, nodeId, inputName, cancellationToken);
+            var ambientVariables = referencedAmbient.Count == 0
                 ? null
                 : await MaterializeAmbientVariableValuesAsync(referencedAmbient, cancellationToken);
+            request = new ExpressionEvaluationRequest(definition, parameters.Values, ambientVariables, cancellationToken);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
@@ -108,7 +108,6 @@ internal sealed class RuntimePortableExpressionEvaluator(
                 exception);
         }
 
-        var request = new ExpressionEvaluationRequest(definition, parameters.Values, ambientVariables, cancellationToken);
         try
         {
             return new PortableExpressionEvaluation(await portableEvaluator.EvaluateAsync(request), effectivePolicy);

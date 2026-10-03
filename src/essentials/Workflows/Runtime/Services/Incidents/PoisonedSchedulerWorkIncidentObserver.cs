@@ -115,11 +115,10 @@ public sealed class PoisonedSchedulerWorkIncidentObserver : IWorkflowSchedulerDr
             if (record.Disposition != RuntimeSchedulerPoisonDisposition.Poisoned)
                 continue;
 
-            // Recording an incident is best-effort surfacing of an already-durable poison record: it must never
-            // sink the drain (and therefore the test-run / dispatch API call, #922). A persistence failure here —
-            // e.g. a projection-column overflow — is caught and logged with the original poison record so the
-            // underlying fault stays diagnosable instead of being masked by the storage error, and the drain
-            // continues to the remaining records and downstream observers.
+            // Recording an incident is best-effort surfacing of an already-durable poison record: a nonfatal
+            // persistence failure here must not sink the drain (and therefore the dispatch API call, #922). It is
+            // caught and logged with the original poison record so the underlying fault stays diagnosable instead
+            // of being masked by the storage error. Cancellation and fatal CLR failures still propagate.
             try
             {
                 var incidentId = IncidentId(record.WorkItemId);
@@ -133,7 +132,7 @@ public sealed class PoisonedSchedulerWorkIncidentObserver : IWorkflowSchedulerDr
             {
                 throw;
             }
-            catch (Exception exception)
+            catch (Exception exception) when (IsCatchableObserverFailure(exception))
             {
                 _logger.LogError(
                     exception,
@@ -230,10 +229,12 @@ public sealed class PoisonedSchedulerWorkIncidentObserver : IWorkflowSchedulerDr
             {
                 throw;
             }
-            catch (Exception exception)
+            catch (Exception exception) when (IsCatchableObserverFailure(exception))
             {
                 // An optional activity-side read projection must not prevent the durable poison incident itself from
-                // being committed. The incident retains its payload-derived address if that projection is unavailable.
+                // being committed when a nonfatal read/projection error occurs. The incident retains its
+                // payload-derived address if that projection is unavailable; cancellation and fatal CLR failures
+                // still propagate.
                 _logger.LogWarning(
                     exception,
                     "Failed to associate poisoned scheduler work item {WorkItemId} with activity execution {ActivityExecutionId}; recording the incident without an activity projection.",
@@ -342,4 +343,15 @@ public sealed class PoisonedSchedulerWorkIncidentObserver : IWorkflowSchedulerDr
 
     private static string? ValueOrNull(IReadOnlyDictionary<string, string> metadata, string key) =>
         metadata.TryGetValue(key, out var value) && !string.IsNullOrWhiteSpace(value) ? value : null;
+
+    private static bool IsCatchableObserverFailure(Exception exception) => exception is not (
+        OperationCanceledException or
+        OutOfMemoryException or
+        StackOverflowException or
+        AccessViolationException or
+        AppDomainUnloadedException or
+        BadImageFormatException or
+        CannotUnloadAppDomainException or
+        InvalidProgramException or
+        ThreadAbortException);
 }
