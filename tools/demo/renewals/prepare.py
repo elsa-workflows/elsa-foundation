@@ -198,7 +198,17 @@ def prepare_host(name):
     write_json(host / 'appsettings.Development.json', {
         'Nuplane': {'HostProvidedPackages': provided, 'Setup': {'Feeds': [{'Name': 'renewal-demo', 'DirectoryPath': str(feed), 'IncludePatterns': ['*'], 'Directory': {'Watch': True, 'DebounceWindow': '00:00:01'}}, {'Name': 'closure', 'DirectoryPath': str(DEMO / 'closure')}], 'PollInterval': '00:00:05'}, 'Capabilities': {'ef-provider': 'Sqlite'}},
         'Elsa': {'Shells': {'ReloadOnPackageChange': False}, 'ModuleManagement': {'Enabled': True}, 'DataProtection': {'ApplicationName': 'Toolbox.Renewals.Demo', 'EntityFrameworkCore': {'Enabled': True, 'Provider': 'Sqlite'}}, 'Cluster': {'Membership': {'HostId': 'toolbox-renewals-' + name, 'EntityFrameworkCore': {'Enabled': True, 'Provider': 'Sqlite'}, 'HeartbeatInterval': '00:00:02', 'ExpiryPeriod': '00:00:10', 'SkewAllowance': '00:00:02'}}, 'Persistence': {'EntityFramework': {'Migrate': {'Policy': 'Validate'}, 'Finalization': {'EvaluationInterval': '00:00:02', 'RefreshInterval': '00:00:02'}}}},
-        'Logging': {'LogLevel': {'Default': 'Information', 'Polly': 'Warning', 'CShells.AspNetCore.Resolution.WebRoutingShellResolver': 'Warning', 'CShells.AspNetCore.Middleware.ShellMiddleware': 'Warning', 'Nuplane.Observability.ReconciliationLogger': 'Warning', 'Microsoft.EntityFrameworkCore.Database.Command': 'Warning'}}
+        # Keep the live story legible without hiding activation or migration errors.
+        # Reconciliation state and CLI results are also captured by the cockpit.
+        'Logging': {'LogLevel': {
+            'Default': 'Warning',
+            'Microsoft.Hosting.Lifetime': 'Information',
+            'CShells.Lifecycle': 'Information',
+            'Elsa.Foundation.Host': 'Information',
+            'Elsa.Persistence.Schema': 'Information',
+            'Elsa.Samples.Nuplane': 'Information',
+            'Elsa.Activities.Design.Reconciliation.Clr.Services.ClrAssemblyScanner': 'Error'
+        }}
     })
     print('Prepared Foundation.Host ' + name + ' on port ' + str(HOSTS[name]), flush=True)
 
