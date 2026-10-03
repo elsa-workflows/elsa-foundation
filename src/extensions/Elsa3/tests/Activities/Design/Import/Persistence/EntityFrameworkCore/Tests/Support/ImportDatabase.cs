@@ -11,6 +11,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Storage;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Elsa3.Activities.Design.Import.Persistence.EntityFrameworkCore.Tests.Support;
 
@@ -65,7 +66,7 @@ internal sealed partial class ImportDatabase(
         clock ??= new MutableTimeProvider(ImportFixtures.Now);
         var analyzer = new ReusableActivityCollectionAnalyzer();
         var importer = new ReusableActivityCollectionImporter(analyzer, ImportFixtures.Materializer(), command ?? Command(access, clock));
-        return new ReusableActivityImportOperationService(OperationStore(access), importer, ImportFixtures.Options(), clock);
+        return new ReusableActivityImportOperationService(OperationStore(access), importer, ImportFixtures.Options(), clock, NullLogger<ReusableActivityImportOperationService>.Instance);
     }
 
     public async Task<LedgerCounts> CountAsync()
