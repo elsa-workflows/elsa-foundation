@@ -39,11 +39,22 @@ public sealed record WorkflowInstanceSummaryView(
     string? SourceId = null,
     string? SourceVersion = null)
 {
+    public int? ActiveIncidentCount { get; init; }
+    public int? BlockingIncidentCount { get; init; }
+
     public static WorkflowInstanceSummaryView From(
         WorkflowExecutionState state,
         long activityCount = 0,
         int incidentCount = 0,
         bool canInspectSensitiveValues = false) =>
+        From(state, activityCount, incidentCount, canInspectSensitiveValues, incidentHealth: null);
+
+    public static WorkflowInstanceSummaryView From(
+        WorkflowExecutionState state,
+        long activityCount,
+        int incidentCount,
+        bool canInspectSensitiveValues,
+        IncidentHealthCounts? incidentHealth) =>
         new(
             state.WorkflowExecutionId,
             state.PinnedExecutable.ArtifactId,
@@ -68,7 +79,11 @@ public sealed record WorkflowInstanceSummaryView(
             state.PinnedSource?.SlotId,
             state.PinnedSource?.SourceKind,
             state.PinnedSource?.SourceId,
-            state.PinnedSource?.SourceVersion);
+            state.PinnedSource?.SourceVersion)
+        {
+            ActiveIncidentCount = incidentHealth?.Active,
+            BlockingIncidentCount = incidentHealth?.Blocking
+        };
 }
 
 /// <summary>

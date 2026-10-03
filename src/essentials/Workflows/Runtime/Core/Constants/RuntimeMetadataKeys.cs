@@ -18,6 +18,10 @@ public static class RuntimeMetadataKeys
     public const string CheckpointSideEffectProfileExternal = "External";
     public const string CheckpointSideEffectProfileReplaySafe = "ReplaySafe";
     public const string ActivityExecutionId = "runtime.activityExecutionId";
+    public const string InputFailureCode = "runtime.inputFailureCode";
+    public const string InputEvaluationPhase = "runtime.inputEvaluationPhase";
+    public const string InputKey = "runtime.inputKey";
+    public const string ExpressionLanguage = "runtime.expressionLanguage";
     /// <summary>
     /// Attempt identity durably claimed by an InvokeActivity delivery before CLR activation. If the same open
     /// attempt is still claimed when the work item is redelivered, the runtime closes it and commits a fresh retry

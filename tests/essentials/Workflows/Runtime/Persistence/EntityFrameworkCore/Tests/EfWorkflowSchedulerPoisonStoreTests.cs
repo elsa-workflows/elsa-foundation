@@ -52,7 +52,19 @@ public sealed class EfWorkflowSchedulerPoisonStoreTests
     {
         await using var database = await TestDatabase.CreateAsync();
         await using var fixture = database.Open("tenant-a");
-        var expected = Record(1, disposition: RuntimeSchedulerPoisonDisposition.RetryScheduled, nextRetryAt: Now.AddMinutes(5));
+        var expected = Record(
+            1,
+            disposition: RuntimeSchedulerPoisonDisposition.RetryScheduled,
+            nextRetryAt: Now.AddMinutes(5),
+            metadata: new Dictionary<string, string>
+            {
+                ["runtime.activityExecutionId"] = "activity-1",
+                ["runtime.executableNodeId"] = "node-1",
+                ["runtime.inputKey"] = "text",
+                ["runtime.inputFailureCode"] = "ExpressionEvaluationFailed",
+                ["runtime.expressionLanguage"] = "JavaScript",
+                ["runtime.inputEvaluationPhase"] = "Evaluation"
+            });
 
         await fixture.Store.RecordAsync(expected);
         var actual = await fixture.Store.FindAsync(expected.WorkflowExecutionId, expected.WorkItemId);
@@ -68,6 +80,8 @@ public sealed class EfWorkflowSchedulerPoisonStoreTests
         Assert.Equal(expected.LastFailedAt, actual.LastFailedAt);
         Assert.Equal(expected.NextRetryAt, actual.NextRetryAt);
         Assert.Equal("work-1", actual.Metadata["payload"]);
+        foreach (var (key, value) in expected.Metadata)
+            Assert.Equal(value, actual.Metadata[key]);
     }
 
     [Fact]
@@ -242,7 +256,8 @@ public sealed class EfWorkflowSchedulerPoisonStoreTests
         string? workItemId = null,
         int failureCount = 1,
         RuntimeSchedulerPoisonDisposition disposition = RuntimeSchedulerPoisonDisposition.Poisoned,
-        DateTimeOffset? nextRetryAt = null) =>
+        DateTimeOffset? nextRetryAt = null,
+        IReadOnlyDictionary<string, string>? metadata = null) =>
         new(
             workflowExecutionId,
             workItemId ?? $"work-{index}",
@@ -254,7 +269,9 @@ public sealed class EfWorkflowSchedulerPoisonStoreTests
             Now.AddMilliseconds(index),
             Now.AddMilliseconds(index * 2.0),
             disposition == RuntimeSchedulerPoisonDisposition.RetryScheduled ? nextRetryAt ?? Now.AddMinutes(1) : null,
-            new Dictionary<string, string> { ["source"] = "test", ["payload"] = $"work-{index}" },
+            new Dictionary<string, string> { ["source"] = "test", ["payload"] = $"work-{index}" }
+                .Concat(metadata ?? new Dictionary<string, string>())
+                .ToDictionary(item => item.Key, item => item.Value, StringComparer.Ordinal),
             new RuntimeFaultInfo("System.ArgumentException", $"inner-{index}"));
 
     private sealed class FixedAccessor(string scope) : IPersistenceAccessContextAccessor
