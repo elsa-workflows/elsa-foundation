@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 2,
+  "loading": {
+    "loadMode": "HostIntegrated",
+    "scope": "DependencyClosure",
+    "reason": "A portable Foundation Identity composition loaded by Nuplane into Elsa.Foundation.Host."
+  },
+  "capabilities": [
+    {
+      "name": "ef-provider",
+      "description": "The EF Core relational provider used by the demo Identity IAM and provider-configuration stores.",
+      "options": [
+        { "name": "Sqlite", "packageId": "Microsoft.EntityFrameworkCore.Sqlite", "version": "[10.0.10]" }
+      ]
+    }
+  ]
+}
