@@ -83,7 +83,8 @@ deleted from the import ledger. `ReusableActivityImportOperationService` owns th
   same export needs a new upload.
 - **A refused apply deletes the upload, unless its caller can continue with the same upload.** The outcomes that keep
   it are a stale plan or an invalid or non-closed selection (422), an idempotency conflict raised inside the commit
-  (409, a concurrent request won the same key), an identity collision (409), a persistence failure (which includes a
+  (409: a concurrent request won the same key with other content, and if it applied another upload this one is still
+  usable under a new key), an identity collision (409), a persistence failure (which includes a
   commit whose outcome is unknown, where the repeat needs the collection again), a schema write refusal and a
   cancellation. Every other outcome refuses the upload's content and deletes it; unknown outcomes fall
   on the deleting side on purpose. A malformed request (a blank plan ID or idempotency key) is refused before the
@@ -99,9 +100,11 @@ deleted from the import ledger. `ReusableActivityImportOperationService` owns th
   visit the global partition, which no host-supplied scope names: an upload stored under a global persistence
   context is deleted by its apply or by the read that finds it expired.
 
-A delete that fails leaves the outcome the caller asked for in place (the receipt, the refusal, the 410), is logged,
-and is left to the two backstops: a replay of the idempotency key repeats it, and the sweep deletes the row once it
-expires. Between its upload and its apply or expiry the document is at rest in the ledger, as a reviewed import needs
+The outcome is decided when these deletes run, so they do not observe the caller's cancellation: a client that
+disconnects after a refusal does not leave the refused upload behind. A delete that fails leaves the outcome the caller
+asked for in place (the receipt, the refusal, the 410) and is logged. The row then stays until something deletes it:
+after a completed apply, a replay of the idempotency key repeats the delete; in a tenant partition, the sweep deletes
+the row once its lifetime runs out. An upload in the global partition whose delete fails is not retried. Between its upload and its apply or expiry the document is at rest in the ledger, as a reviewed import needs
 it to be. The rule bounds that time; it does not encrypt the column, and it does not reach database backups.
 
 ### `IActivityCollectionJsonSource` *(Feature contract — `Elsa3.Activities.Design.Import`)*

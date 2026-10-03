@@ -5,7 +5,6 @@ using Elsa3.Activities.Design.Import.Contracts;
 using Elsa3.Activities.Design.Import.Models;
 using Elsa3.Models;
 using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 
 namespace Elsa3.Activities.Design.Import.Services;
@@ -35,11 +34,10 @@ public sealed class ReusableActivityImportOperationService(
     IReusableActivityCollectionImporter importer,
     IOptions<ReusableActivityImportOptions> options,
     TimeProvider timeProvider,
-    ILogger<ReusableActivityImportOperationService>? logger = null) : IReusableActivityImportOperationService
+    ILogger<ReusableActivityImportOperationService> logger) : IReusableActivityImportOperationService
 {
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
     private readonly ReusableActivityImportOptions _options = ValidateOptions(options.Value);
-    private readonly ILogger _logger = logger ?? NullLogger<ReusableActivityImportOperationService>.Instance;
 
     /// <inheritdoc />
     public async ValueTask<ReusableActivityImportUploadResult> UploadAsync(
@@ -251,7 +249,7 @@ public sealed class ReusableActivityImportOperationService(
                 throw new ReusableActivityImportIdempotencyConflictException(idempotencyKey);
             // The apply this receipt records consumed its upload. Repeating the delete covers an apply that
             // committed and stopped before its delete ran.
-            await DiscardCollectionAsync(collectionHandle, accessScope, cancellationToken);
+            await DiscardCollectionAsync(collectionHandle, accessScope);
             return prior with { Status = ReusableActivityImportReceiptStatus.AlreadyImported };
         }
 
@@ -265,7 +263,7 @@ public sealed class ReusableActivityImportOperationService(
         }
         catch (Exception exception) when (!LeavesUploadUsable(exception))
         {
-            await DiscardCollectionAsync(collectionHandle, accessScope, cancellationToken);
+            await DiscardCollectionAsync(collectionHandle, accessScope);
             throw;
         }
 
@@ -274,9 +272,7 @@ public sealed class ReusableActivityImportOperationService(
                           "apply",
                           idempotencyKey,
                           new InvalidOperationException("The atomic import adapter did not return a durable receipt."));
-        // Not the caller's to cancel: the commit is durable and is reported as applied whatever the caller
-        // cancelled since, and the upload it consumed is deleted on the same terms.
-        await DiscardCollectionAsync(collectionHandle, accessScope, CancellationToken.None);
+        await DiscardCollectionAsync(collectionHandle, accessScope);
         return receipt;
     }
 
@@ -303,37 +299,41 @@ public sealed class ReusableActivityImportOperationService(
                          ?? throw new ReusableActivityImportNotFoundException("The Elsa 3 import collection was not found.");
         if (collection.ExpiresAt <= timeProvider.GetUtcNow())
         {
-            await DiscardCollectionAsync(handle, accessScope, cancellationToken);
+            await DiscardCollectionAsync(handle, accessScope);
             throw new ReusableActivityImportExpiredException(handle);
         }
         return collection;
     }
 
     /// <summary>
-    /// Deletes a decided or expired upload from the ledger. The outcome the caller asked for (the receipt, the
-    /// refusal, the 410) stands whether or not this delete succeeds: a failed delete is logged and the upload is
-    /// left to the two backstops, the replay of the idempotency key, which repeats the delete, and the expiry
-    /// sweep. Only cancellation escapes, and only on the paths that pass the caller's token.
+    /// Deletes a decided or expired upload from the ledger. The outcome is already decided when this runs, so the
+    /// caller's cancellation does not stop it: a client that disconnects after a refusal must not leave the refused
+    /// upload, and whatever literal it holds, in place. For the same reason a failed delete never replaces that
+    /// outcome (the receipt, the refusal, the 410). It is logged, and the row stays until something deletes it: a
+    /// replay of the key repeats the delete after a completed apply, and in a tenant partition the expiry sweep
+    /// deletes it once its lifetime runs out.
     /// </summary>
-    private async ValueTask DiscardCollectionAsync(string handle, ReusableActivityImportAccessScope accessScope, CancellationToken cancellationToken)
+    private async ValueTask DiscardCollectionAsync(string handle, ReusableActivityImportAccessScope accessScope)
     {
         try
         {
-            await store.DeleteCollectionAsync(handle, accessScope, cancellationToken);
+            await store.DeleteCollectionAsync(handle, accessScope, CancellationToken.None);
         }
-        catch (ReusableActivityImportPersistenceException exception)
+        catch (Exception exception) when (exception is not (OutOfMemoryException or StackOverflowException or AccessViolationException))
         {
-            _logger.LogError(exception, "The Elsa 3 import collection upload {Handle} was decided or expired but could not be deleted from the import ledger; the expiry sweep deletes it later", handle);
+            logger.LogError(exception, "The decided or expired Elsa 3 import collection upload {Handle} could not be deleted from the import ledger", handle);
         }
     }
 
     /// <summary>
     /// True for the apply outcomes the caller can continue from with the same upload: a corrected plan or selection,
-    /// a new idempotency key after a concurrent request won the same key inside the commit, a resolved identity
-    /// collision, or a repeat after a persistence failure, a schema write refusal or a cancellation. A persistence
-    /// failure includes a commit whose outcome is unknown, where the repeat needs the collection again. Every other outcome refuses the upload's content, such as a mapped literal on an input
-    /// declared a credential (spec 188, FR-008), and that upload is deleted. Unknown outcomes fall on the deleting
-    /// side on purpose: deleting an upload costs its owner a new upload, keeping one may keep a credential at rest.
+    /// a resolved identity collision, or a repeat after a persistence failure, a schema write refusal or a
+    /// cancellation. A persistence failure includes a commit whose outcome is unknown, where the repeat needs the
+    /// collection again. An idempotency conflict inside the commit means a concurrent request won the same key with
+    /// other content; when that request applied another upload, this one is still usable under a new key. Every
+    /// other outcome refuses the upload's content, such as a mapped literal on an input declared a credential (spec
+    /// 188, FR-008), and that upload is deleted. Unknown outcomes fall on the deleting side on purpose: deleting an
+    /// upload costs its owner a new upload, keeping one may keep a credential at rest.
     /// </summary>
     private static bool LeavesUploadUsable(Exception exception) => exception is
         OperationCanceledException or

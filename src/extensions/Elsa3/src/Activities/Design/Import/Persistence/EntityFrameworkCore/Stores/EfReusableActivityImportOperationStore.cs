@@ -149,11 +149,10 @@ public sealed class EfReusableActivityImportOperationStore(
             var deleted = 0;
             foreach (var candidate in candidates)
             {
-                // ExecuteDelete takes no row limit, so each bounded candidate is deleted by its key. The expiry and the
-                // version are part of the delete itself: the statement removes an expired, readable row or nothing.
+                // ExecuteDelete takes no row limit, so each bounded candidate is deleted by its key. The expiry is
+                // part of the delete itself: the statement removes an expired row or nothing.
                 deleted += await db.Collections
-                    .Where(row => row.TenantKey == tenantKey && row.UserIdHash == candidate.UserIdHash && row.HandleHash == candidate.HandleHash &&
-                                  row.ExpiresAtUtcTicks <= cutoff && readableVersions.Contains(row.SchemaVersion))
+                    .Where(row => row.TenantKey == tenantKey && row.UserIdHash == candidate.UserIdHash && row.HandleHash == candidate.HandleHash && row.ExpiresAtUtcTicks <= cutoff)
                     .ExecuteDeleteAsync(cancellationToken);
             }
 
