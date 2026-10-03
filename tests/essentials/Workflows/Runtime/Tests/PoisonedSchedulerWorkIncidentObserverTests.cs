@@ -30,6 +30,33 @@ public sealed class PoisonedSchedulerWorkIncidentObserverTests
         [RuntimeMetadataKeys.ExecutableNodeId] = "node-1"
     };
 
+    private static IReadOnlyDictionary<string, string> InputFailureMetadata() => new Dictionary<string, string>
+    {
+        [RuntimeMetadataKeys.ActivityExecutionId] = "activity-1",
+        [RuntimeMetadataKeys.ExecutableNodeId] = "node-1",
+        [RuntimeMetadataKeys.InputKey] = "text",
+        [RuntimeMetadataKeys.InputFailureCode] = "ExpressionEvaluationFailed",
+        [RuntimeMetadataKeys.ExpressionLanguage] = "JavaScript",
+        [RuntimeMetadataKeys.InputEvaluationPhase] = "Evaluation"
+    };
+
+    private static RuntimeFaultInfo RedactedInputFailure() => new(
+        "Elsa.Workflows.Runtime.Services.Values.RedactedPortableExpressionException",
+        "Portable expression input fault was redacted (System.InvalidOperationException).");
+
+    private static IReadOnlyDictionary<string, string> BuildCanonicalInputIncidentMetadata(string incidentId)
+    {
+        var metadata = InputFailureMetadata().ToDictionary(item => item.Key, item => item.Value, StringComparer.Ordinal);
+        var fault = RedactedInputFailure();
+        metadata[RuntimeMetadataKeys.IncidentId] = incidentId;
+        metadata[RuntimeMetadataKeys.CheckpointReason] = PoisonedSchedulerWorkIncidentObserver.IncidentFailureType;
+        metadata[RuntimeMetadataKeys.CheckpointRequirement] = RuntimeMetadataKeys.CheckpointRequirementMandatory;
+        metadata[RuntimeMetadataKeys.SchedulerWorkItemId] = "workitem-1";
+        metadata[RuntimeMetadataKeys.FaultInnerType] = fault.ExceptionType;
+        metadata[RuntimeMetadataKeys.FaultInnerMessage] = fault.Message;
+        return metadata;
+    }
+
     [Fact]
     public async Task OnDrainedAsync_WithPoisonedRecordAndFaultedDrain_CommitsBlockingIncident()
     {
@@ -66,18 +93,8 @@ public sealed class PoisonedSchedulerWorkIncidentObserverTests
         var activity = await _harness.SaveActivity();
         await _harness.RecordPoison(
             RuntimeSchedulerPoisonDisposition.Poisoned,
-            innerFault: new RuntimeFaultInfo(
-                "Elsa.Workflows.Runtime.Services.Values.RedactedPortableExpressionException",
-                "Portable expression input fault was redacted (System.InvalidOperationException)."),
-            metadata: new Dictionary<string, string>
-            {
-                [RuntimeMetadataKeys.ActivityExecutionId] = "activity-1",
-                [RuntimeMetadataKeys.ExecutableNodeId] = "node-1",
-                [RuntimeMetadataKeys.InputKey] = "text",
-                [RuntimeMetadataKeys.InputFailureCode] = "ExpressionEvaluationFailed",
-                [RuntimeMetadataKeys.ExpressionLanguage] = "JavaScript",
-                [RuntimeMetadataKeys.InputEvaluationPhase] = "Evaluation"
-            });
+            innerFault: RedactedInputFailure(),
+            metadata: InputFailureMetadata());
 
         await _harness.Observer.OnDrainedAsync(_harness.Envelope, _harness.FaultedDrainResult);
 
@@ -148,6 +165,155 @@ public sealed class PoisonedSchedulerWorkIncidentObserverTests
         Assert.Empty(commit.Checkpoint.ActivityExecutionIds);
         Assert.Empty(commit.StateChanges.ActivityExecutions);
         Assert.Empty(commit.StateChanges.ActivityExecutionInspections);
+    }
+
+    [Fact]
+    public async Task OnDrainedAsync_WhenInitialActivityReadFails_RepairsCanonicalIncidentOnLaterFaultedDrain()
+    {
+        var activityStore = new FailOnceActivityExecutionStateStore(_harness.ActivityStore);
+        var harness = new Harness(_now, activityExecutionStateStore: activityStore);
+        await harness.SaveActivity();
+        await harness.RecordPoison(
+            RuntimeSchedulerPoisonDisposition.Poisoned,
+            innerFault: RedactedInputFailure(),
+            metadata: InputFailureMetadata());
+
+        await harness.Observer.OnDrainedAsync(harness.Envelope, harness.FaultedDrainResult);
+
+        var incident = Assert.Single(await harness.IncidentStore.ListAsync("wfexec-1"));
+        Assert.Empty((await harness.ActivityStore.FindAsync("wfexec-1", "activity-1"))!.IncidentIds);
+        Assert.Null(await harness.InspectionStore.FindAsync("wfexec-1", "activity-1"));
+        Assert.Single(harness.CommitStore.ListCommits());
+
+        await harness.Observer.OnDrainedAsync(harness.Envelope, harness.FaultedDrainResult);
+        await harness.Observer.OnDrainedAsync(harness.Envelope, harness.FaultedDrainResult);
+
+        var persistedActivity = await harness.ActivityStore.FindAsync("wfexec-1", "activity-1");
+        Assert.NotNull(persistedActivity);
+        Assert.Equal(ActivityExecutionStatus.Scheduled, persistedActivity!.Status);
+        Assert.Null(persistedActivity.StartedAt);
+        Assert.Null(persistedActivity.CompletedAt);
+        Assert.Null(persistedActivity.InputSnapshot);
+        Assert.Null(persistedActivity.Attempts);
+        Assert.Equal([incident.IncidentId], persistedActivity.IncidentIds);
+        Assert.Equal(3, activityStore.FindAttempts);
+
+        var projection = await harness.InspectionStore.FindAsync("wfexec-1", "activity-1");
+        Assert.NotNull(projection);
+        Assert.Equal(incident.IncidentId, Assert.Single(projection!.Incidents).IncidentId);
+        var failure = Assert.Single(projection.ValueSnapshots);
+        Assert.Equal(incident.IncidentId, failure.EvaluationId);
+        Assert.Equal("ExpressionEvaluationFailed", failure.Failure!.Code);
+        Assert.Equal(2, harness.CommitStore.ListCommits().Count);
+
+        var originalIncident = Assert.Single(await harness.IncidentStore.ListAsync("wfexec-1"));
+        Assert.Equal(incident.IncidentId, originalIncident.IncidentId);
+        Assert.Equal(IncidentStatus.Blocking, originalIncident.Status);
+        Assert.Equal(incident.Message, originalIncident.Message);
+        var repairCommit = harness.CommitStore.ListCommits()
+            .Select(item => item.Commit)
+            .Single(commit => commit.CommitId.Contains("scheduler-poison-repair", StringComparison.Ordinal));
+        Assert.Empty(repairCommit.StateChanges.Incidents);
+        Assert.Equal("activity-1", Assert.Single(repairCommit.Checkpoint.ActivityExecutionIds));
+        Assert.NotEqual(
+            harness.CommitStore.ListCommits().Select(item => item.Commit.Checkpoint.CheckpointId).First(),
+            repairCommit.Checkpoint.CheckpointId);
+    }
+
+    [Fact]
+    public async Task OnDrainedAsync_WhenExistingIncidentIsResolved_AddsFailureBesideSuccessfulInputEvidence()
+    {
+        var inspectionStore = new InMemoryActivityExecutionInspectionStore();
+        var inspectionReadStore = new FailOnceActivityExecutionInspectionStore(inspectionStore);
+        var harness = new Harness(
+            _now,
+            activityExecutionInspectionStore: inspectionReadStore,
+            inspectionStore: inspectionStore);
+        var activity = await harness.SaveActivity();
+        var incidentId = PoisonedSchedulerWorkIncidentObserver.IncidentId("workitem-1");
+        var resolvedAt = _now.AddMinutes(-1);
+        var incident = new IncidentState(
+            incidentId: incidentId,
+            workflowExecutionId: "wfexec-1",
+            activityExecutionId: "activity-1",
+            executableNodeId: "node-1",
+            severity: IncidentSeverity.Critical,
+            status: IncidentStatus.Resolved,
+            resolutionOutcome: new IncidentResolutionOutcome("Acme.OperatorResolution", resolvedAt, strategy: null, systemSource: "TestResolution"),
+            failureType: PoisonedSchedulerWorkIncidentObserver.IncidentFailureType,
+            message: "resolved before projection recovery",
+            createdAt: _now.AddMinutes(-5),
+            resolvedAt: resolvedAt,
+            metadata: BuildCanonicalInputIncidentMetadata(incidentId));
+        await harness.IncidentStore.SaveAsync(incident);
+        await harness.RecordPoison(RuntimeSchedulerPoisonDisposition.Poisoned, metadata: ActivityAddressMetadata());
+
+        var successfulSnapshot = new ActivityExecutionInspectionValueSnapshot(
+            Name: "text",
+            Subject: ActivityExecutionInspectionValueSubject.ActivityInput,
+            CaptureMode: RuntimePayloadCaptureMode.MetadataOnly,
+            Type: null,
+            CapturedAt: _now.AddMinutes(-4),
+            Payload: null,
+            CaptureReason: "Value capture was withheld by policy.",
+            IsSensitive: false,
+            Metadata: new Dictionary<string, string>(),
+            InputKey: "text",
+            EvaluationId: "successful-evaluation",
+            Phase: "Evaluation",
+            Sequence: 1);
+        var successfulProjection = ActivityExecutionInspectionProjection.FromState(
+            activity,
+            "checkpoint:successful-input",
+            _now.AddMinutes(-4),
+            valueSnapshots: [successfulSnapshot]);
+        await harness.InspectionStore.SaveAsync(successfulProjection);
+
+        var associationOnlyObserver = harness.CreateObserver(inspectionAccumulator: null);
+        await associationOnlyObserver.OnDrainedAsync(harness.Envelope, harness.FaultedDrainResult);
+
+        var unchangedIncident = await harness.IncidentStore.FindAsync("wfexec-1", incidentId);
+        Assert.Equal(IncidentStatus.Resolved, unchangedIncident!.Status);
+        Assert.Equal([incidentId], (await harness.ActivityStore.FindAsync("wfexec-1", "activity-1"))!.IncidentIds);
+        Assert.Equal(successfulProjection, await harness.InspectionStore.FindAsync("wfexec-1", "activity-1"));
+        var associationCommit = Assert.Single(harness.CommitStore.ListCommits()).Commit;
+        Assert.Empty(associationCommit.StateChanges.ActivityExecutionInspections);
+
+        // The next worker can now repair inspection evidence with its normal accumulator. Its distinct deterministic
+        // checkpoint identity must allow this projection-only repair after the association-only commit above.
+        await harness.Observer.OnDrainedAsync(harness.Envelope, harness.FaultedDrainResult);
+        Assert.Single(harness.CommitStore.ListCommits());
+        Assert.Equal(successfulProjection, await harness.InspectionStore.FindAsync("wfexec-1", "activity-1"));
+        await harness.Observer.OnDrainedAsync(harness.Envelope, harness.FaultedDrainResult);
+        await harness.Observer.OnDrainedAsync(harness.Envelope, harness.FaultedDrainResult);
+
+        var persistedIncident = await harness.IncidentStore.FindAsync("wfexec-1", incidentId);
+        Assert.NotNull(persistedIncident);
+        Assert.Equal(IncidentStatus.Resolved, persistedIncident!.Status);
+        Assert.Equal(resolvedAt, persistedIncident.ResolvedAt);
+        Assert.Equal("Acme.OperatorResolution", persistedIncident.ResolutionOutcome!.ActionKind);
+        Assert.Equal(incident.Message, persistedIncident.Message);
+
+        var persistedActivity = await harness.ActivityStore.FindAsync("wfexec-1", "activity-1");
+        Assert.NotNull(persistedActivity);
+        Assert.Equal([incidentId], persistedActivity!.IncidentIds);
+        Assert.Equal(ActivityExecutionStatus.Scheduled, persistedActivity.Status);
+        Assert.Null(persistedActivity.StartedAt);
+        Assert.Null(persistedActivity.CompletedAt);
+
+        var projection = await harness.InspectionStore.FindAsync("wfexec-1", "activity-1");
+        Assert.NotNull(projection);
+        Assert.Equal(successfulProjection.ValueSnapshots.Single(), projection!.ValueSnapshots.Single(snapshot => snapshot.EvaluationId == "successful-evaluation"));
+        var failure = Assert.Single(projection.ValueSnapshots.Where(snapshot => snapshot.EvaluationId == incidentId));
+        Assert.Equal("ExpressionEvaluationFailed", failure.Failure!.Code);
+        Assert.Equal(1, projection.Incidents.Count(summary => summary.IncidentId == incidentId));
+        var commits = harness.CommitStore.ListCommits().Select(item => item.Commit).ToArray();
+        Assert.Equal(2, commits.Length);
+        var inspectionCommit = commits.Single(commit => commit.CommitId.Contains("scheduler-poison-repair-inspection", StringComparison.Ordinal));
+        Assert.Empty(inspectionCommit.StateChanges.ActivityExecutions);
+        Assert.Single(inspectionCommit.StateChanges.ActivityExecutionInspections);
+        Assert.NotEqual(associationCommit.CommitId, inspectionCommit.CommitId);
+        Assert.NotEqual(associationCommit.Checkpoint.CheckpointId, inspectionCommit.Checkpoint.CheckpointId);
     }
 
     [Fact]
@@ -332,8 +498,10 @@ public sealed class PoisonedSchedulerWorkIncidentObserverTests
         public InMemoryIncidentStateStore IncidentStore { get; } = new();
         public InMemoryWorkflowExecutionStateStore WorkflowStore { get; } = new();
         public InMemoryActivityExecutionStateStore ActivityStore { get; } = new();
-        public InMemoryActivityExecutionInspectionStore InspectionStore { get; } = new();
+        public InMemoryActivityExecutionInspectionStore InspectionStore { get; }
         public InMemoryRuntimeCheckpointCommitStore CommitStore { get; }
+        public RuntimeCheckpointCommitter CheckpointCommitter { get; }
+        public FakeTimeProvider TimeProvider { get; }
         public PoisonedSchedulerWorkIncidentObserver Observer { get; }
         public BlockingIncidentWorkflowFaultObserver FaultObserver { get; }
         public WorkflowExecutionCommandEnvelope Envelope { get; }
@@ -343,9 +511,12 @@ public sealed class PoisonedSchedulerWorkIncidentObserverTests
         public Harness(
             DateTimeOffset now,
             IIncidentStateStore? commitIncidentStore = null,
-            IActivityExecutionStateStore? activityExecutionStateStore = null)
+            IActivityExecutionStateStore? activityExecutionStateStore = null,
+            IActivityExecutionInspectionStore? activityExecutionInspectionStore = null,
+            InMemoryActivityExecutionInspectionStore? inspectionStore = null)
         {
             _now = now;
+            InspectionStore = inspectionStore ?? new InMemoryActivityExecutionInspectionStore();
             CommitStore = new InMemoryRuntimeCheckpointCommitStore(
                 WorkflowStore,
                 activityExecutionStateStore: ActivityStore,
@@ -354,23 +525,24 @@ public sealed class PoisonedSchedulerWorkIncidentObserverTests
                 incidentStateStore: commitIncidentStore ?? IncidentStore,
                 activityExecutionInspectionWriter: InspectionStore,
                 rootWriteLeaseManager: PassThroughWorkflowExecutableRootWriteLeaseManager.Instance);
-            var committer = new RuntimeCheckpointCommitter(new ImmediateRuntimeCheckpointPersistencePolicy(), CommitStore, new AsyncLocalRuntimeExecutionOwnershipContextAccessor(), [], []);
-            var timeProvider = new FakeTimeProvider(now);
+            CheckpointCommitter = new RuntimeCheckpointCommitter(new ImmediateRuntimeCheckpointPersistencePolicy(), CommitStore, new AsyncLocalRuntimeExecutionOwnershipContextAccessor(), [], []);
+            TimeProvider = new FakeTimeProvider(now);
             var inspectionAccumulator = new RuntimeActivityExecutionInspectionAccumulator(InspectionStore);
             Observer = new PoisonedSchedulerWorkIncidentObserver(
                 PoisonStore,
                 IncidentStore,
-                committer,
-                timeProvider,
+                CheckpointCommitter,
+                TimeProvider,
                 activityExecutionStateStore: activityExecutionStateStore ?? ActivityStore,
-                inspectionAccumulator: inspectionAccumulator);
+                inspectionAccumulator: inspectionAccumulator,
+                activityExecutionInspectionStore: activityExecutionInspectionStore ?? InspectionStore);
             FaultObserver = new BlockingIncidentWorkflowFaultObserver(
                 IncidentStore,
                 WorkflowStore,
                 ActivityStore,
                 inspectionAccumulator,
-                committer,
-                timeProvider);
+                CheckpointCommitter,
+                TimeProvider);
             Envelope = NewEnvelope();
             FaultedDrainResult = new RuntimeSchedulerDrainResult("wfexec-1", now, now,
             [
@@ -386,6 +558,17 @@ public sealed class PoisonedSchedulerWorkIncidentObserverTests
             ]);
             FaultFreeDrainResult = new RuntimeSchedulerDrainResult("wfexec-1", now, now, []);
         }
+
+        public PoisonedSchedulerWorkIncidentObserver CreateObserver(
+            IRuntimeActivityExecutionInspectionAccumulator? inspectionAccumulator) =>
+            new(
+                PoisonStore,
+                IncidentStore,
+                CheckpointCommitter,
+                TimeProvider,
+                ActivityStore,
+                inspectionAccumulator,
+                InspectionStore);
 
         public ValueTask<RuntimeSchedulerPoisonRecord> RecordPoison(
             RuntimeSchedulerPoisonDisposition disposition,
@@ -490,6 +673,65 @@ public sealed class PoisonedSchedulerWorkIncidentObserverTests
             ActivityExecutionStateParentPageQuery query,
             CancellationToken cancellationToken = default) =>
             throw new NotSupportedException("The projection-failure fixture only reads activity state.");
+    }
+
+    private sealed class FailOnceActivityExecutionStateStore(IActivityExecutionStateStore inner) : IActivityExecutionStateStore
+    {
+        private bool _hasFailed;
+
+        public int FindAttempts { get; private set; }
+
+        public ValueTask<ActivityExecutionState> SaveAsync(ActivityExecutionState state, CancellationToken cancellationToken = default) =>
+            inner.SaveAsync(state, cancellationToken);
+
+        public ValueTask<ActivityExecutionState?> FindAsync(
+            string workflowExecutionId,
+            string activityExecutionId,
+            CancellationToken cancellationToken = default)
+        {
+            FindAttempts++;
+            if (!_hasFailed)
+            {
+                _hasFailed = true;
+                return ValueTask.FromException<ActivityExecutionState?>(new InvalidOperationException("transient activity read failure"));
+            }
+
+            return inner.FindAsync(workflowExecutionId, activityExecutionId, cancellationToken);
+        }
+
+        public ValueTask<RuntimeStorePage<ActivityExecutionState>> ListPageAsync(
+            ActivityExecutionStatePageQuery query,
+            CancellationToken cancellationToken = default) =>
+            inner.ListPageAsync(query, cancellationToken);
+
+        public ValueTask<RuntimeStorePage<ActivityExecutionState>> ListByParentPageAsync(
+            ActivityExecutionStateParentPageQuery query,
+            CancellationToken cancellationToken = default) =>
+            inner.ListByParentPageAsync(query, cancellationToken);
+    }
+
+    private sealed class FailOnceActivityExecutionInspectionStore(IActivityExecutionInspectionStore inner) : IActivityExecutionInspectionStore
+    {
+        private bool _hasFailed;
+
+        public ValueTask<ActivityExecutionInspectionProjection?> FindAsync(
+            string workflowExecutionId,
+            string activityExecutionId,
+            CancellationToken cancellationToken = default)
+        {
+            if (!_hasFailed)
+            {
+                _hasFailed = true;
+                return ValueTask.FromException<ActivityExecutionInspectionProjection?>(new InvalidOperationException("transient inspection read failure"));
+            }
+
+            return inner.FindAsync(workflowExecutionId, activityExecutionId, cancellationToken);
+        }
+
+        public ValueTask<ActivityExecutionInspectionSummaryPage> ListSummariesPageAsync(
+            ActivityExecutionInspectionSummaryPageQuery query,
+            CancellationToken cancellationToken = default) =>
+            inner.ListSummariesPageAsync(query, cancellationToken);
     }
 
     /// <summary>Simulates a projection-column overflow (GW-PHYSICAL-037): every incident write throws.</summary>

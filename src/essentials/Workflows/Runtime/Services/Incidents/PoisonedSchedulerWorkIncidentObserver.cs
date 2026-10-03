@@ -38,6 +38,7 @@ public sealed class PoisonedSchedulerWorkIncidentObserver : IWorkflowSchedulerDr
     private readonly ILogger<PoisonedSchedulerWorkIncidentObserver> _logger;
     private readonly IActivityExecutionStateStore? _activityExecutionStateStore;
     private readonly IRuntimeActivityExecutionInspectionAccumulator? _inspectionAccumulator;
+    private readonly IActivityExecutionInspectionStore? _activityExecutionInspectionStore;
 
     public PoisonedSchedulerWorkIncidentObserver(
         IWorkflowSchedulerPoisonStore poisonStore,
@@ -52,6 +53,27 @@ public sealed class PoisonedSchedulerWorkIncidentObserver : IWorkflowSchedulerDr
             timeProvider,
             activityExecutionStateStore: null,
             inspectionAccumulator: null,
+            logger: logger,
+            activityExecutionInspectionStore: null)
+    {
+    }
+
+    public PoisonedSchedulerWorkIncidentObserver(
+        IWorkflowSchedulerPoisonStore poisonStore,
+        IIncidentStateStore incidentStateStore,
+        RuntimeCheckpointCommitter checkpointCommitter,
+        TimeProvider timeProvider,
+        IActivityExecutionStateStore? activityExecutionStateStore,
+        IRuntimeActivityExecutionInspectionAccumulator? inspectionAccumulator,
+        ILogger<PoisonedSchedulerWorkIncidentObserver>? logger = null)
+        : this(
+            poisonStore,
+            incidentStateStore,
+            checkpointCommitter,
+            timeProvider,
+            activityExecutionStateStore,
+            inspectionAccumulator,
+            activityExecutionInspectionStore: null,
             logger: logger)
     {
     }
@@ -63,6 +85,7 @@ public sealed class PoisonedSchedulerWorkIncidentObserver : IWorkflowSchedulerDr
         TimeProvider timeProvider,
         IActivityExecutionStateStore? activityExecutionStateStore,
         IRuntimeActivityExecutionInspectionAccumulator? inspectionAccumulator,
+        IActivityExecutionInspectionStore? activityExecutionInspectionStore,
         ILogger<PoisonedSchedulerWorkIncidentObserver>? logger = null)
     {
         ArgumentNullException.ThrowIfNull(poisonStore);
@@ -77,6 +100,7 @@ public sealed class PoisonedSchedulerWorkIncidentObserver : IWorkflowSchedulerDr
         _logger = logger ?? NullLogger<PoisonedSchedulerWorkIncidentObserver>.Instance;
         _activityExecutionStateStore = activityExecutionStateStore;
         _inspectionAccumulator = inspectionAccumulator;
+        _activityExecutionInspectionStore = activityExecutionInspectionStore;
     }
 
     /// <summary>
@@ -124,7 +148,11 @@ public sealed class PoisonedSchedulerWorkIncidentObserver : IWorkflowSchedulerDr
                 var incidentId = IncidentId(record.WorkItemId);
                 var existing = await _incidentStateStore.FindAsync(workflowExecutionId, incidentId, cancellationToken);
                 if (existing is not null)
+                {
+                    if (StringComparer.Ordinal.Equals(existing.FailureType, IncidentFailureType))
+                        await ReconcileExistingIncidentAsync(existing, cancellationToken);
                     continue;
+                }
 
                 await CommitIncidentAsync(workflowExecutionId, incidentId, record, cancellationToken);
             }
@@ -136,9 +164,9 @@ public sealed class PoisonedSchedulerWorkIncidentObserver : IWorkflowSchedulerDr
             {
                 _logger.LogError(
                     exception,
-                    "Failed to record a blocking incident for poisoned scheduler work item {WorkItemId} of workflow execution {WorkflowExecutionId} " +
+                    "Failed to surface a blocking incident and activity projection for poisoned scheduler work item {WorkItemId} of workflow execution {WorkflowExecutionId} " +
                     "(command {CommandKind}, handler {HandlerName}, {FailureCount} failure(s)); the original poison fault was {FaultType}: {FaultMessage} " +
-                    "(inner fault: {InnerFault}). The poison record remains durable in the poison store; continuing the drain.",
+                    "(inner fault: {InnerFault}). The poison record and any existing canonical incident remain durable; continuing the drain.",
                     record.WorkItemId,
                     workflowExecutionId,
                     record.CommandKind,
@@ -269,6 +297,111 @@ public sealed class PoisonedSchedulerWorkIncidentObserver : IWorkflowSchedulerDr
                 activityExecutionInspections: activityInspectionChanges),
             PostCommitIntents: [],
             Metadata: metadata);
+
+        await _checkpointCommitter.CommitAsync(commit, cancellationToken);
+    }
+
+    private async ValueTask ReconcileExistingIncidentAsync(
+        IncidentState incident,
+        CancellationToken cancellationToken)
+    {
+        if (incident.ActivityExecutionId is null || _activityExecutionStateStore is null)
+            return;
+
+        var activityState = await _activityExecutionStateStore.FindAsync(
+            incident.WorkflowExecutionId,
+            incident.ActivityExecutionId,
+            cancellationToken);
+        if (activityState is null ||
+            (incident.ExecutableNodeId is not null &&
+             !StringComparer.Ordinal.Equals(activityState.Execution.ExecutableNodeId, incident.ExecutableNodeId)))
+            return;
+
+        var existingProjection = _inspectionAccumulator is null || _activityExecutionInspectionStore is null
+            ? null
+            : await _activityExecutionInspectionStore.FindAsync(
+                incident.WorkflowExecutionId,
+                incident.ActivityExecutionId,
+                cancellationToken);
+        var alreadyAssociated = activityState.IncidentIds.Contains(incident.IncidentId, StringComparer.Ordinal);
+        var inputFailure = BuildInputFailureSnapshot(incident, incident.CreatedAt);
+        var alreadyHasEvaluationEvidence = inputFailure is null ||
+            existingProjection?.ValueSnapshots.Any(snapshot =>
+                StringComparer.Ordinal.Equals(snapshot.EvaluationId, incident.IncidentId)) == true;
+        var alreadyHasIncidentSummary = existingProjection?.Incidents.Any(summary =>
+            StringComparer.Ordinal.Equals(summary.IncidentId, incident.IncidentId)) == true;
+        var needsAssociationRepair = !alreadyAssociated;
+        var needsInspectionRepair = _inspectionAccumulator is not null &&
+            (_activityExecutionInspectionStore is null ||
+             existingProjection is null ||
+             !alreadyHasIncidentSummary ||
+             !alreadyHasEvaluationEvidence);
+        if (!needsAssociationRepair && !needsInspectionRepair)
+            return;
+
+        var associatedState = alreadyAssociated
+            ? activityState
+            : activityState with { IncidentIds = activityState.IncidentIds.Append(incident.IncidentId).ToArray() };
+        var workItemId = incident.Metadata.GetValueOrDefault(RuntimeMetadataKeys.SchedulerWorkItemId);
+        var workItemFingerprint = RuntimeChainId.Fingerprint(workItemId ?? incident.IncidentId);
+        var repairScope = (needsAssociationRepair, needsInspectionRepair) switch
+        {
+            (true, true) => "association-inspection",
+            (true, false) => "association",
+            (false, true) => "inspection",
+            _ => throw new InvalidOperationException("A poison incident repair must update at least one projection.")
+        };
+        var checkpointId = $"checkpoint:{incident.WorkflowExecutionId}:scheduler-poison-repair-{repairScope}:{workItemFingerprint}";
+        // Use the canonical incident's timestamp so a retry after an ambiguous commit produces the same payload
+        // under the deterministic commit id for this repair scope. Separate scopes let a later projection repair
+        // proceed even when an earlier compatibility path committed only the activity association.
+        var repairedAt = incident.CreatedAt;
+        var projection = !needsInspectionRepair || _inspectionAccumulator is null
+            ? null
+            : await _inspectionAccumulator.BuildProjectionAsync(
+                associatedState,
+                checkpointId,
+                repairedAt,
+                incidents: [ActivityExecutionIncidentSummary.From(incident)],
+                valueSnapshots: inputFailure is null ? [] : [inputFailure],
+                metadata: incident.Metadata,
+                cancellationToken: cancellationToken);
+
+        var activityStateChanges = new List<RuntimeStateChange<ActivityExecutionState>>();
+        if (needsAssociationRepair)
+            activityStateChanges.Add(new RuntimeStateChange<ActivityExecutionState>(
+                StateId: incident.ActivityExecutionId,
+                Operation: RuntimeStateChangeOperation.Upsert,
+                State: associatedState,
+                Metadata: incident.Metadata));
+        var inspectionChanges = new List<RuntimeStateChange<ActivityExecutionInspectionProjection>>();
+        if (projection is not null && needsInspectionRepair)
+            inspectionChanges.Add(new RuntimeStateChange<ActivityExecutionInspectionProjection>(
+                StateId: incident.ActivityExecutionId,
+                Operation: RuntimeStateChangeOperation.Upsert,
+                State: projection,
+                Metadata: incident.Metadata));
+
+        var commit = new RuntimeCheckpointCommit(
+            CommitId: $"commit:{incident.WorkflowExecutionId}:scheduler-poison-repair-{repairScope}:{workItemFingerprint}",
+            Checkpoint: new RuntimeCheckpoint(
+                CheckpointId: checkpointId,
+                Name: RuntimeCheckpointNames.IncidentRecorded,
+                WorkflowExecutionId: incident.WorkflowExecutionId,
+                OccurredAt: repairedAt,
+                ActivityExecutionIds: [incident.ActivityExecutionId],
+                Metadata: incident.Metadata),
+            StateChanges: new RuntimeCheckpointStateChangeSet(
+                workflowExecution: null,
+                scheduler: null,
+                activityExecutions: activityStateChanges,
+                bookmarks: [],
+                durableValues: [],
+                incidents: [],
+                operational: [],
+                activityExecutionInspections: inspectionChanges),
+            PostCommitIntents: [],
+            Metadata: incident.Metadata);
 
         await _checkpointCommitter.CommitAsync(commit, cancellationToken);
     }
