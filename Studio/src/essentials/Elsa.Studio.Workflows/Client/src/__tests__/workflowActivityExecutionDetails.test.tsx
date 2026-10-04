@@ -332,7 +332,7 @@ describe("WorkflowActivityExecutionDetails", () => {
       .find(section => section.querySelector("h4")?.textContent?.includes("Inputs"));
     expect(inputSection?.querySelectorAll("[role=listitem]")).toHaveLength(1);
     expect(inputSection?.querySelector(".wf-runtime-evidence-count")?.textContent).toBe("1");
-    expect(inputSection?.querySelector(".wf-runtime-capture-mode")?.textContent).toBe("Paired evidence");
+    expect(inputSection?.querySelector(".wf-input-inspection-caption")?.textContent).toBe("Evaluated at runtime");
     expect(inputSection?.querySelector(".wf-runtime-input .wf-runtime-capture-mode")).toBeNull();
   });
 
@@ -576,8 +576,8 @@ describe("WorkflowActivityExecutionDetails", () => {
 
     const container = render(<WorkflowActivityExecutionDetails context={context} activity={activity} activityCatalog={catalog} />);
 
-    await waitFor(() => expect(container.querySelector(".wf-input-inspection-content > .wf-instance-note")?.textContent).toContain("Metadata only"));
-    expect([...container.querySelectorAll(".wf-input-inspection-preview code")].map(node => node.textContent)).toContain("metadata Only");
+    await waitFor(() => expect([...container.querySelectorAll(".wf-input-inspection-content .wf-instance-note")].map(node => node.textContent).join(" ")).toContain("Metadata only"));
+    expect(container.querySelector(".wf-input-inspection-value")?.textContent).toContain("Runtime value evidence is metadata-only.");
   });
 
   it("retains native input disclosures with distinct controlled regions for punctuation-containing keys", async () => {
@@ -602,8 +602,10 @@ describe("WorkflowActivityExecutionDetails", () => {
       expect(disclosure.hasAttribute("role")).toBe(false);
       expect(disclosure.closest("[role=listitem]")).not.toBe(disclosure);
       const region = document.getElementById(summary.getAttribute("aria-controls")!);
+      const rowName = summary.closest("[role=listitem]")?.querySelector("strong")?.textContent;
       expect(region?.querySelector("section")?.getAttribute("aria-label"))
-        .toBe(`${summary.querySelector("strong")!.textContent} runtime evidence`);
+        .toBe(`${rowName} authored source`);
+      expect(disclosure.hasAttribute("open")).toBe(false);
     }
   });
 
@@ -855,6 +857,96 @@ describe("WorkflowActivityExecutionDetails", () => {
     });
   });
 
+  it.each([{ isSensitive: true }, { uiHint: "password" }, { isCredential: true }])(
+    "protects captured values for a masked declaration even without the runtime sensitivity flag: %s", async declared => {
+      vi.mocked(getActivityExecutionInspection).mockResolvedValue(inspection([valueEvidence({
+        subject: "ActivityInput", inputKey: "token-key", name: "Token", isSensitive: false,
+        accessState: "visible", snapshot: { kind: "string", preview: "PRIVATE_RUNTIME_VALUE", length: 21, truncated: false }
+      })]));
+      const container = render(<WorkflowActivityExecutionDetails
+        context={context} activity={activity}
+        activityCatalog={[{ ...catalog[0]!, inputs: [{ referenceKey: "token-key", name: "Token", typeName: "System.String", ...declared }] }]}
+      />);
+      await waitFor(() => expect(container.querySelector(".wf-input-inspection-value")?.textContent).toContain("Protected value"));
+      expect(container.innerHTML).not.toContain("PRIVATE_RUNTIME_VALUE");
+      expect(getActivityExecutionValuePayload).not.toHaveBeenCalled();
+    }
+  );
+
+  it.each(["declaration", "authored source", "compiled binding"])(
+    "requires an explicit reveal when %s marks a resolvable runtime value sensitive", async sensitivitySource => {
+      vi.mocked(getActivityExecutionInspection).mockResolvedValue(inspection([valueEvidence({
+        inputKey: "token-key", name: "Token", isSensitive: false
+      })]));
+      vi.mocked(getActivityExecutionValuePayload).mockResolvedValue({
+        evidenceId: "evidence-1", captureMode: "DiagnosticSnapshot", payload: { kind: "string", preview: "REVEALED_ON_REQUEST" }
+      });
+      const container = render(<WorkflowActivityExecutionDetails
+        context={context} activity={activity}
+        activityCatalog={[{ ...catalog[0]!, inputs: [{ referenceKey: "token-key", name: "Token", typeName: "System.String", isSensitive: sensitivitySource === "declaration" }] }]}
+        executableNodeFacts={{
+          executableNodeId: "node-1", authoredActivityId: "write-line", activityType: activity.activityType, activityTypeVersion: activity.activityTypeVersion,
+          structureKind: null, available: true, outputCaptures: [], authoredInputsAccess: "visible",
+          authoredInputs: [{ executableNodeId: "node-1", inputKey: "token-key", expressionType: "Literal", value: "PINNED_SECRET", isSensitive: sensitivitySource === "authored source" }],
+          inputBindings: [{ inputKey: "token-key", inputName: "Token", source: "Literal", literal: "PINNED_SECRET", isSensitive: sensitivitySource === "compiled binding" }]
+        }}
+      />);
+      await waitFor(() => expect(container.textContent).toContain("Show captured value"));
+      expect(getActivityExecutionValuePayload).not.toHaveBeenCalled();
+      expect(container.innerHTML).not.toContain("PINNED_SECRET");
+      const reveal = [...container.querySelectorAll<HTMLButtonElement>("button")].find(button => button.textContent === "Show captured value")!;
+      reveal.click();
+      await waitFor(() => expect(container.querySelector(".wf-input-inspection-value")?.textContent).toContain("REVEALED_ON_REQUEST"));
+      expect(getActivityExecutionValuePayload).toHaveBeenCalledTimes(1);
+    }
+  );
+
+  it("keeps safe evaluation failure details visible on a sensitive input without exposing its value", async () => {
+    vi.mocked(getActivityExecutionInspection).mockResolvedValue(inspection([valueEvidence({
+      inputKey: "token-key", name: "Token", isSensitive: false, captureState: "captureFailed",
+      failure: { code: "InputFailed", message: "The token could not be evaluated.", incidentId: "incident-token" },
+      snapshot: { kind: "string", preview: "PRIVATE_RUNTIME_VALUE" }, payload: "PRIVATE_RUNTIME_VALUE"
+    })]));
+    const container = render(<WorkflowActivityExecutionDetails
+      context={context} activity={activity}
+      activityCatalog={[{ ...catalog[0]!, inputs: [{ referenceKey: "token-key", name: "Token", typeName: "System.String", isSensitive: true }] }]}
+    />);
+    await waitFor(() => expect(container.querySelector(".wf-input-inspection-value")?.textContent).toContain("The token could not be evaluated. Incident incident-token."));
+    expect(container.innerHTML).not.toContain("PRIVATE_RUNTIME_VALUE");
+    expect(getActivityExecutionValuePayload).not.toHaveBeenCalled();
+  });
+
+  it.each(["captureState", "state"])("blocks resolution for a failed sensitive capture reported through %s without a failure object", async stateField => {
+    vi.mocked(getActivityExecutionInspection).mockResolvedValue(inspection([valueEvidence({
+      captureState: undefined, state: undefined, [stateField]: "captureFailed",
+      captureReason: "Capturing this value failed.", isSensitive: true
+    })]));
+    const container = render(<WorkflowActivityExecutionDetails context={context} activity={activity} activityCatalog={catalog} />);
+    await waitFor(() => expect(container.querySelector(".wf-input-inspection-value")?.textContent).toContain("Capturing this value failed."));
+    expect(getActivityExecutionValuePayload).not.toHaveBeenCalled();
+    expect(container.textContent).not.toContain("Show captured value");
+  });
+
+  it.each(["unavailable", "redacted", "permissionHidden", "resolutionPermissionRequired"])(
+    "preserves a failed capture incident only when its %s access permits a safe diagnostic", async accessState => {
+      vi.mocked(getActivityExecutionInspection).mockResolvedValue(inspection([valueEvidence({
+        captureState: "captureFailed", accessState,
+        failure: { code: "CaptureFailed", message: "The capture failed.", incidentId: "incident-capture" },
+        snapshot: { kind: "string", preview: "PRIVATE_RUNTIME_VALUE" }, payload: "PRIVATE_RUNTIME_VALUE"
+      })]));
+      const container = render(<WorkflowActivityExecutionDetails context={context} activity={activity} activityCatalog={catalog} />);
+      await waitFor(() => expect(container.querySelector(".wf-input-inspection-value")).not.toBeNull());
+      if (accessState === "unavailable") {
+        expect(container.querySelector(".wf-input-inspection-value")?.textContent).toContain("The capture failed. Incident incident-capture.");
+      } else {
+        expect(container.textContent).not.toContain("incident-capture");
+        expect(container.textContent).not.toContain("The capture failed.");
+      }
+      expect(container.innerHTML).not.toContain("PRIVATE_RUNTIME_VALUE");
+      expect(getActivityExecutionValuePayload).not.toHaveBeenCalled();
+    }
+  );
+
   it("shows an empty state when no input snapshots exist", async () => {
     vi.mocked(getActivityExecutionInspection).mockResolvedValue(inspection([]));
 
@@ -937,7 +1029,7 @@ describe("WorkflowActivityExecutionDetails", () => {
     const container = render(<WorkflowActivityExecutionDetails context={context} activity={activity} activityCatalog={catalog} />);
 
     await waitFor(() => expect(container.textContent).toContain("redacted: sensitive-name"));
-    expect(container.textContent).toContain("Marked sensitive by runtime evidence.");
+    expect(container.querySelector(".wf-input-inspection-value")?.textContent).toContain("redacted");
     expect(container.textContent).toContain("Large file");
     expect(container.textContent).toContain("application/zip");
     expect(container.textContent).toContain("Reference resolution is not available in this release.");

@@ -68,17 +68,18 @@ export function RuntimeValueEvidenceCard({ snapshot, listItem = true }: { snapsh
   );
 }
 
-export function RuntimeValueEvidenceContent({ snapshot }: { snapshot: ActivityExecutionInspectionValueSnapshot }) {
+export function RuntimeValueEvidenceContent({ snapshot, presentation = "card" }: { snapshot: ActivityExecutionInspectionValueSnapshot; presentation?: "card" | "input" }) {
   const scope = useContext(RuntimeValueEvidenceResolutionContext);
   const evidenceId = snapshot.evidenceId?.trim() || null;
   const access = snapshot.accessState ?? snapshot.access;
   const accessKey = access?.toLowerCase() ?? "";
   const captureModeKey = snapshot.captureMode.replace(/[^a-z]/gi, "").toLowerCase();
-  const captureStateKey = snapshot.captureState?.replace(/[^a-z]/gi, "").toLowerCase();
+  const captureStateKey = (snapshot.captureState ?? snapshot.state)?.replace(/[^a-z]/gi, "").toLowerCase();
   const supportedCaptureMode = captureModeKey === "payload" || captureModeKey === "diagnosticsnapshot";
-  const capturedState = !captureStateKey || captureStateKey === "payloadcaptured" || captureStateKey === "diagnosticsnapshotcaptured";
+  const capturedState = !captureStateKey || captureStateKey === "payloadcaptured" || captureStateKey === "diagnosticsnapshotcaptured"
+    || (!snapshot.captureState && captureStateKey === "captured");
   const permissionAllowsResolution = accessKey === "resolutionavailable";
-  const canResolve = !!scope && !!evidenceId && supportedCaptureMode && capturedState && permissionAllowsResolution;
+  const canResolve = !!scope && !!evidenceId && supportedCaptureMode && capturedState && permissionAllowsResolution && !snapshot.failure;
   const resolutionIdentity = JSON.stringify([runtimeValueContextId(scope?.context), scope?.workflowExecutionId, scope?.activityExecutionId, evidenceId, captureModeKey]);
   const [requestedSensitiveIdentity, setRequestedSensitiveIdentity] = useState<string | null>(null);
   const [retrySequence, setRetrySequence] = useState(0);
@@ -135,18 +136,20 @@ export function RuntimeValueEvidenceContent({ snapshot }: { snapshot: ActivityEx
       <div className="wf-runtime-input-content">
         {resolvedPayload && currentResolution?.status === "ready" ? (
           captureModeKey === "diagnosticsnapshot" && isDiagnosticSnapshotNode(currentResolution.payload)
-            ? <DiagnosticSnapshotTree node={currentResolution.payload} />
+            ? <DiagnosticSnapshotTree node={currentResolution.payload} expandRoot={presentation === "card"} />
             : <>
-                <small>Captured value</small>
+                {presentation === "card" ? <small>Captured value</small> : null}
                 <RuntimeInputPayload payload={currentResolution.payload} />
               </>
         ) : protectedAccess ? (
-          <p>{formatEvidenceMessage(snapshot)}</p>
+          <p>{formatEvidenceMessage(snapshot)}{accessKey === "unavailable" && snapshot.failure?.incidentId ? ` Incident ${snapshot.failure.incidentId}.` : ""}</p>
+        ) : snapshot.failure || captureStateKey === "capturefailed" ? (
+          <p>{snapshot.failure ? snapshot.failure.message || snapshot.failure.code || "The input could not be evaluated." : formatEvidenceMessage(snapshot)}{snapshot.failure?.incidentId ? ` Incident ${snapshot.failure.incidentId}.` : ""}</p>
         ) : snapshot.isSensitive ? (
           <>
             {isProtectedDiagnosticSnapshot(diagnosticSnapshot) && isDiagnosticSnapshotNode(diagnosticSnapshot)
-              ? <DiagnosticSnapshotTree node={diagnosticSnapshot} />
-              : <p>Runtime value is protected because this input is sensitive.</p>}
+              ? <DiagnosticSnapshotTree node={diagnosticSnapshot} expandRoot={presentation === "card"} />
+              : <p title="Runtime value is protected because this input is sensitive.">{presentation === "input" ? "Protected value" : "Runtime value is protected because this input is sensitive."}</p>}
             {canShowSensitiveValue ? (
               <button
                 type="button"
@@ -162,10 +165,8 @@ export function RuntimeValueEvidenceContent({ snapshot }: { snapshot: ActivityEx
             {currentResolution?.status === "loading" ? <p role="status">Resolving captured value...</p> : null}
             {currentResolution?.status === "failed" ? <p role="alert">Could not resolve captured value: {currentResolution.error}</p> : null}
           </>
-        ) : snapshot.failure ? (
-          <p>{snapshot.failure.message || snapshot.failure.code || "The input could not be evaluated."}{snapshot.failure.incidentId ? ` Incident ${snapshot.failure.incidentId}.` : ""}</p>
         ) : isDiagnosticSnapshotNode(diagnosticSnapshot) ? (
-          <DiagnosticSnapshotTree node={diagnosticSnapshot} />
+          <DiagnosticSnapshotTree node={diagnosticSnapshot} expandRoot={presentation === "card"} />
         ) : hasPayload ? (
           <RuntimeInputPayload payload={snapshot.payload} />
         ) : (
@@ -181,7 +182,7 @@ export function RuntimeValueEvidenceContent({ snapshot }: { snapshot: ActivityEx
           </p>
         ) : null}
       </div>
-      {snapshot.isSensitive ? <p className="wf-instance-note">Marked sensitive by runtime evidence.</p> : null}
+      {snapshot.isSensitive && presentation === "card" ? <p className="wf-instance-note">Marked sensitive by runtime evidence.</p> : null}
     </>
   );
 }
@@ -201,7 +202,7 @@ export function isKnownSnapshotNode(node: DiagnosticSnapshotNode): node is Known
   return Object.hasOwn(knownSnapshotKinds, node.kind);
 }
 
-function DiagnosticSnapshotTree({ node, depth = 0 }: { node: DiagnosticSnapshotNode; depth?: number }) {
+function DiagnosticSnapshotTree({ node, depth = 0, expandRoot = true }: { node: DiagnosticSnapshotNode; depth?: number; expandRoot?: boolean }) {
   if (!isKnownSnapshotNode(node)) {
     return <DiagnosticSnapshotMarker node={{ kind: "unsupported", reason: `Unknown snapshot node: ${node.kind}` }} />;
   }
@@ -214,17 +215,15 @@ function DiagnosticSnapshotTree({ node, depth = 0 }: { node: DiagnosticSnapshotN
       return <code className="wf-runtime-input-value wf-runtime-snapshot-value">{formatSnapshotPayload(node.value)}</code>;
     case "string": {
       const preview = node.preview ?? "";
-      return (
-        <code className="wf-runtime-input-value wf-runtime-snapshot-value">
-          {preview.length === 0 ? '""' : preview}
-          {node.truncated ? ` (${node.length ?? "unknown"} chars, truncated)` : ""}
-        </code>
-      );
+      const displayText = `${preview.length === 0 ? '""' : preview}${node.truncated ? ` (${node.length ?? "unknown"} chars, truncated)` : ""}`;
+      return !expandRoot && (displayText.length > 160 || displayText.includes("\n"))
+        ? <RuntimeInputPayload payload={displayText} />
+        : <code className="wf-runtime-input-value wf-runtime-snapshot-value">{displayText}</code>;
     }
     case "object":
-      return <DiagnosticSnapshotObject node={node} depth={depth} />;
+      return <DiagnosticSnapshotObject node={node} depth={depth} expandRoot={expandRoot} />;
     case "array":
-      return <DiagnosticSnapshotArray node={node} depth={depth} />;
+      return <DiagnosticSnapshotArray node={node} depth={depth} expandRoot={expandRoot} />;
     case "redacted":
     case "truncated":
     case "unsupported":
@@ -236,12 +235,12 @@ function DiagnosticSnapshotTree({ node, depth = 0 }: { node: DiagnosticSnapshotN
   }
 }
 
-function DiagnosticSnapshotObject({ node, depth }: { node: DiagnosticSnapshotObjectNode; depth: number }) {
+function DiagnosticSnapshotObject({ node, depth, expandRoot }: { node: DiagnosticSnapshotObjectNode; depth: number; expandRoot: boolean }) {
   const properties = node.properties ?? [];
   if (properties.length === 0) return <code className="wf-runtime-input-value wf-runtime-snapshot-value">{"{}"}</code>;
 
   return (
-    <details className="wf-runtime-snapshot-node" open={depth === 0}>
+    <details className="wf-runtime-snapshot-node" open={expandRoot && depth === 0}>
       <summary>{node.typeName || "Object"}{node.truncated ? " (truncated)" : ""}</summary>
       <div className="wf-runtime-snapshot-children">
         {properties.map(property => (
@@ -255,12 +254,12 @@ function DiagnosticSnapshotObject({ node, depth }: { node: DiagnosticSnapshotObj
   );
 }
 
-function DiagnosticSnapshotArray({ node, depth }: { node: DiagnosticSnapshotArrayNode; depth: number }) {
+function DiagnosticSnapshotArray({ node, depth, expandRoot }: { node: DiagnosticSnapshotArrayNode; depth: number; expandRoot: boolean }) {
   const items = node.items ?? [];
   if (items.length === 0) return <code className="wf-runtime-input-value wf-runtime-snapshot-value">[]</code>;
 
   return (
-    <details className="wf-runtime-snapshot-node" open={depth === 0}>
+    <details className="wf-runtime-snapshot-node" open={expandRoot && depth === 0}>
       <summary>Array ({node.itemCount ?? items.length}){node.truncated ? " (truncated)" : ""}</summary>
       <div className="wf-runtime-snapshot-children">
         {items.map((item, index) => (
