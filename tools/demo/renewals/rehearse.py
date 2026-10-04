@@ -614,6 +614,35 @@ def rows(api: Api, host: str, path: str = "/demo/renewals") -> tuple[Response, l
     return response, [item for item in data if isinstance(item, dict)]
 
 
+def assert_registration_appended(before: list[dict[str, Any]], after: list[dict[str, Any]], policy_reference: str) -> dict[str, Any]:
+    """Prove one execution added a row for this policy without replacing an earlier row."""
+    previous = {row.get("id"): row for row in before if row.get("policyReference") == policy_reference and row.get("id")}
+    current = {row.get("id"): row for row in after if row.get("policyReference") == policy_reference and row.get("id")}
+    new_ids = current.keys() - previous.keys()
+
+    if not previous.keys() <= current.keys():
+        raise RehearsalFailure(
+            "verify renewal append",
+            f"Reexecuting the workflow removed a stored row for policy {policy_reference}.",
+            {"before": list(previous.values()), "after": list(current.values())},
+        )
+    changed = [
+        {"before": previous[row_id], "after": current[row_id]}
+        for row_id in previous
+        if previous[row_id] != current[row_id]
+    ]
+    if changed:
+        raise RehearsalFailure("verify renewal append", f"Reexecuting the workflow changed an existing row for policy {policy_reference}.", changed)
+    if len(new_ids) != 1:
+        raise RehearsalFailure(
+            "verify renewal append",
+            f"Expected one new row for policy {policy_reference}; observed {len(new_ids)}.",
+            {"before": list(previous.values()), "after": list(current.values())},
+        )
+
+    return current[next(iter(new_ids))]
+
+
 def assert_pending_reader(status_output: dict[str, Any], host_id: str) -> None:
     output = str(status_output.get("output", "")).lower()
     required = (host_id.lower(), "waits for:", "reads 1.0.0")
@@ -719,6 +748,7 @@ def run_rehearsal(api: Api) -> dict[str, Any]:
         raise RehearsalFailure("observe RegisterRenewal 1.1.0 execution", "The completed activity did not report the exact 1.1.0 activity version.", premium_run)
     api.record("Create, publish, execute 1.1.0 POL-2048 with numeric premium", True, premium_run)
 
+    _, rows_before_compatibility_run = rows(api, "a", "/demo/renewals/with-premium")
     compatibility_run, compatibility_instance, _ = execute_artifact(
         api,
         "a",
@@ -730,6 +760,17 @@ def run_rehearsal(api: Api) -> dict[str, Any]:
     api.record("Reexecute original 1.0 artifact after 1.1.0 switch", True, {"dispatch": api.response_evidence(compatibility_run), "instance": compatibility_instance})
 
     _, final_rows = rows(api, "a", "/demo/renewals/with-premium")
+    repeated_policy_row = assert_registration_appended(rows_before_compatibility_run, final_rows, original_one["policyReference"])
+    api.record(
+        "Reexecuting the same published workflow appends a distinct renewal",
+        True,
+        {
+            "policyReference": original_one["policyReference"],
+            "firstWorkflowExecutionId": original_one["workflowExecutionId"],
+            "secondWorkflowExecutionId": compatibility_run.data["workflowExecutionId"],
+            "newRow": repeated_policy_row,
+        },
+    )
     premium_row = next((row for row in final_rows if row.get("policyReference") == "POL-2048"), None)
     if premium_row is None or not isinstance(premium_row.get("proposedPremium"), (int, float)) or isinstance(premium_row.get("proposedPremium"), bool) or premium_row.get("proposedPremium") != 1250:
         raise RehearsalFailure("retain numeric premium row", "POL-2048 was not retained with numeric proposedPremium 1250.", final_rows)

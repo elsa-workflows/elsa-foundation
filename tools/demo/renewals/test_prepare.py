@@ -215,6 +215,26 @@ class RehearsalModuleTests(unittest.TestCase):
         spec.loader.exec_module(self.rehearse)
 
 
+class RehearsalRenewalAppendTests(RehearsalModuleTests):
+    def test_reexecution_requires_a_new_row_and_preserves_existing_identity(self):
+        before = [{'id': 'first-id', 'policyReference': 'POL-1042', 'createdAt': '2026-10-04T21:13:20Z', 'proposedPremium': None}]
+        after = [
+            before[0],
+            {'id': 'second-id', 'policyReference': 'POL-1042', 'createdAt': '2026-10-04T21:43:37Z', 'proposedPremium': 1250},
+        ]
+
+        new_row = self.rehearse.assert_registration_appended(before, after, 'POL-1042')
+
+        self.assertEqual(new_row['id'], 'second-id')
+
+    def test_reexecution_fails_if_it_updates_the_existing_row(self):
+        before = [{'id': 'stable-id', 'policyReference': 'POL-1042', 'createdAt': '2026-10-04T21:13:20Z', 'proposedPremium': None}]
+        updated = [{**before[0], 'proposedPremium': 1250}]
+
+        with self.assertRaisesRegex(self.rehearse.RehearsalFailure, 'changed an existing row'):
+            self.rehearse.assert_registration_appended(before, updated, 'POL-1042')
+
+
 class RehearsalInstallEvidenceTests(RehearsalModuleTests):
     def setUp(self):
         super().setUp()
