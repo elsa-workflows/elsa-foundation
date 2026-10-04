@@ -93,7 +93,7 @@ public sealed class EmbeddedFixtureHostEvidenceTests : IDisposable
     [Fact]
     public async Task Explicit_embedded_closure_uses_file_locking_without_test_provider()
     {
-        var profile = Assert.Single(FoundationSelectionCatalog.Load().Profiles);
+        var profile = Assert.Single(FoundationSelectionCatalog.Load().Profiles, profile => profile.Id == "embedded-runtime");
         Assert.Equal("embedded-runtime", profile.Id);
         Assert.Equal("1", profile.Version);
         var selectedIds = profile.Members.ToArray();

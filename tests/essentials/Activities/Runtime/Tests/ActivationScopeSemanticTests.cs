@@ -39,7 +39,7 @@ public sealed class ActivationScopeSemanticTests : IAsyncDisposable
         foreach (var activityType in new[] { typeof(TransientDependencyActivity), typeof(ScopedDisposableActivity), typeof(FailingActivity) })
             registry.RegisterType(activityType, activityType.FullName!);
         _activator = new ActivityActivator(
-            [new ClrActivityActivator(_root.GetRequiredService<IServiceScopeFactory>(), registry, _serializer)],
+            [new ClrActivityActivator(_root.GetRequiredService<IServiceScopeFactory>(), registry, _serializer, FixedPersistenceAccess.Unbound)],
             new ActivityInputHydrator(),
             SecretResolutionTestSupport.NoResolverSecretInputResolver());
     }
