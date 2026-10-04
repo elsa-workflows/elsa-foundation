@@ -1,6 +1,6 @@
 # Workflow Incident Troubleshooting
 
-Status: active.
+Status: delivered on 2026-10-04.
 
 Area: workflow-runtime diagnostics and Foundation Studio operator triage.
 
@@ -23,7 +23,7 @@ Make a run with incidents visibly actionable and provide a coherent journey from
 - Expression-editor/IntelliSense work owned by Program #2310.
 - Dashboard, authentication and authoring-toolbar redesign; performance measurement; production deployment.
 
-## Active Objectives
+## Delivered Objectives
 
 1. [Program #2334](https://github.com/elsa-workflows/elsa-foundation/issues/2334) — lead, delivery and completion evidence.
 2. [Epic #2335](https://github.com/elsa-workflows/elsa-foundation/issues/2335) — operator incident triage.
@@ -41,3 +41,9 @@ Make a run with incidents visibly actionable and provide a coherent journey from
 Establish additive backend contracts first; deliver dependent Studio triage against them; integrate and demonstrate the real undefined-variable scenario plus controls. Keep one integration/merge lane and no more than two implementation workers. Complete only after both repositories merge with green gates and real operator acceptance passes. Issue checkpoints record ownership and evidence; Project fields mirror them.
 
 No existing goal owns this human-facing cross-repository outcome: Runtime Execution Evidence explicitly excludes Studio UI, and expression developer experience owns authoring assistance. This bucket therefore preserves those boundaries.
+
+## Delivered outcome (2026-10-04)
+
+Foundation [PR2371](https://github.com/elsa-workflows/elsa-foundation/pull/2371) merged as `dca9d07951f8b1f53245b21daaa6221e0913640a`; Studio [PR556](https://github.com/elsa-workflows/elsa-foundation-studio/pull/556) merged as `3ada1a540384c2de9d7af29dea0125e1dbd9a1a0`. Both normal merge gates and resulting-main CI passed; Foundation Maps passed. Real undefined-JavaScript dispatch, visible run/node health and exact incident/activity/input navigation passed, alongside nested/repeated/BPMN, healthy/history/unassociated, paging, keyboard/themes and responsive layouts. [Acceptance and final screenshots](../reports/incident-troubleshooting/acceptance.md) distinguish real-host proof from compiled/synthetic controls and unavailable current Copilot review. All23 spec tasks are complete.
+
+The completion criteria above are satisfied. [Lead QA issue2340](https://github.com/elsa-workflows/elsa-foundation/issues/2340) tracks the evidence follow-through and its resulting-main gate before public issue/Project closure. No deployment is included.
