@@ -59,3 +59,8 @@ Generated maps still describe the tree.
 Rebuilt current architecture suite
 Source log: /tmp/incident-final-25327-architecture-rebuilt.log
 Passed:635 Failed:0 Skipped:0; preceding stale --no-build DLL failure excluded
+
+Fresh database current backend proof
+Source logs: /tmp/incident-fresh-25327-rest.log and /tmp/incident-fresh-25327-bpmn-projection.log
+SUCCESS: causal input evidence, intervention policy, whole-set health paging both routes
+PASS: fresh BPMN creation/publication/execution/retrieval, topology3/2, exact binding and lifecycle
