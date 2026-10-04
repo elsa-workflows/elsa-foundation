@@ -50,9 +50,9 @@ Independent check: root cause and input lead summary; full evidence remains avai
 - [x] T018 Update backend/Studio behavior docs and contract evidence in `docs/runtime-fault-behavior.md`, affected API README and Studio module docs.
 - [x] T019 Run scoped suites/typecheck/lint/build, architecture/maps and root diff review; record results in `docs/reports/incident-troubleshooting/acceptance.md`.
 - [x] T020 Add real HTTP regression for missing JS input and authoritative health paging in `e2e-tests/` and run against rebuilt normally composed isolated Workbench.
-- [ ] T021 Repeat rebuilt real Studio story/control/layout/theme/keyboard matrix; save after screenshots in `docs/reports/incident-troubleshooting/screenshots/` and acceptance report.
+- [x] T021 Repeat rebuilt real Studio story/control/layout/theme/keyboard matrix; save after screenshots in `docs/reports/incident-troubleshooting/screenshots/` and acceptance report.
 - [x] T022 Obtain independent code/evidence review and fix findings; record review and targeted mutation/revert bite proof in `docs/reports/incident-troubleshooting/acceptance.md`.
-- [ ] T023 Commit/push/open and attach PRs via approved Git route; publish exact-head gates, merge green and verify post-merge CI/Maps; update `docs/program-goals/incident-troubleshooting.md` and issue/Project hierarchy.
+- [x] T023 Commit/push/open and attach PRs via approved Git route; publish exact-head gates, merge green and verify post-merge CI/Maps; update `docs/program-goals/incident-troubleshooting.md` and issue/Project hierarchy.
 
 ## Dependencies and parallel execution
 
@@ -65,3 +65,7 @@ First useful increment: associated failed input and visible health. Continue thr
 ## Issue ownership
 
 Backend evidence [#2338](https://github.com/elsa-workflows/elsa-foundation/issues/2338) owns T009–T011; backend health [#2339](https://github.com/elsa-workflows/elsa-foundation/issues/2339) owns T005–T006. Root owns health; the backend worker owns causal evidence. Studio [#550](https://github.com/elsa-workflows/elsa-foundation-studio/issues/550) owns T007–T008/T012–T017. Root integration/QA [#2340](https://github.com/elsa-workflows/elsa-foundation/issues/2340) owns T018–T023.
+
+## Final product qualification
+
+All23 tasks are complete at Foundation merge `dca9d07951f8b1f53245b21daaa6221e0913640a` and Studio merge `3ada1a540384c2de9d7af29dea0125e1dbd9a1a0`. Resulting-main Foundation CI/Maps and Studio CI passed; the real browser story and bounded controls are recorded in [acceptance](../../docs/reports/incident-troubleshooting/acceptance.md). The lead retains QA issue2340 and the public parents until the scoped evidence follow-through also merges and passes its resulting-main gates. Fresh Copilot review was unavailable; root and independent review fallback is explicitly recorded.

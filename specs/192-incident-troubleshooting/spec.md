@@ -4,7 +4,7 @@
 
 **Created**: 2026-10-02
 
-**Status**: In progress — product owner requested end-to-end delivery of the reviewed QA plan; program #2334.
+**Status**: Implemented — Foundation [#2371](https://github.com/elsa-workflows/elsa-foundation/pull/2371) and Studio [#556](https://github.com/elsa-workflows/elsa-foundation-studio/pull/556) merged; resulting-main CI/Maps and real operator acceptance passed. Evidence follow-through and closure status are documented in [acceptance](../../docs/reports/incident-troubleshooting/acceptance.md).
 
 **Input**: Make runtime incidents obvious and intuitive when inspecting a workflow run, starting with an activity input that references an undefined variable.
 
