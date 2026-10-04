@@ -9,21 +9,27 @@ import {
   WorkflowActivityExecutionDetails,
   WorkflowIncidentList,
   buildInstanceCanvas,
+  combineActivityExecutions,
+  activityExecutionSummaryFromInspection,
   formatSnapshotPayload,
-  getIncidentStackTrace
+  getIncidentStackTrace,
+  loadActiveIncidentActivitySummaries
 } from "../workflow-editor/WorkflowInstances";
 import type { ScopeFrame } from "../workflowAdapter";
 import type {
   ActivityCatalogItem,
+  ActivityNode,
   ActivityExecutionInspection,
   ActivityExecutionInspectionValueSnapshot,
   ActivityExecutionStateSummary,
   IncidentStateSummary,
   WorkflowDefinitionVersionDetails,
-  WorkflowInstanceDetails
+  WorkflowInstanceDetails,
+  WorkflowExecutableNode
 } from "../workflowTypes";
-import type { ExecutableGraphNodeFacts } from "../executableGraph";
-import { flowchartActivity, flowchartNode, forEachActivity, forEachNode, leafNode, writeLine } from "./fixtures";
+import { bpmnStructureKind } from "../bpmn/bpmnTypes";
+import { buildExecutableActivityGraph, type ExecutableGraphNodeFacts } from "../executableGraph";
+import { bpmnActivity, flowchartActivity, flowchartNode, forEachActivity, forEachNode, leafNode, writeLine } from "./fixtures";
 
 vi.mock("../api/runtime", async importOriginal => ({
   ...(await importOriginal<typeof import("../api/runtime")>()),
@@ -94,6 +100,12 @@ async function waitFor(assertion: () => void) {
   }
 
   throw lastError;
+}
+
+function metadataValue(container: ParentNode, label: string) {
+  return [...container.querySelectorAll<HTMLElement>(".wf-activity-meta-item")]
+    .find(item => item.querySelector("dt")?.textContent === label)
+    ?.querySelector(".wf-activity-meta-value")?.textContent;
 }
 
 function installClipboard(writeText: (value: string) => Promise<void>) {
@@ -219,6 +231,40 @@ function valueEvidence(overrides: Partial<ActivityExecutionInspectionValueSnapsh
 }
 
 describe("WorkflowActivityExecutionDetails", () => {
+  it("uses projected incident counts and falls back only to available legacy IDs", () => {
+    vi.mocked(getActivityExecutionInspection).mockResolvedValue(inspection([]));
+    const container = render(<WorkflowActivityExecutionDetails context={context} activity={activity} activityCatalog={catalog} />);
+    const cases: Array<[Partial<ActivityExecutionStateSummary>, string]> = [
+      [{ incidentCount: 1, incidentIds: undefined }, "1"],
+      [{ incidentCount: 0, incidentIds: ["stale-id"] }, "0"],
+      [{ incidentCount: null, incidentIds: ["stale-id"] }, "Unavailable"],
+      [{ incidentCount: undefined, incidentIds: ["legacy-1", "legacy-2"] }, "2"],
+      [{ incidentCount: undefined, incidentIds: undefined }, "Unavailable"]
+    ];
+
+    for (const [summary, expected] of cases) {
+      rerender(<WorkflowActivityExecutionDetails context={context} activity={{ ...activity, ...summary }} activityCatalog={catalog} />);
+      expect(metadataValue(container, "Incidents")).toBe(expected);
+    }
+  });
+
+  it("prefers projected bookmark counts and uses legacy IDs only when the count is absent", () => {
+    vi.mocked(getActivityExecutionInspection).mockResolvedValue(inspection([]));
+    const container = render(<WorkflowActivityExecutionDetails context={context} activity={activity} activityCatalog={catalog} />);
+    const cases: Array<[Partial<ActivityExecutionStateSummary>, string]> = [
+      [{ bookmarkCount: 3, bookmarkIds: undefined }, "3"],
+      [{ bookmarkCount: 0, bookmarkIds: ["stale-id"] }, "0"],
+      [{ bookmarkCount: null, bookmarkIds: ["legacy-id"] }, "Unavailable"],
+      [{ bookmarkCount: undefined, bookmarkIds: ["legacy-1", "legacy-2"] }, "2"],
+      [{ bookmarkCount: undefined, bookmarkIds: undefined }, "Unavailable"]
+    ];
+
+    for (const [summary, expected] of cases) {
+      rerender(<WorkflowActivityExecutionDetails context={context} activity={{ ...activity, ...summary }} activityCatalog={catalog} />);
+      expect(metadataValue(container, "Bookmarks")).toBe(expected);
+    }
+  });
+
   it("uses frozen source-reference wording before the live catalog fallback", async () => {
     vi.mocked(getActivityExecutionInspection).mockResolvedValue(inspection([]));
     const container = render(
@@ -578,6 +624,18 @@ describe("WorkflowActivityExecutionDetails", () => {
 
     await waitFor(() => expect([...container.querySelectorAll(".wf-input-inspection-content .wf-instance-note")].map(node => node.textContent).join(" ")).toContain("Metadata only"));
     expect(container.querySelector(".wf-input-inspection-value")?.textContent).toContain("Runtime value evidence is metadata-only.");
+  });
+
+  it("reports absent input evidence without claiming a completed execution did not evaluate it", async () => {
+    vi.mocked(getActivityExecutionInspection).mockResolvedValue(inspection([]));
+    const declaredCatalog: ActivityCatalogItem[] = [{
+      ...catalog[0]!, inputs: [{ referenceKey: "message-key", name: "Message", typeName: "System.String" }]
+    }];
+    const container = render(<WorkflowActivityExecutionDetails context={context} activity={activity} activityCatalog={declaredCatalog} />);
+
+    await waitFor(() => expect(container.querySelector(".wf-input-inspection-value")?.textContent)
+      .toContain("No evaluation evidence recorded"));
+    expect(container.querySelector(".wf-input-inspection-value")?.textContent).not.toContain("Not evaluated");
   });
 
   it("retains native input disclosures with distinct controlled regions for punctuation-containing keys", async () => {
@@ -1042,7 +1100,7 @@ describe("WorkflowIncidentList", () => {
     const stackTrace = "System.InvalidOperationException: No value\n   at Elsa.Tests.WriteLine.Execute()";
     const container = render(<WorkflowIncidentList incidents={[{ ...incident, metadata: { stackTrace } }]} />);
 
-    const details = container.querySelector("details");
+    const details = container.querySelector(".wf-incident-stacktrace");
     expect(details).not.toBeNull();
     expect(details?.textContent).toContain("System.InvalidOperationException: No value");
     expect(details?.querySelector("pre")?.textContent).toBe(stackTrace);
@@ -1051,7 +1109,8 @@ describe("WorkflowIncidentList", () => {
   it("does not render a stack trace disclosure when none is available", () => {
     const container = render(<WorkflowIncidentList incidents={[incident]} />);
 
-    expect(container.querySelector("details")).toBeNull();
+    expect(container.querySelector(".wf-incident-stacktrace")).toBeNull();
+    expect(container.querySelector(".wf-incident-technical-details")).not.toBeNull();
     expect(container.textContent).toContain("Input failed to evaluate.");
   });
 });
@@ -1123,6 +1182,98 @@ describe("buildInstanceCanvas", () => {
     expect(descended.nodes.map(node => node.id).sort()).toEqual(["wl-1", "wl-2"]);
   });
 
+  it("renders the compact executable BPMN projection with exact incident navigation", () => {
+    const child: WorkflowExecutableNode = {
+      executableNodeId: "compiled-writer",
+      authoredActivityId: "authored-writer",
+      activityType: writeLine.activityTypeKey,
+      activityTypeVersion: "1.0.0",
+      structureKind: null,
+      inputBindings: [],
+      childSlots: []
+    };
+    const executable: WorkflowExecutableNode = {
+      ...child,
+      executableNodeId: "compiled-bpmn",
+      authoredActivityId: "authored-bpmn",
+      activityType: bpmnActivity.activityTypeKey,
+      structureKind: bpmnStructureKind,
+      childSlots: [{ name: "Bpmn.Activities", activities: [child] }],
+      bpmnStructure: {
+        elements: [
+          { elementId: "start", elementType: "startEvent" },
+          { elementId: "task", elementType: "task", childNodeId: "compiled-writer" },
+          { elementId: "end", elementType: "endEvent" }
+        ],
+        sequenceFlows: [{ flowId: "start-task", sourceRef: "start", targetRef: "task" }]
+      }
+    };
+    const catalog = [...instanceCatalog, bpmnActivity];
+    const graph = buildExecutableActivityGraph(executable, catalog);
+    const failedActivity = {
+      ...activity,
+      executableNodeId: child.executableNodeId,
+      authoredActivityId: child.authoredActivityId,
+      status: "Scheduled",
+      startedAt: null,
+      completedAt: null,
+      incidentIds: [incident.incidentId]
+    };
+    const details = {
+      ...instanceDetails([failedActivity]),
+      incidents: [{ ...incident, executableNodeId: child.executableNodeId }]
+    };
+    const opened: Array<{ incidentId: string; nodeId?: string | null }> = [];
+    const canvas = buildInstanceCanvas(
+      { ...definitionVersion, state: { rootActivity: graph.root } }, catalog, details,
+      failedActivity.activityExecutionId, [], () => {},
+      (incidentId, nodeId) => opened.push({ incidentId, nodeId }), details.activities, graph
+    );
+
+    expect(canvas.nodes.map(node => node.id)).toEqual(["start", "task", "end"]);
+    const task = canvas.nodes.find(node => node.id === "task")!;
+    expect(task.data.runtimeNodeId).toBe("authored-writer");
+    expect(task.data.runtime).toMatchObject({
+      status: "Scheduled", activityExecutionId: activity.activityExecutionId,
+      incidentCount: 1, hasBlockingIncident: true, selected: true
+    });
+    task.data.onIncidentClick!(incident.incidentId);
+    expect(opened).toEqual([{ incidentId: incident.incidentId, nodeId: "authored-writer" }]);
+    expect(canvas.nodes.find(node => node.id === "start")?.data.runtime).toBeUndefined();
+    expect(canvas.nodes.find(node => node.id === "end")?.data.runtime).toBeUndefined();
+  });
+
+  it("uses frozen BPMN activity labels in the historical run canvas", () => {
+    const bpmnRoot: ActivityNode = {
+      nodeId: "bpmn-root",
+      activityVersionId: "bpmn@1",
+      inputs: [],
+      outputs: [],
+      structure: {
+        kind: bpmnStructureKind,
+        schemaVersion: "1.0.0",
+        payload: {
+          elements: [
+            { elementId: "frozen-task", elementType: "task", childNodeId: "node-frozen" },
+            { elementId: "named-task", elementType: "task", name: "BPMN element name", childNodeId: "node-named" }
+          ],
+          sequenceFlows: [],
+          activities: [leafNode("node-frozen"), leafNode("node-named")]
+        }
+      }
+    };
+    const version: WorkflowDefinitionVersionDetails = {
+      ...definitionVersion,
+      state: { rootActivity: bpmnRoot },
+      activityPresentation: [{ nodeId: "node-frozen", displayName: "Frozen run label" }]
+    };
+
+    const canvas = buildInstanceCanvas(version, instanceCatalog, instanceDetails([]), null, [], () => {});
+
+    expect(canvas.nodes.find(node => node.id === "frozen-task")?.data.label).toBe("Frozen run label");
+    expect(canvas.nodes.find(node => node.id === "named-task")?.data.label).toBe("BPMN element name");
+  });
+
   it("gives an unsupported scope owner no slot navigation, matching the editor's static placeholder", () => {
     // A leaf activity as root has no structure and no slots, so its designer support is "unsupported"
     // and the viewer renders the one-node placeholder canvas.
@@ -1147,6 +1298,70 @@ describe("buildInstanceCanvas", () => {
     const overlaid = descended.nodes.find(node => node.id === "wl-1")!;
     expect(overlaid.data.runtime?.status).toBe("Completed");
     expect(descended.nodes.find(node => node.id === "wl-2")!.data.runtime).toBeUndefined();
+  });
+
+  it("maps an exact activity inspection beyond the summary page onto its authored graph node", async () => {
+    const targetIncident = {
+      ...incident,
+      activityExecutionId: "older-execution",
+      executableNodeId: "compiled-wl-1"
+    };
+    const details: WorkflowInstanceDetails = {
+      ...instanceDetails([]),
+      instance: { workflowExecutionId: "wf-1" } as WorkflowInstanceDetails["instance"],
+      activityNextContinuationToken: "next-activity-page",
+      incidents: [targetIncident]
+    };
+    const exactInspection = {
+      ...inspection([]),
+      activityExecutionId: "older-execution",
+      workflowExecutionId: "wf-1",
+      executableNodeId: "compiled-wl-1",
+      authoredActivityId: "wl-1",
+      incidents: [{ ...incident, incidentId: targetIncident.incidentId }],
+      bookmarks: ["bookmark-1", "bookmark-2"].map(bookmarkId => ({
+        bookmarkId,
+        resumeTargetId: "target",
+        stimulusType: "timer",
+        stimulusHash: "sha256:timer",
+        createdAt: "2026-07-09T10:00:01Z",
+        metadata: {}
+      }))
+    };
+    expect(activityExecutionSummaryFromInspection(exactInspection)).toMatchObject({
+      bookmarkCount: 2,
+      bookmarkIds: ["bookmark-1", "bookmark-2"]
+    });
+    const loaded = await loadActiveIncidentActivitySummaries(details, async () => exactInspection);
+    const frames = enterForEachBody()!;
+    const descended = buildInstanceCanvas(
+      definitionVersion,
+      instanceCatalog,
+      details,
+      null,
+      frames,
+      () => {},
+      undefined,
+      combineActivityExecutions(details.activities, loaded.activities)
+    );
+
+    expect(loaded.incomplete).toBe(false);
+    expect(loaded.activities[0]).toMatchObject({
+      bookmarkCount: 2,
+      bookmarkIds: ["bookmark-1", "bookmark-2"],
+      incidentCount: 1,
+      incidentIds: [targetIncident.incidentId]
+    });
+    expect(combineActivityExecutions([
+      { ...activity, activityExecutionId: "older-execution", incidentCount: 0, incidentIds: ["stale-id"] }
+    ], loaded.activities)[0]).toMatchObject({
+      incidentCount: 1,
+      incidentIds: [targetIncident.incidentId]
+    });
+    expect(descended.nodes.find(node => node.id === "wl-1")?.data.runtime).toMatchObject({
+      primaryIncidentId: targetIncident.incidentId,
+      hasBlockingIncident: true
+    });
   });
 
   it("renders a projected Flowchart connection as a focusable, named run-canvas edge", () => {

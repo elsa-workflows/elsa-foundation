@@ -100,15 +100,16 @@ export function TestRunStatus({
   onOpenDetails(): void;
 }) {
   const rejected = isRejectedTestRun(testRun);
+  const acceptedWithIncidents = !rejected && hasAcceptedRuntimeIssue(testRun);
   return (
-    <div className="wf-test-run-status" data-state={rejected ? "rejected" : "accepted"}>
+    <div className="wf-test-run-status" data-state={rejected ? "rejected" : acceptedWithIncidents ? "accepted-with-incidents" : "accepted"}>
       <button
         type="button"
         className="wf-test-run-trigger"
         onClick={onOpenDetails}
       >
-        {rejected ? <AlertCircle size={16} /> : <Check size={16} />}
-        {rejected ? "Test run rejected" : "Test run dispatched"}
+        {rejected || acceptedWithIncidents ? <AlertCircle size={16} /> : <Check size={16} />}
+        {rejected ? "Test run rejected" : acceptedWithIncidents ? acceptedRuntimeIssueLabel(testRun) : "Test run dispatched"}
       </button>
     </div>
   );
@@ -117,7 +118,7 @@ export function TestRunStatus({
 export function WorkflowRuntimePanel({ testRun, publishedEquivalent, onOpenRun }: {
   testRun: WorkflowTestRunView | null;
   publishedEquivalent?: WorkflowExecutableSummary | null;
-  onOpenRun(workflowExecutionId: string): void;
+  onOpenRun(workflowExecutionId: string, initialTab?: "issues"): void;
 }) {
   if (!testRun) {
     return (
@@ -129,6 +130,7 @@ export function WorkflowRuntimePanel({ testRun, publishedEquivalent, onOpenRun }
 
   const rejected = isRejectedTestRun(testRun);
   const workflowExecutionId = testRun.workflowExecutionId;
+  const acceptedWithIncidents = !rejected && hasAcceptedRuntimeIssue(testRun);
   // The equivalence signal resolves asynchronously; re-check the artifact id so a match computed for an
   // earlier test run never captions a newer one. A rejected dispatch can still mint a valid artifact id,
   // but pairing a green "identical" banner with a rejection reason reads as contradictory — suppress it.
@@ -137,7 +139,7 @@ export function WorkflowRuntimePanel({ testRun, publishedEquivalent, onOpenRun }
     : null;
   return (
     <div className="wf-runtime-panel">
-      <section className="wf-runtime-card" data-state={rejected ? "rejected" : "accepted"}>
+      <section className="wf-runtime-card" data-state={rejected ? "rejected" : acceptedWithIncidents ? "accepted-with-incidents" : "accepted"}>
         <header>
           <div>
             <span>Latest Test Run</span>
@@ -147,6 +149,15 @@ export function WorkflowRuntimePanel({ testRun, publishedEquivalent, onOpenRun }
         </header>
         <p>Ephemeral - not saved, promoted, or published.</p>
         {rejected && testRun.reason ? <div className="wf-runtime-reason"><AlertCircle size={14} /> {testRun.reason}</div> : null}
+        {acceptedWithIncidents ? (
+          <div className="wf-runtime-incident-warning" role="status">
+            <AlertCircle size={14} aria-hidden="true" />
+            <span>{testRun.incidentCount != null && testRun.incidentCount > 0
+              ? `The test run was accepted and recorded ${testRun.incidentCount} incident${testRun.incidentCount === 1 ? "" : "s"}. Review the incident details on the linked Run.`
+              : "The test run was accepted with a runtime issue. Incident details may be unavailable in this response; review the linked Run."}</span>
+            {workflowExecutionId ? <button type="button" onClick={() => onOpenRun(workflowExecutionId, "issues")}>Review incidents</button> : null}
+          </div>
+        ) : null}
         {equivalent ? (
           <div className="wf-runtime-equivalence">
             <Check size={14} /> Current draft is behaviorally identical to published v{equivalent.artifactVersion}.
@@ -171,6 +182,16 @@ export function WorkflowRuntimePanel({ testRun, publishedEquivalent, onOpenRun }
       </section>
     </div>
   );
+}
+
+function hasAcceptedRuntimeIssue(testRun: WorkflowTestRunView) {
+  return testRun.commandDispatchStatus === "AcceptedButFaulted" || (typeof testRun.incidentCount === "number" && testRun.incidentCount > 0);
+}
+
+function acceptedRuntimeIssueLabel(testRun: WorkflowTestRunView) {
+  return typeof testRun.incidentCount === "number" && testRun.incidentCount > 0
+    ? "Test run accepted with incidents"
+    : "Test run accepted with a runtime issue";
 }
 
 function formatEvidenceCount(count: number | null | undefined, label: string) {

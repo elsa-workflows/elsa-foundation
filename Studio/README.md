@@ -4,6 +4,8 @@ Elsa Foundation Studio is a modular React studio shell hosted by ASP.NET Core. T
 
 For a current map of the host, shell, modules, routing, API boundaries, and authentication flow, see the [architecture tour](docs/architecture-tour.md).
 
+For operator guidance on current run health and following incidents to exact runtime evidence, see [Workflow run incidents](docs/workflow-run-incidents.md).
+
 The host is composed from independently enabled Studio capabilities:
 
 - `Elsa.Studio.Core` defines manifests, diagnostics, and the manifest collection event.

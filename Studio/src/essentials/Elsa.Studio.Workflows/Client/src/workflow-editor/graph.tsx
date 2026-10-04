@@ -10,6 +10,7 @@ import { groupActivityPalette, isActivityBrowsable } from "./editorHelpers";
 import { WorkflowEdgeActionsContext, WorkflowNodeAvailabilityContext } from "./contexts";
 import { NodeSlotBadges } from "./NodeSlotBadges";
 import { WorkflowStatusBadge } from "./WorkflowStatusBadge";
+import { RuntimeIncidentAction } from "./RuntimeIncidentAction";
 import { BpmnElementNode } from "../bpmn/BpmnElementNode";
 import type { WorkflowEdge } from "./editorTypes";
 
@@ -31,6 +32,7 @@ export function WorkflowActivityNode({ id, data, selected }: NodeProps) {
       className={["wf-node", selected ? "selected" : "", runtime ? "wf-node-runtime" : "", runtime?.hasBlockingIncident ? "faulted" : "", availability ? "wf-node-unavailable" : "", nodeData.ghost ? "wf-node-ghost" : "", nodeData.isStartNode ? "wf-node-start" : ""].filter(Boolean).join(" ")}
       data-start-node={nodeData.isStartNode ? "true" : undefined}
       data-icon={nodeData.icon ?? "activity"}
+      data-runtime-node-id={nodeData.runtimeNodeId ?? id}
       title={[nodeData.label, nodeData.description].filter(Boolean).join(" — ")}
       aria-description={nodeData.description}
     >
@@ -61,8 +63,8 @@ export function WorkflowActivityNode({ id, data, selected }: NodeProps) {
       {runtime ? (
         <div className="wf-node-runtime-strip">
           {runtime.status ? <WorkflowStatusBadge status={runtime.status} subStatus={runtime.subStatus} /> : null}
-          {runtime.incidentCount > 0 ? <span className="wf-node-runtime-count">{runtime.incidentCount} incident{runtime.incidentCount === 1 ? "" : "s"}</span> : null}
-          {runtime.faultCount > 0 ? <span className="wf-node-runtime-count">{runtime.faultCount} faults</span> : null}
+          <RuntimeIncidentAction runtime={runtime} onOpenIncident={nodeData.onIncidentClick} activityLabel={nodeData.label} />
+          {runtime.faultCount > 0 ? <span className="wf-node-runtime-count" data-health={runtime.hasBlockingIncident ? "blocking" : "neutral"}>{runtime.faultCount} faults</span> : null}
         </div>
       ) : null}
       {sourcePorts.map((port, index) => {

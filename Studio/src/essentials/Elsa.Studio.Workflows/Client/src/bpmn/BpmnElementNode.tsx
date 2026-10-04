@@ -2,6 +2,7 @@ import React from "react";
 import { Handle, Position, type NodeProps } from "@xyflow/react";
 import { renderActivityIcon } from "../workflowFormatting";
 import { NodeSlotBadges } from "../workflow-editor/NodeSlotBadges";
+import { RuntimeIncidentAction } from "../workflow-editor/RuntimeIncidentAction";
 import { bpmnElementTypes, bpmnElementTypeLabel, isEventElementType, isGatewayElementType, isTerminateEndEvent } from "./bpmnTypes";
 import type { BpmnNodeData } from "./bpmnAdapter";
 
@@ -18,12 +19,14 @@ export function BpmnElementNode({ data, selected }: NodeProps) {
 
   return (
     <div
-      className={["wf-bpmn-node", `wf-bpmn-${element.elementType}`, selected ? "selected" : ""].filter(Boolean).join(" ")}
+      className={["wf-bpmn-node", `wf-bpmn-${element.elementType}`, selected ? "selected" : "", nodeData.runtime ? "wf-bpmn-node-runtime" : "", nodeData.runtime?.hasBlockingIncident ? "faulted" : ""].filter(Boolean).join(" ")}
       data-element-type={element.elementType}
+      data-runtime-node-id={nodeData.runtimeNodeId ?? nodeData.boundActivity?.nodeId ?? element.elementId}
       title={typeLabel}
     >
       {acceptsInbound ? <Handle type="target" position={Position.Left} /> : null}
       {renderBpmnShape(nodeData)}
+      {nodeData.runtime ? <RuntimeIncidentAction runtime={nodeData.runtime} onOpenIncident={nodeData.onIncidentClick} activityLabel={element.name?.trim() || nodeData.boundActivity?.label || typeLabel} className="wf-bpmn-incident-action" /> : null}
       {producesOutbound ? <Handle type="source" position={Position.Right} id="flow" /> : null}
     </div>
   );
@@ -77,6 +80,7 @@ function renderBpmnShape(nodeData: BpmnNodeData) {
               ownerNodeId={bound.nodeId}
               ownerLabel={element.name?.trim() || bound.label}
               slots={nodeData.childSlots}
+              onEnterSlot={nodeData.onEnterSlot}
             />
           </span>
         </>

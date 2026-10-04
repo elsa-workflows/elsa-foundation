@@ -1054,7 +1054,10 @@ function RunDetailFixture() {
             <code>wfexec-browser</code>
           </div>
           <div className="wf-toolbar">
-            <button type="button" onClick={() => setSelectedActivityId("activity-1")}>Select activity</button>
+            <button type="button" onClick={() => {
+              setSelectedActivityId("activity-1");
+              layout.openInspector();
+            }}>Select activity</button>
             <button type="button" onClick={() => {
               layout.closeInspector();
               setSelectedActivityId(null);

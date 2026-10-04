@@ -254,6 +254,22 @@ describe("sidebar search filtering", () => {
     });
   }
 
+  it("keeps module search rendered when the saved desktop icon-rail preference is active", () => {
+    const key = "elsa-studio-sidebar-collapsed";
+    const previous = localStorage.getItem(key);
+    try {
+      localStorage.setItem(key, "true");
+      renderShell();
+
+      expect(container.querySelector(".studio-shell.sidebar-collapsed")).not.toBeNull();
+      expect(searchInput()).not.toBeNull();
+      expect(navLinkLabels()).toContain("Dashboard");
+    } finally {
+      if (previous === null) localStorage.removeItem(key);
+      else localStorage.setItem(key, previous);
+    }
+  });
+
   it("marks the active nav link with aria-current=page", () => {
     renderShell();
     const active = container.querySelector('.nav-section a[aria-current="page"]');

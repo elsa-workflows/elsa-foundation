@@ -1,5 +1,5 @@
 import type { Edge, Node, XYPosition } from "@xyflow/react";
-import type { ActivityCatalogItem, ActivityExecutionStateSummary, ActivityNode, ActivityNodeStructure, ActivityPresentationRecord, DesignMetadataRecord, IncidentStateSummary } from "./workflowTypes";
+import type { ActivityCatalogItem, ActivityExecutionStateSummary, ActivityNode, ActivityNodeStructure, ActivityPresentationRecord, DesignMetadataRecord } from "./workflowTypes";
 import {
   canStartWorkflow as activityCanStartWorkflow,
   flowchartStructureKind,
@@ -38,6 +38,8 @@ export interface WorkflowNodeData extends Record<string, unknown> {
   sourcePorts: WorkflowPortDescriptor[];
   suppressFlowPorts?: boolean;
   runtime?: WorkflowRuntimeNodeOverlay;
+  /** Runtime activity identity for canvases whose visible node id is a different domain element id. */
+  runtimeNodeId?: string;
   description?: string;
   /** True for the Flowchart activity execution enters first, so the canvas can say which node starts. */
   isStartNode?: boolean;
@@ -47,6 +49,7 @@ export interface WorkflowNodeData extends Record<string, unknown> {
   // ghost ("not available in this environment") instead of pretending the activity resolves.
   ghost?: boolean;
   onEnterSlot?(slot: ChildSlot): void;
+  onIncidentClick?(incidentId: string, targetNodeId?: string | null): void;
 }
 
 export type WorkflowNodeSummaryFormatter = (activity: ActivityNode, catalogItem: ActivityCatalogItem) => string | undefined;
@@ -68,7 +71,13 @@ export interface WorkflowRuntimeNodeOverlay {
   activityExecutionId?: string;
   faultCount: number;
   incidentCount: number;
+  historicalIncidentCount?: number;
+  primaryIncidentId?: string;
   hasBlockingIncident: boolean;
+  containedIncidentCount?: number;
+  containedAffectedActivityCount?: number;
+  containedPrimaryIncidentId?: string;
+  containsBlockingIncident?: boolean;
   selected: boolean;
 }
 
@@ -619,50 +628,6 @@ export function buildUnsupportedActivityCanvas(
   };
 }
 
-export function applyRuntimeOverlays(
-  nodes: Node<WorkflowNodeData>[],
-  activities: ActivityExecutionStateSummary[],
-  incidents: IncidentStateSummary[],
-  selectedEvidenceId: string | null = null
-) {
-  const activityByExecutionId = new Map(activities.map(activity => [activity.activityExecutionId, activity]));
-  const activitiesByNodeId = groupBy(activities, activity => activity.authoredActivityId || activity.executableNodeId);
-  const incidentsByNodeId = groupBy(incidents, incident => {
-    if (incident.executableNodeId) return incident.executableNodeId;
-    return incident.activityExecutionId ? activityByExecutionId.get(incident.activityExecutionId)?.authoredActivityId ?? "" : "";
-  });
-
-  return nodes.map(node => {
-    const nodeActivities = activitiesByNodeId.get(node.id) ?? [];
-    const nodeIncidents = incidentsByNodeId.get(node.id) ?? [];
-    if (nodeActivities.length === 0 && nodeIncidents.length === 0) return node;
-
-    const latestActivity = latestActivityExecution(nodeActivities);
-    const selected = selectedEvidenceId === node.id ||
-      nodeActivities.some(activity => activity.activityExecutionId === selectedEvidenceId) ||
-      nodeIncidents.some(incident => incident.incidentId === selectedEvidenceId);
-    const runtime: WorkflowRuntimeNodeOverlay = {
-      status: latestActivity?.status,
-      subStatus: latestActivity?.subStatus,
-      activityExecutionId: latestActivity?.activityExecutionId,
-      faultCount: nodeActivities.reduce((sum, activity) => sum + activity.faultCount + activity.aggregateFaultCount, 0),
-      incidentCount: nodeIncidents.length,
-      hasBlockingIncident: nodeIncidents.some(incident => incident.isBlocking),
-      selected
-    };
-
-    return {
-      ...node,
-      selected,
-      className: selected ? "wf-runtime-node-selected" : node.className,
-      data: {
-        ...node.data,
-        runtime
-      }
-    };
-  });
-}
-
 export function getActivityDesignerSupport(activity: ActivityNode | null | undefined, catalogItem?: ActivityCatalogItem): WorkflowDesignerSupport {
   if (activity?.structure?.kind === flowchartStructureKind || isFlowchartCatalogItem(catalogItem)) return "flowchart";
   if (activity?.structure?.kind === sequenceStructureKind || isSequenceCatalogItem(catalogItem)) return "sequence";
@@ -1168,17 +1133,6 @@ function readOptionalString(value: unknown) {
 
 function clonePayload(payload: Record<string, unknown>): Record<string, unknown> {
   return JSON.parse(JSON.stringify(payload)) as Record<string, unknown>;
-}
-
-function groupBy<T>(items: T[], getKey: (item: T) => string) {
-  const groups = new Map<string, T[]>();
-  for (const item of items) {
-    const key = getKey(item);
-    if (!key) continue;
-    groups.set(key, [...(groups.get(key) ?? []), item]);
-  }
-
-  return groups;
 }
 
 export function latestActivityExecution(activities: ActivityExecutionStateSummary[]) {

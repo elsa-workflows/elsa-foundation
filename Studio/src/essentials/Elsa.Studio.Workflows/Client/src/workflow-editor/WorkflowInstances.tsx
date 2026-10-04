@@ -1,18 +1,19 @@
 import "./activityInspection.css";
+import { createCursorHistory, getPreviousCursor, moveCursorHistoryNext, moveCursorHistoryPrevious, reconcileCursorHistory } from "./cursorHistory";
 import { Component, lazy, Suspense, useCallback, useEffect, useId, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from "react";
-import { ReactFlow, Background, Controls, MiniMap, type Edge, type Node } from "@xyflow/react";
+import { applyNodeChanges, ReactFlow, Background, Controls, MiniMap, type Edge, type Node, type NodeChange, type ReactFlowInstance } from "@xyflow/react";
 import { Activity as ActivityIcon, AlertCircle, Boxes, ChevronLeft, ChevronRight, ListTree, Maximize2, Minimize2, RotateCcw, SlidersHorizontal, Sparkles, Workflow as WorkflowIcon } from "lucide-react";
 import type { StudioActivityInputDescriptor, StudioAiContributionApi, StudioEndpointContext, StudioExpressionEditorContribution, StudioExpressionSourceRendererContext } from "@elsa-workflows/studio-sdk";
 import { listActivities } from "../api/activityDesign";
-import { getActivityExecutionInspection, getExecutable, getExecutableInputSources, getWorkflowInstance, listWorkflowInstances, type WorkflowInstanceListPage } from "../api/runtime";
+import { getActivityExecutionInspection, getExecutable, getExecutableInputSources, getWorkflowInstance, listWorkflowInstances, supportsActivityExecutionInspection, supportsWorkflowInstanceHealthFilter, WorkflowInstanceHealthFilterUnavailableError, type WorkflowInstanceListPage } from "../api/runtime";
 import type { ActivityCatalogItem, ActivityExecutionInspection, ActivityExecutionInspectionValueSnapshot, ActivityExecutionStateSummary, ActivityNode, IncidentStateSummary, WorkflowDefinitionVersionDetails, WorkflowExecutableDetails, WorkflowInstanceDetails, WorkflowInstanceSummary } from "../workflowTypes";
 import { formatActivitySummary } from "../activitySummary";
 import { isMaskedInput, readSecretReference } from "../maskedInput";
 import { resolveActivityLabel } from "../activityPresentation";
 import {
-  applyRuntimeOverlays,
   buildCanvas,
   buildUnsupportedActivityCanvas,
+  findNodeScopePath,
   getActivityDesignerSupport,
   getChildSlots,
   latestActivityExecution,
@@ -24,8 +25,9 @@ import {
   type WorkflowEdgeData,
   type WorkflowNodeData
 } from "../workflowAdapter";
+import { applyRuntimeOverlays, isActiveIncident } from "../workflowRuntimeOverlays";
 import { buildInputInspectionRows, evaluationPhase, evaluationSequence, type InputInspectionRow, type InputInspectionState } from "../inputInspectionRows";
-import { buildExecutableActivityGraph, findExecutableNodeFacts, type ExecutableActivityGraph, type ExecutableGraphNodeFacts } from "../executableGraph";
+import { buildExecutableActivityGraph, findExecutableGraphNodeId, findExecutableNodeFacts, type ExecutableActivityGraph, type ExecutableGraphNodeFacts } from "../executableGraph";
 import { formatDate, formatDuration, shortTypeName } from "../workflowFormatting";
 import { WorkflowExecutionTimeline } from "../WorkflowInstanceTimeline";
 import { WfEmptyState, WfErrorCard, WfListSkeleton } from "./StatusViews";
@@ -33,6 +35,7 @@ import { PanelTabList } from "./PanelTabList";
 import { WorkflowStatusBadge } from "./WorkflowStatusBadge";
 import { nodeTypes, edgeTypes } from "./graph";
 import { ScopeBreadcrumb } from "./ScopeBreadcrumb";
+import { buildBpmnCanvas, type BpmnNodeData } from "../bpmn/bpmnAdapter";
 import { CopyValueButton } from "./executableShared";
 import {
   formatCaptureMode,
@@ -54,6 +57,8 @@ import {
 import { runDetailMinInspectorWidth, useRunDetailLayout, type RunDetailLayoutMode } from "./useRunDetailLayout";
 import { decorateWorkflowCanvasElements } from "./workflowAccessibility";
 
+type WorkflowRunFlowInstance = ReactFlowInstance<Node<WorkflowNodeData>, Edge<WorkflowEdgeData>>;
+
 const runHistoryPageSizes = [10, 25, 50, 100] as const;
 const ReusableBoundaryInspector = lazy(async () => {
   const module = await import("./ReusableBoundaryInspector");
@@ -69,6 +74,7 @@ interface RunHistoryFilters {
   correlationId: string;
   from: string;
   to: string;
+  incidentHealth: "" | "active" | "blocking" | "none";
 }
 
 interface RunHistoryLocation {
@@ -93,10 +99,15 @@ export function WorkflowInstances({ context, navigate }: {
 }) {
   const [location, setLocation] = useState<RunHistoryLocation>(readRunHistoryLocation);
   const [draftFilters, setDraftFilters] = useState<RunHistoryFilters>(location.filters);
-  const [state, setState] = useState<"loading" | "ready" | "failed">("loading");
+  const [state, setState] = useState<"loading" | "ready" | "failed" | "unsupported">("loading");
   const [error, setError] = useState("");
   const [page, setPage] = useState<WorkflowInstanceListPage>(emptyRunHistoryPage);
+  const [healthFilterSupported, setHealthFilterSupported] = useState<boolean | null>(null);
   const requestSequence = useRef(0);
+  const cursorScope = { backend: context, query: buildRunHistoryUrl({ ...location, cursor: null }) };
+  const cursorHistory = useRef(createCursorHistory(cursorScope, location.cursor));
+  const previousPage = getPreviousCursor(cursorHistory.current, cursorScope, location.cursor, page);
+  const canFilterByHealth = healthFilterSupported === true;
 
   const load = useCallback(async () => {
     const requestId = ++requestSequence.current;
@@ -104,6 +115,9 @@ export function WorkflowInstances({ context, navigate }: {
     setError("");
     try {
       const filters = location.filters;
+      const supportsHealthFilter = await supportsWorkflowInstanceHealthFilter(context);
+      setHealthFilterSupported(supportsHealthFilter);
+      if (filters.incidentHealth && !supportsHealthFilter) throw new WorkflowInstanceHealthFilterUnavailableError();
       const nextPage = await listWorkflowInstances(context, {
         status: valueOrUndefined(filters.status),
         runKind: valueOrUndefined(filters.runKind),
@@ -113,6 +127,7 @@ export function WorkflowInstances({ context, navigate }: {
         correlationId: valueOrUndefined(filters.correlationId),
         from: toUtcIso(filters.from),
         to: toUtcIso(filters.to),
+        incidentHealth: filters.incidentHealth || undefined,
         take: location.pageSize,
         cursor: location.cursor ?? undefined
       });
@@ -123,7 +138,7 @@ export function WorkflowInstances({ context, navigate }: {
       if (requestId !== requestSequence.current) return;
       setError(e instanceof Error ? e.message : String(e));
       setPage(emptyRunHistoryPage);
-      setState("failed");
+      setState(e instanceof WorkflowInstanceHealthFilterUnavailableError ? "unsupported" : "failed");
     }
   }, [context, location]);
 
@@ -145,6 +160,10 @@ export function WorkflowInstances({ context, navigate }: {
   }, []);
 
   const updateLocation = (next: RunHistoryLocation, syncDraft = true) => {
+    cursorHistory.current = reconcileCursorHistory(cursorHistory.current, {
+      backend: context, query: buildRunHistoryUrl({ ...next, cursor: null })
+    }, next.cursor);
+    setState("loading");
     setLocation(next);
     if (syncDraft) setDraftFilters(next.filters);
     navigate(buildRunHistoryUrl(next));
@@ -200,6 +219,16 @@ export function WorkflowInstances({ context, navigate }: {
             <option value="Unknown">Unknown / legacy</option>
           </select>
         </label>
+        <label className="wf-toolbar-field">
+          <span>Incident health</span>
+          <select aria-label="Workflow run incident health" value={draftFilters.incidentHealth} disabled={!canFilterByHealth && !draftFilters.incidentHealth} onChange={event => setDraftFilters(current => ({ ...current, incidentHealth: event.target.value as RunHistoryFilters["incidentHealth"] }))}>
+            <option value="">All health states</option>
+            <option value="active" disabled={!canFilterByHealth}>Active incidents</option>
+            <option value="blocking" disabled={!canFilterByHealth}>Needs intervention</option>
+            <option value="none" disabled={!canFilterByHealth}>No active incidents</option>
+          </select>
+          {healthFilterSupported === false ? <small>Current health filtering is not available from this host.</small> : null}
+        </label>
         </div>
         <div className="wf-run-filter-fields">
           <RunFilterInput label="Definition" value={draftFilters.definitionId} onChange={value => setDraftFilters(current => ({ ...current, definitionId: value }))} />
@@ -215,6 +244,7 @@ export function WorkflowInstances({ context, navigate }: {
         </div>
       </form>
       {state === "failed" ? <div role="alert"><WfErrorCard message={error} /></div> : null}
+      {state === "unsupported" ? <p className="wf-run-health-unavailable" role="status">{error} No workflow runs were loaded. Clear the incident-health filter to search without it.</p> : null}
       {state === "loading" ? <div role="status" aria-live="polite" aria-label="Loading workflow runs"><WfListSkeleton /></div> : null}
       {state === "ready" && instances.length === 0 ? (
         <div role="status" aria-live="polite">
@@ -233,6 +263,7 @@ export function WorkflowInstances({ context, navigate }: {
             <span>Run</span>
             <span>Kind</span>
             <span>Status</span>
+            <span>Health</span>
             <span>Definition</span>
             <span>Activity</span>
             <span>Started</span>
@@ -243,7 +274,7 @@ export function WorkflowInstances({ context, navigate }: {
               type="button"
               className="wf-grid-row"
               role="row"
-              aria-label={`Inspect workflow run ${instance.workflowExecutionId}`}
+              aria-label={`Inspect workflow run ${instance.workflowExecutionId} · ${instance.status}${instance.subStatus ? ` · ${instance.subStatus}` : ""} · ${formatCurrentIncidentHealth(instance)}`}
               key={instance.workflowExecutionId}
               onClick={() => openInstance(instance.workflowExecutionId)}
             >
@@ -253,6 +284,7 @@ export function WorkflowInstances({ context, navigate }: {
               </span>
               <span>{formatRunKind(instance.runKind)}</span>
               <span><WorkflowStatusBadge status={instance.status} subStatus={instance.subStatus} /></span>
+              <span><CurrentIncidentHealthLabel instance={instance} /></span>
               <span>
                 <strong>{instance.definitionId}</strong>
                 <small>{instance.definitionVersionId}</small>
@@ -283,14 +315,20 @@ export function WorkflowInstances({ context, navigate }: {
             </select>
           </label>
           <div className="wf-page-controls">
-            <button type="button" disabled={!page.hasPrevious || !page.previousCursor} onClick={() => {
-              if (page.previousCursor) updateLocation({ ...location, cursor: page.previousCursor }, false);
+            <button type="button" disabled={!previousPage.available} onClick={() => {
+              const previous = moveCursorHistoryPrevious(cursorHistory.current, cursorScope, location.cursor, page);
+              if (!previous.destination.available) return;
+              cursorHistory.current = previous.history;
+              updateLocation({ ...location, cursor: previous.destination.cursor }, false);
             }} aria-label="Previous workflow run page">
               <ChevronLeft size={14} /> Previous
             </button>
             <span role="status">{page.hasNext ? "More results" : "End of results"}</span>
             <button type="button" disabled={!page.hasNext || !page.nextCursor} onClick={() => {
-              if (page.nextCursor) updateLocation({ ...location, cursor: page.nextCursor }, false);
+              const next = moveCursorHistoryNext(cursorHistory.current, cursorScope, location.cursor, page.nextCursor);
+              if (!next.destination.available) return;
+              cursorHistory.current = next.history;
+              updateLocation({ ...location, cursor: next.destination.cursor }, false);
             }} aria-label="Next workflow run page">
               Next <ChevronRight size={14} />
             </button>
@@ -324,7 +362,8 @@ function emptyRunHistoryFilters(): RunHistoryFilters {
     artifactId: "",
     correlationId: "",
     from: "",
-    to: ""
+    to: "",
+    incidentHealth: ""
   };
 }
 
@@ -344,7 +383,8 @@ export function readRunHistoryLocation(search = window.location.search): RunHist
       artifactId: parameters.get("artifactId") ?? "",
       correlationId: parameters.get("correlationId") ?? "",
       from: parameters.get("from") ?? "",
-      to: parameters.get("to") ?? ""
+      to: parameters.get("to") ?? "",
+      incidentHealth: parseIncidentHealth(parameters.get("incidentHealth"))
     },
     pageSize: runHistoryPageSizes.includes(requestedPageSize as typeof runHistoryPageSizes[number]) ? requestedPageSize : 25,
     cursor: parameters.get("cursor")
@@ -366,6 +406,35 @@ function valueOrUndefined(value: string) {
   return value || undefined;
 }
 
+function parseIncidentHealth(value: string | null): RunHistoryFilters["incidentHealth"] {
+  return value === "active" || value === "blocking" || value === "none" ? value : "";
+}
+
+export function formatCurrentIncidentHealth(instance: Pick<WorkflowInstanceSummary, "activeIncidentCount" | "blockingIncidentCount">) {
+  if (typeof instance.activeIncidentCount !== "number" || typeof instance.blockingIncidentCount !== "number") {
+    return "Current health unavailable";
+  }
+  if (instance.blockingIncidentCount > 0) {
+    return `${instance.activeIncidentCount} active · ${instance.blockingIncidentCount} blocking · Needs intervention`;
+  }
+  if (instance.activeIncidentCount > 0) {
+    return `${instance.activeIncidentCount} active · Non-blocking`;
+  }
+  return "No active incidents";
+}
+
+function CurrentIncidentHealthLabel({ instance }: { instance: WorkflowInstanceSummary }) {
+  const available = typeof instance.activeIncidentCount === "number" && typeof instance.blockingIncidentCount === "number";
+  const health = !available
+    ? "unavailable"
+    : instance.blockingIncidentCount! > 0
+      ? "blocking"
+      : instance.activeIncidentCount! > 0
+        ? "active"
+        : "none";
+  return <span className="wf-run-health-indicator" data-health={health}>{formatCurrentIncidentHealth(instance)}</span>;
+}
+
 function toUtcIso(value: string) {
   if (!value) return undefined;
   const date = new Date(value);
@@ -374,22 +443,42 @@ function toUtcIso(value: string) {
 
 interface WorkflowInstanceWorkbenchData extends WorkflowInstanceInspectionData {
   executableGraph: ExecutableActivityGraph | null;
+  incidentActivityExecutions: ActivityExecutionStateSummary[];
+  incidentAssociationLookupIncomplete: boolean;
+  incidentActivityLookupSupported: boolean;
+  pendingIncidentActivityExecutionIds: string[];
+  unavailableIncidentActivityFailures: UnavailableIncidentActivityFailure[];
 }
 
-export function WorkflowInstanceDetailsWorkbench({ context, ai, expressionEditors = [], workflowExecutionId, initialActivityExecutionId = null, navigate }: {
+const maxIncidentActivityLookups = 50;
+const incidentActivityLookupBatchSize = 8;
+
+export function WorkflowInstanceDetailsWorkbench({ context, ai, expressionEditors = [], workflowExecutionId, initialActivityExecutionId = null, initialInspectorTab = "timeline", navigate }: {
   context: StudioEndpointContext;
   ai: StudioAiContributionApi;
   expressionEditors?: StudioExpressionEditorContribution[];
   workflowExecutionId: string;
   initialActivityExecutionId?: string | null;
+  initialInspectorTab?: InstanceInspectorTab;
   navigate(path: string): void;
 }) {
   const [state, setState] = useState<"loading" | "ready" | "failed">("loading");
   const [error, setError] = useState("");
   const [data, setData] = useState<WorkflowInstanceWorkbenchData | null>(null);
   const [selectedEvidenceId, setSelectedEvidenceId] = useState<string | null>(null);
+  const [activeInspectorTab, setActiveInspectorTab] = useState<InstanceInspectorTab>(initialInspectorTab);
+  const [focusedRuntimeNodeId, setFocusedRuntimeNodeId] = useState<string | null>(null);
+  const [canvasFocusRequestId, setCanvasFocusRequestId] = useState(0);
+  const [focusInputKey, setFocusInputKey] = useState<string | null>(null);
+  const [incidentAssociationMessage, setIncidentAssociationMessage] = useState<string | null>(null);
   const [frames, setFrames] = useState<ScopeFrame[]>([]);
-  const selectedActivity = findSelectedActivityExecution(data?.details.activities ?? [], selectedEvidenceId);
+  const appliedInitialInspectorTab = useRef<InstanceInspectorTab | null>(null);
+  const incidentNavigationRequest = useRef(0);
+  const loadGeneration = useRef(0);
+  const incidentActivityLookupSequence = useRef(0);
+  const latestIncidentActivityLookupById = useRef(new Map<string, number>());
+  const associationActivities = combineActivityExecutions(data?.details.activities ?? [], data?.incidentActivityExecutions ?? []);
+  const selectedActivity = findSelectedActivityExecution(associationActivities, selectedEvidenceId, data?.details.incidents ?? []);
   const {
     containerRef,
     mode,
@@ -403,14 +492,29 @@ export function WorkflowInstanceDetailsWorkbench({ context, ai, expressionEditor
     workbenchClassName,
     workbenchStyle,
     closeInspector,
+    openInspector,
+    showCanvasForSelection,
     toggleInspectorCollapsed,
     toggleInspectorMaximized,
     startInspectorResize,
     handleInspectorResizeKeyDown
   } = useRunDetailLayout({ selectedActivityId: selectedActivity?.activityExecutionId });
+  useEffect(() => {
+    if (appliedInitialInspectorTab.current === initialInspectorTab) return;
+    appliedInitialInspectorTab.current = initialInspectorTab;
+    incidentNavigationRequest.current += 1;
+    setActiveInspectorTab(initialInspectorTab);
+    if (initialInspectorTab === "issues") openInspector();
+  }, [initialInspectorTab, openInspector]);
   const instanceAction = findAiAction(ai, "weaver.workflows.explain-instance");
 
   const load = useCallback(async () => {
+    const generation = ++loadGeneration.current;
+    latestIncidentActivityLookupById.current.clear();
+    incidentNavigationRequest.current += 1;
+    setIncidentAssociationMessage(null);
+    setFocusedRuntimeNodeId(null);
+    setFocusInputKey(null);
     if (!workflowExecutionId) {
       setError("No workflow execution id was provided.");
       setState("failed");
@@ -421,7 +525,7 @@ export function WorkflowInstanceDetailsWorkbench({ context, ai, expressionEditor
     setError("");
     try {
       const details = await getWorkflowInstance(context, workflowExecutionId);
-      const [executableResult, activityCatalog, sourceResult] = await Promise.all([
+      const [executableResult, activityCatalog, sourceResult, incidentActivityResult] = await Promise.all([
         getExecutable(context, details.instance.artifactId, details.instance.sourceReferenceId).then(
           executable => ({ executable, error: "" }),
           error => ({ executable: null, error: error instanceof Error ? error.message : String(error) })
@@ -431,8 +535,17 @@ export function WorkflowInstanceDetailsWorkbench({ context, ai, expressionEditor
           ? getExecutableInputSources(context, details.instance.artifactId, details.instance.sourceReferenceId).then(
               sources => ({ sources, access: sources.accessState || sources.access || "allowed" }),
               error => ({ sources: null, access: sourceAccessFromError(error) }))
-          : Promise.resolve({ sources: null, access: "unavailable" })
+          : Promise.resolve({ sources: null, access: "unavailable" }),
+        supportsActivityExecutionInspection(context).then(
+          async supported => ({
+            supported,
+            ...await loadActiveIncidentActivitySummaries(
+              details,
+              supported ? activityExecutionId => getActivityExecutionInspection(context, workflowExecutionId, activityExecutionId) : null)
+          }),
+          async () => ({ supported: false, ...await loadActiveIncidentActivitySummaries(details, null) }))
       ]);
+      if (generation !== loadGeneration.current) return;
       const catalog = activityCatalog.activities;
       const executableGraph = executableResult.executable
         ? buildExecutableActivityGraph(
@@ -450,10 +563,15 @@ export function WorkflowInstanceDetailsWorkbench({ context, ai, expressionEditor
           : null,
         definitionVersionError: executableResult.error,
         activityCatalog: catalog,
-        executableGraph
+        executableGraph,
+        incidentActivityExecutions: incidentActivityResult.activities,
+        incidentAssociationLookupIncomplete: incidentActivityResult.incomplete,
+        incidentActivityLookupSupported: incidentActivityResult.supported,
+        pendingIncidentActivityExecutionIds: incidentActivityResult.pendingActivityExecutionIds,
+        unavailableIncidentActivityFailures: incidentActivityResult.unavailableFailures
       });
       const initialEvidence = resolveInitialActivityEvidenceId(
-        details.activities,
+        combineActivityExecutions(details.activities, incidentActivityResult.activities),
         initialActivityExecutionId);
       setSelectedEvidenceId(initialEvidence);
       setFrames([]);
@@ -462,6 +580,7 @@ export function WorkflowInstanceDetailsWorkbench({ context, ai, expressionEditor
         requestAnimationFrame(() => requestAnimationFrame(() => focusSelectedCanvasActivity(initialEvidence)));
       }
     } catch (e) {
+      if (generation !== loadGeneration.current) return;
       setData(null);
       setError(formatWorkflowRunLoadError(e, workflowExecutionId));
       setState("failed");
@@ -483,14 +602,249 @@ export function WorkflowInstanceDetailsWorkbench({ context, ai, expressionEditor
     navigate(`/workflows/definitions?definition=${encodeURIComponent(definitionId)}`);
   };
   const closeResponsiveInspector = () => {
+    incidentNavigationRequest.current += 1;
     closeInspector();
-    requestAnimationFrame(() => focusSelectedCanvasActivity(selectedEvidenceId));
+    requestAnimationFrame(() => focusSelectedCanvasActivity(focusedRuntimeNodeId ?? selectedEvidenceId));
+  };
+
+  const navigateToScope = (nextFrames: ScopeFrame[]) => {
+    incidentNavigationRequest.current += 1;
+    setFrames(nextFrames);
+  };
+
+  const focusNodePath = (nodeId: string | null) => {
+    if (!nodeId || !data?.definitionVersion?.state.rootActivity) return;
+    const path = findNodeScopePath(
+      data.definitionVersion.state.rootActivity,
+      nodeId,
+      activity => resolveActivityLabel(
+        data.definitionVersion?.activityPresentation?.find(record => record.nodeId === activity.nodeId),
+        data.activityCatalog.find(item => item.activityVersionId === activity.activityVersionId),
+        activity.activityVersionId),
+      data.activityCatalog
+    );
+    if (path) setFrames(path);
+  };
+
+  const ensureIncidentActivityAssociation = useCallback(async (incident: IncidentStateSummary, isCurrent: () => boolean = () => true) => {
+    const generation = loadGeneration.current;
+    const activities = combineActivityExecutions(data?.details.activities ?? [], data?.incidentActivityExecutions ?? []);
+    const existing = resolveIncidentActivityAssociation(incident, activities, data?.executableGraph);
+    if (existing?.activityExecution) {
+      if (isCurrent()) setIncidentAssociationMessage(null);
+      return existing;
+    }
+    const activityExecutionId = readIncidentActivityExecutionId(incident);
+    if (!activityExecutionId || !data) return existing;
+    const lookupRequest = ++incidentActivityLookupSequence.current;
+    latestIncidentActivityLookupById.current.set(activityExecutionId, lookupRequest);
+    const isLatestLookup = () => latestIncidentActivityLookupById.current.get(activityExecutionId) === lookupRequest;
+    const finishLookup = () => {
+      if (isLatestLookup()) latestIncidentActivityLookupById.current.delete(activityExecutionId);
+    };
+    let supported: boolean;
+    try {
+      supported = await supportsActivityExecutionInspection(context);
+    } catch {
+      if (isLatestLookup() && isCurrent()) setIncidentAssociationMessage(incidentActivityLookupFailureMessage("unavailable"));
+      finishLookup();
+      return existing;
+    }
+    if (!isLatestLookup()) return existing;
+    if (!supported) {
+      if (isCurrent()) setIncidentAssociationMessage(incidentActivityLookupFailureMessage("unsupported"));
+      finishLookup();
+      return existing;
+    }
+    const workflowExecutionId = data.details.instance.workflowExecutionId;
+    const result = await loadExactIncidentActivitySummary(
+      workflowExecutionId,
+      activityExecutionId,
+      id => getActivityExecutionInspection(context, workflowExecutionId, id));
+    if (!isLatestLookup()) return existing;
+    if (result.status === "failed") {
+      if (isCurrent()) setIncidentAssociationMessage(incidentActivityLookupFailureMessage(result.reason));
+      finishLookup();
+      return existing;
+    }
+    const exact = result.summary;
+    if (isCurrent()) setIncidentAssociationMessage(null);
+    setData(current => {
+      if (!current || generation !== loadGeneration.current || current.details.instance.workflowExecutionId !== workflowExecutionId)
+        return current;
+      const pendingIncidentActivityExecutionIds = current.pendingIncidentActivityExecutionIds
+        .filter(id => id !== activityExecutionId);
+      return {
+        ...current,
+        incidentActivityExecutions: combineActivityExecutions(current.incidentActivityExecutions, [exact]),
+        pendingIncidentActivityExecutionIds,
+        incidentAssociationLookupIncomplete: pendingIncidentActivityExecutionIds.length > 0,
+        incidentActivityLookupSupported: true,
+        unavailableIncidentActivityFailures: current.unavailableIncidentActivityFailures
+          .filter(failure => failure.activityExecutionId !== activityExecutionId)
+      };
+    });
+    finishLookup();
+    return resolveIncidentActivityAssociation(incident, combineActivityExecutions(activities, [exact]), data?.executableGraph);
+  }, [context, data]);
+
+  const loadMoreIncidentAssociations = async () => {
+    if (!data?.incidentActivityLookupSupported || data.pendingIncidentActivityExecutionIds.length === 0) return;
+    const generation = loadGeneration.current;
+    const workflowExecutionId = data.details.instance.workflowExecutionId;
+    const pendingIds = data.pendingIncidentActivityExecutionIds;
+    const result = await loadActiveIncidentActivitySummaries(
+      { ...data.details, activities: associationActivities },
+      activityExecutionId => getActivityExecutionInspection(context, workflowExecutionId, activityExecutionId),
+      pendingIds);
+    setData(current => {
+      if (!current || generation !== loadGeneration.current || current.details.instance.workflowExecutionId !== workflowExecutionId)
+        return current;
+      const confirmedActivityExecutionIds = new Set(current.incidentActivityExecutions.map(activity => activity.activityExecutionId));
+      const pendingIncidentActivityExecutionIds = result.pendingActivityExecutionIds
+        .filter(id => !confirmedActivityExecutionIds.has(id));
+      const unavailableIncidentActivityFailures = combineUnavailableIncidentActivityFailures(
+        current.unavailableIncidentActivityFailures.filter(failure => !confirmedActivityExecutionIds.has(failure.activityExecutionId)),
+        result.unavailableFailures.filter(failure => !confirmedActivityExecutionIds.has(failure.activityExecutionId)));
+      return {
+        ...current,
+        incidentActivityExecutions: combineActivityExecutions(
+          current.incidentActivityExecutions,
+          result.activities.filter(activity => !confirmedActivityExecutionIds.has(activity.activityExecutionId))),
+        pendingIncidentActivityExecutionIds,
+        incidentAssociationLookupIncomplete: pendingIncidentActivityExecutionIds.length > 0,
+        unavailableIncidentActivityFailures
+      };
+    });
+  };
+
+  const beginEvidenceNavigation = () => {
+    const requestId = ++incidentNavigationRequest.current;
+    setIncidentAssociationMessage(null);
+    setFocusInputKey(null);
+    setFocusedRuntimeNodeId(null);
+    return requestId;
+  };
+
+  const requestCanvasFocus = (nodeId: string | null) => {
+    setFocusedRuntimeNodeId(nodeId);
+    if (nodeId) setCanvasFocusRequestId(current => current + 1);
+  };
+
+  const selectEvidence = (evidenceId: string | null) => {
+    beginEvidenceNavigation();
+    setSelectedEvidenceId(evidenceId);
+  };
+
+  const selectInspectorTab = (tab: InstanceInspectorTab) => {
+    incidentNavigationRequest.current += 1;
+    setActiveInspectorTab(tab);
+  };
+
+  const toggleInspectorCollapsedWithNavigation = () => {
+    incidentNavigationRequest.current += 1;
+    toggleInspectorCollapsed();
+  };
+
+  const toggleInspectorMaximizedWithNavigation = () => {
+    incidentNavigationRequest.current += 1;
+    toggleInspectorMaximized();
+  };
+
+  const openIncidentInIssues = (incidentId?: string | null, nodeId?: string | null) => {
+    const requestId = beginEvidenceNavigation();
+    const isCurrent = () => incidentNavigationRequest.current === requestId;
+    const incident = data?.details.incidents?.find(item => item.incidentId === incidentId);
+    const existingAssociation = incident
+      ? resolveIncidentActivityAssociation(incident, associationActivities, data?.executableGraph)
+      : null;
+    const targetNodeId = nodeId ?? existingAssociation?.nodeId ?? null;
+    setSelectedEvidenceId(incidentId ?? null);
+    setActiveInspectorTab("issues");
+    requestCanvasFocus(targetNodeId);
+    focusNodePath(targetNodeId);
+    openInspector();
+
+    if (incident) {
+      void ensureIncidentActivityAssociation(incident, isCurrent).then(association => {
+        if (!isCurrent() || !association?.nodeId || association.nodeId === targetNodeId) return;
+        requestCanvasFocus(association.nodeId);
+        focusNodePath(association.nodeId);
+      });
+    }
+  };
+
+  const showIncidentActivity = (incident: IncidentStateSummary, showInput: boolean) => {
+    const requestId = beginEvidenceNavigation();
+    const isCurrent = () => incidentNavigationRequest.current === requestId;
+    const existingAssociation = resolveIncidentActivityAssociation(incident, associationActivities, data?.executableGraph);
+    setSelectedEvidenceId(incident.incidentId);
+    setActiveInspectorTab(existingAssociation?.activityExecution ? "activity" : "issues");
+    setFocusInputKey(showInput && existingAssociation?.activityExecution ? readIncidentInputKey(incident) : null);
+    requestCanvasFocus(existingAssociation?.nodeId ?? null);
+    focusNodePath(existingAssociation?.nodeId ?? null);
+    if (showInput) openInspector();
+    else showCanvasForSelection();
+
+    void ensureIncidentActivityAssociation(incident, isCurrent).then(association => {
+      if (!isCurrent()) return;
+      if (!association?.activityExecution && association?.nodeId && !readIncidentActivityExecutionId(incident)) {
+        setIncidentAssociationMessage("This incident identifies an activity but not an exact execution, so Studio cannot choose a repeated occurrence.");
+      }
+      setActiveInspectorTab(association?.activityExecution ? "activity" : "issues");
+      setFocusInputKey(showInput && association?.activityExecution ? readIncidentInputKey(incident) : null);
+      if (association?.nodeId !== existingAssociation?.nodeId) {
+        requestCanvasFocus(association?.nodeId ?? null);
+        focusNodePath(association?.nodeId ?? null);
+      }
+      if (showInput) openInspector();
+      else showCanvasForSelection();
+    });
+  };
+
+  const selectActivityExecution = (activityExecutionId: string) => {
+    const activity = associationActivities.find(item => item.activityExecutionId === activityExecutionId);
+    if (!activity) return;
+    const incident = choosePreferredIncident((data?.details.incidents ?? []).filter(item =>
+      isActiveIncident(item) && resolveIncidentActivityAssociation(item, associationActivities, data?.executableGraph)?.activityExecution?.activityExecutionId === activityExecutionId));
+    if (incident) {
+      openIncidentInIssues(incident.incidentId, findExecutableGraphNodeId(data?.executableGraph, activity) ?? (activity.authoredActivityId || activity.executableNodeId));
+      return;
+    }
+    beginEvidenceNavigation();
+    const nodeId = findExecutableGraphNodeId(data?.executableGraph, activity) ?? (activity.authoredActivityId || activity.executableNodeId);
+    setSelectedEvidenceId(activityExecutionId);
+    setActiveInspectorTab("activity");
+    requestCanvasFocus(nodeId);
+    focusNodePath(nodeId);
+    openInspector();
+  };
+
+  const selectGraphActivity = (nodeId: string) => {
+    const nodeIncidents = (data?.details.incidents ?? []).filter(incident =>
+      isActiveIncident(incident) && resolveIncidentActivityAssociation(incident, associationActivities, data?.executableGraph)?.nodeId === nodeId);
+    const incidentToOpen = choosePreferredIncident(nodeIncidents);
+    if (incidentToOpen) {
+      openIncidentInIssues(incidentToOpen.incidentId, nodeId);
+      return;
+    }
+    beginEvidenceNavigation();
+    setSelectedEvidenceId(nodeId);
+    setActiveInspectorTab("activity");
+    requestCanvasFocus(nodeId);
+    openInspector();
+  };
+
+  const openIncidents = () => {
+    const active = choosePreferredIncident((data?.details.incidents ?? []).filter(isActiveIncident));
+    openIncidentInIssues(active?.incidentId ?? selectedEvidenceId);
   };
 
   return (
     <>
       <div className="wf-toolbar">
         <button type="button" onClick={goBack}><ChevronLeft size={14} /> Runs</button>
+        <IncidentHealthAction incidents={data?.details.incidents} onClick={openIncidents} />
         {data?.details.instance.definitionId ? (
           <button type="button" onClick={openDefinitionDesigner}><WorkflowIcon size={14} /> Designer</button>
         ) : null}
@@ -505,15 +859,30 @@ export function WorkflowInstanceDetailsWorkbench({ context, ai, expressionEditor
       {state === "failed" ? <WfErrorCard message={error} /> : null}
       {state === "ready" && data ? (
         <div ref={containerRef} className={workbenchClassName} style={workbenchStyle}>
+          {data.incidentAssociationLookupIncomplete ? (
+            <div className="wf-run-association-status" role="status">
+              <span>
+              {data.incidentActivityLookupSupported
+                ? `Some affected activities are not shown yet (${data.pendingIncidentActivityExecutionIds.length} remaining). Open Issues and load more.`
+                : "Exact affected activity evidence is unavailable from this server."}
+              </span>
+            </div>
+          ) : null}
           <WorkflowInstanceCanvas
             definitionVersion={data.definitionVersion}
             definitionVersionError={data.definitionVersionError}
             activityCatalog={data.activityCatalog}
+            executableGraph={data.executableGraph}
             details={data.details}
+            associationActivities={associationActivities}
             selectedEvidenceId={selectedEvidenceId}
-            onSelectEvidence={setSelectedEvidenceId}
+            onSelectEvidence={selectEvidence}
+            onOpenIncident={openIncidentInIssues}
+            onSelectActivity={selectGraphActivity}
+            focusNodeId={focusedRuntimeNodeId}
+            focusRequestId={canvasFocusRequestId}
             frames={frames}
-            onNavigateToScope={setFrames}
+            onNavigateToScope={navigateToScope}
             inactive={mode === "medium" && mediumDrawerOpen}
           />
           {mediumDrawerOpen ? (
@@ -537,10 +906,23 @@ export function WorkflowInstanceDetailsWorkbench({ context, ai, expressionEditor
             context={context}
             summary={data.details.instance}
             details={data.details}
+            associationActivities={associationActivities}
+            associationLookupIncomplete={data.incidentAssociationLookupIncomplete}
+            associationLookupSupported={data.incidentActivityLookupSupported}
+            associationLookupMessage={incidentAssociationMessage}
+            pendingIncidentActivityCount={data.pendingIncidentActivityExecutionIds.length}
+            unavailableActivityFailures={data.unavailableIncidentActivityFailures}
             state="ready"
             error=""
             selectedEvidenceId={selectedEvidenceId}
-            onSelectEvidence={setSelectedEvidenceId}
+            onSelectEvidence={selectEvidence}
+            activeTab={activeInspectorTab}
+            onActiveTabChange={selectInspectorTab}
+            onShowAffectedActivity={incident => showIncidentActivity(incident, false)}
+            onViewInput={incident => showIncidentActivity(incident, true)}
+            onLoadMoreIncidentAssociations={loadMoreIncidentAssociations}
+            focusInputKey={focusInputKey}
+            onSelectActivityExecution={selectActivityExecution}
             activityCatalog={data.activityCatalog}
             executableGraph={data.executableGraph}
             expressionEditors={expressionEditors}
@@ -552,8 +934,8 @@ export function WorkflowInstanceDetailsWorkbench({ context, ai, expressionEditor
             layoutMode={mode}
             responsiveOpen={mode === "medium" ? mediumDrawerOpen : mode === "narrow" && inspectorExpanded}
             onCloseResponsive={closeResponsiveInspector}
-            onToggleCollapsed={toggleInspectorCollapsed}
-            onToggleMaximized={toggleInspectorMaximized}
+            onToggleCollapsed={toggleInspectorCollapsedWithNavigation}
+            onToggleMaximized={toggleInspectorMaximizedWithNavigation}
           />
         </div>
       ) : null}
@@ -601,6 +983,172 @@ export function resolveInitialActivityEvidenceId(
     : null;
 }
 
+export function combineActivityExecutions(
+  pageActivities: ActivityExecutionStateSummary[],
+  incidentActivities: ActivityExecutionStateSummary[]
+) {
+  const byId = new Map(pageActivities.map(activity => [activity.activityExecutionId, activity]));
+  for (const activity of incidentActivities) byId.set(activity.activityExecutionId, activity);
+  return [...byId.values()];
+}
+
+type IncidentActivityInspection = Pick<ActivityExecutionInspection,
+  | "activityExecutionId"
+  | "workflowExecutionId"
+  | "executableNodeId"
+  | "authoredActivityId"
+  | "activityType"
+  | "activityTypeVersion"
+  | "status"
+  | "subStatus"
+  | "scheduledAt"
+  | "startedAt"
+  | "completedAt"
+  | "bookmarks"
+  | "incidents"
+  | "metadata"
+>;
+
+export function activityExecutionSummaryFromInspection(inspection: IncidentActivityInspection): ActivityExecutionStateSummary {
+  return {
+    activityExecutionId: inspection.activityExecutionId,
+    workflowExecutionId: inspection.workflowExecutionId,
+    executableNodeId: inspection.executableNodeId,
+    authoredActivityId: inspection.authoredActivityId,
+    activityType: inspection.activityType,
+    activityTypeVersion: inspection.activityTypeVersion,
+    status: inspection.status,
+    subStatus: inspection.subStatus,
+    scheduledAt: inspection.scheduledAt,
+    startedAt: inspection.startedAt,
+    completedAt: inspection.completedAt,
+    bookmarkCount: inspection.bookmarks.length,
+    bookmarkIds: inspection.bookmarks.map(bookmark => bookmark.bookmarkId),
+    incidentCount: inspection.incidents.length,
+    incidentIds: inspection.incidents.map(incident => incident.incidentId),
+    metadata: inspection.metadata
+  };
+}
+
+export type IncidentActivityInspectionFetcher = (activityExecutionId: string) => Promise<IncidentActivityInspection>;
+
+export type IncidentActivityLookupFailureReason = "identity-mismatch" | "permission-denied" | "unavailable" | "unsupported";
+type UnavailableIncidentActivityFailure = {
+  activityExecutionId: string;
+  reason: "identity-mismatch" | "permission-denied";
+};
+
+export function incidentActivityLookupFailureMessage(reason: IncidentActivityLookupFailureReason) {
+  switch (reason) {
+    case "identity-mismatch":
+      return "Runtime returned a different run or activity execution. Studio kept the incident open and did not open that execution.";
+    case "permission-denied":
+      return "You do not have permission to inspect this activity execution. The incident remains available here.";
+    case "unsupported":
+      return "This host does not support exact activity inspection. The incident remains available here.";
+    default:
+      return "Studio could not load the exact activity execution. Use Show affected activity to try again; the incident remains available here.";
+  }
+}
+
+export type ExactIncidentActivitySummaryResult =
+  | { status: "found"; summary: ActivityExecutionStateSummary }
+  | { status: "failed"; reason: Exclude<IncidentActivityLookupFailureReason, "unsupported"> };
+
+export async function loadExactIncidentActivitySummary(
+  workflowExecutionId: string,
+  activityExecutionId: string,
+  fetchInspection: IncidentActivityInspectionFetcher
+): Promise<ExactIncidentActivitySummaryResult> {
+  try {
+    const inspection = await fetchInspection(activityExecutionId);
+    if (inspection.activityExecutionId !== activityExecutionId || inspection.workflowExecutionId !== workflowExecutionId) {
+      return { status: "failed", reason: "identity-mismatch" };
+    }
+    return { status: "found", summary: activityExecutionSummaryFromInspection(inspection) };
+  } catch (error) {
+    const structuredStatus = typeof error === "object" && error !== null && "status" in error
+      ? (error as { status?: unknown }).status
+      : undefined;
+    const status = typeof structuredStatus === "number" && Number.isFinite(structuredStatus)
+      ? structuredStatus
+      : undefined;
+    const message = error instanceof Error ? error.message : String(error);
+    const permissionDenied = status !== undefined
+      ? status === 401 || status === 403
+      : /forbidden|permission|unauthori[sz]ed/i.test(message);
+    return {
+      status: "failed",
+      reason: permissionDenied ? "permission-denied" : "unavailable"
+    };
+  }
+}
+
+export async function loadActiveIncidentActivitySummaries(
+  details: WorkflowInstanceDetails,
+  fetchInspection: IncidentActivityInspectionFetcher | null,
+  requestedActivityExecutionIds?: string[]
+) {
+  const activitiesById = new Map(details.activities.map(activity => [activity.activityExecutionId, activity]));
+  const activeIds = [...new Set((details.incidents ?? [])
+    .filter(isActiveIncident)
+    .map(readIncidentActivityExecutionId)
+    .filter((id): id is string => Boolean(id?.trim())))];
+  const requestedIds = requestedActivityExecutionIds
+    ? [...new Set(requestedActivityExecutionIds.filter(id => activeIds.includes(id)))]
+    : activeIds.filter(id => !activitiesById.get(id)?.authoredActivityId);
+  if (requestedIds.length === 0) {
+    return {
+      activities: [] as ActivityExecutionStateSummary[],
+      incomplete: false,
+      pendingActivityExecutionIds: [] as string[],
+      unavailableFailures: [] as UnavailableIncidentActivityFailure[]
+    };
+  }
+  if (!fetchInspection) {
+    return {
+      activities: [] as ActivityExecutionStateSummary[],
+      incomplete: true,
+      pendingActivityExecutionIds: requestedIds,
+      unavailableFailures: [] as UnavailableIncidentActivityFailure[]
+    };
+  }
+
+  const fetched: ActivityExecutionStateSummary[] = [];
+  const failedIds: string[] = [];
+  const unavailableFailures: UnavailableIncidentActivityFailure[] = [];
+  const selectedIds = requestedIds.slice(0, maxIncidentActivityLookups);
+  for (let index = 0; index < selectedIds.length; index += incidentActivityLookupBatchSize) {
+    const batch = selectedIds.slice(index, index + incidentActivityLookupBatchSize);
+    const results = await Promise.all(batch.map(async activityExecutionId => {
+      const result = await loadExactIncidentActivitySummary(details.instance.workflowExecutionId, activityExecutionId, fetchInspection);
+      return { activityExecutionId, result };
+    }));
+    for (const result of results) {
+      if (result.result.status === "found") fetched.push(result.result.summary);
+      else if (result.result.reason === "unavailable") failedIds.push(result.activityExecutionId);
+      else unavailableFailures.push({ activityExecutionId: result.activityExecutionId, reason: result.result.reason });
+    }
+  }
+
+  const pendingActivityExecutionIds = [...requestedIds.slice(selectedIds.length), ...failedIds];
+  return {
+    activities: fetched,
+    incomplete: pendingActivityExecutionIds.length > 0,
+    pendingActivityExecutionIds,
+    unavailableFailures
+  };
+}
+
+function combineUnavailableIncidentActivityFailures(
+  existing: UnavailableIncidentActivityFailure[],
+  next: UnavailableIncidentActivityFailure[]
+) {
+  const byActivityExecutionId = new Map(existing.map(failure => [failure.activityExecutionId, failure]));
+  for (const failure of next) byActivityExecutionId.set(failure.activityExecutionId, failure);
+  return [...byActivityExecutionId.values()];
+}
+
 function sourceAccessFromError(error: unknown) {
   const status = typeof error === "object" && error !== null && "status" in error
     ? Number((error as { status?: unknown }).status)
@@ -615,9 +1163,15 @@ function WorkflowInstanceCanvas({
   definitionVersion,
   definitionVersionError,
   activityCatalog,
+  executableGraph,
   details,
+  associationActivities,
   selectedEvidenceId,
   onSelectEvidence,
+  onOpenIncident,
+  onSelectActivity,
+  focusNodeId,
+  focusRequestId,
   frames,
   onNavigateToScope,
   inactive = false
@@ -625,18 +1179,37 @@ function WorkflowInstanceCanvas({
   definitionVersion: WorkflowDefinitionVersionDetails | null;
   definitionVersionError: string;
   activityCatalog: ActivityCatalogItem[];
+  executableGraph: ExecutableActivityGraph | null;
   details: WorkflowInstanceDetails;
+  associationActivities: ActivityExecutionStateSummary[];
   selectedEvidenceId: string | null;
   onSelectEvidence(evidenceId: string | null): void;
+  onOpenIncident(incidentId: string, nodeId?: string | null): void;
+  onSelectActivity(nodeId: string): void;
+  focusNodeId: string | null;
+  focusRequestId: number;
   frames: ScopeFrame[];
   onNavigateToScope(frames: ScopeFrame[]): void;
   inactive?: boolean;
 }) {
   const scopeKey = getInstanceScopeKey(frames);
+  const [flowInstance, setFlowInstance] = useState<WorkflowRunFlowInstance | null>(null);
   const canvas = useMemo(
-    () => buildInstanceCanvas(definitionVersion, activityCatalog, details, selectedEvidenceId, frames, onNavigateToScope),
-    [activityCatalog, definitionVersion, details, frames, onNavigateToScope, selectedEvidenceId]
+    () => buildInstanceCanvas(definitionVersion, activityCatalog, details, selectedEvidenceId, frames, onNavigateToScope, onOpenIncident, associationActivities, executableGraph),
+    [activityCatalog, associationActivities, definitionVersion, details, executableGraph, frames, onNavigateToScope, onOpenIncident, selectedEvidenceId]
   );
+  const focusCanvasNodeId = focusNodeId
+    ? canvas.nodes.find(node => nodeRuntimeId(node) === focusNodeId)?.id ?? null
+    : null;
+
+  useEffect(() => {
+    if (!flowInstance || !focusCanvasNodeId) return;
+    const frame = requestAnimationFrame(() => {
+      flowInstance.fitView({ nodes: [{ id: focusCanvasNodeId }], duration: 220, padding: 0.35 });
+      focusSelectedCanvasActivity(focusNodeId);
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [flowInstance, focusCanvasNodeId, focusNodeId, focusRequestId, scopeKey]);
 
   return (
     <section className="wf-instance-canvas-shell" aria-label="Workflow run canvas" aria-hidden={inactive || undefined} inert={inactive || undefined}>
@@ -667,27 +1240,86 @@ function WorkflowInstanceCanvas({
         ) : null}
         {definitionVersion && canvas.nodes.length === 0 ? <div className="wf-empty">No workflow activities are available for this executable.</div> : null}
         {canvas.nodes.length > 0 ? (
-          <ReactFlow
+          <ReadOnlyWorkflowFlow
             key={scopeKey}
             nodes={canvas.nodes}
             edges={canvas.edges}
-            nodeTypes={nodeTypes}
-            edgeTypes={edgeTypes}
-            fitView
-            nodesDraggable={false}
-            nodesConnectable={false}
-            elementsSelectable
-            onNodeClick={(_, node) => onSelectEvidence(node.id)}
-            onPaneClick={() => onSelectEvidence(null)}
-          >
-            <Background />
-            <MiniMap pannable zoomable />
-            <Controls />
-          </ReactFlow>
+            onInit={setFlowInstance}
+            onSelectActivity={onSelectActivity}
+            onSelectEvidence={onSelectEvidence}
+          />
         ) : null}
       </div>
     </section>
   );
+}
+
+function ReadOnlyWorkflowFlow({
+  nodes,
+  edges,
+  onInit,
+  onSelectActivity,
+  onSelectEvidence
+}: {
+  nodes: Node<WorkflowNodeData>[];
+  edges: Edge<WorkflowEdgeData>[];
+  onInit(instance: WorkflowRunFlowInstance): void;
+  onSelectActivity(nodeId: string): void;
+  onSelectEvidence(evidenceId: string | null): void;
+}) {
+  const [measuredNodes, setMeasuredNodes] = useState<Node<WorkflowNodeData>[]>([]);
+  const flowNodes = useMemo(() => mergeMeasuredNodeDimensions(nodes, measuredNodes), [measuredNodes, nodes]);
+
+  useEffect(() => {
+    setMeasuredNodes(current => {
+      const activeTypes = new Map(nodes.map(node => [node.id, node.type]));
+      const next = current.filter(node => activeTypes.get(node.id) === node.type);
+      return next.length === current.length ? current : next;
+    });
+  }, [nodes]);
+
+  const onNodesChange = useCallback((changes: NodeChange<Node<WorkflowNodeData>>[]) => {
+    const dimensionChanges = changes.filter(change => change.type === "dimensions");
+    if (dimensionChanges.length === 0) return;
+
+    setMeasuredNodes(current => {
+      return applyNodeChanges(dimensionChanges, mergeMeasuredNodeDimensions(nodes, current));
+    });
+  }, [nodes]);
+
+  return (
+    <ReactFlow
+      nodes={flowNodes}
+      edges={edges}
+      nodeTypes={nodeTypes}
+      edgeTypes={edgeTypes}
+      fitView
+      onInit={onInit}
+      onNodesChange={onNodesChange}
+      nodesDraggable={false}
+      nodesConnectable={false}
+      elementsSelectable
+      onNodeClick={(_, node) => onSelectActivity(nodeRuntimeId(node))}
+      onPaneClick={() => onSelectEvidence(null)}
+    >
+      <Background />
+      <MiniMap pannable zoomable />
+      <Controls />
+    </ReactFlow>
+  );
+}
+
+function mergeMeasuredNodeDimensions(
+  nodes: Node<WorkflowNodeData>[],
+  measuredNodes: Node<WorkflowNodeData>[]
+) {
+  const measuredById = new Map(measuredNodes.map(node => [node.id, node]));
+  return nodes.map(node => {
+    const measuredNode = measuredById.get(node.id);
+    return measuredNode && measuredNode.type === node.type && measuredNode.measured
+      ? { ...node, measured: measuredNode.measured }
+      : node;
+  });
 }
 
 // Builds the read-only run-inspection canvas for the scope addressed by `frames`. Slot badges navigate
@@ -700,7 +1332,10 @@ export function buildInstanceCanvas(
   details: WorkflowInstanceDetails,
   selectedEvidenceId: string | null,
   frames: ScopeFrame[],
-  onNavigateToScope: (frames: ScopeFrame[]) => void
+  onNavigateToScope: (frames: ScopeFrame[]) => void,
+  onOpenIncident: (incidentId: string, nodeId?: string | null) => void = () => undefined,
+  associationActivities: ActivityExecutionStateSummary[] = details.activities,
+  executableGraph: ExecutableActivityGraph | null = null
 ): { nodes: Node<WorkflowNodeData>[]; edges: Edge<WorkflowEdgeData>[] } {
   const root = definitionVersion?.state.rootActivity;
   if (!definitionVersion || !root) return { nodes: [], edges: [] };
@@ -709,7 +1344,9 @@ export function buildInstanceCanvas(
   const scopeOwner = scope?.owner ?? root;
   const scopeOwnerCatalogItem = activityCatalog.find(activity => activity.activityVersionId === scopeOwner.activityVersionId);
   const support = getActivityDesignerSupport(scopeOwner, scopeOwnerCatalogItem);
-  const baseCanvas = support === "unsupported" || !scope
+  const baseCanvas = support === "bpmn" && scope
+    ? buildBpmnCanvas(scope, activityCatalog, definitionVersion.layout, definitionVersion.activityPresentation)
+    : support === "unsupported" || !scope
     ? buildUnsupportedActivityCanvas(
         scopeOwner,
         activityCatalog,
@@ -722,24 +1359,37 @@ export function buildInstanceCanvas(
         definitionVersion.layout,
         formatActivitySummary,
         definitionVersion.activityPresentation);
-  const readonlyNodes = baseCanvas.nodes.map(node => ({
-    ...node,
-    draggable: false,
-    connectable: false,
-    deletable: false,
-    data: {
-      ...node.data,
-      onEnterSlot: (slot: ChildSlot) => {
-        const plan = planSlotNavigation(frames, scopeOwner, node.id, slot, slotCrumbLabel(node.data.label, slot), activityCatalog);
-        if (plan) onNavigateToScope(plan.frames);
+  const readonlyNodes = baseCanvas.nodes.map(node => {
+    const bpmnData = node.data as BpmnNodeData;
+    const runtimeNodeId = bpmnData.runtimeNodeId ?? bpmnData.boundActivity?.nodeId ?? node.id;
+    const slotOwnerNodeId = bpmnData.boundActivity?.nodeId ?? runtimeNodeId;
+    return {
+      ...node,
+      draggable: false,
+      connectable: false,
+      deletable: false,
+      data: {
+        ...node.data,
+        runtimeNodeId,
+        onEnterSlot: (slot: ChildSlot) => {
+          const plan = planSlotNavigation(frames, scopeOwner, slotOwnerNodeId, slot, slotCrumbLabel(node.data.label, slot), activityCatalog);
+          if (plan) onNavigateToScope(plan.frames);
+        },
+        onIncidentClick: (incidentId: string, targetNodeId?: string | null) =>
+          onOpenIncident(incidentId, targetNodeId === undefined ? runtimeNodeId : targetNodeId)
       }
-    }
-  }));
+    } as Node<WorkflowNodeData>;
+  });
 
   return decorateWorkflowCanvasElements(
-    applyRuntimeOverlays(readonlyNodes, details.activities, details.incidents, selectedEvidenceId),
+    applyRuntimeOverlays(readonlyNodes, associationActivities, Array.isArray(details.incidents) ? details.incidents : [], selectedEvidenceId, activityCatalog, executableGraph),
     baseCanvas.edges.map(edge => ({ ...edge, deletable: false }))
   );
+}
+
+function nodeRuntimeId(node: Node) {
+  const data = node.data as Partial<WorkflowNodeData> & { boundActivity?: { nodeId?: string } };
+  return data.runtimeNodeId ?? data.boundActivity?.nodeId ?? node.id;
 }
 
 function getInstanceScopeKey(frames: ScopeFrame[]) {
@@ -760,6 +1410,32 @@ function collectWorkflowGraphNodeIds(definitionVersion: WorkflowDefinitionVersio
   return ids;
 }
 
+export function getIncidentHealthActionState(incidents?: IncidentStateSummary[] | null) {
+  const available = Array.isArray(incidents);
+  const activeIncidents = available ? incidents.filter(isActiveIncident) : [];
+  const blockingCount = activeIncidents.filter(incident => incident.isBlocking).length;
+  const health = !available ? "unavailable" : blockingCount > 0 ? "blocking" : activeIncidents.length > 0 ? "active" : "none";
+  const label = !available
+    ? "Incident health unavailable"
+    : blockingCount > 0
+      ? `Needs intervention · ${blockingCount} blocking · ${activeIncidents.length} active`
+      : activeIncidents.length > 0
+        ? `${activeIncidents.length} active non-blocking`
+        : "No active incidents";
+
+  return { health, label };
+}
+
+function IncidentHealthAction({ incidents, onClick }: { incidents?: IncidentStateSummary[] | null; onClick(): void }) {
+  const { health, label } = getIncidentHealthActionState(incidents);
+
+  return (
+    <button type="button" className="wf-run-incident-action" data-health={health} aria-label={`Open run incidents: ${label}`} onClick={onClick}>
+      <AlertCircle size={14} aria-hidden="true" /> {label}
+    </button>
+  );
+}
+
 function WorkflowInstanceInspector({
   context,
   summary,
@@ -767,7 +1443,20 @@ function WorkflowInstanceInspector({
   state,
   error,
   selectedEvidenceId = null,
+  associationActivities,
+  associationLookupIncomplete = false,
+  associationLookupSupported = false,
+  associationLookupMessage = null,
+  pendingIncidentActivityCount = 0,
+  unavailableActivityFailures = [],
   onSelectEvidence,
+  activeTab,
+  onActiveTabChange,
+  onShowAffectedActivity,
+  onViewInput,
+  onLoadMoreIncidentAssociations,
+  focusInputKey,
+  onSelectActivityExecution,
   graphNodeIds,
   rootNodeId,
   activityCatalog = [],
@@ -785,10 +1474,23 @@ function WorkflowInstanceInspector({
   context: StudioEndpointContext;
   summary: WorkflowInstanceSummary | null;
   details: WorkflowInstanceDetails | null;
+  associationActivities?: ActivityExecutionStateSummary[];
+  associationLookupIncomplete?: boolean;
+  associationLookupSupported?: boolean;
+  associationLookupMessage?: string | null;
+  pendingIncidentActivityCount?: number;
+  unavailableActivityFailures?: UnavailableIncidentActivityFailure[];
   state: "idle" | "loading" | "ready" | "failed";
   error: string;
   selectedEvidenceId?: string | null;
   onSelectEvidence?(evidenceId: string): void;
+  activeTab: InstanceInspectorTab;
+  onActiveTabChange(tab: InstanceInspectorTab): void;
+  onShowAffectedActivity(incident: IncidentStateSummary): void;
+  onViewInput(incident: IncidentStateSummary): void;
+  onLoadMoreIncidentAssociations(): Promise<void>;
+  focusInputKey: string | null;
+  onSelectActivityExecution(activityExecutionId: string): void;
   graphNodeIds?: Set<string>;
   rootNodeId?: string | null;
   activityCatalog?: ActivityCatalogItem[];
@@ -803,7 +1505,6 @@ function WorkflowInstanceInspector({
   onToggleCollapsed?(): void;
   onToggleMaximized?(): void;
 }) {
-  const [activeTab, setActiveTab] = useState<InstanceInspectorTab>("timeline");
   const inspectorRef = useRef<HTMLElement>(null);
 
   useEffect(() => {
@@ -817,11 +1518,13 @@ function WorkflowInstanceInspector({
     return <aside className="wf-instance-inspector"><div className="wf-empty">Select a workflow run to inspect its timeline.</div></aside>;
   }
 
-  const incidentCount = details?.incidents.length ?? 0;
-  const selectedActivity = findSelectedActivityExecution(details?.activities ?? [], selectedEvidenceId);
+  const incidents = Array.isArray(details?.incidents) ? details.incidents : [];
+  const incidentEvidenceAvailable = Array.isArray(details?.incidents);
+  const incidentCount = incidents.length;
+  const activityAssociations = associationActivities ?? details?.activities ?? [];
+  const selectedActivity = findSelectedActivityExecution(activityAssociations, selectedEvidenceId, incidents);
   const openActivityEvidence = (evidenceId: string) => {
-    onSelectEvidence?.(evidenceId);
-    setActiveTab("activity");
+    onSelectActivityExecution(evidenceId);
   };
   const tabs: WorkflowEditorPanelTab[] = [
     { id: "timeline", title: "Timeline", order: 0, icon: <ListTree size={14} />, render: () => null },
@@ -847,7 +1550,7 @@ function WorkflowInstanceInspector({
       }}
     >
       <div className="wf-panel-title wf-instance-panel-title">
-        <PanelTabList label="Run details tabs" tabs={tabs} activeTabId={activeTab} onSelect={tabId => setActiveTab(tabId as InstanceInspectorTab)} />
+        <PanelTabList label="Run details tabs" tabs={tabs} activeTabId={activeTab} onSelect={tabId => onActiveTabChange(tabId as InstanceInspectorTab)} />
         <span className="wf-panel-actions">
           {layoutMode !== "desktop" ? (
             <button
@@ -891,13 +1594,16 @@ function WorkflowInstanceInspector({
           {state === "ready" && details ? (
             <div className="wf-instance-tab-content">
               {activeTab === "timeline" ? (
-                <WorkflowExecutionTimeline
-                  activities={details.activities}
-                  activityCatalog={activityCatalog}
-                  executableGraph={executableGraph}
-                  selectedEvidenceId={selectedEvidenceId}
-                  onSelectEvidence={openActivityEvidence}
-                />
+                <>
+                  {details.activityNextContinuationToken ? <p className="wf-instance-note" role="note">Runtime returned another activity page. This timeline shows the current bounded page; exact incident links can load an associated activity separately.</p> : null}
+                  <WorkflowExecutionTimeline
+                    activities={details.activities}
+                    activityCatalog={activityCatalog}
+                    executableGraph={executableGraph}
+                    selectedEvidenceId={selectedEvidenceId}
+                    onSelectEvidence={openActivityEvidence}
+                  />
+                </>
               ) : activeTab === "activity" ? (
                 <WorkflowActivityExecutionDetails
                   context={context}
@@ -905,10 +1611,26 @@ function WorkflowInstanceInspector({
                   activityCatalog={activityCatalog}
                   executableNodeFacts={findExecutableNodeFacts(executableGraph, selectedActivity)}
                   expressionEditors={expressionEditors}
+                  focusInputKey={focusInputKey}
                 />
               ) : activeTab === "issues" ? (
                 <>
-                  <WorkflowIncidentList incidents={details.incidents} selectedEvidenceId={selectedEvidenceId} onSelectEvidence={onSelectEvidence} />
+                  <WorkflowIncidentList
+                    incidents={incidentEvidenceAvailable ? incidents : undefined}
+                    activities={activityAssociations}
+                    executableGraph={executableGraph}
+                    associationLookupIncomplete={associationLookupIncomplete}
+                    associationLookupSupported={associationLookupSupported}
+                    associationLookupMessage={associationLookupMessage}
+                    pendingIncidentActivityCount={pendingIncidentActivityCount}
+                    unavailableActivityFailures={unavailableActivityFailures}
+                    activityCatalog={activityCatalog}
+                    selectedEvidenceId={selectedEvidenceId}
+                    onSelectEvidence={onSelectEvidence}
+                    onShowAffectedActivity={onShowAffectedActivity}
+                    onViewInput={onViewInput}
+                    onLoadMoreIncidentAssociations={onLoadMoreIncidentAssociations}
+                  />
                   <WorkflowUnmatchedEvidence details={details} graphNodeIds={graphNodeIds} rootNodeId={rootNodeId} />
                 </>
               ) : (
@@ -939,8 +1661,83 @@ function WorkflowInstanceInspector({
   );
 }
 
-function findSelectedActivityExecution(activities: ActivityExecutionStateSummary[], selectedEvidenceId: string | null) {
+export interface IncidentActivityAssociation {
+  nodeId: string | null;
+  activityExecution: ActivityExecutionStateSummary | null;
+}
+
+export function resolveIncidentActivityAssociation(
+  incident: IncidentStateSummary,
+  activities: ActivityExecutionStateSummary[],
+  executableGraph?: ExecutableActivityGraph | null
+): IncidentActivityAssociation | null {
+  const getNodeId = (activity: ActivityExecutionStateSummary) =>
+    findExecutableGraphNodeId(executableGraph, activity) ?? (activity.authoredActivityId || activity.executableNodeId || null);
+  const explicitExecutionId = readIncidentActivityExecutionId(incident);
+  const exactExecution = explicitExecutionId
+    ? activities.find(activity => activity.activityExecutionId === explicitExecutionId)
+    : undefined;
+  if (exactExecution) {
+    return { nodeId: getNodeId(exactExecution), activityExecution: exactExecution };
+  }
+
+  const incidentExecutions = explicitExecutionId
+    ? []
+    : activities.filter(activity => activity.incidentIds?.includes(incident.incidentId) ?? false);
+  if (incidentExecutions.length === 1) {
+    const exact = incidentExecutions[0]!;
+    return { nodeId: getNodeId(exact), activityExecution: exact };
+  }
+
+  const explicitNodeId = incident.executableNodeId?.trim() || incident.metadata?.["runtime.executableNodeId"]?.trim();
+  if (explicitNodeId) {
+    const pinnedNodeId = findExecutableGraphNodeId(executableGraph, { executableNodeId: explicitNodeId });
+    if (pinnedNodeId) return { nodeId: pinnedNodeId, activityExecution: null };
+    const nodeActivity = activities.find(activity => activity.executableNodeId === explicitNodeId);
+    if (!nodeActivity) {
+      const authoredMatches = activities.filter(activity => activity.authoredActivityId === explicitNodeId);
+      if (new Set(authoredMatches.map(activity => activity.executableNodeId)).size > 1) {
+        return { nodeId: null, activityExecution: null };
+      }
+      if (authoredMatches.length === 1) return { nodeId: getNodeId(authoredMatches[0]!), activityExecution: null };
+    }
+    const nodeId = nodeActivity ? getNodeId(nodeActivity) : explicitNodeId;
+    return { nodeId, activityExecution: null };
+  }
+
+  const incidentNodeIds = [...new Set(incidentExecutions.map(getNodeId).filter(Boolean))];
+  return incidentNodeIds.length === 1
+    ? { nodeId: incidentNodeIds[0]!, activityExecution: null }
+    : null;
+}
+
+function choosePreferredIncident(incidents: IncidentStateSummary[]) {
+  return [...incidents].sort((left, right) =>
+    Number(right.isBlocking) - Number(left.isBlocking) || Date.parse(right.createdAt) - Date.parse(left.createdAt))[0] ?? null;
+}
+
+function readIncidentInputKey(incident: IncidentStateSummary) {
+  return incident.metadata?.["runtime.inputKey"]?.trim() || null;
+}
+
+function readIncidentActivityExecutionId(incident: IncidentStateSummary) {
+  return incident.activityExecutionId?.trim() || incident.metadata?.["runtime.activityExecutionId"]?.trim() || null;
+}
+
+export function getIncidentRootCause(incident: IncidentStateSummary) {
+  const rootCause = incident.metadata?.["runtime.faultInnerMessage"]?.trim();
+  return rootCause || incident.message;
+}
+
+function findSelectedActivityExecution(
+  activities: ActivityExecutionStateSummary[],
+  selectedEvidenceId: string | null,
+  incidents: IncidentStateSummary[] = []
+) {
   if (!selectedEvidenceId) return null;
+
+  const selectedIncident = incidents.find(incident => incident.incidentId === selectedEvidenceId);
+  if (selectedIncident) return resolveIncidentActivityAssociation(selectedIncident, activities)?.activityExecution ?? null;
 
   const exactActivity = activities.find(activity => activity.activityExecutionId === selectedEvidenceId);
   if (exactActivity) return exactActivity;
@@ -951,10 +1748,12 @@ function findSelectedActivityExecution(activities: ActivityExecutionStateSummary
   return nodeActivities.length > 0 ? latestActivityExecution(nodeActivities) : null;
 }
 
-function focusSelectedCanvasActivity(selectedEvidenceId: string | null) {
+export function focusSelectedCanvasActivity(selectedEvidenceId: string | null) {
   if (!selectedEvidenceId) return;
   const node = [...document.querySelectorAll<HTMLElement>(".wf-instance-canvas [data-id]")]
-    .find(element => element.dataset.id === selectedEvidenceId);
+    .find(element => element.dataset.id === selectedEvidenceId ||
+      [...element.querySelectorAll<HTMLElement>("[data-runtime-node-id]")]
+        .some(runtimeNode => runtimeNode.dataset.runtimeNodeId === selectedEvidenceId));
   node?.focus();
 }
 
@@ -989,18 +1788,24 @@ type ActivityExecutionInspectionState = {
   error: string;
 };
 
+function resolveReportedCount(count: number | null | undefined, legacyIds: readonly unknown[] | null | undefined) {
+  return count !== undefined ? count : Array.isArray(legacyIds) ? legacyIds.length : null;
+}
+
 export function WorkflowActivityExecutionDetails({
   context,
   activity,
   activityCatalog,
   executableNodeFacts,
-  expressionEditors = []
+  expressionEditors = [],
+  focusInputKey = null
 }: {
   context: StudioEndpointContext;
   activity: ActivityExecutionStateSummary | null;
   activityCatalog: ActivityCatalogItem[];
   executableNodeFacts?: ExecutableGraphNodeFacts;
   expressionEditors?: StudioExpressionEditorContribution[];
+  focusInputKey?: string | null;
 }) {
   const selectedActivityExecutionId = activity?.activityExecutionId ?? null;
   const selectedWorkflowExecutionId = activity?.workflowExecutionId ?? null;
@@ -1083,8 +1888,8 @@ export function WorkflowActivityExecutionDetails({
   const startedLabel = formatDate(activity.startedAt);
   const completedLabel = formatDate(activity.completedAt);
   const durationLabel = formatDuration(activity.startedAt, activity.completedAt) || "Unknown";
-  const bookmarkCount = activity.bookmarkIds?.length ?? 0;
-  const incidentCount = activity.incidentIds?.length ?? 0;
+  const bookmarkCount = resolveReportedCount(activity.bookmarkCount, activity.bookmarkIds);
+  const incidentCount = resolveReportedCount(activity.incidentCount, activity.incidentIds);
   const markCopied = (label: string) => setCopyStatus(`Copied ${label}.`);
   const markCopyFailed = (label: string) => setCopyStatus(`Could not copy ${label}.`);
 
@@ -1136,7 +1941,7 @@ export function WorkflowActivityExecutionDetails({
         <dl className="wf-activity-summary-grid">
           <ActivityMetadataValue label="Started" value={startedLabel} copiedLabel="start time" onCopied={markCopied} onCopyFailed={markCopyFailed} />
           <ActivityMetadataValue label="Duration" value={durationLabel} copiedLabel="duration" onCopied={markCopied} onCopyFailed={markCopyFailed} />
-          <ActivityMetadataValue label="Incidents" value={String(incidentCount)} copiedLabel="incident count" onCopied={markCopied} onCopyFailed={markCopyFailed} />
+          <ActivityMetadataValue label="Incidents" value={incidentCount == null ? "Unavailable" : String(incidentCount)} copiedLabel="incident count" onCopied={markCopied} onCopyFailed={markCopyFailed} />
         </dl>
 
         {copyStatus ? <p className="wf-copy-status" role="status" aria-live="polite">{copyStatus}</p> : null}
@@ -1152,6 +1957,7 @@ export function WorkflowActivityExecutionDetails({
           declarations={declaredInputs}
           executableNodeFacts={executableNodeFacts}
           expressionEditors={expressionEditors}
+          focusInputKey={focusInputKey}
         />
         <WorkflowActivityValueEvidence
           state={currentInspectionState}
@@ -1172,7 +1978,7 @@ export function WorkflowActivityExecutionDetails({
             <ActivityMetadataValue label="Activity Execution ID" value={activity.activityExecutionId} copiedLabel="activity execution ID" code onCopied={markCopied} onCopyFailed={markCopyFailed} />
             <ActivityMetadataValue label="Authored Activity ID" value={activity.authoredActivityId} copiedLabel="authored activity ID" code onCopied={markCopied} onCopyFailed={markCopyFailed} />
             <ActivityMetadataValue label="Completed" value={completedLabel} copiedLabel="completion time" onCopied={markCopied} onCopyFailed={markCopyFailed} />
-            <ActivityMetadataValue label="Bookmarks" value={String(bookmarkCount)} copiedLabel="bookmark count" onCopied={markCopied} onCopyFailed={markCopyFailed} />
+            <ActivityMetadataValue label="Bookmarks" value={bookmarkCount == null ? "Unavailable" : String(bookmarkCount)} copiedLabel="bookmark count" onCopied={markCopied} onCopyFailed={markCopyFailed} />
           </dl>
         </details>
       </section>
@@ -1226,12 +2032,14 @@ function WorkflowActivityInputEvidence({
   state,
   declarations,
   executableNodeFacts,
-  expressionEditors
+  expressionEditors,
+  focusInputKey
 }: {
   state: ActivityExecutionInspectionState;
   declarations: StudioActivityInputDescriptor[];
   executableNodeFacts?: ExecutableGraphNodeFacts;
   expressionEditors: StudioExpressionEditorContribution[];
+  focusInputKey: string | null;
 }) {
   if (state.status === "idle") return null;
 
@@ -1271,6 +2079,7 @@ function WorkflowActivityInputEvidence({
               row={row}
               sourceAccess={executableNodeFacts?.authoredInputsAccess}
               expressionEditors={expressionEditors}
+              focusInput={!!focusInputKey && row.inputKey === focusInputKey}
               inspectionStatus={state.status}
             />
           ))}
@@ -1284,11 +2093,13 @@ function InputInspectionRowCard({
   row,
   sourceAccess,
   expressionEditors,
+  focusInput = false,
   inspectionStatus
 }: {
   row: InputInspectionRow;
   sourceAccess?: string | null;
   expressionEditors: StudioExpressionEditorContribution[];
+  focusInput?: boolean;
   inspectionStatus: ActivityExecutionInspectionState["status"];
 }) {
   const latest = row.latestEvaluation;
@@ -1303,6 +2114,22 @@ function InputInspectionRowCard({
   const sourceProtected = isProtectedSourceAccess(sourceAccess) || isProtectedSourceAccess(row.authoredSource?.accessState ?? row.authoredSource?.access) || !!row.authoredSource?.isSensitive || !!row.compiledBinding?.isSensitive || !!latest?.isSensitive
     || (masked && !secretReference);
   const regionId = useId();
+  const detailsRef = useRef<HTMLDetailsElement>(null);
+  const summaryRef = useRef<HTMLElement>(null);
+
+  useEffect(() => {
+    if (!focusInput) return;
+    const details = detailsRef.current;
+    const summary = summaryRef.current;
+    if (!details || !summary) return;
+    details.open = true;
+    const frame = requestAnimationFrame(() => {
+      summary.focus();
+      summary.scrollIntoView?.({ block: "nearest" });
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [focusInput, row.rowKey]);
+
   const sensitiveInput = masked || row.authoredSource?.isSensitive || row.compiledBinding?.isSensitive;
   const runtimeSnapshot = latest && sensitiveInput && !latest.isSensitive ? { ...latest, isSensitive: true } : latest;
 
@@ -1316,13 +2143,13 @@ function InputInspectionRowCard({
         <div className="wf-input-inspection-value" aria-label={`${row.name} runtime value`}>
           {runtimeSnapshot ? <RuntimeValueEvidenceContent snapshot={runtimeSnapshot} presentation="input" /> : (
             <p className="wf-input-inspection-unavailable">
-              {inspectionStatus === "loading" ? "Loading captured value…" : inspectionStatus === "failed" ? "Runtime evidence unavailable" : "Not evaluated"}
+              {inspectionStatus === "loading" ? "Loading captured value…" : inspectionStatus === "failed" ? "Runtime evidence unavailable" : "No evaluation evidence recorded"}
             </p>
           )}
         </div>
       </div>
-      <details className="wf-input-inspection-disclosure">
-        <summary className="wf-input-inspection-summary" aria-controls={regionId}>
+      <details ref={detailsRef} className="wf-input-inspection-disclosure">
+        <summary ref={summaryRef} tabIndex={0} className="wf-input-inspection-summary" aria-controls={regionId}>
           <ChevronRight size={14} aria-hidden="true" />
           <span>Source &amp; diagnostics</span>
           <small>{sourceProtected ? (isProtectedSourceAccess(sourceAccess) ? "Source hidden" : "Protected source") : sourceKind}</small>
@@ -1498,7 +2325,7 @@ function formatInputInspectionState(state: InputInspectionState) {
     missingDeclaration: "Declaration unavailable",
     missingAuthoredSource: "Authored source unavailable",
     missingCompiledBinding: "Compiled binding unavailable",
-    noEvaluation: "Not evaluated",
+    noEvaluation: "Evaluation evidence not recorded",
     orphanEvidence: "Orphan runtime evidence",
     compiledOnly: "Compiled source only",
     sourceUnavailable: "Source unavailable",
@@ -1593,47 +2420,190 @@ const incidentStackTraceMetadataKeys = [
   "stackTrace"
 ];
 
-export function WorkflowIncidentList({ incidents, selectedEvidenceId = null, onSelectEvidence }: {
-  incidents: IncidentStateSummary[];
+export function WorkflowIncidentList({
+  incidents,
+  activities = [],
+  activityCatalog = [],
+  executableGraph,
+  associationLookupIncomplete = false,
+  associationLookupSupported = false,
+  associationLookupMessage = null,
+  pendingIncidentActivityCount = 0,
+  unavailableActivityFailures = [],
+  selectedEvidenceId = null,
+  onSelectEvidence,
+  onShowAffectedActivity,
+  onViewInput,
+  onLoadMoreIncidentAssociations
+}: {
+  incidents?: IncidentStateSummary[] | null;
+  activities?: ActivityExecutionStateSummary[];
+  activityCatalog?: ActivityCatalogItem[];
+  executableGraph?: ExecutableActivityGraph | null;
+  associationLookupIncomplete?: boolean;
+  associationLookupSupported?: boolean;
+  associationLookupMessage?: string | null;
+  pendingIncidentActivityCount?: number;
+  unavailableActivityFailures?: UnavailableIncidentActivityFailure[];
   selectedEvidenceId?: string | null;
   onSelectEvidence?(evidenceId: string): void;
+  onShowAffectedActivity?(incident: IncidentStateSummary): void;
+  onViewInput?(incident: IncidentStateSummary): void;
+  onLoadMoreIncidentAssociations?(): Promise<void>;
 }) {
   const [copyStatus, setCopyStatus] = useState("");
+  const [loadingAssociations, setLoadingAssociations] = useState(false);
+  const incidentEvidenceAvailable = Array.isArray(incidents);
+  const incidentRows = incidents ?? [];
+  const permissionDeniedCount = unavailableActivityFailures.filter(failure => failure.reason === "permission-denied").length;
+  const identityMismatchCount = unavailableActivityFailures.filter(failure => failure.reason === "identity-mismatch").length;
 
   return (
     <section className="wf-instance-section">
       <h4>Incidents</h4>
-      {incidents.length === 0 ? <p>No incidents recorded.</p> : null}
-      {incidents.map(incident => (
-        <article
-          className="wf-instance-incident"
-          data-severity={incident.severity.toLowerCase()}
-          data-selected={incident.incidentId === selectedEvidenceId}
-          key={incident.incidentId}
-        >
-          <button
-            type="button"
-            className="wf-instance-incident-summary"
-            aria-label={`Select incident ${incident.failureType}`}
-            onClick={() => onSelectEvidence?.(incident.incidentId)}
-          >
-            <strong>{incident.failureType}</strong>
-            <span>{incident.status} · {incident.severity}</span>
-            <p>{incident.message}</p>
-          </button>
-          <CopyValueButton
-            value={formatIncidentForClipboard(incident)}
-            ariaLabel={`Copy incident ${incident.failureType}`}
-            copiedLabel="incident"
-            onCopied={label => setCopyStatus(`Copied ${label}`)}
-            onCopyFailed={label => setCopyStatus(`Could not copy ${label}.`)}
-          />
-          <IncidentStackTrace incident={incident} />
-        </article>
+      {!incidentEvidenceAvailable ? <p>Incident evidence is unavailable from this Runtime host.</p> : null}
+      {associationLookupIncomplete ? (
+        <div className="wf-run-association-status" role="status">
+          <p className="wf-instance-note">{associationLookupSupported
+            ? `Some affected activities are not shown yet (${pendingIncidentActivityCount} remaining).`
+            : "This server cannot provide exact activity evidence."}</p>
+          {associationLookupSupported && onLoadMoreIncidentAssociations ? (
+            <button
+              type="button"
+              className="wf-run-incident-action"
+              data-health="active"
+              disabled={loadingAssociations}
+              onClick={() => {
+                setLoadingAssociations(true);
+                void onLoadMoreIncidentAssociations().finally(() => setLoadingAssociations(false));
+              }}
+            >
+              {loadingAssociations ? "Loading affected activities..." : `Load more affected activities (${pendingIncidentActivityCount})`}
+            </button>
+          ) : null}
+        </div>
+      ) : null}
+      {unavailableActivityFailures.length > 0 ? (
+        <div className="wf-run-association-status" role="status">
+          {permissionDeniedCount > 0 ? (
+            <p>You do not have permission to inspect {permissionDeniedCount} exact activity execution{permissionDeniedCount === 1 ? "" : "s"}. The incident{permissionDeniedCount === 1 ? " remains" : "s remain"} available here.</p>
+          ) : null}
+          {identityMismatchCount > 0 ? (
+            <p>Runtime returned a different run or activity execution for {identityMismatchCount} association{identityMismatchCount === 1 ? "" : "s"}. Studio kept those incidents open and did not open the returned execution.</p>
+          ) : null}
+        </div>
+      ) : null}
+      {associationLookupMessage ? <p className="wf-run-association-status" role="status">{associationLookupMessage}</p> : null}
+      {incidentEvidenceAvailable && incidentRows.length === 0 ? <p>No incidents recorded.</p> : null}
+      {incidentRows.map(incident => (
+        (() => {
+          const association = resolveIncidentActivityAssociation(incident, activities, executableGraph);
+          const inputKey = readIncidentInputKey(incident);
+          const inputFailureCode = incident.metadata?.["runtime.inputFailureCode"];
+          const expressionLanguage = incident.metadata?.["runtime.expressionLanguage"];
+          const inputPhase = incident.metadata?.["runtime.inputEvaluationPhase"];
+          const innerType = incident.metadata?.["runtime.faultInnerType"];
+          const activityFacts = findExecutableNodeFacts(executableGraph, association?.activityExecution) ??
+            (association?.nodeId ? executableGraph?.factsByNodeId.get(association.nodeId) : undefined);
+          const labelActivity = association?.activityExecution ?? activityFacts;
+          const activityLabel = getIncidentActivityLabel(labelActivity, activityCatalog, activityFacts?.presentation);
+          const inputLabel = getIncidentInputLabel(association?.activityExecution, activityCatalog, inputKey, activityFacts);
+          const incidentHealthLabel = !isActiveIncident(incident)
+            ? "Historical"
+            : incident.isBlocking ? "Needs intervention" : "Non-blocking";
+          return (
+            <article
+              className="wf-instance-incident"
+              data-severity={incident.severity.toLowerCase()}
+              data-selected={incident.incidentId === selectedEvidenceId}
+              key={incident.incidentId}
+            >
+              <button
+                type="button"
+                className="wf-instance-incident-summary"
+                onClick={() => onSelectEvidence?.(incident.incidentId)}
+              >
+                <strong>{activityLabel ? `${activityLabel}${inputLabel ? ` · ${inputLabel}` : ""}` : inputLabel ? `Input · ${inputLabel}` : incident.failureType}</strong>
+                <p className="wf-instance-incident-cause">{getIncidentRootCause(incident)}</p>
+                <span>{incidentHealthLabel} · {incident.status}</span>
+                {expressionLanguage ? <small>Expression language · {expressionLanguage}</small> : null}
+              </button>
+              <div className="wf-instance-incident-actions">
+                {association?.nodeId || hasIncidentActivityExecutionId(incident) ? (
+                  <button type="button" onClick={() => onShowAffectedActivity?.(incident)}>Show affected activity</button>
+                ) : <span className="wf-instance-note">Run-level issue · no activity association was recorded.</span>}
+                {inputKey && (association?.activityExecution || hasIncidentActivityExecutionId(incident)) ? (
+                  <button type="button" onClick={() => onViewInput?.(incident)}>View input evidence</button>
+                ) : inputKey ? (
+                  <span className="wf-instance-note">Input key is recorded, but its exact activity execution is unavailable.</span>
+                ) : null}
+              </div>
+              <CopyValueButton
+                value={formatIncidentForClipboard(incident)}
+                ariaLabel={`Copy incident ${incident.failureType}`}
+                copiedLabel="incident"
+                onCopied={label => setCopyStatus(`Copied ${label}`)}
+                onCopyFailed={label => setCopyStatus(`Could not copy ${label}.`)}
+              />
+              <details className="wf-incident-technical-details">
+                <summary>Full incident details</summary>
+                <p>Failure type: <code>{incident.failureType}</code></p>
+                <p>{incident.message}</p>
+                {innerType ? <p>Root cause type: <code>{innerType}</code></p> : null}
+                {inputKey ? <p>Input key: <code>{inputKey}</code></p> : null}
+                {inputFailureCode ? <p>Input failure code: <code>{inputFailureCode}</code></p> : null}
+                {inputPhase ? <p>Input evaluation phase: <code>{inputPhase}</code></p> : null}
+                {expressionLanguage ? <p>Expression language: <code>{expressionLanguage}</code></p> : null}
+              </details>
+              <IncidentStackTrace incident={incident} />
+            </article>
+          );
+        })()
       ))}
       {copyStatus ? <p className="wf-copy-status" role="status">{copyStatus}</p> : null}
     </section>
   );
+}
+
+function getIncidentActivityLabel(
+  activity: Pick<ActivityExecutionStateSummary, "activityType" | "activityTypeVersion"> | null | undefined,
+  catalog: ActivityCatalogItem[],
+  presentation?: ExecutableGraphNodeFacts["presentation"]
+) {
+  if (!activity) return null;
+  const catalogItem = catalog.find(item => item.activityTypeKey === activity.activityType && item.version === activity.activityTypeVersion);
+  return resolveActivityLabel(presentation, catalogItem, activity.activityType);
+}
+
+function hasIncidentActivityExecutionId(incident: IncidentStateSummary) {
+  return Boolean(readIncidentActivityExecutionId(incident));
+}
+
+export function getIncidentInputLabel(
+  activity: Pick<ActivityExecutionStateSummary, "activityType" | "activityTypeVersion"> | null | undefined,
+  catalog: ActivityCatalogItem[],
+  inputKey: string | null,
+  activityFacts?: Pick<ExecutableGraphNodeFacts, "inputBindings">
+) {
+  if (!inputKey) return null;
+  const exactActivityVersion = activity
+    ? catalog.find(item => item.activityTypeKey === activity.activityType && item.version === activity.activityTypeVersion)
+    : undefined;
+  const descriptor = exactActivityVersion?.inputs
+    .find(input => {
+      if (!input || typeof input !== "object") return false;
+      const record = input as Record<string, unknown>;
+      const referenceKey = typeof record.referenceKey === "string" ? record.referenceKey.trim() : "";
+      return referenceKey ? referenceKey === inputKey : record.name === inputKey;
+    }) as StudioActivityInputDescriptor | undefined;
+  const displayName = descriptor?.displayName?.trim();
+  const frozenInputName = activityFacts?.inputBindings.find(binding => (binding.inputKey?.trim() || binding.inputName) === inputKey)?.inputName.trim();
+  const inputLabel = displayName && displayName !== inputKey
+    ? `${displayName} input`
+    : frozenInputName && frozenInputName !== inputKey
+      ? `${frozenInputName} input`
+      : `${inputKey} input`;
+  return inputLabel;
 }
 
 function IncidentStackTrace({ incident }: { incident: IncidentStateSummary }) {

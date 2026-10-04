@@ -1,16 +1,17 @@
 import { describe, expect, it } from "vitest";
 import { buildExecutableActivityGraph, findExecutableNodeFacts, ghostNodeLabel, isGhostFact } from "../executableGraph";
 import { buildExecutableInspectorCanvas } from "../workflow-editor/WorkflowExecutableInspector";
-import { getChildSlots } from "../workflowAdapter";
+import { getChildSlots, resolveScope } from "../workflowAdapter";
 import type { ActivityNode, WorkflowExecutableNode } from "../workflowTypes";
-import { flowchartActivity, forEachActivity, sequenceActivity, writeLine } from "./fixtures";
+import { bpmnActivity, flowchartActivity, forEachActivity, sequenceActivity, writeLine } from "./fixtures";
+import { buildBpmnCanvas } from "../bpmn/bpmnAdapter";
 
 // The Executable Inspector adapts the Execution Material wire tree (executable nodes + named child
-// slots, no structure payload) back into the authored ActivityNode shape so buildCanvas/resolveScope
+// slots and compact topology) back into the authored ActivityNode shape so buildCanvas/resolveScope
 // can render it. These tests pin the adaptation: facet-based slot mapping, generic fallback, ghost
 // nodes for catalog misses, and Layout Sidecar geometry with auto-layout fallback.
 
-const catalog = [flowchartActivity, sequenceActivity, forEachActivity, writeLine];
+const catalog = [flowchartActivity, sequenceActivity, forEachActivity, bpmnActivity, writeLine];
 
 function executableNode(overrides: Partial<WorkflowExecutableNode> = {}): WorkflowExecutableNode {
   return {
@@ -45,7 +46,74 @@ function flowchartRoot(children: WorkflowExecutableNode[]): WorkflowExecutableNo
   });
 }
 
+function bpmnRoot(children: WorkflowExecutableNode[]): WorkflowExecutableNode {
+  return executableNode({
+    executableNodeId: "exec-bpmn",
+    authoredActivityId: "bpmn-root",
+    activityType: bpmnActivity.activityTypeKey,
+    structureKind: "elsa.bpmn.structure",
+    childSlots: children.length ? [{ name: "Bpmn.Activities", activities: children }] : [],
+    bpmnStructure: {
+      elements: [
+        { elementId: "start", elementType: "startEvent" },
+        ...children.map((child, index) => ({ elementId: `task-${index}`, elementType: "task", childNodeId: child.executableNodeId })),
+        { elementId: "end", elementType: "endEvent" }
+      ],
+      sequenceFlows: [{ flowId: "flow", sourceRef: "start", targetRef: children.length ? "task-0" : "end", conditionOutcome: "Done" }]
+    }
+  });
+}
+
 describe("buildExecutableActivityGraph", () => {
+  it("rebuilds pinned BPMN topology and maps its bindings to exact graph identities", () => {
+    const graph = buildExecutableActivityGraph(bpmnRoot([
+      executableNode({ executableNodeId: "exec-1", authoredActivityId: "shared" }),
+      executableNode({ executableNodeId: "exec-2", authoredActivityId: "shared" })
+    ]), catalog);
+    const canvas = buildBpmnCanvas(resolveScope(graph.root, [], catalog)!, catalog, []);
+
+    expect(canvas.nodes.map(node => node.id)).toEqual(["start", "task-0", "task-1", "end"]);
+    expect(canvas.nodes.find(node => node.id === "task-0")?.data.boundActivity?.nodeId).toBe("exec-1");
+    expect(canvas.nodes.find(node => node.id === "task-1")?.data.boundActivity?.nodeId).toBe("exec-2");
+    expect(canvas.edges).toMatchObject([{ id: "flow", source: "start", target: "task-0", label: "Done" }]);
+  });
+
+  it("does not guess a BPMN binding from an unrecognized executable identity", () => {
+    const wire = bpmnRoot([executableNode()]);
+    wire.bpmnStructure!.elements[1]!.childNodeId = "write-line-1";
+    const graph = buildExecutableActivityGraph(wire, catalog);
+    const canvas = buildBpmnCanvas(resolveScope(graph.root, [], catalog)!, catalog, []);
+    expect(canvas.nodes.find(node => node.id === "task-0")?.data.boundActivity).toBeUndefined();
+  });
+
+  it("preserves BPMN event topology without any child activities", () => {
+    const graph = buildExecutableActivityGraph(bpmnRoot([]), catalog);
+    const canvas = buildBpmnCanvas(resolveScope(graph.root, [], catalog)!, catalog, []);
+
+    expect(canvas.nodes.map(node => node.id)).toEqual(["start", "end"]);
+    expect(canvas.edges).toMatchObject([{ source: "start", target: "end" }]);
+  });
+
+  it("copies only compact BPMN wire fields and excludes malformed entries", () => {
+    const projected = {
+      elements: [
+        { elementId: "task", elementType: "task", childNodeId: "exec-1", name: "Pinned task", properties: { secret: "must not cross" } },
+        { elementId: "", elementType: "task" }
+      ],
+      sequenceFlows: [
+        { flowId: "flow", sourceRef: "task", targetRef: "task", name: "Pinned flow", isDefault: true, vertices: [{ x: 123, y: 456 }] },
+        { flowId: "bad", sourceRef: "", targetRef: "task" }
+      ]
+    };
+    const graph = buildExecutableActivityGraph({ ...bpmnRoot([executableNode()]), bpmnStructure: projected }, catalog);
+
+    expect(graph.root.structure?.payload.elements).toEqual([
+      { elementId: "task", elementType: "task", childNodeId: "write-line-1", name: "Pinned task" }
+    ]);
+    expect(graph.root.structure?.payload.sequenceFlows).toEqual([
+      { flowId: "flow", sourceRef: "task", targetRef: "task", name: "Pinned flow", isDefault: true }
+    ]);
+  });
   it("maps facet slots onto an authored-style structure and resolves catalog activities", () => {
     const root = sequenceRoot([
       executableNode({ inputBindings: [{ inputName: "Text", source: "Literal", summary: "\"Hello\"" }] }),

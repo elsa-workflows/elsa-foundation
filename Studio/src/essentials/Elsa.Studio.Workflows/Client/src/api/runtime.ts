@@ -17,7 +17,7 @@ import type {
   WorkflowInstanceDetails,
   WorkflowInstanceSummary
 } from "../workflowTypes";
-import { capabilityIds, getApiCapability, resolveCapabilityLink } from "./capabilities";
+import { capabilityIds, getApiCapability, hasCapabilityLink, resolveCapabilityLink } from "./capabilities";
 import { createWorkflowExecutionRequestInit } from "../workflowRunInputs";
 
 export const runtimeKeys = {
@@ -188,8 +188,20 @@ export interface ListWorkflowInstancesRequest {
   artifactId?: string;
   from?: string;
   to?: string;
+  incidentHealth?: "active" | "blocking" | "none";
   take?: number;
   cursor?: string;
+}
+
+export class WorkflowInstanceHealthFilterUnavailableError extends Error {
+  constructor() {
+    super("This host cannot filter by current incident health.");
+    this.name = "WorkflowInstanceHealthFilterUnavailableError";
+  }
+}
+
+export function supportsWorkflowInstanceHealthFilter(context: StudioEndpointContext) {
+  return hasCapabilityLink(context, capabilityIds.runtime, "workflow-instances-health-filter");
 }
 
 export interface WorkflowInstanceListPage {
@@ -212,6 +224,7 @@ export function workflowInstanceListQuery(request: ListWorkflowInstancesRequest 
   if (request.artifactId) parameters.set("artifactId", request.artifactId);
   if (request.from) parameters.set("from", request.from);
   if (request.to) parameters.set("to", request.to);
+  if (request.incidentHealth) parameters.set("incidentHealth", request.incidentHealth);
   if (request.take) parameters.set("take", String(request.take));
   if (request.cursor) parameters.set("cursor", request.cursor);
   return parameters.toString();
@@ -221,9 +234,13 @@ export async function listWorkflowInstances(context: StudioEndpointContext, requ
   const capability = await getApiCapability(context, capabilityIds.runtime);
   // Runtime v1 guarantees an array at the legacy relation. The cursor envelope is additive and
   // must be explicitly advertised so Studio can keep interoperating with older Foundation hosts.
-  const relation = capability?.links.some(link => link.rel === "workflow-instances-page")
-    ? "workflow-instances-page"
-    : "workflow-instances";
+  const hasHealthFilter = capability?.links.some(link => link.rel === "workflow-instances-health-filter") ?? false;
+  if (request.incidentHealth && !hasHealthFilter) throw new WorkflowInstanceHealthFilterUnavailableError();
+  const relation = request.incidentHealth
+    ? "workflow-instances-health-filter"
+    : capability?.links.some(link => link.rel === "workflow-instances-page")
+      ? "workflow-instances-page"
+      : "workflow-instances";
   const path = await resolveCapabilityLink(context, capabilityIds.runtime, relation);
   const query = workflowInstanceListQuery(request);
   const url = `${path}${query ? `?${query}` : ""}`;
@@ -281,6 +298,10 @@ export async function getActivityExecutionInspection(
   return signal
     ? context.http.getJson<ActivityExecutionInspection>(path, { signal })
     : context.http.getJson<ActivityExecutionInspection>(path);
+}
+
+export function supportsActivityExecutionInspection(context: StudioEndpointContext) {
+  return hasCapabilityLink(context, capabilityIds.runtime, "activity-execution");
 }
 
 export interface ActivityExecutionDescendantsRequest {

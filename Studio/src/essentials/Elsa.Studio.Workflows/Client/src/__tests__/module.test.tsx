@@ -2797,7 +2797,7 @@ describe("workflows module", () => {
     expect(container.textContent).toContain("Test Run");
     expect(container.textContent).toContain("2 activities");
     expect(container.textContent).toContain("1 incidents");
-    await click(rowByLabel(container, "Inspect workflow run wfexec-test"));
+    await click(rowByLabel(container, "Inspect workflow run wfexec-test · Completed · Current health unavailable"));
 
     expect(window.location.pathname).toBe("/workflows/instances/wfexec-test");
     expect(fetchMock).toHaveBeenCalledWith(
@@ -2873,8 +2873,8 @@ describe("workflows module", () => {
     expect(container.querySelector("[data-tab-id='activity']")?.getAttribute("aria-selected")).toBe("true");
     expect(container.textContent).toContain("Activity Execution ID");
     expect(container.textContent).toContain("activity-execution-1");
-    expect(container.textContent).toContain("Bookmarks0");
-    expect(container.textContent).toContain("Incidents0");
+    expect(container.textContent).toContain("BookmarksUnavailable");
+    expect(container.textContent).toContain("IncidentsUnavailable");
     await click(buttonByLabel(container, "Maximize run details panel"));
     expect(buttonByLabel(container, "Restore run details panel")).toBeTruthy();
     await click(buttonByLabel(container, "Restore run details panel"));

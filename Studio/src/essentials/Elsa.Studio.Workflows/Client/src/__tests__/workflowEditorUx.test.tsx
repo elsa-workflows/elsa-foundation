@@ -1,11 +1,13 @@
 import { flushSync } from "react-dom";
 import { createRoot, type Root } from "react-dom/client";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { StudioAiContributionApi } from "@elsa-workflows/studio-sdk";
 import { describeWorkflowError, isWorkflowEditorKeyboardTarget, normalizeWorkflowError } from "../workflow-editor/editorHelpers";
 import { WorkflowAlert } from "../workflow-editor/WorkflowAlert";
+import { WorkflowRuntimePanel } from "../workflow-editor/editorPanels";
 import { useAiProviderAvailability } from "../workflow-editor/useAiProviderAvailability";
 import { formatActivityVersion } from "../workflowFormatting";
+import type { WorkflowTestRunView } from "../workflowTypes";
 
 let root: Root;
 let container: HTMLDivElement;
@@ -147,6 +149,83 @@ describe("WorkflowAlert", () => {
     ));
     expect(container.querySelector(".wf-alert-detail")).toBeNull();
     expect(container.querySelector(".wf-alert-trace")).toBeNull();
+  });
+});
+
+describe("accepted test runs with incidents", () => {
+  it("reports accepted dispatch with incidents and links directly to the Run", () => {
+    const onOpenRun = vi.fn();
+    const testRun: WorkflowTestRunView = {
+      testRunId: "test-run-1",
+      definitionId: "definition-1",
+      definitionVersionId: "draft:1",
+      workflowExecutionId: "run-1",
+      artifactId: "artifact-1",
+      status: "DispatchAccepted",
+      commandDispatchStatus: "Accepted",
+      incidentCount: 1
+    };
+    flushSync(() => root.render(<WorkflowRuntimePanel testRun={testRun} onOpenRun={onOpenRun} />));
+
+    expect(container.querySelector(".wf-runtime-card")?.getAttribute("data-state")).toBe("accepted-with-incidents");
+    expect(container.textContent).toContain("The test run was accepted and recorded 1 incident");
+    const review = [...container.querySelectorAll<HTMLButtonElement>("button")].find(button => button.textContent === "Review incidents");
+    expect(review).toBeTruthy();
+    flushSync(() => review?.click());
+    expect(onOpenRun).toHaveBeenCalledWith("run-1", "issues");
+  });
+
+  it("warns from an AcceptedButFaulted receipt even when the incident count is unavailable", () => {
+    const onOpenRun = vi.fn();
+    const testRun: WorkflowTestRunView = {
+      testRunId: "test-run-legacy",
+      definitionId: "definition-1",
+      definitionVersionId: "draft:1",
+      workflowExecutionId: "run-legacy",
+      status: "DispatchAccepted",
+      commandDispatchStatus: "AcceptedButFaulted"
+    };
+    flushSync(() => root.render(<WorkflowRuntimePanel testRun={testRun} onOpenRun={onOpenRun} />));
+
+    expect(container.querySelector(".wf-runtime-card")?.getAttribute("data-state")).toBe("accepted-with-incidents");
+    expect(container.textContent).toContain("accepted with a runtime issue");
+    expect(container.textContent).toContain("Incident details may be unavailable");
+    const review = [...container.querySelectorAll<HTMLButtonElement>("button")].find(button => button.textContent === "Review incidents");
+    flushSync(() => review?.click());
+    expect(onOpenRun).toHaveBeenCalledWith("run-legacy", "issues");
+  });
+
+  it("keeps the Run ID link on the default timeline destination", () => {
+    const onOpenRun = vi.fn();
+    const testRun: WorkflowTestRunView = {
+      testRunId: "test-run-generic",
+      definitionId: "definition-1",
+      definitionVersionId: "draft:1",
+      workflowExecutionId: "run-generic",
+      status: "DispatchAccepted",
+      commandDispatchStatus: "Accepted"
+    };
+    flushSync(() => root.render(<WorkflowRuntimePanel testRun={testRun} onOpenRun={onOpenRun} />));
+
+    const runLink = [...container.querySelectorAll<HTMLButtonElement>("button")]
+      .find(button => button.textContent === "run-generic");
+    flushSync(() => runLink?.click());
+
+    expect(onOpenRun).toHaveBeenCalledWith("run-generic");
+  });
+
+  it("keeps an ordinary accepted legacy receipt green when no fault evidence is present", () => {
+    const testRun: WorkflowTestRunView = {
+      testRunId: "test-run-accepted",
+      definitionId: "definition-1",
+      definitionVersionId: "draft:1",
+      status: "DispatchAccepted",
+      commandDispatchStatus: "Accepted"
+    };
+    flushSync(() => root.render(<WorkflowRuntimePanel testRun={testRun} onOpenRun={() => {}} />));
+
+    expect(container.querySelector(".wf-runtime-card")?.getAttribute("data-state")).toBe("accepted");
+    expect(container.querySelector(".wf-runtime-incident-warning")).toBeNull();
   });
 });
 

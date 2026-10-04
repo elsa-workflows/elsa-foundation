@@ -653,7 +653,7 @@ export interface WorkflowExecutableConnection {
 
 // A node in the Execution Material tree served by GET /executables/{artifactId}. Input bindings are
 // compact summaries (secrets stay references, never literals); only the structure kind and compact
-// flowchart connections are projected, never the authored structure or descriptor payload.
+// routing topology is projected, never the authored structure or descriptor payload.
 export interface WorkflowExecutableNode {
   executableNodeId: string;
   authoredActivityId: string;
@@ -664,6 +664,24 @@ export interface WorkflowExecutableNode {
   childSlots: WorkflowExecutableChildSlot[];
   connections?: WorkflowExecutableConnection[];
   outputCaptures?: WorkflowExecutableOutputCapture[] | null;
+  bpmnStructure?: WorkflowExecutableBpmnStructure | null;
+}
+
+export interface WorkflowExecutableBpmnStructure {
+  elements: {
+    elementId: string;
+    elementType: string;
+    childNodeId?: string | null;
+    name?: string | null;
+  }[];
+  sequenceFlows: {
+    flowId: string;
+    sourceRef: string;
+    targetRef: string;
+    name?: string | null;
+    conditionOutcome?: string | null;
+    isDefault?: boolean;
+  }[];
 }
 
 // A compiled output capture on an executable node; `conversionPlan` is the pinned ValueConversionPlan
@@ -771,12 +789,18 @@ export interface WorkflowInstanceSummary {
   sourceVersion?: string | null;
   activityCount: number;
   incidentCount: number;
+  /** Current unresolved incidents, excluding Resolved and Suppressed; absent on older Runtime hosts. */
+  activeIncidentCount?: number | null;
+  /** Current blocking incidents; absent on older Runtime hosts. */
+  blockingIncidentCount?: number | null;
 }
 
 export interface WorkflowInstanceDetails {
   instance: WorkflowInstanceSummary;
   activities: ActivityExecutionStateSummary[];
-  incidents: IncidentStateSummary[];
+  /** Present when Runtime bounded the activity summaries and another page is available. */
+  activityNextContinuationToken?: string | null;
+  incidents?: IncidentStateSummary[] | null;
 }
 
 export interface ActivityExecutionInspection {
@@ -1114,10 +1138,14 @@ export interface ActivityExecutionStateSummary {
   branchId?: string | null;
   iterationId?: string | null;
   callStackDepth?: number | null;
-  bookmarkIds: string[];
-  incidentIds: string[];
-  faultCount: number;
-  aggregateFaultCount: number;
+  /** Runtime's projected bookmark total; null means the count is unavailable. */
+  bookmarkCount?: number | null;
+  /** Legacy bookmark identities, used only when the projected count is absent. */
+  bookmarkIds?: string[] | null;
+  incidentCount?: number | null;
+  incidentIds?: string[] | null;
+  faultCount?: number;
+  aggregateFaultCount?: number;
   metadata: Record<string, string>;
 }
 

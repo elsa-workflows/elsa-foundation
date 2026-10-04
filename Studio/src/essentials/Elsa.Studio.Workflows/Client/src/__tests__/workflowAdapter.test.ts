@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vitest";
 import {
-  applyRuntimeOverlays,
   buildUnsupportedActivityCanvas,
   buildCanvas,
   createActivityNode,
@@ -21,7 +20,9 @@ import {
   type CanvasScope,
   type ScopeFrame
 } from "../workflowAdapter";
-import type { ActivityCatalogItem, ActivityNode } from "../workflowTypes";
+import { applyRuntimeOverlays, isActiveIncident } from "../workflowRuntimeOverlays";
+import { buildExecutableActivityGraph } from "../executableGraph";
+import type { ActivityCatalogItem, ActivityExecutionStateSummary, ActivityNode, IncidentStateSummary, WorkflowExecutableNode } from "../workflowTypes";
 import { decorateWorkflowCanvasElements } from "../workflow-editor/workflowAccessibility";
 import { writeLine } from "./fixtures";
 
@@ -571,6 +572,370 @@ describe("workflow adapter", () => {
       }
     });
   });
+
+  it("groups repeated authored placements by the executable identity present on the canvas", () => {
+    const canvas = buildCanvas(firstScope(sequenceRoot([node("shared-node")])), [writeLine], []);
+    const templateNode = canvas.nodes[0]!;
+    const repeatedNodes = ["placement-1", "placement-2"].map(executableNodeId => ({
+      ...templateNode,
+      id: executableNodeId,
+      data: { ...templateNode.data, runtimeNodeId: executableNodeId }
+    }));
+    const first = activityExecution({
+      activityExecutionId: "execution-1",
+      authoredActivityId: "shared-node",
+      executableNodeId: "placement-1",
+      incidentIds: ["incident-execution-1", "incident-relation-1"]
+    });
+    const second = activityExecution({
+      activityExecutionId: "execution-2",
+      authoredActivityId: "shared-node",
+      executableNodeId: "placement-2",
+      incidentIds: ["incident-execution-2", "incident-relation-2"]
+    });
+    const exactIncidents = [
+      incident({ incidentId: "incident-execution-1", activityExecutionId: "execution-1", executableNodeId: "placement-1" }),
+      incident({ incidentId: "incident-execution-2", activityExecutionId: "execution-2", executableNodeId: "placement-2" })
+    ];
+    const exactNodes = applyRuntimeOverlays(repeatedNodes, [first, second], exactIncidents);
+    expect(exactNodes.map(node => [node.id, node.data.runtime?.primaryIncidentId])).toEqual([
+      ["placement-1", "incident-execution-1"],
+      ["placement-2", "incident-execution-2"]
+    ]);
+
+    const relationIncidents = [
+      incident({ incidentId: "incident-relation-1", activityExecutionId: null, executableNodeId: null }),
+      incident({ incidentId: "incident-relation-2", activityExecutionId: null, executableNodeId: null })
+    ];
+    const relationNodes = applyRuntimeOverlays(repeatedNodes, [first, second], relationIncidents);
+    expect(relationNodes.map(node => node.data.runtime?.primaryIncidentId)).toEqual([
+      "incident-relation-1",
+      "incident-relation-2"
+    ]);
+
+    const explicitNodeIncident = incident({
+      incidentId: "incident-node-only",
+      activityExecutionId: null,
+      executableNodeId: "placement-2"
+    });
+    const explicitNodeNodes = applyRuntimeOverlays(repeatedNodes, [
+      { ...first, incidentIds: [] },
+      { ...second, incidentIds: [] }
+    ], [explicitNodeIncident]);
+    expect(explicitNodeNodes.map(node => node.data.runtime?.primaryIncidentId)).toEqual([
+      undefined,
+      "incident-node-only"
+    ]);
+
+    const ambiguousAuthoredIncident = incident({
+      incidentId: "incident-ambiguous-authored",
+      activityExecutionId: null,
+      executableNodeId: "shared-node"
+    });
+    const withoutRelations = [
+      { ...first, incidentIds: [] },
+      { ...second, incidentIds: [] }
+    ];
+    const ambiguousNodes = applyRuntimeOverlays(repeatedNodes, withoutRelations, [ambiguousAuthoredIncident]);
+    expect(ambiguousNodes.map(node => node.data.runtime?.primaryIncidentId)).toEqual([undefined, undefined]);
+  });
+
+  it("keeps pinned repeated-authored placements separate when executable IDs collide with authored identity", () => {
+    const graph = buildExecutableActivityGraph({
+      executableNodeId: "root-executable",
+      authoredActivityId: "root-authored",
+      activityType: sequenceActivity.activityTypeKey,
+      activityTypeVersion: sequenceActivity.version,
+      inputBindings: [],
+      childSlots: [{ name: "Sequence.Activities", activities: [
+        {
+          executableNodeId: "first-executable",
+          authoredActivityId: "shared-node-id",
+          activityType: writeLine.activityTypeKey,
+          activityTypeVersion: writeLine.version,
+          inputBindings: [],
+          childSlots: []
+        },
+        {
+          executableNodeId: "shared-node-id",
+          authoredActivityId: "shared-node-id",
+          activityType: writeLine.activityTypeKey,
+          activityTypeVersion: writeLine.version,
+          inputBindings: [],
+          childSlots: []
+        }
+      ] }]
+    }, [sequenceActivity, writeLine]);
+    const canvas = buildCanvas(firstScope(graph.root), [sequenceActivity, writeLine], []);
+    const first = activityExecution({
+      activityExecutionId: "first-execution",
+      authoredActivityId: "shared-node-id",
+      executableNodeId: "first-executable",
+      status: "Running",
+      scheduledAt: "2026-10-01T12:00:00Z",
+      startedAt: "2026-10-01T12:00:00Z",
+      completedAt: null,
+      incidentIds: ["first-incident"],
+      faultCount: 1
+    });
+    const second = activityExecution({
+      activityExecutionId: "second-execution",
+      authoredActivityId: "shared-node-id",
+      executableNodeId: "shared-node-id",
+      status: "Completed",
+      scheduledAt: "2026-10-01T12:01:00Z",
+      startedAt: "2026-10-01T12:01:00Z",
+      completedAt: "2026-10-01T12:02:00Z",
+      incidentIds: ["second-incident"],
+      faultCount: 2
+    });
+    const firstIncident = incident({ incidentId: "first-incident", activityExecutionId: "first-execution", executableNodeId: "first-executable" });
+    const secondIncident = incident({ incidentId: "second-incident", activityExecutionId: "second-execution", executableNodeId: "shared-node-id" });
+    const placed = applyRuntimeOverlays(canvas.nodes, [first, second], [firstIncident, secondIncident], "second-incident", [sequenceActivity, writeLine], graph);
+    const firstNode = placed.find(node => node.id === "first-executable")!;
+    const secondNode = placed.find(node => node.id === "shared-node-id")!;
+
+    expect(firstNode.data.runtime).toMatchObject({
+      status: "Running",
+      activityExecutionId: "first-execution",
+      faultCount: 1,
+      primaryIncidentId: "first-incident",
+      selected: false
+    });
+    expect(secondNode.data.runtime).toMatchObject({
+      status: "Completed",
+      activityExecutionId: "second-execution",
+      faultCount: 2,
+      primaryIncidentId: "second-incident",
+      selected: true
+    });
+
+    const nodeOnlyIncident = incident({
+      incidentId: "first-node-only-incident",
+      activityExecutionId: null,
+      executableNodeId: "first-executable"
+    });
+    const pageBound = applyRuntimeOverlays(canvas.nodes, [first], [nodeOnlyIncident], nodeOnlyIncident.incidentId, [sequenceActivity, writeLine], graph);
+    expect(pageBound.find(node => node.id === "first-executable")?.data.runtime).toMatchObject({
+      activityExecutionId: "first-execution",
+      incidentCount: 1,
+      primaryIncidentId: "first-node-only-incident",
+      selected: true
+    });
+    expect(pageBound.find(node => node.id === "shared-node-id")?.data.runtime).toBeUndefined();
+  });
+
+  it("excludes resolved and suppressed incidents from current node health while retaining history", () => {
+    const canvas = buildCanvas(firstScope(sequenceRoot([node("write-line-1")])), [writeLine], []);
+    const nonBlocking = { ...incident(), incidentId: "incident-nonblocking", isBlocking: false, status: "Open" };
+    const resolved = { ...incident(), incidentId: "incident-resolved", status: "Resolved" };
+    const suppressed = { ...incident(), incidentId: "incident-suppressed", status: "Suppressed" };
+    const nodes = applyRuntimeOverlays(canvas.nodes, [activityExecution()], [nonBlocking, resolved, suppressed]);
+
+    expect(nodes[0]?.data.runtime).toMatchObject({
+      incidentCount: 1,
+      historicalIncidentCount: 2,
+      hasBlockingIncident: false,
+      primaryIncidentId: "incident-nonblocking"
+    });
+    expect(isActiveIncident(resolved)).toBe(false);
+    expect(isActiveIncident(suppressed)).toBe(false);
+  });
+
+  it("marks a parent container with a contained issue while preserving its own lifecycle", () => {
+    const nestedSequence = sequenceNode("sequence-child", [node("write-line-child")]);
+    const catalog = [flowchartActivity, sequenceActivity, writeLine];
+    const outerCanvas = buildCanvas(firstScope(flowchartRoot([nestedSequence])), catalog, []);
+    const parentExecution = {
+      ...activityExecution(),
+      activityExecutionId: "sequence-execution",
+      executableNodeId: "sequence-child",
+      authoredActivityId: "sequence-child",
+      status: "Running",
+      incidentIds: [],
+      faultCount: 1
+    };
+    const childExecution = {
+      ...activityExecution(),
+      activityExecutionId: "write-line-execution",
+      executableNodeId: "compiled-write-line",
+      authoredActivityId: "write-line-child",
+      status: "Faulted",
+      incidentIds: ["child-incident"]
+    };
+    const childIncident = {
+      ...incident(),
+      incidentId: "child-incident",
+      activityExecutionId: "write-line-execution",
+      executableNodeId: "compiled-write-line"
+    };
+    const parent = applyRuntimeOverlays(outerCanvas.nodes, [parentExecution, childExecution], [childIncident], null, catalog)[0]!;
+
+    expect(parent.data.runtime).toMatchObject({
+      status: "Running",
+      faultCount: 1,
+      incidentCount: 0,
+      hasBlockingIncident: false,
+      containedIncidentCount: 1,
+      containedAffectedActivityCount: 1,
+      containedPrimaryIncidentId: "child-incident",
+      containsBlockingIncident: true
+    });
+
+    const legacyIncident = { ...childIncident, incidentId: "legacy-child-incident", activityExecutionId: null, executableNodeId: null };
+    const legacyChildExecution = { ...childExecution, incidentIds: ["legacy-child-incident"] };
+    const legacyParent = applyRuntimeOverlays(outerCanvas.nodes, [parentExecution, legacyChildExecution], [legacyIncident], null, catalog)[0]!;
+    expect(legacyParent.data.runtime).toMatchObject({
+      incidentCount: 0,
+      containedIncidentCount: 1,
+      containedAffectedActivityCount: 1,
+      containedPrimaryIncidentId: "legacy-child-incident"
+    });
+
+    const childScope = { owner: nestedSequence, slot: getChildSlots(nestedSequence, sequenceActivity)[0]! };
+    const childCanvas = buildCanvas(childScope, catalog, []);
+    const child = applyRuntimeOverlays(childCanvas.nodes, [parentExecution, childExecution], [childIncident], null, catalog)[0]!;
+    expect(child.data.runtime).toMatchObject({ incidentCount: 1, hasBlockingIncident: true, primaryIncidentId: "child-incident" });
+
+    const observedFaultedParent = applyRuntimeOverlays(
+      outerCanvas.nodes,
+      [{ ...parentExecution, status: "Faulted" }, childExecution],
+      [childIncident],
+      null,
+      catalog)[0]!;
+    expect(observedFaultedParent.data.runtime).toMatchObject({
+      status: "Faulted",
+      incidentCount: 0,
+      hasBlockingIncident: false,
+      containedPrimaryIncidentId: "child-incident"
+    });
+
+    const bpmnContainer = {
+      ...outerCanvas.nodes[0]!,
+      id: "bpmn-sequence-element",
+      data: { ...outerCanvas.nodes[0]!.data, runtimeNodeId: "sequence-child" }
+    };
+    const bpmnParent = applyRuntimeOverlays([bpmnContainer], [parentExecution, childExecution], [childIncident], null, catalog)[0]!;
+    expect(bpmnParent).toMatchObject({
+      id: "bpmn-sequence-element",
+      data: { runtime: { status: "Running", incidentCount: 0, containedIncidentCount: 1, containedPrimaryIncidentId: "child-incident" } }
+    });
+  });
+
+  it("keeps incident cues on a parent when repeated authored children use executable IDs", () => {
+    const child = (executableNodeId: string): WorkflowExecutableNode => ({
+      executableNodeId,
+      authoredActivityId: "shared-child",
+      activityType: writeLine.activityTypeKey,
+      activityTypeVersion: writeLine.version,
+      inputBindings: [],
+      childSlots: []
+    });
+    const parent = (executableNodeId: string, authoredActivityId: string, activities: WorkflowExecutableNode[]): WorkflowExecutableNode => ({
+      executableNodeId,
+      authoredActivityId,
+      activityType: sequenceActivity.activityTypeKey,
+      activityTypeVersion: sequenceActivity.version,
+      inputBindings: [],
+      childSlots: [{ name: "Sequence.Activities", activities }]
+    });
+    const graph = buildExecutableActivityGraph(parent("root-executable", "root-authored", [
+      parent("container-executable", "container-authored", [child("placement-1"), child("placement-2")])
+    ]), [sequenceActivity, writeLine]);
+    const canvas = buildCanvas(firstScope(graph.root), [sequenceActivity, writeLine], []);
+    const executions = [
+      activityExecution({
+        activityExecutionId: "container-execution",
+        executableNodeId: "container-executable",
+        authoredActivityId: "container-authored",
+        status: "Running",
+        incidentIds: [],
+        faultCount: 0
+      }),
+      activityExecution({
+        activityExecutionId: "child-execution-1",
+        executableNodeId: "placement-1",
+        authoredActivityId: "shared-child",
+        incidentIds: ["nested-incident"]
+      }),
+      activityExecution({
+        activityExecutionId: "child-execution-2",
+        executableNodeId: "placement-2",
+        authoredActivityId: "shared-child",
+        incidentIds: []
+      })
+    ];
+    const nestedIncident = incident({
+      incidentId: "nested-incident",
+      activityExecutionId: "child-execution-1",
+      executableNodeId: "placement-1"
+    });
+
+    const container = applyRuntimeOverlays(canvas.nodes, executions, [nestedIncident], null, [sequenceActivity, writeLine])[0]!;
+
+    expect(container.data.runtime).toMatchObject({
+      status: "Running",
+      incidentCount: 0,
+      containedIncidentCount: 1,
+      containedAffectedActivityCount: 1,
+      containedPrimaryIncidentId: "nested-incident"
+    });
+  });
+
+  it("maps node-only incident cues through the pinned executable graph when activity inspection is missing", () => {
+    const graph = buildExecutableActivityGraph({
+      executableNodeId: "root-executable",
+      authoredActivityId: "root-authored",
+      activityType: sequenceActivity.activityTypeKey,
+      activityTypeVersion: sequenceActivity.version,
+      structureKind: sequenceStructureKind,
+      inputBindings: [],
+      childSlots: [{ name: "Sequence.Activities", activities: [{
+        executableNodeId: "compiled-write-line",
+        authoredActivityId: "authored-write-line",
+        activityType: writeLine.activityTypeKey,
+        activityTypeVersion: writeLine.version,
+        inputBindings: [],
+        childSlots: []
+      }] }]
+    }, [sequenceActivity, writeLine]);
+    const canvas = buildCanvas(firstScope(graph.root), [sequenceActivity, writeLine], []);
+    const nodeOnlyIncident = incident({
+      activityExecutionId: null,
+      executableNodeId: "compiled-write-line"
+    });
+
+    const nodes = applyRuntimeOverlays(canvas.nodes, [], [nodeOnlyIncident], null, [sequenceActivity, writeLine], graph);
+
+    expect(nodes[0]).toMatchObject({
+      id: "authored-write-line",
+      data: { runtime: { primaryIncidentId: nodeOnlyIncident.incidentId, incidentCount: 1 } }
+    });
+  });
+
+  it("translates BPMN element identity to its bound runtime activity identity", () => {
+    const canvas = buildCanvas(firstScope(sequenceRoot([node("write-line-1")])), [writeLine], []);
+    const bpmnNode = {
+      ...canvas.nodes[0]!,
+      id: "bpmn-task-element",
+      data: { ...canvas.nodes[0]!.data, runtimeNodeId: "write-line-1" }
+    };
+    const nodes = applyRuntimeOverlays([bpmnNode], [activityExecution()], [incident()], "incident-1");
+
+    expect(nodes[0]).toMatchObject({
+      id: "bpmn-task-element",
+      selected: true,
+      data: { runtimeNodeId: "write-line-1", runtime: { incidentCount: 1, primaryIncidentId: "incident-1" } }
+    });
+  });
+
+  it("does not attach a run-level incident to a graph node without structured association", () => {
+    const canvas = buildCanvas(firstScope(sequenceRoot([node("write-line-1")])), [writeLine], []);
+    const runLevelIncident = { ...incident(), activityExecutionId: null, executableNodeId: null, metadata: {} };
+    const nodes = applyRuntimeOverlays(canvas.nodes, [], [runLevelIncident]);
+
+    expect(nodes[0]?.data.runtime).toBeUndefined();
+  });
 });
 
 // A two-slot generic container: a facet declaring `primary` and `secondary` single-cardinality slots.
@@ -818,7 +1183,7 @@ function node(nodeId: string): ActivityNode {
   };
 }
 
-function activityExecution() {
+function activityExecution(overrides: Partial<ActivityExecutionStateSummary> = {}): ActivityExecutionStateSummary {
   return {
     activityExecutionId: "activity-execution-1",
     workflowExecutionId: "wfexec-1",
@@ -840,11 +1205,12 @@ function activityExecution() {
     incidentIds: ["incident-1"],
     faultCount: 1,
     aggregateFaultCount: 0,
-    metadata: {}
+    metadata: {},
+    ...overrides
   };
 }
 
-function incident() {
+function incident(overrides: Partial<IncidentStateSummary> = {}): IncidentStateSummary {
   return {
     incidentId: "incident-1",
     workflowExecutionId: "wfexec-1",
@@ -858,6 +1224,7 @@ function incident() {
     createdAt: "2026-06-18T01:00:02Z",
     resolvedAt: null,
     isBlocking: true,
-    metadata: {}
+    metadata: {},
+    ...overrides
   };
 }

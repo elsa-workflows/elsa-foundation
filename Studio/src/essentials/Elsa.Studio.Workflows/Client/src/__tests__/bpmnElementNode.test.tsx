@@ -162,3 +162,66 @@ describe("BpmnElementNode slot badges", () => {
     expect(onNodeClick).not.toHaveBeenCalled();
   });
 });
+
+describe("BpmnElementNode runtime incident cue", () => {
+  it("keeps a keyboard-accessible incident action distinct from node selection", () => {
+    const onIncidentClick = vi.fn();
+    const onNodeClick = vi.fn();
+    flushSync(() => root.render(
+      <div onClick={onNodeClick}>
+        {bpmnNode({
+          boundActivity: boundContainer,
+          runtimeNodeId: "node-sub",
+          runtime: {
+            status: "Faulted",
+            faultCount: 1,
+            incidentCount: 2,
+            historicalIncidentCount: 0,
+            primaryIncidentId: "incident-1",
+            hasBlockingIncident: true,
+            selected: false
+          },
+          onIncidentClick
+        })}
+      </div>
+    ));
+
+    const action = container.querySelector<HTMLButtonElement>("button.wf-node-incident-action");
+    expect(action?.getAttribute("aria-label")).toContain("Open incidents for BPMN Process, 2 active, needs intervention");
+    expect(action?.getAttribute("data-health")).toBe("blocking");
+    expect(action?.classList.contains("nokey")).toBe(true);
+    click(action!);
+
+    expect(onIncidentClick).toHaveBeenCalledWith("incident-1");
+    expect(onNodeClick).not.toHaveBeenCalled();
+  });
+
+  it("exposes contained child incidents without marking the BPMN parent faulted", () => {
+    const onIncidentClick = vi.fn();
+    render(bpmnNode({
+      boundActivity: boundContainer,
+      runtimeNodeId: "node-sub",
+      runtime: {
+        status: "Running",
+        faultCount: 0,
+        incidentCount: 0,
+        hasBlockingIncident: false,
+        containedIncidentCount: 1,
+        containedAffectedActivityCount: 1,
+        containedPrimaryIncidentId: "child-incident",
+        containsBlockingIncident: true,
+        selected: false
+      },
+      onIncidentClick
+    }));
+
+    const parent = container.querySelector<HTMLElement>(".wf-bpmn-node");
+    const action = container.querySelector<HTMLButtonElement>("button.wf-node-contained-incident-action");
+    expect(parent?.classList.contains("faulted")).toBe(false);
+    expect(action?.getAttribute("aria-label")).toContain("Open 1 incident inside BPMN Process");
+    expect(action?.getAttribute("aria-label")).not.toContain("child-incident");
+    click(action!);
+
+    expect(onIncidentClick).toHaveBeenCalledWith("child-incident", null);
+  });
+});

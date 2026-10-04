@@ -13,7 +13,8 @@ import {
 
 vi.mock("../workflow-editor/WorkflowInstances", () => ({
   WorkflowInstances: () => <div>Runs list</div>,
-  WorkflowInstanceDetailsWorkbench: () => <div>Run workbench</div>
+  WorkflowInstanceDetailsWorkbench: ({ initialInspectorTab }: { initialInspectorTab?: string }) =>
+    <div data-initial-inspector-tab={initialInspectorTab}>Run workbench</div>
 }));
 
 let container: HTMLDivElement;
@@ -75,6 +76,30 @@ describe("Run detail page layout", () => {
     await vi.waitFor(() => expect(container.firstElementChild?.getAttribute("data-narrow-view")).toBe("canvas"));
   });
 
+  it("keeps an initial Issues open request through responsive measurement and honors a later close", async () => {
+    let resize: ((width: number) => void) | undefined;
+    vi.stubGlobal("ResizeObserver", class {
+      constructor(callback: ResizeObserverCallback) {
+        resize = width => callback([{ contentRect: { width } } as ResizeObserverEntry], this as unknown as ResizeObserver);
+      }
+      observe() {}
+      disconnect() {}
+    });
+
+    flushSync(() => root.render(<RunLayoutHarness selectedActivityId={null} />));
+    await vi.waitFor(() => expect(resize).toBeTypeOf("function"));
+    flushSync(() => container.querySelector<HTMLButtonElement>("[data-action='open']")?.click());
+    expect(container.firstElementChild?.getAttribute("data-layout-intent")).toBe("inspector");
+
+    flushSync(() => resize?.(390));
+    await vi.waitFor(() => expect(container.firstElementChild?.getAttribute("data-narrow-view")).toBe("inspector"));
+
+    flushSync(() => container.querySelector<HTMLButtonElement>("[data-action='close']")?.click());
+    await vi.waitFor(() => expect(container.firstElementChild?.getAttribute("data-narrow-view")).toBe("canvas"));
+    flushSync(() => resize?.(390));
+    expect(container.firstElementChild?.getAttribute("data-narrow-view")).toBe("canvas");
+  });
+
   it("uses a full-bleed workbench root without changing the Runs list page", async () => {
     window.history.replaceState({}, "", "/workflows/instances/run-1");
     flushSync(() => root.render(
@@ -87,6 +112,7 @@ describe("Run detail page layout", () => {
 
     await vi.waitFor(() => expect(container.textContent).toContain("Run workbench"));
     expect(container.querySelector(".wf-page--run-workbench")).toBeTruthy();
+    expect(container.querySelector("[data-initial-inspector-tab]")?.getAttribute("data-initial-inspector-tab")).toBe("timeline");
 
     flushSync(() => root.render(
       <WorkflowInstancesPage context={{} as StudioEndpointContext} navigate={() => {}} />
@@ -94,6 +120,29 @@ describe("Run detail page layout", () => {
     await vi.waitFor(() => expect(container.textContent).toContain("Runs list"));
     expect(container.querySelector(".wf-page--run-workbench")).toBeNull();
     expect(container.querySelector(".wf-page")).toBeTruthy();
+  });
+
+  it("opens the Issues tab when incident review supplies a tab query", async () => {
+    window.history.replaceState({}, "", "/workflows/instances/run-1?tab=issues");
+    flushSync(() => root.render(
+      <WorkflowInstanceDetailsPage
+        context={{} as StudioEndpointContext}
+        ai={{} as StudioAiContributionApi}
+        navigate={() => {}}
+      />
+    ));
+
+    await vi.waitFor(() => expect(container.querySelector("[data-initial-inspector-tab]")?.getAttribute("data-initial-inspector-tab")).toBe("issues"));
+
+    window.history.replaceState({}, "", "/workflows/instances/run-1");
+    flushSync(() => root.render(
+      <WorkflowInstanceDetailsPage
+        context={{} as StudioEndpointContext}
+        ai={{} as StudioAiContributionApi}
+        navigate={() => {}}
+      />
+    ));
+    await vi.waitFor(() => expect(container.querySelector("[data-initial-inspector-tab]")?.getAttribute("data-initial-inspector-tab")).toBe("timeline"));
   });
 });
 
@@ -105,6 +154,10 @@ function RunLayoutHarness({ selectedActivityId }: { selectedActivityId: string |
       data-mode={layout.mode}
       data-drawer-open={layout.mediumDrawerOpen}
       data-narrow-view={layout.narrowView}
-    />
+      data-layout-intent={layout.layoutIntent}
+    >
+      <button type="button" data-action="open" onClick={layout.openInspector}>Open</button>
+      <button type="button" data-action="close" onClick={layout.closeInspector}>Close</button>
+    </div>
   );
 }

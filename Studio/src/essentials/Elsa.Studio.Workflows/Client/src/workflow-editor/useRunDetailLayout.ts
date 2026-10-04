@@ -9,6 +9,7 @@ import { readStoredBoolean, readStoredNumber, writeStoredValue } from "./editorH
 
 export type RunDetailLayoutMode = "desktop" | "medium" | "narrow";
 export type RunDetailNarrowView = "canvas" | "inspector";
+type RunDetailLayoutIntent = "automatic" | "canvas" | "inspector";
 
 export const runDetailDesktopMinWidth = 830;
 export const runDetailMediumMinWidth = 480;
@@ -69,6 +70,7 @@ export function useRunDetailLayout({ selectedActivityId }: { selectedActivityId?
   ));
   const [mediumDrawerOpen, setMediumDrawerOpen] = useState(false);
   const [narrowView, setNarrowView] = useState<RunDetailNarrowView>("canvas");
+  const [layoutIntent, setLayoutIntent] = useState<RunDetailLayoutIntent>("automatic");
   const containerRef: RefCallback<HTMLDivElement> = useCallback(element => setContainerElement(element), []);
   // Keep the inspector usable during the first render/SSR-style environments until the
   // container has produced a real measurement; ResizeObserver will select the final mode.
@@ -118,14 +120,14 @@ export function useRunDetailLayout({ selectedActivityId }: { selectedActivityId?
   }, [mode]);
 
   useEffect(() => {
-    if (selectedActivityId) {
+    if (layoutIntent === "inspector" || (layoutIntent === "automatic" && selectedActivityId)) {
       showInspectorForSelection();
       return;
     }
 
     setMediumDrawerOpen(false);
     setNarrowView("canvas");
-  }, [selectedActivityId, showInspectorForSelection]);
+  }, [layoutIntent, selectedActivityId, showInspectorForSelection]);
 
   useEffect(() => {
     if (mode === "desktop") {
@@ -147,13 +149,30 @@ export function useRunDetailLayout({ selectedActivityId }: { selectedActivityId?
   }, [inspectorMaximized]);
 
   const closeInspector = useCallback(() => {
+    setLayoutIntent("canvas");
     setMediumDrawerOpen(false);
     if (mode === "narrow") setNarrowView("canvas");
   }, [mode]);
 
   const toggleInspectorCollapsed = useCallback(() => {
     setInspectorMaximized(false);
-    setInspectorCollapsed(current => !current);
+    const collapsed = !inspectorCollapsed;
+    setLayoutIntent(collapsed ? "canvas" : "inspector");
+    setInspectorCollapsed(collapsed);
+  }, [inspectorCollapsed]);
+
+  const openInspector = useCallback(() => {
+    setLayoutIntent("inspector");
+    setInspectorCollapsed(false);
+    showInspectorForSelection();
+  }, [showInspectorForSelection]);
+
+  const showCanvasForSelection = useCallback(() => {
+    setLayoutIntent("canvas");
+    setInspectorMaximized(false);
+    setInspectorCollapsed(false);
+    setMediumDrawerOpen(false);
+    setNarrowView("canvas");
   }, []);
 
   const toggleInspectorMaximized = useCallback(() => {
@@ -234,6 +253,7 @@ export function useRunDetailLayout({ selectedActivityId }: { selectedActivityId?
   return {
     containerRef,
     containerWidth,
+    layoutIntent,
     mode,
     inspectorWidth,
     inspectorMaxWidth,
@@ -248,7 +268,9 @@ export function useRunDetailLayout({ selectedActivityId }: { selectedActivityId?
     setNarrowView,
     showInspectorForSelection,
     closeInspector,
+    showCanvasForSelection,
     toggleInspectorCollapsed,
+    openInspector,
     toggleInspectorMaximized,
     startInspectorResize,
     handleInspectorResizeKeyDown

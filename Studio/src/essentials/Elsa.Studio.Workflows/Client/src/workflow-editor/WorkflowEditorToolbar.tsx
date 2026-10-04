@@ -1,3 +1,4 @@
+import "./WorkflowEditorToolbar.css";
 import { useEffect, useId, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 import { Check, ChevronRight, GitBranch, LoaderCircle, MoreHorizontal, Network, Play, Redo2, Save, Undo2 } from "lucide-react";
 import { AnchoredPopover } from "@elsa-workflows/studio-ui";

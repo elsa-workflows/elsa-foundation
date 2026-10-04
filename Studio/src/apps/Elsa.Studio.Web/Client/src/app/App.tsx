@@ -467,24 +467,22 @@ export function ShellFrame({
           </button>
         </div>
 
-        {!navCollapsed ? (
-          <label className="sidebar-search">
-            <Search size={16} aria-hidden="true" />
-            <input
-              type="search"
-              aria-label="Search modules"
-              placeholder="Search modules"
-              value={navQuery}
-              onChange={event => setNavQuery(event.target.value)}
-              onKeyDown={event => {
-                if (event.key === "Escape" && navQuery) {
-                  event.preventDefault();
-                  setNavQuery("");
-                }
-              }}
-            />
-          </label>
-        ) : null}
+        <label className="sidebar-search">
+          <Search size={16} aria-hidden="true" />
+          <input
+            type="search"
+            aria-label="Search modules"
+            placeholder="Search modules"
+            value={navQuery}
+            onChange={event => setNavQuery(event.target.value)}
+            onKeyDown={event => {
+              if (event.key === "Escape" && navQuery) {
+                event.preventDefault();
+                setNavQuery("");
+              }
+            }}
+          />
+        </label>
 
         {query && !hasNavResults ? (
           <p className="sidebar-search-empty" role="status">No modules match "{navQuery.trim()}".</p>

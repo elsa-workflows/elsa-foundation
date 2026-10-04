@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import { clearApiCapabilityCache } from "../api/capabilities";
-import { listWorkflowInstances, workflowInstanceListQuery } from "../api/runtime";
+import { listWorkflowInstances, WorkflowInstanceHealthFilterUnavailableError, workflowInstanceListQuery } from "../api/runtime";
 
 afterEach(clearApiCapabilityCache);
 
@@ -16,6 +16,7 @@ describe("workflow instance list client", () => {
       correlationId: "correlation&1",
       from: "2026-07-01T10:00:00.000Z",
       to: "2026-07-02T10:00:00.000Z",
+      incidentHealth: "blocking",
       take: 50,
       cursor: "opaque/cursor+value="
     });
@@ -29,6 +30,7 @@ describe("workflow instance list client", () => {
       correlationId: "correlation&1",
       from: "2026-07-01T10:00:00.000Z",
       to: "2026-07-02T10:00:00.000Z",
+      incidentHealth: "blocking",
       take: "50",
       cursor: "opaque/cursor+value="
     });
@@ -50,6 +52,30 @@ describe("workflow instance list client", () => {
       totalCount: 3
     });
     expect(pageContext.http.getJson).toHaveBeenLastCalledWith("/runtime/workflows/instances/page?take=1");
+  });
+
+  it("uses only the advertised health-filter relation when a health filter is selected", async () => {
+    const pageContext = context(async url => url === "/capabilities" ? pagedCapabilities : {
+      items: [instance("execution-1")],
+      count: 1,
+      totalCount: 1
+    });
+
+    await expect(listWorkflowInstances(pageContext, { incidentHealth: "active", take: 10 })).resolves.toMatchObject({
+      items: [{ workflowExecutionId: "execution-1" }]
+    });
+    expect(pageContext.http.getJson).toHaveBeenLastCalledWith("/runtime/workflows/instances/health?incidentHealth=active&take=10");
+  });
+
+  it("does not send health filters to older paged or legacy relations", async () => {
+    for (const capabilities of [pagedCapabilitiesWithoutHealth, legacyCapabilities]) {
+      const olderContext = context(async url => url === "/capabilities" ? capabilities : []);
+
+      await expect(listWorkflowInstances(olderContext, { incidentHealth: "none" }))
+        .rejects.toBeInstanceOf(WorkflowInstanceHealthFilterUnavailableError);
+      expect(olderContext.http.getJson).toHaveBeenCalledTimes(1);
+      expect(olderContext.http.getJson).toHaveBeenCalledWith("/capabilities");
+    }
   });
 
   it("falls back to the v1 array relation and normalizes its result", async () => {
@@ -84,6 +110,18 @@ const legacyCapabilities = {
 };
 
 const pagedCapabilities = {
+  capabilities: [{
+    id: "elsa.api.runtime",
+    contractVersion: "1",
+    links: [
+      { rel: "workflow-instances", href: "runtime/workflows/instances" },
+      { rel: "workflow-instances-page", href: "runtime/workflows/instances/page" },
+      { rel: "workflow-instances-health-filter", href: "runtime/workflows/instances/health" }
+    ]
+  }]
+};
+
+const pagedCapabilitiesWithoutHealth = {
   capabilities: [{
     id: "elsa.api.runtime",
     contractVersion: "1",

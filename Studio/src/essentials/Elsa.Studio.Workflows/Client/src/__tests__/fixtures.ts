@@ -55,6 +55,23 @@ export const sequenceActivity: ActivityCatalogItem = {
   }]
 };
 
+export const bpmnActivity: ActivityCatalogItem = {
+  ...writeLine,
+  activityVersionId: "bpmn@1",
+  activityTypeKey: "Elsa.Activities.Bpmn.Activities.BpmnProcess",
+  category: "BPMN",
+  displayName: "BPMN Process",
+  designFacets: [{
+    kind: "elsa.bpmn.structure",
+    schemaVersion: "1.0.0",
+    payload: {
+      mode: "bpmn",
+      slots: [{ name: "Bpmn.Activities", property: "activities", displayName: "Activities", cardinality: "many" }],
+      initialPayload: { activities: [], elements: [], sequenceFlows: [] }
+    }
+  }]
+};
+
 export const forEachActivity: ActivityCatalogItem = {
   ...writeLine,
   activityVersionId: "activity-for-each-v1",

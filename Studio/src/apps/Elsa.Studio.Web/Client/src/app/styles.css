@@ -780,6 +780,10 @@ textarea:focus {
     display: none;
   }
 
+  .sidebar-collapsed .sidebar-search {
+    display: none;
+  }
+
   .sidebar-collapsed .nav-section {
     gap: var(--spacing-sm);
   }
@@ -908,6 +912,7 @@ textarea:focus {
 
 .content > .wf-page--run-workbench {
   min-height: 0;
+  min-width: 0;
   flex: 1;
 }
 
@@ -2907,18 +2912,71 @@ textarea:focus {
   }
 
   .sidebar {
+    align-items: center;
     border-right: 0;
     border-bottom: 1px solid var(--border);
     flex-direction: row;
-    gap: 16px;
+    gap: 10px;
     overflow-x: auto;
     overflow-y: hidden;
-    padding: 12px 16px;
+    padding: 8px 12px;
   }
 
-  /* The sidebar renders as a horizontal strip here; the desktop icon-rail collapse
-     does not apply, so the toggle is hidden. */
+  /* Keep every navigation group on the same compact, horizontally scrollable row so
+     the app workspace retains its height on tablet and phone screens. */
+  .sidebar-top {
+    flex: 0 0 auto;
+  }
+
+  .sidebar-search {
+    flex: 0 0 150px;
+  }
+
   .sidebar-collapse-toggle {
+    display: none;
+  }
+
+  .nav-section {
+    display: flex;
+    flex: 0 0 auto;
+    align-items: center;
+    gap: 4px;
+  }
+
+  .nav-heading {
+    display: none;
+  }
+
+  .nav-item-group {
+    display: flex;
+    flex: 0 0 auto;
+    align-items: center;
+  }
+
+  .nav-children {
+    display: flex;
+    flex: 0 0 auto;
+    align-items: center;
+    margin: 0;
+    padding-left: 8px;
+    border-left: 1px solid var(--border);
+  }
+
+  .nav-section a {
+    flex: 0 0 auto;
+  }
+
+  .sidebar-footer {
+    display: flex;
+    flex: 0 0 auto;
+    align-items: center;
+    margin: 0;
+    border-top: 0;
+    border-left: 1px solid var(--border);
+    padding: 0 10px;
+  }
+
+  html[data-nav-mode="top"] .sidebar-footer {
     display: none;
   }
 
@@ -2985,9 +3043,9 @@ textarea:focus {
   }
 
   .sidebar {
-    flex-direction: column;
-    gap: 12px;
-    padding: 12px;
+    flex-direction: row;
+    gap: 10px;
+    padding: 8px 12px;
   }
 
   .brand {

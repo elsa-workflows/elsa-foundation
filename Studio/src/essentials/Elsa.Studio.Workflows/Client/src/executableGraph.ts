@@ -1,4 +1,4 @@
-import { flowchartStructureKind, readStructureDesignFacet, type StructureDesignSlotDescriptor } from "./workflowAdapter";
+import { bpmnStructureKind, flowchartStructureKind, readStructureDesignFacet, type StructureDesignSlotDescriptor } from "./workflowAdapter";
 import type {
   ActivityCatalogItem,
   ActivityNode,
@@ -112,7 +112,7 @@ export function buildExecutableActivityGraph(
       activityVersionId: catalogItem?.activityVersionId ?? ghostActivityVersionId(node),
       inputs: [],
       outputs: [],
-      structure: synthesizeStructure(node, catalogItem, adapt)
+      structure: synthesizeStructure(node, catalogItem, adapt, nodeIdsByExecutableId)
     };
   };
 
@@ -171,6 +171,21 @@ export function findExecutableNodeFacts(
   return undefined;
 }
 
+export function findExecutableGraphNodeId(
+  graph: ExecutableActivityGraph | null | undefined,
+  identity: { executableNodeId?: string | null; authoredActivityId?: string | null } | null | undefined
+) {
+  if (!graph || !identity) return null;
+  if (identity.executableNodeId) {
+    for (const [nodeId, facts] of graph.factsByNodeId) {
+      if (facts.executableNodeId === identity.executableNodeId) return nodeId;
+    }
+  }
+  return identity.authoredActivityId && graph.factsByNodeId.has(identity.authoredActivityId)
+    ? identity.authoredActivityId
+    : null;
+}
+
 // True when the graph node was minted for a catalog miss ("not available in this environment").
 export function isGhostFact(fact: ExecutableGraphNodeFacts | undefined): boolean {
   return !!fact && !fact.available;
@@ -201,10 +216,11 @@ function ghostActivityVersionId(node: WorkflowExecutableNode) {
 function synthesizeStructure(
   node: WorkflowExecutableNode,
   catalogItem: ActivityCatalogItem | undefined,
-  adapt: (child: WorkflowExecutableNode) => ActivityNode
+  adapt: (child: WorkflowExecutableNode) => ActivityNode,
+  nodeIdsByExecutableId: Map<string, string>
 ): ActivityNodeStructure | null {
   const slots = node.childSlots ?? [];
-  if (slots.length === 0) return null;
+  if (slots.length === 0 && !(node.structureKind === bpmnStructureKind && node.bpmnStructure)) return null;
 
   const facet = readStructureDesignFacet(catalogItem);
   const facetMatch = facet && (!node.structureKind || facet.kind === node.structureKind)
@@ -217,7 +233,7 @@ function synthesizeStructure(
       const activities = slot.activities.map(adapt);
       payload[descriptor.property] = descriptor.cardinality === "single" ? activities[0] ?? null : activities;
     }
-    copyFlowchartConnections(facet.kind, node, payload);
+    copyExecutableTopology(facet.kind, node, payload, nodeIdsByExecutableId);
     return { kind: facet.kind, schemaVersion: facet.schemaVersion, payload };
   }
 
@@ -227,7 +243,7 @@ function synthesizeStructure(
   }
 
   const kind = node.structureKind ?? `executable:${node.activityType}`;
-  copyFlowchartConnections(kind, node, payload);
+  copyExecutableTopology(kind, node, payload, nodeIdsByExecutableId);
 
   return {
     kind,
@@ -236,7 +252,12 @@ function synthesizeStructure(
   };
 }
 
-function copyFlowchartConnections(kind: string, node: WorkflowExecutableNode, payload: Record<string, unknown>) {
+function copyExecutableTopology(
+  kind: string,
+  node: WorkflowExecutableNode,
+  payload: Record<string, unknown>,
+  nodeIdsByExecutableId: Map<string, string>
+) {
   if (kind === flowchartStructureKind && Array.isArray(node.connections)) {
     payload.connections = node.connections
       .filter(isValidConnection)
@@ -245,6 +266,36 @@ function copyFlowchartConnections(kind: string, node: WorkflowExecutableNode, pa
         target: cloneConnectionEndpoint(connection.target)
       }));
   }
+  if (kind === bpmnStructureKind && node.bpmnStructure) {
+    const { elements, sequenceFlows } = node.bpmnStructure;
+    // Copy the compact execution topology explicitly. Undeclared payload fields and geometry
+    // never enter the canvas; bindings follow the same exact identities as the adapted children.
+    payload.elements = Array.isArray(elements) ? elements
+      .filter(element => element && nonblank(element.elementId) && nonblank(element.elementType))
+      .map(element => {
+        const childNodeId = nonblank(element.childNodeId) ? nodeIdsByExecutableId.get(element.childNodeId) : undefined;
+        return {
+          elementId: element.elementId,
+          elementType: element.elementType,
+          ...(childNodeId ? { childNodeId } : {}),
+          ...(typeof element.name === "string" ? { name: element.name } : {})
+        };
+      }) : [];
+    payload.sequenceFlows = Array.isArray(sequenceFlows) ? sequenceFlows
+      .filter(flow => flow && nonblank(flow.flowId) && nonblank(flow.sourceRef) && nonblank(flow.targetRef))
+      .map(flow => ({
+        flowId: flow.flowId,
+        sourceRef: flow.sourceRef,
+        targetRef: flow.targetRef,
+        ...(typeof flow.name === "string" ? { name: flow.name } : {}),
+        ...(typeof flow.conditionOutcome === "string" ? { conditionOutcome: flow.conditionOutcome } : {}),
+        ...(typeof flow.isDefault === "boolean" ? { isDefault: flow.isDefault } : {})
+      })) : [];
+  }
+}
+
+function nonblank(value: unknown): value is string {
+  return typeof value === "string" && value.trim().length > 0;
 }
 
 function isValidConnection(value: unknown): value is WorkflowExecutableConnection {

@@ -273,6 +273,23 @@ describe("buildBpmnCanvas", () => {
     expect(canvas.edges[1].label).toBe("Done");
   });
 
+  it("uses frozen per-activity wording before the live catalog while preserving BPMN element names", () => {
+    const owner = bpmnOwner([
+      { elementId: "frozen-task", elementType: "task", childNodeId: "node-frozen" },
+      { elementId: "named-task", elementType: "task", name: "BPMN task name", childNodeId: "node-named" }
+    ], [], [activityNode("node-frozen"), activityNode("node-named")]);
+    const scope = { owner, slot: getChildSlots(owner)[0] };
+
+    const canvas = buildBpmnCanvas(scope, [catalogItem()], [], [
+      { nodeId: "node-frozen", displayName: "Frozen activity wording" }
+    ]);
+
+    expect(canvas.nodes[0].data.boundActivity?.label).toBe("Frozen activity wording");
+    expect(canvas.nodes[0].data.label).toBe("Frozen activity wording");
+    expect(canvas.nodes[1].data.boundActivity?.label).toBe("Write Line");
+    expect(canvas.nodes[1].data.label).toBe("BPMN task name");
+  });
+
   it("carries the bound activity's child slots so a subprocess offers slot entry", () => {
     const owner = bpmnOwner(
       [...diamondElements, { elementId: "sub-1", elementType: "subProcess", childNodeId: "node-sub" }],

@@ -150,7 +150,9 @@ export function WorkflowInstanceDetailsPage({ context, ai, expressionEditors = [
   navigate(path: string): void;
 }) {
   const workflowExecutionId = readWorkflowExecutionIdFromUrl();
-  const initialActivityExecutionId = new URLSearchParams(window.location.search).get("activityExecutionId");
+  const searchParams = new URLSearchParams(window.location.search);
+  const initialActivityExecutionId = searchParams.get("activityExecutionId");
+  const initialInspectorTab = searchParams.get("tab") === "issues" ? "issues" : "timeline";
 
   return (
     <WorkflowsPageFrame
@@ -164,7 +166,7 @@ export function WorkflowInstanceDetailsPage({ context, ai, expressionEditors = [
       ) : null}
     >
       <WorkflowLazyBoundary label="workflow run">
-        <WorkflowInstanceDetailsWorkbench context={context} ai={ai} expressionEditors={expressionEditors} workflowExecutionId={workflowExecutionId} initialActivityExecutionId={initialActivityExecutionId} navigate={navigate} />
+        <WorkflowInstanceDetailsWorkbench context={context} ai={ai} expressionEditors={expressionEditors} workflowExecutionId={workflowExecutionId} initialActivityExecutionId={initialActivityExecutionId} initialInspectorTab={initialInspectorTab} navigate={navigate} />
       </WorkflowLazyBoundary>
     </WorkflowsPageFrame>
   );

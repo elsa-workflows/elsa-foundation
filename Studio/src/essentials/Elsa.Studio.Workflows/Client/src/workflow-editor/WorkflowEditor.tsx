@@ -836,8 +836,9 @@ export function WorkflowEditor({
     : "";
 
   const visibleStatus = renderedTestRun && status.startsWith("Test run") ? "" : status;
-  const openWorkflowRun = (workflowExecutionId: string) => {
-    window.history.pushState({}, "", `/workflows/instances/${encodeURIComponent(workflowExecutionId)}`);
+  const openWorkflowRun = (workflowExecutionId: string, initialTab?: "issues") => {
+    const tabQuery = initialTab ? `?tab=${encodeURIComponent(initialTab)}` : "";
+    window.history.pushState({}, "", `/workflows/instances/${encodeURIComponent(workflowExecutionId)}${tabQuery}`);
     window.dispatchEvent(new PopStateEvent("popstate"));
   };
   const inlineSteps = authorsInline(themeLayout, isBpmnDesigner);
