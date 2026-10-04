@@ -51,9 +51,52 @@ def require_stopped():
     require_ports_free([*HOSTS.values(), 5313])
 
 
+def shared_update_feed():
+    """Return the one feed that distributes post-baseline renewal releases to both hosts."""
+    return DEMO / 'feed'
+
+
+def nuplane_feeds(name):
+    """Keep each host's bootstrap source separate from the shared update source."""
+    host_feed = DEMO / 'hosts' / name / 'feed'
+    return [
+        {'Name': 'renewal-demo-baseline', 'DirectoryPath': str(host_feed), 'IncludePatterns': ['*'], 'Directory': {'Watch': True, 'DebounceWindow': '00:00:01'}},
+        # Nuplane breaks duplicate package requests by alphabetic SourceName. The shared
+        # feed name sorts before the host-local baseline feed, so its newer archive wins
+        # once published; with the shared folder empty, only the baseline feed contributes.
+        {'Name': 'renewal-demo', 'DirectoryPath': str(shared_update_feed()), 'IncludePatterns': ['*'], 'Directory': {'Watch': True, 'DebounceWindow': '00:00:01'}},
+        {'Name': 'closure', 'DirectoryPath': str(DEMO / 'closure')},
+    ]
+
+
+def is_renewal_package(package):
+    return any(package.name.startswith(module + '.') for module, _ in MODULES)
+
+
+def clear_shared_updates():
+    """Reset only demo-owned update archives, and only while all demo ports are free."""
+    require_stopped()
+    feed = shared_update_feed()
+    feed.mkdir(parents=True, exist_ok=True)
+    for package in feed.iterdir():
+        if package.is_file() and is_renewal_package(package) and package.name.endswith(('.nupkg', '.nupkg.tmp')):
+            package.unlink()
+
+
+def require_no_shared_updates_during_bootstrap():
+    feed = shared_update_feed()
+    pending = [p.name for p in feed.glob('*.nupkg') if is_renewal_package(p)]
+    if pending:
+        raise RuntimeError('Shared renewal updates are present; refusing to expose them during baseline bootstrap. Use reset and prepare for a clean baseline before publishing an update: ' + ', '.join(sorted(pending)))
+
+
 def bootstrap_host(name, initialize=False):
     """Acquire the platform before the domain, so their non-collectible generations have separate lifetimes."""
     require_ports_free([HOSTS[name]])
+    # Bootstrap intentionally omits the renewal features. A release in the shared watched
+    # feed here would be acquired before that baseline is complete, so leave it untouched
+    # and require the operator to finish or reset the baseline sequence first.
+    require_no_shared_updates_during_bootstrap()
     host = DEMO / 'hosts' / name
     pid_file = host / 'cockpit.pid'
     if pid_file.exists():
@@ -83,7 +126,7 @@ def bootstrap_host(name, initialize=False):
         write_json(destination, shells)
         destination.chmod(0o600)
     for package in (host / 'feed').glob('*.nupkg'):
-        if any(package.name.startswith(module + '.') for module, _ in MODULES):
+        if is_renewal_package(package):
             package.unlink()
     # The CLI worker that applied the baseline has exited; none of its assembly loads
     # belong to the host. Its restored store must not preload the domain at first boot.
@@ -199,7 +242,7 @@ def prepare_host(name):
         # Startup acquisition and directory watching remain active. The cockpit
         # requests each release reconcile explicitly; five-second scheduled cycles
         # can otherwise fill Nuplane's FIFO during baseline setup on a busy machine.
-        'Nuplane': {'HostProvidedPackages': provided, 'Setup': {'AutomaticReconciliation': False, 'Feeds': [{'Name': 'renewal-demo', 'DirectoryPath': str(feed), 'IncludePatterns': ['*'], 'Directory': {'Watch': True, 'DebounceWindow': '00:00:01'}}, {'Name': 'closure', 'DirectoryPath': str(DEMO / 'closure')}]}, 'Capabilities': {'ef-provider': 'Sqlite'}},
+        'Nuplane': {'HostProvidedPackages': provided, 'Setup': {'AutomaticReconciliation': False, 'Feeds': nuplane_feeds(name)}, 'Capabilities': {'ef-provider': 'Sqlite'}},
         'Elsa': {'Shells': {'ReloadOnPackageChange': False}, 'ModuleManagement': {'Enabled': True}, 'DataProtection': {'ApplicationName': 'Toolbox.Renewals.Demo', 'EntityFrameworkCore': {'Enabled': True, 'Provider': 'Sqlite'}}, 'Cluster': {'Membership': {'HostId': 'toolbox-renewals-' + name, 'EntityFrameworkCore': {'Enabled': True, 'Provider': 'Sqlite'}, 'HeartbeatInterval': '00:00:02', 'ExpiryPeriod': '00:00:10', 'SkewAllowance': '00:00:02'}}, 'Persistence': {'EntityFramework': {'Migrate': {'Policy': 'Validate'}, 'Finalization': {'EvaluationInterval': '00:00:02', 'RefreshInterval': '00:00:02'}}}},
         # Keep the live story legible without hiding activation or migration errors.
         # Reconciliation state and CLI results are also captured by the cockpit.
@@ -217,13 +260,17 @@ def prepare_host(name):
 
 
 def publish(name, release):
-    stage = DEMO / 'staging' / str(release); feed = DEMO / 'hosts' / name / 'feed'
+    stage = DEMO / 'staging' / str(release)
+    # Release 1 is host-local baseline acquisition. Release 2 is the one shared
+    # update publication watched by both independent Nuplane stores.
+    feed = DEMO / 'hosts' / name / 'feed' if release == 1 else shared_update_feed()
     feed.mkdir(parents=True, exist_ok=True)
     packages = [p for p in stage.glob('*.nupkg') if any(p.name.startswith(n + '.') for n, _ in MODULES)]
     if len(packages) != 2: raise RuntimeError('Both staged renewal packages are required; prepare packages first.')
     for p in packages:
         temp = feed / (p.name + '.tmp'); shutil.copy2(p, temp); temp.replace(feed / p.name)
-        print('Published ' + p.name + ' to host ' + name, flush=True)
+        destination = f'host {name} baseline feed' if release == 1 else 'shared renewal update feed'
+        print('Published ' + p.name + ' to ' + destination, flush=True)
 
 
 def persistence(name, operation, restore=False, selection='--all'):
@@ -253,6 +300,7 @@ def main():
     if args.action == 'build-pack': build_pack()
     elif args.action == 'prepare':
         require_stopped()
+        clear_shared_updates()
         for name in HOSTS: prepare_host(name)
         # --all alone can legitimately discover only the host's storage modules.
         # Validate the enabled shell's declarations before applying anything.

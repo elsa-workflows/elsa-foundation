@@ -44,10 +44,18 @@ REPORT = DEMO / "api-rehearsal.json"
 HOSTS = {"a": 5311, "b": 5312}
 STUDIO_PORT = 5313
 RENEWAL_TYPE = "Elsa.Samples.Nuplane.Renewals.Activities.RegisterRenewal"
+RENEWAL_PACKAGE_IDS = (
+    "Elsa.Samples.Nuplane.Renewals",
+    "Elsa.Samples.Nuplane.Renewals.Activities",
+)
 SEQUENCE_TYPE = "Elsa.Activities.Sequence.Activities.Sequence"
 SCHEMA_FAMILY = "SamplesRenewals"
 TERMINAL_STATUSES = {"Completed", "Finished"}
 OBSERVABLE_TERMINAL_STATUSES = TERMINAL_STATUSES | {"Faulted", "Cancelled", "Terminated"}
+API_REQUEST_TIMEOUT = 30
+MANAGEMENT_REQUEST_TIMEOUT = 600
+SHARED_INSTALL_TIMEOUT = 900
+READINESS_TIMEOUT = 300
 
 
 class RehearsalFailure(RuntimeError):
@@ -141,8 +149,11 @@ class Api:
         payload: Any = None,
         expected: set[int] | None = None,
         management: bool = False,
-        timeout: float = 15,
+        timeout: float | None = None,
     ) -> Response:
+        request_timeout = timeout if timeout is not None else (
+            MANAGEMENT_REQUEST_TIMEOUT if management else API_REQUEST_TIMEOUT
+        )
         if host is None:
             url = f"http://127.0.0.1:{STUDIO_PORT}{path}"
         else:
@@ -157,7 +168,7 @@ class Api:
             headers["X-Elsa-Module-Management-Key"] = self.secret
         request = Request(url, data=data, headers=headers, method=method)
         try:
-            with self.opener.open(request, timeout=timeout) as response:
+            with self.opener.open(request, timeout=request_timeout) as response:
                 body = response.read().decode("utf-8", errors="replace")
                 result = Response(response.status, json_or_none(body), body)
         except HTTPError as error:
@@ -214,10 +225,18 @@ def installed_version(host: str) -> tuple[str | None, dict[str, Any]]:
     active = state.get("activeVersionById")
     if not isinstance(active, dict):
         return None, {"path": str(state_path), "error": "activeVersionById missing", "keys": sorted(state)}
-    for package_id, version in active.items():
-        if str(package_id).lower() == "elsa.samples.nuplane.renewals":
-            return str(version), {"path": str(state_path), "activeVersionById": active}
-    return None, {"path": str(state_path), "activeVersionById": active}
+    versions = {
+        expected_id: next(
+            (str(version) for package_id, version in active.items() if str(package_id).lower() == expected_id.lower()),
+            None,
+        )
+        for expected_id in RENEWAL_PACKAGE_IDS
+    }
+    if any(version is None for version in versions.values()):
+        return None, {"path": str(state_path), "error": "both renewal packages are not installed", "versions": versions, "activeVersionById": active}
+    if len(set(versions.values())) != 1:
+        return None, {"path": str(state_path), "error": "renewal package versions do not match", "versions": versions, "activeVersionById": active}
+    return next(iter(versions.values())), {"path": str(state_path), "versions": versions, "activeVersionById": active}
 
 
 def wait_until(label: str, action, predicate, *, timeout: float = 120, interval: float = 2) -> Any:
@@ -229,6 +248,21 @@ def wait_until(label: str, action, predicate, *, timeout: float = 120, interval:
             return last
         time.sleep(interval)
     raise RehearsalFailure(label, "Timed out waiting for the expected state.", last)
+
+
+def wait_for_shared_installation(version: str) -> dict[str, tuple[str | None, dict[str, Any]]]:
+    """Wait once, with one bounded deadline, until both independent stores confirm a release."""
+
+    def installations() -> dict[str, tuple[str | None, dict[str, Any]]]:
+        return {host: installed_version(host) for host in HOSTS}
+
+    return wait_until(
+        f"await Nuplane installation {version} on both hosts from the shared publication",
+        installations,
+        lambda states: all(states[host][0] == version for host in HOSTS),
+        timeout=SHARED_INSTALL_TIMEOUT,
+        interval=2,
+    )
 
 
 PREPARE_TIMEOUT = 900
@@ -623,15 +657,20 @@ def run_rehearsal(api: Api) -> dict[str, Any]:
         raise RehearsalFailure("capture baseline row identities", "The baseline listing omitted a row identity.", before_publish_rows)
     api.record("Retain baseline renewal rows", True, {"rows": before_publish_rows})
 
-    run_prepare(api, ["publish", "--host", "a", "--release", "2"], "Publish release 1.1.0 to host A")
-    installed_a = wait_until(
-        "await host A Nuplane installation 1.1.0",
-        lambda: installed_version("a"),
-        lambda value: value[0] == "1.1.0",
-        timeout=180,
-        interval=2,
-    )
+    run_prepare(api, ["publish", "--host", "a", "--release", "2"], "Publish release 1.1.0 once to the shared feed watched by both hosts")
+    shared_installation = wait_for_shared_installation("1.1.0")
+    installed_a = shared_installation["a"]
     api.record("Host A installed release 1.1.0", True, installed_a)
+    installed_b = shared_installation["b"]
+    api.record("Host B installed release 1.1.0 from the same publication", True, installed_b)
+    served_a_before_reload = assert_release(api, "a", "1.0.0")
+    served_b_before_reload = assert_release(api, "b", "1.0.0")
+    premium_b_before_reload = api.request("b", "/demo/renewals/with-premium", expected={404})
+    api.record(
+        "One shared publication installs 1.1.0 on both hosts while host B still serves 1.0.0",
+        True,
+        {"hostAInstalled": installed_a, "hostBInstalled": installed_b, "hostAServed": served_a_before_reload, "hostBServed": served_b_before_reload, "hostBPremium": api.response_evidence(premium_b_before_reload)},
+    )
 
     pid_before = read_pid("a")
     if pid_before is None:
@@ -657,15 +696,6 @@ def run_rehearsal(api: Api) -> dict[str, Any]:
     assert_pending_reader(status_output, "toolbox-renewals-b")
     api.record("Premium remains dormant while host B serves 1.0.0 and CLI identifies its blocking reader", True, {"hostBRelease": served_b_pending, "premium": api.response_evidence(premium_still_pending), "cli": status_output})
 
-    run_prepare(api, ["publish", "--host", "b", "--release", "2"], "Publish release 1.1.0 to host B")
-    installed_b = wait_until(
-        "await host B Nuplane installation 1.1.0",
-        lambda: installed_version("b"),
-        lambda value: value[0] == "1.1.0",
-        timeout=180,
-        interval=2,
-    )
-    api.record("Host B installed release 1.1.0", True, installed_b)
     reload_b = api.request("b", "/_module-management/reload", method="POST", management=True, expected={200})
     api.record("Host B reloads with HTTP 200", True, api.response_evidence(reload_b))
     served_b = assert_release(api, "b", "1.1.0")
@@ -675,7 +705,7 @@ def run_rehearsal(api: Api) -> dict[str, Any]:
         "await premium endpoint readiness",
         lambda: api.request("a", "/demo/renewals/with-premium"),
         lambda response: response.status == 200,
-        timeout=90,
+        timeout=READINESS_TIMEOUT,
         interval=2,
     )
     if not isinstance(premium_ready.data, list):
