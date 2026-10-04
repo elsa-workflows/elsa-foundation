@@ -99,6 +99,12 @@ adapters validate and translate the selected context at their own persistence bo
 - **Usage:** workflow-execution records are durable executable-retention roots. Completion or fault does not release an artifact; only deletion of the retained execution does. Providers must answer the distinct-root query without materializing every full workflow-execution document and must keep the projection consistent with save/delete.
 - **Default implementation:** `InMemoryWorkflowExecutionStateStore`; durable persistence providers such as the opt-in `RuntimeWorkflowExecutionEntityFrameworkCoreFeature` replace it. EF providers retain an authoritative lossless document plus indexed history, alteration-capture, authority and pinned-artifact projections; `IWorkflowRuntimeAttentionQuery` remains a separate cross-store contract.
 
+### `IWorkflowHealthQuery` *(Core — `Elsa.Workflows.Runtime.Core`)*
+- **Kind:** Optional provider capability implemented by the selected workflow-execution state store.
+- **Signature:** `SupportsIncidentStore(IIncidentStateStore)` and `QueryHealthPageAsync(WorkflowExecutionStatePageQuery, IncidentHealth, CancellationToken)`.
+- **Usage:** `SupportsIncidentStore` must witness that the selected incident store shares the provider's actual persistence scope; a provider must return false for an unrelated incident backend so the API uses the selected-store fallback. Apply current Active, Blocking or None incident health in the same persistence scope before counting and keyset paging. Cursors must bind to health, ordinary filters and scope. The API uses these pages as candidates and still applies request inspection authorization; only its explicit allow-all development adapter can return the provider page directly. Providers without the capability retain bounded candidate traversal and authorization-safe health filtering.
+- **Default implementation:** `EfWorkflowExecutionStateStore`, using existing incident status and workflow identity projections without fault/value content or a schema change.
+
 ### `IWorkflowExecutableReferenceGarbageCollector` *(Core — `Elsa.Workflows.Runtime.Core`)*
 - **Kind:** Replacement (one collector owns physical executable-artifact reclamation for a runtime composition).
 - **Signature:** `SweepAsync(CancellationToken cancellationToken = default)`.
@@ -570,8 +576,8 @@ Leaf-owned contracts for clustered workflow-execution placement and cross-node c
 
 ### `IIncidentStateStore` *(Core — `Elsa.Workflows.Runtime.Core`)*
 - **Kind:** Replacement (one store owns split continuation state for execution-affecting incidents in a runtime composition).
-- **Signature:** `TryAddAsync(IncidentState state, ...)`, `SaveAsync(IncidentState state, ...)`, `FindAsync(string workflowExecutionId, string incidentId, ...)`, `ListAsync(string workflowExecutionId, ...)`, `ListBlockingAsync(string workflowExecutionId, ...)`.
-- **Usage:** stores `IncidentState` keyed by `WorkflowExecutionId` and `IncidentId`. The in-memory checkpoint writer projects incident appends as insert-only changes and incident upserts as replacements from accepted checkpoint commits into this store. Incident history projections, diagnostic payloads, retry, compensation, and intervention behavior are separate runtime surfaces.
+- **Signature:** `TryAddAsync(IncidentState state, ...)`, `SaveAsync(IncidentState state, ...)`, `FindAsync(string workflowExecutionId, string incidentId, ...)`, `ListAsync(string workflowExecutionId, ...)`, `ListBlockingAsync(string workflowExecutionId, ...)`, `CountAsync(string workflowExecutionId, ...)`, `CountHealthAsync(string workflowExecutionId, ...)`.
+- **Usage:** stores `IncidentState` keyed by `WorkflowExecutionId` and `IncidentId`. The in-memory checkpoint writer projects incident appends as insert-only changes and incident upserts as replacements from accepted checkpoint commits into this store. `CountHealthAsync` returns historical, current Open/Blocking and Blocking counts; durable providers should aggregate the status projection without reading captured-value or exception content. Its default implementation preserves compatibility with existing custom stores. Incident history projections, diagnostic payloads, retry, compensation, and intervention behavior are separate runtime surfaces.
 - **Default implementation:** `InMemoryIncidentStateStore` *(single-node in-memory default for the current runtime slice)*.
 
 ### `IIncidentStrategy` / `IIncidentResolutionAction` *(Core contracts; Runtime defaults)*

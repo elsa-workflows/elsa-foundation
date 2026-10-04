@@ -36,7 +36,8 @@ public sealed class WorkflowInstanceDetailsService(
         var activities = activityPage.Items
             .Select(ActivityExecutionInspectionSummaryView.From)
             .ToArray();
-        var incidents = (await incidentStateStore.ListAsync(request.WorkflowExecutionId, cancellationToken))
+        var incidentStates = await incidentStateStore.ListAsync(request.WorkflowExecutionId, cancellationToken);
+        var incidents = incidentStates
             .OrderBy(incident => incident.CreatedAt)
             .ThenBy(incident => incident.IncidentId, StringComparer.Ordinal)
             .Select(incident => IncidentStateView.From(incident, canInspectSensitiveValues))
@@ -60,7 +61,8 @@ public sealed class WorkflowInstanceDetailsService(
         var cadence = checkpointCadenceInspector.Resolve(state);
 
         return new WorkflowInstanceDetailsView(
-            WorkflowInstanceSummaryView.From(state, activityPage.TotalCount, incidents.Length, canInspectSensitiveValues),
+            WorkflowInstanceSummaryView.From(state, activityPage.TotalCount, incidents.Length, canInspectSensitiveValues,
+                IncidentHealthCounts.From(incidentStates)),
             activities,
             incidents,
             outputs,
