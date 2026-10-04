@@ -73,20 +73,69 @@ class BootstrapTests(unittest.TestCase):
     def test_both_hosts_watch_one_shared_update_feed_and_keep_private_baseline_feeds(self):
         feeds_a = self.prepare.nuplane_feeds('a')
         feeds_b = self.prepare.nuplane_feeds('b')
-        update_a = next(feed for feed in feeds_a if feed['Name'] == 'renewal-demo')
-        update_b = next(feed for feed in feeds_b if feed['Name'] == 'renewal-demo')
-        baseline_a = next(feed for feed in feeds_a if feed['Name'] == 'renewal-demo-baseline')
-        baseline_b = next(feed for feed in feeds_b if feed['Name'] == 'renewal-demo-baseline')
+        update_a = next(feed for feed in feeds_a if feed['Name'] == self.prepare.UPDATE_SOURCE)
+        update_b = next(feed for feed in feeds_b if feed['Name'] == self.prepare.UPDATE_SOURCE)
+        baseline_a = next(feed for feed in feeds_a if feed['Name'] == self.prepare.BASELINE_SOURCE)
+        baseline_b = next(feed for feed in feeds_b if feed['Name'] == self.prepare.BASELINE_SOURCE)
 
         self.assertEqual(update_a['DirectoryPath'], str(self.prepare.shared_update_feed()))
         self.assertEqual(update_a['DirectoryPath'], update_b['DirectoryPath'])
         self.assertTrue(update_a['Directory']['Watch'])
         self.assertTrue(update_b['Directory']['Watch'])
         self.assertNotEqual(baseline_a['DirectoryPath'], baseline_b['DirectoryPath'])
-        # Nuplane's DesiredStateAggregator picks the alphabetically first SourceName
-        # when both feeds contain the same package ID; keep shared updates first.
-        self.assertLess(update_a['Name'].casefold(), baseline_a['Name'].casefold())
-        self.assertLess(update_b['Name'].casefold(), baseline_b['Name'].casefold())
+        # Alphabetical fallback would choose the baseline, so generated settings must
+        # explicitly assign the shared update source higher precedence on both hosts.
+        self.assertLess(baseline_a['Name'].casefold(), update_a['Name'].casefold())
+        for host in ('a', 'b'):
+            nuplane = self.prepare.nuplane_configuration(host, ['Elsa.Foundation.Contracts'])
+            priorities = nuplane['DesiredState']['SourcePriorities']
+            self.assertEqual(priorities, {
+                self.prepare.UPDATE_SOURCE: 0,
+                self.prepare.BASELINE_SOURCE: 100,
+                self.prepare.CLOSURE_SOURCE: 200,
+            })
+            self.assertEqual(nuplane['Setup']['Feeds'], self.prepare.nuplane_feeds(host))
+
+    def test_prepared_appsettings_include_source_priorities(self):
+        source_host = self.prepare.DEMO / 'source-host'
+        source_host.mkdir()
+        (source_host / 'Elsa.Foundation.Host.dll').write_bytes(b'host')
+        (source_host / 'Elsa.Shared.dll').write_bytes(b'shared contract')
+        (source_host / 'Elsa.Foundation.Host.deps.json').write_text(json.dumps({
+            'libraries': {'Elsa.Shared/1.0.0': {'type': 'project'}}
+        }))
+        (source_host / 'appsettings.json').write_text(json.dumps({
+            'Nuplane': {
+                'HostProvidedPackages': [],
+                'Loading': {'SharedAssemblies': [{'Name': 'Elsa.Shared'}]},
+            }
+        }))
+        common = self.prepare.DEMO / 'common'
+        common.mkdir()
+        (common / 'Elsa.Samples.Nuplane.Demo.Identity.0.1.0.nupkg').write_bytes(b'identity')
+        stage = self.prepare.DEMO / 'staging/1'
+        stage.mkdir(parents=True)
+        for module, _ in self.prepare.MODULES:
+            (stage / f'{module}.1.0.0.nupkg').write_bytes(b'baseline')
+
+        with patch.object(self.prepare, 'SOURCE_HOST', source_host), \
+                patch.object(self.prepare, 'signing_key', return_value='test-signing-key'):
+            self.prepare.prepare_host('a')
+
+        settings = json.loads((self.host / 'appsettings.Development.json').read_text())
+        nuplane = settings['Nuplane']
+        self.assertEqual(nuplane['DesiredState']['SourcePriorities'], {
+            self.prepare.UPDATE_SOURCE: 0,
+            self.prepare.BASELINE_SOURCE: 100,
+            self.prepare.CLOSURE_SOURCE: 200,
+        })
+        feeds = nuplane['Setup']['Feeds']
+        self.assertEqual([feed['Name'] for feed in feeds], [
+            self.prepare.BASELINE_SOURCE,
+            self.prepare.UPDATE_SOURCE,
+            self.prepare.CLOSURE_SOURCE,
+        ])
+        self.assertEqual(nuplane['HostProvidedPackages'], ['Elsa.Shared'])
 
     def test_prepare_clears_only_owned_shared_update_archives(self):
         shared = self.prepare.shared_update_feed()

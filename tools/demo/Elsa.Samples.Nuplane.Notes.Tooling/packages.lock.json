@@ -302,8 +302,8 @@
       },
       "Nuplane.Abstractions": {
         "type": "Transitive",
-        "resolved": "0.0.11-preview.94",
-        "contentHash": "YtytvT0fC6hyfz1GonNjNdw13jN1Ps3Zl0A+OK8/cZxuL/dUGQbVnWlV82vJkQo6TTmegXRXZx1gOvfGkpXm0g=="
+        "resolved": "0.0.11-preview.95",
+        "contentHash": "iDqQHWKsMwQ3LIdnnbNvUD6mbqqp03pdFechEKoK0iPq/347a0UMDj7BXYctwrBnjz/41kllb+dYVK8FHgMf+Q=="
       },
       "SourceGear.sqlite3": {
         "type": "Transitive",
@@ -516,7 +516,7 @@
           "Elsa.Cluster.InProcess": "[4.0.0-dev, )",
           "Elsa.Persistence.Schema": "[4.0.0-dev, )",
           "Microsoft.Extensions.Logging.Abstractions": "[10.0.10, )",
-          "Nuplane.Loading.Abstractions": "[0.0.11-preview.94, )"
+          "Nuplane.Loading.Abstractions": "[0.0.11-preview.95, )"
         }
       },
       "elsa.diagnostics.opentelemetry": {
@@ -1282,11 +1282,11 @@
       },
       "Nuplane.Loading.Abstractions": {
         "type": "CentralTransitive",
-        "requested": "[0.0.11-preview.94, )",
-        "resolved": "0.0.11-preview.94",
-        "contentHash": "vjTnc+rW+guSOUq1CXpmxp3KKBLxOpazOVHV0nHOji7w5lS7+GLRzYvEyPs/LARwxo9weJO3ie8gF5/F10UIgg==",
+        "requested": "[0.0.11-preview.95, )",
+        "resolved": "0.0.11-preview.95",
+        "contentHash": "T0h99slTiF/D0Z/Lyh0cXhvi2eAgIj57f12W6XdQedlzhKvZ6qkIbxj0+RpDQkxxgeqZ4jMYiykuEm80oF8R6Q==",
         "dependencies": {
-          "Nuplane.Abstractions": "0.0.11-preview.94"
+          "Nuplane.Abstractions": "0.0.11-preview.95"
         }
       },
       "SQLitePCLRaw.bundle_e_sqlite3": {

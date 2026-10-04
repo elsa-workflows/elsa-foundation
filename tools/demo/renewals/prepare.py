@@ -56,17 +56,33 @@ def shared_update_feed():
     return DEMO / 'feed'
 
 
+UPDATE_SOURCE = 'renewal-demo-updates'
+BASELINE_SOURCE = 'renewal-demo-baseline'
+CLOSURE_SOURCE = 'closure'
+
+
 def nuplane_feeds(name):
     """Keep each host's bootstrap source separate from the shared update source."""
     host_feed = DEMO / 'hosts' / name / 'feed'
     return [
-        {'Name': 'renewal-demo-baseline', 'DirectoryPath': str(host_feed), 'IncludePatterns': ['*'], 'Directory': {'Watch': True, 'DebounceWindow': '00:00:01'}},
-        # Nuplane breaks duplicate package requests by alphabetic SourceName. The shared
-        # feed name sorts before the host-local baseline feed, so its newer archive wins
-        # once published; with the shared folder empty, only the baseline feed contributes.
-        {'Name': 'renewal-demo', 'DirectoryPath': str(shared_update_feed()), 'IncludePatterns': ['*'], 'Directory': {'Watch': True, 'DebounceWindow': '00:00:01'}},
-        {'Name': 'closure', 'DirectoryPath': str(DEMO / 'closure')},
+        {'Name': BASELINE_SOURCE, 'DirectoryPath': str(host_feed), 'IncludePatterns': ['*'], 'Directory': {'Watch': True, 'DebounceWindow': '00:00:01'}},
+        {'Name': UPDATE_SOURCE, 'DirectoryPath': str(shared_update_feed()), 'IncludePatterns': ['*'], 'Directory': {'Watch': True, 'DebounceWindow': '00:00:01'}},
+        {'Name': CLOSURE_SOURCE, 'DirectoryPath': str(DEMO / 'closure')},
     ]
+
+
+def nuplane_configuration(name, host_provided_packages):
+    """Build Nuplane settings with explicit precedence for overlapping feed requests."""
+    return {
+        'HostProvidedPackages': list(host_provided_packages),
+        'DesiredState': {'SourcePriorities': {
+            UPDATE_SOURCE: 0,
+            BASELINE_SOURCE: 100,
+            CLOSURE_SOURCE: 200,
+        }},
+        'Setup': {'AutomaticReconciliation': False, 'Feeds': nuplane_feeds(name)},
+        'Capabilities': {'ef-provider': 'Sqlite'},
+    }
 
 
 def is_renewal_package(package):
@@ -242,7 +258,7 @@ def prepare_host(name):
         # Startup acquisition and directory watching remain active. The cockpit
         # requests each release reconcile explicitly; five-second scheduled cycles
         # can otherwise fill Nuplane's FIFO during baseline setup on a busy machine.
-        'Nuplane': {'HostProvidedPackages': provided, 'Setup': {'AutomaticReconciliation': False, 'Feeds': nuplane_feeds(name)}, 'Capabilities': {'ef-provider': 'Sqlite'}},
+        'Nuplane': nuplane_configuration(name, provided),
         'Elsa': {'Shells': {'ReloadOnPackageChange': False}, 'ModuleManagement': {'Enabled': True}, 'DataProtection': {'ApplicationName': 'Toolbox.Renewals.Demo', 'EntityFrameworkCore': {'Enabled': True, 'Provider': 'Sqlite'}}, 'Cluster': {'Membership': {'HostId': 'toolbox-renewals-' + name, 'EntityFrameworkCore': {'Enabled': True, 'Provider': 'Sqlite'}, 'HeartbeatInterval': '00:00:02', 'ExpiryPeriod': '00:00:10', 'SkewAllowance': '00:00:02'}}, 'Persistence': {'EntityFramework': {'Migrate': {'Policy': 'Validate'}, 'Finalization': {'EvaluationInterval': '00:00:02', 'RefreshInterval': '00:00:02'}}}},
         # Keep the live story legible without hiding activation or migration errors.
         # Reconciliation state and CLI results are also captured by the cockpit.

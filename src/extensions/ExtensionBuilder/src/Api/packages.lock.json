@@ -4,11 +4,11 @@
     "net10.0": {
       "Nuplane.Admin": {
         "type": "Direct",
-        "requested": "[0.0.11-preview.94, )",
-        "resolved": "0.0.11-preview.94",
-        "contentHash": "5wQPdBDFwqwqTMI0UH1XFUIenngiOT8HHQm4BRp6rPxG7wy9qbogDcaOTTbAaxdQ88LEduoLZVxrRSToV6E0NA==",
+        "requested": "[0.0.11-preview.95, )",
+        "resolved": "0.0.11-preview.95",
+        "contentHash": "Uo0k1Y3kIhgo0d16iXyIX2p4LHhAzCiU9kr+efNWiUZuT/IIv4H01Yyuta0qTiXy7gmirP9JhQLMAZt3L721xA==",
         "dependencies": {
-          "Nuplane": "0.0.11-preview.94"
+          "Nuplane": "0.0.11-preview.95"
         }
       },
       "JetBrains.Annotations": {
@@ -101,8 +101,8 @@
       },
       "Nuplane.Abstractions": {
         "type": "Transitive",
-        "resolved": "0.0.11-preview.94",
-        "contentHash": "YtytvT0fC6hyfz1GonNjNdw13jN1Ps3Zl0A+OK8/cZxuL/dUGQbVnWlV82vJkQo6TTmegXRXZx1gOvfGkpXm0g=="
+        "resolved": "0.0.11-preview.95",
+        "contentHash": "iDqQHWKsMwQ3LIdnnbNvUD6mbqqp03pdFechEKoK0iPq/347a0UMDj7BXYctwrBnjz/41kllb+dYVK8FHgMf+Q=="
       },
       "Polly.Core": {
         "type": "Transitive",
@@ -161,7 +161,7 @@
           "Elsa.Cluster.Core": "[4.0.0-dev, )",
           "Elsa.Cluster.InProcess": "[4.0.0-dev, )",
           "Elsa.Persistence.Schema": "[4.0.0-dev, )",
-          "Nuplane.Loading.Abstractions": "[0.0.11-preview.94, )"
+          "Nuplane.Loading.Abstractions": "[0.0.11-preview.95, )"
         }
       },
       "elsa.foundation.identity": {
@@ -221,26 +221,26 @@
       },
       "Nuplane": {
         "type": "CentralTransitive",
-        "requested": "[0.0.11-preview.94, )",
-        "resolved": "0.0.11-preview.94",
-        "contentHash": "teZUZqilxgEoDR7hgQsLd30YTi944Fle9Zm/uaxkWmrDR2HL/4pYGsZxiI0+E3yWhI0EU/gKkg25hwbWkTzRoQ==",
+        "requested": "[0.0.11-preview.95, )",
+        "resolved": "0.0.11-preview.95",
+        "contentHash": "Wr0yLYcIu77j07fTkrjxLoQPAsaSTNNFw0QaRwNBVr+0yr7zYwyPcQz61NivkQEWGKCPLgIQvrCz5/viNsgUug==",
         "dependencies": {
           "Microsoft.Extensions.Resilience": "10.1.0",
           "NuGet.Frameworks": "6.13.1",
           "NuGet.Protocol": "6.13.1",
           "NuGet.Resolver": "6.13.1",
           "NuGet.Versioning": "6.13.1",
-          "Nuplane.Abstractions": "0.0.11-preview.94",
+          "Nuplane.Abstractions": "0.0.11-preview.95",
           "Polly.Extensions": "8.6.5"
         }
       },
       "Nuplane.Loading.Abstractions": {
         "type": "CentralTransitive",
-        "requested": "[0.0.11-preview.94, )",
-        "resolved": "0.0.11-preview.94",
-        "contentHash": "vjTnc+rW+guSOUq1CXpmxp3KKBLxOpazOVHV0nHOji7w5lS7+GLRzYvEyPs/LARwxo9weJO3ie8gF5/F10UIgg==",
+        "requested": "[0.0.11-preview.95, )",
+        "resolved": "0.0.11-preview.95",
+        "contentHash": "T0h99slTiF/D0Z/Lyh0cXhvi2eAgIj57f12W6XdQedlzhKvZ6qkIbxj0+RpDQkxxgeqZ4jMYiykuEm80oF8R6Q==",
         "dependencies": {
-          "Nuplane.Abstractions": "0.0.11-preview.94"
+          "Nuplane.Abstractions": "0.0.11-preview.95"
         }
       }
     }
