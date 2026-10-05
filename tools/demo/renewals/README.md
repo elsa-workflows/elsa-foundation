@@ -14,6 +14,8 @@ The API rehearsal uses bounded client waits: ordinary authenticated API requests
 
 Automatic reconciliation remains disabled: rapid scheduled cycles can accumulate in its FIFO during busy baseline setup and delay an explicit request. The cockpit's single Publish action invokes authenticated reconciliation for both running hosts and waits for both installed package versions. Directory watching also remains enabled, so the shared package update reaches each store automatically without another host-specific publication.
 
+The prepared demo hosts use a 10-second cluster heartbeat, a 2-minute membership expiry, and a 2-second clock-skew allowance. The longer demo-only expiry tolerates scheduling stalls while the workstation is compiling or rendering; it does not replace a graceful stop, and an abandoned host is still removed after the configured expiry window.
+
 Reset stops owned processes, refuses occupied demo ports, then archives the isolated runtime directories and database files. It retains prepared packages. Archived files can be recovered; reset never deletes user data or signals unrelated processes.
 
 The [verification report](../../../specs/191-toolbox-renewals-demo/verification.md) records the 3 October browser rehearsal, which predates this shared-feed publication flow. Re-run the API and browser rehearsal before treating it as evidence for the updated two-host sequence.

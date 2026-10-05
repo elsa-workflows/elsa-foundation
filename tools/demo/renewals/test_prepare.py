@@ -136,6 +136,10 @@ class BootstrapTests(unittest.TestCase):
             self.prepare.CLOSURE_SOURCE,
         ])
         self.assertEqual(nuplane['HostProvidedPackages'], ['Elsa.Shared'])
+        membership = settings['Elsa']['Cluster']['Membership']
+        self.assertEqual(membership['HeartbeatInterval'], self.prepare.DEMO_HEARTBEAT_INTERVAL)
+        self.assertEqual(membership['ExpiryPeriod'], self.prepare.DEMO_EXPIRY_PERIOD)
+        self.assertEqual(membership['SkewAllowance'], self.prepare.DEMO_SKEW_ALLOWANCE)
 
     def test_prepare_clears_only_owned_shared_update_archives(self):
         shared = self.prepare.shared_update_feed()

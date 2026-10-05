@@ -14,6 +14,11 @@ DB = DEMO / 'renewals.db'
 CONNECTION = 'Data Source=' + str(DB) + ';Pooling=False;Default Timeout=30'
 HOSTS = {'a': 5311, 'b': 5312}
 MODULES = [('Elsa.Samples.Nuplane.Renewals', ROOT / 'samples/Elsa.Samples.Nuplane.Renewals/Elsa.Samples.Nuplane.Renewals.csproj'), ('Elsa.Samples.Nuplane.Renewals.Activities', ROOT / 'samples/Elsa.Samples.Nuplane.Renewals.Activities/Elsa.Samples.Nuplane.Renewals.Activities.csproj')]
+# The demo may run while the shared workstation is compiling or rendering. Keep
+# membership tolerant of scheduling stalls without changing the real fleet gate.
+DEMO_HEARTBEAT_INTERVAL = '00:00:10'
+DEMO_EXPIRY_PERIOD = '00:02:00'
+DEMO_SKEW_ALLOWANCE = '00:00:02'
 
 
 def run(args, **kwargs):
@@ -259,7 +264,7 @@ def prepare_host(name):
         # requests each release reconcile explicitly; five-second scheduled cycles
         # can otherwise fill Nuplane's FIFO during baseline setup on a busy machine.
         'Nuplane': nuplane_configuration(name, provided),
-        'Elsa': {'Shells': {'ReloadOnPackageChange': False}, 'ModuleManagement': {'Enabled': True}, 'DataProtection': {'ApplicationName': 'Toolbox.Renewals.Demo', 'EntityFrameworkCore': {'Enabled': True, 'Provider': 'Sqlite'}}, 'Cluster': {'Membership': {'HostId': 'toolbox-renewals-' + name, 'EntityFrameworkCore': {'Enabled': True, 'Provider': 'Sqlite'}, 'HeartbeatInterval': '00:00:02', 'ExpiryPeriod': '00:00:10', 'SkewAllowance': '00:00:02'}}, 'Persistence': {'EntityFramework': {'Migrate': {'Policy': 'Validate'}, 'Finalization': {'EvaluationInterval': '00:00:02', 'RefreshInterval': '00:00:02'}}}},
+        'Elsa': {'Shells': {'ReloadOnPackageChange': False}, 'ModuleManagement': {'Enabled': True}, 'DataProtection': {'ApplicationName': 'Toolbox.Renewals.Demo', 'EntityFrameworkCore': {'Enabled': True, 'Provider': 'Sqlite'}}, 'Cluster': {'Membership': {'HostId': 'toolbox-renewals-' + name, 'EntityFrameworkCore': {'Enabled': True, 'Provider': 'Sqlite'}, 'HeartbeatInterval': DEMO_HEARTBEAT_INTERVAL, 'ExpiryPeriod': DEMO_EXPIRY_PERIOD, 'SkewAllowance': DEMO_SKEW_ALLOWANCE}}, 'Persistence': {'EntityFramework': {'Migrate': {'Policy': 'Validate'}, 'Finalization': {'EvaluationInterval': '00:00:02', 'RefreshInterval': '00:00:02'}}}},
         # Keep the live story legible without hiding activation or migration errors.
         # Reconciliation state and CLI results are also captured by the cockpit.
         'Logging': {'LogLevel': {
