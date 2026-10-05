@@ -30,7 +30,7 @@ Required vectors:
 4. Interleaved durable rows, an equal-identity overlay replacement, a tombstone, and overlay-only rows traversed to completion with limit 2: exact expected ordinal sequence with no duplicates or omissions.
 5. Existing valid opaque token, malformed/wrong-binding token, request cancellation, empty-terminal exhaustion, and preservation of the `RuntimeStorePage<T>` constructor rejection for an empty page with a continuation.
 
-Count provider reads by cursor position. Each position may be read at most once in one merge call; the first empty-source vector reads its initial position exactly once, and the limit-2 interleaved traversal may replay the first position once on its second call before reading the following position. A later-call replay is allowed by the payload-free continuation design.
+Count provider reads by cursor position. Each position may be read at most once in one merge call. A request may need multiple filtered pages to prove that no later visible row exists: the durable `a`–`l` vector with tombstones `c`–`l` uses six distinct positions at page size 2. For the limit-2 interleaved traversal, allow up to two positions on the first call and up to two on the second (replay of the initial position and the following position). A later-call replay is allowed by the payload-free continuation design.
 
 ## Current-head HTTP reference capture (#2392)
 

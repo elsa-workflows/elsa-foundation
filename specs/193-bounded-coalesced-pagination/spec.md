@@ -107,6 +107,7 @@ A caller can resume an existing opaque store continuation and cancel an in-progr
 - **SC-003**: With one durable candidate after multiple earlier overlays, one page request fetches that candidate once; selection and has-next look-ahead do not fetch it repeatedly.
 - **SC-004**: Every underlying page request is at most the caller limit and never exceeds the existing public maximum; live buffered durable rows never exceed that bound. Within one merge call, each provider cursor position is read at most once; pages needed again after an output boundary may be replayed on a later call.
 - **SC-005**: Existing continuation tokens remain decodable and query-bound; cancellation and malformed-token behavior match the pre-change contract.
+- **SC-006**: With provider/output limit 2, durable identities `a` through `l`, tombstones for `c` through `l`, and no overlay upserts, the result is `a,b` with no continuation after exactly six distinct provider cursor positions are read to prove the tail has no visible row.
 
 ## Assumptions
 
