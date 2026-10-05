@@ -1,5 +1,6 @@
 using Elsa.Expressions.Core.Contracts;
 using Elsa.Expressions.Core.Models;
+using Elsa.Expressions.JavaScript.Services;
 using Elsa.Workflows.Design.Core.Contracts;
 using Elsa.Workflows.Design.Core.Services;
 using Xunit;
@@ -155,6 +156,41 @@ public sealed class ExpressionAuthoringContextCatalogTests
         Assert.Contains(sourceSymbol, result.Payload.RootSymbols);
         Assert.DoesNotContain("source", filter.SeenIds);
         Assert.Equal(2, filter.Calls);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task JavaScript_getVariable_obeys_profile_policy_with_visible_variables(bool allowAccessor)
+    {
+        var provider = new JavaScriptExpressionToolingProvider();
+        var filter = new SymbolFilter((symbol, _, _, _) => ValueTask.FromResult<ExpressionSymbol?>(
+            symbol.SymbolId == "javascript:getVariable"
+                ? allowAccessor ? symbol with { Documentation = "Policy-approved accessor." } : null
+                : symbol));
+        var service = new ExpressionAuthoringContextService(
+            [new Source(symbols: [Symbol("source:customer", "customer", ExpressionSymbolKind.Variable)])],
+            new Resolver(_ => provider), [filter]);
+
+        var result = await service.ResolveForProviderAsync(Request(), new(true), CancellationToken.None);
+        var context = Assert.IsType<ExpressionAuthoringContext>(result.Payload);
+        var scope = new ExpressionToolingRequestScope(ExpressionToolingContractVersion.V1, context.Document, context);
+        var completions = await provider.GetCompletionsAsync(new(scope, "getVariable", new(0, 11)), CancellationToken.None);
+        var hover = await provider.GetHoverAsync(new(scope, "getVariable", new(0, 11)), CancellationToken.None);
+
+        Assert.Contains(context.RootSymbols, symbol => symbol.SymbolId == "source:customer");
+        if (allowAccessor)
+        {
+            Assert.Equal("getVariable", Assert.Single(completions.Payload!.Items).Label);
+            Assert.Contains("Policy-approved accessor.", hover.Payload!.Contents, StringComparison.Ordinal);
+        }
+        else
+        {
+            Assert.DoesNotContain(context.RootSymbols, symbol => symbol.SymbolId == "javascript:getVariable");
+            Assert.Equal(ExpressionToolingOutcomeState.SupportedEmpty, completions.State);
+            Assert.Equal(ExpressionToolingOutcomeState.SupportedEmpty, hover.State);
+        }
+        Assert.Equal(1, filter.SeenIds.Count(id => id == "javascript:getVariable"));
     }
 
     [Fact]

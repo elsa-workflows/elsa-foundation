@@ -1,12 +1,41 @@
 # Expression Code Intelligence Foundation — Verification
 
-Last reconciled: 2026-10-03 for Program #2310 M2 automated gate and M3 integrated candidate; M3 final producer-consumer/CI/review, delivery and human acceptance pending
+Last reconciled: 2026-10-05 for Program #2310 M3 accessor correction after restart; corrected-head producer-consumer/CI/review, delivery and human acceptance pending
 
 ## Program #2310 status
 
 T026-T027 pass at the exact M1 pair recorded below. T028 passes the exact M2 automated gate at Foundation7457b7a4/Studio00677684 under the documented unavailable-review fallback. Task #2379 implements effective Liquid metadata and policy-filtered runtime catalogs under D12; final coordinated language-depth proof (T029-T031) remains open. Historical baseline evidence remains separate. All program PRs remain draft and unmerged; final human acceptance is outstanding.
 
 ## Passing evidence
+
+### M3 accessor policy correction — Task #2379, 2026-10-05
+
+Independent review of producer `58238b8678dce6dc3dc7510d88c630d106892393` finds that
+`getVariable` was synthesized after the common policy filter. Two retained failing controls
+reproduce denied completion and lost policy-edited documentation. The fixed accessor candidate
+now belongs to the immutable declared catalog (revision `javascript-binding-pure-profile-v2`),
+passes the existing filter once and is projected only when authorized visible bindings exist.
+Context-derived arguments, variable wrappers and generated getters remain workflow facts;
+no evaluation grant changes. The affected catalog controls pass 27/27 and complete Expressions
+passes 236/236 in the corrected candidate tree. After restart, complete Design 534/534, Design API
+143/143, Publishing API 714/714, Jint 126/126 and scoped Architecture 17/17 pass on that correction.
+Generated-map freshness and diff check pass without regeneration. Independent exact-delta review
+reports no actionable remaining finding. Full local Architecture is not claimed.
+
+Studio Task #560 applies the same candidate-authority rule and excludes a generated getter for a
+variable literally named `variable`, which would collide with the reserved `getVariable` name.
+Its retained failing controls reproduce both denied reinsertion and duplicate allowed entries;
+the corrected JavaScript suite passes 15/15. These results do not substitute for the coordinated
+rebuilt browser or exact committed-head gates.
+
+The predecessor producer passes complete [CI 37147080477](https://github.com/elsa-workflows/elsa-foundation/actions/runs/37147080477)
+after one failed-job retry and [Maps 37147082366](https://github.com/elsa-workflows/elsa-foundation/actions/runs/37147082366).
+The first CI attempt failed in unchanged EF SQLite handle code; no causal repair is inferred.
+Predecessor Studio `8ab8fced71095b085e592442c65d01c143649f37` passes every job in
+[CI 37147792665](https://github.com/elsa-workflows/elsa-foundation-studio/actions/runs/37147792665),
+including the paired normal-host browser against that predecessor producer. Neither green gate
+accepts this accessor correction. Copilot has no actual review on either M3 PR at the restart
+checkpoint. Both PRs remain draft and unmerged; M3 and human acceptance remain open.
 
 ### M3 integrated candidate — Task #2379, 2026-10-03
 

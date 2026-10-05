@@ -148,6 +148,7 @@ public sealed class ExpressionToolingProviderContractTests
         Assert.False(string.IsNullOrWhiteSpace(first.Revision));
         Assert.Contains(first.Symbols, symbol => symbol.SymbolId == "javascript:profile:Math");
         Assert.Contains(first.Symbols, symbol => symbol.SymbolId == "javascript:profile:JSON.parse" && symbol.Signatures is not null);
+        Assert.Contains(first.Symbols, symbol => symbol.SymbolId == "javascript:getVariable" && symbol.Signatures is not null);
         var symbols = Assert.IsAssignableFrom<IList<ExpressionSymbol>>(first.Symbols);
         Assert.Throws<NotSupportedException>(() => symbols[0] = new("replacement", "replacement", ExpressionSymbolKind.Function));
     }
@@ -182,6 +183,17 @@ public sealed class ExpressionToolingProviderContractTests
         var root = await provider.GetCompletionsAsync(new(scope, string.Empty, new(0, 0)), CancellationToken.None);
 
         Assert.Single(root.Payload!.Items, item => item.Label == "getVariable");
+    }
+
+    [Fact]
+    public async Task JavaScript_does_not_project_the_variable_accessor_without_visible_variable_bindings()
+    {
+        var provider = new JavaScriptExpressionToolingProvider();
+        var scope = CreateJavaScriptScope([]);
+
+        var completion = await provider.GetCompletionsAsync(new(scope, "getVariable", new(0, 11)), CancellationToken.None);
+
+        Assert.Equal(ExpressionToolingOutcomeState.SupportedEmpty, completion.State);
     }
 
     [Fact]

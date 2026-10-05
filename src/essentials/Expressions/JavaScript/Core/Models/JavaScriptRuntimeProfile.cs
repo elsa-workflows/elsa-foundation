@@ -11,7 +11,7 @@ public static class JavaScriptRuntimeProfile
     public const string ArgumentsName = "args";
     public const string VariablesName = "variables";
     public const string GetVariableName = "getVariable";
-    public const string ToolingCatalogRevision = "javascript-binding-pure-profile-v1";
+    public const string ToolingCatalogRevision = "javascript-binding-pure-profile-v2";
     public const string ArgumentsDocumentation = "Immutable expression parameters. The object is present even when no parameters are declared.";
     public const string VariablesDocumentation = "Immutable visible workflow variables.";
     public const string GetVariableDocumentation = "Reads a visible workflow variable by name.";
@@ -72,7 +72,7 @@ public static class JavaScriptRuntimeProfile
 
     public static ExpressionToolingCatalog DeclaredToolingCatalog { get; } = new(
         ToolingCatalogRevision,
-        StandardGlobalSymbols);
+        Array.AsReadOnly(StandardGlobalSymbols.Append(GetVariableFunction).ToArray()));
 
     /// <summary>Gets the runtime's generated getter name, or null when the variable name contains unsupported characters.</summary>
     public static string? GetGeneratedVariableGetterName(string name)

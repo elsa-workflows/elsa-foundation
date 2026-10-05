@@ -102,6 +102,7 @@ public sealed partial class JavaScriptExpressionToolingProvider : IExpressionToo
             .ToArray();
         var projected = context.RootSymbols
             .Where(symbol => symbol.Kind is ExpressionSymbolKind.Function or ExpressionSymbolKind.Namespace or ExpressionSymbolKind.Extension)
+            .Where(symbol => symbol.SymbolId != JavaScriptRuntimeProfile.GetVariableFunction.SymbolId || variables.Length > 0)
             .ToList();
         projected.Add(new(
             "javascript:args",
@@ -127,7 +128,6 @@ public sealed partial class JavaScriptExpressionToolingProvider : IExpressionToo
                         symbol.Documentation))
                     .ToArray()),
                 JavaScriptRuntimeProfile.VariablesDocumentation));
-            projected.Add(JavaScriptRuntimeProfile.GetVariableFunction);
             var getterNames = new HashSet<string>(JavaScriptRuntimeProfile.ReservedVariableGetterNames, StringComparer.Ordinal);
             foreach (var variable in variables.OrderBy(symbol => symbol.Name, StringComparer.Ordinal))
             {
