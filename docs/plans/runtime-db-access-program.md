@@ -28,7 +28,7 @@ The normal-host journey is publish → trigger → durable scheduling/activation
 
 | ID | Requirement | Proof owner |
 |---|---|---|
-| R1 | Record original/reference fixture identity, payload, image/source, provider, host composition and effective pinned settings | T01/T02 |
+| R1 | Record representative fixture identity, payload, image/source, provider, host composition and effective pinned settings; historical fixture identity is optional if recoverable | T01/T02 |
 | R2 | Distinguish command executions, SQL statements, round trips, transactions, checkpoints and work items; correlate execution identities | T02/T04 |
 | R3 | Bound coalesced page reads by fetched pages; retain unconsumed candidates and inner exhaustion; preserve order, replacement/deletion and continuation | T05/T06 |
 | R4 | Select repeated-materialization strategy from the new trace; scope any cache to execution ownership, staged changes and flush invalidation | T07/T08/#1306 |
@@ -50,6 +50,10 @@ The goals, actors, first deliverables, preserved guarantees and unchanged defaul
 Request-path tracing and low-logging timings are separate runs. Retain a pinned-image historical control if the original artifacts are recoverable, and use current-source before/after comparisons for changes. Record cold/warm identity, machine load, variation, median/p95 and exact settings. Never present a reference workflow as reproduction of the original.
 
 The owner-approved four-activity representative workflow starts through HttpEndpoint and uses a simple deterministic activity with known input/output. Record whether compilation uses a CLR or intrinsic path. Compare bounded REST API startup using the same definition/computation where supported, documenting admission and response-transport differences. Each selected configuration uses the report's 25 warm-ups and 60 timed requests. T01 also selects a single 16-activity straight-line computation fixture and concurrency four, each bounded to 60 timed requests per control. Report sample counts and run variability; a 60-sample p95 is exploratory, not a stable latency objective. Record exact fixtures/payloads; any unavailable control needs an explicit owner and revisit trigger. No parameter sweep or global benchmark service.
+
+The selected fixture is `RuntimeDbPaging2392Reference`: root Sequence / synchronous HttpEndpoint / SetVariable / WriteHttpResponse. POST `/workflows/http/runtime-db-paging-2392/transform` with `{"firstName":"Alice","lastName":"Smith"}`; capture ParsedContent as workflow `content`, compute `referenceText` from the two names, and expect HTTP 200 text `Alice Smith` plus a durable terminal instance. SetVariable compiles to `elsa.intrinsic.set@1`, not the historical CLR transform. These are acceptance expectations; no successful run is claimed until verified.
+
+The REST-start control must execute the same SetVariable computation to `referenceText = Alice Smith` and durable terminal state. A REST-started HTTP definition waiting at a trigger bookmark is not a valid control. Use a companion definition with documented admission/transport differences if necessary; if no valid control can be constructed, report an explicit deferral with owner/revisit trigger. Compare causal command categories and qualify transport latency; do not subtract unlike response paths as exact equivalents.
 
 Response-path and total settled-instance database work are separate measurements. T02 owns request accounting; T04 reuses its taxonomy/identities for post-response attribution and independent polling. Define and bound the settled condition; report remaining durable work instead of silently ending the observation window.
 
@@ -211,7 +215,7 @@ A contingent implementation leaf may close as not planned only after the lead ac
 
 ## Scheduling, handoffs and proof
 
-The next control-room objective is T01 (#2385); T05 (#2392) is the independently Ready buffer. Neither has started. Keep exactly one active lead objective and one integration lane. Up to two or three bounded sessions may help; use isolated writer worktrees, issue scope claims before code, competing-work rechecks before commit and explicit handoff artifacts. No automated worker assignment is activated by this plan.
+T01 (#2385) is the active lead objective; the independent T05 (#2392) investigation is also running. Both have isolated scope claims and Verification Pending. Keep exactly one active lead objective and one integration lane. Up to two or three bounded sessions may help; use isolated writer worktrees, issue scope claims before code, competing-work rechecks before commit and explicit handoff artifacts. Next T02 depends on reviewed T01 output; T06 depends on reviewed T05 specification and before-fix evidence. No neighboring implementation is assigned yet.
 
 The Project separates Status, Work Type, Phase, Area, Priority, Agent State and Verification. Coordination parents never enter Agent Queue. Ready means the stated discovery/specification outcome has enough context, not permission to bypass design gates for adjacent runtime work. Every unexecuted leaf starts with Verification Pending. Review/merge/deploy states and exact-head evidence are recorded on issues as well as the Project.
 
@@ -231,4 +235,4 @@ Runtime implementations run only the affected projects/suites, relevant REST e2e
 
 Complete the program when every finding has evidence or an explicitly owned residual prerequisite, the paging correction demonstrates bounded access and preserved results, selected Coalesced reductions are proven on the normal host, contingent candidates are honestly disposed, and the final response states remaining cost and release availability. Do not infer completion from child closure counts or expect an Immediate speedup as a required result.
 
-This planning session verifies the issue hierarchy, dependency DAG, field values, Ready queue and documentation consistency. Runtime implementation, original-workload reproduction, before/after measurement and correctness execution remain future work owned by the linked leaves. Merge, publication and deployment retain their normal authorization boundaries.
+Planning verification covered the issue hierarchy, dependency DAG, fields, queue and documentation consistency. The active control room now owns delivery, with bounded investigations running. Runtime implementation, representative before/after measurement and correctness execution remain future work owned by the linked leaves; optional original/pinned recovery is not a gate. Merge, publication and deployment retain their normal authorization boundaries.
