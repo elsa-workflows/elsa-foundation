@@ -1,71 +1,50 @@
-# Workspace Launch Readiness
+<a id="workspace-launch-readiness"></a>
 
-Status: active.
+# Elsa 4 Contributor Experience
 
-Area: first-user handoff / repository launch preparation.
+Status: active. Evolved from Workspace Launch Readiness on 6 October 2026.
 
-Steward(s): Joey plus active architects/agents.
+Area: human contributor onboarding and review across `elsa-foundation` and `elsa-foundation-studio`.
+
+Steward: Sipke (product owner), with the Contributor Experience control room owning delivery coordination, integration, review and verification. Repository reviewer coverage must be confirmed on scoped issues before it is promised.
+
+Program: [Foundation #2416](https://github.com/elsa-workflows/elsa-foundation/issues/2416). Scheduling: [Project 56](https://github.com/orgs/elsa-workflows/projects/56). Requirements and decisions: [program PRD](../plans/contributor-experience-program.md).
 
 ## Purpose
 
-Prepare `elsa-foundation` to receive its first new architects and engineers without relying on chat history or broad operating-model grooming.
+A new contributor can independently run Elsa 4, find suitable work, make and validate a change, and receive a helpful review without private maintainer knowledge or an AI subscription.
 
-This bucket exists to turn the Elsa foundation workspace from "still being polished" into a launchable workspace: a new user should be able to initialize the repo, take the architecture tour, understand the source-of-truth layers, find the active program-goal buckets, and know which work is unfinished, unratified, unverified, or intentionally deferred.
+This is the successor to the first-user workspace handoff effort at this same path. Existing links and Git history are retained; the former bucket is not a second active queue. Architecture-tour and source-of-truth orientation remain useful parts of the human contributor path.
 
-## In Scope
+## In scope
 
-- First-user onboarding and handoff readiness.
-- Architecture Tour skill readiness and the short orientation path.
-- Clear next-step routing from reports into program-goal buckets.
-- Launch-readiness checks for broken links, stale roadmap notes, unresolved setup assumptions, and map-refresh behavior.
-- Handoff prompts/templates for large architecture workers when useful.
-- A concise "where to start" path for architects who should not reread the whole constitution first.
+- A short human entrance and verified backend/Studio source-development journeys.
+- Clear contribution/validation guidance, genuinely available starter issues, and willing reviewer coverage.
+- Discoverable support, ownership and active work.
+- Tested server–Studio preview pairs, repeatable setup checks, and unfamiliar-contributor trials.
+- Branch housekeeping only after inventory, ownership and publishing behavior are understood.
 
-## Out Of Scope
+## Out of scope
 
-- Broad constitution ratification.
-- Runtime execution design itself; use [Runtime Execution Seam](runtime-execution-seam.md).
-- Code/test implementation work; use [Code Reality And Test Maturity](code-reality-and-test-maturity.md).
-- CShells generator implementation; use [Feature Composition Readiness](feature-composition-readiness.md).
-- Turning personal workflow preferences into shared doctrine.
+Broad constitution/architecture grooming, performance benchmark gates, silently relaxed merge gates, invented legal/support commitments, or age-only branch deletion. Runtime/product defects remain owned by their engineering program/spec and are linked here as dependencies. Personal operating preferences remain local.
 
-## Active Objectives
+## Active objectives
 
-1. Make the Architecture Tour the primary first-user orientation route.
-2. Ensure `docs/program-goals/README.md` shows focused buckets for the remaining launch work.
-3. Ensure reports remain evidence/inventory and planned durable work moves into a bucket before execution.
-4. Identify whether a new architect can start with a constrained handoff instead of a broad prompt.
-5. Keep launch readiness focused on usability for first users, not on endlessly polishing the operating model.
+1. Establish the durable program and source-setup baseline.
+2. Deliver the first working source change in each repository.
+3. Deliver a supported first contribution, then keep the journey dependable.
 
-## Linked Surfaces
+The [program issue](https://github.com/elsa-workflows/elsa-foundation/issues/2416) and its native children contain executable scope, current claims and evidence. The [Project](https://github.com/orgs/elsa-workflows/projects/56) presents scheduling; this file does not duplicate the live status ledger.
 
-- [Architecture tour](../architecture-tour.md)
-- [Skills catalog](../skills/catalog.md)
-- [Agent maturity audit](../reports/agent-maturity-audit.md)
-- [Workspace launch readiness review](../reports/workspace-launch-readiness-review.md)
-- [First-user prompt options](../reference/first-user-prompts.md)
-- [Unfinished work](../reports/unfinished-work.md)
-- [Program goals index](README.md)
-- [AGENTS.md](../../AGENTS.md)
-- Historical dependency: [First-Request / Cold-Start Readiness](first-request-cold-start-readiness.md)
-  is superseded by owner policy. This goal retains only untimed launch/activation correctness;
-  persistence migration and host-composition evidence belong to
-  [EF Core Persistence](ef-core-persistence.md).
+## Linked surfaces and history
 
-## Current Roadmap Notes
+- [Architecture tour](../architecture-tour.md), [skill catalog](../skills/catalog.md), and [issue-tracker workflow](../agents/issue-tracker.md).
+- [Earlier workspace launch readiness review](../reports/workspace-launch-readiness-review.md) and [agent maturity audit](../reports/agent-maturity-audit.md) remain historical evidence, not current contributor proof.
+- [First-user prompt options](../reference/first-user-prompts.md) remain optional assistance; they are not prerequisites for human contributors.
+- [Unfinished-work inventory](../reports/unfinished-work.md) and [program-goals registry](README.md).
+- [Constitution Readiness](constitution-readiness.md) owns draft-section ratification; [Code Reality And Test Maturity](code-reality-and-test-maturity.md) owns broader code verification.
+- Historical [First-Request / Cold-Start Readiness](first-request-cold-start-readiness.md) is superseded. Its performance measurement remains retired; applicable persistence/activation history is in [EF Core Persistence](ef-core-persistence.md).
 
-- Treat this as the launch/handoff bucket for first users.
-- The next hard architecture unit should live in its own bucket, not here.
-- If an onboarding gap is discovered while preparing a worker handoff, fix the onboarding surface only when it prevents the handoff from being reliable.
-- When a handoff invokes maps and the manifest is dirty or freshness is uncertain, refresh the relevant map first and review generated findings before continuing.
-- The constitutions are ratified at the document level (v4.0.0, 2026-08-08); warn users about the section-level gates still marked draft/provisional (framework §2.24, Elsa §E2.9) when that affects their task, and route ratification-focused work through [Constitution Readiness](constitution-readiness.md).
-- Do not continue broad foundation-workspace polishing. If the workspace can route the user, redirect to the focused hard-work bucket.
+## Drift and completion
 
-## Drift / Review Notes
-
-- This bucket is successful when new users can start work without broad context archaeology.
-- If this becomes another meta-polishing loop, redirect to a hard program bucket such as Runtime Execution Seam or Code Reality And Test Maturity.
-
-## Removal or Completion Conditions
-
-Complete or pause this bucket when the first-user handoff path has been verified, the first architect can start from a named bucket, and remaining work is tracked in focused program-goal buckets rather than in the broad Elsa Foundation Operating Model bucket.
+Keep the program focused on the path from repository choice to reviewed contribution. Reuse existing canonical docs instead of growing a parallel architecture manual. Complete delivery only when the three milestone demonstrations pass, two unfamiliar contributors reach reviewed PRs, starter issues have reviewer coverage, and ongoing checks/triage have accepted owners. Then hand ongoing maintenance to those owners and close the delivery program.
