@@ -45,11 +45,11 @@ Out of scope: changing Immediate globally; relaxing durability; removing outbox 
 
 ## Evidence and requirements gate
 
-The goals, actors, first deliverables, preserved guarantees and unchanged defaults are settled. Original workload/transform availability is an owned reproduction prerequisite, not an assumption. Later cache shapes, provider operations and ReplaySafe candidates remain explicitly unselected until their spikes conclude. Blocked implementation leaves already have outcome boundaries and acceptance criteria, but become Agent Ready only after dependencies and reviewed Speckit artifacts satisfy the gate.
+The goals, actors, first deliverables, preserved guarantees and unchanged defaults are settled. On 5 October 2026 the owner clarified that the transform details are unimportant and any suitable activity is acceptable. Preserve HttpEndpoint trigger startup as the primary scenario and compare it with a bounded REST API start control to distinguish trigger-specific from shared-runtime work. Original workflow/export/transform availability is not a gate. Later cache shapes, provider operations and ReplaySafe candidates remain explicitly unselected until their spikes conclude. Blocked implementation leaves already have outcome boundaries and acceptance criteria, but become Agent Ready only after dependencies and reviewed Speckit artifacts satisfy the gate.
 
 Request-path tracing and low-logging timings are separate runs. Retain a pinned-image historical control if the original artifacts are recoverable, and use current-source before/after comparisons for changes. Record cold/warm identity, machine load, variation, median/p95 and exact settings. Never present a reference workflow as reproduction of the original.
 
-The primary four-activity original workflow, or explicitly non-equivalent reference, uses the report's 25 warm-ups and 60 timed requests per comparable selected configuration. T01 selects a single 16-activity straight-line computation fixture and concurrency four, each bounded to 60 timed requests per control. Report sample counts and run variability; a 60-sample p95 is exploratory, not a stable latency objective. Record exact fixtures/payloads; any unavailable control needs an explicit owner and revisit trigger. No parameter sweep or global benchmark service.
+The owner-approved four-activity representative workflow starts through HttpEndpoint and uses a simple deterministic activity with known input/output. Record whether compilation uses a CLR or intrinsic path. Compare bounded REST API startup using the same definition/computation where supported, documenting admission and response-transport differences. Each selected configuration uses the report's 25 warm-ups and 60 timed requests. T01 also selects a single 16-activity straight-line computation fixture and concurrency four, each bounded to 60 timed requests per control. Report sample counts and run variability; a 60-sample p95 is exploratory, not a stable latency objective. Record exact fixtures/payloads; any unavailable control needs an explicit owner and revisit trigger. No parameter sweep or global benchmark service.
 
 Response-path and total settled-instance database work are separate measurements. T02 owns request accounting; T04 reuses its taxonomy/identities for post-response attribution and independent polling. Define and bound the settled condition; report remaining durable work instead of silently ending the observation window.
 
@@ -103,7 +103,7 @@ Produce a reproducible, current-source causal accounting of the successful HTTP 
 
 | Work ID | Type / deliverable | Prerequisites | Initial readiness |
 |---|---|---|---|
-| T01 | Spike: [#2385](https://github.com/elsa-workflows/elsa-foundation/issues/2385) Capture the workload, effective composition and reproduction prerequisites | None | Ready |
+| T01 | Spike: [#2385](https://github.com/elsa-workflows/elsa-foundation/issues/2385) Establish the HTTP-trigger workload and bounded REST-start control | None | Ready |
 | T02 | Task: [#2386](https://github.com/elsa-workflows/elsa-foundation/issues/2386) Attribute current-head database commands to runtime transitions | [#2385](https://github.com/elsa-workflows/elsa-foundation/issues/2385) | Blocked |
 
 **F2: [#2387](https://github.com/elsa-workflows/elsa-foundation/issues/2387) Explain HTTP 202 and asynchronous follow-up work.** A slow run, a faulted run, a missing committed response and unrelated background polling are distinguishable.
@@ -179,7 +179,7 @@ Demonstrate normal-host correctness and reduced database access on the delivered
 
 | Topic | Current disposition | Owner / revisit trigger |
 |---|---|---|
-| Original workflow, transform and trace packet | Required for exact original attribution; sanitized reference allowed only with a clear non-equivalence label | T01 collects; lead may accept qualified T02 reference completion with an owned missing-artifact residual and revisit trigger; original attribution stays unproven |
+| Workload and entry-path identity | Owner accepts any suitable deterministic activity; HttpEndpoint is primary and REST API startup is a bounded control. Original export/transform is not a gate; historical exact counts remain unproven | T01 records the chosen activity, CLR/intrinsic path and comparison limits; T02/T18 use that reviewed representative fixture |
 | Historical 533/237 and 81 reads | Supplied measurements plus source-supported mechanisms; exact current caller contribution unproven | T02/T05/T06 trace before making attribution claims |
 | Unexpected valid-body 202 | Separate diagnosis; do not count as a successful transform run | T03 owns capture/reproduction and any specified correction |
 | Missing request trace after response | Trace absence does not establish causality | T04 correlates instance/work/checkpoint/outbox identities |

@@ -12,7 +12,7 @@ Explain and reduce avoidable database access for short durable HTTP workflows. P
 
 ## Active objectives
 
-1. [#2385](https://github.com/elsa-workflows/elsa-foundation/issues/2385) Capture the workload, effective composition and reproduction prerequisites — active control-room objective: workload identity, original-artifact prerequisites and bounded reproduction plan.
+1. [#2385](https://github.com/elsa-workflows/elsa-foundation/issues/2385) Establish the HTTP-trigger workload and bounded REST-start control — active control-room objective: representative workflow identity, effective settings and bounded reproduction plan. The owner accepts any suitable activity; original transform artifacts are not a gate.
 2. [#2392](https://github.com/elsa-workflows/elsa-foundation/issues/2392) Specify and reproduce bounded coalesced page merging — independent investigation: current-source pagination specification, deterministic regression and reference-host before-fix evidence.
 
 Both bounded workers use isolated claimed branches; the root control room owns integration and QA. Keep one active lead objective and one integration lane. The Project is the scheduling surface; native issue parents and blocked-by links carry execution relationships. The next leaves depend on these outcomes: #2386 waits for #2385, and #2393 waits for the reviewed #2392 specification and before-fix evidence. Later implementations remain blocked behind evidence and reviewed specifications.
