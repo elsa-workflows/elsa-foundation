@@ -16,7 +16,7 @@ Use [supplied findings](../reports/runtime-db-access/findings.md) and [historica
 
 | Actor | Required outcome |
 |---|---|
-| Workflow author | Publish the intended transform, with justified pinned side-effect profiles and cadence settings |
+| Workflow author | Publish the selected computation, with verified CLR activity profiles, intrinsic classification and cadence settings |
 | HTTP caller | Send valid input and receive the expected transformed body/status in the same exchange |
 | Operator | Inspect committed state, incidents and effective per-run cadence; distinguish request work from follow-up work |
 | Runtime/provider maintainer | Explain each command group and prove a reduction without weakening recovery or ownership |
@@ -39,9 +39,9 @@ The normal-host journey is publish → trigger → durable scheduling/activation
 
 Mandatory terminal/bookmark/incident/external-effect boundaries remain. Coalesced replay is bounded and does not promise exactly-once external side effects. Keep committed state and inspection truthful. PostgreSQL hosts the representative workload; any changed shared adapter contract needs the supported-provider correctness checks.
 
-The owner requested this program after reviewing the findings. This authorizes the narrow workload investigation and program planning. ADR 0073 D7 still retires broad benchmark infrastructure, global timing budgets and performance CI gates. No historical benchmark suite, retired performance workflow, general telemetry platform or architecture rewrite is reinstated. Deterministic algorithm/store-call regressions belong in affected correctness tests; elapsed time is evidence, not a CI gate.
+The owner requested this program after reviewing the findings and appointed this control room to deliver it end to end. This authorizes the scoped investigation and delivery units, subject to their evidence and review gates. ADR 0073 D7 still retires broad benchmark infrastructure, global timing budgets and performance CI gates. No historical benchmark suite, retired performance workflow, general telemetry platform or architecture rewrite is reinstated. Deterministic algorithm/store-call regressions belong in affected correctness tests; elapsed time is evidence, not a CI gate.
 
-Out of scope: changing Immediate globally; relaxing durability; removing outbox crash backstops; broad cross-execution caches; index tuning without a demonstrated query-plan problem; analytics removal without causal evidence; Studio redesign; package publication or deployment in this planning session.
+Out of scope: changing Immediate globally; relaxing durability; removing outbox crash backstops; broad cross-execution caches; index tuning without a demonstrated query-plan problem; analytics removal without causal evidence; Studio redesign; package publication or deployment.
 
 ## Evidence and requirements gate
 
@@ -52,6 +52,8 @@ Request-path tracing and low-logging timings are separate runs. Retain a pinned-
 The owner-approved four-activity representative workflow starts through HttpEndpoint and uses a simple deterministic activity with known input/output. Record whether compilation uses a CLR or intrinsic path. Compare bounded REST API startup using the same definition/computation where supported, documenting admission and response-transport differences. Each selected configuration uses the report's 25 warm-ups and 60 timed requests. T01 also selects a single 16-activity straight-line computation fixture and concurrency four, each bounded to 60 timed requests per control. Report sample counts and run variability; a 60-sample p95 is exploratory, not a stable latency objective. Record exact fixtures/payloads; any unavailable control needs an explicit owner and revisit trigger. No parameter sweep or global benchmark service.
 
 The selected fixture is `RuntimeDbPaging2392Reference`: root Sequence / synchronous HttpEndpoint / SetVariable / WriteHttpResponse. POST `/workflows/http/runtime-db-paging-2392/transform` with `{"firstName":"Alice","lastName":"Smith"}`; capture ParsedContent as workflow `content`, compute `referenceText` from the two names, and expect HTTP 200 text `Alice Smith` plus a durable terminal instance. SetVariable compiles to `elsa.intrinsic.set@1`, not the historical CLR transform. These are acceptance expectations; no successful run is claimed until verified.
+
+For that intrinsic, retain the exported `IntrinsicKind=Set` and source classification by `WorkflowIntrinsicFusion.IsFusable(Set)`. Compiler intrinsics have no `ActivityContract`; pinned `ActivityContract.SideEffectProfile` evidence applies to CLR activity nodes. T02/T05 own actual artifact identity and per-run cadence readback before accepting a trace.
 
 The REST-start control must execute the same SetVariable computation to `referenceText = Alice Smith` and durable terminal state. A REST-started HTTP definition waiting at a trigger bookmark is not a valid control. Use a companion definition with documented admission/transport differences if necessary; if no valid control can be constructed, report an explicit deferral with owner/revisit trigger. Compare causal command categories and qualify transport latency; do not subtract unlike response paths as exact equivalents.
 

@@ -22,7 +22,7 @@ The selected computation is a compiler intrinsic, not the historical CLR documen
 
 The historical findings say the CLR transform had no `[ActivitySideEffectProfile]`; the compiled pinned contract was not supplied. Current compilation defaults an unannotated CLR activity to External, but that source rule does not establish the absent historical artifact's serialized profile. This investigation follows ADR 0032's pinned replay classification and per-run cadence readback, ADR 0020/0031's checkpoint, outbox and single-writer boundaries, ADR 0045's explicit value flow, and ADR 0073 D7's retirement of broad performance infrastructure and timing gates.
 
-The #2392 lane owns the host build, fixture artifact and single current-head traced pre-fix capture. No #2392 run identity or measured result was observed during this T01 spike. This spike delivers the expected fixture identity and readback procedure; its completion does not depend on the sibling host run. T02/T05 must record the actual workflow execution ID, pinned profile and runtime readback before accepting that trace.
+The #2392 lane owns the host build, fixture artifact and single current-head traced pre-fix capture. No #2392 run identity or measured result was observed during this T01 spike. This spike delivers the expected fixture identity and readback procedure; its completion does not depend on the sibling host run. T02/T05 must record the actual workflow execution ID, exported intrinsic kind, source-level intrinsic fusability, pinned CLR activity profiles and runtime readback before accepting that trace.
 
 ## What the historical packet establishes
 
