@@ -19,6 +19,7 @@
 | Evidence | Status |
 |---|---|
 | Workbench build command and result at candidate SHA | Pending: build held under shared-load instruction |
+| Supplied `HostCandidateSha` matched to the independent host build record, with script checkout recorded separately | Pending: no host build or capture invocation |
 | Unique disposable PostgreSQL 16 container/database identity | Pending: container not started |
 | Host effective persistence provider and connection reference | Pending: host not started |
 | Trigger `traceparent` and timestamp | Pending: request not sent |

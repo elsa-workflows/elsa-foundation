@@ -12,6 +12,7 @@
 #>
 [CmdletBinding()]
 param(
+    [Parameter(Mandatory)][ValidatePattern('^[0-9a-fA-F]{40}$')][string] $HostCandidateSha,
     [string] $BaseUrl = "http://localhost:5095",
     [string] $Username = "admin",
     [string] $Password = "Password123!",
@@ -37,7 +38,8 @@ $path = "runtime-db-paging-2392/transform"
 $payload = '{"firstName":"Alice","lastName":"Smith"}'
 
 Write-Host "== #2392 Coalesced HTTP reference (non-equivalent) == -> $BaseUrl" -ForegroundColor Cyan
-Write-Host ("[candidate]  {0}" -f (git -C (Join-Path $PSScriptRoot '../..') rev-parse HEAD).Trim())
+Write-Host ("[scriptHead] {0}" -f (git -C (Join-Path $PSScriptRoot '../..') rev-parse HEAD).Trim())
+Write-Host ("[hostCandidateInput] {0} (operator supplied; verify against the independent host build record)" -f $HostCandidateSha.ToLowerInvariant())
 Write-Host ("[traceparent] {0}" -f $TraceParent)
 
 $ctx = Connect-Elsa -BaseUrl $BaseUrl -Username $Username -Password $Password
@@ -137,7 +139,7 @@ if ([int]$trigger.StatusCode -ne 200 -or "$($trigger.Content)" -ne "Alice Smith"
 }
 
 $list = Invoke-Step "find instance by source definition" {
-    Invoke-RestMethod "$BaseUrl/runtime/workflows/instances?sourceDefinitionId=$($definition.definition.id)" -WebSession $ctx.Session
+    Invoke-RestMethod "$BaseUrl/runtime/workflows/instances?definitionId=$($definition.definition.id)" -WebSession $ctx.Session
 }
 $instances = if ($list.items) { @($list.items) } elseif ($list -is [array]) { @($list) } else { @() }
 $executionIds = @($instances | ForEach-Object { $_.workflowExecutionId } | Where-Object { $_ })
