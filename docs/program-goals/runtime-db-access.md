@@ -1,6 +1,6 @@
 # Runtime Database Access
 
-- **Status:** Planned; breakdown published, runtime execution not started.
+- **Status:** Active; the owner appointed this chat as the end-to-end control room on 5 October 2026. Workload and pagination investigations are running; runtime implementation has not started.
 - **Area:** Workflow runtime / EF persistence access / HTTP workload correctness.
 - **Stewards:** Sipke and the runtime database access program lead; root lead owns integration and QA.
 - **Program:** [#2382](https://github.com/elsa-workflows/elsa-foundation/issues/2382).
@@ -12,10 +12,10 @@ Explain and reduce avoidable database access for short durable HTTP workflows. P
 
 ## Active objectives
 
-1. [#2385](https://github.com/elsa-workflows/elsa-foundation/issues/2385) Capture the workload, effective composition and reproduction prerequisites — next control-room objective: workload identity, original-artifact prerequisites and bounded reproduction plan.
-2. [#2392](https://github.com/elsa-workflows/elsa-foundation/issues/2392) Specify and reproduce bounded coalesced page merging — independent Ready buffer: current-source pagination specification, deterministic regression and reference-host before-fix evidence.
+1. [#2385](https://github.com/elsa-workflows/elsa-foundation/issues/2385) Capture the workload, effective composition and reproduction prerequisites — active control-room objective: workload identity, original-artifact prerequisites and bounded reproduction plan.
+2. [#2392](https://github.com/elsa-workflows/elsa-foundation/issues/2392) Specify and reproduce bounded coalesced page merging — independent investigation: current-source pagination specification, deterministic regression and reference-host before-fix evidence.
 
-No runtime worker is running. Keep one active lead objective, isolated writer worktrees and one integration lane. The Project is the scheduling surface; native issue parents and blocked-by links carry execution relationships. Later implementations remain blocked behind evidence and reviewed specifications.
+Both bounded workers use isolated claimed branches; the root control room owns integration and QA. Keep one active lead objective and one integration lane. The Project is the scheduling surface; native issue parents and blocked-by links carry execution relationships. The next leaves depend on these outcomes: #2386 waits for #2385, and #2393 waits for the reviewed #2392 specification and before-fix evidence. Later implementations remain blocked behind evidence and reviewed specifications.
 
 ## Scope and roadmap
 
