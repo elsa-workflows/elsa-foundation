@@ -28,7 +28,7 @@ Approved implementation plan for T19/#2450; root and independent review accepted
 **Independent test**: Existing behavior suite, repeated/custom registration controls, plus rebuilt valid HttpEndpoint and REST workflows each with expected output, Completed and no incidents.
 
 - [x] T007 [US2] Add only missing idempotency/custom-factory controls using shared setup in tests/essentials/Workflows/Runtime/Tests/RuntimeCheckpointCoalescingTests.cs; preserve every existing assertion.
-- [ ] T008 [US2] Run affected runtime/provider correctness suites, relevant rebuilt backend HTTP e2e and the existing primary/REST controls; retain exact source/DLL/fixture/settings/outcomes/cleanup in specs/194-coalesced-command-scope/evidence/integrated-correctness.md, carrying final concurrent acceptance ownership to T17/T18 without claiming prior error attribution.
+- [x] T008 [US2] Run affected runtime/provider correctness suites, relevant rebuilt backend HTTP e2e and the existing primary/REST controls; retain exact source/DLL/fixture/settings/outcomes/cleanup in specs/194-coalesced-command-scope/evidence/integrated-correctness.md, carrying final concurrent acceptance ownership to T17/T18 without claiming prior error attribution.
 
 ## Phase 5: Integration and Delivery
 
