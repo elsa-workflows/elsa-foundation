@@ -15,7 +15,7 @@ The owner-approved primary scenario uses HttpEndpoint startup and a deterministi
 ## Active objectives
 
 1. [#2386](https://github.com/elsa-workflows/elsa-foundation/issues/2386) Query accounting — active lead objective: causal request/caller ledger, current-run evidence and a valid REST-start control.
-2. [#2392](https://github.com/elsa-workflows/elsa-foundation/issues/2392) Bounded coalesced page-merging specification — active capture lane: reviewed spec193 and first correct normal-host request; causal trace acceptance remains pending.
+2. [#2392](https://github.com/elsa-workflows/elsa-foundation/issues/2392) Bounded coalesced page-merging specification — integration lane: reviewed spec193 and corrected pre-fix normal-host trace; PR integration gates pending. No runtime reduction is implemented yet.
 3. [#2388](https://github.com/elsa-workflows/elsa-foundation/issues/2388) HTTP 202 diagnosis — Ready buffer, no implementation claimed.
 
 [#2385](https://github.com/elsa-workflows/elsa-foundation/issues/2385) is complete through merged [PR #2414](https://github.com/elsa-workflows/elsa-foundation/pull/2414). Post-merge CI and Maps passed at `43b3ef51882105916380ac8e539b49ad7b8a37b6`. No runtime reduction is implemented yet; #2393 remains blocked behind accepted #2392 evidence. Keep one active lead objective, isolated writer worktrees and one integration lane. Project/issues carry live scheduling and native dependencies; this document is a committed checkpoint. Later implementations remain blocked behind evidence and reviewed specifications.

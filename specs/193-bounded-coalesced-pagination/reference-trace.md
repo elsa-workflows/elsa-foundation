@@ -1,6 +1,6 @@
 # Current-Head Coalesced Reference Trace (#2392)
 
-**Status**: First normal-host capture completed on 6 October 2026. HTTP correctness and effective configuration passed; causal command accounting is not yet accepted. The retained logs reveal readback trace-header reuse and missing intermediate engine span parents. The scoped capture correction is reviewed, parsed and locally committed; its host run and retained span metadata are still required. Timing remains held under excessive shared load.
+**Status**: Corrected pre-fix normal-host capture completed on 6 October 2026. Root and independent evidence QA accepted the captured POST ancestry/counts; T05 PR integration gates remain pending. The first capture is retained with its limitations below. Timing remains held under excessive shared load.
 
 ## Candidate and fixture
 
@@ -14,7 +14,24 @@
 - Computation classification: compiler intrinsic, not the historical CLR transform. The published JSON export should record `intrinsicKind: "Set"`; `activityContract` may be omitted or null because `JsonPayloadSerializer.BuildOptions` uses `JsonIgnoreCondition.WhenWritingNull`. The compiler's in-memory `ActivityContract` is a separate null value. `WorkflowIntrinsicFusion.IsFusable(Set)` returns true in the primary-source graph at the candidate. A `SideEffectProfile` is not applicable to this intrinsic.
 - Evidence read permissions: literal `workflow-publishing.read` for executable export and `workflow-runtime.read` for instance detail.
 
-## Captured evidence
+## Corrected capture
+
+The [corrected capture record](evidence/http-reference-2026-10-06-corrected.json), [sanitized events](evidence/http-reference-2026-10-06-corrected-events.jsonl) and [engine spans](evidence/http-reference-2026-10-06-engine-spans.json) retain the actual evidence. The host binary remains built at `5d28bd0cd3d76004988a01b0f0abd7af3af313d6`; the reviewed manual fixture ran at script HEAD `3c6bd3da83c49ea84c9823c8d0181b46c468f881`. The tracked delta was restricted to docs/specs/manual capture code, and the independent DLL hash matched before launch. The workload, payload and runtime source are unchanged.
+
+- Owned PostgreSQL container: `elsa-runtime-db-2392-e1f2e52f06f7`, PostgreSQL 16.15, same image digest/resource configuration as the first capture.
+- HTTP 200 `Alice Smith`; execution `147eTn6gBLT` Completed; artifact `artifact-bc9dfcd40653`, version `147eTWOLgLU`; Coalesced/50/boundary-level readback.
+- POST TraceId `e5acc2e4ccc5b19b7771ec7d3ec1cd97`, request SpanId `4d76eb7a0bb77d49`, start `2026-10-06T01:21:56.478Z`, response finish `01:22:04.462Z`. No inspection GET shares this trace.
+- The normal `GET /diagnostics/opentelemetry/traces/{traceId}` API (permission `Diagnostics:OpenTelemetry.Read`) exported 59 engine spans. Joining their parent links with EF scopes makes all 277 command events descendants of the POST request; no intermediate-parent gap remains in this captured trace. Export/readback calls use separate traces and are observer work.
+- 197 other commands occur before response completion. Persisted OpenTelemetry diagnostics account for 80 commands: 40 before and 40 after the response. The API's engine-span ancestry establishes causality; timestamps only classify the response boundary.
+- Nearest engine phase totals: request/no engine span 21, drain 88, dispatch 3, activity execution 106, checkpoint commit 59. These are parent-span categories, not exact repository-method identities. In particular, the drain category includes diagnostic writes.
+- There are 66 SELECT command events touching durable-value state. Three marker INSERT command events agree with an independent owned-PostgreSQL snapshot of three immutable checkpoint rows for this execution. Stored base64 UTF-16 identifier fields were decoded and matched to the captured execution/commit IDs. The observer snapshot is outside the EF workload count. The 22 checkpoint-commit spans contain 19 Deferred and three Immediate decisions; logical decisions, SQL commands and immutable markers are distinct units.
+- The owned host process, container/volumes and temporary content root were removed. The task-owned diagnostics copy, logs and API exports remain in the protected capture directory. Existing databases remained running.
+
+This corrects capture attribution; it is not a runtime database-access reduction. The 277 POST descendants do not establish a complete settled-work total: commands lacking this TraceId, separate background consumers and diagnostic sinks still require T04's causal ledger. SQL statements and provider network round trips have not been counted. The cold, heavily loaded diagnostic response is not a comparable timing baseline.
+
+Independent QA recomputed the curated event/span closure and count reconciliation. Root verified actual capture/configuration readbacks and the owned-PostgreSQL marker snapshot. The independent corrected-capture review did not inspect the private raw log or database; its acceptance must not be presented as doing so.
+
+## First capture (preserved)
 
 | Evidence | Status |
 |---|---|
