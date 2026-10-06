@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
 
 for (const theme of ["light", "dark"] as const) {
   test(`Expression Type options remain reachable in a constrained inspector (${theme})`, async ({ page }) => {
@@ -32,10 +32,12 @@ for (const theme of ["light", "dark"] as const) {
     await expect(variable).toContainText("requires an inline editor Contribution");
     await listbox.getByRole("option", { name: "Liquid", exact: true }).click();
     await expect(trigger).toHaveText("Liquid");
+    await expectTransitionFocus(page);
 
     await trigger.click();
     await listbox.getByRole("option", { name: "JavaScript", exact: true }).click();
     await expect(trigger).toHaveText("JavaScript");
+    await expectTransitionFocus(page);
 
     await trigger.press("ArrowDown");
     await expect(listbox.getByRole("option", { name: "JavaScript", exact: true })).toBeFocused();
@@ -66,3 +68,14 @@ test("scrolling the anchor out of view closes without fighting inspector scroll 
   expect(await inspector.evaluate(element => element.scrollTop)).toBeGreaterThanOrEqual(maximumScroll - 1);
   await expect(trigger).not.toBeFocused();
 });
+
+async function expectTransitionFocus(page: Page) {
+  const editor = page.getByRole("textbox", { name: "Path expression", exact: true });
+  await expect(editor).toBeFocused();
+  // The editor focuses immediately, then the row completes its requested focus on a frame.
+  // Finish that transition before sending the next independent picker keyboard interaction.
+  // Keyboard input during the transition itself is outside this scenario.
+  await page.evaluate(() => new Promise<void>(resolve =>
+    requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));
+  await expect(editor).toBeFocused();
+}
