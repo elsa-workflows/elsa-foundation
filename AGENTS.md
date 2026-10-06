@@ -186,7 +186,7 @@ Personal workflow choices are local implementation details, not shared repo fact
 
 1. Read the relevant spec under `specs/`, if one exists.
 2. Read [docs/skills/catalog.md](docs/skills/catalog.md#speckit-flow-guide) for the Speckit flow.
-3. Use the official sequence: `speckit-specify` -> `speckit-plan` -> `speckit-tasks` -> `speckit-implement`.
+3. Follow specification -> plan -> tasks -> implementation, reviewing each artifact before the next step. When using an AI integration, use `speckit-specify` -> `speckit-plan` -> `speckit-tasks` -> `speckit-implement`. Otherwise, create and review the same artifacts manually using [the contributor guide](CONTRIBUTING.md#plan-feature-work). The specification, constitution, testing, and review gates apply to both paths.
 4. Keep work on a feature/work-unit branch unless the user explicitly asks otherwise.
 5. Use the constitution as a gate during planning; use glossary/docs for learning context.
 

@@ -147,7 +147,7 @@ The validation compares `.claude/skills/elsa-*/SKILL.md` against this catalog an
 
 **Use when:** a user asks to create, plan, task, or implement a feature/work unit.
 
-**Workflow:** use the official flow: create/switch feature branch through the Speckit git extension, run `speckit-specify`, review, run `speckit-plan`, review, run `speckit-tasks`, then `speckit-implement`.
+**Workflow:** create/switch to a feature branch, then follow specification -> plan -> tasks -> implementation, reviewing each artifact before the next step. With an AI integration, use the Speckit git extension and `speckit-specify`, `speckit-plan`, `speckit-tasks`, and `speckit-implement` in that order. Without one, create and review the same artifacts manually using [the contributor guide](../../CONTRIBUTING.md#plan-feature-work). The specification, constitution, testing, and review gates apply to both paths.
 
 **Output:** specs under `specs/NNN-feature-name/`, branch-aligned work, and constitution-gated implementation.
 
