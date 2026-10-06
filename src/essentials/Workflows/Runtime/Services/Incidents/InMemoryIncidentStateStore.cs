@@ -62,6 +62,14 @@ public sealed class InMemoryIncidentStateStore : IIncidentStateStore
             return new ValueTask<int>(_states.Keys.Count(key => key.WorkflowExecutionId == workflowExecutionId));
     }
 
+    public ValueTask<IncidentHealthCounts> CountHealthAsync(string workflowExecutionId, CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(workflowExecutionId);
+        cancellationToken.ThrowIfCancellationRequested();
+        lock (_syncRoot)
+            return ValueTask.FromResult(IncidentHealthCounts.From(ListByWorkflowExecution(workflowExecutionId)));
+    }
+
     public ValueTask<IReadOnlyCollection<IncidentState>> ListAsync(string workflowExecutionId, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(workflowExecutionId);

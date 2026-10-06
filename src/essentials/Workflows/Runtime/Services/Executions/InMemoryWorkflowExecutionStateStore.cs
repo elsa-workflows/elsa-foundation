@@ -10,6 +10,11 @@ namespace Elsa.Workflows.Runtime.Services.Executions;
 
 public sealed class InMemoryWorkflowExecutionStateStore() : InMemoryKeyedStateStore<string, WorkflowExecutionState>(StringComparer.Ordinal), IWorkflowExecutionStateStore
 {
+    private readonly string? _cursorScope;
+
+    /// <summary>Creates a history store whose cursors also bind an externally applied result-set predicate.</summary>
+    public InMemoryWorkflowExecutionStateStore(string? cursorScope) : this() => _cursorScope = cursorScope;
+
     public ValueTask<WorkflowExecutionState> SaveAsync(WorkflowExecutionState state, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(state);
@@ -76,7 +81,7 @@ public sealed class InMemoryWorkflowExecutionStateStore() : InMemoryKeyedStateSt
         return new(Remove(workflowExecutionId));
     }
 
-    private static WorkflowExecutionStatePage QueryPage(
+    private WorkflowExecutionStatePage QueryPage(
         IEnumerable<WorkflowExecutionState> states,
         WorkflowExecutionStatePageQuery query)
     {
@@ -209,7 +214,7 @@ public sealed class InMemoryWorkflowExecutionStateStore() : InMemoryKeyedStateSt
             query.Selector.MatchAllAuthorized
         })));
 
-    private static string EncodeCursor(
+    private string EncodeCursor(
         WorkflowExecutionState state,
         WorkflowExecutionStatePageQuery query)
     {
@@ -218,14 +223,14 @@ public sealed class InMemoryWorkflowExecutionStateStore() : InMemoryKeyedStateSt
             "v1",
             WorkflowExecutionStateHistory.SortTimestamp(state).UtcTicks.ToString(CultureInfo.InvariantCulture),
             Convert.ToBase64String(Encoding.UTF8.GetBytes(state.WorkflowExecutionId)),
-            WorkflowExecutionStateHistory.Scope(query));
+            PageCursorScope(query));
         return Convert.ToBase64String(Encoding.UTF8.GetBytes(value))
             .TrimEnd('=')
             .Replace('+', '-')
             .Replace('/', '_');
     }
 
-    private static InMemoryCursor DecodeCursor(
+    private InMemoryCursor DecodeCursor(
         string cursor,
         WorkflowExecutionStatePageQuery query)
     {
@@ -237,7 +242,7 @@ public sealed class InMemoryWorkflowExecutionStateStore() : InMemoryKeyedStateSt
             if (parts.Length != 4 ||
                 parts[0] != "v1" ||
                 !long.TryParse(parts[1], NumberStyles.None, CultureInfo.InvariantCulture, out var ticks) ||
-                !StringComparer.Ordinal.Equals(parts[3], WorkflowExecutionStateHistory.Scope(query)))
+                !StringComparer.Ordinal.Equals(parts[3], PageCursorScope(query)))
             {
                 throw new FormatException();
             }
@@ -253,6 +258,14 @@ public sealed class InMemoryWorkflowExecutionStateStore() : InMemoryKeyedStateSt
                 nameof(cursor),
                 exception);
         }
+    }
+
+    private string PageCursorScope(WorkflowExecutionStatePageQuery query)
+    {
+        var scope = WorkflowExecutionStateHistory.Scope(query);
+        return _cursorScope is null
+            ? scope
+            : Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes($"{scope}:{_cursorScope}")));
     }
 
     private sealed record InMemoryCursor(DateTimeOffset SortTimestamp, string WorkflowExecutionId);

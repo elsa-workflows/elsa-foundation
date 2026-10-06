@@ -64,8 +64,8 @@ public class Elsa3ImportActivitiesFeature : IWebShellFeature
             options.ExpiredCollectionSweepBatchSize = ImportOptions.ExpiredCollectionSweepBatchSize;
         });
         services.TryAddScoped<IReusableActivityImportOperationService, ReusableActivityImportOperationService>();
-        // An upload nobody applies or reads again is deleted by time. Persistence core is shared host
-        // infrastructure: it gives the sweep one operation scope per persistence scope.
+        // The sweep deletes expired uploads in every tenant partition the host supplies. Persistence core is shared
+        // host infrastructure: it gives the sweep one operation scope per persistence scope.
         services.AddPersistenceCore();
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IRecurringTask, ExpiredImportCollectionSweepTask>());
 

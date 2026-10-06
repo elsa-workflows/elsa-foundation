@@ -153,8 +153,7 @@ public sealed class RuntimeExecutionPipelineDispatchTests : RuntimePipelineTestS
         IServiceProvider provider,
         RuntimePipelinePlan workflowPlan,
         RuntimePipelinePlan activityPlan) =>
-        new(
-            new RuntimeSchedulerPipelineSelector(),
+        NewDispatcher(
             new RuntimeWorkflowExecutionPipeline(workflowPlan, provider),
             new RuntimeActivityExecutionPipeline(activityPlan, provider));
 

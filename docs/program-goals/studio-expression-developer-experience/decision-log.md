@@ -49,3 +49,13 @@
 **Consequences:** Milestone 3 may adopt or reject the service based on evidence; either outcome must still meet the product acceptance criteria.
 
 **Revisit:** Before milestone 3 implementation begins.
+
+## 2026-10-06 — Remove native VoiceOver verification from delivery acceptance
+
+**Decision:** The product owner explicitly removes actual current-head Chrome+VoiceOver and Safari+VoiceOver observation from Program #2310 acceptance. Record both as **SKIPPED BY OWNER DECISION — NEVER PASSED**. This is a scope amendment, not a test pass, automated substitute or retrospective approval.
+
+**Rationale:** The owner chooses to deliver the remaining scope without waiting for hands-on native announcement observation after repeated observation limitations. The existing automated and native-preparation checkpoints retain their original evidence boundaries.
+
+**Consequences:** Current-head screen-reader behavior remains unverified and must be a final delivery limitation. Historical July baseline evidence is not current program acceptance. Keyboard, automated scoped accessibility, source/cursor/undo, runtime parity, technical/review/integration and required post-merge main gates remain mandatory. Final explicit owner acceptance precedes Ready and dependency-ordered merging; no deployment or package publication is authorized.
+
+**Revisit:** A later owner-approved native accessibility verification task. Do not relabel the skipped gate as passed when closing this program.

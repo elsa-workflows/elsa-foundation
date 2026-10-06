@@ -191,7 +191,27 @@ public sealed record WorkflowExecutableNodeView(
     IReadOnlyCollection<WorkflowExecutableInputBindingView> InputBindings,
     IReadOnlyCollection<WorkflowExecutableChildSlotView> ChildSlots,
     IReadOnlyCollection<WorkflowExecutableConnectionView> Connections,
-    IReadOnlyCollection<WorkflowExecutableOutputCaptureView>? OutputCaptures = null);
+    IReadOnlyCollection<WorkflowExecutableOutputCaptureView>? OutputCaptures = null,
+    WorkflowExecutableBpmnStructureView? BpmnStructure = null);
+
+/// <summary>Allowlisted semantic projection for supported persisted BPMN executable structures.</summary>
+public sealed record WorkflowExecutableBpmnStructureView(
+    IReadOnlyCollection<WorkflowExecutableBpmnElementView> Elements,
+    IReadOnlyCollection<WorkflowExecutableBpmnSequenceFlowView> SequenceFlows);
+
+public sealed record WorkflowExecutableBpmnElementView(
+    string ElementId,
+    string ElementType,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? ChildNodeId = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Name = null);
+
+public sealed record WorkflowExecutableBpmnSequenceFlowView(
+    string FlowId,
+    string SourceRef,
+    string TargetRef,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Name = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? ConditionOutcome = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] bool? IsDefault = null);
 
 public sealed record WorkflowExecutableConnectionEndpointView(string NodeId, string? Port);
 
