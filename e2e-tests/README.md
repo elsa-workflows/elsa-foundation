@@ -118,8 +118,9 @@ pwsh ./e2e-tests/runtime-alterations/Test-AlterationReplayAndRestart.ps1 -UseExt
 take no server argument and can run while yours is up:
 
 ```powershell
-# Start the server on 5295 instead of the launch profile's 5095 (separate terminal):
-#   dotnet run --project src/apps/Elsa.Workbench/Elsa.Workbench.csproj --no-launch-profile -- --urls http://localhost:5295 --environment Development
+# After building, start the server on 5295 instead of the launch profile's 5095 (separate terminal):
+#   dotnet run --no-build --project src/apps/Elsa.Workbench/Elsa.Workbench.csproj --no-launch-profile -- --urls http://localhost:5295 --environment Development
+# In another terminal, wait until http://localhost:5295/health/ready reports ready, then use the same $base for each script.
 $base = 'http://localhost:5295'
 $selfHosted = 'Test-RestartRecovery.ps1', 'Test-AlterationReplayAndRestart.ps1', 'Test-FileBasedDeployment.ps1',
               'Test-SharedPersistence.ps1', 'Test-SharedDiagnosticsPersistence.ps1', 'Test-ServerLifecycleGuard.ps1'
@@ -137,10 +138,11 @@ Docker. On Windows replace `pwsh -NoProfile -File` with `powershell -NoProfile -
 
 - **Windows runner:** use `powershell -NoProfile -ExecutionPolicy Bypass -File <script>`. This machine has **no
   `pwsh`**; the `.EXAMPLE` lines show `pwsh` only as cross-platform shorthand.
-- **Rebuild gotcha:** after rebuilding the server from newer source, **delete the SQLite DBs first**
-  (`elsa.db*`, `elsa-diagnostics.db*` under `src/apps/Elsa.Workbench/`; stop your own server
-  yourself first), then start the server, which migrates the schema from empty. Old rows carry an older
-  schema version a newer build refuses to read, which surfaces as spurious `500`s on publish.
+- **Rebuild gotcha:** after rebuilding the server from newer source, old SQLite data may be incompatible
+  with the new schema and cause errors such as `500` on publish. Stop your own server first. Reset only
+  disposable data, following the exact file inventory and allowlist in the [backend quickstart](../docs/contributing/backend-source-quickstart.md#reset-disposable-sqlite-data).
+  Preserve valuable workflows in their existing checkout and use a separate disposable checkout; do not
+  delete database files with a wildcard or treat this reset as an in-place data migration.
 - **Opt-in features:** `scheduling/` requires `ActivitiesScheduling` + `WorkflowsRuntimeScheduling` +
   `WorkflowsRuntimeRecurringTriggers` in `shells.json` (enabled by default since #1053); `DispatchWorkflow`/`bpmn`
   require the DispatchWorkflow features (see "Composition change" below). A suite whose features aren't composed
