@@ -176,3 +176,8 @@ docker run --rm -p 8080:8080 \
 See [`docs/docker.md`](docs/docker.md) for the full runtime configuration surface
 (environment variables, `shells.json` mounting, the optional `packages/` feed volume, and
 a compose snippet).
+
+## License
+
+Elsa-owned material in this repository is licensed under the MIT License; see [LICENSE](LICENSE).
+Third-party code, assets, and dependencies retain their respective license terms and notices.
