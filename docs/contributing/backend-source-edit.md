@@ -54,4 +54,4 @@ dotnet build src/apps/Elsa.Workbench/Elsa.Workbench.csproj
 
 ## Verified baseline
 
-The exercise and cleanup build were verified on 6 October 2026 on macOS 26.6 arm64 with .NET SDK 10.0.300 at Foundation revision `70f8db49f4f33a5a2a64eda23d5b0437548e2227` ([evidence #2437](https://github.com/elsa-workflows/elsa-foundation/issues/2437)). It does not establish a fresh-install, cross-platform, or human-newcomer result.
+The exercise and cleanup build were verified on 6 October 2026 on macOS 26.6 arm64 with .NET SDK 10.0.300 at Foundation revision `70f8db49f4f33a5a2a64eda23d5b0437548e2227` ([evidence #2437](https://github.com/elsa-workflows/elsa-foundation/issues/2437#issuecomment-6008113532)). It does not establish a fresh-install, cross-platform, or human-newcomer result.
