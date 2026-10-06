@@ -1,6 +1,6 @@
 # Portable imported settings: ownership and transfer
 
-Status: discovery for [#2327](https://github.com/elsa-workflows/elsa-foundation/issues/2327), under [#1962](https://github.com/elsa-workflows/elsa-foundation/issues/1962) and [program #1959](https://github.com/elsa-workflows/elsa-foundation/issues/1959). Recommendation pending Sipke's product decision; this report does not approve an implementation contract.
+Status: discovery for [#2327](https://github.com/elsa-workflows/elsa-foundation/issues/2327), under [#1962](https://github.com/elsa-workflows/elsa-foundation/issues/1962) and [program #1959](https://github.com/elsa-workflows/elsa-foundation/issues/1959). Product decision recorded 2026-10-06: Sipke approved the recommended required-private-input model. [Specification #2457](https://github.com/elsa-workflows/elsa-foundation/issues/2457) and [Draft Spec194](../../../specs/194-portable-private-inputs/spec.md) refine the technical contract; this discovery report does not establish implementation.
 
 ## Finding
 
@@ -110,9 +110,9 @@ The builder could then explain one missing configuration input and let an operat
 
 ## Product decision and smallest follow-up
 
-Sipke must decide whether portable compositions should explicitly depend on privately supplied configuration inputs, with refusal when they are missing. The alternative is to require owner-reviewed nonsecret mappings before a composition may be called portable, leaving other compositions explicitly incomplete until such mappings exist. Neither alternative may silently omit unknown values or call local-only preservation the full outcome.
+On 2026-10-06 Sipke explicitly approved portable compositions depending on separately supplied required private configuration, with generation refusing missing inputs. [Recorded owner decisions](https://github.com/elsa-workflows/elsa-foundation/issues/1959#issuecomment-6023232082) also require Authoring-only API decoupling first. The mapping-every-field alternative was not selected. Unknown values must not be silently omitted or replaced with unrelated destination values; local-only preservation remains insufficient.
 
-After that decision, refine one specification checkpoint under #1962. It must define the versioned public/private boundary, logical owner/input identity, private binding/revision lifecycle, complete bundle scope, cross-machine transfer/rebind approval, source precedence, typed JSON fidelity, contaminated-authored-input handling, upgrade/legacy compatibility and fixed safe refusals. Do not change authored v1 interpretation implicitly or treat generic `accept` as a portability certificate.
+The next checkpoint is [#2457](https://github.com/elsa-workflows/elsa-foundation/issues/2457) under #1962, with [Draft Spec194](../../../specs/194-portable-private-inputs/spec.md). It must define the versioned public/private boundary, logical owner/input identity, private binding/revision lifecycle, complete bundle scope, cross-machine transfer/rebind approval, source precedence, typed JSON fidelity, contaminated-authored-input handling, upgrade/legacy compatibility and fixed safe refusals. Do not change authored v1 interpretation implicitly or treat generic `accept` as a portability certificate.
 
 Its acceptance should extend the existing file/tooling fixtures: real produced CLI import → acceptance → transfer without the original directory → generation → supported inspection; unchanged and deliberately changed owner inputs; absent/drifted required inputs; false/zero/null/empty/object/array fidelity; safe reviewed edits; exact-source privacy scans; and separation of intended inspection from activation/readiness. Use existing projects and fixtures, not another EF suite.
 

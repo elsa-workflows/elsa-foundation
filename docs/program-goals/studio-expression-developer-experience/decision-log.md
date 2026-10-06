@@ -59,3 +59,13 @@
 **Consequences:** Current-head screen-reader behavior remains unverified and must be a final delivery limitation. Historical July baseline evidence is not current program acceptance. Keyboard, automated scoped accessibility, source/cursor/undo, runtime parity, technical/review/integration and required post-merge main gates remain mandatory. Final explicit owner acceptance precedes Ready and dependency-ordered merging; no deployment or package publication is authorized.
 
 **Revisit:** A later owner-approved native accessibility verification task. Do not relabel the skipped gate as passed when closing this program.
+
+## 2026-10-06 — Authorize bounded preview artifact publication
+
+**Decision:** The owner explicitly authorizes preview NuGet/npm package publication only to feedz.io. The owner's subsequent clarification separately authorizes Docker image publication to any endpoint, including Docker Hub, GHCR or Azure ACR in the Skywalker ISP subscription. This delivery retains the existing Docker Hub pipelines rather than introducing a registry migration or provisioning Azure resources.
+
+**Rationale:** Required main merges normally trigger preview package and image publication. The clarification removes the prior publication-scope blocker without changing technical gates or requiring Feedz to provide a Docker/OCI endpoint.
+
+**Consequences:** This amends the earlier no-publication boundary for preview artifacts only. Stable releases, deployments, manual publisher bootstrap/forceadvance and Azure provisioning are not being performed. Final explicit owner acceptance still precedes Ready and dependency-ordered merging; required resulting-main gates and public completion records remain mandatory. Native VoiceOver stays skipped by owner decision and never passed.
+
+**Revisit:** A separately scoped registry migration or stable release/deployment requires its own approval and verification.
