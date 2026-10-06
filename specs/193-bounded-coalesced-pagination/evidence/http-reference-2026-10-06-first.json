@@ -1,0 +1,100 @@
+{
+  "source": "5d28bd0cd3d76004988a01b0f0abd7af3af313d6",
+  "purpose": "single pre-fix Coalesced HTTP diagnostic reference; no timing interpretation",
+  "database": "runtime_db_2392",
+  "image": "postgres:16-alpine",
+  "imageId": "sha256:ef738a34a8651d11b2bace81c55c7e2187f786b484add6c83070884340074368",
+  "primaryConnectionName": "ElsaRuntime2392",
+  "legacyConnectionName": "Elsa",
+  "diagnosticsConnectionName": "ElsaDiagnostics",
+  "containerName": "elsa-runtime-db-2392-31380815b290",
+  "stage": "capture passed; log attribution not yet accepted",
+  "previousAttempt": "capture-2392-4339adbccb5a",
+  "databaseReadiness": "successful SELECT1 against selected database required",
+  "containerId": "58413a1e421fa167cd9e7ae9034375f90907c27bf489f67bb0607ad58df36bf3",
+  "actualImageId": "sha256:ef738a34a8651d11b2bace81c55c7e2187f786b484add6c83070884340074368",
+  "postgresVersion": "16.15",
+  "traceparent": "00-5d5f2e25615468083b27efd93bea90e0-5bf95c55ab0c4869-01",
+  "workflowExecutionId": "147dNKzfuw6",
+  "versionId": "147dN9dDKY1",
+  "artifactId": "artifact-bc9dfcd40653",
+  "status": "Completed",
+  "checkpointCadence": "Coalesced",
+  "maxSegmentCheckpoints": 50,
+  "inspectionGranularity": "boundary-level",
+  "httpStatus": 200,
+  "response": "Alice Smith",
+  "ownedContainerRemoved": true,
+  "captureAcceptance": "HTTP correctness and effective configuration passed; causal accounting pending",
+  "scriptSource": "5d28bd0cd3d76004988a01b0f0abd7af3af313d6",
+  "requestTraceId": "5d5f2e25615468083b27efd93bea90e0",
+  "requestSpanId": "4813cde904ac27d1",
+  "requestStartedUtc": "2026-10-06T01:06:29.489Z",
+  "responseFinishedUtc": "2026-10-06T01:06:31.365Z",
+  "latencyInterpretation": "None: single cold diagnostic request under excessive shared load, with EF/transaction logging and persisted diagnostics",
+  "commandUnit": "EF Database.Command event 20101 executions; not SQL statement or network-round-trip counts",
+  "traceCommands": {
+    "total": 288,
+    "knownPostAncestry": 130,
+    "ofKnownPostAncestryDiagnosticsTables": 80,
+    "unresolvedIntermediateParent": 147,
+    "listInspection": 5,
+    "detailInspection": 6
+  },
+  "limitations": [
+    "Trigger traceparent persisted on readback GETs through shared PowerShell WebSession; request SpanIds distinguish them.",
+    "147 command events lack intermediate engine parent spans in retained logs; do not attribute by timestamp proximity.",
+    "Known POST descendants include commands after transport completion; causal settled-work ledger remains T04.",
+    "Provider round trips and SQL statement census not measured.",
+    "Captured graph contains persisted diagnostic observer commands in SQLite separately from enrolled runtime PostgreSQL participants."
+  ],
+  "clrProfiles": {
+    "Sequence": "ReplaySafe (explicit export)",
+    "HttpEndpoint": "External (wire omitted; ActivityContract constructor default External and WhenWritingDefault omission source-confirmed)",
+    "WriteHttpResponse": "External (wire omitted; ActivityContract constructor default External and WhenWritingDefault omission source-confirmed)"
+  },
+  "intrinsic": {
+    "node": "set-reference-text",
+    "kind": "Set",
+    "activityContract": "omitted-null",
+    "fusable": "source-confirmed at source SHA"
+  },
+  "retainedLocalArtifacts": {
+    "server-1.out.log": {
+      "sha256": "80dcc85cfdc0aae204372c49bfb1d8e467b3a609eda05d7a6bbb7dce7f4e609d",
+      "bytes": 89034485
+    },
+    "executable-export.json": {
+      "sha256": "1ea6802471141f1d89c8cec6f11335c068e45ecc97cb9a011d4330fff17808ff",
+      "bytes": 62329
+    },
+    "instance-detail.json": {
+      "sha256": "37cae181a6a69c8fe970a27abca612bd16e5be5b5e8bac8e6640b445bbaf8ba3",
+      "bytes": 6822
+    },
+    "definition.json": {
+      "sha256": "3e7399d827bc0cf18db6cd38ff708d92f267f6d01c917d69a7d07bf86a5c0e63",
+      "bytes": 8237
+    },
+    "trace-matching-events.jsonl": {
+      "sha256": "77471d67c7748b55242d887a7e76e982c218be7d33cd4f9a236a16c8aa4a12b4",
+      "bytes": 694090
+    }
+  },
+  "build": {
+    "sourceBefore": "5d28bd0cd3d76004988a01b0f0abd7af3af313d6",
+    "sourceAfter": "5d28bd0cd3d76004988a01b0f0abd7af3af313d6",
+    "command": "dotnet build src/apps/Elsa.Workbench/Elsa.Workbench.csproj -m:1 --disable-build-servers --verbosity minimal",
+    "exitCode": 0,
+    "dllSha256": "05c8eb6ac3aac744cb4878678d90dfd27dce9b37d139422ec1dba0f0a38bb08d",
+    "warnings": 101,
+    "errors": 0
+  },
+  "sanitizedEvents": {
+    "file": "http-reference-2026-10-06-first-events.jsonl",
+    "sha256": "49640459be5523beb09c61e7c1cd21ac80da867db116e439a94e3b7dffa4aef8",
+    "events": 395,
+    "commands": 288,
+    "retained": "EF command text without parameter data plus trace/span anchors; no authentication or general log messages"
+  }
+}

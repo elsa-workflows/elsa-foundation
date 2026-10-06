@@ -1,0 +1,141 @@
+{
+  "source": "5d28bd0cd3d76004988a01b0f0abd7af3af313d6",
+  "purpose": "single corrected Coalesced HTTP diagnostic capture; separate inspection traces, retained engine spans; no timing interpretation",
+  "database": "runtime_db_2392",
+  "image": "postgres:16-alpine",
+  "imageId": "sha256:ef738a34a8651d11b2bace81c55c7e2187f786b484add6c83070884340074368",
+  "primaryConnectionName": "ElsaRuntime2392",
+  "legacyConnectionName": "Elsa",
+  "diagnosticsConnectionName": "ElsaDiagnostics",
+  "containerName": "elsa-runtime-db-2392-e1f2e52f06f7",
+  "stage": "corrected POST trace ancestry accepted; T05 integration and T04 settled-work ledger pending",
+  "previousAttempt": "capture-2392-27afc0d6a5e9",
+  "databaseReadiness": "successful SELECT1 against selected database required",
+  "scriptSource": "3c6bd3da83c49ea84c9823c8d0181b46c468f881",
+  "buildRuntimeInputEquivalence": "tracked delta restricted to docs/specs/manual fixture; DLL hash checked independently",
+  "containerId": "040d1325ac00663fb8da854d8d2dbaabf9411f9e6cc4ad3ea0a436782560f411",
+  "actualImageId": "sha256:ef738a34a8651d11b2bace81c55c7e2187f786b484add6c83070884340074368",
+  "postgresVersion": "16.15",
+  "traceparent": "00-e5acc2e4ccc5b19b7771ec7d3ec1cd97-361362e4e5b210b0-01",
+  "workflowExecutionId": "147eTn6gBLT",
+  "versionId": "147eTWOLgLU",
+  "artifactId": "artifact-bc9dfcd40653",
+  "status": "Completed",
+  "checkpointCadence": "Coalesced",
+  "maxSegmentCheckpoints": 50,
+  "inspectionGranularity": "boundary-level",
+  "httpStatus": 200,
+  "response": "Alice Smith",
+  "ownedContainerRemoved": true,
+  "captureAcceptance": "HTTP correctness/effective configuration and complete captured-POST ancestry reviewed by root and independent QA; PR integration gates pending; untraced/background settled-work ledger remains T04",
+  "requestTraceId": "e5acc2e4ccc5b19b7771ec7d3ec1cd97",
+  "requestSpanId": "4d76eb7a0bb77d49",
+  "requestStartedUtc": "2026-10-06T01:21:56.478Z",
+  "responseFinishedUtc": "2026-10-06T01:22:04.462Z",
+  "commandUnit": "EF Database.Command event 20101 executions, not SQL statements or provider round trips",
+  "commands": {
+    "postDescendants": 277,
+    "beforeResponseOther": 197,
+    "beforeResponseDiagnostics": 40,
+    "afterResponseDiagnostics": 40,
+    "unresolvedParentage": 0,
+    "inspectionRequestsOnWorkloadTrace": 0
+  },
+  "nearestEnginePhaseCommands": {
+    "request/no-engine-span": 21,
+    "elsa.runtime.drain": 88,
+    "elsa.runtime.dispatch": 3,
+    "elsa.runtime.activity.execute": 106,
+    "elsa.runtime.checkpoint.commit": 59
+  },
+  "engineSpans": {
+    "total": 59,
+    "names": {
+      "elsa.runtime.drain": 10,
+      "elsa.runtime.dispatch": 17,
+      "elsa.runtime.checkpoint.commit": 22,
+      "elsa.runtime.activity.execute": 10
+    },
+    "checkpointPersistenceMode": {
+      "Deferred": 19,
+      "Immediate": 3
+    }
+  },
+  "checkpointMarkerInsertCommands": 3,
+  "ownedPostgresMarkerSnapshot": {
+    "rows": [
+      {
+        "workflowExecutionId": "147eTn6gBLT",
+        "commitId": "commit:69f22fce7bf122e5:invoke:147eTrQB0sQ:activity-attempt-claimed:147eTrQB0sQ:147eTrQB0sQ:attempt:1",
+        "consumedSchedulerWorkItemIds": [],
+        "pendingPostCommitWorkIds": []
+      },
+      {
+        "workflowExecutionId": "147eTn6gBLT",
+        "commitId": "commit:b5fcbbc025c1b501:invoke:147eUJaXm71:activity-attempt-claimed:147eUJaXm71:147eUJaXm71:attempt:1",
+        "consumedSchedulerWorkItemIds": [],
+        "pendingPostCommitWorkIds": []
+      },
+      {
+        "workflowExecutionId": "147eTn6gBLT",
+        "commitId": "commit:16b05fada204da7c:checkpoint:WorkflowCompleted:147eTpDs6QP",
+        "consumedSchedulerWorkItemIds": [],
+        "pendingPostCommitWorkIds": []
+      }
+    ],
+    "captureScope": "independent owned-PG observer reads before REST controls; excluded from EF trace command census"
+  },
+  "durableValueSelectCommands": 66,
+  "sqlStatementCensus": "not measured",
+  "providerRoundTrips": "not measured",
+  "latencyInterpretation": "None: single cold diagnostic request under high variable load; persisted diagnostics and EF transaction/command logging enabled",
+  "retainedLocalArtifacts": {
+    "server-1.out.log": {
+      "sha256": "1fd442a95b993bb30afce6abd36546979ed7eaaca5dbbded927fad132e5aeae0",
+      "bytes": 870706206
+    },
+    "executable-export.json": {
+      "sha256": "847cd0c158cba703b26795a8503e706c56936a32490b7a2aed1f63288ba12e6c",
+      "bytes": 62326
+    },
+    "instance-detail.json": {
+      "sha256": "291f40c9fb3b5a400b7651e0ed89da39d7d398368292b44bd1fd886052a19a6a",
+      "bytes": 6820
+    },
+    "engine-trace-detail.json": {
+      "sha256": "ffa866706cea29e560ce9fb62858995aea3ff2e9ae14ee535e6c9fb04db1408b",
+      "bytes": 46980
+    },
+    "runtime-checkpoint-markers.json": {
+      "sha256": "4021f2eb23d4591967286bb4d8dd0af136e0722dda5645ba090eda7d1de61d9a",
+      "bytes": 1220
+    }
+  },
+  "sanitizedEvents": {
+    "file": "http-reference-2026-10-06-corrected-events.jsonl",
+    "sha256": "ef256e831630b26b1a6c67a5316698bb8f71771222ef7980a002f947af010a48",
+    "events": 380,
+    "commands": 277
+  },
+  "build": {
+    "sourceBefore": "5d28bd0cd3d76004988a01b0f0abd7af3af313d6",
+    "sourceAfter": "5d28bd0cd3d76004988a01b0f0abd7af3af313d6",
+    "command": "dotnet build src/apps/Elsa.Workbench/Elsa.Workbench.csproj -m:1 --disable-build-servers --verbosity minimal",
+    "wrapper": "/Users/sipke/.local/share/dotnet-build-slots/bin/dotnet",
+    "execSession": 59047,
+    "exitCode": 0,
+    "warnings": 101,
+    "errors": 0,
+    "toolReportedBuildElapsed": "00:05:13.07",
+    "recordedAtUtc": "2026-10-06T00:55:02.012326+00:00",
+    "dllSha256": "05c8eb6ac3aac744cb4878678d90dfd27dce9b37d139422ec1dba0f0a38bb08d",
+    "evidenceScope": "Narrow build only; no runtime or latency acceptance; live command output was truncated, final summary retained."
+  },
+  "clrProfiles": {
+    "Sequence": "ReplaySafe (explicit export)",
+    "HttpEndpoint": "External (wire omitted; ActivityContract constructor default External and WhenWritingDefault omission source-confirmed)",
+    "WriteHttpResponse": "External (wire omitted; ActivityContract constructor default External and WhenWritingDefault omission source-confirmed)"
+  },
+  "rawCaptureStage": "capture passed; log attribution not yet accepted",
+  "independentQaScope": "Curated events/span closure/counts reviewed; private raw logs/database not independently inspected. Root verified raw capture/owned PostgreSQL observer snapshot."
+}
