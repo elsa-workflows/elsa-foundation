@@ -26,7 +26,7 @@ Do not invent a named program-goal bucket just because one is missing. Propose c
 
 | Goal | Status | Area | Steward(s) | Current focus |
 |---|---|---|---|---|
-| [Workspace Launch Readiness](workspace-launch-readiness.md) | Active | First-user handoff / repository launch preparation | Joey plus active architects/agents | Verify the repo can receive first users through tour, skills, reports, and buckets |
+| [Elsa 4 Contributor Experience](workspace-launch-readiness.md) | Active | Human contributor journey across Foundation and Studio | Sipke plus the Contributor Experience control room | Program #2416: verify source setup, support first contributions, and make onboarding dependable; evolves Workspace Launch Readiness |
 | [Elsa Foundation Operating Model](elsa-foundation-operating-model.md) | Active | Repository operating model / AI workspace | Joey plus active architects/agents | Keep the shared routing layer stable; do not use this as the default next-work bucket |
 | [Runtime Execution Seam](runtime-execution-seam.md) | Active | Workflows Runtime architecture / executable artifact seam | Joey plus the incoming runtime architect | Prepare the Runtime execution seam for architect-owned Speckit planning |
 | [Runtime Database Access](runtime-db-access.md) | Active | Workflow runtime / causal DB accounting / bounded access reductions | Sipke plus the runtime database access control room | Program #2382 / Project 55: workload and pagination investigations running in isolated branches; runtime implementation not started |
