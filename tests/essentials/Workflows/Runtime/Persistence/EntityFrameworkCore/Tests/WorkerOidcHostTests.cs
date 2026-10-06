@@ -53,6 +53,16 @@ public sealed class WorkerOidcHostTests
         foreach (var probe in new[] { "mismatch", "global", "privileged", "across" })
         {
             await ResetMappingReadsAsync(first);
+            if (probe == "mismatch")
+            {
+                await Task.Delay(TimeSpan.FromSeconds(20));
+                var overlap = await SnapshotAsync(first);
+                var overlapDiagnostic = FormatMappingReadDiagnostic(overlap);
+                Assert.Empty(GetNonExemptMappingReadObservations(overlap, overlapDiagnostic));
+                Assert.Contains(overlap.GetProperty("mappingReadObservations").EnumerateArray(),
+                    read => read.GetProperty("callerPath").GetString() == "schema-stamped-count");
+                Console.WriteLine("SCANNER OVERLAP: " + overlapDiagnostic);
+            }
             using var response = await PostExecuteAsync(first, artifactId, token, probe);
             await AssertNoMappingReadOrRuntimeEffectAsync(first, probe, response.StatusCode, RequestOperationId(response));
             await AssertNoUserOrExternalIdentityRowsAsync(first);
