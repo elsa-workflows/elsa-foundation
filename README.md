@@ -41,6 +41,9 @@ For faster inner-loop work, open or build one of the committed
 [developer solution filters](docs/reference/developer-solution-filters.md). The full solution remains
 the completion gate.
 
+For a tested macOS backend run from source, including readiness and a completed sample workflow, follow the
+[backend source quickstart](docs/contributing/backend-source-quickstart.md).
+
 ## Supported management APIs
 
 Management-client APIs are owned by their Elsa domains and can be composed directly by custom applications.
