@@ -80,12 +80,14 @@ rules, use the e2e guide. For task-oriented build/test filters and the full-solu
 ## Studio pairing status
 
 Studio's configured default backend is HTTPS `https://localhost:7243`, so a
-Studio run paired with this HTTP profile needs `Studio__BackendBaseUrl=http://localhost:5095`. The separate
-cold Studio.Web restore at the same baseline failed with NU1603 because
-`ConsoleLogStreaming.AspNetCore` `1.0.0-preview.13` was unavailable from the configured sources. That finding
-is tracked by [Studio #551](https://github.com/elsa-workflows/elsa-foundation-studio/issues/551); its proposed
-pin update is in [draft PR #557](https://github.com/elsa-workflows/elsa-foundation-studio/pull/557), which was
-unmerged when this baseline was recorded. Check that work before expecting the Studio source restore to pass.
+Studio run paired with this HTTP profile needs `Studio__BackendBaseUrl=http://localhost:5095`.
+The earlier Studio restore failure for `ConsoleLogStreaming.AspNetCore` `1.0.0-preview.13` was corrected
+by [Studio PR #580](https://github.com/elsa-workflows/elsa-foundation-studio/pull/580), which pins `1.1.0`.
+A new Studio.Web restore passed at merged Studio revision `2eabb6dc7112211b141d129f8849165f1816cbd7`
+using empty package-cache, HTTP-cache, and CLI-home paths; installed SDK packs remained available
+([evidence #579](https://github.com/elsa-workflows/elsa-foundation-studio/issues/579#issuecomment-6014605683)).
+That resolves the package restore blocker. The complete paired source/browser/edit walkthrough remains
+tracked by [Studio #566](https://github.com/elsa-workflows/elsa-foundation-studio/issues/566).
 
 ## Verified baseline
 
@@ -98,8 +100,9 @@ CI selects `10.x`; the repository does not pin the tested patch version. This re
 not a new support policy. Your clone may contain later changes than this baseline.
 
 Other operating systems and a fresh OS installation remain to be verified.
-The separate Studio browser proof used an existing developer environment; it does not remove the cold-restore
-blocker above. No human newcomer trial or complete contribution workflow is claimed here.
+The separate Studio browser proof used an existing developer environment; the later isolated Studio restore
+above does not establish a fresh OS installation or the complete paired source-edit journey. No human newcomer
+trial or complete contribution workflow is claimed here.
 
 For a throwaway test-red/test-green source edit followed by a rebuilt workflow run, see the
 [backend source-edit exercise](backend-source-edit.md). Its separate
