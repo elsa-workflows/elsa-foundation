@@ -4,6 +4,7 @@ using Elsa.Expressions.Liquid.Services;
 using Elsa.Specifications.PackageManifest.Generator.Hints;
 using Fluid;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 
 namespace Elsa.Expressions.Liquid;
 
@@ -22,9 +23,13 @@ public class LiquidExpressionsFeature : IShellFeature
     public void ConfigureServices(IServiceCollection services)
     {
         services
-            .AddScoped<IPortableExpressionHandler, PortableLiquidExpressionHandler>()
-            .AddScoped<FluidParser>()
             .AddSingleton<IExpressionDescriptorProvider, LiquidExpressionDescriptorProvider>()
-            .AddSingleton<IExpressionToolingProvider, LiquidExpressionToolingProvider>();
+            .TryAddSingleton(_ => LiquidExpressionProfile.Default);
+
+        // The parser stays scoped so existing host overrides are honored, while each default scope
+        // receives a fresh parser. The handler applies the same immutable profile to either parser.
+        services.TryAddScoped<FluidParser>(_ => new FluidParser(new FluidParserOptions { AllowFunctions = false }));
+        services.AddScoped<IPortableExpressionHandler, PortableLiquidExpressionHandler>();
+        services.AddSingleton<IExpressionToolingProvider, LiquidExpressionToolingProvider>();
     }
 }

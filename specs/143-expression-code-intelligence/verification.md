@@ -8,13 +8,124 @@ The owner permits preview NuGet/npm publication only to feedz.io and separately 
 
 ## Retained historical baseline
 
-Last reconciled: 2026-10-03 for Program #2310 M2 local conformance verification; committed-head CI/review, delivery and final human acceptance pending
+Last reconciled: 2026-10-06 for retained final M3 evidence, stack synchronization and owner native-observation scope amendment; refreshed integrated-head gates, delivery and final owner acceptance pending
 
 ## Program #2310 status
 
-T026-T027 pass at the exact M1 pair recorded below. T028 is implemented with the local M2 evidence below; its committed-head CI/review gate is pending. Effective Liquid metadata and the final coordinated language-depth gate (T029-T031) remain open. Historical baseline evidence remains separate. All program PRs remain draft and unmerged; final human acceptance is outstanding.
+T026-T027 pass at the exact M1 pair recorded below. T028 passes the exact M2 automated gate at Foundation7457b7a4/Studio00677684 under the documented unavailable-review fallback. T029-T030 pass the retained final M3 producer5cd44d63/consumer473cf1a9 automated gate below. T031 remains open for affected verification of the refreshed integrated head; prior passes are not relabeled. Historical baseline evidence remains separate. All program PRs remain draft and unmerged; final owner acceptance is outstanding.
+
+## Current delivery scope and integration — 2026-10-06
+
+The owner removes only actual current-head Chrome+VoiceOver and Safari+VoiceOver observation from delivery acceptance: **SKIPPED BY OWNER DECISION — NEVER PASSED**. Native screen-reader behavior remains unverified and is a final delivery limitation; automated checks and historical July observations do not prove it. See the [canonical scope decision](../../docs/program-goals/studio-expression-developer-experience/decision-log.md#2026-10-06--remove-native-voiceover-verification-from-delivery-acceptance). Every other technical, review, keyboard, automated accessibility, continuity, runtime and integration gate remains required. Final owner acceptance precedes Ready/merge; required green post-merge main and public completion records follow. No deployment or package publication is included.
+
+Root synchronizes the existing Foundation PR2367→2373→2378→2380 stack with actual main `d652f7342f79daea32e9986f9c381fac8a93ba3f`, retaining main's active spec192 pointer and preserving all expression implementation intents. Generated-map conflicts are resolved through deliberate combined-tree regeneration, not by choosing a historical snapshot. Exact new-head CI/review and affected rebuilt producer-consumer/runtime/REST checks are still required. Main is currently red; importing its tree does not repair it. The peer-owned Foundation2453/2454 then Studio583/584 integration reservation remains intact. Earlier checkpoints below retain their original pending/failure statements.
 
 ## Passing evidence
+
+### Retained final M3 automated checkpoint — 2026-10-05
+
+Immutable Foundation `5cd44d6312d9de85b13f4619fc7aa972a557d033` passes full [CI37376029424](https://github.com/elsa-workflows/elsa-foundation/actions/runs/37376029424), including hosted Architecture, and [Maps37376054285](https://github.com/elsa-workflows/elsa-foundation/actions/runs/37376054285). Immutable final Liquid-integrated Studio `473cf1a9f9622c5abd3091b846e91037e7da55c6` passes every job in [CI37384606857](https://github.com/elsa-workflows/elsa-foundation-studio/actions/runs/37384606857), including the exact rebuilt persisted-host pair. Root independently rebuilds that pair and passes4/4; actual activity inputs/variables/outputs, JavaScript runtime members, Liquid filter/tag metadata/signatures/snippets, exact source/undo persistence, Activity Definition and independent missing-module/provider cases are covered.
+
+Root final affected evidence at that producer: catalog27/27, Expressions236/236, Design534/534, DesignAPI143/143, Publishing714/714, Jint126/126, scopedArchitecture17/17, authenticated Workbench3/3, fresh rebuilt JavaScript REST10/10 and map freshness. Full local Architecture is not claimed; hosted full Architecture is green. Retained failing controls detect denied/accessor metadata reinsertion and policy-edit loss; corrected exact-delta root and independent producer/consumer/browser reviews have no actionable findings. Copilot requests produce no actual M3 review: the documented unavailable-external-review fallback applies, not external approval. See [public final M3 evidence](https://github.com/elsa-workflows/elsa-foundation/pull/2380#issuecomment-6004921316) and Studio spec094 verification for the complete ledger. This satisfies the historical automated T029-T030 implementation dependency, not the refreshed integration head, native observation, final owner acceptance or delivery.
+
+### M3 accessor policy correction — Task #2379, 2026-10-05
+
+Independent review of producer `58238b8678dce6dc3dc7510d88c630d106892393` finds that
+`getVariable` was synthesized after the common policy filter. Two retained failing controls
+reproduce denied completion and lost policy-edited documentation. The fixed accessor candidate
+now belongs to the immutable declared catalog (revision `javascript-binding-pure-profile-v2`),
+passes the existing filter once and is projected only when authorized visible bindings exist.
+Context-derived arguments, variable wrappers and generated getters remain workflow facts;
+no evaluation grant changes. The affected catalog controls pass 27/27 and complete Expressions
+passes 236/236 in the corrected candidate tree. After restart, complete Design 534/534, Design API
+143/143, Publishing API 714/714, Jint 126/126 and scoped Architecture 17/17 pass on that correction.
+Generated-map freshness and diff check pass without regeneration. Independent exact-delta review
+reports no actionable remaining finding. Full local Architecture is not claimed.
+
+Studio Task #560 applies the same candidate-authority rule and excludes a generated getter for a
+variable literally named `variable`, which would collide with the reserved `getVariable` name.
+Its retained failing controls reproduce both denied reinsertion and duplicate allowed entries;
+the corrected JavaScript suite passes 15/15. These results do not substitute for the coordinated
+rebuilt browser or exact committed-head gates.
+
+The predecessor producer passes complete [CI 37147080477](https://github.com/elsa-workflows/elsa-foundation/actions/runs/37147080477)
+after one failed-job retry and [Maps 37147082366](https://github.com/elsa-workflows/elsa-foundation/actions/runs/37147082366).
+The first CI attempt failed in unchanged EF SQLite handle code; no causal repair is inferred.
+Predecessor Studio `8ab8fced71095b085e592442c65d01c143649f37` passes every job in
+[CI 37147792665](https://github.com/elsa-workflows/elsa-foundation-studio/actions/runs/37147792665),
+including the paired normal-host browser against that predecessor producer. Neither green gate
+accepts this accessor correction. Copilot has no actual review on either M3 PR at the restart
+checkpoint. Both PRs remain draft and unmerged; M3 and human acceptance remain open.
+
+### M3 integrated candidate — Task #2379, 2026-10-03
+
+Root integrates the common catalog and Liquid slices at `96d25b0e5`, based on the exact M2 producer
+`7457b7a4564892bab4b28bd0d07fac9709462d56`. The only cherry-pick conflict is adjacent language-specific
+fixture helpers; both are retained. No runtime or test objective is discarded. Local integrated
+checks pass focused profile/provider/catalog contracts 141/141, complete Expressions 235/235,
+Design 528/528 and Design API 143/143. Broader final checks and paired-host proof are still pending
+at this checkpoint; predecessor/worker passes are not substituted for final evidence.
+
+Common metadata is composed after authorization and source identity checks, filtered once through
+the existing profile policy chain, bounded before client paging and included independently in
+context/catalog revisions. Profile IDs reserve authority even when denied; source entries are not
+filtered twice. Legacy providers default to no declared catalog. JavaScript and Liquid do not
+reinsert profile entries omitted from authoritative context.
+
+The module-owned immutable Liquid profile shares runtime parser/options configuration and tooling
+metadata without placing Fluid/services/values in Core. Default Fluid 2.31.0 registry parity, fresh
+objects, denied time/file-backed features and a trusted custom runtime/tooling pair have focused
+tests. Legacy scoped parser overrides and the public parser constructor remain supported without
+inventing their metadata. Root review catches and fixes a multi-language registration regression;
+the retained composition test executes JavaScript and Liquid together. The cursor analyzer is quiet
+in strings and raw/comment blocks and distinguishes values, filters and tags; unknown shapes and
+unproved arity do not become semantic errors. The existing ranking test retains its competing value.
+
+Root reviews both slices and delegates independent read-only common-slice review to the Liquid
+worker. Current-head CI/Maps/external review, architecture, REST and rebuilt coordinated Studio
+proof remain required. All PRs remain draft/unmerged, and no human/assistive-technology acceptance
+or delivery is claimed.
+
+The independent review identifies a malformed profile/filter name that can escape the unavailable
+boundary during search. Four controls reproduce the defect (4 failures/5 passes), including a null
+filter-name `NullReferenceException`; name validation before and after filtering fixes it. The final
+complete Design run passes 532/532. Jint 126/126, Publishing API 714/714 and scoped Architecture17/17
+also pass at this checkpoint (the scoped architecture run precedes this final name-only correction).
+The map check correctly identifies stale test and feature-dependency snapshots. Narrow `maps` and
+`feature-dependency` generation changes only those two maps; the manifest and generated findings
+reports remain byte-identical. The generated findings report is reviewed, not treated as a
+constitution verdict. Final freshness and current corrected-head checks continue.
+
+Root's corrected candidate passes complete Design 532/532, Design API 143/143, Publishing API
+714/714 and scoped Architecture 17/17. Expressions 235/235 and Jint 126/126 pass in this integrated
+tree before the final name-validation-only correction. Final map freshness passes:
+`Generated maps still describe the tree.` The two changed snapshots are included explicitly;
+the byte-identical manifest needs no restamp. Full local Architecture is not claimed.
+
+The rebuilt Debug Workbench passes all three authenticated persisted-host cases, including both
+cookie and rotating-bearer paths plus missing Liquid. Added assertions exercise actual rich context
+signatures/return shapes, omitted time/file-backed Liquid entries, interpolation member assistance,
+filter/tag cursor completion and filter hover via advertised routes. Against that same rebuilt
+Workbench, fresh isolated SQLite JavaScript REST passes all 10 cases. Its owned process stops;
+the isolated content root and logs are retained for diagnosis. Root evidence is retained in
+`/private/tmp/elsa-2379-root-*-final.log` and `elsa-2379-root-workbench-first.log`.
+
+Studio #560's paired rebuilt browser gate, final committed-head CI/Maps and automated review remain
+pending. This producer checkpoint does not close coordinated T031, human acceptance or delivery.
+
+### M2 final exact-head automated gate, 2026-10-03
+
+Foundation `7457b7a4564892bab4b28bd0d07fac9709462d56` passes complete
+[CI 37137966461](https://github.com/elsa-workflows/elsa-foundation/actions/runs/37137966461) and
+[Maps 37137968339](https://github.com/elsa-workflows/elsa-foundation/actions/runs/37137968339).
+Studio `00677684dcd32d5152f16df5b5fafd644df85d9a` passes every job in
+[CI 37138361061](https://github.com/elsa-workflows/elsa-foundation-studio/actions/runs/37138361061),
+including generic Chromium 67/67 and rebuilt paired normal-host 4/4. Root repeats the exact-pair
+normal-host command and passes 4/4 after rebuilding both applications. Copilot's last actual
+Foundation review remains 5401237320 at 59ef0300; its findings are corrected, but re-requests do not
+produce a current-head review. Root/independent exact-delta review plus all final automated/live
+gates exercises the program-lead unavailable-review fallback, not external approval. This satisfies
+the M2 implementation dependency, not merge/delivery or current-head human acceptance.
 
 ### M2 absence-probe correction and final local review, 2026-10-03
 

@@ -181,7 +181,7 @@ Reads current `specs/*` folders and task checkboxes. Status clues are textual, n
 | [140-incident-strategies](../../specs/140-incident-strategies/spec.md) | Extensible Incident Strategies | Approved | - | 54 | 0 | retained |
 | [141-runtime-alterations](../../specs/141-runtime-alterations/spec.md) | Durable Runtime Alterations | Approved | - | 86 | 0 | superseded, retained, deferred |
 | [142-workflow-version-override](../../specs/142-workflow-version-override/spec.md) | Workflow Version Override | Implemented | - | 21 | 0 | - |
-| [143-expression-code-intelligence](../../specs/143-expression-code-intelligence/spec.md) | Expression Code Intelligence Foundation | In progress — Program #2310 extension approved 2026-10-02; baseline remains shipped | - | 28 | 3 | superseded, retained, out of scope |
+| [143-expression-code-intelligence](../../specs/143-expression-code-intelligence/spec.md) | Expression Code Intelligence Foundation | In progress — Program #2310 extension approved 2026-10-02; baseline remains shipped | - | 30 | 1 | superseded, retained, out of scope |
 | [144-zero-ef-final-removal](../../specs/144-zero-ef-final-removal/spec.md) | Zero-EF Final Removal | Superseded by [ADR 0073](../../docs/adr/0073-ef-core-is-the-only-first-party-persistence-family.md) | - | 19 | 77 | superseded, retained, deferred, out of scope |
 | [145-publishing-engine-split](../../specs/145-publishing-engine-split/spec.md) | Publishing engine / API split | Draft | - | 28 | 1 | out of scope |
 | [146-javascript-binding-grammar](../../specs/146-javascript-binding-grammar/spec.md) | JavaScript Binding Grammar Selection | Draft | - | 0 | 0 | out of scope |

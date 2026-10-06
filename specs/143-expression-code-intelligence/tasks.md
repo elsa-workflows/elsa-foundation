@@ -2,7 +2,7 @@
 
 Baseline implementation tasks are complete. File names below reflect the landed design rather than the provisional names in the initial plan.
 
-Tasks T001-T025 describe the implemented baseline. Program #2310 adds T026-T031. T026-T027 have exact-head producer-consumer and normal-host evidence. T028 is implemented with reviewed local conformance evidence; its committed-head CI/review gate is pending. T029-T031 remain open.
+Tasks T001-T025 describe the implemented baseline. Program #2310 adds T026-T031. T026-T027 have exact-head producer-consumer and normal-host evidence. T028 passes the M2 automated gate at Foundation7457b7a4/Studio00677684 under the documented unavailable-review fallback. T029-T030 pass the retained M3 automated gate at Foundation5cd44d63/Studio473cf1a9 under the same explicit fallback, not external approval. These checkboxes describe implementation and immutable checkpoint proof, not acceptance of the refreshed integration head. T031 remains open until affected integrated-head verification is recorded; final owner acceptance, merging and green main remain pending. Actual current-head Chrome/Safari VoiceOver is skipped by owner decision and never passed.
 
 ## Contracts and composition
 
@@ -52,8 +52,8 @@ Tasks T001-T025 describe the implemented baseline. Program #2310 adds T026-T031.
 ## Program #2310 continuation: User Story 2 — Runtime-owned language assistance
 
 - [x] T028 [US2] Align Foundation JavaScript tooling globals, signatures and diagnostics with the runtime expression profile in `src/essentials/Expressions/JavaScript/` and provider contract tests after T026 passes; Studio spec 094 T030 owns local parser grammar.
-- [ ] T029 [P] [US2] Extract the effective binding-pure Liquid filter/tag profile and consume it from both runtime evaluation and `LiquidExpressionToolingProvider` in `src/essentials/Expressions/Liquid/` with parity tests after T026 passes.
-- [ ] T030 [US2] Add Liquid cursor-context completion plus known-shape signature/diagnostic conformance in `src/essentials/Expressions/Liquid/Services/LiquidExpressionToolingProvider.cs` and provider contract tests after T029.
+- [x] T029 [P] [US2] Extract the effective binding-pure Liquid filter/tag profile and consume it from both runtime evaluation and `LiquidExpressionToolingProvider` in `src/essentials/Expressions/Liquid/` with parity tests after T026 passes. Immutable M3 producer5cd44d63/consumer473cf1a9 proof is recorded in `verification.md`; refreshed integration gates remain required.
+- [x] T030 [US2] Add Liquid cursor-context completion plus known-shape signature/diagnostic conformance in `src/essentials/Expressions/Liquid/Services/LiquidExpressionToolingProvider.cs` and provider contract tests after T029. The same retained M3 automated gate passes; this is not new-head or delivery acceptance.
 - [ ] T031 [US2] Record exact-head focused, affected-suite, architecture, maps and real producer-consumer evidence in `specs/143-expression-code-intelligence/verification.md`.
 
 ## Dependencies

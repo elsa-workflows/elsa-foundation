@@ -3,14 +3,15 @@ using Elsa.Expressions.Core.Models;
 namespace Elsa.Expressions.JavaScript.Core.Models;
 
 /// <summary>
-/// Immutable authoring metadata for the selected, deterministic standard globals of the binding-pure JavaScript
-/// runtime. This curated surface is intentionally not an exhaustive JavaScript language catalogue.
+/// Immutable authoring metadata for selected capabilities of the binding-pure JavaScript runtime.
+/// This curated surface is intentionally not an exhaustive JavaScript language catalogue.
 /// </summary>
 public static class JavaScriptRuntimeProfile
 {
     public const string ArgumentsName = "args";
     public const string VariablesName = "variables";
     public const string GetVariableName = "getVariable";
+    public const string ToolingCatalogRevision = "javascript-binding-pure-profile-v2";
     public const string ArgumentsDocumentation = "Immutable expression parameters. The object is present even when no parameters are declared.";
     public const string VariablesDocumentation = "Immutable visible workflow variables.";
     public const string GetVariableDocumentation = "Reads a visible workflow variable by name.";
@@ -68,6 +69,10 @@ public static class JavaScriptRuntimeProfile
         [
             new ExpressionCallableSignature("getVariable(name)", GetVariableParameters, new("Any"))
         ]));
+
+    public static ExpressionToolingCatalog DeclaredToolingCatalog { get; } = new(
+        ToolingCatalogRevision,
+        Array.AsReadOnly(StandardGlobalSymbols.Append(GetVariableFunction).ToArray()));
 
     /// <summary>Gets the runtime's generated getter name, or null when the variable name contains unsupported characters.</summary>
     public static string? GetGeneratedVariableGetterName(string name)
