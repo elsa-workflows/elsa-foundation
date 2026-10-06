@@ -1,3 +1,5 @@
+using Elsa.Modularity.Planning.Bridge;
+
 namespace Elsa.Cli;
 
 /// <summary>Publishes reviewed composition output without replacing source or existing output.</summary>
@@ -360,7 +362,7 @@ public static class CompositionFilePublisher
             if (string.IsNullOrWhiteSpace(fileName) || fileName is "." or ".." ||
                 Path.IsPathRooted(fileName) || fileName.IndexOfAny(['/', '\\', ':', '\0']) >= 0 ||
                 contents is null || !names.Add(fileName) ||
-                (portable && !CompositionFileSource.IsSupportedFileName(fileName)))
+                (portable && !CompositionSourceFiles.IsSupportedName(fileName)))
                 throw OutputFailed();
 
             files.Add(new KeyValuePair<string, byte[]>(fileName, contents));

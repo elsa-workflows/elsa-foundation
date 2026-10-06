@@ -270,8 +270,8 @@ public static class PortableCompositionValidator
         var selection = snapshot.Selection;
         var context = new PortableInputContext(selection.ShellId, selection.Environment);
         if (!SelectionValueRules.IsSafeReference(context.Shell) ||
-            string.IsNullOrWhiteSpace(context.Environment) || context.Environment.Length > 128 ||
-            !context.Environment.All(character => char.IsAsciiLetterOrDigit(character) || character is '_' or '-'))
+            context.Environment is null || context.Environment.Length > 128 ||
+            !CompositionSourceFiles.IsEnvironmentName(context.Environment))
             throw Mismatch();
         return context;
     }

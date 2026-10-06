@@ -4,6 +4,7 @@ using Elsa.Modularity.Planning.Json;
 using Elsa.Modularity.Planning.Models;
 using System.Diagnostics;
 using System.Text;
+using System.Text.Json;
 using System.Xml.Linq;
 
 namespace Elsa.Cli.Tests;
@@ -863,6 +864,30 @@ public sealed class CompositionFileSourceTests
 
         Assert.Equal("bridge-source-missing", refusal.Code);
         Assert.DoesNotContain(fixture.Directory, refusal.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Portable_receipts_include_long_supported_siblings_captured_by_legacy_and_bounded_readers()
+    {
+        using var fixture = new LocalFixture();
+        var sibling = $"shells.{new string('x', 129)}.json";
+        var contents = Encoding.UTF8.GetBytes("private sibling canary");
+        File.WriteAllBytes(Path.Join(fixture.Directory, sibling), contents);
+        var legacy = CompositionFileSource.Open(fixture.Directory, "default", "Production");
+        var bounded = CandidateSource(fixture);
+        using var authored = JsonDocument.Parse("""
+            {"schemaVersion":"1","catalog":{"id":"test","version":"1","digest":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"},"groups":[],"add":[],"remove":[],"accepted":{"catalogDigest":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","featureIds":[],"locks":[]}}
+            """);
+        var envelope = new PortableComposition("1", PortableCompositionJson.EnvelopeKind, authored.RootElement.Clone(),
+            new PortableRequiredInput(PortableCompositionJson.RequiredInputKind, Guid.NewGuid().ToString("D"), Guid.NewGuid().ToString("D")),
+            PortableInputDisposition.Origin);
+        var bytes = PortableCompositionJson.SerializeComposition(envelope);
+        var receipt = PortableCompositionValidator.CreateInputReceipt(envelope, bytes, bounded.Snapshot);
+
+        Assert.Equal(contents, legacy.Snapshot.CopyBytes(sibling));
+        Assert.Equal(contents, bounded.Snapshot.CopyBytes(sibling));
+        Assert.Contains(receipt.Files, file => file.Name == sibling);
+        PortableCompositionValidator.ValidateInput(envelope, bytes, receipt, legacy.Snapshot);
     }
 
     [Fact]

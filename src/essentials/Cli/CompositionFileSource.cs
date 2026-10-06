@@ -29,7 +29,7 @@ public sealed class CompositionFileSource
     private static CompositionFileSource Capture(string hostDirectory, string shellId, string environment,
         CompositionFileReader? candidateReader)
     {
-        if (!SelectionValueRules.IsSafeReference(shellId) || !IsSafeEnvironment(environment) ||
+        if (!SelectionValueRules.IsSafeReference(shellId) || !CompositionSourceFiles.IsEnvironmentName(environment) ||
             (candidateReader is not null && (shellId.Length > 128 || environment.Length > 128)))
             throw CliRefusal.Usage("bridge-source-invalid", "The selected shell or environment identity is invalid.");
 
@@ -62,7 +62,9 @@ public sealed class CompositionFileSource
         IReadOnlyDictionary<string, byte[]> current;
         try
         {
-            current = ReadSupportedFiles(_hostDirectory, rechecking: true, _candidateReader);
+            var directory = FullDirectory(_hostDirectory);
+            current = ReadSupportedFiles(directory, rechecking: true, _candidateReader);
+            _ = FullDirectory(directory);
         }
         catch (CliRefusal)
         {
@@ -106,7 +108,7 @@ public sealed class CompositionFileSource
             foreach (var path in Directory.EnumerateFileSystemEntries(directory))
             {
                 var name = Path.GetFileName(path);
-                if (!IsSupportedName(name))
+                if (!CompositionSourceFiles.IsSupportedName(name))
                     continue;
                 if (files.ContainsKey(name))
                     throw CliRefusal.Usage("bridge-source-duplicate", "The host contains case-equivalent source file names.");
@@ -150,17 +152,4 @@ public sealed class CompositionFileSource
                 rechecking ? "A copied host source file changed after preview." : "A host source file could not be read.");
         }
     }
-
-    private static bool IsSafeEnvironment(string? value) => !string.IsNullOrWhiteSpace(value) &&
-        value.All(ch => char.IsAsciiLetterOrDigit(ch) || ch is '_' or '-');
-
-    internal static bool IsSupportedFileName(string name) => IsSupportedName(name);
-
-    private static bool IsSupportedName(string name) =>
-        name.Equals("shells.json", StringComparison.OrdinalIgnoreCase) ||
-        name.Equals("appsettings.json", StringComparison.OrdinalIgnoreCase) ||
-        (name.EndsWith(".json", StringComparison.OrdinalIgnoreCase) &&
-         (name.StartsWith("shells.", StringComparison.OrdinalIgnoreCase) ||
-          name.StartsWith("appsettings.", StringComparison.OrdinalIgnoreCase)) &&
-         IsSafeEnvironment(name[(name.IndexOf('.') + 1)..^5]));
 }

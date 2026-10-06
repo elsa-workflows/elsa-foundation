@@ -420,6 +420,30 @@ public sealed class CompositionFilePublisherTests
     }
 
     [Fact]
+    public void Portable_candidate_write_failure_cleans_the_partially_written_staging_directory()
+    {
+        using var fixture = new PublisherFixture();
+        var destination = Path.Join(fixture.Parent, "portable-write-failed");
+        // The first file is writable; the next supported basename exceeds the filesystem component limit.
+        // This fails in FileStream creation during staging, before the publication recheck can run.
+        var files = new Dictionary<string, byte[]>
+        {
+            ["shells.json"] = AuthoredJson,
+            [$"appsettings.{new string('x', 300)}.json"] = AuthoredJson
+        };
+        var recheckCalled = false;
+
+        var refusal = Assert.Throws<CliRefusal>(() => CompositionFilePublisher.PublishPortableCandidate(
+            destination, files, AuthoredJson, [fixture.Source], () => recheckCalled = true));
+
+        Assert.Equal("bridge-output-failed", refusal.Code);
+        Assert.False(recheckCalled);
+        Assert.False(Directory.Exists(destination));
+        Assert.Empty(Directory.GetDirectories(fixture.Parent, ".portable-write-failed.*.tmp"));
+        Assert.Equal("unchanged", File.ReadAllText(Path.Join(fixture.Source, "source.json")));
+    }
+
+    [Fact]
     public void Portable_publication_refuses_existing_output_and_protected_root_overlap()
     {
         using var fixture = new PublisherFixture();

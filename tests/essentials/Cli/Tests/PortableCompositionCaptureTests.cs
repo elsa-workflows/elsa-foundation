@@ -48,6 +48,33 @@ public sealed class PortableCompositionCaptureTests
     }
 
     [Fact]
+    public void Recheck_refuses_a_bundle_root_replaced_by_a_link_even_when_all_bytes_match()
+    {
+        if (OperatingSystem.IsWindows())
+            return;
+        using var fixture = new CaptureFixture();
+        using var capture = PortableCompositionCapture.OpenInputs(fixture.ExplicitInputs);
+        capture.BindPrivateBundle(fixture.Host, "default", "Production");
+        var original = Path.Join(fixture.Root.Path, "original-host");
+        Directory.Move(fixture.Host, original);
+        try
+        {
+            Directory.CreateSymbolicLink(fixture.Host, original);
+
+            var refusal = Assert.Throws<CliRefusal>(capture.VerifyUnchanged);
+
+            Assert.Equal("bridge-source-changed", refusal.Code);
+            Assert.DoesNotContain(fixture.Host, refusal.Message, StringComparison.Ordinal);
+        }
+        finally
+        {
+            if (Directory.Exists(fixture.Host))
+                Directory.Delete(fixture.Host);
+            Directory.Move(original, fixture.Host);
+        }
+    }
+
+    [Fact]
     public void Recheck_maps_explicit_input_drift_to_the_portable_drift_code_and_keeps_frozen_bytes()
     {
         using var fixture = new CaptureFixture();

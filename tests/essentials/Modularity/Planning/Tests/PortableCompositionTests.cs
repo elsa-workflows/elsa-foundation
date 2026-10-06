@@ -115,6 +115,24 @@ public sealed class PortableCompositionTests
     }
 
     [Fact]
+    public void Receipts_preserve_supported_long_sibling_names_without_changing_the_selected_context()
+    {
+        var envelope = Envelope();
+        var bytes = PortableCompositionJson.SerializeComposition(envelope);
+        var source = InputSnapshot();
+        var sibling = $"appsettings.{new string('x', 129)}.json";
+        var files = source.FileNames.Select(name => new KeyValuePair<string, byte[]>(name, source.CopyBytes(name)))
+            .Append(Pair(sibling, "private sibling bytes"));
+        var complete = SourceSnapshot.Freeze(source.Selection, files);
+
+        var receipt = PortableCompositionValidator.CreateInputReceipt(envelope, bytes, complete);
+        var roundtrip = PortableCompositionJson.ParseInputReceipt(PortableCompositionJson.SerializeInputReceipt(receipt));
+
+        Assert.Contains(roundtrip.Files, file => file.Name == sibling && file.Sha256 == Hash(complete.CopyBytes(sibling)));
+        PortableCompositionValidator.ValidateInput(envelope, bytes, roundtrip, complete);
+    }
+
+    [Fact]
     public void Candidate_receipt_codec_refuses_unknown_disposition_and_missing_fields()
     {
         var valid = CandidateReceiptJson();

@@ -155,29 +155,6 @@ public static class PortableCompositionJson
         });
     }
 
-    internal static bool IsSupportedFileName(string? name)
-    {
-        if (string.IsNullOrEmpty(name) || name.Contains('/') || name.Contains('\\') || name != Path.GetFileName(name))
-            return false;
-        if (name.Equals("shells.json", StringComparison.OrdinalIgnoreCase) ||
-            name.Equals("appsettings.json", StringComparison.OrdinalIgnoreCase))
-            return true;
-
-        if (!name.EndsWith(".json", StringComparison.OrdinalIgnoreCase))
-            return false;
-        var prefix = name.StartsWith("shells.", StringComparison.OrdinalIgnoreCase)
-            ? "shells."
-            : name.StartsWith("appsettings.", StringComparison.OrdinalIgnoreCase)
-                ? "appsettings."
-                : null;
-        if (prefix is null)
-            return false;
-
-        var environment = name[prefix.Length..^5];
-        return environment.Length is > 0 and <= 128 &&
-               environment.All(character => char.IsAsciiLetterOrDigit(character) || character is '_' or '-');
-    }
-
     internal static void ValidateInventory(ImmutableArray<PortableFileDigest> files)
     {
         if (files.IsDefaultOrEmpty)
@@ -187,7 +164,7 @@ public static class PortableCompositionJson
         string? previous = null;
         foreach (var file in files)
         {
-            if (file is null || !IsSupportedFileName(file.Name) ||
+            if (file is null || !CompositionSourceFiles.IsSupportedName(file.Name) ||
                 !insensitiveNames.Add(file.Name) || RequireSha256(file.Sha256) != file.Sha256 ||
                 (previous is not null && StringComparer.Ordinal.Compare(previous, file.Name) >= 0))
                 throw Invalid();
@@ -266,8 +243,8 @@ public static class PortableCompositionJson
     private static void ValidateContext(PortableInputContext context)
     {
         if (context is null || !SelectionValueRules.IsSafeReference(context.Shell) ||
-            string.IsNullOrWhiteSpace(context.Environment) || context.Environment.Length > 128 ||
-            !context.Environment.All(character => char.IsAsciiLetterOrDigit(character) || character is '_' or '-'))
+            context.Environment is null || context.Environment.Length > 128 ||
+            !CompositionSourceFiles.IsEnvironmentName(context.Environment))
             throw Invalid();
     }
 
