@@ -150,7 +150,7 @@ You **MUST** consider the user input before proceeding (if not empty).
 6. Execute implementation following the task plan:
    - **Phase-by-phase execution**: Complete each phase before moving to the next
    - **Respect dependencies**: Run sequential tasks in order, parallel tasks [P] can run together  
-   - **Follow the declared test cadence**: For greenfield tasks, use the application-level choice in [framework §2.21.2](../../../.specify/memory/constitution-framework.md#2212-greenfield-test-discipline). Use test-first execution only when application policy, the feature specification, or the user explicitly chooses TDD.
+   - **Follow the declared test cadence**: For greenfield tasks, use the application-level choice in [framework §2.21.2](../../../.specify/memory/constitution-framework.md#2212-greenfield-test-discipline). Use test-first execution only when the application's derived constitution declares TDD.
    - **File-based coordination**: Tasks affecting the same files must run sequentially
    - **Validation checkpoints**: Verify each phase completion before proceeding
 
