@@ -19,7 +19,10 @@ param(
     [string] $Username = "admin",
     [string] $Password = "Password123!",
     [string] $TraceParent = "",
-    [ValidateSet("Coalesced", "Immediate")][string] $ExpectedCadence = "Coalesced"
+    [ValidateSet("Coalesced", "Immediate")][string] $ExpectedCadence = "Coalesced",
+    [string] $WorkflowName = "RuntimeDbPaging2392Reference",
+    [string] $RoutePath = "runtime-db-paging-2392/transform",
+    [switch] $SetupOnly
 )
 . "$PSScriptRoot/../_ElsaCommon.ps1"
 
@@ -36,8 +39,8 @@ if ($TraceParent -notmatch '^00-(?!0{32})[0-9a-fA-F]{32}-(?!0{16})[0-9a-fA-F]{16
 }
 $TraceParent = $TraceParent.ToLowerInvariant()
 
-$workflowName = "RuntimeDbPaging2392Reference"
-$path = "runtime-db-paging-2392/transform"
+$workflowName = $WorkflowName
+$path = $RoutePath
 $payload = '{"firstName":"Alice","lastName":"Smith"}'
 
 Write-Host "== #2392 $ExpectedCadence HTTP reference (non-equivalent) == -> $BaseUrl" -ForegroundColor Cyan
@@ -77,7 +80,7 @@ $variables = @(
 
 $definition = Invoke-Step "submit reference workflow" {
     Submit-Workflow -Ctx $ctx -Name $workflowName `
-        -Description "Task #2392 current-head Coalesced reference; non-equivalent to historical custom transform." `
+        -Description "Task #2392 current-head $ExpectedCadence HTTP reference; non-equivalent to historical custom transform." `
         -RootActivity $root -Variables $variables
 }
 $publication = Invoke-Step "publish reference workflow" {
@@ -129,9 +132,26 @@ Write-Host ("[executable] {0}" -f ($publishedSet | ConvertTo-Json -Compress -Dep
 Write-Host '[wire]       intrinsicKind="Set"; activityContract may be omitted or null (JsonPayloadSerializer uses WhenWritingNull; compiler in-memory ActivityContract is separately null).'
 Write-Host "[fusion]     WorkflowIntrinsicFusion.IsFusable(Set)=true (source verified at this candidate)."
 
+# The management trigger index refresh is bounded to the same one interval for both setup-only and diagnostic flows.
+Start-Sleep -Seconds 1 # Give the published trigger table one refresh interval.
+
+if ($SetupOnly) {
+    return [pscustomobject]@{
+        DefinitionId       = [string]$definition.definition.id
+        VersionId          = [string]$definition.version.id
+        ArtifactId         = [string]$publication.artifactId
+        SourceReferenceId  = [string]$publication.sourceReferenceId
+        WorkflowName       = $workflowName
+        RoutePath          = $path
+        ExpectedCadence    = $ExpectedCadence
+        CandidateSourceSha = $HostCandidateSha.ToLowerInvariant()
+        Context            = $ctx
+        ExecutableExport   = $export
+    }
+}
+
 # Content-addressed artifacts can be shared across authored source definitions. Filter on this run's unique source
 # definition and reject ambiguity instead of selecting an unrelated older instance.
-Start-Sleep -Seconds 1 # Give the published trigger table one refresh interval.
 # PowerShell persists explicit request headers on a reused WebSession. Keep the trigger's traceparent
 # on a separate authenticated session so instance inspection cannot join the trigger trace.
 $triggerSession = [Microsoft.PowerShell.Commands.WebRequestSession]::new()

@@ -33,11 +33,13 @@
 param(
     [Parameter(Mandatory)][string] $BaseUrl,
     [Parameter(Mandatory)][ValidatePattern('^[0-9a-fA-F]{40}$')][string] $HostCandidateSha,
-    [Parameter(Mandatory)][ValidateNotNullOrEmpty()][string] $HttpArtifactId,
-    [Parameter(Mandatory)][ValidateNotNullOrEmpty()][string] $HttpSourceReferenceId,
+    [string] $HttpArtifactId = '',
+    [string] $HttpSourceReferenceId = '',
     [string] $Username = 'admin',
     [string] $Password = 'Password123!',
-    [ValidateRange(1, 30)][int] $StatusReadTimeoutSeconds = 8
+    [ValidateRange(1, 30)][int] $StatusReadTimeoutSeconds = 8,
+    [switch] $CompanionOnly,
+    [switch] $SetupOnly
 )
 
 . "$PSScriptRoot/../variables/_VarCommon.ps1"
@@ -46,6 +48,12 @@ $ErrorActionPreference = 'Stop'
 $ExpectedText = 'Alice Smith'
 $Content = [ordered]@{ firstName = 'Alice'; lastName = 'Smith' }
 $ComputeExpression = "getVariable('content').firstName + ' ' + getVariable('content').lastName"
+if (-not $CompanionOnly -and ([string]::IsNullOrWhiteSpace($HttpArtifactId) -or [string]::IsNullOrWhiteSpace($HttpSourceReferenceId))) {
+    throw 'HttpArtifactId and HttpSourceReferenceId are required unless CompanionOnly is selected.'
+}
+if ($SetupOnly -and -not $CompanionOnly) {
+    throw 'SetupOnly is supported only with CompanionOnly so the failed direct REST attempt cannot be created.'
+}
 
 function New-TraceIdentity {
     $traceId = [Guid]::NewGuid().ToString('N').ToLowerInvariant()
@@ -216,39 +224,44 @@ function Write-RunReadback {
 }
 
 Write-Host '== #2386 REST-start source/workload control ==' -ForegroundColor Cyan
-Write-Host ("candidateSourceSha={0}; directArtifactId={1}; directSourceReferenceId={2}" -f `
-    $HostCandidateSha, $HttpArtifactId, $HttpSourceReferenceId)
+if ($CompanionOnly) {
+    Write-Host ("candidateSourceSha={0}; directAttempt=skipped by CompanionOnly" -f $HostCandidateSha)
+    $directReason = 'not attempted by explicit CompanionOnly selection'
+} else {
+    Write-Host ("candidateSourceSha={0}; directArtifactId={1}; directSourceReferenceId={2}" -f `
+        $HostCandidateSha, $HttpArtifactId, $HttpSourceReferenceId)
 
-# First ask the selected HTTP-published artifact to start over the ordinary REST execute route.
-$directBody = @{
-    sourceReferenceId = $HttpSourceReferenceId
-    inputs = @{ content = $Content }
-} | ConvertTo-Json -Depth 10 -Compress
-$directPath = "runtime/workflows/executables/$HttpArtifactId/execute"
-$directRequest = Invoke-TracedJsonRequest -Method POST -Path $directPath -Body $directBody
-$directExecutionId = if ($directRequest.Data) { [string]$directRequest.Data.workflowExecutionId } else { $null }
-Write-Host ("[direct] executeHttpStatus={0}; traceId={1}; executionId={2}; sourceReferenceId={3}" -f `
-    $directRequest.StatusCode, $directRequest.TraceId, (Format-ReportedValue $directExecutionId), $HttpSourceReferenceId)
+    # Default behavior: first ask the selected HTTP-published artifact to start over the ordinary REST execute route.
+    $directBody = @{
+        sourceReferenceId = $HttpSourceReferenceId
+        inputs = @{ content = $Content }
+    } | ConvertTo-Json -Depth 10 -Compress
+    $directPath = "runtime/workflows/executables/$HttpArtifactId/execute"
+    $directRequest = Invoke-TracedJsonRequest -Method POST -Path $directPath -Body $directBody
+    $directExecutionId = if ($directRequest.Data) { [string]$directRequest.Data.workflowExecutionId } else { $null }
+    Write-Host ("[direct] executeHttpStatus={0}; traceId={1}; executionId={2}; sourceReferenceId={3}" -f `
+        $directRequest.StatusCode, $directRequest.TraceId, (Format-ReportedValue $directExecutionId), $HttpSourceReferenceId)
 
-if ($directRequest.StatusCode -lt 200 -or $directRequest.StatusCode -ge 300) {
-    throw "Direct REST execute was not accepted (HTTP $($directRequest.StatusCode)); status and trace ID are retained above."
+    if ($directRequest.StatusCode -lt 200 -or $directRequest.StatusCode -ge 300) {
+        throw "Direct REST execute was not accepted (HTTP $($directRequest.StatusCode)); status and trace ID are retained above."
+    }
+    if ([string]::IsNullOrWhiteSpace($directExecutionId)) {
+        throw "Direct REST execute returned HTTP $($directRequest.StatusCode) without a workflowExecutionId; no instance could be read."
+    }
+
+    $directReadback = Get-InstanceDetailBounded -ExecutionId $directExecutionId
+    $directOutput = Get-OutputValueSafe -Instance $directReadback.Detail -Name 'referenceText'
+    Write-RunReadback -Label 'direct' -Readback $directReadback -OutputValue $directOutput
+
+    $directTerminal = (Get-RunStatus $directReadback.Detail) -in @('Completed', 'Finished')
+    if ($directTerminal -and $directOutput -eq $ExpectedText) {
+        Write-Host 'SUCCESS - direct REST start reached terminal state and exposed exact Alice Smith output.' -ForegroundColor Green
+        return
+    }
+
+    $directReason = Get-DirectFallbackReason -Readback $directReadback -OutputValue $directOutput
+    Write-Host ("[direct] not accepted as the control: {0}" -f $directReason) -ForegroundColor Yellow
 }
-if ([string]::IsNullOrWhiteSpace($directExecutionId)) {
-    throw "Direct REST execute returned HTTP $($directRequest.StatusCode) without a workflowExecutionId; no instance could be read."
-}
-
-$directReadback = Get-InstanceDetailBounded -ExecutionId $directExecutionId
-$directOutput = Get-OutputValueSafe -Instance $directReadback.Detail -Name 'referenceText'
-Write-RunReadback -Label 'direct' -Readback $directReadback -OutputValue $directOutput
-
-$directTerminal = (Get-RunStatus $directReadback.Detail) -in @('Completed', 'Finished')
-if ($directTerminal -and $directOutput -eq $ExpectedText) {
-    Write-Host 'SUCCESS - direct REST start reached terminal state and exposed exact Alice Smith output.' -ForegroundColor Green
-    return
-}
-
-$directReason = Get-DirectFallbackReason -Readback $directReadback -OutputValue $directOutput
-Write-Host ("[direct] not accepted as the control: {0}" -f $directReason) -ForegroundColor Yellow
 
 # Build the ordinary REST companion only after preserving the actual direct result above.
 $sequenceContext = New-TracedContext
@@ -283,6 +296,20 @@ $publishTraceId = $publishContext.TraceId
 Write-Host ("[companion] artifactId={0}; sourceReferenceId={1}; sequenceLookupTraceId={2}; submitTraceId={3}; publishTraceId={4}" -f `
     $published.artifactId, $published.sourceReferenceId, $sequenceLookupTraceId, $submitTraceId, $publishTraceId)
 Write-Host '[companion-shape] omits HttpEndpoint admission and WriteHttpResponse transport; adds SetVariable(input.content -> workflow variable content) and SetOutput(referenceText).'
+
+if ($SetupOnly) {
+    $executableExport = Invoke-RestMethod "$BaseUrl/publishing/workflows/$($definition.version.id)/executable-export" -WebSession $publishContext.Context.Session
+    return [pscustomobject]@{
+        DefinitionId       = [string]$definition.definition.id
+        VersionId          = [string]$definition.version.id
+        ArtifactId         = [string]$published.artifactId
+        SourceReferenceId  = [string]$published.sourceReferenceId
+        WorkflowName       = $companionName
+        CandidateSourceSha = $HostCandidateSha.ToLowerInvariant()
+        Context            = $publishContext.Context
+        ExecutableExport   = $executableExport
+    }
+}
 
 $companionBody = @{
     sourceReferenceId = $published.sourceReferenceId
