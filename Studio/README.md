@@ -6,7 +6,11 @@ For a current map of the host, shell, modules, routing, API boundaries, and auth
 
 For operator guidance on current run health and following incidents to exact runtime evidence, see [Workflow run incidents](docs/workflow-run-incidents.md).
 
-Want to contribute? Start with the [human contribution guide](CONTRIBUTING.md).
+These repositories develop the Elsa 4 preview. Elsa 3 uses the separate [elsa-core](https://github.com/elsa-workflows/elsa-core) and [elsa-studio](https://github.com/elsa-workflows/elsa-studio) repositories.
+
+- **Try Elsa 4:** [run Workbench and Studio from published Docker images](https://github.com/elsa-workflows/elsa-foundation/blob/main/docker/compose/README.md#quick-start--published-images-no-clone-or-build).
+- **Contribute to the server:** follow the [Elsa Foundation contribution guide](https://github.com/elsa-workflows/elsa-foundation/blob/main/CONTRIBUTING.md).
+- **Contribute to Studio:** follow the [Elsa Foundation Studio contribution guide](CONTRIBUTING.md).
 
 The host is composed from independently enabled Studio capabilities:
 
