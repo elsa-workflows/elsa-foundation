@@ -4,7 +4,7 @@
 
 **Prerequisites**: `plan.md`, `spec.md`, `research.md`, `data-model.md`, `contracts/coalesced-page-merge.md`, and `quickstart.md`.
 
-**Scope boundary**: These are the implementation tasks for follow-on issue #2393, after lead review. They do not assign runtime implementation to #2392. The required #2392 current-head before trace is separately pending in `reference-trace.md`.
+**Scope boundary**: These are the implementation tasks for follow-on issue #2393, after lead review and predecessor integration. They do not assign runtime implementation to #2392. The required #2392 pre-fix trace is captured and reviewed in [reference-trace.md](reference-trace.md); #2393 still requires red-before-green implementation proof and the same-fixture after capture.
 
 ## Phase 1: Setup
 

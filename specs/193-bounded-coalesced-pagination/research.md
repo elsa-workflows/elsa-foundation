@@ -1,7 +1,7 @@
 # Research: Bounded Coalesced Runtime-Store Page Merging
 
 **Date**: 2026-10-05
-**Candidate source**: `7b8e5d1304c198ce80dcc3d17aed5598245c7352`
+**Initial source-audit candidate**: `7b8e5d1304c198ce80dcc3d17aed5598245c7352`. The later captured binary was built at `5d28bd0cd3d76004988a01b0f0abd7af3af313d6`; runtime source is unchanged across those documentation/capture commits.
 **Graph source**: primary checkout `Users-sipke-Projects-Elsa-elsa-foundation-main`; the worktree was not indexed.
 
 ## R1. Current merge loop issues one-row reads and loses per-call reuse
@@ -34,4 +34,4 @@ Use a bounded per-call durable-page buffer and per-call exhausted-source state. 
 
 ## R6. Host trace status
 
-The current-head pre-fix Coalesced normal-host trace is an acceptance deliverable, not source-based inference. The agreed fixture is specified in `quickstart.md`. Host build/database capture is paused until the program lead confirms the shared machine load has fallen; no host, database, container, restore, or build has been started in this worktree. When captured, attach exact command output and effective instance readback in `reference-trace.md`, label this fixture representative and non-equivalent to the earlier custom-transform workload, and retain any unavailable values as pending rather than infer them.
+The pre-fix Coalesced normal-host trace is actual evidence, separate from the source mechanism above. The agreed fixture is specified in `quickstart.md`; the narrow build, owned PostgreSQL16.15 capture, effective readback, corrected engine-span ancestry and cleanup are recorded in [reference-trace.md](reference-trace.md). Root and independent QA accepted curated trace reconciliation. The fixture remains representative and non-equivalent to the earlier custom transform. Timing, untraced/background settled work, SQL-statement census and provider round trips remain explicitly qualified; no runtime optimization has been implemented by #2392.

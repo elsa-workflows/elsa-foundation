@@ -6,14 +6,14 @@
 
 ## Summary
 
-Reduce repeated inner-store page calls made while a Coalesced runtime store merges durable rows and session overlays. Use a bounded page buffer and per-call exhaustion state; keep fetched-but-unemitted candidates recoverable at output-page boundaries without persisting row payloads or introducing global cache state. Preserve sorted overlay semantics, existing store interfaces, opaque continuation compatibility, Immediate defaults, and durability/fencing/inspection behavior. Implementation is assigned to #2393 only after this plan and its tasks are reviewed. Task #2392 also requires an exact-current-head Coalesced normal-host reference trace; it remains pending while the shared build machine is overloaded.
+Reduce repeated inner-store page calls made while a Coalesced runtime store merges durable rows and session overlays. Use a bounded page buffer and per-call exhaustion state; keep fetched-but-unemitted candidates recoverable at output-page boundaries without persisting row payloads or introducing global cache state. Preserve sorted overlay semantics, existing store interfaces, opaque continuation compatibility, Immediate defaults, and durability/fencing/inspection behavior. Root reviewed this plan/tasks; implementation belongs to #2393 after #2392's integration gates. The required pre-fix Coalesced normal-host trace is captured and reviewed in [reference-trace.md](reference-trace.md). Timing remains held under excessive shared load.
 
 ## Technical Context
 
 **Language/Version**: C# / .NET 10.0.300 SDK on the current host.
 **Primary Dependencies**: Existing Elsa runtime store abstractions, EF Core runtime persistence adapter, and existing PowerShell REST e2e helpers.
 **Storage**: Existing runtime stores; PostgreSQL 16 is used only for the separate normal-host reference trace in a uniquely named disposable container/database.
-**Testing**: `tests/essentials/Workflows/Runtime/Tests/Elsa.Workflows.Runtime.Tests.csproj`, plus the manual HTTP capture fixture in `e2e-tests/http/Capture-RuntimeDbPaging2392Reference.ps1` after the host trace can run.
+**Testing**: `tests/essentials/Workflows/Runtime/Tests/Elsa.Workflows.Runtime.Tests.csproj`, plus the manual HTTP capture fixture in `e2e-tests/http/Capture-RuntimeDbPaging2392Reference.ps1` for the same-fixture after comparison.
 **Target Platform**: Workbench normal host and the existing supported runtime-store providers.
 **Project Type**: .NET runtime library with REST/e2e validation.
 **Performance Goals**: Deterministic bounded inner-page call counts in correctness tests. Elapsed time is evidence only; it is not a CI threshold.
@@ -77,7 +77,7 @@ No other provider or API files are in the initial implementation scope. If a sup
 1. Before the implementation, add deterministic tests and run the exact named tests against this baseline to record the expected red call-count failure. Do not change production code for the pre-fix proof.
 2. Implement #2393, then run the entire affected runtime test project as a whole. Verify all pages and exact call counts, cancellation, empty-terminal exhaustion, the existing constructor rejection for an empty page with a continuation, equality replacement, tombstone suppression, and valid pre-change token decoding.
 3. Perform a mutation bite-proof by restoring the repeated-probe behavior or disabling buffer retention, show the bounded-call test failing, restore the fix, and rerun the complete focused project green.
-4. Run `e2e-tests/http/Capture-RuntimeDbPaging2392Reference.ps1` on the rebuilt current candidate with PostgreSQL 16 in a fresh disposable container/database. This is a manually invoked capture, outside the global `Test-*.ps1` HTTP suite; it is not a routine test or performance gate. Keep response correctness, terminal state, per-run cadence, SQL command output, and settled follow-up work as separate evidence. The initial #2392 baseline uses SHA `7b8e5d1304c198ce80dcc3d17aed5598245c7352` and the same settings for after comparison.
+4. Run `e2e-tests/http/Capture-RuntimeDbPaging2392Reference.ps1` on the rebuilt current candidate with PostgreSQL 16 in a fresh disposable container/database. This is a manually invoked capture, outside the global `Test-*.ps1` HTTP suite; it is not a routine test or performance gate. Keep response correctness, terminal state, per-run cadence, EF command output, and settled follow-up work as separate evidence. The captured #2392 baseline was built at `5d28bd0cd3d76004988a01b0f0abd7af3af313d6` and used script HEAD `3c6bd3da83c49ea84c9823c8d0181b46c468f881`; runtime inputs and DLL identity were independently checked. Preserve its provider, fixture and effective settings for the after comparison, with the new candidate source/build recorded separately.
 5. Root owns the final integration gates: relevant REST e2e, architecture guard, generated-maps check, full diff review, and issue/Project transitions. No measurement is interpreted as a latency result while the shared machine is overloaded.
 
 ## Complexity Tracking

@@ -32,4 +32,4 @@
 ## Notes
 
 - The exact `crsp1` token encoding, 100/500 request bounds, affected source/test paths, PostgreSQL reference setup, and executable intrinsic evidence belong to planning/research/contract artifacts; the specification names only the user-visible compatibility and boundedness rules.
-- The required #2392 pre-fix normal-host reference capture remains pending under the shared-load hold and is tracked separately in [reference-trace.md](../reference-trace.md). This is an evidence-execution residual, not an unresolved specification decision.
+- The required #2392 pre-fix normal-host reference is captured, with corrected POST ancestry/counts reviewed in [reference-trace.md](../reference-trace.md). PR integration gates remain pending; timing and the broader T04 settled-work ledger are separate outcomes.
