@@ -2,6 +2,8 @@
 
 **Status: T02 remains in progress.** This is a bounded source audit for the captured successful HTTP reference and ordinary REST companion in Coalesced and Immediate modes. It identifies source-backed query families and why their read-before-write checks exist; it does not attribute an EF command to a specific method, estimate latency, establish provider round trips, or close T04 settled-work accounting. The complementary [EF identity ledger](ef-identity-accounting.md) supplies observed context/provider/lifecycle joins, and [before timings](before-timing.md) are now recorded separately. Exact callers, participants and T04 settlement remain open. See the [baseline accounting](baseline-accounting.md) for fixture identities, outcomes, command totals, and the accepted capture qualifications.
 
+The later [bounded Azure settlement packet](azure-settled-accounting.md) adds a primary Coalesced settlement snapshot and six subsequent source-bound resumption sweeps. Its separate acceptance does not retroactively fill the exact-caller or participant gaps in the older packets mapped here.
+
 ## Evidence boundary
 
 The assigned accounting worktree was clean at `3cf6e806da1338d64faa2f628a3486d21a227a27`; its runtime source files match dependency main `e6faa5689814c33353009b13f5b9e44d0e9982a4`. Code discovery used the indexed primary project first. Some current primary-checkout runtime files differ from this captured-source revision, so graph results were used only to navigate symbols and caller relationships, then cross-checked against the exact worktree source. Graph relationships are not proof of which source calls produced the captured database events.
