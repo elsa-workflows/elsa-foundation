@@ -10,13 +10,13 @@
 
 **Purpose**: Confirm exact baseline and scoped project.
 
-- [ ] T001 Confirm the reviewed scope, implementation branch, and focused test command in `specs/193-bounded-coalesced-pagination/plan.md`.
+- [x] T001 Confirm the reviewed scope, implementation branch, and focused test command in `specs/193-bounded-coalesced-pagination/plan.md`.
 
 ## Phase 2: Foundational
 
 **Purpose**: Keep merge semantics and existing continuation behavior as the implementation baseline.
 
-- [ ] T002 Record baseline expectations for the existing coalesced paging cases in `tests/essentials/Workflows/Runtime/Tests/RuntimeCheckpointCoalescingTests.cs` before changing production behavior.
+- [x] T002 Record baseline expectations for the existing coalesced paging cases in `tests/essentials/Workflows/Runtime/Tests/RuntimeCheckpointCoalescingTests.cs` before changing production behavior.
 
 ## Phase 3: User Story 1 - Read merged pages without repeated inner probes (Priority: P1)
 
@@ -26,12 +26,12 @@
 
 ### Tests for User Story 1
 
-- [ ] T003 [US1] Add the empty durable source with 128 overlays and exact call-count regression to `tests/essentials/Workflows/Runtime/Tests/RuntimeCheckpointCoalescingTests.cs`; demonstrate the assertion fails on the unmodified merger.
-- [ ] T004 [US1] Add the overlay-before-durable candidate plus has-next retention regression to `tests/essentials/Workflows/Runtime/Tests/RuntimeCheckpointCoalescingTests.cs`; assert exact candidate read count and row order.
+- [x] T003 [US1] Add the empty durable source with 128 overlays and exact call-count regression to `tests/essentials/Workflows/Runtime/Tests/RuntimeCheckpointCoalescingTests.cs`; demonstrate the assertion fails on the unmodified merger.
+- [x] T004 [US1] Add the overlay-before-durable candidate plus has-next retention regression to `tests/essentials/Workflows/Runtime/Tests/RuntimeCheckpointCoalescingTests.cs`; assert exact candidate read count and row order.
 
 ### Implementation for User Story 1
 
-- [ ] T005 [US1] Implement a request-scoped bounded durable-page buffer and memoized terminal exhaustion in `src/essentials/Workflows/Runtime/Services/Coalescing/CoalescingRuntimeStateStores.cs`.
+- [x] T005 [US1] Implement a request-scoped bounded durable-page buffer and memoized terminal exhaustion in `src/essentials/Workflows/Runtime/Services/Coalescing/CoalescingRuntimeStateStores.cs`.
 
 ## Phase 4: User Story 2 - Preserve identity and ordering across continuations (Priority: P1)
 
@@ -41,12 +41,12 @@
 
 ### Tests for User Story 2
 
-- [ ] T006 [US2] Add a multi-page fixture with interleaved durable rows, a same-identity replacement, a tombstone, and overlay-only rows to `tests/essentials/Workflows/Runtime/Tests/RuntimeCheckpointCoalescingTests.cs`.
-- [ ] T007 [US2] Add an output-boundary case that replays the bounded page from before an unconsumed row and filters by last-emitted identity in `tests/essentials/Workflows/Runtime/Tests/RuntimeCheckpointCoalescingTests.cs`.
+- [x] T006 [US2] Add a multi-page fixture with interleaved durable rows, a same-identity replacement, a tombstone, and overlay-only rows to `tests/essentials/Workflows/Runtime/Tests/RuntimeCheckpointCoalescingTests.cs`.
+- [x] T007 [US2] Add an output-boundary case that replays the bounded page from before an unconsumed row and filters by last-emitted identity in `tests/essentials/Workflows/Runtime/Tests/RuntimeCheckpointCoalescingTests.cs`.
 
 ### Implementation for User Story 2
 
-- [ ] T008 [US2] Preserve the pre-batch provider position and last-emitted identity when returning a continuation in `src/essentials/Workflows/Runtime/Services/Coalescing/CoalescingRuntimeStateStores.cs`; commit terminal exhaustion only after buffered rows are emitted or suppressed.
+- [x] T008 [US2] Preserve the pre-batch provider position and last-emitted identity when returning a continuation in `src/essentials/Workflows/Runtime/Services/Coalescing/CoalescingRuntimeStateStores.cs`; commit terminal exhaustion only after buffered rows are emitted or suppressed.
 
 ## Phase 5: User Story 3 - Keep continuations and cancellation compatible (Priority: P1)
 
@@ -56,17 +56,17 @@
 
 ### Tests for User Story 3
 
-- [ ] T009 [US3] Add pre-change token, malformed/wrong-binding, cancellation, and empty-terminal exhaustion cases to `tests/essentials/Workflows/Runtime/Tests/RuntimeCheckpointCoalescingTests.cs`; retain the existing empty-page-with-continuation rejection coverage in `tests/essentials/Workflows/Runtime/Tests/RuntimeStorePageTests.cs`.
+- [x] T009 [US3] Add pre-change token, malformed/wrong-binding, cancellation, and empty-terminal exhaustion cases to `tests/essentials/Workflows/Runtime/Tests/RuntimeCheckpointCoalescingTests.cs`; retain the existing empty-page-with-continuation rejection coverage in `tests/essentials/Workflows/Runtime/Tests/RuntimeStorePageTests.cs`.
 
 ### Implementation for User Story 3
 
-- [ ] T010 [US3] Keep the existing `crsp1` serialization envelope and memoize empty-terminal exhaustion in `src/essentials/Workflows/Runtime/Services/Coalescing/CoalescingRuntimeStateStores.cs` without changing the public token contract. Leave `CoalescingRuntimeStoreContinuation.cs` unchanged unless implementation review identifies a concrete codec requirement.
+- [x] T010 [US3] Keep the existing `crsp1` serialization envelope and memoize empty-terminal exhaustion in `src/essentials/Workflows/Runtime/Services/Coalescing/CoalescingRuntimeStateStores.cs` without changing the public token contract. Leave `CoalescingRuntimeStoreContinuation.cs` unchanged unless implementation review identifies a concrete codec requirement.
 
 ## Final Phase: Verification and cross-cutting concerns
 
 **Purpose**: Prove algorithmic boundedness, host compatibility, and the intended before/after distinction.
 
-- [ ] T011 Run the focused whole runtime test project and the expected red-then-green mutation proof using `tests/essentials/Workflows/Runtime/Tests/Elsa.Workflows.Runtime.Tests.csproj`.
+- [x] T011 Run the focused whole runtime test project and the expected red-then-green mutation proof using `tests/essentials/Workflows/Runtime/Tests/Elsa.Workflows.Runtime.Tests.csproj`.
 - [ ] T012 Run the same representative PostgreSQL Workbench journey before and after the correction with the manually invoked `e2e-tests/http/Capture-RuntimeDbPaging2392Reference.ps1`; record exact output, terminal state, effective cadence, and command trace in `specs/193-bounded-coalesced-pagination/reference-trace.md`.
 - [ ] T013 Review changed source and docs against `specs/193-bounded-coalesced-pagination/contracts/coalesced-page-merge.md` and the scoped boundary in `specs/193-bounded-coalesced-pagination/plan.md`.
 
