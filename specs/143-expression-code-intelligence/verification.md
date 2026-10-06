@@ -1,5 +1,13 @@
 # Expression Code Intelligence Foundation — Verification
 
+## Current integration snapshot — 2026-10-06
+
+The existing Foundation expression stack is being synchronized with main `2a0d1f10fb91bf6928203430d938d99d183c5cda`. The root planning branch changes no production, test, SDK or workflow file relative to that main. Its generated spec-status map retains the reopened expression work (25 completed tasks and 6 open tasks) and the two new draft specs. Root and independent diff review pass; authoritative combined-head Maps and CI remain pending. Historical baseline results below do not establish acceptance of this synchronized stack or a new Studio/Foundation pair.
+
+The owner permits preview NuGet/npm publication only to feedz.io and separately permits Docker images at any endpoint; this delivery keeps the existing Docker Hub workflows. Native Chrome/Safari VoiceOver is **SKIPPED BY OWNER DECISION — NEVER PASSED**. All program PRs remain draft/unmerged pending technical/review gates and explicit final owner acceptance. Required resulting-main checks and public completion records remain open.
+
+## Retained historical baseline
+
 Last reconciled: 2026-10-03 for Program #2310 M2 local conformance verification; committed-head CI/review, delivery and final human acceptance pending
 
 ## Program #2310 status
