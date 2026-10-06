@@ -1,4 +1,5 @@
 using System.Data.Common;
+using System.Diagnostics;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
@@ -766,7 +767,7 @@ internal static class Program
             CommandEventData eventData,
             InterceptionResult<DbDataReader> result)
         {
-            CountIfMappingRead(command);
+            CountIfMappingRead(command, eventData);
             return result;
         }
 
@@ -776,17 +777,18 @@ internal static class Program
             InterceptionResult<DbDataReader> result,
             CancellationToken cancellationToken = default)
         {
-            CountIfMappingRead(command);
+            CountIfMappingRead(command, eventData);
             return ValueTask.FromResult(result);
         }
 
-        private void CountIfMappingRead(DbCommand command)
+        private void CountIfMappingRead(DbCommand command, CommandEventData eventData)
         {
             var sql = command.CommandText.TrimStart();
             if (sql.StartsWith("SELECT", StringComparison.OrdinalIgnoreCase) &&
                 sql.Contains(IdentityIamEfModule.ClaimMappingTableName, StringComparison.OrdinalIgnoreCase))
             {
                 var evidence = CaptureOperationEvidence(_httpContextAccessor?.HttpContext);
+                var callerPath = CaptureCallerPath();
                 lock (_gate)
                 {
                     _lifetimeCount++;
@@ -803,9 +805,55 @@ internal static class Program
                         evidence.DirectHttpOperationId,
                         evidence.FlowedOperationId,
                         evidence.FlowedOperationKind,
-                        evidence.FlowedContextCategory));
+                        evidence.FlowedContextCategory,
+                        callerPath,
+                        eventData.CommandId.ToString("N"),
+                        eventData.Context?.ContextId.InstanceId.ToString("N"),
+                        eventData.Context is null ? "none" : eventData.Context is IdentityIamDbContext ? "identity-iam" : "other"));
                 }
             }
+        }
+
+        private static string CaptureCallerPath()
+        {
+            const int maxFrames = 64;
+            const string claimMappingStore = "Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Stores.EfClaimMappingStore";
+            const string schemaStampedTable = "Elsa.Persistence.EntityFramework.SchemaBackfill.EfSchemaStampedTable";
+
+            var frames = new StackTrace(fNeedFileInfo: false).GetFrames();
+            if (frames is null)
+                return "unknown";
+
+            foreach (var frame in frames.Take(maxFrames))
+            {
+                var method = frame.GetMethod();
+                var frameType = method?.DeclaringType;
+                if (frameType is null)
+                    continue;
+
+                if (string.Equals(frameType.FullName, claimMappingStore, StringComparison.Ordinal) ||
+                    string.Equals(frameType.DeclaringType?.FullName, claimMappingStore, StringComparison.Ordinal))
+                    return "claim-mapping-store";
+
+                if (string.Equals(frameType.FullName, schemaStampedTable, StringComparison.Ordinal))
+                {
+                    if (method!.Name == "CountCoreAsync")
+                        return "schema-stamped-count";
+                    if (method.Name == "PageCoreAsync")
+                        return "schema-stamped-page";
+                }
+
+                if (!string.Equals(frameType.DeclaringType?.FullName, schemaStampedTable, StringComparison.Ordinal) ||
+                    !string.Equals(method!.Name, "MoveNext", StringComparison.Ordinal))
+                    continue;
+
+                if (frameType.Name.StartsWith("<CountCoreAsync>d__", StringComparison.Ordinal))
+                    return "schema-stamped-count";
+                if (frameType.Name.StartsWith("<PageCoreAsync>d__", StringComparison.Ordinal))
+                    return "schema-stamped-page";
+            }
+
+            return "unknown";
         }
 
         private OperationTag CreateOperation(string operationKind, string contextCategory)
@@ -918,7 +966,11 @@ internal static class Program
             string? DirectHttpOperationId,
             string? FlowedOperationId,
             string? FlowedOperationKind,
-            string? FlowedContextCategory);
+            string? FlowedContextCategory,
+            string CallerPath,
+            string CommandId,
+            string? DbContextId,
+            string DbContextKind);
 
         public sealed record CounterSnapshot(
             long MappingReadEpoch,

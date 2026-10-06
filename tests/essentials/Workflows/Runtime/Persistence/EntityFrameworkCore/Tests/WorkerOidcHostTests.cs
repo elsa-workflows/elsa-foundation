@@ -489,6 +489,15 @@ public sealed class WorkerOidcHostTests
         var directHttpContext = observation.GetProperty("directHttpContextPresent").GetBoolean()
             ? "present"
             : "absent";
+        var callerPath = observation.TryGetProperty("callerPath", out var caller)
+            ? $" caller={caller.GetString()}"
+            : string.Empty;
+        var commandId = observation.TryGetProperty("commandId", out var command)
+            ? $" command={command.GetString()}"
+            : string.Empty;
+        var dbContext = observation.TryGetProperty("dbContextKind", out var contextKind)
+            ? $" db-context={contextKind.GetString()}/{observation.GetProperty("dbContextId").GetString() ?? "none"}"
+            : string.Empty;
         return $"{observation.GetProperty("operationId").GetString()} " +
                $"{observation.GetProperty("operationSource").GetString()}/" +
                $"{observation.GetProperty("operationKind").GetString()}:" +
@@ -497,7 +506,8 @@ public sealed class WorkerOidcHostTests
                $"direct-http {directHttpContext}/{observation.GetProperty("directHttpOperationId").GetString() ?? "none"} " +
                $"flowed {observation.GetProperty("flowedOperationId").GetString() ?? "none"}/" +
                $"{observation.GetProperty("flowedOperationKind").GetString() ?? "none"}:" +
-               $"{observation.GetProperty("flowedContextCategory").GetString() ?? "none"}";
+               $"{observation.GetProperty("flowedContextCategory").GetString() ?? "none"}" +
+               callerPath + commandId + dbContext;
     }
 
     private static async Task AssertNoRuntimeRowsAsync(WorkerOidcHostProcess host)
