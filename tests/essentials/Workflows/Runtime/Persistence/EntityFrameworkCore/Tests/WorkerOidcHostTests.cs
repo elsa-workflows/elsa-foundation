@@ -53,7 +53,7 @@ public sealed class WorkerOidcHostTests
         {
             await ResetMappingReadsAsync(first);
             using var response = await PostExecuteAsync(first, artifactId, token, probe);
-            await AssertNoMappingReadOrRuntimeEffectAsync(first, probe, response.StatusCode);
+            await AssertNoMappingReadOrRuntimeEffectAsync(first, probe, response.StatusCode, RequestOperationId(response));
             await AssertNoUserOrExternalIdentityRowsAsync(first);
         }
 
@@ -72,7 +72,8 @@ public sealed class WorkerOidcHostTests
             await ResetMappingReadsAsync(first);
             using var response = await PostExecuteAsync(first, artifactId, invalidToken);
             Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
-            await AssertNoMappingReadOrRuntimeEffectAsync(first);
+            await AssertNoMappingReadOrRuntimeEffectAsync(first, actualStatusCode: response.StatusCode,
+                operationId: RequestOperationId(response));
             await AssertNoUserOrExternalIdentityRowsAsync(first);
         }
 
@@ -108,6 +109,7 @@ public sealed class WorkerOidcHostTests
 
         using var executeResponse = await PostExecuteAsync(first, artifactId, token);
         Assert.Equal(HttpStatusCode.OK, executeResponse.StatusCode);
+        await AssertSingleHttpMappingReadAttributedToResponseAsync(first, executeResponse, "ordinary");
         var executeResult = await ReadJsonAsync(executeResponse);
         Assert.Equal("Accepted", executeResult.GetProperty("commandDispatchStatus").GetString());
         var executionId = executeResult.GetProperty("workflowExecutionId").GetString()!;
@@ -204,6 +206,7 @@ public sealed class WorkerOidcHostTests
         var afterRestartDeniedCall = await SnapshotAsync(second, executionId);
         Assert.Equal(stateRowsBeforeRevokedCall, afterRestartDeniedCall.GetProperty("workflowExecutionStateRows").GetInt32());
         await AssertNoUserOrExternalIdentityRowsAsync(second);
+        await AssertResetSpanningControlReadAsync(second);
     }
 
     [UnixPtyFact]
@@ -241,8 +244,11 @@ public sealed class WorkerOidcHostTests
             "Bearer", fixture.CreateToken(audience: WorkerOidcHostFixture.Audience));
         await ResetMappingReadsAsync(host);
         using (var response = await host.Client.SendAsync(oldAudienceRequest))
+        {
             Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
-        await AssertNoMappingReadOrRuntimeEffectAsync(host);
+            await AssertNoMappingReadOrRuntimeEffectAsync(host, actualStatusCode: response.StatusCode,
+                operationId: RequestOperationId(response));
+        }
         await AssertNoUserOrExternalIdentityRowsAsync(host);
 
         using var candidateAudienceRequest = new HttpRequestMessage(HttpMethod.Get, "/capabilities");
@@ -376,26 +382,86 @@ public sealed class WorkerOidcHostTests
     private static async Task<int> MappingReadCountAsync(WorkerOidcHostProcess host) =>
         (await SnapshotAsync(host)).GetProperty("mappingReadCount").GetInt32();
 
+    private static string RequestOperationId(HttpResponseMessage response)
+    {
+        var operationId = Assert.Single(response.Headers.GetValues(WorkerOidcHostFixture.RequestOperationIdHeader));
+        Assert.Matches("^op-[1-9][0-9]*$", operationId);
+        return operationId;
+    }
+
+    private static async Task AssertSingleHttpMappingReadAttributedToResponseAsync(
+        WorkerOidcHostProcess host,
+        HttpResponseMessage response,
+        string expectedCategory)
+    {
+        var snapshot = await SnapshotAsync(host);
+        var read = Assert.Single(snapshot.GetProperty("mappingReadObservations").EnumerateArray());
+        Assert.Equal(1, snapshot.GetProperty("mappingReadCount").GetInt64());
+        Assert.Equal(RequestOperationId(response), read.GetProperty("operationId").GetString());
+        Assert.Equal("http-request", read.GetProperty("operationKind").GetString());
+        Assert.Equal("direct-http-context", read.GetProperty("operationSource").GetString());
+        Assert.Equal(expectedCategory, read.GetProperty("contextCategory").GetString());
+        Assert.True(read.GetProperty("directHttpContextPresent").GetBoolean());
+        Assert.Equal(RequestOperationId(response), read.GetProperty("directHttpOperationId").GetString());
+        Assert.Equal(RequestOperationId(response), read.GetProperty("flowedOperationId").GetString());
+        Assert.Equal("http-request", read.GetProperty("flowedOperationKind").GetString());
+        Assert.Equal(read.GetProperty("operationEpoch").GetInt64(), read.GetProperty("queryEpoch").GetInt64());
+        Assert.False(snapshot.GetProperty("observationRecordsTruncated").GetBoolean());
+    }
+
+    private static async Task AssertResetSpanningControlReadAsync(WorkerOidcHostProcess host)
+    {
+        await ResetMappingReadsAsync(host);
+        var beforeResetSpanningControl = await SnapshotAsync(host);
+        var resetSpanningControl = await host.ControlWithReceiptAsync("list-rules", new
+        {
+            tenantId = WorkerOidcHostFixture.TenantId,
+            provider = WorkerOidcHostFixture.ProviderId
+        }, resetEpochAfterOperationEntry: true);
+        var afterResetSpanningControl = await SnapshotAsync(host);
+        var resetSpanningRead = Assert.Single(afterResetSpanningControl.GetProperty("mappingReadObservations").EnumerateArray());
+        Assert.Matches("^op-[1-9][0-9]*$", resetSpanningControl.OperationId);
+        Assert.Equal("fixture-control", resetSpanningControl.OperationKind);
+        Assert.Equal("list-rules", resetSpanningControl.OperationCategory);
+        Assert.Equal("flowed-control-operation", resetSpanningRead.GetProperty("operationSource").GetString());
+        Assert.False(resetSpanningRead.GetProperty("directHttpContextPresent").GetBoolean());
+        Assert.Equal(resetSpanningControl.OperationId, resetSpanningRead.GetProperty("flowedOperationId").GetString());
+        Assert.Equal("fixture-control", resetSpanningRead.GetProperty("flowedOperationKind").GetString());
+        Assert.Equal(resetSpanningControl.OperationId, resetSpanningRead.GetProperty("operationId").GetString());
+        Assert.Equal(resetSpanningControl.OperationEpoch, resetSpanningRead.GetProperty("operationEpoch").GetInt64());
+        Assert.Equal(resetSpanningControl.OperationEpoch + 1, resetSpanningRead.GetProperty("queryEpoch").GetInt64());
+        Assert.Equal(resetSpanningRead.GetProperty("queryEpoch").GetInt64(),
+            afterResetSpanningControl.GetProperty("mappingReadEpoch").GetInt64());
+        Assert.Equal(1, afterResetSpanningControl.GetProperty("mappingReadCount").GetInt64());
+        Assert.Equal(beforeResetSpanningControl.GetProperty("lifetimeMappingReadCount").GetInt64() + 1,
+            afterResetSpanningControl.GetProperty("lifetimeMappingReadCount").GetInt64());
+        Assert.False(afterResetSpanningControl.GetProperty("observationRecordsTruncated").GetBoolean());
+    }
+
     private static async Task AssertNoMappingReadOrRuntimeEffectAsync(
         WorkerOidcHostProcess host,
         string? expectedProbe = null,
-        HttpStatusCode? actualStatusCode = null)
+        HttpStatusCode? actualStatusCode = null,
+        string? operationId = null)
     {
         var snapshot = await SnapshotAsync(host);
-        var accessCategories = snapshot.GetProperty("persistenceAccessCategories")
-            .EnumerateArray()
-            .Select(value => value.GetString()!)
-            .ToArray();
-        var mappingReadCategories = snapshot.GetProperty("mappingReadCategories")
-            .EnumerateArray()
-            .Select(value => value.GetString()!)
-            .ToArray();
+        var accessObservations = snapshot.GetProperty("persistenceAccessObservations").EnumerateArray().ToArray();
+        var mappingReadObservations = snapshot.GetProperty("mappingReadObservations").EnumerateArray().ToArray();
+        var accessSummary = accessObservations.Select(FormatOperationObservation);
+        var mappingReadSummary = mappingReadObservations.Select(FormatOperationObservation);
         var diagnostic = $"Probe '{expectedProbe ?? "none"}', response '{actualStatusCode?.ToString() ?? "not asserted"}', " +
-                         $"access categories [{string.Join(", ", accessCategories)}], " +
-                         $"mapping-read categories [{string.Join(", ", mappingReadCategories)}].";
+                         $"operation '{operationId ?? "none"}', epoch {snapshot.GetProperty("mappingReadEpoch").GetInt64()}, " +
+                         $"lifetime SELECT count {snapshot.GetProperty("lifetimeMappingReadCount").GetInt64()}, " +
+                         $"records truncated {snapshot.GetProperty("observationRecordsTruncated").GetBoolean()}, " +
+                         $"access observations [{string.Join(", ", accessSummary)}], " +
+                         $"mapping-read observations [{string.Join(", ", mappingReadSummary)}].";
 
         if (expectedProbe is not null)
-            Assert.True(accessCategories.Contains(expectedProbe, StringComparer.Ordinal), $"Expected the probe to be observed. {diagnostic}");
+            Assert.True(accessObservations.Any(observation =>
+                    observation.GetProperty("persistenceAccessCategory").GetString() == expectedProbe &&
+                    (observation.GetProperty("directHttpOperationId").GetString() == operationId ||
+                     observation.GetProperty("flowedOperationId").GetString() == operationId)),
+                $"Expected the allowlisted persistence context and independent HTTP operation to be observed together. {diagnostic}");
         if (actualStatusCode is not null)
             Assert.True(actualStatusCode == HttpStatusCode.Unauthorized, $"Expected an unauthorized response. {diagnostic}");
 
@@ -407,6 +473,31 @@ public sealed class WorkerOidcHostTests
         Assert.Equal(WorkerOidcHostFixture.TenantId, snapshot.GetProperty("persistenceScope").GetString());
         Assert.Equal("Ordinary", snapshot.GetProperty("persistenceAccessPolicy").GetString());
         Assert.False(snapshot.GetProperty("persistenceAcrossScopes").GetBoolean());
+    }
+
+    private static string FormatOperationObservation(JsonElement observation)
+    {
+        var endEpoch = observation.TryGetProperty("queryEpoch", out var queryEpoch)
+            ? queryEpoch.GetInt64()
+            : observation.GetProperty("observationEpoch").GetInt64();
+        var startEpoch = observation.GetProperty("operationEpoch").ValueKind == JsonValueKind.Number
+            ? observation.GetProperty("operationEpoch").GetInt64().ToString()
+            : "none";
+        var persistenceAccessCategory = observation.TryGetProperty("persistenceAccessCategory", out var category)
+            ? $" selected={category.GetString()}"
+            : string.Empty;
+        var directHttpContext = observation.GetProperty("directHttpContextPresent").GetBoolean()
+            ? "present"
+            : "absent";
+        return $"{observation.GetProperty("operationId").GetString()} " +
+               $"{observation.GetProperty("operationSource").GetString()}/" +
+               $"{observation.GetProperty("operationKind").GetString()}:" +
+               $"{observation.GetProperty("contextCategory").GetString()}{persistenceAccessCategory} " +
+               $"epoch {startEpoch}->{endEpoch} " +
+               $"direct-http {directHttpContext}/{observation.GetProperty("directHttpOperationId").GetString() ?? "none"} " +
+               $"flowed {observation.GetProperty("flowedOperationId").GetString() ?? "none"}/" +
+               $"{observation.GetProperty("flowedOperationKind").GetString() ?? "none"}:" +
+               $"{observation.GetProperty("flowedContextCategory").GetString() ?? "none"}";
     }
 
     private static async Task AssertNoRuntimeRowsAsync(WorkerOidcHostProcess host)
