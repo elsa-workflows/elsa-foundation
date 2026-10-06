@@ -77,7 +77,7 @@ You **MUST** consider the user input before proceeding (if not empty).
    - Phase 1: Setup tasks (project initialization)
    - Phase 2: Foundational tasks (blocking prerequisites for all user stories)
    - Phase 3+: One phase per user story (in priority order from spec.md)
-   - Each phase includes: story goal, independent test criteria, tests required by applicable repository policy or warranted by the story's scope, and implementation tasks
+   - Each phase includes: story goal, independent test criteria, applicable test tasks, and implementation tasks; order test tasks according to the declared application cadence
    - Final Phase: Polish & cross-cutting concerns
    - All tasks must follow the strict checklist format (see Task Generation Rules below)
    - Clear file paths for each task
@@ -137,7 +137,7 @@ The tasks.md should be immediately executable - each task must be specific enoug
 
 **CRITICAL**: Tasks MUST be organized by user story to enable independent implementation and testing.
 
-**Test-task generation**: A silent feature specification does not waive tests required by repository policy. For Foundation feature classes and logic-bearing implementations in scope, include the registration and per-implementation unit-test tasks required by [framework §2.23](../../../.specify/memory/constitution-framework.md#223-unit-tests). Add other tests when requested or warranted by the story's changed behavior, contracts, or acceptance criteria. If no test obligation applies (for example, a docs-only correction), omit unrelated tests, including runtime tests.
+**Test-task generation**: A silent feature specification does not waive tests required by repository policy. For Foundation feature classes and logic-bearing implementations in scope, include the registration and per-implementation unit-test tasks required by [framework §2.23](../../../.specify/memory/constitution-framework.md#223-unit-tests). Test existence and cadence are separate: for greenfield work, follow [framework §2.21.2](../../../.specify/memory/constitution-framework.md#2212-greenfield-test-discipline); use test-first ordering and require a failing run only when application policy, the feature specification, or the user explicitly chooses TDD. Add other tests when requested or warranted by the story's changed behavior, contracts, or acceptance criteria. If no test obligation applies (for example, a docs-only correction), omit unrelated tests, including runtime tests.
 
 ### Checklist Format (REQUIRED)
 
@@ -183,7 +183,6 @@ Every task MUST strictly follow this format:
    - Mark story dependencies (most stories should be independent)
 
 2. **From Contracts**:
-   - Map each interface contract → to the user story it serves
    - Map each interface contract to its story. Add a contract-test task when requested or warranted by the contract's scope and acceptance criteria; applicable repository-required tests still apply when the spec is silent.
 
 3. **From Data Model**:
@@ -201,7 +200,7 @@ Every task MUST strictly follow this format:
 - **Phase 1**: Setup (project initialization)
 - **Phase 2**: Foundational (blocking prerequisites - MUST complete before user stories)
 - **Phase 3+**: User Stories in priority order (P1, P2, P3...)
-  - Within each story: Applicable tests → Models → Services → Endpoints → Integration
+  - Within each story, order applicable tests by the declared application cadence (§2.21.2); if TDD is explicitly selected, place tests before implementation. Keep implementation tasks in dependency order: Models → Services → Endpoints → Integration.
   - Each phase should be a complete, independently testable increment
 - **Final Phase**: Polish & Cross-Cutting Concerns
 

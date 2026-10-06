@@ -9,7 +9,7 @@ description: "Task list template for feature implementation"
 
 **Prerequisites**: plan.md (required), spec.md (required for user stories), research.md, data-model.md, contracts/
 
-**Tests**: Include tests required by applicable repository policy even when the feature specification is silent. For Foundation feature classes and logic-bearing implementations in scope, include the registration and per-implementation unit-test tasks required by [framework §2.23](../memory/constitution-framework.md#223-unit-tests). Add other test tasks when requested or warranted by the story's changed behavior, contracts, or acceptance criteria. Omit test tasks when no testing obligation applies (for example, a docs-only correction); do not invent unrelated runtime tests.
+**Tests**: Include tests required by applicable repository policy even when the feature specification is silent. For Foundation feature classes and logic-bearing implementations in scope, include the registration and per-implementation unit-test tasks required by [framework §2.23](../memory/constitution-framework.md#223-unit-tests). Test existence and test-first cadence are separate: for greenfield work, follow the application cadence in [framework §2.21.2](../memory/constitution-framework.md#2212-greenfield-test-discipline). Use test-first ordering and require a failing run only when application policy, the feature specification, or the user explicitly chooses TDD. Add other test tasks when requested or warranted by the story's changed behavior, contracts, or acceptance criteria. Omit test tasks when no testing obligation applies (for example, a docs-only correction); do not invent unrelated runtime tests.
 
 **Organization**: Tasks are grouped by user story to enable independent implementation and testing of each story.
 
@@ -82,7 +82,7 @@ Examples of foundational tasks (adjust based on your project):
 
 ### Tests for User Story 1 (when applicable)
 
-> **NOTE: Write these tests FIRST, ensure they FAIL before implementation**
+> When application policy, the feature specification, or the user explicitly chooses TDD, write these tests first and verify they fail before implementation. Otherwise, place test tasks according to the application's declared cadence.
 
 - [ ] T010 [P] [US1] Verify [Feature] registration resolves its expected services in tests/[feature test project]/[Feature]RegistrationTests.cs
 - [ ] T011 [P] [US1] Cover each behavior branch of [logic-bearing implementation] with stubbed dependencies in tests/[implementation test project]/[Implementation]Tests.cs
@@ -179,7 +179,7 @@ Examples of foundational tasks (adjust based on your project):
 
 ### Within Each User Story
 
-- Tests (if included) MUST be written and FAIL before implementation
+- Place test tasks according to the application's declared cadence (§2.21.2); when TDD is explicitly selected by application policy, the feature specification, or the user, write tests before implementation and verify they fail
 - Models before services
 - Services before endpoints
 - Core implementation before integration
@@ -199,7 +199,7 @@ Examples of foundational tasks (adjust based on your project):
 ## Parallel Example: User Story 1
 
 ```bash
-# Launch applicable User Story 1 tests together:
+# These test tasks may be parallelized; position them according to the application's declared cadence:
 Task: "Verify [Feature] registration in tests/[feature test project]/[Feature]RegistrationTests.cs"
 Task: "Cover [implementation] behavior branches in tests/[implementation test project]/[Implementation]Tests.cs"
 
@@ -246,7 +246,7 @@ With multiple developers:
 - [P] tasks = different files, no dependencies
 - [Story] label maps task to specific user story for traceability
 - Each user story should be independently completable and testable
-- Verify tests fail before implementing
+- Verify tests fail before implementation only when application policy, the feature specification, or the user explicitly chooses TDD
 - Commit after each task or logical group
 - Stop at any checkpoint to validate story independently
 - Avoid: vague tasks, same file conflicts, cross-story dependencies that break independence
