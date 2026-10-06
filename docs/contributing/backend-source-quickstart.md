@@ -16,9 +16,12 @@ git clone https://github.com/elsa-workflows/elsa-foundation.git elsa-foundation-
 cd elsa-foundation-contributor
 ```
 
-An existing disposable checkout or Git worktree also works. The host creates or migrates its SQLite databases
-at startup and keeps them in that checkout. Keep valuable local databases; no database deletion is needed to
-follow this guide.
+An existing disposable checkout or Git worktree also works when its databases are compatible with the source
+revision. The host creates or migrates its SQLite databases at startup and keeps them in that checkout.
+After switching to newer source, old data can be incompatible and publish requests can return `500`.
+For this onboarding path, use a fresh disposable checkout after a source update; preserve any valuable data
+in the previous checkout. The [e2e rebuild guidance](../../e2e-tests/README.md) describes
+resetting only disposable Workbench databases after stopping your own server.
 
 ## Build, start, and verify
 
@@ -53,7 +56,8 @@ completed with one completed `WriteLine` activity and no incidents. These are lo
 do not reuse them outside the disposable local host. Stop the backend with Ctrl+C in the terminal where you
 started it.
 
-To resume later, run the same start command from the same checkout. Its local workflow data is retained.
+To resume later at the same source revision, run the same start command from the same checkout. Its local
+workflow data is retained.
 For a new empty environment, use another disposable checkout rather than deleting data from an existing one.
 
 ## If a step fails
@@ -65,7 +69,7 @@ For a new empty environment, use another disposable checkout rather than deletin
 | Restore cannot reach a source or find a package | Check the source/version named in the error against `NuGet.config` and your network access. Keep the error and source revision when reporting it; do not add private credentials or suppress restore errors to get past it. |
 | Readiness cannot connect | Check the server terminal for startup errors and confirm it is listening on HTTP port 5095. Use the HTTP profile shown above. |
 | The smoke test cannot authenticate | Confirm the URL points to your Development host and its disposable data, then inspect the server error. Existing databases may have different credentials. |
-| Behavior changes after switching source revisions | Rebuild before using `--no-build`. Use a separate disposable checkout when you need an empty database. |
+| Behavior changes or publish returns `500` after switching source revisions | Stop your own server, rebuild before using `--no-build`, and use a fresh disposable checkout to avoid retaining an incompatible database. Preserve valuable data in the old checkout. |
 
 If port 5095 is occupied, do not stop a process you do not own. The [e2e guide](../../e2e-tests/README.md)
 documents a custom-port start; choose a free port you own and pass the same `-BaseUrl` to the smoke test. The
