@@ -502,6 +502,7 @@ internal static class Program
         {
             mappingReadCount = mappingReadSnapshot.MappingReadCount,
             lifetimeMappingReadCount = mappingReadSnapshot.LifetimeMappingReadCount,
+            epochStartLifetimeMappingReadCount = mappingReadSnapshot.EpochStartLifetimeMappingReadCount,
             mappingReadEpoch = mappingReadSnapshot.MappingReadEpoch,
             observationRecordsTruncated = mappingReadSnapshot.ObservationRecordsTruncated,
             workflowExecutionStateRows,
@@ -741,6 +742,7 @@ internal static class Program
                     _epoch,
                     _lifetimeCount - _epochStartCount,
                     _lifetimeCount,
+                    _epochStartCount,
                     _persistenceAccessObservations.ToArray(),
                     _mappingReadObservations.ToArray(),
                     _observationRecordsTruncated);
@@ -976,6 +978,7 @@ internal static class Program
             long MappingReadEpoch,
             long MappingReadCount,
             long LifetimeMappingReadCount,
+            long EpochStartLifetimeMappingReadCount,
             PersistenceAccessObservation[] PersistenceAccessObservations,
             MappingReadObservation[] MappingReadObservations,
             bool ObservationRecordsTruncated);
