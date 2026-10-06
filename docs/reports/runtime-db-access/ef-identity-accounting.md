@@ -55,6 +55,23 @@ Coalesced observed 16 physical provider transaction references and 16 logical ge
 
 `notEnlisted` means the EF callback observed `DbCommand.Transaction` as null. It does not establish absence of an ambient or server-side transaction. EF callback identity and transaction events do not prove server commit acknowledgment, transaction atomicity, or a checkpoint participant mapping.
 
+## Checkpoint ancestry and marker associations
+
+An independently recomputed derivative joins the existing callback rows to their nearest exported checkpoint ancestor. Start and terminal endpoints resolve to the same checkpoint. This adds no capture and changes none of the published ledger values. Root and independent Sol accepted the derivative and its limits in [the T02 evidence record](https://github.com/elsa-workflows/elsa-foundation/issues/2386#issuecomment-6011963583).
+
+| Cadence | Request | Logical checkpoint spans | Observed modes | Runtime command pairs inside / outside checkpoint ancestry | Runtime SaveChanges pairs inside / outside | Marker INSERT pairs / Npgsql Started events / exact associated tuples |
+|---|---|---:|---|---:|---:|---:|
+| Coalesced | HTTP | 22 | 19 Deferred, 3 Immediate | 59 / 136 | 17 / 3 | 3 / 3 / 3 |
+| Coalesced | REST | 18 | 17 Deferred, 1 Immediate | 19 / 63 | 5 / 3 | 1 / 1 / 1 |
+| Immediate | HTTP | 22 | 22 Immediate | 211 / 294 | 52 / 73 | 22 / 22 / 22 |
+| Immediate | REST | 18 | 18 Immediate | 186 / 255 | 44 / 65 | 18 / 18 / 18 |
+
+Each of the 44 marker INSERT pairs has `exactProviderReferenceAndScope`, one candidate, matching scope and start/terminal provider-reference equality. Its full `(transaction, provider reference, generation, connection, context)` tuple equals exactly one observed Npgsql `TransactionStarted` tuple beneath the same nearest checkpoint. These are exact EF/provider and exported-span associations. They do not identify the checkpoint participant set, join each SaveChanges to a provider transaction, prove server commit acknowledgment or atomicity, or reconstruct queue/outbox row history. A command outside checkpoint ancestry is outside that observed span group, not proven unnecessary work.
+
+Logical checkpoint spans, marker INSERT command pairs and physical provider references are distinct units. These representative HTTP controls have 22 logical spans in each mode and 22/3 marker INSERT pairs for Immediate/Coalesced. They do not reproduce the supplied historical 24/4 marker-statement counts. The initial derivative selected a nonexistent join-enum value and produced empty tuple arrays; it remains rejected. Correcting that parser supplies measurement integrity, not a new capture or runtime repair.
+
+Accepted derivative SHA-256: `dfc0efb6421a9d4251327cd2e5463ac7fe9ba84e9798f5aee759e0932edbc98b`; independent raw-observer/engine-span/public-ledger recomputation receipt: `725e3585e860c3db32df63cbf294b66007f35155f60f1d5af37a7a3805fcc4db`. The normalized ledger below contains the callback endpoints, exact tuples and exported spans needed to recompute the associations.
+
 ## Span and response-time boundaries
 
 Command span IDs either close to an exported engine span and its parent chain, or match the unexported request Activity that exactly parents exported drain roots. The latter has no runtime phase label. Exported engine attributes are limited to observed values such as checkpoint ID/mode/mandatory/post-commit intent, work-item ID, handler, command kind, and drain fields. These span relationships do not identify repository callsites or participants.
