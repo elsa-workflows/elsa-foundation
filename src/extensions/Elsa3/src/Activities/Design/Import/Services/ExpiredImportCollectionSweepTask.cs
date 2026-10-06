@@ -8,9 +8,11 @@ using Microsoft.Extensions.Options;
 namespace Elsa3.Activities.Design.Import.Services;
 
 /// <summary>
-/// Recurring sweep that deletes collection uploads whose lifetime has run out. An upload that is applied, refused
-/// or read after its expiry is deleted by <see cref="ReusableActivityImportOperationService"/>; this sweep covers the
-/// upload nobody comes back to, so it is driven by time rather than by the next import request. Each tick visits
+/// Recurring sweep that deletes collection uploads whose lifetime has run out. When an upload is applied, refused or
+/// read after its expiry, <see cref="ReusableActivityImportOperationService"/> deletes it; this sweep covers the upload
+/// nobody comes back to, and the one whose delete there failed, so it is driven by time rather than by the next
+/// import request. It visits tenant partitions only (see "Upload retention" in the import's
+/// <c>EXTENSION_POINTS.md</c>). Each tick visits
 /// every persistence scope the host supplies and deletes at most
 /// <see cref="ReusableActivityImportOptions.ExpiredCollectionSweepBatchSize"/> expired uploads in each. Failure
 /// backoff comes from <see cref="BackoffSweepPumpTask"/>.

@@ -22,7 +22,7 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests;
 /// </summary>
 public sealed class RuntimeEntityFrameworkCoreEndToEndTests : IDisposable
 {
-    private const string EventName = "order-shipped";
+    internal const string EventName = "order-shipped";
     private const string ExecutableNodeId = "node-event";
     private const string ActivityExecutionId = "actexec-event";
     private const string RecoverySigningKey = "ef-runtime-end-to-end-recovery-signing-key-32";
@@ -122,7 +122,7 @@ public sealed class RuntimeEntityFrameworkCoreEndToEndTests : IDisposable
     }
 
     /// <summary>A mid-flow <see cref="Event"/> wait: it suspends with a trigger registration and completes on the named event.</summary>
-    private static WorkflowExecutable NewEventExecutable()
+    internal static WorkflowExecutable NewEventExecutable()
     {
         var resumeTargetId = WorkflowExecutableResumeTarget.ComposeScopedId(ExecutableNodeId, Event.ResumeTargetId);
         using var descriptor = JsonDocument.Parse("""{"type":"test"}""");
@@ -151,7 +151,7 @@ public sealed class RuntimeEntityFrameworkCoreEndToEndTests : IDisposable
             IncidentStrategyBuiltIns.FaultReference);
     }
 
-    private static RuntimeInputBinding Literal(string inputName, string typeAlias, object value)
+    internal static RuntimeInputBinding Literal(string inputName, string typeAlias, object value)
     {
         var type = new ValueTypeDescriptor(typeAlias);
         return new RuntimeInputBinding(

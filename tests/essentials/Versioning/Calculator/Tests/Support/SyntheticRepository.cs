@@ -55,7 +55,7 @@ internal sealed class SyntheticRepository : IDisposable
     public SyntheticRepository()
     {
         Root = System.IO.Directory.CreateTempSubdirectory("elsa-versioning-").FullName;
-        Git("init", "--quiet", "--initial-branch=main");
+        Init(Root);
         Calculator = new GitRepository(Root);
 
         Write("Directory.Build.props",
@@ -191,6 +191,18 @@ internal sealed class SyntheticRepository : IDisposable
     }
 
     public string Git(params string[] arguments) => Run(null, arguments);
+
+    /// <summary>
+    /// Initializes a repository at <paramref name="directory"/> that starts no background work. By default git detaches a
+    /// <c>maintenance run --auto</c> from every commit, fetch and receive-pack, which outlives the command the test
+    /// awaited and can still be repacking when <see cref="Dispose"/> deletes the directory: the delete then fails with
+    /// "Directory not empty" (#2365).
+    /// </summary>
+    public void Init(string directory, bool bare = false)
+    {
+        Git(["init", "--quiet", "--initial-branch=main", .. bare ? ["--bare"] : Array.Empty<string>(), directory]);
+        Git("-C", directory, "config", "maintenance.auto", "false");
+    }
 
     public void Dispose() => System.IO.Directory.Delete(Root, recursive: true);
 

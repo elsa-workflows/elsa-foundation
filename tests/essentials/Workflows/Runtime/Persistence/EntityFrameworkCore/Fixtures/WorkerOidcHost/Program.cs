@@ -1,6 +1,7 @@
 using System.Collections.Concurrent;
 using System.Data.Common;
 using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json;
 using CShells;
 using CShells.AspNetCore.Configuration;
@@ -56,17 +57,8 @@ using Microsoft.Extensions.Options;
 
 internal static class Program
 {
-    private const string ShellName = "worker-oidc-runtime";
-    private const string OidcFeatureName = "FoundationIdentityOidc";
-    private const string IamFeatureName = "IdentityIamEntityFrameworkCore";
-    private const string RuntimeFeatureName = "WorkflowsRuntimeEntityFrameworkCore";
-    private const string LockingFeatureName = "FileSystemDistributedLocking";
-    private const string RuntimeResourceName = "WorkerRuntime";
-    private const string IamConnectionName = "Iam";
     private const string JwtBearerScheme = "Elsa.Identity.Oidc.Jwt";
     private const string NormalizedAuthenticationType = OidcBearerNormalizationEvents.NormalizedAuthenticationType;
-    private const string RecoverySigningKey = "worker-oidc-runtime-recovery-signing-key-32-bytes";
-    private const string HierarchySigningKey = "worker-oidc-runtime-hierarchy-signing-key-32-bytes";
 
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
@@ -103,19 +95,21 @@ internal static class Program
         object? readyData;
         string? address;
         string artifactSha256;
+        CandidateConfiguration candidateConfiguration;
         var startupStage = "build";
 
         try
         {
-            app = CreateApp(input, mappingReads);
+            candidateConfiguration = CandidateConfiguration.Load(input);
+            app = CreateApp(input, mappingReads, candidateConfiguration.Configuration);
             app.MapShells();
             startupStage = "start";
             await app.StartAsync();
             address = GetListeningAddress(app);
             startupStage = "activate";
-            var shell = await app.Services.GetRequiredService<IShellRegistry>().GetOrActivateAsync(ShellName);
+            var shell = await app.Services.GetRequiredService<IShellRegistry>().GetOrActivateAsync(input.ShellId);
             startupStage = "describe";
-            readyData = await DescribeAsync(app, shell, input);
+            readyData = await DescribeAsync(app, shell, input, candidateConfiguration.FileHashes);
             artifactSha256 = await HashAssemblyAsync();
         }
         catch (Exception exception)
@@ -180,7 +174,7 @@ internal static class Program
 
                 try
                 {
-                    var result = await ExecuteControlAsync(activeApp, input, mappingReads, request);
+                    var result = await ExecuteControlAsync(activeApp, input, mappingReads, candidateConfiguration.FileHashes, request);
                     await WriteAsync(new { status = "ok", data = result.Value });
                     if (result.Stop)
                         break;
@@ -200,9 +194,11 @@ internal static class Program
         return 0;
     }
 
-    private static WebApplication CreateApp(HostStartupInput input, MappingReadCounter mappingReads)
+    private static WebApplication CreateApp(
+        HostStartupInput input,
+        MappingReadCounter mappingReads,
+        IConfiguration candidateConfiguration)
     {
-        Directory.CreateDirectory(input.LocksDirectory);
         var builder = WebApplication.CreateBuilder(new WebApplicationOptions
         {
             EnvironmentName = Environments.Development,
@@ -211,8 +207,7 @@ internal static class Program
         builder.WebHost.UseUrls("http://127.0.0.1:0");
         builder.Logging.ClearProviders();
 
-        var configuration = BuildConfiguration(input);
-        builder.Configuration.AddConfiguration(configuration);
+        builder.Configuration.AddConfiguration(candidateConfiguration);
 
         // This establishes the ordinary nondefault tenant context before CShells copies root services into a shell.
         builder.Services.AddPersistenceCore(input.PersistenceScope);
@@ -257,62 +252,10 @@ internal static class Program
                 typeof(WorkflowsRuntimeTriggersFeature).Assembly,
                 typeof(FileSystemLockingFeature).Assembly,
                 typeof(TasksFeature).Assembly)
-            .WithConfigurationProvider(builder.Configuration));
+            .WithConfigurationProvider(candidateConfiguration));
 
         return builder.Build();
     }
-
-    private static IConfiguration BuildConfiguration(HostStartupInput input)
-    {
-        var values = new Dictionary<string, string?>(StringComparer.Ordinal)
-        {
-            ["Elsa:Persistence:DefaultResource"] = "primary",
-            ["Elsa:Persistence:Resources:primary:Provider"] = "Sqlite",
-            ["Elsa:Persistence:Resources:primary:ConnectionName"] = RuntimeResourceName,
-            [$"ConnectionStrings:{RuntimeResourceName}"] = $"Data Source={input.RuntimeDatabasePath};Pooling=False",
-            [$"ConnectionStrings:{IamConnectionName}"] = $"Data Source={input.IamDatabasePath};Pooling=False",
-            [$"CShells:Shells:{ShellName}:Configuration:WebRouting:Path"] = "",
-            [$"CShells:Shells:{ShellName}:Features:{OidcFeatureName}:Authority"] = input.Authority,
-            [$"CShells:Shells:{ShellName}:Features:{OidcFeatureName}:Audience"] = input.Audience,
-            [$"CShells:Shells:{ShellName}:Features:{OidcFeatureName}:ProviderId"] = input.ProviderId,
-            [$"CShells:Shells:{ShellName}:Features:{OidcFeatureName}:TenantId"] = input.TenantId,
-            [$"CShells:Shells:{ShellName}:Features:{OidcFeatureName}:NormalizeBearerClaims"] = "true",
-            [$"CShells:Shells:{ShellName}:Features:{OidcFeatureName}:RequireHttpsMetadata"] = "false",
-            [$"CShells:Shells:{ShellName}:Features:{OidcFeatureName}:IsDefault"] = "true",
-            [$"CShells:Shells:{ShellName}:Features:{IamFeatureName}:Provider"] = "Sqlite",
-            [$"CShells:Shells:{ShellName}:Features:{IamFeatureName}:ConnectionName"] = IamConnectionName,
-            [$"CShells:Shells:{ShellName}:Features:{RuntimeFeatureName}:RecoveryContinuationSigningKey"] = RecoverySigningKey,
-            [$"CShells:Shells:{ShellName}:Features:{RuntimeFeatureName}:HierarchyCursorSigningKey"] = HierarchySigningKey,
-            [$"CShells:Shells:{ShellName}:Features:{LockingFeatureName}:LocksFolderPath"] = input.LocksDirectory
-        };
-
-        foreach (var feature in SelectedFeatures)
-            values[$"CShells:Shells:{ShellName}:Features:{feature}"] = null;
-
-        return new ConfigurationBuilder().AddInMemoryCollection(values).Build();
-    }
-
-    private static readonly string[] SelectedFeatures =
-    [
-        "FoundationIdentityAbstractions",
-        "FoundationIdentityOidc",
-        "IdentityIamEntityFrameworkCore",
-        "Primitives",
-        "Serialization",
-        "Mediator",
-        "Events",
-        "Expressions",
-        "ActivitiesRuntime",
-        "ActivitiesPrimitives",
-        "ActivitiesControlFlow",
-        "ActivitiesSequence",
-        "ApiCapabilities",
-        "WorkflowsRuntimeApi",
-        "WorkflowsRuntimeEntityFrameworkCore",
-        "WorkflowsRuntimeResumption",
-        "WorkflowsRuntimeTriggers",
-        "FileSystemDistributedLocking"
-    ];
 
     private static string GetListeningAddress(WebApplication app)
     {
@@ -325,7 +268,8 @@ internal static class Program
     private static async Task<object> DescribeAsync(
         WebApplication app,
         IShell shell,
-        HostStartupInput input)
+        HostStartupInput input,
+        IReadOnlyDictionary<string, string> candidateFileHashes)
     {
         var schemes = shell.ServiceProvider.GetRequiredService<IAuthenticationSchemeProvider>();
         var defaultAuthenticate = await schemes.GetDefaultAuthenticateSchemeAsync();
@@ -361,9 +305,17 @@ internal static class Program
 
         return new
         {
-            shell = ShellName,
+            shell = input.ShellId,
+            environment = input.Environment,
+            candidateFileHashes,
+            candidateAppsettingsOverlayLoaded = app.Configuration["WorkerProfileCandidate:Layer"] == "environment",
+            candidateShellOverlayLoaded = app.Configuration[$"CShells:Shells:{input.ShellId}:Configuration:WorkerProfileCandidate:Layer"] == "environment",
             tenantId = oidc.TenantId,
             providerId = oidc.ProviderId,
+            oidcAudienceSha256 = HashString(oidc.Audience ?? string.Empty),
+            oidcAuthorityConfigured = !string.IsNullOrWhiteSpace(oidc.Authority),
+            oidcClientIdConfigured = !string.IsNullOrWhiteSpace(oidc.ClientId),
+            oidcRequireHttpsMetadata = oidc.RequireHttpsMetadata,
             normalizationEnabled = oidc.NormalizeBearerClaims,
             audienceConfigured = !string.IsNullOrWhiteSpace(oidc.Audience),
             jwtBearerScheme = oidc.JwtBearerScheme,
@@ -380,13 +332,15 @@ internal static class Program
             runtimeProvider = runtimeOptions.Provider,
             runtimeConnectionName = runtimeOptions.ConnectionName,
             runtimeDatabaseProvider = runtime.Database.ProviderName,
-            runtimeUsesExpectedDatabase = string.Equals(Path.GetFullPath(runtimeConnection), Path.GetFullPath(input.RuntimeDatabasePath), StringComparison.Ordinal),
+            runtimeUsesExpectedDatabase = SameDatabase(runtimeConnection,
+                GetConnectionDataSource(app.Configuration, runtimeOptions.ConnectionName)),
             runtimeMigrationsApplied = runtimeAppliedMigrations.Any(),
             runtimeMigrationsPending = runtimePendingMigrations.Any(),
             iamProvider = iamOptions.Provider,
             iamConnectionName = iamOptions.ConnectionName,
             iamDatabaseProvider = iam.Database.ProviderName,
-            iamUsesExpectedDatabase = string.Equals(Path.GetFullPath(iamConnection), Path.GetFullPath(input.IamDatabasePath), StringComparison.Ordinal),
+            iamUsesExpectedDatabase = SameDatabase(iamConnection,
+                GetConnectionDataSource(app.Configuration, iamOptions.ConnectionName)),
             iamMigrationsApplied = iamAppliedMigrations.Any(),
             iamMigrationsPending = iamPendingMigrations.Any(),
             databasesAreDistinct = !string.Equals(Path.GetFullPath(runtimeConnection), Path.GetFullPath(iamConnection), StringComparison.Ordinal),
@@ -395,7 +349,7 @@ internal static class Program
             persistenceScope = access.Scope?.Value,
             persistenceAccessPolicy = access.AccessPolicy.ToString(),
             persistenceAcrossScopes = access.AcrossScopes,
-            usesConfiguredTenant = string.Equals(access.Scope?.Value, input.TenantId, StringComparison.Ordinal)
+            usesConfiguredTenant = string.Equals(access.Scope?.Value, oidc.TenantId, StringComparison.Ordinal)
         };
     }
 
@@ -403,13 +357,14 @@ internal static class Program
         WebApplication app,
         HostStartupInput input,
         MappingReadCounter mappingReads,
+        IReadOnlyDictionary<string, string> candidateFileHashes,
         ControlRequest request)
     {
-        var shell = await app.Services.GetRequiredService<IShellRegistry>().GetOrActivateAsync(ShellName);
+        var shell = await app.Services.GetRequiredService<IShellRegistry>().GetOrActivateAsync(input.ShellId);
         switch (request.Command)
         {
             case "describe":
-                return new(await DescribeAsync(app, shell, input), Stop: false);
+                return new(await DescribeAsync(app, shell, input, candidateFileHashes), Stop: false);
             case "reset-mapping-reads":
                 mappingReads.Reset();
                 return new(new { reset = true }, Stop: false);
@@ -541,6 +496,34 @@ internal static class Program
         await Console.Out.FlushAsync();
     }
 
+    private static string HashString(string value) =>
+        Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(value)));
+
+    private static bool SameDatabase(string actual, string configured)
+    {
+        if (string.IsNullOrWhiteSpace(actual) || string.IsNullOrWhiteSpace(configured))
+            return false;
+        try
+        {
+            return string.Equals(Path.GetFullPath(actual), Path.GetFullPath(configured), StringComparison.Ordinal);
+        }
+        catch (Exception exception) when (exception is ArgumentException or NotSupportedException or PathTooLongException)
+        {
+            return false;
+        }
+    }
+
+    private static string GetConnectionDataSource(IConfiguration configuration, string? connectionName)
+    {
+        var connectionString = string.IsNullOrWhiteSpace(connectionName)
+            ? null
+            : configuration.GetConnectionString(connectionName);
+        if (string.IsNullOrWhiteSpace(connectionString))
+            return string.Empty;
+        var values = new DbConnectionStringBuilder { ConnectionString = connectionString };
+        return values.TryGetValue("Data Source", out var value) ? Convert.ToString(value) ?? string.Empty : string.Empty;
+    }
+
     private static async Task<string> HashAssemblyAsync()
     {
         await using var assembly = File.OpenRead(typeof(Program).Assembly.Location);
@@ -554,25 +537,65 @@ internal static class Program
     }
 
     private sealed record HostStartupInput(
-        string Authority,
-        string Audience,
-        string ProviderId,
-        string TenantId,
-        string PersistenceScope,
-        string IamDatabasePath,
-        string RuntimeDatabasePath,
-        string LocksDirectory)
+        string CandidateDirectory,
+        string ShellId,
+        string Environment,
+        string PersistenceScope)
     {
         public void Validate()
         {
-            ArgumentException.ThrowIfNullOrWhiteSpace(Authority);
-            ArgumentException.ThrowIfNullOrWhiteSpace(Audience);
-            ArgumentException.ThrowIfNullOrWhiteSpace(ProviderId);
-            ArgumentException.ThrowIfNullOrWhiteSpace(TenantId);
+            ArgumentException.ThrowIfNullOrWhiteSpace(CandidateDirectory);
+            ArgumentException.ThrowIfNullOrWhiteSpace(ShellId);
+            ArgumentException.ThrowIfNullOrWhiteSpace(Environment);
             ArgumentException.ThrowIfNullOrWhiteSpace(PersistenceScope);
-            ArgumentException.ThrowIfNullOrWhiteSpace(IamDatabasePath);
-            ArgumentException.ThrowIfNullOrWhiteSpace(RuntimeDatabasePath);
-            ArgumentException.ThrowIfNullOrWhiteSpace(LocksDirectory);
+            if (!IsSafeIdentity(ShellId) || !IsSafeIdentity(Environment))
+                throw new JsonException();
+        }
+
+        private static bool IsSafeIdentity(string value) => value.Length <= 128 && value.All(character =>
+            char.IsAsciiLetterOrDigit(character) || character is '-' or '_');
+    }
+
+    private sealed record CandidateConfiguration(
+        IConfigurationRoot Configuration,
+        IReadOnlyDictionary<string, string> FileHashes)
+    {
+        public static CandidateConfiguration Load(HostStartupInput input)
+        {
+            var directory = Path.GetFullPath(input.CandidateDirectory);
+            var names = new[]
+            {
+                "appsettings.json",
+                $"appsettings.{input.Environment}.json",
+                "shells.json",
+                $"shells.{input.Environment}.json"
+            };
+            var bytes = new SortedDictionary<string, byte[]>(StringComparer.Ordinal);
+            foreach (var name in names)
+            {
+                var path = Path.Join(directory, name);
+                if (!File.Exists(path))
+                    throw new FileNotFoundException("A selected Worker candidate file is missing.");
+                bytes.Add(name, File.ReadAllBytes(path));
+            }
+
+            var hashes = bytes.ToDictionary(
+                item => item.Key,
+                item => Convert.ToHexString(SHA256.HashData(item.Value)),
+                StringComparer.Ordinal);
+            var builder = new ConfigurationBuilder();
+            var streams = names.Select(name => new MemoryStream(bytes[name], writable: false)).ToArray();
+            try
+            {
+                foreach (var stream in streams)
+                    builder.AddJsonStream(stream);
+                return new CandidateConfiguration(builder.Build(), hashes);
+            }
+            finally
+            {
+                foreach (var stream in streams)
+                    stream.Dispose();
+            }
         }
     }
 

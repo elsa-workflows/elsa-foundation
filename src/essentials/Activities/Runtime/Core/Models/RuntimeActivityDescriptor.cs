@@ -63,6 +63,9 @@ public static class WellKnownRuntimeActivityConsumers
 {
     public const string ClrActivity = "elsa.clr-activity";
     public const string GraphActivity = "elsa.graph-activity";
+
+    /// <summary>The reserved descriptor type of an intrinsic node, which the engine runs itself.</summary>
+    public const string Intrinsic = "intrinsic";
 }
 
 /// <summary>Classifies an artifact activation failure without treating deployment recovery as activity retry.</summary>

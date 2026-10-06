@@ -1,3 +1,4 @@
+using Elsa.Activities.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Extensions;
 using Elsa.Tasks.Core;
 using Elsa.Workflows.Runtime.Builders;
@@ -405,6 +406,7 @@ public static class RuntimeCoreServiceCollectionExtensions
         // IRuntimeRematerializeInputsOnChildCompletion composite (While) re-reads live frames per pass.
         services.TryAddScoped<RuntimeActivityInputSnapshotMaterializer>();
         services.TryAddScoped<WorkflowIntrinsicExecutor>();
+        services.TryAddEnumerable(ServiceDescriptor.Singleton<IRuntimeActivityConsumerCapability, IntrinsicActivityConsumerCapability>());
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IWorkflowSchedulerDrainObserver, NoopWorkflowSchedulerDrainObserver>());
         // Registered before BlockingIncidentWorkflowFaultObserver: the blocking incident it projects from a parked
         // poison record must be visible to the fault observer within the same drain notification pass.

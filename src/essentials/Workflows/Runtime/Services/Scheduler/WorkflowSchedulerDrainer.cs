@@ -7,6 +7,7 @@ using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Diagnostics;
 using Elsa.Workflows.Runtime.Services.Incidents;
+using Elsa.Workflows.Runtime.Services.Values;
 
 namespace Elsa.Workflows.Runtime.Services.Scheduler;
 
@@ -335,7 +336,7 @@ public sealed class WorkflowSchedulerDrainer : IWorkflowSchedulerDrainer
             if (_consumedWorkClaimAccessor?.WasConsumedDurably != true)
                 await AckAsync(workItem, renewal?.Current, cancellationToken);
 
-            await HandleHandlerCrashAsync(workItem, handlerName, faultInfo, innerFaultInfo, cancellationToken);
+            await HandleHandlerCrashAsync(workItem, handlerName, exception, faultInfo, innerFaultInfo, cancellationToken);
 
             return new RuntimeSchedulerWorkItemResult(
                 workItemId: workItem.WorkItemId,
@@ -369,6 +370,7 @@ public sealed class WorkflowSchedulerDrainer : IWorkflowSchedulerDrainer
     private async ValueTask HandleHandlerCrashAsync(
         RuntimeSchedulerWorkItem workItem,
         string handlerName,
+        Exception exception,
         RuntimeFaultInfo faultInfo,
         RuntimeFaultInfo? innerFaultInfo,
         CancellationToken cancellationToken)
@@ -407,6 +409,7 @@ public sealed class WorkflowSchedulerDrainer : IWorkflowSchedulerDrainer
                 break;
         }
 
+        var metadata = BuildPoisonMetadata(workItem, existing, decision, exception);
         await _poisonStore.RecordAsync(new RuntimeSchedulerPoisonRecord(
             workflowExecutionId: workItem.WorkflowExecutionId,
             workItemId: workItem.WorkItemId,
@@ -418,13 +421,82 @@ public sealed class WorkflowSchedulerDrainer : IWorkflowSchedulerDrainer
             firstFailedAt: firstFailedAt,
             lastFailedAt: now,
             nextRetryAt: nextRetryAt,
-            metadata: decision is null ? null : new Dictionary<string, string>(StringComparer.Ordinal)
-            {
-                [RuntimeMetadataKeys.SchedulerPoisonRetryMode] = decision.Mode.ToString(),
-                [RuntimeMetadataKeys.SchedulerPoisonRetryReason] = decision.Reason
-            },
+            metadata: metadata,
             innerFault: innerFaultInfo),
             cancellationToken);
+    }
+
+    private static Dictionary<string, string> BuildPoisonMetadata(
+        RuntimeSchedulerWorkItem workItem,
+        RuntimeSchedulerPoisonRecord? existing,
+        RuntimeDomainRetryDecision? retryDecision,
+        Exception exception)
+    {
+        var metadata = existing?.Metadata.ToDictionary(item => item.Key, item => item.Value, StringComparer.Ordinal)
+                       ?? new Dictionary<string, string>(StringComparer.Ordinal);
+
+        // The same work item may be retried after an expression failure and later fail for an unrelated reason.
+        // Refresh address fields from its immutable payload and clear only the typed evidence for the previous failure.
+        metadata.Remove(RuntimeMetadataKeys.InputFailureCode);
+        metadata.Remove(RuntimeMetadataKeys.InputKey);
+        metadata.Remove(RuntimeMetadataKeys.ExpressionLanguage);
+        metadata.Remove(RuntimeMetadataKeys.InputEvaluationPhase);
+        if (HasActivityAddressPayload(workItem.CommandKind) && workItem.Payload is { } payload)
+        {
+            AddPayloadString(payload, "activityExecutionId", RuntimeMetadataKeys.ActivityExecutionId, metadata);
+            AddPayloadString(payload, "executableNodeId", RuntimeMetadataKeys.ExecutableNodeId, metadata);
+        }
+
+        if (exception is ExpressionInputFailureException inputFailure)
+        {
+            metadata[RuntimeMetadataKeys.InputFailureCode] = inputFailure.InputFailureCode;
+            metadata[RuntimeMetadataKeys.InputKey] = inputFailure.InputKey;
+            metadata[RuntimeMetadataKeys.ExpressionLanguage] = inputFailure.ExpressionLanguage;
+            metadata[RuntimeMetadataKeys.InputEvaluationPhase] = inputFailure.EvaluationPhase;
+        }
+
+        // A later retry-policy decision replaces its two fields, while older records without a new decision retain
+        // the last recorded retry context alongside the stable activity address.
+        if (retryDecision is not null)
+        {
+            metadata[RuntimeMetadataKeys.SchedulerPoisonRetryMode] = retryDecision.Mode.ToString();
+            metadata[RuntimeMetadataKeys.SchedulerPoisonRetryReason] = retryDecision.Reason;
+        }
+
+        return metadata;
+    }
+
+    private static bool HasActivityAddressPayload(WorkflowExecutionCommandKind commandKind) =>
+        commandKind is WorkflowExecutionCommandKind.ScheduleActivity
+            or WorkflowExecutionCommandKind.CompleteActivity
+            or WorkflowExecutionCommandKind.ResumeBookmark
+            or WorkflowExecutionCommandKind.CreateBookmark
+            or WorkflowExecutionCommandKind.StartActivity
+            or WorkflowExecutionCommandKind.InvokeActivity
+            or WorkflowExecutionCommandKind.NotifyParentActivity
+            or WorkflowExecutionCommandKind.RetryActivityBoundary
+            or WorkflowExecutionCommandKind.CancelActivityScope;
+
+    private static void AddPayloadString(
+        System.Text.Json.JsonElement payload,
+        string propertyName,
+        string metadataKey,
+        IDictionary<string, string> metadata)
+    {
+        if (payload.ValueKind != System.Text.Json.JsonValueKind.Object)
+            return;
+
+        foreach (var property in payload.EnumerateObject())
+        {
+            if (!StringComparer.OrdinalIgnoreCase.Equals(property.Name, propertyName) ||
+                property.Value.ValueKind != System.Text.Json.JsonValueKind.String)
+                continue;
+
+            var value = property.Value.GetString();
+            if (!string.IsNullOrWhiteSpace(value))
+                metadata[metadataKey] = value;
+            return;
+        }
     }
 
     private async ValueTask<SchedulerWorkDelivery?> AcquireNextAsync(

@@ -85,6 +85,53 @@ public sealed class RuntimeMinimalApiBehaviorTests
         Assert.Equal("artifact-reconciliation", detailBody.GetProperty("sourceKind").GetString());
     }
 
+    [Theory]
+    [InlineData("/runtime/workflows/instances")]
+    [InlineData("/runtime/workflows/instances/page")]
+    public async Task Instance_list_routes_bind_and_describe_the_incident_health_query(string path)
+    {
+        ListWorkflowInstances? capturedRequest = null;
+        await using var host = await StartAsync(
+            _ => null,
+            services => services.AddSingleton<IWorkflowInstanceListService>(
+                new RecordingWorkflowInstanceListService(request => capturedRequest = request)));
+
+        using var response = await host.Client.GetAsync($"{path}?incidentHealth=blocking");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal("blocking", capturedRequest?.IncidentHealth);
+        var healthParameter = Assert.Single(host.FindEndpoint(path).Metadata
+            .GetOrderedMetadata<EndpointParameterMetadata>()
+            .Where(parameter => parameter.Name == nameof(ListWorkflowInstances.IncidentHealth)));
+        Assert.Equal(EndpointBindingSource.Query, healthParameter.Source);
+        Assert.Equal(typeof(IncidentHealth), healthParameter.Type);
+        Assert.False(healthParameter.Required);
+    }
+
+    [Theory]
+    [InlineData("/runtime/workflows/instances", "incidentHealth=unknown")]
+    [InlineData("/runtime/workflows/instances/page", "incidentHealth=unknown")]
+    [InlineData("/runtime/workflows/instances", "incidentHealth=active&incidentHealth=blocking")]
+    [InlineData("/runtime/workflows/instances/page", "incidentHealth=active&incidentHealth=blocking")]
+    public async Task Instance_list_health_query_is_not_silently_ignored_when_invalid(string path, string query)
+    {
+        ListWorkflowInstances? capturedRequest = null;
+        await using var host = await StartAsync(
+            _ => null,
+            services => services.AddSingleton<IWorkflowInstanceListService>(
+                new RecordingWorkflowInstanceListService(request =>
+                {
+                    capturedRequest = request;
+                    if (request.IncidentHealth is not (null or "active" or "blocking" or "none"))
+                        throw new ArgumentException("Invalid incident health filter.", nameof(request.IncidentHealth));
+                })));
+
+        using var response = await host.Client.GetAsync($"{path}?{query}");
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Equal(query.Contains('&') ? "active,blocking" : "unknown", capturedRequest?.IncidentHealth);
+    }
+
     /// <remarks>
     /// These five operations declare <see cref="EndpointBodyMode.RequiredWithContentTypeAndPayload"/>,
     /// whose whole reason for existing is this case: a literal-null payload is answered at the media
@@ -502,11 +549,13 @@ public sealed class RuntimeMinimalApiBehaviorTests
     {
         public HttpClient Client { get; } = client;
 
+        public RouteEndpoint FindEndpoint(string route) => app.Services.GetRequiredService<EndpointDataSource>().Endpoints
+            .OfType<RouteEndpoint>()
+            .Single(candidate => candidate.RoutePattern.RawText?.TrimStart('/') == route.TrimStart('/'));
+
         public async Task<DefaultHttpContext> InvokeMappedAsync(string route, Action<DefaultHttpContext> configure)
         {
-            var endpoint = app.Services.GetRequiredService<EndpointDataSource>().Endpoints
-                .OfType<RouteEndpoint>()
-                .Single(candidate => candidate.RoutePattern.RawText == route);
+            var endpoint = FindEndpoint(route);
             var context = new DefaultHttpContext { RequestServices = app.Services };
             context.Response.Body = new MemoryStream();
             configure(context);
@@ -518,6 +567,15 @@ public sealed class RuntimeMinimalApiBehaviorTests
         {
             Client.Dispose();
             await app.DisposeAsync();
+        }
+    }
+
+    private sealed class RecordingWorkflowInstanceListService(Action<ListWorkflowInstances> observe) : IWorkflowInstanceListService
+    {
+        public Task<WorkflowInstanceListView> ListAsync(ListWorkflowInstances request, CancellationToken cancellationToken)
+        {
+            observe(request);
+            return Task.FromResult(new WorkflowInstanceListView([], null, false, 0, 0));
         }
     }
 

@@ -1,10 +1,16 @@
-![Elsa Foundation architectural blueprint header](docs/assets/elsa-foundation-header.png)
+![Elsa 4, a modern .NET workflow engine, illustrated with branching activity paths, a modular runtime and layered checkpoints](docs/assets/elsa-foundation-header.png)
 
 # Elsa Foundation
 
 `elsa-foundation` is the transitional Elsa 4 foundation workspace.
 
 It contains the main Elsa domain core libraries, default foundation implementations, the Speckit specification flow, and the architecture knowledge needed to navigate and verify the refactor from `elsa-core`.
+
+These repositories develop the Elsa 4 preview. Elsa 3 uses the separate [elsa-core](https://github.com/elsa-workflows/elsa-core) and [elsa-studio](https://github.com/elsa-workflows/elsa-studio) repositories.
+
+- **Try Elsa 4:** [run Workbench and Studio from published Docker images](docker/compose/README.md#quick-start--published-images-no-clone-or-build).
+- **Contribute to the server:** follow the [Elsa Foundation contribution guide](CONTRIBUTING.md).
+- **Contribute to Studio:** follow the [Elsa Foundation Studio contribution guide](https://github.com/elsa-workflows/elsa-foundation-studio/blob/main/CONTRIBUTING.md).
 
 ## Philosophy
 
@@ -40,6 +46,9 @@ dotnet build Elsa.Server.slnx
 For faster inner-loop work, open or build one of the committed
 [developer solution filters](docs/reference/developer-solution-filters.md). The full solution remains
 the completion gate.
+
+For a tested macOS backend run from source, including readiness and a completed sample workflow, follow the
+[backend source quickstart](docs/contributing/backend-source-quickstart.md).
 
 ## Supported management APIs
 

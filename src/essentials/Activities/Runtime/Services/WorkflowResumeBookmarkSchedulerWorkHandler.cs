@@ -7,6 +7,7 @@ using Elsa.Expressions.Core.Models;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Exceptions;
+using Elsa.Workflows.Runtime.Core.Extensions;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Services.ActivityExecutions;
 using Elsa.Workflows.Runtime.Services.Checkpoints;
@@ -17,7 +18,7 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace Elsa.Activities.Runtime.Services;
 
-public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedulerWorkHandler
+public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedulerWorkHandler, IRuntimePipelineWorkHandler
 {
     public const string HandlerName = nameof(WorkflowResumeBookmarkSchedulerWorkHandler);
 
@@ -56,14 +57,29 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
         return workItem.CommandKind == WorkflowExecutionCommandKind.ResumeBookmark;
     }
 
-    public async ValueTask HandleAsync(RuntimeSchedulerWorkItem workItem, CancellationToken cancellationToken = default)
+    /// <summary>Direct (no-pipeline) dispatch: runs against a fresh scope that carries the host's persistence scope.</summary>
+    public ValueTask HandleAsync(RuntimeSchedulerWorkItem workItem, CancellationToken cancellationToken = default) =>
+        HandleAsync(workItem, persistenceScope: null, cancellationToken);
+
+    /// <summary>
+    /// Pipeline dispatch: runs against a fresh scope bound to the partition the dispatcher staged, so the resume works
+    /// in the partition the work item belongs to. The drain's ambient services are not used.
+    /// </summary>
+    public ValueTask HandleAsync(RuntimeSchedulerWorkItem workItem, IRuntimePipelineContext pipelineContext, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(pipelineContext);
+
+        return HandleAsync(workItem, pipelineContext.Workspace.PersistenceScope, cancellationToken);
+    }
+
+    private async ValueTask HandleAsync(RuntimeSchedulerWorkItem workItem, PersistenceScope? persistenceScope, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(workItem);
         cancellationToken.ThrowIfCancellationRequested();
 
         var resumePayload = SchedulerWorkItems.DeserializePayload<RuntimeResumeBookmarkCommandPayload>(
             workItem, "ResumeBookmark", "resume bookmark payload", PayloadValidationParamNames);
-        await using var scope = _serviceScopeFactory.CreateAsyncScope();
+        await using var scope = await _serviceScopeFactory.CreateAsyncScopeAsync(persistenceScope);
         var serviceProvider = scope.ServiceProvider;
         var activityExecutionStateStore = serviceProvider.GetRequiredService<IActivityExecutionStateStore>();
         var bookmarkStateStore = serviceProvider.GetRequiredService<IBookmarkStateStore>();

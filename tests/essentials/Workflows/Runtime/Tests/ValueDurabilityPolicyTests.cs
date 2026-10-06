@@ -644,7 +644,7 @@ public sealed class ValueDurabilityPolicyTests
             ValueProtectionPolicy.InstanceInline,
             RuntimeInputBindingSource.Expression,
             expression: expression);
-        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+        var exception = await Assert.ThrowsAsync<ExpressionInputFailureException>(() =>
             new RuntimeActivityInputMaterializer(new RuntimeInputBindingResolver(), new StringTypeRegistry(), new ThrowingPortableEvaluator(), externalPayloadStore: null)
                 .MaterializeSnapshotAsync(
                     NewTypedNode(binding, ActivityValuePolicy.Default),
@@ -653,8 +653,123 @@ public sealed class ValueDurabilityPolicyTests
                     Now)
                 .AsTask());
 
+        Assert.Equal(ExpressionInputFailureException.ExpressionEvaluationFailed, exception.InputFailureCode);
+        Assert.Equal("message", exception.InputKey);
+        Assert.Equal("test", exception.ExpressionLanguage);
+        Assert.Equal(ExpressionInputFailureException.EvaluationPhaseName, exception.EvaluationPhase);
         Assert.Contains("portable 'test' expression", exception.Message, StringComparison.Ordinal);
         Assert.Contains("fingerprint 'sha256:", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Portable_expression_parameter_materialization_failure_reports_its_phase()
+    {
+        var expression = new RuntimeExpressionBinding(
+            "test",
+            "value",
+            parameters: new Dictionary<string, ExpressionParameterBinding>
+            {
+                ["value"] = new WorkflowRequestExpressionParameterBinding("missing")
+            });
+        var binding = new RuntimeInputBinding(
+            "message",
+            StringType,
+            ValueProtectionPolicy.InstanceInline,
+            RuntimeInputBindingSource.Expression,
+            expression: expression);
+
+        var exception = await Assert.ThrowsAsync<ExpressionInputFailureException>(() =>
+            new RuntimeActivityInputMaterializer(
+                    new RuntimeInputBindingResolver(),
+                    new StringTypeRegistry(),
+                    new EchoPortableEvaluator(),
+                    externalPayloadStore: null)
+                .MaterializeSnapshotAsync(
+                    NewTypedNode(binding, ActivityValuePolicy.Default),
+                    "invocation-1",
+                    NewResolutionContext(),
+                    Now)
+                .AsTask());
+
+        Assert.Equal(ExpressionInputFailureException.InputMaterializationFailed, exception.InputFailureCode);
+        Assert.Equal("message", exception.InputKey);
+        Assert.Equal("test", exception.ExpressionLanguage);
+        Assert.Equal(ExpressionInputFailureException.MaterializationPhase, exception.EvaluationPhase);
+    }
+
+    [Fact]
+    public async Task Portable_expression_result_policy_preparation_failure_reports_materialization_and_redacts_conservatively()
+    {
+        var expression = new RuntimeExpressionBinding(
+            "test",
+            "value",
+            parameters: new Dictionary<string, ExpressionParameterBinding>
+            {
+                ["value"] = new ActivityResultExpressionParameterBinding("producer", "$result")
+            });
+        var binding = new RuntimeInputBinding(
+            "message",
+            StringType,
+            ValueProtectionPolicy.InstanceInline,
+            RuntimeInputBindingSource.Expression,
+            expression: expression);
+
+        var exception = await Assert.ThrowsAsync<ExpressionInputFailureException>(() =>
+            new RuntimeActivityInputMaterializer(
+                    new RuntimeInputBindingResolver(),
+                    new StringTypeRegistry(),
+                    new EchoPortableEvaluator(),
+                    externalPayloadStore: null)
+                .MaterializeSnapshotAsync(
+                    NewTypedNode(binding, ActivityValuePolicy.Default),
+                    "invocation-1",
+                    NewResolutionContext(),
+                    Now)
+                .AsTask());
+
+        Assert.Equal(ExpressionInputFailureException.InputMaterializationFailed, exception.InputFailureCode);
+        Assert.Equal("message", exception.InputKey);
+        Assert.Equal(ExpressionInputFailureException.MaterializationPhase, exception.EvaluationPhase);
+        Assert.Equal(
+            "Elsa.Workflows.Runtime.Services.Values.RedactedPortableExpressionException",
+            exception.InnerException?.GetType().FullName);
+    }
+
+    [Fact]
+    public async Task Portable_expression_request_construction_failure_reports_its_materialization_phase()
+    {
+        var reference = new DurableValueExternalReference("request-payloads", "requests/request-1", new Dictionary<string, string>());
+        var expression = new RuntimeExpressionBinding(
+            "test",
+            "value",
+            parameters: new Dictionary<string, ExpressionParameterBinding>
+            {
+                ["value"] = new WorkflowRequestExpressionParameterBinding("request")
+            });
+        var binding = new RuntimeInputBinding(
+            "message",
+            StringType,
+            ValueProtectionPolicy.InstanceInline,
+            RuntimeInputBindingSource.Expression,
+            expression: expression);
+        var context = NewResolutionContext(workflowInputEnvelopes: new Dictionary<string, ValueEnvelope>
+        {
+            ["request"] = ValueEnvelope.External(new ValueTypeDescriptor("Request"), reference, ExternalPolicy("request-payloads"))
+        });
+
+        var exception = await Assert.ThrowsAsync<ExpressionInputFailureException>(() =>
+            new RuntimeActivityInputMaterializer(
+                    new RuntimeInputBindingResolver(),
+                    new StringTypeRegistry(),
+                    new EchoPortableEvaluator(),
+                    new DisposedJsonPayloadStore())
+                .MaterializeSnapshotAsync(NewTypedNode(binding, ActivityValuePolicy.Default), "invocation-1", context, Now)
+                .AsTask());
+
+        Assert.Equal(ExpressionInputFailureException.InputMaterializationFailed, exception.InputFailureCode);
+        Assert.Equal("message", exception.InputKey);
+        Assert.Equal(ExpressionInputFailureException.MaterializationPhase, exception.EvaluationPhase);
+        Assert.IsType<ObjectDisposedException>(exception.InnerException);
     }
 
     [Fact]
@@ -684,7 +799,7 @@ public sealed class ValueDurabilityPolicyTests
             ["secret"] = ValueEnvelope.Inline(StringType, JsonSerializer.SerializeToElement(secret), sensitivePolicy)
         });
 
-        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+        var exception = await Assert.ThrowsAsync<ExpressionInputFailureException>(() =>
             new RuntimeActivityInputMaterializer(
                     new RuntimeInputBindingResolver(),
                     new StringTypeRegistry(),
@@ -693,6 +808,8 @@ public sealed class ValueDurabilityPolicyTests
                 .MaterializeSnapshotAsync(NewTypedNode(binding, ActivityValuePolicy.Default), "invocation-1", context, Now)
                 .AsTask());
 
+        Assert.Equal(ExpressionInputFailureException.ExpressionEvaluationFailed, exception.InputFailureCode);
+        Assert.Equal("message", exception.InputKey);
         Assert.NotNull(exception.InnerException);
         Assert.Contains(typeof(InvalidOperationException).FullName!, exception.InnerException!.Message, StringComparison.Ordinal);
         Assert.DoesNotContain(secret, exception.ToString(), StringComparison.Ordinal);
@@ -897,6 +1014,22 @@ public sealed class ValueDurabilityPolicyTests
             DurableValueExternalReference reference,
             CancellationToken cancellationToken = default) =>
             ValueTask.FromResult(payloads[reference.Locator].Clone());
+    }
+
+    private sealed class DisposedJsonPayloadStore : IExternalPayloadStore
+    {
+        public ValueTask<DurableValueExternalReference> WriteAsync(
+            ExternalPayloadWriteRequest request,
+            CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException("The request-construction regression only reads an existing payload.");
+
+        public ValueTask<JsonElement> ReadAsync(
+            DurableValueExternalReference reference,
+            CancellationToken cancellationToken = default)
+        {
+            using var document = JsonDocument.Parse("\"request-value\"");
+            return ValueTask.FromResult(document.RootElement);
+        }
     }
 
     private sealed class EchoPortableEvaluator : IPortableExpressionEvaluator
