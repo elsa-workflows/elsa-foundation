@@ -5,6 +5,7 @@ on:
     branches: [main]
     paths:
       - '.github/workflows/backend-source-platform.yml'
+      - 'global.json'
       - 'docs/contributing/backend-source-quickstart.md'
       - 'docs/contributing/backend-source-edit.md'
       - 'NuGet.config'
