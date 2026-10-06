@@ -2,7 +2,7 @@
 
 **Feature Branch**: `143-expression-code-intelligence`
 **Created**: 2026-07-28
-**Status**: Implemented — shipped baseline; unmerged Program #2310 extension approved 2026-10-02
+**Status**: In progress — Program #2310 extension approved 2026-10-02; baseline remains shipped
 **Input**: Provide a safe, language-neutral, design-time-only Foundation contract that lets Studio give JavaScript and Liquid expressions contextual code intelligence and semantic diagnostics, without evaluating user code or exposing runtime values.
 
 **Program continuation**: Foundation Program #2310 retains every baseline contract and extends the providers with real-host persisted-workflow proof, runtime-compatible JavaScript grammar/API metadata, effective Liquid filter/tag metadata, richer known-shape help and diagnostics, and installed-text-syntax conformance. Studio presentation remains owned by Studio spec `094-expression-code-intelligence`.

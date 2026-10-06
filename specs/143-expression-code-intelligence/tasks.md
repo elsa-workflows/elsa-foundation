@@ -47,7 +47,7 @@ Tasks T001-T025 describe the implemented baseline. Program #2310 adds T026-T031.
 ## Program #2310 continuation: User Story 4 — Real composed APIs
 
 - [x] T026 [US4] Add a real Workbench-process persisted-draft authoring integration test under `tests/essentials/Workbench/Tests/`, reusing `WorkbenchProcess`, the stock authenticated shell, and its isolated SQLite content root; discover actual activity version/output metadata through the authoring API, then cover capability discovery, context, completion, hover and validation for JavaScript and Liquid.
-- [x] T027 [US4] Add architecture-only independent-provider composition and missing-provider capability-advertisement cases under `tests/Elsa/Architecture/` after T026 establishes the real-host path; unavailable, unauthorized, incompatible, stale and cancellation behavior stays in the owning provider/API suites.
+- [x] T027 [US4] Add architecture-only independent-provider composition and missing-provider capability-advertisement cases under `tests/essentials/Architecture/` after T026 establishes the real-host path; unavailable, unauthorized, incompatible, stale and cancellation behavior stays in the owning provider/API suites.
 
 ## Program #2310 continuation: User Story 2 — Runtime-owned language assistance
 
