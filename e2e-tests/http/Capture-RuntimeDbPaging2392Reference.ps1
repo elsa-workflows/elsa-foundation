@@ -129,9 +129,13 @@ Write-Host "[fusion]     WorkflowIntrinsicFusion.IsFusable(Set)=true (source ver
 # Content-addressed artifacts can be shared across authored source definitions. Filter on this run's unique source
 # definition and reject ambiguity instead of selecting an unrelated older instance.
 Start-Sleep -Seconds 1 # Give the published trigger table one refresh interval.
+# PowerShell persists explicit request headers on a reused WebSession. Keep the trigger's traceparent
+# on a separate authenticated session so instance inspection cannot join the trigger trace.
+$triggerSession = [Microsoft.PowerShell.Commands.WebRequestSession]::new()
+$triggerSession.Cookies = $ctx.Session.Cookies
 $trigger = Invoke-Step "POST synchronous HTTP trigger" {
     Invoke-WebRequest "$BaseUrl/workflows/http/$path" -Method POST -Body $payload -ContentType "application/json" `
-        -Headers @{ traceparent = $TraceParent } -WebSession $ctx.Session -UseBasicParsing
+        -Headers @{ traceparent = $TraceParent } -WebSession $triggerSession -UseBasicParsing
 }
 Write-Host ("[response]   HTTP {0}; body={1}" -f [int]$trigger.StatusCode, "$($trigger.Content)")
 if ([int]$trigger.StatusCode -ne 200 -or "$($trigger.Content)" -ne "Alice Smith") {
