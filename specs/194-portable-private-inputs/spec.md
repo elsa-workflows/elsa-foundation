@@ -1,10 +1,10 @@
 # Feature Specification: Portable compositions with required private inputs
 
-**Feature Branch**: `codex/2457-portable-input-contract`
+**Feature Branch**: `codex/2461-portable-private-inputs`
 
 **Created**: 2026-10-06
 
-**Status**: Draft — specification checkpoint #2457; no production portability delivered
+**Status**: In progress — reviewed contract approved for implementation under #2461 on 2026-10-06; no production portability delivered yet
 
 **Input**: Sipke's explicit approval of reviewed nonsecret public intent plus separately supplied required private configuration at the destination, recorded on [program #1959](https://github.com/elsa-workflows/elsa-foundation/issues/1959#issuecomment-6023232082). [Specification #2457](https://github.com/elsa-workflows/elsa-foundation/issues/2457) follows completed [discovery #2327](https://github.com/elsa-workflows/elsa-foundation/issues/2327).
 

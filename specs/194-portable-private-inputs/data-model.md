@@ -1,6 +1,6 @@
 # Portable/private model
 
-The normative proposal is [portable-input-v1](contracts/portable-input-v1.md).
+The approved implementation contract is [portable-input-v1](contracts/portable-input-v1.md).
 
 | Entity | Fields and relationships | Validation |
 |---|---|---|
