@@ -294,6 +294,7 @@ builder.Services.AddCShellsAspNetCore(shells =>
             // discoverable by the runtime feature catalog (so they surface as "available" in the modularity UI)
             // and enablable via shell configuration.
             typeof(Elsa.Expressions.JavaScript.JavaScriptFeature).Assembly,
+            typeof(Elsa.Expressions.Liquid.LiquidExpressionsFeature).Assembly,
             typeof(Elsa.Expressions.JavaScript.Jint.JintFeature).Assembly,
             typeof(Elsa.Expressions.JavaScript.Rendering.JavaScriptRenderingFeature).Assembly,
             typeof(Elsa.Http.JavaScript.HttpJavaScriptFeature).Assembly,

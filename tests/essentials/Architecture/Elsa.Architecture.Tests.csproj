@@ -49,6 +49,8 @@
     <ProjectReference Include="..\..\..\src\essentials\Attention\Api\Elsa.Attention.Api.csproj" />
     <ProjectReference Include="..\Api\Compatibility\Testing\Elsa.Api.Compatibility.Testing.csproj" />
     <ProjectReference Include="..\..\..\src\essentials\Expressions\Api\Elsa.Expressions.Api.csproj" />
+    <ProjectReference Include="..\..\..\src\essentials\Expressions\JavaScript\Elsa.Expressions.JavaScript.csproj" />
+    <ProjectReference Include="..\..\..\src\essentials\Expressions\Liquid\Elsa.Expressions.Liquid.csproj" />
     <ProjectReference Include="..\..\..\src\essentials\Expressions\JavaScript\Rendering\Elsa.Expressions.JavaScript.Rendering.csproj" />
     <ProjectReference Include="..\..\..\src\essentials\Expressions\JavaScript\Rendering\Core\Elsa.Expressions.JavaScript.Rendering.Core.csproj" />
     <ProjectReference Include="..\..\..\src\essentials\Expressions\Elsa.Expressions.csproj" />

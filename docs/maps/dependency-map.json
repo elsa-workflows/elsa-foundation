@@ -345,6 +345,11 @@
         },
         {
           "type": "internal",
+          "id": "Elsa.Expressions.Liquid",
+          "path": "src/essentials/Expressions/Liquid/Elsa.Expressions.Liquid.csproj"
+        },
+        {
+          "type": "internal",
           "id": "Elsa.Foundation.DataProtection.EntityFrameworkCore",
           "path": "src/essentials/Foundation/DataProtection/EntityFrameworkCore/Elsa.Foundation.DataProtection.EntityFrameworkCore.csproj"
         },
@@ -12449,6 +12454,11 @@
         },
         {
           "type": "internal",
+          "id": "Elsa.Expressions.JavaScript",
+          "path": "src/essentials/Expressions/JavaScript/Elsa.Expressions.JavaScript.csproj"
+        },
+        {
+          "type": "internal",
           "id": "Elsa.Expressions.JavaScript.Rendering.Core",
           "path": "src/essentials/Expressions/JavaScript/Rendering/Core/Elsa.Expressions.JavaScript.Rendering.Core.csproj"
         },
@@ -12456,6 +12466,11 @@
           "type": "internal",
           "id": "Elsa.Expressions.JavaScript.Rendering",
           "path": "src/essentials/Expressions/JavaScript/Rendering/Elsa.Expressions.JavaScript.Rendering.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Expressions.Liquid",
+          "path": "src/essentials/Expressions/Liquid/Elsa.Expressions.Liquid.csproj"
         },
         {
           "type": "internal",

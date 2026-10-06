@@ -711,6 +711,11 @@
           "OpenIddict.Validation": "7.5.0"
         }
       },
+      "Parlot": {
+        "type": "Transitive",
+        "resolved": "1.5.2",
+        "contentHash": "idEOR6WU8WvnaDhFcj9PkWv8r/Actca8KfV9kw94//QEC0iQJVB9w/Z4ZLY8LxwSVMuNPuuLB649kCcVb+HrLw=="
+      },
       "Polly": {
         "type": "Transitive",
         "resolved": "7.2.4",
@@ -863,6 +868,11 @@
         "type": "Transitive",
         "resolved": "10.0.8",
         "contentHash": "4hnHSbtc1FP91qiOsweSa/3My/tkKAU9WcUyCZNSUPhfNyFtIhTl9qEPaSK2g4XzTMaq4huRerF6tSV9q44Cnw=="
+      },
+      "TimeZoneConverter": {
+        "type": "Transitive",
+        "resolved": "7.2.0",
+        "contentHash": "4Poqu79dTmacVETqUJ53g3x4U21V/cmWPSlehdsVE4Q00akavvlRq+SRjcg/CmfO9ibOCjRl6TeUV7hkC5RC4w=="
       },
       "ZstdSharp.Port": {
         "type": "Transitive",
@@ -1355,6 +1365,16 @@
         "type": "Project",
         "dependencies": {
           "Elsa.Events.Core": "[4.0.0-dev, )"
+        }
+      },
+      "elsa.expressions.liquid": {
+        "type": "Project",
+        "dependencies": {
+          "CShells.Abstractions": "[0.0.30-preview.159, )",
+          "Elsa.Events.Core": "[4.0.0-dev, )",
+          "Elsa.Expressions.Core": "[4.0.0-dev, )",
+          "Elsa.Serialization.Core": "[4.0.0-dev, )",
+          "Fluid.Core": "[2.31.0, )"
         }
       },
       "elsa.extensionbuilder.api": {
@@ -2193,6 +2213,16 @@
         "contentHash": "d5Ka7jRMEJ5pzxNXPAWtCmfssmXz2/PtLo5bbXcod7K0ZcuCvUMmDZUEIkF6TlGO00dBBT07kTs3ShuNv58PRQ==",
         "dependencies": {
           "JsonSchema.Net": "9.2.0"
+        }
+      },
+      "Fluid.Core": {
+        "type": "CentralTransitive",
+        "requested": "[2.31.0, )",
+        "resolved": "2.31.0",
+        "contentHash": "HowYbawChrOQLgbezHp/pKY3TUdkNwrpz4CE9z2QHvx4769JXP5IjurpoPGFfz+73RcxxC04niukIXjygAYIzw==",
+        "dependencies": {
+          "Parlot": "1.5.2",
+          "TimeZoneConverter": "7.2.0"
         }
       },
       "GitHub.Copilot.SDK": {
