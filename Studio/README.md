@@ -97,11 +97,10 @@ explicit "backend management unavailable" state.
 
 ## Build
 
-> **Current backend setup limitation:** An earlier isolated-cache restore failed for
-> `ConsoleLogStreaming.AspNetCore` `1.0.0-preview.13` (see [Foundation #2432](https://github.com/elsa-workflows/elsa-foundation/issues/2432)); that pin is still on this `main`.
-> Its proposed correction in [Studio #551](https://github.com/elsa-workflows/elsa-foundation-studio/issues/551) / [PR #557](https://github.com/elsa-workflows/elsa-foundation-studio/pull/557)
-> is not merged. The end-to-end source-development path is tracked in [Studio #566](https://github.com/elsa-workflows/elsa-foundation-studio/issues/566).
-> The `.NET` build/test/run commands below are existing developer commands, not a verified cold-cache setup recipe.
+> **Source setup status:** The central `ConsoleLogStreaming.AspNetCore` pin now uses `1.1.0`.
+> [Studio #579](https://github.com/elsa-workflows/elsa-foundation-studio/issues/579) records a restore with isolated package-cache, HTTP-cache, and CLI-home paths, a Studio.Web build, and affected console-stream/host tests for this correction.
+> The complete source-development and paired browser journey remains tracked in [Studio #566](https://github.com/elsa-workflows/elsa-foundation-studio/issues/566).
+> The `.NET` commands below are existing developer commands; the scoped checks do not establish a complete fresh-machine setup or source-edit journey.
 
 ```bash
 pnpm install

@@ -26,9 +26,11 @@ Run the affected workspace's existing test, typecheck, or build script as approp
 
 The repository-defined hosted PR jobs are in [CI](.github/workflows/ci.yml) and [Docker Image](.github/workflows/docker.yml). CI runs lint, typecheck, workspace unit tests, shuffled Workflows tests, the Workflows bundle budget, and Chromium browser tests. The Docker workflow builds the Studio image on pull requests. The [Packages workflow](.github/workflows/packages.yml) uses .NET 10 to restore, build, test, and pack on selected branch pushes and releases; it does not run on pull requests. Check the live pull request and repository branch rules for its exact checks and requirements.
 
-### Current .NET setup limitation
+### Current .NET setup verification
 
-The current `main` still pins `ConsoleLogStreaming.AspNetCore` `1.0.0-preview.13` in [`Directory.Packages.props`](Directory.Packages.props). An earlier isolated-cache restore failed for that version ([Foundation #2432](https://github.com/elsa-workflows/elsa-foundation/issues/2432)). Its correction is owned by [Studio #551](https://github.com/elsa-workflows/elsa-foundation-studio/issues/551) / [PR #557](https://github.com/elsa-workflows/elsa-foundation-studio/pull/557), which remains unmerged; the complete source setup and paired workflow are tracked in [Studio #566](https://github.com/elsa-workflows/elsa-foundation-studio/issues/566). The existing `dotnet build`, `dotnet test`, and `dotnet run` commands in README are not a verified cold-cache setup path. Check those issues for current status before relying on a from-source backend run.
+[`Directory.Packages.props`](Directory.Packages.props) now pins `ConsoleLogStreaming.AspNetCore` `1.1.0`. [Studio #579](https://github.com/elsa-workflows/elsa-foundation-studio/issues/579) records the correction of the earlier preview-package restore failure, with a Studio.Web restore using isolated package-cache, HTTP-cache, and CLI-home paths, a scoped host build, and affected console-stream/host tests. Installed SDK packs remained available during those checks.
+
+The complete source setup, paired workflow and visible source-edit journey remain tracked in [Studio #566](https://github.com/elsa-workflows/elsa-foundation-studio/issues/566). The existing `dotnet build`, `dotnet test`, and `dotnet run` commands in README are not, by themselves, a verified fresh-machine walkthrough. Check that issue for the remaining setup and browser evidence.
 
 If GitHub displays a `license/cla` check on your pull request, follow the instructions in that check.
 
