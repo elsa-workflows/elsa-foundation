@@ -173,6 +173,9 @@ $maxSegment = Get-DetailValue $detail "maxSegmentCheckpoints"
 $inspection = Get-DetailValue $detail "inspectionGranularity"
 Write-Host ("[terminal]   status={0}" -f $detail.instance.status)
 Write-Host ("[effective]  checkpointCadence={0}; maxSegmentCheckpoints={1}; inspectionGranularity={2}" -f $cadence, $maxSegment, $inspection)
-if ("$cadence" -ne $ExpectedCadence -or [int]$maxSegment -ne 50 -or -not $inspection) {
-    throw "Expected effective checkpointCadence=$ExpectedCadence and maxSegmentCheckpoints=50, with inspectionGranularity present; got cadence='$cadence', maxSegmentCheckpoints='$maxSegment', inspectionGranularity='$inspection'."
+$expectedMaxSegment = if ($ExpectedCadence -eq "Coalesced") { 50 } else { $null }
+$expectedInspection = if ($ExpectedCadence -eq "Coalesced") { "boundary-level" } else { "activity-level" }
+$expectedMaxSegmentText = if ($null -eq $expectedMaxSegment) { "<null>" } else { [string]$expectedMaxSegment }
+if ("$cadence" -ne $ExpectedCadence -or $maxSegment -ne $expectedMaxSegment -or "$inspection" -ne $expectedInspection) {
+    throw "Expected effective checkpointCadence=$ExpectedCadence, maxSegmentCheckpoints=$expectedMaxSegmentText, and inspectionGranularity=$expectedInspection; got cadence='$cadence', maxSegmentCheckpoints='$maxSegment', inspectionGranularity='$inspection'."
 }
