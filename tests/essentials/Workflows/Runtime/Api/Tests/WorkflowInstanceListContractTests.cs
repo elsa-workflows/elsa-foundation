@@ -4,12 +4,37 @@ using Elsa.Mediator.Core.Contracts;
 using Elsa.Workflows.Runtime.Api.Capabilities;
 using Elsa.Workflows.Runtime.Api.Models;
 using Elsa.Workflows.Runtime.Api.Requests;
+using Elsa.Workflows.Runtime.Core.Models;
 using Xunit;
 
 namespace Elsa.Workflows.Runtime.Api.Tests;
 
 public sealed class WorkflowInstanceListContractTests
 {
+    [Fact]
+    public void Health_additions_preserve_the_original_record_and_factory_signatures()
+    {
+        AssertPositionalContract(typeof(ListWorkflowInstances),
+            typeof(string), typeof(string), typeof(string), typeof(int?), typeof(string),
+            typeof(string), typeof(string), typeof(DateTimeOffset?), typeof(DateTimeOffset?), typeof(string));
+
+        AssertPositionalContract(typeof(WorkflowInstanceSummaryView),
+            typeof(string), typeof(string), typeof(string), typeof(string), typeof(string), typeof(string),
+            typeof(string), typeof(string), typeof(string), typeof(DateTimeOffset), typeof(DateTimeOffset?),
+            typeof(DateTimeOffset?), typeof(DateTimeOffset?), typeof(string), typeof(string), typeof(string),
+            typeof(long), typeof(int), typeof(string), typeof(string), typeof(string), typeof(string),
+            typeof(string), typeof(string));
+
+        var legacyFrom = typeof(WorkflowInstanceSummaryView).GetMethod(
+            nameof(WorkflowInstanceSummaryView.From),
+            BindingFlags.Public | BindingFlags.Static,
+            binder: null,
+            types: [typeof(WorkflowExecutionState), typeof(long), typeof(int), typeof(bool)],
+            modifiers: null);
+        Assert.NotNull(legacyFrom);
+        Assert.All(legacyFrom!.GetParameters().Skip(1), parameter => Assert.True(parameter.IsOptional));
+    }
+
     [Fact]
     public void Legacy_instance_list_preserves_the_v1_array_contract()
     {
@@ -18,7 +43,7 @@ public sealed class WorkflowInstanceListContractTests
 
         AssertProperties(request,
             "Status", "DefinitionId", "CorrelationId", "Take", "Cursor",
-            "WorkflowExecutionId", "ArtifactId", "From", "To", "RunKind");
+            "WorkflowExecutionId", "ArtifactId", "From", "To", "RunKind", "IncidentHealth");
         Assert.Equal(typeof(IReadOnlyCollection<WorkflowInstanceSummaryView>), response);
         RuntimeApiEndpointTestFactory.AssertPermissionPolicy(endpoint, WorkflowRuntimePermissions.WorkflowRuntimeRead);
     }
@@ -31,16 +56,17 @@ public sealed class WorkflowInstanceListContractTests
 
         AssertProperties(request,
             "Status", "DefinitionId", "CorrelationId", "Take", "Cursor",
-            "WorkflowExecutionId", "ArtifactId", "From", "To", "RunKind");
+            "WorkflowExecutionId", "ArtifactId", "From", "To", "RunKind", "IncidentHealth");
         AssertProperties(response,
             "Items", "NextCursor", "HasNext", "Count", "TotalCount");
         var item = response.GetProperty("Items")!.PropertyType.GetGenericArguments().Single();
-        AssertProperties(item, "RunKind");
+        AssertProperties(item, "RunKind", "IncidentCount", "ActiveIncidentCount", "BlockingIncidentCount");
         RuntimeApiEndpointTestFactory.AssertPermissionPolicy(endpoint, WorkflowRuntimePermissions.WorkflowRuntimeRead);
 
         var links = RuntimeApiCapabilities.StaticDeclaration.Links.ToDictionary(link => link.Rel, StringComparer.Ordinal);
         Assert.Equal("runtime/workflows/instances", links["workflow-instances"].Href);
         Assert.Equal("runtime/workflows/instances/page", links["workflow-instances-page"].Href);
+        Assert.Equal("runtime/workflows/instances/page", links["workflow-instances-health-filter"].Href);
         Assert.Equal(1, RuntimeApiCapabilities.StaticDeclaration.ContractMajorVersion);
     }
 
@@ -79,5 +105,16 @@ public sealed class WorkflowInstanceListContractTests
 
     private static void AssertProperties(Type type, params string[] properties) =>
         Assert.All(properties, property => Assert.NotNull(type.GetProperty(property, BindingFlags.Public | BindingFlags.Instance)));
+
+    private static void AssertPositionalContract(Type type, params Type[] parameterTypes)
+    {
+        Assert.NotNull(type.GetConstructor(parameterTypes));
+        Assert.NotNull(type.GetMethod(
+            "Deconstruct",
+            BindingFlags.Public | BindingFlags.Instance,
+            binder: null,
+            types: parameterTypes.Select(parameterType => parameterType.MakeByRefType()).ToArray(),
+            modifiers: null));
+    }
 
 }

@@ -7,26 +7,32 @@ namespace Elsa.Workflows.Runtime.Services.Pipelines;
 /// <summary>
 /// Dispatches a drained scheduler work item through the runtime execution pipeline for its kind, staging the selected
 /// work handler in the pipeline's <c>Invoke</c> slot so it runs before the later slots that apply its results (ADR 0029,
-/// Move 2). The pipeline terminal is a guard that fails loudly if the handler was never run.
+/// Move 2). The pipeline terminal is a guard that fails loudly if the handler was never run. It also stages the
+/// partition of the DI scope it lives in, which is the command's partition, so a handler that creates its own scope
+/// works in the partition the work item belongs to rather than in the host's.
 /// </summary>
 public sealed class RuntimeExecutionPipelineDispatcher : IRuntimeExecutionPipelineDispatcher
 {
     private readonly IRuntimeSchedulerPipelineSelector _selector;
     private readonly IRuntimeWorkflowExecutionPipeline _workflowPipeline;
     private readonly IRuntimeActivityExecutionPipeline _activityPipeline;
+    private readonly IPersistenceAccessContextAccessor _persistenceAccessContextAccessor;
 
     public RuntimeExecutionPipelineDispatcher(
         IRuntimeSchedulerPipelineSelector selector,
         IRuntimeWorkflowExecutionPipeline workflowPipeline,
-        IRuntimeActivityExecutionPipeline activityPipeline)
+        IRuntimeActivityExecutionPipeline activityPipeline,
+        IPersistenceAccessContextAccessor persistenceAccessContextAccessor)
     {
         ArgumentNullException.ThrowIfNull(selector);
         ArgumentNullException.ThrowIfNull(workflowPipeline);
         ArgumentNullException.ThrowIfNull(activityPipeline);
+        ArgumentNullException.ThrowIfNull(persistenceAccessContextAccessor);
 
         _selector = selector;
         _workflowPipeline = workflowPipeline;
         _activityPipeline = activityPipeline;
+        _persistenceAccessContextAccessor = persistenceAccessContextAccessor;
     }
 
     public ValueTask DispatchAsync(
@@ -47,6 +53,7 @@ public sealed class RuntimeExecutionPipelineDispatcher : IRuntimeExecutionPipeli
             var activityContext = new ActivityRuntimePipelineContext(workItem);
             activityContext.Workspace.CancellationToken = cancellationToken;
             activityContext.Workspace.AmbientServices = ambientServices;
+            activityContext.Workspace.PersistenceScope = _persistenceAccessContextAccessor.Current.Scope;
             activityContext.Workspace.InvokeHandler = pipelineContext => handler is IRuntimePipelineWorkHandler pipelineAwareHandler
                 ? pipelineAwareHandler.HandleAsync(workItem, pipelineContext, cancellationToken)
                 : handler.HandleAsync(workItem, cancellationToken);
@@ -68,6 +75,7 @@ public sealed class RuntimeExecutionPipelineDispatcher : IRuntimeExecutionPipeli
         var workflowContext = new WorkflowRuntimePipelineContext(workItem);
         workflowContext.Workspace.CancellationToken = cancellationToken;
         workflowContext.Workspace.AmbientServices = ambientServices;
+        workflowContext.Workspace.PersistenceScope = _persistenceAccessContextAccessor.Current.Scope;
         workflowContext.Workspace.InvokeHandler = pipelineContext => handler is IRuntimePipelineWorkHandler pipelineAwareHandler
             ? pipelineAwareHandler.HandleAsync(workItem, pipelineContext, cancellationToken)
             : handler.HandleAsync(workItem, cancellationToken);

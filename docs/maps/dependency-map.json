@@ -19243,6 +19243,11 @@
         },
         {
           "type": "internal",
+          "id": "Elsa.Cluster.Readability",
+          "path": "src/essentials/Cluster/Readability/Elsa.Cluster.Readability.csproj"
+        },
+        {
+          "type": "internal",
           "id": "Elsa.Tasks",
           "path": "src/essentials/Tasks/Elsa.Tasks.csproj"
         },
@@ -19681,6 +19686,11 @@
           "type": "internal",
           "id": "Elsa.Api.Capabilities",
           "path": "src/essentials/Api/Capabilities/Elsa.Api.Capabilities.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "dotnet-elsa",
+          "path": "src/essentials/Cli/Elsa.Cli.csproj"
         },
         {
           "type": "internal",

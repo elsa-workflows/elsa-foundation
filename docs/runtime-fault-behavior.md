@@ -216,9 +216,21 @@ persistence failure is caught and logged with the original fault, and the drain 
 It does not terminate the workflow. The `WaitForIntervention` outcome is non-null, so
 `BlockingIncidentWorkflowFaultObserver` filters the incident out and leaves the workflow in its
 existing status; the strategy observer skips it too, both because the drain stopped on a fault rather
-than quiescing and because the incident carries no `ActivityExecutionId`. It also does not touch
-activity state: the activity that was mid-dispatch stays whatever it was, typically `Scheduled` or
-`Running`.
+than quiescing and because its intervention outcome is already decided. Activity lifecycle stays whatever
+it was, typically `Scheduled` or `Running`; an attributable activity gains the incident association
+and an inspection projection in the same `IncidentRecorded` checkpoint.
+
+Activity command payloads supply the exact activity execution and executable node address. A portable
+input failure also records its input key, expression language, phase and failure classification. The
+observer synthesizes payload-free failed-input evidence linked to the incident: there is no successful
+value snapshot to invent. Existing fault capture and sensitive inspection permissions govern the cause;
+protected inputs retain their redacted cause. Unattributable engine failures keep a run-level incident.
+Cancellation, lost claims and checkpoint-rule failures retain their existing handling.
+
+Instance summaries distinguish historical totals from current Open/Blocking and Blocking counts.
+Resolved/Suppressed records remain history. The API advertises health filtering through its additive
+capability relation; the filter applies before authorized total counts and cursor paging. Studio uses
+this current health to show intervention cues without rewriting workflow or activity lifecycle.
 
 So the honest one-line answer to "what happens by default when a handler faults" is: **the work item
 is dropped from the queue, parked as poisoned with no retry, and surfaced as a blocking critical

@@ -104,6 +104,7 @@ public sealed class Elsa3ImportRegistrationOwnershipTests
         services.AddScoped<IReusableActivityCollectionAnalyzer, ReusableActivityCollectionAnalyzer>();
         services.AddScoped<IReusableActivityCollectionImporter, ReusableActivityCollectionImporter>();
         services.AddScoped<IReusableActivityImportOperationService, ReusableActivityImportOperationService>();
+        services.AddLogging();
         await using var provider = services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
         try
         {

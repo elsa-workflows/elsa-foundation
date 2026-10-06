@@ -28,6 +28,14 @@ public sealed class RuntimePipelineWorkspace
     public IServiceProvider? AmbientServices { get; set; }
 
     /// <summary>
+    /// The partition this dispatch's work item belongs to, staged by the dispatcher from the persistence scope its own
+    /// DI scope is bound to (the command's partition). A handler that creates its own scope because the drain carried
+    /// no <see cref="AmbientServices"/> binds that scope to this partition; a scope created without it would carry the
+    /// host's persistence scope instead. Null when the dispatching scope is bound to no single partition.
+    /// </summary>
+    public PersistenceScope? PersistenceScope { get; set; }
+
+    /// <summary>
     /// The dispatch's cancellation token, staged so slot middleware (the pipeline delegate threads no token) can forward
     /// it to cancellable work such as the checkpoint commit.
     /// </summary>

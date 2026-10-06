@@ -38,9 +38,10 @@ applied only as a reviewed dependency-closed mutation; Runtime never consumes th
 - **Purpose:** stores immutable expiring collection handles, deletes them, and reads completed apply receipts.
 - **Default implementation:** `EfReusableActivityImportOperationStore`; opt-in EF Core
   implementation `EfReusableActivityImportOperationStore`.
-- **Invariant:** collection and receipt writes are append-only, and reads are bound to the exact
-  ambient tenant plus user scope; authorization mismatches are indistinguishable from absence.
-- **Deletes:** a stored row is never rewritten, and a collection upload is deleted rather than kept.
+- **Invariant:** a stored row is never rewritten: receipts are append-only and a collection upload is deleted,
+  never updated. Reads are bound to the exact ambient tenant plus user scope; authorization mismatches are
+  indistinguishable from absence.
+- **Deletes:** a collection upload is deleted rather than kept.
   `DeleteCollectionAsync` removes one upload in its exact tenant-plus-user scope; `DeleteExpiredCollectionsAsync`
   removes a bounded batch of the ambient persistence scope's uploads, every user's, whose stored expiry has passed,
   oldest first. Both remove rows and decide nothing: when an upload is deleted is the operation service's rule (see
@@ -81,9 +82,11 @@ deleted from the import ledger. `ReusableActivityImportOperationService` owns th
   an apply, analysis, selection and a second apply against that handle answer 404: importing a further subset of the
   same export needs a new upload.
 - **A refused apply deletes the upload, unless its caller can continue with the same upload.** The outcomes that keep
-  it are a stale plan or an invalid or non-closed selection (422), an identity collision (409), a persistence failure
-  (which includes a commit whose outcome is unknown, where the repeat needs the collection again), a schema write
-  refusal and a cancellation. Every other outcome refuses the upload's content and deletes it; unknown outcomes fall
+  it are a stale plan or an invalid or non-closed selection (422), an idempotency conflict raised inside the commit
+  (409: a concurrent request won the same key with other content, and if it applied another upload this one is still
+  usable under a new key), an identity collision (409), a persistence failure (which includes a
+  commit whose outcome is unknown, where the repeat needs the collection again), a schema write refusal and a
+  cancellation. Every other outcome refuses the upload's content and deletes it; unknown outcomes fall
   on the deleting side on purpose. A malformed request (a blank plan ID or idempotency key) is refused before the
   upload is read and leaves it alone.
 - **An expired upload is deleted, not only refused.** The read that finds an upload past its expiry deletes it and
@@ -92,9 +95,19 @@ deleted from the import ledger. `ReusableActivityImportOperationService` owns th
   `IRecurringTask`, which is why this feature depends on `Tasks`. Every
   `ReusableActivityImportOptions.ExpiredCollectionSweepInterval` (15 minutes by default) it visits each persistence
   scope the host supplies (`IPersistenceScopeRunner`) and deletes at most `ExpiredCollectionSweepBatchSize` (100)
-  expired uploads in each. Every node runs it; the delete is idempotent. It does not visit the global partition, which
-  no host-supplied scope names: an upload stored under a global persistence context is deleted by its apply or by the
-  read that finds it expired.
+  expired uploads in each. Every node runs it; the delete is idempotent. It leaves a row at a schema version this
+  build does not read (ADR 0077): such a row was written by a newer build and is left to a build that reads it. It does not
+  visit the global partition, which no host-supplied scope names: an upload stored under a global persistence
+  context is deleted by its apply or by the read that finds it expired.
+
+The outcome is decided when these deletes run, so they do not observe the caller's cancellation: a client that
+disconnects after a refusal does not leave the refused upload behind. A delete that fails leaves the outcome the caller
+asked for in place (the receipt, the refusal, the 410) and is logged. The row then stays, and until its expiry it is
+still readable and can still be applied, so a refused upload whose delete failed keeps its content at rest until
+something deletes it: after a completed apply, a replay of the idempotency key repeats the delete; any later read of
+the handle that finds it expired deletes it; and in a tenant partition, the sweep deletes it once its lifetime runs
+out. So the one row nothing retries is a refused or expired upload in the global partition whose handle is never used
+again. This paragraph is the one statement of that behavior; the code's documentation points here.
 
 Between its upload and its apply or expiry the document is at rest in the ledger, as a reviewed import needs it to be.
 The rule bounds that time; it does not encrypt the column, and it does not reach database backups.

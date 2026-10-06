@@ -838,7 +838,7 @@ public sealed class ClrActivityActivatorTests : IAsyncDisposable
         var registry = new WellKnownTypeRegistry();
         foreach (var activityType in new[] { typeof(ServiceBearingActivity), typeof(TwoInputActivity) })
             registry.RegisterType(activityType, activityType.FullName!);
-        return new ClrActivityActivator(services.GetRequiredService<IServiceScopeFactory>(), registry, Serializer);
+        return new ClrActivityActivator(services.GetRequiredService<IServiceScopeFactory>(), registry, Serializer, FixedPersistenceAccess.Unbound);
     }
 
     private static ActivityContract Contract(Type activityType, params string[] inputKeys) => Contract(activityType, StringType, inputKeys);

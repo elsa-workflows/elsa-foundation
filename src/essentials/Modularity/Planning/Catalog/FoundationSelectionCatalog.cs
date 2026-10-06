@@ -8,7 +8,7 @@ namespace Elsa.Modularity.Planning.Catalog;
 public static class FoundationSelectionCatalog
 {
     private const string ResourcePrefix = "Elsa.Modularity.Planning.Catalogs.foundation-selection-catalog-v";
-    private const string CurrentVersion = "2";
+    private const string CurrentVersion = "3";
 
     /// <summary>Reads and strictly validates the current bundled catalog snapshot.</summary>
     public static SelectionCatalog Load() => LoadVersion(CurrentVersion);
@@ -16,7 +16,7 @@ public static class FoundationSelectionCatalog
     /// <summary>Uses a matching bundled snapshot, or the current snapshot so an unknown pin remains unresolved.</summary>
     public static SelectionCatalog LoadFor(CatalogPin pin)
     {
-        foreach (var version in new[] { "1", CurrentVersion })
+        foreach (var version in new[] { "1", "2", CurrentVersion })
         {
             var catalog = LoadVersion(version);
             if (catalog.Id == pin.Id && catalog.Version == pin.Version && catalog.Digest == pin.Digest)

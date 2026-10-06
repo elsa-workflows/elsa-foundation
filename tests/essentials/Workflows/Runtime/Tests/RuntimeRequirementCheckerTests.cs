@@ -5,8 +5,10 @@ using Elsa.Primitives.Models;
 using Elsa.Serialization.Core;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Workflows.Runtime.Extensions;
 using Elsa.Workflows.Runtime.Services.Executables;
 using Elsa.Workflows.Runtime.Services.Values;
+using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
 namespace Elsa.Workflows.Runtime.Tests;
@@ -69,6 +71,25 @@ public sealed class RuntimeRequirementCheckerTests
             entry => AssertActivityType(entry, "Sample.MissingActivity", ["node-missing"], RuntimeRequirementStatus.MissingActivityType),
             entry => AssertActivityType(entry, "Sample.RegisteredActivity", ["node-registered"], RuntimeRequirementStatus.Available),
             entry => AssertActivityType(entry, string.Empty, ["node-unreadable"], RuntimeRequirementStatus.MissingActivityType));
+    }
+
+    [Fact]
+    public void A_runtime_composed_by_AddWorkflowRuntime_answers_the_requirement_an_intrinsic_node_declares()
+    {
+        // The descriptor type and schema version are spelled out: they are the wire values a published artifact carries.
+        var intrinsic = Node("node-finish", "intrinsic", JsonSerializer.SerializeToElement(new { kind = "Finish", schemaVersion = "1.0.0" }));
+        using var runtime = new ServiceCollection().AddWorkflowRuntime().BuildServiceProvider();
+        var checker = Checker(runtime.GetServices<IRuntimeActivityConsumerCapability>(), []);
+        var subject = new RuntimeRequirementCheckSubject(
+            "artifact-3",
+            [new RuntimeRequirement(intrinsic.Descriptor.ConsumerKey, intrinsic.Descriptor.SchemaVersion)],
+            [],
+            [intrinsic]);
+
+        var result = checker.Check(subject);
+
+        Assert.True(result.IsSatisfied);
+        AssertRequirement(Assert.Single(result.Requirements), "intrinsic", "1", RuntimeRequirementStatus.Available, ["1"]);
     }
 
     private static void AssertRequirement(

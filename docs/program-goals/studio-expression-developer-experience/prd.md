@@ -59,7 +59,7 @@ The author can use completion, hover, signatures, explicit formatting, keyboard 
 
 - Preserve the current permission, Host Policy, no-store, cancellation, revision and telemetry boundaries.
 - Keep language/editor modules independently composable and keep editor-engine types out of the public Studio SDK.
-- Apply WCAG 2.2 AA interaction expectations to the scoped editor journeys through automated accessibility checks plus the named keyboard and screen-reader scenarios. This program does not claim product-wide formal WCAG conformance.
+- Apply WCAG 2.2 AA interaction expectations to the scoped editor journeys through automated accessibility checks plus the named keyboard scenarios. Actual current-head Chrome/Safari VoiceOver verification is removed from acceptance by the [2026-10-06 owner decision](decision-log.md#2026-10-06--remove-native-voiceover-verification-from-delivery-acceptance), recorded as skipped and never passed. No current-head native screen-reader or product-wide formal WCAG conformance is claimed.
 - Keep normal-host integration proof current to the exact reviewed Studio and Foundation heads.
 - Use focused affected-suite validation first and serialize heavy builds on the shared machine.
 
@@ -92,7 +92,7 @@ The author can use completion, hover, signatures, explicit formatting, keyboard 
 1. **Composed baseline**: the real persisted workflow journey passes for JavaScript and Liquid and proves degraded states.
 2. **Conformance**: installed text syntax readiness and runtime JavaScript grammar/API parity pass.
 3. **Language depth**: JavaScript locals/members/signatures and Liquid value/filter/tag help use runtime-owned metadata with useful diagnostics.
-4. **Complete experience**: theme, preview, signature, formatting, keyboard, screen-reader and continuity acceptance passes in real Studio.
+4. **Complete experience**: theme, preview, signature, formatting, keyboard and continuity acceptance passes in real Studio; actual Chrome/Safari VoiceOver remains explicitly skipped by owner decision and never passed.
 
 The program succeeds only when all four executable demonstrations pass on reviewed heads and the affected repository gates are green.
 
