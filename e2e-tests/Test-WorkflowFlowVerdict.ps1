@@ -4,11 +4,15 @@
 #>
 [CmdletBinding()]
 param(
-    [string] $VerdictModulePath = (Join-Path $PSScriptRoot '_WorkflowFlowVerdict.ps1'),
+    [string] $VerdictModulePath,
     [switch] $SkipMutationProof
 )
 
 $ErrorActionPreference = 'Stop'
+# Windows PowerShell 5.1 does not populate PSScriptRoot during parameter-default binding.
+if (-not $PSBoundParameters.ContainsKey('VerdictModulePath')) {
+    $VerdictModulePath = Join-Path $PSScriptRoot '_WorkflowFlowVerdict.ps1'
+}
 . $VerdictModulePath
 
 function Invoke-TestPowerShell {
