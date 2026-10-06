@@ -19,6 +19,9 @@ public sealed class EfIncidentStateStore(
 {
     private const int ProviderPageSize = RuntimeStorePageRequest.MaximumLimit;
 
+    internal bool UsesSameBackingStore(RuntimeDbContext candidateContext, IPersistenceAccessContextAccessor candidateAccessor) =>
+        ReferenceEquals(context, candidateContext) && ReferenceEquals(accessContextAccessor, candidateAccessor);
+
     public async ValueTask<bool> TryAddAsync(
         IncidentState state,
         CancellationToken cancellationToken = default)
@@ -115,6 +118,21 @@ public sealed class EfIncidentStateStore(
     {
         EfRuntimeOperationalStoreSupport.ValidateIdentity(workflowExecutionId, nameof(workflowExecutionId));
         return CountCoreAsync(workflowExecutionId, cancellationToken);
+    }
+
+    public async ValueTask<IncidentHealthCounts> CountHealthAsync(string workflowExecutionId, CancellationToken cancellationToken = default)
+    {
+        EfRuntimeOperationalStoreSupport.ValidateIdentity(workflowExecutionId, nameof(workflowExecutionId));
+        cancellationToken.ThrowIfCancellationRequested();
+        var scope = EfRuntimeOperationalStoreSupport.RequireScope(accessContextAccessor);
+        // Status is an existing indexed projection; count in the provider without loading exception/value content.
+        return await QueryForWorkflow(scope, workflowExecutionId)
+            .GroupBy(_ => 1)
+            .Select(group => new IncidentHealthCounts(
+                group.Count(),
+                group.Count(row => row.Status != (int)IncidentStatus.Resolved && row.Status != (int)IncidentStatus.Suppressed),
+                group.Count(row => row.Status == (int)IncidentStatus.Blocking)))
+            .SingleOrDefaultAsync(cancellationToken) ?? new IncidentHealthCounts(0, 0, 0);
     }
 
     public ValueTask<IReadOnlyCollection<IncidentState>> ListAsync(

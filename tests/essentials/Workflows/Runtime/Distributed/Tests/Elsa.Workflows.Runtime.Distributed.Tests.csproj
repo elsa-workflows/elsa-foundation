@@ -31,6 +31,8 @@
     <ProjectReference Include="..\..\..\..\..\..\src\essentials\Tasks\Elsa.Tasks.csproj" />
     <!-- The distributed runtime composed on a membership provider, shared with the membership conformance kit (spec 184). -->
     <ProjectReference Include="..\..\..\..\Cluster\Testing\Elsa.Cluster.Testing.csproj" />
+    <!-- AddShellStartupValidation, which both shipped hosts compose: a shell runs its ValidateOnStart checks as it activates (#2331). -->
+    <ProjectReference Include="..\..\..\..\..\..\src\essentials\Cluster\Readability\Elsa.Cluster.Readability.csproj" />
   </ItemGroup>
 
 </Project>

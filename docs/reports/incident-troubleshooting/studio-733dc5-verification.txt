@@ -1,0 +1,76 @@
+Valid exact55 predecessor regression; expected failure
+
+ RUN  v2.1.9 /Users/sipke/.codex-workspaces/incident-troubleshooting/studio/src/essentials/Elsa.Studio.Workflows/Client
+
+ ❯ src/__tests__/WorkflowInstanceWorkbenchIntegration.test.tsx (18 tests | 1 failed | 17 skipped) 1149ms
+   × workflow run workbench incident navigation > reframes and refocuses the same affected activity on each explicit activation 1149ms
+     → expected "spy" to be called 2 times, but got 1 times
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/__tests__/WorkflowInstanceWorkbenchIntegration.test.tsx > workflow run workbench incident navigation > reframes and refocuses the same affected activity on each explicit activation
+AssertionError: expected "spy" to be called 2 times, but got 1 times
+ ❯ src/__tests__/WorkflowInstanceWorkbenchIntegration.test.tsx:151:61
+    149|     expect(showAffectedActivityAgain).toBeTruthy();
+    150|     click(showAffectedActivityAgain);
+    151|     await vi.waitFor(() => expect(mockFlowInstance.fitView).toHaveBeen…
+       |                                                             ^
+    152|     await vi.waitFor(() => expect(focus).toHaveBeenCalledTimes(1));
+    153|     expect(document.activeElement).toBe(targetNode);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 17 skipped (18)
+   Start at  15:53:39
+   Duration  2.25s (transform 316ms, setup 18ms, collect 482ms, tests 1.15s, environment 272ms, prepare 61ms)
+
+undefined
+/Users/sipke/.codex-workspaces/incident-troubleshooting/studio/src/essentials/Elsa.Studio.Workflows/Client:
+[ERR_PNPM_RECURSIVE_EXEC_FIRST_FAIL] Command failed with exit code 1: vitest run src/__tests__/WorkflowInstanceWorkbenchIntegration.test.tsx -t 'reframes and refocuses'
+
+
+Restored final733 affected/module suites; passed162
+
+ RUN  v2.1.9 /Users/sipke/.codex-workspaces/incident-troubleshooting/studio/src/essentials/Elsa.Studio.Workflows/Client
+
+ ✓ src/__tests__/workflowInstances.test.tsx (16 tests) 53ms
+ ✓ src/__tests__/WorkflowInstanceWorkbenchIntegration.test.tsx (18 tests) 2247ms
+ ✓ src/__tests__/module.test.tsx (128 tests) 7407ms
+   ✓ workflows module > renders active definition actions and soft-deletes with confirmation 343ms
+   ✓ workflows module > enables workflow editor autosave by default when not configured 332ms
+   ✓ workflows module > runs a published executable and opens its exact pinned multi-node canvas 653ms
+   ✓ workflows module > renders the Executable Inspector with sidecar layout, ghost nodes and reference selection 323ms
+   ✓ workflows module > renders activity availability rows with compact types and helpful descriptions 329ms
+   ✓ workflows module > navigates from workflow runs to the compatible instance detail route 340ms
+   ✓ workflows module > moves selected definitions through the advertised relation, deduplicates submission, and announces success 403ms
+
+ Test Files  3 passed (3)
+      Tests  162 passed (162)
+   Start at  15:54:09
+   Duration  8.80s (transform 1.11s, setup 56ms, collect 2.00s, tests 9.71s, environment 968ms, prepare 179ms)
+
+
+
+Root final733 integrated affected suites; passed208
+
+ RUN  v2.1.9 /Users/sipke/.codex-workspaces/incident-troubleshooting/studio/src/essentials/Elsa.Studio.Workflows/Client
+
+ ✓ src/__tests__/bpmnAdapter.test.ts (28 tests) 8ms
+ ✓ src/__tests__/workflowAdapter.test.ts (45 tests) 14ms
+ ✓ src/__tests__/executableGraph.test.ts (12 tests) 9ms
+ ✓ src/__tests__/workflowInstances.test.tsx (16 tests) 87ms
+ ✓ src/__tests__/workflowRunHistory.test.tsx (4 tests) 154ms
+ ✓ src/__tests__/bpmnElementNode.test.tsx (13 tests) 101ms
+ ✓ src/__tests__/workflowActivityExecutionDetails.test.tsx (54 tests) 395ms
+ ✓ src/__tests__/inputInspectionRows.test.ts (10 tests) 4ms
+ ✓ src/__tests__/workflowRuntimeIncidentCue.test.tsx (2 tests) 19ms
+ ✓ src/__tests__/WorkflowInstanceDetailsLayout.test.tsx (6 tests) 863ms
+   ✓ Run detail page layout > uses a full-bleed workbench root without changing the Runs list page 626ms
+ ✓ src/__tests__/WorkflowInstanceWorkbenchIntegration.test.tsx (18 tests) 2288ms
+
+ Test Files  11 passed (11)
+      Tests  208 passed (208)
+   Start at  15:55:55
+   Duration  4.43s (transform 1.25s, setup 351ms, collect 5.09s, tests 3.94s, environment 6.97s, prepare 1.07s)
+

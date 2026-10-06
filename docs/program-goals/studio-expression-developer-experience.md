@@ -49,3 +49,9 @@ Complete only after real Studio/backend user journeys demonstrate every scoped m
 ## Readiness checkpoint — 2026-10-02
 
 The requirements-interrogation gate passes for milestone 1. The product outcome, actors, repository boundaries, security posture, compatibility constraints, acceptance journey and validation strategy are fixed by the approved assessment, Studio ADRs 0002/0006, Studio spec 094 and Foundation spec 143. Discovery found no competing implementation. Studio #546 and #545 are merged prerequisites, not work to duplicate. The deeper JavaScript language-service technology remains safely deferred behind a bounded spike before milestone 3 because baseline integration, grammar conformance and local/runtime completion merging do not depend on it.
+
+## Delivery scope checkpoint — 2026-10-06
+
+The owner requests end-to-end delivery of all four milestones and explicitly removes only actual current-head Chrome+VoiceOver and Safari+VoiceOver observation from acceptance. Both remain **SKIPPED BY OWNER DECISION — NEVER PASSED**; native screen-reader behavior is a delivery limitation, not a passing result. See the [canonical decision](studio-expression-developer-experience/decision-log.md#2026-10-06--remove-native-voiceover-verification-from-delivery-acceptance).
+
+Resume the existing Foundation/Studio specs, tasks and PR stack, preserving historical exact-head proof and avoiding competing implementations. Resolve stack integration and reverify affected heads; keep all other technical, review, keyboard, automated accessibility and runtime gates. Keep PRs draft until required gates and the owner's explicit final acceptance; then merge in dependency order, verify required green post-merge main and synchronize public completion records. No package publication or deployment is included. The program issue holds live evidence and ownership; earlier bootstrap checkpoints above remain historical.

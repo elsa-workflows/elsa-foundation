@@ -99,6 +99,12 @@ adapters validate and translate the selected context at their own persistence bo
 - **Usage:** workflow-execution records are durable executable-retention roots. Completion or fault does not release an artifact; only deletion of the retained execution does. Providers must answer the distinct-root query without materializing every full workflow-execution document and must keep the projection consistent with save/delete.
 - **Default implementation:** `InMemoryWorkflowExecutionStateStore`; durable persistence providers such as the opt-in `RuntimeWorkflowExecutionEntityFrameworkCoreFeature` replace it. EF providers retain an authoritative lossless document plus indexed history, alteration-capture, authority and pinned-artifact projections; `IWorkflowRuntimeAttentionQuery` remains a separate cross-store contract.
 
+### `IWorkflowHealthQuery` *(Core — `Elsa.Workflows.Runtime.Core`)*
+- **Kind:** Optional provider capability implemented by the selected workflow-execution state store.
+- **Signature:** `SupportsIncidentStore(IIncidentStateStore)` and `QueryHealthPageAsync(WorkflowExecutionStatePageQuery, IncidentHealth, CancellationToken)`.
+- **Usage:** `SupportsIncidentStore` must witness that the selected incident store shares the provider's actual persistence scope; a provider must return false for an unrelated incident backend so the API uses the selected-store fallback. Apply current Active, Blocking or None incident health in the same persistence scope before counting and keyset paging. Cursors must bind to health, ordinary filters and scope. The API uses these pages as candidates and still applies request inspection authorization; only its explicit allow-all development adapter can return the provider page directly. Providers without the capability retain bounded candidate traversal and authorization-safe health filtering.
+- **Default implementation:** `EfWorkflowExecutionStateStore`, using existing incident status and workflow identity projections without fault/value content or a schema change.
+
 ### `IWorkflowExecutableReferenceGarbageCollector` *(Core — `Elsa.Workflows.Runtime.Core`)*
 - **Kind:** Replacement (one collector owns physical executable-artifact reclamation for a runtime composition).
 - **Signature:** `SweepAsync(CancellationToken cancellationToken = default)`.
@@ -570,8 +576,8 @@ Leaf-owned contracts for clustered workflow-execution placement and cross-node c
 
 ### `IIncidentStateStore` *(Core — `Elsa.Workflows.Runtime.Core`)*
 - **Kind:** Replacement (one store owns split continuation state for execution-affecting incidents in a runtime composition).
-- **Signature:** `TryAddAsync(IncidentState state, ...)`, `SaveAsync(IncidentState state, ...)`, `FindAsync(string workflowExecutionId, string incidentId, ...)`, `ListAsync(string workflowExecutionId, ...)`, `ListBlockingAsync(string workflowExecutionId, ...)`.
-- **Usage:** stores `IncidentState` keyed by `WorkflowExecutionId` and `IncidentId`. The in-memory checkpoint writer projects incident appends as insert-only changes and incident upserts as replacements from accepted checkpoint commits into this store. Incident history projections, diagnostic payloads, retry, compensation, and intervention behavior are separate runtime surfaces.
+- **Signature:** `TryAddAsync(IncidentState state, ...)`, `SaveAsync(IncidentState state, ...)`, `FindAsync(string workflowExecutionId, string incidentId, ...)`, `ListAsync(string workflowExecutionId, ...)`, `ListBlockingAsync(string workflowExecutionId, ...)`, `CountAsync(string workflowExecutionId, ...)`, `CountHealthAsync(string workflowExecutionId, ...)`.
+- **Usage:** stores `IncidentState` keyed by `WorkflowExecutionId` and `IncidentId`. The in-memory checkpoint writer projects incident appends as insert-only changes and incident upserts as replacements from accepted checkpoint commits into this store. `CountHealthAsync` returns historical, current Open/Blocking and Blocking counts; durable providers should aggregate the status projection without reading captured-value or exception content. Its default implementation preserves compatibility with existing custom stores. Incident history projections, diagnostic payloads, retry, compensation, and intervention behavior are separate runtime surfaces.
 - **Default implementation:** `InMemoryIncidentStateStore` *(single-node in-memory default for the current runtime slice)*.
 
 ### `IIncidentStrategy` / `IIncidentResolutionAction` *(Core contracts; Runtime defaults)*
@@ -654,11 +660,15 @@ Leaf-owned contracts for clustered workflow-execution placement and cross-node c
 `RuntimeSchedulerWorkHandlerBase<TPayload>` (project `Elsa.Workflows.Runtime`, same namespace) is the
 optional dispatch scaffold for payload-typed handlers that also implement `IRuntimePipelineWorkHandler`:
 it deserializes the payload once (throwing validation errors before any scope is created) and runs the
-handler body against the pipeline's ambient services or a fresh scope. A derivation supplies `Name`,
+handler body against the pipeline's ambient services or a fresh scope. The fresh scope is bound to the
+partition the dispatcher staged (`RuntimePipelineWorkspace.PersistenceScope`), so the body works in the
+partition the work item belongs to; direct no-pipeline dispatch knows no partition and its scope carries
+the host's persistence scope. A derivation supplies `Name`,
 `CanHandle`, `DeserializePayload`, and `HandleWithServicesAsync`. Shipped derivations:
 `WorkflowInvokeActivitySchedulerWorkHandler`, `WorkflowParentActivityCompletionSchedulerWorkHandler`,
 `WorkflowNotifyParentActivitySchedulerWorkHandler` *(all cross-domain — `Elsa.Activities.Runtime`)*.
-A handler that must not gain pipeline dispatch (the resume handler) implements the interfaces directly.
+A handler that must not run in the drain's ambient services (the resume handler) implements the
+interfaces directly: it always creates its own scope and takes only the staged partition from the workspace.
 
 ### `IFallbackWorkflowSchedulerWorkHandler` *(Core — `Elsa.Workflows.Runtime.Core`)*
 - **Kind:** Contributor marker (handlers consume drained scheduler work items only after ordinary handlers decline them).
@@ -724,7 +734,7 @@ Cursor failures carry the cursor class, boundary/query/access binding results, a
 - **Kind:** Contributor opt-in (a migrated scheduler work handler's context-aware overload).
 - **Signature:** `HandleAsync(RuntimeSchedulerWorkItem workItem, IRuntimePipelineContext pipelineContext, CancellationToken)`.
 - **Usage:** ADR 0029 Move 2 slot-invoked handler model. A scheduler work handler additionally implements this interface to run inside the pipeline's `Invoke` slot with the per-dispatch context threaded **explicitly** (no ambient/AsyncLocal accessor). The handler either **stages** its assembled `RuntimeCheckpointCommit`(s) on `IRuntimePipelineContext.Workspace` for the `Checkpoint` slot to commit **in order, one committer call per staged entry** (never folded — folding is the coalescing decorators' job), or, for the nested-invoke handlers whose commits must go through a dynamically-resolved provider, commits **inline** in the `Invoke` slot and stages nothing. Handlers that have not migrated keep only `IWorkflowSchedulerWorkHandler` and run their plain path unchanged. `RuntimeExecutionPipelineDispatcher` stages the selected handler on the workspace and any migrated handler is picked up by a runtime cast.
-- **Staging surface:** `RuntimePipelineWorkspace` — `StageCheckpointCommit(...)` / `PendingCheckpointCommits` (ordered list), the `PendingCheckpointCommit` single-commit convenience, and `AmbientServices` (the explicit carrier for the drain's request-scoped provider that RT-7 substituted for the removed ambient service locator).
+- **Staging surface:** `RuntimePipelineWorkspace` — `StageCheckpointCommit(...)` / `PendingCheckpointCommits` (ordered list), the `PendingCheckpointCommit` single-commit convenience, `AmbientServices` (the explicit carrier for the drain's request-scoped provider that RT-7 substituted for the removed ambient service locator), and `PersistenceScope` (the partition of the dispatcher's own DI scope, which is the command's partition; a handler that creates a scope of its own binds it to this partition with `IServiceScopeFactory.CreateAsyncScopeAsync(PersistenceScope?)` instead of inheriting the host's persistence scope, #2341).
 - **Known implementations (shipped):** workflow `Cancel` + `Checkpoint`; activity `CreateBookmark`, `ScheduleActivity`, `StartActivity` (stage), and the nested-invoke `InvokeActivity` + `ParentActivityCompletion` (inline-commit, stage nothing).
 
 ### `IWorkflowDispatchDurabilityEvidence` *(Core — `Elsa.Workflows.Runtime.Core`)*

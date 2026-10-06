@@ -30,6 +30,8 @@ Each result records exact Studio and Foundation revisions, commands, browser/ass
 
 **Promised outcome:** Expression editing is readable, accessible and continuous across themes, sizes and editing modes, with active signatures and safe explicit formatting.
 
-**Demonstration:** Exercise light/dark/dim themes, narrow inspector, long and multiline source, paste, expand/collapse, syntax switching, formatting, keyboard exit/help/completion and supported screen-reader flows.
+**Demonstration:** Exercise light/dark/dim themes, narrow inspector, long and multiline source, paste, expand/collapse, syntax switching, formatting and keyboard exit/help/completion.
 
-**Expected evidence:** automated accessibility results for the scoped editor surfaces; documented keyboard-only and supported screen-reader runs for focus, completion, hover/signature help, diagnostics, compact-to-expanded transition, Tab capture/escape and unavailable states; source/cursor/undo assertions; Liquid whitespace preservation; and affected complete-suite/repository-gate results. This evidence is scoped to the named journeys and is not a product-wide formal conformance audit.
+**Expected evidence:** automated accessibility results for the scoped editor surfaces; documented keyboard-only runs for focus, completion, hover/signature help, diagnostics, compact-to-expanded transition, Tab capture/escape and unavailable states; source/cursor/undo assertions; Liquid whitespace preservation; and affected complete-suite/repository-gate results. This evidence is scoped to the named journeys and is not a product-wide formal conformance audit.
+
+**Owner scope amendment, 2026-10-06:** Actual current-head Chrome+VoiceOver and Safari+VoiceOver are **SKIPPED BY OWNER DECISION — NEVER PASSED**, per the [decision log](decision-log.md#2026-10-06--remove-native-voiceover-verification-from-delivery-acceptance). Preserve historical attempts and July baseline results unchanged. Native screen-reader behavior remains unverified; automated or keyboard proof must not be attributed to it. Every other required gate, final owner acceptance and post-merge main qualification remains required.

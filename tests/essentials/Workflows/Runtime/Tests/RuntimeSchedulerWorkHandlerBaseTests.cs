@@ -1,4 +1,5 @@
 using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Extensions;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Services.WorkHandlers;
 using Microsoft.Extensions.DependencyInjection;
@@ -9,6 +10,8 @@ namespace Elsa.Workflows.Runtime.Tests;
 
 public sealed class RuntimeSchedulerWorkHandlerBaseTests
 {
+    private const string HostScope = "host-scope";
+
     [Fact]
     public void Constructor_WhenScopeFactoryIsNull_Throws()
     {
@@ -66,6 +69,30 @@ public sealed class RuntimeSchedulerWorkHandlerBaseTests
     }
 
     [Fact]
+    public async Task HandleAsync_WithPipelineButNoAmbientServices_BindsTheFreshScopeToTheStagedPartition()
+    {
+        await using var provider = new ServiceCollection().AddPersistenceCore(HostScope).BuildServiceProvider();
+        var handler = new TestHandler(provider.GetRequiredService<IServiceScopeFactory>());
+        var pipelineContext = new WorkflowRuntimePipelineContext(WorkItem());
+        pipelineContext.Workspace.PersistenceScope = new PersistenceScope("tenant-alpha");
+
+        await handler.HandleAsync(WorkItem(), pipelineContext);
+
+        Assert.Equal(pipelineContext.Workspace.PersistenceScope, handler.SeenPersistenceScope);
+    }
+
+    [Fact]
+    public async Task HandleAsync_WithoutPipeline_LeavesTheFreshScopeOnTheHostPersistenceScope()
+    {
+        await using var provider = new ServiceCollection().AddPersistenceCore(HostScope).BuildServiceProvider();
+        var handler = new TestHandler(provider.GetRequiredService<IServiceScopeFactory>());
+
+        await handler.HandleAsync(WorkItem());
+
+        Assert.Equal(new PersistenceScope(HostScope), handler.SeenPersistenceScope);
+    }
+
+    [Fact]
     public async Task HandleAsync_NullArgumentsAndCancelledTokens_ThrowOnBothOverloads()
     {
         var handler = new TestHandler(new CountingScopeFactory());
@@ -113,6 +140,7 @@ public sealed class RuntimeSchedulerWorkHandlerBaseTests
         public bool FailDeserialize { get; init; }
         public int Deserialized { get; private set; }
         public IServiceProvider? SeenProvider { get; private set; }
+        public PersistenceScope? SeenPersistenceScope { get; private set; }
         public TimeProvider Clock => TimeProvider;
 
         public override string Name => nameof(TestHandler);
@@ -134,6 +162,7 @@ public sealed class RuntimeSchedulerWorkHandlerBaseTests
             CancellationToken cancellationToken)
         {
             SeenProvider = serviceProvider;
+            SeenPersistenceScope = serviceProvider.GetService<IPersistenceAccessContextAccessor>()?.Current.Scope;
             return ValueTask.CompletedTask;
         }
     }

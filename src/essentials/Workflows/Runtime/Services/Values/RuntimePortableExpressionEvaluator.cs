@@ -46,46 +46,49 @@ internal sealed class RuntimePortableExpressionEvaluator(
             expression.Options,
             expression.CapabilityProfile,
             expression.Metadata);
-        var dependencyPolicy = DetermineDependencyPolicy(expression, resolutionContext, nodeId, inputName);
-        var effectivePolicy = dependencyPolicy is null
-            ? ownerPolicy
-            : ValuePolicyCombiner.Combine(
-                ownerPolicy,
-                dependencyPolicy,
-                $"Portable expression input '{inputName}' on executable node '{nodeId}'");
-
-        // Issue #984: a JavaScript expression may read lexically visible variables through the ambient
-        // variables.X / getVariable('X') / get<Name>() surface. Resolve exactly which visible variables the source
-        // references (or all of them when it performs computed access we cannot resolve statically), then fold their
-        // protection policy into the effective policy up front so a sensitive variable read cannot silently detaint
-        // the result — mirroring how declared parameter policies propagate. Only these referenced variables are
-        // materialized and handed to the engine, so an unrelated variable never triggers an external-payload read.
-        var referencedAmbient = ExposesAmbientVariables(expression, resolutionContext)
-            ? ResolveReferencedAmbientVariables(expression.Expression, resolutionContext.VisibleVariablesByName)
-            : EmptyAmbientVariables;
-        foreach (var (name, envelope) in referencedAmbient)
-        {
-            // The engine needs the variable's value, and a withheld value is not here to hand it.
-            // A computed access (variables[x], getVariable(x)) references every visible variable, so any withheld one refuses it.
-            if (envelope.Presence == ValuePresence.Withheld)
-                throw SecretBindingDiagnostics.WithheldVariableNotResolved(name);
-
-            effectivePolicy = ValuePolicyCombiner.Combine(
-                effectivePolicy,
-                envelope.Policy,
-                $"Ambient variable read on portable expression input '{inputName}' on executable node '{nodeId}'");
-        }
-
+        var effectivePolicy = ownerPolicy;
+        var hasActivityResultDependency = expression.Parameters.Values
+            .Any(static binding => binding is ActivityResultExpressionParameterBinding);
+        var activityResultPolicyResolved = !hasActivityResultDependency;
+        ExpressionEvaluationRequest request;
         try
         {
+            var dependencyPolicy = DetermineDependencyPolicy(expression, resolutionContext, nodeId, inputName);
+            effectivePolicy = dependencyPolicy is null
+                ? ownerPolicy
+                : ValuePolicyCombiner.Combine(
+                    ownerPolicy,
+                    dependencyPolicy,
+                    $"Portable expression input '{inputName}' on executable node '{nodeId}'");
+            activityResultPolicyResolved = true;
+
+            // Issue #984: a JavaScript expression may read lexically visible variables through the ambient
+            // variables.X / getVariable('X') / get<Name>() surface. Resolve exactly which visible variables the source
+            // references (or all of them when it performs computed access we cannot resolve statically), then fold their
+            // protection policy into the effective policy up front so a sensitive variable read cannot silently detaint
+            // the result — mirroring how declared parameter policies propagate. Only these referenced variables are
+            // materialized and handed to the engine, so an unrelated variable never triggers an external-payload read.
+            var referencedAmbient = ExposesAmbientVariables(expression, resolutionContext)
+                ? ResolveReferencedAmbientVariables(expression.Expression, resolutionContext.VisibleVariablesByName)
+                : EmptyAmbientVariables;
+            foreach (var (name, envelope) in referencedAmbient)
+            {
+                // The engine needs the variable's value, and a withheld value is not here to hand it.
+                // A computed access (variables[x], getVariable(x)) references every visible variable, so any withheld one refuses it.
+                if (envelope.Presence == ValuePresence.Withheld)
+                    throw SecretBindingDiagnostics.WithheldVariableNotResolved(name);
+
+                effectivePolicy = ValuePolicyCombiner.Combine(
+                    effectivePolicy,
+                    envelope.Policy,
+                    $"Ambient variable read on portable expression input '{inputName}' on executable node '{nodeId}'");
+            }
+
             var parameters = await MaterializeParametersAsync(expression, resolutionContext, nodeId, inputName, cancellationToken);
             var ambientVariables = referencedAmbient.Count == 0
                 ? null
                 : await MaterializeAmbientVariableValuesAsync(referencedAmbient, cancellationToken);
-            var request = new ExpressionEvaluationRequest(definition, parameters.Values, ambientVariables, cancellationToken);
-            return new PortableExpressionEvaluation(
-                await portableEvaluator.EvaluateAsync(request),
-                effectivePolicy);
+            request = new ExpressionEvaluationRequest(definition, parameters.Values, ambientVariables, cancellationToken);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
@@ -99,14 +102,63 @@ internal sealed class RuntimePortableExpressionEvaluator(
         }
         catch (Exception exception)
         {
-            var message = $"Input '{inputName}' on executable node '{nodeId}' failed to materialize or evaluate its portable '{expression.Language}' expression with fingerprint '{definition.Fingerprint}'.";
-            if (effectivePolicy.IsSensitive ||
-                effectivePolicy.RequiresEncryption ||
-                !string.IsNullOrWhiteSpace(effectivePolicy.RedactionMode))
-                throw new InvalidOperationException(message, new RedactedPortableExpressionException(exception.GetType()));
-
-            throw new InvalidOperationException(message, exception);
+            throw NewInputFailure(
+                ExpressionInputFailureException.InputMaterializationFailed,
+                ExpressionInputFailureException.MaterializationPhase,
+                definition,
+                expression,
+                inputName,
+                nodeId,
+                effectivePolicy,
+                exception,
+                conservativelyRedact: !activityResultPolicyResolved);
         }
+
+        try
+        {
+            return new PortableExpressionEvaluation(await portableEvaluator.EvaluateAsync(request), effectivePolicy);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (WithheldValueException)
+        {
+            throw;
+        }
+        catch (Exception exception)
+        {
+            throw NewInputFailure(
+                ExpressionInputFailureException.ExpressionEvaluationFailed,
+                ExpressionInputFailureException.EvaluationPhaseName,
+                definition,
+                expression,
+                inputName,
+                nodeId,
+                effectivePolicy,
+                exception);
+        }
+    }
+
+    private static ExpressionInputFailureException NewInputFailure(
+        string code,
+        string phase,
+        ExpressionDefinition definition,
+        RuntimeExpressionBinding expression,
+        string inputName,
+        string nodeId,
+        ValueProtectionPolicy effectivePolicy,
+        Exception exception,
+        bool conservativelyRedact = false)
+    {
+        var message = $"Input '{inputName}' on executable node '{nodeId}' failed to materialize or evaluate its portable '{expression.Language}' expression with fingerprint '{definition.Fingerprint}'.";
+        var cause = conservativelyRedact ||
+                    effectivePolicy.IsSensitive ||
+                    effectivePolicy.RequiresEncryption ||
+                    !string.IsNullOrWhiteSpace(effectivePolicy.RedactionMode)
+            ? new RedactedPortableExpressionException(exception.GetType())
+            : exception;
+        return new ExpressionInputFailureException(code, inputName, expression.Language, phase, message, cause);
     }
 
     private static ValueProtectionPolicy? DetermineDependencyPolicy(
