@@ -1,4 +1,4 @@
-![Elsa Foundation architectural blueprint header](docs/assets/elsa-foundation-header.png)
+![Elsa 4, a modern .NET workflow engine, illustrated with branching activity paths, a modular runtime and layered checkpoints](docs/assets/elsa-foundation-header.png)
 
 # Elsa Foundation
 
