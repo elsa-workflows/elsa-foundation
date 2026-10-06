@@ -10,6 +10,20 @@ Elsa Foundation is the transitional Elsa 4 foundation workspace. Contributions a
 
 If you are unsure where to start, ask in Q&A and check open issues and pull requests for work without an existing claim. For issue-backed or split work, coordinate overlapping scope before editing; the [issue tracker guide](docs/agents/issue-tracker.md) explains how to check and record a claim.
 
+## Create a topic branch
+
+If you do not have write access to the Elsa organization, fork this repository on GitHub. The backend source quickstart clones the upstream repository, so `origin` points at Elsa. Keep it unchanged and check your remotes with `git remote -v`. Replace `YOUR-ACCOUNT` below with your GitHub username. Run the first command only if your fork is not already configured as a remote:
+
+```bash
+git remote add fork https://github.com/YOUR-ACCOUNT/elsa-foundation.git
+git fetch origin
+git switch -c contributing/my-fix origin/main
+```
+
+If your fork remote has another name, use that name when pushing later. If you cloned your fork instead of following the quickstart, create your topic branch from an up-to-date copy of Elsa Foundation's `main` and push it to your fork's remote.
+
+Maintainers working in the organization repository use a feature/work-unit branch and follow [the repository's claim guidance](AGENTS.md#concurrent-work-claims) for issue-backed or split work.
+
 ## Plan feature work
 
 For substantial feature work, align the scope in an issue before implementation. Feature work follows the repository's existing Spec Kit sequence: **specification → plan → tasks → implementation**. This is a human-readable artifact path; no AI tool is required. Review each artifact before moving to the next step:
@@ -19,23 +33,7 @@ For substantial feature work, align the scope in an issue before implementation.
 3. Create `tasks.md` from the [tasks template](.specify/templates/tasks-template.md), with concrete file paths, implementation work, and the tests required by the feature and repository gates. The template is a scaffold: its generic example text does not waive applicable tests or constitution requirements.
 4. Review the spec, plan, and task list together, then implement the agreed tasks. Record validation in the spec's quickstart or other task-specific evidence and in the pull request.
 
-The [Specs guide](specs/README.md) explains the artifact roles. Applicable quality rules remain in the [framework constitution](.specify/memory/constitution-framework.md) and [Elsa constitution](.specify/memory/constitution.md). Small fixes still follow the normal review and testing requirements; this guide creates no spec or test waiver.
-
-## Work from a fork
-
-If you do not have write access to the Elsa organization, fork this repository. The backend source quickstart clones the upstream repository, so `origin` points at Elsa. Keep it unchanged and check it with `git remote -v`. If your fork remote is not already configured, add it as a separate remote named `fork`:
-
-```bash
-git remote add fork https://github.com/YOUR-ACCOUNT/elsa-foundation.git
-git fetch origin
-git switch -c contributing/my-fix origin/main
-```
-
-Replace `YOUR-ACCOUNT` with your GitHub username. Make and validate your change on the new branch, then commit it and push it to your fork with `git push -u fork contributing/my-fix`. If you cloned your fork instead, push the topic branch to that fork's remote. Open a draft pull request from your fork branch against Elsa Foundation's `main`; do not push a contributor branch to the organization repository. Link the related issue when there is one, describe the user-visible change, and list the checks you ran and any relevant checks you could not run.
-
-Maintainers working in the organization repository use a feature/work-unit branch and follow [the repository's claim guidance](AGENTS.md#concurrent-work-claims) for issue-backed or split work.
-
-The repository is [MIT licensed](LICENSE). Pull requests may show the existing `license/cla` check from [Microsoft GitHub Policy Service](https://github.com/apps/microsoft-github-policy-service); follow the check's status and any instructions it provides. This guide does not add a separate signing process or infer an exemption.
+The [Specs guide](specs/README.md) explains the artifact roles. Applicable quality rules remain in the [framework constitution](.specify/memory/constitution-framework.md) and [Elsa constitution](.specify/memory/constitution.md). Small fixes still follow the applicable specification, review, and testing requirements.
 
 ## Validate and record the change
 
@@ -43,6 +41,10 @@ Use the narrowest build and test suites that cover your change while iterating. 
 
 Focused checks do not replace the repository's merge gate. See the [Merge Gate](docs/skills/catalog.md#merge-gate) for the required build, affected suites, architecture and maps checks, diff review, and hosted-check evidence; behavioral changes also need the bite-proof described there. For orientation beyond the task at hand, see the [architecture tour](docs/architecture-tour.md).
 
-## After opening a pull request
+## Open a pull request
+
+After making and validating the change, review your diff and commit the intended files. Push the topic branch to your fork with `git push -u fork contributing/my-fix`, substituting your fork remote and branch names if they differ. Open a draft pull request from that branch against Elsa Foundation's `main`. Link the related issue when there is one, describe the user-visible change, and list the checks you ran and any relevant checks you could not run.
+
+The repository is [MIT licensed](LICENSE). Pull requests may show the existing `license/cla` check from [Microsoft GitHub Policy Service](https://github.com/apps/microsoft-github-policy-service); follow the check's status and any instructions it provides. This guide does not add a separate signing process or infer an exemption.
 
 When the change is ready for review, mark the draft PR ready. Respond to review requests, update the branch, and rerun and report checks affected by the changes. Keep the PR in draft while it is still in progress. A maintainer can merge only after the required review and gates pass; do not merge past a red or missing required check.
