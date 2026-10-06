@@ -202,7 +202,7 @@ public static class CompositionImporter
         output.Add(new ExpandedSetting(featureId, pointer, segments, value.Clone(), sourceLayer, portable, preview));
     }
 
-    private static void RejectPortableParentReview(
+    internal static void RejectPortableParentReview(
         string featureId,
         ImmutableArray<string> segments,
         JsonElement value,
@@ -536,7 +536,7 @@ public static class CompositionImporter
 
     private static ImmutableArray<string> Append(ImmutableArray<string> path, string segment) => path.Add(segment);
 
-    private static string EncodePointer(ImmutableArray<string> segments) => string.Concat(segments.Select(segment => "/" + EscapePointerSegment(segment)));
+    internal static string EncodePointer(ImmutableArray<string> segments) => string.Concat(segments.Select(segment => "/" + EscapePointerSegment(segment)));
 
     private static string EscapePointerSegment(string segment) => segment.Replace("~", "~0", StringComparison.Ordinal).Replace("/", "~1", StringComparison.Ordinal);
 
@@ -551,7 +551,7 @@ public static class CompositionImporter
         _ => "unknown"
     };
 
-    private static bool IsHostOwnedPersistenceField(ImmutableArray<string> segments) =>
+    internal static bool IsHostOwnedPersistenceField(ImmutableArray<string> segments) =>
         segments.Any(segment => segment.Equals("ConnectionStrings", StringComparison.OrdinalIgnoreCase)) ||
         segments.Length >= 2 &&
         segments[0].Equals("Elsa", StringComparison.OrdinalIgnoreCase) &&
@@ -561,7 +561,7 @@ public static class CompositionImporter
          last.Equals("ConnectionString", StringComparison.OrdinalIgnoreCase) ||
          last.Equals("ConnectionName", StringComparison.OrdinalIgnoreCase));
 
-    private static bool IsLogicalResourceName(string name) =>
+    internal static bool IsLogicalResourceName(string name) =>
         SelectionValueRules.IsSafeReference(name) &&
         name.Length > 0 &&
         (char.IsLetter(name[0]) || name[0] == '_') &&
