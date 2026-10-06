@@ -58,7 +58,7 @@ You **MUST** consider the user input before proceeding (if not empty).
 2. **Load design documents**: Read from FEATURE_DIR:
    - **Required**: plan.md (tech stack, libraries, structure), spec.md (user stories with priorities)
    - **Optional**: data-model.md (entities), contracts/ (interface contracts), research.md (decisions), quickstart.md (test scenarios)
-   - **IF EXISTS**: Load `.specify/memory/constitution.md` for project principles and governance constraints
+   - **IF EXISTS**: Load `.specify/memory/constitution.md` from the repository root for project principles and governance constraints
    - Note: Not all projects have all documents. Generate tasks based on what's available.
 
 3. **Execute task generation workflow**:
@@ -138,6 +138,8 @@ The tasks.md should be immediately executable - each task must be specific enoug
 **CRITICAL**: Tasks MUST be organized by user story to enable independent implementation and testing.
 
 **Test-task generation**: A silent feature specification does not waive tests required by repository policy. For Foundation feature classes and logic-bearing implementations in scope, include the registration and per-implementation unit-test tasks required by [framework §2.23](../../../.specify/memory/constitution-framework.md#223-unit-tests). Test existence and cadence are separate: for greenfield work, follow [framework §2.21.2](../../../.specify/memory/constitution-framework.md#2212-greenfield-test-discipline); use test-first ordering and require a failing run only when the application's derived constitution declares TDD. Add other tests when requested or warranted by the story's changed behavior, contracts, or acceptance criteria. If no test obligation applies (for example, a docs-only correction), omit unrelated tests, including runtime tests.
+
+For greenfield work without a declared cadence, record that gap in the plan and tasks for the application owner to resolve. Do not infer a test-first requirement from the examples or omit applicable required tests.
 
 ### Checklist Format (REQUIRED)
 

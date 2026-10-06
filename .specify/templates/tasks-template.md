@@ -11,6 +11,8 @@ description: "Task list template for feature implementation"
 
 **Tests**: Include tests required by applicable repository policy even when the feature specification is silent. For Foundation feature classes and logic-bearing implementations in scope, include the registration and per-implementation unit-test tasks required by [framework §2.23](../memory/constitution-framework.md#223-unit-tests). Test existence and test-first cadence are separate: for greenfield work, follow the application cadence in [framework §2.21.2](../memory/constitution-framework.md#2212-greenfield-test-discipline). Use test-first ordering and require a failing run only when the application's derived constitution declares TDD. Add other test tasks when requested or warranted by the story's changed behavior, contracts, or acceptance criteria. Omit test tasks when no testing obligation applies (for example, a docs-only correction); do not invent unrelated runtime tests.
 
+**Undeclared cadence**: For greenfield work without a cadence declared in the application's derived constitution, record the gap in the plan and tasks for the application owner to resolve. Do not infer a test-first requirement from these examples or omit applicable required tests.
+
 **Organization**: Tasks are grouped by user story to enable independent implementation and testing of each story. The test-before-implementation sample ordering below illustrates TDD only; when generating tasks, reorder tests and task IDs to match the cadence declared by the application's derived constitution.
 
 ## Format: `[ID] [P?] [Story] Description`
