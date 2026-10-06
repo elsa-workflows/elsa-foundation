@@ -5,9 +5,18 @@ Development profile uses SQLite, so this path needs no separate database server 
 
 ## Prerequisites
 
-- Git, a .NET 10 SDK, and PowerShell 7 (`pwsh`). Check with `dotnet --version` and `pwsh --version`.
+- Git, a stable .NET 10 SDK, and PowerShell 7 (`pwsh`). Check with `dotnet --version` and `pwsh --version`.
 - Network access to the public package sources listed in the committed [`NuGet.config`](../../NuGet.config).
   The verified Workbench restore needed no maintainer credentials.
+
+The repository's [`global.json`](../../global.json) sets the SDK floor at `10.0.300`. Its `latestFeature`
+setting selects the latest installed stable SDK in the same or a later .NET 10.0 feature band; it does
+not roll forward to another major/minor line. Prerelease SDKs are excluded. From the repository root,
+`dotnet --version` prints the SDK selected for this checkout; it may be newer than `10.0.300` when a
+later compatible SDK is installed. If the CLI reports that no compatible SDK is installed, install a
+stable .NET 10.0 SDK at `10.0.300` or later from the [official .NET 10 download page](https://dotnet.microsoft.com/en-us/download/dotnet/10.0),
+then open a new terminal and check again. This selects the SDK used by the .NET CLI; it does not change
+the projects' target frameworks.
 
 Start with a separate checkout for disposable onboarding data:
 
@@ -96,10 +105,18 @@ Foundation revision `bc94b1a3694e02acefcfd4d0229cd5624a8b3a18` ([evidence #2430]
 A separate locked restore passed with fresh NuGet package and HTTP caches, without the maintainer package
 cache or credentials; installed SDK library packs remained available
 ([evidence #2432](https://github.com/elsa-workflows/elsa-foundation/issues/2432)).
-CI selects `10.x`; the repository does not pin the tested patch version. This records a tested toolchain,
-not a new support policy. Your clone may contain later changes than this baseline.
+These are historical baselines from before the root SDK selector was added. The manually executed
+commands above used SDK `10.0.300` on macOS. The separate hosted Windows/Linux source journey used SDK
+`10.0.401` on Ubuntu 24.04 and Windows Server 2025; it builds and runs the Workbench DLL through an
+automated host rather than replaying these interactive commands ([evidence #2443](https://github.com/elsa-workflows/elsa-foundation/issues/2443)).
+They do not verify resolution through the new selector. Candidate SDK-selection and platform checks are
+tracked separately in [#2455](https://github.com/elsa-workflows/elsa-foundation/issues/2455).
+The selector defines the toolchain choice; it does not promise every allowed SDK patch or every platform.
+Your clone may contain later source changes than these baselines.
 
-Other operating systems and a fresh OS installation remain to be verified.
+The interactive commands in this guide remain manually verified only on macOS. Other operating systems,
+a fresh OS installation, literal manual replay on Windows/Linux, and a human newcomer trial remain to
+be verified.
 The separate Studio browser proof used an existing developer environment; the later isolated Studio restore
 above does not establish a fresh OS installation or the complete paired source-edit journey. No human newcomer
 trial or complete contribution workflow is claimed here.
