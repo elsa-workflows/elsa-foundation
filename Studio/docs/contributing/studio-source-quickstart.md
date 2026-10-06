@@ -2,6 +2,8 @@
 
 This walkthrough pairs a source-built Elsa Foundation Studio with a source-built Foundation Workbench. Use disposable checkouts for both repositories. The backend guide covers Workbench startup, its local Development seed, and its own workflow smoke test: [Run the backend from source](https://github.com/elsa-workflows/elsa-foundation/blob/main/docs/contributing/backend-source-quickstart.md).
 
+For an optional setup that pairs source-built Studio with a published Workbench image, see [Use a packaged Workbench backend](studio-packaged-backend.md).
+
 The commands below describe the tested macOS/Bash setup; other operating systems have not been verified here.
 
 The clone commands follow each repository's current default branch. The test and browser evidence below applies only to the exact Studio and Foundation revisions recorded in the evidence section; verify later source pairs separately.
