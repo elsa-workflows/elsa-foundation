@@ -322,7 +322,7 @@ internal static class CoalescingRuntimeStorePageMerger
         where T : class
     {
         public string? TokenContinuation => BufferedItems is null ? Continuation : BufferContinuationBefore;
-        public bool TokenExhausted => BufferedItems is null ? Exhausted : false;
+        public bool TokenExhausted => BufferedItems is null && Exhausted;
 
         public InnerCursor<T> AdvanceBufferedItem() =>
             BufferedItems is null
