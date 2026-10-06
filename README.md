@@ -6,6 +6,8 @@
 
 It contains the main Elsa domain core libraries, default foundation implementations, the Speckit specification flow, and the architecture knowledge needed to navigate and verify the refactor from `elsa-core`.
 
+New to the project? Start with [CONTRIBUTING.md](CONTRIBUTING.md) for the Docker and source paths, where to ask questions, and how to propose a change.
+
 ## Philosophy
 
 Elsa Foundation should be a thin protocol, not a fat one.
