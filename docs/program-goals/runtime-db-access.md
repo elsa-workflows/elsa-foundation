@@ -1,6 +1,6 @@
 # Runtime Database Access
 
-- **Status:** Active; the owner appointed this chat as the end-to-end control room on 5 October 2026. Workload and pagination investigations are running; runtime implementation has not started.
+- **Status:** In Progress; owner-appointed control room since 5 October 2026. Workload plan delivered; current-run query accounting and reference capture active.
 - **Area:** Workflow runtime / EF persistence access / HTTP workload correctness.
 - **Stewards:** Sipke and the runtime database access program lead; root lead owns integration and QA.
 - **Program:** [#2382](https://github.com/elsa-workflows/elsa-foundation/issues/2382).
@@ -10,12 +10,15 @@
 
 Explain and reduce avoidable database access for short durable HTTP workflows. Preserve response/output, committed state and inspection, atomic checkpoint proof, fencing, partition isolation and crash/replay behavior. Keep Immediate as host default; prove improvements on explicit Coalesced mode and report Immediate controls separately.
 
+The owner-approved primary scenario uses HttpEndpoint startup and a deterministic computation; original transform artifacts are not a prerequisite.
+
 ## Active objectives
 
-1. [#2385](https://github.com/elsa-workflows/elsa-foundation/issues/2385) Establish the HTTP-trigger workload and bounded REST-start control — active control-room objective: representative workflow identity, effective settings and bounded reproduction plan. The owner accepts any suitable activity; original transform artifacts are not a gate.
-2. [#2392](https://github.com/elsa-workflows/elsa-foundation/issues/2392) Specify and reproduce bounded coalesced page merging — independent investigation: current-source pagination specification, deterministic regression and reference-host before-fix evidence.
+1. [#2386](https://github.com/elsa-workflows/elsa-foundation/issues/2386) Query accounting — active lead objective: causal request/caller ledger, current-run evidence and a valid REST-start control.
+2. [#2392](https://github.com/elsa-workflows/elsa-foundation/issues/2392) Bounded coalesced page-merging specification — active capture lane: reviewed spec193 and first correct normal-host request; causal trace acceptance remains pending.
+3. [#2388](https://github.com/elsa-workflows/elsa-foundation/issues/2388) HTTP 202 diagnosis — Ready buffer, no implementation claimed.
 
-Both bounded workers use isolated claimed branches; the root control room owns integration and QA. Keep one active lead objective and one integration lane. The Project is the scheduling surface; native issue parents and blocked-by links carry execution relationships. The next leaves depend on these outcomes: #2386 waits for #2385, and #2393 waits for the reviewed #2392 specification and before-fix evidence. Later implementations remain blocked behind evidence and reviewed specifications.
+[#2385](https://github.com/elsa-workflows/elsa-foundation/issues/2385) is complete through merged [PR #2414](https://github.com/elsa-workflows/elsa-foundation/pull/2414). Post-merge CI and Maps passed at `43b3ef51882105916380ac8e539b49ad7b8a37b6`. No runtime reduction is implemented yet; #2393 remains blocked behind accepted #2392 evidence. Keep one active lead objective, isolated writer worktrees and one integration lane. Project/issues carry live scheduling and native dependencies; this document is a committed checkpoint. Later implementations remain blocked behind evidence and reviewed specifications.
 
 ## Scope and roadmap
 
@@ -35,4 +38,4 @@ Program ownership is a new named bucket requested on 5 October 2026. Retired EF/
 
 ## Completion
 
-Require causal accounting or explicitly owned residual uncertainty, proven bounded pagination and fewer avoidable Coalesced operations, preserved touched contracts, reviewed dispositions for rejected candidates, and a comparable final evidence/response packet. Closure counts alone are insufficient. Merge, package publication and deployment retain their normal authority.
+Require causal accounting or explicitly owned residual uncertainty, proven bounded pagination and fewer avoidable Coalesced operations, preserved touched contracts, reviewed dispositions for rejected candidates, and a comparable final evidence/response packet. Closure counts alone are insufficient. The owner authorized implementation, commit, push, PRs and green-gate program merges on 6 October 2026; package publication and deployment remain outside scope.
