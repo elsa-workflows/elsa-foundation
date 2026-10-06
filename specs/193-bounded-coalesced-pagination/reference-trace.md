@@ -1,6 +1,6 @@
-# Current-Head Coalesced Reference Trace (#2392)
+# Coalesced HTTP reference before and after paging correction (#2392/#2393)
 
-**Status**: Corrected pre-fix normal-host capture completed on 6 October 2026. Root and independent evidence QA accepted the captured POST ancestry/counts; T05 PR integration gates remain pending. The first capture is retained with its limitations below. Timing remains held under excessive shared load.
+**Status**: Corrected pre-fix and bounded after-fix normal-host captures completed on 6 October 2026. Root and independent raw-stream QA accepted the query evidence. T05 PR #2436 is merged with post-merge CI/Maps passed; its initial unchanged-source CI failure remains preserved on #2293 without a causal repair claim. T06 implementation/host proof is reviewed in PR #2442; exact-head gates and merge remain pending. Timing is separate unfinished T02 work. The first capture is retained with its original limitations below.
 
 ## Candidate and fixture
 
@@ -30,6 +30,30 @@ The [corrected capture record](evidence/http-reference-2026-10-06-corrected.json
 This corrects capture attribution; it is not a runtime database-access reduction. The 277 POST descendants do not establish a complete settled-work total: commands lacking this TraceId, separate background consumers and diagnostic sinks still require T04's causal ledger. SQL statements and provider network round trips have not been counted. The cold, heavily loaded diagnostic response is not a comparable timing baseline.
 
 Independent QA recomputed the curated event/span closure and count reconciliation. Root verified actual capture/configuration readbacks and the owned-PostgreSQL marker snapshot. The independent corrected-capture review did not inspect the private raw log or database; its acceptance must not be presented as doing so.
+
+## After-fix normal-host comparison (#2393)
+
+The [sanitized before/after census](evidence/http-after-census-2026-10-06.json) records the accepted raw-stream reconciliation. The after candidate is `c37b9d707011a01b494408019abb5707f5a02405`, Workbench DLL SHA-256 `30d632076fb90bb8d4060b359e433a0e428dfa78677a898f25639441e75d235e`; the wrapper-driven Workbench build passed with 101 warnings and zero errors. Only the shared page-merger production file changed from the runtime-equivalent pre-fix candidate. The manual fixture bytes are identical before and after (SHA-256 `17481d9502ded1a651c41cf5b217fba5a7b2c52009d935efa0915bfe5c9c51dc`). The authored graph, activity types, input expression and payload are equal; rebuilt pinned contract versions/fingerprints and publication identities are candidate-specific.
+
+The after request returned HTTP 200 / `Alice Smith`; execution `147lC6RyDeV` and all four activities Completed. Artifact `artifact-c96f491a077d`, version `147lBwnrGCJ`, source reference `activation-ref:publication-147lBxvmhGZ`; actual readback is Coalesced/50/boundary-level. PostgreSQL 16.15 uses the same image ID and persistence composition as before, with a fresh uniquely named owned database. POST TraceId `0ecc4bc5d6689dff7a18319d9cf5e16a`, root SpanId `9e7b3fb1f04b5917`; inspection/engine-export calls and the later HTTP echo suite use separate traces.
+
+| EF command observation | Before | After | Delta |
+|---|---:|---:|---:|
+| All request-root descendants | 277 | 194 | -83 |
+| Leading SELECT commands | 246 | 163 | -83 |
+| SELECT commands touching durable-value state | 66 | 8 | -58 |
+| SELECT commands touching activity-execution state | 37 | 12 | -25 |
+| Leading INSERT / UPDATE / DELETE commands | 9 / 9 / 13 | 9 / 9 / 13 | unchanged |
+| Checkpoint-marker INSERT commands | 3 | 3 | unchanged |
+| EF transaction / savepoint event groups | 13 / 6 | 13 / 6 | unchanged |
+
+All 194 after commands close to the matching request root, with zero parent conflicts and zero missing `State.commandText` fields. Every other table-token touch count is unchanged. The entire observed -83 delta is SELECT-only and confined to the two tables served by the shared merger. This is consistent with the bounded page-buffer/exhaustion mechanism and its baseline-red/mutation regression proof; it remains a single before/after observation rather than exclusive causal or timing proof. Commands may contain multiple SQL statements; table-token touches can overlap. Provider round trips and exact repository-call ownership were not instrumented.
+
+The after trace has 114 other-table commands before response and 80 diagnostics-table commands after it. Diagnostic total of 80 is unchanged, but its response split moves from 40 before/40 after to 0 before/80 after. Exported engine spans change 59→54 (drain 10→9, dispatch 17→14, activity 10→10, checkpoint 22→21), and nearest-phase ancestry redistributes. Do not infer phase-specific savings or stable segmentation. The before checkpoint-span decisions are 19 Deferred/3 Immediate; after 19 Deferred/2 Immediate. Export snapshot completeness is not independently established, and the after three marker INSERT commands do not prove three rows or a one-to-one relation with those two Immediate spans. No after PostgreSQL marker observer snapshot was captured. T02/T04 retain unresolved source/settled attribution.
+
+The existing rebuilt-server HTTP echo suite passed 4/4 request-body, route, query and header cases. The complete runtime test project passed 2,012/2,012; restoring the exact old production source made both repeated-probe regressions fail again (7 and 4 calls versus expected 1). Root and independent Sol 5.6 High QA reviewed the implementation and independently streamed the raw before/after logs. After raw log: 115,875,911 bytes, SHA-256 `a5ae43f0c865d35d6bd3b31923d5be1a37143795d5524f8b778ecee4089965a5`. Logs/exports remain protected outside Git. Root verified the owned process/container/content root and secrets were removed, with both existing user PostgreSQL containers still running.
+
+This diagnostic run is not a latency measurement. Low-logging 25-warm-up/60-sample controls, representative concurrency/scale, final after timing, crash/recovery integration and later candidate dispositions remain program work, not passed evidence for this unit.
 
 ## First capture (preserved)
 

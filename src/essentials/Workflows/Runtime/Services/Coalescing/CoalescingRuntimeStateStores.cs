@@ -100,7 +100,8 @@ public sealed class CoalescingActivityExecutionStateStore(
                 .Where(state => after is null || StringComparer.Ordinal.Compare(state.Execution.ActivityExecutionId, after) > 0)
                 .OrderBy(state => state.Execution.ActivityExecutionId, StringComparer.Ordinal)
                 .FirstOrDefault(),
-            id => session.TryGetActivity(id, out _, out _));
+            id => session.TryGetActivity(id, out _, out _),
+            cancellationToken);
     }
 
     public async ValueTask<RuntimeStorePage<ActivityExecutionState>> ListByParentPageAsync(
@@ -126,7 +127,8 @@ public sealed class CoalescingActivityExecutionStateStore(
                 .Where(state => after is null || StringComparer.Ordinal.Compare(state.Execution.ActivityExecutionId, after) > 0)
                 .OrderBy(state => state.Execution.ActivityExecutionId, StringComparer.Ordinal)
                 .FirstOrDefault(),
-            id => session.TryGetActivity(id, out _, out _));
+            id => session.TryGetActivity(id, out _, out _),
+            cancellationToken);
     }
 }
 
@@ -170,7 +172,8 @@ public sealed class CoalescingDurableValueStateStore(
                 .Where(state => after is null || StringComparer.Ordinal.Compare(state.DurableValueId, after) > 0)
                 .OrderBy(state => state.DurableValueId, StringComparer.Ordinal)
                 .FirstOrDefault(),
-            id => session.TryGetDurableValue(id, out _, out _));
+            id => session.TryGetDurableValue(id, out _, out _),
+            cancellationToken);
     }
 }
 
@@ -182,19 +185,30 @@ internal static class CoalescingRuntimeStorePageMerger
         Func<int, string?, ValueTask<RuntimeStorePage<T>>> readInnerPage,
         Func<T, string> identity,
         Func<string?, T?> nextOverlay,
-        Func<string, bool> suppressesInner)
+        Func<string, bool> suppressesInner,
+        CancellationToken cancellationToken)
         where T : class
     {
+        cancellationToken.ThrowIfCancellationRequested();
         var cursor = CoalescingRuntimeStoreContinuation.Decode(request.ContinuationToken, binding, nameof(request));
         var lastIdentity = cursor?.LastIdentity;
-        var inner = new InnerCursor(cursor?.InnerContinuation, cursor?.InnerExhausted ?? false);
+        var inner = new InnerCursor<T>(cursor?.InnerContinuation, cursor?.InnerExhausted ?? false);
         var items = new List<T>(request.Limit);
 
         while (items.Count < request.Limit)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             var overlay = nextOverlay(lastIdentity);
-            var candidate = await ReadNextInnerAsync(readInnerPage, identity, suppressesInner, lastIdentity, inner);
-            inner = candidate?.Before ?? inner;
+            var read = await ReadNextInnerAsync(
+                readInnerPage,
+                identity,
+                suppressesInner,
+                lastIdentity,
+                inner,
+                request.Limit,
+                cancellationToken);
+            var candidate = read.Candidate;
+            inner = candidate?.Before ?? read.Cursor;
             if (overlay is null && candidate is null)
                 break;
 
@@ -220,52 +234,108 @@ internal static class CoalescingRuntimeStorePageMerger
                 hasNext = true;
             else
             {
-                var candidate = await ReadNextInnerAsync(readInnerPage, identity, suppressesInner, lastIdentity, inner);
+                var read = await ReadNextInnerAsync(
+                    readInnerPage,
+                    identity,
+                    suppressesInner,
+                    lastIdentity,
+                    inner,
+                    request.Limit,
+                    cancellationToken);
+                var candidate = read.Candidate;
+                inner = candidate?.Before ?? read.Cursor;
                 if (candidate is not null)
                 {
                     hasNext = true;
-                    inner = candidate.Before;
                 }
             }
         }
 
+        cancellationToken.ThrowIfCancellationRequested();
         var next = hasNext
-            ? CoalescingRuntimeStoreContinuation.Encode(binding, new(lastIdentity!, inner.Continuation, inner.Exhausted))
+            ? CoalescingRuntimeStoreContinuation.Encode(binding, new(lastIdentity!, inner.TokenContinuation, inner.TokenExhausted))
             : null;
         return new RuntimeStorePage<T>(request, items, next);
     }
 
-    private static async ValueTask<InnerCandidate<T>?> ReadNextInnerAsync<T>(
+    private static async ValueTask<InnerReadResult<T>> ReadNextInnerAsync<T>(
         Func<int, string?, ValueTask<RuntimeStorePage<T>>> readInnerPage,
         Func<T, string> identity,
         Func<string, bool> suppressesInner,
         string? lastIdentity,
-        InnerCursor current)
+        InnerCursor<T> current,
+        int pageLimit,
+        CancellationToken cancellationToken)
         where T : class
     {
-        while (!current.Exhausted)
+        while (true)
         {
-            var page = await readInnerPage(1, current.Continuation);
-            if (page.Items.Count == 0)
-                return null;
-
-            var item = page.Items[0];
-            var after = new InnerCursor(page.NextContinuationToken, page.NextContinuationToken is null);
-            var itemIdentity = identity(item);
-            if (lastIdentity is not null && StringComparer.Ordinal.Compare(itemIdentity, lastIdentity) <= 0 || suppressesInner(itemIdentity))
+            cancellationToken.ThrowIfCancellationRequested();
+            if (current.BufferedItems is { } bufferedItems)
             {
-                current = after;
-                continue;
+                if (current.BufferIndex >= bufferedItems.Count)
+                {
+                    current = current.AdvancePastBuffer();
+                    continue;
+                }
+
+                var item = bufferedItems[current.BufferIndex];
+                var after = current.AdvanceBufferedItem();
+                var itemIdentity = identity(item);
+                if (lastIdentity is not null && StringComparer.Ordinal.Compare(itemIdentity, lastIdentity) <= 0 || suppressesInner(itemIdentity))
+                {
+                    current = after;
+                    continue;
+                }
+
+                return new(new(item, current, after), current);
             }
 
-            return new InnerCandidate<T>(item, current, after);
-        }
+            if (current.Exhausted)
+                return new(null, current);
 
-        return null;
+            var page = await readInnerPage(pageLimit, current.Continuation);
+            if (page.Items.Count == 0)
+            {
+                return new(null, current with { Exhausted = true });
+            }
+
+            current = current with
+            {
+                BufferedItems = page.Items,
+                BufferIndex = 0,
+                BufferContinuationBefore = current.Continuation,
+                BufferContinuationAfter = page.NextContinuationToken,
+                BufferExhaustedAfter = page.NextContinuationToken is null
+            };
+        }
     }
 
-    private sealed record InnerCursor(string? Continuation, bool Exhausted);
-    private sealed record InnerCandidate<T>(T Item, InnerCursor Before, InnerCursor After) where T : class;
+    private sealed record InnerCursor<T>(
+        string? Continuation,
+        bool Exhausted,
+        IReadOnlyList<T>? BufferedItems = null,
+        int BufferIndex = 0,
+        string? BufferContinuationBefore = null,
+        string? BufferContinuationAfter = null,
+        bool BufferExhaustedAfter = false)
+        where T : class
+    {
+        public string? TokenContinuation => BufferedItems is null ? Continuation : BufferContinuationBefore;
+        public bool TokenExhausted => BufferedItems is null && Exhausted;
+
+        public InnerCursor<T> AdvanceBufferedItem() =>
+            BufferedItems is null
+                ? this
+                : BufferIndex + 1 < BufferedItems.Count
+                    ? this with { BufferIndex = BufferIndex + 1 }
+                    : AdvancePastBuffer();
+
+        public InnerCursor<T> AdvancePastBuffer() => new(BufferContinuationAfter, BufferExhaustedAfter);
+    }
+
+    private sealed record InnerReadResult<T>(InnerCandidate<T>? Candidate, InnerCursor<T> Cursor) where T : class;
+    private sealed record InnerCandidate<T>(T Item, InnerCursor<T> Before, InnerCursor<T> After) where T : class;
 }
 
 /// <summary>
