@@ -1,0 +1,403 @@
+{
+  "schemaVersion": 1,
+  "captureDate": "2026-10-06",
+  "scope": "One Coalesced T01 HTTP reference request plus the two bounded REST-start attempts from the same owned capture host. This is a source-backed accounting census, not a timing comparison or T02 acceptance.",
+  "sourceAndHost": {
+    "candidateSourceSha": "5d28bd0cd3d76004988a01b0f0abd7af3af313d6",
+    "referenceMainSha": "43b3ef51882105916380ac8e539b49ad7b8a37b6",
+    "runtimeEquivalenceToReferenceMain": "Reported by capture owner; this file does not assert an independent rebuild of the host.",
+    "workbenchDllSha256": "05c8eb6ac3aac744cb4878678d90dfd27dce9b37d139422ec1dba0f0a38bb08d",
+    "postgresVersion": "16.15",
+    "diagnosticsStore": "SQLite",
+    "primaryProvider": "PostgreSQL",
+    "rawLogSha256": "1fd442a95b993bb30afce6abd36546979ed7eaaca5dbbded927fad132e5aeae0",
+    "rawLogBytes": 870706206,
+    "rawLogPersistedHere": false,
+    "sourceStableBeforeAndAfterBuild": true,
+    "httpCaptureScriptSha": "3c6bd3da83c49ea84c9823c8d0181b46c468f881",
+    "restCaptureScriptIdentity": {
+      "observedHead": "14b87c287bb2b0677bd8b800c1b9b001c856e44b",
+      "scriptSha256": "d418021d127d05755501257d64aa2d30010aaba2640c11423e96bba5f8e915d5",
+      "laterCommitOfIdenticalScript": "c72a939400c455236d0618e57f85148bec7ef7b9",
+      "meaning": "The manual script was not committed when executed; its bytes/hash and actual observed HEAD were retained. The later commit is provenance for those bytes, not the executed HEAD."
+    }
+  },
+  "httpReference": {
+    "requestTraceId": "e5acc2e4ccc5b19b7771ec7d3ec1cd97",
+    "requestSpanId": "4d76eb7a0bb77d49",
+    "workflowExecutionId": "147eTn6gBLT",
+    "artifactId": "artifact-bc9dfcd40653",
+    "publishedVersionId": "147eTWOLgLU",
+    "httpStatus": 200,
+    "response": "Alice Smith",
+    "instanceStatus": "Completed",
+    "checkpointCadence": "Coalesced",
+    "maxSegmentCheckpoints": 50,
+    "inspectionGranularity": "boundary-level",
+    "commandUnit": "Microsoft.EntityFrameworkCore.Database.Command event 20101 executions; not SQL statements or provider round trips",
+    "efCommandExecutions": {
+      "postRequestDescendants": 277,
+      "beforeResponseOther": 197,
+      "beforeResponseDiagnostics": 40,
+      "afterResponseDiagnostics": 40,
+      "unresolvedParentage": 0,
+      "inspectionRequestsOnWorkloadTrace": 0,
+      "byResponseAndTable": {
+        "beforeResponse": {
+          "elsaOtelDiagnostics": 40,
+          "other": 197
+        },
+        "afterResponse": {
+          "elsaOtelDiagnostics": 40,
+          "other": 0
+        }
+      }
+    },
+    "nearestEnginePhaseCommands": {
+      "requestRootWithoutEngineSpan": 21,
+      "elsa.runtime.drain": 88,
+      "elsa.runtime.dispatch": 3,
+      "elsa.runtime.activity.execute": 106,
+      "elsa.runtime.checkpoint.commit": 59
+    },
+    "engineSpans": {
+      "total": 59,
+      "elsa.runtime.drain": 10,
+      "elsa.runtime.dispatch": 17,
+      "elsa.runtime.checkpoint.commit": 22,
+      "elsa.runtime.activity.execute": 10,
+      "checkpointPersistenceMode": {
+        "Deferred": 19,
+        "Immediate": 3
+      }
+    },
+    "checkpointMarkerInsertCommands": 3,
+    "durableValueSelectCommands": 66,
+    "sqlStatementCount": "Pending",
+    "providerRoundTripCount": "Pending",
+    "transactionEvidence": "Observed lifecycle/savepoint event groups below; exact provider/SaveChanges/checkpoint mapping pending.",
+    "latencyInterpretation": "Not accepted; one diagnostic request with persisted diagnostics and EF transaction/command logging enabled, under variable load.",
+    "sanitizedT05EventFileSha256": "ef256e831630b26b1a6c67a5316698bb8f71771222ef7980a002f947af010a48",
+    "reviewState": "Curated event/count/closure QA and exact T05 documentation-delta QA were accepted at a0d9a46da. PR integration checks remain pending. The corrected raw log and captured PostgreSQL database were not independently inspected.",
+    "transactionEventObservations": {
+      "captureUnit": "Structured EF transaction logging events in the HTTP request trace; event counts describe logged begin/began/commit/dispose and savepoint message sequences, not SaveChanges calls or SQL statements.",
+      "transactionLifecycleGroups": 13,
+      "perEventIdCounts": {
+        "20209": 13,
+        "20200": 13,
+        "20210": 13,
+        "20202": 13,
+        "20204": 13
+      },
+      "eventMessageTemplates": {
+        "20209": "Beginning transaction with isolation level {isolationLevel}.",
+        "20200": "Began transaction with isolation level {isolationLevel}.",
+        "20210": "Committing transaction.",
+        "20202": "Committed transaction.",
+        "20204": "Disposing transaction."
+      },
+      "savepointEventGroups": 6,
+      "savepointPerEventIdCounts": {
+        "20212": 6,
+        "20213": 6,
+        "20216": 6,
+        "20217": 6
+      },
+      "savepointMessageTemplates": {
+        "20212": "Creating transaction savepoint.",
+        "20213": "Created transaction savepoint.",
+        "20216": "Releasing transaction savepoint.",
+        "20217": "Released transaction savepoint."
+      },
+      "interpretation": "Thirteen observed EF transaction lifecycle event groups and six savepoint event groups are separate from 22 logical checkpoint-commit spans and 3 immutable marker INSERT command executions; they do not establish a SaveChanges-to-transaction/checkpoint mapping or SQL statement/round-trip count."
+    },
+    "engineSpanIdentityAttributesObserved": [
+      "elsa.workflow.execution_id",
+      "elsa.work_item.id",
+      "elsa.command.kind",
+      "elsa.handler.name",
+      "elsa.checkpoint.id",
+      "elsa.checkpoint.persistence_mode",
+      "elsa.checkpoint.mandatory",
+      "elsa.checkpoint.post_commit_intents",
+      "elsa.drain.items_processed",
+      "elsa.drain.outermost",
+      "elsa.drain.stop_reason",
+      "elsa.outcome"
+    ],
+    "selectedEngineSpanAnchors": [
+      {
+        "kind": "dispatch",
+        "spanId": "fcb5e7e8c74899d6",
+        "parentDrainSpanId": "5cff22c3ce0fd413",
+        "workItemId": "147eTnErUMc",
+        "handler": "WorkflowStartSchedulerWorkHandler"
+      },
+      {
+        "kind": "finalDrain",
+        "spanId": "0f4bb4288d7ea5fc",
+        "stopReason": "WorkflowTerminated"
+      },
+      {
+        "kind": "finalCheckpoint",
+        "spanId": "c6e5bbe358b0defd",
+        "checkpointId": "checkpoint:16b05fada204da7c:checkpoint:WorkflowCompleted:147eTpDs6QP",
+        "persistenceMode": "Immediate",
+        "checkpointName": "WorkflowCompleted"
+      }
+    ],
+    "participantMapping": "Checkpoint and work-item identities are available on engine spans where those tags are present. Participant-name mapping is not present in the curated engine JSON; exact participant mapping remains Pending.",
+    "nearestEnginePhaseBucketUnit": "All EF event 20101 commands are assigned by nearest engine-span ancestor; these totals include both elsa_otel diagnostics-table and other-table commands.",
+    "checkpointMarkerObserverSnapshot": {
+      "workflowExecutionId": "147eTn6gBLT",
+      "rows": [
+        {
+          "commitId": "commit:69f22fce7bf122e5:invoke:147eTrQB0sQ:activity-attempt-claimed:147eTrQB0sQ:147eTrQB0sQ:attempt:1",
+          "consumedSchedulerWorkItemIds": [],
+          "pendingPostCommitWorkIds": []
+        },
+        {
+          "commitId": "commit:b5fcbbc025c1b501:invoke:147eUJaXm71:activity-attempt-claimed:147eUJaXm71:147eUJaXm71:attempt:1",
+          "consumedSchedulerWorkItemIds": [],
+          "pendingPostCommitWorkIds": []
+        },
+        {
+          "commitId": "commit:16b05fada204da7c:checkpoint:WorkflowCompleted:147eTpDs6QP",
+          "consumedSchedulerWorkItemIds": [],
+          "pendingPostCommitWorkIds": []
+        }
+      ],
+      "interpretation": "Three immutable marker rows were observed for the HTTP workflow execution. This observer snapshot is not a settled-work/outbox census and is separate from EF command-event counts."
+    }
+  },
+  "restStarts": {
+    "requestEndpoint": "POST /runtime/workflows/executables/{artifactId}/execute",
+    "censusMethod": "Exact TraceId filtering for each POST request in the structured server log, EventId 20101; request-phase attribution from scope-parent closure with exported engine-span parents.",
+    "parentClosure": {
+      "method": "Build structured scope SpanId-to-ParentId edges per TraceId, merge exported engine span parent edges, and walk from each EF command span to the matching ASP.NET RequestStarting root. Classify by the nearest engine span in that ancestor chain; retain a separate request-root bucket when no engine span occurs on the chain.",
+      "scopeParentConflicts": 0,
+      "directCommandsReachingMatchingRequestRoot": "167/167",
+      "companionCommandsReachingMatchingRequestRoot": "102/102",
+      "meaning": "No exact engine-span phase is not missing request causality. Request-root ancestry does not identify an exact repository method or provider call."
+    },
+    "directHttpDefinitionAttempt": {
+      "traceId": "e8bc92b4d5c94ce7b044fdadc55d6dd4",
+      "executionId": "147evUABB3s",
+      "artifactId": "artifact-bc9dfcd40653",
+      "sourceReferenceId": "activation-ref:publication-147eTZQkyb5",
+      "httpStatus": 200,
+      "boundedReadbackStates": [
+        "Running",
+        "Running"
+      ],
+      "outputs": {},
+      "checkpointCadence": "Coalesced",
+      "maxSegmentCheckpoints": 50,
+      "inspectionGranularity": "boundary-level",
+      "projectedIncident": {
+        "failureType": "SchedulerWorkPoisoned",
+        "severity": "Critical",
+        "status": "Blocking",
+        "underlyingInputFailure": "ExpressionInputFailureException; Jint reported: Cannot read properties of null (reading 'firstName')."
+      },
+      "activityStates": {
+        "HttpEndpoint": "Completed",
+        "SetVariable": "Scheduled",
+        "rootSequence": "Running"
+      },
+      "validRestControl": false,
+      "interpretation": "HTTP 200 accepted the start request. Both bounded readbacks remained Running. This is not evidence of a Waiting-at-HttpEndpoint bookmark or a terminal Faulted execution, and it is not counted as a valid successful REST control.",
+      "requestFinishedUtc": "2026-10-06T01:28:14.309Z",
+      "efCommandExecutions": 167,
+      "commandsBeforeRequestFinished": 167,
+      "commandsAfterRequestFinished": 0,
+      "engineSpans": {
+        "total": 33,
+        "elsa.runtime.drain": 6,
+        "elsa.runtime.dispatch": 9,
+        "elsa.runtime.checkpoint.commit": 12,
+        "elsa.runtime.activity.execute": 6
+      },
+      "nearestEnginePhaseCommands": {
+        "requestRootWithoutEngineSpan": 48,
+        "elsa.runtime.drain": 53,
+        "elsa.runtime.dispatch": 5,
+        "elsa.runtime.activity.execute": 40,
+        "elsa.runtime.checkpoint.commit": 21
+      },
+      "oneLeadingSqlVerbPerEfCommand": {
+        "SELECT": 143,
+        "INSERT": 9,
+        "DELETE": 8,
+        "UPDATE": 7
+      },
+      "nearestEnginePhaseTableCommands": {
+        "requestRootWithoutEngineSpan": {
+          "elsaOtelDiagnostics": 0,
+          "other": 48
+        },
+        "elsa.runtime.drain": {
+          "elsaOtelDiagnostics": 0,
+          "other": 53
+        },
+        "elsa.runtime.dispatch": {
+          "elsaOtelDiagnostics": 0,
+          "other": 5
+        },
+        "elsa.runtime.activity.execute": {
+          "elsaOtelDiagnostics": 0,
+          "other": 40
+        },
+        "elsa.runtime.checkpoint.commit": {
+          "elsaOtelDiagnostics": 0,
+          "other": 21
+        }
+      },
+      "transactionEventObservations": {
+        "transactionLifecycleGroups": 9,
+        "perEventIdCounts": {
+          "20209": 9,
+          "20200": 9,
+          "20210": 9,
+          "20202": 9,
+          "20204": 9
+        },
+        "eventMessageTemplates": {
+          "20209": "Beginning transaction with isolation level {isolationLevel}.",
+          "20200": "Began transaction with isolation level {isolationLevel}.",
+          "20210": "Committing transaction.",
+          "20202": "Committed transaction.",
+          "20204": "Disposing transaction."
+        },
+        "savepointEventGroups": 6,
+        "savepointPerEventIdCounts": {
+          "20212": 6,
+          "20213": 6,
+          "20216": 6,
+          "20217": 6
+        },
+        "interpretation": "Structured EF transaction/savepoint lifecycle event observations; not a SaveChanges, SQL statement, or provider round-trip count."
+      }
+    },
+    "ordinaryRestCompanion": {
+      "traceId": "741839c622df4f92a4555550dbec1d33",
+      "executionId": "147ewbFVfxk",
+      "artifactId": "artifact-0cdb3feb0bec",
+      "sourceReferenceId": "activation-ref:publication-147ewTwSejQ",
+      "httpStatus": 200,
+      "instanceStatus": "Completed",
+      "output": {
+        "referenceText": "Alice Smith"
+      },
+      "checkpointCadence": "Coalesced",
+      "maxSegmentCheckpoints": 50,
+      "inspectionGranularity": "boundary-level",
+      "workflowInputProjection": "WorkflowRequest content input projected by SetVariable to content; the same JavaScript expression getVariable('content').firstName + ' ' + getVariable('content').lastName is evaluated; SetOutput exposes referenceText.",
+      "comparisonBoundary": "Omits HttpEndpoint admission and WriteHttpResponse transport; adds the input-projection SetVariable and SetOutput intrinsics. Not latency-equivalent to the HTTP request.",
+      "validRestControl": true,
+      "requestFinishedUtc": "2026-10-06T01:28:27.699Z",
+      "efCommandExecutions": 102,
+      "commandsBeforeRequestFinished": 86,
+      "commandsAfterRequestFinished": 16,
+      "engineSpans": {
+        "total": 26,
+        "elsa.runtime.drain": 2,
+        "elsa.runtime.dispatch": 5,
+        "elsa.runtime.checkpoint.commit": 18,
+        "elsa.runtime.activity.execute": 1
+      },
+      "nearestEnginePhaseCommands": {
+        "requestRootWithoutEngineSpan": 19,
+        "elsa.runtime.drain": 20,
+        "elsa.runtime.dispatch": 3,
+        "elsa.runtime.activity.execute": 41,
+        "elsa.runtime.checkpoint.commit": 19
+      },
+      "oneLeadingSqlVerbPerEfCommand": {
+        "SELECT": 91,
+        "INSERT": 5,
+        "UPDATE": 3,
+        "DELETE": 3
+      },
+      "nearestEnginePhaseTableCommands": {
+        "requestRootWithoutEngineSpan": {
+          "elsaOtelDiagnostics": 0,
+          "other": 19
+        },
+        "elsa.runtime.drain": {
+          "elsaOtelDiagnostics": 0,
+          "other": 20
+        },
+        "elsa.runtime.dispatch": {
+          "elsaOtelDiagnostics": 0,
+          "other": 3
+        },
+        "elsa.runtime.activity.execute": {
+          "elsaOtelDiagnostics": 0,
+          "other": 41
+        },
+        "elsa.runtime.checkpoint.commit": {
+          "elsaOtelDiagnostics": 0,
+          "other": 19
+        }
+      },
+      "transactionEventObservations": {
+        "transactionLifecycleGroups": 3,
+        "perEventIdCounts": {
+          "20209": 3,
+          "20200": 3,
+          "20210": 3,
+          "20202": 3,
+          "20204": 3
+        },
+        "eventMessageTemplates": {
+          "20209": "Beginning transaction with isolation level {isolationLevel}.",
+          "20200": "Began transaction with isolation level {isolationLevel}.",
+          "20210": "Committing transaction.",
+          "20202": "Committed transaction.",
+          "20204": "Disposing transaction."
+        },
+        "savepointEventGroups": 2,
+        "savepointPerEventIdCounts": {
+          "20212": 2,
+          "20213": 2,
+          "20216": 2,
+          "20217": 2
+        },
+        "interpretation": "Structured EF transaction/savepoint lifecycle event observations; not a SaveChanges, SQL statement, or provider round-trip count."
+      }
+    },
+    "diagnosticTableClassification": {
+      "rule": "Case-insensitive presence of elsa_otel in EF command text marks a diagnostics-table command; this does not parse statements or infer provider operations.",
+      "direct": {
+        "beforeResponse": {
+          "elsaOtelDiagnostics": 0,
+          "other": 167
+        },
+        "afterResponse": {
+          "elsaOtelDiagnostics": 0,
+          "other": 0
+        }
+      },
+      "companion": {
+        "beforeResponse": {
+          "elsaOtelDiagnostics": 0,
+          "other": 86
+        },
+        "afterResponse": {
+          "elsaOtelDiagnostics": 0,
+          "other": 16
+        }
+      },
+      "interpretation": "No EF command in either filtered REST TraceId contained the elsa_otel table token. All nearest-phase command buckets below therefore contain only other-table EF command events for these traces."
+    }
+  },
+  "accountingLimits": [
+    "A leading SQL verb is one label per EF command event, not a parsed statement count. One command can contain multiple statements.",
+    "EF command events do not prove SQL statement counts, provider network round trips, or a one-to-one mapping with logical checkpoints. EF transaction/savepoint logger event groups are recorded separately; they do not establish a SaveChanges-to-checkpoint mapping or atomicity proof.",
+    "Nearest engine phase is an ancestor-span classification; exact repository method attribution and ActivityExecutionId/outbox-item joins for arbitrary commands remain unavailable. Captured engine tags do expose selected workflow, work-item, handler, and checkpoint identities; participant-name mapping remains unavailable.",
+    "The separate instance-detail readbacks have their own request traces and are not included in either REST POST TraceId census.",
+    "Commands after RequestFinished remain separately categorized; timestamp proximity alone does not prove settled work, outbox ownership, or causality.",
+    "Immediate-mode and low-logging timing captures remain pending. No latency comparison or optimization conclusion is made."
+  ]
+}
