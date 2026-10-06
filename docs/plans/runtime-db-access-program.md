@@ -1,6 +1,6 @@
 # Runtime database access reduction program
 
-Planning snapshot: 5 October 2026. Runtime implementation and measurements have not started.
+Original planning baseline: 5 October 2026; delivery checkpoint: 6 October 2026. Initial-readiness columns retain the planning baseline; the checkpoint and native Project/issue states carry current delivery status.
 
 Program: [#2382](https://github.com/elsa-workflows/elsa-foundation/issues/2382). Scheduling: [Project 55](https://github.com/orgs/elsa-workflows/projects/55). Goal bucket: [Runtime Database Access](../program-goals/runtime-db-access.md).
 
@@ -75,6 +75,7 @@ Two entry branches are available: T01 → T02 establishes accounting; T05 → T0
 flowchart LR
   T01["T01 Fixture"] --> T02["T02 Accounting"]
   T01 --> T03["T03 HTTP 202"]
+  T01 --> T19["T19 Coalesced command scope"]
   T01 --> T04["T04 Follow-up"]
   T02 --> T04
   T05["T05 Paging spec + before proof"] --> T06["T06 Paging correction"]
@@ -88,6 +89,7 @@ flowchart LR
   T06 --> Q
   T03 --> T17["T17 Integrated correctness"]
   T06 --> T17
+  T19 --> T17
   MAT --> T17
   CAD --> T17
   CP --> T17
@@ -99,7 +101,7 @@ flowchart LR
 
 ## Full work breakdown
 
-Each linked issue contains its objective, scope, acceptance criteria, dependencies, validation and canonical context. This inventory contains one program, five epics, eight features and twenty leaf units. Three leaves adopt existing issues; their original reports remain visible with current-scope addenda. No competing implementation issue is created for them.
+Each linked issue contains its objective, scope, acceptance criteria, dependencies, validation and canonical context. This inventory contains one program, five epics, eight features and twenty-one leaf units. Three leaves adopt existing issues; their original reports remain visible with current-scope addenda. No competing implementation issue is created for them.
 
 ### E1: [#2383](https://github.com/elsa-workflows/elsa-foundation/issues/2383) Explain request and follow-up database work
 
@@ -118,6 +120,7 @@ Produce a reproducible, current-source causal accounting of the successful HTTP 
 |---|---|---|---|
 | T03 | Spike: [#2388](https://github.com/elsa-workflows/elsa-foundation/issues/2388) Diagnose the unexpected HTTP 202 and define any correction | [#2385](https://github.com/elsa-workflows/elsa-foundation/issues/2385) | Blocked |
 | T04 | Spike: [#2389](https://github.com/elsa-workflows/elsa-foundation/issues/2389) Attribute untraced post-response scheduler and outbox work | [#2385](https://github.com/elsa-workflows/elsa-foundation/issues/2385), [#2386](https://github.com/elsa-workflows/elsa-foundation/issues/2386) | Blocked |
+| T19 | Bug: [#2450](https://github.com/elsa-workflows/elsa-foundation/issues/2450) Scope the default Coalesced drain factory to command persistence services | [#2385](https://github.com/elsa-workflows/elsa-foundation/issues/2385) | Added 6 October; implementation/verification active |
 
 ### E2: [#2390](https://github.com/elsa-workflows/elsa-foundation/issues/2390) Bound coalesced reads and materialization
 
@@ -178,7 +181,7 @@ Demonstrate normal-host correctness and reduced database access on the delivered
 
 | Work ID | Type / deliverable | Prerequisites | Initial readiness |
 |---|---|---|---|
-| T17 | Task: [#2412](https://github.com/elsa-workflows/elsa-foundation/issues/2412) Verify integrated runtime correctness on the delivery candidate | [#2388](https://github.com/elsa-workflows/elsa-foundation/issues/2388), [#2393](https://github.com/elsa-workflows/elsa-foundation/issues/2393), [#1306](https://github.com/elsa-workflows/elsa-foundation/issues/1306), [#2400](https://github.com/elsa-workflows/elsa-foundation/issues/2400), [#2405](https://github.com/elsa-workflows/elsa-foundation/issues/2405), [#2409](https://github.com/elsa-workflows/elsa-foundation/issues/2409) | Blocked |
+| T17 | Task: [#2412](https://github.com/elsa-workflows/elsa-foundation/issues/2412) Verify integrated runtime correctness on the delivery candidate | [#2388](https://github.com/elsa-workflows/elsa-foundation/issues/2388), [#2393](https://github.com/elsa-workflows/elsa-foundation/issues/2393), [#1306](https://github.com/elsa-workflows/elsa-foundation/issues/1306), [#2400](https://github.com/elsa-workflows/elsa-foundation/issues/2400), [#2405](https://github.com/elsa-workflows/elsa-foundation/issues/2405), [#2409](https://github.com/elsa-workflows/elsa-foundation/issues/2409), [#2450](https://github.com/elsa-workflows/elsa-foundation/issues/2450) | Blocked |
 | T18 | Task: [#2413](https://github.com/elsa-workflows/elsa-foundation/issues/2413) Publish before-after database accounting and final response | [#2412](https://github.com/elsa-workflows/elsa-foundation/issues/2412), [#2389](https://github.com/elsa-workflows/elsa-foundation/issues/2389), [#2386](https://github.com/elsa-workflows/elsa-foundation/issues/2386) | Blocked |
 
 ## Decisions, ambiguities and ownership
@@ -217,7 +220,11 @@ A contingent implementation leaf may close as not planned only after the lead ac
 
 ## Scheduling, handoffs and proof
 
-T01 (#2385) is the active lead objective, with its workload plan in review; the independent T05 (#2392) specification is running. Both have isolated scope claims and Verification Pending. Keep exactly one active lead objective and one integration lane. Up to two or three bounded sessions may help; use isolated writer worktrees, issue scope claims before code, competing-work rechecks before commit and explicit handoff artifacts. Next T02 depends on accepted T01 output; T06 depends on reviewed T05 specification and before-fix evidence. Local host builds and captures are held while shared machine load is excessive; this is an execution blocker, not a failed runtime result. No neighboring implementation is assigned yet.
+T02 (#2386) remains the active lead accounting objective; [draft PR #2447](https://github.com/elsa-workflows/elsa-foundation/pull/2447) is the existing accounting/evidence integration lane. T01 (#2385), T05 (#2392) and T06 (#2393) are delivered through PRs #2414, #2436 and #2442. T06's exact PR gates passed, but resulting-main CI at 932 failed in Persistence EF with unresolved cause; Project Verification stays Failed. T03 (#2388) remains in review. Keep exactly one lead objective, isolated writer scopes and root-owned integration/QA.
+
+T19 (#2450) is the separately claimed correction discovered while reviewing the retained Coalesced four-client correctness failure. Its [Spec 194](../../specs/194-coalesced-command-scope/spec.md) is Approved. The default factory was singleton while retaining scoped committer/inner persistence services; a minimal default scoped registration passes real-EF identity controls in both validation modes. Before-fix and singleton-revert mutation controls fail for the intended lifetime reasons. Existing custom lifetimes/idempotency, 2,013 runtime tests, 635 architecture tests and rebuilt primary/valid REST controls pass locally. [Scope proof](../../specs/194-coalesced-command-scope/evidence/scope-contract.md), [normal-host evidence](../../specs/194-coalesced-command-scope/evidence/integrated-correctness.md), and [delivery limits](../../specs/194-coalesced-command-scope/evidence/delivery.md) record the exact scope. This proves the source lifetime correction and two sequential controls; individual prior HTTP500/202 attribution and final C4 acceptance remain unresolved. T19 is a native T17 blocker; downstream T17/T18 retain concurrent and before/after acceptance.
+
+The accounting lane retains six qualified successful before-cases and one failed Coalesced C4 case, without sample replacement. The first EF identity observer capture failed its join-integrity gate despite correct HTTP/REST outcomes; its replacement is under review before any new live capture. No timing or command-count gain is claimed for T19. Package publication and deployment remain excluded, and subsequent merges stay held pending the existing publication-boundary decision. Other selected implementation chains remain blocked behind accepted accounting and reviewed specifications. Up to two or three bounded sessions may help; root keeps local builds/hosts serial and preserves unrelated work and existing databases.
 
 The Project separates Status, Work Type, Phase, Area, Priority, Agent State and Verification. Coordination parents never enter Agent Queue. Ready means the stated discovery/specification outcome has enough context, not permission to bypass design gates for adjacent runtime work. Every unexecuted leaf starts with Verification Pending. Review/merge/deploy states and exact-head evidence are recorded on issues as well as the Project.
 
@@ -231,10 +238,10 @@ Runtime implementations run only the affected projects/suites, relevant REST e2e
 - #1305 and #1308 contain historical Groundwork proposals. Removed-provider mechanisms are context to revalidate, not current instructions. #1239 is explicitly re-aimed at current EF adapters.
 - #2286 owns the checkpoint root-write-lease identity defect. Any selected lease-seam change waits for its correction or an explicitly coordinated claim; no duplicated fix or unreviewed hoisting.
 - Do not reintroduce retired benchmark/timing gates through instrumentation, generic helpers, pipeline checks or global budgets. Any reusable observability expansion belongs to its existing program.
-- The primary checkout's pre-existing lockfile changes remain untouched. This plan uses the isolated `claude/runtime-db-access-program` branch.
+- The primary checkout's pre-existing lockfile changes remain untouched. The original planning unit used the isolated `claude/runtime-db-access-program` branch; subsequent bounded units use their claimed isolated branches/worktrees.
 
 ## Completion and present validation
 
 Complete the program when every finding has evidence or an explicitly owned residual prerequisite, the paging correction demonstrates bounded access and preserved results, selected Coalesced reductions are proven on the normal host, contingent candidates are honestly disposed, and the final response states remaining cost and release availability. Do not infer completion from child closure counts or expect an Immediate speedup as a required result.
 
-Planning verification covered the issue hierarchy, dependency DAG, fields, queue and documentation consistency. The active control room now owns delivery, with bounded investigations running. Runtime implementation, representative before/after measurement and correctness execution remain future work owned by the linked leaves; optional original/pinned recovery is not a gate. Merge, publication and deployment retain their normal authorization boundaries.
+Planning verification covered the issue hierarchy, dependency DAG, fields, queue and documentation consistency. The active control room now owns delivery, with bounded investigations running. T06 paging implementation and T19 local scope/sequential correctness proof are recorded above. Remaining selected implementations, comparable final before/after evidence, concurrent T17/T18 correctness and final delivery acceptance remain future work owned by the linked leaves; optional original/pinned recovery is not a gate. Scoped green-gate merges are authorized by the owner but remain held for the publication-boundary decision; package publication and deployment remain excluded.

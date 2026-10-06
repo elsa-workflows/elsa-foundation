@@ -15,10 +15,12 @@ The owner-approved primary scenario uses HttpEndpoint startup and a deterministi
 ## Active objectives
 
 1. [#2386](https://github.com/elsa-workflows/elsa-foundation/issues/2386) Query accounting — active lead objective: causal request/caller ledger, current-run evidence and a valid REST-start control.
-2. [#2392](https://github.com/elsa-workflows/elsa-foundation/issues/2392) Bounded coalesced page-merging specification — integration lane: reviewed spec193 and corrected pre-fix normal-host trace; PR integration gates pending. No runtime reduction is implemented yet.
-3. [#2388](https://github.com/elsa-workflows/elsa-foundation/issues/2388) HTTP 202 diagnosis — Ready buffer, no implementation claimed.
+2. [#2450](https://github.com/elsa-workflows/elsa-foundation/issues/2450) Coalesced command-scope correction — approved Spec 194, minimal default-factory scoped registration, accepted before-fix/mutation proof and local runtime/architecture/primary HTTP/REST gates. Exact-head delivery acceptance remains pending; final concurrent acceptance belongs to T17/T18.
+3. [#2388](https://github.com/elsa-workflows/elsa-foundation/issues/2388) HTTP 202 diagnosis — in review; individual prior response attribution remains unresolved.
 
-[#2385](https://github.com/elsa-workflows/elsa-foundation/issues/2385) is complete through merged [PR #2414](https://github.com/elsa-workflows/elsa-foundation/pull/2414). Post-merge CI and Maps passed at `43b3ef51882105916380ac8e539b49ad7b8a37b6`. No runtime reduction is implemented yet; #2393 remains blocked behind accepted #2392 evidence. Keep one active lead objective, isolated writer worktrees and one integration lane. Project/issues carry live scheduling and native dependencies; this document is a committed checkpoint. Later implementations remain blocked behind evidence and reviewed specifications.
+[#2385](https://github.com/elsa-workflows/elsa-foundation/issues/2385), [#2392](https://github.com/elsa-workflows/elsa-foundation/issues/2392) and [#2393](https://github.com/elsa-workflows/elsa-foundation/issues/2393) are delivered through [PR #2414](https://github.com/elsa-workflows/elsa-foundation/pull/2414), [PR #2436](https://github.com/elsa-workflows/elsa-foundation/pull/2436) and [PR #2442](https://github.com/elsa-workflows/elsa-foundation/pull/2442). The paging correction is merged, but T06 resulting-main CI at 932 failed in a Persistence EF test with unresolved cause; its Verification remains Failed. The single SQLite supporting diagnostic did not reproduce the exception and its interval was rejected, so it supplies no causal repair or green-main claim.
+
+Keep one active lead objective, isolated writer worktrees and root-owned integration/QA. [Draft PR #2447](https://github.com/elsa-workflows/elsa-foundation/pull/2447) remains the existing accounting lane; its fixture pins are preserved while reviewed captures proceed. The seven before-cases retain every attempt, including the failed Coalesced C4 case. The first live EF observer join failed and is being corrected before another capture. Project/issues carry live scheduling/native dependencies; this document is a committed checkpoint. Other implementation chains remain blocked behind accepted accounting and reviewed specifications. Merges remain held for the publication-boundary decision; package publication and deployment are excluded.
 
 ## Scope and roadmap
 
@@ -28,7 +30,7 @@ The owner-approved primary scenario uses HttpEndpoint startup and a deterministi
 - Select narrowly justified atomic checkpoint and queue/outbox reductions.
 - Prove the integrated normal-host result and respond to every supplied finding.
 
-[The canonical plan](../plans/runtime-db-access-program.md) carries requirements, all five epics/eight features/twenty leaves, milestone exits, ambiguity ownership and coverage. Issues contain task acceptance and delivery criteria. [Supplied findings](../reports/runtime-db-access/findings.md) and [historical source response](../reports/runtime-db-access/response.md) retain evidence provenance.
+[The canonical plan](../plans/runtime-db-access-program.md) carries requirements, all five epics/eight features/twenty-one leaves, milestone exits, ambiguity ownership and coverage. Issues contain task acceptance and delivery criteria. [Supplied findings](../reports/runtime-db-access/findings.md) and [historical source response](../reports/runtime-db-access/response.md) retain evidence provenance.
 
 ## Boundaries and coordination
 
