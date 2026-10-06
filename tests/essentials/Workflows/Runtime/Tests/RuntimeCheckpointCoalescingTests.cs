@@ -33,9 +33,7 @@ public sealed class RuntimeCheckpointCoalescingTests(ITestOutputHelper output)
     [Fact]
     public void AddCoalescingRuntimeCheckpointPersistence_SelectsCoalescingPolicyAndDecoratesStores()
     {
-        var services = new ServiceCollection();
-        new WorkflowsRuntimeApiFeature().ConfigureServices(services);
-        services.AddCoalescingRuntimeCheckpointPersistence();
+        var services = CreateCoalescingServices();
 
         using var provider = services.BuildServiceProvider();
 
@@ -53,6 +51,38 @@ public sealed class RuntimeCheckpointCoalescingTests(ITestOutputHelper output)
         Assert.IsType<CoalescingActivityExecutionInspectionStore>(provider.GetRequiredService<IActivityExecutionInspectionStore>());
         Assert.NotNull(provider.GetRequiredService<IRuntimeCoalescingSessionAccessor>());
         Assert.NotNull(provider.GetRequiredService<IRuntimeCoalescingDrainScopeFactory>());
+    }
+
+    [Theory]
+    [InlineData(ServiceLifetime.Singleton)]
+    [InlineData(ServiceLifetime.Scoped)]
+    public async Task RepeatedRegistrationPreservesTheExplicitDrainFactoryLifetime(ServiceLifetime lifetime)
+    {
+        var services = CreateCoalescingServices(collection =>
+            collection.Add(new ServiceDescriptor(
+                typeof(IRuntimeCoalescingDrainScopeFactory),
+                typeof(ExplicitCoalescingDrainScopeFactory),
+                lifetime)));
+        var afterFirstRegistration = services.ToArray();
+
+        services.AddCoalescingRuntimeCheckpointPersistence();
+
+        Assert.Equal(afterFirstRegistration, services);
+        Assert.Equal(lifetime, Assert.Single(services, descriptor => descriptor.ServiceType == typeof(IRuntimeCoalescingDrainScopeFactory)).Lifetime);
+
+        await using var provider = services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
+        await using var firstScope = provider.CreateAsyncScope();
+        await using var secondScope = provider.CreateAsyncScope();
+        var first = firstScope.ServiceProvider.GetRequiredService<IRuntimeCoalescingDrainScopeFactory>();
+        var firstAgain = firstScope.ServiceProvider.GetRequiredService<IRuntimeCoalescingDrainScopeFactory>();
+        var second = secondScope.ServiceProvider.GetRequiredService<IRuntimeCoalescingDrainScopeFactory>();
+
+        Assert.IsType<ExplicitCoalescingDrainScopeFactory>(first);
+        Assert.Same(first, firstAgain);
+        if (lifetime == ServiceLifetime.Singleton)
+            Assert.Same(first, second);
+        else
+            Assert.NotSame(first, second);
     }
 
     [Fact]
@@ -1572,5 +1602,20 @@ public sealed class RuntimeCheckpointCoalescingTests(ITestOutputHelper output)
                 ? pageReader(query, cancellationToken)
                 : inner.ListPageAsync(query, cancellationToken);
         }
+    }
+
+    private static ServiceCollection CreateCoalescingServices(Action<IServiceCollection>? configureBeforeCoalescing = null)
+    {
+        var services = new ServiceCollection();
+        new WorkflowsRuntimeApiFeature().ConfigureServices(services);
+        configureBeforeCoalescing?.Invoke(services);
+        services.AddCoalescingRuntimeCheckpointPersistence();
+        return services;
+    }
+
+    private sealed class ExplicitCoalescingDrainScopeFactory : IRuntimeCoalescingDrainScopeFactory
+    {
+        public IRuntimeCoalescingDrainScope Begin(string workflowExecutionId, int? maxSegmentCheckpoints = null) =>
+            throw new NotSupportedException("The registration test does not begin a runtime drain.");
     }
 }

@@ -1,6 +1,6 @@
 # Tasks: Coalesced Command Scope
 
-Planning draft for T19/#2450; all implementation/test tasks remain pending root and independent review. One correction branch; no concurrent writer on these files. Spec/plan, dependency evidence and source audit are available. No new project/package/schema is needed.
+Approved implementation plan for T19/#2450; root and independent review accepted the design and before-fix tests. One correction branch; no concurrent writer on these files. Spec/plan, dependency evidence and source audit are available. No new project/package/schema is needed.
 
 ## Phase 1: Setup
 
@@ -9,8 +9,8 @@ Planning draft for T19/#2450; all implementation/test tasks remain pending root 
 
 ## Phase 2: Foundational Contract Proof
 
-- [ ] T003 [US1] Add shared real-EF composition controls for two scopes with ValidateScopes true/false in tests/essentials/Workflows/Runtime/Persistence/EntityFrameworkCore/ProviderTests/RuntimeCoalescingScopeRegistrationTests.cs; avoid database queries, Docker fixtures and reflection.
-- [ ] T004 [US1] Execute only the new controls against unchanged runtime registration, retaining exact command/TRX/source/test diff and a lifetime-contract failure in specs/194-coalesced-command-scope/evidence/before-fix.md.
+- [x] T003 [US1] Add shared real-EF composition controls for two scopes with ValidateScopes true/false in tests/essentials/Workflows/Runtime/Persistence/EntityFrameworkCore/ProviderTests/RuntimeCoalescingScopeRegistrationTests.cs; avoid database queries, Docker fixtures and reflection.
+- [x] T004 [US1] Execute only the new controls against unchanged runtime registration, retaining exact command/TRX/source/test diff and a lifetime-contract failure in specs/194-coalesced-command-scope/evidence/before-fix.md.
 
 ## Phase 3: User Story 1 — Independent Command Scopes
 
@@ -18,8 +18,8 @@ Planning draft for T19/#2450; all implementation/test tasks remain pending root 
 
 **Independent test**: Under both validation modes, resolve consistent scoped identities inside each scope and distinct factory/committer/inner-store/context identities across scopes.
 
-- [ ] T005 [US1] Replace only the default factory TryAddSingleton with TryAddScoped in src/essentials/Workflows/Runtime/Api/Coalescing/CoalescingRuntimeCheckpointPersistenceExtensions.cs, preserving registration order and custom-factory behavior.
-- [ ] T006 [US1] Run corrected controls and a temporary registration-revert mutation, restore correct source and retain green/red evidence in specs/194-coalesced-command-scope/evidence/scope-contract.md.
+- [x] T005 [US1] Replace only the default factory TryAddSingleton with TryAddScoped in src/essentials/Workflows/Runtime/Api/Coalescing/CoalescingRuntimeCheckpointPersistenceExtensions.cs, preserving registration order and custom-factory behavior.
+- [x] T006 [US1] Run corrected controls and a temporary registration-revert mutation, restore correct source and retain green/red evidence in specs/194-coalesced-command-scope/evidence/scope-contract.md.
 
 ## Phase 4: User Story 2 — Preserve Runtime Behavior and Customization
 
@@ -27,7 +27,7 @@ Planning draft for T19/#2450; all implementation/test tasks remain pending root 
 
 **Independent test**: Existing behavior suite, repeated/custom registration controls, plus rebuilt valid HttpEndpoint and REST workflows each with expected output, Completed and no incidents.
 
-- [ ] T007 [US2] Add only missing idempotency/custom-factory controls using shared setup in tests/essentials/Workflows/Runtime/Tests/RuntimeCheckpointCoalescingTests.cs; preserve every existing assertion.
+- [x] T007 [US2] Add only missing idempotency/custom-factory controls using shared setup in tests/essentials/Workflows/Runtime/Tests/RuntimeCheckpointCoalescingTests.cs; preserve every existing assertion.
 - [ ] T008 [US2] Run affected runtime/provider correctness suites, relevant rebuilt backend HTTP e2e and the existing primary/REST controls; retain exact source/DLL/fixture/settings/outcomes/cleanup in specs/194-coalesced-command-scope/evidence/integrated-correctness.md, carrying final concurrent acceptance ownership to T17/T18 without claiming prior error attribution.
 
 ## Phase 5: Integration and Delivery
