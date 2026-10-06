@@ -102,6 +102,6 @@ The separate Studio browser proof used an existing developer environment; it doe
 blocker above. No human newcomer trial or complete contribution workflow is claimed here.
 
 For a throwaway test-red/test-green source edit followed by a rebuilt workflow run, see the
-[backend source-edit exercise](backend-source-edit.md). It was verified separately at Foundation revision
-`70f8db49f4f33a5a2a64eda23d5b0437548e2227` on macOS 26.6 arm64 with .NET SDK 10.0.300; this does not
-establish a fresh-install, cross-platform, or human-newcomer result.
+[backend source-edit exercise](backend-source-edit.md). Its separate
+[verified baseline](backend-source-edit.md#verified-baseline) records the execution date, source revision,
+toolchain and evidence; it does not establish a fresh-install, cross-platform, or human-newcomer result.
