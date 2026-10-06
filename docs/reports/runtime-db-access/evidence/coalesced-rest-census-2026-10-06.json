@@ -389,7 +389,7 @@
           "other": 0
         }
       },
-      "interpretation": "Direct has48diagnostic-table commands before response; companion has16 after response. They occur in the nearest drain bucket. Other commands remain distinct; diagnostic-table presence does not establish source-call ownership or settled/background totals.",
+      "interpretation": "Direct has 48 diagnostic-table commands before response; companion has 16 after response. They occur in the nearest drain bucket. Other commands remain distinct; diagnostic-table presence does not establish source-call ownership or settled/background totals.",
       "commandTextPresence": {
         "direct": "167/167",
         "companion": "102/102",

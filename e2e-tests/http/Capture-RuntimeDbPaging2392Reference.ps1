@@ -1,6 +1,6 @@
 <#
 .SYNOPSIS
-    Runs the approved, four-node #2392 Coalesced HTTP reference against an already-running Workbench.
+    Runs the approved, four-node #2392 HTTP reference against an already-running Workbench.
 .DESCRIPTION
     This is a scoped fixture, not a host/database harness. It reuses _ElsaCommon.ps1 for authoring and inspection,
     starts the workflow through its synchronous HttpEndpoint, verifies its response and terminal instance state,
@@ -9,6 +9,8 @@
 
     The SetVariable node is the compiler intrinsic `elsa.intrinsic.set@1` (IntrinsicKind=Set, fusable); it is not the
     historical custom CLR transform. Treat output as a representative, non-equivalent reference.
+    ExpectedCadence checks per-run readback only; configure the task-owned host separately. Its default remains
+    Coalesced. The workflow definition and published executable inputs are unchanged by this parameter.
 #>
 [CmdletBinding()]
 param(
@@ -16,7 +18,8 @@ param(
     [string] $BaseUrl = "http://localhost:5095",
     [string] $Username = "admin",
     [string] $Password = "Password123!",
-    [string] $TraceParent = ""
+    [string] $TraceParent = "",
+    [ValidateSet("Coalesced", "Immediate")][string] $ExpectedCadence = "Coalesced"
 )
 . "$PSScriptRoot/../_ElsaCommon.ps1"
 
@@ -37,7 +40,7 @@ $workflowName = "RuntimeDbPaging2392Reference"
 $path = "runtime-db-paging-2392/transform"
 $payload = '{"firstName":"Alice","lastName":"Smith"}'
 
-Write-Host "== #2392 Coalesced HTTP reference (non-equivalent) == -> $BaseUrl" -ForegroundColor Cyan
+Write-Host "== #2392 $ExpectedCadence HTTP reference (non-equivalent) == -> $BaseUrl" -ForegroundColor Cyan
 Write-Host ("[scriptHead] {0}" -f (git -C (Join-Path $PSScriptRoot '../..') rev-parse HEAD).Trim())
 Write-Host ("[hostCandidateInput] {0} (operator supplied; verify against the independent host build record)" -f $HostCandidateSha.ToLowerInvariant())
 Write-Host ("[traceparent] {0}" -f $TraceParent)
@@ -170,6 +173,6 @@ $maxSegment = Get-DetailValue $detail "maxSegmentCheckpoints"
 $inspection = Get-DetailValue $detail "inspectionGranularity"
 Write-Host ("[terminal]   status={0}" -f $detail.instance.status)
 Write-Host ("[effective]  checkpointCadence={0}; maxSegmentCheckpoints={1}; inspectionGranularity={2}" -f $cadence, $maxSegment, $inspection)
-if ("$cadence" -ne "Coalesced" -or [int]$maxSegment -ne 50 -or -not $inspection) {
-    throw "Expected effective checkpointCadence=Coalesced and maxSegmentCheckpoints=50, with inspectionGranularity present; got cadence='$cadence', maxSegmentCheckpoints='$maxSegment', inspectionGranularity='$inspection'."
+if ("$cadence" -ne $ExpectedCadence -or [int]$maxSegment -ne 50 -or -not $inspection) {
+    throw "Expected effective checkpointCadence=$ExpectedCadence and maxSegmentCheckpoints=50, with inspectionGranularity present; got cadence='$cadence', maxSegmentCheckpoints='$maxSegment', inspectionGranularity='$inspection'."
 }
