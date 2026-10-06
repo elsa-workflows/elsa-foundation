@@ -17,6 +17,7 @@ param(
     [string] $Message  = "Hello World from the single-activity flow!"
 )
 . "$PSScriptRoot/_ElsaCommon.ps1"
+. "$PSScriptRoot/_WorkflowFlowVerdict.ps1"
 
 Write-Host "== Single WriteLine workflow ==  -> $BaseUrl" -ForegroundColor Cyan
 $ctx = Connect-Elsa -BaseUrl $BaseUrl -Username $Username -Password $Password
@@ -39,11 +40,8 @@ Write-Host ("[execute] execution={0} dispatch={1}" -f $run.workflowExecutionId, 
 Write-Host "[observe] instance detail:"
 $inst = Wait-WorkflowInstance -Ctx $ctx -ExecutionId $run.workflowExecutionId
 Show-WorkflowInstance -Instance $inst
+Assert-WorkflowFlowResult -Instance $inst
 
 Write-Host ""
-if ($inst.instance.status -in @('Completed','Finished')) {
-    Write-Host "SUCCESS - workflow completed. Look for this line in the SERVER console:" -ForegroundColor Green
-    Write-Host ("  $Message")
-} else {
-    Write-Host ("FINISHED with status '{0}' (see incidents above)." -f $inst.instance.status) -ForegroundColor Yellow
-}
+Write-Host "SUCCESS - workflow completed. Look for this line in the SERVER console:" -ForegroundColor Green
+Write-Host ("  $Message")
