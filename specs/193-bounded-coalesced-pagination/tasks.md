@@ -67,8 +67,8 @@
 **Purpose**: Prove algorithmic boundedness, host compatibility, and the intended before/after distinction.
 
 - [x] T011 Run the focused whole runtime test project and the expected red-then-green mutation proof using `tests/essentials/Workflows/Runtime/Tests/Elsa.Workflows.Runtime.Tests.csproj`.
-- [ ] T012 Run the same representative PostgreSQL Workbench journey before and after the correction with the manually invoked `e2e-tests/http/Capture-RuntimeDbPaging2392Reference.ps1`; record exact output, terminal state, effective cadence, and command trace in `specs/193-bounded-coalesced-pagination/reference-trace.md`.
-- [ ] T013 Review changed source and docs against `specs/193-bounded-coalesced-pagination/contracts/coalesced-page-merge.md` and the scoped boundary in `specs/193-bounded-coalesced-pagination/plan.md`.
+- [x] T012 Run the same representative PostgreSQL Workbench journey before and after the correction with the manually invoked `e2e-tests/http/Capture-RuntimeDbPaging2392Reference.ps1`; record exact output, terminal state, effective cadence, and command trace in `specs/193-bounded-coalesced-pagination/reference-trace.md`.
+- [x] T013 Review changed source and docs against `specs/193-bounded-coalesced-pagination/contracts/coalesced-page-merge.md` and the scoped boundary in `specs/193-bounded-coalesced-pagination/plan.md`.
 
 ## Dependencies and execution order
 
