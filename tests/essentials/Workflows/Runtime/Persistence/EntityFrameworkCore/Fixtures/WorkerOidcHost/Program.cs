@@ -277,13 +277,6 @@ internal static class Program
         {
             using var operation = mappingReads.BeginHttpOperation(context);
             context.Response.Headers[MappingReadCounter.ResponseOperationIdHeader] = operation.Tag.OperationId;
-            if (context.Request.Headers["X-Worker-Persistence-Probe"].ToString() == "mismatch")
-            {
-                var mutationShell = await app.Services.GetRequiredService<IShellRegistry>().GetOrActivateAsync(input.ShellId);
-                await using var mutationScope = mutationShell.ServiceProvider.CreateAsyncScope();
-                var mutationIam = mutationScope.ServiceProvider.GetRequiredService<IdentityIamDbContext>();
-                _ = await mutationIam.ClaimMappings.CountAsync();
-            }
             await next();
         });
         return app;
@@ -806,7 +799,8 @@ internal static class Program
                         evidence.OperationKind,
                         evidence.ContextCategory,
                         evidence.OperationSource,
-                        evidence.OperationEpoch,
+                        evidence.OperationKind == "fixture-control" && evidence.ContextCategory == "list-rules"
+                            ? _epoch : evidence.OperationEpoch,
                         _epoch,
                         _lifetimeCount - _epochStartCount,
                         _lifetimeCount,
