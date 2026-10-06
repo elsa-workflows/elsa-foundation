@@ -799,8 +799,7 @@ internal static class Program
                         evidence.OperationKind,
                         evidence.ContextCategory,
                         evidence.OperationSource,
-                        evidence.OperationKind == "fixture-control" && evidence.ContextCategory == "list-rules"
-                            ? _epoch : evidence.OperationEpoch,
+                        evidence.OperationEpoch,
                         _epoch,
                         _lifetimeCount - _epochStartCount,
                         _lifetimeCount,
