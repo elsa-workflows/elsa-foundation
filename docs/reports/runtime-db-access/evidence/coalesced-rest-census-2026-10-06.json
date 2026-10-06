@@ -237,8 +237,8 @@
           "other": 48
         },
         "elsa.runtime.drain": {
-          "elsaOtelDiagnostics": 0,
-          "other": 53
+          "elsaOtelDiagnostics": 48,
+          "other": 5
         },
         "elsa.runtime.dispatch": {
           "elsaOtelDiagnostics": 0,
@@ -325,8 +325,8 @@
           "other": 19
         },
         "elsa.runtime.drain": {
-          "elsaOtelDiagnostics": 0,
-          "other": 20
+          "elsaOtelDiagnostics": 16,
+          "other": 4
         },
         "elsa.runtime.dispatch": {
           "elsaOtelDiagnostics": 0,
@@ -368,11 +368,11 @@
       }
     },
     "diagnosticTableClassification": {
-      "rule": "Case-insensitive presence of elsa_otel in EF command text marks a diagnostics-table command; this does not parse statements or infer provider operations.",
+      "rule": "Case-insensitive presence of elsa_otel in the exact raw EF field State.commandText marks a diagnostics-table command; command text must be present on every counted EF event. This does not parse statements or infer provider operations.",
       "direct": {
         "beforeResponse": {
-          "elsaOtelDiagnostics": 0,
-          "other": 167
+          "elsaOtelDiagnostics": 48,
+          "other": 119
         },
         "afterResponse": {
           "elsaOtelDiagnostics": 0,
@@ -385,11 +385,16 @@
           "other": 86
         },
         "afterResponse": {
-          "elsaOtelDiagnostics": 0,
-          "other": 16
+          "elsaOtelDiagnostics": 16,
+          "other": 0
         }
       },
-      "interpretation": "No EF command in either filtered REST TraceId contained the elsa_otel table token. All nearest-phase command buckets below therefore contain only other-table EF command events for these traces."
+      "interpretation": "Direct has48diagnostic-table commands before response; companion has16 after response. They occur in the nearest drain bucket. Other commands remain distinct; diagnostic-table presence does not establish source-call ownership or settled/background totals.",
+      "commandTextPresence": {
+        "direct": "167/167",
+        "companion": "102/102",
+        "field": "State.commandText"
+      }
     }
   },
   "accountingLimits": [
