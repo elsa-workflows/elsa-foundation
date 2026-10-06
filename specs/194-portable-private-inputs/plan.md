@@ -2,7 +2,7 @@
 
 **Branch**: `codex/2457-portable-input-contract` | **Date**: 2026-10-06 | **Spec**: [spec.md](spec.md)
 
-**Status**: Proposed contract under #2457; no implementation-ready tasks/production changes.
+**Status**: Draft — Proposed contract under #2457; no implementation-ready tasks/production changes.
 
 ## Summary
 
