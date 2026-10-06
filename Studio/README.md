@@ -6,6 +6,8 @@ For a current map of the host, shell, modules, routing, API boundaries, and auth
 
 For operator guidance on current run health and following incidents to exact runtime evidence, see [Workflow run incidents](docs/workflow-run-incidents.md).
 
+Want to contribute? Start with the [human contribution guide](CONTRIBUTING.md).
+
 The host is composed from independently enabled Studio capabilities:
 
 - `Elsa.Studio.Core` defines manifests, diagnostics, and the manifest collection event.
@@ -90,6 +92,12 @@ configured, and the backend must expose the Extension Builder surface. Against a
 explicit "backend management unavailable" state.
 
 ## Build
+
+> **Current backend setup limitation:** An earlier isolated-cache restore failed for
+> `ConsoleLogStreaming.AspNetCore` `1.0.0-preview.13` (see [Foundation #2432](https://github.com/elsa-workflows/elsa-foundation/issues/2432)); that pin is still on this `main`.
+> Its proposed correction in [Studio #551](https://github.com/elsa-workflows/elsa-foundation-studio/issues/551) / [PR #557](https://github.com/elsa-workflows/elsa-foundation-studio/pull/557)
+> is not merged. The end-to-end source-development path is tracked in [Studio #566](https://github.com/elsa-workflows/elsa-foundation-studio/issues/566).
+> The `.NET` build/test/run commands below are existing developer commands, not a verified cold-cache setup recipe.
 
 ```bash
 pnpm install

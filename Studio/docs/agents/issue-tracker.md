@@ -17,6 +17,8 @@ Infer the repo from `git remote -v` - `gh` does this automatically when run insi
 
 **PRs as a request surface: no.** _(Set to `yes` if this repo treats external PRs as feature requests; `/triage` reads this flag.)_
 
+This keeps feature requests in GitHub Issues; it does not rule out a PR proposing a concrete small fix. Align substantial feature scope in an issue before implementation. See the [human contribution guide](../../CONTRIBUTING.md).
+
 When set to `yes`, PRs run through the same labels and states as issues, using the `gh pr` equivalents:
 
 - **Read a PR**: `gh pr view <number> --comments` and `gh pr diff <number>` for the diff.
