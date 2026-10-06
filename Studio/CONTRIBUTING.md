@@ -26,6 +26,8 @@ For a paired source-built Studio and Workbench walkthrough, see [Make a visible 
 
 Run the affected workspace's existing test, typecheck, or build script as appropriate. For example, `pnpm --filter @elsa-workflows/studio-workflows test` runs that package's test script; use the package name and scripts from its `package.json` for other modules. The root scripts in [`package.json`](package.json) provide broader checks such as `pnpm lint`, `pnpm typecheck`, `pnpm test`, `pnpm test:browser`, and `pnpm check:bundle:workflows`.
 
+For a change-by-change view of focused checks and evidence, see Foundation's [shared contributor validation matrix](https://github.com/elsa-workflows/elsa-foundation/blob/main/docs/contributing/validation-matrix.md).
+
 The repository-defined hosted PR jobs are in [CI](.github/workflows/ci.yml) and [Docker Image](.github/workflows/docker.yml). CI runs lint, typecheck, workspace unit tests, shuffled Workflows tests, the Workflows bundle budget, and Chromium browser tests. The Docker workflow builds the Studio image on pull requests. The [Packages workflow](.github/workflows/packages.yml) uses .NET 10 to restore, build, test, and pack on selected branch pushes and releases; it does not run on pull requests. Check the live pull request and repository branch rules for its exact checks and requirements.
 
 ### Current .NET setup verification
