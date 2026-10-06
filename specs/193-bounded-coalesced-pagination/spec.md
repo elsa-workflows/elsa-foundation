@@ -8,7 +8,7 @@
 
 **Created**: 2026-10-05
 
-**Status**: Approved — reviewed design; implementation and normal-host proof complete locally; PR gates pending #2393
+**Status**: Implemented — [PR #2442](https://github.com/elsa-workflows/elsa-foundation/pull/2442)
 
 **Input**: Program #2382, leaf T05 / issue #2392. Specify and reproduce the bounded correction for Coalesced runtime-store page merging; implementation is separate issue #2393.
 
