@@ -12,6 +12,10 @@
     preflight, instance verification, and all readbacks are outside the measured interval. EF Core logging must be
     Warning with no command/transaction Debug override on the owner-started host. Persisted diagnostics stay enabled
     by default; this script does not change host logging or diagnostics settings.
+    -RequireStableLoad opts into two consecutive 1m/5m load observations below the logical processor count, 30 seconds
+    apart, with at most four observations and 90 seconds of scheduled waiting, plus snapshot execution time. The
+    warm-up readback and gate duration are recorded as excluded settlement time. Missing or unstable metrics save an
+    incomplete artifact before measurement.
 
     The bounded case set is intentionally finite: Http4Sequential, Http16Sequential, Http4Concurrency4, and
     RestCompanionCoalesced (Coalesced only). This file is named Capture-*.ps1 and is not discovered by Test-*.ps1.
@@ -25,7 +29,8 @@ param(
     [Parameter(Mandatory)][ValidateNotNullOrEmpty()][string] $OutputPath,
     [string] $Username = 'admin',
     [string] $Password = 'Password123!',
-    [bool] $PersistedDiagnosticsEnabled = $true
+    [bool] $PersistedDiagnosticsEnabled = $true,
+    [switch] $RequireStableLoad
 )
 
 $ErrorActionPreference = 'Stop'
@@ -35,6 +40,7 @@ $PayloadJson = '{"firstName":"Alice","lastName":"Smith"}'
 $WarmupCount = 25
 $MeasuredCount = 60
 $InstanceCountExpected = 1 + $WarmupCount + $MeasuredCount
+$requireStableLoadEnabled = [bool]$RequireStableLoad
 
 if ($Case -eq 'RestCompanionCoalesced' -and $ExpectedCadence -ne 'Coalesced') {
     throw 'RestCompanionCoalesced is selected only for ExpectedCadence=Coalesced.'
@@ -117,6 +123,42 @@ function Write-TimingArtifact {
     if (-not (Test-Path -LiteralPath $outDirectory)) { New-Item -Path $outDirectory -ItemType Directory -Force | Out-Null }
     $json = ConvertTo-Json -InputObject $Artifact -Depth 100
     [System.IO.File]::WriteAllText($OutputPath, $json + [Environment]::NewLine, [Text.UTF8Encoding]::new($false))
+}
+
+function Get-LoadGateAssessment {
+    param([Parameter(Mandatory)] $Snapshot)
+    $loads = @($Snapshot.loadAverage1m5m15m)
+    $processors = [int]$Snapshot.logicalProcessorCount
+    if ($processors -le 0 -or $loads.Count -lt 2 -or $null -eq $loads[0] -or $null -eq $loads[1]) {
+        return [pscustomobject]@{
+            available = $false
+            belowProcessorCount = $false
+            logicalProcessorCount = $processors
+            load1m = $null
+            load5m = $null
+        }
+    }
+    try {
+        $load1m = [double]$loads[0]
+        $load5m = [double]$loads[1]
+    } catch {
+        return [pscustomobject]@{
+            available = $false
+            belowProcessorCount = $false
+            logicalProcessorCount = $processors
+            load1m = $null
+            load5m = $null
+        }
+    }
+    $validLoads = -not [double]::IsNaN($load1m) -and -not [double]::IsInfinity($load1m) -and
+        -not [double]::IsNaN($load5m) -and -not [double]::IsInfinity($load5m)
+    [pscustomobject]@{
+        available = $validLoads
+        belowProcessorCount = ($validLoads -and $load1m -lt $processors -and $load5m -lt $processors)
+        logicalProcessorCount = $processors
+        load1m = if ($validLoads) { $load1m } else { $null }
+        load5m = if ($validLoads) { $load5m } else { $null }
+    }
 }
 
 function Add-ExportNodeEvidence {
@@ -597,6 +639,14 @@ $httpClients = @()
 $preflightRecord = $null
 $warmupRecords = [System.Collections.Generic.List[object]]::new()
 $measuredRecords = [System.Collections.Generic.List[object]]::new()
+$warmupVerification = $null
+$loadGateObservations = [System.Collections.Generic.List[object]]::new()
+$loadGatePassed = $false
+$loadGateWasEvaluated = $false
+$loadGateFailureReason = $null
+$loadGateElapsedSeconds = 0.0
+$preMeasurementFailureReason = $null
+$preMeasurementFailurePoint = $null
 $batchStart = $null
 $batchEnd = $null
 $loadBefore = $null
@@ -635,6 +685,30 @@ if ($fixtureKind -eq 'http') {
 } else {
     $relativeUri = "runtime/workflows/executables/$($setup.ArtifactId)/execute"
     $requestJson = (@{ sourceReferenceId = $setup.SourceReferenceId; inputs = @{ content = @{ firstName = 'Alice'; lastName = 'Smith' } } } | ConvertTo-Json -Depth 10 -Compress)
+}
+$sourceEvidence = [ordered]@{
+    candidateSha = $CandidateSha.ToLowerInvariant()
+    fixtureWorktreeHead = $FixtureHead
+    timingScriptSha256 = $FixtureScriptSha256
+}
+$fixtureEvidence = [ordered]@{
+    kind = $fixtureKind
+    workflowName = $setup.WorkflowName
+    definitionId = $setup.DefinitionId
+    versionId = $setup.VersionId
+    artifactId = $setup.ArtifactId
+    sourceReferenceId = $setup.SourceReferenceId
+    routeOrEndpoint = $relativeUri
+    expectedHttpResponse = if ($fixtureKind -eq 'http') { 'HTTP 200 text body Alice Smith' } else { 'HTTP 200 execute admission with workflowExecutionId; terminal/output readback is separate' }
+    authoredNodeCount = if ($setup.AuthoredNodeCount) { $setup.AuthoredNodeCount } else { 4 }
+    authoredSetCount = if ($setup.AuthoredSetCount) { $setup.AuthoredSetCount } elseif ($fixtureKind -eq 'http') { 1 } else { 2 }
+    executableExport = $profileEvidence
+    workflowIntrinsicFusion = [ordered]@{
+        sourceSha = $CandidateSha.ToLowerInvariant()
+        sourcePath = $fusionPath
+        isFusableSet = $setFusable
+        meaning = 'Source classifies Set as fusable; this does not remove it from the exported/authored node count.'
+    }
 }
 
 try {
@@ -676,17 +750,8 @@ try {
             schemaVersion = 1
             captureKind = 'manual-low-logging-timing-fixture'
             case = $Case
-            source = [ordered]@{ candidateSha = $CandidateSha.ToLowerInvariant(); fixtureWorktreeHead = $FixtureHead; timingScriptSha256 = $FixtureScriptSha256 }
-            fixture = [ordered]@{
-                kind = $fixtureKind
-                workflowName = $setup.WorkflowName
-                definitionId = $setup.DefinitionId
-                versionId = $setup.VersionId
-                artifactId = $setup.ArtifactId
-                sourceReferenceId = $setup.SourceReferenceId
-                routeOrEndpoint = $relativeUri
-                executableExport = $profileEvidence
-            }
+            source = $sourceEvidence
+            fixture = $fixtureEvidence
             protocol = [ordered]@{
                 setupPreflightRequests = 1
                 warmupsRequired = $WarmupCount
@@ -717,7 +782,145 @@ try {
         }
     }
 
-    $loadBefore = Get-HostSnapshot
+    if ($requireStableLoadEnabled) {
+        $postWarmupSettlementWatch = [Diagnostics.Stopwatch]::StartNew()
+        try {
+            if ($fixtureKind -eq 'http') {
+                $warmupVerification = Get-HttpVerification -Setup $setup -Session $context.Session -ExpectedInstanceCount (1 + $WarmupCount)
+            } else {
+                $warmupVerification = Get-RestVerification -Records (@($preflightRecord) + $warmupRecords.ToArray()) -Session $context.Session -ExpectedInstanceCount (1 + $WarmupCount)
+            }
+        } catch {
+            $warmupVerification = [pscustomobject]@{
+                verificationErrorType = $_.Exception.GetType().Name
+                expectedInstanceCount = (1 + $WarmupCount)
+                allHttpRunsVerified = $false
+                allRunsVerified = $false
+            }
+        }
+
+        $warmupVerificationPassed = if ($fixtureKind -eq 'http') {
+            [bool]$warmupVerification.allHttpRunsVerified
+        } else {
+            [bool]$warmupVerification.allRunsVerified
+        }
+        if ($null -ne $warmupVerification.verificationErrorType) {
+            $preMeasurementFailureReason = 'warmupReadbackException'
+            $preMeasurementFailurePoint = 'pre-measurement-warmup-readback'
+        } elseif (-not $warmupVerificationPassed) {
+            $preMeasurementFailureReason = 'warmupReadbackFailed'
+            $preMeasurementFailurePoint = 'pre-measurement-warmup-readback'
+        }
+
+        if ($null -eq $preMeasurementFailureReason) {
+            $loadGateWasEvaluated = $true
+            $loadGateWatch = [Diagnostics.Stopwatch]::StartNew()
+            $consecutiveStableObservations = 0
+            for ($observationIndex = 0; $observationIndex -lt 4; $observationIndex++) {
+                if ($observationIndex -gt 0) {
+                    Start-Sleep -Seconds 30
+                }
+                $snapshot = Get-HostSnapshot
+                $assessment = Get-LoadGateAssessment -Snapshot $snapshot
+                $loadGateObservations.Add([pscustomobject]@{
+                    observation = ($observationIndex + 1)
+                    snapshot = $snapshot
+                    loadAvailable = [bool]$assessment.available
+                    logicalProcessorCount = [int]$assessment.logicalProcessorCount
+                    load1m = $assessment.load1m
+                    load5m = $assessment.load5m
+                    bothLoadsBelowProcessorCount = [bool]$assessment.belowProcessorCount
+                })
+                if (-not $assessment.available) {
+                    $loadGateFailureReason = 'loadMetricsUnavailable'
+                    break
+                }
+                if ($assessment.belowProcessorCount) {
+                    $consecutiveStableObservations++
+                    if ($consecutiveStableObservations -ge 2) {
+                        $loadGatePassed = $true
+                        break
+                    }
+                } else {
+                    $consecutiveStableObservations = 0
+                }
+            }
+            $loadGateWatch.Stop()
+            $loadGateElapsedSeconds = [Math]::Round($loadGateWatch.Elapsed.TotalSeconds, 3)
+            if (-not $loadGatePassed -and $null -eq $loadGateFailureReason) {
+                $loadGateFailureReason = 'stableLoadNotObservedWithinFourObservations'
+            }
+        }
+        $postWarmupSettlementWatch.Stop()
+        $postWarmupSettlementElapsedSeconds = [Math]::Round($postWarmupSettlementWatch.Elapsed.TotalSeconds, 3)
+        if ($loadGateWasEvaluated -and -not $loadGatePassed) {
+            $preMeasurementFailureReason = $loadGateFailureReason
+            $preMeasurementFailurePoint = 'pre-measurement-stable-load-gate'
+        }
+
+        if ($null -ne $preMeasurementFailureReason) {
+            $partialArtifact = [ordered]@{
+                schemaVersion = 1
+                captureKind = 'manual-low-logging-timing-fixture'
+                completionState = 'incomplete'
+                case = $Case
+                source = $sourceEvidence
+                fixture = $fixtureEvidence
+                settings = [ordered]@{
+                    expectedCadence = $ExpectedCadence
+                    expectedMaxSegmentCheckpoints = $ExpectedMaxSegment
+                    expectedInspectionGranularity = $ExpectedInspection
+                    expectedEfCoreLogLevel = 'Warning'
+                    hostLoggingLevelVerifiedByScript = $false
+                    persistedDiagnosticsEnabled = $PersistedDiagnosticsEnabled
+                    persistedDiagnosticsChangedByScript = $false
+                }
+                protocol = [ordered]@{
+                    timingBoundary = 'Monotonic Stopwatch starts before HttpClient.SendAsync and stops after complete response body read.'
+                    setupPreflightRequests = 1
+                    warmupsRequired = $WarmupCount
+                    warmupsPerformed = $warmupRecords.Count
+                    measuredSamplesRequired = $MeasuredCount
+                    measuredSamples = $measuredRecords.Count
+                    measurementStarted = $false
+                    retriesOrReplacementSamples = 0
+                    failedSamplesRetained = $true
+                    requireStableLoad = $true
+                    loadGateEvaluated = $loadGateWasEvaluated
+                    loadGatePassed = if ($loadGateWasEvaluated) { $loadGatePassed } else { $null }
+                    loadGateFailureReason = $loadGateFailureReason
+                    preMeasurementFailureReason = $preMeasurementFailureReason
+                    loadGateElapsedSeconds = $loadGateElapsedSeconds
+                    loadGateObservationIntervalSeconds = 30
+                    loadGateMaximumObservations = 4
+                    loadGateMaximumScheduledWaitSeconds = 90
+                    loadGateTimingScope = 'Elapsed time includes up to 90 seconds of scheduled waits plus host snapshot execution; no process-level timeout is set for uptime.'
+                    loadGateCriteria = '1m and 5m load averages below logical processor count in two consecutive observations.'
+                    postWarmupSettlementElapsedSeconds = $postWarmupSettlementElapsedSeconds
+                    postWarmupSettlementExcludedFromMeasurement = $true
+                    loadGateObservations = $loadGateObservations.ToArray()
+                }
+                preflight = $preflightRecord
+                preflightVerification = $preflightVerification
+                warmups = $warmupRecords.ToArray()
+                warmupVerification = $warmupVerification
+                measured = $measuredRecords.ToArray()
+                summary = [ordered]@{
+                    failurePoint = $preMeasurementFailurePoint
+                    failureReason = $preMeasurementFailureReason
+                    actualPreflightRequests = 1
+                    actualWarmupRequests = $warmupRecords.Count
+                    actualMeasuredRequests = $measuredRecords.Count
+                    loadGateFailureReason = $loadGateFailureReason
+                }
+            }
+            Write-TimingArtifact -Artifact $partialArtifact
+            throw "Pre-measurement check failed ($preMeasurementFailureReason); no measured requests were issued, and an incomplete artifact was saved to '$OutputPath'."
+        }
+        $loadBefore = $loadGateObservations[$loadGateObservations.Count - 1].snapshot
+    } else {
+        $loadBefore = Get-HostSnapshot
+    }
     $batchStart = [DateTime]::UtcNow.ToString('o')
     if ($Case -eq 'Http4Concurrency4') {
         $responses = [ElsaRuntimeDbTiming2386.HttpSampler]::RunFourClientsAsync($httpClients, $relativeUri, $requestJson, 15).GetAwaiter().GetResult()
@@ -794,30 +997,8 @@ $result = [ordered]@{
     captureKind = 'manual-low-logging-timing-fixture'
     case = $Case
     caseDescription = $timingCaseName
-    source = [ordered]@{
-        candidateSha = $CandidateSha.ToLowerInvariant()
-        fixtureWorktreeHead = $FixtureHead
-        timingScriptSha256 = $FixtureScriptSha256
-    }
-    fixture = [ordered]@{
-        kind = $fixtureKind
-        workflowName = $setup.WorkflowName
-        definitionId = $setup.DefinitionId
-        versionId = $setup.VersionId
-        artifactId = $setup.ArtifactId
-        sourceReferenceId = $setup.SourceReferenceId
-        routeOrEndpoint = $relativeUri
-        expectedHttpResponse = if ($fixtureKind -eq 'http') { 'HTTP 200 text body Alice Smith' } else { 'HTTP 200 execute admission with workflowExecutionId; terminal/output readback is separate' }
-        authoredNodeCount = if ($setup.AuthoredNodeCount) { $setup.AuthoredNodeCount } elseif ($fixtureKind -eq 'http') { 4 } else { 4 }
-        authoredSetCount = if ($setup.AuthoredSetCount) { $setup.AuthoredSetCount } elseif ($fixtureKind -eq 'http') { 1 } else { 2 }
-        executableExport = $profileEvidence
-        workflowIntrinsicFusion = [ordered]@{
-            sourceSha = $CandidateSha.ToLowerInvariant()
-            sourcePath = $fusionPath
-            isFusableSet = $setFusable
-            meaning = 'Source classifies Set as fusable; this does not remove it from the exported/authored node count.'
-        }
-    }
+    source = $sourceEvidence
+    fixture = $fixtureEvidence
     settings = [ordered]@{
         expectedCadence = $ExpectedCadence
         expectedMaxSegmentCheckpoints = $ExpectedMaxSegment
@@ -840,6 +1021,20 @@ $result = [ordered]@{
         warmupDistributionPolicy = if ($Case -eq 'Http4Concurrency4') { 'round-robin across four clients' } else { 'single client' }
         measuredRequestsPerConcurrentClient = if ($Case -eq 'Http4Concurrency4') { 15 } else { 60 }
         expectedTotalInstancesIncludingPreflight = $InstanceCountExpected
+        requireStableLoad = $requireStableLoadEnabled
+        loadGateEvaluated = if ($requireStableLoadEnabled) { $loadGateWasEvaluated } else { $null }
+        loadGatePassed = if ($requireStableLoadEnabled) { $loadGatePassed } else { $null }
+        loadGateFailureReason = $loadGateFailureReason
+        loadGateElapsedSeconds = $loadGateElapsedSeconds
+        loadGateObservationIntervalSeconds = if ($requireStableLoadEnabled) { 30 } else { $null }
+        loadGateMaximumObservations = if ($requireStableLoadEnabled) { 4 } else { $null }
+        loadGateMaximumScheduledWaitSeconds = if ($requireStableLoadEnabled) { 90 } else { $null }
+        loadGateTimingScope = if ($requireStableLoadEnabled) { 'Elapsed time includes up to 90 seconds of scheduled waits plus host snapshot execution; no process-level timeout is set for uptime.' } else { $null }
+        loadGateCriteria = if ($requireStableLoadEnabled) { '1m and 5m load averages below logical processor count in two consecutive observations.' } else { $null }
+        loadGateElapsedTimeExcludedFromMeasurement = $requireStableLoadEnabled
+        postWarmupSettlementElapsedSeconds = if ($requireStableLoadEnabled) { $postWarmupSettlementElapsedSeconds } else { $null }
+        postWarmupSettlementExcludedFromMeasurement = $requireStableLoadEnabled
+        loadGateObservations = $loadGateObservations.ToArray()
         retriesOrReplacementSamples = 0
         failedSamplesRetained = $true
         timer = 'System.Diagnostics.Stopwatch; monotonic per request; full body buffered and read.'
@@ -852,6 +1047,8 @@ $result = [ordered]@{
     }
     timestampsUtc = [ordered]@{ measuredBatchStart = $batchStart; measuredBatchEnd = $batchEnd }
     preflight = $preflightRecord
+    preflightVerification = $preflightVerification
+    warmupVerification = $warmupVerification
     warmups = $warmupRecords.ToArray()
     measured = $measuredRecords.ToArray()
     measuredStatistics = Get-TimingStatistics -Samples $measuredRecords.ToArray()
