@@ -277,6 +277,13 @@ internal static class Program
         {
             using var operation = mappingReads.BeginHttpOperation(context);
             context.Response.Headers[MappingReadCounter.ResponseOperationIdHeader] = operation.Tag.OperationId;
+            if (context.Request.Headers["X-Worker-Persistence-Probe"].ToString() == "mismatch")
+            {
+                var mutationShell = await app.Services.GetRequiredService<IShellRegistry>().GetOrActivateAsync(input.ShellId);
+                await using var mutationScope = mutationShell.ServiceProvider.CreateAsyncScope();
+                var mutationIam = mutationScope.ServiceProvider.GetRequiredService<IdentityIamDbContext>();
+                _ = await mutationIam.ClaimMappings.CountAsync();
+            }
             await next();
         });
         return app;
