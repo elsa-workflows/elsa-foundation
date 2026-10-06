@@ -97,6 +97,11 @@ cache or credentials; installed SDK library packs remained available
 CI selects `10.x`; the repository does not pin the tested patch version. This records a tested toolchain,
 not a new support policy. Your clone may contain later changes than this baseline.
 
-Other operating systems, a fresh OS installation, and a source-edit/rebuild exercise remain to be verified.
+Other operating systems and a fresh OS installation remain to be verified.
 The separate Studio browser proof used an existing developer environment; it does not remove the cold-restore
 blocker above. No human newcomer trial or complete contribution workflow is claimed here.
+
+For a throwaway test-red/test-green source edit followed by a rebuilt workflow run, see the
+[backend source-edit exercise](backend-source-edit.md). Its separate
+[verified baseline](backend-source-edit.md#verified-baseline) records the execution date, source revision,
+toolchain and evidence; it does not establish a fresh-install, cross-platform, or human-newcomer result.
