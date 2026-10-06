@@ -710,6 +710,16 @@ public sealed class CompositionFileSourceTests
         Assert.Equal("bridge-source-changed", Assert.Throws<CliRefusal>(source.VerifyUnchanged).Code);
     }
 
+    [Fact]
+    public void Candidate_source_detects_renamed_unused_sibling()
+    {
+        using var fixture = new LocalFixture();
+        var source = CandidateSource(fixture);
+        File.Move(Path.Join(fixture.Directory, "shells.Staging.json"), Path.Join(fixture.Directory, "shells.Review.json"));
+
+        Assert.Equal("bridge-source-changed", Assert.Throws<CliRefusal>(source.VerifyUnchanged).Code);
+    }
+
     [Theory]
     [InlineData(33, 0)]
     [InlineData(9, FileLimit)]

@@ -154,6 +154,8 @@ public sealed class CompositionFileSource
     private static bool IsSafeEnvironment(string? value) => !string.IsNullOrWhiteSpace(value) &&
         value.All(ch => char.IsAsciiLetterOrDigit(ch) || ch is '_' or '-');
 
+    internal static bool IsSupportedFileName(string name) => IsSupportedName(name);
+
     private static bool IsSupportedName(string name) =>
         name.Equals("shells.json", StringComparison.OrdinalIgnoreCase) ||
         name.Equals("appsettings.json", StringComparison.OrdinalIgnoreCase) ||

@@ -16,91 +16,60 @@ public static class CompositionFilePublisher
         ArgumentNullException.ThrowIfNull(candidateFiles);
         ArgumentNullException.ThrowIfNull(recheck);
 
-        string? stagingDirectory = null;
-        try
-        {
-            cancellationToken.ThrowIfCancellationRequested();
-            if (!Directory.Exists(sourceDirectory))
-                throw CliRefusal.Resolution("bridge-source-missing", "The selected host source directory is missing.");
+        PublishDirectory(destinationDirectory, [sourceDirectory], () => ValidateCandidateFiles(candidateFiles, portable: false)
+            .Select(file => new OutputFile(file.Key, file.Value)).ToArray(), recheck, cancellationToken,
+            () =>
+            {
+                if (!Directory.Exists(sourceDirectory))
+                    throw CliRefusal.Resolution("bridge-source-missing", "The selected host source directory is missing.");
+            });
+    }
 
-            var sourceRoot = ResolveExistingDirectory(sourceDirectory);
-            var destinationFullPath = Path.GetFullPath(destinationDirectory);
-            var destinationName = Path.GetFileName(destinationFullPath);
-            var destinationParent = Path.GetDirectoryName(destinationFullPath);
-            if (string.IsNullOrEmpty(destinationName) || string.IsNullOrEmpty(destinationParent) || !Directory.Exists(destinationParent))
+    /// <summary>Publishes public composition bytes and an opaque private receipt as one fresh artifact directory.</summary>
+    public static void PublishPortableComposition(
+        string destinationDirectory,
+        ReadOnlyMemory<byte> compositionJson,
+        ReadOnlyMemory<byte> privateReceiptJson,
+        IEnumerable<string> protectedRoots,
+        Action recheck,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(destinationDirectory);
+        ArgumentNullException.ThrowIfNull(protectedRoots);
+        ArgumentNullException.ThrowIfNull(recheck);
+
+        PublishDirectory(destinationDirectory, protectedRoots,
+            () =>
+            [
+                new OutputFile("public/composition.json", compositionJson),
+                new OutputFile("private/input-receipt.json", privateReceiptJson)
+            ], recheck, cancellationToken);
+    }
+
+    /// <summary>Publishes supported host files and an opaque private candidate receipt as one fresh directory.</summary>
+    public static void PublishPortableCandidate(
+        string destinationDirectory,
+        IReadOnlyDictionary<string, byte[]> candidateFiles,
+        ReadOnlyMemory<byte> privateReceiptJson,
+        IEnumerable<string> protectedRoots,
+        Action recheck,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(destinationDirectory);
+        ArgumentNullException.ThrowIfNull(candidateFiles);
+        ArgumentNullException.ThrowIfNull(protectedRoots);
+        ArgumentNullException.ThrowIfNull(recheck);
+
+        PublishDirectory(destinationDirectory, protectedRoots, () =>
+        {
+            var files = ValidateCandidateFiles(candidateFiles, portable: true);
+            if (files.Count == 0)
                 throw OutputFailed();
 
-            var resolvedParent = ResolveExistingDirectory(destinationParent);
-            var resolvedDestination = Path.Combine(resolvedParent, destinationName);
-            if (IsSameOrInside(sourceRoot, resolvedDestination) || IsSameOrInside(resolvedDestination, sourceRoot))
-                throw OutputExists();
-            if (PathExists(resolvedDestination))
-                throw OutputExists();
-
-            var files = ValidateCandidateFiles(candidateFiles);
-            stagingDirectory = Path.Combine(resolvedParent, $".{destinationName}.{Guid.NewGuid():N}.tmp");
-            CreatePrivateDirectory(stagingDirectory);
-
-            foreach (var (fileName, contents) in files)
-            {
-                cancellationToken.ThrowIfCancellationRequested();
-                var filePath = Path.Combine(stagingDirectory, fileName);
-                var options = new FileStreamOptions
-                {
-                    Mode = FileMode.CreateNew,
-                    Access = FileAccess.Write,
-                    Share = FileShare.None,
-                    Options = FileOptions.WriteThrough
-                };
-                if (!OperatingSystem.IsWindows())
-                    options.UnixCreateMode = UnixFileMode.UserRead | UnixFileMode.UserWrite;
-
-                using var stream = new FileStream(filePath, options);
-                stream.Write(contents);
-                stream.Flush(flushToDisk: true);
-            }
-
-            cancellationToken.ThrowIfCancellationRequested();
-            recheck();
-            cancellationToken.ThrowIfCancellationRequested();
-            if (PathExists(resolvedDestination))
-                throw OutputExists();
-
-            Directory.Move(stagingDirectory, resolvedDestination);
-            stagingDirectory = null;
-        }
-        catch (CliRefusal)
-        {
-            throw;
-        }
-        catch (OperationCanceledException)
-        {
-            throw CliRefusal.Usage("bridge-review-required", "The candidate was not published because review was cancelled.");
-        }
-        catch (Exception)
-        {
-            if (PathExistsSafely(destinationDirectory))
-                throw OutputExists();
-            throw OutputFailed();
-        }
-        finally
-        {
-            if (stagingDirectory is not null)
-            {
-                try
-                {
-                    Directory.Delete(stagingDirectory, recursive: true);
-                }
-                catch (IOException)
-                {
-                    // Do not replace the original safe refusal or expose a filesystem path in diagnostics.
-                }
-                catch (UnauthorizedAccessException)
-                {
-                    // Best-effort cleanup; the primary result remains the safe refusal below.
-                }
-            }
-        }
+            var outputs = files.Select(file => new OutputFile($"candidate/{file.Key}", file.Value)).ToList();
+            outputs.Add(new OutputFile("private/candidate-receipt.json", privateReceiptJson));
+            return outputs;
+        }, recheck, cancellationToken);
     }
 
     public static void PublishAuthored(
@@ -219,6 +188,144 @@ public static class CompositionFilePublisher
         }
     }
 
+    private static void PublishDirectory(
+        string destinationDirectory,
+        IEnumerable<string> protectedRoots,
+        Func<IReadOnlyList<OutputFile>> filesFactory,
+        Action recheck,
+        CancellationToken cancellationToken,
+        Action? preflight = null)
+    {
+        string? stagingDirectory = null;
+        string? resolvedDestination = null;
+        try
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            preflight?.Invoke();
+            var destinationFullPath = Path.GetFullPath(destinationDirectory);
+            var destinationName = Path.GetFileName(destinationFullPath);
+            var destinationParent = Path.GetDirectoryName(destinationFullPath);
+            if (string.IsNullOrEmpty(destinationName) || string.IsNullOrEmpty(destinationParent) || !Directory.Exists(destinationParent))
+                throw OutputFailed();
+
+            var resolvedParent = ResolveExistingDirectory(destinationParent);
+            resolvedDestination = Path.Combine(resolvedParent, destinationName);
+            var roots = protectedRoots.ToArray();
+            if (roots.Length == 0 || roots.Any(string.IsNullOrWhiteSpace))
+                throw OutputFailed();
+
+            foreach (var protectedRoot in roots)
+            {
+                var resolvedProtectedRoot = ResolveProtectedPath(protectedRoot);
+                if (IsSameOrInside(resolvedProtectedRoot, resolvedDestination) ||
+                    IsSameOrInside(resolvedDestination, resolvedProtectedRoot))
+                    throw OutputExists();
+            }
+
+            if (PathExists(resolvedDestination))
+                throw OutputExists();
+
+            var files = filesFactory();
+            stagingDirectory = Path.Combine(resolvedParent, $".{destinationName}.{Guid.NewGuid():N}.tmp");
+            CreatePrivateDirectory(stagingDirectory);
+            foreach (var (relativePath, contents) in files)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                var filePath = CreatePrivateParentDirectories(stagingDirectory, relativePath);
+                var options = new FileStreamOptions
+                {
+                    Mode = FileMode.CreateNew,
+                    Access = FileAccess.Write,
+                    Share = FileShare.None,
+                    Options = FileOptions.WriteThrough
+                };
+                if (!OperatingSystem.IsWindows())
+                    options.UnixCreateMode = UnixFileMode.UserRead | UnixFileMode.UserWrite;
+
+                using var stream = new FileStream(filePath, options);
+                stream.Write(contents.Span);
+                stream.Flush(flushToDisk: true);
+            }
+
+            cancellationToken.ThrowIfCancellationRequested();
+            recheck();
+            cancellationToken.ThrowIfCancellationRequested();
+            if (PathExists(resolvedDestination))
+                throw OutputExists();
+
+            Directory.Move(stagingDirectory, resolvedDestination);
+            stagingDirectory = null;
+        }
+        catch (CliRefusal)
+        {
+            throw;
+        }
+        catch (OperationCanceledException)
+        {
+            throw CliRefusal.Usage("bridge-review-required", "The candidate was not published because review was cancelled.");
+        }
+        catch (Exception)
+        {
+            if ((resolvedDestination is not null && PathExistsSafely(resolvedDestination)) || PathExistsSafely(destinationDirectory))
+                throw OutputExists();
+            throw OutputFailed();
+        }
+        finally
+        {
+            if (stagingDirectory is not null)
+            {
+                try
+                {
+                    Directory.Delete(stagingDirectory, recursive: true);
+                }
+                catch (IOException)
+                {
+                    // Preserve the primary safe refusal and remove only task-owned staging.
+                }
+                catch (UnauthorizedAccessException)
+                {
+                    // Preserve the primary safe refusal and remove only task-owned staging.
+                }
+            }
+        }
+    }
+
+    private static string CreatePrivateParentDirectories(string stagingDirectory, string relativePath)
+    {
+        var segments = relativePath.Split('/');
+        if (segments.Length == 0 || segments.Any(segment => string.IsNullOrWhiteSpace(segment) || segment is "." or ".." ||
+                                                            segment.IndexOfAny(['\\', ':', '\0']) >= 0))
+            throw OutputFailed();
+
+        var current = stagingDirectory;
+        foreach (var segment in segments[..^1])
+        {
+            current = Path.Combine(current, segment);
+            CreatePrivateDirectory(current);
+        }
+
+        return Path.Combine(current, segments[^1]);
+    }
+
+    private static string ResolveProtectedPath(string path)
+    {
+        var fullPath = Path.GetFullPath(path);
+        if (Directory.Exists(fullPath))
+            return ResolveExistingDirectory(fullPath);
+
+        var fileInfo = new FileInfo(fullPath);
+        fileInfo.Refresh();
+        if (fileInfo.LinkTarget is not null || fileInfo.Attributes.HasFlag(FileAttributes.ReparsePoint))
+            throw OutputFailed();
+
+        var parent = Path.GetDirectoryName(fullPath);
+        if (string.IsNullOrEmpty(parent))
+            throw OutputFailed();
+
+        var resolvedParent = Directory.Exists(parent) ? ResolveExistingDirectory(parent) : Path.GetFullPath(parent);
+        return Path.Combine(resolvedParent, Path.GetFileName(fullPath));
+    }
+
     private static string ResolveExistingDirectory(string path)
     {
         var fullPath = Path.GetFullPath(path);
@@ -241,10 +348,10 @@ public static class CompositionFilePublisher
     }
 
     private static IReadOnlyList<KeyValuePair<string, byte[]>> ValidateCandidateFiles(
-        IReadOnlyDictionary<string, byte[]> candidateFiles)
+        IReadOnlyDictionary<string, byte[]> candidateFiles, bool portable)
     {
         var files = new List<KeyValuePair<string, byte[]>>(candidateFiles.Count);
-        var names = new HashSet<string>(OperatingSystem.IsWindows() || OperatingSystem.IsMacOS()
+        var names = new HashSet<string>(portable || OperatingSystem.IsWindows() || OperatingSystem.IsMacOS()
             ? StringComparer.OrdinalIgnoreCase
             : StringComparer.Ordinal);
 
@@ -252,7 +359,8 @@ public static class CompositionFilePublisher
         {
             if (string.IsNullOrWhiteSpace(fileName) || fileName is "." or ".." ||
                 Path.IsPathRooted(fileName) || fileName.IndexOfAny(['/', '\\', ':', '\0']) >= 0 ||
-                contents is null || !names.Add(fileName))
+                contents is null || !names.Add(fileName) ||
+                (portable && !CompositionFileSource.IsSupportedFileName(fileName)))
                 throw OutputFailed();
 
             files.Add(new KeyValuePair<string, byte[]>(fileName, contents));
@@ -309,4 +417,6 @@ public static class CompositionFilePublisher
 
     private static CliRefusal OutputFailed() =>
         CliRefusal.Resolution("bridge-output-failed", "The output could not be published.");
+
+    private readonly record struct OutputFile(string RelativePath, ReadOnlyMemory<byte> Contents);
 }
