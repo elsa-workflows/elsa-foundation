@@ -22,6 +22,8 @@ For frontend work, use Node.js 22 and the pnpm version declared in [`package.jso
 pnpm install --frozen-lockfile
 ```
 
+For a paired source-built Studio and Workbench walkthrough, see [Make a visible Studio source edit](docs/contributing/studio-source-quickstart.md). Its evidence section describes the tested source-edit and browser path, toolchain, and explicit verification limits.
+
 Run the affected workspace's existing test, typecheck, or build script as appropriate. For example, `pnpm --filter @elsa-workflows/studio-workflows test` runs that package's test script; use the package name and scripts from its `package.json` for other modules. The root scripts in [`package.json`](package.json) provide broader checks such as `pnpm lint`, `pnpm typecheck`, `pnpm test`, `pnpm test:browser`, and `pnpm check:bundle:workflows`.
 
 The repository-defined hosted PR jobs are in [CI](.github/workflows/ci.yml) and [Docker Image](.github/workflows/docker.yml). CI runs lint, typecheck, workspace unit tests, shuffled Workflows tests, the Workflows bundle budget, and Chromium browser tests. The Docker workflow builds the Studio image on pull requests. The [Packages workflow](.github/workflows/packages.yml) uses .NET 10 to restore, build, test, and pack on selected branch pushes and releases; it does not run on pull requests. Check the live pull request and repository branch rules for its exact checks and requirements.
@@ -30,7 +32,7 @@ The repository-defined hosted PR jobs are in [CI](.github/workflows/ci.yml) and 
 
 [`Directory.Packages.props`](Directory.Packages.props) now pins `ConsoleLogStreaming.AspNetCore` `1.1.0`. [Studio #579](https://github.com/elsa-workflows/elsa-foundation-studio/issues/579) records the correction of the earlier preview-package restore failure, with a Studio.Web restore using isolated package-cache, HTTP-cache, and CLI-home paths, a scoped host build, and affected console-stream/host tests. Installed SDK packs remained available during those checks.
 
-The complete source setup, paired workflow and visible source-edit journey remain tracked in [Studio #566](https://github.com/elsa-workflows/elsa-foundation-studio/issues/566). The existing `dotnet build`, `dotnet test`, and `dotnet run` commands in README are not, by themselves, a verified fresh-machine walkthrough. Check that issue for the remaining setup and browser evidence.
+The source-paired Studio/Workbench setup, visible edit, and browser workflow are recorded in the [Studio source quickstart](docs/contributing/studio-source-quickstart.md). Broader contributor acceptance remains tracked in [Studio #566](https://github.com/elsa-workflows/elsa-foundation-studio/issues/566), including the reference-backend option, mismatched Studio/Workbench versions, fresh-OS setup, and first-time contributor trials.
 
 If GitHub displays a `license/cla` check on your pull request, follow the instructions in that check.
 
