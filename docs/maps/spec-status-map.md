@@ -234,3 +234,4 @@ Reads current `specs/*` folders and task checkboxes. Status clues are textual, n
 | [193-bounded-coalesced-pagination](../../specs/193-bounded-coalesced-pagination/spec.md) | 193-bounded-coalesced-pagination | Implemented — [PR #2442](https://github.com/elsa-workflows/elsa-foundation/pull/2442) | - | 13 | 0 | retained, out of scope |
 | [194-portable-private-inputs](../../specs/194-portable-private-inputs/spec.md) | Portable compositions with required private inputs | Draft — specification checkpoint #2457; no production portability delivered | - | 0 | 0 | retained, deferred |
 | [195-authoring-api-boundary](../../specs/195-authoring-api-boundary/spec.md) | Authoring-only API | Draft | - | 0 | 0 | retained |
+| [196-coalesced-command-scope](../../specs/196-coalesced-command-scope/spec.md) | Coalesced Command Scope | Implemented | - | 10 | 1 | - |
