@@ -66,22 +66,16 @@ public sealed class ConsoleStreamHookInstallerTests : IDisposable
     {
         var installCount = 0;
         var contentRoot = CreateTempDir();
-        var otherDirectory = CreateTempDir();
-        var originalCurrentDirectory = Directory.GetCurrentDirectory();
+        var args = new[] { "--contentRoot", contentRoot.FullName };
         WriteEnabledShellsJson(contentRoot.FullName);
 
-        try
-        {
-            Directory.SetCurrentDirectory(otherDirectory.FullName);
+        Assert.Equal(
+            Path.Combine(contentRoot.FullName, "shells.json"),
+            ConsoleStreamHookInstaller.ResolveShellsJsonPath(args));
 
-            ConsoleStreamHookInstaller.InstallConsoleStreamHookIfEnabled(["--contentRoot", contentRoot.FullName], () => installCount++);
+        ConsoleStreamHookInstaller.InstallConsoleStreamHookIfEnabled(args, () => installCount++);
 
-            Assert.Equal(1, installCount);
-        }
-        finally
-        {
-            Directory.SetCurrentDirectory(originalCurrentDirectory);
-        }
+        Assert.Equal(1, installCount);
     }
 
     [Fact]
