@@ -37,15 +37,28 @@ public sealed class DockerWorkflowTests
         Assert.False(on.ContainsKey("push"));
     }
 
-    /// <summary>The versions job only plans for itself on a pull request; every other trigger takes the computation from a Packages run.</summary>
+    /// <summary>Admission gates version resolution, which plans only on PRs and otherwise consumes a Packages artifact.</summary>
     [Fact]
     public void The_versions_job_only_plans_for_itself_on_a_pull_request()
     {
-        var versions = Jobs["versions"];
-        var condition = (string)versions["if"];
+        var admission = Jobs["admission"];
+        var admissionSteps = ((List<object>)admission["steps"]).Cast<Dictionary<object, object>>().ToList();
+        var checkoutStep = admissionSteps.Single(step => step.TryGetValue("uses", out var uses) &&
+            ((string)uses).StartsWith("actions/checkout", StringComparison.Ordinal));
+        Assert.Equal("${{ github.sha }}", (string)Map(checkoutStep, "with")["ref"]);
 
-        Assert.Contains("github.event_name == 'pull_request'", condition, StringComparison.Ordinal);
-        Assert.Contains("github.event.workflow_run.conclusion == 'success'", condition, StringComparison.Ordinal);
+        var admitStep = admissionSteps.Single(step => step.TryGetValue("id", out var id) && (string)id == "admit");
+        Assert.Equal("python3 tools/contributor-checkpoints/workflow_guards.py docker-admission", (string)admitStep["run"]);
+        var admissionEnvironment = Map(admitStep, "env");
+        Assert.Equal("${{ github.event.workflow_run.event }}", (string)admissionEnvironment["WORKFLOW_RUN_EVENT"]);
+        Assert.Equal("${{ github.event.workflow_run.conclusion }}", (string)admissionEnvironment["WORKFLOW_RUN_CONCLUSION"]);
+        Assert.Equal("${{ steps.admit.outputs.allowed }}", (string)Map(admission, "outputs")["allowed"]);
+
+        var versions = Jobs["versions"];
+        Assert.Equal("admission", (string)versions["needs"]);
+        Assert.Equal("needs.admission.outputs.allowed == 'true'", (string)versions["if"]);
+        Assert.Equal("versions", (string)Jobs["build-and-push"]["needs"]);
+        Assert.Equal("versions", (string)Jobs["build-and-push-foundation-host"]["needs"]);
 
         var steps = ((List<object>)versions["steps"]).Cast<Dictionary<object, object>>().ToList();
         var planStep = steps.Single(step => step.TryGetValue("name", out var name) && (string)name == "Plan");

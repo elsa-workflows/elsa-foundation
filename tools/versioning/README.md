@@ -241,7 +241,9 @@ it pushed, so `publish-state` exists and the next push to `main` publishes the r
 
 The workflow serializes every run from `main`, from its plan to its write-back, on the concurrency group
 `publish-state`, and never cancels one in progress (FR-020); anything else that writes `publish-state` joins that
-group. A GitHub Release publishes nothing until the 4.0 release cut (#2085): its job fails and says so.
+group. Except for the exact metadata-only contributor checkpoint accepted in #2426 and guarded in #2478, every
+GitHub Release fails until the 4.0 release cut (#2085). The checkpoint uses a reserved prerelease tag and creates no
+package artifact or feed write; the release path does not pack or publish it.
 
 To rehearse against a scratch feed, run `plan`, pack as the workflow does, and `publish` with `--feed` at the scratch
 feed and `--remote` at a scratch repository, which then holds the record.

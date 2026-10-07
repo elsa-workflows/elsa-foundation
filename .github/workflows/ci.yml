@@ -74,6 +74,9 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Check contributor checkpoint workflow guards
+        run: python3 tools/contributor-checkpoints/test_workflow_guards.py
+
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: 10.x
