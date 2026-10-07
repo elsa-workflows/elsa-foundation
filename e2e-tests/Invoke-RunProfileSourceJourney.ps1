@@ -1,14 +1,17 @@
 <#
 .SYNOPSIS
-    Replay the documented dotnet run launch profile and WriteLine smoke on a hosted runner.
+    Replay the documented dotnet run launch profile and a strict WriteLine smoke on a hosted runner.
 .DESCRIPTION
     Owns the dotnet run process tree launched from the repository root. It uses the fixed HTTP profile
     port, leaves pre-existing listeners alone, and retains startup/smoke diagnostics when a step fails.
     -InvalidCommandControl propagates a deliberately invalid project invocation's exit code to its caller.
+    -SequenceSmoke preserves the ordinary smoke default and runs the strict one-child Sequence source-edit sample.
 #>
 [CmdletBinding()]
 param(
-    [switch] $InvalidCommandControl
+    [switch] $InvalidCommandControl,
+    [switch] $SequenceSmoke,
+    [string] $DiagnosticsOutputName = 'diagnostics_path'
 )
 
 $ErrorActionPreference = 'Stop'
@@ -23,6 +26,8 @@ $ownedListenerSnapshots = @()
 $journeyError = $null
 $cleanupFailures = @()
 $failureControlExitCode = $null
+
+if ($InvalidCommandControl -and $SequenceSmoke) { throw 'The invalid-command control and Sequence smoke are mutually exclusive.' }
 
 . "$PSScriptRoot/_ServerLifecycle.ps1"
 
@@ -317,14 +322,19 @@ function Assert-RunProfilePortReleased {
 }
 
 function Invoke-WorkflowSmoke {
-    param([Parameter(Mandatory)][string] $SmokeLog)
-    $scriptPath = if ($runProfileIsWindows) { '.\e2e-tests\Test-WorkflowFlow.ps1' } else { './e2e-tests/Test-WorkflowFlow.ps1' }
+    param([Parameter(Mandatory)][string] $SmokeLog, [switch] $UseSequence)
+    if ($UseSequence) {
+        $scriptPath = if ($runProfileIsWindows) { '.\e2e-tests\Test-SequenceWorkflow.ps1' } else { './e2e-tests/Test-SequenceWorkflow.ps1' }
+    } else {
+        $scriptPath = if ($runProfileIsWindows) { '.\e2e-tests\Test-WorkflowFlow.ps1' } else { './e2e-tests/Test-WorkflowFlow.ps1' }
+    }
     $childPowerShell = if ($runProfileIsWindows) { 'powershell.exe' } else { 'pwsh' }
     $child = Get-Command $childPowerShell -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
     if (-not $child) { throw "Required smoke-test shell '$childPowerShell' is unavailable." }
     $arguments = @('-NoProfile')
     if ($runProfileIsWindows) { $arguments += @('-ExecutionPolicy', 'Bypass') }
     $arguments += @('-File', $scriptPath, '-BaseUrl', $baseUrl)
+    if ($UseSequence) { $arguments += @('-Lines', 'Contributor exercise') }
     Write-Host ("[smoke] {0} {1}" -f $childPowerShell, ($arguments -join ' '))
     $savedErrorActionPreference = $ErrorActionPreference
     try {
@@ -349,7 +359,7 @@ $diagnosticsRoot = New-RunProfileDiagnosticsRoot
 $serverOutputLog = Join-Path $diagnosticsRoot 'dotnet-run.stdout.log'
 $serverErrorLog = Join-Path $diagnosticsRoot 'dotnet-run.stderr.log'
 $smokeLog = Join-Path $diagnosticsRoot 'workflow-smoke.log'
-Set-RunProfileOutput -Name 'diagnostics_path' -Value $diagnosticsRoot
+Set-RunProfileOutput -Name $DiagnosticsOutputName -Value $diagnosticsRoot
 
 try {
     $revision = (& git -C $repoRoot rev-parse HEAD 2>&1 | Out-String).Trim()
@@ -438,14 +448,21 @@ try {
         }
         if (-not $ready) { throw "Owned dotnet run did not report readiness on port $port within 300 seconds (last curl exit code: $lastCurlExitCode)." }
 
-        $smokeExitCode = Invoke-WorkflowSmoke -SmokeLog $smokeLog
+        $smokeExitCode = Invoke-WorkflowSmoke -SmokeLog $smokeLog -UseSequence:$SequenceSmoke
         if ($smokeExitCode -ne 0) { throw "The canonical workflow smoke exited with code $smokeExitCode; logs are retained in $diagnosticsRoot." }
-        Write-Host '[smoke] exit code 0; the strict workflow verdict requires one completed write-root WriteLine and zero reported/returned incidents.'
+        if ($SequenceSmoke) {
+            Write-Host '[smoke] exit code 0; the strict Sequence verdict requires the completed sequence-root and line-0 records, consistent activity counts, and zero reported/returned incidents.'
+            $sequenceEvidenceLines = @(Get-Content -LiteralPath $smokeLog | Where-Object { $_ -match '^\[sequence verdict\]' })
+            if ($sequenceEvidenceLines.Count -ne 1) { throw 'The Sequence smoke did not emit exactly one sanitized strict-verdict evidence line.' }
+            Write-Host $sequenceEvidenceLines[0]
+        } else {
+            Write-Host '[smoke] exit code 0; the strict workflow verdict requires one completed write-root WriteLine and zero reported/returned incidents.'
+        }
 
         if (-not (Test-Path -LiteralPath $serverOutputLog -PathType Leaf)) { throw 'The owned dotnet run stdout log was not created.' }
         $serverOutput = Get-Content -LiteralPath $serverOutputLog -Raw
         $serverLines = if ($null -eq $serverOutput) { @() } else { @([regex]::Split($serverOutput, "`r`n|`n|`r")) }
-        $expectedOutput = 'Hello World from the single-activity flow!'
+        $expectedOutput = if ($SequenceSmoke) { 'Onboarding: Contributor exercise' } else { 'Hello World from the single-activity flow!' }
         if ($serverLines -cnotcontains $expectedOutput) { throw 'The exact WriteLine text was not found as a complete line in the owned dotnet run stdout log.' }
         Write-Host "[server stdout] exact WriteLine line observed: $expectedOutput"
     }
@@ -508,7 +525,7 @@ if ($InvalidCommandControl) {
 Add-RunProfileSummary -Lines @(
     '### Documented run-profile journey: PASSED',
     '- Replayed `dotnet run --no-build --project src/apps/Elsa.Workbench/Elsa.Workbench.csproj --launch-profile http` from the repository root on the fixed documented port 5095.',
-    '- A bounded curl readiness request reported `ready`; the canonical REST smoke exited 0 with the strict one-WriteLine/zero-incident verdict and exact stdout line.',
+    $(if ($SequenceSmoke) { '- A bounded curl readiness request reported `ready`; the canonical one-child Sequence smoke exited 0 with strict root/child/activity-count/zero-incident verdicts and the exact server stdout line.' } else { '- A bounded curl readiness request reported `ready`; the canonical REST smoke exited 0 with the strict one-WriteLine/zero-incident verdict and exact stdout line.' }),
     '- The wrapper stopped only the recorded dotnet run process tree, verified recorded process exit and port release, and removed only its temporary diagnostics directory.',
     '- This is automated command replay on a hosted runner, not a fresh bare-OS installation, an interactive Ctrl+C session, or a human newcomer trial.'
 )

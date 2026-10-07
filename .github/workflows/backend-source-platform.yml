@@ -18,6 +18,12 @@ on:
       - 'e2e-tests/README.md'
       - 'e2e-tests/Invoke-PlatformSourceJourney.ps1'
       - 'e2e-tests/Invoke-RunProfileSourceJourney.ps1'
+      - 'e2e-tests/Invoke-SourceEditExercise.ps1'
+      - 'e2e-tests/_SourceEditTrxVerdict.ps1'
+      - 'e2e-tests/Test-SourceEditTrxVerdict.ps1'
+      - 'e2e-tests/_SequenceWorkflowVerdict.ps1'
+      - 'e2e-tests/Test-SequenceWorkflowVerdict.ps1'
+      - 'e2e-tests/Test-SequenceWorkflow.ps1'
       - 'e2e-tests/Test-WorkflowFlow.ps1'
       - 'e2e-tests/Test-WorkflowFlowVerdict.ps1'
       - 'e2e-tests/_ServerLifecycle.ps1'
@@ -90,9 +96,13 @@ jobs:
         run: |
           if [ "$RUNNER_OS" = "Windows" ]; then
             powershell -NoProfile -ExecutionPolicy Bypass -File e2e-tests/Test-WorkflowFlowVerdict.ps1
+            powershell -NoProfile -ExecutionPolicy Bypass -File e2e-tests/Test-SequenceWorkflowVerdict.ps1
+            powershell -NoProfile -ExecutionPolicy Bypass -File e2e-tests/Test-SourceEditTrxVerdict.ps1
             powershell -NoProfile -ExecutionPolicy Bypass -File e2e-tests/Invoke-PlatformSourceJourney.ps1
           else
             pwsh -NoProfile -File e2e-tests/Test-WorkflowFlowVerdict.ps1
+            pwsh -NoProfile -File e2e-tests/Test-SequenceWorkflowVerdict.ps1
+            pwsh -NoProfile -File e2e-tests/Test-SourceEditTrxVerdict.ps1
             pwsh -NoProfile -File e2e-tests/Invoke-PlatformSourceJourney.ps1
           fi
 
@@ -137,6 +147,16 @@ jobs:
             pwsh -NoProfile -File e2e-tests/Invoke-RunProfileSourceJourney.ps1
           fi
 
+      - name: Replay and restore the documented backend source edit
+        id: source-edit-journey
+        shell: bash
+        run: |
+          if [ "$RUNNER_OS" = "Windows" ]; then
+            powershell -NoProfile -ExecutionPolicy Bypass -File e2e-tests/Invoke-SourceEditExercise.ps1
+          else
+            pwsh -NoProfile -File e2e-tests/Invoke-SourceEditExercise.ps1
+          fi
+
       - name: Upload owned-server diagnostics on failure
         if: ${{ failure() && steps.platform-journey.outcome == 'failure' && steps.platform-journey.outputs.diagnostics_path != '' }}
         uses: actions/upload-artifact@v4
@@ -153,6 +173,24 @@ jobs:
           name: backend-source-run-profile-diagnostics-${{ matrix.runner }}
           path: ${{ steps.run-profile-journey.outputs.diagnostics_path }}
           if-no-files-found: error
+          retention-days: 7
+
+      - name: Upload source-edit test and command evidence
+        if: ${{ always() && steps.source-edit-journey.outcome != 'skipped' && steps.source-edit-journey.outputs.diagnostics_path != '' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-source-edit-evidence-${{ matrix.runner }}
+          path: ${{ steps.source-edit-journey.outputs.diagnostics_path }}
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Upload owned Sequence server diagnostics on failure
+        if: ${{ always() && steps.source-edit-journey.outcome == 'failure' && steps.source-edit-journey.outputs.sequence_diagnostics_path != '' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-source-edit-server-diagnostics-${{ matrix.runner }}
+          path: ${{ steps.source-edit-journey.outputs.sequence_diagnostics_path }}
+          if-no-files-found: ignore
           retention-days: 7
 
       - name: Upload failure-control diagnostics on failure
