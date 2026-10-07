@@ -166,6 +166,14 @@ function validateComposeConfig(config) {
   assert.equal(config.services["elsa-workbench"].environment.ASPNETCORE_ENVIRONMENT, "Production");
   assert.equal(config.services["elsa-studio"].environment.ASPNETCORE_ENVIRONMENT, "Production");
   assert.equal(config.services["elsa-workbench"].environment["Cors__AllowedOrigins__0"], studioUrl);
+  const returnOrigins = config.services["elsa-workbench"].environment;
+  const returnOriginPrefix = "CShells__Shells__default__Features__FoundationIdentityAspNetCoreIdentity__AllowedReturnUrlOrigins__";
+  assert.equal(returnOrigins[`${returnOriginPrefix}2`], studioUrl,
+    "the Production login return-origin allowlist must include the published Studio origin at index 2");
+  assert.equal(returnOrigins[`${returnOriginPrefix}0`], undefined,
+    "the pair Compose override must preserve the shell's existing return-origin entry at index 0");
+  assert.equal(returnOrigins[`${returnOriginPrefix}1`], undefined,
+    "the pair Compose override must preserve the shell's existing return-origin entry at index 1");
   assert.equal(config.services["elsa-studio"].environment.Studio__BackendBaseUrl, workbenchUrl);
   assert.equal(config.services["elsa-workbench"].environment["Elsa__ModuleManagement__ApiKey"],
     config.services["elsa-studio"].environment.Studio__BackendModuleManagementApiKey);
@@ -318,6 +326,9 @@ async function signIn(page) {
   const loginForm = page.locator('form[action="/_elsa/identity/login"]');
   await loginPhase(page, "login-backend-form", authResponses,
     () => loginForm.waitFor({ state: "visible", timeout: 45_000 }));
+  authResponses.returnTargets.hidden = classifyReturnTarget(
+    await loginForm.locator('input[name="returnUrl"]').getAttribute("value")
+  );
   await loginPhase(page, "login-form-submit", authResponses, async () => {
     await loginForm.locator('input[name="username"]').fill("admin");
     await loginForm.locator('input[name="password"]').fill("Password123!");
@@ -325,6 +336,12 @@ async function signIn(page) {
   });
   await loginPhase(page, "login-return-to-studio", authResponses,
     () => page.waitForURL(url => url.origin === studioUrl, { timeout: 45_000 }));
+  await loginPhase(page, "login-return-contract", authResponses, async () => {
+    assert.deepEqual(authResponses.returnTargets,
+      { query: "studio-origin", hidden: "studio-origin", redirect: "studio-origin" },
+      "the login challenge, rendered form and redirect must preserve the Studio return origin");
+    log("Login return targets: query=studio-origin; hidden=studio-origin; redirect=studio-origin");
+  });
   await loginPhase(page, "login-session-ready", authResponses, async () => {
     await page.goto(`${studioUrl}/workflows/definitions`, { waitUntil: "domcontentloaded" });
     await page.getByRole("heading", { name: "Definitions" }).waitFor({ state: "visible", timeout: 45_000 });
@@ -338,13 +355,34 @@ function observeSafeAuthResponses(page) {
     "/_elsa/identity/login"
   ]);
   const responses = [];
+  const returnTargets = { query: "other", hidden: "other", redirect: "other" };
   page.on("response", response => {
     const url = new URL(response.url());
     if (url.origin !== workbenchUrl || !allowedPaths.has(url.pathname)) return;
-    responses.push(`${response.request().method()} ${url.pathname} status=${response.status()}`);
+    const method = response.request().method();
+    if (url.pathname === "/_elsa/identity/login" && method === "GET") {
+      returnTargets.query = classifyReturnTarget(url.searchParams.get("returnUrl"));
+    }
+    if (url.pathname === "/_elsa/identity/login" && method === "POST") {
+      returnTargets.redirect = classifyReturnTarget(response.headers().location);
+    }
+    responses.push(`${method} ${url.pathname} status=${response.status()}`);
     if (responses.length > 8) responses.shift();
   });
-  return responses;
+  return { responses, returnTargets };
+}
+
+function classifyReturnTarget(value) {
+  if (typeof value !== "string" || value.length === 0) return "other";
+  try {
+    const target = new URL(value, `${workbenchUrl}/`);
+    if (target.origin === studioUrl) return "studio-origin";
+    if (target.origin === workbenchUrl && target.pathname === "/") return "workbench-root";
+    if (!/^[a-z][a-z0-9+.-]*:/i.test(value) && !value.startsWith("//")) return "relative";
+  } catch {
+    // Invalid or unsupported targets are reported only as the fixed "other" category.
+  }
+  return "other";
 }
 
 async function loginPhase(page, phase, authResponses, action) {
@@ -382,7 +420,7 @@ async function logSafeLoginDiagnostic(page, phase, authResponses, error) {
               : currentUrl.origin === workbenchUrl
                 ? "workbench-other-route"
                 : "other-origin";
-  log(`login diagnostic phase=${phase}; failure=${safeFailureClass(error)}; state=${state}; location=${location}; form=${formVisible}; signing-in=${signingInVisible}; auth-responses=${authResponses.join(" | ") || "none"}`);
+  log(`login diagnostic phase=${phase}; failure=${safeFailureClass(error)}; state=${state}; location=${location}; form=${formVisible}; signing-in=${signingInVisible}; return-targets=query:${authResponses.returnTargets.query},hidden:${authResponses.returnTargets.hidden},redirect:${authResponses.returnTargets.redirect}; auth-responses=${authResponses.responses.join(" | ") || "none"}`);
 }
 
 async function runBrowserJourney() {
