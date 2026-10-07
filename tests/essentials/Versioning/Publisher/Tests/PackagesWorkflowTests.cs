@@ -91,10 +91,13 @@ public sealed class PackagesWorkflowTests
 
     /// <summary>Release events run the checkpoint guard; other releases fail there, while package build and publish remain excluded.</summary>
     [Fact]
-    public void A_release_publishes_nothing_and_fails_pointing_at_the_release_cut()
+    public void Release_events_are_guarded_without_entering_package_build_or_publish()
     {
         Assert.Equal("${{ github.event_name == 'release' }}", Jobs["release"]["if"]);
         Assert.Equal("${{ github.event_name != 'release' }}", Jobs["pack"]["if"]);
+        Assert.Equal("pack", Jobs["publish"]["needs"]);
+        Assert.Contains("github.event_name == 'push' || github.event_name == 'workflow_dispatch'",
+            (string)Jobs["publish"]["if"], StringComparison.Ordinal);
 
         var steps = ((List<object>)Jobs["release"]["steps"]).Cast<Dictionary<object, object>>().ToList();
         var guardStep = steps.Single(step => step.TryGetValue("name", out var name) &&
