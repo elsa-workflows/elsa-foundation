@@ -173,7 +173,13 @@ function Start-RunProfileProcess {
         PassThru = $true
     }
     if ($runProfileIsWindows) { $start.WindowStyle = 'Hidden' }
-    return Start-Process @start
+    $process = Start-Process @start
+    if ($runProfileIsWindows) {
+        # Windows PowerShell 5.1 can lose ExitCode for redirected processes unless the
+        # Process handle is opened and retained before the child exits.
+        $null = $process.Handle
+    }
+    return $process
 }
 
 function Update-RunProfileObservedSnapshots {
@@ -370,7 +376,11 @@ try {
         }
         $ownedProcess.Refresh()
         if (-not $ownedProcess.HasExited) { throw 'The invalid project command did not fail within 30 seconds.' }
-        $failureControlExitCode = [int]$ownedProcess.ExitCode
+        $ownedProcess.WaitForExit()
+        $ownedProcess.Refresh()
+        $nativeExitCode = $ownedProcess.ExitCode
+        if ($null -eq $nativeExitCode) { throw 'The invalid project process exited, but its native exit code was unavailable.' }
+        $failureControlExitCode = [int]$nativeExitCode
         if ($failureControlExitCode -eq 0) { throw 'The deliberately invalid project command unexpectedly returned success.' }
         Assert-RunProfilePortFree
         Write-Host "[negative control] nonexistent-project dotnet run returned exit code $failureControlExitCode and left port $port free."
