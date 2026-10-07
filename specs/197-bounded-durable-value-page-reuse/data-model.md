@@ -67,7 +67,7 @@ On a capacity boundary, return the full page already obtained from the provider,
 | Eligible successful page read | Admit only if its captured generation, execution owner, active context, and codec identity remain current. |
 | Logical deferred checkpoint buffered in memory | Keep baseline entries; the existing overlay is still re-applied on each read. |
 | Actual inner checkpoint commit or direct durable-value save/delete begins | Advance generation, clear entries, mark write active; bypass lookup and admission while any write is active. |
-| Inner write ends | Fence and clear again. On failure/cancellation disable admission for this session; on success permit an empty new generation. |
+| Inner write ends | Fence and clear again. On failure/cancellation permanently disable admission for this session; on success permit an empty new generation only if admission has not already been permanently disabled. |
 | Read completes after a generation/owner/context change | Return the provider result to its caller as normal but do not admit it. |
 | Nested owner entered | Suspend parent memo permanently for that parent scope; child starts empty if independently eligible. |
 | Capacity exhausted | Return complete provider result, clear entries, disable admission until successful boundary/reset. |
