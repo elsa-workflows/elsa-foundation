@@ -136,7 +136,10 @@ function Show-WorkflowInstance { param($Instance) }
         $mutant = $canonicalSmoke.Replace($assertionCall, '# verdict call removed by mutation proof')
         $mutant | Set-Content -LiteralPath $smokePath
         $bypassExitCode = Invoke-TestPowerShell -ScriptPath $smokePath -LogPath $smokeLog -ScriptArguments @('-Lines', 'fixture')
-        if ($bypassExitCode -ne 0) { throw 'Removing the Sequence verdict call did not reproduce the false-green smoke.' }
+        $bypassOutput = Get-Content -LiteralPath $smokeLog -Raw
+        if ($bypassExitCode -ne 0 -or $bypassOutput -notlike '*SUCCESS - sequence completed*') {
+            throw "Removing the Sequence verdict call did not reproduce the false-green smoke: $bypassOutput"
+        }
         Write-Host '  MUTATION REJECTED: removing the canonical verdict falsely accepts the invalid fixture'
         $passed++
     } finally {
