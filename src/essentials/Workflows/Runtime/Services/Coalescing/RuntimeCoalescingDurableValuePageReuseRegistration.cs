@@ -19,7 +19,6 @@ public sealed class RuntimeCoalescingDurableValuePageReuseRegistration
     private readonly ServiceDescriptor? _codecDescriptor;
     private readonly Dictionary<Type, ServiceDescriptor[]> _beforeGroups;
     private Dictionary<Type, ServiceDescriptor[]>? _expectedGroups;
-    private bool _captured;
 
     private RuntimeCoalescingDurableValuePageReuseRegistration(
         IServiceCollection services,
@@ -48,7 +47,9 @@ public sealed class RuntimeCoalescingDurableValuePageReuseRegistration
     /// Whether the captured registration is still eligible in the finalized service collection.
     /// This is checked when the durable-value wrapper is activated, so later overrides bypass reuse.
     /// </summary>
-    public bool IsEligible => EligibleBeforeDecoration && _captured && CurrentGroupsMatch();
+    public bool IsEligible => EligibleBeforeDecoration &&
+                              _expectedGroups is { } expectedGroups &&
+                              CurrentGroupsMatch(expectedGroups);
 
     /// <summary>Captures pre-decoration backend ownership and the effective stable dependencies.</summary>
     public static RuntimeCoalescingDurableValuePageReuseRegistration CaptureBeforeDecoration(IServiceCollection services)
@@ -147,12 +148,16 @@ public sealed class RuntimeCoalescingDurableValuePageReuseRegistration
         ArgumentNullException.ThrowIfNull(decorations);
         ArgumentNullException.ThrowIfNull(markerDescriptor);
         ArgumentNullException.ThrowIfNull(registrationDescriptor);
-        _captured = false;
         _expectedGroups = null;
 
-        if (!EligibleBeforeDecoration || _backend is null || _backendDescriptor is null ||
-            _durableStoreDescriptor is null || _accessorDescriptor is null || _codecDescriptor is null)
+        if (!EligibleBeforeDecoration)
             return;
+
+        // Eligibility is set only after these descriptors are captured; the private constructor never receives
+        // an eligible state with an incomplete descriptor set.
+        var backend = _backend!;
+        var backendDescriptor = _backendDescriptor!;
+        var durableStoreDescriptor = _durableStoreDescriptor!;
 
         try
         {
@@ -160,7 +165,7 @@ public sealed class RuntimeCoalescingDurableValuePageReuseRegistration
             var seenOwnedDurable = false;
             foreach (var decoration in decorations)
             {
-                if (_backend.Owns(decoration.Original))
+                if (backend.Owns(decoration.Original))
                 {
                     var expectedInnerServiceType = typeof(CoalescingInner<>).MakeGenericType(decoration.Original.ServiceType);
                     if (decoration.Original.ServiceType != decoration.Wrapper.ServiceType ||
@@ -178,19 +183,15 @@ public sealed class RuntimeCoalescingDurableValuePageReuseRegistration
                     if (expected.ContainsKey(decoration.Inner.ServiceType))
                         return;
                     expected.Add(decoration.Inner.ServiceType, [decoration.Inner]);
-                    if (ReferenceEquals(decoration.Original, _durableStoreDescriptor))
-                    {
-                        if (seenOwnedDurable || decoration.Original.ServiceType != typeof(IDurableValueStateStore))
-                            return;
+                    if (ReferenceEquals(decoration.Original, durableStoreDescriptor))
                         seenOwnedDurable = true;
-                    }
                 }
             }
 
             if (!seenOwnedDurable)
                 return;
 
-            expected[typeof(RuntimeOperationalStateStoreBackend)] = [_backendDescriptor];
+            expected[typeof(RuntimeOperationalStateStoreBackend)] = [backendDescriptor];
             expected[markerDescriptor.ServiceType] = [markerDescriptor];
             expected[registrationDescriptor.ServiceType] = [registrationDescriptor];
             if (!ContainsExactlyOnce(_services, markerDescriptor) || !ContainsExactlyOnce(_services, registrationDescriptor) ||
@@ -199,35 +200,36 @@ public sealed class RuntimeCoalescingDurableValuePageReuseRegistration
                 ServiceGroup(_services, registrationDescriptor.ServiceType).Length != 1)
                 return;
 
-            _expectedGroups = expected.ToDictionary(pair => pair.Key, pair => pair.Value.ToArray());
-            _captured = CurrentGroupsMatch();
+            var expectedGroups = expected.ToDictionary(pair => pair.Key, pair => pair.Value.ToArray());
+            if (CurrentGroupsMatch(expectedGroups))
+                _expectedGroups = expectedGroups;
         }
         catch (InvalidOperationException)
         {
             _expectedGroups = null;
-            _captured = false;
         }
     }
 
-    private bool CurrentGroupsMatch()
+    private bool CurrentGroupsMatch(Dictionary<Type, ServiceDescriptor[]> expectedGroups)
     {
-        if (_expectedGroups is null || _backend is null || _backendDescriptor is null ||
-            _accessorDescriptor is null || _codecDescriptor is null)
-            return false;
+        // Eligibility invariants guarantee these descriptors whenever a candidate group map is built.
+        var backendDescriptor = _backendDescriptor!;
+        var accessorDescriptor = _accessorDescriptor!;
+        var codecDescriptor = _codecDescriptor!;
 
-        if (!ContainsExactlyOnce(_services, _backendDescriptor) ||
-            !ContainsExactlyOnce(_services, _accessorDescriptor) ||
-            !ContainsExactlyOnce(_services, _codecDescriptor) ||
-            !IsStableBuiltInCodec(_codecDescriptor))
+        if (!ContainsExactlyOnce(_services, backendDescriptor) ||
+            !ContainsExactlyOnce(_services, accessorDescriptor) ||
+            !ContainsExactlyOnce(_services, codecDescriptor) ||
+            !IsStableBuiltInCodec(codecDescriptor))
             return false;
 
         var backendDescriptors = _services
             .Where(descriptor => descriptor.ImplementationInstance is RuntimeOperationalStateStoreBackend)
             .ToArray();
-        if (backendDescriptors.Length != 1 || !ReferenceEquals(backendDescriptors[0], _backendDescriptor))
+        if (backendDescriptors.Length != 1 || !ReferenceEquals(backendDescriptors[0], backendDescriptor))
             return false;
 
-        foreach (var (serviceType, expected) in _expectedGroups)
+        foreach (var (serviceType, expected) in expectedGroups)
         {
             var current = ServiceGroup(_services, serviceType);
             if (current.Length != expected.Length)

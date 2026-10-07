@@ -1,0 +1,24 @@
+# Current-candidate provider and live correctness evidence
+
+On 7 October 2026, source `7667d1c4c47873fdf3ac313a37b9fea259295d93` passed the canonical hosted CI, Maps and CodeQL gates. The runtime EF provider job ran with native providers required: **185 passed, zero failures, zero skips** ([job log](https://github.com/elsa-workflows/elsa-foundation/actions/runs/37668148890/job/112953404479)). CodeRabbit completed review of that head without concrete defects. No Copilot review is claimed.
+
+Root built the same clean candidate's Workbench project with 96 warnings and zero errors, then used a fresh owned PostgreSQL 16.15 database, isolated SQLite diagnostics, and an explicitly Coalesced/50 host with durable-value page reuse enabled. The [result and evidence hashes](live-verification.json) pin the binary, scripts, configuration, publication identities and retained observations. This run measures correctness, not query savings or latency.
+
+## Startup and settlement
+
+- The primary HttpEndpoint/SetVariable/WriteHttpResponse workflow returned HTTP 200 with exactly `Alice Smith`, completed, and had zero incidents. The same check passed again after the owned host process was killed and restarted.
+- The existing REST control first attempted the HTTP-published artifact and retained its actual HTTP 200 admission followed by a Running instance with one incident. That path lacks the explicit workflow-input projection and is not the accepted REST control.
+- The valid REST companion explicitly bound `WorkflowRequest.content`, performed the same deterministic computation, returned HTTP 200 admission, completed with `referenceText = Alice Smith`, and had zero incidents. The `-CompanionOnly` shortcut was not used.
+- Four concurrent requests to one separately published HTTP workflow each returned their distinct expected marker response with HTTP 200. Four distinct associated instances completed with zero incidents and retained Coalesced/50 cadence.
+
+The original capture exited **1** because its C4 matcher expected the payload marker in instance details, which do not expose workflow variables. The original failure and `requestsVerified=false` remain unchanged. Root then joined each original unique request trace ID to the same run's retained engine spans and their `elsa.workflow.execution_id`, and to its exact retained instance detail. Each trace contained 59 spans and 17 dispatch spans with exactly one execution identity; all four identities were distinct and agreed with trace-summary membership. Independent QA recomputed this attribution from the retained SQLite data and verified the detail hashes. This later analysis establishes the four response/settlement pairs; it is neither a rerun nor a product repair. It does not resolve the historical 60-request failure in #2388.
+
+## Malformed input and restart boundaries
+
+A separately published HTTP workflow received malformed JSON (`{`). Its response was HTTP 202 with one started execution ID; inspection reported Running with one blocking scheduler-poison incident. This is retained as accepted ingress followed by failed workflow computation, not a successful workflow or an expectation of HTTP 400. The current request-body parser returns null for malformed JSON, and the endpoint has a 202 fallback when dispatch produces no committed synchronous response. The separate REST `/execute` malformed-body contract is not substituted for this endpoint's behavior.
+
+A Coalesced workflow persisted a variable and an Event bookmark before restart. After a real process kill and relaunch against the same database, its suspension and saved state remained; one ResumeOnly stimulus matched one execution, which completed with the saved output and no duplicate Set/Wait/Echo records. A separate blocking incident also survived unchanged. The capture's two process starts constitute **one restart**. Both sequential HTTP runs retained their expected state and cadence.
+
+This committed-bookmark restart does not exercise a crash during an active, memo-populated drain, stale-lease discovery or the recovered provider read. **T014 remains open for that proof**, and T016's corresponding recovery acceptance remains open. T007's later coverage completion is recorded in [the integration evidence](integration-verification.md); T017's final candidate review/delivery remains incomplete. The live host here predates the registration-state simplification, so this is not claimed as a live run of that later source delta.
+
+The owned Workbench processes, content root and PostgreSQL container were removed after preserving evidence. Generated credential files were deleted; existing databases were not used. No timing comparison, primary-workload SQL reduction, default-mode change, or exactly-once external-effect claim follows from these checks.

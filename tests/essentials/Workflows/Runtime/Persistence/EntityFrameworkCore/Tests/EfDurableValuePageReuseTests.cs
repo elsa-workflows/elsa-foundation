@@ -473,6 +473,7 @@ public sealed class EfDurableValuePageReuseTests
         {
             while (_reads.TryDequeue(out _))
             {
+                // Discard previous observations before measuring the next execution window.
             }
         }
 

@@ -2,6 +2,7 @@ using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Services.Coalescing;
 using Elsa.Workflows.Runtime.Services.Recovery;
+using Elsa.Workflows.Runtime.Services.Scheduler;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 using Xunit;
@@ -44,6 +45,7 @@ public sealed class CoalescingDurableValuePageReuseEligibilityTests
     [InlineData("in-memory-backend")]
     [InlineData("duplicate-owned-durable-contract")]
     [InlineData("keyed-owned-durable-contract")]
+    [InlineData("keyed-owned-other-contract")]
     [InlineData("interface-only-backend")]
     [InlineData("missing-owned-concrete")]
     [InlineData("duplicate-owned-concrete")]
@@ -68,6 +70,37 @@ public sealed class CoalescingDurableValuePageReuseEligibilityTests
         Assert.False(registration.IsEligible);
     }
 
+    [Fact]
+    public void Ineligible_registration_skips_decoration_enumeration()
+    {
+        var raw = BuildPreDecorationCase("in-memory-backend");
+        var registration = RuntimeCoalescingDurableValuePageReuseRegistration.CaptureBeforeDecoration(raw.Services);
+        var enumerationAttempted = false;
+        var marker = new ServiceDescriptor(typeof(FakeMarker), typeof(FakeMarker), ServiceLifetime.Singleton);
+        var carrier = ServiceDescriptor.Singleton(registration);
+
+        registration.CaptureAfterDecoration(ThrowOnEnumeration(() => enumerationAttempted = true), marker, carrier);
+
+        Assert.False(enumerationAttempted);
+        Assert.False(registration.IsEligible);
+    }
+
+    [Fact]
+    public void Invalid_operation_during_recapture_clears_previously_valid_eligibility()
+    {
+        var composition = Decorate(BuildComposition());
+        Assert.True(composition.Registration.IsEligible);
+        var enumerationAttempted = false;
+
+        composition.Registration.CaptureAfterDecoration(
+            ThrowOnEnumeration(() => enumerationAttempted = true),
+            composition.Marker,
+            composition.Carrier);
+
+        Assert.True(enumerationAttempted);
+        Assert.False(composition.Registration.IsEligible);
+    }
+
     [Theory]
     [InlineData("no-durable-decoration")]
     [InlineData("wrong-wrapper-type")]
@@ -83,6 +116,43 @@ public sealed class CoalescingDurableValuePageReuseEligibilityTests
     public void Incomplete_or_malformed_decoration_fails_closed(string scenario)
     {
         var composition = Decorate(BuildComposition(), scenario);
+
+        Assert.True(composition.Registration.EligibleBeforeDecoration);
+        Assert.False(composition.Registration.IsEligible);
+    }
+
+    [Fact]
+    public void Existing_owned_inner_service_collision_fails_closed()
+    {
+        var raw = BuildComposition();
+        // This pre-existing owned descriptor collides with the inner key the coalescing decorator will add.
+        var existingInner = new ServiceDescriptor(
+            typeof(CoalescingInner<IDurableValueStateStore>),
+            _ => new CoalescingInner<IDurableValueStateStore>(new OwnedDurableValueStore()),
+            ServiceLifetime.Scoped);
+        raw.Services.Add(existingInner);
+        ReplaceBackend(raw, RuntimeOperationalStateStoreBackend.EntityFramework,
+            raw.ConcreteDescriptor, raw.DurableDescriptor, existingInner);
+
+        var composition = Decorate(raw);
+
+        Assert.True(composition.Registration.EligibleBeforeDecoration);
+        Assert.False(composition.Registration.IsEligible);
+    }
+
+    [Fact]
+    public void Duplicate_owned_scheduler_group_fails_closed_during_decoration()
+    {
+        var raw = BuildComposition();
+        var first = ServiceDescriptor.Scoped<ISchedulerStateStore, InMemorySchedulerStateStore>();
+        var selected = ServiceDescriptor.Scoped<ISchedulerStateStore, InMemorySchedulerStateStore>();
+        raw.Services.Add(first);
+        raw.Services.Add(selected);
+        ReplaceBackend(raw, RuntimeOperationalStateStoreBackend.EntityFramework,
+            raw.ConcreteDescriptor, raw.DurableDescriptor, first, selected);
+
+        // The extension decorates the last registration, while the prior duplicate keeps the group ambiguous.
+        var composition = Decorate(raw, additionalSchedulerDecoration: selected);
 
         Assert.True(composition.Registration.EligibleBeforeDecoration);
         Assert.False(composition.Registration.IsEligible);
@@ -176,6 +246,15 @@ public sealed class CoalescingDurableValuePageReuseEligibilityTests
                     raw.ConcreteDescriptor, keyed);
                 break;
             }
+            case "keyed-owned-other-contract":
+            {
+                var keyed = ServiceDescriptor.DescribeKeyed(
+                    typeof(ISchedulerStateStore), "alternate", typeof(InMemorySchedulerStateStore), ServiceLifetime.Scoped);
+                services.Add(keyed);
+                ReplaceBackend(raw, RuntimeOperationalStateStoreBackend.EntityFramework,
+                    raw.ConcreteDescriptor, raw.DurableDescriptor, keyed);
+                break;
+            }
             case "interface-only-backend":
                 services.Remove(raw.ConcreteDescriptor);
                 ReplaceBackend(raw, RuntimeOperationalStateStoreBackend.EntityFramework, raw.DurableDescriptor);
@@ -257,7 +336,10 @@ public sealed class CoalescingDurableValuePageReuseEligibilityTests
         return new(services, concreteDescriptor, durableDescriptor, backend, backendDescriptor, accessorDescriptor, codecDescriptor);
     }
 
-    private static DecoratedComposition Decorate(RawComposition raw, string scenario = "valid")
+    private static DecoratedComposition Decorate(
+        RawComposition raw,
+        string scenario = "valid",
+        ServiceDescriptor? additionalSchedulerDecoration = null)
     {
         var registration = RuntimeCoalescingDurableValuePageReuseRegistration.CaptureBeforeDecoration(raw.Services);
         var services = raw.Services;
@@ -285,6 +367,22 @@ public sealed class CoalescingDurableValuePageReuseEligibilityTests
             services.Add(inner);
             services.Add(wrapper);
             decorations.Add(new(raw.DurableDescriptor, inner, wrapper));
+        }
+
+        if (additionalSchedulerDecoration is not null)
+        {
+            services.Remove(additionalSchedulerDecoration);
+            var additionalInner = new ServiceDescriptor(
+                typeof(CoalescingInner<ISchedulerStateStore>),
+                _ => new CoalescingInner<ISchedulerStateStore>(new InMemorySchedulerStateStore()),
+                additionalSchedulerDecoration.Lifetime);
+            var additionalWrapper = new ServiceDescriptor(
+                typeof(ISchedulerStateStore),
+                _ => new InMemorySchedulerStateStore(),
+                additionalSchedulerDecoration.Lifetime);
+            services.Add(additionalInner);
+            services.Add(additionalWrapper);
+            decorations.Add(new(additionalSchedulerDecoration, additionalInner, additionalWrapper));
         }
 
         var marker = new ServiceDescriptor(typeof(FakeMarker), typeof(FakeMarker), ServiceLifetime.Singleton);
@@ -420,6 +518,15 @@ public sealed class CoalescingDurableValuePageReuseEligibilityTests
 
     private static IRuntimeRecoveryContinuationCodec CreateCodec() => new HmacRuntimeRecoveryContinuationCodec(
         Options.Create(new RuntimeRecoveryContinuationOptions { SigningKey = new string('k', 32) }));
+
+    private static IEnumerable<RuntimeCoalescingDurableValuePageReuseRegistration.ServiceDecoration> ThrowOnEnumeration(Action onEnumeration) =>
+        Enumerable.Repeat(default(RuntimeCoalescingDurableValuePageReuseRegistration.ServiceDecoration), 1)
+            .Select<RuntimeCoalescingDurableValuePageReuseRegistration.ServiceDecoration,
+                RuntimeCoalescingDurableValuePageReuseRegistration.ServiceDecoration>(_ =>
+            {
+                onEnumeration();
+                throw new InvalidOperationException("Simulated service collection mutation during enumeration.");
+            });
 
     private sealed class RawComposition(
         IServiceCollection services,

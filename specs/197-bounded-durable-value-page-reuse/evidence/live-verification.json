@@ -1,0 +1,213 @@
+{
+  "candidateSourceSha": "7667d1c4c47873fdf3ac313a37b9fea259295d93",
+  "provider": "16.15",
+  "scenario": "HttpEndpoint -> SetVariable intrinsic -> WriteHttpResponse; valid REST companion explicitly binds WorkflowRequest inputs",
+  "timingEvidence": false,
+  "queryReductionEvidence": false,
+  "hostBuild": {
+    "exitCode": 0,
+    "warnings": 96,
+    "errors": 0,
+    "dllSha256": "d0b66bd6f135c844420107726184fa0d9235942128ccd156776839c3d888b215",
+    "logSha256": "b3d22aa96efa425c3c781afa4d775a44deda29e39c35986ecbb57d649e8a7b57"
+  },
+  "http": [
+    {
+      "id": "coalesced-http",
+      "workflowExecutionId": "14AbDHdGguj",
+      "definitionId": "14AbD9kEpDa",
+      "versionId": "14AbD9mFLgl",
+      "artifactId": "artifact-22a5be0ab4a3",
+      "sourceReferenceId": "activation-ref:publication-14AbDAYSc7R",
+      "httpStatus": 200,
+      "responseBodyMatchedExactly": true,
+      "status": "Completed",
+      "incidentCount": 0,
+      "checkpointCadence": "Coalesced",
+      "maxSegmentCheckpoints": 50
+    },
+    {
+      "id": "post-restart-http",
+      "workflowExecutionId": "14AbFTwKSv6",
+      "definitionId": "14AbFM2Sf6r",
+      "versionId": "14AbFM4U3OQ",
+      "artifactId": "artifact-fdcad2998081",
+      "sourceReferenceId": "activation-ref:publication-14AbFMz3m0Q",
+      "httpStatus": 200,
+      "responseBodyMatchedExactly": true,
+      "status": "Completed",
+      "incidentCount": 0,
+      "checkpointCadence": "Coalesced",
+      "maxSegmentCheckpoints": 50
+    }
+  ],
+  "rest": {
+    "directHttpStatus": 200,
+    "directReason": "direct run remained nonterminal with status 'Running' during bounded status reads",
+    "companionExecutionId": "14AbE6GS0hv",
+    "companionHttpStatus": 200,
+    "companionOutput": "Alice Smith",
+    "companionObserved": {
+      "status": "Completed",
+      "incidentCount": 0,
+      "checkpointCadence": "Coalesced",
+      "maxSegmentCheckpoints": 50,
+      "inspectionGranularity": "boundary-level"
+    },
+    "directExecutionId": "14AbDQS98JB",
+    "directObserved": {
+      "status": "Running",
+      "incidentCount": 1,
+      "acceptedControl": false
+    }
+  },
+  "concurrentFour": {
+    "candidate": "7667d1c4c47873fdf3ac313a37b9fea259295d93",
+    "recordedUtc": "2026-10-07T20:00:55.474438+00:00",
+    "originalCaptureExit": 1,
+    "originalFailure": "C4 per-attempt payload marker was absent from instance-detail surface; four HTTP 200 responses and four completed instances were retained",
+    "method": "Join original unique request traceId to retained engine spans elsa.workflow.execution_id, then exact retained instance detail; no rerun or product change",
+    "attempts": [
+      {
+        "attempt": 1,
+        "traceId": "afcbf00e671f46b3b01a4f233f66032b",
+        "workflowExecutionId": "14AbEDXz4Z0",
+        "httpStatus": 200,
+        "responseMatched": true,
+        "status": "Completed",
+        "incidentCount": 0,
+        "spanCount": 59,
+        "dispatchSpanCount": 17,
+        "traceSha256": "6104bccdf7c074cbaed8dc2fbc671db388e7e62f46ec7f392cca2b3bd243cb66",
+        "detailSha256": "967f6708d41eb62046e8bdda56a4655cc8fee451888d101da3b919dd1ed83d2b"
+      },
+      {
+        "attempt": 2,
+        "traceId": "c4dc3e13687344988a6b16ab3b0cc2e8",
+        "workflowExecutionId": "14AbEDYSjpJ",
+        "httpStatus": 200,
+        "responseMatched": true,
+        "status": "Completed",
+        "incidentCount": 0,
+        "spanCount": 59,
+        "dispatchSpanCount": 17,
+        "traceSha256": "fe5ab8c072069fd0f9126cb45ea079caf8ee1d8b5bdaa3a55c62205f407cca09",
+        "detailSha256": "50eabb4b7a92cf0cd8d16b5bb407c408e68c86616c731d163b986d6177a6d91d"
+      },
+      {
+        "attempt": 3,
+        "traceId": "f75e266f6e134e37882efa7daed6f1ec",
+        "workflowExecutionId": "14AbEDYWy2C",
+        "httpStatus": 200,
+        "responseMatched": true,
+        "status": "Completed",
+        "incidentCount": 0,
+        "spanCount": 59,
+        "dispatchSpanCount": 17,
+        "traceSha256": "798423cbaf83471967fc2fe4c4251532fb064c98cc0fc28cdd9161e58db78d1c",
+        "detailSha256": "49a1404e0611965afb1b7ccbdcdf0d3f6be39c0edb1d960bfbc64cd23366dba0"
+      },
+      {
+        "attempt": 4,
+        "traceId": "7c4151cb5e7d45b28a90df533c21fc1f",
+        "workflowExecutionId": "14AbEDYKle8",
+        "httpStatus": 200,
+        "responseMatched": true,
+        "status": "Completed",
+        "incidentCount": 0,
+        "spanCount": 59,
+        "dispatchSpanCount": 17,
+        "traceSha256": "838de06a7d4973f4760437eea47b6e80753301951c382b89933d23a149b355a6",
+        "detailSha256": "5bb860eaccaea0477c3ddfa3d56cd8d93ffe3d37698e24ecb5d741ef09d1fb62"
+      }
+    ],
+    "verified": true
+  },
+  "malformed": {
+    "acceptance": "Recorded only; not asserted as passing by this capture",
+    "status": 202,
+    "expectedSuccess": false,
+    "body": "{\"started\":[\"14AbEVQZQzK\"],\"resumed\":[]}",
+    "definitionId": "14AbEQ5b2wH",
+    "instances": [
+      {
+        "status": "Running",
+        "incidentCount": 1,
+        "workflowExecutionId": "14AbEVQZQzK"
+      }
+    ]
+  },
+  "restart": {
+    "processStarts": 2,
+    "persistedBookmark": "14AbEgcij3m",
+    "persistedIncident": "14AbEiQNDSf",
+    "persistedAcrossRestart": true,
+    "resumedWithPersistedValue": true,
+    "activeDrainCrashRecoveryProven": false
+  },
+  "cleanup": {
+    "hostRootRemoved": true,
+    "containerRemoved": true,
+    "secretFilesRemoved": true,
+    "completedUtc": "2026-10-07T19:59:36.1019460+00:00"
+  },
+  "providerSuite": {
+    "head": "7667d1c4c47873fdf3ac313a37b9fea259295d93",
+    "runId": 37668148890,
+    "jobId": 112953404479,
+    "requireNativeProviders": true,
+    "passed": 185,
+    "failed": 0,
+    "skipped": 0
+  },
+  "evidenceHashes": {
+    "c4-trace-f75e266f6e134e37882efa7daed6f1ec.json": "798423cbaf83471967fc2fe4c4251532fb064c98cc0fc28cdd9161e58db78d1c",
+    "boundaries.ps1": "6fcb2615f0fddd7dc5260a5688b0500d5f98a92f1a7aa172b37807c899a7ee56",
+    "c4-trace-attribution.json": "f383f518f5a6a50b9e070df95fdae0f9eef44d5b4db854e8777a4ee95a60eff1",
+    "c4-instance-14AbEDYSjpJ.json": "50eabb4b7a92cf0cd8d16b5bb407c408e68c86616c731d163b986d6177a6d91d",
+    "coalesced-http-detail.json": "7e3c553aa5cd506f2f36042c6edc453fa2a71da5ce738114ae6d69c88dfa179c",
+    "run.ps1": "2a08427494098433e9833eaeb284b614b8823a3b45c791ea171a6cae111edb7d",
+    "rest-companion-detail.json": "4b4c64c0aa8429ef318347ad55050b9f3adbf54d7a93e5b3d7b0911df0ac35de",
+    "config-coalesced-restarted-appsettings.Development.json": "e98675f0922574263376a941fdc4519e1bb54bc83a369557df20d41c12fb8bc2",
+    "coalesced-http-export.json": "05159ecb765c1aa039b81174cf04398e6c4ef5f737136efc85eeb69f235e4cef",
+    "malformed-instance-14AbEVQZQzK.json": "aef1fcc4491aa91eae3f8abaa7bb4ac9abc5e9308f48f5c018fb29399a9af329",
+    "c4-trace-afcbf00e671f46b3b01a4f233f66032b.json": "6104bccdf7c074cbaed8dc2fbc671db388e7e62f46ec7f392cca2b3bd243cb66",
+    "config-coalesced-host-50-shells.json": "ef6f1722cc09f64e5ace7649a13866bf359372fb535d7b3855fabb4b2fdb19be",
+    "coalesced-http-after-coalesced-restarted.json": "7e3c553aa5cd506f2f36042c6edc453fa2a71da5ce738114ae6d69c88dfa179c",
+    "config-coalesced-host-50-appsettings.json": "2297cd86bfdc1ce4e7ae5c95d30440ad24afbf06bcd9db6bedfa8361218fbf1a",
+    "metadata.json": "2992bf524c341f775c78675e4a425970b816389880a652d9368f38b8466d8632",
+    "config-coalesced-restarted-shells.json": "ef6f1722cc09f64e5ace7649a13866bf359372fb535d7b3855fabb4b2fdb19be",
+    "rest-direct-detail.json": "87984a6aec6b4e5482bc2b98e0621d17b3ab0b8e8261c75fa1ac6468339f890b",
+    "config-coalesced-restarted-appsettings.json": "2297cd86bfdc1ce4e7ae5c95d30440ad24afbf06bcd9db6bedfa8361218fbf1a",
+    "bookmark-before-restart.json": "fd28e10c3bc5cb279d357b249b673e84f6a1d11cb9747fedfe405ddc74ca0fa5",
+    "incident-list-before-restart.json": "b8f82a1d2dafb301f6c9dc2f1568aed7148842d11490831e3d571a7e2d9d7b4d",
+    "c4-trace-c4dc3e13687344988a6b16ab3b0cc2e8.json": "fe5ab8c072069fd0f9126cb45ea079caf8ee1d8b5bdaa3a55c62205f407cca09",
+    "config-coalesced-host-50-appsettings.Development.json": "e98675f0922574263376a941fdc4519e1bb54bc83a369557df20d41c12fb8bc2",
+    "c4-instance-14AbEDYWy2C.json": "49a1404e0611965afb1b7ccbdcdf0d3f6be39c0edb1d960bfbc64cd23366dba0",
+    "c4-trace-7c4151cb5e7d45b28a90df533c21fc1f.json": "838de06a7d4973f4760437eea47b6e80753301951c382b89933d23a149b355a6",
+    "bookmark-after-same-candidate-restart.json": "fd28e10c3bc5cb279d357b249b673e84f6a1d11cb9747fedfe405ddc74ca0fa5",
+    "bookmark-resumed-same-candidate-restart.json": "15c6154bf8ef08601288571e5d0a25d48247a7008bb17a662c8636a6c27c8055",
+    "incident-after-same-candidate-restart.json": "853330c7425f5e41cfcf001048d254ac81f8f91d4e701058fe33e63d879581e5",
+    "post-restart-http-detail.json": "07825d3bb15f6acb1baa736dbc6e8ae570e795af6ae99c161ff5489a672935c1",
+    "requests.ps1": "2b0702dab71efd3e99d5883930182e6a25edbb4743d50189368ef6a6e3e76c8d",
+    "post-restart-http-export.json": "8d081b31ff0c056f05525a81c358d512d6a156f8dd5fd505a0538cfc34873da1",
+    "incident-list-after-same-candidate-restart.json": "b8f82a1d2dafb301f6c9dc2f1568aed7148842d11490831e3d571a7e2d9d7b4d",
+    "c4-instance-14AbEDYKle8.json": "5bb860eaccaea0477c3ddfa3d56cd8d93ffe3d37698e24ecb5d741ef09d1fb62",
+    "prepare.ps1": "f6298759ca7fd01393595a167abf07a54bb8c08009f5cb40f31ba7da1e1a5e2f",
+    "c4-instance-14AbEDXz4Z0.json": "967f6708d41eb62046e8bdda56a4655cc8fee451888d101da3b919dd1ed83d2b",
+    "incident-before-restart.json": "853330c7425f5e41cfcf001048d254ac81f8f91d4e701058fe33e63d879581e5"
+  },
+  "limits": [
+    "Original capture exited 1 due to unavailable payload markers in instance details; retained same-run engine trace attribution was independently verified afterward. No rerun or product repair.",
+    "Four concurrent requests do not establish resolution of historical #2388 60-request failures.",
+    "Malformed HTTP result is recorded accepted-start/incident behavior, not successful execution or a 400 expectation.",
+    "Restart at a committed bookmark does not prove interrupted active-drain recovery."
+  ],
+  "privateArchive": {
+    "archive": "1306-live-7667d1c4c.tar.gz",
+    "sha256": "e1bb1b0a7517ed824a85b21964241acbabaf63a9aadf5f263049c586dae4b650",
+    "bytes": 997470,
+    "private": true,
+    "credentialsFilesRemoved": true
+  }
+}
