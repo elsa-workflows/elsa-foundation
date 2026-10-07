@@ -1,6 +1,6 @@
 # Runtime Database Access
 
-- **Status:** In Progress; owner-appointed control room since 5 October 2026. Qualified accounting and materialization spike delivered; bounded durable-value page-reuse specification active.
+- **Status:** In Progress; owner-appointed control room since 5 October 2026. Qualified accounting and materialization spike delivered; page-reuse design merged and cadence verification in review.
 - **Area:** Workflow runtime / EF persistence access / HTTP workload correctness.
 - **Stewards:** Sipke and the runtime database access program lead; root lead owns integration and QA.
 - **Program:** [#2382](https://github.com/elsa-workflows/elsa-foundation/issues/2382).
@@ -14,9 +14,10 @@ The owner-approved primary scenario uses HttpEndpoint startup and a deterministi
 
 ## Active objectives
 
-1. [#2396](https://github.com/elsa-workflows/elsa-foundation/issues/2396) is the sole active execution objective: [spec197](../../specs/197-bounded-durable-value-page-reuse/spec.md) specifies bounded raw durable-value page reuse. Root and independent review accepted the specification/plan for task breakdown; design delivery and #1306 implementation gates remain open.
-2. [#2388](https://github.com/elsa-workflows/elsa-foundation/issues/2388) remains in review with the failed Coalesced concurrency control and unresolved historical HTTP202 attribution. Final integrated acceptance remains blocked on its disposition and any necessary correction.
-3. [#2399](https://github.com/elsa-workflows/elsa-foundation/issues/2399), [#1312](https://github.com/elsa-workflows/elsa-foundation/issues/1312), [#1239](https://github.com/elsa-workflows/elsa-foundation/issues/1239) and [#2407](https://github.com/elsa-workflows/elsa-foundation/issues/2407) are Ready after the accepted accounting/paging prerequisites. Their current scope requires no owner decision or missing reporter input; later implementation remains subject to their selected designs.
+1. [#2399](https://github.com/elsa-workflows/elsa-foundation/issues/2399) is in review through [PR #2486](https://github.com/elsa-workflows/elsa-foundation/pull/2486). Root and independent QA accepted the [six-case normal-host cadence and restart evidence](../reports/runtime-db-access/cadence-verification.md); hosted review and delivery gates remain separate. No runtime change or measured query saving is claimed.
+2. [#2396](https://github.com/elsa-workflows/elsa-foundation/issues/2396)'s [spec197](../../specs/197-bounded-durable-value-page-reuse/spec.md) design merged through [PR #2485](https://github.com/elsa-workflows/elsa-foundation/pull/2485) at `c2dc3ac28`, with all 37 PR check/status entries terminal and nonblocking. Root retains the resulting-main gate before accepting delivery and releasing #1306 for implementation; the issue records its live status.
+3. [#2388](https://github.com/elsa-workflows/elsa-foundation/issues/2388) remains in review with the failed Coalesced concurrency control and unresolved historical HTTP202 attribution. Final integrated acceptance remains blocked on its disposition and any necessary correction.
+4. [#1312](https://github.com/elsa-workflows/elsa-foundation/issues/1312), [#1239](https://github.com/elsa-workflows/elsa-foundation/issues/1239) and [#2407](https://github.com/elsa-workflows/elsa-foundation/issues/2407) are Ready after the accepted accounting/paging prerequisites. Their current scope requires no owner decision or missing reporter input; later implementation remains subject to their selected designs.
 
 T02/#2386 and T04/#2389 are delivered as [qualified accounting handoffs](https://github.com/elsa-workflows/elsa-foundation/issues/2386#issuecomment-6037855554) through PR #2447 at `a6684744`; resulting-main CI/Maps/CodeQL passed. T07/#2395 is delivered as the qualified [strategy-selection spike](../reports/runtime-db-access/materialization-reuse-spike.md) through PR #2480 at `7bb1aaecb`; resulting-main [CI](https://github.com/elsa-workflows/elsa-foundation/actions/runs/37620919147), [Maps](https://github.com/elsa-workflows/elsa-foundation/actions/runs/37620918826) and CodeQL passed. This selects design work, not an implemented cache or primary-workload saving. T19/#2450 remains delivered. M1/M3/M4/M5 and final T17/T18 remain incomplete.
 

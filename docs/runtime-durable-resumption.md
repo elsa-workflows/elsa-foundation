@@ -384,6 +384,9 @@ with `-ExpectedMaxSegmentCheckpoints`. Immediate expects a null cap. With no new
 and no authored override. This #2392 SetVariable intrinsic reference remains representative and is not equivalent to
 the historical custom CLR transform.
 
+The [T09 normal-host verification](reports/runtime-db-access/cadence-verification.md) records six cadence cases,
+same-execution readback across host reconfiguration, and bookmark/incident persistence across a real process restart.
+
 For SQL diagnostics, temporarily set `Logging__LogLevel__Microsoft.EntityFrameworkCore.Database.Command=Information`, retain
 structured logs with scopes and UTC timestamps, and inspect EF command event 20101. Keep sensitive-data logging disabled. This counts command executions;
 it does not by itself count individual SQL statements. Keep diagnostic runs separate from timing runs, which use
