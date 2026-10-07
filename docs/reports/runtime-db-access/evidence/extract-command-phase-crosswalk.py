@@ -433,16 +433,21 @@ def build_crosswalk(source: dict[str, Any]) -> dict[str, Any]:
 
 def write_private(path: Path, data: str) -> None:
     fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    fd_owned = True
     try:
         os.fchmod(fd, 0o600)
-        with os.fdopen(fd, "w", encoding="utf-8", newline="\n") as stream:
+        stream = os.fdopen(fd, "w", encoding="utf-8", newline="\n")
+        fd_owned = False
+        with stream:
             stream.write(data)
             stream.flush()
     except BaseException:
-        try:
-            os.close(fd)
-        except OSError:
-            pass
+        if fd_owned:
+            try:
+                os.close(fd)
+            except OSError:
+                # Cleanup is best effort; preserve the original failure.
+                pass
         raise
 
 

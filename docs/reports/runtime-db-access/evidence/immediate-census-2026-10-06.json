@@ -37,11 +37,11 @@
       "reason": "Workbench code-missing attestation assertion; not SQLite"
     },
     "postMergeCiAttempt2": {
-      "runId": 37403499846,
+      "runId": "37403499846",
       "attempt": 2,
       "conclusion": "success",
       "sourceUnchanged": true,
-      "interpretation": "Passed gate evidence only; attempt1 retained on2293 with cause unresolved, no causal repair."
+      "interpretation": "Passed gate evidence only; attempt 1 retained on #2293 with cause unresolved, no causal repair."
     }
   },
   "httpReference": {

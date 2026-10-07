@@ -4,9 +4,11 @@
 .DESCRIPTION
     This file is deliberately named Capture-*.ps1 so it is not included by Test-*.ps1 suite discovery.
     It tries the selected HTTP-published artifact first, pinned by both artifact ID and sourceReferenceId.
-    If that run does not produce the expected terminal referenceText, it retains the direct result and
+    After an accepted start with a readable execution ID, if the run does not produce the expected terminal
+    referenceText, it retains the direct result and
     provisions an ordinary REST-start companion with an explicit WorkflowRequest -> SetVariable projection,
     the same referenceText SetVariable expression, and SetOutput for instance-detail visibility.
+    A rejected start or missing execution ID stops the capture with its failure retained.
 
     Source audit basis: at 43b3ef51882105916380ac8e539b49ad7b8a37b6 (the relevant source/helper files are
     unchanged at this worktree's documentation head), WorkflowExecutionStartService passes request.Inputs as
@@ -298,7 +300,10 @@ Write-Host ("[companion] artifactId={0}; sourceReferenceId={1}; sequenceLookupTr
 Write-Host '[companion-shape] omits HttpEndpoint admission and WriteHttpResponse transport; adds SetVariable(input.content -> workflow variable content) and SetOutput(referenceText).'
 
 if ($SetupOnly) {
-    $executableExport = Invoke-RestMethod "$BaseUrl/publishing/workflows/$($definition.version.id)/executable-export" -WebSession $publishContext.Context.Session
+    $exportContext = New-TracedContext
+    $executableExport = Invoke-RestMethod "$BaseUrl/publishing/workflows/$($definition.version.id)/executable-export" -WebSession $exportContext.Context.Session
+    # Caller readbacks must not inherit the publish or export operation's traceparent.
+    $callerContext = Connect-Elsa -BaseUrl $BaseUrl -Username $Username -Password $Password
     return [pscustomobject]@{
         DefinitionId       = [string]$definition.definition.id
         VersionId          = [string]$definition.version.id
@@ -306,7 +311,7 @@ if ($SetupOnly) {
         SourceReferenceId  = [string]$published.sourceReferenceId
         WorkflowName       = $companionName
         CandidateSourceSha = $HostCandidateSha.ToLowerInvariant()
-        Context            = $publishContext.Context
+        Context            = $callerContext
         ExecutableExport   = $executableExport
     }
 }

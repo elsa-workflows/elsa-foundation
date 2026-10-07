@@ -116,7 +116,7 @@ The `responseFinishedUtc` used in the EF ledger is the **client HTTP IWR `finall
 | Immediate | HTTP | 635 | 0 |
 | Immediate | REST | 556 | 0 |
 
-This is timestamp ordering against the client completion boundary only; it assigns no causal phase. A separate earlier census counted 40 diagnostic commands after the server ASP.NET request-finished timestamp. That server-side comparison is a different boundary and is not contradicted by these client-IWR-relative buckets.
+This is timestamp ordering against the client completion boundary only; it assigns no causal phase. A separate earlier Coalesced HTTP census counted 40 diagnostic commands after the server ASP.NET request-finished timestamp. That server-side comparison is a different boundary and is not contradicted by these client-IWR-relative buckets.
 
 ## Historical count differences and unresolved attribution
 
