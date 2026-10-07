@@ -6,6 +6,8 @@ on:
     paths:
       - .github/workflows/published-image-pair.yml
       - docker/compose/docker-compose.images.yml
+      - docker/compose/README.md
+      - docs/contributing/published-image-pair.md
       - tools/contributor-pair-proof/**
 
 permissions:
