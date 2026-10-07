@@ -132,6 +132,8 @@ Published file: 1,590,396 bytes, SHA-256 `924aa56281cea7a7b72872c0453b7a5aa76c5e
 
 The observer's corrected source SHA-256 is `c52c5ba964d3b0942386c747aed1c2f9ec78e08247abedb17c04824def15f1aa`. Its two private Release projects built with zero errors/warnings. A fixed 58-case synthetic gate ran once, including provider-object reuse, complete correlated tuples, Cartesian-negative, missing/ambiguous identity and externally delivered SIGTERM finalization controls. Root and independent Sol accepted that actual gate before the two live captures. The earlier collector's failed live join remains rejected; repairing the collector supplies measurement integrity, not a runtime performance repair.
 
+The newer [observed durable-value method accounting](method-accounting.md) adds exact method scopes in separate captures. Its process-local identities and changed background activity remain separate from this preserved ledger.
+
 ## Remaining ownership
 
 T02 owns exact request caller and checkpoint/participant reconciliation, with these unobserved associations kept explicit rather than derived from table names. T04/#2389 reuses the process-local identity taxonomy for a separately bounded post-response/outbox outcome. T17/#2412 and T18/#2413 own integrated correctness and a comparable final before/after packet. The prior Coalesced concurrency failure and historical valid-input 202 remain distinct; this pair of sequential successful controls does not resolve either cause. No original transform/export prerequisite is imposed.
