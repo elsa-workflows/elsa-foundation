@@ -78,6 +78,7 @@ class WorkflowGuardTests(unittest.TestCase):
             self.assertEqual(0, accepted.returncode)
             self.assertEqual(1, ordinary.returncode)
             self.assertIn("Packages from a GitHub Release are not published", ordinary.stdout)
+            self.assertIn("#2085", ordinary.stdout)
 
     def test_docker_admission_cli_matrix_preserves_direct_paths(self) -> None:
         cases = [("workflow_run", event, result, event in {"push", "workflow_dispatch"} and result == "success")
