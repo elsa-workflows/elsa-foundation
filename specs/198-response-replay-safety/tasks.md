@@ -8,7 +8,7 @@
 
 **Purpose**: Preserve a genuine pre-candidate artifact for routine tests without fetching or building historical source in CI.
 
-- [ ] T001 Publish the selected `HttpEndpoint → SetVariable → WriteHttpResponse` workflow through the normal Workbench publication and closure-export path at source revision `cd6e2a2a7edaf3ec774c5688e9adddeee6a09d2c`; retain the exact External closure bytes and provenance manifest at `tests/essentials/Activities/Http/IntegrationTests/Fixtures/ResponseReplayHost/Fixtures/pre-candidate-external-closure.json` and `tests/essentials/Activities/Http/IntegrationTests/Fixtures/ResponseReplayHost/Fixtures/pre-candidate-external-manifest.json` (source, design/version, artifact ID/version/hash, resolved profile, and fixture SHA-256).
+- [X] T001 Publish the selected `HttpEndpoint → SetVariable → WriteHttpResponse` workflow through the normal Workbench publication and closure-export path from the reviewed source-equivalent capture checkout at actual Git HEAD `d605dbe360621e649e1c947ab406928c91c4ee2f`, with baseline source reference `cd6e2a2a7edaf3ec774c5688e9adddeee6a09d2c`; retain the exact External closure bytes and provenance manifest at `tests/essentials/Activities/Http/IntegrationTests/Fixtures/ResponseReplayHost/Fixtures/pre-candidate-external-closure.json` and `tests/essentials/Activities/Http/IntegrationTests/Fixtures/ResponseReplayHost/Fixtures/pre-candidate-external-manifest.json`. Source equivalence, normal publication/export, valid HTTP request/response, identity, omitted-default profile resolution, and closure SHA-256 are retained in the manifest and private attempt logs.
 
 ## Phase 2: Foundational
 
