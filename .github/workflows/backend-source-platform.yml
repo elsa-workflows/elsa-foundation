@@ -74,9 +74,9 @@ jobs:
 
       - name: Build Workbench with the documented command
         shell: bash
-        run: dotnet build src/apps/Elsa.Workbench/Elsa.Workbench.csproj
+        run: dotnet build src/apps/Elsa.Workbench/Elsa.Workbench.csproj -p:RestoreLockedMode=true
 
-      - name: Verify the ordinary build left tracked lock files unchanged
+      - name: Verify the documented build left tracked lock files unchanged
         shell: bash
         run: git diff --exit-code -- ':(glob)**/packages.lock.json'
 
@@ -115,7 +115,7 @@ jobs:
           fi
           printf '%s\n' "$control_output"
           if [ "$control_exit" -eq 0 ]; then
-            echo 'The deliberately invalid dotnet run invocation unexpectedly returned success.' >&2
+            echo 'The deliberately invalid launch invocation unexpectedly returned success.' >&2
             exit 1
           fi
           case "$control_output" in
@@ -125,7 +125,7 @@ jobs:
               exit 1
               ;;
           esac
-          echo "Expected negative control: wrapper propagated dotnet run exit code $control_exit; the fixed port remained free."
+          echo "Expected negative control: wrapper propagated native exit code $control_exit; the fixed port remained free."
 
       - name: Replay the documented dotnet run profile and workflow smoke
         id: run-profile-journey
