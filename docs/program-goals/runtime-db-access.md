@@ -1,6 +1,6 @@
 # Runtime Database Access
 
-- **Status:** In Progress; owner-appointed control room since 5 October 2026. Qualified accounting, materialization spike and bounded durable-value page-reuse design delivered; ReplaySafe audit active.
+- **Status:** In Progress; owner-appointed control room since 5 October 2026. Qualified accounting, materialization spike and bounded durable-value page-reuse design delivered; #1306 implementation active and ReplaySafe audit in review.
 - **Area:** Workflow runtime / EF persistence access / HTTP workload correctness.
 - **Stewards:** Sipke and the runtime database access program lead; root lead owns integration and QA.
 - **Program:** [#2382](https://github.com/elsa-workflows/elsa-foundation/issues/2382).
@@ -14,8 +14,8 @@ The owner-approved primary scenario uses HttpEndpoint startup and a deterministi
 
 ## Active objectives
 
-1. [#1312](https://github.com/elsa-workflows/elsa-foundation/issues/1312) is the active bounded discovery objective. The [ReplaySafe audit](../reports/runtime-db-access/replay-safety-audit.md) distinguishes the selected Set intrinsic, existing structural profiles and a conditional `WriteHttpResponse` candidate. A retained published artifact confirms this fixture's inline/pure response bindings. No profile change or saving is delivered; whole-contract and crash/replay proof remain required for T10.
-2. [#2396](https://github.com/elsa-workflows/elsa-foundation/issues/2396) is delivered through PR #2485 at `c2dc3ac28` after resulting-main CI/Maps/CodeQL passed. [Spec197](../../specs/197-bounded-durable-value-page-reuse/spec.md), plan and 17 tasks make [#1306](https://github.com/elsa-workflows/elsa-foundation/issues/1306) Ready. Its nonempty actual-EF reduction and freshness/authority/lifecycle proof remain unimplemented.
+1. [#1306](https://github.com/elsa-workflows/elsa-foundation/issues/1306) is the active implementation objective, beginning with T001's nonempty actual-EF baseline. [#2396](https://github.com/elsa-workflows/elsa-foundation/issues/2396) is delivered through PR #2485 at `c2dc3ac28` after resulting-main CI/Maps/CodeQL passed. [Spec197](../../specs/197-bounded-durable-value-page-reuse/spec.md), plan and 17 tasks make the design ready for implementation. The reduction and freshness/authority/lifecycle proof remain unimplemented.
+2. [#1312](https://github.com/elsa-workflows/elsa-foundation/issues/1312) is in review through [PR #2487](https://github.com/elsa-workflows/elsa-foundation/pull/2487). The [ReplaySafe audit](../reports/runtime-db-access/replay-safety-audit.md) distinguishes the selected Set intrinsic, existing structural profiles and a conditional `WriteHttpResponse` candidate. A retained published artifact confirms this fixture's inline/pure response bindings. No profile change or saving is delivered; whole-contract and crash/replay proof remain required for T10.
 3. [#2399](https://github.com/elsa-workflows/elsa-foundation/issues/2399) is in review through [PR #2486](https://github.com/elsa-workflows/elsa-foundation/pull/2486): six HTTP cases, seven stamped rereads and bounded restart/bookmark/incident evidence are accepted locally. Hosted review/merge and resulting-main delivery gates remain separate from that evidence.
 4. [#2388](https://github.com/elsa-workflows/elsa-foundation/issues/2388) remains in review with the failed Coalesced concurrency control and unresolved historical HTTP202 attribution. Final integrated acceptance remains blocked on its disposition and any necessary correction. [#1239](https://github.com/elsa-workflows/elsa-foundation/issues/1239) and [#2407](https://github.com/elsa-workflows/elsa-foundation/issues/2407) are Ready. No owner input is outstanding.
 
