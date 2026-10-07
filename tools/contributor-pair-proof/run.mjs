@@ -555,24 +555,60 @@ async function runBrowserJourney() {
   assert.ok((await runRow.innerText()).includes(definitionId), "run does not point to the created definition");
   log(`Inspected run ${workflowExecutionId}: Published Run, Completed, artifact matched, zero incidents`);
 
-  stage = "run-activity-inspection";
+  stage = "run-open-details-row";
   await runRow.click();
+
+  stage = "run-details-heading";
   await page.getByRole("heading", { name: "Run" }).waitFor({ state: "visible" });
+  log("Opened the selected workflow run inspector");
+
+  stage = "run-timeline-list";
   const timeline = page.getByRole("list", { name: "Execution timeline" });
   await timeline.waitFor({ state: "visible", timeout: 60_000 });
+
+  stage = "run-timeline-write-line-count";
   const writeLineRows = timeline.locator(":scope > li").filter({ hasText: /write\s*line/i });
   assert.equal(await writeLineRows.count(), 1, "the current run must contain exactly one Write Line activity execution");
-  await writeLineRows.locator('[data-status="completed"]').waitFor({ state: "visible" });
-  await writeLineRows.first().getByRole("button").click();
-  await page.getByRole("button", { name: /^Activity$/i }).click();
+
+  stage = "run-timeline-completed-status";
+  const completedStatus = writeLineRows.locator('[data-status="completed"]');
+  await completedStatus.waitFor({ state: "visible" });
+  assert.equal(await completedStatus.count(), 1, "the Write Line execution must expose one completed status badge");
+  log("Timeline contains exactly one completed Write Line execution");
+
+  stage = "run-timeline-select-write-line";
+  const writeLineButton = writeLineRows.getByRole("button");
+  assert.equal(await writeLineButton.count(), 1, "the Write Line timeline entry must expose one selection button");
+  await writeLineButton.click();
+
+  stage = "run-activity-tab-visible";
+  const activityTab = page.getByRole("tab", { name: "Activity", exact: true });
+  await activityTab.waitFor({ state: "visible" });
+  assert.equal(await activityTab.count(), 1, "the run inspector must expose one Activity tab");
+
+  stage = "run-activity-tab-select";
+  await activityTab.click();
+
+  stage = "run-activity-overview-heading";
   const activityOverview = page.locator(".wf-activity-overview");
-  await activityOverview.getByRole("heading", { name: "Write Line", exact: true }).waitFor({ state: "visible" });
+  await activityOverview.getByRole("heading", { name: /^Write\s*Line$/i }).waitFor({ state: "visible" });
+
+  stage = "run-activity-overview-status";
   await activityOverview.getByText("Completed", { exact: true }).waitFor({ state: "visible" });
+
+  stage = "run-activity-overview-zero-incidents";
   assert.equal(await activityOverview.locator(".wf-activity-summary-grid").getByText("0", { exact: true }).count(), 1,
     "the current Write Line execution must report zero incidents");
 
-  stage = "run-incident-inspection";
-  await page.getByRole("button", { name: /^Issues(?: \(\d+\))?$/i }).click();
+  stage = "run-issues-tab-visible";
+  const issuesTab = page.getByRole("tab", { name: /^Issues(?: \(\d+\))?$/i });
+  await issuesTab.waitFor({ state: "visible" });
+  assert.equal(await issuesTab.count(), 1, "the run inspector must expose one Issues tab");
+
+  stage = "run-issues-tab-select";
+  await issuesTab.click();
+
+  stage = "run-incident-empty-state";
   await page.getByText("No incidents recorded.", { exact: true }).waitFor({ state: "visible" });
   log(`Inspected the completed Write Line activity for run ${workflowExecutionId}`);
 
