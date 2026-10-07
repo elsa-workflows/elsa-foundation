@@ -140,8 +140,14 @@ function Get-RunProfileProcessForSnapshot {
 
 function Get-RunProfileReadiness {
     param([Parameter(Mandatory)][string] $CurlPath)
-    $body = @(& $CurlPath --connect-timeout 3 --max-time 10 -fsS "$baseUrl/health/ready" 2>$null)
-    $exitCode = $LASTEXITCODE
+    $savedErrorActionPreference = $ErrorActionPreference
+    try {
+        $ErrorActionPreference = 'Continue'
+        $body = @(& $CurlPath --connect-timeout 3 --max-time 10 -fsS "$baseUrl/health/ready" 2>$null)
+        $exitCode = $LASTEXITCODE
+    } finally {
+        $ErrorActionPreference = $savedErrorActionPreference
+    }
     if ($exitCode -ne 0) {
         return [pscustomobject]@{ ExitCode = $exitCode; Status = $null }
     }
