@@ -17,6 +17,7 @@ param(
     [string[]] $Lines    = @("Sequence line 1", "Sequence line 2", "Sequence line 3")
 )
 . "$PSScriptRoot/_ElsaCommon.ps1"
+. "$PSScriptRoot/_SequenceWorkflowVerdict.ps1"
 
 Write-Host "== Sequence of WriteLines ==  -> $BaseUrl" -ForegroundColor Cyan
 $ctx = Connect-Elsa -BaseUrl $BaseUrl -Username $Username -Password $Password
@@ -45,12 +46,20 @@ Write-Host ("[execute] execution={0} dispatch={1}" -f $run.workflowExecutionId, 
 Write-Host "[observe] instance detail:"
 $inst = Wait-WorkflowInstance -Ctx $ctx -ExecutionId $run.workflowExecutionId
 Show-WorkflowInstance -Instance $inst
+Assert-SequenceWorkflowResult -Instance $inst -ExpectedLineCount $Lines.Count
 
 $expected = $Lines.Count + 1   # children + the Sequence root itself
-Write-Host ""
-if ($inst.instance.status -in @('Completed','Finished') -and $inst.instance.activityCount -eq $expected) {
-    Write-Host "SUCCESS - sequence completed; SERVER console should show, in order:" -ForegroundColor Green
-    $Lines | ForEach-Object { Write-Host "  $_" }
-} else {
-    Write-Host ("FINISHED with status '{0}', activityCount={1} (expected {2})." -f $inst.instance.status, $inst.instance.activityCount, $expected) -ForegroundColor Yellow
+$recordEvidence = @()
+foreach ($activity in @($inst.activities)) {
+    $nodeId = Get-SequenceWorkflowRequiredProperty -Object $activity -Name 'executableNodeId'
+    $activityType = Get-SequenceWorkflowRequiredProperty -Object $activity -Name 'activityType'
+    $activityStatus = Get-SequenceWorkflowRequiredProperty -Object $activity -Name 'status'
+    $shortType = ($activityType -split '\.')[-1]
+    $recordEvidence += "${nodeId}=${shortType}:${activityStatus}"
 }
+$reportedIncidentCount = Get-SequenceWorkflowRequiredProperty -Object $inst.instance -Name 'incidentCount'
+$returnedIncidentCount = @($inst.incidents).Count
+Write-Host ("[sequence verdict] instance={0} reportedActivities={1} returnedActivities={2} reportedIncidents={3} returnedIncidents={4} records={5}" -f $inst.instance.status, $inst.instance.activityCount, @($inst.activities).Count, $reportedIncidentCount, $returnedIncidentCount, ($recordEvidence -join ','))
+Write-Host ""
+Write-Host "SUCCESS - sequence completed with $expected activity records and zero incidents; SERVER console should show, in order:" -ForegroundColor Green
+$Lines | ForEach-Object { Write-Host "  $_" }

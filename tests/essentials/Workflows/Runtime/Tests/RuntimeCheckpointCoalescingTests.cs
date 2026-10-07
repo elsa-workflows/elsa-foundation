@@ -1,3 +1,5 @@
+using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json;
 using Elsa.Primitives.Models;
 using Elsa.Workflows.Runtime.Api;
@@ -31,9 +33,7 @@ public sealed class RuntimeCheckpointCoalescingTests(ITestOutputHelper output)
     [Fact]
     public void AddCoalescingRuntimeCheckpointPersistence_SelectsCoalescingPolicyAndDecoratesStores()
     {
-        var services = new ServiceCollection();
-        new WorkflowsRuntimeApiFeature().ConfigureServices(services);
-        services.AddCoalescingRuntimeCheckpointPersistence();
+        var services = CreateCoalescingServices();
 
         using var provider = services.BuildServiceProvider();
 
@@ -51,6 +51,38 @@ public sealed class RuntimeCheckpointCoalescingTests(ITestOutputHelper output)
         Assert.IsType<CoalescingActivityExecutionInspectionStore>(provider.GetRequiredService<IActivityExecutionInspectionStore>());
         Assert.NotNull(provider.GetRequiredService<IRuntimeCoalescingSessionAccessor>());
         Assert.NotNull(provider.GetRequiredService<IRuntimeCoalescingDrainScopeFactory>());
+    }
+
+    [Theory]
+    [InlineData(ServiceLifetime.Singleton)]
+    [InlineData(ServiceLifetime.Scoped)]
+    public async Task RepeatedRegistrationPreservesTheExplicitDrainFactoryLifetime(ServiceLifetime lifetime)
+    {
+        var services = CreateCoalescingServices(collection =>
+            collection.Add(new ServiceDescriptor(
+                typeof(IRuntimeCoalescingDrainScopeFactory),
+                typeof(ExplicitCoalescingDrainScopeFactory),
+                lifetime)));
+        var afterFirstRegistration = services.ToArray();
+
+        services.AddCoalescingRuntimeCheckpointPersistence();
+
+        Assert.Equal(afterFirstRegistration, services);
+        Assert.Equal(lifetime, Assert.Single(services, descriptor => descriptor.ServiceType == typeof(IRuntimeCoalescingDrainScopeFactory)).Lifetime);
+
+        await using var provider = services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
+        await using var firstScope = provider.CreateAsyncScope();
+        await using var secondScope = provider.CreateAsyncScope();
+        var first = firstScope.ServiceProvider.GetRequiredService<IRuntimeCoalescingDrainScopeFactory>();
+        var firstAgain = firstScope.ServiceProvider.GetRequiredService<IRuntimeCoalescingDrainScopeFactory>();
+        var second = secondScope.ServiceProvider.GetRequiredService<IRuntimeCoalescingDrainScopeFactory>();
+
+        Assert.IsType<ExplicitCoalescingDrainScopeFactory>(first);
+        Assert.Same(first, firstAgain);
+        if (lifetime == ServiceLifetime.Singleton)
+            Assert.Same(first, second);
+        else
+            Assert.NotSame(first, second);
     }
 
     [Fact]
@@ -392,14 +424,7 @@ public sealed class RuntimeCheckpointCoalescingTests(ITestOutputHelper output)
     [Fact]
     public async Task Coalesced_activity_pages_merge_overlay_without_traversing_the_inner_collection()
     {
-        var inner = new CountingActivityExecutionStateStore();
-        var session = new RuntimeCoalescingSession(
-            "wfexec-1",
-            new InMemoryWorkflowSchedulerWorkQueue(),
-            new CoalescingRuntimeCheckpointPersistenceOptions());
-        var store = new CoalescingActivityExecutionStateStore(
-            new CoalescingInner<IActivityExecutionStateStore>(inner),
-            new FixedCoalescingSessionAccessor(session));
+        var (inner, session, store) = CreateCountingActivityExecutionStateStore();
         await inner.SaveAsync(Activity("act-a"));
         await inner.SaveAsync(Activity("act-c"));
         session.BufferDeferred(NewEmptyCommit("wfexec-1", 99, "overlay") with
@@ -417,7 +442,212 @@ public sealed class RuntimeCheckpointCoalescingTests(ITestOutputHelper output)
         Assert.NotNull(first.NextContinuationToken);
         Assert.NotNull(second.NextContinuationToken);
         Assert.Null(third.NextContinuationToken);
-        Assert.Equal(4, inner.PageReadCount);
+        // The final durable row is replayed across the output-page boundary once, but look-ahead reuses the buffered
+        // candidate within the second request instead of issuing the old duplicate provider call.
+        Assert.Equal(3, inner.PageReadCount);
+    }
+
+    [Fact]
+    public async Task Coalesced_page_merger_empty_terminal_page_is_read_once_for_large_overlay()
+    {
+        const string workflowExecutionId = "wfexec-1";
+        var (inner, session, store) = CreateCountingActivityExecutionStateStore();
+        var overlayRows = Enumerable.Range(0, 128)
+            .Select(index => Activity($"overlay-{index:D3}"))
+            .ToArray();
+        session.BufferDeferred(NewEmptyCommit(workflowExecutionId, 100, "overlay") with
+        {
+            StateChanges = ActivityUpsert(overlayRows)
+        });
+
+        var page = await store.ListPageAsync(new ActivityExecutionStatePageQuery(workflowExecutionId, limit: 7));
+
+        Assert.Equal(
+            Enumerable.Range(0, 7).Select(index => $"overlay-{index:D3}"),
+            page.Items.Select(state => state.Execution.ActivityExecutionId));
+        Assert.NotNull(page.NextContinuationToken);
+        Assert.Equal(1, inner.PageReadCount);
+        Assert.All(inner.PageRequests, request => Assert.InRange(request.Limit, 1, 7));
+    }
+
+    [Fact]
+    public async Task Coalesced_page_merger_retains_terminal_candidate_while_overlay_rows_are_emitted()
+    {
+        const string workflowExecutionId = "wfexec-1";
+        var (inner, session, store) = CreateCountingActivityExecutionStateStore();
+        await inner.SaveAsync(Activity("d"));
+        session.BufferDeferred(NewEmptyCommit(workflowExecutionId, 101, "overlay") with
+        {
+            StateChanges = ActivityUpsert(Activity("a"), Activity("b"), Activity("c"))
+        });
+
+        var page = await store.ListPageAsync(new ActivityExecutionStatePageQuery(workflowExecutionId, limit: 4));
+
+        Assert.Equal(["a", "b", "c", "d"], page.Items.Select(state => state.Execution.ActivityExecutionId));
+        Assert.Null(page.NextContinuationToken);
+        Assert.Equal(1, inner.PageReadCount);
+    }
+
+    [Fact]
+    public async Task Coalesced_page_merger_preserves_interleaved_replacements_and_tombstones_across_pages()
+    {
+        const string workflowExecutionId = "wfexec-1";
+        var (inner, session, store) = CreateCountingActivityExecutionStateStore();
+        await inner.SaveAsync(Activity("a"));
+        await inner.SaveAsync(Activity("c"));
+        await inner.SaveAsync(Activity("e"));
+        var replacement = Activity("c");
+        session.BufferDeferred(NewEmptyCommit(workflowExecutionId, 102, "overlay") with
+        {
+            StateChanges = ActivityChanges(
+                ActivityChange("b"),
+                ActivityChange(replacement),
+                ActivityChange("f"),
+                ActivityDelete("e"))
+        });
+
+        var whole = await store.ListPageAsync(new ActivityExecutionStatePageQuery(workflowExecutionId, limit: 7));
+        Assert.Equal(["a", "b", "c", "f"], whole.Items.Select(state => state.Execution.ActivityExecutionId));
+        Assert.Same(replacement, Assert.Single(whole.Items, state => state.Execution.ActivityExecutionId == "c"));
+        Assert.Null(whole.NextContinuationToken);
+        Assert.Single(inner.PageRequests);
+        Assert.Equal(7, Assert.Single(inner.PageRequests).Limit);
+
+        inner.PageRequests.Clear();
+        var first = await store.ListPageAsync(new ActivityExecutionStatePageQuery(workflowExecutionId, limit: 2));
+        var firstReadPositions = inner.PageRequests.Select(request => request.ContinuationToken).ToArray();
+        Assert.Equal(firstReadPositions.Length, firstReadPositions.Distinct().Count());
+        Assert.InRange(firstReadPositions.Length, 1, 2);
+
+        inner.PageRequests.Clear();
+        var second = await store.ListPageAsync(new ActivityExecutionStatePageQuery(workflowExecutionId, limit: 2, first.NextContinuationToken));
+        var secondReadPositions = inner.PageRequests.Select(request => request.ContinuationToken).ToArray();
+        Assert.Equal(secondReadPositions.Length, secondReadPositions.Distinct().Count());
+        Assert.InRange(secondReadPositions.Length, 0, 2);
+
+        Assert.Equal(["a", "b"], first.Items.Select(state => state.Execution.ActivityExecutionId));
+        Assert.Equal(["c", "f"], second.Items.Select(state => state.Execution.ActivityExecutionId));
+        Assert.Same(replacement, Assert.Single(second.Items, state => state.Execution.ActivityExecutionId == "c"));
+        Assert.Null(second.NextContinuationToken);
+    }
+
+    [Fact]
+    public async Task Coalesced_page_merger_replays_a_bounded_page_at_an_output_boundary()
+    {
+        const string workflowExecutionId = "wfexec-1";
+        var (inner, session, store) = CreateCountingActivityExecutionStateStore();
+        var durable = Activity("c");
+        await inner.SaveAsync(durable);
+        session.BufferDeferred(NewEmptyCommit(workflowExecutionId, 103, "overlay") with
+        {
+            StateChanges = ActivityUpsert(Activity("a"), Activity("b"))
+        });
+
+        var first = await store.ListPageAsync(new ActivityExecutionStatePageQuery(workflowExecutionId, limit: 2));
+        Assert.Equal(["a", "b"], first.Items.Select(state => state.Execution.ActivityExecutionId));
+        Assert.NotNull(first.NextContinuationToken);
+        Assert.Single(inner.PageRequests);
+        Assert.DoesNotContain("\"c\"", DecodeCoalescingContinuationPayload(first.NextContinuationToken));
+
+        inner.PageRequests.Clear();
+        var second = await store.ListPageAsync(new ActivityExecutionStatePageQuery(workflowExecutionId, limit: 2, first.NextContinuationToken));
+        Assert.Same(durable, Assert.Single(second.Items));
+        Assert.Null(second.NextContinuationToken);
+        Assert.Single(inner.PageRequests);
+    }
+
+    [Fact]
+    public async Task Coalesced_page_merger_keeps_legacy_continuations_and_rejects_invalid_bindings()
+    {
+        const string workflowExecutionId = "wfexec-1";
+        const string binding = "coalesced-activity-state:workflow:wfexec-1";
+        var (inner, session, store) = CreateCountingActivityExecutionStateStore();
+        await inner.SaveAsync(Activity("a"));
+        await inner.SaveAsync(Activity("b"));
+        session.BufferDeferred(NewEmptyCommit(workflowExecutionId, 104, "overlay"));
+
+        var preChangeProviderPage = await inner.ListPageAsync(new ActivityExecutionStatePageQuery(workflowExecutionId, limit: 1));
+        var legacyToken = EncodeLegacyCoalescingContinuation(
+            binding,
+            lastIdentity: "a",
+            preChangeProviderPage.NextContinuationToken,
+            exhausted: false);
+        var resumed = await store.ListPageAsync(new ActivityExecutionStatePageQuery(workflowExecutionId, limit: 1, legacyToken));
+
+        Assert.Equal("b", Assert.Single(resumed.Items).Execution.ActivityExecutionId);
+        Assert.Null(resumed.NextContinuationToken);
+        await Assert.ThrowsAsync<ArgumentException>(async () =>
+            await store.ListPageAsync(new ActivityExecutionStatePageQuery(workflowExecutionId, limit: 1, "malformed")));
+        var checksumMismatch = EncodeLegacyCoalescingContinuation(binding, "a", null, exhausted: true).Split('.');
+        checksumMismatch[2] = $"{(checksumMismatch[2][0] == 'A' ? 'B' : 'A')}{checksumMismatch[2][1..]}";
+        await Assert.ThrowsAsync<ArgumentException>(async () =>
+            await store.ListPageAsync(new ActivityExecutionStatePageQuery(workflowExecutionId, limit: 1, string.Join('.', checksumMismatch))));
+        await Assert.ThrowsAsync<ArgumentException>(async () =>
+            await store.ListPageAsync(new ActivityExecutionStatePageQuery(
+                workflowExecutionId,
+                limit: 1,
+                EncodeLegacyCoalescingContinuation("coalesced-activity-state:workflow:other", "a", null, exhausted: true))));
+    }
+
+    [Fact]
+    public async Task Coalesced_page_merger_memoizes_empty_terminal_source_and_observes_cancellation()
+    {
+        const string workflowExecutionId = "wfexec-1";
+        var (inner, session, store) = CreateCountingActivityExecutionStateStore();
+        session.BufferDeferred(NewEmptyCommit(workflowExecutionId, 105, "overlay"));
+
+        var empty = await store.ListPageAsync(new ActivityExecutionStatePageQuery(workflowExecutionId, limit: 2));
+        Assert.Empty(empty.Items);
+        Assert.Null(empty.NextContinuationToken);
+        Assert.Equal(1, inner.PageReadCount);
+        session.BufferDeferred(NewEmptyCommit(workflowExecutionId, 106, "overlay") with
+        {
+            StateChanges = ActivityUpsert(Activity("overlay"))
+        });
+
+        using var fetchCancellation = new CancellationTokenSource();
+        inner.PageReaderOverride = async (query, cancellationToken) =>
+        {
+            await Task.Delay(Timeout.Infinite, cancellationToken);
+            return new RuntimeStorePage<ActivityExecutionState>(query, []);
+        };
+        var fetch = store.ListPageAsync(new ActivityExecutionStatePageQuery(workflowExecutionId, limit: 2), fetchCancellation.Token).AsTask();
+        fetchCancellation.Cancel();
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(async () => await fetch);
+        Assert.Equal(2, inner.PageReadCount);
+
+        var allOverlayContinuation = EncodeLegacyCoalescingContinuation(binding:
+            "coalesced-activity-state:workflow:wfexec-1", lastIdentity: "before-overlay", innerContinuation: null, exhausted: true);
+        using var preCancelled = new CancellationTokenSource();
+        preCancelled.Cancel();
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(async () =>
+            await store.ListPageAsync(new ActivityExecutionStatePageQuery(workflowExecutionId, limit: 1, allOverlayContinuation), preCancelled.Token));
+        Assert.Equal(2, inner.PageReadCount);
+    }
+
+    [Fact]
+    public async Task Coalesced_page_merger_scans_filtered_tail_once_per_provider_position()
+    {
+        const string workflowExecutionId = "wfexec-1";
+        var (inner, session, store) = CreateCountingActivityExecutionStateStore();
+        foreach (var activityExecutionId in Enumerable.Range('a', 12).Select(value => ((char)value).ToString()))
+            await inner.SaveAsync(Activity(activityExecutionId));
+
+        session.BufferDeferred(NewEmptyCommit(workflowExecutionId, 107, "overlay") with
+        {
+            StateChanges = ActivityChanges(
+                Enumerable.Range('c', 10)
+                    .Select(value => ActivityDelete(((char)value).ToString()))
+                    .ToArray())
+        });
+
+        var page = await store.ListPageAsync(new ActivityExecutionStatePageQuery(workflowExecutionId, limit: 2));
+
+        Assert.Equal(["a", "b"], page.Items.Select(state => state.Execution.ActivityExecutionId));
+        Assert.Null(page.NextContinuationToken);
+        Assert.Equal(6, inner.PageReadCount);
+        Assert.Equal(inner.PageRequests.Count, inner.PageRequests.Select(request => request.ContinuationToken).Distinct().Count());
+        Assert.All(inner.PageRequests, request => Assert.Equal(2, request.Limit));
     }
 
     // W8's Delay is the first real suspending activity: it writes a durable timer (via IDurableTimerStore) and
@@ -1019,22 +1249,47 @@ public sealed class RuntimeCheckpointCoalescingTests(ITestOutputHelper output)
             PostCommitIntents: [],
             Metadata: new Dictionary<string, string>());
 
-    private static RuntimeCheckpointStateChangeSet ActivityUpsert(ActivityExecutionState state) =>
+    private static RuntimeCheckpointStateChangeSet ActivityUpsert(params ActivityExecutionState[] states) =>
+        ActivityChanges(states.Select(ActivityChange).ToArray());
+
+    private static RuntimeCheckpointStateChangeSet ActivityChanges(params RuntimeStateChange<ActivityExecutionState>[] changes) =>
         new(
             workflowExecution: null,
             scheduler: null,
-            activityExecutions:
-            [
-                new RuntimeStateChange<ActivityExecutionState>(
-                    state.Execution.ActivityExecutionId,
-                    RuntimeStateChangeOperation.Upsert,
-                    state,
-                    new Dictionary<string, string>())
-            ],
+            activityExecutions: changes,
             bookmarks: [],
             durableValues: [],
             incidents: [],
             operational: []);
+
+    private static RuntimeStateChange<ActivityExecutionState> ActivityChange(ActivityExecutionState state) =>
+        new(state.Execution.ActivityExecutionId, RuntimeStateChangeOperation.Upsert, state, new Dictionary<string, string>());
+
+    private static RuntimeStateChange<ActivityExecutionState> ActivityChange(string activityExecutionId) =>
+        ActivityChange(Activity(activityExecutionId));
+
+    private static RuntimeStateChange<ActivityExecutionState> ActivityDelete(string activityExecutionId) =>
+        new(activityExecutionId, RuntimeStateChangeOperation.Delete, Activity(activityExecutionId), new Dictionary<string, string>());
+
+    private static string EncodeLegacyCoalescingContinuation(string binding, string lastIdentity, string? innerContinuation, bool exhausted)
+    {
+        var payload = JsonSerializer.SerializeToUtf8Bytes(new
+        {
+            Binding = binding,
+            Cursor = new { LastIdentity = lastIdentity, InnerContinuation = innerContinuation, InnerExhausted = exhausted }
+        });
+        return $"crsp1.{EncodeBase64Url(payload)}.{EncodeBase64Url(SHA256.HashData(payload))}";
+    }
+
+    private static string DecodeCoalescingContinuationPayload(string token)
+    {
+        var encoded = token.Split('.')[1].Replace('-', '+').Replace('_', '/');
+        encoded += (encoded.Length % 4) switch { 0 => "", 2 => "==", 3 => "=", _ => throw new FormatException() };
+        return Encoding.UTF8.GetString(Convert.FromBase64String(encoded));
+    }
+
+    private static string EncodeBase64Url(ReadOnlySpan<byte> value) =>
+        Convert.ToBase64String(value).TrimEnd('=').Replace('+', '-').Replace('/', '_');
 
     // A deferrable (non-boundary) checkpoint commit carrying a pending EnqueueSchedulerWork continuation intent,
     // like a hot-loop ActivityCompleted hop that schedules its successor.
@@ -1313,11 +1568,27 @@ public sealed class RuntimeCheckpointCoalescingTests(ITestOutputHelper output)
             throw new NotSupportedException("The cap test provides a fixed ambient session.");
     }
 
+    private static (CountingActivityExecutionStateStore Inner, RuntimeCoalescingSession Session, CoalescingActivityExecutionStateStore Store)
+        CreateCountingActivityExecutionStateStore()
+    {
+        var inner = new CountingActivityExecutionStateStore();
+        var session = new RuntimeCoalescingSession(
+            "wfexec-1",
+            new InMemoryWorkflowSchedulerWorkQueue(),
+            new CoalescingRuntimeCheckpointPersistenceOptions());
+        var store = new CoalescingActivityExecutionStateStore(
+            new CoalescingInner<IActivityExecutionStateStore>(inner),
+            new FixedCoalescingSessionAccessor(session));
+        return (inner, session, store);
+    }
+
     private sealed class CountingActivityExecutionStateStore : IActivityExecutionStateStore
     {
         private readonly InMemoryActivityExecutionStateStore inner = new();
 
         public int PageReadCount { get; private set; }
+        public List<(int Limit, string? ContinuationToken)> PageRequests { get; } = [];
+        public Func<ActivityExecutionStatePageQuery, CancellationToken, ValueTask<RuntimeStorePage<ActivityExecutionState>>>? PageReaderOverride { get; set; }
         public ValueTask<ActivityExecutionState> SaveAsync(ActivityExecutionState state, CancellationToken cancellationToken = default) => inner.SaveAsync(state, cancellationToken);
         public ValueTask<ActivityExecutionState?> FindAsync(string workflowExecutionId, string activityExecutionId, CancellationToken cancellationToken = default) => inner.FindAsync(workflowExecutionId, activityExecutionId, cancellationToken);
         public ValueTask<long> CountAsync(string workflowExecutionId, CancellationToken cancellationToken = default) => inner.CountAsync(workflowExecutionId, cancellationToken);
@@ -1326,7 +1597,25 @@ public sealed class RuntimeCheckpointCoalescingTests(ITestOutputHelper output)
         public ValueTask<RuntimeStorePage<ActivityExecutionState>> ListPageAsync(ActivityExecutionStatePageQuery query, CancellationToken cancellationToken = default)
         {
             PageReadCount++;
-            return inner.ListPageAsync(query, cancellationToken);
+            PageRequests.Add((query.Limit, query.ContinuationToken));
+            return PageReaderOverride is { } pageReader
+                ? pageReader(query, cancellationToken)
+                : inner.ListPageAsync(query, cancellationToken);
         }
+    }
+
+    private static ServiceCollection CreateCoalescingServices(Action<IServiceCollection>? configureBeforeCoalescing = null)
+    {
+        var services = new ServiceCollection();
+        new WorkflowsRuntimeApiFeature().ConfigureServices(services);
+        configureBeforeCoalescing?.Invoke(services);
+        services.AddCoalescingRuntimeCheckpointPersistence();
+        return services;
+    }
+
+    private sealed class ExplicitCoalescingDrainScopeFactory : IRuntimeCoalescingDrainScopeFactory
+    {
+        public IRuntimeCoalescingDrainScope Begin(string workflowExecutionId, int? maxSegmentCheckpoints = null) =>
+            throw new NotSupportedException("The registration test does not begin a runtime drain.");
     }
 }
