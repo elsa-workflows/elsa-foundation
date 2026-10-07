@@ -48,6 +48,8 @@ function safeFailureClass(error) {
   const name = error instanceof Error ? error.name : "";
   if (name === "TimeoutError") return "timeout";
   if (name === "AssertionError") return "assertion";
+  if (name === "Error" && error.message.includes("strict mode violation")) return "ambiguous-locator";
+  if (name === "Error" && /interrupted by another navigation|ERR_ABORTED/.test(error.message)) return "navigation-interrupted";
   if (name === "Error") return "error";
   return "other";
 }
@@ -342,10 +344,10 @@ async function signIn(page) {
       "the login challenge, rendered form and redirect must preserve the Studio return origin");
     log("Login return targets: query=studio-origin; hidden=studio-origin; redirect=studio-origin");
   });
-  await loginPhase(page, "login-session-ready", authResponses, async () => {
-    await page.goto(`${studioUrl}/workflows/definitions`, { waitUntil: "domcontentloaded" });
-    await page.getByRole("heading", { name: "Definitions" }).waitFor({ state: "visible", timeout: 45_000 });
-  });
+  await loginPhase(page, "login-session-navigation", authResponses,
+    () => page.goto(`${studioUrl}/workflows/definitions`, { waitUntil: "domcontentloaded" }));
+  await loginPhase(page, "login-session-ready", authResponses,
+    () => page.getByRole("heading", { name: "Definitions", exact: true }).waitFor({ state: "visible", timeout: 45_000 }));
 }
 
 function observeSafeAuthResponses(page) {
