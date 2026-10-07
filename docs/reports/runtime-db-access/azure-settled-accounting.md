@@ -1,20 +1,20 @@
 # Bounded Azure settlement accounting
 
-**Accepted scope:** one successful Coalesced HttpEndpoint request, one valid REST-start control, a durable settlement snapshot for the primary execution, and six subsequent natural resumption sweeps. Root reviewed the retained artifacts and an independent reconstruction of their lifecycle ledger. T02 remains In Progress/Running; T04 remains Blocked/Pending because exact caller, checkpoint-participant and work-item/outbox attribution are not complete. This is diagnostic accounting on the preserved before source, not a timing comparison or final integrated acceptance.
+**Accepted scope:** one successful Coalesced HttpEndpoint request and one successful Immediate HttpEndpoint request, each with a valid REST-start control, a primary durable-settlement snapshot, and six later natural resumption sweeps. Root reviewed each retained packet and an independent reconstruction of the lifecycle ledger. T02 remains In Progress/Running; T04 remains Blocked/Pending because exact caller, checkpoint-participant and work-item/outbox attribution are not complete. These are diagnostic accounting packets on the preserved before source, not a timing comparison or final integrated acceptance.
 
-The [sanitized evidence](evidence/azure-settled-accounting-2026-10-06.json) contains counts, identity hashes, source pins, finite verification results and the acceptance boundary. Private raw files include disposable database credentials and are retained outside the repository.
+The [sanitized Coalesced evidence](evidence/azure-settled-accounting-2026-10-06.json) and [sanitized Immediate evidence](evidence/immediate-settled-accounting-2026-10-06.json) contain allowlisted counts, provenance hashes, finite verification results and their acceptance boundaries. Private raw files include disposable database credentials and are retained outside the repository.
 
 ## Scenario and source
 
-The run began on 6 October 2026 at 22:12:22.547 UTC on the owner-approved isolated Skywalker ISP Azure runner: Ubuntu 24.04 x64, eight vCPUs, 32 GiB RAM, .NET 10.0.12 and PostgreSQL 16.15. It used the [reviewed deterministic fixture and companion](workload-reproduction-plan.md), with Alice Smith input and expected output. Each was invoked once, without an in-run retry. Both returned HTTP 200, expected body/output, Completed state, zero incidents, and effective Coalesced/50/boundary-level settings.
+The Coalesced run began on 6 October 2026 at 22:12:22.547 UTC on the owner-approved isolated Skywalker ISP Azure runner: Ubuntu 24.04 x64, eight vCPUs, 32 GiB RAM, .NET 10.0.12 and PostgreSQL 16.15. The Immediate capture used the same [reviewed deterministic fixture and REST control](workload-reproduction-plan.md); its descriptor changed only `configuration.cadence` from Coalesced to Immediate. Each HTTP request and REST control was invoked once, without an in-run retry. All four requests returned HTTP 200, matched the expected Alice Smith body/output, and completed with zero incidents. Both Coalesced controls reported Coalesced/50/boundary-level settings; both Immediate controls reported Immediate/null/activity-level settings.
 
 The runtime baseline is `e6faa5689814c33353009b13f5b9e44d0e9982a4`; diagnostic revision `b3f55bef32576011d39b93d664949a0cb705fb3b` plus the three pinned private source overlays supplies request-drain and resumption-sweep boundaries. Overlay manifest SHA-256 is `eb6d628f8baff10cac49ebe06aa20c37efa4392b96660a983ed306dcca9d217e`. Fixtures come from `6f3a07e24df4d2baf73dec7e52f501db55e755d9`. These pins identify a preserved before-source observation, not current main or an exact reproduction of the historical transform.
 
-The observation cutoff was 90 seconds after harness start, followed by a two-second terminal-only close window. The inner harness completed in 95.827 seconds and the outer guard in 95.922 seconds, including setup and cleanup. These durations are harness execution bounds, not workflow latency samples. Both receipts passed; all 589 pre/post binary pins, source overlays and fixture pins matched. Root independently verified that the 24 owned process groups and exact disposable PostgreSQL container were absent after cleanup. No forced host kill occurred.
+Each observation cutoff was 90 seconds after harness start, followed by a two-second terminal-only close window. For the Coalesced packet, the inner harness completed in 95.827 seconds and the outer guard in 95.922 seconds, including setup and cleanup. These durations are harness execution bounds, not workflow latency samples. Both Coalesced receipts passed; all 589 pre/post binary pins, source overlays and fixture pins matched. Root independently verified that the 24 owned process groups and exact disposable PostgreSQL container were absent after cleanup. No forced host kill occurred.
 
 ## What the database counts mean
 
-An EF command start and matching terminal form one command execution. A command can contain multiple SQL statements or touch several tables. The counts below therefore do not establish statement totals, network round trips, rows read, checkpoints or exclusive execution ownership. See the [existing source/query map](source-query-map.md) for source-confirmed mechanisms and the [EF identity ledger](ef-identity-accounting.md) for the shared taxonomy.
+An EF command start and matching terminal form one command execution. A command can contain multiple SQL statements or touch several tables. The counts below therefore do not establish statement totals, network round trips, rows read, checkpoints or exclusive execution ownership. See the [existing source/query map](source-query-map.md) for source-confirmed mechanisms and the [EF identity ledger](ef-identity-accounting.md) for the shared taxonomy. This section records the Coalesced packet; the Immediate packet follows below.
 
 | Trace | Runtime PostgreSQL | Diagnostics SQLite | Placement SQLite | IAM SQLite | Total EF commands |
 |---|---:|---:|---:|---:|---:|
@@ -38,7 +38,7 @@ Method stop is not the HTTP response-finished boundary. Exact Activity-object an
 
 ## What settlement and background work establish
 
-The read-only repeatable-read PostgreSQL snapshot identifies the primary execution as Completed and terminal, with zero scheduler items and no outbox items. All six known outbox-status counts are zero. Snapshot, primary execution HMAC, request-drain receipt, live-context receipt and settlement marker match. This snapshot concerns the primary execution at that instant; REST terminal readback is a separate control and does not constitute a second durable-settlement snapshot.
+The Coalesced read-only repeatable-read PostgreSQL snapshot identifies the primary execution as Completed and terminal, with zero scheduler items and no outbox items. All six known outbox-status counts are zero. Snapshot, primary execution HMAC, request-drain receipt, live-context receipt and settlement marker match. This snapshot concerns the primary execution at that instant; REST terminal readback is a separate control and does not constitute a second durable-settlement snapshot. The separate Immediate snapshot is described below.
 
 One resumption sweep preceded the settlement marker. Six subsequent sweeps began and completed after it. Every sweep performed six PostgreSQL SELECT command executions:
 
@@ -50,22 +50,38 @@ One resumption sweep preceded the settlement marker. Six subsequent sweeps began
 
 Each sweep had no observed SaveChanges, transaction generation, descendant tail or outstanding lifecycle at finalization. No resumption-candidate event was observed. This directly shows recurring reads after the primary workflow has reached the defined settled condition. It does not identify returned rows as belonging to that workflow or explain the historical 25–695 untraced commands. Source-bound sweep activity and diagnostics tails are separate observed categories; the historical remainder stays unresolved under T04.
 
+## Accepted Immediate companion
+
+The separately accepted Immediate packet uses the same preserved baseline revision, `e6faa5689814c33353009b13f5b9e44d0e9982a4`; the exact descriptor difference was cadence only. All 589 checked binary pins were unchanged. The single HTTP request returned 200 with the expected Alice Smith body, Completed status, zero incidents, Immediate cadence, no segment-checkpoint limit, and activity-level inspection. The valid REST companion returned 200 with matched output, Completed status, and zero incidents. The independent v2 ledger verified the request-plan typed-HMAC mappings and the per-run guard; the earlier v1 ledger's 530 repeated lifecycle annotations are not transaction starts or terminals.
+
+| Trace | Runtime PostgreSQL | Diagnostics SQLite | Placement SQLite | IAM SQLite | Total EF commands |
+|---|---:|---:|---:|---:|---:|
+| Immediate HttpEndpoint | 505 | 128 | 2 | 0 | 635 |
+| Immediate REST companion | 441 | 112 | 2 | 1 | 556 |
+| Seven six-command sweeps | 42 | 0 | 0 | 0 | 42 |
+
+The Immediate packet reconciled 1,233 command starts and terminals into 1,233 one-to-one pairs. The seven sweeps contributed 42 PostgreSQL commands; six began after the settlement marker. Each performed four `elsa_runtime_execution_liveness_state` SELECTs, one `elsa_runtime_scheduler_work_item` SELECT, and one `elsa_runtime_post_commit_outbox` SELECT. The six later sweeps completed with no in-flight command, SaveChanges, or transaction generation and conserved tails.
+
+The packet paired 296 SaveChanges operations and 70 transaction generations. The 600 transaction logger callbacks include lifecycle and savepoint events; they are not 600 transactions. At the HTTP method stop, 609 command pairs had completed, with eight descendant-tail command pairs after stop and 18 commands outside that source boundary. At the REST method stop, 525 had completed, with 16 descendant-tail pairs and 15 outside that source boundary. Activity ancestry records observed descendants but does not establish that the caller awaited them or exclusively owned their work.
+
+The Immediate snapshot concerns only the primary execution: it was Completed and terminal, had zero scheduler items, 15 unique Delivered outbox rows, and zero in each of the five non-Delivered statuses. The matching settlement marker, request plan and typed-HMAC trace associations were independently checked. Root verified 24 owned process groups and the exact disposable PostgreSQL container absent after cleanup. These checks accept the bounded accounting packet; they do not complete final candidate accounting or integrated correctness.
+
 ## Failure history and acceptance limits
 
-The first twelve normal Azure captures remain failed and excluded. The twelfth reached the full observation window and produced valid collector/snapshot evidence, but its final stage receipt exceeded the harness's 16 KiB cap: the validated wrapper was 20,239 bytes. Root and independent review confirmed that exact source failure. A prospective correction allows up to 64 KiB only for the collector-stage receipt, retaining the 16 KiB default for other stages and all overwrite/size rejection checks. Nine finite controls passed, including the old method rejecting the retained shape and the new method accepting it. The thirteenth fresh run is the accepted packet; no earlier receipt was rewritten or promoted.
+The first twelve normal Coalesced Azure captures remain failed and excluded. The twelfth reached the full observation window and produced valid collector/snapshot evidence, but its final stage receipt exceeded the harness's 16 KiB cap: the validated wrapper was 20,239 bytes. Root and independent review confirmed that exact source failure. A prospective correction allows up to 64 KiB only for the collector-stage receipt, retaining the 16 KiB default for other stages and all overwrite/size rejection checks. Nine finite controls passed, including the old method rejecting the retained shape and the new method accepting it. The thirteenth fresh Coalesced run is the accepted packet; no earlier receipt was rewritten or promoted. The separately accepted Immediate packet is a new observation and does not change the failed-capture record.
 
 Other preparatory fixes and their failed attempts remain in the [T02 issue history](https://github.com/elsa-workflows/elsa-foundation/issues/2386). Successful harness corrections are not runtime query reductions, latency gains or causal repairs of errors whose original evidence was unavailable.
 
-The accepted packet narrows the accounting gap; it does not close these remaining outcomes:
+The accepted packets narrow the accounting gap; they do not close these remaining outcomes:
 
-- The equivalent finite settled observation for Immediate and final candidate accounting remain to be completed.
+- Final candidate accounting and integrated correctness remain to be completed. The two accepted packets do not establish exclusive execution ownership or attribute every command to an exact repository caller.
 - Exact repository-caller, checkpoint-participant/marker and work-item/outbox identity joins remain distinct from command/context/Activity ancestry.
 - The historical untraced range, original transform cost and isolated valid-input 202 are not reproduced or explained by this packet.
-- Comparable low-logging before/after measurements, concurrent correctness and changed-contract interruption/replay verification remain with T17/T18. The [seven earlier before timing cases](before-timing.md) retain their own qualifications.
+- Final integrated before/after measurements, concurrent correctness and changed-contract interruption/replay verification remain with T17/T18. The [bounded Azure M2 timing pairs](azure-m2-timing.md) and [seven earlier before timing cases](before-timing.md) retain their separate qualifications.
 
 The already delivered M2 pagination correction has separate, qualified 277-to-194 command evidence. The repeated 277 here identifies the preserved before scenario; it supplies no new gain. Remaining reduction choices continue through their reviewed materialization, cadence, checkpoint and scheduler/outbox spikes. No global default, durability rule or program acceptance criterion changes.
 
-## Retained evidence fingerprints
+## Retained Coalesced evidence fingerprints
 
 | Artifact | SHA-256 |
 |---|---|
