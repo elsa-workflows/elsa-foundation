@@ -4,7 +4,7 @@
 
 **Created**: 2026-10-06
 
-**Status**: Approved
+**Status**: Implemented
 
 **Input**: Deliver Program #2382 end to end, including integrated correctness. Correction unit [T19/#2450](https://github.com/elsa-workflows/elsa-foundation/issues/2450) addresses the source-confirmed Coalesced drain factory lifetime mismatch discovered during T02/T03 follow-up. It blocks [T17/#2412](https://github.com/elsa-workflows/elsa-foundation/issues/2412).
 
@@ -74,5 +74,5 @@ An author keeps the same Coalesced workflow and an integrator keeps an explicitl
 - The source-confirmed singleton-to-scoped mismatch justifies a narrow contract correction independently of unresolved per-request attribution.
 - The current Coalesced concurrency baseline observed failures; it is not a successful performance comparison. It remains a mandatory downstream T17/T18 integrated correctness gate; T19 establishes the scope contract and representative correctness without claiming that downstream gate passed.
 - The scoped EF runtime composition is the contract-test composition; existing provider registration fixtures can be reused without querying a database.
-- The separate activation-write renewal issue #2287, main SQLite failure #2185/#2293, observer transaction-identity correction and package-publication boundary retain separate ownership.
-- No elapsed-time target, new global benchmark infrastructure, deployment or package publication is introduced.
+- The separate activation-write renewal issue #2287, main SQLite failure #2185/#2293, and observer transaction-identity correction retain separate ownership. The owner authorizes automatic Feedz preview-package publication caused by otherwise approved program merges; manual publication/releases and deployments remain outside scope.
+- No elapsed-time target or new global benchmark infrastructure is introduced.

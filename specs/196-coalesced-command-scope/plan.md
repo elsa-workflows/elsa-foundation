@@ -2,7 +2,7 @@
 
 **Branch**: `claude/runtime-db-coalesced-scope` | **Date**: 2026-10-06 | **Spec**: [spec.md](spec.md)
 
-**Input**: [T19/#2450](https://github.com/elsa-workflows/elsa-foundation/issues/2450), Program #2382. Planning draft; runtime implementation awaits independent spec/plan/tasks review.
+**Input**: [T19/#2450](https://github.com/elsa-workflows/elsa-foundation/issues/2450), Program #2382. The reviewed implementation and evidence are in the existing PR #2451; final pre-merge review and gates remain root-owned.
 
 ## Summary
 
@@ -26,7 +26,7 @@ The contract defect is source confirmed. It is a candidate mechanism for C4 quer
 
 **Performance Goals**: None for this unit. Report observed correctness separately from bounded final timing; no global benchmark/gate/default changes.
 
-**Constraints**: Preserve all current behavioral assertions and guarantees. Root and independent Sol own review/verification; serialized builds/hosts through queued dotnet. Publication/deployment excluded, subsequent merges held pending the existing owner question.
+**Constraints**: Preserve all current behavioral assertions and guarantees. Root and independent Sol own review/verification; serialized builds/hosts through queued dotnet. The owner authorizes automatic Feedz preview-package publication caused by otherwise approved program merges. Manual publication/releases and deployments remain outside scope; all exact-head and resulting-main gates still apply.
 
 **Scale/Scope**: One default registration plus focused shared-fixture contract tests and spec/evidence artifacts. No second DI container, shared-context locking, provider rewrite or feature redesign.
 
@@ -46,7 +46,7 @@ src/essentials/Workflows/Runtime/Api/Coalescing/
 tests/essentials/Workflows/Runtime/Tests/
   RuntimeCheckpointCoalescingTests.cs
 tests/essentials/Workflows/Runtime/Persistence/EntityFrameworkCore/ProviderTests/
-  RuntimeCoalescingScopeRegistrationTests.cs (proposed focused test file)
+  RuntimeCoalescingScopeRegistrationTests.cs (focused test file)
 ```
 
 **Structure Decision**: Keep the single registration correction at its current feature seam. Place real EF composition identity/validation controls in its existing provider test project, without attaching container fixture collections or performing queries. Reuse shared setup within the new test file; avoid reflection into primary-constructor fields or implementation-only mirror assertions.
@@ -59,7 +59,7 @@ tests/essentials/Workflows/Runtime/Persistence/EntityFrameworkCore/ProviderTests
 4. Run the targeted controls green, then revert only that registration in a temporary mutation working diff and require the controls fail again. Restore it and record source hashes; mutation is not a second implementation or a performance run.
 5. Run existing affected runtime suite and provider correctness gates as appropriate, rebuilt relevant backend HTTP e2e and primary/valid REST representative controls. The final C4 case belongs to downstream T17/T18 integrated acceptance, must retain every attempt and verify terminal state/incidents, and is not a T19 completion criterion. Root reviews all delegated changes and integrated evidence.
 6. Run architecture and generated-maps freshness checks. Refresh only genuinely changed generated snapshots as part of this authorized correction after reviewing the generated findings; stage each changed path including manifest. No stale map is used as navigation proof.
-7. Publish coherent scoped draft PR, exact-head gates/review rounds and issue/Project transitions. Green PR is distinct from resulting-main CI/Maps. Publication boundary hold remains until owner answers; never treat skipped/unavailable checks or unchanged retries as repairs.
+7. Use the existing PR #2451 for the scoped correction and record exact-head gates/review rounds and issue/Project transitions. Green PR checks are distinct from resulting-main CI/Maps. Automatic Feedz preview-package publication from otherwise approved program merges is authorized; manual publication/releases and deployments remain outside scope. Never treat skipped/unavailable checks or unchanged retries as repairs.
 
 ## Complexity Tracking
 
