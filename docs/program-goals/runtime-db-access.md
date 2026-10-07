@@ -1,6 +1,6 @@
 # Runtime Database Access
 
-- **Status:** In Progress; owner-appointed control room since 5 October 2026. Accounting handoff in review; post-pagination materialization experiment next.
+- **Status:** In Progress; owner-appointed control room since 5 October 2026. Qualified accounting and materialization spike delivered; bounded durable-value page-reuse specification active.
 - **Area:** Workflow runtime / EF persistence access / HTTP workload correctness.
 - **Stewards:** Sipke and the runtime database access program lead; root lead owns integration and QA.
 - **Program:** [#2382](https://github.com/elsa-workflows/elsa-foundation/issues/2382).
@@ -14,9 +14,15 @@ The owner-approved primary scenario uses HttpEndpoint startup and a deterministi
 
 ## Active objectives
 
-1. [#2386](https://github.com/elsa-workflows/elsa-foundation/issues/2386) Query accounting — lead review objective: finite T02/T04 handoff with qualified residual ownership. [#2395](https://github.com/elsa-workflows/elsa-foundation/issues/2395) receives the accepted input for its next normal-path materialization experiment.
-2. [#2450](https://github.com/elsa-workflows/elsa-foundation/issues/2450) Coalesced command-scope correction — merged in PR #2451 at `82e10a827`; resulting-main CI and Maps passed, so delivery is accepted as Done / Complete / Passed. Final C4/recovery proof remains T17/T18.
-3. [#2388](https://github.com/elsa-workflows/elsa-foundation/issues/2388) HTTP 202 diagnosis — in review; individual prior response attribution remains unresolved.
+1. [#2396](https://github.com/elsa-workflows/elsa-foundation/issues/2396) is the sole active execution objective: [spec197](../../specs/197-bounded-durable-value-page-reuse/spec.md) specifies bounded raw durable-value page reuse. Root and independent review accepted the specification/plan for task breakdown; design delivery and #1306 implementation gates remain open.
+2. [#2388](https://github.com/elsa-workflows/elsa-foundation/issues/2388) remains in review with the failed Coalesced concurrency control and unresolved historical HTTP202 attribution. Final integrated acceptance remains blocked on its disposition and any necessary correction.
+3. [#2399](https://github.com/elsa-workflows/elsa-foundation/issues/2399), [#1312](https://github.com/elsa-workflows/elsa-foundation/issues/1312), [#1239](https://github.com/elsa-workflows/elsa-foundation/issues/1239) and [#2407](https://github.com/elsa-workflows/elsa-foundation/issues/2407) are Ready after the accepted accounting/paging prerequisites. Their current scope requires no owner decision or missing reporter input; later implementation remains subject to their selected designs.
+
+T02/#2386 and T04/#2389 are delivered as [qualified accounting handoffs](https://github.com/elsa-workflows/elsa-foundation/issues/2386#issuecomment-6037855554) through PR #2447 at `a6684744`; resulting-main CI/Maps/CodeQL passed. T07/#2395 is delivered as the qualified [strategy-selection spike](../reports/runtime-db-access/materialization-reuse-spike.md) through PR #2480 at `7bb1aaecb`; resulting-main [CI](https://github.com/elsa-workflows/elsa-foundation/actions/runs/37620919147), [Maps](https://github.com/elsa-workflows/elsa-foundation/actions/runs/37620918826) and CodeQL passed. This selects design work, not an implemented cache or primary-workload saving. T19/#2450 remains delivered. M1/M3/M4/M5 and final T17/T18 remain incomplete.
+
+### Retained delivery checkpoints
+
+The records below retain historical evidence and failed attempts. Their then-current scheduling descriptions are superseded by the active objectives above; no later pass repairs an earlier failed run.
 
 [#2385](https://github.com/elsa-workflows/elsa-foundation/issues/2385), [#2392](https://github.com/elsa-workflows/elsa-foundation/issues/2392) and [#2393](https://github.com/elsa-workflows/elsa-foundation/issues/2393) are delivered through [PR #2414](https://github.com/elsa-workflows/elsa-foundation/pull/2414), [PR #2436](https://github.com/elsa-workflows/elsa-foundation/pull/2436) and [PR #2442](https://github.com/elsa-workflows/elsa-foundation/pull/2442). The paging correction is merged. Failed main932 evidence is retained with unresolved cause; subsequent exact main `1e94f719` and `592d6c0e` CI/Maps passed, and T06 Project Verification is Passed. Historical main `d652f734` failed ordinary CI with separate Core/Architecture jobs skipped; its causal attribution remains unresolved. Main `2ad0d854` separately passed CI, Maps and Windows/Linux backend-source replay on 7 October; those exact-revision passes do not repair the earlier evidence. The single SQLite supporting diagnostic did not reproduce the exception and its interval was rejected, so it supplies no causal repair or green-main claim.
 
@@ -26,7 +32,9 @@ The preceding fully verified accounting checkpoint, draft PR #2447 at `3616df777
 
 ## Scope and roadmap
 
-The [residual command account](../reports/runtime-db-access/residual-accounting.md) reconciles all 716 commands without method ancestry in the two extended captures, across 45 disjoint groups. The [joined T02/T04 report](../reports/runtime-db-access/joined-request-settlement-accounting.md) now supplies the reviewed identity subgraphs, drain/tail and settlement bins, separate sweeps and historical limits. Root accepts this finite input under the residual-uncertainty rule. T02/T04 remain open through qualified PR review; literal missing caller/row and response-boundary evidence stays unproven. On publishing the accepted input, remove only its T04/T07 discovery blockers with linked issue evidence. T07 can then perform its normal-path same-segment materialization experiment; T08/#1306 design and implementation gates remain. No new generic baseline harness is selected. The preceding `6174a09a5` passed CI/Core/Architecture/EF suites, Maps, filters and CodeQL; new heads need fresh gates. Final T17/T18 correctness and measurement requirements remain unchanged.
+The [residual command account](../reports/runtime-db-access/residual-accounting.md) conserves 716 commands without method ancestry across 45 groups; the [joined report](../reports/runtime-db-access/joined-request-settlement-accounting.md) preserves 931 exact method joins among 1,647 total commands. T02/T04 closure accepts the finite handoff and explicit residual ownership, not missing method outcomes, all row/caller ownership or a same-run response boundary. The program lead through T18 retains those gaps, with materialization-specific questions carried into T08/#1306. A selected change or claimed gain must resolve the attribution it depends on before acceptance.
+
+T07 selected bounded raw provider-page reuse within an eligible coalescing owner, with the live staged overlay reapplied on each read. Its empty-state CLR experiment and source-reachable start-to-invoke path justify spec197; the implementation must prove a non-empty actual-EF reduction and preserve authority, cursor validation, write freshness, lifetime and complete fallback. Final primary HTTP/REST savings remain T18 work. No new generic instrumentation platform or global cache is selected.
 
 - Explain successful request commands, unexpected 202 and untraced follow-up work.
 - Correct coalesced pagination, then assess repeated materialization.
