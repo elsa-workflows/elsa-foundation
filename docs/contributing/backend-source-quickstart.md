@@ -1,11 +1,12 @@
-# Run the backend from source on macOS
+# Run the backend from source
 
 Build the default `Elsa.Workbench` backend, check that it is ready, and run your first workflow. The
 Development profile uses SQLite, so this path needs no separate database server or Docker.
 
 ## Prerequisites
 
-- Git, a stable .NET 10 SDK, and PowerShell 7 (`pwsh`). Check with `dotnet --version` and `pwsh --version`.
+- Git and a stable .NET 10 SDK. On macOS or Linux, install PowerShell 7 (`pwsh`); the Windows command below
+  uses Windows PowerShell 5.1 (`powershell.exe`).
 - Network access to the public package sources listed in the committed [`NuGet.config`](../../NuGet.config).
   The verified Workbench restore needed no maintainer credentials.
 
@@ -49,8 +50,12 @@ steps and file allowlist are below.
 From the Foundation repository root, build the focused backend project:
 
 ```bash
-dotnet build src/apps/Elsa.Workbench/Elsa.Workbench.csproj
+dotnet build src/apps/Elsa.Workbench/Elsa.Workbench.csproj -p:RestoreLockedMode=true
 ```
+
+The build still performs its normal restore when needed, but locked mode keeps that restore aligned with the
+committed dependency versions required by CI. When dependencies change, update and review the lock files using
+the [NuGet lock-file instructions](../reference/nuget-lock-files.md#updating-lock-files-on-a-package-bump).
 
 Start the HTTP launch profile in one terminal and leave it running:
 
@@ -76,6 +81,45 @@ The script signs in with the local Development seed (`admin` / `Password123!`), 
 completed with one completed `WriteLine` activity and no incidents. These are local Development credentials;
 do not reuse them outside the disposable local host. Stop the backend with Ctrl+C in the terminal where you
 started it.
+
+### Linux and Windows command forms
+
+The default profile intentionally uses fixed port 5095. These command forms build once, then run the same
+documented launch profile and REST smoke. Keep the backend in the foreground in terminal 1. Run readiness and
+the smoke in terminal 2 after startup; retry readiness while the shell activates. If port 5095 is occupied,
+leave the existing listener alone and use the alternate-port recovery above.
+
+Linux, from the repository root:
+
+```bash
+dotnet build src/apps/Elsa.Workbench/Elsa.Workbench.csproj -p:RestoreLockedMode=true
+dotnet run --no-build --project src/apps/Elsa.Workbench/Elsa.Workbench.csproj --launch-profile http
+```
+
+In a second terminal:
+
+```bash
+curl -fsS http://localhost:5095/health/ready
+pwsh -NoProfile -File ./e2e-tests/Test-WorkflowFlow.ps1 -BaseUrl http://localhost:5095
+```
+
+Windows PowerShell 5.1, from the repository root:
+
+```powershell
+dotnet build src/apps/Elsa.Workbench/Elsa.Workbench.csproj -p:RestoreLockedMode=true
+dotnet run --no-build --project src/apps/Elsa.Workbench/Elsa.Workbench.csproj --launch-profile http
+```
+
+In a second PowerShell terminal:
+
+```powershell
+curl.exe -fsS http://localhost:5095/health/ready
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\e2e-tests\Test-WorkflowFlow.ps1 -BaseUrl http://localhost:5095
+```
+
+The hosted platform workflow also replays this profile on Linux and Windows after the same locked-mode build
+command and focused test. That automated check is not a fresh operating-system installation or a human newcomer
+trial; the exact platform command forms above are provided for local use.
 
 To resume later at the same source revision, run the same start command from the same checkout. Its local
 workflow data is retained.
@@ -119,7 +163,7 @@ or remove the directory.
 | Symptom | Next step |
 |---|---|
 | SDK missing or target framework unsupported | Install a .NET 10 SDK, then check `dotnet --version` from the repository root. |
-| `pwsh` not found | Install PowerShell 7 before running the workflow smoke test. The backend can remain running. |
+| PowerShell command not found | Install PowerShell 7 (`pwsh`) on macOS/Linux, or use Windows PowerShell 5.1 (`powershell.exe`) on Windows. The backend can remain running. |
 | Restore cannot reach a source or find a package | Check the source/version named in the error against `NuGet.config` and your network access. Keep the error and source revision when reporting it; do not add private credentials or suppress restore errors to get past it. |
 | Readiness cannot connect | Check the server terminal for startup errors and confirm it is listening on HTTP port 5095. Use the HTTP profile shown above. |
 | The smoke test cannot authenticate | Confirm the URL points to your Development host and its disposable data, then inspect the server error. Existing databases may have different credentials. |
@@ -165,13 +209,14 @@ tracked by [Studio #566](https://github.com/elsa-workflows/elsa-foundation-studi
 
 ## Verified baseline
 
-The build, startup, readiness and REST workflow commands were executed on macOS with SDK `10.0.300` at
+The original plain build, startup, readiness and REST workflow commands were executed on macOS with SDK `10.0.300` at
 Foundation revision `bc94b1a3694e02acefcfd4d0229cd5624a8b3a18` ([evidence #2430](https://github.com/elsa-workflows/elsa-foundation/issues/2430)).
 A separate locked restore passed with fresh NuGet package and HTTP caches, without the maintainer package
 cache or credentials; installed SDK library packs remained available
 ([evidence #2432](https://github.com/elsa-workflows/elsa-foundation/issues/2432)).
-These are historical baselines from before the root SDK selector was added. The manually executed
-commands above used SDK `10.0.300` on macOS. The separate hosted Windows/Linux source journey used SDK
+These are historical baselines from before the root SDK selector was added. The manually executed build used
+plain `dotnet build` without `-p:RestoreLockedMode=true`; it does not verify the locked-mode build command now
+documented above. The separate hosted Windows/Linux source journey used SDK
 `10.0.401` on Ubuntu 24.04 and Windows Server 2025; it builds and runs the Workbench DLL through an
 automated host rather than replaying these interactive commands ([evidence #2443](https://github.com/elsa-workflows/elsa-foundation/issues/2443)).
 They do not verify resolution through the new selector. SDK selection and hosted platform checks were later
@@ -183,8 +228,9 @@ these baselines.
 The local tool restore, focused build, occupied-port diagnostic, alternate-port smoke, and disposable SQLite
 reset were exercised on Foundation revision `0e7e7f4b23ba9c55bdb6d9062348f12cf25e4101` with macOS 26.6 ARM64
 and SDK `10.0.300` ([#2458 runtime receipt](https://github.com/elsa-workflows/elsa-foundation/issues/2458#issuecomment-6024342838)).
-This was automated execution in an existing development environment. The current focused build used
-`--no-restore` and reused previously restored project dependencies; the readiness and exact-file
+This was automated execution in an existing development environment. The focused build used `--no-restore`
+and reused previously restored project dependencies, so it does not verify the locked-mode build command now
+documented above. The readiness and exact-file
 `rm` instructions above are contributor steps, not commands claimed as verbatim in that run. The hosted
 Windows/Linux run does not literally replay these interactive commands. No fresh-OS, manual Windows/Linux,
 or human-newcomer trial is claimed.
