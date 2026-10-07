@@ -235,3 +235,4 @@ Reads current `specs/*` folders and task checkboxes. Status clues are textual, n
 | [194-portable-private-inputs](../../specs/194-portable-private-inputs/spec.md) | Portable compositions with required private inputs | Draft — specification checkpoint #2457; no production portability delivered | - | 0 | 0 | retained, deferred |
 | [195-authoring-api-boundary](../../specs/195-authoring-api-boundary/spec.md) | Authoring-only API | Draft | - | 0 | 0 | retained |
 | [196-coalesced-command-scope](../../specs/196-coalesced-command-scope/spec.md) | Coalesced Command Scope | Implemented | - | 10 | 1 | - |
+| [197-bounded-durable-value-page-reuse](../../specs/197-bounded-durable-value-page-reuse/spec.md) | Bounded Durable-Value Page Reuse | Draft | - | 0 | 17 | retained, deferred |
