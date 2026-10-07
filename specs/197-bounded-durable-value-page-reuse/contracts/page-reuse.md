@@ -1,6 +1,6 @@
 # Internal Contract: Durable-Value Page Reuse
 
-This document defines an internal Runtime Services behavior. It does not add or alter a public store API, paging model, persisted contract, or checkpoint durability rule.
+This document defines Runtime Services implementation behavior. The memo implementation is `public sealed` for direct unit testing under framework §2.23.3; retained entries remain private. It does not add a provider cache capability interface or alter a public store API, paging model, persisted contract, or checkpoint durability rule.
 
 ## Eligibility and fallback
 
@@ -10,15 +10,20 @@ Reuse is considered only when all of these conditions hold:
 2. The current call is owned by the active coalescing session for the same workflow execution.
 3. Before decoration, existing runtime backend ownership metadata identified one unambiguous `EntityFramework` backend owning the current durable-value contract and effective underlying registrations.
 4. The current context is a single ordinary persistence scope, and the resolved continuation codec is the built-in sealed HMAC codec from a proven effective singleton composition shared with the inner EF store. Custom, transient/scoped or unprovable codec compositions bypass reuse.
-5. The current owner is not itself suspended by a nested owner, disposed, deactivated, writing, or otherwise outside the cache lifetime. A legitimate child owner may use its own independent empty memo; entering that child permanently disables the parent's memo for the remainder of the parent scope.
+5. The effective access-context accessor is uniquely registered with a scoped or singleton lifetime shared by the wrapper and inner EF store; missing, transient, ambiguous or changed registrations bypass reuse. Read its current immutable context on every call.
+6. The current owner is not itself suspended by a nested owner, disposed, deactivated, writing, or otherwise outside the cache lifetime. A legitimate child owner may use its own independent empty memo; entering that child permanently disables the parent's memo for the remainder of the parent scope.
 
 If any condition cannot be established, call the existing inner store and preserve its result, exception, rejection, or cancellation behavior. Missing, ambiguous, in-memory, custom, or overridden backend registrations bypass reuse; eligibility uncertainty must not become a new startup error. Backend ownership metadata is trusted host-composition metadata, not a security attestation. The current access check remains authoritative on every call.
+
+Accessor stability relies on the existing [persistence access and scope contract](../../../src/essentials/Workflows/Runtime/EXTENSION_POINTS.md#persistence-access-and-scope-contracts): one immutable context is selected for an operation's DI scope, and transported contexts bind once to the shared scoped state. The default accessor enforces the one-bind rule. Host replacements must preserve that contract. Before/after context checks detect an observed change; they do not prove stability against a nonconforming accessor that changes A → B → A during a provider call. No private-type probe or new Core capability is introduced to classify such implementations.
 
 ## Read behavior
 
 For an eligible request, capture the current access context and exact `DurableValueStatePageQuery` fields. The key includes scope, access policy, purpose, across-scopes flag, workflow execution ID, requested limit, exact opaque input continuation, and reference identity of the built-in codec instance. Do not inspect token contents or duplicate EF cursor-purpose/binding logic in Runtime Services.
 
 Before lookup, keep cancellation, identity validation, current scope authorization, active owner, and execution-match checks live. For a miss, invoke the inner EF store. Admit only a successful complete page after the call returns and only if generation, active write count, owner, context, and codec still match the captured values. A page from an invalid/non-null cursor cannot be cached because the inner store validates before returning; failed validations are never entries. On a hit, the same codec instance and complete request key prove only that this exact cursor/request succeeded earlier under the same stable built-in codec. Custom codecs, different codec objects, or contexts that are no longer eligible bypass the memo.
+
+Identity and scope-length validity are deterministic properties of the immutable exact key: a failed first provider validation cannot create an entry, and a changed identity or scope cannot hit it. The wrapper does not copy EF private length constants. The live checks are the cancellation token, current accessor/context and `RequireScope()`, active owner, execution match and effective composition. Re-read owner/context/codec after a provider load before admission. This preserves validation outcomes without pretending the provider validator executes on a hit.
 
 Return a detached copy of the successful raw provider page. The existing coalescing page merger must run on every logical read and merge the then-current staged upserts and tombstones. This keeps staged changes visible and avoids stale merged pages.
 

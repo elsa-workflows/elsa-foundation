@@ -27,6 +27,9 @@ public static class CoalescingRuntimeCheckpointPersistenceExtensions
         if (services.Any(descriptor => descriptor.ServiceType == typeof(CoalescingRegistrationMarker)))
             return services;
 
+        var durableValueReuse = RuntimeCoalescingDurableValuePageReuseRegistration.CaptureBeforeDecoration(services);
+        var decorations = new List<RuntimeCoalescingDurableValuePageReuseRegistration.ServiceDecoration>();
+
         var options = new CoalescingRuntimeCheckpointPersistenceOptions();
         configureOptions?.Invoke(options);
 
@@ -42,23 +45,30 @@ public static class CoalescingRuntimeCheckpointPersistenceExtensions
 
         // Decorate the durable stores the coalescing session overlays. Each decorator passes through byte-for-byte when
         // no session is active; only an active session (established by the drain scope) redirects to the working set.
-        services.DecorateWithCoalescing<IRuntimeCheckpointCommitStore, CoalescingRuntimeCheckpointCommitStore>();
-        services.DecorateWithCoalescing<IWorkflowSchedulerWorkQueue, CoalescingWorkflowSchedulerWorkQueue>();
-        services.DecorateWithCoalescing<IRuntimePostCommitOutboxStore, CoalescingRuntimePostCommitOutboxStore>();
+        decorations.Add(services.DecorateWithCoalescing<IRuntimeCheckpointCommitStore, CoalescingRuntimeCheckpointCommitStore>());
+        decorations.Add(services.DecorateWithCoalescing<IWorkflowSchedulerWorkQueue, CoalescingWorkflowSchedulerWorkQueue>());
+        decorations.Add(services.DecorateWithCoalescing<IRuntimePostCommitOutboxStore, CoalescingRuntimePostCommitOutboxStore>());
         services.RemoveAll<IPostCommitOutboxLookupStore>();
         services.AddScoped<IPostCommitOutboxLookupStore>(serviceProvider =>
             (IPostCommitOutboxLookupStore)serviceProvider.GetRequiredService<IRuntimePostCommitOutboxStore>());
-        services.DecorateWithCoalescing<IWorkflowExecutionStateStore, CoalescingWorkflowExecutionStateStore>();
-        services.DecorateWithCoalescing<IActivityExecutionStateStore, CoalescingActivityExecutionStateStore>();
-        services.DecorateWithCoalescing<IDurableValueStateStore, CoalescingDurableValueStateStore>();
-        services.DecorateWithCoalescing<ISchedulerStateStore, CoalescingSchedulerStateStore>();
-        services.DecorateWithCoalescing<IActivityExecutionInspectionStore, CoalescingActivityExecutionInspectionStore>();
+        decorations.Add(services.DecorateWithCoalescing<IWorkflowExecutionStateStore, CoalescingWorkflowExecutionStateStore>());
+        decorations.Add(services.DecorateWithCoalescing<IActivityExecutionStateStore, CoalescingActivityExecutionStateStore>());
+        decorations.Add(services.DecorateWithCoalescing<IDurableValueStateStore, CoalescingDurableValueStateStore>());
+        decorations.Add(services.DecorateWithCoalescing<ISchedulerStateStore, CoalescingSchedulerStateStore>());
+        decorations.Add(services.DecorateWithCoalescing<IActivityExecutionInspectionStore, CoalescingActivityExecutionInspectionStore>());
 
         // The drain scope factory presence is what makes the drain orchestrator take its coalescing path: the
         // orchestrator has one constructor and its DI factory resolves this factory with GetService, so registering it
         // here is the whole selection mechanism.
         services.TryAddScoped<IRuntimeCoalescingDrainScopeFactory, RuntimeCoalescingDrainScopeFactory>();
-        services.AddSingleton<CoalescingRegistrationMarker>();
+        var markerDescriptor = new ServiceDescriptor(
+            typeof(CoalescingRegistrationMarker),
+            typeof(CoalescingRegistrationMarker),
+            ServiceLifetime.Singleton);
+        services.Add(markerDescriptor);
+        var reuseRegistrationDescriptor = ServiceDescriptor.Singleton(durableValueReuse);
+        services.Add(reuseRegistrationDescriptor);
+        durableValueReuse.CaptureAfterDecoration(decorations, markerDescriptor, reuseRegistrationDescriptor);
 
         return services;
     }
@@ -66,7 +76,7 @@ public static class CoalescingRuntimeCheckpointPersistenceExtensions
     // Captures the currently-registered (durable) implementation of TService as CoalescingInner<TService> and replaces
     // the TService registration with TDecorator. The decorator and the session reach the inner store via
     // CoalescingInner<TService> so resolving TService inside the decorator does not recurse.
-    private static void DecorateWithCoalescing<TService, TDecorator>(this IServiceCollection services)
+    private static RuntimeCoalescingDurableValuePageReuseRegistration.ServiceDecoration DecorateWithCoalescing<TService, TDecorator>(this IServiceCollection services)
         where TService : class
         where TDecorator : class, TService
     {
@@ -76,15 +86,18 @@ public static class CoalescingRuntimeCheckpointPersistenceExtensions
 
         services.Remove(descriptor);
 
-        services.Add(new ServiceDescriptor(
+        var innerDescriptor = new ServiceDescriptor(
             typeof(CoalescingInner<TService>),
             serviceProvider => new CoalescingInner<TService>((TService)InstantiateFromDescriptor(descriptor, serviceProvider)),
-            descriptor.Lifetime));
+            descriptor.Lifetime);
+        services.Add(innerDescriptor);
 
-        services.Add(new ServiceDescriptor(
+        var wrapperDescriptor = new ServiceDescriptor(
             typeof(TService),
             serviceProvider => ActivatorUtilities.CreateInstance<TDecorator>(serviceProvider),
-            descriptor.Lifetime));
+            descriptor.Lifetime);
+        services.Add(wrapperDescriptor);
+        return new(descriptor, innerDescriptor, wrapperDescriptor);
     }
 
     private static object InstantiateFromDescriptor(ServiceDescriptor descriptor, IServiceProvider serviceProvider)

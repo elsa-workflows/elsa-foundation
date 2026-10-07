@@ -414,6 +414,25 @@ per-drain memo of the **durable baseline** (never the buffered state, which woul
 bytes), invalidated at every durable flush. `CoalescingRuntimeCheckpointPersistenceOptions.CoalesceInspectionReads`
 (default on) disables it back to per-hop durable reads.
 
+**Durable-value page reuse** (spec 197) avoids repeated reads of unchanged provider pages within one eligible
+Coalesced drain. `WorkflowsRuntimeCheckpointPersistence.CoalesceDurableValueReads` defaults to `true`; set it to
+`false` to compare the same checkpoint cadence without page reuse. This switch is independent of
+`CoalesceInspectionReads` and does not enable Coalesced mode on an Immediate host.
+
+Reuse requires an unambiguous first-party EF backend that still owns its effective registrations, the shared
+singleton built-in HMAC continuation codec, and the same live ordinary persistence scope. Unsupported, custom,
+overridden or ambiguous compositions fall back to provider reads. Each exact page request is keyed by workflow,
+query, continuation, scope and codec identity. The provider page is detached, and each logical read merges the
+current staged changes again. `FindAsync` is unchanged.
+
+Each drain retains at most 32 pages, 1,024 rows and 4 MiB of accounted content; these are retention limits, not
+exact heap-size or aggregate host-memory guarantees. Exceeding a limit preserves complete provider results and
+disables admission until a successful write boundary/reset. Actual checkpoint and direct durable-value writes
+fence reuse before and after the write. Failed or canceled writes, nested ownership, disposal and drain
+cancellation permanently disable that session's memo. The memo belongs to its drain and is never persisted. Page reuse does not
+weaken checkpoint durability or promise that every workflow issues fewer queries. The [verification evidence](../specs/197-bounded-durable-value-page-reuse/evidence/integration-verification.md)
+separates the measured EF fixture reduction from live correctness and outstanding delivery gates.
+
 **Flush boundaries — mandatory checkpoints are never coalesced away.** The policy forces an immediate flush at
 every durability-critical boundary: `WorkflowSuspended`, `WorkflowCompleted`, `WorkflowFaulted`,
 `WorkflowCancelled`, `IncidentRecorded`, `ActivitySuspended`, `ActivityCancelled`, and `BookmarkCreated`. A

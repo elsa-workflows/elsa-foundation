@@ -43,6 +43,7 @@ public sealed class RuntimeCoalescingSession
     private readonly Dictionary<string, RuntimePostCommitOutboxItem> _outboxItems = new(StringComparer.Ordinal);
     private readonly HashSet<string> _durablyPersistedOutboxIds = new(StringComparer.Ordinal);
     private readonly IRuntimePostCommitOutboxStore? _innerOutboxStore;
+    private readonly RuntimeCoalescingDurableValuePageMemo? _durableValuePageMemo;
 
     public RuntimeCoalescingSession(
         string workflowExecutionId,
@@ -61,10 +62,18 @@ public sealed class RuntimeCoalescingSession
         _innerQueue = innerQueue;
         _innerOutboxStore = innerOutboxStore;
         MaxSegmentCheckpoints = options.MaxSegmentCheckpoints;
+        CoalesceDurableValueReads = options.CoalesceDurableValueReads;
+        CoalesceInspectionReads = options.CoalesceInspectionReads;
+        _durableValuePageMemo = options.CoalesceDurableValueReads
+            ? new RuntimeCoalescingDurableValuePageMemo()
+            : null;
     }
 
     public string WorkflowExecutionId { get; }
     public int MaxSegmentCheckpoints { get; }
+    public bool CoalesceDurableValueReads { get; }
+    public bool CoalesceInspectionReads { get; }
+    internal RuntimeCoalescingDurableValuePageMemo? DurableValuePageMemo => _durableValuePageMemo;
 
     /// <summary>
     /// <see langword="true"/> while the session is coalescing. An activity-attempt boundary and the per-segment hop cap
@@ -76,7 +85,17 @@ public sealed class RuntimeCoalescingSession
     public int HopCount { get; private set; }
     public bool HasBufferedChanges => _bufferedChangeSets.Count > 0;
 
-    public void Deactivate() => IsActive = false;
+    public void Deactivate()
+    {
+        IsActive = false;
+        DisableDurableValuePageReuse();
+    }
+
+    internal void BindDurableValuePageReuseCancellationToken(CancellationToken cancellationToken) =>
+        _durableValuePageMemo?.BindOwnerCancellationToken(cancellationToken);
+
+    /// <summary>Disables only the synchronized page memo; callers may use it from drain-cancellation callbacks.</summary>
+    internal void DisableDurableValuePageReuse() => _durableValuePageMemo?.DisablePermanently();
 
     /// <summary>Returns <see langword="true"/> when this session owns the supplied workflow execution and is active.</summary>
     public bool AppliesTo(string workflowExecutionId) =>

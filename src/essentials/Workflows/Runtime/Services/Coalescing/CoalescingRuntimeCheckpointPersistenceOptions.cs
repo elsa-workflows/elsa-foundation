@@ -17,6 +17,13 @@ public sealed class CoalescingRuntimeCheckpointPersistenceOptions
     public int MaxSegmentCheckpoints { get; set; } = 50;
 
     /// <summary>
+    /// When enabled (the default), equivalent durable-value page reads within an eligible coalescing session may
+    /// reuse the session's bounded raw-page memo. Disable to keep issuing the durable page request on each logical
+    /// read while retaining the selected checkpoint cadence.
+    /// </summary>
+    public bool CoalesceDurableValueReads { get; set; } = true;
+
+    /// <summary>
     /// When enabled (the default), <see cref="Contracts.IActivityExecutionInspectionStore.FindAsync"/> reads issued
     /// while a coalescing session owns the workflow execution are served from a per-drain memo of the durable
     /// baseline instead of re-reading the durable store on every hop. The memo caches exactly what the durable store
