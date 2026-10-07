@@ -96,9 +96,10 @@ function Invoke-LoggedCommand {
     $savedErrorActionPreference = $ErrorActionPreference
     try {
         $ErrorActionPreference = 'Continue'
-        $LASTEXITCODE = $null
+        # Native invocations update the global automatic variable; a local reset shadows it.
+        $global:LASTEXITCODE = $null
         & $application.Source @Arguments *> $LogPath
-        $exitCode = $LASTEXITCODE
+        $exitCode = $global:LASTEXITCODE
     } finally {
         $ErrorActionPreference = $savedErrorActionPreference
     }
@@ -155,9 +156,9 @@ function Invoke-SequenceSourceSmoke {
     try {
         $ErrorActionPreference = 'Continue'
         Write-Host "[command:sequence-smoke] $childName $($arguments -join ' ')"
-        $LASTEXITCODE = $null
+        $global:LASTEXITCODE = $null
         & $child.Source @arguments *> $rawLogPath
-        $exitCode = $LASTEXITCODE
+        $exitCode = $global:LASTEXITCODE
     } finally {
         $ErrorActionPreference = $savedErrorActionPreference
     }
