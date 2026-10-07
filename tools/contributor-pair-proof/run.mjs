@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { execFileSync, spawn } from "node:child_process";
+import { createHash } from "node:crypto";
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import net from "node:net";
 import os from "node:os";
@@ -274,6 +275,16 @@ function inspectImage(image) {
   return { imageId, platform, source, revision, version };
 }
 
+function inspectApplicationVersion(containerId, application) {
+  const manifest = commandOutput("docker", ["exec", containerId, "cat", `/app/${application}.deps.json`]);
+  const libraries = Object.keys(JSON.parse(manifest).libraries ?? {});
+  const entries = libraries.filter(name => name.startsWith(`${application}/`));
+  assert.equal(entries.length, 1, "the published application dependency manifest must identify its host version");
+  const version = entries[0].slice(application.length + 1);
+  assert.match(version, /^\d[0-9A-Za-z.+-]{0,99}$/);
+  return { version, manifestHash: createHash("sha256").update(manifest).digest("hex") };
+}
+
 function findRecord(value, predicate) {
   if (Array.isArray(value)) {
     for (const item of value) {
@@ -447,22 +458,41 @@ async function runBrowserJourney() {
   assert.ok(definitionId, "created workflow definition ID is missing from the Studio URL");
   log(`Created workflow definition ${definitionId} through the Studio UI`);
 
-  stage = "activity-picker";
-  const addActivity = page.getByRole("button", { name: /^Add (step|activity)$/i });
+  stage = "activity-picker-trigger";
+  const addActivity = page.getByRole("button", { name: "Add activity", exact: true });
   await addActivity.waitFor({ state: "visible" });
   await addActivity.click();
-  const picker = page.getByRole("listbox", { name: "Activity picker" });
-  await picker.getByRole("searchbox", { name: "Search activities" }).fill("WriteLine");
-  await picker.getByRole("option", { name: /write\s*line/i }).first().click();
+  stage = "activity-picker-open";
+  const menu = page.locator(".wf-connect-menu:visible");
+  await menu.waitFor({ state: "visible" });
+  assert.equal(await menu.count(), 1, "the activity picker menu must be unique and visible");
+  const picker = menu.getByRole("listbox", { name: "Activity picker", exact: true });
+  await picker.waitFor({ state: "visible" });
+  assert.equal(await picker.count(), 1, "the visible menu must contain one Activity picker listbox");
+  stage = "activity-picker-search";
+  await menu.getByRole("searchbox", { name: "Search activities", exact: true }).fill("WriteLine");
+  stage = "activity-picker-option";
+  const writeLineOption = picker.getByRole("option", { name: /write\s*line/i });
+  await writeLineOption.waitFor({ state: "visible" });
+  assert.equal(await writeLineOption.count(), 1, "the activity picker must return one Write Line option");
+  await writeLineOption.click();
   stage = "activity-configure";
-  await page.getByLabel("Text", { exact: true }).fill(expectedOutput);
+  const textProperty = page.locator(".wf-property-row").filter({
+    has: page.locator(".wf-property-row-header > label").filter({ hasText: /^Text$/ })
+  });
+  await textProperty.waitFor({ state: "visible" });
+  assert.equal(await textProperty.count(), 1, "the selected Write Line must expose one Text property row");
+  const textEditor = textProperty.getByRole("textbox");
+  await textEditor.waitFor({ state: "visible" });
+  assert.equal(await textEditor.count(), 1, "the Text property must expose one literal text editor");
+  await textEditor.fill(expectedOutput);
   const saveButton = page.getByRole("button", { name: /^Save$/i });
   if (await saveButton.count()) await saveButton.first().click();
   log("Added and configured a Write Line activity through the Studio UI");
 
   stage = "workflow-publish";
-  await page.getByRole("button", { name: /^Publish$/i }).first().click();
-  const reviewDialog = page.getByRole("dialog");
+  await page.getByRole("button", { name: "Review & publish", exact: true }).click();
+  const reviewDialog = page.getByRole("dialog", { name: "Review and publish", exact: true });
   await reviewDialog.waitFor({ state: "visible" });
   const publicationResponse = captureUiPostIdentity(page, {
     endpoint: pathname => /\/publishing\/workflows\/[^/]+\/publish$/.test(pathname),
@@ -471,7 +501,10 @@ async function runBrowserJourney() {
     project: "publication",
     expectedDefinitionId: definitionId
   });
-  await reviewDialog.getByRole("button", { name: /publish/i }).last().click();
+  const publishButton = reviewDialog.getByRole("button", { name: "Publish", exact: true });
+  await publishButton.waitFor({ state: "visible" });
+  assert.equal(await publishButton.count(), 1, "the review dialog must expose one Publish action");
+  await publishButton.click();
   const publication = await publicationResponse;
   assert.ok(publication.artifactId, "published artifact ID was not returned by the Studio publication action");
   if (publication.definitionId) assert.equal(publication.definitionId, definitionId);
@@ -638,6 +671,7 @@ async function main() {
   await waitForHttp(workbenchUrl, "Workbench");
   await waitForHttp(studioUrl, "Studio");
   for (const [name, image] of Object.entries(images)) {
+    stage = "container-image-provenance";
     const metadata = inspectImage(image);
     const serviceName = name === "workbench" ? "elsa-workbench" : "elsa-studio";
     const containerId = commandOutput("docker", compose("ps", "--quiet", serviceName));
@@ -649,6 +683,10 @@ async function main() {
     assert.equal(logDriver, "json-file", `${name} container is not using the expected local json-file log driver`);
     if (name === "workbench") ownedWorkbenchContainerId = containerId;
     log(`${name}: image ID=${metadata.imageId}; running image ID=${runningImageId}; OCI source=${metadata.source}; revision=${metadata.revision}; version=${metadata.version}; platform=${metadata.platform}`);
+    stage = "application-version-provenance";
+    const application = name === "workbench" ? "Elsa.Workbench" : "Elsa.Studio.Web";
+    const artifact = inspectApplicationVersion(containerId, application);
+    log(`${application}: dependency-manifest host version=${artifact.version}; trimmed manifest SHA256=${artifact.manifestHash}; this is distinct from the image tag and OCI base-image version`);
   }
 
   stage = "browser-workflow-journey";
