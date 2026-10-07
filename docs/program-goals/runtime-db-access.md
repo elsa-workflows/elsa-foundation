@@ -26,6 +26,8 @@ The preceding fully verified accounting checkpoint, draft PR #2447 at `3616df777
 
 ## Scope and roadmap
 
+The [residual command account](../reports/runtime-db-access/residual-accounting.md) now reconciles all 716 commands without method ancestry in the two extended captures, across 45 disjoint groups. Root adopts the independently reviewed T04/T07/T18 ownership and reopen triggers under this bucket's residual-uncertainty rule. This preserves unknown callers/rows and every measured side-store cost; it does not claim new savings or close any downstream gate. T02 remains open pending its joined T04 handoff and qualified acceptance. The next bounded action imports the accepted packets into T04, without another baseline harness. The preceding `ad1704144` checkpoint passed CI/Core/Architecture/EF suites, Maps, filters and CodeQL; new edits need fresh gates.
+
 - Explain successful request commands, unexpected 202 and untraced follow-up work.
 - Correct coalesced pagination, then assess repeated materialization.
 - Verify effective cadence and review complete ReplaySafe contracts.
