@@ -1,6 +1,6 @@
 # Quickstart: Validate Durable-Value Page Reuse
 
-This is the validation guide for the implementation candidate. [The integration checkpoint](evidence/integration-verification.md) records the commands and outcomes already observed; the remaining live and provider gates below still require verification. Use only an owned host and fresh disposable database for those gates.
+This is the validation guide for the implementation candidate. [The integration checkpoint](evidence/integration-verification.md) and [final bounded correctness qualification](evidence/final-live-verification.md) record the observed source, provider and live outcomes. The commands below describe how to repeat those checks on an owned host and fresh disposable database. Final PR-head hosted gates and resulting-main verification remain required for delivery.
 
 ## Prerequisites
 

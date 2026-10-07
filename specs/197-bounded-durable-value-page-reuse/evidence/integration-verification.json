@@ -158,5 +158,14 @@
     "scannerVsBacklogDirectlyObserved": false,
     "priorAttempt": "The first worker fixture expected an active persisted queue claim. Source confirmed Coalesced claims are held in the overlay while the durable backstop stays unclaimed; the test expectation was corrected. No product defect or repair is inferred.",
     "independentReview": "Root and independent reviewer accepted the mechanism; the copied-queue membership oracle was strengthened to exact unique ID set equality before final worker and root passes."
+  },
+  "finalLiveQualification": {
+    "sourceSha": "9d6fd212da419ef1d4efd978dc91c138d7776b4e",
+    "receipt": "final-live-verification.json",
+    "acceptedTasks": "T001-T017",
+    "remainingDeliveryGates": [
+      "Final PR-head hosted review and checks",
+      "Normal merge and resulting-main verification"
+    ]
   }
 }
