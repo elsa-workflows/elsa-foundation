@@ -1,0 +1,74 @@
+{
+  "capturedAtUtc": "2026-10-07T18:24:17.620728+00:00",
+  "scope": "Spec197 integrated candidate; no primary HTTP/REST savings or latency claim",
+  "files": {
+    "src/essentials/Workflows/Runtime/Services/Coalescing/AsyncLocalRuntimeCoalescingSessionAccessor.cs": "ccb6d1dd17e3545550bb18abd96095f3654a3fa14ea49e1a944f574c8c5139d5",
+    "src/essentials/Workflows/Runtime/Services/Coalescing/CoalescingRuntimeCheckpointCommitStore.cs": "3796d79fa7e1b16bcac94ff9af3ec06c9be7936dec2c5bb2696a3ecc0729b5b3",
+    "src/essentials/Workflows/Runtime/Services/Coalescing/CoalescingRuntimeStateStores.cs": "c05176b3f628f81bec5ef397862de29935faa5a2cf5cfc604f4282c0241a400f",
+    "src/essentials/Workflows/Runtime/Services/Coalescing/RuntimeCoalescingDrainScopeFactory.cs": "46c9d64cebbdb473a254b8cf715ec39d30a87c9dd9b962e9f17bb6f3a80ff792",
+    "src/essentials/Workflows/Runtime/Services/Coalescing/RuntimeCoalescingDurableValuePageMemo.cs": "4c96a1ef95eff5e8fd611f3c3a0fcf59d8afab591853a1dd5975d622784356ff",
+    "src/essentials/Workflows/Runtime/Services/Coalescing/RuntimeCoalescingSession.cs": "695630641258d3aecff4c5d9eef368c049c6640bfdc3b705460092bd7ba051e7",
+    "src/essentials/Workflows/Runtime/Services/Scheduler/WorkflowDrainOrchestrator.cs": "19eb7ba3e640c0fd0fc98f22ff14627d16fbac80e929e1e9766117bda954640e",
+    "tests/essentials/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/EfDurableValuePageReuseTests.cs": "81c08f6ef6ab82108474020baf27a930d0db51a43651eaeddc3b57490990a793",
+    "tests/essentials/Workflows/Runtime/Tests/CoalescingDurableValuePageMemoTests.cs": "96761fc27924b64bbc062a71fe0e5239b41368bc5fcf59ffcffa8e84902cc0bc",
+    "tests/essentials/Workflows/Runtime/Tests/CoalescingDurableValuePageReuseEligibilityTests.cs": "8e5abd799d79f50cf56a07adaec6daaec4a859a2e874f0302e85cfa094213041",
+    "tests/essentials/Workflows/Runtime/Tests/CoalescingDurableValuePageReuseTests.cs": "891a1cb9687faee82eff74048a2c1b4ea764cbdf43aa17aaba1ac75d99c89e08"
+  },
+  "verification": [
+    {
+      "label": "runtime-full",
+      "artifact": "1306-root-full-runtime-final.trx",
+      "sha256": "6bbf8389129058c2c7c8e2138fbcc9c827d31512afd4ca3b5cde0134751846ff",
+      "total": 2120,
+      "passed": 2120,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "label": "ef-full",
+      "artifact": "1306-root-full-ef-final.trx",
+      "sha256": "c1acdc30c455793bbf0c2c7ebd9144ab26679b2c05836f152648960ee0b7fbdb",
+      "total": 903,
+      "passed": 903,
+      "failed": 0,
+      "skipped": 0,
+      "pageReuseOutput": "Uncached durable-value page reads: 6; nonempty: 2.\nEnabled durable-value page reads: 2; nonempty: 1."
+    },
+    {
+      "label": "late-generation-before-fix",
+      "artifact": "1306-root-late-generation-before.trx",
+      "sha256": "935d012b419188de7a213160d91881d4b627cab7dfaedf9a888f814070eb009b",
+      "total": 2,
+      "passed": 1,
+      "failed": 1,
+      "skipped": 0
+    },
+    {
+      "label": "late-generation-fixed",
+      "artifact": "1306-root-late-generation-fixed.trx",
+      "sha256": "3f2b62dbb11e1a9e846327e38aecdda189a273f880f073c250a88f7786ca9fdc",
+      "total": 42,
+      "passed": 42,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "label": "original-cancellation-failure",
+      "artifact": "1306-root-full-runtime.trx",
+      "sha256": "24862e9e24b85702539f9bc05d1210e3eda536f2466bab4e236ec1d85fed14a0",
+      "total": 2113,
+      "passed": 2112,
+      "failed": 1,
+      "skipped": 0
+    },
+    {
+      "label": "architecture-full-after-canonical-restore",
+      "artifact": "1306-root-architecture-restored.trx",
+      "sha256": "baea7dec81d2d4eb75ab1b35a66439bc619258f36dbe6fdc8a1459f5a7c9164f",
+      "total": 635,
+      "passed": 635,
+      "failed": 0,
+      "skipped": 0
+    }
+  ]
+}

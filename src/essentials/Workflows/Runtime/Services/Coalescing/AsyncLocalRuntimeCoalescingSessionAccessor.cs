@@ -16,13 +16,19 @@ public sealed class AsyncLocalRuntimeCoalescingSessionAccessor : IRuntimeCoalesc
     public IDisposable Push(RuntimeCoalescingSession? session)
     {
         var prior = _current.Value;
+        if (prior?.Session is { } parent && !ReferenceEquals(parent, session))
+            parent.DisableDurableValuePageReuse();
+
         _current.Value = new Frame(session, prior);
-        return new PopWhenDisposed(this, prior);
+        return new PopWhenDisposed(this, prior, session);
     }
 
     private sealed record Frame(RuntimeCoalescingSession? Session, Frame? Prior);
 
-    private sealed class PopWhenDisposed(AsyncLocalRuntimeCoalescingSessionAccessor accessor, Frame? prior) : IDisposable
+    private sealed class PopWhenDisposed(
+        AsyncLocalRuntimeCoalescingSessionAccessor accessor,
+        Frame? prior,
+        RuntimeCoalescingSession? pushedSession) : IDisposable
     {
         private bool _disposed;
 
@@ -31,6 +37,7 @@ public sealed class AsyncLocalRuntimeCoalescingSessionAccessor : IRuntimeCoalesc
             if (_disposed)
                 return;
 
+            pushedSession?.DisableDurableValuePageReuse();
             accessor._current.Value = prior;
             _disposed = true;
         }

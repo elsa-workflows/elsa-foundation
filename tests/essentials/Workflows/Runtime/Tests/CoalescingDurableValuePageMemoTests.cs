@@ -414,6 +414,105 @@ public sealed class CoalescingDurableValuePageMemoTests
         Assert.Equal(2, loads);
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Admission_is_revalidated_after_metadata_is_cloned_and_reestimated(bool completeWriteDuringClone)
+    {
+        var query = Query();
+        var memo = new RuntimeCoalescingDurableValuePageMemo();
+        var codec = new object();
+        var current = true;
+        var metadata = new DynamicMetadata(index =>
+        {
+            // The first enumeration measures the provider page. The second occurs while cloning its metadata.
+            // Revoke context or advance the write generation during cloning to exercise the final publish-point check.
+            if (index == 2)
+            {
+                if (completeWriteDuringClone)
+                {
+                    using var write = memo.BeginWrite();
+                    write.Succeed();
+                }
+                else
+                {
+                    current = false;
+                }
+            }
+
+            return "value";
+        });
+        var row = new DurableValueState(
+            "provider-row",
+            WorkflowExecutionId,
+            "value",
+            new RuntimeValueTypeDescriptor("string", null, null),
+            DurableValueLifecycle.None,
+            DurableValueStorage.None,
+            null,
+            null,
+            null,
+            DateTimeOffset.UnixEpoch,
+            metadata);
+        var providerPage = Page(query, [row]);
+        var loads = 0;
+
+        var first = await memo.GetOrLoadAsync(query, Context(), codec, () =>
+        {
+            loads++;
+            return ValueTask.FromResult(providerPage);
+        }, () => current);
+
+        Assert.Equal("provider-row", Assert.Single(first.Items).DurableValueId);
+        Assert.Equal(completeWriteDuringClone, current);
+
+        // Restore validity and verify that the page was not retained despite the completed provider result.
+        current = true;
+        var retryPage = Page(query, [Row("provider-retry")]);
+        var retry = await memo.GetOrLoadAsync(query, Context(), codec, () =>
+        {
+            loads++;
+            return ValueTask.FromResult(retryPage);
+        }, () => current);
+
+        Assert.Equal(2, loads);
+        Assert.Equal("provider-retry", retry.Items[0].DurableValueId);
+    }
+
+    [Fact]
+    public async Task Cancellation_on_a_candidate_hit_propagates_without_loading_from_the_provider()
+    {
+        var query = Query();
+        var memo = new RuntimeCoalescingDurableValuePageMemo();
+        var codec = new object();
+        using var cancellation = new CancellationTokenSource();
+        var loads = 0;
+        var page = Page(query, [Row("cached")]);
+
+        await memo.GetOrLoadAsync(query, Context(), codec, () =>
+        {
+            loads++;
+            return ValueTask.FromResult(page);
+        }, () =>
+        {
+            cancellation.Token.ThrowIfCancellationRequested();
+            return true;
+        });
+
+        cancellation.Cancel();
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => memo.GetOrLoadAsync(query, Context(), codec, () =>
+        {
+            loads++;
+            return ValueTask.FromResult(Page(query, [Row("provider-after-cancellation")]));
+        }, () =>
+        {
+            cancellation.Token.ThrowIfCancellationRequested();
+            return true;
+        }).AsTask());
+
+        Assert.Equal(1, loads);
+    }
+
     [Fact]
     public async Task Estimate_and_clone_failures_fall_back_complete_and_do_not_poison_a_later_page()
     {

@@ -40,7 +40,11 @@ public sealed class CoalescingDurableValuePageReuseEligibilityTests
     [InlineData("duplicate-backend")]
     [InlineData("keyed-backend")]
     [InlineData("factory-backend")]
+    [InlineData("wrong-backend-service-type")]
     [InlineData("in-memory-backend")]
+    [InlineData("duplicate-owned-durable-contract")]
+    [InlineData("keyed-owned-durable-contract")]
+    [InlineData("interface-only-backend")]
     [InlineData("missing-owned-concrete")]
     [InlineData("duplicate-owned-concrete")]
     [InlineData("concrete-override")]
@@ -105,6 +109,8 @@ public sealed class CoalescingDurableValuePageReuseEligibilityTests
     [InlineData("remove-carrier")]
     [InlineData("replace-carrier")]
     [InlineData("duplicate-durable-contract")]
+    [InlineData("second-backend-instance")]
+    [InlineData("unowned-backend-factory")]
     public void Changes_to_captured_post_decoration_groups_disable_reuse(string scenario)
     {
         var composition = Decorate(BuildComposition());
@@ -138,11 +144,41 @@ public sealed class CoalescingDurableValuePageReuseEligibilityTests
                 services.Remove(raw.BackendDescriptor!);
                 services.AddSingleton<RuntimeOperationalStateStoreBackend>(_ => raw.Backend);
                 break;
+            case "wrong-backend-service-type":
+            {
+                services.Remove(raw.BackendDescriptor!);
+                var wrongBackendDescriptor = ServiceDescriptor.Singleton(typeof(object), raw.Backend);
+                services.Add(wrongBackendDescriptor);
+                raw.BackendDescriptor = wrongBackendDescriptor;
+                break;
+            }
             case "in-memory-backend":
                 services.Remove(raw.BackendDescriptor!);
                 services.Add(ServiceDescriptor.Singleton(new RuntimeOperationalStateStoreBackend(
                     RuntimeOperationalStateStoreBackend.InMemory,
                     [raw.ConcreteDescriptor, raw.DurableDescriptor])));
+                break;
+            case "duplicate-owned-durable-contract":
+            {
+                var duplicate = ServiceDescriptor.Scoped<IDurableValueStateStore>(_ => new OwnedDurableValueStore());
+                services.Add(duplicate);
+                ReplaceBackend(raw, RuntimeOperationalStateStoreBackend.EntityFramework,
+                    raw.ConcreteDescriptor, raw.DurableDescriptor, duplicate);
+                break;
+            }
+            case "keyed-owned-durable-contract":
+            {
+                services.Remove(raw.DurableDescriptor);
+                var keyed = ServiceDescriptor.DescribeKeyed(
+                    typeof(IDurableValueStateStore), "alternate", typeof(OwnedDurableValueStore), ServiceLifetime.Scoped);
+                services.Add(keyed);
+                ReplaceBackend(raw, RuntimeOperationalStateStoreBackend.EntityFramework,
+                    raw.ConcreteDescriptor, keyed);
+                break;
+            }
+            case "interface-only-backend":
+                services.Remove(raw.ConcreteDescriptor);
+                ReplaceBackend(raw, RuntimeOperationalStateStoreBackend.EntityFramework, raw.DurableDescriptor);
                 break;
             case "missing-owned-concrete":
                 services.Remove(raw.ConcreteDescriptor);
@@ -345,9 +381,27 @@ public sealed class CoalescingDurableValuePageReuseEligibilityTests
             case "duplicate-durable-contract":
                 services.AddScoped<IDurableValueStateStore>(_ => new OwnedDurableValueStore());
                 break;
+            case "second-backend-instance":
+                services.Add(ServiceDescriptor.Singleton(new RuntimeOperationalStateStoreBackend(
+                    RuntimeOperationalStateStoreBackend.EntityFramework,
+                    [raw.ConcreteDescriptor, raw.DurableDescriptor])));
+                break;
+            case "unowned-backend-factory":
+                services.AddSingleton<RuntimeOperationalStateStoreBackend>(_ => raw.Backend);
+                break;
             default:
                 throw new ArgumentOutOfRangeException(nameof(scenario), scenario, "Unknown post-decoration case.");
         }
+    }
+
+    private static void ReplaceBackend(RawComposition raw, string name, params ServiceDescriptor[] ownedDescriptors)
+    {
+        raw.Services.Remove(raw.BackendDescriptor!);
+        var backend = new RuntimeOperationalStateStoreBackend(name, ownedDescriptors);
+        var descriptor = ServiceDescriptor.Singleton(backend);
+        raw.Services.Add(descriptor);
+        raw.Backend = backend;
+        raw.BackendDescriptor = descriptor;
     }
 
     private static void ReplaceAccessor(RawComposition raw, ServiceDescriptor replacement)
@@ -379,7 +433,7 @@ public sealed class CoalescingDurableValuePageReuseEligibilityTests
         public IServiceCollection Services { get; } = services;
         public ServiceDescriptor ConcreteDescriptor { get; } = concreteDescriptor;
         public ServiceDescriptor DurableDescriptor { get; } = durableDescriptor;
-        public RuntimeOperationalStateStoreBackend Backend { get; } = backend;
+        public RuntimeOperationalStateStoreBackend Backend { get; set; } = backend;
         public ServiceDescriptor? BackendDescriptor { get; set; } = backendDescriptor;
         public ServiceDescriptor? AccessorDescriptor { get; set; } = accessorDescriptor;
         public ServiceDescriptor? CodecDescriptor { get; set; } = codecDescriptor;

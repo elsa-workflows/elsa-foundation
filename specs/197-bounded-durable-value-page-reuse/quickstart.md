@@ -1,6 +1,6 @@
 # Quickstart: Validate Durable-Value Page Reuse
 
-This is a validation guide for the implementation phase. It does not claim that the feature is implemented or that any command has run. Do not start a host or database as part of this planning-only task.
+This is the validation guide for the implementation candidate. [The integration checkpoint](evidence/integration-verification.md) records the commands and outcomes already observed; the remaining live and provider gates below still require verification. Use only an owned host and fresh disposable database for those gates.
 
 ## Prerequisites
 

@@ -1,0 +1,31 @@
+# Integrated durable-value page reuse checkpoint
+
+This checkpoint implements the reviewed memo in the Coalesced durable-value page path. It preserves the existing overlay merge on every logical read and keeps Immediate, ineligible compositions and manual wrappers on their original provider path. [Source/test digests and retained test-result summaries](integration-verification.json) identify the candidate bytes; the PR delivery receipt supplies the commit and hosted gates.
+
+## Observed reduction and semantics
+
+The actual CShells EF fixture runs the same typed start, deferred activity start and deterministic invocation with `CoalesceDurableValueReads` disabled and enabled. Backing durable-value page SELECTs decrease **6 → 2**; nonempty pages decrease **2 → 1**. Both runs finish with equivalent normalized workflow identity, invocation identity, contract type, serialized inputs, visible variable and result. This is a SQLite EF fixture measurement, not primary HttpEndpoint/REST savings, provider round trips, or latency evidence.
+
+The negative controls use the same option value as their measured run. An overlength identity and malformed public cursor reject with equivalent exception types. A further control warms a valid provider-produced cursor, corrupts only its inner HMAC signature, recomputes the valid public envelope checksum, and verifies rejection twice with reuse enabled and disabled. Its extra persisted row is created after the measured workflow and semantic capture, solely to obtain a nonterminal provider cursor.
+
+The first-party shared codec identity is source-confirmed by the captured unique singleton HMAC descriptor and the same scoped service provider constructing the inner EF store and wrapper. The real eligible EF reduction exercises that path. No reflection or test-only production API is used.
+
+## Safety and causal regressions
+
+The wrapper tests exercise current overlay additions, replacement and tombstones; direct and actual checkpoint writes; failed/canceled write permanent disablement; overlapping reads/writes; changed and global access contexts; changed descriptors/codecs; independent nested ownership, null ownership, disposal and fresh-session fallback. The original staged overlay remains visible when memo reuse ends. A fresh-session test is not claimed as an actual crash/recovery execution.
+
+Root and independent review found and closed three integration defects before this checkpoint:
+
+- Suppressing the ambient owner with `Push(null)` could allow its old pages to survive a tokenless inner write. The regression lost a persisted row before the fix and passes with permanent parent disablement.
+- A canceled drain could observe cancellation before its asynchronous memo-disable callback ran. The first full Runtime suite reported 2,112 passes and one heartbeat failure. A deterministic test holds the callback while a tokenless cleanup read runs; it fails with one backing read before the fix and requires two after it. The memo now observes the bound drain token under its lock as well as retaining the clear/disable callback. Caller and heartbeat controls preserve staged overlay values.
+- Metadata enumeration or the final validator could change admission context or write generation during cloning. The two-case regression covers context revocation and a successful reentrant write. Without the final generation guard the write case fails with one load instead of two. Admission now checks the live validator, memo eligibility and captured generation immediately before publishing the entry.
+
+A separate root mutation disables wrapper reuse and makes the EF reduction assertion fail at **6 versus 6**. These failures are retained as before/fixed or mutation evidence, not rewritten as successful attempts.
+
+## Verification and remaining gates
+
+Root's complete Runtime suite passes **2,120/2,120**, the complete EF integration suite passes **903/903**, and the architecture suite passes **635/635**, all with zero skipped tests. The latter includes the positive reduction and actual inner-HMAC controls. Root's final memo/wrapper filter passes 42 cases. Worker tests are inputs to this independently checked result.
+
+The eligibility matrix has 59 cases. The six added controls cover wrong backend service type, duplicate and keyed backend-owned durable contracts, missing concrete/self ownership, a second backend instance after capture, and a late unowned backend factory. The focused coverage report gives the registration class **88.4% branch coverage**, not 100%. Defensive private-state and internally constructed decoration-collision guards remain unexecuted; T007's literal complete-branch criterion stays unchecked pending final disposition.
+
+T006 and T008–T013 have integrated source/behavior proof. T014 retains actual recovery proof as an open requirement. T015's provider suite, T016's rebuilt PostgreSQL HTTP/REST, concurrent and recovery controls, and T017's final exact-head review/CI and delivery remain separate gates. The initial architecture invocation could not execute because this checkout lacked its assets file; canonical locked graph restore then completed, and all 635 architecture tests executed successfully. The initial Maps check identified three stale generated files. They were regenerated and reviewed; the subsequent freshness check passes. The manifest and generated findings reports remained byte-identical. No unavailable check is a pass, and no program milestone is completed by this checkpoint alone.

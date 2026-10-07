@@ -4,6 +4,7 @@ using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Workflows.Runtime.Services.Coalescing;
 using Elsa.Workflows.Runtime.Services.Executions;
 using Elsa.Workflows.Runtime.Services.Incidents;
 using Microsoft.Extensions.DependencyInjection;
@@ -350,6 +351,12 @@ public sealed class WorkflowDrainOrchestrator : IWorkflowDrainOrchestrator
         // mid-segment replays from the last flushed state plus durable scheduler-queue redelivery. A null cadence (no
         // resolver registered) coalesces with the host-configured cap, byte-identical to pre-R5 behavior.
         await using var scope = _coalescingScopeFactory.Begin(request.WorkflowExecutionId, cadence?.MaxSegmentCheckpoints);
+        scope.Session.BindDurableValuePageReuseCancellationToken(cancellationToken);
+        // Drain cancellation also covers ownership-lease loss. This callback fences only the memo's synchronized state;
+        // the existing overlay and session cancellation behavior remain on the normal drain path.
+        using var pageReuseCancellation = cancellationToken.Register(
+            static state => ((RuntimeCoalescingSession)state!).DisableDurableValuePageReuse(),
+            scope.Session);
         var drainResult = await DrainSchedulerAndPostCommitWorkAsync(request, cancellationToken);
         await scope.FlushAtQuiescenceAsync(cancellationToken);
         await NotifyObserversAsync(envelope, drainResult, cancellationToken);

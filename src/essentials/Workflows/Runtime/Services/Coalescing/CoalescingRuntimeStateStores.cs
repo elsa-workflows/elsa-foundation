@@ -1,6 +1,8 @@
 using Elsa.Workflows.Runtime.Contracts;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Workflows.Runtime.Services.Recovery;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace Elsa.Workflows.Runtime.Services.Coalescing;
 
@@ -137,6 +139,7 @@ public sealed class CoalescingDurableValueStateStore : IDurableValueStateStore
 {
     private readonly IDurableValueStateStore _inner;
     private readonly IRuntimeCoalescingSessionAccessor _sessionAccessor;
+    private readonly IServiceProvider? _serviceProvider;
 
     public CoalescingDurableValueStateStore(
         CoalescingInner<IDurableValueStateStore> inner,
@@ -149,19 +152,39 @@ public sealed class CoalescingDurableValueStateStore : IDurableValueStateStore
         CoalescingInner<IDurableValueStateStore> inner,
         IRuntimeCoalescingSessionAccessor sessionAccessor,
         RuntimeCoalescingDurableValuePageReuseRegistration? pageReuseRegistration)
+        : this(inner, sessionAccessor, pageReuseRegistration, null)
+    {
+    }
+
+    public CoalescingDurableValueStateStore(
+        CoalescingInner<IDurableValueStateStore> inner,
+        IRuntimeCoalescingSessionAccessor sessionAccessor,
+        RuntimeCoalescingDurableValuePageReuseRegistration? pageReuseRegistration,
+        IServiceProvider? serviceProvider)
     {
         _inner = inner.Value;
         _sessionAccessor = sessionAccessor;
         PageReuseRegistration = pageReuseRegistration;
+        _serviceProvider = serviceProvider;
     }
 
     internal RuntimeCoalescingDurableValuePageReuseRegistration? PageReuseRegistration { get; }
 
-    public ValueTask<DurableValueState> SaveAsync(DurableValueState state, CancellationToken cancellationToken = default) =>
-        _inner.SaveAsync(state, cancellationToken);
+    public async ValueTask<DurableValueState> SaveAsync(DurableValueState state, CancellationToken cancellationToken = default)
+    {
+        var session = _sessionAccessor.Current;
+        return await WriteWithMemoFenceAsync(
+            session,
+            () => _inner.SaveAsync(state, cancellationToken));
+    }
 
-    public ValueTask<bool> DeleteAsync(string workflowExecutionId, string durableValueId, CancellationToken cancellationToken = default) =>
-        _inner.DeleteAsync(workflowExecutionId, durableValueId, cancellationToken);
+    public async ValueTask<bool> DeleteAsync(string workflowExecutionId, string durableValueId, CancellationToken cancellationToken = default)
+    {
+        var session = _sessionAccessor.Current;
+        return await WriteWithMemoFenceAsync(
+            session,
+            () => _inner.DeleteAsync(workflowExecutionId, durableValueId, cancellationToken));
+    }
 
     public async ValueTask<DurableValueState?> FindAsync(string workflowExecutionId, string durableValueId, CancellationToken cancellationToken = default)
     {
@@ -180,11 +203,45 @@ public sealed class CoalescingDurableValueStateStore : IDurableValueStateStore
         if (_sessionAccessor.Current is not { } session || !session.AppliesTo(query.WorkflowExecutionId))
             return await _inner.ListPageAsync(query, cancellationToken);
 
+        var hasPageReuse = TryGetPageReuseContext(session, query.WorkflowExecutionId, out var pageReuse);
+
         return await CoalescingRuntimeStorePageMerger.MergeAsync(
             query,
             $"coalesced-durable-value:{query.WorkflowExecutionId}",
-            (limit, continuation) => _inner.ListPageAsync(
-                new DurableValueStatePageQuery(query.WorkflowExecutionId, limit, continuation), cancellationToken),
+            async (limit, continuation) =>
+            {
+                var innerQuery = new DurableValueStatePageQuery(query.WorkflowExecutionId, limit, continuation);
+                if (!hasPageReuse)
+                    return await _inner.ListPageAsync(innerQuery, cancellationToken);
+
+                bool ValidateCurrentOwnerAndContext()
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+                    if (!ReferenceEquals(_sessionAccessor.Current, session) ||
+                        !session.AppliesTo(innerQuery.WorkflowExecutionId) ||
+                        !session.CoalesceDurableValueReads ||
+                        !ReferenceEquals(session.DurableValuePageMemo, pageReuse.Memo) ||
+                        PageReuseRegistration?.IsEligible != true)
+                        return false;
+
+                    var current = pageReuse.Accessor.Current;
+                    if (!Equals(current, pageReuse.AccessContext))
+                        return false;
+
+                    // A cache hit must still perform the same ordinary-scope authorization check as the provider.
+                    _ = current.RequireScope();
+                    return ReferenceEquals(
+                        _serviceProvider!.GetService<IRuntimeRecoveryContinuationCodec>(),
+                        pageReuse.ContinuationCodec);
+                }
+
+                return await pageReuse.Memo.GetOrLoadAsync(
+                    innerQuery,
+                    pageReuse.AccessContext,
+                    pageReuse.ContinuationCodec,
+                    () => _inner.ListPageAsync(innerQuery, cancellationToken),
+                    ValidateCurrentOwnerAndContext);
+            },
             state => state.DurableValueId,
             after => session.GetDurableValueUpserts()
                 .Where(state => after is null || StringComparer.Ordinal.Compare(state.DurableValueId, after) > 0)
@@ -193,6 +250,53 @@ public sealed class CoalescingDurableValueStateStore : IDurableValueStateStore
             id => session.TryGetDurableValue(id, out _, out _),
             cancellationToken);
     }
+
+    private bool TryGetPageReuseContext(
+        RuntimeCoalescingSession session,
+        string workflowExecutionId,
+        out PageReuseContext pageReuse)
+    {
+        pageReuse = default;
+        var memo = session.DurableValuePageMemo;
+        var registration = PageReuseRegistration;
+        var serviceProvider = _serviceProvider;
+        if (!session.CoalesceDurableValueReads || memo is null || registration?.IsEligible != true || serviceProvider is null ||
+            !ReferenceEquals(_sessionAccessor.Current, session) || !session.AppliesTo(workflowExecutionId))
+            return false;
+
+        // Resolve only after the captured first-party composition is eligible. For the registered scoped EF inner store,
+        // this is the same provider/scope that constructed the inner store; singleton HMAC resolution is reference-stable.
+        var accessor = serviceProvider.GetService<IPersistenceAccessContextAccessor>();
+        var codec = serviceProvider.GetService<IRuntimeRecoveryContinuationCodec>();
+        if (accessor is null || codec is not HmacRuntimeRecoveryContinuationCodec)
+            return false;
+
+        var accessContext = accessor.Current;
+        if (accessContext.Scope is null || accessContext.AccessPolicy != PersistenceAccessPolicy.Ordinary || accessContext.AcrossScopes)
+            return false;
+
+        pageReuse = new PageReuseContext(memo, accessor, accessContext, codec);
+        return true;
+    }
+
+    private static async ValueTask<TResult> WriteWithMemoFenceAsync<TResult>(
+        RuntimeCoalescingSession? session,
+        Func<ValueTask<TResult>> writeAsync)
+    {
+        if (session?.DurableValuePageMemo is not { } memo)
+            return await writeAsync();
+
+        using var write = memo.BeginWrite();
+        var result = await writeAsync();
+        write.Succeed();
+        return result;
+    }
+
+    private readonly record struct PageReuseContext(
+        RuntimeCoalescingDurableValuePageMemo Memo,
+        IPersistenceAccessContextAccessor Accessor,
+        PersistenceAccessContext AccessContext,
+        IRuntimeRecoveryContinuationCodec ContinuationCodec);
 }
 
 internal static class CoalescingRuntimeStorePageMerger

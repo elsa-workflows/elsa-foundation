@@ -24,8 +24,28 @@ public sealed class RuntimeCoalescingDurableValuePageMemo
     private long _activeWrites;
     private int _rowCount;
     private long _contentBytes;
+    private CancellationToken _ownerCancellationToken;
+    private bool _ownerCancellationTokenBound;
     private bool _capacityDisabled;
     private bool _permanentlyDisabled;
+
+    /// <summary>Bind the drain lifetime once so cancellation fences reads before callback scheduling completes.</summary>
+    internal void BindOwnerCancellationToken(CancellationToken cancellationToken)
+    {
+        lock (_gate)
+        {
+            if (_ownerCancellationTokenBound)
+            {
+                DisablePermanentlyUnderLock();
+                return;
+            }
+
+            _ownerCancellationToken = cancellationToken;
+            _ownerCancellationTokenBound = true;
+            if (cancellationToken.IsCancellationRequested)
+                DisablePermanentlyUnderLock();
+        }
+    }
 
     /// <summary>
     /// Returns a fresh detached page from the memo, or invokes <paramref name="loadPageAsync"/> and returns its
@@ -35,7 +55,8 @@ public sealed class RuntimeCoalescingDurableValuePageMemo
         DurableValueStatePageQuery query,
         PersistenceAccessContext accessContext,
         object continuationCodecIdentity,
-        Func<ValueTask<RuntimeStorePage<DurableValueState>>> loadPageAsync)
+        Func<ValueTask<RuntimeStorePage<DurableValueState>>> loadPageAsync,
+        Func<bool>? validateCurrent = null)
     {
         ArgumentNullException.ThrowIfNull(query);
         ArgumentNullException.ThrowIfNull(accessContext);
@@ -67,11 +88,10 @@ public sealed class RuntimeCoalescingDurableValuePageMemo
 
         if (hit is not null)
         {
+            RuntimeStorePage<DurableValueState>? detachedHit = null;
             try
             {
-                var detachedHit = ClonePage(hit.Page, query);
-                if (IsCurrentHit(key, hit, hitGeneration))
-                    return detachedHit;
+                detachedHit = ClonePage(hit.Page, query);
             }
             catch (Exception exception) when (IsRecoverable(exception))
             {
@@ -79,6 +99,19 @@ public sealed class RuntimeCoalescingDurableValuePageMemo
                 mayAdmit = IsCurrentGeneration(hitGeneration);
                 readGeneration = hitGeneration;
             }
+
+            // Keep live access and owner checks outside the clone recovery catch. In particular, cancellation and a
+            // current-scope rejection on a would-be hit must retain their own behavior. A miss goes to the provider,
+            // which preserves its original validation order and exceptions.
+            if (detachedHit is not null &&
+                (validateCurrent is null || validateCurrent()) &&
+                IsCurrentHit(key, hit, hitGeneration))
+            {
+                return detachedHit;
+            }
+
+            if (detachedHit is not null)
+                mayAdmit = false;
 
             // A write, capacity boundary, or owner disable raced with the clone. This call began before that
             // boundary, so it must use the provider and must not refill the newer generation.
@@ -90,6 +123,11 @@ public sealed class RuntimeCoalescingDurableValuePageMemo
 
         var loadedPage = await loadPageAsync();
         if (!mayAdmit)
+            return loadedPage;
+
+        // The provider result is already complete. If ownership or access changed during the await, keep that result
+        // and simply decline to retain it; validation failures must not replace a successful provider outcome.
+        if (!CanAdmitAfterLoad(validateCurrent))
             return loadedPage;
 
         PageEstimate estimate;
@@ -109,6 +147,11 @@ public sealed class RuntimeCoalescingDurableValuePageMemo
         lock (_gate)
         {
             if (!CanReadOrAdmit() || _generation != readGeneration)
+                return loadedPage;
+
+            // Revalidate at the actual admission point so a write, owner transition, context change, or codec change
+            // that raced with accounting/cloning cannot publish a page into the memo.
+            if (!CanAdmitAfterLoad(validateCurrent))
                 return loadedPage;
 
             // A concurrent miss for this exact key already paid the entry cost. Check it before testing capacity so
@@ -153,6 +196,11 @@ public sealed class RuntimeCoalescingDurableValuePageMemo
                 return loadedPage;
             }
 
+            // Snapshotting and re-estimating can enumerate mutable provider-owned metadata. Revalidate once more at
+            // the actual publish point so a context/owner change during that work cannot admit the detached page.
+            if (!CanAdmitAfterLoad(validateCurrent) || !CanReadOrAdmit() || _generation != readGeneration)
+                return loadedPage;
+
             admitted = new Entry(snapshot, snapshotEstimate.RowCount, snapshotEstimate.ContentBytes);
             _entries.Add(key, admitted);
             _rowCount = checked(_rowCount + snapshotEstimate.RowCount);
@@ -191,15 +239,35 @@ public sealed class RuntimeCoalescingDurableValuePageMemo
     public void DisablePermanently()
     {
         lock (_gate)
-        {
-            AdvanceGenerationUnderLock();
-            ClearEntriesUnderLock();
-            _permanentlyDisabled = true;
-        }
+            DisablePermanentlyUnderLock();
     }
 
+    // The token is checked under _gate as well as by the callback. Cancellation is observable before async callbacks finish.
     private bool CanReadOrAdmit() =>
+        !(_ownerCancellationTokenBound && _ownerCancellationToken.IsCancellationRequested) &&
         !_capacityDisabled && !_permanentlyDisabled && _activeWrites == 0;
+
+    private void DisablePermanentlyUnderLock()
+    {
+        AdvanceGenerationUnderLock();
+        ClearEntriesUnderLock();
+        _permanentlyDisabled = true;
+    }
+
+    private static bool CanAdmitAfterLoad(Func<bool>? validateCurrent)
+    {
+        if (validateCurrent is null)
+            return true;
+
+        try
+        {
+            return validateCurrent();
+        }
+        catch (Exception exception) when (IsRecoverable(exception))
+        {
+            return false;
+        }
+    }
 
     // Both byte operands are guarded by the 4 MiB cap, so this checked sum is at most 8 MiB.
     private bool WouldExceedContentBudget(PageEstimate estimate) =>

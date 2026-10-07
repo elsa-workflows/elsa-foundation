@@ -1,6 +1,8 @@
 using System.Collections.Concurrent;
 using System.Data.Common;
+using System.Security.Cryptography;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using CShells;
 using CShells.DependencyInjection;
 using CShells.Features;
@@ -35,15 +37,18 @@ using Elsa.Workflows.Runtime.Api.Requests;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Workflows.Runtime.Contracts;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.DependencyInjection;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Entities;
 using Elsa.Workflows.Runtime.Resumption;
 using Elsa.Workflows.Runtime.Services.Coalescing;
+using Elsa.Workflows.Runtime.Services.Scheduler;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
 using Xunit;
 using Xunit.Abstractions;
 using SequenceActivity = Elsa.Activities.Sequence.Activities.Sequence;
@@ -64,7 +69,29 @@ public sealed class EfDurableValuePageReuseTests
     public EfDurableValuePageReuseTests(ITestOutputHelper output) => _output = output;
 
     [Fact]
-    public async Task Coalesced_external_sequence_materializes_nonempty_inputs_from_the_ef_backing_page()
+    public async Task Coalesced_external_sequence_reuses_nonempty_ef_pages_without_changing_workflow_values()
+    {
+        var uncached = await RunScenarioAsync(coalesceDurableValueReads: false);
+        var cached = await RunScenarioAsync(coalesceDurableValueReads: true);
+
+        _output.WriteLine($"Uncached durable-value page reads: {uncached.PageReadCount}; nonempty: {uncached.NonemptyPageReadCount}.");
+        _output.WriteLine($"Enabled durable-value page reads: {cached.PageReadCount}; nonempty: {cached.NonemptyPageReadCount}.");
+        Assert.True(uncached.PageReadCount >= 4, $"Expected the uncached start/invoke page reads, observed {uncached.PageReadCount}.");
+        Assert.True(uncached.NonemptyPageReadCount >= 2, $"Expected nonempty backing pages after the first external claim, observed {uncached.NonemptyPageReadCount} of {uncached.PageReadCount} page reads.");
+        Assert.True(cached.NonemptyPageReadCount > 0, "The enabled run must still read a nonempty backing page.");
+        Assert.True(
+            cached.PageReadCount < uncached.PageReadCount,
+            $"Expected the eligible EF memo to reduce backing page requests; uncached={uncached.PageReadCount}, enabled={cached.PageReadCount}.");
+        Assert.Equal(uncached.SemanticSnapshot, cached.SemanticSnapshot);
+        Assert.Equal(typeof(ArgumentException).FullName, uncached.InvalidIdentityFailureType);
+        Assert.Equal(uncached.InvalidIdentityFailureType, cached.InvalidIdentityFailureType);
+        Assert.Equal(typeof(ArgumentException).FullName, uncached.InvalidCursorFailureType);
+        Assert.Equal(uncached.InvalidCursorFailureType, cached.InvalidCursorFailureType);
+        Assert.Equal(typeof(ArgumentException).FullName, uncached.InvalidInnerCursorFailureType);
+        Assert.Equal(uncached.InvalidInnerCursorFailureType, cached.InvalidInnerCursorFailureType);
+    }
+
+    private static async Task<ScenarioCapture> RunScenarioAsync(bool coalesceDurableValueReads)
     {
         var databasePath = Path.Join(Path.GetTempPath(), $"elsa-durable-page-reuse-{Guid.NewGuid():N}.db");
         var connectionString = $"Data Source={databasePath};Pooling=False";
@@ -72,7 +99,7 @@ public sealed class EfDurableValuePageReuseTests
 
         try
         {
-            await using var host = CreateHost(connectionString, pageReads);
+            await using var host = CreateHost(connectionString, pageReads, coalesceDurableValueReads);
             var shell = await host.GetRequiredService<IShellRegistry>().GetOrActivateAsync(ShellName);
             var enabledFeatures = shell.ServiceProvider.GetRequiredService<ShellSettings>().EnabledFeatures;
             Assert.Contains("ActivitiesPrimitives", enabledFeatures);
@@ -152,11 +179,96 @@ public sealed class EfDurableValuePageReuseTests
                 Assert.Equal($"{Greeting}:{Payload}", activity.Completion!.Result.InlineValue!.Value.GetString());
             }
 
-            _output.WriteLine($"Uncached durable-value page reads: {observedPages.Count}; nonempty: {observedPages.Count(read => read)}; rows-present sequence: {string.Join(",", observedPages.Select(read => read ? "1" : "0"))}.");
-            Assert.True(observedPages.Count >= 4, $"Expected the uncached start/invoke page reads, observed {observedPages.Count}.");
-            Assert.True(
-                observedPages.Count(read => read) >= 2,
-                $"Expected at least two nonempty backing pages after the first external claim, observed {observedPages.Count(read => read)} of {observedPages.Count} page reads.");
+            var semanticSnapshot = JsonSerializer.Serialize(new
+            {
+                Status = workflow.Status.ToString(),
+                Cadence = workflow.SystemMetadata[RuntimeMetadataKeys.CheckpointCadence],
+                Activities = new[] { first, second }.Select(activity => new
+                {
+                    activity.Execution.ExecutableNodeId,
+                    activity.Execution.ActivityType,
+                    WorkflowIdentityMatches = activity.Execution.WorkflowExecutionId == started.WorkflowExecutionId,
+                    InvocationIdentityMatches = activity.InputSnapshot!.InvocationId == activity.InvocationId,
+                    ContractActivityType = activity.ContractIdentity!.ActivityTypeKey,
+                    Inputs = activity.InputSnapshot.Values.OrderBy(pair => pair.Key, StringComparer.Ordinal).Select(pair => new
+                    {
+                        pair.Key,
+                        Value = pair.Value.InlineValue!.Value.GetRawText()
+                    }),
+                    Result = activity.Completion!.Result.InlineValue!.Value.GetRawText()
+                })
+            });
+
+            var durableValueStore = scope.ServiceProvider.GetRequiredService<IDurableValueStateStore>();
+            var sessionAccessor = scope.ServiceProvider.GetRequiredService<IRuntimeCoalescingSessionAccessor>();
+            var coalescingOptions = scope.ServiceProvider.GetRequiredService<CoalescingRuntimeCheckpointPersistenceOptions>();
+            Assert.Equal(coalesceDurableValueReads, coalescingOptions.CoalesceDurableValueReads);
+            var invalidExecutionId = new string('x', RuntimeOperationalStateEfModule.IdentityMaximumLength + 1);
+            var invalidIdentitySession = new RuntimeCoalescingSession(
+                invalidExecutionId,
+                new InMemoryWorkflowSchedulerWorkQueue(),
+                coalescingOptions);
+            string invalidIdentityFailureType;
+            using (sessionAccessor.Push(invalidIdentitySession))
+            {
+                invalidIdentityFailureType = await CaptureFailureTypeAsync(
+                    async () => await durableValueStore.ListPageAsync(new DurableValueStatePageQuery(invalidExecutionId, limit: 10)));
+            }
+
+            // The completed workflow persists one value. Add a second only for the cursor rejection control;
+            // the measured workflow page counts and semantic snapshot were captured before this setup.
+            var persistedValue = Assert.Single((await durableValueStore.ListPageAsync(
+                new DurableValueStatePageQuery(started.WorkflowExecutionId, limit: 10))).Items);
+            await durableValueStore.SaveAsync(new DurableValueState(
+                "cursor-rejection-probe",
+                started.WorkflowExecutionId,
+                "cursor-rejection-probe",
+                persistedValue.Type,
+                persistedValue.Lifecycle,
+                persistedValue.Storage,
+                persistedValue.InlineValue,
+                persistedValue.ExternalReference,
+                persistedValue.SourceActivityExecutionId,
+                persistedValue.CapturedAt,
+                persistedValue.Metadata));
+            var cursorSession = new RuntimeCoalescingSession(
+                started.WorkflowExecutionId,
+                new InMemoryWorkflowSchedulerWorkQueue(),
+                coalescingOptions);
+            string invalidCursorFailureType;
+            string invalidInnerCursorFailureType;
+            using (sessionAccessor.Push(cursorSession))
+            {
+                // Warm the valid first-page key before asking the public coalesced store to reject a malformed token.
+                await durableValueStore.ListPageAsync(new DurableValueStatePageQuery(started.WorkflowExecutionId, limit: 10));
+                await durableValueStore.ListPageAsync(new DurableValueStatePageQuery(started.WorkflowExecutionId, limit: 10));
+                invalidCursorFailureType = await CaptureFailureTypeAsync(
+                    async () => await durableValueStore.ListPageAsync(new DurableValueStatePageQuery(
+                        started.WorkflowExecutionId,
+                        limit: 10,
+                        continuationToken: "not-a-valid-coalescing-token")));
+
+                // Use a real provider-produced cursor, warm its valid key, then corrupt only its inner signature.
+                // Recompute the public envelope checksum so rejection must reach the EF/HMAC boundary.
+                var firstPage = await durableValueStore.ListPageAsync(
+                    new DurableValueStatePageQuery(started.WorkflowExecutionId, limit: 1));
+                Assert.NotNull(firstPage.NextContinuationToken);
+                await durableValueStore.ListPageAsync(new DurableValueStatePageQuery(
+                    started.WorkflowExecutionId, limit: 1, continuationToken: firstPage.NextContinuationToken));
+                var invalidInnerCursor = CorruptInnerSignature(firstPage.NextContinuationToken);
+                async Task ReadInvalidInnerCursorAsync() => await durableValueStore.ListPageAsync(
+                    new DurableValueStatePageQuery(started.WorkflowExecutionId, limit: 1, continuationToken: invalidInnerCursor));
+                invalidInnerCursorFailureType = await CaptureFailureTypeAsync(ReadInvalidInnerCursorAsync);
+                Assert.Equal(invalidInnerCursorFailureType, await CaptureFailureTypeAsync(ReadInvalidInnerCursorAsync));
+            }
+
+            return new ScenarioCapture(
+                observedPages.Count,
+                observedPages.Count(read => read),
+                semanticSnapshot,
+                invalidIdentityFailureType,
+                invalidCursorFailureType,
+                invalidInnerCursorFailureType);
         }
         finally
         {
@@ -165,7 +277,10 @@ public sealed class EfDurableValuePageReuseTests
         }
     }
 
-    private static ServiceProvider CreateHost(string connectionString, DurableValuePageReadProbe pageReads)
+    private static ServiceProvider CreateHost(
+        string connectionString,
+        DurableValuePageReadProbe pageReads,
+        bool coalesceDurableValueReads)
     {
         var values = new Dictionary<string, string?>
         {
@@ -176,7 +291,8 @@ public sealed class EfDurableValuePageReuseTests
             [$"CShells:Shells:{ShellName}:Features:WorkflowsRuntimeEntityFrameworkCore:RecoveryContinuationSigningKey"] = RecoverySigningKey,
             [$"CShells:Shells:{ShellName}:Features:WorkflowsRuntimeEntityFrameworkCore:HierarchyCursorSigningKey"] = HierarchySigningKey,
             [$"CShells:Shells:{ShellName}:Features:WorkflowsRuntimeCheckpointPersistence:Mode"] = "Coalesced",
-            [$"CShells:Shells:{ShellName}:Features:WorkflowsRuntimeCheckpointPersistence:MaxSegmentCheckpoints"] = "50"
+            [$"CShells:Shells:{ShellName}:Features:WorkflowsRuntimeCheckpointPersistence:MaxSegmentCheckpoints"] = "50",
+            [$"CShells:Shells:{ShellName}:Features:WorkflowsRuntimeCheckpointPersistence:CoalesceDurableValueReads"] = coalesceDurableValueReads.ToString()
         };
         foreach (var id in SelectedFeatureIds)
             values[$"CShells:Shells:{ShellName}:Features:{id}"] = null;
@@ -298,6 +414,32 @@ public sealed class EfDurableValuePageReuseTests
             activityContract: contract);
     }
 
+    private static async Task<string> CaptureFailureTypeAsync(Func<Task> action)
+    {
+        var exception = await Record.ExceptionAsync(action);
+        Assert.NotNull(exception);
+        return exception.GetType().FullName!;
+    }
+
+    private static string CorruptInnerSignature(string coalescingToken)
+    {
+        var parts = coalescingToken.Split('.');
+        Assert.Equal("crsp1", parts[0]);
+        var base64Payload = parts[1].Replace('-', '+').Replace('_', '/');
+        base64Payload = base64Payload.PadRight((base64Payload.Length + 3) / 4 * 4, '=');
+        var payload = JsonNode.Parse(Convert.FromBase64String(base64Payload))!;
+        var cursor = payload["Cursor"]!;
+        var innerToken = cursor["InnerContinuation"]!.GetValue<string>().Split('.');
+        Assert.Equal(3, innerToken.Length);
+        Assert.NotEmpty(innerToken[2]);
+        innerToken[2] = (innerToken[2][0] == 'A' ? "B" : "A") + innerToken[2][1..];
+        cursor["InnerContinuation"] = string.Join('.', innerToken);
+        var bytes = JsonSerializer.SerializeToUtf8Bytes(payload);
+        return $"crsp1.{Encode(bytes)}.{Encode(SHA256.HashData(bytes))}";
+
+        static string Encode(byte[] value) => Convert.ToBase64String(value).TrimEnd('=').Replace('+', '-').Replace('/', '_');
+    }
+
     private static readonly string[] SelectedFeatureIds =
     [
         "Primitives",
@@ -314,6 +456,14 @@ public sealed class EfDurableValuePageReuseTests
         "WorkflowsRuntimeTriggers",
         "WorkflowsRuntimeCheckpointPersistence"
     ];
+
+    private sealed record ScenarioCapture(
+        int PageReadCount,
+        int NonemptyPageReadCount,
+        string SemanticSnapshot,
+        string InvalidIdentityFailureType,
+        string InvalidCursorFailureType,
+        string InvalidInnerCursorFailureType);
 
     private sealed class DurableValuePageReadProbe : DbCommandInterceptor
     {
