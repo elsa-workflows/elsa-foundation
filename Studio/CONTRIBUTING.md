@@ -10,6 +10,8 @@ A small, concrete fix may be proposed directly in a pull request. For a substant
 
 To report a suspected security vulnerability, use the [private security reporting guidance](SECURITY.md).
 
+For conduct expectations and reporting, see the [Code of Conduct](CODE_OF_CONDUCT.md).
+
 AI tools are optional. Their use does not change the applicable review or quality expectations.
 
 ## Plans and artifacts
