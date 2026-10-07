@@ -72,6 +72,37 @@ Logical checkpoint spans, marker INSERT command pairs and physical provider refe
 
 Accepted derivative SHA-256: `dfc0efb6421a9d4251327cd2e5463ac7fe9ba84e9798f5aee759e0932edbc98b`; independent raw-observer/engine-span/public-ledger recomputation receipt: `725e3585e860c3db32df63cbf294b66007f35155f60f1d5af37a7a3805fcc4db`. The normalized ledger below contains the callback endpoints, exact tuples and exported spans needed to recompute the associations.
 
+## Command ancestry by phase and dispatch
+
+An offline crosswalk now makes the existing command endpoints and exported span attributes directly usable for grouping. It preserves all 1,569 source pair identities exactly once, with references isolated to their original capture and request. Root replayed the extractor and independently reconstructed every pair's engine-parent chain and nearest phase, checkpoint and dispatch; a separate reviewer recomputed the same associations. The 44 marker tuple associations above also agree. This adds no live capture or database read.
+
+The following counts include **runtime PostgreSQL command pairs only**, grouped by the nearest exported runtime span. A command at the unexported request Activity has no assigned runtime phase.
+
+| Cadence | Request | Request Activity, no exported phase | Drain | Dispatch | Activity execution | Checkpoint commit | Runtime total |
+|---|---|---:|---:|---:|---:|---:|---:|
+| Coalesced | HTTP | 19 | 8 | 3 | 106 | 59 | 195 |
+| Coalesced | REST | 15 | 4 | 3 | 41 | 19 | 82 |
+| Immediate | HTTP | 93 | 104 | 45 | 52 | 211 | 505 |
+| Immediate | REST | 79 | 92 | 41 | 43 | 186 | 441 |
+
+Across all providers, 1,353 command pairs have exported engine ancestry and 216 have the explicit unexported request-Activity context. All 336 diagnostic SQLite pairs have drain ancestry in this packet. A combined drain count therefore includes diagnostics storage as well as runtime work; it is not a runtime-provider count.
+
+Nearest dispatch ancestry supplies the observed handler, command kind and work-item attributes for 168/63 Coalesced HTTP/REST pairs and 308/270 Immediate pairs: 809 pairs in total. The other 760 retain explicit absence of a dispatch ancestor. These attributes identify the surrounding exported dispatch, not the repository caller, the queue row touched by a command, an exclusive owner, or awaited work. Table-token memberships can overlap.
+
+For example, the preserved Coalesced HTTP baseline has 65 durable-value SELECT pairs under activity execution (25 under schedule-activity dispatch, 20 under start-activity dispatch and 20 under invoke-activity dispatch), plus one under checkpoint commit. Those 66 reads precede the delivered paging correction; they are not the post-M2 remainder. The [separately reviewed M2 delivery](https://github.com/elsa-workflows/elsa-foundation/pull/2442) reduced durable-value SELECT commands from 66 to eight and activity-state SELECT commands from 37 to 12. No pair identities are joined between these separate captures.
+
+The [compact crosswalk summary](evidence/command-phase-crosswalk-2026-10-07.json) contains request/provider/phase/handler/checkpoint groups and all 44 marker checks. The [finite extractor](evidence/extract-command-phase-crosswalk.py) reconstructs every pair and its exact ordered engine-parent links from the SHA-pinned published identity ledger. To reproduce it from the repository root, choose a private output directory:
+
+```sh
+python3 docs/reports/runtime-db-access/evidence/extract-command-phase-crosswalk.py \
+  --input docs/reports/runtime-db-access/evidence/ef-identity-accounting-2026-10-06.json \
+  --out-dir /path/to/private/crosswalk-output
+```
+
+The output includes the full crosswalk, compact summary and a Markdown inventory. Four bounded controls cover a valid chain, a malformed endpoint, ambiguous parents and cross-trace isolation. All command-pair terminal references are omitted in the source normalization and defined as the start reference; the checked equality follows that contract and is not independent terminal telemetry. The 112 registry endpoints with null parents belong to other retained callback records, not these command-pair endpoints. They remain in the original ledger and are not filled from another endpoint. Chains stop explicitly at unexported parents; observer endpoint aliases are not exported engine spans.
+
+Full derivative SHA-256: `0ca1cc77bf2d58dd8194e72e58ecf77b53bb2cec1deba6ec87b31ba5c90d0d90`; compact summary SHA-256: `77ee66147a18ec0005d9d27d648d51ef87969f78a8843669b4d435899e286f69`. The full derivative records separate unexported endpoint and parent nodes. Exact endpoint metadata and all engine-parent links were compared separately and agree. No source ledger values or runtime behavior changed.
+
 ## Span and response-time boundaries
 
 Command span IDs either close to an exported engine span and its parent chain, or match the unexported request Activity that exactly parents exported drain roots. The latter has no runtime phase label. Exported engine attributes are limited to observed values such as checkpoint ID/mode/mandatory/post-commit intent, work-item ID, handler, command kind, and drain fields. These span relationships do not identify repository callsites or participants.
