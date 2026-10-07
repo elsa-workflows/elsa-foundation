@@ -17,6 +17,7 @@ on:
       - 'tests/essentials/Activities/Runtime/Tests/packages.lock.json'
       - 'e2e-tests/README.md'
       - 'e2e-tests/Invoke-PlatformSourceJourney.ps1'
+      - 'e2e-tests/Invoke-RunProfileSourceJourney.ps1'
       - 'e2e-tests/Test-WorkflowFlow.ps1'
       - 'e2e-tests/Test-WorkflowFlowVerdict.ps1'
       - 'e2e-tests/_ServerLifecycle.ps1'
@@ -71,9 +72,13 @@ jobs:
           dotnet restore src/apps/Elsa.Workbench/Elsa.Workbench.csproj --locked-mode
           dotnet restore tests/essentials/Activities/Runtime/Tests/Elsa.Activities.Runtime.Tests.csproj --locked-mode
 
-      - name: Build Workbench for the owned DLL host
+      - name: Build Workbench with the documented command
         shell: bash
-        run: dotnet build src/apps/Elsa.Workbench/Elsa.Workbench.csproj --configuration Debug --no-restore
+        run: dotnet build src/apps/Elsa.Workbench/Elsa.Workbench.csproj
+
+      - name: Verify the ordinary build left tracked lock files unchanged
+        shell: bash
+        run: git diff --exit-code -- ':(glob)**/packages.lock.json'
 
       - name: Run the focused WriteLine bound-input test
         shell: bash
@@ -91,11 +96,70 @@ jobs:
             pwsh -NoProfile -File e2e-tests/Invoke-PlatformSourceJourney.ps1
           fi
 
+      - name: Verify dotnet run failure propagation
+        id: run-profile-negative-control
+        shell: bash
+        run: |
+          if [ "$RUNNER_OS" = "Windows" ]; then
+            if control_output=$(powershell -NoProfile -ExecutionPolicy Bypass -File e2e-tests/Invoke-RunProfileSourceJourney.ps1 -InvalidCommandControl 2>&1); then
+              control_exit=0
+            else
+              control_exit=$?
+            fi
+          else
+            if control_output=$(pwsh -NoProfile -File e2e-tests/Invoke-RunProfileSourceJourney.ps1 -InvalidCommandControl 2>&1); then
+              control_exit=0
+            else
+              control_exit=$?
+            fi
+          fi
+          printf '%s\n' "$control_output"
+          if [ "$control_exit" -eq 0 ]; then
+            echo 'The deliberately invalid dotnet run invocation unexpectedly returned success.' >&2
+            exit 1
+          fi
+          case "$control_output" in
+            *"RUN_PROFILE_FAILURE_PROPAGATED:$control_exit"*) ;;
+            *)
+              echo 'The wrapper did not mark the expected native command failure as propagated.' >&2
+              exit 1
+              ;;
+          esac
+          echo "Expected negative control: wrapper propagated dotnet run exit code $control_exit; the fixed port remained free."
+
+      - name: Replay the documented dotnet run profile and workflow smoke
+        id: run-profile-journey
+        shell: bash
+        run: |
+          if [ "$RUNNER_OS" = "Windows" ]; then
+            powershell -NoProfile -ExecutionPolicy Bypass -File e2e-tests/Invoke-RunProfileSourceJourney.ps1
+          else
+            pwsh -NoProfile -File e2e-tests/Invoke-RunProfileSourceJourney.ps1
+          fi
+
       - name: Upload owned-server diagnostics on failure
-        if: ${{ failure() && steps.platform-journey.outputs.diagnostics_path != '' }}
+        if: ${{ failure() && steps.platform-journey.outcome == 'failure' && steps.platform-journey.outputs.diagnostics_path != '' }}
         uses: actions/upload-artifact@v4
         with:
           name: backend-source-diagnostics-${{ matrix.runner }}
           path: ${{ steps.platform-journey.outputs.diagnostics_path }}
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Upload run-profile diagnostics on failure
+        if: ${{ failure() && steps.run-profile-journey.outcome == 'failure' && steps.run-profile-journey.outputs.diagnostics_path != '' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-source-run-profile-diagnostics-${{ matrix.runner }}
+          path: ${{ steps.run-profile-journey.outputs.diagnostics_path }}
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Upload failure-control diagnostics on failure
+        if: ${{ failure() && steps.run-profile-negative-control.outcome == 'failure' && steps.run-profile-negative-control.outputs.diagnostics_path != '' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-source-run-profile-control-diagnostics-${{ matrix.runner }}
+          path: ${{ steps.run-profile-negative-control.outputs.diagnostics_path }}
           if-no-files-found: error
           retention-days: 7

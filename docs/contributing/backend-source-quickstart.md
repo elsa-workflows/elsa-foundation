@@ -1,11 +1,12 @@
-# Run the backend from source on macOS
+# Run the backend from source
 
 Build the default `Elsa.Workbench` backend, check that it is ready, and run your first workflow. The
 Development profile uses SQLite, so this path needs no separate database server or Docker.
 
 ## Prerequisites
 
-- Git, a stable .NET 10 SDK, and PowerShell 7 (`pwsh`). Check with `dotnet --version` and `pwsh --version`.
+- Git and a stable .NET 10 SDK. On macOS or Linux, install PowerShell 7 (`pwsh`); the Windows command below
+  uses Windows PowerShell 5.1 (`powershell.exe`).
 - Network access to the public package sources listed in the committed [`NuGet.config`](../../NuGet.config).
   The verified Workbench restore needed no maintainer credentials.
 
@@ -77,6 +78,45 @@ completed with one completed `WriteLine` activity and no incidents. These are lo
 do not reuse them outside the disposable local host. Stop the backend with Ctrl+C in the terminal where you
 started it.
 
+### Linux and Windows command forms
+
+The default profile intentionally uses fixed port 5095. These command forms build once, then run the same
+documented launch profile and REST smoke. Keep the backend in the foreground in terminal 1. Run readiness and
+the smoke in terminal 2 after startup; retry readiness while the shell activates. If port 5095 is occupied,
+leave the existing listener alone and use the alternate-port recovery above.
+
+Linux, from the repository root:
+
+```bash
+dotnet build src/apps/Elsa.Workbench/Elsa.Workbench.csproj
+dotnet run --no-build --project src/apps/Elsa.Workbench/Elsa.Workbench.csproj --launch-profile http
+```
+
+In a second terminal:
+
+```bash
+curl -fsS http://localhost:5095/health/ready
+pwsh -NoProfile -File ./e2e-tests/Test-WorkflowFlow.ps1 -BaseUrl http://localhost:5095
+```
+
+Windows PowerShell 5.1, from the repository root:
+
+```powershell
+dotnet build src/apps/Elsa.Workbench/Elsa.Workbench.csproj
+dotnet run --no-build --project src/apps/Elsa.Workbench/Elsa.Workbench.csproj --launch-profile http
+```
+
+In a second PowerShell terminal:
+
+```powershell
+curl.exe -fsS http://localhost:5095/health/ready
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\e2e-tests\Test-WorkflowFlow.ps1 -BaseUrl http://localhost:5095
+```
+
+The hosted platform workflow also replays this profile on Linux and Windows after its ordinary build and
+focused test. That automated check is not a fresh operating-system installation or a human newcomer trial;
+the exact platform command forms above are provided for local use.
+
 To resume later at the same source revision, run the same start command from the same checkout. Its local
 workflow data is retained.
 For a new empty environment, use another disposable checkout unless you are deliberately resetting this
@@ -119,7 +159,7 @@ or remove the directory.
 | Symptom | Next step |
 |---|---|
 | SDK missing or target framework unsupported | Install a .NET 10 SDK, then check `dotnet --version` from the repository root. |
-| `pwsh` not found | Install PowerShell 7 before running the workflow smoke test. The backend can remain running. |
+| PowerShell command not found | Install PowerShell 7 (`pwsh`) on macOS/Linux, or use Windows PowerShell 5.1 (`powershell.exe`) on Windows. The backend can remain running. |
 | Restore cannot reach a source or find a package | Check the source/version named in the error against `NuGet.config` and your network access. Keep the error and source revision when reporting it; do not add private credentials or suppress restore errors to get past it. |
 | Readiness cannot connect | Check the server terminal for startup errors and confirm it is listening on HTTP port 5095. Use the HTTP profile shown above. |
 | The smoke test cannot authenticate | Confirm the URL points to your Development host and its disposable data, then inspect the server error. Existing databases may have different credentials. |
