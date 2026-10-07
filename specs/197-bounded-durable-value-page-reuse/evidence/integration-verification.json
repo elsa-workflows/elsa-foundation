@@ -1,5 +1,5 @@
 {
-  "capturedAtUtc": "2026-10-07T20:31:29.473988+00:00",
+  "capturedAtUtc": "2026-10-07T20:45:59.650285+00:00",
   "scope": "Spec197 integrated candidate; no primary HTTP/REST savings or latency claim",
   "files": {
     "src/essentials/Workflows/Runtime/Services/Coalescing/AsyncLocalRuntimeCoalescingSessionAccessor.cs": "ccb6d1dd17e3545550bb18abd96095f3654a3fa14ea49e1a944f574c8c5139d5",
@@ -9,7 +9,7 @@
     "src/essentials/Workflows/Runtime/Services/Coalescing/RuntimeCoalescingDurableValuePageMemo.cs": "4c96a1ef95eff5e8fd611f3c3a0fcf59d8afab591853a1dd5975d622784356ff",
     "src/essentials/Workflows/Runtime/Services/Coalescing/RuntimeCoalescingSession.cs": "695630641258d3aecff4c5d9eef368c049c6640bfdc3b705460092bd7ba051e7",
     "src/essentials/Workflows/Runtime/Services/Scheduler/WorkflowDrainOrchestrator.cs": "19eb7ba3e640c0fd0fc98f22ff14627d16fbac80e929e1e9766117bda954640e",
-    "tests/essentials/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/EfDurableValuePageReuseTests.cs": "0a8d81dcb76e3e8277b5869571436a40424f20de7c888154758b832de5409dba",
+    "tests/essentials/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/EfDurableValuePageReuseTests.cs": "123af640d331a69c31a5dcbafd943211cc108e0fb59ef696b5b6b9f181a7fc60",
     "tests/essentials/Workflows/Runtime/Tests/CoalescingDurableValuePageMemoTests.cs": "96761fc27924b64bbc062a71fe0e5239b41368bc5fcf59ffcffa8e84902cc0bc",
     "tests/essentials/Workflows/Runtime/Tests/CoalescingDurableValuePageReuseEligibilityTests.cs": "4e619b20f353f9fec4ce490ef04233d817cbc480a1eac90be8745bc97627c2cf",
     "tests/essentials/Workflows/Runtime/Tests/CoalescingDurableValuePageReuseTests.cs": "891a1cb9687faee82eff74048a2c1b4ea764cbdf43aa17aaba1ac75d99c89e08",
@@ -106,10 +106,30 @@
       "passed": 635,
       "failed": 0,
       "skipped": 0
+    },
+    {
+      "label": "ef-after-t014",
+      "artifact": "1306-root-ef-t014.trx",
+      "sha256": "a97d69b747b3e734d61d8d60f5fbfd09a8b17e6e0fba4d5e7657a6641c46bbc3",
+      "total": 904,
+      "passed": 904,
+      "failed": 0,
+      "skipped": 0,
+      "recoveryTest": "Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.EfDurableValuePageReuseTests.Persisted_interruption_snapshot_recovers_memo_populated_coalesced_execution",
+      "recoveryOutcome": "Passed"
+    },
+    {
+      "label": "architecture-after-t014",
+      "artifact": "1306-root-architecture-t014.trx",
+      "sha256": "dba9e45d9e3ad36d368d00f8269eb6ea54353e1dce8c7d0549ad1aa57b0307e8",
+      "total": 635,
+      "passed": 635,
+      "failed": 0,
+      "skipped": 0
     }
   ],
   "baseCandidateSha": "7667d1c4c47873fdf3ac313a37b9fea259295d93",
-  "laterDelta": "T007 registration-state simplification, five additional eligibility cases, loop clarification and evidence/operator docs; PR receipt supplies resulting commit",
+  "laterDelta": "T007 registration-state simplification, five eligibility cases, T014 persisted interruption-snapshot recovery test and shared test setup, loop clarification and evidence/operator docs; PR receipt supplies resulting commit",
   "registrationCoverage": {
     "artifact": "1306-root-runtime-t007-coverage.xml",
     "sha256": "b3b28b59151b48b2cece696aa87d175a5c15c37c431b4555e563231e91a227fb",
@@ -125,5 +145,18 @@
         "branchRate": 1.0
       }
     ]
+  },
+  "recoveryVerification": {
+    "integratedOn": "312d86713532315b7281357ea367735a7e514e4f",
+    "kind": "Real EF persisted interruption-snapshot recovery",
+    "originalState": "Active Coalesced drain with nonempty provider-page memo hit, live persisted ownership lease, real unclaimed durable scheduler backstop. Active scheduler claim is held in the session overlay.",
+    "snapshotIdentity": "Source and copied queue WorkItemId sets are unique and exactly equal; copied lease fence equals the captured active fence.",
+    "recovery": "New host opens SQLite snapshot under advanced time; production IRuntimeResumptionService.SweepAsync accepts the execution; recovered leaf obtains fresh nonempty EF page then memo hit, a newer fence and active-lease rejection of the original fence. Expected inputs/results, Completed workflow and activities, zero incidents and empty queue are asserted.",
+    "rootEfTotal": 904,
+    "processKilledMidDrain": false,
+    "sameDatabaseFileReopened": false,
+    "scannerVsBacklogDirectlyObserved": false,
+    "priorAttempt": "The first worker fixture expected an active persisted queue claim. Source confirmed Coalesced claims are held in the overlay while the durable backstop stays unclaimed; the test expectation was corrected. No product defect or repair is inferred.",
+    "independentReview": "Root and independent reviewer accepted the mechanism; the copied-queue membership oracle was strengthened to exact unique ID set equality before final worker and root passes."
   }
 }
