@@ -262,5 +262,5 @@ New work should move toward this rule:
 <!-- SPECKIT START -->
 For additional context about technologies, project structure, shell commands, contracts, and
 validation scenarios for the active work unit, read
-`specs/197-bounded-durable-value-page-reuse/plan.md`.
+`specs/198-response-replay-safety/plan.md`.
 <!-- SPECKIT END -->
