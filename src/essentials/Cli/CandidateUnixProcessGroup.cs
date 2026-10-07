@@ -1,6 +1,5 @@
 using System.Globalization;
 using System.Runtime.InteropServices;
-using System.Text;
 
 namespace Elsa.Cli;
 
@@ -19,6 +18,7 @@ public sealed class CandidateUnixProcessGroup
     private const int MaximumMacProcessCapacity = 1 << 16;
     private static readonly TimeSpan PollInterval = TimeSpan.FromMilliseconds(10);
     private const string LinuxProcessStates = "RSDZTtWXxKPI";
+    private static readonly CandidateLinuxProcessGroupReader LinuxReader = new();
 
     private readonly Func<int, CancellationToken, IEnumerable<CandidateUnixProcessGroupMember>> readMembers;
 
@@ -69,44 +69,10 @@ public sealed class CandidateUnixProcessGroup
     {
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(processGroupId);
         if (OperatingSystem.IsLinux())
-            return ReadLinuxMembers(processGroupId, cancellationToken);
+            return LinuxReader.ReadMembers(processGroupId, cancellationToken);
         if (OperatingSystem.IsMacOS())
             return ReadMacMembers(processGroupId, cancellationToken);
         throw new PlatformNotSupportedException();
-    }
-
-    private static IEnumerable<CandidateUnixProcessGroupMember> ReadLinuxMembers(
-        int processGroupId, CancellationToken cancellationToken)
-    {
-        var members = new List<CandidateUnixProcessGroupMember>();
-        foreach (var directory in Directory.EnumerateDirectories("/proc"))
-        {
-            cancellationToken.ThrowIfCancellationRequested();
-            var name = Path.GetFileName(directory);
-            if (!int.TryParse(name, NumberStyles.None, CultureInfo.InvariantCulture, out var processId) || processId <= 0)
-                continue;
-
-            CandidateUnixProcessGroupMember snapshot;
-            try
-            {
-                snapshot = ParseLinuxMember(processId, File.ReadAllText(Path.Combine(directory, "stat"), Encoding.ASCII));
-            }
-            catch (FileNotFoundException)
-            {
-                // The process exited between directory enumeration and stat read.
-                continue;
-            }
-            catch (DirectoryNotFoundException)
-            {
-                // The process directory disappeared between directory enumeration and stat read.
-                continue;
-            }
-
-            if (snapshot.GroupId == processGroupId)
-                members.Add(snapshot);
-        }
-
-        return members;
     }
 
     /// <summary>Validates a kernel Linux stat record and projects only its group and execution state.</summary>
