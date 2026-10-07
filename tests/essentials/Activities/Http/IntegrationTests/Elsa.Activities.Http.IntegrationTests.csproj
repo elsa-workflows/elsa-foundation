@@ -48,4 +48,14 @@
     <Using Include="Xunit" />
   </ItemGroup>
 
+  <ItemGroup>
+    <Compile Remove="Fixtures/ResponseReplayHost/**/*.cs" />
+    <None Update="Fixtures/ResponseReplayHost/Fixtures/pre-candidate-external-closure.json" CopyToOutputDirectory="PreserveNewest" />
+    <None Update="Fixtures/ResponseReplayHost/Fixtures/pre-candidate-external-manifest.json" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="Fixtures/ResponseReplayHost/ResponseReplayHost.csproj" ReferenceOutputAssembly="false" />
+  </ItemGroup>
+
 </Project>

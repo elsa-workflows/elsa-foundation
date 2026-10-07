@@ -14,7 +14,7 @@
 
 **Purpose**: Prove the immutable baseline can execute through a real child host and establish test-owned process/database lifecycle before changing the candidate declaration.
 
-- [ ] T002 Add `tests/essentials/Activities/Http/IntegrationTests/Fixtures/ResponseReplayHost/ResponseReplayHost.csproj`, reference it as a build dependency from `tests/essentials/Activities/Http/IntegrationTests/Elsa.Activities.Http.IntegrationTests.csproj`, and add the initial parent process test in `tests/essentials/Activities/Http/IntegrationTests/ResponseReplaySafetyProcessTests.cs`; launch the already-built child DLL directly, load the unchanged External closure through the production reconciliation path, and prove the baseline response with owned SQLite, stable test keys, and deterministic child cleanup. Do not invoke nested `dotnet build`, `dotnet run`, or `dotnet test` from the parent test.
+- [X] T002 Add `tests/essentials/Activities/Http/IntegrationTests/Fixtures/ResponseReplayHost/ResponseReplayHost.csproj`, reference it as a build dependency from `tests/essentials/Activities/Http/IntegrationTests/Elsa.Activities.Http.IntegrationTests.csproj`, and add the initial parent process test in `tests/essentials/Activities/Http/IntegrationTests/ResponseReplaySafetyProcessTests.cs`; launch the already-built child DLL directly, load the unchanged External closure through the production reconciliation path, and prove the baseline response with owned SQLite, stable test keys, and deterministic child cleanup. Do not invoke nested `dotnet build`, `dotnet run`, or `dotnet test` from the parent test.
 
 **Checkpoint**: The captured External artifact is immutable and executable on the candidate runtime through the child host; no candidate annotation has been added yet.
 
