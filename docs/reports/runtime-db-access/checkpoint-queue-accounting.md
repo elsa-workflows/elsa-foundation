@@ -41,3 +41,30 @@ The initial prelaunch attempt was rejected before a host or database started bec
 The evidence packet projects all 420 command pairs with exact operation linkage where observed, plus all 146 paired operations and their observed method metadata. It exposes only bounded category fields and typed HMACs; raw IDs, SQL text, parameters, payloads, bearer or credential tokens, and machine-local paths are excluded. The numeric monotonic claim-fence counter is included as non-secret lifecycle metadata. The raw probe SHA-256 is 3261099441a6ca5adcbf5e1c92965e1d7bccdf59d85c757e34050f1ccd7d4b88; the exported archive SHA-256 is 2a9d0434209f8694f194ce0efe33ab2236d6d9f07def068a625936f3f5a5e3f5. The JSON projection was derived from that retained capture and its reviewed receipts; producing this packet did not launch a host.
 
 For a later candidate comparison, this packet supplies the checkpoint, queue, and outbox phase baseline within the same 420-pair Coalesced workload. It does not contain an after run or show a query reduction. The 238 commands without method ancestors remain at trace/boundary level, and two additional durable-value page-read operations remain excluded outside the target request/boundaries. T02 remains In Progress / Verification Running pending the other caller, comparison, and correctness gates.
+
+## Immediate capture (7 October 2026)
+
+The accepted bounded Immediate source-candidate capture adds a separate phase ledger for its HTTP request and REST control. It is preserved-before-source evidence: it does not measure a query reduction, elapsed-time improvement, or production behavior. The allowlisted [Immediate evidence packet](evidence/checkpoint-queue-immediate-2026-10-07.json) keeps this run separate from the Coalesced capture above.
+
+| Command group | Command pairs | Exact method joins | Without method ancestor |
+|---|---:|---:|---:|
+| HTTP request | 635 | 392 | 243 |
+| REST control | 556 | 345 | 211 |
+| Six resumption sweeps | 36 | 12 | 24 |
+| **Total** | **1,227** | **749** | **478** |
+
+| Operation family | Operation pairs | Joined command pairs | Metadata observed |
+|---|---:|---:|---:|
+| Checkpoint | 333 | 397 | 333 |
+| Scheduler queue | 140 | 246 | 140 |
+| Post-commit outbox | 66 | 94 | 66 |
+| Durable-value page reads | 12 | 12 | absent by design |
+| **Total** | **551** | **749** | **539** |
+
+All 293 checkpoint child spans identity-match their 40 commit parents. The ledger excludes two durable-value reads outside the target request and boundary, one queue poll, and one outbox claim that began after admission closed. The six global `scheduler_queue.list_claimable_executions` polls have no target-execution identity, so they remain assigned only to their sweep traces. Every method outcome is unknown; a disposed instrumentation scope does not show that its method returned successfully.
+
+The HTTP request returned 200 with the expected body, completed with zero incidents, and ended with a terminal read-only snapshot showing zero queue items and 15 outbox rows in `Delivered` status, with zero in every other inspected status. The REST control returned 200 with the expected output and completed with zero incidents; it has no separate settlement snapshot. The HTTP snapshot is not evidence of REST settlement.
+
+The probe is 8,963,801 bytes and 4,773 records under the prepared 16 MiB artifact cap. The host exited normally and the owned database container was removed. The temporary Azure resource group was deleted and confirmed absent after all captures and compiled host/tool artifacts were exported and hash-verified locally. Preparation included six matching guard cases and 42 portable synthetic controls; those controls did not exercise a total-artifact-byte boundary. The evidence packet records source, binary, fixture, descriptor, archive, and review pins, and exports typed HMAC identities without raw IDs, SQL text, parameters, credentials, or machine-local paths. Participant input counts remain requested inputs, not persisted-row counts; combined flush commands are not divided among participants.
+
+A prior Immediate capture had 1,243 command pairs (635 HTTP, 559 REST, 49 sweep pairs); this capture has 1,227 (635, 556, and 36). Separate-capture variation has no causal or savings attribution. The existing M2 reduction of 83 HTTP SELECTs (277 to 194) is separate and is not counted here. The public packet SHA-256 is `02b23c01d38d0e14a4e4217f11085d93d26b5b7b751ee940678a0a2cb5dc24a4`.
