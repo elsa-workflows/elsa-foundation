@@ -35,7 +35,11 @@ internal static class BridgeTestHost
             ["Studio:Auth:Enabled"] = authEnabled ? "true" : "false"
         };
 
-        var builder = WebApplication.CreateSlimBuilder(new WebApplicationOptions { EnvironmentName = Environments.Production });
+        var builder = WebApplication.CreateSlimBuilder(new WebApplicationOptions
+        {
+            EnvironmentName = Environments.Production,
+            ContentRootPath = AppContext.BaseDirectory
+        });
         builder.WebHost.UseTestServer();
         builder.Configuration.AddInMemoryCollection(settings);
         builder.Services.AddStudioBridgeAuth(builder.Configuration);
