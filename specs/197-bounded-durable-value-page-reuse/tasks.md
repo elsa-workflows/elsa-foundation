@@ -31,6 +31,8 @@ T002–T003 are accepted. The session snapshots both boolean settings; all four 
 
 T004–T005 are accepted as a standalone primitive after root and independent review, 14 memo tests, and a focused mutation that fails when the pre-clone cumulative budget check is removed. The combined configuration/memo suite passes 24/24 after restoration. [Evidence and limits](evidence/memo-primitive-verification.md) distinguish reachable branch proof from defensive arithmetic guards. No store/session integration or query reduction is established by this checkpoint.
 
+T006–T007 have an accepted implementation checkpoint with 53 focused eligibility cases, a root 80-test combined pass, an actual-EF eligible baseline, and before/fixed proof for the inner-type guard. Both tasks remain unchecked for literal shared codec identity and remaining branch/integration proof; see [evidence and limits](evidence/eligibility-checkpoint.md).
+
 **Checkpoint**: The option, memo primitive, and safe eligibility decision are tested before integration into the read path.
 
 ---

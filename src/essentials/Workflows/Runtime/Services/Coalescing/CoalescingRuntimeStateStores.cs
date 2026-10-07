@@ -133,11 +133,29 @@ public sealed class CoalescingActivityExecutionStateStore(
 }
 
 /// <summary>Coalescing-aware overlay for <see cref="IDurableValueStateStore"/>. See <see cref="CoalescingWorkflowExecutionStateStore"/>.</summary>
-public sealed class CoalescingDurableValueStateStore(
-    CoalescingInner<IDurableValueStateStore> inner,
-    IRuntimeCoalescingSessionAccessor sessionAccessor) : IDurableValueStateStore
+public sealed class CoalescingDurableValueStateStore : IDurableValueStateStore
 {
-    private readonly IDurableValueStateStore _inner = inner.Value;
+    private readonly IDurableValueStateStore _inner;
+    private readonly IRuntimeCoalescingSessionAccessor _sessionAccessor;
+
+    public CoalescingDurableValueStateStore(
+        CoalescingInner<IDurableValueStateStore> inner,
+        IRuntimeCoalescingSessionAccessor sessionAccessor)
+        : this(inner, sessionAccessor, null)
+    {
+    }
+
+    public CoalescingDurableValueStateStore(
+        CoalescingInner<IDurableValueStateStore> inner,
+        IRuntimeCoalescingSessionAccessor sessionAccessor,
+        RuntimeCoalescingDurableValuePageReuseRegistration? pageReuseRegistration)
+    {
+        _inner = inner.Value;
+        _sessionAccessor = sessionAccessor;
+        PageReuseRegistration = pageReuseRegistration;
+    }
+
+    internal RuntimeCoalescingDurableValuePageReuseRegistration? PageReuseRegistration { get; }
 
     public ValueTask<DurableValueState> SaveAsync(DurableValueState state, CancellationToken cancellationToken = default) =>
         _inner.SaveAsync(state, cancellationToken);
@@ -147,7 +165,7 @@ public sealed class CoalescingDurableValueStateStore(
 
     public async ValueTask<DurableValueState?> FindAsync(string workflowExecutionId, string durableValueId, CancellationToken cancellationToken = default)
     {
-        if (sessionAccessor.Current is { } session && session.AppliesTo(workflowExecutionId) &&
+        if (_sessionAccessor.Current is { } session && session.AppliesTo(workflowExecutionId) &&
             session.TryGetDurableValue(durableValueId, out var overlay, out _))
             return overlay;
 
@@ -159,7 +177,7 @@ public sealed class CoalescingDurableValueStateStore(
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(query);
-        if (sessionAccessor.Current is not { } session || !session.AppliesTo(query.WorkflowExecutionId))
+        if (_sessionAccessor.Current is not { } session || !session.AppliesTo(query.WorkflowExecutionId))
             return await _inner.ListPageAsync(query, cancellationToken);
 
         return await CoalescingRuntimeStorePageMerger.MergeAsync(

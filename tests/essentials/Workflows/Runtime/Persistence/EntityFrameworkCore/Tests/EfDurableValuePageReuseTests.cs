@@ -39,6 +39,7 @@ using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.DependencyInjection;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Entities;
 using Elsa.Workflows.Runtime.Resumption;
+using Elsa.Workflows.Runtime.Services.Coalescing;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.Configuration;
@@ -77,6 +78,7 @@ public sealed class EfDurableValuePageReuseTests
             Assert.Contains("ActivitiesPrimitives", enabledFeatures);
             Assert.Contains("ActivitiesRuntime", enabledFeatures);
             await using var scope = shell.ServiceProvider.CreateAsyncScope();
+            Assert.True(scope.ServiceProvider.GetRequiredService<RuntimeCoalescingDurableValuePageReuseRegistration>().IsEligible);
             Assert.Contains(
                 scope.ServiceProvider.GetServices<IActivityActivationStrategy>(),
                 strategy => strategy is ClrActivityActivator);
