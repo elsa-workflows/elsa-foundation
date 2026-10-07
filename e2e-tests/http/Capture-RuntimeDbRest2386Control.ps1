@@ -301,7 +301,7 @@ Write-Host '[companion-shape] omits HttpEndpoint admission and WriteHttpResponse
 
 if ($SetupOnly) {
     $exportContext = New-TracedContext
-    $executableExport = Invoke-RestMethod "$BaseUrl/publishing/workflows/$($definition.version.id)/executable-export" -WebSession $exportContext.Context.Session
+    $executableExport = Invoke-RestMethod "$($BaseUrl.TrimEnd('/'))/publishing/workflows/$($definition.version.id)/executable-export" -WebSession $exportContext.Context.Session
     # Caller readbacks must not inherit the publish or export operation's traceparent.
     $callerContext = Connect-Elsa -BaseUrl $BaseUrl -Username $Username -Password $Password
     return [pscustomobject]@{
