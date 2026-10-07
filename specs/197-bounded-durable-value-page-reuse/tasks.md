@@ -12,7 +12,7 @@
 
 **Purpose**: Establish the baseline and proof oracle before adding reuse.
 
-- [ ] T001 Prepare the deterministic non-empty normal typed-start → deferred `ActivityStarted` → invoke fixture in `tests/essentials/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/EfDurableValuePageReuseTests.cs`; retain its uncached backing-page count and serialized inputs, identity, visibility and result before adding the memo. Reuse the existing EF fixture and a narrow test counter. This baseline becomes T010's same-cadence enabled/disabled oracle.
+- [x] T001 Prepare the deterministic non-empty normal typed-start → deferred `ActivityStarted` → invoke fixture in `tests/essentials/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/EfDurableValuePageReuseTests.cs`; retain its uncached backing-page count and serialized inputs, identity, visibility and result before adding the memo. Reuse the existing EF fixture and a narrow test counter. This baseline becomes T010's same-cadence enabled/disabled oracle.
 
 ---
 
