@@ -44,6 +44,14 @@ function log(message) {
   console.log(`[published-pair] ${message}`);
 }
 
+function safeFailureClass(error) {
+  const name = error instanceof Error ? error.name : "";
+  if (name === "TimeoutError") return "timeout";
+  if (name === "AssertionError") return "assertion";
+  if (name === "Error") return "error";
+  return "other";
+}
+
 function commandOutput(command, args, options = {}) {
   try {
     return execFileSync(command, args, {
@@ -304,17 +312,77 @@ function captureUiPostIdentity(page, { endpoint, expectedOrigin, predicate, proj
 }
 
 async function signIn(page) {
-  await page.goto(`${studioUrl}/workflows/definitions`, { waitUntil: "domcontentloaded" });
+  const authResponses = observeSafeAuthResponses(page);
+  await loginPhase(page, "login-studio-navigation", authResponses,
+    () => page.goto(`${studioUrl}/workflows/definitions`, { waitUntil: "domcontentloaded" }));
   const loginForm = page.locator('form[action="/_elsa/identity/login"]');
-  await loginForm.waitFor({ state: "visible", timeout: 45_000 });
-  await loginForm.locator('input[name="username"]').fill("admin");
-  await loginForm.locator('input[name="password"]').fill("Password123!");
-  await Promise.all([
-    page.waitForURL(url => url.origin === studioUrl, { timeout: 45_000 }),
-    loginForm.locator('button[type="submit"]').click()
+  await loginPhase(page, "login-backend-form", authResponses,
+    () => loginForm.waitFor({ state: "visible", timeout: 45_000 }));
+  await loginPhase(page, "login-form-submit", authResponses, async () => {
+    await loginForm.locator('input[name="username"]').fill("admin");
+    await loginForm.locator('input[name="password"]').fill("Password123!");
+    await loginForm.locator('button[type="submit"]').click({ noWaitAfter: true });
+  });
+  await loginPhase(page, "login-return-to-studio", authResponses,
+    () => page.waitForURL(url => url.origin === studioUrl, { timeout: 45_000 }));
+  await loginPhase(page, "login-session-ready", authResponses, async () => {
+    await page.goto(`${studioUrl}/workflows/definitions`, { waitUntil: "domcontentloaded" });
+    await page.getByRole("heading", { name: "Definitions" }).waitFor({ state: "visible", timeout: 45_000 });
+  });
+}
+
+function observeSafeAuthResponses(page) {
+  const allowedPaths = new Set([
+    "/_elsa/identity/bootstrap",
+    "/_elsa/identity/session",
+    "/_elsa/identity/login"
   ]);
-  await page.goto(`${studioUrl}/workflows/definitions`, { waitUntil: "domcontentloaded" });
-  await page.getByRole("heading", { name: "Definitions" }).waitFor({ state: "visible", timeout: 45_000 });
+  const responses = [];
+  page.on("response", response => {
+    const url = new URL(response.url());
+    if (url.origin !== workbenchUrl || !allowedPaths.has(url.pathname)) return;
+    responses.push(`${response.request().method()} ${url.pathname} status=${response.status()}`);
+    if (responses.length > 8) responses.shift();
+  });
+  return responses;
+}
+
+async function loginPhase(page, phase, authResponses, action) {
+  stage = phase;
+  try {
+    return await action();
+  } catch (error) {
+    await logSafeLoginDiagnostic(page, phase, authResponses, error);
+    throw error;
+  }
+}
+
+async function logSafeLoginDiagnostic(page, phase, authResponses, error) {
+  const currentUrl = new URL(page.url());
+  const knownOrigin = [studioUrl, workbenchUrl].includes(currentUrl.origin);
+  const knownPath = ["/", "/workflows/definitions", "/_elsa/identity/login"].includes(currentUrl.pathname);
+  const location = knownOrigin
+    ? `${currentUrl.origin}${knownPath ? currentUrl.pathname : "/[other-route]"}`
+    : "[other-origin]";
+  const formVisible = await page.locator('form[action="/_elsa/identity/login"]').isVisible().catch(() => false);
+  const signingInVisible = await page.locator('[role="status"]').getByText("Signing in…", { exact: true }).isVisible().catch(() => false);
+  const unableToSignInVisible = await page.getByRole("alert").getByText("Unable to sign in", { exact: true }).isVisible().catch(() => false);
+  const state = formVisible
+    ? "backend-login-form"
+    : unableToSignInVisible
+      ? "studio-auth-failed"
+      : signingInVisible
+        ? "studio-signing-in"
+        : currentUrl.origin === workbenchUrl && currentUrl.pathname === "/_elsa/identity/login"
+          ? "backend-login-route-without-form"
+          : currentUrl.origin === studioUrl && currentUrl.pathname === "/workflows/definitions"
+            ? "studio-definitions-without-session"
+            : currentUrl.origin === studioUrl
+              ? "studio-other-route"
+              : currentUrl.origin === workbenchUrl
+                ? "workbench-other-route"
+                : "other-origin";
+  log(`login diagnostic phase=${phase}; failure=${safeFailureClass(error)}; state=${state}; location=${location}; form=${formVisible}; signing-in=${signingInVisible}; auth-responses=${authResponses.join(" | ") || "none"}`);
 }
 
 async function runBrowserJourney() {
@@ -556,7 +624,7 @@ async function main() {
 try {
   await main();
 } catch (error) {
-  console.error(`[published-pair] failed during ${stage} (${error instanceof Error ? error.name : "unknown error"})`);
+  console.error(`[published-pair] failed during ${stage} (${safeFailureClass(error)})`);
   process.exitCode = 1;
 } finally {
   if (browser) await browser.close().catch(() => {});
@@ -569,7 +637,7 @@ try {
   }
   if (tempDir) await rm(tempDir, { recursive: true, force: true }).catch(() => {});
   if (cleanupError) {
-    console.error(`[published-pair] owned cleanup failed (${cleanupError instanceof Error ? cleanupError.name : "unknown error"})`);
+    console.error(`[published-pair] owned cleanup failed (${safeFailureClass(cleanupError)})`);
     process.exitCode = 1;
   }
 }
