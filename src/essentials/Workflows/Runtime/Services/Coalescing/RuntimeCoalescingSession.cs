@@ -61,10 +61,14 @@ public sealed class RuntimeCoalescingSession
         _innerQueue = innerQueue;
         _innerOutboxStore = innerOutboxStore;
         MaxSegmentCheckpoints = options.MaxSegmentCheckpoints;
+        CoalesceDurableValueReads = options.CoalesceDurableValueReads;
+        CoalesceInspectionReads = options.CoalesceInspectionReads;
     }
 
     public string WorkflowExecutionId { get; }
     public int MaxSegmentCheckpoints { get; }
+    public bool CoalesceDurableValueReads { get; }
+    public bool CoalesceInspectionReads { get; }
 
     /// <summary>
     /// <see langword="true"/> while the session is coalescing. An activity-attempt boundary and the per-segment hop cap

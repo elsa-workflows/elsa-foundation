@@ -83,14 +83,20 @@ public sealed class WorkflowsRuntimeCheckpointPersistenceFeatureTests
         Assert.Same(selectedProvider, provider.GetRequiredService<CoalescingInner<IRuntimeCheckpointCommitStore>>().Value);
     }
 
-    [Fact]
-    public async Task AuthoredCapUsesSessionCapWithoutChangingHostOptions()
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public async Task AuthoredCapUsesSessionCapAndPreservesBothReadSettingsWithoutChangingHostOptions(
+        bool coalesceDurableValueReads,
+        bool coalesceInspectionReads)
     {
         var services = CreateRuntimeServices();
         services.AddCoalescingRuntimeCheckpointPersistence(options =>
         {
-            options.CoalesceInspectionReads = false;
-            options.CoalesceDurableValueReads = false;
+            options.CoalesceInspectionReads = coalesceInspectionReads;
+            options.CoalesceDurableValueReads = coalesceDurableValueReads;
         });
 
         using var provider = services.BuildServiceProvider();
@@ -100,8 +106,10 @@ public sealed class WorkflowsRuntimeCheckpointPersistenceFeatureTests
 
         Assert.Equal(7, scope.Session.MaxSegmentCheckpoints);
         Assert.Equal(50, hostOptions.MaxSegmentCheckpoints);
-        Assert.False(hostOptions.CoalesceDurableValueReads);
-        Assert.False(hostOptions.CoalesceInspectionReads);
+        Assert.Equal(coalesceDurableValueReads, scope.Session.CoalesceDurableValueReads);
+        Assert.Equal(coalesceInspectionReads, scope.Session.CoalesceInspectionReads);
+        Assert.Equal(coalesceDurableValueReads, hostOptions.CoalesceDurableValueReads);
+        Assert.Equal(coalesceInspectionReads, hostOptions.CoalesceInspectionReads);
     }
 
     [Fact]
