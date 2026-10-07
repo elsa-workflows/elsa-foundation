@@ -115,7 +115,7 @@ A deferred decision blocks only the dependent task. Escalate one concrete choice
 
 ## Completion and handover
 
-Close current delivery after the nondeferred M1–M3 acceptance evidence is complete, reviewer-backed starter work is genuinely available, and ongoing maintenance/triage ownership has completed handover. The two unfamiliar-human trials and their reviewed PRs remain deferred follow-up: they are not complete or passed and do not block delivery or handover. Resume only after Sipke explicitly resumes the trials and two willing participants are available ([owner decision](https://github.com/elsa-workflows/elsa-foundation/issues/2428#issuecomment-6037784871)). Remaining product fixes stay with their engineering owners. Closed issue counts alone do not establish success.
+Close current delivery after the nondeferred M1–M3 acceptance evidence is complete, reviewer-backed starter work is genuinely available, both repositories publish the approved conduct policy and contact guidance with a verified confidential-reporting route, and ongoing maintenance/triage ownership has completed handover. The two unfamiliar-human trials and their reviewed PRs remain deferred follow-up: they are not complete or passed and do not block delivery or handover. Resume only after Sipke explicitly resumes the trials and two willing participants are available ([owner decision](https://github.com/elsa-workflows/elsa-foundation/issues/2428#issuecomment-6037784871)). Remaining product fixes stay with their engineering owners. Closed issue counts alone do not establish success.
 
 ## Starting evidence and dependencies
 
