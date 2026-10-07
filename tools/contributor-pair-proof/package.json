@@ -1,0 +1,11 @@
+{
+  "name": "elsa-published-image-pair-proof",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "proof": "node run.mjs"
+  },
+  "devDependencies": {
+    "playwright": "1.61.1"
+  }
+}
