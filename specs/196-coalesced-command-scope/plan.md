@@ -37,7 +37,7 @@ Root reviewed both ratified constitutions. Framework §2.1/§2.6: correction sta
 ## Project Structure
 
 ```text
-specs/194-coalesced-command-scope/
+specs/196-coalesced-command-scope/
   spec.md, plan.md, research.md, data-model.md, quickstart.md, tasks.md
   contracts/drain-scope-lifetime.md
   evidence/ (reviewed controls and final provenance)

@@ -1,5 +1,0 @@
-# Design Review
-
-2026-10-06: root and independent Sol 5.6/High QA reviewed Spec 194 at exact failed-base main 932. The first review held three documentation inconsistencies: default versus custom-factory scope, T19 versus downstream final C4 acceptance ownership, and a missing custom/idempotency test dependency. Root corrected all three; independent re-review accepted spec/plan/contracts/quickstart/tasks. No runtime source had changed at acceptance. The default-only scoped registration, real EF no-query two-scope controls, mutation sensitivity and unchanged behavior/review/gate boundaries are approved for implementation.
-
-Root updated lifecycle status to Approved and records setup/design tasks complete. New test-only implementation is bounded to the two existing test surfaces; runtime registration remains unchanged until actual before-fix proof. Unavailable/unfinished tests remain pending. The separate private EF observer lifecycle correction is not product behavior or attribution of prior errors. Subsequent merges remain held for the owner's publication-boundary decision; publication/deployment are excluded.

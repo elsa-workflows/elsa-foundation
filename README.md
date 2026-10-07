@@ -6,7 +6,11 @@
 
 It contains the main Elsa domain core libraries, default foundation implementations, the Speckit specification flow, and the architecture knowledge needed to navigate and verify the refactor from `elsa-core`.
 
-New to the project? Start with [CONTRIBUTING.md](CONTRIBUTING.md) for the Docker and source paths, where to ask questions, and how to propose a change.
+These repositories develop the Elsa 4 preview. Elsa 3 uses the separate [elsa-core](https://github.com/elsa-workflows/elsa-core) and [elsa-studio](https://github.com/elsa-workflows/elsa-studio) repositories.
+
+- **Try Elsa 4:** [run Workbench and Studio from published Docker images](docker/compose/README.md#quick-start--published-images-no-clone-or-build).
+- **Contribute to the server:** follow the [Elsa Foundation contribution guide](CONTRIBUTING.md).
+- **Contribute to Studio:** follow the [Elsa Foundation Studio contribution guide](https://github.com/elsa-workflows/elsa-foundation-studio/blob/main/CONTRIBUTING.md).
 
 ## Philosophy
 

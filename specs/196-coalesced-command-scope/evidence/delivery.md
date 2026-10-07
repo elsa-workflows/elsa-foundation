@@ -1,5 +1,7 @@
 # Local delivery gates and remaining acceptance
 
+This packet records the original correction evidence under Spec 194, retained when the specification was renumbered to 196 during the 7 October integration refresh. The refresh merges main `bfdde6ccdc4666479146177c1c845b7647111739`; runtime registration and test sources are unchanged from PR head `c55f6469324bb24418bda2ff40100d09573aca90`. Earlier results below remain historical evidence. Root and independent review accepted the resolved integration diff after correcting accounting-report links and stale status text. Generated Maps freshness passed (`dotnet run --no-build --project tools/maps/Elsa.Maps.Generator -- check`, exit 0). Exact-head CI remains pending for the refreshed commit; resulting-main and final T17/T18 gates remain open.
+
 Root owns integration; bounded test author used Luna Extra High and independent QA used Sol 5.6 High. Root reviewed all delegated changes and executed every build/test/host run through the queued toolchain. The only runtime source change is the default factory lifetime. Custom registrations, cadence, persistence formats and checkpoint semantics are preserved.
 
 | Gate | Actual result | Scope/limit |
@@ -10,7 +12,7 @@ Root owns integration; bounded test author used Luna Extra High and independent 
 | Architecture initial | 611 passed, 24 failed | Required restore outputs absent in the new worktree; retained failed evidence |
 | Required locked Release/isolated Debug restore | Wrapper exit 0 | Environment prerequisites only; no runtime repair |
 | Architecture after restore | 635 passed, zero failed/skipped | Full local architecture gate |
-| Maps initial | Exit 1; four stale outputs | New Spec 194/provider test inventory required generated snapshot updates |
+| Maps initial | Exit 1; four stale outputs | Original Spec 194/provider test inventory required generated snapshot updates |
 | Reviewed Maps refresh and freshness | Four files changed; check exit 0 | Manifest/spec/test inventory/v1 count; no dependency/package/schema change |
 | Rebuilt PostgreSQL primary HttpEndpoint + valid REST | Two exact Completed/zero-incident/Alice Smith controls passed, wrapper exit 0 | Sequential correctness only; retained settings/source-reference/export/build evidence |
 | Independent review | Design, tests/source/mutation, harness and actual evidence accepted | Local root + independent Sol QA; external PR review is pending |

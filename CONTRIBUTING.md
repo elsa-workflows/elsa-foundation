@@ -39,6 +39,8 @@ The [Specs guide](specs/README.md) explains the artifact roles. Applicable quali
 
 Use the narrowest build and test suites that cover your change while iterating. A feature's `specs/<feature>/quickstart.md`, the [developer solution filters](docs/reference/developer-solution-filters.md), and the [backend E2E guide](e2e-tests/README.md) point to task-specific validation. Record what you ran; if a check is unavailable, say it was not run.
 
+For a change-by-change view of focused checks and evidence, see the [contributor validation matrix](docs/contributing/validation-matrix.md).
+
 Focused checks do not replace the repository's merge gate. See the [Merge Gate](docs/skills/catalog.md#merge-gate) for the required build, affected suites, architecture and maps checks, diff review, and hosted-check evidence; behavioral changes also need the bite-proof described there. For orientation beyond the task at hand, see the [architecture tour](docs/architecture-tour.md).
 
 ## Open a pull request

@@ -1,0 +1,101 @@
+name: Backend source platform
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - '.github/workflows/backend-source-platform.yml'
+      - 'global.json'
+      - 'docs/contributing/backend-source-quickstart.md'
+      - 'docs/contributing/backend-source-edit.md'
+      - 'NuGet.config'
+      - 'Directory.Packages.props'
+      - 'src/apps/Elsa.Workbench/Elsa.Workbench.csproj'
+      - 'src/apps/Elsa.Workbench/packages.lock.json'
+      - 'src/apps/Elsa.Workbench/appsettings*.json'
+      - 'src/apps/Elsa.Workbench/shells.json'
+      - 'tests/essentials/Activities/Runtime/Tests/packages.lock.json'
+      - 'e2e-tests/README.md'
+      - 'e2e-tests/Invoke-PlatformSourceJourney.ps1'
+      - 'e2e-tests/Test-WorkflowFlow.ps1'
+      - 'e2e-tests/Test-WorkflowFlowVerdict.ps1'
+      - 'e2e-tests/_ServerLifecycle.ps1'
+      - 'e2e-tests/_ElsaCommon.ps1'
+      - 'e2e-tests/_WorkflowFlowVerdict.ps1'
+      - 'tests/essentials/Activities/Runtime/Tests/Elsa.Activities.Runtime.Tests.csproj'
+      - 'tests/essentials/Activities/Runtime/Tests/WriteLineBoundInputExecutionTests.cs'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  backend-source:
+    name: Backend source (${{ matrix.runner }})
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [ubuntu-24.04, windows-2025]
+    env:
+      DOTNET_NOLOGO: true
+      DOTNET_CLI_TELEMETRY_OPTOUT: true
+      DOTNET_GENERATE_ASPNET_CERTIFICATE: false
+      DOTNET_ADD_GLOBAL_TOOLS_TO_PATH: false
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ github.event.pull_request.head.repo.full_name || github.repository }}
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+
+      - name: Select the existing .NET 10.x CI line
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.x
+
+      - name: Record the runner and verify empty job paths
+        shell: bash
+        run: |
+          if [ "$RUNNER_OS" = "Windows" ]; then
+            powershell -NoProfile -ExecutionPolicy Bypass -File e2e-tests/Invoke-PlatformSourceJourney.ps1 -PreflightOnly
+          else
+            pwsh -NoProfile -File e2e-tests/Invoke-PlatformSourceJourney.ps1 -PreflightOnly
+          fi
+
+      - name: Restore Workbench and the focused test project from committed public feeds
+        shell: bash
+        run: |
+          dotnet restore src/apps/Elsa.Workbench/Elsa.Workbench.csproj --locked-mode
+          dotnet restore tests/essentials/Activities/Runtime/Tests/Elsa.Activities.Runtime.Tests.csproj --locked-mode
+
+      - name: Build Workbench for the owned DLL host
+        shell: bash
+        run: dotnet build src/apps/Elsa.Workbench/Elsa.Workbench.csproj --configuration Debug --no-restore
+
+      - name: Run the focused WriteLine bound-input test
+        shell: bash
+        run: dotnet test tests/essentials/Activities/Runtime/Tests/Elsa.Activities.Runtime.Tests.csproj --configuration Debug --no-restore --filter 'FullyQualifiedName~WriteLineBoundInputExecutionTests'
+
+      - name: Test strict result verdict and run the owned backend journey
+        id: platform-journey
+        shell: bash
+        run: |
+          if [ "$RUNNER_OS" = "Windows" ]; then
+            powershell -NoProfile -ExecutionPolicy Bypass -File e2e-tests/Test-WorkflowFlowVerdict.ps1
+            powershell -NoProfile -ExecutionPolicy Bypass -File e2e-tests/Invoke-PlatformSourceJourney.ps1
+          else
+            pwsh -NoProfile -File e2e-tests/Test-WorkflowFlowVerdict.ps1
+            pwsh -NoProfile -File e2e-tests/Invoke-PlatformSourceJourney.ps1
+          fi
+
+      - name: Upload owned-server diagnostics on failure
+        if: ${{ failure() && steps.platform-journey.outputs.diagnostics_path != '' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-source-diagnostics-${{ matrix.runner }}
+          path: ${{ steps.platform-journey.outputs.diagnostics_path }}
+          if-no-files-found: error
+          retention-days: 7
