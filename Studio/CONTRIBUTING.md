@@ -8,6 +8,8 @@ Actionable Studio work is tracked in [GitHub Issues](https://github.com/elsa-wor
 
 A small, concrete fix may be proposed directly in a pull request. For a substantial feature, describe the desired behavior in a Studio issue first and align its scope there; a pull request is not a feature-request substitute. General questions belong in the shared [Foundation Q&A](https://github.com/elsa-workflows/elsa-foundation/discussions/categories/q-a). Keep actionable Studio work in Studio Issues.
 
+To report a suspected security vulnerability, use the [private security reporting guidance](SECURITY.md).
+
 AI tools are optional. Their use does not change the applicable review or quality expectations.
 
 ## Plans and artifacts
