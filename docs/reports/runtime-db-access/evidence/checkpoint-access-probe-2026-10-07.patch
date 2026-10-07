@@ -1,0 +1,76 @@
+diff --git a/tests/essentials/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/EfRuntimeCheckpointCommitStoreTests.cs b/tests/essentials/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/EfRuntimeCheckpointCommitStoreTests.cs
+--- a/tests/essentials/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/EfRuntimeCheckpointCommitStoreTests.cs
++++ b/tests/essentials/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/EfRuntimeCheckpointCommitStoreTests.cs
+@@ -17,0 +18 @@
++using Xunit.Abstractions;
+@@ -21 +22 @@
+-public sealed class EfRuntimeCheckpointCommitStoreTests
++public sealed class EfRuntimeCheckpointCommitStoreTests(ITestOutputHelper output)
+@@ -22,0 +24 @@
++    private readonly ITestOutputHelper _output = output;
+@@ -690,0 +693,32 @@
++    }
++
++    [Fact]
++    public async Task Checkpoint_command_count_probe()
++    {
++        await using var database = await TestDatabase.CreateAsync();
++        var capture = new CommandCaptureInterceptor();
++        var commit = WithActivityExecution("commit-command-count-probe", CheckpointActivity("activity-probe"),
++            CheckpointBookmark("bookmark-probe", "activity"));
++        await using var context = database.Open("tenant-a", capture);
++        var store = new EfRuntimeCheckpointCommitStore(context, new FixedAccessor("tenant-a"));
++
++        capture.Commands.Clear();
++        var first = await store.CommitAsync(commit, Decision());
++        var firstCommands = capture.Commands.Select(DescribeCapturedCommand).ToArray();
++        WriteCommandProbe("first-new", firstCommands);
++
++        capture.Commands.Clear();
++        var replay = await store.CommitAsync(commit, Decision());
++        var replayCommands = capture.Commands.Select(DescribeCapturedCommand).ToArray();
++        WriteCommandProbe("replay", replayCommands);
++
++        capture.Commands.Clear();
++        var markerCount = await context.RuntimeCheckpointCommits.CountAsync();
++        var activityCount = await context.ActivityExecutionStates.CountAsync();
++        var bookmarkCount = await context.Bookmarks.CountAsync();
++        _output.WriteLine($"CHECKPOINT_SEMANTICS firstPending={first.PendingPostCommitWorkIds.Count} replayPending={replay.PendingPostCommitWorkIds.Count} markers={markerCount} activityExecutions={activityCount} bookmarks={bookmarkCount}");
++        Assert.Empty(first.PendingPostCommitWorkIds);
++        Assert.Empty(replay.PendingPostCommitWorkIds);
++        Assert.Equal(1, markerCount);
++        Assert.Equal(1, activityCount);
++        Assert.Equal(1, bookmarkCount);
+@@ -1461,0 +1496,32 @@
++    private void WriteCommandProbe(string phase, IReadOnlyCollection<string> commands)
++    {
++        _output.WriteLine($"CHECKPOINT_COMMAND_PROBE phase={phase} count={commands.Count} ordered={string.Join(" > ", commands)}");
++        foreach (var group in commands.GroupBy(command => command).OrderBy(group => group.Key, StringComparer.Ordinal))
++            _output.WriteLine($"CHECKPOINT_COMMAND_PROBE_COUNT phase={phase} category={group.Key} count={group.Count()}");
++    }
++
++    private static string DescribeCapturedCommand(string command)
++    {
++        var firstWord = new string(command.TrimStart().TakeWhile(character => !char.IsWhiteSpace(character)).ToArray()).ToUpperInvariant();
++        var verb = firstWord is "SELECT" or "INSERT" or "UPDATE" or "DELETE" ? firstWord : "OTHER";
++        (string Fragment, string Category)[] tableCategories =
++        [
++            ("checkpoint_commit", "marker"),
++            ("activity_execution", "activity_execution"),
++            ("bookmark", "bookmark"),
++            ("workflow_execution", "workflow_execution"),
++            ("scheduler_state", "scheduler"),
++            ("durable_value", "durable_value"),
++            ("inspection", "inspection"),
++            ("incident", "incident"),
++            ("liveness", "execution_fence")
++        ];
++        var categories = tableCategories
++            .Where(candidate => command.Contains(candidate.Fragment, StringComparison.OrdinalIgnoreCase))
++            .Select(candidate => candidate.Category)
++            .Distinct(StringComparer.Ordinal)
++            .OrderBy(category => category, StringComparer.Ordinal)
++            .ToArray();
++        return $"{verb}/{(categories.Length == 0 ? "other" : string.Join("+", categories))}";
++    }
++
