@@ -15,6 +15,8 @@ Reuse is considered only when all of these conditions hold:
 
 If any condition cannot be established, call the existing inner store and preserve its result, exception, rejection, or cancellation behavior. Missing, ambiguous, in-memory, custom, or overridden backend registrations bypass reuse; eligibility uncertainty must not become a new startup error. Backend ownership metadata is trusted host-composition metadata, not a security attestation. The current access check remains authoritative on every call.
 
+Accessor stability relies on the existing [persistence access and scope contract](../../../src/essentials/Workflows/Runtime/EXTENSION_POINTS.md#persistence-access-and-scope-contracts): one immutable context is selected for an operation's DI scope, and transported contexts bind once to the shared scoped state. The default accessor enforces the one-bind rule. Host replacements must preserve that contract. Before/after context checks detect an observed change; they do not prove stability against a nonconforming accessor that changes A → B → A during a provider call. No private-type probe or new Core capability is introduced to classify such implementations.
+
 ## Read behavior
 
 For an eligible request, capture the current access context and exact `DurableValueStatePageQuery` fields. The key includes scope, access policy, purpose, across-scopes flag, workflow execution ID, requested limit, exact opaque input continuation, and reference identity of the built-in codec instance. Do not inspect token contents or duplicate EF cursor-purpose/binding logic in Runtime Services.
