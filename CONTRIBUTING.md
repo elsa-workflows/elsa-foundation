@@ -6,6 +6,7 @@ Elsa Foundation is the transitional Elsa 4 foundation workspace. Contributions a
 
 - To run the backend from source on macOS, use the [backend source quickstart](docs/contributing/backend-source-quickstart.md). For a prebuilt Workbench and Studio stack, follow the [Docker quickstart](docs/docker-hub-quickstart.md).
 - To report a suspected security vulnerability, use the [private security reporting guidance](SECURITY.md).
+- For conduct expectations and reporting, see the [Code of Conduct](CODE_OF_CONDUCT.md).
 - For a contributor question, use [Foundation Discussions Q&A](https://github.com/elsa-workflows/elsa-foundation/discussions/categories/q-a).
 - To report an actionable bug or propose a feature, open a [Foundation issue](https://github.com/elsa-workflows/elsa-foundation/issues). Small fixes may arrive directly as pull requests; substantial feature requests should start with an issue so the scope can be aligned before implementation.
 

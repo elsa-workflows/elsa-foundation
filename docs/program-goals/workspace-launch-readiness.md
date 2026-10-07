@@ -21,7 +21,7 @@ This is the successor to the first-user workspace handoff effort at this same pa
 - A short human entrance and verified backend/Studio source-development journeys.
 - Clear contribution/validation guidance, genuinely available starter issues, and willing reviewer coverage.
 - Discoverable support, ownership and active work.
-- Tested server–Studio preview pairs, repeatable setup checks, and unfamiliar-contributor trials.
+- Tested server–Studio preview pairs and repeatable setup checks. Two unfamiliar-contributor trials remain deferred follow-up, not a current delivery blocker; no date is promised. Resume only after Sipke explicitly resumes them and two willing participants are available ([owner decision](https://github.com/elsa-workflows/elsa-foundation/issues/2428#issuecomment-6037784871)).
 - Branch housekeeping only after inventory, ownership and publishing behavior are understood.
 
 ## Out of scope
@@ -32,7 +32,7 @@ Broad constitution/architecture grooming, performance benchmark gates, silently 
 
 1. Establish the durable program and source-setup baseline.
 2. Deliver the first working source change in each repository.
-3. Deliver a supported first contribution, then keep the journey dependable.
+3. Deliver the supported first-contribution path, then keep the journey dependable. The two unfamiliar-human trials and their reviewed PRs are deferred follow-up, not an active delivery gate.
 
 The [program issue](https://github.com/elsa-workflows/elsa-foundation/issues/2416) and its native children contain executable scope, current claims and evidence. The [Project](https://github.com/orgs/elsa-workflows/projects/56) presents scheduling; this file does not duplicate the live status ledger.
 
@@ -47,4 +47,4 @@ The [program issue](https://github.com/elsa-workflows/elsa-foundation/issues/241
 
 ## Drift and completion
 
-Keep the program focused on the path from repository choice to reviewed contribution. Reuse existing canonical docs instead of growing a parallel architecture manual. Complete delivery only when the three milestone demonstrations pass, two unfamiliar contributors reach reviewed PRs, starter issues have reviewer coverage, and ongoing checks/triage have accepted owners. Then hand ongoing maintenance to those owners and close the delivery program.
+Keep the program focused on the path from repository choice to reviewed contribution. Reuse existing canonical docs instead of growing a parallel architecture manual. Complete current delivery when the nondeferred milestone evidence passes, five to ten genuinely available starter issues have reviewer coverage, both repositories publish the approved conduct policy and contact guidance with a verified confidential-reporting route, and ongoing checks/triage ownership has completed handover. The two unfamiliar-human trials remain unperformed deferred follow-up, not passed evidence or a delivery/handover blocker. Resume only after Sipke explicitly resumes the trials and two willing participants are available ([owner decision](https://github.com/elsa-workflows/elsa-foundation/issues/2428#issuecomment-6037784871)).

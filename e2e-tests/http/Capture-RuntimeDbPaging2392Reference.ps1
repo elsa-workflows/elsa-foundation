@@ -9,8 +9,9 @@
 
     The SetVariable node is the compiler intrinsic `elsa.intrinsic.set@1` (IntrinsicKind=Set, fusable); it is not the
     historical custom CLR transform. Treat output as a representative, non-equivalent reference.
-    ExpectedCadence checks per-run readback only; configure the task-owned host separately. Its default remains
-    Coalesced. The workflow definition and published executable inputs are unchanged by this parameter.
+    ExpectedCadence and ExpectedMaxSegmentCheckpoints check per-run readback; configure the task-owned host separately.
+    AuthoredCadence and AuthoredMaxSegmentCheckpoints submit the supported strategyOptions.checkpointCadence draft
+    input before publishing. Defaults preserve the prior no-authored-override, Coalesced/50 expectation.
 #>
 [CmdletBinding()]
 param(
@@ -20,11 +21,39 @@ param(
     [string] $Password = "Password123!",
     [string] $TraceParent = "",
     [ValidateSet("Coalesced", "Immediate")][string] $ExpectedCadence = "Coalesced",
+    [int] $ExpectedMaxSegmentCheckpoints = 0,
+    [ValidateSet("Immediate", "Coalesced")][string] $AuthoredCadence,
+    [int] $AuthoredMaxSegmentCheckpoints = 0,
     [string] $WorkflowName = "RuntimeDbPaging2392Reference",
     [string] $RoutePath = "runtime-db-paging-2392/transform",
     [switch] $SetupOnly
 )
+$authoredCadenceWasBound = $PSBoundParameters.ContainsKey("AuthoredCadence")
+$expectedMaxWasBound = $PSBoundParameters.ContainsKey("ExpectedMaxSegmentCheckpoints")
+$authoredMaxWasBound = $PSBoundParameters.ContainsKey("AuthoredMaxSegmentCheckpoints")
 . "$PSScriptRoot/../_ElsaCommon.ps1"
+
+if ($expectedMaxWasBound -and $ExpectedMaxSegmentCheckpoints -le 0) {
+    throw "ExpectedMaxSegmentCheckpoints must be positive when specified."
+}
+if ($authoredMaxWasBound -and $AuthoredCadence -ne "Coalesced") {
+    throw "AuthoredMaxSegmentCheckpoints is valid only with -AuthoredCadence Coalesced."
+}
+if ($authoredMaxWasBound -and $AuthoredMaxSegmentCheckpoints -le 0) {
+    throw "AuthoredMaxSegmentCheckpoints must be positive when specified."
+}
+if ($expectedMaxWasBound -and $ExpectedCadence -ne "Coalesced") {
+    throw "ExpectedMaxSegmentCheckpoints can only be specified when -ExpectedCadence Coalesced."
+}
+
+$strategyOptions = $null
+if ($authoredCadenceWasBound) {
+    $authoredCheckpointCadence = @{ mode = $AuthoredCadence }
+    if ($authoredMaxWasBound) {
+        $authoredCheckpointCadence.maxSegmentCheckpoints = $AuthoredMaxSegmentCheckpoints
+    }
+    $strategyOptions = @{ checkpointCadence = $authoredCheckpointCadence }
+}
 
 if ([string]::IsNullOrWhiteSpace($TraceParent)) {
     $traceBytes = New-Object byte[] 24
@@ -47,6 +76,20 @@ Write-Host "== #2392 $ExpectedCadence HTTP reference (non-equivalent) == -> $Bas
 Write-Host ("[scriptHead] {0}" -f (git -C (Join-Path $PSScriptRoot '../..') rev-parse HEAD).Trim())
 Write-Host ("[hostCandidateInput] {0} (operator supplied; verify against the independent host build record)" -f $HostCandidateSha.ToLowerInvariant())
 Write-Host ("[traceparent] {0}" -f $TraceParent)
+$authoredCadenceText = if (-not $authoredCadenceWasBound) { "<host default>" } else { $AuthoredCadence }
+$authoredCapText = if ($authoredMaxWasBound) { [string]$AuthoredMaxSegmentCheckpoints } else { "<host default>" }
+Write-Host ("[authored]   checkpointCadence={0}; maxSegmentCheckpoints={1}" -f $authoredCadenceText, $authoredCapText)
+$expectedMaxSegment = if ($expectedMaxWasBound) {
+    $ExpectedMaxSegmentCheckpoints
+} elseif ($ExpectedCadence -eq "Coalesced" -and $authoredMaxWasBound) {
+    $AuthoredMaxSegmentCheckpoints
+} elseif ($ExpectedCadence -eq "Coalesced") {
+    50
+} else {
+    $null
+}
+$effectiveCapText = if ($null -eq $expectedMaxSegment) { "<null>" } else { [string]$expectedMaxSegment }
+Write-Host ("[expected]   checkpointCadence={0}; maxSegmentCheckpoints={1}" -f $ExpectedCadence, $effectiveCapText)
 
 $ctx = Connect-Elsa -BaseUrl $BaseUrl -Username $Username -Password $Password
 $sequence = Invoke-Step "resolve Sequence" { Get-ActivityVersionId -Ctx $ctx -TypeKey 'Elsa.Activities.Sequence.Activities.Sequence' }
@@ -81,7 +124,7 @@ $variables = @(
 $definition = Invoke-Step "submit reference workflow" {
     Submit-Workflow -Ctx $ctx -Name $workflowName `
         -Description "Task #2392 current-head $ExpectedCadence HTTP reference; non-equivalent to historical custom transform." `
-        -RootActivity $root -Variables $variables
+        -RootActivity $root -Variables $variables -StrategyOptions $strategyOptions
 }
 $publication = Invoke-Step "publish reference workflow" {
     Publish-WorkflowVersion -Ctx $ctx -VersionId $definition.version.id
@@ -144,6 +187,9 @@ if ($SetupOnly) {
         WorkflowName       = $workflowName
         RoutePath          = $path
         ExpectedCadence    = $ExpectedCadence
+        ExpectedMaxSegmentCheckpoints = $expectedMaxSegment
+        AuthoredCadence    = if ($authoredCadenceWasBound) { $AuthoredCadence } else { $null }
+        AuthoredMaxSegmentCheckpoints = if ($authoredMaxWasBound) { $AuthoredMaxSegmentCheckpoints } else { $null }
         CandidateSourceSha = $HostCandidateSha.ToLowerInvariant()
         Context            = $ctx
         ExecutableExport   = $export
@@ -193,7 +239,6 @@ $maxSegment = Get-DetailValue $detail "maxSegmentCheckpoints"
 $inspection = Get-DetailValue $detail "inspectionGranularity"
 Write-Host ("[terminal]   status={0}" -f $detail.instance.status)
 Write-Host ("[effective]  checkpointCadence={0}; maxSegmentCheckpoints={1}; inspectionGranularity={2}" -f $cadence, $maxSegment, $inspection)
-$expectedMaxSegment = if ($ExpectedCadence -eq "Coalesced") { 50 } else { $null }
 $expectedInspection = if ($ExpectedCadence -eq "Coalesced") { "boundary-level" } else { "activity-level" }
 $expectedMaxSegmentText = if ($null -eq $expectedMaxSegment) { "<null>" } else { [string]$expectedMaxSegment }
 if ("$cadence" -ne $ExpectedCadence -or $maxSegment -ne $expectedMaxSegment -or "$inspection" -ne $expectedInspection) {
