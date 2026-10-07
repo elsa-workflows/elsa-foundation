@@ -71,4 +71,6 @@ A prior Immediate capture had 1,243 command pairs (635 HTTP, 559 REST, 49 sweep 
 
 ## Residual source review
 
+The [joined request/settlement report](joined-request-settlement-accounting.md) imports both packets into the shared T02/T04 ledger. It adds operation-local typed identity joins, reconciles drain tails and natural sweeps, and states the missing response-finished boundary and unresolved historical range explicitly.
+
 The [remaining-command account](residual-accounting.md) conserves all 238 Coalesced and 478 Immediate commands without method ancestry across 45 disjoint groups and 13 source-supported families. It records exact-caller limits, the root lead's bounded dispositions, and the existing T04/T07/T18 ownership and revisit conditions. Those source candidates do not add observed method joins, turn participant inputs into rows, or claim new savings. The full program's reduction selection and integrated correctness/final measurement gates remain open.

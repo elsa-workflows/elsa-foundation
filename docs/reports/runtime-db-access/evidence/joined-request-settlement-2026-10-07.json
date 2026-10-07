@@ -1,0 +1,188 @@
+{
+  "captures": [
+    {
+      "archiveSha256": "2a9d0434209f8694f194ce0efe33ab2236d6d9f07def068a625936f3f5a5e3f5",
+      "cadence": "Coalesced",
+      "checkpointIdentity": {
+        "commitOperations": 4,
+        "directChildren": 34,
+        "typedExecutionCheckpointCommitParentMatches": 34
+      },
+      "commandPairs": 420,
+      "http": {
+        "afterDrainStop": 46,
+        "afterStopSourceBoundaryTail": 40,
+        "beforeDrain": 13,
+        "joined": 129,
+        "noMethod": 148,
+        "outsideDrainBoundary": 19,
+        "pairs": 277,
+        "withinDrainInterval": 218
+      },
+      "httpTraceLastTerminalSequence": 916,
+      "methodJoined": 182,
+      "noMethodAncestor": 238,
+      "outboxIdentity": {
+        "checkpointStageOutboxIds": 0,
+        "getDeliverableReturnedIds": 0,
+        "recordDeliveryInputIds": 0
+      },
+      "packetSha256": "ff500f54c1a94ddd52e397e3a7f3c3a7e33982cabfeb19459f6c840d6094f836",
+      "queueIdentity": {
+        "dequeueOperationExecutionMatches": 4,
+        "dequeueReturnedIds": 4,
+        "dequeueToEnqueueTypedHmacMatches": 4,
+        "enqueuedWorkItemIds": 4,
+        "listOperationExecutionMatches": 2,
+        "listReturnedIds": 2,
+        "listToEnqueueTypedHmacMatches": 2
+      },
+      "rawBytes": 2561423,
+      "rawProbeSha256": "3261099441a6ca5adcbf5e1c92965e1d7bccdf59d85c757e34050f1ccd7d4b88",
+      "rawRecords": 1361,
+      "rest": {
+        "afterDrainStop": 13,
+        "afterStopSourceBoundaryTail": 8,
+        "beforeDrain": 11,
+        "joined": 39,
+        "noMethod": 62,
+        "outsideDrainBoundary": 16,
+        "pairs": 101,
+        "withinDrainInterval": 77
+      },
+      "settlement": {
+        "http": "Completed terminal; queue=0; all six outbox statuses=0",
+        "rest": "Completed; no separate settlement snapshot"
+      },
+      "settlementMarkerSequence": 1251,
+      "settlementMarkerSnapshotSha256": "0dc65758fe4ced108f649c0b7c90d11dcd3c21de6dc57e52284c512b0ba18ff5",
+      "sweeps": {
+        "methodJoinedAllSweeps": 14,
+        "noMethodAllSweeps": 28,
+        "pairsPerSweep": 6,
+        "postSettlement": 6,
+        "postSettlementCommandPairs": 36,
+        "postSettlementJoined": 12,
+        "postSettlementNoMethod": 24,
+        "preSettlement": 1,
+        "total": 7
+      }
+    },
+    {
+      "archiveSha256": "16326aa45e1c638ff4ef566cc799a3d7826a8f30de5264fcdb29c7e7944a1c30",
+      "cadence": "Immediate",
+      "checkpointIdentity": {
+        "commitOperations": 40,
+        "directChildren": 293,
+        "typedExecutionCheckpointCommitParentMatches": 293
+      },
+      "commandPairs": 1227,
+      "http": {
+        "afterDrainStop": 14,
+        "afterStopSourceBoundaryTail": 8,
+        "beforeDrain": 12,
+        "joined": 392,
+        "noMethod": 243,
+        "outsideDrainBoundary": 18,
+        "pairs": 635,
+        "withinDrainInterval": 609
+      },
+      "httpTraceLastTerminalSequence": 2498,
+      "methodJoined": 749,
+      "noMethodAncestor": 478,
+      "outboxIdentity": {
+        "checkpointParticipantStageScopesWithOutboxId": 28,
+        "getDeliverableOperations": 30,
+        "getDeliverableReturnedOutboxIds": 28,
+        "getDeliverableReturnedToRecordInputMatches": 28,
+        "persistedOutcome": "unobserved; stage inputs are requested inputs; operation outcomes unknown",
+        "recordDeliveryResultOperationsWithOutboxInput": 28,
+        "sourceMechanism": "GetDeliverable query filters rows by its operation execution input; checkpoint source projects pending outbox IDs",
+        "stageOutboxTypedIds": 28,
+        "stageParentCommitExecutionAndGetQueryExecutionMatch": 28,
+        "stageToGetDeliverableReturnedIdMatches": 28
+      },
+      "packetSha256": "02b23c01d38d0e14a4e4217f11085d93d26b5b7b751ee940678a0a2cb5dc24a4",
+      "queueIdentity": {
+        "checkpointConsumedSchedulerStageIds": 20,
+        "claimOperationExecutionMatches": 42,
+        "claimOperations": 70,
+        "claimReturnToEnqueueTypedHmacMatches": 42,
+        "claimReturnedIds": 42,
+        "completeClaimExecutionMatchesEnqueue": 22,
+        "completeClaimInputs": 22,
+        "completeClaimToEnqueueTypedHmacMatches": 22,
+        "enqueuedWorkItemIds": 42,
+        "stageConsumedVsCompleteClaimOverlap": 0,
+        "stageExecutionMatchesParentCommitAndPerItemEnqueue": 20,
+        "stageToEnqueueAndClaimReturnMatches": 20
+      },
+      "rawBytes": 8963801,
+      "rawProbeSha256": "12495885af9f6e64263f636d8d8360306073cd5fe425f068830876cd03364753",
+      "rawRecords": 4773,
+      "rest": {
+        "afterDrainStop": 13,
+        "afterStopSourceBoundaryTail": 8,
+        "beforeDrain": 10,
+        "joined": 345,
+        "noMethod": 211,
+        "outsideDrainBoundary": 15,
+        "pairs": 556,
+        "withinDrainInterval": 533
+      },
+      "settlement": {
+        "http": "Completed terminal; queue=0; 15 Delivered and other five outbox statuses=0",
+        "rest": "Completed; no separate settlement snapshot"
+      },
+      "settlementMarkerSequence": 4679,
+      "settlementMarkerSnapshotSha256": "d268dd8c622611a4b0e7565df2227578068ef206eb3044614948c8bd04a24a15",
+      "sweeps": {
+        "methodJoinedAllSweeps": 12,
+        "noMethodAllSweeps": 24,
+        "pairsPerSweep": 6,
+        "postSettlement": 5,
+        "postSettlementCommandPairs": 30,
+        "postSettlementJoined": 10,
+        "postSettlementNoMethod": 20,
+        "preSettlement": 1,
+        "total": 6
+      }
+    }
+  ],
+  "limits": [
+    "No method outcome for checkpoint/queue/outbox scopes.",
+    "Current command traces and drain tails are not the HTTP response-finished boundary.",
+    "Global sweeps have no target execution identity and ownership remains unknown_not_awaited.",
+    "Immediate 20 consumed-stage work_item IDs and 22 complete_claim IDs are disjoint; report as distinct subgraphs.",
+    "Participant input counts are not persisted-row counts; combined flush attribution is not per participant.",
+    "The historical 25-695 range remains explicitly unresolved; current 716 no-method-ancestor commands are a distinct population."
+  ],
+  "residualMatrix": {
+    "currentNoMethodCommands": 716,
+    "groups": 45,
+    "historical25To695CoveredByThese716": false,
+    "multiTableGroups": 0,
+    "rootAdoptedEvidenceSha256": "85a689f09d7d6c1a670fcf64bc389afc69a58e5eb5e996301d3fbd56b98f2a33"
+  },
+  "source": {
+    "diagnosticCandidate": "b3f55bef32576011d39b93d664949a0cb705fb3b",
+    "runtimeBaseline": "e6faa5689814c33353009b13f5b9e44d0e9982a4",
+    "sourceDeltaSha256": "050e1f066f48dcf0abc41c99b8276d476bad60cee53a7e51c2ab00bbed162f67"
+  },
+  "schema": "runtime-db-joined-request-settlement/v1",
+  "inputAccountingCommit": "6174a09a55c3d835b5b4274697ec81610d9ddca4",
+  "boundarySemantics": {
+    "requestBins": "monotonic request_drain method start and stop; not HTTP response completion",
+    "afterStopSourceBoundaryTail": "subset of afterDrainStop; not an additional bucket",
+    "outsideDrainBoundary": "beforeDrain plus afterDrainStop minus afterStopSourceBoundaryTail",
+    "captureLocalIdentitiesOnly": true,
+    "methodOutcomesObserved": false,
+    "extendedRawHasHttpResponseFinishedBoundary": false,
+    "primarySnapshotSettlesRest": false
+  },
+  "review": {
+    "privateDerivationSha256": "f09ba64f6836b96cb0ecb396ffcebb6f187a78935706f179578f495b96238c4d",
+    "independentRawReplayReviewSha256": "7af0b2758bc2c179e66f5cc493361bd851bd134447ba1f5df4a6e92ad02ed90e",
+    "rootDisposition": "accepted finite input and qualified handoff; unknown all-command caller/row identity and same-run post-response placement remain unproven; PR review gates pending"
+  }
+}
