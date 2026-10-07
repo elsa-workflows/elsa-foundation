@@ -25,13 +25,21 @@ dotnet test tests/essentials/Modularity/Planning/Tests/Elsa.Modularity.Planning.
 
 Locked restore succeeded. Result: **36 passed, 0 failed, 0 skipped**. This covers the integrated pure portable wire/correlation/public-content rules and the long-sibling regression. It does not exercise the produced portable commands or Workbench.
 
-Root CLI verification is pending at this checkpoint:
+Root CLI verification completed against the same production-source revision:
 
 ```text
 dotnet test tests/essentials/Cli/Tests/Elsa.Cli.Tests.csproj --no-restore --filter "FullyQualifiedName~CompositionFilePublisherTests|FullyQualifiedName~PortableCompositionCaptureTests|FullyQualifiedName~CompositionFileSourceTests|FullyQualifiedName~CompositionAcceptCliTests" --logger "trx;LogFileName=2461-cli-foundations.trx"
 ```
 
-The clean completed utility checkout was moved to the exact integrated revision, preserving its original worker branch and reusing its restored/build outputs. The shared build-slot wrapper remains in use. Extreme shared-machine load makes elapsed time and timeout-shaped failures unsuitable as correctness conclusions without reconciliation.
+Result: **102 passed, 3 failed, 0 skipped, 105 total**. Duration reported by the test runner: 6 minutes 47 seconds, excluding the fixture build. This is a failed check, not a full CLI pass. The three unchanged controls failed at their bounded process/deadline assertions:
+
+- `CompositionAcceptCliTests.Regular_file_check_refuses_directory_symlink_device_and_fifo_without_hanging`: the produced CLI exceeded the fixture's 5-second deadline.
+- `CompositionFileSourceTests.Candidate_reader_rejects_a_fifo_replacing_a_regular_file_after_preflight_without_blocking`: the owned child exceeded its 30-second deadline.
+- `CompositionAcceptCliTests.Workspace_profile_drives_plan_accept_and_generation_with_exact_readback`: the subsequent produced planning command returned timeout exit 124 after acceptance had succeeded.
+
+The load averages observed immediately after the run were 768.41 / 743.36 / 719.96 on the shared 8-core machine. The failure shapes suggest contention; that does not prove the product correct or permit counting the failed controls as passed. Reconcile the failures with a quieter rerun before closing the corresponding foundation tasks or advancing a delivery gate. No deadlines were enlarged and no tests were removed.
+
+The clean completed utility checkout was moved to the exact integrated revision, preserving its original worker branch and reusing its restored/build outputs. The shared build-slot wrapper remained in use. New long-sibling, root-link-swap and partial-write regressions were among the 102 passes; the source/publication/acceptance check as a whole remains red.
 
 Earlier worker results apply only to their narrower source revisions: Planning final filter 35 passed/0 failed/0 skipped; utility/source filter 85 passed/0 failed/0 skipped before final worker hardening, followed by final publisher/capture filter 33 passed/0 failed/0 skipped. They do not substitute for root integrated verification.
 
