@@ -1,0 +1,226 @@
+{
+  "issue": 2407,
+  "program": 2382,
+  "date": "2026-10-08",
+  "sourceCommit": "9a472affde60978cb15743fbc0e5ce22ee0581a9",
+  "decision": "No production change selected; naive insert-first enqueue trial rejected.",
+  "measurementUnit": "SQLite EF Reader/NonQuery command attempts, including failed commands; not physical round trips or elapsed time.",
+  "scope": [
+    "Queue enqueue identity reads, FIFO claims, consumption, empty probes, retry and renewal.",
+    "Outbox intent admission/write, deliverable polling, inline delivery, claim completion and status updates."
+  ],
+  "historicalEvidence": {
+    "packet": "checkpoint-queue-accounting-2026-10-07.json",
+    "sha256": "ff500f54c1a94ddd52e397e3a7f3c3a7e33982cabfeb19459f6c840d6094f836",
+    "instrumentedSourceCandidate": "b3f55bef32576011d39b93d664949a0cb705fb3b",
+    "runtimeBaseline": "e6faa5689814c33353009b13f5b9e44d0e9982a4",
+    "coalescedQueue": {
+      "enqueueOperations": 4,
+      "commandsPerEnqueue": [
+        "SELECT",
+        "INSERT"
+      ],
+      "interpretation": "Historical preserved-before observation only; at most four pre-read commands are a structural ceiling hypothesis if all four identities were new. Not a post-M2 or current-HEAD count."
+    },
+    "coalescedOutbox": {
+      "operations": 11,
+      "joinedCommandPairs": 11,
+      "returnedOrStagedOutboxIdentityChain": false
+    },
+    "backgroundSweeps": {
+      "resumptionSweeps": 7,
+      "targetExecutionIdentity": false,
+      "interpretation": "Global recovery/liveness observations; do not infer redundant polls from empty results.",
+      "commandPairs": 42
+    },
+    "historicalSourceOverlayPins": {
+      "queue": "3ab6d23e0d377004e72929e41db25b4f00450a054ead813fa32e4e1111d71763",
+      "outbox": "63d9e190776b2723280fbe2da252a45a477d431bcfd4dfb095b979bbaa681831",
+      "note": "Diagnostic overlay pins, not raw source-file SHA-256 values."
+    }
+  },
+  "trial": {
+    "provider": "SQLite in-memory shared fixture",
+    "probeShape": "Temporary DbCommandInterceptor captured EF Reader/NonQuery attempts only during each enqueue call, emitted sanitized verbs and failure flags, and excluded fixture setup and verification reads.",
+    "productionEdit": "Removed only the enqueue identity SELECT/early return at source lines 47-50; retained unique-conflict catch, detaching the attempted entity, winner reload, ReadChecked, cancellation/provider-failure cleanup and all existing assertions.",
+    "runs": {
+      "baseline": {
+        "source": "9a472affde60978cb15743fbc0e5ce22ee0581a9",
+        "newIdentity": {
+          "attempts": [
+            "SELECT",
+            "INSERT"
+          ],
+          "count": 2
+        },
+        "duplicateChangedPayloadFreshContext": {
+          "attempts": [
+            "SELECT"
+          ],
+          "count": 1
+        },
+        "pairTotal": 3,
+        "focusedClass": {
+          "passed": 13,
+          "failed": 0,
+          "total": 13
+        },
+        "probe": [
+          "ENQUEUE_PROBE phase=new attempts=SELECT INSERT",
+          "ENQUEUE_PROBE phase=duplicate attempts=SELECT"
+        ]
+      },
+      "naiveInsertFirst": {
+        "newIdentity": {
+          "attempts": [
+            "INSERT"
+          ],
+          "count": 1
+        },
+        "duplicateChangedPayloadFreshContext": {
+          "attempts": [
+            "INSERT[failed]",
+            "SELECT"
+          ],
+          "count": 2
+        },
+        "pairTotal": 3,
+        "focusedClass": {
+          "passed": 12,
+          "failed": 1,
+          "total": 13
+        },
+        "probe": [
+          "ENQUEUE_PROBE phase=new attempts=INSERT",
+          "ENQUEUE_PROBE phase=duplicate attempts=INSERT[failed] SELECT"
+        ],
+        "failure": {
+          "test": "Duplicate_enqueue_does_not_flush_pending_sibling_or_invoke_save_interceptor",
+          "exception": "DbUpdateException: Injected queue save failure.",
+          "meaning": "The existing-key replay now invokes SaveChanges and the armed interceptor while a sibling entity is pending in the shared context.",
+          "databaseWriteClaim": false,
+          "unexecutedAssertions": [
+            "Returned winning sequence matches the original winner.",
+            "SaveChanges interceptor invocation count remains zero.",
+            "Pending sibling remains EntityState.Added.",
+            "Separate-context read confirms sibling was not persisted and original winner remains."
+          ],
+          "qualification": "The interceptor throws before SQL; the trial does not establish that the sibling was persisted. The enqueue throw prevented the listed follow-up assertions from executing."
+        },
+        "corruptProjectionReplay": "The probe-added EnqueueAsync assertion in the existing Projection_drift_fails_closed_on_visible_row case passed; candidate conflict reload still failed closed through ReadChecked. The committed test covers ListAsync only."
+      },
+      "restored": {
+        "sourceSha256": "010fc5e612bcdafb931ba809fc1a88ace433dbf8725df6273ae4caf795f6d65a",
+        "newIdentity": {
+          "attempts": [
+            "SELECT",
+            "INSERT"
+          ],
+          "count": 2
+        },
+        "duplicateChangedPayloadFreshContext": {
+          "attempts": [
+            "SELECT"
+          ],
+          "count": 1
+        },
+        "pairTotal": 3,
+        "focusedClass": {
+          "passed": 13,
+          "failed": 0,
+          "total": 13
+        }
+      }
+    },
+    "pendingChangeFallback": "Not implemented or tested. A ChangeTracker.HasChanges/read-first fallback could protect pending siblings, but does not preserve the clean-context duplicate's no-SaveChanges boundary and keeps reads on contexts with pending changes.",
+    "unverified": [
+      "Ambient transaction/savepoint behavior on unique-conflict reload.",
+      "PostgreSQL or other native-provider behavior.",
+      "Current matched post-M2 queue/outbox workload distribution or net command reduction.",
+      "Physical round trips, network RTT or latency gain."
+    ]
+  },
+  "currentSourcePins": [
+    {
+      "path": "src/essentials/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/EfSchedulerWorkQueueStore.cs",
+      "lines": "39-76,234-348,393-423,573-608",
+      "sha256": "010fc5e612bcdafb931ba809fc1a88ace433dbf8725df6273ae4caf795f6d65a",
+      "gitBlobAtB3f55And9a": "6ddfd999e97a9e19e368e88b4980f6116135f4f1"
+    },
+    {
+      "path": "src/essentials/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/EfRuntimePostCommitOutboxStore.cs",
+      "lines": "28-69,82-205,208-435,487-525",
+      "sha256": "a5f4e1abeed91d2a20fcca9ae45cbf99ec55e4ee0bcebe808cd98c651df3d7e8",
+      "gitBlobAtB3f55And9a": "f8b1995a78ac714859460267aef6adb5eb65b81c"
+    },
+    {
+      "path": "src/essentials/Workflows/Runtime/Services/Scheduler/WorkflowSchedulerDrainer.cs",
+      "lines": "132-210,247-252,324-360,502-546,561-675",
+      "sha256": "8de3cd3de031fa0bed865baf88fb6e36f40113559bd79d17817ba7f447183ee4",
+      "gitBlobAtB3f55And9a": "a76cc28a6fedb401c6701c381e31f9a6c223ed23"
+    },
+    {
+      "path": "src/essentials/Workflows/Runtime/Services/Checkpoints/RuntimePostCommitOutboxProcessor.cs",
+      "lines": "130-228,230-281,334-435",
+      "sha256": "de27bcc53db30188b1b531ef70813691ef82e43f9f18f316d5fb2f63bfb0296b",
+      "gitBlobAtB3f55And9a": "0d978c0542e79978f2ca25461be5ea84fb53c25a"
+    },
+    {
+      "path": "src/essentials/Workflows/Runtime/Services/Recovery/RuntimeResumptionService.cs",
+      "lines": "82-115,186-211,320-369",
+      "sha256": "2be3a7b7170e4e1286346d32e72fd4cd58484a1dd7d122852e776d218acf91bb",
+      "gitBlobAtB3f55And9a": "9702ec59eabb9d532614084f87be8621f5f17d1c"
+    },
+    {
+      "path": "src/essentials/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/EfRuntimeCheckpointOutboxParticipantStaging.cs",
+      "lines": "7-48",
+      "sha256": "88d0e9db944cf6a8baa077e0594f0f1a3b918610c46abe54eb76eafa0c8a7507"
+    },
+    {
+      "path": "src/essentials/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/EfRuntimeCheckpointParticipantStaging.cs",
+      "lines": "336-409",
+      "sha256": "0cb856996261b17cb4b066774afd46d76aac6f47cdbcdf451ff6e750a61211e3"
+    },
+    {
+      "path": "src/essentials/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/EfRuntimeCheckpointCommitStore.cs",
+      "lines": "181-195",
+      "sha256": "5632009e015024d85d561959951a68aaaea946c92c2807b1c3b313c78d21e8e9"
+    },
+    {
+      "path": "tests/essentials/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/EfSchedulerWorkQueueStoreTests.cs",
+      "lines": "22-37,186-218,221-233,270-337",
+      "sha256": "9dff4dd8bb650838e53d62cbbe2852a92ee39789d322f55d87f2b74cc9f7b69d"
+    }
+  ],
+  "artifacts": {
+    "repositoryEvidence": {
+      "enqueue-count-probe-2026-10-08.patch": "4b9bfb4220696dfe6f3b27c34ceda40d09a3020036e5e4baad06816fbf1dd952",
+      "enqueue-insert-first-trial-2026-10-08.patch": "fb4046209d88466b756ba0d5553d8a08a406b545725f075ecb2640accce0fb3a"
+    },
+    "privateEvidenceArchiveArtifactsSha256": {
+      "logs/baseline.log": "f5951a1ca7e11d5e9f915c65c0492e11c1dd93e4f18f1b5811f224837a5af6cc",
+      "logs/candidate.log": "6f8c5e3a5269c0ad47d510c6cf79077bd761392eab518eb477aaf4cd1c9786e4",
+      "logs/restored.log": "90301e679982487f15e9510d89dc3a5246552e31885d59f9f3dabe50112158f1",
+      "logs/locked-restore.log": "5a0b1a72496639d429ffc2a1115f660c98de45538b0330e3e460a14e281906b7",
+      "logs/restore-after-candidate.log": "41d05ca6fd6b1b64ee78bb756fded530033b599da569de3dd07e814bdf2f1c98",
+      "trx/baseline/baseline.trx": "500643a20eb758fbb0b1ccc68c1c1b98fcd81423a268889d8807e9770465e050",
+      "trx/candidate/candidate.trx": "82137af8bafa9fc3f4d1eba15766da793ed603a4ad4dbab1e4ab114ad05a31de",
+      "trx/restored/restored.trx": "db53047410c8e62d027340fe7da5ca9dc03499cd40dd868b781faddd49897209",
+      "source-before/EfSchedulerWorkQueueStore.cs": "010fc5e612bcdafb931ba809fc1a88ace433dbf8725df6273ae4caf795f6d65a",
+      "source-before/EfSchedulerWorkQueueStoreTests.cs": "9dff4dd8bb650838e53d62cbbe2852a92ee39789d322f55d87f2b74cc9f7b69d",
+      "source-candidate/EfSchedulerWorkQueueStore.cs": "cc94da9d0db5ec64b08ee577ac9742fc87919442635046df93ed8bdb920ddb9e",
+      "source-candidate/EfSchedulerWorkQueueStoreTests.cs": "f2b1270122ed28bc8a1439d46987ba89bfa73a22412c51c0601976b311ee36bd",
+      "source-restored/EfSchedulerWorkQueueStore.cs": "010fc5e612bcdafb931ba809fc1a88ace433dbf8725df6273ae4caf795f6d65a",
+      "source-restored/EfSchedulerWorkQueueStoreTests.cs": "f2b1270122ed28bc8a1439d46987ba89bfa73a22412c51c0601976b311ee36bd",
+      "test-probe.patch": "4b9bfb4220696dfe6f3b27c34ceda40d09a3020036e5e4baad06816fbf1dd952",
+      "candidate-production.patch": "d7f56969ca9338f015c2b64f1fa26f7181a2109c427ebb24bf94159c3365ec2c"
+    }
+  },
+  "patchFormat": "Ordinary unified patches with repository-relative paths; use git apply (no --unidiff-zero required) in a disposable worktree at sourceCommit.",
+  "privateEvidenceArchive": {
+    "basename": "2407-enqueue-access-9a472affd.tar.gz",
+    "sha256": "6de64c2f1c95194cd6726ae6492cc6d5095abf771d2e5cd7f4547774107e821b",
+    "bytes": 57938,
+    "contents": "Source audit, trial logs/TRX/source snapshots and review records; retained privately."
+  }
+}
