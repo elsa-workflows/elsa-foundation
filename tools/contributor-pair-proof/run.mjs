@@ -472,7 +472,9 @@ async function runBrowserJourney() {
   stage = "activity-picker-search";
   await menu.getByRole("searchbox", { name: "Search activities", exact: true }).fill("WriteLine");
   stage = "activity-picker-option";
-  const writeLineOption = picker.getByRole("option", { name: /write\s*line/i });
+  const writeLineOption = picker.getByRole("option").filter({
+    has: page.locator("strong").filter({ hasText: /^write\s*line$/i })
+  });
   await writeLineOption.waitFor({ state: "visible" });
   assert.equal(await writeLineOption.count(), 1, "the activity picker must return one Write Line option");
   await writeLineOption.click();
