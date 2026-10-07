@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Builder;
+using Microsoft.Extensions.Hosting;
 
 namespace Elsa.Studio.Tests;
 
@@ -21,7 +22,7 @@ public sealed class BridgeTestHostContentRootTests
 
         try
         {
-            var expectedContentRoot = Path.GetFullPath(AppContext.BaseDirectory);
+            var expectedContentRoot = Path.TrimEndingDirectorySeparator(Path.GetFullPath(AppContext.BaseDirectory));
             Assert.NotEqual(expectedContentRoot, alternatePath);
             Directory.SetCurrentDirectory(alternatePath);
 
@@ -31,7 +32,7 @@ public sealed class BridgeTestHostContentRootTests
 
             var bridgeBuilder = BridgeTestHost.CreateBuilder();
             configurations.Add(bridgeBuilder.Configuration);
-            Assert.Equal(expectedContentRoot, Path.GetFullPath(bridgeBuilder.Environment.ContentRootPath));
+            Assert.Equal(expectedContentRoot, Path.TrimEndingDirectorySeparator(Path.GetFullPath(bridgeBuilder.Environment.ContentRootPath)));
         }
         finally
         {
