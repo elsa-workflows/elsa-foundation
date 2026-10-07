@@ -26,7 +26,12 @@ public sealed class RuntimeCoalescingDrainScopeFactory(
         // A per-workflow authored segment cap (ADR 0032 R5) overrides the host default for this run only; the host
         // options singleton is left untouched. When unspecified (or equal) the shared host options are reused as-is.
         var sessionOptions = maxSegmentCheckpoints is { } cap && cap != options.MaxSegmentCheckpoints
-            ? new CoalescingRuntimeCheckpointPersistenceOptions { MaxSegmentCheckpoints = cap }
+            ? new CoalescingRuntimeCheckpointPersistenceOptions
+            {
+                MaxSegmentCheckpoints = cap,
+                CoalesceDurableValueReads = options.CoalesceDurableValueReads,
+                CoalesceInspectionReads = options.CoalesceInspectionReads,
+            }
             : options;
 
         var session = new RuntimeCoalescingSession(workflowExecutionId, innerQueue.Value, sessionOptions, innerOutboxStore.Value);

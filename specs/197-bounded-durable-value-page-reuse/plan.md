@@ -8,7 +8,7 @@
 
 Reuse detached raw `IDurableValueStateStore.ListPageAsync` results only inside an eligible, actively owned coalescing execution segment. Re-run the existing overlay merger for every logical read so staged additions, replacements, and deletions stay visible. A single `CoalesceDurableValueReads` control keeps enabled and disabled runs on the same coalescing cadence; Immediate mode and non-EF or ambiguous compositions keep the existing provider path. Eligibility is captured from the existing runtime backend ownership metadata before decoration, plus the built-in stable continuation codec. Eligibility must prove the effective singleton codec is the same object used by the inner EF store; custom, transient/scoped or unprovable codec compositions bypass reuse. Per-call access, cancellation, identity, owner, and request checks remain in force. Writes and ownership boundaries fence entries; finite limits force complete uncached fallback. The feature does not change paging or durability contracts and makes no latency claim.
 
-This is a design plan only. No implementation, build, or test has been run or is claimed here.
+The design was accepted through T08. Implementation is now active under #1306: [T001's nonempty EF baseline](evidence/nonempty-ef-baseline.md) is accepted; subsequent tasks and all delivery gates remain tracked in [tasks.md](tasks.md). No page-reuse reduction is accepted yet.
 
 ## Technical Context
 
@@ -46,7 +46,7 @@ Source claims in this plan were checked against pinned Git objects at `a6684744d
 
 **After design — PASS**
 
-The page memo is internal, bounded, and session-owned. Public paging, runtime store, cadence, and durability contracts remain unchanged. All reuse is conditional and falls back to the existing complete provider result.
+The page memo is a bounded, session-owned Runtime Services implementation. Its implementation class is `public sealed` for direct unit testing under framework §2.23.3; its retained state and entry representation remain private. Public paging, runtime store, cadence, and durability contracts remain unchanged. All reuse is conditional and falls back to the existing complete provider result.
 
 ### Design decisions
 
@@ -85,7 +85,7 @@ e2e-tests/http/Capture-RuntimeDbPaging2392Reference.ps1
 e2e-tests/http/Capture-RuntimeDbRest2386Control.ps1
 ```
 
-**Structure Decision**: Keep production code within the existing Runtime API and Services coalescing layers; keep the memo type internal. Put deterministic behavior tests in Runtime tests, first-party EF composition and page-count proof in EF integration tests, provider gates in the existing provider project, and real PostgreSQL HTTP/REST regressions in the existing HTTP scripts.
+**Structure Decision**: Keep production code within the existing Runtime API and Services coalescing layers; use a directly testable `public sealed` memo implementation under framework §2.23.3, with private retained state and no new Core cache capability interface. Put deterministic behavior tests in Runtime tests, first-party EF composition and page-count proof in EF integration tests, provider gates in the existing provider project, and real PostgreSQL HTTP/REST regressions in the existing HTTP scripts.
 
 ### Verification gates
 
@@ -93,4 +93,6 @@ Before delivery, prove enabled/disabled equivalence and a deterministic non-empt
 
 ## Complexity Tracking
 
-No constitution violations or public-contract additions are planned.
+The implementation review on 7 October corrected the design's literal `internal` visibility to the framework's required `public sealed` implementation convention (§2.23.3). Reflection and `InternalsVisibleTo` were rejected. This adds a concrete Services implementation surface for direct tests; it does not add a provider capability interface or change public store/paging, persistence, cadence or durability contracts.
+
+The existing backend metadata is sufficient for conservative eligibility without a new contract-to-concrete mapping API. Before decoration, validate complete owned-descriptor presence through the existing guard (treat its rejection as ineligible), then capture the owned descriptors and expected post-decoration service registrations. At activation, verify the watched groups, unique backend marker and stable singleton codec against the finalized composition. Watching all owned concrete registrations conservatively detects replacement of the concrete reached by the first-party durable-store factory without probing an EF type. The actual first-party EF integration oracle must pass; a design that merely makes every host ineligible is not accepted.

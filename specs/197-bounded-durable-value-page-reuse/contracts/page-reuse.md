@@ -1,6 +1,6 @@
 # Internal Contract: Durable-Value Page Reuse
 
-This document defines an internal Runtime Services behavior. It does not add or alter a public store API, paging model, persisted contract, or checkpoint durability rule.
+This document defines Runtime Services implementation behavior. The memo implementation is `public sealed` for direct unit testing under framework §2.23.3; retained entries remain private. It does not add a provider cache capability interface or alter a public store API, paging model, persisted contract, or checkpoint durability rule.
 
 ## Eligibility and fallback
 
