@@ -13,6 +13,7 @@ Program: [Modular Hosting Upstream Delivery](../../program-goals/modular-hosting
 | D7 | No stable package tag or production deployment is part of this delivery. Publish preview packages through existing pipelines. | Record exact package/version/source and run consumer proof against those packages. |
 | D8 | M3 actual package deletion is deferred until a bounded safety spike proves no live, candidate, sibling-graph, or LKG use at the point of deletion. A store lock alone is insufficient. | M3 cannot be marked ready or implemented as destructive cleanup before the gate in the roadmap passes. |
 | D9 | Foundation retains Elsa-specific EF refusal interpretation, Attention/readiness projection, cluster schema reporting, endpoint authorization, and Studio behavior. | Upstream packages expose generic events/lifetimes; they do not import Elsa concepts. |
+| D10 | The stock catalog exposes optional commit-source capability. Publish the exact snapshot first, enqueue with the commit, and dispatch notifications in order outside refresh/dispatch locks. Concurrent/reentrant refresh does not await an already-running subscriber. | Custom catalog implementations remain compatible; callbacks enqueue work, exceptions are isolated, and CurrentSnapshot may be newer than an event payload. |
 
 ## Open decision gate: M3 deletion safety
 

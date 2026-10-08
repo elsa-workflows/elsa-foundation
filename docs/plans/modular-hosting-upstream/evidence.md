@@ -10,6 +10,16 @@ The ownership mutation test failed as intended when instance descriptors were re
 
 Full CI, external current-head review, push/PR, merge, resulting-main checks, published preview and Foundation adoption remain outstanding. No milestone is complete. Git/session preference is pending before push/PR. Delegate model fallback was Luna High because Luna Extra High was unavailable.
 
+Root subsequently ran the complete CShells.Tests project at unchanged `9e66d41321083a456e132a4979c3ed997a367d9f`: **666 passed, zero failed/skipped**, Debug/net10, six seconds reported by the runner. This is local regression evidence, not remote CI or a performance claim. The [issue records the run](https://github.com/valence-works/cshells/issues/144#issuecomment-6056073967).
+
+## Catalog and safety research in progress
+
+[CShells #146](https://github.com/valence-works/cshells/issues/146) is claimed in `/tmp/hosting-cshells-catalog`, baseline `49c912633d968197ddd430c5bd826acd9cfcb15d`, branch `017-runtime-catalog-commits`. The approved design exposes optional commit capability on the resolved stock catalog accessor, queues exact snapshots with commits, then dispatches in commit order outside refresh/queue locks. Concurrent or reentrant refresh can return while an earlier subscriber is still running. No mandatory catalog interface change or separate mismatched DI alias is introduced. No implementation proof is claimed yet.
+
+Spec Kit's branch-number discovery missed the `+` marker used for a branch checked out in a sibling worktree and generated a second 016 prefix. The worker corrected the branch/directory to 017 without rerunning the creation script. This tooling finding is separate from the production change.
+
+CShells #145's generic build-lease contract is being refined before implementation readiness. Nuplane #108 has a [bounded non-destructive store-use lease spike](https://github.com/valence-works/nuplane/issues/108#issuecomment-6056120277) in `/tmp/nuplane-store-use-spike/`; destructive cleanup remains blocked until its full safety gate is proven. These research activities do not count as delivered runtime behavior.
+
 ## Source baselines
 
 | Repository | Ref / commit | Evidence |
