@@ -2,6 +2,7 @@
 
 **Feature Branch**: `worktree-agent-a9886080ad6b0451b`
 **Created**: 2026-07-22
+**Status**: Implemented — original D1/D2 delivery; corrective #2497 delivery gates are tracked below.
 **Program**: Runtime Execution Seam
 **ADR**: [ADR 0047](../../docs/adr/0047-replaysafe-activities-execute-as-fused-hops-with-precomputed-routing.md) — **Decisions D1 + D2** (D3 shipped as [spec 119](../119-publish-time-routing-tables/spec.md); D4 stays deferred)
 **Extends**: [ADR 0031](../../docs/adr/0031-runtime-burst-execution-sticky-single-writer-drain-with-in-process-fast-path.md) (burst/locality), [ADR 0032](../../docs/adr/0032-runtime-checkpoint-cadence-is-policy-driven-per-workflow.md) (R2 ReplaySafe claim relaxation, cadence), [ADR 0020](../../docs/adr/0020-runtime-checkpoint-commit-post-commit-work.md) (post-commit intents release only after durable commit)
@@ -228,7 +229,7 @@ behavior, so it can never silently become a correctness dependency and rolls bac
 
 ## Corrective follow-up #2497 — durable cuts inside fused spans
 
-**Status (8 October 2026): implemented; local recovery evidence accepted, delivery gates pending.** Owned by [Runtime Database Access](../../docs/program-goals/runtime-db-access.md), Program #2382 / Bug [#2497](https://github.com/elsa-workflows/elsa-foundation/issues/2497). The historical shipped evidence above did not cover the cap-fold cut now reproduced with current EF persistence. This restores FR-006; it does not add a new public recovery contract or relax FR-009. The [corrective evidence](evidence/cap-recovery.md) records source identities, retained failures and the remaining gates.
+**Review checkpoint (8 October 2026): correction implemented; local recovery evidence accepted, delivery gates pending.** Owned by [Runtime Database Access](../../docs/program-goals/runtime-db-access.md), Program #2382 / Bug [#2497](https://github.com/elsa-workflows/elsa-foundation/issues/2497). The historical shipped evidence above did not cover the cap-fold cut now reproduced with current EF persistence. This restores FR-006; it does not add a new public recovery contract or relax FR-009. The [corrective evidence](evidence/cap-recovery.md) records source identities, retained failures and the remaining gates.
 
 An EF/SQLite persisted-interruption test captured ActivityStarted / Running and its input snapshot at cap 2, without durable scheduler or pending outbox work. The uninterrupted generation completed with fusion engaged; ordinary fresh-provider resumption over the captured database remained Running. Source review additionally found a window between the inner checkpoint write and eventual queue seeding, and a nested-D2 violation of count-based FIFO advancement. The corrective evidence now includes both inner-store-return and decorator-return cuts, unchanged-main missing-anchor controls, and a provider-order red/green regression.
 
