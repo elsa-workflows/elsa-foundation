@@ -4,7 +4,7 @@
 
 **Created**: 2026-10-08
 
-**Status**: Draft
+**Status**: Implemented — [PR #2518](https://github.com/elsa-workflows/elsa-foundation/pull/2518)
 
 **Input**: User description: "Establish whether `WriteHttpResponse` can safely use the existing ReplaySafe classification, preserving its complete supported input contract and proving real publication plus ungraceful crash/replay behavior before any classification change. Keep Immediate as the default, HttpEndpoint External, existing pinned artifacts unchanged, and report measured claim/flush/dispatch/database-command deltas honestly, including zero gain or a no-change disposition."
 

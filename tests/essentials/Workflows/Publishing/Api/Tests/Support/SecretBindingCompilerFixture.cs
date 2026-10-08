@@ -152,13 +152,6 @@ internal static class SecretBindingCompilerFixture
         if (valueType == typeof(string))
             return JsonSerializer.SerializeToElement(value);
 
-        try
-        {
-            return JsonSerializer.SerializeToElement(JsonSerializer.Deserialize(value, valueType), valueType);
-        }
-        catch (JsonException)
-        {
-            return JsonSerializer.SerializeToElement(value);
-        }
+        return JsonSerializer.SerializeToElement(JsonSerializer.Deserialize(value, valueType), valueType);
     }
 }
