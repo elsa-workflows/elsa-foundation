@@ -60,9 +60,40 @@ if (args.Length == 4 && args[0] == "--publication-proof")
     }
 }
 
+if (args.Length == 8 && args[0] == "--crash-stage")
+{
+    try
+    {
+        await ResponseReplayPublicationHost.RunCrashStageAsync(
+            args[1], args[2], args[3], args[4], args[5], args[6], args[7]);
+        return 0;
+    }
+    catch (Exception exception)
+    {
+        Console.Error.WriteLine(exception);
+        return 1;
+    }
+}
+
+if (args.Length == 7 && args[0] == "--resume-recovery")
+{
+    try
+    {
+        var result = await ResponseReplayPublicationHost.RunCrashResumeAsync(
+            args[1], args[2], args[3], args[4], args[5], args[6]);
+        Console.WriteLine($"RESPONSE_REPLAY_RECOVERY_RESULT={JsonSerializer.Serialize(result, new JsonSerializerOptions(JsonSerializerDefaults.Web))}");
+        return 0;
+    }
+    catch (Exception exception)
+    {
+        Console.Error.WriteLine(exception);
+        return 1;
+    }
+}
+
 if (args.Length != 2)
 {
-    Console.Error.WriteLine("Usage: ResponseReplayHost <closure-path> <database-path> | --publication-proof <closure-path> <database-path> <evidence-directory>");
+    Console.Error.WriteLine("Usage: ResponseReplayHost <closure-path> <database-path> | --publication-proof <closure-path> <database-path> <evidence-directory> | --crash-stage <closure-path> <database-path> <evidence-directory> <pipe-name> <artifact-id> <artifact-hash> | --resume-recovery <closure-path> <database-path> <evidence-directory> <execution-id> <artifact-id> <artifact-hash>");
     return 2;
 }
 

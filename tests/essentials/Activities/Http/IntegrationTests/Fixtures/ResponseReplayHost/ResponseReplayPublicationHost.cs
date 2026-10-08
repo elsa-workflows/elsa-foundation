@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Http.Json;
 using System.Security.Claims;
+using System.Text;
 using System.Text.Json;
 using CShells.AspNetCore.Configuration;
 using CShells.AspNetCore.Extensions;
@@ -13,6 +14,7 @@ using Elsa.Activities.Design.Persistence.EntityFrameworkCore;
 using Elsa.Activities.Design.Reconciliation;
 using Elsa.Activities.Design.Reconciliation.Clr;
 using Elsa.Activities.Http;
+using Elsa.Activities.Http.IntegrationTests;
 using Elsa.Activities.Primitives;
 using Elsa.Activities.Runtime;
 using Elsa.Activities.Runtime.Core.Models;
@@ -35,6 +37,7 @@ using Elsa.Primitives;
 using Elsa.Primitives.Hosting;
 using Elsa.Serialization.SystemText;
 using Elsa.Tasks;
+using Elsa.Tasks.Core;
 using Elsa.Workflows.Design.Api;
 using Elsa.Workflows.Design.Persistence.EntityFrameworkCore;
 using Elsa.Workflows.Design.Validations;
@@ -47,11 +50,13 @@ using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Http;
 using Elsa.Workflows.Runtime.Http.Contracts;
+using Elsa.Workflows.Runtime.Http.Tasks;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore;
 using Elsa.Workflows.Runtime.Reconciliation;
 using Elsa.Workflows.Runtime.Reconciliation.Core.Contracts;
 using Elsa.Workflows.Runtime.Reconciliation.Contracts;
 using Elsa.Workflows.Runtime.Reconciliation.Core.Models;
+using Elsa.Workflows.Runtime.Reconciliation.Startup;
 using Elsa.Workflows.Runtime.Scheduling;
 using Elsa.Workflows.Runtime.Resumption;
 using Microsoft.AspNetCore.Authentication;
@@ -73,6 +78,7 @@ internal static class ResponseReplayPublicationHost
     private const string SetNodeId = "set-reference-text";
     private const string HttpResponsePath = "/workflows/http/";
     private const string ShellWebRoutingPathKey = "CShells:Shells:default:Configuration:WebRouting:Path";
+    private const string ReplayCorrelationHeader = "X-Response-Replay-Correlation";
     private static readonly HashSet<string> TransportHeaders = new(StringComparer.OrdinalIgnoreCase)
     {
         "Connection", "Content-Length", "Content-Type", "Date", "Keep-Alive", "Proxy-Authenticate",
@@ -410,14 +416,181 @@ internal static class ResponseReplayPublicationHost
             ReadStringVariable(restFrame, "referenceText"));
     }
 
-    private static async Task<WebApplication> StartHostAsync(string databasePath, string closurePath, string evidenceDirectory)
+    public static async Task RunCrashStageAsync(
+        string closurePath,
+        string databasePath,
+        string evidenceDirectory,
+        string pipeName,
+        string candidateArtifactId,
+        string candidateArtifactHash,
+        string requestCorrelationId)
+    {
+        Directory.CreateDirectory(evidenceDirectory);
+        var closureBytes = await File.ReadAllBytesAsync(closurePath);
+        var baseline = ReadBaseline(closureBytes);
+        var gateOptions = new ResponseReplayCommitGateOptions(
+            pipeName,
+            candidateArtifactId,
+            candidateArtifactHash,
+            HttpNodeId,
+            ResponseNodeId);
+        await using var app = await StartHostAsync(
+            databasePath, closurePath, evidenceDirectory, gateOptions, includeHistoricalClosureReconciliation: false);
+        var shell = await app.Services.GetRequiredService<IShellRegistry>().GetOrActivateAsync(ShellName);
+        using (var scope = shell.ServiceProvider.CreateScope())
+        {
+            var provider = scope.ServiceProvider;
+            EnsureHistoricalClosureReconciliationDisabled(provider);
+            await provider.GetServices<IStartupTask>()
+                .OfType<UpdateRouteTableStartupTask>()
+                .Single()
+                .ExecuteAsync(CancellationToken.None);
+        }
+
+        using var runtimeScope = shell.ServiceProvider.CreateScope();
+        var providerForRuntime = runtimeScope.ServiceProvider;
+        await EnsureHistoricalExternalArtifactPreservedAsync(providerForRuntime, baseline);
+        var executable = await providerForRuntime.GetRequiredService<IWorkflowExecutableStore>()
+            .FindAsync(candidateArtifactId, CancellationToken.None)
+            ?? throw new InvalidOperationException("The newly published candidate artifact is absent from the crash-stage runtime.");
+        Ensure(executable.Identity.ArtifactHash == candidateArtifactHash,
+            "The crash-stage runtime loaded a different candidate artifact hash.");
+        Ensure(executable.Nodes.Single(node => node.AuthoredActivityId == ResponseNodeId)
+                   .ActivityContract?.SideEffectProfile == SideEffectProfile.ReplaySafe,
+            "The crash-stage runtime did not retain the candidate WriteHttpResponse ReplaySafe profile.");
+        Ensure(executable.Nodes.Single(node => node.AuthoredActivityId == HttpNodeId)
+                   .ActivityContract?.SideEffectProfile == SideEffectProfile.External,
+            "The crash-stage runtime changed HttpEndpoint from its External profile.");
+
+        var activeBindings = await ReadActiveHttpBindingsAsync(providerForRuntime.GetRequiredService<IWorkflowTriggerBindingStore>());
+        var servingBindings = activeBindings
+            .Where(binding => string.Equals(
+                binding.Metadata.GetValueOrDefault("http:template"), baseline.RoutePath, StringComparison.Ordinal))
+            .ToArray();
+        Ensure(servingBindings.Length == 1 && servingBindings[0].ArtifactId == candidateArtifactId,
+            "The crash-stage route is not served by exactly the newly published candidate artifact.");
+
+        var gate = shell.ServiceProvider.GetRequiredService<ResponseReplayCommitGateChannel>();
+        using var pipeTimeout = new CancellationTokenSource(TimeSpan.FromSeconds(45));
+        await gate.ConnectAsync(pipeTimeout.Token);
+        await gate.WaitForCommandAsync("start-request", pipeTimeout.Token);
+
+        using var client = app.GetTestClient();
+        var endpointBasePath = shell.ServiceProvider
+            .GetRequiredService<Microsoft.Extensions.Options.IOptions<Elsa.Activities.Http.Options.HttpEndpointOptions>>()
+            .Value.BasePath;
+        var path = $"{endpointBasePath.TrimEnd('/')}/{baseline.RoutePath.Trim('/')}";
+        using var request = new HttpRequestMessage(HttpMethod.Post, path)
+        {
+            Content = new StringContent("{\"firstName\":\"Alice\",\"lastName\":\"Smith\"}", Encoding.UTF8, "application/json")
+        };
+        request.Headers.Add(ReplayCorrelationHeader, requestCorrelationId);
+        using var response = await client.SendAsync(request, HttpCompletionOption.ResponseContentRead, CancellationToken.None);
+        var responseBody = await response.Content.ReadAsStringAsync();
+        throw new InvalidOperationException(
+            $"The crash-stage HTTP request returned HTTP {(int)response.StatusCode} with body '{responseBody}' before the response-buffered barrier held the child.");
+    }
+
+    public static async Task<RecoveryProofResult> RunCrashResumeAsync(
+        string closurePath,
+        string databasePath,
+        string evidenceDirectory,
+        string workflowExecutionId,
+        string candidateArtifactId,
+        string candidateArtifactHash)
+    {
+        Directory.CreateDirectory(evidenceDirectory);
+        var baseline = ReadBaseline(await File.ReadAllBytesAsync(closurePath));
+        await using var app = await StartHostAsync(
+            databasePath, closurePath, evidenceDirectory, includeHistoricalClosureReconciliation: false);
+        var shell = await app.Services.GetRequiredService<IShellRegistry>().GetOrActivateAsync(ShellName);
+        using (var scope = shell.ServiceProvider.CreateScope())
+        {
+            var provider = scope.ServiceProvider;
+            EnsureHistoricalClosureReconciliationDisabled(provider);
+            await provider.GetServices<IStartupTask>()
+                .OfType<UpdateRouteTableStartupTask>()
+                .Single()
+                .ExecuteAsync(CancellationToken.None);
+        }
+
+        using var runtimeScope = shell.ServiceProvider.CreateScope();
+        var providerForRuntime = runtimeScope.ServiceProvider;
+        await EnsureHistoricalExternalArtifactPreservedAsync(providerForRuntime, baseline);
+        var executable = await providerForRuntime.GetRequiredService<IWorkflowExecutableStore>()
+            .FindAsync(candidateArtifactId, CancellationToken.None)
+            ?? throw new InvalidOperationException("The recovery host cannot load the pinned candidate artifact.");
+        Ensure(executable.Identity.ArtifactHash == candidateArtifactHash,
+            "The recovery host loaded a different candidate artifact hash.");
+        Ensure(executable.Nodes.Single(node => node.AuthoredActivityId == ResponseNodeId)
+                   .ActivityContract?.SideEffectProfile == SideEffectProfile.ReplaySafe,
+            "The recovery host did not retain the candidate WriteHttpResponse ReplaySafe profile.");
+        Ensure(executable.Nodes.Single(node => node.AuthoredActivityId == HttpNodeId)
+                   .ActivityContract?.SideEffectProfile == SideEffectProfile.External,
+            "The recovery host changed HttpEndpoint from its External profile.");
+
+        var activeBindings = await ReadActiveHttpBindingsAsync(providerForRuntime.GetRequiredService<IWorkflowTriggerBindingStore>());
+        var servingBindings = activeBindings
+            .Where(binding => string.Equals(
+                binding.Metadata.GetValueOrDefault("http:template"), baseline.RoutePath, StringComparison.Ordinal))
+            .ToArray();
+        Ensure(servingBindings.Length == 1 && servingBindings[0].ArtifactId == candidateArtifactId,
+            "The recovered candidate is not the sole active route for the immutable baseline path.");
+
+        var execution = await WaitForExecutionAsync(
+            providerForRuntime.GetRequiredService<IWorkflowExecutionStateStore>(),
+            workflowExecutionId,
+            TimeSpan.FromMinutes(4));
+        Ensure(execution.Status == WorkflowExecutionStatus.Completed,
+            $"Normal runtime recovery ended the execution in {execution.Status}.");
+        Ensure(execution.PinnedExecutable.ArtifactId == candidateArtifactId &&
+               execution.PinnedExecutable.ArtifactHash == candidateArtifactHash,
+            "Normal runtime recovery changed the original execution artifact pin.");
+        var responseInstruction = await ReadResponseInstructionAsync(providerForRuntime, workflowExecutionId, ResponseNodeId);
+        var frame = execution.RootVariableFrame
+            ?? throw new InvalidOperationException("The recovered completed execution has no durable root variable frame.");
+        Ensure(ReadStringVariable(frame, "content", "firstName") == "Alice" &&
+               ReadStringVariable(frame, "content", "lastName") == "Smith" &&
+               ReadStringVariable(frame, "referenceText") == "Alice Smith",
+            "The recovered execution did not preserve the original request and deterministic computation.");
+
+        var instruction = new
+        {
+            statusCode = responseInstruction.GetProperty("statusCode").GetInt32(),
+            body = responseInstruction.GetProperty("body").GetString(),
+            contentType = responseInstruction.GetProperty("contentType").GetString(),
+            headers = ReadInstructionHeaders(responseInstruction)
+        };
+        Ensure(instruction.statusCode == (int)HttpStatusCode.OK &&
+               instruction.body == "Alice Smith" &&
+               instruction.contentType == "text/plain" && instruction.headers.Count == 0,
+            "The recovered response instruction differs from the uninterrupted candidate result.");
+
+        return new RecoveryProofResult(
+            workflowExecutionId,
+            execution.PinnedExecutable.ArtifactId,
+            execution.PinnedExecutable.ArtifactHash,
+            execution.Status.ToString(),
+            instruction.statusCode,
+            instruction.body!,
+            instruction.contentType!,
+            instruction.headers.Count,
+            ReadStringVariable(frame, "content", "firstName"),
+            ReadStringVariable(frame, "content", "lastName"),
+            ReadStringVariable(frame, "referenceText"));
+    }
+
+    private static async Task<WebApplication> StartHostAsync(
+        string databasePath,
+        string closurePath,
+        string evidenceDirectory,
+        ResponseReplayCommitGateOptions? gateOptions = null,
+        bool includeHistoricalClosureReconciliation = true)
     {
         var connectionString = $"Data Source={databasePath};Pooling=False";
         var values = new Dictionary<string, string?>(StringComparer.Ordinal)
         {
             [ShellWebRoutingPathKey] = "",
-            ["CShells:Shells:default:Features:JsonWorkflowArtifactReconciliation:Options:FilePath"] = closurePath,
-            ["CShells:Shells:default:Features:JsonWorkflowArtifactReconciliation:Options:SourceId"] = ArtifactReconciliationSourceId,
             ["CShells:Shells:default:Features:ClrActivityReconciliation:Options:FolderPath"] = AppContext.BaseDirectory,
             ["CShells:Shells:default:Features:WorkflowsRuntimeCheckpointPersistence:Mode"] = "Coalesced",
             ["CShells:Shells:default:Features:WorkflowsRuntimeCheckpointPersistence:MaxSegmentCheckpoints"] = "50",
@@ -440,7 +613,7 @@ internal static class ResponseReplayPublicationHost
             "ApiCapabilities", "JavaScriptExpressions", "JavaScriptJintEngine", "ActivitiesRuntime", "ActivitiesPrimitives", "ActivitiesSequence",
             "ActivitiesHttp", "Http", "WorkflowsRuntimeHttp", "WorkflowsRuntimeApi", "WorkflowsRuntimeTriggers",
             "WorkflowsRuntimeResumption", "WorkflowsRuntimeRecurringTriggers", "WorkflowsRuntimeEntityFrameworkCore",
-            "WorkflowsRuntimeCheckpointPersistence", "JsonWorkflowArtifactReconciliation", "ActivitiesDesignApi",
+            "WorkflowsRuntimeCheckpointPersistence", "ActivitiesDesignApi",
             "ActivitiesDesignEntityFrameworkCore", "ActivitiesDesignReconciliation", "ClrActivityReconciliation",
             "WorkflowDesignValidations", "WorkflowsDesignApi", "WorkflowsDesignEntityFrameworkCore", "WorkflowsPublishing",
             "WorkflowsPublishingApi", "WorkflowsPublishingEntityFrameworkCore", "FileSystemDistributedLocking",
@@ -448,6 +621,25 @@ internal static class ResponseReplayPublicationHost
         };
         foreach (var featureId in featureIds)
             values[$"CShells:Shells:default:Features:{featureId}"] = null;
+        if (includeHistoricalClosureReconciliation)
+        {
+            values["CShells:Shells:default:Features:JsonWorkflowArtifactReconciliation"] = null;
+            values["CShells:Shells:default:Features:JsonWorkflowArtifactReconciliation:Options:FilePath"] = closurePath;
+            values["CShells:Shells:default:Features:JsonWorkflowArtifactReconciliation:Options:SourceId"] = ArtifactReconciliationSourceId;
+        }
+        else
+        {
+            values["CShells:Shells:default:Features:JsonWorkflowArtifactReconciliation"] = "false";
+        }
+        if (gateOptions is not null)
+        {
+            values["CShells:Shells:default:Features:ResponseReplayCommitGate"] = null;
+            values["CShells:Shells:default:Features:ResponseReplayCommitGate:PipeName"] = gateOptions.PipeName;
+            values["CShells:Shells:default:Features:ResponseReplayCommitGate:TargetArtifactId"] = gateOptions.TargetArtifactId;
+            values["CShells:Shells:default:Features:ResponseReplayCommitGate:TargetArtifactHash"] = gateOptions.TargetArtifactHash;
+            values["CShells:Shells:default:Features:ResponseReplayCommitGate:EndpointNodeId"] = gateOptions.EndpointNodeId;
+            values["CShells:Shells:default:Features:ResponseReplayCommitGate:ResponseNodeId"] = gateOptions.ResponseNodeId;
+        }
 
         var builder = WebApplication.CreateBuilder(new WebApplicationOptions
         {
@@ -771,9 +963,11 @@ internal static class ResponseReplayPublicationHost
 
     private static async Task<WorkflowExecutionState> WaitForExecutionAsync(
         IWorkflowExecutionStateStore store,
-        string executionId)
+        string executionId,
+        TimeSpan? timeoutDuration = null)
     {
-        var deadline = DateTimeOffset.UtcNow.AddSeconds(30);
+        var timeout = timeoutDuration ?? TimeSpan.FromSeconds(30);
+        var deadline = DateTimeOffset.UtcNow + timeout;
         do
         {
             var execution = (await store.ListAllAsync()).SingleOrDefault(state => state.WorkflowExecutionId == executionId);
@@ -782,7 +976,7 @@ internal static class ResponseReplayPublicationHost
             await Task.Delay(100);
         } while (DateTimeOffset.UtcNow < deadline);
 
-        throw new TimeoutException($"Execution '{executionId}' did not reach a terminal state within 30 seconds.");
+        throw new TimeoutException($"Execution '{executionId}' did not reach a terminal state within {timeout.TotalSeconds:0} seconds.");
     }
 
     private static async Task<JsonElement> ReadResponseInstructionAsync(IServiceProvider provider, string executionId, string nodeId)
@@ -807,6 +1001,24 @@ internal static class ResponseReplayPublicationHost
             continuation = page.NextContinuationToken;
         } while (continuation is not null);
         return bindings;
+    }
+
+    private static void EnsureHistoricalClosureReconciliationDisabled(IServiceProvider provider) =>
+        Ensure(!provider.GetServices<IStartupTask>().OfType<WorkflowArtifactReconcilerStartupTask>().Any(),
+            "The restart host registered the historical JSON artifact reconciliation startup task.");
+
+    private static async Task EnsureHistoricalExternalArtifactPreservedAsync(
+        IServiceProvider provider,
+        BaselineIdentity baseline)
+    {
+        var executable = await provider.GetRequiredService<IWorkflowExecutableStore>()
+            .FindAsync(baseline.ArtifactId, CancellationToken.None)
+            ?? throw new InvalidOperationException("The restart host did not retain the immutable External baseline executable.");
+        Ensure(executable.Identity.ArtifactHash == baseline.ArtifactHash,
+            "The restart host changed the immutable External baseline artifact hash.");
+        Ensure(executable.Nodes.Single(node => node.AuthoredActivityId == ResponseNodeId)
+                   .ActivityContract?.SideEffectProfile == SideEffectProfile.External,
+            "The restart host changed the immutable baseline WriteHttpResponse External profile.");
     }
 
     private static BaselineIdentity ReadBaseline(byte[] closureBytes)
@@ -897,6 +1109,19 @@ internal sealed record PublicationProofResult(
     string RestPersistedFirstName,
     string RestPersistedLastName,
     string RestReferenceText);
+
+internal sealed record RecoveryProofResult(
+    string ExecutionId,
+    string PinnedArtifactId,
+    string PinnedArtifactHash,
+    string ExecutionStatus,
+    int ResponseStatusCode,
+    string ResponseBody,
+    string ResponseContentType,
+    int ResponseHeaderCount,
+    string PersistedFirstName,
+    string PersistedLastName,
+    string ReferenceText);
 
 internal sealed class ResponseReplayAuthenticationHandler(
     Microsoft.Extensions.Options.IOptionsMonitor<AuthenticationSchemeOptions> options,
