@@ -100,7 +100,7 @@ The validation compares `.claude/skills/elsa-*/SKILL.md` against this catalog an
 
 **Use when:** `.agent-prefs/` has no preference files other than `.gitkeep`, or a user asks to set up local agent preferences for the repository.
 
-**Workflow:** read [../../AGENTS.md](../../AGENTS.md#personal-operating-preferences) and [../reference/agent-preferences.md](../reference/agent-preferences.md#expected-preference-files). Use the expected preference table to identify known local preference files and their ask triggers. Read [../reference/git-operating-models.md](../reference/git-operating-models.md) only if Git workflow setup is relevant. Ask a brief setup question for each missing preference needed by the current work, such as Git operating model before remote work or session execution model before substantial planning/multi-session work. Create only the selected ignored files under `.agent-prefs/`; leave skipped preferences unset. Use [Create Agent Preference](#create-agent-preference) for the actual file shape. Do not ask for preferences unrelated to the current task.
+**Workflow:** read [../../AGENTS.md](../../AGENTS.md#personal-operating-preferences) and [../reference/agent-preferences.md](../reference/agent-preferences.md#expected-preference-files). Use the expected preference table to identify known local preference files and their ask triggers. Read [../reference/git-operating-models.md](../reference/git-operating-models.md) only if Git workflow setup is relevant. Apply the maintainer/contributor Git publication path without asking for a model selection; missing preferences do not gate publication. Ask a brief setup question only for personal choices needed by the current work, such as session execution model before substantial planning/multi-session work. Create only the selected ignored files under `.agent-prefs/`; leave skipped preferences unset. Use [Create Agent Preference](#create-agent-preference) for the actual file shape. Do not ask for preferences unrelated to the current task.
 
 **Output:** created local `.agent-prefs/*.md` files, or a short note that the user chose to decide per session. Never commit personal preference files.
 
@@ -147,7 +147,7 @@ The validation compares `.claude/skills/elsa-*/SKILL.md` against this catalog an
 
 **Use when:** a user asks to create, plan, task, or implement a feature/work unit.
 
-**Workflow:** use the official flow: create/switch feature branch through the Speckit git extension, run `speckit-specify`, review, run `speckit-plan`, review, run `speckit-tasks`, then `speckit-implement`.
+**Workflow:** create/switch to a feature branch, then follow specification -> plan -> tasks -> implementation, reviewing each artifact before the next step. With an AI integration, use the Speckit git extension and `speckit-specify`, `speckit-plan`, `speckit-tasks`, and `speckit-implement` in that order. Without one, create and review the same artifacts manually using [the contributor guide](../../CONTRIBUTING.md#plan-feature-work). The specification, constitution, testing, and review gates apply to both paths.
 
 **Output:** specs under `specs/NNN-feature-name/`, branch-aligned work, and constitution-gated implementation.
 

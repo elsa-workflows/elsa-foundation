@@ -23,13 +23,25 @@ public sealed class RuntimeCoalescingDrainScopeFactory(
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(workflowExecutionId);
 
+        // A nested owner gets a fresh memo. The parent cannot resume reusing its old baseline after the child exits.
+        sessionAccessor.Current?.DisableDurableValuePageReuse();
+
         // A per-workflow authored segment cap (ADR 0032 R5) overrides the host default for this run only; the host
         // options singleton is left untouched. When unspecified (or equal) the shared host options are reused as-is.
         var sessionOptions = maxSegmentCheckpoints is { } cap && cap != options.MaxSegmentCheckpoints
-            ? new CoalescingRuntimeCheckpointPersistenceOptions { MaxSegmentCheckpoints = cap }
+            ? new CoalescingRuntimeCheckpointPersistenceOptions
+            {
+                MaxSegmentCheckpoints = cap,
+                CoalesceDurableValueReads = options.CoalesceDurableValueReads,
+                CoalesceInspectionReads = options.CoalesceInspectionReads,
+            }
             : options;
 
         var session = new RuntimeCoalescingSession(workflowExecutionId, innerQueue.Value, sessionOptions, innerOutboxStore.Value);
+        // A legacy provider may not support identity deletion. Never discover that after a folded commit has landed:
+        // disable buffering before the drain begins, leaving queue operations and checkpoint writes durable.
+        if (!innerQueue.Value.SupportsTargetedDeletion)
+            session.Deactivate();
         var handle = sessionAccessor.Push(session);
         return new Scope(session, handle, checkpointCommitter, timeProvider);
     }
@@ -105,6 +117,7 @@ public sealed class RuntimeCoalescingDrainScopeFactory(
 
         public ValueTask DisposeAsync()
         {
+            session.DisableDurableValuePageReuse();
             scopeHandle.Dispose();
             return ValueTask.CompletedTask;
         }

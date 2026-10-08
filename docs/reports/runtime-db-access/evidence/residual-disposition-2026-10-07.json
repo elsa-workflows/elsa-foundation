@@ -1,0 +1,1326 @@
+{
+  "schema": "elsa.runtime-db.residual-disposition.v1",
+  "scope": {
+    "claim": "Offline source crosswalk and owned residuals for two accepted preserved-before captures; no newly observed method joins or query reduction.",
+    "capturedProductRevision": "b3f55bef32576011d39b93d664949a0cb705fb3b",
+    "accountingHeadReviewed": "ad170414460d80d85aaf22f0a782877e0e31d802",
+    "sourceOverlayBoundary": "Pinned source references describe product mechanisms; diagnostic overlays and their binary identities remain pinned in the capture packets.",
+    "allCommandPairs": 1647,
+    "exactMethodJoins": 931,
+    "residualCommandPairs": 716,
+    "groupKeyCount": 45,
+    "multiTableResidualGroups": 0,
+    "methodReturnOutcomesObserved": false,
+    "closure": "Root dispositions preserve unresolved attribution. T02 review/merge, downstream acceptance and full program completion are separate gates."
+  },
+  "captures": {
+    "Coalesced": {
+      "packetUrl": "https://github.com/elsa-workflows/elsa-foundation/blob/ad170414460d80d85aaf22f0a782877e0e31d802/docs/reports/runtime-db-access/evidence/checkpoint-queue-accounting-2026-10-07.json",
+      "packetSha256": "ff500f54c1a94ddd52e397e3a7f3c3a7e33982cabfeb19459f6c840d6094f836",
+      "rawProbeSha256": "3261099441a6ca5adcbf5e1c92965e1d7bccdf59d85c757e34050f1ccd7d4b88",
+      "commandPairs": 420,
+      "exactMethodJoins": 182,
+      "withoutMethodAncestor": 238,
+      "withoutMethodAncestorByTrace": {
+        "HTTP": 148,
+        "REST": 62,
+        "background": 28
+      }
+    },
+    "Immediate": {
+      "packetUrl": "https://github.com/elsa-workflows/elsa-foundation/blob/ad170414460d80d85aaf22f0a782877e0e31d802/docs/reports/runtime-db-access/evidence/checkpoint-queue-immediate-2026-10-07.json",
+      "packetSha256": "02b23c01d38d0e14a4e4217f11085d93d26b5b7b751ee940678a0a2cb5dc24a4",
+      "rawProbeSha256": "12495885af9f6e64263f636d8d8360306073cd5fe425f068830876cd03364753",
+      "commandPairs": 1227,
+      "exactMethodJoins": 749,
+      "withoutMethodAncestor": 478,
+      "withoutMethodAncestorByTrace": {
+        "HTTP": 243,
+        "REST": 211,
+        "background": 24
+      }
+    }
+  },
+  "mechanisms": {
+    "diagnostics": {
+      "family": "diagnostics SQLite",
+      "mechanism": "EfOpenTelemetryStore durable ingestion/commit and retention paths; separate query APIs also exist (CommitCapturesDurablyAsync, ApplyPendingRetentionAsync).",
+      "uncertainty": "No batch ID joins a command to a runtime event, exact store method, or retention/query operation.",
+      "relevance": "Separate diagnostic-store cost; no disable-telemetry or runtime-provider reduction claim is supported.",
+      "sourceReferences": [
+        {
+          "path": "src/essentials/Diagnostics/OpenTelemetry/Persistence/EntityFrameworkCore/Stores/EfOpenTelemetryStore.cs",
+          "lines": [
+            381,
+            523
+          ],
+          "url": "https://github.com/elsa-workflows/elsa-foundation/blob/b3f55bef32576011d39b93d664949a0cb705fb3b/src/essentials/Diagnostics/OpenTelemetry/Persistence/EntityFrameworkCore/Stores/EfOpenTelemetryStore.cs#L381-L523"
+        }
+      ]
+    },
+    "placement": {
+      "family": "execution-placement SQLite",
+      "mechanism": "EfExecutionPlacementStore.TryClaimAsync reads a lease and may insert; FindAsync is another reader. Actor-provider and placement-pump callers are source candidates.",
+      "uncertainty": "No exact actor-provider/pump path, lease owner/result, or row identity is joined.",
+      "relevance": "Separate placement-store cost; no reduction is selected from the read/insert pair.",
+      "sourceReferences": [
+        {
+          "path": "src/essentials/Workflows/Runtime/Distributed/Persistence/EntityFrameworkCore/Stores/EfExecutionPlacementStore.cs",
+          "lines": [
+            30,
+            123
+          ],
+          "url": "https://github.com/elsa-workflows/elsa-foundation/blob/b3f55bef32576011d39b93d664949a0cb705fb3b/src/essentials/Workflows/Runtime/Distributed/Persistence/EntityFrameworkCore/Stores/EfExecutionPlacementStore.cs#L30-L123"
+        }
+      ]
+    },
+    "iam": {
+      "family": "IAM SQLite",
+      "mechanism": "EfUserStore.FindAsync and FindByEmailAsync both read identity_users; principal-factory and sign-in service paths are distinct candidates.",
+      "uncertainty": "No exact user-ID/email lookup or authentication caller/result is joined.",
+      "relevance": "Separate REST admission/authentication cost; do not attribute it to workflow runtime store.",
+      "sourceReferences": [
+        {
+          "path": "src/essentials/Foundation/Identity/Persistence/EntityFrameworkCore/Stores/EfUserStore.cs",
+          "lines": [
+            21,
+            52
+          ],
+          "url": "https://github.com/elsa-workflows/elsa-foundation/blob/b3f55bef32576011d39b93d664949a0cb705fb3b/src/essentials/Foundation/Identity/Persistence/EntityFrameworkCore/Stores/EfUserStore.cs#L21-L52"
+        }
+      ]
+    },
+    "activity_state": {
+      "family": "activity execution state",
+      "mechanism": "EfActivityExecutionStateStore exposes FindAsync, CountAsync, ListPageAsync, ListByParentPageAsync; SaveAsync reads before upsert.",
+      "uncertainty": "Multiple readers/writers and activities are candidates. No operation/method span, execution/activity identity, or row count is joined.",
+      "relevance": "Runtime PostgreSQL cost; reduction relevance requires exact caller and post-pagination evidence.",
+      "sourceReferences": [
+        {
+          "path": "src/essentials/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/EfActivityExecutionStateStore.cs",
+          "lines": [
+            20,
+            119
+          ],
+          "url": "https://github.com/elsa-workflows/elsa-foundation/blob/b3f55bef32576011d39b93d664949a0cb705fb3b/src/essentials/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/EfActivityExecutionStateStore.cs#L20-L119"
+        }
+      ]
+    },
+    "inspection": {
+      "family": "activity inspection projection",
+      "mechanism": "EfActivityExecutionInspectionStore.SaveAsync pre-reads; FindAsync and ListSummariesPageAsync are other readers. The accumulator/checkpoint writer path is source-confirmed.",
+      "uncertainty": "No join to SaveAsync, FindAsync, checkpoint staging, or a specific checkpoint/row. Do not call this a Studio/API readback or assume it unnecessary.",
+      "relevance": "Runtime PostgreSQL cost; checkpoint relation remains unproved per command.",
+      "sourceReferences": [
+        {
+          "path": "src/essentials/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/EfActivityExecutionInspectionStore.cs",
+          "lines": [
+            20,
+            109
+          ],
+          "url": "https://github.com/elsa-workflows/elsa-foundation/blob/b3f55bef32576011d39b93d664949a0cb705fb3b/src/essentials/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/EfActivityExecutionInspectionStore.cs#L20-L109"
+        }
+      ]
+    },
+    "workflow_state": {
+      "family": "workflow execution state",
+      "mechanism": "EfWorkflowExecutionStateStore exposes FindAsync, ListAsync, QueryPageAsync, QueryHealthPageAsync.",
+      "uncertainty": "Multiple read shapes; no method ID, execution ID, or returned-row count maps this group to a call.",
+      "relevance": "Runtime PostgreSQL cost; pair count is not a page or row count.",
+      "sourceReferences": [
+        {
+          "path": "src/essentials/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/EfWorkflowExecutionStateStore.cs",
+          "lines": [
+            61,
+            110
+          ],
+          "url": "https://github.com/elsa-workflows/elsa-foundation/blob/b3f55bef32576011d39b93d664949a0cb705fb3b/src/essentials/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/EfWorkflowExecutionStateStore.cs#L61-L110"
+        }
+      ]
+    },
+    "liveness": {
+      "family": "liveness and recovery state",
+      "mechanism": "EfExecutionLivenessStateStore has save/try-save/find/versioned-find and recovery-page paths. Four SELECTs per resumption sweep are source-compatible with ListRecoveryPageAsync but are not joined to it.",
+      "uncertainty": "Request-root/drain groups do not identify method/owner. Sweep groups have a boundary but no exact method, returned-row, or target-execution ownership.",
+      "relevance": "Request-path liveness is runtime cost; background sweeps stay separate from the primary execution.",
+      "sourceReferences": [
+        {
+          "path": "src/essentials/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/EfExecutionLivenessStateStore.cs",
+          "lines": [
+            21,
+            124
+          ],
+          "url": "https://github.com/elsa-workflows/elsa-foundation/blob/b3f55bef32576011d39b93d664949a0cb705fb3b/src/essentials/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/EfExecutionLivenessStateStore.cs#L21-L124"
+        },
+        {
+          "path": "src/essentials/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/EfExecutionLivenessStateStore.cs",
+          "lines": [
+            226,
+            310
+          ],
+          "url": "https://github.com/elsa-workflows/elsa-foundation/blob/b3f55bef32576011d39b93d664949a0cb705fb3b/src/essentials/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/EfExecutionLivenessStateStore.cs#L226-L310"
+        }
+      ]
+    },
+    "dispatch": {
+      "family": "workflow dispatch state",
+      "mechanism": "EfWorkflowDispatchStore.FindAsync, ListAsync and QueryAsync read dispatch state. SaveAsync pre-reads and validates a lifecycle transition; admission and completion paths also read dispatch records. No exact SELECT caller is observed.",
+      "uncertainty": "No method span, dispatch/execution identity, retry result, or checkpoint link is joined.",
+      "relevance": "Runtime request-path cost; no access reduction inferred.",
+      "sourceReferences": [
+        {
+          "path": "src/essentials/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/EfWorkflowDispatchStore.cs",
+          "lines": [
+            29,
+            112
+          ],
+          "url": "https://github.com/elsa-workflows/elsa-foundation/blob/b3f55bef32576011d39b93d664949a0cb705fb3b/src/essentials/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/EfWorkflowDispatchStore.cs#L29-L112"
+        }
+      ]
+    },
+    "hold": {
+      "family": "workflow hold state",
+      "mechanism": "EfWorkflowHoldStateStore.FindAsync reads a control-plane ID; ListForWorkflowExecutionAsync walks workflow and global rows because embedded holds can target the execution. SaveAsync also loads before upsert.",
+      "uncertainty": "No read method, execution identity, or returned-row result is joined.",
+      "relevance": "Runtime request-path cost; requiredness/redundancy undetermined.",
+      "sourceReferences": [
+        {
+          "path": "src/essentials/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/EfWorkflowHoldStateStore.cs",
+          "lines": [
+            54,
+            128
+          ],
+          "url": "https://github.com/elsa-workflows/elsa-foundation/blob/b3f55bef32576011d39b93d664949a0cb705fb3b/src/essentials/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/EfWorkflowHoldStateStore.cs#L54-L128"
+        }
+      ]
+    },
+    "bookmark": {
+      "family": "bookmark/trigger state",
+      "mechanism": "HttpEndpointMiddleware and StimulusRouter query waiting bookmarks through EfBookmarkStateStore to route/resume eligible executions.",
+      "uncertainty": "No caller or bookmark/execution result joins the request-root pair; source order does not prove a match/resume occurred.",
+      "relevance": "HTTP-specific admission cost; keep separate from REST-start shared computation.",
+      "sourceReferences": [
+        {
+          "path": "src/essentials/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/EfBookmarkStateStore.cs",
+          "lines": [
+            172,
+            217
+          ],
+          "url": "https://github.com/elsa-workflows/elsa-foundation/blob/b3f55bef32576011d39b93d664949a0cb705fb3b/src/essentials/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/EfBookmarkStateStore.cs#L172-L217"
+        },
+        {
+          "path": "src/essentials/Workflows/Runtime/Services/Triggers/StimulusRouter.cs",
+          "lines": [
+            73,
+            107
+          ],
+          "url": "https://github.com/elsa-workflows/elsa-foundation/blob/b3f55bef32576011d39b93d664949a0cb705fb3b/src/essentials/Workflows/Runtime/Services/Triggers/StimulusRouter.cs#L73-L107"
+        }
+      ]
+    },
+    "incident": {
+      "family": "incident participant/state",
+      "mechanism": "EfIncidentStateStore exposes FindAsync, CountAsync, CountHealthAsync, ListAsync and ListBlockingAsync. Incident state is also a supported checkpoint participant; this unmatched SELECT is not joined to a participant operation.",
+      "uncertainty": "No checkpoint ID, participant operation, method, or row result is joined.",
+      "relevance": "Potential checkpoint-related runtime cost; no participant row or write is claimed.",
+      "sourceReferences": [
+        {
+          "path": "src/essentials/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/EfIncidentStateStore.cs",
+          "lines": [
+            102,
+            146
+          ],
+          "url": "https://github.com/elsa-workflows/elsa-foundation/blob/b3f55bef32576011d39b93d664949a0cb705fb3b/src/essentials/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/EfIncidentStateStore.cs#L102-L146"
+        },
+        {
+          "path": "src/essentials/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/EfIncidentStateStore.cs",
+          "lines": [
+            206,
+            241
+          ],
+          "url": "https://github.com/elsa-workflows/elsa-foundation/blob/b3f55bef32576011d39b93d664949a0cb705fb3b/src/essentials/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/EfIncidentStateStore.cs#L206-L241"
+        }
+      ]
+    },
+    "source_reference": {
+      "family": "pinned executable source reference",
+      "mechanism": "WorkflowStartDispatcher.ResolvePinnedExecutableAsync lists artifact source references to select live provenance. EfWorkflowExecutableSourceReferenceStore has FindAsync and artifact/definition/general page readers. PinnedExecutableRead reads the executable, not its source references.",
+      "uncertainty": "No caller, source-reference identity, or lookup result is joined.",
+      "relevance": "Runtime request admission cost; distinct from activity materialization.",
+      "sourceReferences": [
+        {
+          "path": "src/essentials/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/EfWorkflowExecutableSourceReferenceStore.cs",
+          "lines": [
+            104,
+            129
+          ],
+          "url": "https://github.com/elsa-workflows/elsa-foundation/blob/b3f55bef32576011d39b93d664949a0cb705fb3b/src/essentials/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/EfWorkflowExecutableSourceReferenceStore.cs#L104-L129"
+        },
+        {
+          "path": "src/essentials/Workflows/Runtime/Services/Executions/WorkflowStartDispatcher.cs",
+          "lines": [
+            297,
+            325
+          ],
+          "url": "https://github.com/elsa-workflows/elsa-foundation/blob/b3f55bef32576011d39b93d664949a0cb705fb3b/src/essentials/Workflows/Runtime/Services/Executions/WorkflowStartDispatcher.cs#L297-L325"
+        }
+      ]
+    },
+    "trigger_binding": {
+      "family": "HTTP trigger binding",
+      "mechanism": "EfWorkflowTriggerBindingStore.QueryPageAsync reads total count and a bounded page. HttpEndpoint/StimulusRouter use bindings for admission; the router reuses a supplied match set. The observed two commands do not establish two redundant binding lookups.",
+      "uncertainty": "No claimant/binding method or returned identity is joined; counts do not prove one lookup per trigger.",
+      "relevance": "HTTP-specific route admission; not part of REST companion computation.",
+      "sourceReferences": [
+        {
+          "path": "src/essentials/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/EfWorkflowTriggerBindingStore.cs",
+          "lines": [
+            357,
+            399
+          ],
+          "url": "https://github.com/elsa-workflows/elsa-foundation/blob/b3f55bef32576011d39b93d664949a0cb705fb3b/src/essentials/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/EfWorkflowTriggerBindingStore.cs#L357-L399"
+        },
+        {
+          "path": "src/essentials/Workflows/Runtime/Services/Triggers/StimulusRouter.cs",
+          "lines": [
+            116,
+            127
+          ],
+          "url": "https://github.com/elsa-workflows/elsa-foundation/blob/b3f55bef32576011d39b93d664949a0cb705fb3b/src/essentials/Workflows/Runtime/Services/Triggers/StimulusRouter.cs#L116-L127"
+        }
+      ]
+    }
+  },
+  "sourceBlobs": {
+    "src/essentials/Diagnostics/OpenTelemetry/Persistence/EntityFrameworkCore/Stores/EfOpenTelemetryStore.cs": {
+      "sha256AtCapturedProductRevision": "6568fb12fd88470c94bd3a26e65f4d626ead5d4834f81003043672a706d66bf7",
+      "unchangedAtAccountingHead": true
+    },
+    "src/essentials/Workflows/Runtime/Distributed/Persistence/EntityFrameworkCore/Stores/EfExecutionPlacementStore.cs": {
+      "sha256AtCapturedProductRevision": "4afa7fc88d49a1ae29c3621f42dd7d71a227df1fa1d26372b9c5b83bd068caa1",
+      "unchangedAtAccountingHead": true
+    },
+    "src/essentials/Foundation/Identity/Persistence/EntityFrameworkCore/Stores/EfUserStore.cs": {
+      "sha256AtCapturedProductRevision": "fbac7045635305198740ea830a763c094c418403c6c0a7957587bb1b7c7f511d",
+      "unchangedAtAccountingHead": true
+    },
+    "src/essentials/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/EfActivityExecutionStateStore.cs": {
+      "sha256AtCapturedProductRevision": "3e72807b59fa4473adede2fd638621fb236f7c18138dd635f38439d7094ff30f",
+      "unchangedAtAccountingHead": true
+    },
+    "src/essentials/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/EfActivityExecutionInspectionStore.cs": {
+      "sha256AtCapturedProductRevision": "75496ec3bab60fdf313c8804611a0727fb602b38ad19faed9c8cb50ab3cb34c6",
+      "unchangedAtAccountingHead": true
+    },
+    "src/essentials/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/EfWorkflowExecutionStateStore.cs": {
+      "sha256AtCapturedProductRevision": "77549a238f25b48af04c7137aee3966fc51e8fc99d8df1faf61c13ad25235a1e",
+      "unchangedAtAccountingHead": true
+    },
+    "src/essentials/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/EfExecutionLivenessStateStore.cs": {
+      "sha256AtCapturedProductRevision": "594c8f9a9bb51bf92dad6ea27cef11baa2b53a67856df404892c08722f104603",
+      "unchangedAtAccountingHead": true
+    },
+    "src/essentials/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/EfWorkflowDispatchStore.cs": {
+      "sha256AtCapturedProductRevision": "431b73abf580af6303dc556b4c6e68d7006ae00c422d021e24c671200122b94e",
+      "unchangedAtAccountingHead": true
+    },
+    "src/essentials/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/EfWorkflowHoldStateStore.cs": {
+      "sha256AtCapturedProductRevision": "3a67cd84454d418a31a0e997c095e603f6722800db5648f4627e40340fbc0baf",
+      "unchangedAtAccountingHead": true
+    },
+    "src/essentials/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/EfBookmarkStateStore.cs": {
+      "sha256AtCapturedProductRevision": "de23458855cda4ab6a2d42ee0bffffac8423a5e7af26aff98c8d93ff50ce2b4f",
+      "unchangedAtAccountingHead": true
+    },
+    "src/essentials/Workflows/Runtime/Services/Triggers/StimulusRouter.cs": {
+      "sha256AtCapturedProductRevision": "52a82a5c95c298e6dd12934f31b3b9cfbbcd33f426c3e0bb6acb20ab1950dbb7",
+      "unchangedAtAccountingHead": true
+    },
+    "src/essentials/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/EfIncidentStateStore.cs": {
+      "sha256AtCapturedProductRevision": "762a1a1e9f3dd2092bc35790f2c6549bd85ec11eb643849f57507a0d3085299b",
+      "unchangedAtAccountingHead": true
+    },
+    "src/essentials/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/EfWorkflowExecutableSourceReferenceStore.cs": {
+      "sha256AtCapturedProductRevision": "8068a4532102d6bfee7c2fe0c063f8af626f01cded6d7086fba3e97fcc29bb41",
+      "unchangedAtAccountingHead": true
+    },
+    "src/essentials/Workflows/Runtime/Services/Executions/WorkflowStartDispatcher.cs": {
+      "sha256AtCapturedProductRevision": "9300bc2a9a1cb3eb988b922440b67586eba825659811736c3780a6980ee9bfb0",
+      "unchangedAtAccountingHead": true
+    },
+    "src/essentials/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/EfWorkflowTriggerBindingStore.cs": {
+      "sha256AtCapturedProductRevision": "b1aefbf52944bdcf3f8f610afd654185005fa4e8dcf5c05aa2597cda78d0ada1",
+      "unchangedAtAccountingHead": true
+    }
+  },
+  "dispositions": {
+    "program_final": {
+      "accountableOwner": "Program #2382 control-room lead",
+      "acceptanceIssue": "https://github.com/elsa-workflows/elsa-foundation/issues/2413",
+      "status": "owned residual; exact method and row ownership unresolved",
+      "decision": "Retain this measured family in end-to-end accounting. No access removal is selected from this aggregate. No blanket method-instrumentation extension is required to assess the already delivered paging change or the bounded materialization spike.",
+      "acceptanceTrigger": "T18 must disclose the residual with final before/after command groups. Before any selected change touches this store, or any claimed saving relies on this group, resolve the relevant caller/identity boundary. Investigate an unexplained final group delta before attributing it to an optimization."
+    },
+    "materialization": {
+      "accountableOwner": "Program lead through T07 strategy spike",
+      "acceptanceIssue": "https://github.com/elsa-workflows/elsa-foundation/issues/2395",
+      "status": "open design prerequisite",
+      "decision": "Use post-pagination evidence to distinguish repeated materialization from other activity-state consumers; do not treat every table read as a materializer call.",
+      "acceptanceTrigger": "Before T08/#2396 selects a design or #1306 implements it, identify the relevant reader/writer and unchanged-baseline interval, staged visibility, ownership, flush and cold-fallback behavior; otherwise record a reviewed no-change decision."
+    },
+    "settlement": {
+      "accountableOwner": "Program lead through T04 post-response attribution",
+      "acceptanceIssue": "https://github.com/elsa-workflows/elsa-foundation/issues/2389",
+      "status": "open joined-accounting prerequisite",
+      "decision": "Retain observed resumption-sweep commands as separately counted background work. Four liveness SELECTs per sweep are source-compatible with recovery scans, not proof of their exact method or exclusive target-execution ownership.",
+      "acceptanceTrigger": "T04 must import these exact packets and distinguish request tails, settled target state and independent polling, preserving any missing row/owner join and the unresolved historical 25–695 attribution. No second baseline harness or blanket polling attribution."
+    }
+  },
+  "groups": [
+    {
+      "trace": "HTTP",
+      "sourceBoundaryOperation": "request_drain",
+      "boundaryInterpretation": "request_drain",
+      "provider": {
+        "commandType": "Microsoft.Data.Sqlite.SqliteCommand",
+        "connectionType": "Microsoft.Data.Sqlite.SqliteConnection"
+      },
+      "contextType": "Elsa.Diagnostics.OpenTelemetry.Persistence.EntityFrameworkCore.OpenTelemetrySqliteDbContext",
+      "leadingVerb": "DELETE",
+      "tableTokens": [
+        "elsa_otel_capture_ledger"
+      ],
+      "unmatchedCommandPairs": {
+        "Coalesced": 10,
+        "Immediate": 16
+      },
+      "mechanismRef": "diagnostics",
+      "dispositionRef": "program_final",
+      "observedMethod": false
+    },
+    {
+      "trace": "HTTP",
+      "sourceBoundaryOperation": "request_drain",
+      "boundaryInterpretation": "request_drain",
+      "provider": {
+        "commandType": "Microsoft.Data.Sqlite.SqliteCommand",
+        "connectionType": "Microsoft.Data.Sqlite.SqliteConnection"
+      },
+      "contextType": "Elsa.Diagnostics.OpenTelemetry.Persistence.EntityFrameworkCore.OpenTelemetrySqliteDbContext",
+      "leadingVerb": "SELECT",
+      "tableTokens": [
+        "elsa_otel_instruments"
+      ],
+      "unmatchedCommandPairs": {
+        "Coalesced": 10,
+        "Immediate": 16
+      },
+      "mechanismRef": "diagnostics",
+      "dispositionRef": "program_final",
+      "observedMethod": false
+    },
+    {
+      "trace": "HTTP",
+      "sourceBoundaryOperation": "request_drain",
+      "boundaryInterpretation": "request_drain",
+      "provider": {
+        "commandType": "Microsoft.Data.Sqlite.SqliteCommand",
+        "connectionType": "Microsoft.Data.Sqlite.SqliteConnection"
+      },
+      "contextType": "Elsa.Diagnostics.OpenTelemetry.Persistence.EntityFrameworkCore.OpenTelemetrySqliteDbContext",
+      "leadingVerb": "SELECT",
+      "tableTokens": [
+        "elsa_otel_logs"
+      ],
+      "unmatchedCommandPairs": {
+        "Coalesced": 10,
+        "Immediate": 16
+      },
+      "mechanismRef": "diagnostics",
+      "dispositionRef": "program_final",
+      "observedMethod": false
+    },
+    {
+      "trace": "HTTP",
+      "sourceBoundaryOperation": "request_drain",
+      "boundaryInterpretation": "request_drain",
+      "provider": {
+        "commandType": "Microsoft.Data.Sqlite.SqliteCommand",
+        "connectionType": "Microsoft.Data.Sqlite.SqliteConnection"
+      },
+      "contextType": "Elsa.Diagnostics.OpenTelemetry.Persistence.EntityFrameworkCore.OpenTelemetrySqliteDbContext",
+      "leadingVerb": "SELECT",
+      "tableTokens": [
+        "elsa_otel_metric_points"
+      ],
+      "unmatchedCommandPairs": {
+        "Coalesced": 10,
+        "Immediate": 16
+      },
+      "mechanismRef": "diagnostics",
+      "dispositionRef": "program_final",
+      "observedMethod": false
+    },
+    {
+      "trace": "HTTP",
+      "sourceBoundaryOperation": "request_drain",
+      "boundaryInterpretation": "request_drain",
+      "provider": {
+        "commandType": "Microsoft.Data.Sqlite.SqliteCommand",
+        "connectionType": "Microsoft.Data.Sqlite.SqliteConnection"
+      },
+      "contextType": "Elsa.Diagnostics.OpenTelemetry.Persistence.EntityFrameworkCore.OpenTelemetrySqliteDbContext",
+      "leadingVerb": "SELECT",
+      "tableTokens": [
+        "elsa_otel_resources"
+      ],
+      "unmatchedCommandPairs": {
+        "Coalesced": 10,
+        "Immediate": 16
+      },
+      "mechanismRef": "diagnostics",
+      "dispositionRef": "program_final",
+      "observedMethod": false
+    },
+    {
+      "trace": "HTTP",
+      "sourceBoundaryOperation": "request_drain",
+      "boundaryInterpretation": "request_drain",
+      "provider": {
+        "commandType": "Microsoft.Data.Sqlite.SqliteCommand",
+        "connectionType": "Microsoft.Data.Sqlite.SqliteConnection"
+      },
+      "contextType": "Elsa.Diagnostics.OpenTelemetry.Persistence.EntityFrameworkCore.OpenTelemetrySqliteDbContext",
+      "leadingVerb": "SELECT",
+      "tableTokens": [
+        "elsa_otel_spans"
+      ],
+      "unmatchedCommandPairs": {
+        "Coalesced": 10,
+        "Immediate": 16
+      },
+      "mechanismRef": "diagnostics",
+      "dispositionRef": "program_final",
+      "observedMethod": false
+    },
+    {
+      "trace": "HTTP",
+      "sourceBoundaryOperation": "request_drain",
+      "boundaryInterpretation": "request_drain",
+      "provider": {
+        "commandType": "Microsoft.Data.Sqlite.SqliteCommand",
+        "connectionType": "Microsoft.Data.Sqlite.SqliteConnection"
+      },
+      "contextType": "Elsa.Diagnostics.OpenTelemetry.Persistence.EntityFrameworkCore.OpenTelemetrySqliteDbContext",
+      "leadingVerb": "SELECT",
+      "tableTokens": [
+        "elsa_otel_traces"
+      ],
+      "unmatchedCommandPairs": {
+        "Coalesced": 20,
+        "Immediate": 32
+      },
+      "mechanismRef": "diagnostics",
+      "dispositionRef": "program_final",
+      "observedMethod": false
+    },
+    {
+      "trace": "HTTP",
+      "sourceBoundaryOperation": "request_drain",
+      "boundaryInterpretation": "request_drain",
+      "provider": {
+        "commandType": "Npgsql.NpgsqlCommand",
+        "connectionType": "Npgsql.NpgsqlConnection"
+      },
+      "contextType": "Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.RuntimePostgreSqlDbContext",
+      "leadingVerb": "SELECT",
+      "tableTokens": [
+        "elsa_runtime_activity_execution_inspection"
+      ],
+      "unmatchedCommandPairs": {
+        "Coalesced": 8,
+        "Immediate": 15
+      },
+      "mechanismRef": "inspection",
+      "dispositionRef": "program_final",
+      "observedMethod": false
+    },
+    {
+      "trace": "HTTP",
+      "sourceBoundaryOperation": "request_drain",
+      "boundaryInterpretation": "request_drain",
+      "provider": {
+        "commandType": "Npgsql.NpgsqlCommand",
+        "connectionType": "Npgsql.NpgsqlConnection"
+      },
+      "contextType": "Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.RuntimePostgreSqlDbContext",
+      "leadingVerb": "SELECT",
+      "tableTokens": [
+        "elsa_runtime_activity_execution_state"
+      ],
+      "unmatchedCommandPairs": {
+        "Coalesced": 33,
+        "Immediate": 30
+      },
+      "mechanismRef": "activity_state",
+      "dispositionRef": "materialization",
+      "observedMethod": false
+    },
+    {
+      "trace": "HTTP",
+      "sourceBoundaryOperation": "request_drain",
+      "boundaryInterpretation": "request_drain",
+      "provider": {
+        "commandType": "Npgsql.NpgsqlCommand",
+        "connectionType": "Npgsql.NpgsqlConnection"
+      },
+      "contextType": "Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.RuntimePostgreSqlDbContext",
+      "leadingVerb": "SELECT",
+      "tableTokens": [
+        "elsa_runtime_workflow_dispatch"
+      ],
+      "unmatchedCommandPairs": {
+        "Coalesced": 1,
+        "Immediate": 1
+      },
+      "mechanismRef": "dispatch",
+      "dispositionRef": "program_final",
+      "observedMethod": false
+    },
+    {
+      "trace": "HTTP",
+      "sourceBoundaryOperation": "request_drain",
+      "boundaryInterpretation": "request_drain",
+      "provider": {
+        "commandType": "Npgsql.NpgsqlCommand",
+        "connectionType": "Npgsql.NpgsqlConnection"
+      },
+      "contextType": "Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.RuntimePostgreSqlDbContext",
+      "leadingVerb": "SELECT",
+      "tableTokens": [
+        "elsa_runtime_workflow_execution_state"
+      ],
+      "unmatchedCommandPairs": {
+        "Coalesced": 5,
+        "Immediate": 46
+      },
+      "mechanismRef": "workflow_state",
+      "dispositionRef": "program_final",
+      "observedMethod": false
+    },
+    {
+      "trace": "HTTP",
+      "sourceBoundaryOperation": "request_drain",
+      "boundaryInterpretation": "request_drain",
+      "provider": {
+        "commandType": "Npgsql.NpgsqlCommand",
+        "connectionType": "Npgsql.NpgsqlConnection"
+      },
+      "contextType": "Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.RuntimePostgreSqlDbContext",
+      "leadingVerb": "SELECT",
+      "tableTokens": [
+        "elsa_runtime_workflow_hold_state"
+      ],
+      "unmatchedCommandPairs": {
+        "Coalesced": 4,
+        "Immediate": 7
+      },
+      "mechanismRef": "hold",
+      "dispositionRef": "program_final",
+      "observedMethod": false
+    },
+    {
+      "trace": "HTTP",
+      "sourceBoundaryOperation": null,
+      "boundaryInterpretation": "request_root_no_instrumented_boundary",
+      "provider": {
+        "commandType": "Microsoft.Data.Sqlite.SqliteCommand",
+        "connectionType": "Microsoft.Data.Sqlite.SqliteConnection"
+      },
+      "contextType": "Elsa.Workflows.Runtime.Distributed.Persistence.EntityFrameworkCore.ExecutionPlacementSqliteDbContext",
+      "leadingVerb": "INSERT",
+      "tableTokens": [
+        "elsa_distributed_execution_placement"
+      ],
+      "unmatchedCommandPairs": {
+        "Coalesced": 1,
+        "Immediate": 1
+      },
+      "mechanismRef": "placement",
+      "dispositionRef": "program_final",
+      "observedMethod": false
+    },
+    {
+      "trace": "HTTP",
+      "sourceBoundaryOperation": null,
+      "boundaryInterpretation": "request_root_no_instrumented_boundary",
+      "provider": {
+        "commandType": "Microsoft.Data.Sqlite.SqliteCommand",
+        "connectionType": "Microsoft.Data.Sqlite.SqliteConnection"
+      },
+      "contextType": "Elsa.Workflows.Runtime.Distributed.Persistence.EntityFrameworkCore.ExecutionPlacementSqliteDbContext",
+      "leadingVerb": "SELECT",
+      "tableTokens": [
+        "elsa_distributed_execution_placement"
+      ],
+      "unmatchedCommandPairs": {
+        "Coalesced": 1,
+        "Immediate": 1
+      },
+      "mechanismRef": "placement",
+      "dispositionRef": "program_final",
+      "observedMethod": false
+    },
+    {
+      "trace": "HTTP",
+      "sourceBoundaryOperation": null,
+      "boundaryInterpretation": "request_root_no_instrumented_boundary",
+      "provider": {
+        "commandType": "Npgsql.NpgsqlCommand",
+        "connectionType": "Npgsql.NpgsqlConnection"
+      },
+      "contextType": "Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.RuntimePostgreSqlDbContext",
+      "leadingVerb": "INSERT",
+      "tableTokens": [
+        "elsa_runtime_execution_liveness_state"
+      ],
+      "unmatchedCommandPairs": {
+        "Coalesced": 1,
+        "Immediate": 1
+      },
+      "mechanismRef": "liveness",
+      "dispositionRef": "program_final",
+      "observedMethod": false
+    },
+    {
+      "trace": "HTTP",
+      "sourceBoundaryOperation": null,
+      "boundaryInterpretation": "request_root_no_instrumented_boundary",
+      "provider": {
+        "commandType": "Npgsql.NpgsqlCommand",
+        "connectionType": "Npgsql.NpgsqlConnection"
+      },
+      "contextType": "Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.RuntimePostgreSqlDbContext",
+      "leadingVerb": "SELECT",
+      "tableTokens": [
+        "elsa_runtime_activity_execution_state"
+      ],
+      "unmatchedCommandPairs": {
+        "Coalesced": 1,
+        "Immediate": 1
+      },
+      "mechanismRef": "activity_state",
+      "dispositionRef": "materialization",
+      "observedMethod": false
+    },
+    {
+      "trace": "HTTP",
+      "sourceBoundaryOperation": null,
+      "boundaryInterpretation": "request_root_no_instrumented_boundary",
+      "provider": {
+        "commandType": "Npgsql.NpgsqlCommand",
+        "connectionType": "Npgsql.NpgsqlConnection"
+      },
+      "contextType": "Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.RuntimePostgreSqlDbContext",
+      "leadingVerb": "SELECT",
+      "tableTokens": [
+        "elsa_runtime_bookmark_state"
+      ],
+      "unmatchedCommandPairs": {
+        "Coalesced": 1,
+        "Immediate": 1
+      },
+      "mechanismRef": "bookmark",
+      "dispositionRef": "program_final",
+      "observedMethod": false
+    },
+    {
+      "trace": "HTTP",
+      "sourceBoundaryOperation": null,
+      "boundaryInterpretation": "request_root_no_instrumented_boundary",
+      "provider": {
+        "commandType": "Npgsql.NpgsqlCommand",
+        "connectionType": "Npgsql.NpgsqlConnection"
+      },
+      "contextType": "Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.RuntimePostgreSqlDbContext",
+      "leadingVerb": "SELECT",
+      "tableTokens": [
+        "elsa_runtime_execution_liveness_state"
+      ],
+      "unmatchedCommandPairs": {
+        "Coalesced": 4,
+        "Immediate": 4
+      },
+      "mechanismRef": "liveness",
+      "dispositionRef": "program_final",
+      "observedMethod": false
+    },
+    {
+      "trace": "HTTP",
+      "sourceBoundaryOperation": null,
+      "boundaryInterpretation": "request_root_no_instrumented_boundary",
+      "provider": {
+        "commandType": "Npgsql.NpgsqlCommand",
+        "connectionType": "Npgsql.NpgsqlConnection"
+      },
+      "contextType": "Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.RuntimePostgreSqlDbContext",
+      "leadingVerb": "SELECT",
+      "tableTokens": [
+        "elsa_runtime_incident_state"
+      ],
+      "unmatchedCommandPairs": {
+        "Coalesced": 1,
+        "Immediate": 1
+      },
+      "mechanismRef": "incident",
+      "dispositionRef": "program_final",
+      "observedMethod": false
+    },
+    {
+      "trace": "HTTP",
+      "sourceBoundaryOperation": null,
+      "boundaryInterpretation": "request_root_no_instrumented_boundary",
+      "provider": {
+        "commandType": "Npgsql.NpgsqlCommand",
+        "connectionType": "Npgsql.NpgsqlConnection"
+      },
+      "contextType": "Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.RuntimePostgreSqlDbContext",
+      "leadingVerb": "SELECT",
+      "tableTokens": [
+        "elsa_runtime_workflow_executable_source_reference"
+      ],
+      "unmatchedCommandPairs": {
+        "Coalesced": 1,
+        "Immediate": 1
+      },
+      "mechanismRef": "source_reference",
+      "dispositionRef": "program_final",
+      "observedMethod": false
+    },
+    {
+      "trace": "HTTP",
+      "sourceBoundaryOperation": null,
+      "boundaryInterpretation": "request_root_no_instrumented_boundary",
+      "provider": {
+        "commandType": "Npgsql.NpgsqlCommand",
+        "connectionType": "Npgsql.NpgsqlConnection"
+      },
+      "contextType": "Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.RuntimePostgreSqlDbContext",
+      "leadingVerb": "SELECT",
+      "tableTokens": [
+        "elsa_runtime_workflow_execution_state"
+      ],
+      "unmatchedCommandPairs": {
+        "Coalesced": 3,
+        "Immediate": 2
+      },
+      "mechanismRef": "workflow_state",
+      "dispositionRef": "program_final",
+      "observedMethod": false
+    },
+    {
+      "trace": "HTTP",
+      "sourceBoundaryOperation": null,
+      "boundaryInterpretation": "request_root_no_instrumented_boundary",
+      "provider": {
+        "commandType": "Npgsql.NpgsqlCommand",
+        "connectionType": "Npgsql.NpgsqlConnection"
+      },
+      "contextType": "Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.RuntimePostgreSqlDbContext",
+      "leadingVerb": "SELECT",
+      "tableTokens": [
+        "elsa_runtime_workflow_trigger_binding"
+      ],
+      "unmatchedCommandPairs": {
+        "Coalesced": 2,
+        "Immediate": 2
+      },
+      "mechanismRef": "trigger_binding",
+      "dispositionRef": "program_final",
+      "observedMethod": false
+    },
+    {
+      "trace": "HTTP",
+      "sourceBoundaryOperation": null,
+      "boundaryInterpretation": "request_root_no_instrumented_boundary",
+      "provider": {
+        "commandType": "Npgsql.NpgsqlCommand",
+        "connectionType": "Npgsql.NpgsqlConnection"
+      },
+      "contextType": "Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.RuntimePostgreSqlDbContext",
+      "leadingVerb": "UPDATE",
+      "tableTokens": [
+        "elsa_runtime_execution_liveness_state"
+      ],
+      "unmatchedCommandPairs": {
+        "Coalesced": 1,
+        "Immediate": 1
+      },
+      "mechanismRef": "liveness",
+      "dispositionRef": "program_final",
+      "observedMethod": false
+    },
+    {
+      "trace": "REST",
+      "sourceBoundaryOperation": "request_drain",
+      "boundaryInterpretation": "request_drain",
+      "provider": {
+        "commandType": "Microsoft.Data.Sqlite.SqliteCommand",
+        "connectionType": "Microsoft.Data.Sqlite.SqliteConnection"
+      },
+      "contextType": "Elsa.Diagnostics.OpenTelemetry.Persistence.EntityFrameworkCore.OpenTelemetrySqliteDbContext",
+      "leadingVerb": "DELETE",
+      "tableTokens": [
+        "elsa_otel_capture_ledger"
+      ],
+      "unmatchedCommandPairs": {
+        "Coalesced": 2,
+        "Immediate": 14
+      },
+      "mechanismRef": "diagnostics",
+      "dispositionRef": "program_final",
+      "observedMethod": false
+    },
+    {
+      "trace": "REST",
+      "sourceBoundaryOperation": "request_drain",
+      "boundaryInterpretation": "request_drain",
+      "provider": {
+        "commandType": "Microsoft.Data.Sqlite.SqliteCommand",
+        "connectionType": "Microsoft.Data.Sqlite.SqliteConnection"
+      },
+      "contextType": "Elsa.Diagnostics.OpenTelemetry.Persistence.EntityFrameworkCore.OpenTelemetrySqliteDbContext",
+      "leadingVerb": "SELECT",
+      "tableTokens": [
+        "elsa_otel_instruments"
+      ],
+      "unmatchedCommandPairs": {
+        "Coalesced": 2,
+        "Immediate": 14
+      },
+      "mechanismRef": "diagnostics",
+      "dispositionRef": "program_final",
+      "observedMethod": false
+    },
+    {
+      "trace": "REST",
+      "sourceBoundaryOperation": "request_drain",
+      "boundaryInterpretation": "request_drain",
+      "provider": {
+        "commandType": "Microsoft.Data.Sqlite.SqliteCommand",
+        "connectionType": "Microsoft.Data.Sqlite.SqliteConnection"
+      },
+      "contextType": "Elsa.Diagnostics.OpenTelemetry.Persistence.EntityFrameworkCore.OpenTelemetrySqliteDbContext",
+      "leadingVerb": "SELECT",
+      "tableTokens": [
+        "elsa_otel_logs"
+      ],
+      "unmatchedCommandPairs": {
+        "Coalesced": 2,
+        "Immediate": 14
+      },
+      "mechanismRef": "diagnostics",
+      "dispositionRef": "program_final",
+      "observedMethod": false
+    },
+    {
+      "trace": "REST",
+      "sourceBoundaryOperation": "request_drain",
+      "boundaryInterpretation": "request_drain",
+      "provider": {
+        "commandType": "Microsoft.Data.Sqlite.SqliteCommand",
+        "connectionType": "Microsoft.Data.Sqlite.SqliteConnection"
+      },
+      "contextType": "Elsa.Diagnostics.OpenTelemetry.Persistence.EntityFrameworkCore.OpenTelemetrySqliteDbContext",
+      "leadingVerb": "SELECT",
+      "tableTokens": [
+        "elsa_otel_metric_points"
+      ],
+      "unmatchedCommandPairs": {
+        "Coalesced": 2,
+        "Immediate": 14
+      },
+      "mechanismRef": "diagnostics",
+      "dispositionRef": "program_final",
+      "observedMethod": false
+    },
+    {
+      "trace": "REST",
+      "sourceBoundaryOperation": "request_drain",
+      "boundaryInterpretation": "request_drain",
+      "provider": {
+        "commandType": "Microsoft.Data.Sqlite.SqliteCommand",
+        "connectionType": "Microsoft.Data.Sqlite.SqliteConnection"
+      },
+      "contextType": "Elsa.Diagnostics.OpenTelemetry.Persistence.EntityFrameworkCore.OpenTelemetrySqliteDbContext",
+      "leadingVerb": "SELECT",
+      "tableTokens": [
+        "elsa_otel_resources"
+      ],
+      "unmatchedCommandPairs": {
+        "Coalesced": 2,
+        "Immediate": 14
+      },
+      "mechanismRef": "diagnostics",
+      "dispositionRef": "program_final",
+      "observedMethod": false
+    },
+    {
+      "trace": "REST",
+      "sourceBoundaryOperation": "request_drain",
+      "boundaryInterpretation": "request_drain",
+      "provider": {
+        "commandType": "Microsoft.Data.Sqlite.SqliteCommand",
+        "connectionType": "Microsoft.Data.Sqlite.SqliteConnection"
+      },
+      "contextType": "Elsa.Diagnostics.OpenTelemetry.Persistence.EntityFrameworkCore.OpenTelemetrySqliteDbContext",
+      "leadingVerb": "SELECT",
+      "tableTokens": [
+        "elsa_otel_spans"
+      ],
+      "unmatchedCommandPairs": {
+        "Coalesced": 2,
+        "Immediate": 14
+      },
+      "mechanismRef": "diagnostics",
+      "dispositionRef": "program_final",
+      "observedMethod": false
+    },
+    {
+      "trace": "REST",
+      "sourceBoundaryOperation": "request_drain",
+      "boundaryInterpretation": "request_drain",
+      "provider": {
+        "commandType": "Microsoft.Data.Sqlite.SqliteCommand",
+        "connectionType": "Microsoft.Data.Sqlite.SqliteConnection"
+      },
+      "contextType": "Elsa.Diagnostics.OpenTelemetry.Persistence.EntityFrameworkCore.OpenTelemetrySqliteDbContext",
+      "leadingVerb": "SELECT",
+      "tableTokens": [
+        "elsa_otel_traces"
+      ],
+      "unmatchedCommandPairs": {
+        "Coalesced": 4,
+        "Immediate": 28
+      },
+      "mechanismRef": "diagnostics",
+      "dispositionRef": "program_final",
+      "observedMethod": false
+    },
+    {
+      "trace": "REST",
+      "sourceBoundaryOperation": "request_drain",
+      "boundaryInterpretation": "request_drain",
+      "provider": {
+        "commandType": "Npgsql.NpgsqlCommand",
+        "connectionType": "Npgsql.NpgsqlConnection"
+      },
+      "contextType": "Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.RuntimePostgreSqlDbContext",
+      "leadingVerb": "SELECT",
+      "tableTokens": [
+        "elsa_runtime_activity_execution_inspection"
+      ],
+      "unmatchedCommandPairs": {
+        "Coalesced": 4,
+        "Immediate": 13
+      },
+      "mechanismRef": "inspection",
+      "dispositionRef": "program_final",
+      "observedMethod": false
+    },
+    {
+      "trace": "REST",
+      "sourceBoundaryOperation": "request_drain",
+      "boundaryInterpretation": "request_drain",
+      "provider": {
+        "commandType": "Npgsql.NpgsqlCommand",
+        "connectionType": "Npgsql.NpgsqlConnection"
+      },
+      "contextType": "Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.RuntimePostgreSqlDbContext",
+      "leadingVerb": "SELECT",
+      "tableTokens": [
+        "elsa_runtime_activity_execution_state"
+      ],
+      "unmatchedCommandPairs": {
+        "Coalesced": 22,
+        "Immediate": 26
+      },
+      "mechanismRef": "activity_state",
+      "dispositionRef": "materialization",
+      "observedMethod": false
+    },
+    {
+      "trace": "REST",
+      "sourceBoundaryOperation": "request_drain",
+      "boundaryInterpretation": "request_drain",
+      "provider": {
+        "commandType": "Npgsql.NpgsqlCommand",
+        "connectionType": "Npgsql.NpgsqlConnection"
+      },
+      "contextType": "Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.RuntimePostgreSqlDbContext",
+      "leadingVerb": "SELECT",
+      "tableTokens": [
+        "elsa_runtime_workflow_dispatch"
+      ],
+      "unmatchedCommandPairs": {
+        "Coalesced": 1,
+        "Immediate": 1
+      },
+      "mechanismRef": "dispatch",
+      "dispositionRef": "program_final",
+      "observedMethod": false
+    },
+    {
+      "trace": "REST",
+      "sourceBoundaryOperation": "request_drain",
+      "boundaryInterpretation": "request_drain",
+      "provider": {
+        "commandType": "Npgsql.NpgsqlCommand",
+        "connectionType": "Npgsql.NpgsqlConnection"
+      },
+      "contextType": "Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.RuntimePostgreSqlDbContext",
+      "leadingVerb": "SELECT",
+      "tableTokens": [
+        "elsa_runtime_workflow_execution_state"
+      ],
+      "unmatchedCommandPairs": {
+        "Coalesced": 5,
+        "Immediate": 41
+      },
+      "mechanismRef": "workflow_state",
+      "dispositionRef": "program_final",
+      "observedMethod": false
+    },
+    {
+      "trace": "REST",
+      "sourceBoundaryOperation": "request_drain",
+      "boundaryInterpretation": "request_drain",
+      "provider": {
+        "commandType": "Npgsql.NpgsqlCommand",
+        "connectionType": "Npgsql.NpgsqlConnection"
+      },
+      "contextType": "Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.RuntimePostgreSqlDbContext",
+      "leadingVerb": "SELECT",
+      "tableTokens": [
+        "elsa_runtime_workflow_hold_state"
+      ],
+      "unmatchedCommandPairs": {
+        "Coalesced": 0,
+        "Immediate": 5
+      },
+      "mechanismRef": "hold",
+      "dispositionRef": "program_final",
+      "observedMethod": false
+    },
+    {
+      "trace": "REST",
+      "sourceBoundaryOperation": null,
+      "boundaryInterpretation": "request_root_no_instrumented_boundary",
+      "provider": {
+        "commandType": "Microsoft.Data.Sqlite.SqliteCommand",
+        "connectionType": "Microsoft.Data.Sqlite.SqliteConnection"
+      },
+      "contextType": "Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.IdentityIamSqliteDbContext",
+      "leadingVerb": "SELECT",
+      "tableTokens": [
+        "identity_users"
+      ],
+      "unmatchedCommandPairs": {
+        "Coalesced": 1,
+        "Immediate": 1
+      },
+      "mechanismRef": "iam",
+      "dispositionRef": "program_final",
+      "observedMethod": false
+    },
+    {
+      "trace": "REST",
+      "sourceBoundaryOperation": null,
+      "boundaryInterpretation": "request_root_no_instrumented_boundary",
+      "provider": {
+        "commandType": "Microsoft.Data.Sqlite.SqliteCommand",
+        "connectionType": "Microsoft.Data.Sqlite.SqliteConnection"
+      },
+      "contextType": "Elsa.Workflows.Runtime.Distributed.Persistence.EntityFrameworkCore.ExecutionPlacementSqliteDbContext",
+      "leadingVerb": "INSERT",
+      "tableTokens": [
+        "elsa_distributed_execution_placement"
+      ],
+      "unmatchedCommandPairs": {
+        "Coalesced": 1,
+        "Immediate": 1
+      },
+      "mechanismRef": "placement",
+      "dispositionRef": "program_final",
+      "observedMethod": false
+    },
+    {
+      "trace": "REST",
+      "sourceBoundaryOperation": null,
+      "boundaryInterpretation": "request_root_no_instrumented_boundary",
+      "provider": {
+        "commandType": "Microsoft.Data.Sqlite.SqliteCommand",
+        "connectionType": "Microsoft.Data.Sqlite.SqliteConnection"
+      },
+      "contextType": "Elsa.Workflows.Runtime.Distributed.Persistence.EntityFrameworkCore.ExecutionPlacementSqliteDbContext",
+      "leadingVerb": "SELECT",
+      "tableTokens": [
+        "elsa_distributed_execution_placement"
+      ],
+      "unmatchedCommandPairs": {
+        "Coalesced": 1,
+        "Immediate": 1
+      },
+      "mechanismRef": "placement",
+      "dispositionRef": "program_final",
+      "observedMethod": false
+    },
+    {
+      "trace": "REST",
+      "sourceBoundaryOperation": null,
+      "boundaryInterpretation": "request_root_no_instrumented_boundary",
+      "provider": {
+        "commandType": "Npgsql.NpgsqlCommand",
+        "connectionType": "Npgsql.NpgsqlConnection"
+      },
+      "contextType": "Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.RuntimePostgreSqlDbContext",
+      "leadingVerb": "INSERT",
+      "tableTokens": [
+        "elsa_runtime_execution_liveness_state"
+      ],
+      "unmatchedCommandPairs": {
+        "Coalesced": 1,
+        "Immediate": 1
+      },
+      "mechanismRef": "liveness",
+      "dispositionRef": "program_final",
+      "observedMethod": false
+    },
+    {
+      "trace": "REST",
+      "sourceBoundaryOperation": null,
+      "boundaryInterpretation": "request_root_no_instrumented_boundary",
+      "provider": {
+        "commandType": "Npgsql.NpgsqlCommand",
+        "connectionType": "Npgsql.NpgsqlConnection"
+      },
+      "contextType": "Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.RuntimePostgreSqlDbContext",
+      "leadingVerb": "SELECT",
+      "tableTokens": [
+        "elsa_runtime_execution_liveness_state"
+      ],
+      "unmatchedCommandPairs": {
+        "Coalesced": 4,
+        "Immediate": 4
+      },
+      "mechanismRef": "liveness",
+      "dispositionRef": "program_final",
+      "observedMethod": false
+    },
+    {
+      "trace": "REST",
+      "sourceBoundaryOperation": null,
+      "boundaryInterpretation": "request_root_no_instrumented_boundary",
+      "provider": {
+        "commandType": "Npgsql.NpgsqlCommand",
+        "connectionType": "Npgsql.NpgsqlConnection"
+      },
+      "contextType": "Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.RuntimePostgreSqlDbContext",
+      "leadingVerb": "SELECT",
+      "tableTokens": [
+        "elsa_runtime_incident_state"
+      ],
+      "unmatchedCommandPairs": {
+        "Coalesced": 1,
+        "Immediate": 1
+      },
+      "mechanismRef": "incident",
+      "dispositionRef": "program_final",
+      "observedMethod": false
+    },
+    {
+      "trace": "REST",
+      "sourceBoundaryOperation": null,
+      "boundaryInterpretation": "request_root_no_instrumented_boundary",
+      "provider": {
+        "commandType": "Npgsql.NpgsqlCommand",
+        "connectionType": "Npgsql.NpgsqlConnection"
+      },
+      "contextType": "Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.RuntimePostgreSqlDbContext",
+      "leadingVerb": "SELECT",
+      "tableTokens": [
+        "elsa_runtime_workflow_executable_source_reference"
+      ],
+      "unmatchedCommandPairs": {
+        "Coalesced": 1,
+        "Immediate": 1
+      },
+      "mechanismRef": "source_reference",
+      "dispositionRef": "program_final",
+      "observedMethod": false
+    },
+    {
+      "trace": "REST",
+      "sourceBoundaryOperation": null,
+      "boundaryInterpretation": "request_root_no_instrumented_boundary",
+      "provider": {
+        "commandType": "Npgsql.NpgsqlCommand",
+        "connectionType": "Npgsql.NpgsqlConnection"
+      },
+      "contextType": "Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.RuntimePostgreSqlDbContext",
+      "leadingVerb": "SELECT",
+      "tableTokens": [
+        "elsa_runtime_workflow_execution_state"
+      ],
+      "unmatchedCommandPairs": {
+        "Coalesced": 3,
+        "Immediate": 2
+      },
+      "mechanismRef": "workflow_state",
+      "dispositionRef": "program_final",
+      "observedMethod": false
+    },
+    {
+      "trace": "REST",
+      "sourceBoundaryOperation": null,
+      "boundaryInterpretation": "request_root_no_instrumented_boundary",
+      "provider": {
+        "commandType": "Npgsql.NpgsqlCommand",
+        "connectionType": "Npgsql.NpgsqlConnection"
+      },
+      "contextType": "Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.RuntimePostgreSqlDbContext",
+      "leadingVerb": "UPDATE",
+      "tableTokens": [
+        "elsa_runtime_execution_liveness_state"
+      ],
+      "unmatchedCommandPairs": {
+        "Coalesced": 1,
+        "Immediate": 1
+      },
+      "mechanismRef": "liveness",
+      "dispositionRef": "program_final",
+      "observedMethod": false
+    },
+    {
+      "trace": "background",
+      "sourceBoundaryOperation": "resumption_sweep",
+      "boundaryInterpretation": "resumption_sweep",
+      "provider": {
+        "commandType": "Npgsql.NpgsqlCommand",
+        "connectionType": "Npgsql.NpgsqlConnection"
+      },
+      "contextType": "Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.RuntimePostgreSqlDbContext",
+      "leadingVerb": "SELECT",
+      "tableTokens": [
+        "elsa_runtime_execution_liveness_state"
+      ],
+      "unmatchedCommandPairs": {
+        "Coalesced": 28,
+        "Immediate": 24
+      },
+      "mechanismRef": "liveness",
+      "dispositionRef": "settlement",
+      "observedMethod": false
+    }
+  ]
+}

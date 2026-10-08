@@ -658,6 +658,144 @@ public sealed class WorkflowExecutableInspectorTests
         Assert.Equal("Approved", connection.Source.Port);
         Assert.Equal("send-email", connection.Target.NodeId);
         Assert.Equal("In", connection.Target.Port);
+        Assert.Null(detail.RootActivity.BpmnStructure);
+        var json = JsonSerializer.SerializeToElement(detail, new JsonSerializerOptions(JsonSerializerDefaults.Web));
+        Assert.Equal(JsonValueKind.Null, json.GetProperty("rootActivity").GetProperty("bpmnStructure").ValueKind);
+    }
+
+    [Fact]
+    public async Task Detail_projects_only_compact_bpmn_elements_and_sequence_flows()
+    {
+        var structure = new ExecutableActivityStructure(
+            "elsa.bpmn.structure",
+            "1.0.0",
+            JsonSerializer.SerializeToElement(new
+            {
+                elements = new object[]
+                {
+                    new { elementId = "start", elementType = "startEvent", name = "Begin", secret = "element-secret" },
+                    new { elementId = "task", elementType = "task", childNodeId = "writer", name = "Write order", properties = new { expression = "element-payload-secret" } },
+                    new { elementId = "end", elementType = "endEvent", eventDefinitions = new[] { "event-secret" } }
+                },
+                sequenceFlows = new object[]
+                {
+                    new { flowId = "start-to-task", sourceRef = "start", targetRef = "task", name = "continue", conditionOutcome = "Continue", isDefault = false, conditionExpression = "flow-secret" },
+                    new { flowId = "task-to-end", sourceRef = "task", targetRef = "end", isDefault = true }
+                },
+                variables = new[] { new { name = "secret-variable" } },
+                diagram = new { bounds = "diagram-secret" },
+                rawXml = "raw-xml-secret"
+            }));
+        var writer = new ExecutableNode(
+            "writer",
+            "authored-writer",
+            "Elsa.Activities.Primitives.Activities.WriteLine",
+            "1.0.0",
+            new RuntimeActivityDescriptor("Test", RuntimeActivityDescriptor.InitialSchemaVersion, JsonSerializer.SerializeToElement(new { })),
+            new Dictionary<string, RuntimeInputBinding>(),
+            new Dictionary<string, string>());
+        await _executableStore.SaveAsync(Executable(
+            _now,
+            structure: structure,
+            childSlots: [new ExecutableChildSlot("Bpmn.Activities", [writer])],
+            activityType: "Elsa.Activities.Bpmn.Activities.BpmnProcess"));
+
+        var detail = await _inspector.GetAsync("artifact-1");
+        var json = JsonSerializer.SerializeToElement(detail, new JsonSerializerOptions(JsonSerializerDefaults.Web));
+        Assert.IsType<Models.WorkflowExecutableBpmnStructureView>(detail!.RootActivity.BpmnStructure);
+        var bpmnJson = json.GetProperty("rootActivity").GetProperty("bpmnStructure");
+        var elements = bpmnJson.GetProperty("elements").EnumerateArray().ToArray();
+        var sequenceFlows = bpmnJson.GetProperty("sequenceFlows").EnumerateArray().ToArray();
+
+        Assert.Equal(3, elements.Length);
+        Assert.Equal("start", elements[0].GetProperty("elementId").GetString());
+        Assert.Equal("startEvent", elements[0].GetProperty("elementType").GetString());
+        Assert.Equal("Begin", elements[0].GetProperty("name").GetString());
+        Assert.False(elements[0].TryGetProperty("childNodeId", out _));
+        Assert.Equal("writer", elements[1].GetProperty("childNodeId").GetString());
+        Assert.Equal("Write order", elements[1].GetProperty("name").GetString());
+        Assert.Equal(4, elements[1].EnumerateObject().Count());
+        Assert.False(elements[2].TryGetProperty("eventDefinitions", out _));
+        Assert.Equal(2, sequenceFlows.Length);
+        Assert.Equal("start-to-task", sequenceFlows[0].GetProperty("flowId").GetString());
+        Assert.Equal("start", sequenceFlows[0].GetProperty("sourceRef").GetString());
+        Assert.Equal("task", sequenceFlows[0].GetProperty("targetRef").GetString());
+        Assert.Equal("continue", sequenceFlows[0].GetProperty("name").GetString());
+        Assert.Equal("Continue", sequenceFlows[0].GetProperty("conditionOutcome").GetString());
+        Assert.False(sequenceFlows[0].GetProperty("isDefault").GetBoolean());
+        Assert.True(sequenceFlows[1].GetProperty("isDefault").GetBoolean());
+        Assert.Equal(6, sequenceFlows[0].EnumerateObject().Count());
+        Assert.DoesNotContain("element-secret", json.ToString(), StringComparison.Ordinal);
+        Assert.DoesNotContain("element-payload-secret", json.ToString(), StringComparison.Ordinal);
+        Assert.DoesNotContain("event-secret", json.ToString(), StringComparison.Ordinal);
+        Assert.DoesNotContain("flow-secret", json.ToString(), StringComparison.Ordinal);
+        Assert.DoesNotContain("secret-variable", json.ToString(), StringComparison.Ordinal);
+        Assert.DoesNotContain("diagram-secret", json.ToString(), StringComparison.Ordinal);
+        Assert.DoesNotContain("raw-xml-secret", json.ToString(), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Detail_preserves_bpmn_events_without_activity_child_slots_and_skips_malformed_entries()
+    {
+        await _executableStore.SaveAsync(Executable(
+            _now,
+            structure: new ExecutableActivityStructure(
+                "elsa.bpmn.structure",
+                "1.0.0",
+                JsonSerializer.SerializeToElement(new
+                {
+                    elements = new object[]
+                    {
+                        new { elementId = "start", elementType = "startEvent" },
+                        new { elementId = "task", elementType = "task", childNodeId = 42, name = true },
+                        new { elementId = "end", elementType = "endEvent" },
+                        new { elementId = "malformed-element" },
+                        "not-an-element"
+                    },
+                    sequenceFlows = new object[]
+                    {
+                        new { flowId = "start-to-end", sourceRef = "start", targetRef = "end", name = 42, isDefault = "false" },
+                        new { flowId = "malformed-flow", sourceRef = "start" },
+                        7
+                    }
+                })),
+            activityType: "Elsa.Activities.Bpmn.Activities.BpmnProcess"));
+
+        var detail = await _inspector.GetAsync("artifact-1");
+
+        Assert.Empty(detail!.RootActivity.ChildSlots);
+        var bpmn = Assert.IsType<Models.WorkflowExecutableBpmnStructureView>(detail.RootActivity.BpmnStructure);
+        var bpmnJson = JsonSerializer.SerializeToElement(bpmn, new JsonSerializerOptions(JsonSerializerDefaults.Web));
+        var elements = bpmnJson.GetProperty("elements").EnumerateArray().ToArray();
+        Assert.Equal(["start", "task", "end"], elements
+            .Select(element => element.GetProperty("elementId").GetString()));
+        Assert.False(elements[1].TryGetProperty("childNodeId", out _));
+        Assert.False(elements[1].TryGetProperty("name", out _));
+        var flows = bpmnJson.GetProperty("sequenceFlows").EnumerateArray().ToArray();
+        Assert.Equal(["start-to-end"], flows
+            .Select(flow => flow.GetProperty("flowId").GetString()));
+        Assert.False(flows[0].TryGetProperty("name", out _));
+        Assert.False(flows[0].TryGetProperty("isDefault", out _));
+    }
+
+    [Fact]
+    public async Task Detail_omits_bpmn_projection_for_unsupported_schema()
+    {
+        await _executableStore.SaveAsync(Executable(
+            _now,
+            structure: new ExecutableActivityStructure(
+                "elsa.bpmn.structure",
+                "2.0.0",
+                JsonSerializer.SerializeToElement(new
+                {
+                    elements = new[] { new { elementId = "task", elementType = "task" } },
+                    sequenceFlows = Array.Empty<object>()
+                })),
+            activityType: "Elsa.Activities.Bpmn.Activities.BpmnProcess"));
+
+        var detail = await _inspector.GetAsync("artifact-1");
+
+        Assert.Null(detail!.RootActivity.BpmnStructure);
     }
 
     [Fact]
@@ -719,6 +857,8 @@ public sealed class WorkflowExecutableInspectorTests
         DateTimeOffset now,
         JsonElement? descriptor = null,
         ExecutableActivityStructure? structure = null,
+        IReadOnlyCollection<ExecutableChildSlot>? childSlots = null,
+        string activityType = "Test.Root",
         IReadOnlyDictionary<string, RuntimeInputBinding>? inputBindings = null,
         IReadOnlyDictionary<string, RuntimeOutputCapture>? outputCaptures = null,
         WorkflowExecutableInputContract? inputContract = null,
@@ -726,7 +866,7 @@ public sealed class WorkflowExecutableInspectorTests
         new(
             new WorkflowExecutableIdentity("artifact-1", "definition-1", "version-1", "1.0.0", "sha256:test"),
             new ExecutableNode(
-                "root", "root", "Test.Root", "1.0.0",
+                "root", "root", activityType, "1.0.0",
                 new RuntimeActivityDescriptor(
                     "Test",
                     RuntimeActivityDescriptor.InitialSchemaVersion,
@@ -734,6 +874,7 @@ public sealed class WorkflowExecutableInspectorTests
                 inputBindings ?? new Dictionary<string, RuntimeInputBinding>(),
                 outputCaptures ?? new Dictionary<string, RuntimeOutputCapture>(),
                 new Dictionary<string, string>(),
+                childSlots,
                 structure: structure),
             new Dictionary<string, WorkflowExecutableResumeTarget>(),
             now,

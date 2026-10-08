@@ -32,6 +32,14 @@ public interface IIncidentStateStore
         return (await ListAsync(workflowExecutionId, cancellationToken)).Count;
     }
 
+    /// <summary>Returns historical and current incident counts without requiring value/fault disclosure.</summary>
+    async ValueTask<IncidentHealthCounts> CountHealthAsync(string workflowExecutionId, CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(workflowExecutionId);
+        cancellationToken.ThrowIfCancellationRequested();
+        return IncidentHealthCounts.From(await ListAsync(workflowExecutionId, cancellationToken));
+    }
+
     /// <summary>
     /// Returns all incident states for the given workflow execution ID.
     /// </summary>

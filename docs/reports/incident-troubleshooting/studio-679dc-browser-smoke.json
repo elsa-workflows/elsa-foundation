@@ -1,0 +1,91 @@
+{
+  "studioHead": "679dc5adf1a3a522b18fe6a0d75d97520cf8de87",
+  "backendProduct": "25327dd148bd1ef92898cc01ba84c618fc60fe89",
+  "hostPid": 13876,
+  "cause": "TIMELINE\nACTIVITY\nISSUES (1)\nDETAILS\nINCIDENTS\nWrite Line · Text input\n\nqaMissingVariable is not defined\n\nNeeds intervention · Blocking\nExpression language · JavaScript\nShow affected activity\nView input evidence\nFull incident details\nat Elsa.Workflows.Runtime.Services.Values.RuntimePortableExpressionEvaluator.EvaluateAsync(RuntimeExpressionBinding e...",
+  "input": "TIMELINE\nACTIVITY\nISSUES (1)\nDETAILS\nSELECTED ACTIVITY\nWrite Line\nWriteLine 1.0.0+afcf8c7da851e964b7230551bf64c253b9ef6ab6\nScheduled\nSTARTED\nDURATION\nUnknown\nINCIDENTS\n1\nINPUTS\n1\nEvaluated at runtime\nText\nString\n\nqaMissingVariable is not defined Incident incident:57fd06dd208cd3b5:scheduler-poison.\n\nSource & diagnostics\nJavaScript\nAuthored source\nqaMissingVariable\nCompiled binding (Expression)\nCapture details\nType\nString\nCapture\nMetadata Only\nCaptured\n04/10/2026, 14:53:23\nPhase\nEvaluation\nSequence\n1\n\nUnavailable · Evaluation failed\n\nOUTPUTS\n\nNo runtime output snapshots were recorded for this execution.\n\nExecution details\n4 values",
+  "activeRows": [
+    "RunKindStatusHealthDefinitionActivityStartedDuration",
+    "145858xvtsrartifact-14cf9d09dc47Test RunRunning1 active · 1 blocking · Needs intervention1440FoMlNRedraft:1440FoNRryM-55f05f2d2 activities1 incidents04/10/2026, 14:53:220s",
+    "1442qN5n0rmartifact-b51d86eda701Published RunRunning1 active · 1 blocking · Needs intervention1442qMz0DPW1442qMz0Cnc1 activities1 incidents03/10/2026, 23:12:270s",
+    "1442qJ2Kakrartifact-b51d86eda701Published RunRunning1 active · 1 blocking · Needs intervention1442qHCGUoH1442qHEJJru1 activities1 incidents03/10/2026, 23:12:270s",
+    "1440dj72dQTartifact-35aa72a04ed2Published RunRunning1 active · 1 blocking · Needs intervention1440diuLHAV1440diuGcRI2 activities1 incidents03/10/2026, 22:41:370s",
+    "1440dDp1yIrartifact-b08dcaef3c7fPublished RunRunning1 active · 1 blocking · Needs intervention1440dDRftfa1440dDRh2B22 activities1 incidents03/10/2026, 22:41:300s",
+    "1440MPQ7x4Kartifact-14cf9d09dc47Test RunRunning1 active · 1 blocking · Needs intervention1440FoMlNRedraft:1440FoNRryM-55f05f2d2 activities1 incidents03/10/2026, 22:37:420s",
+    "143PaVtNqBfartifact-b51d86eda701Published RunRunning1 active · 1 blocking · Needs intervention143PaVmLE4f143PaVmQzDS1 activities1 incidents03/10/2026, 14:03:070s",
+    "143PaRZ0cZMartifact-b51d86eda701Published RunRunning1 active · 1 blocking · Needs intervention143PaOgP1or143PaOiNFWj1 activities1 incidents03/10/2026, 14:03:070s",
+    "143LLQjGk4wartifact-c92dd0ed7357Published RunCompleted1 active · Non-blocking143LLQZY7rE143LLQZdRbs3 activities1 incidents03/10/2026, 13:03:450s",
+    "143KuSsxwwNartifact-f441883c0567Published RunCompleted1 active · Non-blocking143KnGq1ogD143KnGpowEJ3 activities1 incidents03/10/2026, 12:57:400s",
+    "143KuSJuVeKartifact-f441883c0567Published RunCompleted1 active · Non-blocking143KnGq1ogD143KnGpowEJ3 activities1 incidents03/10/2026, 12:57:390s",
+    "143KZBAevSxartifact-a32d5f8ac04dPublished RunRunning1 active · 1 blocking · Needs intervention143KZArUGtQ143KZArXvYG3 activities1 incidents03/10/2026, 12:52:510s",
+    "143KJCCZt0aartifact-b51d86eda701Published RunRunning1 active · 1 blocking · Needs intervention143KJC47vUs143KJC48jOx1 activities1 incidents03/10/2026, 12:49:150s",
+    "143KJ6sPp9Nartifact-b51d86eda701Published RunRunning1 active · 1 blocking · Needs intervention143KJ3ZGgiS143KJ3cAbeN1 activities1 incidents03/10/2026, 12:49:140s"
+  ],
+  "activeFirst": [
+    "RunKindStatusHealthDefinitionActivityStartedDuration",
+    "145858xvtsrartifact-14cf9d09dc47Test RunRunning1 active · 1 blocking · Needs intervention1440FoMlNRedraft:1440FoNRryM-55f05f2d2 activities1 incidents04/10/2026, 14:53:220s",
+    "1442qN5n0rmartifact-b51d86eda701Published RunRunning1 active · 1 blocking · Needs intervention1442qMz0DPW1442qMz0Cnc1 activities1 incidents03/10/2026, 23:12:270s",
+    "1442qJ2Kakrartifact-b51d86eda701Published RunRunning1 active · 1 blocking · Needs intervention1442qHCGUoH1442qHEJJru1 activities1 incidents03/10/2026, 23:12:270s",
+    "1440dj72dQTartifact-35aa72a04ed2Published RunRunning1 active · 1 blocking · Needs intervention1440diuLHAV1440diuGcRI2 activities1 incidents03/10/2026, 22:41:370s",
+    "1440dDp1yIrartifact-b08dcaef3c7fPublished RunRunning1 active · 1 blocking · Needs intervention1440dDRftfa1440dDRh2B22 activities1 incidents03/10/2026, 22:41:300s",
+    "1440MPQ7x4Kartifact-14cf9d09dc47Test RunRunning1 active · 1 blocking · Needs intervention1440FoMlNRedraft:1440FoNRryM-55f05f2d2 activities1 incidents03/10/2026, 22:37:420s",
+    "143PaVtNqBfartifact-b51d86eda701Published RunRunning1 active · 1 blocking · Needs intervention143PaVmLE4f143PaVmQzDS1 activities1 incidents03/10/2026, 14:03:070s",
+    "143PaRZ0cZMartifact-b51d86eda701Published RunRunning1 active · 1 blocking · Needs intervention143PaOgP1or143PaOiNFWj1 activities1 incidents03/10/2026, 14:03:070s",
+    "143LLQjGk4wartifact-c92dd0ed7357Published RunCompleted1 active · Non-blocking143LLQZY7rE143LLQZdRbs3 activities1 incidents03/10/2026, 13:03:450s",
+    "143KuSsxwwNartifact-f441883c0567Published RunCompleted1 active · Non-blocking143KnGq1ogD143KnGpowEJ3 activities1 incidents03/10/2026, 12:57:400s"
+  ],
+  "activeSecond": [
+    "RunKindStatusHealthDefinitionActivityStartedDuration",
+    "143KuSJuVeKartifact-f441883c0567Published RunCompleted1 active · Non-blocking143KnGq1ogD143KnGpowEJ3 activities1 incidents03/10/2026, 12:57:390s",
+    "143KZBAevSxartifact-a32d5f8ac04dPublished RunRunning1 active · 1 blocking · Needs intervention143KZArUGtQ143KZArXvYG3 activities1 incidents03/10/2026, 12:52:510s",
+    "143KJCCZt0aartifact-b51d86eda701Published RunRunning1 active · 1 blocking · Needs intervention143KJC47vUs143KJC48jOx1 activities1 incidents03/10/2026, 12:49:150s",
+    "143KJ6sPp9Nartifact-b51d86eda701Published RunRunning1 active · 1 blocking · Needs intervention143KJ3ZGgiS143KJ3cAbeN1 activities1 incidents03/10/2026, 12:49:140s"
+  ],
+  "previousEnabled": true,
+  "activeReturned": [
+    "RunKindStatusHealthDefinitionActivityStartedDuration",
+    "145858xvtsrartifact-14cf9d09dc47Test RunRunning1 active · 1 blocking · Needs intervention1440FoMlNRedraft:1440FoNRryM-55f05f2d2 activities1 incidents04/10/2026, 14:53:220s",
+    "1442qN5n0rmartifact-b51d86eda701Published RunRunning1 active · 1 blocking · Needs intervention1442qMz0DPW1442qMz0Cnc1 activities1 incidents03/10/2026, 23:12:270s",
+    "1442qJ2Kakrartifact-b51d86eda701Published RunRunning1 active · 1 blocking · Needs intervention1442qHCGUoH1442qHEJJru1 activities1 incidents03/10/2026, 23:12:270s",
+    "1440dj72dQTartifact-35aa72a04ed2Published RunRunning1 active · 1 blocking · Needs intervention1440diuLHAV1440diuGcRI2 activities1 incidents03/10/2026, 22:41:370s",
+    "1440dDp1yIrartifact-b08dcaef3c7fPublished RunRunning1 active · 1 blocking · Needs intervention1440dDRftfa1440dDRh2B22 activities1 incidents03/10/2026, 22:41:300s",
+    "1440MPQ7x4Kartifact-14cf9d09dc47Test RunRunning1 active · 1 blocking · Needs intervention1440FoMlNRedraft:1440FoNRryM-55f05f2d2 activities1 incidents03/10/2026, 22:37:420s",
+    "143PaVtNqBfartifact-b51d86eda701Published RunRunning1 active · 1 blocking · Needs intervention143PaVmLE4f143PaVmQzDS1 activities1 incidents03/10/2026, 14:03:070s",
+    "143PaRZ0cZMartifact-b51d86eda701Published RunRunning1 active · 1 blocking · Needs intervention143PaOgP1or143PaOiNFWj1 activities1 incidents03/10/2026, 14:03:070s",
+    "143LLQjGk4wartifact-c92dd0ed7357Published RunCompleted1 active · Non-blocking143LLQZY7rE143LLQZdRbs3 activities1 incidents03/10/2026, 13:03:450s",
+    "143KuSsxwwNartifact-f441883c0567Published RunCompleted1 active · Non-blocking143KnGq1ogD143KnGpowEJ3 activities1 incidents03/10/2026, 12:57:400s"
+  ],
+  "returnedToFirst": true,
+  "bpmnInitialNodes": [
+    {
+      "id": "bpmn-start-cc15b2ebd704422a908e03c60a05aeaa",
+      "visibility": "visible"
+    },
+    {
+      "id": "bpmn-task-cc15b2ebd704422a908e03c60a05aeaa",
+      "visibility": "visible"
+    },
+    {
+      "id": "bpmn-end-cc15b2ebd704422a908e03c60a05aeaa",
+      "visibility": "visible"
+    }
+  ],
+  "bpmnCause": "TIMELINE\nACTIVITY\nISSUES (1)\nDETAILS\nINCIDENTS\nWrite Line · Text input\n\nqaMissingVariable is not defined\n\nNeeds intervention · Blocking\nExpression language · JavaScript\nShow affected activity\nView input evidence\nFull incident details\nat Elsa.Workflows.Runtime.Services.Values.RuntimePortableExpressionEvaluator.EvaluateAsync(RuntimeExpressionBinding e...",
+  "bpmnAffected": "TIMELINE\nACTIVITY\nISSUES (1)\nDETAILS\nSELECTED ACTIVITY\nWrite Line\nWriteLine 1.0.0+afcf8c7da851e964b7230551bf64c253b9ef6ab6\nScheduled\nSTARTED\nDURATION\nUnknown\nINCIDENTS\n1\nINPUTS\n1\nEvaluated at runtime\nText\nString\n\nqaMissingVariable is not defined Incident incident:617cff17c59efce6:scheduler-poison.\n\nSource & diagnostics\nJavaScript\nOUTPUTS\n\nNo runtime output snapshots were recorded for this execution.\n\nExecution details\n4 values",
+  "bpmnInput": "TIMELINE\nACTIVITY\nISSUES (1)\nDETAILS\nSELECTED ACTIVITY\nWrite Line\nWriteLine 1.0.0+afcf8c7da851e964b7230551bf64c253b9ef6ab6\nScheduled\nSTARTED\nDURATION\nUnknown\nINCIDENTS\n1\nINPUTS\n1\nEvaluated at runtime\nText\nString\n\nqaMissingVariable is not defined Incident incident:617cff17c59efce6:scheduler-poison.\n\nSource & diagnostics\nJavaScript\nAuthored source\nqaMissingVariable\nCompiled binding (Expression)\nCapture details\nType\nString\nCapture\nMetadata Only\nCaptured\n03/10/2026, 22:41:37\nPhase\nEvaluation\nSequence\n1\n\nUnavailable · Evaluation failed\n\nOUTPUTS\n\nNo runtime output snapshots were recorded for this execution.\n\nExecution details\n4 values",
+  "bpmnFinalNodes": [
+    {
+      "id": "bpmn-start-cc15b2ebd704422a908e03c60a05aeaa",
+      "visibility": "visible"
+    },
+    {
+      "id": "bpmn-task-cc15b2ebd704422a908e03c60a05aeaa",
+      "visibility": "visible"
+    },
+    {
+      "id": "bpmn-end-cc15b2ebd704422a908e03c60a05aeaa",
+      "visibility": "visible"
+    }
+  ],
+  "completedAt": "2026-10-04T13:22:16.311Z"
+}

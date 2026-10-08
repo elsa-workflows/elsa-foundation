@@ -19,7 +19,8 @@ name: Packages
 #                push the feed rejects by the input fingerprint of the feed's copy (FR-018), and writes the record back
 #                with this workflow's GITHUB_TOKEN (FR-017). A manual run can force-advance named packages (FR-003).
 #
-# A GitHub Release publishes nothing until the 4.0 release cut, #2085: the release job fails and says so.
+# A GitHub Release publishes nothing until the 4.0 release cut, #2085. The reserved contributor-preview prereleases
+# are metadata-only; every other release keeps the explicit refusal.
 #
 # The full test suite is intentionally NOT run here (it includes Testcontainers-based integration tests); testing
 # belongs in CI. Packing only compiles the libraries, so no containers are started.
@@ -199,10 +200,13 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - name: Refuse until the 4.0 release cut
-        # A release used to push its tag's version of every package, to feedz.io and nuget.org, through a global
-        # /p:Version and --skip-duplicate. Spec 150 forbids both, and a stable 4.0.0 on either feed would sort above every
-        # computed 4.0.N-preview. Promoting a release is #2085's to build.
-        run: |
-          echo "::error title=Releases publish nothing yet::Packages from a GitHub Release are not published until the 4.0 release cut is built (#2085, https://github.com/elsa-workflows/elsa-foundation/issues/2085). Previews publish from main."
-          exit 1
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+
+      - name: Allow only metadata-only contributor checkpoints
+        env:
+          RELEASE_ACTION: ${{ github.event.action }}
+          RELEASE_PRERELEASE: ${{ github.event.release.prerelease }}
+          RELEASE_TAG_NAME: ${{ github.event.release.tag_name }}
+        run: python3 tools/contributor-checkpoints/workflow_guards.py release

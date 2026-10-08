@@ -102,7 +102,40 @@ public sealed class ReplaySafeFusionDriver
     /// never dropped and never enqueued on the successful fused path. A top-level span (one entered from the drain
     /// loop, not from the pump itself) then pumps the completion cascade inline (D2).
     /// </summary>
+    // Keep the established non-generic ValueTask API; the schedule-aware path uses the core result to release its anchor.
     public async ValueTask ContinueFusedSpanAsync(RuntimeSchedulerWorkItem startWorkItem, CancellationToken cancellationToken = default)
+    {
+        await ContinueFusedSpanCoreAsync(startWorkItem, cancellationToken);
+    }
+
+    internal void RegisterFusedScheduleAnchor(RuntimeSchedulerWorkItem scheduleWorkItem)
+    {
+        ArgumentNullException.ThrowIfNull(scheduleWorkItem);
+        var session = _coalescingSessionAccessor?.Current;
+        if (session is null || !session.AppliesTo(scheduleWorkItem.WorkflowExecutionId))
+            throw new InvalidOperationException("A fused Schedule anchor requires the active coalescing session that admitted the span.");
+
+        session.RegisterFusedScheduleAnchor(scheduleWorkItem);
+    }
+
+    internal async ValueTask ContinueFusedScheduleSpanAsync(
+        RuntimeSchedulerWorkItem scheduleWorkItem,
+        RuntimeSchedulerWorkItem startWorkItem,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(scheduleWorkItem);
+        ArgumentNullException.ThrowIfNull(startWorkItem);
+        var session = _coalescingSessionAccessor?.Current;
+        if (session is null || !session.AppliesTo(scheduleWorkItem.WorkflowExecutionId))
+            throw new InvalidOperationException("A fused Schedule span requires the active coalescing session that registered its anchor.");
+
+        // Keep the durable redrive anchor when the fused start declines or the span faults/cancels. Only a span that
+        // completed normally may release its in-memory protection; a continuing checkpoint may already have flushed it.
+        if (await ContinueFusedSpanCoreAsync(startWorkItem, cancellationToken))
+            session.CompleteFusedScheduleAnchor(scheduleWorkItem.WorkItemId);
+    }
+
+    private async ValueTask<bool> ContinueFusedSpanCoreAsync(RuntimeSchedulerWorkItem startWorkItem, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(startWorkItem);
 
@@ -112,7 +145,7 @@ public sealed class ReplaySafeFusionDriver
             // Fallback: not a fresh Scheduled fusable node. Hand the StartActivity item to the overlay queue so the
             // discrete StartActivity handler processes it — discrete-equivalent, nothing dropped (research §4).
             await _schedulerWorkQueue.EnqueueAsync(startWorkItem, cancellationToken);
-            return;
+            return false;
         }
 
         _diagnostics?.RecordFusedSpan();
@@ -129,6 +162,7 @@ public sealed class ReplaySafeFusionDriver
         }
 
         await PumpCompletionCascadeAsync(startWorkItem.WorkflowExecutionId, cancellationToken);
+        return true;
     }
 
     /// <summary>
@@ -225,7 +259,13 @@ public sealed class ReplaySafeFusionDriver
                 {
                     var workflowState = await workflowExecutionStateStore.FindAsync(workflowExecutionId, cancellationToken);
                     if (workflowState is not null && workflowState.Status.IsTerminal())
+                    {
+                        // A deactivating child commit could not remove its currently pumped Schedule item from the
+                        // durable frontier because that item was still present in the overlay at commit time. It has
+                        // now been consumed; reconcile the stale durable prefix without writing checkpoint state.
+                        await session.AdvanceInnerQueueAsync(consumeInFlightClaims: true, cancellationToken);
                         break;
+                    }
                 }
             }
         }

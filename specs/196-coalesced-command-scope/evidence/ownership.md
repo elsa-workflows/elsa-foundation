@@ -1,0 +1,3 @@
+# Ownership
+
+Root control room owns correction T19/#2450 under Program #2382. Isolated worktree: runtime-db-coalesced-scope; branch claude/runtime-db-coalesced-scope; base 932562a7d2b96536a0f9b0355a273bc081f2fe3a. Planning claim: https://github.com/elsa-workflows/elsa-foundation/issues/2450#issuecomment-6010387896. Issue comments and matching open PRs were refreshed before writing; no competing scope was found. Native parent 2387 and T17 blocker 2412 were verified, Project planning review matched. Scope is default factory lifetime plus deterministic tests, with separate normal-host proof and downstream T17/T18 C4 acceptance. Root reviews delegated test/source changes and owns integration/verification. T02 remains the lead accounting objective.

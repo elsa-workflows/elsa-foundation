@@ -90,7 +90,8 @@ internal static class TypedActivityTestActivation
         var strategy = new ClrActivityActivator(
             services.GetRequiredService<IServiceScopeFactory>(),
             registry,
-            serializer);
+            serializer,
+            FixedPersistenceAccess.Unbound);
         var activator = new ActivityActivator([strategy], new ActivityInputHydrator(), SecretResolutionTestSupport.NoResolverSecretInputResolver());
         return await activator.ActivateAsync(request);
     }

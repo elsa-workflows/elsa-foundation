@@ -1,0 +1,47 @@
+# Integrated durable-value page reuse checkpoint
+
+This checkpoint implements the reviewed memo in the Coalesced durable-value page path. It preserves the existing overlay merge on every logical read and keeps Immediate, ineligible compositions and manual wrappers on their original provider path. [Source/test digests and retained test-result summaries](integration-verification.json) identify the candidate bytes; the PR delivery receipt supplies the commit and hosted gates.
+
+## Observed reduction and semantics
+
+The actual CShells EF fixture runs the same typed start, deferred activity start and deterministic invocation with `CoalesceDurableValueReads` disabled and enabled. Backing durable-value page SELECTs decrease **6 → 2**; nonempty pages decrease **2 → 1**. Both runs finish with equivalent normalized workflow identity, invocation identity, contract type, serialized inputs, visible variable and result. This is a SQLite EF fixture measurement, not primary HttpEndpoint/REST savings, provider round trips, or latency evidence.
+
+The negative controls use the same option value as their measured run. An overlength identity and malformed public cursor reject with equivalent exception types. A further control warms a valid provider-produced cursor, corrupts only its inner HMAC signature, recomputes the valid public envelope checksum, and verifies rejection twice with reuse enabled and disabled. Its extra persisted row is created after the measured workflow and semantic capture, solely to obtain a nonterminal provider cursor.
+
+The first-party shared codec identity is source-confirmed by the captured unique singleton HMAC descriptor and the same scoped service provider constructing the inner EF store and wrapper. The real eligible EF reduction exercises that path. No reflection or test-only production API is used.
+
+## Safety and causal regressions
+
+The wrapper tests exercise current overlay additions, replacement and tombstones; direct and actual checkpoint writes; failed/canceled write permanent disablement; overlapping reads/writes; changed and global access contexts; changed descriptors/codecs; independent nested ownership, null ownership, disposal and fresh-session fallback. The original staged overlay remains visible when memo reuse ends. A fresh-session test is not claimed as an actual crash/recovery execution.
+
+Root and independent review found and closed three integration defects before this checkpoint:
+
+- Suppressing the ambient owner with `Push(null)` could allow its old pages to survive a tokenless inner write. The regression lost a persisted row before the fix and passes with permanent parent disablement.
+- A canceled drain could observe cancellation before its asynchronous memo-disable callback ran. The first full Runtime suite reported 2,112 passes and one heartbeat failure. A deterministic test holds the callback while a tokenless cleanup read runs; it fails with one backing read before the fix and requires two after it. The memo now observes the bound drain token under its lock as well as retaining the clear/disable callback. Caller and heartbeat controls preserve staged overlay values.
+- Metadata enumeration or the final validator could change admission context or write generation during cloning. The two-case regression covers context revocation and a successful reentrant write. Without the final generation guard the write case fails with one load instead of two. Admission now checks the live validator, memo eligibility and captured generation immediately before publishing the entry.
+
+A separate root mutation disables wrapper reuse and makes the EF reduction assertion fail at **6 versus 6**. These failures are retained as before/fixed or mutation evidence, not rewritten as successful attempts.
+
+## Persisted interruption-snapshot recovery
+
+T014 is accepted after root integrated the reviewed recovery fixture and passed the complete EF suite: **904/904, zero skips**. The test starts a real EF-backed Coalesced workflow, reaches its second External activity, and observes a nonempty provider page followed by a memo hit while the execution owns a live persisted lease. At that point SQLite backup captures the actual committed database. The source and copied durable queue IDs are unique and exactly equal; the copied lease retains the original fencing token.
+
+The original generation completes only against its original database. A fresh host opens the snapshot with a clock advanced beyond the captured lease, and the production resumption service accepts and completes the same execution. The recovered activity issues a fresh nonempty EF page read followed by a memo hit, owns a higher fence, and observes rejection of the old fence while that new lease is live. Expected persisted inputs/results, completed activity and workflow states, zero incidents and an empty durable queue are all asserted.
+
+The first worker fixture incorrectly expected a persisted active scheduler claim at the pause. Source confirms that Coalesced keeps that active claim in its session overlay while the durable segment-entry backstop remains unclaimed. Correcting that test assumption is not a runtime repair. Root and independent review accepted the final fixture, including exact queue-set equality.
+
+This is a **persisted interruption-snapshot recovery** test. It does not kill an OS process mid-drain or reopen the same database file. The production sweep result does not directly identify whether scanner or backlog discovery supplied its candidate, so no such provenance is claimed. The separate live bookmark check remains the actual process-kill/restart evidence.
+
+## Verification and remaining gates
+
+After T007's registration change, root's complete Runtime suite passes **2,125/2,125**, the complete EF integration suite passes **904/904**, and the architecture suite passes **635/635**, all with zero skipped tests. The EF suite includes the positive reduction and actual inner-HMAC controls. Root's final memo/wrapper filter passes 42 cases. Worker tests are inputs to this independently checked result.
+
+T007 is accepted after the eligibility matrix grew to **64 cases** and root's full Runtime suite passed **2,125/2,125**, with zero skips. The registration class and its nested record have **100% line and branch coverage** in that root run, including the ineligible early return and `InvalidOperationException` fallback. No coverage exclusion or test-only production hook was added.
+
+The new cases exercise a keyed owned scheduler contract, a pre-existing owned inner-service collision, a duplicate owned scheduler group, skipped enumeration for an ineligible backend, and failed recapture clearing a previously valid result. The implementation now publishes one validated descriptor map instead of separately tracking a map and capture flag. Redundant null checks already guaranteed by immutable successful construction and duplicate checks already enforced by descriptor-group identity were removed after root and independent review. Live descriptor replacement, scope and codec checks remain intact. A root mutation retaining the previous map across a failed recapture fails with `Expected: False; Actual: True`; the exact intended source was then restored before the full Runtime pass.
+
+T001–T017 have accepted source and bounded correctness evidence. [Final live qualification](final-live-verification.md) records the clean `9d6fd212da419ef1d4efd978dc91c138d7776b4e` candidate: primary HTTP and valid REST completion, 60 exact concurrent responses joined to distinct completed zero-incident executions, malformed-input observations and one committed-bookmark process restart. Root and independent QA recomputed the joins. The persisted interruption-snapshot test above is separate from that live restart.
+
+The native-required provider suite passed **185 tests with zero skips** at `312d86713532315b7281357ea367735a7e514e4f`, which has identical production and provider-test source to the final live candidate. Root and independent source-contract review passed. Final PR-head hosted checks/review, normal merge and resulting-main verification remain required; no prior-head result is substituted for them. No actual Copilot review is claimed.
+
+Historical verification failures remain retained. The initial architecture invocation could not execute because this checkout lacked its assets file; canonical locked graph restore then completed, and all 635 architecture tests executed successfully. Earlier Maps checks found real stale snapshots; reviewed refreshes brought them current. Subsequent accepted-task changes affected only `spec-status-map.md`; manifest and generated findings remained byte-identical. The final accepted-task refresh records 17 accepted and zero open tasks. No unavailable check is a pass, and no program milestone is completed by this checkpoint alone.

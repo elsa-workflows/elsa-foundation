@@ -15,6 +15,8 @@ public sealed class WorkflowExecutableInspector(
     TimeProvider? timeProvider = null) : IWorkflowExecutableInspector
 {
     private const int PreviewLength = 80;
+    private const string BpmnStructureKind = "elsa.bpmn.structure";
+    private const string BpmnStructureSchemaVersion = "1.0.0";
     private readonly TimeProvider _timeProvider = timeProvider ?? TimeProvider.System;
 
     Task<WorkflowExecutablesListView> IWorkflowExecutableInspector.ListAsync(ListWorkflowExecutables request, CancellationToken cancellationToken) =>
@@ -236,7 +238,8 @@ public sealed class WorkflowExecutableInspector(
             node.OutputCaptures.Values
                 .OrderBy(capture => capture.OutputName, StringComparer.Ordinal)
                 .Select(OutputCapture)
-                .ToArray());
+                .ToArray(),
+            ProjectBpmnStructure(node));
 
     private static WorkflowExecutableOutputCaptureView OutputCapture(RuntimeOutputCapture capture) =>
         new(
@@ -281,17 +284,91 @@ public sealed class WorkflowExecutableInspector(
 
     private static WorkflowExecutableConnectionEndpointView? ProjectEndpoint(JsonElement value)
     {
-        if (value.ValueKind != JsonValueKind.Object ||
-            !value.TryGetProperty("nodeId", out var nodeIdValue) ||
-            nodeIdValue.ValueKind != JsonValueKind.String ||
-            string.IsNullOrWhiteSpace(nodeIdValue.GetString()))
+        if (value.ValueKind != JsonValueKind.Object || !TryReadRequiredString(value, "nodeId", out var nodeId))
             return null;
 
         var port = value.TryGetProperty("port", out var portValue) && portValue.ValueKind == JsonValueKind.String
             ? portValue.GetString()
             : null;
-        return new(nodeIdValue.GetString()!, port);
+        return new(nodeId, port);
     }
+
+    // BPMN's executable structure is activity-owned, so Runtime API does not take a dependency on the BPMN module.
+    // This projection deliberately exposes only the semantic element/flow fields used by inspection clients.
+    private static WorkflowExecutableBpmnStructureView? ProjectBpmnStructure(ExecutableNode node)
+    {
+        if (node.Structure is not { } structure ||
+            !StringComparer.Ordinal.Equals(structure.Kind, BpmnStructureKind) ||
+            !StringComparer.Ordinal.Equals(structure.SchemaVersion, BpmnStructureSchemaVersion) ||
+            structure.Payload.ValueKind != JsonValueKind.Object)
+            return null;
+
+        var elements = new List<WorkflowExecutableBpmnElementView>();
+        if (structure.Payload.TryGetProperty("elements", out var elementValues) && elementValues.ValueKind == JsonValueKind.Array)
+        {
+            foreach (var element in elementValues.EnumerateArray())
+            {
+                if (element.ValueKind != JsonValueKind.Object ||
+                    !TryReadRequiredString(element, "elementId", out var elementId) ||
+                    !TryReadRequiredString(element, "elementType", out var elementType))
+                    continue;
+
+                elements.Add(new(
+                    elementId,
+                    elementType,
+                    ReadOptionalString(element, "childNodeId"),
+                    ReadOptionalString(element, "name")));
+            }
+        }
+
+        var sequenceFlows = new List<WorkflowExecutableBpmnSequenceFlowView>();
+        if (structure.Payload.TryGetProperty("sequenceFlows", out var flowValues) && flowValues.ValueKind == JsonValueKind.Array)
+        {
+            foreach (var flow in flowValues.EnumerateArray())
+            {
+                if (flow.ValueKind != JsonValueKind.Object ||
+                    !TryReadRequiredString(flow, "flowId", out var flowId) ||
+                    !TryReadRequiredString(flow, "sourceRef", out var sourceRef) ||
+                    !TryReadRequiredString(flow, "targetRef", out var targetRef))
+                    continue;
+
+                sequenceFlows.Add(new(
+                    flowId,
+                    sourceRef,
+                    targetRef,
+                    ReadOptionalString(flow, "name"),
+                    ReadOptionalString(flow, "conditionOutcome"),
+                    ReadOptionalBoolean(flow, "isDefault")));
+            }
+        }
+
+        return new(elements, sequenceFlows);
+    }
+
+    private static bool TryReadRequiredString(JsonElement value, string propertyName, out string result)
+    {
+        result = "";
+        if (!value.TryGetProperty(propertyName, out var property) ||
+            property.ValueKind != JsonValueKind.String ||
+            string.IsNullOrWhiteSpace(property.GetString()))
+            return false;
+
+        // Retain source-faithful identifiers; validation must not rewrite authored identity.
+        result = property.GetString()!;
+        return true;
+    }
+
+    private static string? ReadOptionalString(JsonElement value, string propertyName) =>
+        value.TryGetProperty(propertyName, out var property) &&
+        property.ValueKind == JsonValueKind.String &&
+        !string.IsNullOrWhiteSpace(property.GetString())
+            ? property.GetString()
+            : null;
+
+    private static bool? ReadOptionalBoolean(JsonElement value, string propertyName) =>
+        value.TryGetProperty(propertyName, out var property) && property.ValueKind is JsonValueKind.True or JsonValueKind.False
+            ? property.GetBoolean()
+            : null;
 
     private static WorkflowExecutableInputBindingView Binding(RuntimeInputBinding binding, bool includeSourceDetails) =>
         new(

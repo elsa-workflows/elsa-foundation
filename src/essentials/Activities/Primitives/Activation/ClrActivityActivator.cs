@@ -4,15 +4,22 @@ using Elsa.Activities.Runtime.Core.Exceptions;
 using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Primitives.Models;
 using Elsa.Serialization.Core;
+using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Extensions;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Elsa.Activities.Primitives.Activation;
 
-/// <summary>Creates and hydrates one fresh CLR activity in an owned child scope per invocation attempt.</summary>
+/// <summary>
+/// Creates and hydrates one fresh CLR activity in an owned child scope per invocation attempt. The child scope is bound
+/// to the partition of the scope this activator lives in, so services injected into the activity work in the
+/// partition the activation runs under rather than in the host's.
+/// </summary>
 public sealed class ClrActivityActivator(
     IServiceScopeFactory scopeFactory,
     IWellKnownTypeRegistry typeRegistry,
-    IPayloadSerializer payloadSerializer) : IActivityActivationStrategy
+    IPayloadSerializer payloadSerializer,
+    IPersistenceAccessContextAccessor persistenceAccessContextAccessor) : IActivityActivationStrategy
 {
     public string ConsumerKey => WellKnownRuntimeActivityConsumers.ClrActivity;
     public IReadOnlyCollection<string> SupportedSchemaVersions => [RuntimeActivityDescriptor.InitialSchemaVersion];
@@ -34,7 +41,7 @@ public sealed class ClrActivityActivator(
         if (!typeof(IActivity).IsAssignableFrom(activityType))
             throw new InvalidOperationException($"Registered CLR activity type '{activityType.FullName}' does not implement {nameof(IActivity)}.");
 
-        var scope = scopeFactory.CreateAsyncScope();
+        var scope = await scopeFactory.CreateAsyncScopeAsync(persistenceAccessContextAccessor.Current.Scope);
         IActivity? activity = null;
         try
         {

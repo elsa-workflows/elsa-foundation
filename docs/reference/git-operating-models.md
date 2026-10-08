@@ -1,81 +1,49 @@
 # Git Operating Models
 
-This catalog describes shared Git workflow shapes that agents and engineers can choose from. It is committed reference material, not a personal preference file.
+This reference describes the publication paths defined in [AGENTS.md](../../AGENTS.md#personal-operating-preferences). They apply to engineers and agents using any tool; no personal Git preference file or workflow selection is required before publication.
 
-Personal selections belong in `.agent-prefs/git-operating-model.md`, which is intentionally ignored by Git. If that file does not exist, ask the user which operating model they prefer before pushing, opening pull requests, or changing remotes.
+## Maintainers - Organization Branch
 
-## Model A - Fork PR
+Maintainer work, including Sipke’s sessions, always uses feature/work-unit branches in the organization repository. Never create a fork PR for maintainer work.
 
-Use when the user does not have push rights to the upstream repository, or prefers fork isolation.
+1. Check the existing remotes and use the remote pointing to the organization repository. Do not assume `origin` identifies the correct repository or rewrite remotes just to match an example.
+2. Work on a branch such as `codex/<work-unit-name>`.
+3. Commit coherent work-unit checkpoints locally.
+4. Push the branch to the organization repository.
+5. Open a draft pull request from that branch to the appropriate organization base branch.
+6. Keep follow-up commits on the same branch while the unit is active.
 
-Default remote shape:
+The maintainer path is already selected by repository policy. If organization push access is unavailable, report the access problem and preserve the local work; do not switch to a fork PR.
 
-- `upstream` points to the source repository.
-- `origin` points to the user's fork.
+## Contributors - Fork PR
 
-Default workflow:
+Contributors without organization write access use a fork. Infer this path from the session context and repository access without asking them to choose an operating model. See [the contributor guide](../../CONTRIBUTING.md#create-a-topic-branch).
 
-1. Work on a branch such as `codex/<work-unit-name>`.
-2. Commit coherent work-unit checkpoints locally.
-3. Push the branch to `origin`.
-4. Open a draft pull request from the fork branch to the upstream base branch.
-5. Keep pushing follow-up commits to the same branch while the unit is active.
+1. Check existing remotes and use or configure a remote pointing to the contributor’s fork, preserving the upstream remote.
+2. Work on a topic branch based on the appropriate upstream base branch.
+3. Commit coherent work-unit checkpoints locally.
+4. Push the branch to the fork remote.
+5. Open a draft pull request from the fork branch to the upstream base branch.
+6. Keep follow-up commits on the same branch while the unit is active.
 
-Do not push directly to `upstream` under this model.
+Contributors with organization write access can use the organization-branch workflow. Do not infer maintainer identity solely from the checkout’s `origin` URL: contributors can clone upstream too.
 
-## Model B - Organization Branch
+## Local Checkpoints and Patch Export
 
-Use when the user has push rights to the organization repository and wants branches to live directly there.
+When the user requests local-only work, commit locally and leave publication for later. When remote publication is unavailable, preserve local commits and report the concrete blocker. Produce patches, diffs, or a bundle when requested. These are delivery states, not additional operating-model choices required before publication.
 
-Default remote shape:
+## Optional Local Git Details
 
-- `origin` may point directly to the organization repository.
-- `upstream` may be absent or may also point to the organization repository.
-
-Default workflow:
-
-1. Work on a branch such as `codex/<work-unit-name>`.
-2. Commit coherent work-unit checkpoints locally.
-3. Push the branch to the organization repository.
-4. Open a draft pull request from the organization branch to the base branch.
-
-Before using this model, confirm the user wants direct organization branches.
-
-## Model C - Local Checkpoint
-
-Use when the user wants clean local history but no remote updates yet.
-
-Default workflow:
-
-1. Work on a branch such as `codex/<work-unit-name>`.
-2. Commit coherent work-unit checkpoints locally.
-3. Do not push unless the user explicitly asks.
-
-This is useful for early exploration, private work, or when remote permissions are not configured.
-
-## Model D - Patch Export
-
-Use when the environment cannot push and the user needs to transfer work manually.
-
-Default workflow:
-
-1. Work on a branch such as `codex/<work-unit-name>`.
-2. Commit coherent work-unit checkpoints locally.
-3. Produce patches, diffs, or a bundle only when the user asks.
-
-This model should stay a fallback. Prefer a real remote branch when possible.
-
-## Personal Preference Template
-
-Create `.agent-prefs/git-operating-model.md` locally with content like:
+An ignored `.agent-prefs/git-operating-model.md` may record remote names, branch naming, or other local details. It must respect the maintainer/contributor paths above and is never required for publication. For a maintainer checkout, an example is:
 
 ```md
 # Git Operating Model Preference
 
-Preferred model: fork-pr
+Role: maintainer
+Preferred model: organization-branch
 
-upstream: https://github.com/elsa-workflows/elsa-foundation.git
-origin: https://github.com/<user>/elsa-foundation.git
+organization remote: origin
+organization repository: https://github.com/elsa-workflows/elsa-foundation.git
 default branch prefix: codex/
 use draft PRs: yes
 commit style: coherent work-unit checkpoints

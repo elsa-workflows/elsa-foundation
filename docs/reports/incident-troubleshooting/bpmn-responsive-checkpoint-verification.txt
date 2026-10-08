@@ -1,0 +1,66 @@
+Backend exact predecessor RED
+Source log: /tmp/incident-bpmn-projection-red-bdba80b65.log
+  Elsa.Workflows.Runtime.Api.Tests -> /Users/sipke/.codex-workspaces/worktrees/ad6121bf-aa7e-4e1f-8e5b-938420bf5956/elsa-foundation-main/tests/essentials/Workflows/Runtime/Api/Tests/bin/Release/net10.0/Elsa.Workflows.Runtime.Api.Tests.dll
+Failed!  - Failed:     2, Passed:     0, Skipped:     0, Total:     2, Duration: 86 ms - Elsa.Workflows.Runtime.Api.Tests.dll (net10.0)
+
+Backend inspector GREEN
+Source log: /tmp/incident-bpmn-projection-green-final.log
+  Elsa.Workflows.Runtime.Api.Tests -> /Users/sipke/.codex-workspaces/worktrees/ad6121bf-aa7e-4e1f-8e5b-938420bf5956/elsa-foundation-main/tests/essentials/Workflows/Runtime/Api/Tests/bin/Release/net10.0/Elsa.Workflows.Runtime.Api.Tests.dll
+Passed!  - Failed:     0, Passed:    34, Skipped:     0, Total:    34, Duration: 174 ms - Elsa.Workflows.Runtime.Api.Tests.dll (net10.0)
+
+Full current API suite
+Source log: /tmp/incident-final-25327-api-all.log
+Passed!  - Failed:     0, Passed:   139, Skipped:     0, Total:   139, Duration: 6 s - Elsa.Workflows.Runtime.Api.Tests.dll (net10.0)
+
+Current normal-host causal and paging HTTP
+Source log: /tmp/incident-rest-25327.log
+SUCCESS - persisted causal input failure, preserved intervention policy and whole-set incident-health paging on both routes (incident-qa-63761ffda62e433bbf7c3f70272ba66a)
+
+Retained presentation control HTTP
+Source log: /tmp/incident-controls-25327.log
+
+
+Persisted BPMN HTTP topology and exact association
+Source log: /tmp/incident-bpmn-projection-http-25327.log
+PASS: real persisted BPMN topology 3 elements / 2 flows and exact incident child binding
+
+Studio compact wire predecessor RED
+Source log: /tmp/incident-studio-bpmn-wire-red-098.log
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 3 ⎯⎯⎯⎯⎯⎯⎯
+ Test Files  1 failed (1)
+      Tests  3 failed | 12 skipped (15)
+
+Studio graph and instance canvas GREEN
+Source log: /tmp/incident-studio-bpmn-canvas-green.log
+ Test Files  2 passed (2)
+      Tests  70 passed (70)
+
+Studio current typecheck
+Source log: /tmp/incident-studio-bpmn-typecheck.log
+
+
+Studio full affected module 1508 tests
+Source log: /tmp/incident-studio-bpmn-workflows-all.log
+ Test Files  119 passed (119)
+      Tests  1508 passed (1508)
+
+Studio current module bundle budget
+Source log: /tmp/incident-studio-bpmn-workflows-build.log
+Workflows bundle budget
+  Primary JavaScript entry:          126.21 kB raw / 33.76 kB gzip (budget 127.50 kB)
+  Workflows stylesheet:              148.83 kB raw / 21.70 kB gzip (budget 185.00 kB)
+  Authenticated Definitions total:   381.46 kB raw / 83.04 kB gzip (budget 384.50 kB)
+  Activity upgrades total:           372.38 kB raw / 73.95 kB gzip (budget 375.50 kB)
+
+Current generated maps check
+Source log: /tmp/incident-final-25327-maps-check.log
+Generated maps still describe the tree.
+
+Rebuilt current architecture suite
+Source log: /tmp/incident-final-25327-architecture-rebuilt.log
+Passed:635 Failed:0 Skipped:0; preceding stale --no-build DLL failure excluded
+
+Fresh database current backend proof
+Source logs: /tmp/incident-fresh-25327-rest.log and /tmp/incident-fresh-25327-bpmn-projection.log
+SUCCESS: causal input evidence, intervention policy, whole-set health paging both routes
+PASS: fresh BPMN creation/publication/execution/retrieval, topology3/2, exact binding and lifecycle

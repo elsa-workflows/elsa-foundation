@@ -9,9 +9,11 @@ description: "Task list template for feature implementation"
 
 **Prerequisites**: plan.md (required), spec.md (required for user stories), research.md, data-model.md, contracts/
 
-**Tests**: The examples below include test tasks. Tests are OPTIONAL - only include them if explicitly requested in the feature specification.
+**Tests**: Include tests required by applicable repository policy even when the feature specification is silent. For Foundation feature classes and logic-bearing implementations in scope, include the registration and per-implementation unit-test tasks required by [framework §2.23](../memory/constitution-framework.md#223-unit-tests). Test existence and test-first cadence are separate: for greenfield work, follow the application cadence in [framework §2.21.2](../memory/constitution-framework.md#2212-greenfield-test-discipline). Use test-first ordering and require a failing run only when the application's derived constitution declares TDD. Add other test tasks when requested or warranted by the story's changed behavior, contracts, or acceptance criteria. Omit test tasks when no testing obligation applies (for example, a docs-only correction); do not invent unrelated runtime tests.
 
-**Organization**: Tasks are grouped by user story to enable independent implementation and testing of each story.
+**Undeclared cadence**: For greenfield work without a cadence declared in the application's derived constitution, record the gap in the plan and tasks for the application owner to resolve. Do not infer a test-first requirement from these examples or omit applicable required tests.
+
+**Organization**: Tasks are grouped by user story to enable independent implementation and testing of each story. The test-before-implementation sample ordering below illustrates TDD only; when generating tasks, reorder tests and task IDs to match the cadence declared by the application's derived constitution.
 
 ## Format: `[ID] [P?] [Story] Description`
 
@@ -80,12 +82,12 @@ Examples of foundational tasks (adjust based on your project):
 
 **Independent Test**: [How to verify this story works on its own]
 
-### Tests for User Story 1 (OPTIONAL - only if tests requested) ⚠️
+### Tests for User Story 1 (when applicable)
 
-> **NOTE: Write these tests FIRST, ensure they FAIL before implementation**
+> When the application's derived constitution declares TDD, write these tests first and verify they fail before implementation. Otherwise, place test tasks according to the application's declared cadence.
 
-- [ ] T010 [P] [US1] Contract test for [endpoint] in tests/contract/test_[name].py
-- [ ] T011 [P] [US1] Integration test for [user journey] in tests/integration/test_[name].py
+- [ ] T010 [P] [US1] Verify [Feature] registration resolves its expected services in tests/[feature test project]/[Feature]RegistrationTests.cs
+- [ ] T011 [P] [US1] Cover each behavior branch of [logic-bearing implementation] with stubbed dependencies in tests/[implementation test project]/[Implementation]Tests.cs
 
 ### Implementation for User Story 1
 
@@ -106,10 +108,10 @@ Examples of foundational tasks (adjust based on your project):
 
 **Independent Test**: [How to verify this story works on its own]
 
-### Tests for User Story 2 (OPTIONAL - only if tests requested) ⚠️
+### Tests for User Story 2 (when applicable)
 
-- [ ] T018 [P] [US2] Contract test for [endpoint] in tests/contract/test_[name].py
-- [ ] T019 [P] [US2] Integration test for [user journey] in tests/integration/test_[name].py
+- [ ] T018 [P] [US2] Test [scope-specific behavior] in tests/[test project]/[Story]BehaviorTests.cs
+- [ ] T019 [P] [US2] Test [contract or acceptance criterion, when warranted] in tests/[test project]/[Story]ContractTests.cs
 
 ### Implementation for User Story 2
 
@@ -128,10 +130,10 @@ Examples of foundational tasks (adjust based on your project):
 
 **Independent Test**: [How to verify this story works on its own]
 
-### Tests for User Story 3 (OPTIONAL - only if tests requested) ⚠️
+### Tests for User Story 3 (when applicable)
 
-- [ ] T024 [P] [US3] Contract test for [endpoint] in tests/contract/test_[name].py
-- [ ] T025 [P] [US3] Integration test for [user journey] in tests/integration/test_[name].py
+- [ ] T024 [P] [US3] Test [scope-specific behavior] in tests/[test project]/[Story]BehaviorTests.cs
+- [ ] T025 [P] [US3] Test [contract or acceptance criterion, when warranted] in tests/[test project]/[Story]ContractTests.cs
 
 ### Implementation for User Story 3
 
@@ -154,7 +156,7 @@ Examples of foundational tasks (adjust based on your project):
 - [ ] TXXX [P] Documentation updates in docs/
 - [ ] TXXX Code cleanup and refactoring
 - [ ] TXXX Performance optimization across all stories
-- [ ] TXXX [P] Additional unit tests (if requested) in tests/unit/
+- [ ] TXXX [P] Additional scope-specific tests (when warranted) in tests/
 - [ ] TXXX Security hardening
 - [ ] TXXX Run quickstart.md validation
 
@@ -179,7 +181,7 @@ Examples of foundational tasks (adjust based on your project):
 
 ### Within Each User Story
 
-- Tests (if included) MUST be written and FAIL before implementation
+- Place test tasks according to the application's declared cadence (§2.21.2); when the application's derived constitution declares TDD, write tests before implementation and verify they fail
 - Models before services
 - Services before endpoints
 - Core implementation before integration
@@ -196,12 +198,12 @@ Examples of foundational tasks (adjust based on your project):
 
 ---
 
-## Parallel Example: User Story 1
+## Parallel Example: User Story 1 (TDD cadence only)
 
 ```bash
-# Launch all tests for User Story 1 together (if tests requested):
-Task: "Contract test for [endpoint] in tests/contract/test_[name].py"
-Task: "Integration test for [user journey] in tests/integration/test_[name].py"
+# These test tasks may be parallelized; position them according to the application's declared cadence:
+Task: "Verify [Feature] registration in tests/[feature test project]/[Feature]RegistrationTests.cs"
+Task: "Cover [implementation] behavior branches in tests/[implementation test project]/[Implementation]Tests.cs"
 
 # Launch all models for User Story 1 together:
 Task: "Create [Entity1] model in src/models/[entity1].py"
@@ -246,7 +248,7 @@ With multiple developers:
 - [P] tasks = different files, no dependencies
 - [Story] label maps task to specific user story for traceability
 - Each user story should be independently completable and testable
-- Verify tests fail before implementing
+- Verify tests fail before implementation only when the application's derived constitution declares TDD
 - Commit after each task or logical group
 - Stop at any checkpoint to validate story independently
 - Avoid: vague tasks, same file conflicts, cross-story dependencies that break independence

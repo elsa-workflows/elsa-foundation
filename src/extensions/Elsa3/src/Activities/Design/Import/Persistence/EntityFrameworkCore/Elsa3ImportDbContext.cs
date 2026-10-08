@@ -23,8 +23,8 @@ public abstract class Elsa3ImportDbContext(DbContextOptions options) : DbContext
         ConfigureCollection(modelBuilder.Entity<Elsa3ImportCollectionRecord>());
         ConfigureReceipt(modelBuilder.Entity<Elsa3ImportReceiptRecord>());
         ConfigureDefinitionBinding(modelBuilder.Entity<Elsa3ImportDefinitionBindingRecord>());
-        // Every row is immutable once written: collections and receipts are append-only and a binding is
-        // provenance. An accidental update fails instead of silently rewriting history.
+        // Every row is immutable once written: receipts are append-only, a collection upload is deleted but never
+        // updated, and a binding is provenance. An accidental update fails instead of silently rewriting history.
         foreach (var property in modelBuilder.Model.GetEntityTypes().SelectMany(entity => entity.GetProperties()))
             property.SetAfterSaveBehavior(PropertySaveBehavior.Throw);
         // Mapped after that loop: a finalization record is updated in place.

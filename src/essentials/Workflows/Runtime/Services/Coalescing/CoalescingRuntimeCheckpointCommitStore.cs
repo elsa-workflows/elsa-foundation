@@ -12,8 +12,8 @@ namespace Elsa.Workflows.Runtime.Services.Coalescing;
 /// single atomic durable commit at a flush boundary (attempt activation, suspension/fault/cancellation/completion, an
 /// operational or bookmark write, the per-segment hop cap, or the end-of-drain quiescence flush). A durable attempt
 /// boundary and a cap-hit fold-and-flush each start another coalesced segment in the same drain; when no session is
-/// active this decorator is a byte-for-byte pass-through to the durable inner store, so the default (Immediate) path
-/// is completely unaffected.
+/// active, Deferred decisions are normalized to Immediate because there is no working set to flush later. The
+/// default Immediate path forwards the original decision unchanged.
 /// </summary>
 /// <remarks>
 /// This decorator never bypasses single-writer ownership fencing: the folded flush is routed back through
@@ -28,6 +28,9 @@ public sealed class CoalescingRuntimeCheckpointCommitStore(
     private static readonly RuntimeCheckpointPersistenceDecision ImmediateDecision =
         new(RuntimeCheckpointPersistenceMode.Immediate, "Coalesced segment flush.");
 
+    private static readonly RuntimeCheckpointPersistenceDecision NoActiveSessionDecision =
+        new(RuntimeCheckpointPersistenceMode.Immediate, "No matching active coalescing session.");
+
     private readonly IRuntimeCheckpointCommitStore _inner = inner.Value;
 
     public async ValueTask<RuntimeCheckpointCommitStoreResult> CommitAsync(RuntimeCheckpointCommit commit, RuntimeCheckpointPersistenceDecision decision, CancellationToken cancellationToken = default)
@@ -35,14 +38,22 @@ public sealed class CoalescingRuntimeCheckpointCommitStore(
         ArgumentNullException.ThrowIfNull(commit);
         ArgumentNullException.ThrowIfNull(decision);
 
-        if (sessionAccessor.Current is not { } session || !session.AppliesTo(commit.WorkflowExecutionId))
-            return await _inner.CommitAsync(commit, decision, cancellationToken);
+        // Capture the ambient owner before the await so a concurrent context change cannot redirect this write lease to
+        // another session. Even a non-matching commit fences the current owner's raw-page memo conservatively.
+        var session = sessionAccessor.Current;
+        if (session is null || !session.AppliesTo(commit.WorkflowExecutionId))
+        {
+            // Deferred has meaning only inside this matching working set. In particular, a legacy queue's disabled
+            // scope must not ask a third-party store to defer a write that no active session will later flush.
+            var directDecision = decision.Mode == RuntimeCheckpointPersistenceMode.Deferred ? NoActiveSessionDecision : decision;
+            return await CommitInnerAsync(session, commit, directDecision, cancellationToken);
+        }
 
         // The synthetic folded quiescence-flush commit built by the drain scope: it already represents the whole
         // segment (routed here through the committer so fencing gates it). Apply straight to inner and end the segment.
         if (commit.Checkpoint.Metadata.ContainsKey(RuntimeCoalescingMetadataKeys.CoalescedFlush))
         {
-            var flushResult = await _inner.CommitAsync(commit, decision, cancellationToken);
+            var flushResult = await CommitInnerAsync(session, commit, decision, cancellationToken);
             session.InvalidateInspectionBaselines();
             await session.ReconcileDurablyPersistedOutboxAsync(commit.Checkpoint.OccurredAt, cancellationToken);
             await session.AdvanceInnerQueueAsync(consumeInFlightClaims: true, cancellationToken);
@@ -88,7 +99,9 @@ public sealed class CoalescingRuntimeCheckpointCommitStore(
             // itself, so it is validated here before the durable store sees it; every other path forwards the
             // committer's already-validated commit unchanged.
             RuntimeCheckpointCommitValidator.Validate(foldedCommit);
-            await _inner.CommitAsync(foldedCommit, ImmediateDecision, cancellationToken);
+            if (continueAfterBoundary)
+                await session.EnsureActiveFusedScheduleAnchorsAsync(cancellationToken);
+            await CommitInnerAsync(session, foldedCommit, ImmediateDecision, cancellationToken);
             session.InvalidateInspectionBaselines();
             if (capFold)
             {
@@ -103,7 +116,10 @@ public sealed class CoalescingRuntimeCheckpointCommitStore(
             // A deactivating boundary — and a cap fold, whose trailing commit rode the in-flight dispatch — already
             // carries the in-flight item's effect in this flush, so the item must be consumed here instead of surviving
             // as a durable duplicate (see AdvanceInnerQueueAsync). Only the pre-activation attempt boundary keeps it.
-            await session.AdvanceInnerQueueAsync(consumeInFlightClaims: capFold || !continueAfterBoundary, cancellationToken);
+            await session.AdvanceInnerQueueAsync(
+                consumeInFlightClaims: capFold || !continueAfterBoundary,
+                cancellationToken,
+                preserveActiveFusedScheduleAnchors: capFold);
             session.ClearBuffer();
             if (!continueAfterBoundary)
                 session.Deactivate();
@@ -112,16 +128,36 @@ public sealed class CoalescingRuntimeCheckpointCommitStore(
 
         // Nothing buffered: pass this commit straight through, then reconcile the durable queue with any overlay
         // consumption that happened before the first checkpoint.
-        var passthrough = await _inner.CommitAsync(commit, decision, cancellationToken);
+        if (continueAfterBoundary)
+            await session.EnsureActiveFusedScheduleAnchorsAsync(cancellationToken);
+        var passthrough = await CommitInnerAsync(session, commit, decision, cancellationToken);
         session.InvalidateInspectionBaselines();
         if (continueAfterBoundary)
             session.RecordDurableBoundaryState(commit.StateChanges);
         await session.ReconcileDurablyPersistedOutboxAsync(commit.Checkpoint.OccurredAt, cancellationToken);
-        await session.AdvanceInnerQueueAsync(consumeInFlightClaims: !continueAfterBoundary, cancellationToken);
+        await session.AdvanceInnerQueueAsync(
+            consumeInFlightClaims: !continueAfterBoundary,
+            cancellationToken,
+            preserveActiveFusedScheduleAnchors: false);
         session.ClearBuffer();
         if (!continueAfterBoundary)
             session.Deactivate();
         return passthrough;
+    }
+
+    private async ValueTask<RuntimeCheckpointCommitStoreResult> CommitInnerAsync(
+        RuntimeCoalescingSession? session,
+        RuntimeCheckpointCommit commit,
+        RuntimeCheckpointPersistenceDecision decision,
+        CancellationToken cancellationToken)
+    {
+        if (session?.DurableValuePageMemo is not { } memo)
+            return await _inner.CommitAsync(commit, decision, cancellationToken);
+
+        using var write = memo.BeginWrite();
+        var result = await _inner.CommitAsync(commit, decision, cancellationToken);
+        write.Succeed();
+        return result;
     }
 
     // A checkpoint's outbox carries only Pending items, but an overlay continuation whose delivery failed retryably is

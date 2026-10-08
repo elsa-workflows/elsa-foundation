@@ -2,6 +2,7 @@ using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Persistence.EntityFramework;
 using Elsa.Primitives.Models;
 using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Exceptions;
@@ -698,6 +699,31 @@ public sealed class EfRuntimeArtifactScopeTests
     }
 
     [Fact]
+    public async Task Executable_idempotent_save_preserves_the_first_pinned_side_effect_profile()
+    {
+        await using var database = await Database.CreateAsync();
+        await using var fixture = database.Open("tenant-a");
+        var original = Executable(
+            "profile-artifact",
+            "profile-hash",
+            activityContract: PinnedContract(SideEffectProfile.External));
+        var candidate = Executable(
+            "profile-artifact",
+            "profile-hash",
+            activityContract: PinnedContract(SideEffectProfile.ReplaySafe));
+
+        await fixture.Executable.SaveAsync(original);
+        // Same identity/hash is an immutable no-op; the candidate profile must not overwrite the first row.
+        await fixture.Executable.SaveAsync(candidate);
+
+        var persisted = await fixture.Executable.FindAsync(original.Identity.ArtifactId);
+        Assert.NotNull(persisted);
+        Assert.Equal(SideEffectProfile.External, persisted!.RootActivity.ActivityContract!.SideEffectProfile);
+        Assert.Equal(original.RootActivity.ActivityContract.SchemaFingerprint, persisted.RootActivity.ActivityContract.SchemaFingerprint);
+        Assert.NotEqual(candidate.RootActivity.ActivityContract.SchemaFingerprint, persisted.RootActivity.ActivityContract.SchemaFingerprint);
+    }
+
+    [Fact]
     public async Task Executable_idempotent_save_rejects_mismatched_existing_incarnations()
     {
         await using var database = await Database.CreateAsync();
@@ -713,6 +739,52 @@ public sealed class EfRuntimeArtifactScopeTests
         await Assert.ThrowsAsync<InvalidDataException>(() => fixture.Executable
             .SaveAsync(Executable("mismatched-incarnation"))
             .AsTask());
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Executable_profiles_with_distinct_hashes_persist_and_read_independently_in_both_orders(bool replaySafeFirst)
+    {
+        await using var database = await Database.CreateAsync();
+        await using var fixture = database.Open("tenant-a");
+        var previouslyColliding = ProfileExecutable(SideEffectProfile.External, omitContractFromHash: true);
+        var external = ProfileExecutable(SideEffectProfile.External);
+        var replaySafe = ProfileExecutable(SideEffectProfile.ReplaySafe);
+
+        Assert.NotEqual(previouslyColliding.Identity.ArtifactHash, external.Identity.ArtifactHash);
+        Assert.NotEqual(previouslyColliding.Identity.ArtifactId, external.Identity.ArtifactId);
+        Assert.NotEqual(external.Identity.ArtifactHash, replaySafe.Identity.ArtifactHash);
+        Assert.NotEqual(external.Identity.ArtifactId, replaySafe.Identity.ArtifactId);
+        await fixture.Executable.SaveAsync(previouslyColliding);
+        var originalRow = await fixture.Context.WorkflowExecutables.SingleAsync(
+            x => x.ArtifactId == Elsa.Persistence.EntityFramework.EfRelationalIdentity.Encode(previouslyColliding.Identity.ArtifactId));
+        var originalContentJson = originalRow.ContentJson;
+        if (replaySafeFirst)
+        {
+            await fixture.Executable.SaveAsync(replaySafe);
+            await fixture.Executable.SaveAsync(external);
+        }
+        else
+        {
+            await fixture.Executable.SaveAsync(external);
+            await fixture.Executable.SaveAsync(replaySafe);
+        }
+
+        var persistedExternal = await fixture.Executable.FindAsync(external.Identity.ArtifactId);
+        var persistedReplaySafe = await fixture.Executable.FindAsync(replaySafe.Identity.ArtifactId);
+        var persistedCollision = await fixture.Executable.FindAsync(previouslyColliding.Identity.ArtifactId);
+
+        Assert.Equal(SideEffectProfile.External, persistedExternal?.RootActivity.ActivityContract?.SideEffectProfile);
+        Assert.Equal(SideEffectProfile.ReplaySafe, persistedReplaySafe?.RootActivity.ActivityContract?.SideEffectProfile);
+        Assert.Equal(external.Identity.ArtifactHash, persistedExternal?.Identity.ArtifactHash);
+        Assert.Equal(replaySafe.Identity.ArtifactHash, persistedReplaySafe?.Identity.ArtifactHash);
+        Assert.Equal(previouslyColliding.Identity.ArtifactHash, persistedCollision?.Identity.ArtifactHash);
+        Assert.Equal(SideEffectProfile.External, persistedCollision?.RootActivity.ActivityContract?.SideEffectProfile);
+        var preservedRow = await fixture.Context.WorkflowExecutables.AsNoTracking().SingleAsync(
+            x => x.ArtifactId == Elsa.Persistence.EntityFramework.EfRelationalIdentity.Encode(previouslyColliding.Identity.ArtifactId));
+        Assert.Equal(originalContentJson, preservedRow.ContentJson);
+        Assert.Equal(3, await fixture.Context.WorkflowExecutables.CountAsync());
     }
 
     [Fact]
@@ -1350,10 +1422,86 @@ public sealed class EfRuntimeArtifactScopeTests
     private static WorkflowExecutable Executable(
         string artifactId,
         string? artifactHash = null,
-        IReadOnlyDictionary<string, string>? compatibilityMetadata = null)
+        IReadOnlyDictionary<string, string>? compatibilityMetadata = null,
+        ActivityContract? activityContract = null)
     {
-        var node = new ExecutableNode("node", "node", "test", "1", "consumer", JsonSerializer.SerializeToElement(new { }), new Dictionary<string, RuntimeInputBinding>(), new Dictionary<string, string>(), outputCaptures: new Dictionary<string, RuntimeOutputCapture>());
+        var node = new ExecutableNode("node", "node", "test", "1", "consumer", JsonSerializer.SerializeToElement(new { }), new Dictionary<string, RuntimeInputBinding>(), new Dictionary<string, string>(), activityContract: activityContract, outputCaptures: new Dictionary<string, RuntimeOutputCapture>());
         return new WorkflowExecutable(new WorkflowExecutableIdentity(artifactId, "definition", "version", "1", artifactHash ?? $"hash-{artifactId}"), node, new Dictionary<string, WorkflowExecutableResumeTarget>(), DateTimeOffset.UtcNow, compatibilityMetadata ?? new Dictionary<string, string>(), IncidentStrategyBuiltIns.FaultReference);
+    }
+
+    private static ActivityContract PinnedContract(SideEffectProfile profile) => new(
+        "test.activity",
+        "1",
+        "test",
+        JsonSerializer.SerializeToElement(new { }),
+        [],
+        new ActivityResultContract(new ValueTypeDescriptor("Elsa.Unit"), true, ActivityValuePolicy.Default, []),
+        [ActivityOutcomes.Done],
+        new ActivityActivationRequirement("test", "test"),
+        profile);
+
+    private static WorkflowExecutable ProfileExecutable(SideEffectProfile profile, bool omitContractFromHash = false)
+    {
+        var payload = JsonSerializer.SerializeToElement(new { });
+        var contract = new ActivityContract(
+            "test.activity",
+            "1",
+            "test",
+            payload,
+            [],
+            new ActivityResultContract(new ValueTypeDescriptor("Elsa.Unit"), true, ActivityValuePolicy.Default, []),
+            [ActivityOutcomes.Done],
+            new ActivityActivationRequirement("test", "test"),
+            profile);
+        var node = new ExecutableNode(
+            "profile-node",
+            "profile-node",
+            "test.activity",
+            "1",
+            "consumer",
+            payload,
+            new Dictionary<string, RuntimeInputBinding>(),
+            new Dictionary<string, string>(),
+            activityContract: contract);
+        var inputContract = new WorkflowExecutableInputContract(WorkflowExecutableInputContract.CurrentVersion, []);
+        var dependencies = Array.Empty<WorkflowExecutableDependency>();
+        var hasher = new WorkflowExecutableHasher();
+        // The pre-fix structured projection omitted ActivityContract. Hashing the same node without
+        // its contract recreates that row's old identity without carrying a legacy hasher into the test.
+        var hashNode = omitContractFromHash
+            ? new ExecutableNode(
+                node.ExecutableNodeId,
+                node.AuthoredActivityId,
+                node.ActivityType,
+                node.ActivityTypeVersion,
+                node.Descriptor,
+                node.InputBindings,
+                node.OutputCaptures,
+                node.Metadata,
+                node.ChildSlots,
+                node.Structure,
+                activityContract: null,
+                node.IntrinsicKind,
+                node.IntrinsicVariable)
+            : node;
+        var hash = hasher.ComputeHash(hashNode, inputContract, dependencies);
+        var identity = new WorkflowExecutableIdentity(
+            hasher.CreateArtifactId("artifact-", hash),
+            "definition-profile",
+            "version-profile",
+            "1",
+            hash);
+        return new WorkflowExecutable(
+            identity,
+            node,
+            new Dictionary<string, WorkflowExecutableResumeTarget>(),
+            DateTimeOffset.UnixEpoch,
+            new Dictionary<string, string>(),
+            inputContract,
+            dependencies,
+            runtimeRequirements: null,
+            storageDriverRequirements: null,
+            IncidentStrategyBuiltIns.FaultReference);
     }
 
     private static ExecutableActivityTemplate Template(string id, string hash)

@@ -1,5 +1,9 @@
 # Feature Specification: Author-Declared Side-Effect Profile Gates the Pre-Activation Claim Boundary
 
+The [artifact identity correction](artifact-identity-correction.md) records #2515: include the
+pinned profile in the normal compiler's structured behavioral hash. Foundation export
+backwards compatibility is not required, as confirmed by the owner on 8 October 2026.
+
 **Feature Branch**: `worktree-agent-a42c393bebf532809`
 
 **Created**: 2026-07-20

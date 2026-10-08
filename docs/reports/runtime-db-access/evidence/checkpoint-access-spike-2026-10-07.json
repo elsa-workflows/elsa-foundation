@@ -1,0 +1,126 @@
+{
+  "issue": 1239,
+  "sourceCommit": "a1e837de0563f44c9df465442077ead13fefe927",
+  "date": "2026-10-07",
+  "decision": "Retain current checkpoint path; reject the tested single-save candidate. No performance gain claimed.",
+  "measurementUnit": "SQLite EF DbCommand executions, not physical round trips",
+  "probeShape": "One activity execution plus bookmark; no workflow-execution participant, root-write lease or expected fence. Assertion readbacks excluded.",
+  "counts": {
+    "baseline": {
+      "firstNewCommit": 6,
+      "replay": 1
+    },
+    "trial": {
+      "firstNewCommit": 6,
+      "replay": 1
+    },
+    "restored": {
+      "firstNewCommit": 6,
+      "replay": 1
+    }
+  },
+  "verification": {
+    "baseline": {
+      "sha256": "192aef5b9fb5df27df1ca577c2320bca98242bf0916c1548ca2dc5d55fdc3773",
+      "counters": {
+        "total": "45",
+        "executed": "45",
+        "passed": "45",
+        "failed": "0",
+        "error": "0",
+        "timeout": "0",
+        "aborted": "0",
+        "inconclusive": "0",
+        "passedButRunAborted": "0",
+        "notRunnable": "0",
+        "notExecuted": "0",
+        "disconnected": "0",
+        "warning": "0",
+        "completed": "0",
+        "inProgress": "0",
+        "pending": "0"
+      },
+      "failures": [],
+      "probes": [
+        "CHECKPOINT_COMMAND_PROBE phase=first-new count=6 ordered=SELECT/marker > SELECT/activity_execution > SELECT/bookmark > INSERT/activity_execution > INSERT/bookmark > INSERT/marker\nCHECKPOINT_COMMAND_PROBE_COUNT phase=first-new category=INSERT/activity_execution count=1\nCHECKPOINT_COMMAND_PROBE_COUNT phase=first-new category=INSERT/bookmark count=1\nCHECKPOINT_COMMAND_PROBE_COUNT phase=first-new category=INSERT/marker count=1\nCHECKPOINT_COMMAND_PROBE_COUNT phase=first-new category=SELECT/activity_execution count=1\nCHECKPOINT_COMMAND_PROBE_COUNT phase=first-new category=SELECT/bookmark count=1\nCHECKPOINT_COMMAND_PROBE_COUNT phase=first-new category=SELECT/marker count=1\nCHECKPOINT_COMMAND_PROBE phase=replay count=1 ordered=SELECT/marker\nCHECKPOINT_COMMAND_PROBE_COUNT phase=replay category=SELECT/marker count=1\nCHECKPOINT_SEMANTICS firstPending=0 replayPending=0 markers=1 activityExecutions=1 bookmarks=1"
+      ]
+    },
+    "trial": {
+      "sha256": "52335d07b489d4411e7bd578703591b7b9c513fc99650e34d64634aa0fba1b5b",
+      "counters": {
+        "total": "45",
+        "executed": "45",
+        "passed": "43",
+        "failed": "2",
+        "error": "0",
+        "timeout": "0",
+        "aborted": "0",
+        "inconclusive": "0",
+        "passedButRunAborted": "0",
+        "notRunnable": "0",
+        "notExecuted": "0",
+        "disconnected": "0",
+        "warning": "0",
+        "completed": "0",
+        "inProgress": "0",
+        "pending": "0"
+      },
+      "failures": [
+        {
+          "name": "Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.EfRuntimeCheckpointCommitStoreTests.Marker_failure_rolls_back_a_pre_staged_sibling_and_leaves_marker_reusable",
+          "outcome": "Failed",
+          "message": "Assert.DoesNotContain() Failure: Item found in collection\n             \u2193 (pos 0)\nCollection: [\"elsa_runtime_checkpoint_commit\", \"elsa_runtime_scheduler_state\"]\nFound:      \"elsa_runtime_checkpoint_commit\""
+        },
+        {
+          "name": "Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.EfRuntimeCheckpointCommitStoreTests.Marker_commit_flushes_a_pre_staged_sibling_in_the_same_transaction",
+          "outcome": "Failed",
+          "message": "The immutable checkpoint marker must be inserted after staged participant rows."
+        }
+      ],
+      "probes": [
+        "CHECKPOINT_COMMAND_PROBE phase=first-new count=6 ordered=SELECT/marker > SELECT/activity_execution > SELECT/bookmark > INSERT/activity_execution > INSERT/bookmark > INSERT/marker\nCHECKPOINT_COMMAND_PROBE_COUNT phase=first-new category=INSERT/activity_execution count=1\nCHECKPOINT_COMMAND_PROBE_COUNT phase=first-new category=INSERT/bookmark count=1\nCHECKPOINT_COMMAND_PROBE_COUNT phase=first-new category=INSERT/marker count=1\nCHECKPOINT_COMMAND_PROBE_COUNT phase=first-new category=SELECT/activity_execution count=1\nCHECKPOINT_COMMAND_PROBE_COUNT phase=first-new category=SELECT/bookmark count=1\nCHECKPOINT_COMMAND_PROBE_COUNT phase=first-new category=SELECT/marker count=1\nCHECKPOINT_COMMAND_PROBE phase=replay count=1 ordered=SELECT/marker\nCHECKPOINT_COMMAND_PROBE_COUNT phase=replay category=SELECT/marker count=1\nCHECKPOINT_SEMANTICS firstPending=0 replayPending=0 markers=1 activityExecutions=1 bookmarks=1"
+      ]
+    },
+    "restored": {
+      "sha256": "70e873f10b37f4946258b3641aa4a43ea637c97689042aec044f7105863dfa0c",
+      "counters": {
+        "total": "2",
+        "executed": "2",
+        "passed": "2",
+        "failed": "0",
+        "error": "0",
+        "timeout": "0",
+        "aborted": "0",
+        "inconclusive": "0",
+        "passedButRunAborted": "0",
+        "notRunnable": "0",
+        "notExecuted": "0",
+        "disconnected": "0",
+        "warning": "0",
+        "completed": "0",
+        "inProgress": "0",
+        "pending": "0"
+      },
+      "failures": [],
+      "probes": [
+        "CHECKPOINT_COMMAND_PROBE phase=first-new count=6 ordered=SELECT/marker > SELECT/activity_execution > SELECT/bookmark > INSERT/activity_execution > INSERT/bookmark > INSERT/marker\nCHECKPOINT_COMMAND_PROBE_COUNT phase=first-new category=INSERT/activity_execution count=1\nCHECKPOINT_COMMAND_PROBE_COUNT phase=first-new category=INSERT/bookmark count=1\nCHECKPOINT_COMMAND_PROBE_COUNT phase=first-new category=INSERT/marker count=1\nCHECKPOINT_COMMAND_PROBE_COUNT phase=first-new category=SELECT/activity_execution count=1\nCHECKPOINT_COMMAND_PROBE_COUNT phase=first-new category=SELECT/bookmark count=1\nCHECKPOINT_COMMAND_PROBE_COUNT phase=first-new category=SELECT/marker count=1\nCHECKPOINT_COMMAND_PROBE phase=replay count=1 ordered=SELECT/marker\nCHECKPOINT_COMMAND_PROBE_COUNT phase=replay category=SELECT/marker count=1\nCHECKPOINT_SEMANTICS firstPending=0 replayPending=0 markers=1 activityExecutions=1 bookmarks=1"
+      ]
+    },
+    "restoredSourceSha256": "5632009e015024d85d561959951a68aaaea946c92c2807b1c3b313c78d21e8e9"
+  },
+  "limitations": [
+    "No PostgreSQL trial, physical round-trip count or timing gain.",
+    "Trial failure-path test stopped at its marker-order assertion; later rollback-state and retry assertions did not run. No durable partial-commit failure is established.",
+    "Restoration ran two focused checks, not the whole class again.",
+    "Historical checkpoint packet used a private instrumented b3f55bef32576011d39b93d664949a0cb705fb3b candidate; exact lease-call attribution and method outcomes remain unresolved."
+  ],
+  "artifacts": {
+    "checkpoint-access-probe-2026-10-07.patch": "4bd2935cdb8d1d5086d121ad7ff25815b2631559f4fb3843a90edfbf096b499b",
+    "checkpoint-single-save-trial-2026-10-07.patch": "04f13da0bf2f0e4fc020b4cf6cd1e17d6561866ac5fefb0faec11e787578932f"
+  },
+  "independentReview": {
+    "sha256": "656a0958b62e9be5480d983c1def106fcb688ce85416009481726badfc2130a6",
+    "outcome": "No essential missing check for the scoped rejection; retain provider and failed-assertion limits."
+  },
+  "patchFormat": "Zero-context unified patches; use git apply --unidiff-zero in a disposable worktree at sourceCommit."
+}

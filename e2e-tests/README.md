@@ -47,6 +47,28 @@ separately started server above. See "Running these tests" below for the rules.
 post-restart resume currently takes a precise `KNOWN ISSUE #1761` tracker branch for the pre-existing defect;
 see [the issue](https://github.com/elsa-workflows/elsa-foundation/issues/1761) and [the durability suite](durability/README.md).
 
+## Hosted Windows and Linux source journey
+
+`.github/workflows/backend-source-platform.yml` is a narrowly path-triggered and manually dispatchable
+check on `ubuntu-24.04` and `windows-2025`. It records the exact source revision, runner image, selected
+.NET 10.x SDK and PowerShell. Each job starts with empty job-scoped NuGet package, HTTP-cache and CLI-home
+paths, restores Workbench and the focused `WriteLineBoundInputExecutionTests` project in locked mode, then
+builds/tests with `--no-restore`. It does not restore a package cache or configure repository/environment
+secrets. Hosted images still include SDK library packs, so this is not a fresh bare-OS installation.
+
+The platform harness launches the already-built Workbench DLL from an isolated content root, then runs
+`Test-WorkflowFlow.ps1` as a child process with the documented Windows PowerShell 5.1 or Linux `pwsh`
+invocation. The smoke requires status `Completed`, exactly one completed `write-root` `WriteLine`, and both
+a reported incident count and returned incident collection of zero. The harness confirms the exact
+WriteLine text in its owned server stdout, stops only its owned PID, verifies that process exited and the
+port was released, then removes only its content root. Failure logs are retained for upload.
+
+This hosted path uses CI-owned locked restore and process control around the same project/test targets; it
+does not literally replay the contributor guide's ordinary build command or `dotnet run` / Ctrl+C sequence.
+It also does not perform the temporary source-edit exercise, prove a clean bare OS, or establish human
+Windows acceptance or a .NET support policy. Use the [backend source quickstart](../docs/contributing/backend-source-quickstart.md)
+for the interactive contributor route.
+
 ## Running these tests — READ THIS (agents included)
 
 > [!WARNING]
@@ -66,7 +88,8 @@ see [the issue](https://github.com/elsa-workflows/elsa-foundation/issues/1761) a
 >   deliberately no `-TakeOverPort` switch: no journey needs to replace a running server, because the owned
 >   server runs from its own temporary content root with its own SQLite files. To reuse a port, stop your
 >   server yourself.
-> - **Every other script only sends HTTP requests** to `-BaseUrl` (default `http://localhost:5095`).
+> - **The platform source harness also owns its server** and uses the same lifecycle helper and free-port rules.
+> - **Every other server-dependent script only sends HTTP requests** to `-BaseUrl` (default `http://localhost:5095`).
 > - **Do not add `Stop-Process`, `kill`, or a port lookup that feeds one, to a script.** Use
 >   `Start-OwnedElsaServer` / `Restart-OwnedElsaServer` / `Remove-OwnedElsaServer`. `Test-ServerLifecycleGuard.ps1`
 >   proves the refusal against a bystander listener and needs no server.
@@ -95,8 +118,9 @@ pwsh ./e2e-tests/runtime-alterations/Test-AlterationReplayAndRestart.ps1 -UseExt
 take no server argument and can run while yours is up:
 
 ```powershell
-# Start the server on 5295 instead of the launch profile's 5095 (separate terminal):
-#   dotnet run --project src/apps/Elsa.Workbench/Elsa.Workbench.csproj --no-launch-profile -- --urls http://localhost:5295 --environment Development
+# After building, start the server on 5295 instead of the launch profile's 5095 (separate terminal):
+#   dotnet run --no-build --project src/apps/Elsa.Workbench/Elsa.Workbench.csproj --no-launch-profile -- --urls http://localhost:5295 --environment Development
+# In another terminal, wait until http://localhost:5295/health/ready reports ready, then use the same $base for each script.
 $base = 'http://localhost:5295'
 $selfHosted = 'Test-RestartRecovery.ps1', 'Test-AlterationReplayAndRestart.ps1', 'Test-FileBasedDeployment.ps1',
               'Test-SharedPersistence.ps1', 'Test-SharedDiagnosticsPersistence.ps1', 'Test-ServerLifecycleGuard.ps1'
@@ -114,10 +138,11 @@ Docker. On Windows replace `pwsh -NoProfile -File` with `powershell -NoProfile -
 
 - **Windows runner:** use `powershell -NoProfile -ExecutionPolicy Bypass -File <script>`. This machine has **no
   `pwsh`**; the `.EXAMPLE` lines show `pwsh` only as cross-platform shorthand.
-- **Rebuild gotcha:** after rebuilding the server from newer source, **delete the SQLite DBs first**
-  (`elsa.db*`, `elsa-diagnostics.db*` under `src/apps/Elsa.Workbench/`; stop your own server
-  yourself first), then start the server, which migrates the schema from empty. Old rows carry an older
-  schema version a newer build refuses to read, which surfaces as spurious `500`s on publish.
+- **Rebuild gotcha:** after rebuilding the server from newer source, old SQLite data may be incompatible
+  with the new schema and cause errors such as `500` on publish. Stop your own server first. Reset only
+  disposable data, following the exact file inventory and allowlist in the [backend quickstart](../docs/contributing/backend-source-quickstart.md#reset-disposable-sqlite-data).
+  Preserve valuable workflows in their existing checkout and use a separate disposable checkout; do not
+  delete database files with a wildcard or treat this reset as an in-place data migration.
 - **Opt-in features:** `scheduling/` requires `ActivitiesScheduling` + `WorkflowsRuntimeScheduling` +
   `WorkflowsRuntimeRecurringTriggers` in `shells.json` (enabled by default since #1053); `DispatchWorkflow`/`bpmn`
   require the DispatchWorkflow features (see "Composition change" below). A suite whose features aren't composed
@@ -224,8 +249,10 @@ pwsh ./e2e-tests/Test-SequenceWorkflow.ps1 -Lines "one","two","three"
 pwsh ./e2e-tests/Test-HttpWorkflow.ps1 -Method GET
 ```
 
-Each prints step-by-step progress and the resulting instance (status + per-activity executions). On any
-failure it stops and prints the failing step, HTTP status, and the ProblemDetails body.
+Each prints step-by-step progress and the resulting instance (status + per-activity executions). The
+single-WriteLine `Test-WorkflowFlow.ps1` smoke exits unsuccessfully unless its one returned `write-root`
+WriteLine activity and workflow both completed with zero reported and returned incidents. On an HTTP
+failure, it prints the failing step, status and ProblemDetails body.
 
 ## Contract notes baked into the scripts (learned by testing)
 

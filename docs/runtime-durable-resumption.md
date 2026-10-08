@@ -346,6 +346,52 @@ unflushed segment after a crash. `MaxSegmentCheckpoints` (default 50, positive v
 memory window; lower values flush more frequently, while higher values favor write reduction. The Elsa.Workbench
 reference composition explicitly selects `Coalesced` with cap 50; other hosts remain `Immediate` unless configured.
 
+**A workflow can author its own cadence.** The design draft carries it under
+`state.strategyOptions.checkpointCadence`, which publication compiles into the immutable executable:
+
+```json
+"state": {
+  "strategyOptions": {
+    "checkpointCadence": {
+      "mode": "Coalesced",
+      "maxSegmentCheckpoints": 8
+    }
+  }
+}
+```
+
+`mode` accepts `Immediate` or `Coalesced`; an absent or empty mode inherits the host default. Authored `Immediate`
+overrides a Coalesced host. Authored `Coalesced` overrides the host cap when it supplies a positive
+`maxSegmentCheckpoints`; when that cap is absent, the host cap applies. A Coalesced authoring on an Immediate host
+resolves to Immediate because that host has no coalescing session. Mandatory boundaries still flush immediately.
+Changing authored cadence requires publishing a new workflow version so the executable contains the change; editing
+the draft alone does not alter a published executable.
+
+At run start, the runtime stamps the effective cadence onto that execution's persisted state and includes the segment
+cap for Coalesced runs; it carries the stamp forward as the state is rebuilt. Instance detail reports
+`checkpointCadence`, `maxSegmentCheckpoints`, and `inspectionGranularity` for the cadence that run used. To verify
+persistence across host reconfiguration, capture the
+`workflowExecutionId` and these fields from a completed run, restart the host against the same database with a
+different host mode or cap, then issue the authenticated
+`GET /runtime/workflows/instances/{workflowExecutionId}` for that same ID. The three fields should still describe
+the original run; a new run with no authored cadence should resolve from the reconfigured host. The existing
+`e2e-tests/http/Capture-RuntimeDbPaging2392Reference.ps1` fixture prints the execution ID and performs the initial
+detail read. Its optional `-AuthoredCadence` and `-AuthoredMaxSegmentCheckpoints` inputs exercise the published
+authoring contract, while `-ExpectedMaxSegmentCheckpoints` checks an explicit effective cap. When the expected cadence
+is Coalesced and this parameter is omitted, an explicit authored cap becomes the expectation; otherwise it defaults
+to 50. When testing host-cap fallback on a Coalesced host with a cap other than 50, pass that host cap explicitly
+with `-ExpectedMaxSegmentCheckpoints`. Immediate expects a null cap. With no new parameters, the fixture keeps its existing Coalesced/50 expectation
+and no authored override. This #2392 SetVariable intrinsic reference remains representative and is not equivalent to
+the historical custom CLR transform.
+
+The [T09 normal-host verification](reports/runtime-db-access/cadence-verification.md) records six cadence cases,
+same-execution readback across host reconfiguration, and bookmark/incident persistence across a real process restart.
+
+For SQL diagnostics, temporarily set `Logging__LogLevel__Microsoft.EntityFrameworkCore.Database.Command=Information`, retain
+structured logs with scopes and UTC timestamps, and inspect EF command event 20101. Keep sensitive-data logging disabled. This counts command executions;
+it does not by itself count individual SQL statements. Keep diagnostic runs separate from timing runs, which use
+`Logging__LogLevel__Microsoft.EntityFrameworkCore.Database.Command=Warning`, then restore the host's normal logging configuration.
+
 **Governing invariant — the durable scheduler queue never advances past the last flushed state.** Within a
 coalesced segment, intra-drain checkpoints are buffered in an ambient in-memory working set (an overlay over
 the real state stores, scheduler queue, and outbox). The segment-entry work item is **only** dequeued from the
@@ -368,6 +414,25 @@ per-drain memo of the **durable baseline** (never the buffered state, which woul
 bytes), invalidated at every durable flush. `CoalescingRuntimeCheckpointPersistenceOptions.CoalesceInspectionReads`
 (default on) disables it back to per-hop durable reads.
 
+**Durable-value page reuse** (spec 197) avoids repeated reads of unchanged provider pages within one eligible
+Coalesced drain. `WorkflowsRuntimeCheckpointPersistence.CoalesceDurableValueReads` defaults to `true`; set it to
+`false` to compare the same checkpoint cadence without page reuse. This switch is independent of
+`CoalesceInspectionReads` and does not enable Coalesced mode on an Immediate host.
+
+Reuse requires an unambiguous first-party EF backend that still owns its effective registrations, the shared
+singleton built-in HMAC continuation codec, and the same live ordinary persistence scope. Unsupported, custom,
+overridden or ambiguous compositions fall back to provider reads. Each exact page request is keyed by workflow,
+query, continuation, scope and codec identity. The provider page is detached, and each logical read merges the
+current staged changes again. `FindAsync` is unchanged.
+
+Each drain retains at most 32 pages, 1,024 rows and 4 MiB of accounted content; these are retention limits, not
+exact heap-size or aggregate host-memory guarantees. Exceeding a limit preserves complete provider results and
+disables admission until a successful write boundary/reset. Actual checkpoint and direct durable-value writes
+fence reuse before and after the write. Failed or canceled writes, nested ownership, disposal and drain
+cancellation permanently disable that session's memo. The memo belongs to its drain and is never persisted. Page reuse does not
+weaken checkpoint durability or promise that every workflow issues fewer queries. The [verification evidence](../specs/197-bounded-durable-value-page-reuse/evidence/integration-verification.md)
+separates the measured EF fixture reduction from live correctness and outstanding delivery gates.
+
 **Flush boundaries — mandatory checkpoints are never coalesced away.** The policy forces an immediate flush at
 every durability-critical boundary: `WorkflowSuspended`, `WorkflowCompleted`, `WorkflowFaulted`,
 `WorkflowCancelled`, `IncidentRecorded`, `ActivitySuspended`, `ActivityCancelled`, and `BookmarkCreated`. A
@@ -378,8 +443,9 @@ boundary-forced flush is **complete** (condition C): it atomically persists the 
 checkpoint itself + any remaining unconsumed in-memory queue items (durably re-enqueued) + undelivered outbox
 intents. Nothing buffered is lost at a boundary.
 
-**Segment cap.** `CoalescingRuntimeCheckpointPersistenceOptions.MaxSegmentCheckpoints` (default 50) bounds a
-segment: once the buffered checkpoint count reaches the cap, an intermediate fold-and-flush is forced and a
+**Segment cap.** `CoalescingRuntimeCheckpointPersistenceOptions.MaxSegmentCheckpoints` (default 50) counts buffered
+checkpoint records, not activities, nodes, or activity executions. It bounds a segment: once the buffered checkpoint
+count reaches the cap, an intermediate fold-and-flush is forced and a
 **fresh segment starts** (like a durable attempt boundary), so a replayable hot loop longer than the cap keeps
 coalescing at one durable commit per cap-sized window instead of degrading to per-checkpoint persistence for the
 remainder of the drain (ADR 0032's segment-cap follow-up). The cap's purpose is unchanged: it bounds both replay

@@ -31,6 +31,9 @@ CI publishes two images to Docker Hub — **`elsaworkflows/elsa-workbench`** and
 `sha-<short-commit>`. There are no `4` / `4.0` / `4.0.0` release tags yet — Elsa 4 is pre-release.
 Run the whole stack straight from these images.
 
+For a pinned, isolated check that Studio can create and run a workflow against Workbench, see
+[Verify the published Studio–Workbench pair](../../docs/contributing/published-image-pair.md).
+
 > **Persistence is ephemeral here.** The server image's baked-in default composition is **SQLite**
 > (written under `/app`), which is discarded when the `elsa-workbench` container is removed. For
 > durable, Postgres-backed persistence, use the build-from-source reference stack in sections 2–3

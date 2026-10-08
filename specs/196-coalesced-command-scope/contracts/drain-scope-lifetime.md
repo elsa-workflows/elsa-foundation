@@ -1,0 +1,3 @@
+# Drain Factory Lifetime Contract
+
+Public interface/method signatures remain unchanged. Default registration is scoped: repeated resolution in one command scope returns the same factory; independent command scopes return distinct default factories and independently scoped persistence collaborators. Coalesced registration is idempotent. A pre-registered custom factory is preserved by TryAdd semantics and retains the integrator's supplied lifetime contract. Session/cadence/flush/fence/checkpoint/outbox behavior is unchanged; scope validation is a test control, not a new global configuration policy.

@@ -22,6 +22,8 @@
       "src/essentials/Api/Capabilities/Elsa.Api.Capabilities.csproj",
       "src/essentials/Attention/Core/Elsa.Attention.Core.csproj",
       "src/essentials/Caching/Core/Elsa.Caching.Core.csproj",
+      "src/essentials/Cli/Elsa.Cli.csproj",
+      "src/essentials/Cli/Worker/Elsa.Cli.Worker.csproj",
       "src/essentials/Cluster/Core/Elsa.Cluster.Core.csproj",
       "src/essentials/Cluster/InProcess/Elsa.Cluster.InProcess.csproj",
       "src/essentials/Cluster/Readability/Elsa.Cluster.Readability.csproj",

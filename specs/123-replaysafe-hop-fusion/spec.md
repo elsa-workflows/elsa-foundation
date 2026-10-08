@@ -2,6 +2,7 @@
 
 **Feature Branch**: `worktree-agent-a9886080ad6b0451b`
 **Created**: 2026-07-22
+**Status**: Implemented — original D1/D2 delivery; corrective #2497 delivery gates are tracked below.
 **Program**: Runtime Execution Seam
 **ADR**: [ADR 0047](../../docs/adr/0047-replaysafe-activities-execute-as-fused-hops-with-precomputed-routing.md) — **Decisions D1 + D2** (D3 shipped as [spec 119](../119-publish-time-routing-tables/spec.md); D4 stays deferred)
 **Extends**: [ADR 0031](../../docs/adr/0031-runtime-burst-execution-sticky-single-writer-drain-with-in-process-fast-path.md) (burst/locality), [ADR 0032](../../docs/adr/0032-runtime-checkpoint-cadence-is-policy-driven-per-workflow.md) (R2 ReplaySafe claim relaxation, cadence), [ADR 0020](../../docs/adr/0020-runtime-checkpoint-commit-post-commit-work.md) (post-commit intents release only after durable commit)
@@ -225,3 +226,22 @@ behavior, so it can never silently become a correctness dependency and rolls bac
   (register options); benchmark A/B methods.
 - Docs: ADR 0047 Follow-up; ADR 0031 cross-reference note; spec-095 FR amendment.
 - Tests: `ReplaySafeFusionGuardrailTests`, `ReplaySafeFusionCrashConvergenceTests`, seam tests.
+
+## Corrective follow-up #2497 — durable cuts inside fused spans
+
+**Review checkpoint (8 October 2026): review corrections in progress; prior pinned recovery evidence retained, final gates reopened.** Owned by [Runtime Database Access](../../docs/program-goals/runtime-db-access.md), Program #2382 / Bug [#2497](https://github.com/elsa-workflows/elsa-foundation/issues/2497). The historical shipped evidence above did not cover the cap-fold cut now reproduced with current EF persistence. This restores FR-006; it does not add a new public recovery contract or relax FR-009. The [corrective evidence](evidence/cap-recovery.md) records source identities, retained failures and the remaining gates.
+
+An EF/SQLite persisted-interruption test captured ActivityStarted / Running and its input snapshot at cap 2, without durable scheduler or pending outbox work. The uninterrupted generation completed with fusion engaged; ordinary fresh-provider resumption over the captured database remained Running. Source review additionally found a window between the inner checkpoint write and eventual queue seeding, and a nested-D2 violation of count-based FIFO advancement. The corrective evidence now includes both inner-store-return and decorator-return cuts, unchanged-main missing-anchor controls, and a provider-order red/green regression.
+
+- **CR-001:** Register each unchanged original fused Schedule work item in memory before its ActivityScheduled checkpoint, including nested D2 items consumed without an ordinary queue claim. Scope registration to the owning session/span; registration alone performs no store operation.
+- **CR-002:** Before a continuing durable write (cap fold or the existing eligible ActivityAttemptClaimed boundary), persist every necessary active original Schedule anchor idempotently through the inner queue. Complete this before the inner checkpoint write. Do not advance or delete queue state during that preparation. An anchor failure prevents the checkpoint; successful partial preparation or a later checkpoint failure must retain recoverable anchors.
+- **CR-003:** Protect active anchors at continuing boundaries and remove only known, consumed work-item identities after their effects commit. Listing order is not a dequeue contract. Concurrent outbox delivery may add durable work; preserve unrelated/unconsumed additions and reconcile known consumed deliveries without rejecting the whole queue. Never remove work merely because its identity is absent from the overlay.
+- **CR-004:** Redelivery of a Running typed ReplaySafe execution uses its committed input snapshot and existing deterministic Start-to-Invoke path. Scheduled behavior remains; External/unmarked, cancelled and terminal paths retain their current guarantees. Fusable intrinsics need Schedule anchoring but no invented Running stage.
+- **CR-005:** Non-continuing boundaries retain the existing atomic state/outbox guarantee and add no new anchor write. Successful terminal/quiescent execution removes retained anchors and stale consumed rows through a named, verified cleanup path, including D2 consumption after session deactivation.
+- **CR-006:** Under-cap fused spans without a mid-span durable write add no per-span queue writes. Preserve fusion engagement, the existing wire contract, pinned interpretation, defaults, fencing and partition isolation. Record additional access at required durable cuts rather than hiding it as free.
+- **CR-007:** Verify pre-inner and post-inner/decorator cuts, cap-1 attempt and cap-2 Started boundaries, cap-on-Schedule typed/intrinsic cases, nested D2 with more than one successor, failures/cancellation, and final cleanup. Recovery uses an independently captured durable image, fresh provider and normal resumption after owner expiry, without manually injecting work.
+- **CR-008:** Accept only after the changed runtime and provider suites, applicable fusion/External controls, relevant backend e2e, architecture/maps, independent/root review, PR checks and resulting-main gates pass. A snapshot test remains persisted-interruption evidence; do not relabel it an OS-process-kill test.
+
+- **CR-009:** Require advertised identity-targeted deletion before enabling the coalescing working set. Shipped providers and decorators must expose the capability. Legacy providers without it keep immediate durable writes, with no deferred decision escaping to an unsupported store. Verify that fallback and in-memory/EF concurrent-delivery cases.
+
+This correction is independently deliverable from Spec198's conditional response annotation. It introduces internal write-order and queue-lifetime enforcement of the existing redrive guarantee, not a generic recovery service or a new durable command kind. Final access reductions remain Program #2382's measured obligation.

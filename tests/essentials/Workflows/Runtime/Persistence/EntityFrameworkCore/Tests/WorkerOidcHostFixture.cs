@@ -23,6 +23,7 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests;
 /// </summary>
 internal sealed class WorkerOidcHostFixture : IAsyncDisposable
 {
+    public const string RequestOperationIdHeader = "X-Worker-Oidc-Fixture-Operation";
     public const string TenantId = "worker-tenant-acme";
     public const string ProviderId = "worker-issuer";
     public const string Audience = "worker-api";
@@ -52,18 +53,36 @@ internal sealed class WorkerOidcHostFixture : IAsyncDisposable
 
     public string IamDatabasePath => Path.Combine(_root, "iam.db");
 
+    public WorkerProfileCandidate PrimaryCandidate { get; private set; } = null!;
+
+    public WorkerProfileCandidate? ControlCandidate { get; private set; }
+
     public static async Task<WorkerOidcHostFixture> CreateAsync()
     {
         var root = Path.Combine(Path.GetTempPath(), $"elsa-worker-oidc-{Guid.NewGuid():N}");
         Directory.CreateDirectory(root);
         Directory.CreateDirectory(Path.Combine(root, "locks"));
+        WorkerOidcIssuer? issuer = null;
+        WorkerOidcHostFixture? fixture = null;
         try
         {
-            return new WorkerOidcHostFixture(root, await WorkerOidcIssuer.StartAsync());
+            issuer = await WorkerOidcIssuer.StartAsync();
+            fixture = new WorkerOidcHostFixture(root, issuer);
+            fixture.PrimaryCandidate = await WorkerProfileCandidate.CreatePrimaryAsync(
+                root, issuer.Authority, fixture.RuntimeDatabasePath, fixture.IamDatabasePath, Path.Combine(root, "locks"));
+            return fixture;
         }
         catch
         {
-            Directory.Delete(root, recursive: true);
+            if (fixture is not null)
+                await fixture.DisposeAsync();
+            else
+            {
+                if (issuer is not null)
+                    await issuer.DisposeAsync();
+                if (Directory.Exists(root))
+                    Directory.Delete(root, recursive: true);
+            }
             throw;
         }
     }
@@ -79,18 +98,27 @@ internal sealed class WorkerOidcHostFixture : IAsyncDisposable
 
     public string TamperSignature(string token) => _issuer.TamperSignature(token);
 
-    public async Task<WorkerOidcHostProcess> StartHostAsync(string? persistenceScope = null)
+    public async Task<WorkerProfileCandidate> CreateControlCandidateAsync()
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
+        if (ControlCandidate is not null)
+            return ControlCandidate;
+        ControlCandidate = await PrimaryCandidate.CreateControlAsync(
+            _root, Authority, RuntimeDatabasePath, IamDatabasePath, Path.Combine(_root, "locks"));
+        return ControlCandidate;
+    }
+
+    public async Task<WorkerOidcHostProcess> StartHostAsync(
+        WorkerProfileCandidate? candidate = null,
+        string? persistenceScope = null)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        candidate ??= PrimaryCandidate;
         var startup = new WorkerOidcHostStartup(
-            Authority,
-            Audience,
-            ProviderId,
-            TenantId,
-            persistenceScope ?? TenantId,
-            IamDatabasePath,
-            RuntimeDatabasePath,
-            Path.Combine(_root, "locks"));
+            candidate.CandidateDirectory,
+            candidate.ShellId,
+            candidate.Environment,
+            persistenceScope ?? TenantId);
         var assemblyPath = WorkerHostAssemblyPath();
         var artifactSha256 = await HashFileSha256Async(assemblyPath);
         var process = await WorkerOidcHostProcess.StartAsync(
@@ -195,14 +223,10 @@ internal sealed class WorkerOidcHostFixture : IAsyncDisposable
 }
 
 internal sealed record WorkerOidcHostStartup(
-    string Authority,
-    string Audience,
-    string ProviderId,
-    string TenantId,
-    string PersistenceScope,
-    string IamDatabasePath,
-    string RuntimeDatabasePath,
-    string LocksDirectory);
+    string CandidateDirectory,
+    string ShellId,
+    string Environment,
+    string PersistenceScope);
 
 internal sealed class WorkerOidcHostProcess : IAsyncDisposable
 {
@@ -293,6 +317,15 @@ internal sealed class WorkerOidcHostProcess : IAsyncDisposable
 
     public async Task<JsonElement> ControlAsync(string command, object? payload = null)
     {
+        var receipt = await ControlWithReceiptAsync(command, payload);
+        return receipt.Data;
+    }
+
+    public async Task<WorkerOidcControlReceipt> ControlWithReceiptAsync(
+        string command,
+        object? payload = null,
+        bool resetEpochAfterOperationEntry = false)
+    {
         ObjectDisposedException.ThrowIf(_disposed, this);
         await _controlGate.WaitAsync();
         try
@@ -300,14 +333,20 @@ internal sealed class WorkerOidcHostProcess : IAsyncDisposable
             await _process.StandardInput.WriteLineAsync(JsonSerializer.Serialize(new
             {
                 command,
-                payload = payload ?? new { }
+                payload = payload ?? new { },
+                resetEpochAfterOperationEntry
             }, _jsonOptions));
             await _process.StandardInput.FlushAsync();
             var line = await _process.StandardOutput.ReadLineAsync().WaitAsync(ControlTimeout);
             var reply = line is null ? null : JsonSerializer.Deserialize<WorkerOidcHostReply>(line, _jsonOptions);
             if (reply?.Status != "ok")
                 throw new InvalidOperationException($"The Worker OIDC fixture control failed ({reply?.Code ?? "no-receipt"}).");
-            return reply.Data.Clone();
+            return new WorkerOidcControlReceipt(
+                reply.OperationId ?? throw new InvalidOperationException("The Worker OIDC fixture control omitted its operation ID."),
+                reply.OperationKind ?? throw new InvalidOperationException("The Worker OIDC fixture control omitted its operation kind."),
+                reply.OperationCategory ?? throw new InvalidOperationException("The Worker OIDC fixture control omitted its operation category."),
+                reply.OperationEpoch ?? throw new InvalidOperationException("The Worker OIDC fixture control omitted its operation epoch."),
+                reply.Data.Clone());
         }
         finally
         {
@@ -382,7 +421,18 @@ internal sealed record WorkerOidcHostReply(
     JsonElement Data,
     string? ArtifactSha256,
     string? Stage,
-    string? ExceptionType);
+    string? ExceptionType,
+    string? OperationId = null,
+    string? OperationKind = null,
+    string? OperationCategory = null,
+    long? OperationEpoch = null);
+
+internal sealed record WorkerOidcControlReceipt(
+    string OperationId,
+    string OperationKind,
+    string OperationCategory,
+    long OperationEpoch,
+    JsonElement Data);
 
 internal sealed class WorkerOidcIssuer : IAsyncDisposable
 {
