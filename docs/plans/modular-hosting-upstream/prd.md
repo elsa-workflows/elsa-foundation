@@ -22,6 +22,7 @@ Publish preview CShells primitives that let a host explicitly share a selected s
 6. **Startup behavior.** Any generic startup/retry/readiness primitive must be opt-in/configurable and must leave Elsa's health contracts and retry/refusal policy in Elsa adapters. Do not duplicate existing host behavior without an explicit upstream boundary and integration proof.
 7. **Safe store pruning.** M3 cannot become ready until a bounded spike demonstrates, with concurrent and failure scenarios, that an unreferenced package is not needed by active shells, shell builds using an older catalog snapshot, sibling package graphs, or last-known-good recovery. Define lock ordering and revalidation at deletion time. If proof cannot be made, defer pruning and use a documented diagnostic/restart path.
 8. **Preview lifecycle.** Publish preview package versions through existing owner-repository workflows, consume their exact identities in Foundation, and run the host proof. Do not create a stable release tag or deploy production as part of this program.
+9. **Candidate generation protection.** Provide generic lifecycle evidence early enough to protect the catalog used by a shell before its first initializer, through failure, promotion, drain and disposal. Adopt Foundation #2164 for the Elsa integration; a post-build generation property or post-refresh event alone must not be represented as closing that race.
 
 ## Success measures
 

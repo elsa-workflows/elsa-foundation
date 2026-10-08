@@ -12,6 +12,8 @@ Program issue: [#2500](https://github.com/elsa-workflows/elsa-foundation/issues/
 
 Native parent relations connect this hierarchy. Native dependencies block integration on ownership/catalog, and final qualification on integration, activation and safe pruning. Later tasks are refined after their contracts stabilize. Related #2354/#2362 remain with their existing program and claims; they are not duplicate child work here.
 
+[CShells #145](https://github.com/valence-works/cshells/issues/145) also belongs to the shell-infrastructure Epic: it owns the generic catalog/build lifetime prerequisite for adopted [Foundation #2164](https://github.com/elsa-workflows/elsa-foundation/issues/2164), under qualification #2509. Its bounded design gate must resolve synchronization before it becomes implementation-ready. A post-commit notification alone cannot protect a candidate that selected the old catalog before reaching its first initializer.
+
 ## M0 — ownership and API design
 
 Record the CShells API and ownership model before coding. Reconcile the exact descriptor/`IEnumerable<T>` behavior, root disposal ownership, committed catalog notification timing, cancellation, and overlapping-generation semantics. Inspect the current upstream issue/PR state before claiming work. No implementation, review, or publication is claimed by these drafts.
@@ -32,6 +34,7 @@ Implement explicit host-owned service descriptors and committed catalog notifica
 - Multiple registrations and `IEnumerable<T>` preserve descriptor order and multiplicity for the selected unkeyed singleton set; unselected service types remain provider-local.
 - Exercise overlapping reload: old generation drains after the next generation starts; neither lifetime is truncated and neither shell can dispose root-owned services.
 - Catalog refresh emits one committed-snapshot notification after commit; cancellation/failure emits no success notification; subscribers can read the announced generation without polling.
+- A deterministic race holds a candidate before its first initializer while a new catalog commits and other old pins release. The candidate's exact old snapshot stays protected until build failure/cancellation or actual shell disposal. Verify successful promotion and overlapping drain, and define callback ordering without arbitrary subscriber work under a catalog lock.
 - Run focused CShells tests, full required owner-repository gates, exact-head review, publish the preview, and record a consumer identity plus the executable overlapping-generation proof. No result is implied here.
 
 ## M2 — integration, startup/readiness boundary, and Foundation adoption

@@ -10,7 +10,7 @@ Use the canonical [framework glossary](../glossary/root.md) and [Elsa glossary](
 
 ## Milestones
 
-- **M1 — CShells primitives:** explicit host-owned singleton sharing, sole disposal ownership, and notifications after a feature catalog snapshot commits. Prove behavior across overlapping shell generations, reload, and teardown.
+- **M1 — CShells primitives:** explicit host-owned singleton sharing, sole disposal ownership, notifications after a feature catalog snapshot commits, and catalog protection from shell build start through disposal. Prove behavior across overlapping shell generations, reload, and teardown.
 - **M2 — optional integration and host adoption:** adopt Foundation issue [#2314](https://github.com/elsa-workflows/elsa-foundation/issues/2314) for one Nuplane observer/provider implementation in optional `CShells.Nuplane`, with Elsa policy adapters kept in `Elsa.Modularity.Nuplane`. Preserve per-host reload defaults and show package delivery through shell promotion and recovery. Deliver configurable generic startup/retry/readiness support with Elsa policy adapters.
 - **M3 — Nuplane pruning:** blocked from readiness until the bounded store-safety spike in the [roadmap](../plans/modular-hosting-upstream/roadmap.md) proves safe deletion under lock, LKG, in-use package graphs, and concurrent hosts. A lock by itself is insufficient.
 - **M4 — Foundation adoption:** consume preview packages, remove superseded local helpers where appropriate, and prove existing behavior, architecture, package, integration, and resulting-main gates.
