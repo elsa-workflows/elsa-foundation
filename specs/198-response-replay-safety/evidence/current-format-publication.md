@@ -63,6 +63,7 @@ and committed response body. Root inspected the actual TRX (SHA-256
 receipt; independent review found no material fixture handoff issue. This completes #2515's
 current-format integration handoff.
 
-The candidate declaration remains External. This establishes a current-format baseline,
-not ReplaySafe classification acceptance, matched query counts, latency, crash recovery
-on the final candidate or completion of #2400.
+At capture and handoff the declaration was External. This establishes a current-format
+baseline, not ReplaySafe classification acceptance, matched query counts, latency, crash
+recovery on the final candidate or completion of #2400. The subsequent conditional
+declaration and its proof remain owned by the current #2400 task checkpoint.
