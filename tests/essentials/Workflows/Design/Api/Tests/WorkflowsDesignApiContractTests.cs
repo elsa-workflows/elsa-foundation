@@ -47,6 +47,41 @@ namespace Elsa.Workflows.Design.Api.Tests;
 
 public sealed class WorkflowsDesignApiContractTests
 {
+    private const string EnumContractBody = """
+        {
+          "operationKey": "enum-contract",
+          "name": "Enum contract",
+          "state": {
+            "rootActivity": {
+              "nodeId": "root",
+              "activityVersionId": "activity-version",
+              "inputs": [
+                {
+                  "referenceKey": "input",
+                  "value": { "value": "value" },
+                  "conversion": { "mode": "json" }
+                }
+              ],
+              "outputs": [],
+              "intrinsic": {
+                "kind": "setOutput",
+                "valueType": { "alias": "String", "collectionKind": "single" }
+              }
+            },
+            "outputs": [
+              {
+                "referenceKey": "output",
+                "name": "Output",
+                "type": { "alias": "String", "collectionKind": "single" },
+                "displayName": "Output",
+                "isNullable": false,
+                "sourceRepresentation": "textValue"
+              }
+            ]
+          }
+        }
+        """;
+
     [Fact]
     public void Mapper_registers_exactly_the_27_owned_operations_with_stable_metadata()
     {
@@ -339,40 +374,7 @@ public sealed class WorkflowsDesignApiContractTests
     public async Task Submit_binds_and_writes_the_schema_enum_contract()
     {
         await using var host = await AuthorizationHost.StartAsync();
-        const string body = """
-            {
-              "operationKey": "enum-contract",
-              "name": "Enum contract",
-              "state": {
-                "rootActivity": {
-                  "nodeId": "root",
-                  "activityVersionId": "activity-version",
-                  "inputs": [
-                    {
-                      "referenceKey": "input",
-                      "value": { "value": "value" },
-                      "conversion": { "mode": "json" }
-                    }
-                  ],
-                  "outputs": [],
-                  "intrinsic": {
-                    "kind": "setOutput",
-                    "valueType": { "alias": "String", "collectionKind": "single" }
-                  }
-                },
-                "outputs": [
-                  {
-                    "referenceKey": "output",
-                    "name": "Output",
-                    "type": { "alias": "String", "collectionKind": "single" },
-                    "displayName": "Output",
-                    "isNullable": false,
-                    "sourceRepresentation": "textValue"
-                  }
-                ]
-              }
-            }
-            """;
+        var body = EnumContractBody;
 
         using var request = LifecycleRequest(HttpMethod.Post, "/design/workflows/definitions/submit", body);
         using var response = await host.Client.SendAsync(request);
@@ -403,6 +405,37 @@ public sealed class WorkflowsDesignApiContractTests
         using var studioResponse = await host.Client.SendAsync(studioRequest);
 
         Assert.True(studioResponse.IsSuccessStatusCode, await studioResponse.Content.ReadAsStringAsync());
+    }
+
+    [Theory]
+    [InlineData("\"kind\": \"setOutput\"", "\"kind\": \"not-a-kind\"")]
+    [InlineData("\"mode\": \"json\"", "\"mode\": \"not-a-mode\"")]
+    public async Task Submit_rejects_invalid_enum_values_before_dispatch(string expected, string replacement)
+    {
+        await using var host = await AuthorizationHost.StartAsync();
+        var body = EnumContractBody.Replace(expected, replacement, StringComparison.Ordinal);
+        using var request = LifecycleRequest(HttpMethod.Post, "/design/workflows/definitions/submit", body);
+
+        using var response = await host.Client.SendAsync(request);
+
+        await AssertWorkflowDesignProblemAsync(response, HttpStatusCode.BadRequest);
+        Assert.Null(host.Domain.LastSubmittedState);
+    }
+
+    [Fact]
+    public async Task Submit_denies_an_unauthorized_identity_before_dispatch()
+    {
+        await using var host = await AuthorizationHost.StartAsync();
+        using var request = LifecycleRequest(HttpMethod.Post, "/design/workflows/definitions/submit", EnumContractBody);
+        request.Headers.Remove(AuthorizationHost.IdentityHeader);
+        request.Headers.TryAddWithoutValidation(AuthorizationHost.IdentityHeader, "trusted-denied");
+
+        using var response = await host.Client.SendAsync(request);
+
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+        Assert.Null(response.Content.Headers.ContentType);
+        Assert.Empty(await response.Content.ReadAsByteArrayAsync());
+        Assert.Null(host.Domain.LastSubmittedState);
     }
 
     [Fact]
@@ -545,6 +578,18 @@ public sealed class WorkflowsDesignApiContractTests
         };
         request.Headers.TryAddWithoutValidation(AuthorizationHost.IdentityHeader, "trusted-manage");
         return request;
+    }
+
+    private static async Task AssertWorkflowDesignProblemAsync(HttpResponseMessage response, HttpStatusCode expectedStatus)
+    {
+        Assert.Equal(expectedStatus, response.StatusCode);
+        Assert.Equal("application/problem+json", response.Content.Headers.ContentType?.MediaType);
+
+        using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        var problem = document.RootElement;
+        Assert.Equal((int)expectedStatus, problem.GetProperty("statusCode").GetInt32());
+        Assert.Equal("One or more errors occurred!", problem.GetProperty("message").GetString());
+        Assert.True(problem.GetProperty("errors").EnumerateObject().Any());
     }
 
     internal sealed class AuthorizationHost(IHost host) : IAsyncDisposable
