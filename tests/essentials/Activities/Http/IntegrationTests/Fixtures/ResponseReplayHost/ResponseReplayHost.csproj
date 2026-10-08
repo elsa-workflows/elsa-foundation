@@ -6,6 +6,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <PackageReference Include="CShells.AspNetCore" />
     <PackageReference Include="Microsoft.AspNetCore.TestHost" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" />
   </ItemGroup>
@@ -16,19 +17,41 @@
 
   <ItemGroup>
     <ProjectReference Include="../../../../../../../src/essentials/Activities/Http/Elsa.Activities.Http.csproj" />
+    <ProjectReference Include="../../../../../../../src/essentials/Activities/Design/Api/Elsa.Activities.Design.Api.csproj" />
+    <ProjectReference Include="../../../../../../../src/essentials/Activities/Design/Persistence/EntityFrameworkCore/Elsa.Activities.Design.Persistence.EntityFrameworkCore.csproj" />
+    <ProjectReference Include="../../../../../../../src/essentials/Activities/Design/Reconciliation/Elsa.Activities.Design.Reconciliation.csproj" />
+    <ProjectReference Include="../../../../../../../src/essentials/Activities/Design/Reconciliation/Clr/Elsa.Activities.Design.Reconciliation.Clr.csproj" />
     <ProjectReference Include="../../../../../../../src/essentials/Activities/Runtime/Elsa.Activities.Runtime.csproj" />
     <ProjectReference Include="../../../../../../../src/essentials/Activities/Runtime/Core/Elsa.Activities.Runtime.Core.csproj" />
     <ProjectReference Include="../../../../../../../src/essentials/Activities/Primitives/Elsa.Activities.Primitives.csproj" />
     <ProjectReference Include="../../../../../../../src/essentials/Activities/Sequence/Elsa.Activities.Sequence.csproj" />
     <ProjectReference Include="../../../../../../../tests/essentials/Activities/Testing/Elsa.Activities.Testing.csproj" />
     <ProjectReference Include="../../../../../../../src/essentials/Events/Elsa.Events.csproj" />
+    <ProjectReference Include="../../../../../../../src/essentials/Api/Capabilities/Elsa.Api.Capabilities.csproj" />
+    <ProjectReference Include="../../../../../../../src/essentials/Caching/Memory/Elsa.Caching.Memory.csproj" />
     <ProjectReference Include="../../../../../../../src/essentials/Expressions/Elsa.Expressions.csproj" />
     <ProjectReference Include="../../../../../../../src/essentials/Expressions/JavaScript/Elsa.Expressions.JavaScript.csproj" />
     <ProjectReference Include="../../../../../../../src/essentials/Expressions/JavaScript/Jint/Elsa.Expressions.JavaScript.Jint.csproj" />
+    <ProjectReference Include="../../../../../../../src/essentials/Expressions/JavaScript/Rendering/Elsa.Expressions.JavaScript.Rendering.csproj" />
     <ProjectReference Include="../../../../../../../src/essentials/Http/Elsa.Http.csproj" />
+    <ProjectReference Include="../../../../../../../src/essentials/Http/Core/Elsa.Http.Core.csproj" />
+    <ProjectReference Include="../../../../../../../src/essentials/Locking/FileSystem/Elsa.Locking.FileSystem.csproj" />
+    <ProjectReference Include="../../../../../../../src/essentials/Mediator/Elsa.Mediator.csproj" />
     <ProjectReference Include="../../../../../../../src/essentials/Primitives/Primitives/Elsa.Primitives.csproj" />
+    <ProjectReference Include="../../../../../../../src/essentials/Primitives/Hosting/Elsa.Primitives.Hosting.csproj" />
     <ProjectReference Include="../../../../../../../src/essentials/Serialization/SystemText/Elsa.Serialization.SystemText.csproj" />
+    <ProjectReference Include="../../../../../../../src/essentials/Tasks/Elsa.Tasks.csproj" />
+    <ProjectReference Include="../../../../../../../src/essentials/Foundation/Identity/Elsa.Foundation.Identity.csproj" />
+    <ProjectReference Include="../../../../../../../src/essentials/Workflows/Design/JavaScript/Elsa.Workflows.Design.JavaScript.csproj" />
+    <ProjectReference Include="../../../../../../../src/essentials/Workflows/Design/Api/Elsa.Workflows.Design.Api.csproj" />
+    <ProjectReference Include="../../../../../../../src/essentials/Workflows/Design/Persistence/EntityFrameworkCore/Elsa.Workflows.Design.Persistence.EntityFrameworkCore.csproj" />
+    <ProjectReference Include="../../../../../../../src/essentials/Workflows/Design/Validations/Elsa.Workflows.Design.Validations.csproj" />
+    <ProjectReference Include="../../../../../../../src/essentials/Workflows/Publishing/Elsa.Workflows.Publishing.csproj" />
+    <ProjectReference Include="../../../../../../../src/essentials/Workflows/Publishing/Api/Elsa.Workflows.Publishing.Api.csproj" />
+    <ProjectReference Include="../../../../../../../src/essentials/Workflows/Publishing/Persistence/EntityFrameworkCore/Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore.csproj" />
     <ProjectReference Include="../../../../../../../src/essentials/Workflows/Runtime/Api/Elsa.Workflows.Runtime.Api.csproj" />
+    <ProjectReference Include="../../../../../../../src/essentials/Workflows/Runtime/Resumption/Elsa.Workflows.Runtime.Resumption.csproj" />
+    <ProjectReference Include="../../../../../../../src/essentials/Workflows/Runtime/JavaScript/Elsa.Workflows.Runtime.JavaScript.csproj" />
     <ProjectReference Include="../../../../../../../src/essentials/Workflows/Runtime/Http/Elsa.Workflows.Runtime.Http.csproj" />
     <ProjectReference Include="../../../../../../../src/essentials/Workflows/Runtime/Persistence/EntityFrameworkCore/Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.csproj" />
     <ProjectReference Include="../../../../../../../src/essentials/Workflows/Runtime/Reconciliation/Elsa.Workflows.Runtime.Reconciliation.csproj" />

@@ -45,9 +45,24 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
 
+if (args.Length == 4 && args[0] == "--publication-proof")
+{
+    try
+    {
+        var result = await ResponseReplayPublicationHost.RunAsync(args[1], args[2], args[3]);
+        Console.WriteLine($"RESPONSE_REPLAY_PUBLICATION_RESULT={JsonSerializer.Serialize(result, new JsonSerializerOptions(JsonSerializerDefaults.Web))}");
+        return 0;
+    }
+    catch (Exception exception)
+    {
+        Console.Error.WriteLine(exception);
+        return 1;
+    }
+}
+
 if (args.Length != 2)
 {
-    Console.Error.WriteLine("Usage: ResponseReplayHost <closure-path> <database-path>");
+    Console.Error.WriteLine("Usage: ResponseReplayHost <closure-path> <database-path> | --publication-proof <closure-path> <database-path> <evidence-directory>");
     return 2;
 }
 
