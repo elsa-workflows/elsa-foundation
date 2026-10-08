@@ -28,7 +28,7 @@ This is a conditional draft, not a safe implementation recipe. First establish a
 After that invariant is established, use the same resolved coordination identity and same `IStoreLock` used by reconciliation. A sidecar derived from the authoritative state path (for example `<state-path>.package-use/`) is usable only if the binding guarantees every consumer consults it. Do not place lease records in a package install directory or state JSON. A memory-only/unresolved state store has no cross-process prune guarantee. Any additional root-wide and per-state locks need one fixed acquisition order and explicit scoped ownership; adding a root lock inside a callback that already holds a state lock is not a demonstrated handoff design.
 
 1. **Load admission.** Before any read/scan/load from a graph's package paths, acquire the store lock or borrow an explicit, valid ownership scope from the reconciliation operation that already holds it. Require actual acquired/borrowed ownership. While holding it, create a unique per-generation lease record containing schema version, opaque lease ID, and the full normalized install paths for every package in the resolved graph. Write/flush the immutable record, then open/hold its separate sentinel with `FileShare.None`. Only after both are established may the lock scope end and the loader touch package files. Unique never-reused IDs avoid stale-file/name-reuse races. Normalize paths with one OS-aware canonicalizer used by both loader and pruner.
-2. **Prune snapshot + deletion.** Acquire the same store lock and require `Acquired`; refresh current persisted state while held; enumerate inventory and lease records; exclude active/LKG closures. For each lease, make exactly one nonblocking exclusive-open attempt on its sentinel. `IOException` means a live cooperating owner: read its immutable metadata and protect those exact paths, then continue; never wait or retry while holding the store lock. If exclusive open succeeds, keep that probe handle while treating the record as stale, then reap its record and sentinel. Malformed metadata under a live sentinel fails closed for that prune attempt; malformed metadata whose sentinel is exclusively acquired is stale because a loader acquires the sentinel before any package read. Plan and delete only remaining paths while still holding the store lock. Report per-candidate deletion failures; never report a failed delete as removed. Keep the state and package metadata unchanged by prune, since only non-active/non-LKG inventory is deleted.
+2. **Prune snapshot + deletion.** Acquire the same store lock and require `Acquired`; refresh current persisted state while held; enumerate inventory and lease records; exclude active/LKG closures. For each lease, make exactly one nonblocking exclusive-open attempt on its sentinel. `IOException` means a live cooperating owner: read its immutable metadata and protect those exact paths, then continue; never wait or retry while holding the store lock. If exclusive open succeeds, treat the unique record as stale while holding the probe handle. Close that handle before deleting its record and sentinel, keeping the store lock throughout; Windows cannot delete a sentinel opened without delete sharing. Never reuse lease IDs. Any cleanup failure fails closed for that prune attempt. Malformed metadata under a live sentinel fails closed for that prune attempt; malformed metadata whose sentinel is exclusively acquired is stale because a loader acquires the sentinel before any package read. Plan and delete only remaining paths while still holding the store lock. Report per-candidate deletion failures; never report a failed delete as removed. Keep the state and package metadata unchanged by prune, since only non-active/non-LKG inventory is deleted.
 3. **Lease lifetime.** On successful load, attach lease ownership to the actual load-context generation, not `PackageId@Version` alone. Retain for process lifetime when `IsCollectible == false`. For collectible contexts, call `Unload()` through existing paths and release only after a weak reference proves the context dead. If proof is pending/fails, keep the lease. On partial load failure, the same rule applies: a collectible context retains until dead; a non-collectible context may have irreversibly loaded files and therefore keeps the lease until process exit. A scan that proves no context was created/assembly loaded may dispose its transient lease after the scan.
 4. **Crash recovery.** OS release of the sentinel is the liveness source, not PID/heartbeat/timeout. After a process crash, its sentinel can be opened exclusively, so stale metadata is ignored/reaped under the store lock. A partially written record is not visible to prune while its writer holds the store lock; if the process crashes before sentinel acquisition and lock release, its record is stale and no package read has started. Never steal a live sentinel based on age or PID.
 5. **Lock ordering and deadlock avoidance.** A generation may retain its per-lease sentinel for its lifetime and later enter reconciliation, so lease-holder → global-store-lock acquisition is valid and expected. Load admission during a reconciliation borrows the already-owned global lock; it does not open it again. Prune holds the global store lock, but probes each lease sentinel **nonblocking** and never waits/retries for one. If a lease sentinel is busy, prune protects that record's paths and continues. This breaks the cycle where a process holding an old lease waits for the global lock while prune holds that lock and waits for the lease. The process retains lease sentinels without holding the global lock between operations. Weak-unload cleanup closes its sentinel (and may then remove its unique record) without first acquiring the global lock; unique IDs plus the global lock around publication/probing/reaping prevent record replacement races. The reconciliation callback path already owns the global lock, so it needs a real scoped ownership token/reentrant participant path; a second direct `FileShare.None` open demonstrably fails. An ambient token must be scoped/invalidation-safe across async continuations, or passed explicitly through an additive reconciliation/load boundary; a blanket AsyncLocal "someone in this process owns the lock" bypass is too broad.
@@ -86,7 +86,7 @@ The initial empty-store observer-gate attempt did not enter `OnPackagesReconcile
 
 Owned temp-only files: `/tmp/nuplane-store-use-spike/probe/LeaseProbe.csproj`, `Program.cs`, and `probe-output.txt`. No Nuplane package store was touched and no Nuplane source was edited. The probe tests the same `FileStream(FileShare.None)` primitive used by `StoreLock`; the owner child is killed, not asked to clean up its lock.
 
-Exact command:
+Original checkpoint command (the retained file predates the assertion hardening below):
 
 ```sh
 dotnet run --project /tmp/nuplane-store-use-spike/probe/LeaseProbe.csproj > /tmp/nuplane-store-use-spike/probe-output.txt 2>&1
@@ -104,6 +104,8 @@ after-owner-crash: ACQUIRED
 This proves the local OS/runtime lock primitive and crash release, not the proposed Nuplane record protocol, cross-platform deployment filesystems, or deletion safety. The probe deletes its task-owned unique lock path and leaves only source, report, and output proof; no Nuplane install directory was created or touched.
 
 ## Reproduction source
+
+The following standalone probe includes later review hardening: all four outcomes are checked, the temporary directory is unique, and a failed child start is guarded during cleanup. Root extracted this version into a separate `lock-probe-review-93656493/positive/` artifact project and executed it successfully; isolated constant-ACQUIRED and constant-DENIED variants both exited nonzero at the contradicted assertions. Logs and source copies are retained beside that project. This is probe validation only; the original checkpoint source/log above remain unchanged.
 
 The following standalone probe is preserved for reproducibility. Create these two files in a task-owned temporary directory and run the command above, updating the project path. It is separate from product code and tests; passing it does not authorize deletion.
 
@@ -135,16 +137,16 @@ if (args.Length > 0 && args[0] == "hold")
     return;
 }
 
-var ownedDirectory = "/tmp/nuplane-store-use-spike/probe/owned";
+var ownedDirectory = Path.Combine(Path.GetTempPath(), $"nuplane-lock-probe-{Guid.NewGuid():N}");
 Directory.CreateDirectory(ownedDirectory);
 var path = Path.Combine(ownedDirectory, $"lease-{Guid.NewGuid():N}.lock");
 try
 {
     using (var sameProcessFirst = Open(path))
     {
-        Console.WriteLine($"same-process-second: {Attempt(path)}");
+        Check("same-process-second", Attempt(path), "DENIED(IOException)");
     }
-    Console.WriteLine($"same-process-after-dispose: {Attempt(path)}");
+    Check("same-process-after-dispose", Attempt(path), "ACQUIRED");
 
     var dll = Assembly.GetEntryAssembly()!.Location;
     var host = Environment.GetEnvironmentVariable("DOTNET_HOST_PATH") ?? "dotnet";
@@ -161,21 +163,23 @@ try
     owner.StartInfo.ArgumentList.Add("hold");
     owner.StartInfo.ArgumentList.Add(path);
 
+    var ownerStarted = false;
     try
     {
         owner.Start();
+        ownerStarted = true;
         var ready = await owner.StandardOutput.ReadLineAsync().WaitAsync(TimeSpan.FromSeconds(10));
         if (ready != "OWNER_READY")
             throw new InvalidOperationException($"Unexpected owner output: {ready}");
 
-        Console.WriteLine($"cross-process-contender: {Attempt(path)}");
+        Check("cross-process-contender", Attempt(path), "DENIED(IOException)");
         owner.Kill(entireProcessTree: true);
         await owner.WaitForExitAsync().WaitAsync(TimeSpan.FromSeconds(10));
-        Console.WriteLine($"after-owner-crash: {Attempt(path)}");
+        Check("after-owner-crash", Attempt(path), "ACQUIRED");
     }
     finally
     {
-        if (!owner.HasExited)
+        if (ownerStarted && !owner.HasExited)
         {
             owner.Kill(entireProcessTree: true);
             await owner.WaitForExitAsync().WaitAsync(TimeSpan.FromSeconds(10));
@@ -186,6 +190,14 @@ finally
 {
     if (File.Exists(path))
         File.Delete(path);
+    Directory.Delete(ownedDirectory);
+}
+
+static void Check(string label, string actual, string expected)
+{
+    Console.WriteLine($"{label}: {actual}");
+    if (actual != expected)
+        throw new InvalidOperationException($"{label}: expected {expected}, got {actual}");
 }
 
 static FileStream Open(string path) => new(path, FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None);

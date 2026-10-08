@@ -11,7 +11,7 @@ Program: [Modular Hosting Upstream Delivery](../program-goals/modular-hosting-up
 
 The recent release history increments the last version component (`0.0.N`), rather than the middle component. The next bases are already incremented; no additional bump is currently needed. Re-query tags, GitHub releases, NuGet and the final merged version files immediately before release. If another release consumes the intended number, select the next unused version in the same series and update all dependent plans and pins. Never overwrite a published tag or package.
 
-GitHub REST release/tag/main results and NuGet flat-container versions are retained at `/Users/sipke/.codex-workspaces/artifacts/modular-hosting-2500/release-planning/release-audit.json`. This is a release inventory, not proof that the candidates have landed or been published.
+The linked release pages above are the shared baseline references; the committed table records the inspected development bases. Raw GitHub REST release/tag/main results and NuGet flat-container versions are retained locally at `/Users/sipke/.codex-workspaces/artifacts/modular-hosting-2500/release-planning/release-audit.json`. This is a release inventory, not proof that the candidates have landed or been published.
 
 ## Release ordering and evidence
 
