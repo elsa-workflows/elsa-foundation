@@ -313,7 +313,7 @@ public sealed class ResponseReplayCommitGateFeature : IShellFeature, IPostConfig
             typeof(IRuntimeCheckpointCommitStore),
             serviceProvider =>
             {
-                var resolvedInner = Instantiate(registered, serviceProvider);
+                var resolvedInner = ResponseReplayServiceDescriptorActivator.Instantiate(registered, serviceProvider);
                 if (resolvedInner is not CoalescingRuntimeCheckpointCommitStore inner)
                     throw new InvalidOperationException($"The test gate expected the registered Coalesced store, found '{resolvedInner.GetType().FullName}'.");
 
@@ -327,15 +327,4 @@ public sealed class ResponseReplayCommitGateFeature : IShellFeature, IPostConfig
             registered.Lifetime));
     }
 
-    private static object Instantiate(ServiceDescriptor descriptor, IServiceProvider serviceProvider)
-    {
-        if (descriptor.ImplementationInstance is { } instance)
-            return instance;
-        if (descriptor.ImplementationFactory is { } factory)
-            return factory(serviceProvider);
-        if (descriptor.ImplementationType is { } implementationType)
-            return ActivatorUtilities.CreateInstance(serviceProvider, implementationType);
-
-        throw new InvalidOperationException("The registered Coalesced checkpoint store has no resolvable implementation.");
-    }
 }

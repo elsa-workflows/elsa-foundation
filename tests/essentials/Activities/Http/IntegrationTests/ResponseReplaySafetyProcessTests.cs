@@ -14,6 +14,7 @@ using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Entities;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
+using Xunit.Abstractions;
 
 namespace Elsa.Activities.Http.IntegrationTests;
 
@@ -22,10 +23,14 @@ public sealed class ResponseReplaySafetyProcessTests
     private const string ResultPrefix = "RESPONSE_REPLAY_RESULT=";
     private const string PublicationResultPrefix = "RESPONSE_REPLAY_PUBLICATION_RESULT=";
     private const string RecoveryResultPrefix = "RESPONSE_REPLAY_RECOVERY_RESULT=";
+    private const string MeasurementResultPrefix = "RESPONSE_REPLAY_MEASUREMENT_RESULT=";
     private const string HttpNodeId = "http-in";
     private const string ResponseNodeId = "write-response";
     private const string ReplayCorrelationHeader = "X-Response-Replay-Correlation";
     private static readonly JsonSerializerOptions RuntimeJsonOptions = CreateRuntimeJsonOptions();
+    private readonly ITestOutputHelper _output;
+
+    public ResponseReplaySafetyProcessTests(ITestOutputHelper output) => _output = output;
 
     [Fact]
     public async Task CapturedExternalClosure_ImportsAndExecutesThroughChildHttpHost()
@@ -197,6 +202,157 @@ public sealed class ResponseReplaySafetyProcessTests
                 Directory.Delete(ownedRoot, recursive: true);
             else
                 Console.Error.WriteLine($"Response-replay publication child DB and logs retained at {ownedRoot}.");
+        }
+    }
+
+    [Fact]
+    public async Task MatchedCoalescedProfiles_ReportBoundaryCountsWithoutAttributingOtherExecutionWork()
+    {
+        var repositoryRoot = FindRepositoryRoot();
+        var fixtureDirectory = Path.Combine(repositoryRoot,
+            "tests", "essentials", "Activities", "Http", "IntegrationTests", "Fixtures", "ResponseReplayHost", "Fixtures");
+        var closurePath = Path.Combine(fixtureDirectory, "pre-candidate-external-closure.json");
+        var manifestPath = Path.Combine(fixtureDirectory, "pre-candidate-external-manifest.json");
+        var childProjectDirectory = Path.Combine(repositoryRoot,
+            "tests", "essentials", "Activities", "Http", "IntegrationTests", "Fixtures", "ResponseReplayHost");
+
+        using var manifest = JsonDocument.Parse(await File.ReadAllTextAsync(manifestPath));
+        var publicationManifest = manifest.RootElement.GetProperty("publication");
+        var routePath = publicationManifest.GetProperty("routePath").GetString()!;
+        var baselineArtifactId = publicationManifest.GetProperty("artifactId").GetString()!;
+        var baselineArtifactHash = publicationManifest.GetProperty("artifactHash").GetString()!;
+        var closureBytes = await File.ReadAllBytesAsync(closurePath);
+        var closureHash = Convert.ToHexString(SHA256.HashData(closureBytes)).ToLowerInvariant();
+        Assert.Equal(manifest.RootElement.GetProperty("export").GetProperty("sha256").GetString(), closureHash);
+        Assert.Equal("External", publicationManifest.GetProperty("resolvedWriteHttpResponseProfile").GetString());
+
+        var configuration = new DirectoryInfo(AppContext.BaseDirectory).Parent!.Name;
+        var childDll = Path.Combine(childProjectDirectory, "bin", configuration, "net10.0", "ResponseReplayHost.dll");
+        Assert.True(File.Exists(childDll), $"The referenced child project was not built: {childDll}");
+
+        var ownedRoot = Path.Combine(Path.GetTempPath(), $"elsa-response-replay-t010-t011-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(ownedRoot);
+        var seedDatabasePath = Path.Combine(ownedRoot, "seed.db");
+        var externalDatabasePath = Path.Combine(ownedRoot, "external.db");
+        var candidateDatabasePath = Path.Combine(ownedRoot, "candidate.db");
+        var retainSuccessfulEvidence = string.Equals(
+            Environment.GetEnvironmentVariable("ELSA_RESPONSE_REPLAY_RETAIN_EVIDENCE"), "1", StringComparison.Ordinal);
+        var passed = false;
+
+        try
+        {
+            var setup = await RunChildProcessAsync(
+                childDll, ownedRoot, TimeSpan.FromMinutes(3), "response-replay matched-count publication setup",
+                "--publication-proof", closurePath, seedDatabasePath, ownedRoot);
+            Assert.Equal(0, setup.ExitCode);
+            using var setupResult = ReadSingleResult(setup.Stdout, PublicationResultPrefix);
+            var publication = setupResult.RootElement;
+            Assert.Equal(baselineArtifactId, publication.GetProperty("baselineArtifactId").GetString());
+            Assert.Equal(baselineArtifactHash, publication.GetProperty("baselineArtifactHash").GetString());
+            Assert.Equal("External", publication.GetProperty("baselineProfile").GetString());
+            Assert.Equal("ReplaySafe", publication.GetProperty("candidateProfile").GetString());
+            var candidateDefinitionId = publication.GetProperty("candidateDefinitionId").GetString()!;
+            var candidateArtifactId = publication.GetProperty("candidateArtifactId").GetString()!;
+            var candidateArtifactHash = publication.GetProperty("candidateArtifactHash").GetString()!;
+            Assert.Equal(candidateArtifactHash, publication.GetProperty("candidateExecutableArtifactHash").GetString());
+
+            // The child has exited before the SQLite online backup; this copies one coherent database view,
+            // including any committed WAL pages, without copying a live main file.
+            await BackupSqliteDatabaseAsync(seedDatabasePath, externalDatabasePath);
+            await BackupSqliteDatabaseAsync(seedDatabasePath, candidateDatabasePath);
+
+            var unpublish = await RunChildProcessAsync(
+                childDll, ownedRoot, TimeSpan.FromMinutes(2), "response-replay External comparison unpublish",
+                "--measurement-unpublish-candidate", closurePath, externalDatabasePath, ownedRoot,
+                candidateDefinitionId, candidateArtifactId, candidateArtifactHash);
+            Assert.Equal(0, unpublish.ExitCode);
+
+            // A separate ordinary host then applies the unchanged historical JSON source through the production
+            // reconciler, leaving both immutable artifacts present and the External route active.
+            var reconcile = await RunChildProcessAsync(
+                childDll, ownedRoot, TimeSpan.FromMinutes(2), "response-replay External comparison reconcile",
+                "--measurement-reconcile-external", closurePath, externalDatabasePath, ownedRoot,
+                baselineArtifactId, baselineArtifactHash, candidateArtifactId, candidateArtifactHash);
+            Assert.Equal(0, reconcile.ExitCode);
+
+            var externalResult = await RunMeasuredChildAsync(
+                childDll, ownedRoot, closurePath, externalDatabasePath,
+                "External", baselineArtifactId, baselineArtifactHash,
+                baselineArtifactId, baselineArtifactHash,
+                candidateArtifactId, candidateArtifactHash, routePath);
+            var candidateResult = await RunMeasuredChildAsync(
+                childDll, ownedRoot, closurePath, candidateDatabasePath,
+                "ReplaySafe", candidateArtifactId, candidateArtifactHash,
+                baselineArtifactId, baselineArtifactHash,
+                candidateArtifactId, candidateArtifactHash, routePath);
+
+            Assert.Equal(externalResult.HttpStatus, candidateResult.HttpStatus);
+            Assert.Equal(externalResult.ResponseBody, candidateResult.ResponseBody);
+            Assert.Equal(externalResult.ResponseContentType, candidateResult.ResponseContentType);
+            Assert.Equal(externalResult.AuthoredHeaders.Count, candidateResult.AuthoredHeaders.Count);
+            Assert.Empty(externalResult.AuthoredHeaders);
+            Assert.Empty(candidateResult.AuthoredHeaders);
+
+            var externalCounts = CountTotals(externalResult.Observation);
+            var candidateCounts = CountTotals(candidateResult.Observation);
+            var report = new
+            {
+                setup = new
+                {
+                    closureSha256 = closureHash,
+                    baselineArtifactId,
+                    baselineArtifactHash,
+                    candidateArtifactId,
+                    candidateArtifactHash,
+                    runtime = "same prebuilt child DLL",
+                    persistence = "equivalent owned SQLite online-backup copies",
+                    hostPreparation = "fresh child process; identical measured-host startup and pre-capture verification; no publication during either count window",
+                    window = "correlated POST through delivered response, independent Completed execution read, empty scheduler queue, and terminal outbox state",
+                    commandAttemptSemantics = "EF Reader/Scalar/NonQuery interceptor attempts and outcomes; Reader Succeeded means ReaderExecuted returned a reader, not result exhaustion, row count, or physical SQL statements",
+                    pageReuseEligible = candidateResult.Observation.DurableValuePageReuseEligible && externalResult.Observation.DurableValuePageReuseEligible
+                },
+                external = new
+                {
+                    profile = "External",
+                    responseReceived = new
+                    {
+                        raw = externalResult.ResponseReceivedObservation,
+                        allObservedTotals = CountTotals(externalResult.ResponseReceivedObservation)
+                    },
+                    settled = new { raw = externalResult.Observation, allObservedTotals = externalCounts },
+                    settledMinusResponseReceivedByBucket = DifferenceByBucket(
+                        externalResult.Observation, externalResult.ResponseReceivedObservation)
+                },
+                candidate = new
+                {
+                    profile = "ReplaySafe",
+                    responseReceived = new
+                    {
+                        raw = candidateResult.ResponseReceivedObservation,
+                        allObservedTotals = CountTotals(candidateResult.ResponseReceivedObservation)
+                    },
+                    settled = new { raw = candidateResult.Observation, allObservedTotals = candidateCounts },
+                    settledMinusResponseReceivedByBucket = DifferenceByBucket(
+                        candidateResult.Observation, candidateResult.ResponseReceivedObservation)
+                },
+                candidateMinusExternalAllObserved = Difference(candidateCounts, externalCounts),
+                candidateMinusExternalByBucket = DifferenceByBucket(candidateResult.Observation, externalResult.Observation)
+            };
+            var reportJson = JsonSerializer.Serialize(report, new JsonSerializerOptions(JsonSerializerDefaults.Web));
+            _output.WriteLine($"RESPONSE_REPLAY_MATCHED_COUNTS={reportJson}");
+            if (retainSuccessfulEvidence)
+                await File.WriteAllTextAsync(Path.Combine(ownedRoot, "matched-counts.json"), reportJson);
+
+            passed = true;
+        }
+        finally
+        {
+            if (passed && !retainSuccessfulEvidence)
+                Directory.Delete(ownedRoot, recursive: true);
+            else if (passed)
+                _output.WriteLine($"Response-replay matched-count evidence retained at {ownedRoot}.");
+            else
+                _output.WriteLine($"Response-replay matched-count DBs and logs retained at {ownedRoot}.");
         }
     }
 
@@ -404,7 +560,7 @@ public sealed class ResponseReplaySafetyProcessTests
             var candidateExecutionIdsAfter = await ReadCandidateExecutionIdsAsync(databasePath, candidateArtifactId);
             Assert.Equal(existingCandidateExecutionIds.Count + 1, candidateExecutionIdsAfter.Count);
             Assert.Contains(executionId, candidateExecutionIdsAfter);
-            Assert.Equal(1, candidateExecutionIdsAfter.Except(existingCandidateExecutionIds, StringComparer.Ordinal).Count());
+            Assert.Single(candidateExecutionIdsAfter.Except(existingCandidateExecutionIds, StringComparer.Ordinal));
             passed = true;
         }
         finally
@@ -417,6 +573,443 @@ public sealed class ResponseReplaySafetyProcessTests
                 Console.Error.WriteLine($"Response-replay hard-crash DB and logs retained at {ownedRoot}.");
         }
     }
+
+    private static async Task<ResponseReplayMeasurementResult> RunMeasuredChildAsync(
+        string childDll,
+        string ownedRoot,
+        string closurePath,
+        string databasePath,
+        string profile,
+        string targetArtifactId,
+        string targetArtifactHash,
+        string baselineArtifactId,
+        string baselineArtifactHash,
+        string candidateArtifactId,
+        string candidateArtifactHash,
+        string routePath)
+    {
+        var pipeName = $"rr-{Guid.NewGuid():N}"[..19];
+        var correlationId = $"t011-{profile}-{Guid.NewGuid():N}";
+        var gateEvidencePath = Path.Combine(ownedRoot, $"{profile.ToLowerInvariant()}-{Guid.NewGuid():N}-measurement-gate.jsonl");
+        await using var pipeServer = new NamedPipeServerStream(
+            pipeName, PipeDirection.InOut, 1, PipeTransmissionMode.Byte, PipeOptions.Asynchronous);
+        await using var child = StartChildProcess(
+            childDll, ownedRoot, $"response-replay {profile} matched-count child",
+            "--measure", closurePath, databasePath, ownedRoot, pipeName,
+            targetArtifactId, targetArtifactHash, profile, correlationId,
+            baselineArtifactId, baselineArtifactHash, candidateArtifactId, candidateArtifactHash);
+
+        await WaitForPipeConnectionAsync(pipeServer, child, TimeSpan.FromMinutes(2));
+        using var reader = new StreamReader(pipeServer, new UTF8Encoding(false), false, 1024, leaveOpen: true);
+        await using var writer = new StreamWriter(pipeServer, new UTF8Encoding(false), 1024, leaveOpen: true) { AutoFlush = true };
+
+        using (var transportReady = await ReadGateMessageAsync(reader, TimeSpan.FromSeconds(45), gateEvidencePath))
+        {
+            Assert.Equal("ready", transportReady.RootElement.GetProperty("type").GetString());
+            Assert.Equal(child.ProcessId, transportReady.RootElement.GetProperty("payload").GetProperty("processId").GetInt32());
+        }
+
+        using (var ready = await ReadGateMessageAsync(reader, TimeSpan.FromSeconds(45), gateEvidencePath))
+        {
+            Assert.Equal("measurement-ready", ready.RootElement.GetProperty("type").GetString());
+            var payload = ready.RootElement.GetProperty("payload");
+            Assert.Equal(child.ProcessId, payload.GetProperty("processId").GetInt32());
+            Assert.Equal(correlationId, payload.GetProperty("correlationId").GetString());
+            Assert.Equal(targetArtifactId, payload.GetProperty("targetArtifactId").GetString());
+            Assert.Equal(targetArtifactHash, payload.GetProperty("targetArtifactHash").GetString());
+            Assert.Equal(profile, payload.GetProperty("targetProfile").GetString());
+            Assert.Equal("External", payload.GetProperty("endpointProfile").GetString());
+            Assert.Equal(1, payload.GetProperty("activeRouteBindingCount").GetInt32());
+            Assert.True(payload.GetProperty("durableValuePageReuseEligible").GetBoolean());
+            Assert.True(payload.GetProperty("equivalentStartupPreparation").GetBoolean());
+            Assert.Equal(baselineArtifactId, payload.GetProperty("baselineArtifactId").GetString());
+            Assert.Equal(baselineArtifactHash, payload.GetProperty("baselineArtifactHash").GetString());
+            Assert.Equal(candidateArtifactId, payload.GetProperty("candidateArtifactId").GetString());
+            Assert.Equal(candidateArtifactHash, payload.GetProperty("candidateArtifactHash").GetString());
+        }
+
+        await SendGateCommandAsync(writer, "start", gateEvidencePath);
+        using var httpDelivered = await ReadGateMessageAsync(reader, TimeSpan.FromMinutes(2), gateEvidencePath);
+        Assert.Equal("http-delivered", httpDelivered.RootElement.GetProperty("type").GetString());
+        var delivered = httpDelivered.RootElement.GetProperty("payload");
+        var executionId = AssertNonEmpty(delivered.GetProperty("workflowExecutionId").GetString());
+        Assert.Equal(targetArtifactId, delivered.GetProperty("targetArtifactId").GetString());
+        Assert.Equal(targetArtifactHash, delivered.GetProperty("targetArtifactHash").GetString());
+        Assert.Equal(profile, delivered.GetProperty("targetProfile").GetString());
+        Assert.Equal(200, delivered.GetProperty("statusCode").GetInt32());
+        Assert.Equal("Alice Smith", delivered.GetProperty("body").GetString());
+        Assert.Equal("text/plain", delivered.GetProperty("contentType").GetString());
+        Assert.Empty(delivered.GetProperty("authoredHeaders").EnumerateObject());
+
+        var settledState = await WaitForMeasurementSettlementAsync(databasePath, executionId, TimeSpan.FromMinutes(2));
+        AssertDurableRequestAndTrigger(settledState, targetArtifactId, targetArtifactHash, routePath, correlationId);
+        Assert.Equal(targetArtifactId, settledState.Execution.PinnedExecutable.ArtifactId);
+        Assert.Equal(targetArtifactHash, settledState.Execution.PinnedExecutable.ArtifactHash);
+        AssertMeasurementTerminalState(settledState);
+
+        await SendGateCommandAsync(writer, "settled", gateEvidencePath);
+        using var complete = await ReadGateMessageAsync(reader, TimeSpan.FromSeconds(45), gateEvidencePath);
+        Assert.Equal("measurement-complete", complete.RootElement.GetProperty("type").GetString());
+        var completedPayload = complete.RootElement.GetProperty("payload");
+        Assert.Equal(200, completedPayload.GetProperty("responseStatus").GetInt32());
+        Assert.Equal("Alice Smith", completedPayload.GetProperty("responseBody").GetString());
+        Assert.Equal("text/plain", completedPayload.GetProperty("responseContentType").GetString());
+        Assert.Empty(completedPayload.GetProperty("authoredHeaders").EnumerateObject());
+        var observationJson = completedPayload.GetProperty("observation");
+        Assert.Equal(executionId, observationJson.GetProperty("targetExecutionId").GetString());
+        Assert.Equal(targetArtifactId, observationJson.GetProperty("targetArtifactId").GetString());
+        Assert.Equal(targetArtifactHash, observationJson.GetProperty("targetArtifactHash").GetString());
+        Assert.Equal(profile, observationJson.GetProperty("targetProfile").GetString());
+        Assert.True(observationJson.GetProperty("durableValuePageReuseEligible").GetBoolean());
+        Assert.True(observationJson.GetProperty("equivalentStartupPreparation").GetBoolean());
+        Assert.Equal(0, observationJson.GetProperty("orphanCommandOutcomes").GetInt32());
+        Assert.Equal(0, observationJson.GetProperty("inFlightCommandAttempts").GetInt32());
+
+        var process = await child.WaitForExitAsync(TimeSpan.FromMinutes(2));
+        Assert.True(process.ExitCode == 0,
+            $"The {profile} measured process exited {process.ExitCode}.\nstdout:\n{process.Stdout}\nstderr:\n{process.Stderr}");
+        var resultLine = Assert.Single(
+            process.Stdout.Split(Environment.NewLine, StringSplitOptions.RemoveEmptyEntries),
+            line => line.StartsWith(MeasurementResultPrefix, StringComparison.Ordinal));
+        var result = JsonSerializer.Deserialize<ResponseReplayMeasurementResult>(
+            resultLine[MeasurementResultPrefix.Length..], new JsonSerializerOptions(JsonSerializerDefaults.Web));
+        Assert.NotNull(result);
+        Assert.Equal(executionId, result.WorkflowExecutionId);
+        Assert.Equal(200, result.HttpStatus);
+        Assert.Equal("Alice Smith", result.ResponseBody);
+        Assert.Equal("text/plain", result.ResponseContentType);
+        Assert.Empty(result.AuthoredHeaders);
+        AssertResponseAndSettledSnapshots(
+            result.ResponseReceivedObservation,
+            result.Observation,
+            correlationId,
+            executionId,
+            targetArtifactId,
+            targetArtifactHash,
+            profile);
+        AssertObservationWindow(result.Observation, correlationId, executionId, targetArtifactId, targetArtifactHash, profile);
+        return result;
+    }
+
+    private static async Task<IndependentRuntimeState> WaitForMeasurementSettlementAsync(
+        string databasePath,
+        string executionId,
+        TimeSpan timeout)
+    {
+        var deadline = DateTimeOffset.UtcNow + timeout;
+        InvalidOperationException? lastReadException = null;
+        while (DateTimeOffset.UtcNow < deadline)
+        {
+            IndependentRuntimeState state;
+            try
+            {
+                state = await ReadIndependentRuntimeStateAsync(databasePath, executionId);
+                lastReadException = null;
+            }
+            catch (InvalidOperationException exception)
+            {
+                lastReadException = exception;
+                await Task.Delay(TimeSpan.FromMilliseconds(250));
+                continue;
+            }
+
+            var responseIsCommitted = state.ActivityStates.Count(activity =>
+                StringComparer.Ordinal.Equals(activity.Execution.AuthoredActivityId, ResponseNodeId) && activity.Completion is not null) == 1;
+            var outboxIsTerminal = state.OutboxStatuses.All(status => status is
+                RuntimePostCommitOutboxStatus.Delivered or
+                RuntimePostCommitOutboxStatus.FailedFinal or
+                RuntimePostCommitOutboxStatus.Cancelled);
+            if (state.Execution.Status == WorkflowExecutionStatus.Faulted)
+                throw new InvalidOperationException("The matched measurement workflow faulted before the settled boundary.");
+            if (state.IncidentCount != 0)
+                throw new InvalidOperationException($"The matched measurement workflow recorded {state.IncidentCount} runtime incident(s).");
+            if (state.Execution.Status == WorkflowExecutionStatus.Completed &&
+                responseIsCommitted && state.SchedulerItems.Count == 0 && outboxIsTerminal)
+            {
+                if (state.OutboxStatuses.Any(status => status is
+                    RuntimePostCommitOutboxStatus.FailedFinal or RuntimePostCommitOutboxStatus.Cancelled))
+                    throw new InvalidOperationException("The matched measurement workflow has a failed or cancelled post-commit outbox item.");
+                return state;
+            }
+
+            await Task.Delay(TimeSpan.FromMilliseconds(250));
+        }
+
+        throw new TimeoutException(
+            $"Workflow execution '{executionId}' did not reach Completed with a committed response and no scheduler or unsettled outbox work within {timeout}.",
+            lastReadException);
+    }
+
+    private static void AssertMeasurementTerminalState(IndependentRuntimeState state)
+    {
+        Assert.Equal(WorkflowExecutionStatus.Completed, state.Execution.Status);
+        Assert.Empty(state.SchedulerItems);
+        Assert.Equal(0, state.IncidentCount);
+        Assert.All(state.OutboxStatuses, status => Assert.Equal(RuntimePostCommitOutboxStatus.Delivered, status));
+
+        var response = Assert.Single(state.ActivityStates,
+            activity => activity.Execution.AuthoredActivityId == ResponseNodeId && activity.Completion is not null);
+        var instruction = response.Completion!.Result.InlineValue!.Value;
+        Assert.Equal(200, instruction.GetProperty("statusCode").GetInt32());
+        Assert.Equal("Alice Smith", instruction.GetProperty("body").GetString());
+        Assert.Equal("text/plain", instruction.GetProperty("contentType").GetString());
+        Assert.Empty(instruction.GetProperty("headers").EnumerateObject());
+        Assert.Equal("Alice", ReadStringVariable(state.Execution.RootVariableFrame!, "content", "firstName"));
+        Assert.Equal("Smith", ReadStringVariable(state.Execution.RootVariableFrame!, "content", "lastName"));
+        Assert.Equal("Alice Smith", ReadStringVariable(state.Execution.RootVariableFrame!, "referenceText"));
+    }
+
+    private static void AssertObservationWindow(
+        ResponseReplayObservationSnapshot observation,
+        string correlationId,
+        string executionId,
+        string artifactId,
+        string artifactHash,
+        string responseProfile)
+    {
+        Assert.Equal(correlationId, observation.CorrelationId);
+        Assert.Equal(executionId, observation.TargetExecutionId);
+        Assert.Equal(artifactId, observation.TargetArtifactId);
+        Assert.Equal(artifactHash, observation.TargetArtifactHash);
+        Assert.Equal(responseProfile, observation.TargetProfile);
+        Assert.True(observation.DurableValuePageReuseEligible);
+        Assert.True(observation.EquivalentStartupPreparation);
+        Assert.NotNull(observation.TargetClaim);
+        Assert.Equal(RuntimeCheckpointNames.ActivityAttemptClaimed, observation.TargetClaim!.CheckpointName);
+        Assert.Equal(executionId, observation.TargetClaim.WorkflowExecutionId);
+        Assert.Equal(artifactId, observation.TargetClaim.ArtifactId);
+        Assert.Equal(artifactHash, observation.TargetClaim.ArtifactHash);
+        Assert.Equal(HttpNodeId, observation.TargetClaim.NodeId);
+        Assert.Equal("External", observation.TargetClaim.ClaimActivityProfile);
+        Assert.Equal(ResponseNodeId, observation.TargetClaim.ResponseNodeId);
+        Assert.Equal(responseProfile, observation.TargetClaim.ResponseProfile);
+        Assert.NotEmpty(observation.ResponseCompletionAttempts);
+        Assert.All(observation.ResponseCompletionAttempts, responseCompletion =>
+        {
+            Assert.Equal(RuntimeCheckpointNames.ActivityCompleted, responseCompletion.CheckpointName);
+            Assert.Equal(executionId, responseCompletion.WorkflowExecutionId);
+            Assert.Equal(artifactId, responseCompletion.ArtifactId);
+            Assert.Equal(artifactHash, responseCompletion.ArtifactHash);
+            Assert.Equal(ResponseNodeId, responseCompletion.NodeId);
+            Assert.Equal(responseProfile, responseCompletion.PinnedResponseProfile);
+            Assert.Equal(RuntimeCheckpointPersistenceMode.Deferred.ToString(), responseCompletion.PersistenceDecision);
+        });
+        Assert.Equal(0, observation.OrphanCommandOutcomes);
+        Assert.Equal(0, observation.InFlightCommandAttempts);
+
+        foreach (var command in observation.Buckets.Values.SelectMany(bucket => bucket.Commands.Values))
+            Assert.Equal(command.Started, command.Succeeded + command.Failed + command.Canceled);
+    }
+
+    private static void AssertResponseAndSettledSnapshots(
+        ResponseReplayObservationSnapshot responseReceived,
+        ResponseReplayObservationSnapshot settled,
+        string correlationId,
+        string executionId,
+        string artifactId,
+        string artifactHash,
+        string profile)
+    {
+        Assert.Equal(correlationId, responseReceived.CorrelationId);
+        Assert.Equal(executionId, responseReceived.TargetExecutionId);
+        Assert.Equal(artifactId, responseReceived.TargetArtifactId);
+        Assert.Equal(artifactHash, responseReceived.TargetArtifactHash);
+        Assert.Equal(profile, responseReceived.TargetProfile);
+        Assert.Equal(settled.TargetClaim, responseReceived.TargetClaim);
+        Assert.Equal(settled.DurableValuePageReuseEligible, responseReceived.DurableValuePageReuseEligible);
+        Assert.Equal(settled.EquivalentStartupPreparation, responseReceived.EquivalentStartupPreparation);
+        Assert.True(settled.ResponseCompletionAttempts.Count >= responseReceived.ResponseCompletionAttempts.Count);
+        Assert.Equal(
+            responseReceived.ResponseCompletionAttempts,
+            settled.ResponseCompletionAttempts.Take(responseReceived.ResponseCompletionAttempts.Count));
+        Assert.True(settled.CarryInCommandOutcomes >= responseReceived.CarryInCommandOutcomes);
+        Assert.True(settled.OrphanCommandOutcomes >= responseReceived.OrphanCommandOutcomes);
+        Assert.Equal(
+            responseReceived.Buckets.Keys.OrderBy(key => key, StringComparer.Ordinal),
+            settled.Buckets.Keys.OrderBy(key => key, StringComparer.Ordinal));
+
+        foreach (var (bucketName, before) in responseReceived.Buckets)
+        {
+            var after = settled.Buckets[bucketName];
+            AssertAtLeast(after.Dispatches, before.Dispatches, bucketName, nameof(before.Dispatches));
+            AssertAtLeast(after.DrainCycles, before.DrainCycles, bucketName, nameof(before.DrainCycles));
+            AssertAtLeast(after.ActivityExecutions, before.ActivityExecutions, bucketName, nameof(before.ActivityExecutions));
+            AssertAtLeast(after.LogicalCheckpointAttempts, before.LogicalCheckpointAttempts, bucketName, nameof(before.LogicalCheckpointAttempts));
+            AssertAtLeast(after.LogicalCheckpointSucceeded, before.LogicalCheckpointSucceeded, bucketName, nameof(before.LogicalCheckpointSucceeded));
+            AssertAtLeast(after.LogicalCheckpointFailed, before.LogicalCheckpointFailed, bucketName, nameof(before.LogicalCheckpointFailed));
+            AssertAtLeast(after.LogicalCheckpointCanceled, before.LogicalCheckpointCanceled, bucketName, nameof(before.LogicalCheckpointCanceled));
+            AssertAtLeast(after.LogicalClaimCheckpointAttempts, before.LogicalClaimCheckpointAttempts, bucketName, nameof(before.LogicalClaimCheckpointAttempts));
+            AssertAtLeast(after.LogicalClaimCheckpointSucceeded, before.LogicalClaimCheckpointSucceeded, bucketName, nameof(before.LogicalClaimCheckpointSucceeded));
+            AssertAtLeast(after.DeferredDecisionAttempts, before.DeferredDecisionAttempts, bucketName, nameof(before.DeferredDecisionAttempts));
+            AssertAtLeast(after.ImmediateDecisionAttempts, before.ImmediateDecisionAttempts, bucketName, nameof(before.ImmediateDecisionAttempts));
+            AssertAtLeast(after.DurableCheckpointAttempts, before.DurableCheckpointAttempts, bucketName, nameof(before.DurableCheckpointAttempts));
+            AssertAtLeast(after.DurableCheckpointSucceeded, before.DurableCheckpointSucceeded, bucketName, nameof(before.DurableCheckpointSucceeded));
+            AssertAtLeast(after.DurableCheckpointFailed, before.DurableCheckpointFailed, bucketName, nameof(before.DurableCheckpointFailed));
+            AssertAtLeast(after.DurableCheckpointCanceled, before.DurableCheckpointCanceled, bucketName, nameof(before.DurableCheckpointCanceled));
+            AssertAtLeast(after.DurableClaimCheckpointAttempts, before.DurableClaimCheckpointAttempts, bucketName, nameof(before.DurableClaimCheckpointAttempts));
+            AssertAtLeast(after.DurableClaimCheckpointSucceeded, before.DurableClaimCheckpointSucceeded, bucketName, nameof(before.DurableClaimCheckpointSucceeded));
+            AssertAtLeast(after.SegmentFlushAttempts, before.SegmentFlushAttempts, bucketName, nameof(before.SegmentFlushAttempts));
+            AssertAtLeast(after.SegmentFlushes, before.SegmentFlushes, bucketName, nameof(before.SegmentFlushes));
+
+            foreach (var commandName in before.Commands.Keys.Union(after.Commands.Keys, StringComparer.Ordinal))
+            {
+                before.Commands.TryGetValue(commandName, out var beforeCommand);
+                after.Commands.TryGetValue(commandName, out var afterCommand);
+                beforeCommand ??= new ResponseReplayCommandSnapshot(0, 0, 0, 0);
+                afterCommand ??= new ResponseReplayCommandSnapshot(0, 0, 0, 0);
+                AssertAtLeast(afterCommand.Started, beforeCommand.Started, bucketName, $"{commandName}.Started");
+                AssertAtLeast(afterCommand.Succeeded, beforeCommand.Succeeded, bucketName, $"{commandName}.Succeeded");
+                AssertAtLeast(afterCommand.Failed, beforeCommand.Failed, bucketName, $"{commandName}.Failed");
+                AssertAtLeast(afterCommand.Canceled, beforeCommand.Canceled, bucketName, $"{commandName}.Canceled");
+            }
+        }
+    }
+
+    private static void AssertAtLeast(long settled, long responseReceived, string bucket, string counter) =>
+        Assert.True(settled >= responseReceived,
+            $"The settled {bucket} {counter} counter ({settled}) is below its response-received value ({responseReceived}).");
+
+    private static async Task BackupSqliteDatabaseAsync(string sourcePath, string destinationPath)
+    {
+        Directory.CreateDirectory(Path.GetDirectoryName(destinationPath)!);
+        var sourceString = new SqliteConnectionStringBuilder
+        {
+            DataSource = sourcePath,
+            Mode = SqliteOpenMode.ReadOnly,
+            Cache = SqliteCacheMode.Shared,
+            Pooling = false
+        }.ToString();
+        var destinationString = new SqliteConnectionStringBuilder
+        {
+            DataSource = destinationPath,
+            Mode = SqliteOpenMode.ReadWriteCreate,
+            Cache = SqliteCacheMode.Shared,
+            Pooling = false
+        }.ToString();
+        await using var source = new SqliteConnection(sourceString);
+        await source.OpenAsync();
+        await using var destination = new SqliteConnection(destinationString);
+        await destination.OpenAsync();
+        source.BackupDatabase(destination);
+    }
+
+    private static ResponseReplayCountTotals CountTotals(ResponseReplayObservationSnapshot observation)
+    {
+        var buckets = observation.Buckets.Values.ToArray();
+        var commands = buckets.SelectMany(bucket => bucket.Commands.Values).ToArray();
+        return new ResponseReplayCountTotals(
+            buckets.Sum(bucket => bucket.LogicalCheckpointAttempts),
+            buckets.Sum(bucket => bucket.LogicalCheckpointSucceeded),
+            buckets.Sum(bucket => bucket.LogicalCheckpointFailed),
+            buckets.Sum(bucket => bucket.LogicalCheckpointCanceled),
+            buckets.Sum(bucket => bucket.LogicalClaimCheckpointAttempts),
+            buckets.Sum(bucket => bucket.LogicalClaimCheckpointSucceeded),
+            buckets.Sum(bucket => bucket.DeferredDecisionAttempts),
+            buckets.Sum(bucket => bucket.ImmediateDecisionAttempts),
+            buckets.Sum(bucket => bucket.DurableCheckpointAttempts),
+            buckets.Sum(bucket => bucket.DurableCheckpointSucceeded),
+            buckets.Sum(bucket => bucket.DurableCheckpointFailed),
+            buckets.Sum(bucket => bucket.DurableCheckpointCanceled),
+            buckets.Sum(bucket => bucket.DurableClaimCheckpointAttempts),
+            buckets.Sum(bucket => bucket.DurableClaimCheckpointSucceeded),
+            buckets.Sum(bucket => bucket.SegmentFlushAttempts),
+            buckets.Sum(bucket => bucket.SegmentFlushes),
+            buckets.Sum(bucket => bucket.Dispatches),
+            buckets.Sum(bucket => bucket.DrainCycles),
+            buckets.Sum(bucket => bucket.ActivityExecutions),
+            commands.Sum(command => command.Started),
+            commands.Sum(command => command.Succeeded),
+            commands.Sum(command => command.Failed),
+            commands.Sum(command => command.Canceled));
+    }
+
+    private static ResponseReplayCountTotals Difference(ResponseReplayCountTotals candidate, ResponseReplayCountTotals external) =>
+        new(
+            candidate.LogicalCheckpointAttempts - external.LogicalCheckpointAttempts,
+            candidate.LogicalCheckpointSucceeded - external.LogicalCheckpointSucceeded,
+            candidate.LogicalCheckpointFailed - external.LogicalCheckpointFailed,
+            candidate.LogicalCheckpointCanceled - external.LogicalCheckpointCanceled,
+            candidate.ActivityClaimAttempts - external.ActivityClaimAttempts,
+            candidate.ActivityClaimsSucceeded - external.ActivityClaimsSucceeded,
+            candidate.DeferredDecisionAttempts - external.DeferredDecisionAttempts,
+            candidate.ImmediateDecisionAttempts - external.ImmediateDecisionAttempts,
+            candidate.DurableCheckpointAttempts - external.DurableCheckpointAttempts,
+            candidate.DurableCheckpointSucceeded - external.DurableCheckpointSucceeded,
+            candidate.DurableCheckpointFailed - external.DurableCheckpointFailed,
+            candidate.DurableCheckpointCanceled - external.DurableCheckpointCanceled,
+            candidate.DurableClaimCheckpointAttempts - external.DurableClaimCheckpointAttempts,
+            candidate.DurableClaimCheckpointsSucceeded - external.DurableClaimCheckpointsSucceeded,
+            candidate.SegmentFlushAttempts - external.SegmentFlushAttempts,
+            candidate.SegmentFlushesSucceeded - external.SegmentFlushesSucceeded,
+            candidate.Dispatches - external.Dispatches,
+            candidate.DrainCycles - external.DrainCycles,
+            candidate.ActivityExecutions - external.ActivityExecutions,
+            candidate.DatabaseCommandAttempts - external.DatabaseCommandAttempts,
+            candidate.DatabaseCommandSucceeded - external.DatabaseCommandSucceeded,
+            candidate.DatabaseCommandFailed - external.DatabaseCommandFailed,
+            candidate.DatabaseCommandCanceled - external.DatabaseCommandCanceled);
+
+    private static IReadOnlyDictionary<string, ResponseReplayCountTotals> DifferenceByBucket(
+        ResponseReplayObservationSnapshot settled,
+        ResponseReplayObservationSnapshot responseReceived) =>
+        settled.Buckets.Keys.ToDictionary(
+            bucketName => bucketName,
+            bucketName => Difference(CountTotals(settled.Buckets[bucketName]), CountTotals(responseReceived.Buckets[bucketName])),
+            StringComparer.Ordinal);
+
+    private static ResponseReplayCountTotals CountTotals(ResponseReplayBucketSnapshot bucket)
+    {
+        var commands = bucket.Commands.Values.ToArray();
+        return new ResponseReplayCountTotals(
+            bucket.LogicalCheckpointAttempts,
+            bucket.LogicalCheckpointSucceeded,
+            bucket.LogicalCheckpointFailed,
+            bucket.LogicalCheckpointCanceled,
+            bucket.LogicalClaimCheckpointAttempts,
+            bucket.LogicalClaimCheckpointSucceeded,
+            bucket.DeferredDecisionAttempts,
+            bucket.ImmediateDecisionAttempts,
+            bucket.DurableCheckpointAttempts,
+            bucket.DurableCheckpointSucceeded,
+            bucket.DurableCheckpointFailed,
+            bucket.DurableCheckpointCanceled,
+            bucket.DurableClaimCheckpointAttempts,
+            bucket.DurableClaimCheckpointSucceeded,
+            bucket.SegmentFlushAttempts,
+            bucket.SegmentFlushes,
+            bucket.Dispatches,
+            bucket.DrainCycles,
+            bucket.ActivityExecutions,
+            commands.Sum(command => command.Started),
+            commands.Sum(command => command.Succeeded),
+            commands.Sum(command => command.Failed),
+            commands.Sum(command => command.Canceled));
+    }
+
+    private sealed record ResponseReplayCountTotals(
+        long LogicalCheckpointAttempts,
+        long LogicalCheckpointSucceeded,
+        long LogicalCheckpointFailed,
+        long LogicalCheckpointCanceled,
+        long ActivityClaimAttempts,
+        long ActivityClaimsSucceeded,
+        long DeferredDecisionAttempts,
+        long ImmediateDecisionAttempts,
+        long DurableCheckpointAttempts,
+        long DurableCheckpointSucceeded,
+        long DurableCheckpointFailed,
+        long DurableCheckpointCanceled,
+        long DurableClaimCheckpointAttempts,
+        long DurableClaimCheckpointsSucceeded,
+        long SegmentFlushAttempts,
+        long SegmentFlushesSucceeded,
+        long Dispatches,
+        long DrainCycles,
+        long ActivityExecutions,
+        long DatabaseCommandAttempts,
+        long DatabaseCommandSucceeded,
+        long DatabaseCommandFailed,
+        long DatabaseCommandCanceled);
 
     private static void AssertAuthoredBehaviorMatches(JsonElement baselineClosure, JsonElement candidateClosure, string baselineArtifactId, string candidateArtifactId)
     {
@@ -651,9 +1244,16 @@ public sealed class ResponseReplaySafetyProcessTests
         var livenessContent = liveness is null
             ? null
             : DeserializeRuntimeJson<ExecutionLivenessState>(liveness.ContentJson);
+        var incidentCount = await db.IncidentStates.AsNoTracking()
+            .CountAsync(row => row.WorkflowExecutionIdHash == executionHash && row.WorkflowExecutionId == executionId);
+        var outboxStatuses = await db.RuntimePostCommitOutbox.AsNoTracking()
+            .Where(row => row.WorkflowExecutionIdHash == executionHash && row.WorkflowExecutionId == executionId)
+            .Select(row => row.Status)
+            .ToArrayAsync();
 
         return new IndependentRuntimeState(execution, stimulus, triggerNode, triggerMetadata, activityStates,
-            workRows.Select(row => (row, DeserializeRuntimeJson<RuntimeSchedulerWorkItem>(row.ContentJson))).ToArray(), liveness, livenessContent);
+            workRows.Select(row => (row, DeserializeRuntimeJson<RuntimeSchedulerWorkItem>(row.ContentJson))).ToArray(),
+            outboxStatuses.Select(status => (RuntimePostCommitOutboxStatus)status).ToArray(), incidentCount, liveness, livenessContent);
     }
 
     private static RuntimeExecutionLease AssertDurableRequestAndClaim(
@@ -812,6 +1412,8 @@ public sealed class ResponseReplaySafetyProcessTests
         DurableValueState TriggerMetadata,
         IReadOnlyCollection<ActivityExecutionState> ActivityStates,
         IReadOnlyCollection<(SchedulerWorkItemEntity Row, RuntimeSchedulerWorkItem Work)> SchedulerItems,
+        IReadOnlyCollection<RuntimePostCommitOutboxStatus> OutboxStatuses,
+        int IncidentCount,
         ExecutionLivenessStateEntity? Liveness,
         ExecutionLivenessState? LivenessContent)
     {

@@ -1,8 +1,10 @@
 using System.Net;
 using System.Net.Http.Json;
+using System.Diagnostics;
 using System.Security.Claims;
 using System.Text;
 using System.Text.Json;
+using Activity = System.Diagnostics.Activity;
 using CShells.AspNetCore.Configuration;
 using CShells.AspNetCore.Extensions;
 using CShells.AspNetCore.Routing;
@@ -43,9 +45,11 @@ using Elsa.Workflows.Design.Persistence.EntityFrameworkCore;
 using Elsa.Workflows.Design.Validations;
 using Elsa.Workflows.Publishing;
 using Elsa.Workflows.Publishing.Api;
+using Elsa.Workflows.Publishing.Api.Handlers;
 using Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore;
 using Elsa.Workflows.Runtime.Api;
 using Elsa.Workflows.Runtime.Api.Coalescing;
+using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Http;
@@ -59,7 +63,9 @@ using Elsa.Workflows.Runtime.Reconciliation.Core.Models;
 using Elsa.Workflows.Runtime.Reconciliation.Startup;
 using Elsa.Workflows.Runtime.Scheduling;
 using Elsa.Workflows.Runtime.Resumption;
+using Elsa.Workflows.Runtime.Services.Coalescing;
 using Microsoft.AspNetCore.Authentication;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.TestHost;
@@ -416,6 +422,309 @@ internal static class ResponseReplayPublicationHost
             ReadStringVariable(restFrame, "referenceText"));
     }
 
+    public static async Task UnpublishCandidateForMeasurementAsync(
+        string closurePath,
+        string databasePath,
+        string evidenceDirectory,
+        string candidateDefinitionId,
+        string candidateArtifactId,
+        string candidateArtifactHash)
+    {
+        Directory.CreateDirectory(evidenceDirectory);
+        var baseline = ReadBaseline(await File.ReadAllBytesAsync(closurePath));
+        await using var app = await StartHostAsync(
+            databasePath, closurePath, evidenceDirectory, includeHistoricalClosureReconciliation: false);
+        var shell = await app.Services.GetRequiredService<IShellRegistry>().GetOrActivateAsync(ShellName);
+        using var scope = shell.ServiceProvider.CreateScope();
+        var provider = scope.ServiceProvider;
+        EnsureHistoricalClosureReconciliationDisabled(provider);
+        await EnsureHistoricalExternalArtifactPreservedAsync(provider, baseline);
+
+        var candidate = await provider.GetRequiredService<IWorkflowExecutableStore>()
+            .FindAsync(candidateArtifactId, CancellationToken.None)
+            ?? throw new InvalidOperationException("The candidate executable is absent from the External comparison database copy.");
+        Ensure(candidate.Identity.ArtifactHash == candidateArtifactHash && candidate.Identity.DefinitionId == candidateDefinitionId,
+            "The candidate identity changed in the External comparison database copy.");
+        Ensure(candidate.Nodes.Single(node => node.AuthoredActivityId == ResponseNodeId)
+                   .ActivityContract?.SideEffectProfile == SideEffectProfile.ReplaySafe,
+            "The candidate artifact profile changed before External comparison preparation.");
+
+        var activeSlot = (await provider.GetRequiredService<IWorkflowActivationAuthority>()
+                .ListByDefinitionAsync(candidateDefinitionId, CancellationToken.None))
+            .Single(slot => slot.ActiveActivationId is not null);
+        var unpublished = await provider.GetRequiredService<IPublicationSlotUnpublisher>()
+            .UnpublishAsync(candidateDefinitionId, activeSlot.SlotName, CancellationToken.None);
+        Ensure(unpublished.ActiveActivationId is null,
+            "The candidate publication slot remained active after normal unpublish.");
+        Ensure((await provider.GetRequiredService<IWorkflowExecutableStore>()
+                    .FindAsync(candidateArtifactId, CancellationToken.None))?.Identity.ArtifactHash == candidateArtifactHash,
+            "Normal candidate unpublish removed or changed its immutable executable.");
+        await shell.ServiceProvider.GetServices<IStartupTask>()
+            .OfType<UpdateRouteTableStartupTask>()
+            .Single()
+            .ExecuteAsync(CancellationToken.None);
+
+        var activeRouteBindings = (await ReadActiveHttpBindingsAsync(provider.GetRequiredService<IWorkflowTriggerBindingStore>()))
+            .Where(binding => StringComparer.Ordinal.Equals(binding.Metadata.GetValueOrDefault("http:template"), baseline.RoutePath))
+            .ToArray();
+        Ensure(activeRouteBindings.Length == 0,
+            "The External comparison copy still serves the shared route before unchanged-source reconciliation.");
+    }
+
+    public static async Task ReconcileExternalForMeasurementAsync(
+        string closurePath,
+        string databasePath,
+        string evidenceDirectory,
+        string baselineArtifactId,
+        string baselineArtifactHash,
+        string candidateArtifactId,
+        string candidateArtifactHash)
+    {
+        Directory.CreateDirectory(evidenceDirectory);
+        var baseline = ReadBaseline(await File.ReadAllBytesAsync(closurePath));
+        Ensure(baseline.ArtifactId == baselineArtifactId && baseline.ArtifactHash == baselineArtifactHash,
+            "External comparison identity differs from the immutable closure fixture.");
+        await using var app = await StartHostAsync(databasePath, closurePath, evidenceDirectory);
+        var shell = await app.Services.GetRequiredService<IShellRegistry>().GetOrActivateAsync(ShellName);
+        using var scope = shell.ServiceProvider.CreateScope();
+        var provider = scope.ServiceProvider;
+        var result = await provider.GetRequiredService<IWorkflowArtifactReconciler>().ReconcileAsync(CancellationToken.None);
+        var baselineResult = result.Entries.SingleOrDefault(entry => StringComparer.Ordinal.Equals(entry.ArtifactId, baseline.ArtifactId));
+        Ensure(baselineResult is not null &&
+               baselineResult.Outcome is WorkflowArtifactImportOutcome.Imported or WorkflowArtifactImportOutcome.AlreadyCurrent,
+            $"Normal unchanged-source reconciliation did not restore the immutable External artifact: {baselineResult?.Outcome} ({baselineResult?.Diagnostic}).");
+        await shell.ServiceProvider.GetServices<IStartupTask>()
+            .OfType<UpdateRouteTableStartupTask>()
+            .Single()
+            .ExecuteAsync(CancellationToken.None);
+
+        await EnsureHistoricalExternalArtifactPreservedAsync(provider, baseline);
+        var executableStore = provider.GetRequiredService<IWorkflowExecutableStore>();
+        var candidateExecutable = await executableStore.FindAsync(candidateArtifactId, CancellationToken.None)
+            ?? throw new InvalidOperationException("Normal External reconciliation removed the retained candidate executable.");
+        Ensure(candidateExecutable.Identity.ArtifactHash == candidateArtifactHash &&
+               candidateExecutable.Nodes.Single(node => node.AuthoredActivityId == ResponseNodeId)
+                   .ActivityContract?.SideEffectProfile == SideEffectProfile.ReplaySafe,
+            "Normal External reconciliation changed the retained candidate artifact identity or profile.");
+
+        var activeRouteBindings = (await ReadActiveHttpBindingsAsync(provider.GetRequiredService<IWorkflowTriggerBindingStore>()))
+            .Where(binding => StringComparer.Ordinal.Equals(binding.Metadata.GetValueOrDefault("http:template"), baseline.RoutePath))
+            .ToArray();
+        Ensure(activeRouteBindings.Length == 1 && activeRouteBindings[0].ArtifactId == baseline.ArtifactId,
+            "Normal unchanged-source reconciliation did not make the External artifact the sole active shared-route binding.");
+    }
+
+    public static async Task<ResponseReplayMeasurementResult> RunMeasurementAsync(
+        string closurePath,
+        string databasePath,
+        string evidenceDirectory,
+        string pipeName,
+        string targetArtifactId,
+        string targetArtifactHash,
+        string targetProfile,
+        string correlationId,
+        string baselineArtifactId,
+        string baselineArtifactHash,
+        string candidateArtifactId,
+        string candidateArtifactHash)
+    {
+        Directory.CreateDirectory(evidenceDirectory);
+        var closureBytes = await File.ReadAllBytesAsync(closurePath);
+        var baseline = ReadBaseline(closureBytes);
+        Ensure(baseline.ArtifactId == baselineArtifactId && baseline.ArtifactHash == baselineArtifactHash,
+            "The measurement baseline identity differs from the immutable External closure.");
+        Ensure(targetProfile is "External" or "ReplaySafe", $"Unsupported measured profile '{targetProfile}'.");
+        var requestPath = $"{HttpResponsePath.TrimEnd('/')}/{baseline.RoutePath.Trim('/')}";
+        var options = new ResponseReplayMeasurementOptions(
+            requestPath,
+            correlationId,
+            targetArtifactId,
+            targetArtifactHash,
+            targetProfile,
+            HttpNodeId,
+            ResponseNodeId);
+        await using var app = await StartHostAsync(
+            databasePath,
+            closurePath,
+            evidenceDirectory,
+            includeHistoricalClosureReconciliation: false,
+            observationOptions: options);
+
+        var shell = await app.Services.GetRequiredService<IShellRegistry>().GetOrActivateAsync(ShellName);
+        using var scope = shell.ServiceProvider.CreateScope();
+        var provider = scope.ServiceProvider;
+        EnsureHistoricalClosureReconciliationDisabled(provider);
+        await provider.GetServices<IStartupTask>()
+            .OfType<UpdateRouteTableStartupTask>()
+            .Single()
+            .ExecuteAsync(CancellationToken.None);
+        await EnsureHistoricalExternalArtifactPreservedAsync(provider, baseline);
+
+        var executableStore = provider.GetRequiredService<IWorkflowExecutableStore>();
+        var candidate = await executableStore.FindAsync(candidateArtifactId, CancellationToken.None)
+            ?? throw new InvalidOperationException("The measurement database copy does not retain the published candidate executable.");
+        Ensure(candidate.Identity.ArtifactHash == candidateArtifactHash &&
+               candidate.Nodes.Single(node => node.AuthoredActivityId == ResponseNodeId)
+                   .ActivityContract?.SideEffectProfile == SideEffectProfile.ReplaySafe,
+            "The measurement database copy changed the candidate identity or ReplaySafe response profile.");
+        Ensure(candidate.Nodes.Single(node => node.AuthoredActivityId == HttpNodeId)
+                   .ActivityContract?.SideEffectProfile == SideEffectProfile.External,
+            "The measurement database copy changed HttpEndpoint's External profile.");
+
+        var target = await executableStore.FindAsync(targetArtifactId, CancellationToken.None)
+            ?? throw new InvalidOperationException("The selected measurement executable is absent from the database copy.");
+        Ensure(target.Identity.ArtifactHash == targetArtifactHash,
+            "The selected measurement executable hash differs from the requested artifact.");
+        var targetResponseProfile = target.Nodes.Single(node => node.AuthoredActivityId == ResponseNodeId)
+            .ActivityContract?.SideEffectProfile.ToString();
+        Ensure(targetResponseProfile == targetProfile,
+            $"The selected executable resolved response profile '{targetResponseProfile ?? "<absent>"}', expected '{targetProfile}'.");
+
+        var routeBindings = (await ReadActiveHttpBindingsAsync(provider.GetRequiredService<IWorkflowTriggerBindingStore>()))
+            .Where(binding => StringComparer.Ordinal.Equals(binding.Metadata.GetValueOrDefault("http:template"), baseline.RoutePath))
+            .ToArray();
+        Ensure(routeBindings.Length == 1 && routeBindings[0].ArtifactId == targetArtifactId,
+            "The intended measured artifact is not the sole active binding for the shared HTTP route.");
+
+        var routeTable = shell.ServiceProvider.GetRequiredService<IRouteTable>();
+        using (var snapshot = (routeTable as IRouteTableSnapshotProvider
+                   ?? throw new InvalidOperationException("The measured route table does not expose its snapshot-resolution seam."))
+                   .AcquireSnapshot())
+        {
+            var match = snapshot.ResolveRoute(
+                baseline.RoutePath.Trim('/'),
+                "POST",
+                shell.ServiceProvider.GetRequiredService<IRouteMatcher>())
+                ?? throw new InvalidOperationException("The production route snapshot did not resolve the selected POST route.");
+            Ensure(match.Template == baseline.RoutePath.Trim('/'),
+                "The production route snapshot selected a different route template.");
+        }
+
+        var endpointBasePath = shell.ServiceProvider
+            .GetRequiredService<Microsoft.Extensions.Options.IOptions<Elsa.Activities.Http.Options.HttpEndpointOptions>>()
+            .Value.BasePath;
+        Ensure(StringComparer.OrdinalIgnoreCase.Equals(
+                requestPath,
+                $"{endpointBasePath.TrimEnd('/')}/{baseline.RoutePath.Trim('/')}") &&
+               StringComparer.Ordinal.Equals(options.RequestPath, requestPath),
+            "The server-side request observation marker does not match the composed HttpEndpoint request path.");
+
+        var pageReuse = shell.ServiceProvider.GetRequiredService<RuntimeCoalescingDurableValuePageReuseRegistration>();
+        Ensure(pageReuse.IsEligible,
+            "The measured test-only store wrappers changed the runtime's durable-value page-reuse eligibility.");
+        var observation = shell.ServiceProvider.GetRequiredService<ResponseReplayObservation>();
+        observation.RecordHostComposition(pageReuse.IsEligible, equivalentStartupPreparation: true);
+
+        var channel = new ResponseReplayCommitGateChannel(new ResponseReplayCommitGateOptions(
+            pipeName,
+            targetArtifactId,
+            targetArtifactHash,
+            HttpNodeId,
+            ResponseNodeId));
+        await using var ownedChannel = channel;
+        using var pipeTimeout = new CancellationTokenSource(TimeSpan.FromSeconds(45));
+        await channel.ConnectAsync(pipeTimeout.Token);
+        await channel.SendAsync("measurement-ready", new
+        {
+            processId = Environment.ProcessId,
+            requestPath,
+            correlationId,
+            targetArtifactId,
+            targetArtifactHash,
+            targetProfile,
+            endpointNodeId = HttpNodeId,
+            endpointProfile = target.Nodes.Single(node => node.AuthoredActivityId == HttpNodeId)
+                .ActivityContract?.SideEffectProfile.ToString(),
+            responseNodeId = ResponseNodeId,
+            responseProfile = targetResponseProfile,
+            baselineArtifactId,
+            baselineArtifactHash,
+            candidateArtifactId,
+            candidateArtifactHash,
+            activeRouteBindingCount = routeBindings.Length,
+            durableValuePageReuseEligible = pageReuse.IsEligible,
+            equivalentStartupPreparation = true
+        }, pipeTimeout.Token);
+        await channel.WaitForCommandAsync("start", pipeTimeout.Token);
+
+        observation.BeginCapture();
+        using var client = app.GetTestClient();
+        using var request = new HttpRequestMessage(HttpMethod.Post, requestPath)
+        {
+            Content = new StringContent("{\"firstName\":\"Alice\",\"lastName\":\"Smith\"}", Encoding.UTF8, "application/json")
+        };
+        request.Headers.Add(ReplayCorrelationHeader, correlationId);
+        using var response = await client.SendAsync(request, HttpCompletionOption.ResponseContentRead, CancellationToken.None);
+        var body = await response.Content.ReadAsStringAsync();
+        // This marks the client's fully buffered response boundary, not the server's exact socket-write instant.
+        var responseReceivedObservation = observation.CaptureSnapshot();
+        var contentType = response.Content.Headers.ContentType?.MediaType;
+        var authoredHeaders = ReadAuthoredResponseHeaders(response);
+        Ensure(response.StatusCode == HttpStatusCode.OK, $"The measured request returned HTTP {(int)response.StatusCode}.");
+        Ensure(body == "Alice Smith", $"The measured request returned unexpected body '{body}'.");
+        Ensure(contentType == "text/plain", $"The measured request returned content type '{contentType ?? "<absent>"}'.");
+        Ensure(authoredHeaders.Count == 0, "The measured response unexpectedly delivered authored HTTP headers.");
+        var targetExecutionId = observation.TargetExecutionId
+            ?? throw new InvalidOperationException("The measured request did not produce a correlated target claim.");
+        await channel.SendAsync("http-delivered", new
+        {
+            workflowExecutionId = targetExecutionId,
+            targetArtifactId,
+            targetArtifactHash,
+            targetProfile,
+            statusCode = (int)response.StatusCode,
+            body,
+            contentType,
+            authoredHeaders
+        });
+        await channel.WaitForCommandAsync("settled", CancellationToken.None);
+
+        var snapshotResult = observation.EndCapture();
+        Ensure(snapshotResult.TargetClaim is not null &&
+               snapshotResult.TargetClaim.CheckpointName == RuntimeCheckpointNames.ActivityAttemptClaimed &&
+               snapshotResult.TargetClaim.ArtifactId == targetArtifactId &&
+               snapshotResult.TargetClaim.ArtifactHash == targetArtifactHash &&
+               snapshotResult.TargetClaim.NodeId == HttpNodeId &&
+               snapshotResult.TargetClaim.ClaimActivityProfile == SideEffectProfile.External.ToString() &&
+               snapshotResult.TargetClaim.ResponseProfile == targetProfile,
+            "The measured claim/checkpoint/profile attribution does not match the selected artifact and response node.");
+        await channel.SendAsync("measurement-complete", new
+        {
+            responseStatus = (int)response.StatusCode,
+            responseBody = body,
+            responseContentType = contentType,
+            authoredHeaders,
+            responseReceivedObservation,
+            observation = snapshotResult
+        });
+
+        return new ResponseReplayMeasurementResult(
+            targetExecutionId, (int)response.StatusCode, body, contentType!, authoredHeaders, responseReceivedObservation, snapshotResult);
+    }
+
+    private static IReadOnlyDictionary<string, string[]> ReadAuthoredResponseHeaders(HttpResponseMessage response)
+    {
+        var transportHeaders = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        {
+            "Connection", "Content-Encoding", "Content-Length", "Content-Type", "Date", "Keep-Alive",
+            "Server", "TE", "Trailer", "Transfer-Encoding", "Upgrade", "Via"
+        };
+        var values = new Dictionary<string, List<string>>(StringComparer.OrdinalIgnoreCase);
+        foreach (var (name, headerValues) in response.Headers.Concat(response.Content.Headers))
+        {
+            if (transportHeaders.Contains(name))
+                continue;
+            if (!values.TryGetValue(name, out var collected))
+            {
+                collected = [];
+                values.Add(name, collected);
+            }
+            collected.AddRange(headerValues);
+        }
+
+        return values.ToDictionary(pair => pair.Key, pair => pair.Value.ToArray(), StringComparer.OrdinalIgnoreCase);
+    }
+
     public static async Task RunCrashStageAsync(
         string closurePath,
         string databasePath,
@@ -585,7 +894,8 @@ internal static class ResponseReplayPublicationHost
         string closurePath,
         string evidenceDirectory,
         ResponseReplayCommitGateOptions? gateOptions = null,
-        bool includeHistoricalClosureReconciliation = true)
+        bool includeHistoricalClosureReconciliation = true,
+        ResponseReplayMeasurementOptions? observationOptions = null)
     {
         var connectionString = $"Data Source={databasePath};Pooling=False";
         var values = new Dictionary<string, string?>(StringComparer.Ordinal)
@@ -639,6 +949,17 @@ internal static class ResponseReplayPublicationHost
             values["CShells:Shells:default:Features:ResponseReplayCommitGate:TargetArtifactHash"] = gateOptions.TargetArtifactHash;
             values["CShells:Shells:default:Features:ResponseReplayCommitGate:EndpointNodeId"] = gateOptions.EndpointNodeId;
             values["CShells:Shells:default:Features:ResponseReplayCommitGate:ResponseNodeId"] = gateOptions.ResponseNodeId;
+        }
+        if (observationOptions is not null)
+        {
+            values["CShells:Shells:default:Features:ResponseReplayObservation"] = null;
+            values["CShells:Shells:default:Features:ResponseReplayObservation:RequestPath"] = observationOptions.RequestPath;
+            values["CShells:Shells:default:Features:ResponseReplayObservation:CorrelationId"] = observationOptions.CorrelationId;
+            values["CShells:Shells:default:Features:ResponseReplayObservation:TargetArtifactId"] = observationOptions.TargetArtifactId;
+            values["CShells:Shells:default:Features:ResponseReplayObservation:TargetArtifactHash"] = observationOptions.TargetArtifactHash;
+            values["CShells:Shells:default:Features:ResponseReplayObservation:TargetProfile"] = observationOptions.TargetProfile;
+            values["CShells:Shells:default:Features:ResponseReplayObservation:EndpointNodeId"] = observationOptions.EndpointNodeId;
+            values["CShells:Shells:default:Features:ResponseReplayObservation:ResponseNodeId"] = observationOptions.ResponseNodeId;
         }
 
         var builder = WebApplication.CreateBuilder(new WebApplicationOptions
@@ -702,6 +1023,31 @@ internal static class ResponseReplayPublicationHost
         builder.Services.AddAuthorization();
 
         var app = builder.Build();
+        if (observationOptions is { } measuredRequest)
+        {
+            app.Use(async (context, next) =>
+            {
+                if (!HttpMethods.IsPost(context.Request.Method) ||
+                    !StringComparer.Ordinal.Equals(context.Request.Path.Value, measuredRequest.RequestPath) ||
+                    !StringComparer.Ordinal.Equals(context.Request.Headers[ReplayCorrelationHeader].ToString(), measuredRequest.CorrelationId))
+                {
+                    await next();
+                    return;
+                }
+
+                using var activity = new Activity("response-replay.measured-http-request");
+                activity.SetTag(ResponseReplayObservation.RequestCorrelationActivityTag, measuredRequest.CorrelationId);
+                activity.Start();
+                try
+                {
+                    await next();
+                }
+                finally
+                {
+                    activity.Stop();
+                }
+            });
+        }
         app.MapShells();
         app.UseAuthentication();
         app.UseAuthorization();

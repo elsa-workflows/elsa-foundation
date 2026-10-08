@@ -91,9 +91,55 @@ if (args.Length == 7 && args[0] == "--resume-recovery")
     }
 }
 
+if (args.Length == 7 && args[0] == "--measurement-unpublish-candidate")
+{
+    try
+    {
+        await ResponseReplayPublicationHost.UnpublishCandidateForMeasurementAsync(
+            args[1], args[2], args[3], args[4], args[5], args[6]);
+        return 0;
+    }
+    catch (Exception exception)
+    {
+        Console.Error.WriteLine(exception);
+        return 1;
+    }
+}
+
+if (args.Length == 8 && args[0] == "--measurement-reconcile-external")
+{
+    try
+    {
+        await ResponseReplayPublicationHost.ReconcileExternalForMeasurementAsync(
+            args[1], args[2], args[3], args[4], args[5], args[6], args[7]);
+        return 0;
+    }
+    catch (Exception exception)
+    {
+        Console.Error.WriteLine(exception);
+        return 1;
+    }
+}
+
+if (args.Length == 13 && args[0] == "--measure")
+{
+    try
+    {
+        var result = await ResponseReplayPublicationHost.RunMeasurementAsync(
+            args[1], args[2], args[3], args[4], args[5], args[6], args[7], args[8], args[9], args[10], args[11], args[12]);
+        Console.WriteLine($"RESPONSE_REPLAY_MEASUREMENT_RESULT={JsonSerializer.Serialize(result, new JsonSerializerOptions(JsonSerializerDefaults.Web))}");
+        return 0;
+    }
+    catch (Exception exception)
+    {
+        Console.Error.WriteLine(exception);
+        return 1;
+    }
+}
+
 if (args.Length != 2)
 {
-    Console.Error.WriteLine("Usage: ResponseReplayHost <closure-path> <database-path> | --publication-proof <closure-path> <database-path> <evidence-directory> | --crash-stage <closure-path> <database-path> <evidence-directory> <pipe-name> <artifact-id> <artifact-hash> | --resume-recovery <closure-path> <database-path> <evidence-directory> <execution-id> <artifact-id> <artifact-hash>");
+    Console.Error.WriteLine("Usage: ResponseReplayHost <closure-path> <database-path> | --publication-proof <closure-path> <database-path> <evidence-directory> | --crash-stage <closure-path> <database-path> <evidence-directory> <pipe-name> <artifact-id> <artifact-hash> <request-correlation-id> | --resume-recovery <closure-path> <database-path> <evidence-directory> <execution-id> <artifact-id> <artifact-hash> | --measurement-unpublish-candidate <closure-path> <database-path> <evidence-directory> <candidate-definition-id> <candidate-artifact-id> <candidate-artifact-hash> | --measurement-reconcile-external <closure-path> <database-path> <evidence-directory> <baseline-artifact-id> <baseline-artifact-hash> <candidate-artifact-id> <candidate-artifact-hash> | --measure <closure-path> <database-path> <evidence-directory> <pipe-name> <artifact-id> <artifact-hash> <profile> <request-correlation-id> <baseline-artifact-id> <baseline-artifact-hash> <candidate-artifact-id> <candidate-artifact-hash>");
     return 2;
 }
 
