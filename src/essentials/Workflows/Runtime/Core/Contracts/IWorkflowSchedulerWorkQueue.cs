@@ -14,6 +14,13 @@ public interface IWorkflowSchedulerWorkQueue
     bool SupportsClaimTransitions => false;
 
     /// <summary>
+    /// Indicates that <see cref="DeleteAsync"/> removes only the specified work-item identity, independently of
+    /// listing/dequeue order and concurrent enqueues. Coalescing requires this capability to reconcile consumed work;
+    /// providers without it retain immediate durable checkpoint writes.
+    /// </summary>
+    bool SupportsTargetedDeletion => false;
+
+    /// <summary>
     /// Records a scheduler work item for its workflow execution and returns the queued item.
     /// </summary>
     /// <remarks>

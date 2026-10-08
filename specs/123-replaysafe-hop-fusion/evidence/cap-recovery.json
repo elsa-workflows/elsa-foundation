@@ -2,7 +2,7 @@
   "document": "Spec 123 corrective evidence",
   "date": "2026-10-08",
   "issue": "#2497",
-  "status": "Root accepts C003-C007 local evidence. PR/native-provider/merge/resulting-main delivery gates remain pending.",
+  "status": "Historical local evidence for PR head667a. Superseded for candidate acceptance by review-round1 supplement; no current-head acceptance follows from this file.",
   "source_pins": {
     "src/essentials/Workflows/Runtime/Services/Coalescing/CoalescingRuntimeCheckpointCommitStore.cs": "88f0783aa63bae63c014708a160751d27d38158261b5ad1b24693f42f3200a06",
     "src/essentials/Workflows/Runtime/Services/Coalescing/RuntimeCoalescingSession.cs": "788abc8d45ee1ea9679a038f6b4bfd3ba83c40e690bb14e2e15c9899b9d160b1",
@@ -294,5 +294,6 @@
       "receipt_sha256": "4552bbd9b2cb8b3b7d652e48e1655e5fe4360e3e50d72e004e163a6ca54cd183",
       "passed_log_sha256": "692c1972a3e507f2117dbbc7f5259b56307bb4181e583044a4a50a05cf777ecb"
     }
-  }
+  },
+  "review_round1_supplement": "cap-recovery-review-round1.json"
 }

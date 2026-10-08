@@ -16,6 +16,7 @@ using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.DependencyInjection
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Entities;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores;
 using Elsa.Workflows.Runtime.Resumption;
+using Elsa.Workflows.Runtime.Services.Checkpoints;
 using Elsa.Workflows.Runtime.Services.Coalescing;
 using Elsa.Workflows.Runtime.Services.Values;
 using Microsoft.Data.Sqlite;
@@ -101,7 +102,7 @@ public sealed class EfReplaySafeFusionCapRecoveryTests
     [Theory]
     [InlineData(CheckpointCommitGatePlacement.InnerStoreReturn)]
     [InlineData(CheckpointCommitGatePlacement.CoalescingDecoratorReturn)]
-    public Task Nested_D2_cap_fold_preserves_fifo_anchors_across_multiple_successors(
+    public Task Nested_D2_cap_fold_preserves_active_anchors_across_multiple_successors(
         CheckpointCommitGatePlacement gatePlacement) =>
         RunCutAndRecoverAsync(
             _output,
@@ -118,7 +119,131 @@ public sealed class EfReplaySafeFusionCapRecoveryTests
             gatePlacement: gatePlacement);
 
     [Fact]
-    public async Task Queue_advance_removes_consumed_prefix_before_out_of_order_same_time_continuations()
+    public async Task Persisted_outbox_delivery_between_anchor_enqueue_and_session_refresh_is_reconciled()
+    {
+        var databasePath = Path.Join(Path.GetTempPath(), $"elsa-replaysafe-cap-outbox-interleave-{Guid.NewGuid():N}.db");
+        var queueOperations = new QueueOperationRecorder();
+        var gate = new CheckpointCommitGate(RuntimeCheckpointNames.ActivityCompleted, targetOccurrence: 2, queueOperations);
+        var completed = false;
+        var overlapObserved = false;
+        var deleteCallsAtInterleave = 0;
+
+        try
+        {
+            await using (var source = await StartGenerationAsync(
+                             databasePath,
+                             gate,
+                             maxSegmentCheckpoints: 2,
+                             enableSequence: true,
+                             activityExecutionIds: Enumerable.Range(1, 8).Select(index => $"actexec-replaysafe-cap-interleave-{index}").ToArray(),
+                             schedulerQueueDecorator: inner => new CountingSchedulerWorkQueue(inner, queueOperations)))
+            {
+                var sourceRun = source.RunAsync(NewReplaySafeSequenceExecutable());
+                try
+                {
+                    var capture = gate.WaitForTargetCheckpointAsync(TimeSpan.FromSeconds(45));
+                    if (await Task.WhenAny(capture, sourceRun) != capture)
+                    {
+                        await sourceRun;
+                        throw new InvalidOperationException("The source run completed before the post-commit interleaving point was captured.");
+                    }
+
+                    var (commit, _) = await capture;
+                    Assert.Equal(RuntimeCheckpointNames.ActivityCompleted, commit.Checkpoint.Name);
+                    Assert.True(gate.WasCaptured);
+
+                    // The InnerStoreReturn gate is after the durable checkpoint/outbox write and anchor enqueue, but
+                    // before the coalescing session's next reconciliation. Deliver the real persisted
+                    // continuation through a fresh scope with no session accessor to force the competing enqueue here.
+                    await using var scope = source.Services.CreateAsyncScope();
+                    var provider = scope.ServiceProvider;
+                    var durableQueue = provider.GetRequiredService<CoalescingInner<IWorkflowSchedulerWorkQueue>>().Value;
+                    var queueBefore = await durableQueue.ListAllAsync(WorkflowExecutionId);
+                    Assert.Contains(queueBefore, item =>
+                        item.CommandKind == WorkflowExecutionCommandKind.ScheduleActivity &&
+                        StringComparer.Ordinal.Equals(ReadScheduleNodeId(item), "node-replaysafe-cap-b"));
+
+                    var durableOutbox = provider.GetRequiredService<CoalescingInner<IRuntimePostCommitOutboxStore>>().Value;
+                    var now = provider.GetRequiredService<TimeProvider>().GetUtcNow();
+                    var pending = Assert.Single(await durableOutbox.GetDeliverableAsync(new RuntimePostCommitOutboxQuery(
+                        now,
+                        limit: 10,
+                        workflowExecutionId: WorkflowExecutionId,
+                        intentKind: RuntimePostCommitIntentKinds.EnqueueSchedulerWork)));
+                    var pendingWorkItem = Assert.IsType<RuntimeSchedulerWorkItem>(
+                        pending.Intent.Payload?.Deserialize<RuntimeSchedulerWorkItem>());
+                    Assert.Equal(WorkflowExecutionId, pending.Intent.WorkflowExecutionId);
+                    Assert.Equal(WorkflowExecutionId, pendingWorkItem.WorkflowExecutionId);
+                    Assert.DoesNotContain(queueBefore, item =>
+                        StringComparer.Ordinal.Equals(item.WorkItemId, pendingWorkItem.WorkItemId));
+
+                    var deleteCallsBeforeDelivery = queueOperations.Snapshot().DeleteCalls;
+                    var processor = new RuntimePostCommitOutboxProcessor(
+                        durableOutbox,
+                        new RuntimeSchedulerPostCommitIntentDispatcher(durableQueue),
+                        provider.GetRequiredService<TimeProvider>());
+                    var delivery = await processor.ProcessAsync(new RuntimePostCommitOutboxProcessRequest(
+                        limit: 1,
+                        workflowExecutionId: WorkflowExecutionId,
+                        intentKind: RuntimePostCommitIntentKinds.EnqueueSchedulerWork));
+                    Assert.Equal(1, delivery.DeliveredCount);
+                    var delivered = Assert.Single(delivery.Items);
+                    Assert.Equal(pending.Intent.IntentId, delivered.IntentId);
+                    Assert.Equal(RuntimePostCommitOutboxStatus.Delivered, delivered.RequestedDeliveryResultStatus);
+                    Assert.False(delivered.IsSuperseded);
+
+                    var queueDuringInterleave = await durableQueue.ListAllAsync(WorkflowExecutionId);
+                    Assert.Contains(queueDuringInterleave, item =>
+                        StringComparer.Ordinal.Equals(item.WorkItemId, pendingWorkItem.WorkItemId));
+                    Assert.Contains(queueDuringInterleave, item =>
+                        item.CommandKind == WorkflowExecutionCommandKind.ScheduleActivity &&
+                        StringComparer.Ordinal.Equals(ReadScheduleNodeId(item), "node-replaysafe-cap-b"));
+                    deleteCallsAtInterleave = queueOperations.Snapshot().DeleteCalls;
+                    Assert.Equal(deleteCallsBeforeDelivery, deleteCallsAtInterleave);
+                    Assert.False(sourceRun.IsCompleted, "The source must remain paused during outbox delivery.");
+                    overlapObserved = true;
+                    _output.WriteLine(
+                        $"Outbox interleaved before session refresh: intent={pending.Intent.IntentId}, " +
+                        $"workItem={pendingWorkItem.WorkItemId}, deleteAsyncCallsBeforeRelease={deleteCallsAtInterleave}.");
+                }
+                finally
+                {
+                    gate.Release();
+                    try
+                    {
+                        await sourceRun.WaitAsync(TimeSpan.FromSeconds(45));
+                    }
+                    catch
+                    {
+                        // Preserve the interleaving assertion as the primary failure.
+                    }
+                }
+
+                var result = await sourceRun.WaitAsync(TimeSpan.FromSeconds(45));
+                Assert.Equal(WorkflowExecutionStatus.Completed, result.WorkflowState?.Status);
+                Assert.True(
+                    source.Services.GetRequiredService<RuntimeSchedulerDispatchDiagnostics>().FusedSpans > 0,
+                    "The source dispatch must actually enter ReplaySafe fusion for this to exercise session refresh.");
+                Assert.True(overlapObserved, "A persisted outbox item was delivered while a durable anchor existed and the source session was paused before refresh.");
+                _output.WriteLine($"Targeted deletes after release: {queueOperations.Snapshot().DeleteCalls - deleteCallsAtInterleave}.");
+                await AssertQueueAndOutboxSettledAsync(source.Services);
+            }
+
+            completed = true;
+        }
+        finally
+        {
+            gate.Release();
+            SqliteConnection.ClearAllPools();
+            if (completed)
+                DeleteDatabaseFiles(databasePath);
+            else
+                Console.Error.WriteLine($"Outbox-interleaving test failed; retained SQLite evidence at '{databasePath}'.");
+        }
+    }
+
+    [Fact]
+    public async Task Queue_advance_removes_consumed_identities_among_out_of_order_same_time_continuations()
     {
         var databasePath = Path.Join(Path.GetTempPath(), $"elsa-replaysafe-cap-order-{Guid.NewGuid():N}.db");
         var completed = false;
@@ -141,19 +266,18 @@ public sealed class EfReplaySafeFusionCapRecoveryTests
             await session.EnqueueOverlayAsync(NewQueueWorkItem("continuation-early", 5, timestamp), CancellationToken.None);
             await session.EnqueueOverlayAsync(NewQueueWorkItem("continuation-middle", 20, timestamp), CancellationToken.None);
 
-            // The two continuations have the same timestamp as the original items but sort before and between them
-            // by the provider's sequence key. Deleting the consumed seeded prefix after these inserts would dequeue
-            // the wrong row and corrupt the tracked durable order.
+            // The new continuations sort before and between the original rows. Identity deletion must preserve
+            // them regardless of where they move the provider's dequeue head.
             await session.AdvanceInnerQueueAsync(consumeInFlightClaims: false, CancellationToken.None);
             Assert.Equal(
                 new[] { "continuation-early", "continuation-middle", "seeded-second" },
                 (await durableQueue.ListAllAsync(WorkflowExecutionId)).Select(item => item.WorkItemId));
 
-            // Subsequent reconciliation must use the provider's actual post-insert order, not overlay insertion order.
+            // A consumed item can be deleted behind still-unconsumed work without touching those continuations.
             Assert.Equal("seeded-second", (await session.DequeueOverlayAsync(CancellationToken.None))?.WorkItemId);
             await session.AdvanceInnerQueueAsync(consumeInFlightClaims: false, CancellationToken.None);
             Assert.Equal(
-                new[] { "continuation-early", "continuation-middle", "seeded-second" },
+                new[] { "continuation-early", "continuation-middle" },
                 (await durableQueue.ListAllAsync(WorkflowExecutionId)).Select(item => item.WorkItemId));
 
             Assert.Equal("continuation-early", (await session.DequeueOverlayAsync(CancellationToken.None))?.WorkItemId);
@@ -163,7 +287,8 @@ public sealed class EfReplaySafeFusionCapRecoveryTests
 
             Assert.Equal(2, queue.EnqueueCalls);
             Assert.Equal(2, queue.ListPageCalls); // one seed page and one refresh after actual inserts
-            Assert.Equal(4, queue.DequeueCalls);
+            Assert.Equal(0, queue.DequeueCalls);
+            Assert.Equal(4, queue.DeleteCalls);
             completed = true;
         }
         finally
@@ -405,10 +530,14 @@ public sealed class EfReplaySafeFusionCapRecoveryTests
                     // A prior continuing boundary can already have made the active anchors durable.
                     // Retain the observed deltas, including zero, instead of requiring redundant writes.
                     if (gatePlacement == CheckpointCommitGatePlacement.InnerStoreReturn)
+                    {
                         Assert.Equal(0, queueDelta.DequeueCalls);
+                        Assert.Equal(0, queueDelta.DeleteCalls);
+                    }
                     output.WriteLine(
                         $"{checkpointName} {gatePlacement}: enqueue={queueDelta.EnqueueCalls}, " +
-                        $"ListAsync page calls={queueDelta.ListPageCalls}, dequeue={queueDelta.DequeueCalls}. " +
+                        $"ListAsync page calls={queueDelta.ListPageCalls}, dequeue={queueDelta.DequeueCalls}, " +
+                        $"DeleteAsync calls={queueDelta.DeleteCalls}. " +
                         "These are scheduler-queue API/page counts, not SQL command counts.");
 
                     await using (var scope = source.Services.CreateAsyncScope())
@@ -466,8 +595,10 @@ public sealed class EfReplaySafeFusionCapRecoveryTests
                             .ToArray();
                         if (expectMultipleActivities)
                         {
+                            // Child a's fused dispatch finished before the preceding durable boundary and its
+                            // consumed identity has been removed. Parent and child b are still active recovery anchors.
                             Assert.Equal(
-                                new[] { "node-replaysafe-cap-sequence", "node-replaysafe-cap-a", "node-replaysafe-cap-b" },
+                                new[] { "node-replaysafe-cap-sequence", "node-replaysafe-cap-b" },
                                 durableAnchorNodeIds);
                         }
                         else
@@ -862,13 +993,15 @@ public sealed class EfReplaySafeFusionCapRecoveryTests
         private int _enqueueCalls;
         private int _listPageCalls;
         private int _dequeueCalls;
+        private int _deleteCalls;
 
         public ConcurrentQueue<RuntimeSchedulerWorkItem> EnqueuedItems { get; } = new();
 
         public QueueOperationCounts Snapshot() => new(
             Volatile.Read(ref _enqueueCalls),
             Volatile.Read(ref _listPageCalls),
-            Volatile.Read(ref _dequeueCalls));
+            Volatile.Read(ref _dequeueCalls),
+            Volatile.Read(ref _deleteCalls));
 
         public void RecordEnqueue(RuntimeSchedulerWorkItem workItem)
         {
@@ -879,14 +1012,17 @@ public sealed class EfReplaySafeFusionCapRecoveryTests
         public void RecordListPage() => Interlocked.Increment(ref _listPageCalls);
 
         public void RecordDequeue() => Interlocked.Increment(ref _dequeueCalls);
+
+        public void RecordDelete() => Interlocked.Increment(ref _deleteCalls);
     }
 
-    private readonly record struct QueueOperationCounts(int EnqueueCalls, int ListPageCalls, int DequeueCalls)
+    private readonly record struct QueueOperationCounts(int EnqueueCalls, int ListPageCalls, int DequeueCalls, int DeleteCalls)
     {
         public QueueOperationCounts DifferenceFrom(QueueOperationCounts earlier) => new(
             EnqueueCalls - earlier.EnqueueCalls,
             ListPageCalls - earlier.ListPageCalls,
-            DequeueCalls - earlier.DequeueCalls);
+            DequeueCalls - earlier.DequeueCalls,
+            DeleteCalls - earlier.DeleteCalls);
     }
 
     private sealed class AnchorEnqueueFault(bool cancel)
@@ -1021,7 +1157,10 @@ public sealed class EfReplaySafeFusionCapRecoveryTests
         public int EnqueueCalls { get; private set; }
         public int ListPageCalls { get; private set; }
         public int DequeueCalls { get; private set; }
+        private int _deleteCalls;
+        public int DeleteCalls => Volatile.Read(ref _deleteCalls);
 
+        public bool SupportsTargetedDeletion => inner.SupportsTargetedDeletion;
         public bool SupportsClaimTransitions => inner.SupportsClaimTransitions;
         public bool SupportsClaimableBacklogDiscovery => inner.SupportsClaimableBacklogDiscovery;
 
@@ -1048,8 +1187,12 @@ public sealed class EfReplaySafeFusionCapRecoveryTests
             return inner.DequeueAsync(workflowExecutionId, cancellationToken);
         }
 
-        public ValueTask<bool> DeleteAsync(string workflowExecutionId, string workItemId, CancellationToken cancellationToken = default) =>
-            inner.DeleteAsync(workflowExecutionId, workItemId, cancellationToken);
+        public ValueTask<bool> DeleteAsync(string workflowExecutionId, string workItemId, CancellationToken cancellationToken = default)
+        {
+            Interlocked.Increment(ref _deleteCalls);
+            recorder?.RecordDelete();
+            return inner.DeleteAsync(workflowExecutionId, workItemId, cancellationToken);
+        }
 
         public ValueTask<IReadOnlyCollection<string>> ListPendingWorkflowExecutionIdsAsync(int limit, CancellationToken cancellationToken = default) =>
             inner.ListPendingWorkflowExecutionIdsAsync(limit, cancellationToken);

@@ -1,6 +1,8 @@
 # Spec 123 corrective evidence — 2026-10-08
 
-Root accepts the local C003–C007 evidence below for corrective issue #2497. The final focused, six affected-project, rebuilt-host and architecture checks passed on the pinned candidate. Map freshness passes after the scoped generated-map refresh. PR/native-provider/resulting-main delivery gates remain pending. Artifact names identify retained control-room evidence; SHA-256 values support comparison with the original receipts. The adjacent [JSON receipt](cap-recovery.json) carries structured outcomes.
+**Review round 1:** the following is retained evidence for PR head `667a120399a78041a5bbf8f6705ec682cae95c8c`, not acceptance of the current working correction. Greptile subsequently found two queue-reconciliation gaps; C004/C006/C007 are reopened. Current correction evidence is recorded in the [review-round-one supplement](cap-recovery-review-round1.md).
+
+Root accepted the local C003–C007 evidence below for that pinned candidate of corrective issue #2497. The final focused, six affected-project, rebuilt-host and architecture checks passed on the pinned candidate. Map freshness passes after the scoped generated-map refresh. PR/native-provider/resulting-main delivery gates remain pending. Artifact names identify retained control-room evidence; SHA-256 values support comparison with the original receipts. The adjacent [JSON receipt](cap-recovery.json) carries structured outcomes.
 
 ## Candidate source pins
 

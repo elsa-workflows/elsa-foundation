@@ -12,8 +12,8 @@ namespace Elsa.Workflows.Runtime.Services.Coalescing;
 /// single atomic durable commit at a flush boundary (attempt activation, suspension/fault/cancellation/completion, an
 /// operational or bookmark write, the per-segment hop cap, or the end-of-drain quiescence flush). A durable attempt
 /// boundary and a cap-hit fold-and-flush each start another coalesced segment in the same drain; when no session is
-/// active this decorator is a byte-for-byte pass-through to the durable inner store, so the default (Immediate) path
-/// is completely unaffected.
+/// active, Deferred decisions are normalized to Immediate because there is no working set to flush later. The
+/// default Immediate path forwards the original decision unchanged.
 /// </summary>
 /// <remarks>
 /// This decorator never bypasses single-writer ownership fencing: the folded flush is routed back through
@@ -28,6 +28,9 @@ public sealed class CoalescingRuntimeCheckpointCommitStore(
     private static readonly RuntimeCheckpointPersistenceDecision ImmediateDecision =
         new(RuntimeCheckpointPersistenceMode.Immediate, "Coalesced segment flush.");
 
+    private static readonly RuntimeCheckpointPersistenceDecision NoActiveSessionDecision =
+        new(RuntimeCheckpointPersistenceMode.Immediate, "No matching active coalescing session.");
+
     private readonly IRuntimeCheckpointCommitStore _inner = inner.Value;
 
     public async ValueTask<RuntimeCheckpointCommitStoreResult> CommitAsync(RuntimeCheckpointCommit commit, RuntimeCheckpointPersistenceDecision decision, CancellationToken cancellationToken = default)
@@ -39,7 +42,12 @@ public sealed class CoalescingRuntimeCheckpointCommitStore(
         // another session. Even a non-matching commit fences the current owner's raw-page memo conservatively.
         var session = sessionAccessor.Current;
         if (session is null || !session.AppliesTo(commit.WorkflowExecutionId))
-            return await CommitInnerAsync(session, commit, decision, cancellationToken);
+        {
+            // Deferred has meaning only inside this matching working set. In particular, a legacy queue's disabled
+            // scope must not ask a third-party store to defer a write that no active session will later flush.
+            var directDecision = decision.Mode == RuntimeCheckpointPersistenceMode.Deferred ? NoActiveSessionDecision : decision;
+            return await CommitInnerAsync(session, commit, directDecision, cancellationToken);
+        }
 
         // The synthetic folded quiescence-flush commit built by the drain scope: it already represents the whole
         // segment (routed here through the committer so fencing gates it). Apply straight to inner and end the segment.
