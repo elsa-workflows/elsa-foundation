@@ -24,6 +24,8 @@ public sealed class CoalescingWorkflowSchedulerWorkQueue(
     public bool SupportsClaimTransitions =>
         sessionAccessor.Current is { IsActive: true } || _inner.SupportsClaimTransitions;
 
+    public bool SupportsTargetedDeletion => _inner.SupportsTargetedDeletion;
+
     public async ValueTask<RuntimeSchedulerWorkItem> EnqueueAsync(RuntimeSchedulerWorkItem workItem, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(workItem);
@@ -69,11 +71,8 @@ public sealed class CoalescingWorkflowSchedulerWorkQueue(
         CancellationToken cancellationToken = default) =>
         _inner.ListNextWorkItemsAsync(workflowExecutionIds, cancellationToken);
 
-    // Targeted deletion always addresses the durable inner queue. Its only caller is the out-of-drain terminal-residue
-    // purge in the resumption sweep (spec 113), which never runs inside a coalescing session — so, like
-    // ListPendingWorkflowExecutionIdsAsync, there is no overlay to consult and delegating to the inner queue is the
-    // whole operation. (A coalescing overlay is a per-drain buffer over this same durable queue; it holds no items a
-    // terminated execution could still legitimately run.)
+    // Targeted deletion addresses durable residue, including the out-of-drain terminal purge (spec 113).
+    // The session's own reconciliation uses its captured inner provider after the folded checkpoint commits.
     public ValueTask<bool> DeleteAsync(string workflowExecutionId, string workItemId, CancellationToken cancellationToken = default) =>
         _inner.DeleteAsync(workflowExecutionId, workItemId, cancellationToken);
 

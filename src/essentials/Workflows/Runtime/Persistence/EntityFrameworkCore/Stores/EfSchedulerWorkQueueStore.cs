@@ -34,6 +34,8 @@ public sealed class EfSchedulerWorkQueueStore(
 
     public bool SupportsClaimTransitions => true;
 
+    public bool SupportsTargetedDeletion => true;
+
     public bool SupportsClaimableBacklogDiscovery => true;
 
     public async ValueTask<RuntimeSchedulerWorkItem> EnqueueAsync(

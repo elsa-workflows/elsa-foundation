@@ -1,0 +1,385 @@
+{
+  "title": "PR #2511 review round 1 queue-reconciliation correction evidence",
+  "createdUtc": "2026-10-08",
+  "status": "Root accepts focused regression/API evidence and listed passing local gates; full EF attempt retained failed, current-head hosted verification and review required.",
+  "decision": "root_accepts_focused_regression_and_bounded_queue_api_evidence_only",
+  "tracking": {
+    "programIssue": 2382,
+    "correctiveIssue": 2497,
+    "pullRequest": 2511,
+    "reviewRoundOneFindings": [
+      "Provider ListAllAsync order is not necessarily durable DequeueAsync order.",
+      "Persisted outbox delivery may add durable work while a coalescing session is active; reconciliation must preserve unrelated work and reconcile known identities."
+    ],
+    "workingBaseHead": "86ca60ee5b100ccce0a4934865bedeaf558596a3",
+    "candidateIdentity": "Working candidate identified by source hashes; base commit alone excludes the uncommitted correction."
+  },
+  "candidateSourcePins": {
+    "src/essentials/Workflows/Runtime/Core/Contracts/IWorkflowSchedulerWorkQueue.cs": "f47b8316efd18bb325e97f5d98ba137f7f6348a148bf50c0618784746bc802b7",
+    "src/essentials/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/EfSchedulerWorkQueueStore.cs": "97982a0d153aaf3e6d901bd1a4282217a60df6428012d07323f82aeae9feafd9",
+    "src/essentials/Workflows/Runtime/Services/Coalescing/CoalescingRuntimeCheckpointCommitStore.cs": "e47ac0262070daf1eca7461b84fb86f79ed5383716dc2bafeee93f18af700eb2",
+    "src/essentials/Workflows/Runtime/Services/Coalescing/CoalescingWorkflowSchedulerWorkQueue.cs": "43886c66f32fc077a56cde6401b0003e57038c2fd79c5d662131344baeb02e37",
+    "src/essentials/Workflows/Runtime/Services/Coalescing/RuntimeCoalescingDrainScopeFactory.cs": "2d659ec491abcbcc6c84d4f79506a3c5c3e3c7b557f8b4bb7de8c31d8786ad09",
+    "src/essentials/Workflows/Runtime/Services/Coalescing/RuntimeCoalescingSession.cs": "d81fa779a2cbb93c0ed91806fe9a4067c486228aaae531b86d93c6064ebfa752",
+    "src/essentials/Workflows/Runtime/Services/Scheduler/InMemoryWorkflowSchedulerWorkQueue.cs": "b2c1b023a6c99a825f5bafd31764c1be0c56a02a83d37a330d2da3e2c3dcb6c7",
+    "tests/essentials/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/EfReplaySafeFusionCapRecoveryTests.cs": "fde2288c9ee2969a9c8e93b6cbcc23cec125b4ac6ca9a62cd63c9a5ee99e1fe5",
+    "tests/essentials/Workflows/Runtime/Tests/RuntimeCheckpointCoalescingTests.cs": "f4eea374730218eff47ae7d7b18dca4b559681406e8b619b7445e5947b8e0684",
+    "src/essentials/Workflows/Runtime/Services/WorkHandlers/ReplaySafeFusionDriver.cs": "786ae3c6bae9a2acbad27089e007de3c238ff4181e333a400021385b7410327f",
+    "src/essentials/Workflows/Runtime/Services/WorkHandlers/WorkflowScheduleActivitySchedulerWorkHandler.cs": "77a39c4ed199ed069fb40b552dec062595fc9627d66377d43235ecfd29e3caee"
+  },
+  "regressionEvidence": {
+    "unchangedProductionListOrderRed": {
+      "artifactPrefix": "review-round1-red-inmemory",
+      "receiptSha256": "f9ac14cbee878b9f5d81c4486db309389e8734c63003fb76ca9b0288d75ec986",
+      "trxSha256": "12a182286a99f6d2d2f6370c8d1e769b747ad781f942aee3d84a7658fc5aaff0",
+      "test": "RuntimeCheckpointCoalescingTests.AdvanceInnerQueue_RemovesConsumedSeededItemsByIdentity_WhenListOrderDiffersFromDequeueOrder",
+      "outcome": "failed_at_executed_behavior_assertion",
+      "observed": "The durable scheduler queue did not dequeue the expected FIFO head 'work-5'.",
+      "baseline": "unchanged PR-667a production source"
+    },
+    "singleSessionMutationOutboxRed": {
+      "artifactPrefix": "review-round1-red-outbox",
+      "receiptSha256": "a52e2744f4e5dd9755989945449afacb31ee84877a304158391afc99f328e2a2",
+      "trxSha256": "f4d9756d9bbcfbe2966381643b01719f0cf3fae826f3e8d9bc6837ebde687d1b",
+      "test": "EfReplaySafeFusionCapRecoveryTests.Persisted_outbox_delivery_between_anchor_enqueue_and_session_refresh_is_reconciled",
+      "mutation": {
+        "file": "RuntimeCoalescingSession.cs",
+        "mutatedSha256": "788abc8d45ee1ea9679a038f6b4bfd3ba83c40e690bb14e2e15c9899b9d160b1",
+        "meaning": "restored only the session file to PR-667a version; test and capability declarations remained candidate versions"
+      },
+      "outcome": "failed_at_executed_behavior_assertion",
+      "observed": "Start returned AcceptedButFaulted because durable queue contents changed outside the active coalescing session and observed order could not be reconciled.",
+      "candidateRestored": true,
+      "qualification": "This is a one-file mutation bite, not a full-main baseline."
+    },
+    "focusedV2SupersededAttempt": {
+      "artifactPrefix": "review-round1-focused-v2",
+      "receiptSha256": "3186415075bb2bc13c6f0c493fc3d55645205816460aeef18c9d4a7f32bcbf72",
+      "runtime": {
+        "passed": 44,
+        "failed": 0,
+        "skipped": 0,
+        "trxSha256": "9921ddfe88dca08634d32838a337e739b0b2814693cb85d184444c1e7e5b3cb1"
+      },
+      "runtimeEf": {
+        "passed": 13,
+        "failed": 3,
+        "skipped": 0,
+        "trxSha256": "94f6db2c8480dd0dbad6efcb6b8b64d85c7da26d208500b023568672d4e41f68"
+      },
+      "failureDisposition": "All three EF failures were stale nested-D2 expectations for a consumed child-A Schedule anchor. They expected sequence/A/B, while the still-required active anchors were sequence/B. v3 updates those expectations and retains the recovery assertions."
+    },
+    "focusedV3": {
+      "artifactPrefix": "review-round1-focused-v3",
+      "receiptSha256": "244a01e1089fd702cd6b4594b839802fcc90755a3faeaf78a30a5d4c3c2d7b51",
+      "runtimeCommand": "dotnet test tests/essentials/Workflows/Runtime/Tests/Elsa.Workflows.Runtime.Tests.csproj --no-restore -m:1 --filter FullyQualifiedName~RuntimeCheckpointCoalescingTests --logger 'trx;LogFileName=focused.trx'",
+      "runtime": {
+        "total": 44,
+        "executed": 44,
+        "passed": 44,
+        "failed": 0,
+        "skipped": 0,
+        "trxSha256": "188ea76d935d08cd2ef2a2ac573b09573e9898ff861013d4ac798c7bfa0647d4"
+      },
+      "runtimeEfCommand": "dotnet test tests/essentials/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.csproj --no-restore -m:1 --filter FullyQualifiedName~EfReplaySafeFusionCapRecoveryTests --logger 'trx;LogFileName=focused.trx'",
+      "runtimeEf": {
+        "total": 16,
+        "executed": 16,
+        "passed": 16,
+        "failed": 0,
+        "skipped": 0,
+        "trxSha256": "8443a62c44ad205671f1b97040f47c2a61d41c0bca40aeba38984a23b9b135c9"
+      }
+    }
+  },
+  "observedQueueApiDeltas": [
+    {
+      "boundary": "ActivityStarted cap 2",
+      "capture": "inner-store return",
+      "enqueue": 1,
+      "listAsyncPageCalls": 1,
+      "dequeue": 0,
+      "targetedDeleteAsync": 0
+    },
+    {
+      "boundary": "ActivityStarted cap 2",
+      "capture": "coalescing-decorator return",
+      "enqueue": 1,
+      "listAsyncPageCalls": 1,
+      "dequeue": 0,
+      "targetedDeleteAsync": 1
+    },
+    {
+      "boundary": "ActivityAttemptClaimed cap 1",
+      "capture": "inner-store return",
+      "enqueue": 0,
+      "listAsyncPageCalls": 0,
+      "dequeue": 0,
+      "targetedDeleteAsync": 0
+    },
+    {
+      "boundary": "ActivityAttemptClaimed cap 1",
+      "capture": "coalescing-decorator return",
+      "enqueue": 0,
+      "listAsyncPageCalls": 0,
+      "dequeue": 0,
+      "targetedDeleteAsync": 0
+    },
+    {
+      "boundary": "Typed ActivityScheduled cap 1",
+      "capture": "inner-store return",
+      "enqueue": 1,
+      "listAsyncPageCalls": 1,
+      "dequeue": 0,
+      "targetedDeleteAsync": 0
+    },
+    {
+      "boundary": "Typed ActivityScheduled cap 1",
+      "capture": "coalescing-decorator return",
+      "enqueue": 1,
+      "listAsyncPageCalls": 1,
+      "dequeue": 0,
+      "targetedDeleteAsync": 1
+    },
+    {
+      "boundary": "Fusable intrinsic ActivityScheduled cap 1",
+      "capture": "inner-store return",
+      "enqueue": 1,
+      "listAsyncPageCalls": 1,
+      "dequeue": 0,
+      "targetedDeleteAsync": 0
+    },
+    {
+      "boundary": "Fusable intrinsic ActivityScheduled cap 1",
+      "capture": "coalescing-decorator return",
+      "enqueue": 1,
+      "listAsyncPageCalls": 1,
+      "dequeue": 0,
+      "targetedDeleteAsync": 1
+    },
+    {
+      "boundary": "Nested D2 ActivityCompleted occurrence 2",
+      "capture": "inner-store return",
+      "enqueue": 0,
+      "listAsyncPageCalls": 0,
+      "dequeue": 0,
+      "targetedDeleteAsync": 0
+    },
+    {
+      "boundary": "Nested D2 ActivityCompleted occurrence 2",
+      "capture": "coalescing-decorator return",
+      "enqueue": 0,
+      "listAsyncPageCalls": 1,
+      "dequeue": 0,
+      "targetedDeleteAsync": 0
+    }
+  ],
+  "outboxInterleavingObservation": {
+    "test": "Persisted_outbox_delivery_between_anchor_enqueue_and_session_refresh_is_reconciled",
+    "observedPersistedWorkItem": true,
+    "targetedDeleteCallsBeforeRelease": 2,
+    "targetedDeleteCallsAfterRelease": 4,
+    "qualification": "These are queue API calls within the test, not SQL counts or latency."
+  },
+  "failureAndDeliverySemantics": {
+    "atLeastOncePreserved": true,
+    "exactlyOnceClaimed": false,
+    "initialOverlaySeedOrderChanged": false,
+    "initialOverlaySeedOrderQualification": "This correction does not redefine the overlay's initial ListAllAsync ordering semantics.",
+    "snapshotVsProcessKill": "Persisted SQLite interruption evidence is not an OS process-kill test."
+  },
+  "broaderCurrentPinGates": {
+    "fullAffectedRunReceipt": {
+      "artifact": "review-round1-full-gates-v1/receipt.json",
+      "receiptSha256": "cbb6110f0f6eee7cd33fe357f051d836312abd2950dec00a27c68fb97c14b9fd",
+      "status": "failed_one_http_timeout_in_runtime_ef",
+      "runtime": {
+        "passed": 2131,
+        "failed": 0
+      },
+      "resumption": {
+        "passed": 21,
+        "failed": 0
+      },
+      "runtimeEf": {
+        "passed": 919,
+        "failed": 1,
+        "skipped": 0,
+        "trxSha256": "2cccf5d2aef7a0b617e251d69f8aea1d73dbd6ee65cabe166edb19c45046bfd7",
+        "failedTest": "WorkerOidcHostTests.Real_bearer_actor_executes_resumes_revokes_and_reloads_across_a_child_process_restart",
+        "failure": "HttpClient.Timeout of30seconds at first authorized execute",
+        "disposition": "unresolved_attribution; Mac load107.93/110.27/84.03 observed after run is context, not proof of cause"
+      }
+    },
+    "backendE2E": {
+      "status": "five_valid_controls_passed",
+      "receiptSha256": "3cdbbb6ab2d275847d32e60720ef7d352ca2ea0b3ec8d2301cc56a37bc06ec43",
+      "scripts": [
+        "http/Test-HttpMethods.ps1",
+        "http/Test-HttpEcho.ps1",
+        "Test-SequenceWorkflow.ps1",
+        "http/Capture-RuntimeDbRest2386Control.ps1",
+        "Test-WorkflowFlow.ps1"
+      ],
+      "ownedProcessStopped": true,
+      "freshDatabaseRetained": true,
+      "sourceAndBinaryPins": {
+        "src/essentials/Workflows/Runtime/Services/Coalescing/RuntimeCoalescingSession.cs": "d81fa779a2cbb93c0ed91806fe9a4067c486228aaae531b86d93c6064ebfa752",
+        "src/essentials/Workflows/Runtime/Services/WorkHandlers/WorkflowScheduleActivitySchedulerWorkHandler.cs": "77a39c4ed199ed069fb40b552dec062595fc9627d66377d43235ecfd29e3caee",
+        "src/essentials/Workflows/Runtime/Services/Coalescing/CoalescingRuntimeCheckpointCommitStore.cs": "e47ac0262070daf1eca7461b84fb86f79ed5383716dc2bafeee93f18af700eb2",
+        "src/apps/Elsa.Workbench/bin/Debug/net10.0/Elsa.Workflows.Runtime.dll": "ae41dc8c70037f1d118a58836dd4488ecb1940027649a1c9f60573c837154194",
+        "src/apps/Elsa.Workbench/bin/Debug/net10.0/Elsa.Workbench.dll": "0210df2e43f39dc5000b8937f21af98ecaaf29390d4e0acc9f0780357caebe08",
+        "src/essentials/Workflows/Runtime/Services/WorkHandlers/ReplaySafeFusionDriver.cs": "786ae3c6bae9a2acbad27089e007de3c238ff4181e333a400021385b7410327f"
+      },
+      "qualification": "REST companion does not separately assert incident count; WorkflowFlow asserts zero incidents."
+    },
+    "architecture": "635_passed_0_failed_0_skipped",
+    "mapsForCurrentSourcePin": "freshness_check_passed_no_further_refresh_required",
+    "hostedNativeProviderChecks": "pending",
+    "independentFinalReview": {
+      "status": "scoped_source_review_and_root_diff_review_accepted; final_delivery_QA_pending",
+      "artifact": "review-round1-independent-v2/review.md",
+      "sha256": "b1fd15778db9fc1d5ea93e14d03f91006497a84bf30055a91882de7130d95703",
+      "subsequentRootReviewedDelta": "correct active-anchor assertions, distinct Immediate fallback reason and explanatory docs; focusedv3 and all later tests use these current source pins"
+    },
+    "mergeAndResultingMain": "pending",
+    "workerTimeoutSourceReview": {
+      "artifact": "review-round1-worker-timeout-triage-v1/triage.md",
+      "sha256": "e87d5ee4fe54a0695270595b148aa0cf76ad97d264e1bf7d5311dd4a88e0c50b",
+      "sourceConfirmed": "Fixture exact19-feature composition omits WorkflowsRuntimeCheckpointPersistence; coalescing/session/fusion paths are not active.",
+      "cause": "undetermined; failed fixture discarded child stderr and removed owned database",
+      "acceptance": "requires current-head hosted suite proof; no retry or causal repair claimed"
+    },
+    "remainingLocalGates": {
+      "artifact": "review-round1-remaining-gates-v1/receipt.json",
+      "sha256": "feca9558f80b2c6076fdd586ec7f6e7c539625aa95c5e54aa15bd533c55576aa",
+      "stages": [
+        {
+          "name": "activities-runtime",
+          "exitCode": 0,
+          "logSha256": "dacc1f0fa477a2cddfaed2eda63bf8800414df46d498d992af4a79ba43e5b544",
+          "trxSha256": "47fb6e55ad7524d6885e2ea61a47b7d27e34331533e6a01314d02340666cc2d4",
+          "counters": {
+            "total": "352",
+            "executed": "352",
+            "passed": "352",
+            "failed": "0",
+            "error": "0",
+            "timeout": "0",
+            "aborted": "0",
+            "inconclusive": "0",
+            "passedButRunAborted": "0",
+            "notRunnable": "0",
+            "notExecuted": "0",
+            "disconnected": "0",
+            "warning": "0",
+            "completed": "0",
+            "inProgress": "0",
+            "pending": "0"
+          }
+        },
+        {
+          "name": "sequence",
+          "exitCode": 0,
+          "logSha256": "3eb055a013904ad3966117e76d2672ae3b1804ee6d9fb9737961ab520088946c",
+          "trxSha256": "9ebe9fc79dacae1c238954c6dda19c3c2d2ef840e4d87ef006dbf12138faa3aa",
+          "counters": {
+            "total": "18",
+            "executed": "18",
+            "passed": "18",
+            "failed": "0",
+            "error": "0",
+            "timeout": "0",
+            "aborted": "0",
+            "inconclusive": "0",
+            "passedButRunAborted": "0",
+            "notRunnable": "0",
+            "notExecuted": "0",
+            "disconnected": "0",
+            "warning": "0",
+            "completed": "0",
+            "inProgress": "0",
+            "pending": "0"
+          }
+        },
+        {
+          "name": "flowchart",
+          "exitCode": 0,
+          "logSha256": "f20d90fce5ddf4043f8b9ac56d98b5a8859c18bcf36db07091eb9c3b004f7276",
+          "trxSha256": "07db7cec0b1f673ee225c8d9ab01b3354bd3ac39fba8dc5cd62104d89b924ab6",
+          "counters": {
+            "total": "105",
+            "executed": "105",
+            "passed": "105",
+            "failed": "0",
+            "error": "0",
+            "timeout": "0",
+            "aborted": "0",
+            "inconclusive": "0",
+            "passedButRunAborted": "0",
+            "notRunnable": "0",
+            "notExecuted": "0",
+            "disconnected": "0",
+            "warning": "0",
+            "completed": "0",
+            "inProgress": "0",
+            "pending": "0"
+          }
+        },
+        {
+          "name": "workbench-build",
+          "exitCode": 0,
+          "logSha256": "f3e5811a2e8c982ffef3e200c228593d488739f96a0712de92ee7c7f175572de"
+        },
+        {
+          "name": "backend",
+          "exitCode": 0,
+          "logSha256": "c9000ba5c68ad429247c06f556926b6434f587f9d7e70125c5ccb076c56c7211"
+        },
+        {
+          "name": "architecture",
+          "exitCode": 0,
+          "logSha256": "fc5b031d07919f1c1b7aa02fabf0d15fa7b2dd9d8608af495a3b6003dbd23b8c",
+          "trxSha256": "68f4c65d78120a6e40343cb49447afb87cd028a30bc682606c2ff36a19559c45",
+          "counters": {
+            "total": "635",
+            "executed": "635",
+            "passed": "635",
+            "failed": "0",
+            "error": "0",
+            "timeout": "0",
+            "aborted": "0",
+            "inconclusive": "0",
+            "passedButRunAborted": "0",
+            "notRunnable": "0",
+            "notExecuted": "0",
+            "disconnected": "0",
+            "warning": "0",
+            "completed": "0",
+            "inProgress": "0",
+            "pending": "0"
+          }
+        },
+        {
+          "name": "maps-check",
+          "exitCode": 0,
+          "logSha256": "692c1972a3e507f2117dbbc7f5259b56307bb4181e583044a4a50a05cf777ecb"
+        }
+      ]
+    }
+  },
+  "privateArtifactNames": [
+    "review-round1-red-inmemory/receipt.json",
+    "review-round1-red-inmemory/red.trx",
+    "review-round1-red-outbox/receipt.json",
+    "review-round1-red-outbox/red.trx",
+    "review-round1-focused-v2/receipt.json",
+    "review-round1-focused-v2/runtime/focused.trx",
+    "review-round1-focused-v2/runtime-ef/focused.trx",
+    "review-round1-focused-v3/receipt.json",
+    "review-round1-focused-v3/runtime/focused.trx",
+    "review-round1-focused-v3/runtime-ef/focused.trx",
+    "review-round1-full-gates-v1/receipt.json"
+  ],
+  "updatedUtc": "2026-10-08T10:57:59.254785+00:00"
+}
