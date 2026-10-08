@@ -2,7 +2,7 @@
 
 Program: [Modular Hosting Upstream Delivery](../program-goals/modular-hosting-upstream-delivery.md); [CShells #142](https://github.com/valence-works/cshells/issues/142). Status: draft extraction design for later refinement, not delivered behavior.
 
-**Scope:** design only, grounded in Foundation 8805e95be, CShells 352a25e (local #147 working snapshot), and Nuplane source snapshot 21e2c24. The #146 catalog-commit notification exists only in the local CShells working tree; it is unpublished. No production files changed and no builds were run.
+**Scope:** design only, initially grounded in Foundation 8805e95be, CShells 352a25e and Nuplane source snapshot 21e2c24. The deferred freshness review below uses locally qualified CShells #147 at 8b22edc and the exact Nuplane .94 package/source bf27be6. These CShells changes remain unpublished. This research changes no production files and runs no builds; prerequisite implementation evidence is recorded separately in the [register](../plans/modular-hosting-upstream/evidence.md).
 
 ## Recommendation
 
@@ -28,7 +28,22 @@ Represent those choices independently, using narrow configuration/options or pol
 
 For a changed-or-pending trigger, clear dirty state only after catalog refresh succeeds and, when reload was requested, every active shell reload succeeds. Inspect all ReloadResult.Error values because batch reload failures can be returned rather than thrown. Keep dirty work on refresh/reload failure so a later eligible reconcile retries. Propagate caller cancellation. Nuplane dispatches observers sequentially in registration order and catches/logs observer exceptions independently (Nuplane src/Nuplane/Events/ObserverEventDispatcher.cs:10-28, 68-84, snapshot 21e2c24). The current Workbench bool relies on serialized reconciliation; verify the actual targeted package contract before relying on that assumption. If callbacks can overlap, use a single drainer with versioned dirty state so work arriving during a refresh/reload is not cleared by the older attempt.
 
-Both existing observers check for an active shell before doing anything. Workbench checks before it marks _changePending (Foundation src/apps/Elsa.Workbench/Modularity/ShellCatalogRefreshOnPackagesChanged.cs:50-58). A reconcile during a no-active interval is therefore forgotten. Do not assume the next activation reads the latest assemblies: a failed prior activation may already have initialized a stale catalog. Record this as a compatibility/design case and explicitly test/decide it; do not silently change it during consolidation.
+Both existing observers check for an active shell before doing anything. Workbench checks before it marks _changePending (Foundation src/apps/Elsa.Workbench/Modularity/ShellCatalogRefreshOnPackagesChanged.cs:50-58). A reconcile during a no-active interval is therefore forgotten. A failed prior activation may already have initialized a stale catalog; the next builder's EnsureInitializedAsync does not refresh that snapshot. The adapter will intentionally retain this freshness work while preserving lazy activation, as specified below.
+
+## Deferred catalog freshness
+
+Use one private root coordinator shared by the observer and the #147 build participant. Track a source-change epoch and a successfully refreshed catalog epoch. Keep active-shell reload retry work separate. Register the same instance through both contracts; this case needs no lifecycle subscriber or attempted-generation map.
+
+1. Record eligible reconcile work before checking for an active shell. With no active shell, retain the source epoch and return without scanning or activating anything. Preserve observer enablement and each host's refresh trigger.
+2. BeginAsync runs before the builder's first catalog read. Under a shared refresh semaphore, compare the epochs. If source work is outstanding, capture epoch E, call RefreshAsync, and advance the catalog watermark only to E after success. A failure/cancellation leaves work outstanding. Refresh at this explicit build request also covers an uninitialized catalog with one scan; the builder's subsequent EnsureInitializedAsync is a no-op.
+3. Active observer passes use the same refresh gate and epoch capture. Release that gate before ReloadActiveAsync: reload invokes BeginAsync, and holding the gate would deadlock. Keep observer passes serialized or otherwise version reload work so an older success cannot clear a newer request/failure.
+4. Create automatic reload retry work only when an eligible observer pass actually targets active shells. Clear it only after the applicable full-success condition; inspect all returned reload errors. A deferred catalog refresh does not itself request a reload of the first shell later activated from that fresh catalog. Workbench reload-off still refreshes.
+
+Catalog freshness is independent of promotion success. If refresh succeeds and candidate activation fails, the next Begin can reuse the fresh catalog without rescanning. A later reconcile advances the source epoch and requires another refresh. Source changes arriving during a refresh remain outstanding because only its captured epoch is acknowledged.
+
+An already-overlapping build can still select an older snapshot when a reconcile arrives after Begin's refresh. Retain the newer epoch for the next build or eligible observer pass. This design does not invalidate in-flight builds or promise that every overlapping candidate serves the latest package set; adding an Active acknowledgment would not establish that stronger guarantee either. Generation protection remains the separate #147/#2164 boundary.
+
+This deliberately fixes forgotten no-active work while preserving deferred scanning. Refreshing directly during every inactive reconcile would also fix staleness, but would eagerly scan and retain assembly snapshots for hosts that may never request a shell. The Begin seam avoids that timing change.
 
 ## Elsa reload policy and refusal boundaries
 
@@ -52,16 +67,17 @@ CShells snapshot 352a25e has no Nuplane reference/lock entry and its current CI/
 2. Real composition registers observer after autoloading; a newly loaded package appears in the catalog refresh from that reconcile.
 3. Test separate host modes: Foundation-style every-reconcile refresh/reload default; Workbench-style changed-or-pending refresh and reload-off default. Changed/unchanged cycles must match each mode.
 4. For changed-or-pending mode, test refresh failure, partial batch reload failure, refusal as generic error, and successful retry on a later unchanged reconcile. Verify reload-off still refreshes. Verify cancellation.
-5. Test no-active reconcile followed by activation after a failed activation initialized the catalog: make the current lost-change behavior explicit, then test the selected behavior if consolidation intentionally changes it.
+5. Fail an initial activation after catalog initialization, then reconcile with no active shell. Assert no immediate refresh/reload; the next real build refreshes once before snapshot selection. Promotion failure after that refresh must not force another scan; a newer reconcile must. Cover the cold catalog path with exactly one scan and no gratuitous reload of the first successful shell.
 6. Confirm one observer failure does not suppress later observers. Add concurrency test only if the targeted Nuplane callback contract allows overlap; ensure an intervening change remains pending.
 7. Omitting CShells.Nuplane leaves existing configuration alone; host/explicit/custom providers still compose; CShells core has no Nuplane dependency and integration has no Elsa dependency.
 8. Document the #2164 generation-readability limit and Foundation-only restart/locked policy boundary.
+9. Gate a source change during refresh and after Begin but before snapshot selection. Only the captured epoch is acknowledged; the next Begin refreshes outstanding work. Test refresh failure/cancellation retention and reentrant reload without holding the refresh gate. Do not assert in-flight build invalidation.
 
 Existing Foundation proof is in tests/essentials/Modularity/Tests/WorkbenchShellCatalogRefreshTests.cs:40-183 (no active shell, changed/unchanged, opt-in reload, refresh/reload failure, refusal details/retry, cancellation). Ordering against real Workbench composition is pinned in tests/essentials/Modularity/Tests/HostOwnedServicesAreSharedWithShellsTests.cs:264-283. Extend/generalize this proof without moving Elsa refusal assertions into the generic package.
 
 ## Decisions and boundaries
 
 - Keep the optional integration as one CShells.Nuplane package; existing APIs support the minimal adapter without coupling CShells core to Nuplane.
-- Preserve current per-host observer enablement, refresh trigger, and reload defaults via explicit settings. Dirty retries and retaining changes across no-active intervals are behavior decisions, not incidental consequences of a shared implementation.
+- Preserve current per-host observer enablement, refresh trigger, and reload defaults via explicit settings. Intentionally retain no-active freshness work until the next requested build; keep its catalog acknowledgment separate from active-shell reload retries.
 - Restart-policy staging remains Foundation-owned; it cannot be met by disabling automatic reload.
 - Use the exact published Nuplane .94 package/source. Current evidence distinguishes its source commit bf27be646d4c124b6b2ba2c632f9a49b1a5252c6 from the supplied 21e2c24 snapshot; compatibility should be proven by restore/build.
