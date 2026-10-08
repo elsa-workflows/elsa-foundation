@@ -6,7 +6,7 @@ Program: [Modular Hosting Upstream Delivery](../program-goals/modular-hosting-up
 
 ## Recommendation
 
-Add one optional CShells.Nuplane package, downstream of CShells.Abstractions and Nuplane loading/observer abstractions. Keep CShells core free of Nuplane references and leave existing provider composition unchanged when the package is absent.
+Add one optional CShells.Nuplane package, downstream of CShells and Nuplane loading/observer abstractions. Runtime seams use CShells.Abstractions; the explicit composition helper may reference CShells for its builder and host-sharing API, as the existing ASP.NET Core integration does. Keep CShells core free of Nuplane references and leave existing provider composition unchanged when the package is absent.
 
 Minimal public types:
 
@@ -45,6 +45,14 @@ An already-overlapping build can still select an older snapshot when a reconcile
 
 This deliberately fixes forgotten no-active work while preserving deferred scanning. Refreshing directly during every inactive reconcile would also fix staleness, but would eagerly scan and retain assembly snapshots for hosts that may never request a shell. The Begin seam avoids that timing change.
 
+## Root registration and aliases
+
+The exact Nuplane .94 source's [OnPackagesChanged implementation](https://github.com/valence-works/nuplane/blob/bf27be646d4c124b6b2ba2c632f9a49b1a5252c6/src/Nuplane/Builder/NuplaneBuilder.cs#L138) registers INuplaneObserver by implementation type. Despite its XML wording, it does not alias a separately registered concrete singleton. Registering the coordinator concretely and also calling OnPackagesChanged for it would create two independent state owners.
+
+Use one concrete coordinator singleton and explicit singleton observer/build-participant factory aliases resolving that concrete service. Add the observer alias after AutoloadPackages to preserve ordering. The build-participant interface is already excluded from shell copies. Select the concrete coordinator with ShareSingletonWithShells so a copied observer factory also resolves the root instance; do not implicitly share every other INuplaneObserver registration. Its injected package assembly catalog is then root-resolved, without HostContainer capture.
+
+Keep this coordinator non-disposable while it owns only managed synchronization state. A copied interface factory returning a borrowed disposable can acquire child disposal ownership even when its concrete service registration is shared. If the adapter later owns teardown resources, review that alias/disposal boundary explicitly. Tests must prove root observer/participant identity, shell-side alias identity, unchanged unrelated observers, and safe drain of overlapping generations.
+
 ## Elsa reload policy and refusal boundaries
 
 The generic observer may accept a package-change policy to decide whether an already-refreshed catalog should trigger automatic reload. The seam must not decide whether catalog refresh happens. Foundation #2258 / ADR 0079 keeps per-package hot-reload, restart, and locked policy in Foundation. A generic reload policy alone cannot enforce restart: if the new package is visible in Nuplane's active set and the catalog is refreshed, a manual shell reload may still compose it. Foundation must stage/exclude restart-policy packages until restart; locked enforcement also stays in Foundation. Do not describe auto-reload-off as restart-only behavior.
@@ -72,6 +80,7 @@ CShells snapshot 352a25e has no Nuplane reference/lock entry and its current CI/
 7. Omitting CShells.Nuplane leaves existing configuration alone; host/explicit/custom providers still compose; CShells core has no Nuplane dependency and integration has no Elsa dependency.
 8. Document the #2164 generation-readability limit and Foundation-only restart/locked policy boundary.
 9. Gate a source change during refresh and after Begin but before snapshot selection. Only the captured epoch is acknowledged; the next Begin refreshes outstanding work. Test refresh failure/cancellation retention and reentrant reload without holding the refresh gate. Do not assert in-flight build invalidation.
+10. Prove one coordinator across root observer/build-participant aliases and shell-resolved observer aliases, without modifying unrelated observers or transferring disposal ownership. Registration must preserve ordering after Nuplane autoload; no HostContainer capture is needed.
 
 Existing Foundation proof is in tests/essentials/Modularity/Tests/WorkbenchShellCatalogRefreshTests.cs:40-183 (no active shell, changed/unchanged, opt-in reload, refresh/reload failure, refusal details/retry, cancellation). Ordering against real Workbench composition is pinned in tests/essentials/Modularity/Tests/HostOwnedServicesAreSharedWithShellsTests.cs:264-283. Extend/generalize this proof without moving Elsa refusal assertions into the generic package.
 
