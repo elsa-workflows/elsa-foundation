@@ -24,6 +24,12 @@ Root combined the two verified branches locally in `/tmp/hosting-cshells-generat
 
 Nuplane #108's bounded non-destructive [store-use safety spike](../../reports/modular-hosting-store-safety-spike.md) confirmed same-process and sibling-process exclusive-open denial, then acquisition after disposal/owner crash on local macOS/.NET 10. It did not test the complete proposed lease protocol or delete package files. Loading inside an already-held reconciliation lock requires a scoped ownership handoff; prune must probe long-lived lease sentinels without waiting under the global lock. Exact paths, active/LKG closure, actual load-context death and a ratified shared-root upgrade/admission boundary remain destructive-readiness requirements. The owner choice for that compatibility boundary is pending. No report-only substitution closes #108 or unblocks final qualification.
 
+## M2 draft extraction designs
+
+Read-only research for [optional Nuplane integration](../../reports/modular-hosting-integration-candidate.md) and [startup activation/retry support](../../reports/modular-hosting-startup-candidate.md) maps current host behavior and test targets. These are proposals, not implementation-ready tasks or passed runtime proof. Foundation.Host disables both refresh/reload and acts on every enabled reconcile; Workbench refreshes changed/pending work even with auto-reload off. Both currently skip before active-shell detection, and Workbench can forget a change after a failed first activation initialized a stale catalog. Preserve explicit host policies and decide that recovery case in the adapter task rather than accidentally changing it.
+
+The published Nuplane `.94` nuspec points to `bf27be646d4c124b6b2ba2c632f9a49b1a5252c6`. GitHub's base `bf27be6` → head `21e2c24` comparison shows the source snapshot is four commits ahead; among the relevant abstraction/observer/autoload files only `ResolvedPackage.cs` changed, adding `PackageContentHash`. Observer/catalog contract files are unchanged in that comparison. Implementation must still restore/build against the exact published package; source snapshots and package provenance remain distinct evidence.
+
 ## Source baselines
 
 | Repository | Ref / commit | Evidence |
