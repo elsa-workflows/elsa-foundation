@@ -1,7 +1,7 @@
 # Implementation Plan: Shared Nuplane Adapter Adoption
 
 **Branch**: `2340-shared-nuplane-adoption` | **Date**: 2026-10-09 | **Spec**: [spec.md](spec.md)
-**Status**: Draft — source/discovery design prepared; exception-observability prerequisite under bounded review/probe.
+**Status**: Draft — source/discovery design prepared; the bounded diagnostic confirmed the catalog-refresh exception-observability gap. The upstream correction, tests and package qualification remain outstanding.
 
 ## Summary
 
@@ -28,7 +28,7 @@ Replace the two host package providers/observers with the public upstream adapte
 - Existing host boundaries: preserve feed/base-path setup, observer order, host-provided assemblies, unrelated sharing and per-host startup policy. Do not relax architecture allowlists to admit a convenience helper dependency.
 - Draft framework §2.24 and Elsa §E2.9 are not relied on as new ratified gates.
 
-**Pre-design assessment**: no product-policy ambiguity in this observer-only scope. **Post-design assessment**: planning remains Draft pending independent review and the bounded exception-boundary counterexample/correction decision. No implementation-ready task has been created yet.
+**Pre-design assessment**: no product-policy ambiguity in this observer-only scope. **Post-design assessment**: the bounded public-package diagnostic and independent review confirmed the existing catalog-refresh logging gap and selected log-and-rethrow correction. Planning remains Draft pending implementation, actual-DI tests and package qualification; no implementation-ready task has been created yet.
 
 ## Project Structure
 
@@ -48,7 +48,7 @@ Replace the two host package providers/observers with the public upstream adapte
 
 ## Validation Sequence
 
-1. Confirm/resolve upstream exception-observability prerequisite with public-package evidence and independent review. Its manually constructed coordinator must receive the optional DI logger from the holder factory; actual-DI capture tests prove original Error/exception plus dispatcher Warning/later-observer delivery, without swallowing the existing thrown exception contract.
+1. Implement and qualify the upstream exception-observability correction. The completed public-package diagnostic confirmed that catalog-refresh failure currently produces only Nuplane’s generic Warning. The manually constructed coordinator must receive the optional DI logger from the holder factory; actual-DI capture tests must prove Error logging with the original exception plus dispatcher Warning/later-observer delivery, while preserving the existing thrown-exception contract.
 2. Finalize design/contracts/tasks, commit the reviewed plan, and implement bounded app-local profiles and upstream composition in the owned preparation worktree.
 3. Qualify in a separate copy with exact audited previews; retain existing assertions, add runtime configuration reload, cold Begin freshness, one coordinator identity and refusal/redaction tests. Run scoped builds only through the shared build-slot wrapper.
 4. Root reviews the complete diff and delegated work. Run causal reversible mutations for live option invalidation and alias/order behavior where applicable. Preserve unsuccessful attempts honestly.
