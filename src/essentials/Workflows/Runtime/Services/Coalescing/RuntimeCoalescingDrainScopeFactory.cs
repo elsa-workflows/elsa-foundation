@@ -38,6 +38,10 @@ public sealed class RuntimeCoalescingDrainScopeFactory(
             : options;
 
         var session = new RuntimeCoalescingSession(workflowExecutionId, innerQueue.Value, sessionOptions, innerOutboxStore.Value);
+        // A legacy provider may not support identity deletion. Never discover that after a folded commit has landed:
+        // disable buffering before the drain begins, leaving queue operations and checkpoint writes durable.
+        if (!innerQueue.Value.SupportsTargetedDeletion)
+            session.Deactivate();
         var handle = sessionAccessor.Push(session);
         return new Scope(session, handle, checkpointCommitter, timeProvider);
     }

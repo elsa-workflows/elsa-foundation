@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Exceptions;
@@ -101,6 +102,18 @@ public sealed class WorkflowScheduleActivitySchedulerWorkHandler : IWorkflowSche
 
             if (existing.Status == ActivityExecutionStatus.Scheduled)
                 await EnqueueStartActivityAsync(workItem, schedulePayload, cancellationToken);
+            else if (existing.Status == ActivityExecutionStatus.Running &&
+                     executableNode.IntrinsicKind is null &&
+                     executableNode.ActivityContract?.SideEffectProfile == SideEffectProfile.ReplaySafe)
+            {
+                if (existing.InputSnapshot is null)
+                    throw new InvalidOperationException($"VF-ACT-009: Running typed activity invocation '{existing.InvocationId}' has no committed input snapshot.");
+
+                // A durable fused Schedule anchor may be redelivered after ActivityStarted was folded into a
+                // continuing cap/attempt checkpoint. Re-enter the existing deterministic Start -> Invoke path; the
+                // Start handler observes Running and enqueues the already-materialized invocation from its snapshot.
+                await EnqueueStartActivityAsync(workItem, schedulePayload, cancellationToken);
+            }
 
             return null;
         }
@@ -121,8 +134,9 @@ public sealed class WorkflowScheduleActivitySchedulerWorkHandler : IWorkflowSche
         if (_fusionDriver is { } driver && driver.ShouldFuse(workItem.WorkflowExecutionId, executableNode))
         {
             var core = await BuildScheduledCommitAsync(workItem, schedulePayload, state, cancellationToken);
+            driver.RegisterFusedScheduleAnchor(workItem);
             await _checkpointCommitter.CommitAsync(core.Commit, cancellationToken);
-            await driver.ContinueFusedSpanAsync(core.StartWorkItem, cancellationToken);
+            await driver.ContinueFusedScheduleSpanAsync(workItem, core.StartWorkItem, cancellationToken);
             return null;
         }
 

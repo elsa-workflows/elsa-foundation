@@ -86,6 +86,125 @@ public sealed class RuntimeCheckpointCoalescingTests(ITestOutputHelper output)
     }
 
     [Fact]
+    public async Task AdvanceInnerQueue_RemovesConsumedSeededItemsByIdentity_WhenListOrderDiffersFromDequeueOrder()
+    {
+        const string workflowExecutionId = "wfexec-list-dequeue-order";
+        var inner = new InMemoryWorkflowSchedulerWorkQueue();
+
+        // ListAsync is key-ordered, while the in-memory queue's FIFO head is insertion-ordered.
+        foreach (var sequence in new long[] { 30, 5, 20 })
+            await inner.EnqueueAsync(NewReconciliationWorkItem(workflowExecutionId, sequence));
+
+        Assert.Equal(
+            ["work-5", "work-20", "work-30"],
+            (await inner.ListAllAsync(new RuntimeSchedulerWorkQuery(workflowExecutionId))).Select(item => item.WorkItemId));
+        Assert.Equal(
+            "work-30",
+            (await inner.ListNextWorkItemsAsync([workflowExecutionId])).Single().Value.WorkItemId);
+
+        var session = new RuntimeCoalescingSession(
+            workflowExecutionId,
+            inner,
+            new CoalescingRuntimeCheckpointPersistenceOptions());
+        await session.EnsureQueueSeededAsync(CancellationToken.None);
+
+        Assert.Equal("work-5", (await session.DequeueOverlayAsync(CancellationToken.None))!.WorkItemId);
+        Assert.Equal("work-20", (await session.DequeueOverlayAsync(CancellationToken.None))!.WorkItemId);
+
+        await session.AdvanceInnerQueueAsync(consumeInFlightClaims: false, CancellationToken.None);
+
+        Assert.Equal(
+            ["work-30"],
+            (await inner.ListAllAsync(new RuntimeSchedulerWorkQuery(workflowExecutionId))).Select(item => item.WorkItemId));
+        Assert.Equal(
+            ["work-30"],
+            (await session.ListOverlayAsync(new RuntimeSchedulerWorkQuery(workflowExecutionId), CancellationToken.None))
+                .Items.Select(item => item.WorkItemId));
+    }
+
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public async Task AdvanceInnerQueue_PreservesUnobservedConcurrentWork_AndRemovesOnlyKnownConsumedDelivery(
+        bool knownConsumedDelivery, bool addsNewContinuation)
+    {
+        const string workflowExecutionId = "wfexec-concurrent-delivery";
+        var inner = new InMemoryWorkflowSchedulerWorkQueue();
+        await inner.EnqueueAsync(NewReconciliationWorkItem(workflowExecutionId, 10));
+        var session = new RuntimeCoalescingSession(workflowExecutionId, inner, new CoalescingRuntimeCheckpointPersistenceOptions());
+        await session.EnsureQueueSeededAsync(CancellationToken.None);
+        Assert.Equal("work-10", (await session.DequeueOverlayAsync(CancellationToken.None))!.WorkItemId);
+        var delivered = NewReconciliationWorkItem(workflowExecutionId, 5);
+        if (knownConsumedDelivery)
+        {
+            await session.EnqueueOverlayAsync(delivered, CancellationToken.None);
+            Assert.Equal("work-5", (await session.DequeueOverlayAsync(CancellationToken.None))!.WorkItemId);
+        }
+
+        // This represents a separate deliverer; it changes only the durable queue, outside the active overlay.
+        await inner.EnqueueAsync(delivered);
+        session.MarkOutboxDurablyPersisted(NewContinuationIntentCommit(workflowExecutionId, 1).StateChanges.PostCommitOutbox);
+        if (addsNewContinuation)
+        {
+            await session.EnqueueOverlayAsync(NewReconciliationWorkItem(workflowExecutionId, 20), CancellationToken.None);
+            await session.AdvanceInnerQueueAsync(consumeInFlightClaims: false, CancellationToken.None);
+            Assert.Equal("work-20", (await session.DequeueOverlayAsync(CancellationToken.None))!.WorkItemId);
+        }
+        await session.AdvanceInnerQueueAsync(consumeInFlightClaims: false, CancellationToken.None);
+
+        var durable = await inner.ListAllAsync(workflowExecutionId);
+        if (knownConsumedDelivery)
+            Assert.Empty(durable);
+        else
+            Assert.Equal("work-5", Assert.Single(durable).WorkItemId);
+    }
+
+    [Fact]
+    public async Task LegacyQueueWithoutTargetedDeletion_DisablesBufferingBeforeTheFirstCheckpoint()
+    {
+        var services = CreateCoalescingServices(collection =>
+            collection.AddSingleton<IWorkflowSchedulerWorkQueue>(new LegacySchedulerWorkQueue()));
+        await using var provider = services.BuildServiceProvider();
+        var factory = provider.GetRequiredService<IRuntimeCoalescingDrainScopeFactory>();
+        await using (var scope = factory.Begin("wfexec-legacy"))
+        {
+            Assert.False(scope.Session.IsActive);
+            await provider.GetRequiredService<IRuntimeCheckpointCommitStore>().CommitAsync(
+                NewEmptyCommit("wfexec-legacy", 1, RuntimeCheckpointNames.ActivityScheduled),
+                new RuntimeCheckpointPersistenceDecision(RuntimeCheckpointPersistenceMode.Deferred));
+            Assert.False(scope.Session.HasBufferedChanges);
+            var recorded = Assert.Single(provider.GetRequiredService<InMemoryRuntimeCheckpointCommitStore>().ListCommits());
+            Assert.Equal(RuntimeCheckpointPersistenceMode.Immediate, recorded.Decision.Mode);
+        }
+
+        await SeedAsync(provider);
+        await EnqueueStartAsync(provider);
+        Assert.Equal(WorkflowExecutionStatus.Completed,
+            (await provider.GetRequiredService<IWorkflowExecutionStateStore>().FindAsync("wfexec-1"))!.Status);
+        Assert.Empty(await provider.GetRequiredService<IWorkflowSchedulerWorkQueue>().ListAllAsync("wfexec-1"));
+    }
+
+    private static RuntimeSchedulerWorkItem NewReconciliationWorkItem(string workflowExecutionId, long sequence) =>
+        new($"work-{sequence}", workflowExecutionId, $"command-{sequence}", WorkflowExecutionCommandKind.ScheduleActivity,
+            $"envelope-{sequence}", $"idempotency-{sequence}", Now, Now, sequence);
+
+    private sealed class LegacySchedulerWorkQueue : IWorkflowSchedulerWorkQueue
+    {
+        private readonly InMemoryWorkflowSchedulerWorkQueue _inner = new();
+
+        public ValueTask<RuntimeSchedulerWorkItem> EnqueueAsync(RuntimeSchedulerWorkItem item, CancellationToken cancellationToken = default) =>
+            _inner.EnqueueAsync(item, cancellationToken);
+        public ValueTask<RuntimeStorePage<RuntimeSchedulerWorkItem>> ListAsync(RuntimeSchedulerWorkQuery query, CancellationToken cancellationToken = default) =>
+            _inner.ListAsync(query, cancellationToken);
+        public ValueTask<RuntimeSchedulerWorkItem?> DequeueAsync(string workflowExecutionId, CancellationToken cancellationToken = default) =>
+            _inner.DequeueAsync(workflowExecutionId, cancellationToken);
+        public ValueTask<IReadOnlyCollection<string>> ListPendingWorkflowExecutionIdsAsync(int limit, CancellationToken cancellationToken = default) =>
+            _inner.ListPendingWorkflowExecutionIdsAsync(limit, cancellationToken);
+    }
+
+    [Fact]
     public async Task CoalescingOutboxLookup_ConsultsActiveOverlayBeforeDurableInner()
     {
         var inner = new InMemoryRuntimeCheckpointCommitStore();
