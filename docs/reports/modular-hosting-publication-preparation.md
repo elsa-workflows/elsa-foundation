@@ -1,6 +1,6 @@
 # Modular Hosting Publication Preparation
 
-Program: [Modular Hosting Upstream Delivery](../program-goals/modular-hosting-upstream-delivery.md). Status: prepared locally; no upstream PR, push, release or milestone completion is claimed. The repository-required Git/session preference remains pending.
+Program: [Modular Hosting Upstream Delivery](../program-goals/modular-hosting-upstream-delivery.md). Status: prepared locally; no upstream PR, push, release or milestone completion is claimed. The maintainer organization-branch publication path was confirmed on 2026-10-08; no Git workflow selection remains pending.
 
 ## Reviewable submission material
 
@@ -36,4 +36,4 @@ An independent reviewer fresh-cloned each as a mirror, verified non-shallow stat
 
 ## Remaining delivery gates
 
-Git/session selection still gates push/PR; no remote operation is waiting in the background. After publication is allowed, require current-head CI/review, normal merges, owner preview pipelines and feed/source identity, then optional integration and Foundation adoption/e2e. M3 still requires its owner admission/compatibility decision and complete deletion-safety proof. Foundation #2354 and #2362 remain separately owned, and #2293 remains open. No release, adoption, pruning safety or end-to-end completion is inferred from submission preparation or backup recovery.
+The prior Git-selection hold is resolved: maintainer work uses organization branches without a preference-selection gate. Require current-head CI/review, normal merges, owner preview pipelines and feed/source identity, then optional integration and Foundation adoption/e2e. M3 still requires its owner admission/compatibility decision and complete deletion-safety proof. Foundation #2354 and #2362 remain separately owned, and #2293 remains open. No release, adoption, pruning safety or end-to-end completion is inferred from submission preparation or backup recovery.

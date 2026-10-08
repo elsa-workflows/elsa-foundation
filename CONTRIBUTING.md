@@ -24,7 +24,7 @@ git switch -c contributing/my-fix origin/main
 
 If your fork remote has another name, use that name when pushing later. If you cloned your fork instead of following the quickstart, create your topic branch from an up-to-date copy of Elsa Foundation's `main` and push it to your fork's remote.
 
-Maintainers working in the organization repository use a feature/work-unit branch and follow [the repository's claim guidance](AGENTS.md#concurrent-work-claims) for issue-backed or split work.
+Maintainers, including Sipke, always publish feature/work-unit branches in the organization repository and open PRs from those branches. Maintainer work never uses fork PRs. Contributors without organization write access use the fork workflow above. These defaults also apply when using agents; no local preference setup or workflow selection is required before publication. Follow [the repository's claim guidance](AGENTS.md#concurrent-work-claims) for issue-backed or split work.
 
 ## Plan feature work
 
@@ -47,7 +47,7 @@ Focused checks do not replace the repository's merge gate. See the [Merge Gate](
 
 ## Open a pull request
 
-After making and validating the change, review your diff and commit the intended files. Push the topic branch to your fork with `git push -u fork contributing/my-fix`, substituting your fork remote and branch names if they differ. Open a draft pull request from that branch against Elsa Foundation's `main`. Link the related issue when there is one, describe the user-visible change, and list the checks you ran and any relevant checks you could not run.
+After making and validating the change, review your diff and commit the intended files. For contributor fork work, push the topic branch with `git push -u fork contributing/my-fix`, substituting your fork remote and branch names if they differ. For maintainer work, push the topic branch to the organization remote instead. Open a draft pull request from that branch against Elsa Foundation's `main`. Link the related issue when there is one, describe the user-visible change, and list the checks you ran and any relevant checks you could not run.
 
 The repository is [MIT licensed](LICENSE). Pull requests may show the existing `license/cla` check from [Microsoft GitHub Policy Service](https://github.com/apps/microsoft-github-policy-service); follow the check's status and any instructions it provides. This guide does not add a separate signing process or infer an exemption.
 
