@@ -28,7 +28,7 @@ The real public `AddNuplane` composition seeds one logical active version in an 
 
 The corrected fixture passed on actual **.NET 8.0.10, 9.0.9 and 10.0.8**. Its first successful run exposed an empty default package-lock file written into the working directory. Root preserved/moved that task-created file to the artifacts, configured an explicit temporary lock-file path, then reran all three targets. Corrected temporary roots were removed and the workspace stayed clean. Independent read-only package-proof QA found no concrete false positive or blocker.
 
-This proves public package/DI notification and logical-state persistence. It does not prove physical package installation, collectible context death, pruning, a package-to-CShells serving-generation journey, or Foundation adoption. Nuplane preview `.99` now supplies the removal fix for interim adapter qualification; the CShells primitives still need upstream integration/publication.
+This proves public package/DI notification and logical-state persistence. It does not prove physical package installation, collectible context death, pruning, a package-to-CShells serving-generation journey, or Foundation adoption. Nuplane preview `.99` supplies the removal fix for interim adapter qualification; CShells ownership/catalog primitives are now published and externally qualified as preview `.161`, while build leases and the optional adapter remain pending. See the current [evidence register](../plans/modular-hosting-upstream/evidence.md).
 
 ## Published preview and resulting-main gates
 
