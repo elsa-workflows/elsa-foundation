@@ -314,7 +314,7 @@ public sealed class ResponseReplaySafetyProcessTests
                     runtime = "same prebuilt child DLL",
                     persistence = "equivalent owned SQLite online-backup copies",
                     hostPreparation = "fresh child process; identical measured-host startup and pre-capture verification; no publication during either count window",
-                    window = "correlated POST through delivered response, independent Completed execution read, empty scheduler queue, and terminal outbox state",
+                    window = "correlated POST through delivered response, independent target execution settlement (Completed response, no target scheduler work, terminal target outbox state), then bounded drain of admitted command and checkpoint callbacks",
                     commandAttemptSemantics = "EF Reader/Scalar/NonQuery interceptor attempts and outcomes; Reader Succeeded means ReaderExecuted returned a reader, not result exhaustion, row count, or physical SQL statements",
                     pageReuseEligible = candidateResult.Observation.DurableValuePageReuseEligible && externalResult.Observation.DurableValuePageReuseEligible
                 },
@@ -326,9 +326,16 @@ public sealed class ResponseReplaySafetyProcessTests
                         raw = externalResult.ResponseReceivedObservation,
                         allObservedTotals = CountTotals(externalResult.ResponseReceivedObservation)
                     },
-                    settled = new { raw = externalResult.Observation, allObservedTotals = externalCounts },
-                    settledMinusResponseReceivedByBucket = DifferenceByBucket(
-                        externalResult.Observation, externalResult.ResponseReceivedObservation)
+                    captureStopped = new
+                    {
+                        raw = externalResult.CaptureStoppedObservation,
+                        allObservedTotals = CountTotals(externalResult.CaptureStoppedObservation)
+                    },
+                    callbackDrained = new { raw = externalResult.Observation, allObservedTotals = externalCounts },
+                    captureStoppedMinusResponseReceivedByBucket = DifferenceByBucket(
+                        externalResult.CaptureStoppedObservation, externalResult.ResponseReceivedObservation),
+                    callbackDrainedMinusCaptureStoppedByBucket = DifferenceByBucket(
+                        externalResult.Observation, externalResult.CaptureStoppedObservation)
                 },
                 candidate = new
                 {
@@ -338,9 +345,16 @@ public sealed class ResponseReplaySafetyProcessTests
                         raw = candidateResult.ResponseReceivedObservation,
                         allObservedTotals = CountTotals(candidateResult.ResponseReceivedObservation)
                     },
-                    settled = new { raw = candidateResult.Observation, allObservedTotals = candidateCounts },
-                    settledMinusResponseReceivedByBucket = DifferenceByBucket(
-                        candidateResult.Observation, candidateResult.ResponseReceivedObservation)
+                    captureStopped = new
+                    {
+                        raw = candidateResult.CaptureStoppedObservation,
+                        allObservedTotals = CountTotals(candidateResult.CaptureStoppedObservation)
+                    },
+                    callbackDrained = new { raw = candidateResult.Observation, allObservedTotals = candidateCounts },
+                    captureStoppedMinusResponseReceivedByBucket = DifferenceByBucket(
+                        candidateResult.CaptureStoppedObservation, candidateResult.ResponseReceivedObservation),
+                    callbackDrainedMinusCaptureStoppedByBucket = DifferenceByBucket(
+                        candidateResult.Observation, candidateResult.CaptureStoppedObservation)
                 },
                 candidateMinusExternalAllObserved = Difference(candidateCounts, externalCounts),
                 candidateMinusExternalByBucket = DifferenceByBucket(candidateResult.Observation, externalResult.Observation)
@@ -818,6 +832,7 @@ public sealed class ResponseReplaySafetyProcessTests
         Assert.Equal("Alice Smith", completedPayload.GetProperty("responseBody").GetString());
         Assert.Equal("text/plain", completedPayload.GetProperty("responseContentType").GetString());
         Assert.Empty(completedPayload.GetProperty("authoredHeaders").EnumerateObject());
+        var captureStoppedJson = completedPayload.GetProperty("captureStoppedObservation");
         var observationJson = completedPayload.GetProperty("observation");
         Assert.Equal(executionId, observationJson.GetProperty("targetExecutionId").GetString());
         Assert.Equal(targetArtifactId, observationJson.GetProperty("targetArtifactId").GetString());
@@ -827,6 +842,10 @@ public sealed class ResponseReplaySafetyProcessTests
         Assert.True(observationJson.GetProperty("equivalentStartupPreparation").GetBoolean());
         Assert.Equal(0, observationJson.GetProperty("orphanCommandOutcomes").GetInt32());
         Assert.Equal(0, observationJson.GetProperty("inFlightCommandAttempts").GetInt32());
+        Assert.Equal(executionId, captureStoppedJson.GetProperty("targetExecutionId").GetString());
+        Assert.Equal(targetArtifactId, captureStoppedJson.GetProperty("targetArtifactId").GetString());
+        Assert.Equal(targetArtifactHash, captureStoppedJson.GetProperty("targetArtifactHash").GetString());
+        Assert.Equal(profile, captureStoppedJson.GetProperty("targetProfile").GetString());
 
         var process = await child.WaitForExitAsync(TimeSpan.FromMinutes(2));
         Assert.True(process.ExitCode == 0,
@@ -842,8 +861,9 @@ public sealed class ResponseReplaySafetyProcessTests
         Assert.Equal("Alice Smith", result.ResponseBody);
         Assert.Equal("text/plain", result.ResponseContentType);
         Assert.Empty(result.AuthoredHeaders);
-        AssertResponseAndSettledSnapshots(
+        AssertResponseSettlementAndDrainSnapshots(
             result.ResponseReceivedObservation,
+            result.CaptureStoppedObservation,
             result.Observation,
             correlationId,
             executionId,
@@ -899,7 +919,7 @@ public sealed class ResponseReplaySafetyProcessTests
         }
 
         throw new TimeoutException(
-            $"Workflow execution '{executionId}' did not reach Completed with a committed response and no scheduler or unsettled outbox work within {timeout}.",
+            $"Workflow execution '{executionId}' did not reach Completed with a committed response and no target scheduler or unsettled target outbox work within {timeout}.",
             lastReadException);
     }
 
@@ -964,9 +984,10 @@ public sealed class ResponseReplaySafetyProcessTests
             Assert.Equal(command.Started, command.Succeeded + command.Failed + command.Canceled);
     }
 
-    private static void AssertResponseAndSettledSnapshots(
+    private static void AssertResponseSettlementAndDrainSnapshots(
         ResponseReplayObservationSnapshot responseReceived,
-        ResponseReplayObservationSnapshot settled,
+        ResponseReplayObservationSnapshot captureStopped,
+        ResponseReplayObservationSnapshot callbackDrained,
         string correlationId,
         string executionId,
         string artifactId,
@@ -978,46 +999,91 @@ public sealed class ResponseReplaySafetyProcessTests
         Assert.Equal(artifactId, responseReceived.TargetArtifactId);
         Assert.Equal(artifactHash, responseReceived.TargetArtifactHash);
         Assert.Equal(profile, responseReceived.TargetProfile);
-        Assert.Equal(settled.TargetClaim, responseReceived.TargetClaim);
-        Assert.Equal(settled.DurableValuePageReuseEligible, responseReceived.DurableValuePageReuseEligible);
-        Assert.Equal(settled.EquivalentStartupPreparation, responseReceived.EquivalentStartupPreparation);
-        Assert.True(settled.ResponseCompletionAttempts.Count >= responseReceived.ResponseCompletionAttempts.Count);
+        Assert.Equal(captureStopped.TargetClaim, responseReceived.TargetClaim);
+        Assert.Equal(captureStopped.DurableValuePageReuseEligible, responseReceived.DurableValuePageReuseEligible);
+        Assert.Equal(captureStopped.EquivalentStartupPreparation, responseReceived.EquivalentStartupPreparation);
+        Assert.True(captureStopped.ResponseCompletionAttempts.Count >= responseReceived.ResponseCompletionAttempts.Count);
         Assert.Equal(
             responseReceived.ResponseCompletionAttempts,
-            settled.ResponseCompletionAttempts.Take(responseReceived.ResponseCompletionAttempts.Count));
-        Assert.True(settled.CarryInCommandOutcomes >= responseReceived.CarryInCommandOutcomes);
-        Assert.True(settled.OrphanCommandOutcomes >= responseReceived.OrphanCommandOutcomes);
+            captureStopped.ResponseCompletionAttempts.Take(responseReceived.ResponseCompletionAttempts.Count));
+        Assert.True(captureStopped.CarryInCommandOutcomes >= responseReceived.CarryInCommandOutcomes);
+        Assert.True(captureStopped.OrphanCommandOutcomes >= responseReceived.OrphanCommandOutcomes);
         Assert.Equal(
             responseReceived.Buckets.Keys.OrderBy(key => key, StringComparer.Ordinal),
-            settled.Buckets.Keys.OrderBy(key => key, StringComparer.Ordinal));
+            captureStopped.Buckets.Keys.OrderBy(key => key, StringComparer.Ordinal));
 
-        foreach (var (bucketName, before) in responseReceived.Buckets)
+        AssertSnapshotCountersAtLeast(responseReceived, captureStopped);
+
+        Assert.Equal(captureStopped.TargetClaim, callbackDrained.TargetClaim);
+        Assert.Equal(captureStopped.DurableValuePageReuseEligible, callbackDrained.DurableValuePageReuseEligible);
+        Assert.Equal(captureStopped.EquivalentStartupPreparation, callbackDrained.EquivalentStartupPreparation);
+        Assert.Equal(captureStopped.ResponseCompletionAttempts, callbackDrained.ResponseCompletionAttempts);
+        Assert.Equal(captureStopped.CarryInCommandOutcomes, callbackDrained.CarryInCommandOutcomes);
+        Assert.Equal(captureStopped.OrphanCommandOutcomes, callbackDrained.OrphanCommandOutcomes);
+        Assert.Equal(
+            captureStopped.Buckets.Keys.OrderBy(key => key, StringComparer.Ordinal),
+            callbackDrained.Buckets.Keys.OrderBy(key => key, StringComparer.Ordinal));
+        AssertFrozenAdmissionCounts(captureStopped, callbackDrained);
+        AssertSnapshotCountersAtLeast(captureStopped, callbackDrained);
+    }
+
+    private static void AssertFrozenAdmissionCounts(
+        ResponseReplayObservationSnapshot captureStopped,
+        ResponseReplayObservationSnapshot callbackDrained)
+    {
+        foreach (var (bucketName, before) in captureStopped.Buckets)
         {
-            var after = settled.Buckets[bucketName];
-            AssertAtLeast(after.Dispatches, before.Dispatches, bucketName, nameof(before.Dispatches));
-            AssertAtLeast(after.DrainCycles, before.DrainCycles, bucketName, nameof(before.DrainCycles));
-            AssertAtLeast(after.ActivityExecutions, before.ActivityExecutions, bucketName, nameof(before.ActivityExecutions));
-            AssertAtLeast(after.LogicalCheckpointAttempts, before.LogicalCheckpointAttempts, bucketName, nameof(before.LogicalCheckpointAttempts));
-            AssertAtLeast(after.LogicalCheckpointSucceeded, before.LogicalCheckpointSucceeded, bucketName, nameof(before.LogicalCheckpointSucceeded));
-            AssertAtLeast(after.LogicalCheckpointFailed, before.LogicalCheckpointFailed, bucketName, nameof(before.LogicalCheckpointFailed));
-            AssertAtLeast(after.LogicalCheckpointCanceled, before.LogicalCheckpointCanceled, bucketName, nameof(before.LogicalCheckpointCanceled));
-            AssertAtLeast(after.LogicalClaimCheckpointAttempts, before.LogicalClaimCheckpointAttempts, bucketName, nameof(before.LogicalClaimCheckpointAttempts));
-            AssertAtLeast(after.LogicalClaimCheckpointSucceeded, before.LogicalClaimCheckpointSucceeded, bucketName, nameof(before.LogicalClaimCheckpointSucceeded));
-            AssertAtLeast(after.DeferredDecisionAttempts, before.DeferredDecisionAttempts, bucketName, nameof(before.DeferredDecisionAttempts));
-            AssertAtLeast(after.ImmediateDecisionAttempts, before.ImmediateDecisionAttempts, bucketName, nameof(before.ImmediateDecisionAttempts));
-            AssertAtLeast(after.DurableCheckpointAttempts, before.DurableCheckpointAttempts, bucketName, nameof(before.DurableCheckpointAttempts));
-            AssertAtLeast(after.DurableCheckpointSucceeded, before.DurableCheckpointSucceeded, bucketName, nameof(before.DurableCheckpointSucceeded));
-            AssertAtLeast(after.DurableCheckpointFailed, before.DurableCheckpointFailed, bucketName, nameof(before.DurableCheckpointFailed));
-            AssertAtLeast(after.DurableCheckpointCanceled, before.DurableCheckpointCanceled, bucketName, nameof(before.DurableCheckpointCanceled));
-            AssertAtLeast(after.DurableClaimCheckpointAttempts, before.DurableClaimCheckpointAttempts, bucketName, nameof(before.DurableClaimCheckpointAttempts));
-            AssertAtLeast(after.DurableClaimCheckpointSucceeded, before.DurableClaimCheckpointSucceeded, bucketName, nameof(before.DurableClaimCheckpointSucceeded));
-            AssertAtLeast(after.SegmentFlushAttempts, before.SegmentFlushAttempts, bucketName, nameof(before.SegmentFlushAttempts));
-            AssertAtLeast(after.SegmentFlushes, before.SegmentFlushes, bucketName, nameof(before.SegmentFlushes));
-
+            var after = callbackDrained.Buckets[bucketName];
+            Assert.Equal(before.Dispatches, after.Dispatches);
+            Assert.Equal(before.DrainCycles, after.DrainCycles);
+            Assert.Equal(before.ActivityExecutions, after.ActivityExecutions);
+            Assert.Equal(before.LogicalCheckpointAttempts, after.LogicalCheckpointAttempts);
+            Assert.Equal(before.LogicalClaimCheckpointAttempts, after.LogicalClaimCheckpointAttempts);
+            Assert.Equal(before.DeferredDecisionAttempts, after.DeferredDecisionAttempts);
+            Assert.Equal(before.ImmediateDecisionAttempts, after.ImmediateDecisionAttempts);
+            Assert.Equal(before.DurableCheckpointAttempts, after.DurableCheckpointAttempts);
+            Assert.Equal(before.DurableClaimCheckpointAttempts, after.DurableClaimCheckpointAttempts);
+            Assert.Equal(before.SegmentFlushAttempts, after.SegmentFlushAttempts);
             foreach (var commandName in before.Commands.Keys.Union(after.Commands.Keys, StringComparer.Ordinal))
             {
                 before.Commands.TryGetValue(commandName, out var beforeCommand);
                 after.Commands.TryGetValue(commandName, out var afterCommand);
+                Assert.Equal(beforeCommand?.Started ?? 0, afterCommand?.Started ?? 0);
+            }
+        }
+    }
+
+    private static void AssertSnapshotCountersAtLeast(
+        ResponseReplayObservationSnapshot before,
+        ResponseReplayObservationSnapshot after)
+    {
+        foreach (var (bucketName, beforeBucket) in before.Buckets)
+        {
+            var afterBucket = after.Buckets[bucketName];
+            AssertAtLeast(afterBucket.Dispatches, beforeBucket.Dispatches, bucketName, nameof(beforeBucket.Dispatches));
+            AssertAtLeast(afterBucket.DrainCycles, beforeBucket.DrainCycles, bucketName, nameof(beforeBucket.DrainCycles));
+            AssertAtLeast(afterBucket.ActivityExecutions, beforeBucket.ActivityExecutions, bucketName, nameof(beforeBucket.ActivityExecutions));
+            AssertAtLeast(afterBucket.LogicalCheckpointAttempts, beforeBucket.LogicalCheckpointAttempts, bucketName, nameof(beforeBucket.LogicalCheckpointAttempts));
+            AssertAtLeast(afterBucket.LogicalCheckpointSucceeded, beforeBucket.LogicalCheckpointSucceeded, bucketName, nameof(beforeBucket.LogicalCheckpointSucceeded));
+            AssertAtLeast(afterBucket.LogicalCheckpointFailed, beforeBucket.LogicalCheckpointFailed, bucketName, nameof(beforeBucket.LogicalCheckpointFailed));
+            AssertAtLeast(afterBucket.LogicalCheckpointCanceled, beforeBucket.LogicalCheckpointCanceled, bucketName, nameof(beforeBucket.LogicalCheckpointCanceled));
+            AssertAtLeast(afterBucket.LogicalClaimCheckpointAttempts, beforeBucket.LogicalClaimCheckpointAttempts, bucketName, nameof(beforeBucket.LogicalClaimCheckpointAttempts));
+            AssertAtLeast(afterBucket.LogicalClaimCheckpointSucceeded, beforeBucket.LogicalClaimCheckpointSucceeded, bucketName, nameof(beforeBucket.LogicalClaimCheckpointSucceeded));
+            AssertAtLeast(afterBucket.DeferredDecisionAttempts, beforeBucket.DeferredDecisionAttempts, bucketName, nameof(beforeBucket.DeferredDecisionAttempts));
+            AssertAtLeast(afterBucket.ImmediateDecisionAttempts, beforeBucket.ImmediateDecisionAttempts, bucketName, nameof(beforeBucket.ImmediateDecisionAttempts));
+            AssertAtLeast(afterBucket.DurableCheckpointAttempts, beforeBucket.DurableCheckpointAttempts, bucketName, nameof(beforeBucket.DurableCheckpointAttempts));
+            AssertAtLeast(afterBucket.DurableCheckpointSucceeded, beforeBucket.DurableCheckpointSucceeded, bucketName, nameof(beforeBucket.DurableCheckpointSucceeded));
+            AssertAtLeast(afterBucket.DurableCheckpointFailed, beforeBucket.DurableCheckpointFailed, bucketName, nameof(beforeBucket.DurableCheckpointFailed));
+            AssertAtLeast(afterBucket.DurableCheckpointCanceled, beforeBucket.DurableCheckpointCanceled, bucketName, nameof(beforeBucket.DurableCheckpointCanceled));
+            AssertAtLeast(afterBucket.DurableClaimCheckpointAttempts, beforeBucket.DurableClaimCheckpointAttempts, bucketName, nameof(beforeBucket.DurableClaimCheckpointAttempts));
+            AssertAtLeast(afterBucket.DurableClaimCheckpointSucceeded, beforeBucket.DurableClaimCheckpointSucceeded, bucketName, nameof(beforeBucket.DurableClaimCheckpointSucceeded));
+            AssertAtLeast(afterBucket.SegmentFlushAttempts, beforeBucket.SegmentFlushAttempts, bucketName, nameof(beforeBucket.SegmentFlushAttempts));
+            AssertAtLeast(afterBucket.SegmentFlushes, beforeBucket.SegmentFlushes, bucketName, nameof(beforeBucket.SegmentFlushes));
+
+            foreach (var commandName in beforeBucket.Commands.Keys.Union(afterBucket.Commands.Keys, StringComparer.Ordinal))
+            {
+                beforeBucket.Commands.TryGetValue(commandName, out var beforeCommand);
+                afterBucket.Commands.TryGetValue(commandName, out var afterCommand);
                 beforeCommand ??= new ResponseReplayCommandSnapshot(0, 0, 0, 0);
                 afterCommand ??= new ResponseReplayCommandSnapshot(0, 0, 0, 0);
                 AssertAtLeast(afterCommand.Started, beforeCommand.Started, bucketName, $"{commandName}.Started");
@@ -1028,9 +1094,9 @@ public sealed class ResponseReplaySafetyProcessTests
         }
     }
 
-    private static void AssertAtLeast(long settled, long responseReceived, string bucket, string counter) =>
-        Assert.True(settled >= responseReceived,
-            $"The settled {bucket} {counter} counter ({settled}) is below its response-received value ({responseReceived}).");
+    private static void AssertAtLeast(long after, long before, string bucket, string counter) =>
+        Assert.True(after >= before,
+            $"The later {bucket} {counter} counter ({after}) is below its earlier value ({before}).");
 
     private static string GetExpectedCandidateProfileForMatchedMeasurement() =>
         Environment.GetEnvironmentVariable(ExpectedCandidateProfileEnvironmentVariable) switch

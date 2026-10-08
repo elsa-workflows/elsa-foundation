@@ -764,7 +764,9 @@ internal static class ResponseReplayPublicationHost
         });
         await channel.WaitForCommandAsync("settled", CancellationToken.None);
 
-        var snapshotResult = observation.EndCapture();
+        var finalization = await observation.EndCaptureAsync(TimeSpan.FromSeconds(30));
+        var captureStoppedObservation = finalization.CaptureStoppedObservation;
+        var snapshotResult = finalization.CallbackDrainedObservation;
         Ensure(snapshotResult.TargetClaim is not null &&
                snapshotResult.TargetClaim.CheckpointName == RuntimeCheckpointNames.ActivityAttemptClaimed &&
                snapshotResult.TargetClaim.ArtifactId == targetArtifactId &&
@@ -780,11 +782,19 @@ internal static class ResponseReplayPublicationHost
             responseContentType = contentType,
             authoredHeaders,
             responseReceivedObservation,
+            captureStoppedObservation,
             observation = snapshotResult
         });
 
         return new ResponseReplayMeasurementResult(
-            targetExecutionId, (int)response.StatusCode, body, contentType!, authoredHeaders, responseReceivedObservation, snapshotResult);
+            targetExecutionId,
+            (int)response.StatusCode,
+            body,
+            contentType!,
+            authoredHeaders,
+            responseReceivedObservation,
+            captureStoppedObservation,
+            snapshotResult);
     }
 
     private static IReadOnlyDictionary<string, string[]> ReadAuthoredResponseHeaders(HttpResponseMessage response)

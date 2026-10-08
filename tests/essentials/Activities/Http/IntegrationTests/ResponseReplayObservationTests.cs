@@ -9,19 +9,158 @@ namespace Elsa.Activities.Http.IntegrationTests;
 public sealed class ResponseReplayObservationTests
 {
     [Fact]
-    public void Observation_SeparatesRequestBackgroundAndUnattributedAttempts()
+    public async Task EndCaptureAsync_DrainsAdmittedCommandAndCheckpointCallbacks_AndExcludesLateStarts()
+    {
+        var observation = CreateObservation();
+        var carryInCommand = Guid.NewGuid();
+        var lateCarryInCommand = Guid.NewGuid();
+        observation.RecordCommandStart(carryInCommand, activity: null, "Reader|CarryIn");
+        observation.RecordCommandStart(lateCarryInCommand, activity: null, "Reader|LateCarryIn");
+        observation.BeginCapture();
+        observation.RecordCommandOutcome(carryInCommand, ResponseReplayAttemptOutcome.Succeeded);
+
+        using var requestActivity = StartRequestActivity();
+
+        var claim = CreateCommit(
+            "execution-target",
+            "http-in",
+            RuntimeCheckpointNames.ActivityAttemptClaimed,
+            carriesClaimMarker: true);
+        var logicalClaim = observation.BeginLogicalCheckpoint(
+            claim,
+            new RuntimeCheckpointPersistenceDecision(RuntimeCheckpointPersistenceMode.Deferred));
+        var logicalResponse = observation.BeginLogicalCheckpoint(
+            CreateCommit(
+                "execution-target",
+                "write-response",
+                RuntimeCheckpointNames.ActivityCompleted,
+                carriesClaimMarker: true),
+            new RuntimeCheckpointPersistenceDecision(RuntimeCheckpointPersistenceMode.Deferred));
+        var durableResponse = observation.BeginDurableCheckpoint(
+            CreateCommit(
+                "execution-target",
+                "write-response",
+                RuntimeCheckpointNames.ActivityCompleted,
+                carriesClaimMarker: true),
+            new RuntimeCheckpointPersistenceDecision(RuntimeCheckpointPersistenceMode.Deferred),
+            hasBufferedSegment: true);
+
+        var duplicateCommandId = Guid.NewGuid();
+        observation.RecordCommandStart(duplicateCommandId, Activity.Current, "Reader|First");
+        observation.RecordCommandStart(duplicateCommandId, Activity.Current, "Reader|Second");
+        var canceledCommandId = Guid.NewGuid();
+        observation.RecordCommandStart(canceledCommandId, Activity.Current, "Reader|Canceled");
+
+        var finalizationTask = observation.EndCaptureAsync(TimeSpan.FromSeconds(30));
+        Assert.False(finalizationTask.IsCompleted);
+
+        observation.RecordCommandOutcome(lateCarryInCommand, ResponseReplayAttemptOutcome.Succeeded);
+        var lateCommandId = Guid.NewGuid();
+        observation.RecordCommandStart(lateCommandId, Activity.Current, "Reader|Late");
+        Assert.Null(observation.BeginLogicalCheckpoint(
+            claim,
+            new RuntimeCheckpointPersistenceDecision(RuntimeCheckpointPersistenceMode.Deferred)));
+
+        observation.RecordCommandOutcome(duplicateCommandId, ResponseReplayAttemptOutcome.Succeeded);
+        observation.RecordCommandOutcome(duplicateCommandId, ResponseReplayAttemptOutcome.Failed);
+        observation.RecordCommandOutcome(canceledCommandId, ResponseReplayAttemptOutcome.Canceled);
+        observation.CompleteLogicalCheckpoint(logicalClaim, ResponseReplayAttemptOutcome.Succeeded);
+        observation.CompleteLogicalCheckpoint(logicalResponse, ResponseReplayAttemptOutcome.Failed);
+        observation.CompleteDurableCheckpoint(durableResponse, ResponseReplayAttemptOutcome.Canceled);
+
+        var finalization = await finalizationTask;
+        var stopped = finalization.CaptureStoppedObservation;
+        var drained = finalization.CallbackDrainedObservation;
+        var request = drained.Buckets["requestDrain"];
+
+        Assert.Equal(3, stopped.InFlightCommandAttempts);
+        Assert.Equal(1, stopped.CarryInCommandOutcomes);
+        Assert.Equal(0, stopped.OrphanCommandOutcomes);
+        Assert.Equal(2, stopped.Buckets["requestDrain"].LogicalCheckpointAttempts);
+        Assert.Equal(1, stopped.Buckets["requestDrain"].DurableCheckpointAttempts);
+        Assert.Equal(0, stopped.Buckets["requestDrain"].LogicalCheckpointSucceeded);
+        Assert.Equal(0, stopped.Buckets["requestDrain"].LogicalCheckpointFailed);
+        Assert.Equal(0, stopped.Buckets["requestDrain"].DurableCheckpointCanceled);
+        Assert.Equal(0, stopped.Buckets["requestDrain"].Commands["Reader|First"].Succeeded);
+
+        Assert.Equal(0, drained.InFlightCommandAttempts);
+        Assert.Equal(1, drained.CarryInCommandOutcomes);
+        Assert.Equal(0, drained.OrphanCommandOutcomes);
+        Assert.Equal(stopped.Buckets["requestDrain"].LogicalCheckpointAttempts,
+            drained.Buckets["requestDrain"].LogicalCheckpointAttempts);
+        Assert.Equal(stopped.Buckets["requestDrain"].DurableCheckpointAttempts,
+            drained.Buckets["requestDrain"].DurableCheckpointAttempts);
+        Assert.Equal(1, request.LogicalCheckpointSucceeded);
+        Assert.Equal(1, request.LogicalCheckpointFailed);
+        Assert.Equal(1, request.DurableCheckpointCanceled);
+        Assert.Equal(1, request.SegmentFlushAttempts);
+        Assert.Equal(0, request.SegmentFlushes);
+        Assert.Equal(1, request.Commands["Reader|First"].Succeeded);
+        Assert.Equal(1, request.Commands["Reader|Second"].Failed);
+        Assert.Equal(1, request.Commands["Reader|Canceled"].Canceled);
+
+        // Completion callbacks and late starts cannot mutate either immutable snapshot after finalization.
+        observation.RecordCommandStart(lateCommandId, Activity.Current, "Reader|AfterDrain");
+        observation.RecordCommandOutcome(lateCommandId, ResponseReplayAttemptOutcome.Succeeded);
+        Assert.Equal(3, stopped.InFlightCommandAttempts);
+        Assert.Equal(0, stopped.Buckets["requestDrain"].Commands["Reader|First"].Succeeded);
+        Assert.Equal(0, drained.InFlightCommandAttempts);
+        Assert.False(drained.Buckets["requestDrain"].Commands.ContainsKey("Reader|AfterDrain"));
+    }
+
+    [Fact]
+    public async Task EndCaptureAsync_ReportsTimeoutWithoutReturningPartialSnapshot()
+    {
+        var observation = CreateObservation();
+        observation.BeginCapture();
+        using var requestActivity = StartRequestActivity();
+        var attempt = observation.BeginLogicalCheckpoint(
+            CreateCommit(
+                "execution-target",
+                "http-in",
+                RuntimeCheckpointNames.ActivityAttemptClaimed,
+                carriesClaimMarker: true),
+            new RuntimeCheckpointPersistenceDecision(RuntimeCheckpointPersistenceMode.Deferred));
+
+        await Assert.ThrowsAsync<TimeoutException>(() => observation.EndCaptureAsync(TimeSpan.FromMilliseconds(1)));
+        Assert.Null(observation.BeginLogicalCheckpoint(
+            CreateCommit(
+                "execution-target",
+                "write-response",
+                RuntimeCheckpointNames.ActivityCompleted,
+                carriesClaimMarker: true),
+            new RuntimeCheckpointPersistenceDecision(RuntimeCheckpointPersistenceMode.Deferred)));
+        observation.CompleteLogicalCheckpoint(attempt, ResponseReplayAttemptOutcome.Succeeded);
+    }
+
+    [Fact]
+    public async Task EndCaptureAsync_ReportsCancellationWithoutReturningPartialSnapshot()
+    {
+        var observation = CreateObservation();
+        observation.BeginCapture();
+        using var requestActivity = StartRequestActivity();
+        var attempt = observation.BeginLogicalCheckpoint(
+            CreateCommit(
+                "execution-target",
+                "http-in",
+                RuntimeCheckpointNames.ActivityAttemptClaimed,
+                carriesClaimMarker: true),
+            new RuntimeCheckpointPersistenceDecision(RuntimeCheckpointPersistenceMode.Deferred));
+        using var cancellation = new CancellationTokenSource();
+        var finalization = observation.EndCaptureAsync(Timeout.InfiniteTimeSpan, cancellation.Token);
+        cancellation.Cancel();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => finalization);
+        observation.CompleteLogicalCheckpoint(attempt, ResponseReplayAttemptOutcome.Canceled);
+    }
+
+    [Fact]
+    public async Task Observation_SeparatesRequestBackgroundAndUnattributedAttempts()
     {
         const string workflowExecutionId = "execution-target";
         const string endpointNodeId = "http-in";
         const string correlationId = "request-correlation";
-        var observation = new ResponseReplayObservation(new ResponseReplayMeasurementOptions(
-            "/workflows/http/replay",
-            correlationId,
-            "artifact-target",
-            "artifact-hash-target",
-            "ReplaySafe",
-            endpointNodeId,
-            "write-response"));
+        var observation = CreateObservation();
 
         var carryInCommand = Guid.NewGuid();
         observation.RecordCommandStart(carryInCommand, activity: null, "Reader|Startup");
@@ -92,7 +231,7 @@ public sealed class ResponseReplayObservationTests
         observation.RecordCommandOutcome(unownedCommand, ResponseReplayAttemptOutcome.Succeeded);
         observation.RecordCommandOutcome(Guid.NewGuid(), ResponseReplayAttemptOutcome.Canceled);
 
-        var snapshot = observation.EndCapture();
+        var snapshot = (await observation.EndCaptureAsync(TimeSpan.FromSeconds(1))).CallbackDrainedObservation;
         var request = snapshot.Buckets["requestDrain"];
         var background = snapshot.Buckets["backgroundResumption"];
         var unattributed = snapshot.Buckets["unattributed"];
@@ -129,6 +268,22 @@ public sealed class ResponseReplayObservationTests
         Assert.Equal(1, snapshot.CarryInCommandOutcomes);
         Assert.Equal(1, snapshot.OrphanCommandOutcomes);
         Assert.Equal(0, snapshot.InFlightCommandAttempts);
+    }
+
+    private static ResponseReplayObservation CreateObservation() => new(new ResponseReplayMeasurementOptions(
+        "/workflows/http/replay",
+        "request-correlation",
+        "artifact-target",
+        "artifact-hash-target",
+        "ReplaySafe",
+        "http-in",
+        "write-response"));
+
+    private static Activity StartRequestActivity()
+    {
+        var activity = new Activity("measured-http-request");
+        activity.SetTag(ResponseReplayObservation.RequestCorrelationActivityTag, "request-correlation");
+        return activity.Start()!;
     }
 
     private static RuntimeCheckpointCommit CreateCommit(

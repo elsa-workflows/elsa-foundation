@@ -47,6 +47,10 @@ internal sealed record ResponseReplayObservationSnapshot(
     int CarryInCommandOutcomes,
     int OrphanCommandOutcomes);
 
+internal sealed record ResponseReplayObservationFinalization(
+    ResponseReplayObservationSnapshot CaptureStoppedObservation,
+    ResponseReplayObservationSnapshot CallbackDrainedObservation);
+
 internal sealed record ResponseReplayMeasurementResult(
     string WorkflowExecutionId,
     int HttpStatus,
@@ -54,6 +58,7 @@ internal sealed record ResponseReplayMeasurementResult(
     string ResponseContentType,
     IReadOnlyDictionary<string, string[]> AuthoredHeaders,
     ResponseReplayObservationSnapshot ResponseReceivedObservation,
+    ResponseReplayObservationSnapshot CaptureStoppedObservation,
     ResponseReplayObservationSnapshot Observation);
 
 internal sealed record ResponseReplayClaimBoundarySnapshot(
@@ -111,8 +116,11 @@ internal sealed class ResponseReplayObservation(ResponseReplayMeasurementOptions
     private readonly Dictionary<ResponseReplayWorkBucket, MutableBucket> _buckets = Enum.GetValues<ResponseReplayWorkBucket>()
         .ToDictionary(bucket => bucket, _ => new MutableBucket());
     private readonly Dictionary<Guid, Queue<CommandAttempt>> _inFlightCommands = [];
+    private readonly HashSet<CheckpointAttempt> _inFlightCheckpoints = new(ReferenceEqualityComparer.Instance);
     private readonly List<ResponseReplayResponseBoundarySnapshot> _responseCompletionAttempts = [];
-    private bool _capturing;
+    private readonly TaskCompletionSource _drainSignal = new(TaskCreationOptions.RunContinuationsAsynchronously);
+    private CaptureLifecycle _lifecycle;
+    private int _inFlightAdmittedCommandAttempts;
     private string? _targetExecutionId;
     private ResponseReplayClaimBoundarySnapshot? _targetClaim;
     private bool _pageReuseEligible;
@@ -144,22 +152,60 @@ internal sealed class ResponseReplayObservation(ResponseReplayMeasurementOptions
     {
         lock (_sync)
         {
-            if (_capturing)
+            if (_lifecycle != CaptureLifecycle.NotStarted)
                 throw new InvalidOperationException("The response-replay observation window is already active.");
             if (_targetExecutionId is not null)
                 throw new InvalidOperationException("The target execution was observed before the response-replay window started.");
-            _capturing = true;
+            _lifecycle = CaptureLifecycle.Capturing;
         }
     }
 
-    public ResponseReplayObservationSnapshot EndCapture()
+    public async Task<ResponseReplayObservationFinalization> EndCaptureAsync(
+        TimeSpan timeout,
+        CancellationToken cancellationToken = default)
     {
+        if (timeout < TimeSpan.Zero && timeout != Timeout.InfiniteTimeSpan)
+            throw new ArgumentOutOfRangeException(nameof(timeout), "The callback-drain timeout must be non-negative or infinite.");
+
+        ResponseReplayObservationSnapshot captureStopped;
         lock (_sync)
         {
-            if (!_capturing)
+            if (_lifecycle != CaptureLifecycle.Capturing)
                 throw new InvalidOperationException("The response-replay observation window is not active.");
-            _capturing = false;
-            return CreateSnapshot();
+            // Close admission before taking the boundary snapshot. The bounded wait below covers only
+            // command and checkpoint attempts that were admitted before this transition.
+            _lifecycle = CaptureLifecycle.Draining;
+            captureStopped = CreateSnapshot();
+            if (PendingAttemptCount == 0)
+            {
+                _lifecycle = CaptureLifecycle.Completed;
+                return new ResponseReplayObservationFinalization(captureStopped, CreateSnapshot());
+            }
+        }
+
+        try
+        {
+            await _drainSignal.Task.WaitAsync(timeout, cancellationToken).ConfigureAwait(false);
+            lock (_sync)
+            {
+                if (PendingAttemptCount != 0)
+                    throw new InvalidOperationException("The response-replay callback drain signaled before all admitted attempts completed.");
+                _lifecycle = CaptureLifecycle.Completed;
+                return new ResponseReplayObservationFinalization(captureStopped, CreateSnapshot());
+            }
+        }
+        catch (TimeoutException)
+        {
+            lock (_sync)
+                _lifecycle = CaptureLifecycle.Failed;
+            throw new TimeoutException(
+                $"The response-replay callback drain did not complete within {timeout.TotalSeconds:0.###} seconds.");
+        }
+        catch
+        {
+            lock (_sync)
+                _lifecycle = CaptureLifecycle.Failed;
+            throw;
         }
     }
 
@@ -167,7 +213,7 @@ internal sealed class ResponseReplayObservation(ResponseReplayMeasurementOptions
     {
         lock (_sync)
         {
-            if (!_capturing)
+            if (_lifecycle != CaptureLifecycle.Capturing)
                 throw new InvalidOperationException("The response-replay observation window is not active.");
             return CreateSnapshot();
         }
@@ -188,7 +234,12 @@ internal sealed class ResponseReplayObservation(ResponseReplayMeasurementOptions
             return;
 
         lock (_sync)
+        {
+            if (!_inFlightCheckpoints.Remove(attempt))
+                return;
             _buckets[attempt.Bucket].CompleteLogical(outcome, attempt.IsClaimBoundary);
+            SignalDrainIfComplete();
+        }
     }
 
     public void CompleteDurableCheckpoint(CheckpointAttempt? attempt, ResponseReplayAttemptOutcome outcome)
@@ -197,7 +248,12 @@ internal sealed class ResponseReplayObservation(ResponseReplayMeasurementOptions
             return;
 
         lock (_sync)
+        {
+            if (!_inFlightCheckpoints.Remove(attempt))
+                return;
             _buckets[attempt.Bucket].CompleteDurable(outcome, attempt.IsClaimBoundary, attempt.IsSegmentFlush);
+            SignalDrainIfComplete();
+        }
     }
 
     public void RecordDispatch(RuntimeSchedulerWorkItem workItem) =>
@@ -213,13 +269,16 @@ internal sealed class ResponseReplayObservation(ResponseReplayMeasurementOptions
     {
         lock (_sync)
         {
+            if (_lifecycle is CaptureLifecycle.Draining or CaptureLifecycle.Completed or CaptureLifecycle.Failed)
+                return;
+
             if (!_inFlightCommands.TryGetValue(commandId, out var attempts))
             {
                 attempts = new Queue<CommandAttempt>();
                 _inFlightCommands.Add(commandId, attempts);
             }
 
-            if (!_capturing)
+            if (_lifecycle == CaptureLifecycle.NotStarted)
             {
                 // Preserve an out-of-window start so an outcome crossing into the capture window is
                 // reported as carry-in instead of being mistaken for a missing callback.
@@ -231,6 +290,7 @@ internal sealed class ResponseReplayObservation(ResponseReplayMeasurementOptions
             var commandKey = new CommandAttemptKey(bucket, commandCategory);
             _buckets[bucket].StartCommand(commandKey.Name);
             attempts.Enqueue(new CommandAttempt(commandKey));
+            _inFlightAdmittedCommandAttempts++;
         }
     }
 
@@ -238,17 +298,24 @@ internal sealed class ResponseReplayObservation(ResponseReplayMeasurementOptions
     {
         lock (_sync)
         {
+            if (_lifecycle is CaptureLifecycle.Completed or CaptureLifecycle.Failed)
+                return;
+
             if (!_inFlightCommands.TryGetValue(commandId, out var attempts) || attempts.Count == 0)
             {
-                if (_capturing)
+                if (_lifecycle == CaptureLifecycle.Capturing)
                     _orphanCommandOutcomes++;
                 return;
             }
 
             var attempt = attempts.Dequeue();
             if (attempt.Key is { } key)
+            {
                 _buckets[key.Bucket].CompleteCommand(key.Name, outcome);
-            else if (_capturing)
+                _inFlightAdmittedCommandAttempts--;
+                SignalDrainIfComplete();
+            }
+            else if (_lifecycle == CaptureLifecycle.Capturing)
                 _carryInCommandOutcomes++;
             if (attempts.Count == 0)
                 _inFlightCommands.Remove(commandId);
@@ -263,7 +330,7 @@ internal sealed class ResponseReplayObservation(ResponseReplayMeasurementOptions
     {
         lock (_sync)
         {
-            if (!_capturing)
+            if (_lifecycle != CaptureLifecycle.Capturing)
                 return null;
 
             var claimBoundary = IsClaimBoundary(commit);
@@ -302,7 +369,9 @@ internal sealed class ResponseReplayObservation(ResponseReplayMeasurementOptions
             var bucket = Classify(Activity.Current, commit.WorkflowExecutionId);
             var flush = hasBufferedSegment || commit.Checkpoint.Metadata.ContainsKey(RuntimeCoalescingMetadataKeys.CoalescedFlush);
             _buckets[bucket].StartCheckpoint(durable, decision.Mode, claimBoundary, flush);
-            return new CheckpointAttempt(bucket, durable, claimBoundary, flush);
+            var attempt = new CheckpointAttempt(bucket, durable, claimBoundary, flush);
+            _inFlightCheckpoints.Add(attempt);
+            return attempt;
         }
     }
 
@@ -310,7 +379,7 @@ internal sealed class ResponseReplayObservation(ResponseReplayMeasurementOptions
     {
         lock (_sync)
         {
-            if (!_capturing)
+            if (_lifecycle != CaptureLifecycle.Capturing)
                 return;
 
             var bucket = Classify(Activity.Current, workflowExecutionId);
@@ -341,7 +410,6 @@ internal sealed class ResponseReplayObservation(ResponseReplayMeasurementOptions
 
     private ResponseReplayObservationSnapshot CreateSnapshot()
     {
-        var commands = _inFlightCommands.Values.Sum(queue => queue.Count(attempt => attempt.Key is not null));
         return new ResponseReplayObservationSnapshot(
             Options.CorrelationId,
             _targetExecutionId ?? throw new InvalidOperationException("No target execution was observed in the measured request."),
@@ -356,9 +424,17 @@ internal sealed class ResponseReplayObservation(ResponseReplayMeasurementOptions
                 pair => BucketName(pair.Key),
                 pair => pair.Value.Snapshot(),
                 StringComparer.Ordinal),
-            commands,
+            _inFlightAdmittedCommandAttempts,
             _carryInCommandOutcomes,
             _orphanCommandOutcomes);
+    }
+
+    private int PendingAttemptCount => _inFlightAdmittedCommandAttempts + _inFlightCheckpoints.Count;
+
+    private void SignalDrainIfComplete()
+    {
+        if (_lifecycle == CaptureLifecycle.Draining && PendingAttemptCount == 0)
+            _drainSignal.TrySetResult();
     }
 
     private bool IsTargetArtifactClaim(RuntimeCheckpointCommit commit) =>
@@ -446,6 +522,15 @@ internal sealed class ResponseReplayObservation(ResponseReplayMeasurementOptions
         Dispatch,
         Drain,
         ActivityExecution
+    }
+
+    private enum CaptureLifecycle
+    {
+        NotStarted,
+        Capturing,
+        Draining,
+        Completed,
+        Failed
     }
 
     private sealed class MutableBucket
