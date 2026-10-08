@@ -122,3 +122,10 @@ The regression asserts that both corrected profiles differ from it. The producti
 file SHA-256 changes from
 `88aebe66d24c5814d0ec3c6b840b105656485d3c6379410d382cc5c864d51d70` to
 `c861de3d6a81620328b9206cfc116a13dfbe86633d374bf1ca6bf152f2911d6a`.
+
+The first complete publisher run at `f1efed929` executed 717 tests: 716 passed and one
+inline hash-golden test failed, with zero skips. Its two structured hash pins have now been
+updated for the same profile projection; its contract-fingerprint assertions stay unchanged.
+The focused corrected test passed 1/1. The first CI run was cancelled after the known local
+failure while preparing the corrected head; that cancellation is not accepted evidence.
+The complete affected and PR gates must run on the corrected candidate before acceptance.

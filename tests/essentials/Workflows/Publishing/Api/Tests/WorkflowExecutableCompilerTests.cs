@@ -191,9 +191,9 @@ public sealed class WorkflowExecutableCompilerTests
     [Fact]
     public async Task An_undeclared_input_keeps_its_contract_fingerprint_and_artifact_hash()
     {
-        // Captured before the sensitivity declaration existed (spec 188, slice 5): neither the contract fingerprint nor
-        // the artifact hash of a node whose inputs declare nothing may move. All three values were re-derived
-        // independently on unmodified main at df02ece3c and matched.
+        // These values were captured before the sensitivity declaration existed (spec 188, slice 5). #2515
+        // intentionally updates the structured artifact hashes to include the effective side-effect profile;
+        // the contract fingerprint remains unchanged for both input variants.
         var unbound = await SecretBindingCompilerFixture.CompileAsync(SecretBindingCompilerFixture.Node(typeof(TestWriteLineActivity)), [typeof(TestWriteLineActivity)]);
         var literal = await SecretBindingCompilerFixture.CompileAsync(
             SecretBindingCompilerFixture.Node(typeof(TestWriteLineActivity), new WorkflowArgumentState("Text", new ArgumentValue(JsonSerializer.SerializeToElement("hello"), "Literal"), null, null, null, null)),
@@ -201,8 +201,8 @@ public sealed class WorkflowExecutableCompilerTests
 
         Assert.Equal("sha256:d4c0e91ccccf8bfd0650d563b933c2dc24fa6acf5db71de7614cd82adecd3cb5", unbound.RootActivity.ActivityContract!.SchemaFingerprint);
         Assert.Equal(unbound.RootActivity.ActivityContract.SchemaFingerprint, literal.RootActivity.ActivityContract!.SchemaFingerprint);
-        Assert.Equal("sha256:05ae620ba51b3ae51f212e1506b691ba358561d42f10ab7286ed4cfbac11cce5", unbound.Identity.ArtifactHash);
-        Assert.Equal("sha256:6657ac74698170e3b3a592a64184c0a32edefa8db169fbf14fbb5578e2eb8edc", literal.Identity.ArtifactHash);
+        Assert.Equal("sha256:0e1f299d066b2d136264598e6b1725ba9a28e974807cd7db0df8a7330b4a67ff", unbound.Identity.ArtifactHash);
+        Assert.Equal("sha256:7b4d6b3a6d8b5c00b228dcb91f73de2f775839f9adc14beddd0b3639d96adf0d", literal.Identity.ArtifactHash);
     }
 
     [Fact]
