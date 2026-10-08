@@ -6,6 +6,8 @@ Stewards: Sipke and the program delivery lead. [CShells #144](https://github.com
 
 Deliver and adopt explicit host-owned services, committed CShells catalog notifications, and an optional Nuplane-to-CShells adapter. Add a Nuplane package-store pruning feature only after a bounded safety spike proves that package files are unused by active, candidate, and sibling generations. Preserve the host and Workbench policies described in [decisions](../plans/modular-hosting-upstream/decisions.md).
 
+The one shallow Ready buffer is [CShells #148](https://github.com/valence-works/cshells/issues/148), activation settlement under startup Feature #143. It prevents `GetOrActivateAsync` from returning a candidate before Commit can roll back, while preserving early routing identity. Implement it after #147's local review; no second implementation leaf is active.
+
 Use the canonical [framework glossary](../glossary/root.md) and [Elsa glossary](../glossary/elsa.md) for Host, Shell, feature composition, and Nuplane terms.
 
 ## Milestones

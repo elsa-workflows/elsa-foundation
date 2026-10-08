@@ -23,26 +23,37 @@ Proposed surface (names illustrative pending upstream review):
 ```csharp
 public interface IShellActivationRunner
 {
-    Task<IShellActivationRun> StartAsync(
+    IShellActivationRun Start(
         IReadOnlyList<string> shellNames,
         ShellActivationRetryPolicy? retryPolicy = null,
         IShellActivationObserver? observer = null,
         CancellationToken startupCancellationToken = default);
 }
 
-public delegate TimeSpan? ShellActivationRetryPolicy(
+public delegate ShellActivationRetryDecision ShellActivationRetryPolicy(
     string shellName, Exception failure, int failedAttempts);
 
-public interface IShellActivationRun : IAsyncDisposable
+public interface IShellActivationRun
 {
+    Task InitialPass { get; }
     IReadOnlyList<ShellActivationAttemptState> Snapshot { get; }
     Task StopAsync(CancellationToken shutdownToken = default);
 }
 ```
 
-`StartAsync` performs the initial attempts serially in the caller's startup phase, then returns a run handle. A `null` retry policy means one shot; a policy returning `null` for a specific failure stops retrying that shell; a positive delay schedules its next attempt. The run owns retry tasks and a private stopping token. `StopAsync` cancels and joins them, bounded by the supplied host shutdown token; `DisposeAsync` cancels and observes any remaining work. The initial pass observes `startupCancellationToken`; retry lifetime is explicitly owned by the returned handle so the IHostedService can stop it on host shutdown. Activation always goes through `GetOrActivateAsync`.
+`Start` returns a run handle synchronously, with a tracked `InitialPass` task. A host can therefore stop the run even if startup is cancelled while an activation ignores cancellation. Initial attempts run serially in caller order; ordinary activation faults do not prevent later targets from running. Retry scheduling starts only after the initial pass completes normally. A `null` retry policy means one shot; a decision is Stop or RetryAfter with a positive delay. Invalid delays or a throwing policy stop recovery for that target, preserve its activation failure and expose a safe policy-error result; other targets continue. The run owns initial/retry tasks and its stopping token. `StopAsync` cancels them and waits only within the supplied host shutdown token. Outstanding stubborn work remains tracked, eventual faults are observed, and its token source is disposed when no work uses it. No `IAsyncDisposable` contract implies an unbounded join. Activation goes through `GetOrActivateAsync` after the settlement prerequisite below.
 
-The observer receives immutable attempt-completed values with shell name, attempt number, timestamps, outcome/active generation, and the exception for host-local classification/logging. The run's immutable current snapshot keeps only generic values (attempt count, active generation, last failure type/time, next retry time/status); it does not expose exception messages or an endpoint. Observer exceptions must not suppress an activation result or terminate retry scheduling; they are logged by the runner. The runner reconciles success with `GetActive`/registry lifecycle so a request or reload that activates a shell clears stale failed state before the next retry. An optional injected `TimeProvider` (or internal delay abstraction) makes retries deterministic in tests without real sleeps.
+The observer receives immutable attempt-completed values with shell name, attempt number, timestamps, outcome/active generation, and the exception for host-local classification/logging. The run's immutable current snapshot keeps only generic values (attempt count, active generation, last failure type/time, next retry time/status); it does not expose exception messages or an endpoint. State commits before observer notification; no gate is held while invoking the registry, policy, observer or logger. Observer/logger failures cannot suppress an activation result or terminate retry scheduling. An optional injected `TimeProvider` makes retries deterministic in tests without real sleeps.
+
+## Required activation settlement fix
+
+Source review found that `ShellRegistry.CreateGenerationAsync` sends Active lifecycle notifications before publishing the candidate, then publishes `slot.Active` before activation-participant Commit. Later Commit failure rolls back. Raw `GetActive` and Active notifications therefore do not prove success. The current lock-free `GetOrActivateAsync` fast path also returns this provisional candidate to an unrelated caller. A runner using any of these as settlement proof could permanently stop recovery for a failed activation.
+
+[CShells #148](https://github.com/valence-works/cshells/issues/148) is the reviewed prerequisite, queued behind #147. Concrete Shell receives an internal thread-visible committed marker, set after acceptance/Commit/Complete and the final eligibility check, before observational success logging. `GetOrActivateAsync` returns immediately only for committed shells; a provisional candidate waits for the existing per-name semaphore, then rechecks current state after commit or rollback. An unsettled active shell under the acquired semaphore is an invariant failure. `GetActive`/`GetAll` retain early candidate visibility for routing and participant identity. No mandatory interface member, lifecycle coordinator or event is added.
+
+The default runner may reconcile pending recovery from an externally activated concrete Shell only when its committed marker is set. It checks this on snapshot reads and retry deadlines; provisional candidates do not suppress failures. Its own successful operation must also return a settled, still-current active instance. A target becomes terminal once satisfied; later drain/unregister does not trigger automatic reactivation. An arbitrary custom registry's successful operation must explicitly promise settlement; external reconciliation requires an optional stable-state capability or a documented committed `GetActive` contract. Do not silently infer that guarantee from Active state. Same-name activation/reload/unregister reentry from activation callbacks remains unsupported; direct identity observation remains available.
+
+Prerequisite proof gates Commit deterministically after publication: concurrent `GetOrActivateAsync` waits while raw `GetActive` sees the candidate, then returns the new generation on success, restored old generation on reload rollback, or a later unique generation after fail-once initial rollback. Also prove pre-publication old-generation reuse, independent waiter cancellation, rejection during completion, stampede serialization and a throwing success logger. Restoring the unconditional fast path must fail the blocked-Commit regression before restoration passes.
 
 There is no built-in target selector, host phase selector, retry default, readiness aggregation, health route, telemetry schema, or Elsa configuration binding. Hosts provide target names and policies. A host-supplied retry delegate sees the original exception: Foundation maps transient faults to capped exponential delay plus jitter and maps `IEfModuleRefusal` to the max interval; CShells itself has no EF dependency. Workbench passes no retry policy, preserving one-shot eager semantics and swallowed failures. This keeps package support to activation execution/lifetime and a small state projection rather than a control plane.
 
@@ -50,7 +61,7 @@ There is no built-in target selector, host phase selector, retry default, readin
 
 | Consumer | Preserve | Keep local |
 |---|---|---|
-| Foundation.Host | Default-on eager first attempt; serial attempts before listening; unbounded retry after start; capped exponential/jitter; host-stop cancellation; readiness requires all configured shells. Adapter passes its configured shell names and Elsa retry policy, awaits `StartAsync` initial pass, stores the run, stops it from `StopAsync`, and projects runner attempt state through its current readiness endpoint. | EF refusal classification and slower check interval; public sanitized health JSON; Attention severity/details/permissions; `AddShellStartupValidation`. Replace the duplicate local retry loop/tracker attempt bookkeeping with runner state + an Elsa projection; keep subscriber reconciliation for activations caused by request/reload. |
+| Foundation.Host | Default-on eager first attempt; serial attempts before listening; unbounded retry after start; capped exponential/jitter; host-stop cancellation; readiness requires all configured shells. Adapter stores the run returned by `Start`, awaits `InitialPass`, stops it from `StopAsync`, and projects runner attempt state through its current readiness endpoint. | EF refusal classification and slower check interval; public sanitized health JSON; Attention severity/details/permissions; `AddShellStartupValidation`. Replace duplicate retry/tracker attempt bookkeeping with runner state + an Elsa projection; remove Active-notification reconciliation as a success source and use settled registry state. |
 | Workbench eager adapter | Eager option stays off unless explicitly enabled; opted-in eager attempt remains pre-listen, one-shot, logs/swallow failures and continues to next name. | Workbench options/target selection, activation timing logs. Pass no retry policy. |
 | Workbench default warmup adapter | Warmup remains enabled by default after `ApplicationStarted`, returns immediately from host `StartAsync`, and activates only configured default shell. It calls the same runner for one target with no retry policy, then maps attempt outcome into `ShellReadinessState`; feature-discovery + activation telemetry remains around this call. Eager and warmup may overlap: same-name serialization/reuse in `GetOrActivateAsync` prevents duplicate activation, while warmup retains its own readiness transition and phase telemetry. | Workbench `ApplicationStarted` wait, readiness state/endpoint/options, telemetry and host-specific failure codes. Keep auto reload opt-in false, owned by its separate package-change work. |
 
@@ -72,7 +83,7 @@ Focused source-level ordering gap: Workbench unit tests cover target selection/f
 ## Minimal proof contracts
 
 - Use an injected `TimeProvider` to prove initial serial order, capped retry timing, retry cancellation/await on `StopAsync`, and no extra attempt after stop without wall-clock sleeps.
-- A failing target does not prevent later initial targets from being attempted; a null retry policy makes exactly one attempt per target; policy `null` stops that target while positive delay schedules it.
+- A failing target does not prevent later initial targets from being attempted; a null retry policy makes exactly one attempt per target; Stop ends that target while RetryAfter with a positive delay schedules it. Invalid/throwing policies fail closed for that target without stopping others.
 - An activation made through request/reload between retries clears stale failed state and does not cause a second active generation. Observer faults do not corrupt result or retry ownership.
 - Foundation consumer tests preserve default-on pre-listen first attempts, continuing capped retries, refusal-at-cap, cancellation, sanitized readiness, and Attention mapping. Workbench tests preserve default-off eager, pre-listen one-shot and continue-on-fault, plus warmup's nonblocking start/post-`ApplicationStarted` timing and independent telemetry/readiness.
 - Add one coordinated Workbench test for eager + warmup enabled: both adapters can observe the same active generation; exactly one registry build occurs; warmup still publishes its own readiness state and telemetry.
@@ -83,6 +94,6 @@ A shared runner can accidentally erase meaningful host differences: blocking sta
 
 ## Cancellation and recovery boundaries to resolve in the task
 
-Cancellation during the serial first pass must cancel/dispose its private run without starting orphan retries or requiring a handle that was never returned. Stop must remain bounded when activation ignores cancellation; a subsequent DisposeAsync must not reintroduce an unbounded join of that task. Specify how remaining task faults are observed and the cancellation source is cleaned when outstanding work completes.
+Cancellation during the serial first pass cancels the run lifetime and prevents retries. The synchronous handle remains available for bounded Stop even if activation ignores cancellation. Remaining tasks stay tracked; observe eventual faults and clean the cancellation source after work completes. Test concurrent snapshot reads, stop, observer and policy faults without holding a gate over external calls.
 
 Once startup activation succeeds, the job stops retrying. A later drain/unregister must not silently turn startup recovery into perpetual automatic reactivation. External request/reload activation may reconcile stale failed state while recovery is pending; host readiness still derives from the currently active registry generation.

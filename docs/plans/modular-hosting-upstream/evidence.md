@@ -30,6 +30,8 @@ Read-only research for [optional Nuplane integration](../../reports/modular-host
 
 The published Nuplane `.94` nuspec points to `bf27be646d4c124b6b2ba2c632f9a49b1a5252c6`. GitHub's base `bf27be6` → head `21e2c24` comparison shows the source snapshot is four commits ahead; among the relevant abstraction/observer/autoload files only `ResolvedPackage.cs` changed, adding `PackageContentHash`. Observer/catalog contract files are unchanged in that comparison. Implementation must still restore/build against the exact published package; source snapshots and package provenance remain distinct evidence.
 
+Root-reviewed startup research found an additional settlement gap: Active notification precedes publication, and raw `GetActive` plus the current `GetOrActivateAsync` fast path can expose a candidate before Commit succeeds. [CShells #148](https://github.com/valence-works/cshells/issues/148), native child of #143, is the one shallow Ready buffer behind active #147. Its approved internal committed marker and semaphore recheck preserve routing identity while preventing provisional success. The [startup candidate](../../reports/modular-hosting-startup-candidate.md) now requires that fix and a synchronous run handle with tracked initial-pass work and bounded Stop. This is design/source evidence, not a passed regression or implemented runner.
+
 ## Source baselines
 
 | Repository | Ref / commit | Evidence |
