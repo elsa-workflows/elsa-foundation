@@ -24,6 +24,7 @@ public sealed class ResponseReplaySafetyProcessTests
     private const string PublicationResultPrefix = "RESPONSE_REPLAY_PUBLICATION_RESULT=";
     private const string RecoveryResultPrefix = "RESPONSE_REPLAY_RECOVERY_RESULT=";
     private const string MeasurementResultPrefix = "RESPONSE_REPLAY_MEASUREMENT_RESULT=";
+    private const string ExpectedCandidateProfileEnvironmentVariable = "ELSA_RESPONSE_REPLAY_T012_EXPECT_CANDIDATE_PROFILE";
     private const string HttpNodeId = "http-in";
     private const string ResponseNodeId = "write-response";
     private const string ReplayCorrelationHeader = "X-Response-Replay-Correlation";
@@ -218,6 +219,7 @@ public sealed class ResponseReplaySafetyProcessTests
 
         using var manifest = JsonDocument.Parse(await File.ReadAllTextAsync(manifestPath));
         var publicationManifest = manifest.RootElement.GetProperty("publication");
+        var expectedCandidateProfile = GetExpectedCandidateProfileForMatchedMeasurement();
         var routePath = publicationManifest.GetProperty("routePath").GetString()!;
         var baselineArtifactId = publicationManifest.GetProperty("artifactId").GetString()!;
         var baselineArtifactHash = publicationManifest.GetProperty("artifactHash").GetString()!;
@@ -243,14 +245,14 @@ public sealed class ResponseReplaySafetyProcessTests
         {
             var setup = await RunChildProcessAsync(
                 childDll, ownedRoot, TimeSpan.FromMinutes(3), "response-replay matched-count publication setup",
-                "--publication-proof", closurePath, seedDatabasePath, ownedRoot);
+                "--measurement-publication-proof", closurePath, seedDatabasePath, ownedRoot, expectedCandidateProfile);
             Assert.Equal(0, setup.ExitCode);
             using var setupResult = ReadSingleResult(setup.Stdout, PublicationResultPrefix);
             var publication = setupResult.RootElement;
             Assert.Equal(baselineArtifactId, publication.GetProperty("baselineArtifactId").GetString());
             Assert.Equal(baselineArtifactHash, publication.GetProperty("baselineArtifactHash").GetString());
             Assert.Equal("External", publication.GetProperty("baselineProfile").GetString());
-            Assert.Equal("ReplaySafe", publication.GetProperty("candidateProfile").GetString());
+            Assert.Equal(expectedCandidateProfile, publication.GetProperty("candidateProfile").GetString());
             var candidateDefinitionId = publication.GetProperty("candidateDefinitionId").GetString()!;
             var candidateArtifactId = publication.GetProperty("candidateArtifactId").GetString()!;
             var candidateArtifactHash = publication.GetProperty("candidateArtifactHash").GetString()!;
@@ -264,7 +266,7 @@ public sealed class ResponseReplaySafetyProcessTests
             var unpublish = await RunChildProcessAsync(
                 childDll, ownedRoot, TimeSpan.FromMinutes(2), "response-replay External comparison unpublish",
                 "--measurement-unpublish-candidate", closurePath, externalDatabasePath, ownedRoot,
-                candidateDefinitionId, candidateArtifactId, candidateArtifactHash);
+                candidateDefinitionId, candidateArtifactId, candidateArtifactHash, expectedCandidateProfile);
             Assert.Equal(0, unpublish.ExitCode);
 
             // A separate ordinary host then applies the unchanged historical JSON source through the production
@@ -272,19 +274,19 @@ public sealed class ResponseReplaySafetyProcessTests
             var reconcile = await RunChildProcessAsync(
                 childDll, ownedRoot, TimeSpan.FromMinutes(2), "response-replay External comparison reconcile",
                 "--measurement-reconcile-external", closurePath, externalDatabasePath, ownedRoot,
-                baselineArtifactId, baselineArtifactHash, candidateArtifactId, candidateArtifactHash);
+                baselineArtifactId, baselineArtifactHash, candidateArtifactId, candidateArtifactHash, expectedCandidateProfile);
             Assert.Equal(0, reconcile.ExitCode);
 
             var externalResult = await RunMeasuredChildAsync(
                 childDll, ownedRoot, closurePath, externalDatabasePath,
                 "External", baselineArtifactId, baselineArtifactHash,
                 baselineArtifactId, baselineArtifactHash,
-                candidateArtifactId, candidateArtifactHash, routePath);
+                candidateArtifactId, candidateArtifactHash, routePath, expectedCandidateProfile);
             var candidateResult = await RunMeasuredChildAsync(
                 childDll, ownedRoot, closurePath, candidateDatabasePath,
-                "ReplaySafe", candidateArtifactId, candidateArtifactHash,
+                expectedCandidateProfile, candidateArtifactId, candidateArtifactHash,
                 baselineArtifactId, baselineArtifactHash,
-                candidateArtifactId, candidateArtifactHash, routePath);
+                candidateArtifactId, candidateArtifactHash, routePath, expectedCandidateProfile);
 
             Assert.Equal(externalResult.HttpStatus, candidateResult.HttpStatus);
             Assert.Equal(externalResult.ResponseBody, candidateResult.ResponseBody);
@@ -295,6 +297,8 @@ public sealed class ResponseReplaySafetyProcessTests
 
             var externalCounts = CountTotals(externalResult.Observation);
             var candidateCounts = CountTotals(candidateResult.Observation);
+            if (expectedCandidateProfile == "External")
+                AssertExternalProfilePolicyCountsMatch(externalResult.Observation, candidateResult.Observation);
             var report = new
             {
                 setup = new
@@ -304,6 +308,7 @@ public sealed class ResponseReplaySafetyProcessTests
                     baselineArtifactHash,
                     candidateArtifactId,
                     candidateArtifactHash,
+                    expectedCandidateProfile,
                     runtime = "same prebuilt child DLL",
                     persistence = "equivalent owned SQLite online-backup copies",
                     hostPreparation = "fresh child process; identical measured-host startup and pre-capture verification; no publication during either count window",
@@ -325,7 +330,7 @@ public sealed class ResponseReplaySafetyProcessTests
                 },
                 candidate = new
                 {
-                    profile = "ReplaySafe",
+                    profile = expectedCandidateProfile,
                     responseReceived = new
                     {
                         raw = candidateResult.ResponseReceivedObservation,
@@ -586,7 +591,8 @@ public sealed class ResponseReplaySafetyProcessTests
         string baselineArtifactHash,
         string candidateArtifactId,
         string candidateArtifactHash,
-        string routePath)
+        string routePath,
+        string expectedCandidateProfile)
     {
         var pipeName = $"rr-{Guid.NewGuid():N}"[..19];
         var correlationId = $"t011-{profile}-{Guid.NewGuid():N}";
@@ -597,7 +603,8 @@ public sealed class ResponseReplaySafetyProcessTests
             childDll, ownedRoot, $"response-replay {profile} matched-count child",
             "--measure", closurePath, databasePath, ownedRoot, pipeName,
             targetArtifactId, targetArtifactHash, profile, correlationId,
-            baselineArtifactId, baselineArtifactHash, candidateArtifactId, candidateArtifactHash);
+            baselineArtifactId, baselineArtifactHash, candidateArtifactId, candidateArtifactHash,
+            expectedCandidateProfile);
 
         await WaitForPipeConnectionAsync(pipeServer, child, TimeSpan.FromMinutes(2));
         using var reader = new StreamReader(pipeServer, new UTF8Encoding(false), false, 1024, leaveOpen: true);
@@ -619,6 +626,7 @@ public sealed class ResponseReplaySafetyProcessTests
             Assert.Equal(targetArtifactHash, payload.GetProperty("targetArtifactHash").GetString());
             Assert.Equal(profile, payload.GetProperty("targetProfile").GetString());
             Assert.Equal("External", payload.GetProperty("endpointProfile").GetString());
+            Assert.Equal(expectedCandidateProfile, payload.GetProperty("candidateProfile").GetString());
             Assert.Equal(1, payload.GetProperty("activeRouteBindingCount").GetInt32());
             Assert.True(payload.GetProperty("durableValuePageReuseEligible").GetBoolean());
             Assert.True(payload.GetProperty("equivalentStartupPreparation").GetBoolean());
@@ -868,6 +876,31 @@ public sealed class ResponseReplaySafetyProcessTests
     private static void AssertAtLeast(long settled, long responseReceived, string bucket, string counter) =>
         Assert.True(settled >= responseReceived,
             $"The settled {bucket} {counter} counter ({settled}) is below its response-received value ({responseReceived}).");
+
+    private static string GetExpectedCandidateProfileForMatchedMeasurement() =>
+        Environment.GetEnvironmentVariable(ExpectedCandidateProfileEnvironmentVariable) switch
+        {
+            null => "ReplaySafe",
+            "External" => "External",
+            var value => throw new InvalidOperationException(
+                $"{ExpectedCandidateProfileEnvironmentVariable} accepts only 'External' when set; received '{value}'.")
+        };
+
+    private static void AssertExternalProfilePolicyCountsMatch(
+        ResponseReplayObservationSnapshot external,
+        ResponseReplayObservationSnapshot candidate)
+    {
+        var externalRequest = external.Buckets["requestDrain"];
+        var candidateRequest = candidate.Buckets["requestDrain"];
+        Assert.Equal(externalRequest.DeferredDecisionAttempts, candidateRequest.DeferredDecisionAttempts);
+        Assert.Equal(externalRequest.ImmediateDecisionAttempts, candidateRequest.ImmediateDecisionAttempts);
+        Assert.Equal(externalRequest.DurableCheckpointAttempts, candidateRequest.DurableCheckpointAttempts);
+        Assert.Equal(externalRequest.DurableCheckpointSucceeded, candidateRequest.DurableCheckpointSucceeded);
+        Assert.Equal(externalRequest.DurableClaimCheckpointAttempts, candidateRequest.DurableClaimCheckpointAttempts);
+        Assert.Equal(externalRequest.DurableClaimCheckpointSucceeded, candidateRequest.DurableClaimCheckpointSucceeded);
+        Assert.Equal(externalRequest.SegmentFlushAttempts, candidateRequest.SegmentFlushAttempts);
+        Assert.Equal(externalRequest.SegmentFlushes, candidateRequest.SegmentFlushes);
+    }
 
     private static async Task BackupSqliteDatabaseAsync(string sourcePath, string destinationPath)
     {

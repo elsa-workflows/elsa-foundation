@@ -91,7 +91,25 @@ internal static class ResponseReplayPublicationHost
         "Proxy-Authorization", "TE", "Trailer", "Transfer-Encoding", "Upgrade", "Via", "Server"
     };
 
-    public static async Task<PublicationProofResult> RunAsync(string closurePath, string databasePath, string evidenceDirectory)
+    public static Task<PublicationProofResult> RunAsync(string closurePath, string databasePath, string evidenceDirectory) =>
+        RunPublicationProofAsync(closurePath, databasePath, evidenceDirectory, SideEffectProfile.ReplaySafe);
+
+    public static Task<PublicationProofResult> RunMeasurementSetupAsync(
+        string closurePath,
+        string databasePath,
+        string evidenceDirectory,
+        string expectedCandidateProfile) =>
+        RunPublicationProofAsync(
+            closurePath,
+            databasePath,
+            evidenceDirectory,
+            ParseExpectedCandidateProfile(expectedCandidateProfile));
+
+    private static async Task<PublicationProofResult> RunPublicationProofAsync(
+        string closurePath,
+        string databasePath,
+        string evidenceDirectory,
+        SideEffectProfile expectedCandidateProfile)
     {
         Directory.CreateDirectory(evidenceDirectory);
         var closureBytes = await File.ReadAllBytesAsync(closurePath);
@@ -260,8 +278,8 @@ internal static class ResponseReplayPublicationHost
         var candidateResponseNode = candidate.Nodes.Single(node => node.AuthoredActivityId == ResponseNodeId);
         var candidateResponseContract = candidateResponseNode.ActivityContract
             ?? throw new InvalidOperationException("The candidate response node has no pinned activity contract.");
-        Ensure(candidateResponseContract.SideEffectProfile == SideEffectProfile.ReplaySafe,
-            "The normal publisher did not compile the candidate WriteHttpResponse profile as ReplaySafe.");
+        Ensure(candidateResponseContract.SideEffectProfile == expectedCandidateProfile,
+            $"The normal publisher compiled the candidate WriteHttpResponse profile as '{candidateResponseContract.SideEffectProfile}', expected '{expectedCandidateProfile}'.");
         Ensure(candidateResponseContract.Inputs.TryGetValue("StatusCode", out var statusCodeContract) &&
                statusCodeContract.HasDefault && statusCodeContract.DefaultValue is { } statusDefault &&
                statusDefault.ValueKind == JsonValueKind.Number && statusDefault.GetInt32() == 200,
@@ -428,8 +446,10 @@ internal static class ResponseReplayPublicationHost
         string evidenceDirectory,
         string candidateDefinitionId,
         string candidateArtifactId,
-        string candidateArtifactHash)
+        string candidateArtifactHash,
+        string expectedCandidateProfile)
     {
+        var expectedCandidateSideEffectProfile = ParseExpectedCandidateProfile(expectedCandidateProfile);
         Directory.CreateDirectory(evidenceDirectory);
         var baseline = ReadBaseline(await File.ReadAllBytesAsync(closurePath));
         await using var app = await StartHostAsync(
@@ -446,8 +466,8 @@ internal static class ResponseReplayPublicationHost
         Ensure(candidate.Identity.ArtifactHash == candidateArtifactHash && candidate.Identity.DefinitionId == candidateDefinitionId,
             "The candidate identity changed in the External comparison database copy.");
         Ensure(candidate.Nodes.Single(node => node.AuthoredActivityId == ResponseNodeId)
-                   .ActivityContract?.SideEffectProfile == SideEffectProfile.ReplaySafe,
-            "The candidate artifact profile changed before External comparison preparation.");
+                   .ActivityContract?.SideEffectProfile == expectedCandidateSideEffectProfile,
+            $"The candidate artifact profile changed before External comparison preparation; expected '{expectedCandidateSideEffectProfile}'.");
 
         var activeSlot = (await provider.GetRequiredService<IWorkflowActivationAuthority>()
                 .ListByDefinitionAsync(candidateDefinitionId, CancellationToken.None))
@@ -478,8 +498,10 @@ internal static class ResponseReplayPublicationHost
         string baselineArtifactId,
         string baselineArtifactHash,
         string candidateArtifactId,
-        string candidateArtifactHash)
+        string candidateArtifactHash,
+        string expectedCandidateProfile)
     {
+        var expectedCandidateSideEffectProfile = ParseExpectedCandidateProfile(expectedCandidateProfile);
         Directory.CreateDirectory(evidenceDirectory);
         var baseline = ReadBaseline(await File.ReadAllBytesAsync(closurePath));
         Ensure(baseline.ArtifactId == baselineArtifactId && baseline.ArtifactHash == baselineArtifactHash,
@@ -504,8 +526,8 @@ internal static class ResponseReplayPublicationHost
             ?? throw new InvalidOperationException("Normal External reconciliation removed the retained candidate executable.");
         Ensure(candidateExecutable.Identity.ArtifactHash == candidateArtifactHash &&
                candidateExecutable.Nodes.Single(node => node.AuthoredActivityId == ResponseNodeId)
-                   .ActivityContract?.SideEffectProfile == SideEffectProfile.ReplaySafe,
-            "Normal External reconciliation changed the retained candidate artifact identity or profile.");
+                   .ActivityContract?.SideEffectProfile == expectedCandidateSideEffectProfile,
+            $"Normal External reconciliation changed the retained candidate artifact identity or expected profile '{expectedCandidateSideEffectProfile}'.");
 
         var activeRouteBindings = (await ReadActiveHttpBindingsAsync(provider.GetRequiredService<IWorkflowTriggerBindingStore>()))
             .Where(binding => StringComparer.Ordinal.Equals(binding.Metadata.GetValueOrDefault("http:template"), baseline.RoutePath))
@@ -526,8 +548,10 @@ internal static class ResponseReplayPublicationHost
         string baselineArtifactId,
         string baselineArtifactHash,
         string candidateArtifactId,
-        string candidateArtifactHash)
+        string candidateArtifactHash,
+        string expectedCandidateProfile)
     {
+        var expectedCandidateSideEffectProfile = ParseExpectedCandidateProfile(expectedCandidateProfile);
         Directory.CreateDirectory(evidenceDirectory);
         var closureBytes = await File.ReadAllBytesAsync(closurePath);
         var baseline = ReadBaseline(closureBytes);
@@ -565,8 +589,8 @@ internal static class ResponseReplayPublicationHost
             ?? throw new InvalidOperationException("The measurement database copy does not retain the published candidate executable.");
         Ensure(candidate.Identity.ArtifactHash == candidateArtifactHash &&
                candidate.Nodes.Single(node => node.AuthoredActivityId == ResponseNodeId)
-                   .ActivityContract?.SideEffectProfile == SideEffectProfile.ReplaySafe,
-            "The measurement database copy changed the candidate identity or ReplaySafe response profile.");
+                   .ActivityContract?.SideEffectProfile == expectedCandidateSideEffectProfile,
+            $"The measurement database copy changed the candidate identity or expected response profile '{expectedCandidateSideEffectProfile}'.");
         Ensure(candidate.Nodes.Single(node => node.AuthoredActivityId == HttpNodeId)
                    .ActivityContract?.SideEffectProfile == SideEffectProfile.External,
             "The measurement database copy changed HttpEndpoint's External profile.");
@@ -634,6 +658,8 @@ internal static class ResponseReplayPublicationHost
             targetProfile,
             endpointNodeId = HttpNodeId,
             endpointProfile = target.Nodes.Single(node => node.AuthoredActivityId == HttpNodeId)
+                .ActivityContract?.SideEffectProfile.ToString(),
+            candidateProfile = candidate.Nodes.Single(node => node.AuthoredActivityId == ResponseNodeId)
                 .ActivityContract?.SideEffectProfile.ToString(),
             responseNodeId = ResponseNodeId,
             responseProfile = targetResponseProfile,
@@ -1352,6 +1378,13 @@ internal static class ResponseReplayPublicationHost
     private static void EnsureHistoricalClosureReconciliationDisabled(IServiceProvider provider) =>
         Ensure(!provider.GetServices<IStartupTask>().OfType<WorkflowArtifactReconcilerStartupTask>().Any(),
             "The restart host registered the historical JSON artifact reconciliation startup task.");
+
+    private static SideEffectProfile ParseExpectedCandidateProfile(string profile) => profile switch
+    {
+        "External" => SideEffectProfile.External,
+        "ReplaySafe" => SideEffectProfile.ReplaySafe,
+        _ => throw new InvalidOperationException($"Unsupported expected candidate profile '{profile}'.")
+    };
 
     private static async Task EnsureHistoricalExternalArtifactPreservedAsync(
         IServiceProvider provider,

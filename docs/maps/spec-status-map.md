@@ -236,3 +236,4 @@ Reads current `specs/*` folders and task checkboxes. Status clues are textual, n
 | [195-authoring-api-boundary](../../specs/195-authoring-api-boundary/spec.md) | Authoring-only API | Draft | - | 0 | 0 | retained |
 | [196-coalesced-command-scope](../../specs/196-coalesced-command-scope/spec.md) | Coalesced Command Scope | Implemented | - | 10 | 1 | - |
 | [197-bounded-durable-value-page-reuse](../../specs/197-bounded-durable-value-page-reuse/spec.md) | Bounded Durable-Value Page Reuse | Draft | - | 17 | 0 | retained, deferred |
+| [198-response-replay-safety](../../specs/198-response-replay-safety/spec.md) | Response Replay Safety | Draft | - | 16 | 3 | out of scope |
