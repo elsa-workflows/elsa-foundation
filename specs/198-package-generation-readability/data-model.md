@@ -12,7 +12,7 @@ This model describes in-memory host-lifetime evidence. It adds no persistence sc
 
 ### Candidate generation lease
 
-- **Identity**: one CShells build generation/lease, associated with the immutable shell descriptor when that becomes available.
+- **Identity**: one CShells build generation/lease and the immutable shell descriptor supplied at Begin.
 - **States**:
   - `Unresolved`: created before any feature-catalog read; counts all otherwise-retirable package contexts the unknown selection could name.
   - `Selected`: records the exact feature assemblies in that build's selected snapshot and counts their non-default load contexts. Disabled features and sibling assemblies sharing a context still count; unrelated scanned assemblies do not.
@@ -64,6 +64,8 @@ stateDiagram-v2
 ```
 
 A lease-managed lifecycle retains its descriptor ownership marker after the live lease is released through the terminal lifecycle notification, preventing a late callback from creating a fallback pin. A legacy fallback follows a separate lifecycle: first notification → conservative pin → confirmed drain → release. It is not a second release path for lease-managed generations. CShells does not automatically retry failed lease release; do not invent a later positive teardown callback. Unconfirmed teardown keeps the lease pinned for the host lifetime unless the runtime actually supplies the required confirmation.
+
+A pre-provider build that never produced an observed shell clears its descriptor marker on confirmed unwind, because no terminal shell notification is expected. For an observed shell, keep a weak association after terminal notification and safe lease release so late callbacks do not recreate pins. Do not retain an unbounded strong history of completed descriptors.
 
 ## Invariants
 

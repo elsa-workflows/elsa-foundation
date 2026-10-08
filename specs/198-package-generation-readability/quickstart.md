@@ -47,4 +47,6 @@ Restore each mutation and rerun the affected test.
 
 ## Final stable adoption
 
+Upstream release readiness uses delivered upstream source tasks, their checks, and the Foundation consumer proof against the exact public previews. Coordinating Feature #145 stays open for downstream stable acceptance; its closure and M1's final end-to-end acceptance are not prerequisites for tags that must supply those stable packages. This avoids waiting for #2164 Done before publishing the packages #2164 must finally adopt. The safe-pruning release gate remains required independently.
+
 Final qualification remains pending until D7's current published stable versions are available. Build and run the actual Foundation host using upstream NuGet PackageReferences, exercise readability before and after retirement/reintroduction, and record exact package versions and clean-source evidence. Foundation-owned project references are permitted; replacing upstream package dependencies with upstream source-project references is not. Complete the architecture guard and generated-map check against the qualified head before merge/Done; they remain pending in this plan.
