@@ -721,6 +721,32 @@ public sealed class WorkflowExecutableCompilerTests
     }
 
     [Fact]
+    public async Task Compiler_artifact_identity_changes_when_only_the_pinned_side_effect_profile_changes()
+    {
+        var workflow = WorkflowVersion(Node("write-one", Text("hello")));
+        var request = NewRequest(DateTimeOffset.UtcNow);
+        var external = await Compiler(workflow).CompileAsync(request);
+        var replaySafe = await Compiler(
+                workflow,
+                metadataEnricher: new PinnedSideEffectProfileEnricher(Elsa.Activities.Runtime.Core.Models.SideEffectProfile.ReplaySafe))
+            .CompileAsync(request);
+
+        var externalContract = external.RootActivity.ActivityContract!;
+        var replaySafeContract = replaySafe.RootActivity.ActivityContract!;
+        Assert.Equal(external.RootActivity.ExecutableNodeId, replaySafe.RootActivity.ExecutableNodeId);
+        Assert.Equal(external.RootActivity.ActivityType, replaySafe.RootActivity.ActivityType);
+        Assert.Equal(external.RootActivity.DescriptorType, replaySafe.RootActivity.DescriptorType);
+        Assert.Equal(external.RootActivity.DescriptorPayload.GetRawText(), replaySafe.RootActivity.DescriptorPayload.GetRawText());
+        Assert.Equal(JsonSerializer.Serialize(external.RootActivity.InputBindings), JsonSerializer.Serialize(replaySafe.RootActivity.InputBindings));
+        Assert.Equal(Elsa.Activities.Runtime.Core.Models.SideEffectProfile.External, externalContract.SideEffectProfile);
+        Assert.Equal(Elsa.Activities.Runtime.Core.Models.SideEffectProfile.ReplaySafe, replaySafeContract.SideEffectProfile);
+        Assert.NotEqual(externalContract.SchemaFingerprint, replaySafeContract.SchemaFingerprint);
+        // The current structured hasher omits ActivityContract; this is the intentional identity regression proof.
+        Assert.NotEqual(external.Identity.ArtifactHash, replaySafe.Identity.ArtifactHash);
+        Assert.NotEqual(external.Identity.ArtifactId, replaySafe.Identity.ArtifactId);
+    }
+
+    [Fact]
     public async Task WriteHttpResponse_candidate_profile_preserves_current_binding_families_and_pure_expression_contract()
     {
         static WorkflowArgumentState Input(string key, object? value, string expressionType) =>
@@ -2501,7 +2527,8 @@ public sealed class WorkflowExecutableCompilerTests
 
     private WorkflowExecutableCompiler Compiler(
         WorkflowDefinitionVersion workflowVersion,
-        IIncidentStrategyCatalog? incidentStrategyCatalog = null)
+        IIncidentStrategyCatalog? incidentStrategyCatalog = null,
+        IExecutableNodeMetadataEnricher? metadataEnricher = null)
     {
         var registry = TestWellKnownTypeRegistry.Create();
         registry.RegisterType(typeof(LegacyTriggerActivity), TypeAliasConvention.CanonicalAlias(typeof(LegacyTriggerActivity)));
@@ -2510,6 +2537,7 @@ public sealed class WorkflowExecutableCompilerTests
             new FakeActivityVersionStore([_writeLineActivity, _writeLinesActivity, _sequenceActivity, _legacyTriggerActivity]),
             _activityStructureService,
             registry,
+            metadataEnricher: metadataEnricher,
             incidentStrategyCatalog: incidentStrategyCatalog);
     }
 
@@ -2924,5 +2952,42 @@ public sealed class WorkflowExecutableCompilerTests
 
         public Task Publish(IEvent @event, CancellationToken cancellationToken = default) =>
             _handler.Handle(Assert.IsType<ExecutableCompilationCollecting>(@event), cancellationToken);
+    }
+
+    private sealed class PinnedSideEffectProfileEnricher(Elsa.Activities.Runtime.Core.Models.SideEffectProfile profile) : IExecutableNodeMetadataEnricher
+    {
+        public ValueTask<ExecutableNode> EnrichAsync(
+            WorkflowExecutableCompileRequest request,
+            WorkflowExecutableCompileSource source,
+            ExecutableNode rootActivity,
+            CancellationToken cancellationToken = default)
+        {
+            var contract = rootActivity.ActivityContract ?? throw new InvalidOperationException("The test activity must have a pinned contract.");
+            var replacement = new Elsa.Activities.Runtime.Core.Models.ActivityContract(
+                contract.ActivityTypeKey,
+                contract.ContractVersion,
+                contract.DescriptorKind,
+                contract.DescriptorPayload,
+                contract.Inputs.Values,
+                contract.Result,
+                contract.Outcomes,
+                contract.Activation,
+                profile);
+            var node = new ExecutableNode(
+                rootActivity.ExecutableNodeId,
+                rootActivity.AuthoredActivityId,
+                rootActivity.ActivityType,
+                rootActivity.ActivityTypeVersion,
+                rootActivity.Descriptor,
+                rootActivity.InputBindings,
+                rootActivity.OutputCaptures,
+                rootActivity.Metadata,
+                rootActivity.ChildSlots,
+                rootActivity.Structure,
+                replacement,
+                rootActivity.IntrinsicKind,
+                rootActivity.IntrinsicVariable);
+            return ValueTask.FromResult(node);
+        }
     }
 }
