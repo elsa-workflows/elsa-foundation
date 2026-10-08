@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "last_publish_commit": "249cd21329a13d6d67da5fd8e2b0974579cb044b",
+  "last_publish_commit": "9c9f475929018d96a16fb3a24549a304a7612254",
   "packages": [
     {
       "package_id": "Elsa.Activities.Bpmn",
@@ -604,8 +604,8 @@
     },
     {
       "package_id": "Elsa.Workflows.Runtime",
-      "version": "4.0.24-preview",
-      "commit": "249cd21329a13d6d67da5fd8e2b0974579cb044b"
+      "version": "4.0.25-preview",
+      "commit": "9c9f475929018d96a16fb3a24549a304a7612254"
     },
     {
       "package_id": "Elsa.Workflows.Runtime.Api",
