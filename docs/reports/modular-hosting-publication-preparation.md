@@ -1,6 +1,6 @@
 # Modular Hosting Publication Preparation
 
-Program: [Modular Hosting Upstream Delivery](../program-goals/modular-hosting-upstream-delivery.md). Status: prepared locally; no upstream PR, push, release or milestone completion is claimed. The maintainer organization-branch publication path was confirmed on 2026-10-08; no Git workflow selection remains pending.
+Program: [Modular Hosting Upstream Delivery](../program-goals/modular-hosting-upstream-delivery.md). Status: first three upstream PRs are open on organization branches; CI/review are running. No merge, release or milestone completion is claimed. The maintainer organization-branch publication path was confirmed on 2026-10-08; no Git workflow selection remains pending.
 
 ## Reviewable submission material
 
@@ -37,3 +37,13 @@ An independent reviewer fresh-cloned each as a mirror, verified non-shallow stat
 ## Remaining delivery gates
 
 The prior Git-selection hold is resolved: maintainer work uses organization branches without a preference-selection gate. Require current-head CI/review, normal merges, owner preview pipelines and feed/source identity, optional integration, then final GitHub releases and Foundation adoption/e2e under the [release plan](modular-hosting-release-plan.md). M3 still requires its owner admission/compatibility decision and complete deletion-safety proof. Foundation #2354 and #2362 remain separately owned, and #2293 remains open. No release, adoption, pruning safety or end-to-end completion is inferred from submission preparation or backup recovery.
+
+## First publication wave — 2026-10-08
+
+| Candidate | Organization PR | Exact submitted head | Current gate |
+|---|---|---|---|
+| Nuplane removal completion #109 | [#110](https://github.com/valence-works/nuplane/pull/110) | `d6eac6e3faacb72b5acfb93c59d2862c340ca3a7` | Validate platform matrix/full build-test and Greptile started; Copilot request accepted |
+| CShells ownership #144 | [#150](https://github.com/valence-works/cshells/pull/150) | `9e66d41321083a456e132a4979c3ed997a367d9f` | CI and Greptile started; Copilot request accepted |
+| CShells catalog #146 | [#151](https://github.com/valence-works/cshells/pull/151) | `3318f5b1564a033bc5650641231740541fad80a3` | CI/review pending completion; Copilot request accepted |
+
+Root refreshed upstream main/permissions/claims and confirmed no competing PR before publishing. Heads and source trees remain the locally qualified candidates. Fresh read-only independent source review found no concrete blocker in all three; it ran no additional tests and does not replace hosted checks or bot review. Copilot request success is not proof of completed review. Exact publication metadata is retained in `publication-preparation/first-wave-publication.json`. Dependent #147/#148/#149 remain prepared locally until prerequisites land; Foundation coordination documentation is published alongside.
