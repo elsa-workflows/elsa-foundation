@@ -4,9 +4,9 @@
     "net10.0": {
       "CShells.Abstractions": {
         "type": "Direct",
-        "requested": "[0.0.30-preview.159, )",
-        "resolved": "0.0.30-preview.159",
-        "contentHash": "es495Gvvqx1t0DJomzsfoxlIE/k8ZMEj3OaL/uKvdUd5cXpfQowko63T03LlRhTBS7Nhm6xoPoQW1cZAx6e8uQ==",
+        "requested": "[0.0.30-preview.171, )",
+        "resolved": "0.0.30-preview.171",
+        "contentHash": "2p6zgaxVhIuHEDoklz3t9PbReDmMgAUIHbw5zVZSV4uMR9kl7q+gftXX1K0woMWt55uvTnqJ+K1q6KVSoPRuVA==",
         "dependencies": {
           "JetBrains.Annotations": "2025.2.4"
         }

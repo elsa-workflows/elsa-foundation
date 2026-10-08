@@ -22,6 +22,7 @@
          generation on reload — hot, no restart). Brings CShells.Abstractions + CShells.AspNetCore.Abstractions
          transitively; those are the interfaces feed features implement against this host's CShells runtime. -->
     <PackageReference Include="CShells.AspNetCore" />
+    <PackageReference Include="CShells.Nuplane" />
 
     <!-- CShells.FastEndpoints: the FastEndpoints runtime seam for CShells. Carries the built-in
          "FastEndpoints" [ShellFeature] that scans a shell's feature assemblies for FastEndpoints

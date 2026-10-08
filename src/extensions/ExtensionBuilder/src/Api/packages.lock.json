@@ -4,11 +4,11 @@
     "net10.0": {
       "Nuplane.Admin": {
         "type": "Direct",
-        "requested": "[0.0.11-preview.94, )",
-        "resolved": "0.0.11-preview.94",
-        "contentHash": "5wQPdBDFwqwqTMI0UH1XFUIenngiOT8HHQm4BRp6rPxG7wy9qbogDcaOTTbAaxdQ88LEduoLZVxrRSToV6E0NA==",
+        "requested": "[0.0.11-preview.99, )",
+        "resolved": "0.0.11-preview.99",
+        "contentHash": "JbTJkBDSFMPIrIqE5+xsBPIliYh59jt+tKoOoIBjrCCNvYREMHNosXylUaoEXJZWAD6n8bNJY/E/EEdygvsHBA==",
         "dependencies": {
-          "Nuplane": "0.0.11-preview.94"
+          "Nuplane": "0.0.11-preview.99"
         }
       },
       "JetBrains.Annotations": {
@@ -101,8 +101,8 @@
       },
       "Nuplane.Abstractions": {
         "type": "Transitive",
-        "resolved": "0.0.11-preview.94",
-        "contentHash": "YtytvT0fC6hyfz1GonNjNdw13jN1Ps3Zl0A+OK8/cZxuL/dUGQbVnWlV82vJkQo6TTmegXRXZx1gOvfGkpXm0g=="
+        "resolved": "0.0.11-preview.99",
+        "contentHash": "A06Sr32mGAQuyvLPgTZRfcCSwPhUg0Qao1dfz6e6bYuAbz9baC0XXbKG5DAY9SZ46xEV27yy8EONCU1HIgpq8A=="
       },
       "Polly.Core": {
         "type": "Transitive",
@@ -157,18 +157,18 @@
       "elsa.cluster.readability": {
         "type": "Project",
         "dependencies": {
-          "CShells.Abstractions": "[0.0.30-preview.159, )",
+          "CShells.Abstractions": "[0.0.30-preview.171, )",
           "Elsa.Cluster.Core": "[4.0.0-dev, )",
           "Elsa.Cluster.InProcess": "[4.0.0-dev, )",
           "Elsa.Persistence.Schema": "[4.0.0-dev, )",
-          "Nuplane.Loading.Abstractions": "[0.0.11-preview.94, )"
+          "Nuplane.Loading.Abstractions": "[0.0.11-preview.99, )"
         }
       },
       "elsa.foundation.identity": {
         "type": "Project",
         "dependencies": {
-          "CShells.Abstractions": "[0.0.30-preview.159, )",
-          "CShells.AspNetCore.Abstractions": "[0.0.30-preview.159, )",
+          "CShells.Abstractions": "[0.0.30-preview.171, )",
+          "CShells.AspNetCore.Abstractions": "[0.0.30-preview.171, )",
           "Elsa.Api.AspNetCore": "[4.0.0-dev, )",
           "Elsa.Foundation.Identity.Core": "[4.0.0-dev, )"
         }
@@ -190,20 +190,20 @@
       },
       "CShells.Abstractions": {
         "type": "CentralTransitive",
-        "requested": "[0.0.30-preview.159, )",
-        "resolved": "0.0.30-preview.159",
-        "contentHash": "es495Gvvqx1t0DJomzsfoxlIE/k8ZMEj3OaL/uKvdUd5cXpfQowko63T03LlRhTBS7Nhm6xoPoQW1cZAx6e8uQ==",
+        "requested": "[0.0.30-preview.171, )",
+        "resolved": "0.0.30-preview.171",
+        "contentHash": "2p6zgaxVhIuHEDoklz3t9PbReDmMgAUIHbw5zVZSV4uMR9kl7q+gftXX1K0woMWt55uvTnqJ+K1q6KVSoPRuVA==",
         "dependencies": {
           "JetBrains.Annotations": "2025.2.4"
         }
       },
       "CShells.AspNetCore.Abstractions": {
         "type": "CentralTransitive",
-        "requested": "[0.0.30-preview.159, )",
-        "resolved": "0.0.30-preview.159",
-        "contentHash": "13PD+8QJBhWA9gwU3Io4bFRzSDpMJrvwjfKiW7AvfSY+EaSI5Aa7Jsa26O4N7n49eN/fWXMtRhbOibYUqnom1A==",
+        "requested": "[0.0.30-preview.171, )",
+        "resolved": "0.0.30-preview.171",
+        "contentHash": "GQiGdy2GONJ1DQ1lQSJeu1N+XCC2wD0po60QSzKalis8aAbCQe6yBvjzC3rdfFJn/qHYuyG9Y4PbYsTUH5FkJg==",
         "dependencies": {
-          "CShells.Abstractions": "0.0.30-preview.159",
+          "CShells.Abstractions": "0.0.30-preview.171",
           "JetBrains.Annotations": "2025.2.4"
         }
       },
@@ -221,26 +221,26 @@
       },
       "Nuplane": {
         "type": "CentralTransitive",
-        "requested": "[0.0.11-preview.94, )",
-        "resolved": "0.0.11-preview.94",
-        "contentHash": "teZUZqilxgEoDR7hgQsLd30YTi944Fle9Zm/uaxkWmrDR2HL/4pYGsZxiI0+E3yWhI0EU/gKkg25hwbWkTzRoQ==",
+        "requested": "[0.0.11-preview.99, )",
+        "resolved": "0.0.11-preview.99",
+        "contentHash": "VwB6/eFn9sgaqY2Ef4UPjae3CdfncCOvkakyPLBpBWKnE1n854HNibQnJhUAmyAqE35IOE7+Jljl1PXkwM3DIg==",
         "dependencies": {
           "Microsoft.Extensions.Resilience": "10.1.0",
           "NuGet.Frameworks": "6.13.1",
           "NuGet.Protocol": "6.13.1",
           "NuGet.Resolver": "6.13.1",
           "NuGet.Versioning": "6.13.1",
-          "Nuplane.Abstractions": "0.0.11-preview.94",
+          "Nuplane.Abstractions": "0.0.11-preview.99",
           "Polly.Extensions": "8.6.5"
         }
       },
       "Nuplane.Loading.Abstractions": {
         "type": "CentralTransitive",
-        "requested": "[0.0.11-preview.94, )",
-        "resolved": "0.0.11-preview.94",
-        "contentHash": "vjTnc+rW+guSOUq1CXpmxp3KKBLxOpazOVHV0nHOji7w5lS7+GLRzYvEyPs/LARwxo9weJO3ie8gF5/F10UIgg==",
+        "requested": "[0.0.11-preview.99, )",
+        "resolved": "0.0.11-preview.99",
+        "contentHash": "ddG0PSFDvwfx1holS+lYbyezACFGSa0thBFojB5R0UOYf4QJopTOC5zHttYS4sJA8sv1mIAMRv3BxW0Upgxe8g==",
         "dependencies": {
-          "Nuplane.Abstractions": "0.0.11-preview.94"
+          "Nuplane.Abstractions": "0.0.11-preview.99"
         }
       }
     }

@@ -8,14 +8,14 @@
 
 ## Phase 1: Setup
 
-- [ ] T001 Create a separately owned qualification worktree from the reviewed Foundation source baseline and capture its clean starting commit/status in `artifacts/modular-hosting-2500/foundation-2314-preparation/`; do not alter the canonical branch pins in `Directory.Packages.props`.
-- [ ] T002 In the qualification worktree only, apply the coherent centrally managed CShells `.171` family and Nuplane `.99` preview overlay, add the preview `CShells.Nuplane` package version to `Directory.Packages.props`, and record the exact overlay diff without changing canonical pins or locks.
+- [x] T001 Create a separately owned qualification worktree from the reviewed Foundation source baseline and capture its clean starting commit/status in `artifacts/modular-hosting-2500/foundation-2314-preparation/`; do not alter the canonical branch pins in `Directory.Packages.props`.
+- [x] T002 In the qualification worktree only, apply the coherent centrally managed CShells `.171` family and Nuplane `.99` preview overlay, add the preview `CShells.Nuplane` package version to `Directory.Packages.props`, and record the exact overlay diff without changing canonical pins or locks.
 
 ## Phase 2: Foundational Qualification Baseline
 
 **Purpose**: Establish a locked restore target for the candidate before replacing either host composition.
 
-- [ ] T003 In the qualification worktree, add direct `CShells.Nuplane` `PackageReference` entries to `src/apps/Elsa.Foundation.Host/Elsa.Foundation.Host.csproj` and `src/apps/Elsa.Workbench/Elsa.Workbench.csproj`, restore every reached `packages.lock.json` in the scoped project dependency graph, including `src/apps/Elsa.Foundation.Host/packages.lock.json` and `src/apps/Elsa.Workbench/packages.lock.json`, and verify exact `.171`/`.99` identities plus required `net8.0`, `net9.0` and `net10.0` assets. Record archive/cache/source/lock identities under `artifacts/modular-hosting-2500/foundation-2314-preparation/`; `.172` has archive verification only and is not runtime proof.
+- [x] T003 In the qualification worktree, add direct `CShells.Nuplane` `PackageReference` entries to `src/apps/Elsa.Foundation.Host/Elsa.Foundation.Host.csproj` and `src/apps/Elsa.Workbench/Elsa.Workbench.csproj`, restore every reached `packages.lock.json` in the scoped project dependency graph, including `src/apps/Elsa.Foundation.Host/packages.lock.json` and `src/apps/Elsa.Workbench/packages.lock.json`, and verify exact `.171`/`.99` identities plus required `net8.0`, `net9.0` and `net10.0` assets. Record archive/cache/source/lock identities under `artifacts/modular-hosting-2500/foundation-2314-preparation/`; `.172` has archive verification only and is not runtime proof.
 
 ## Phase 3: User Story 1 - Deliver package changes consistently (Priority: P1)
 
