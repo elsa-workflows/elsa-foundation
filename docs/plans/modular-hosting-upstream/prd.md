@@ -21,7 +21,7 @@ Publish preview CShells primitives that let a host explicitly share a selected s
 5. **Host policy preservation.** Workbench refreshes after actual package changes, but automatic shell reload remains opt-in and defaults to `false`. Foundation.Host retains its current auto-reload default. Preserve cancellation, retry after unsuccessful promotion, refusal reporting, and root-owned Nuplane coordinator services.
 6. **Startup behavior.** Any generic startup/retry/readiness primitive must be opt-in/configurable and must leave Elsa's health contracts and retry/refusal policy in Elsa adapters. Do not duplicate existing host behavior without an explicit upstream boundary and integration proof.
 7. **Safe store pruning.** M3 cannot become ready until a bounded spike demonstrates, with concurrent and failure scenarios, that an unreferenced package is not needed by active shells, shell builds using an older catalog snapshot, sibling package graphs, or last-known-good recovery. Define lock ordering and revalidation at deletion time. If proof cannot be made, defer pruning and use a documented diagnostic/restart path.
-8. **Preview lifecycle.** Publish preview package versions through existing owner-repository workflows, consume their exact identities in Foundation, and run the host proof. Do not create a stable release tag or deploy production as part of this program.
+8. **Release lifecycle.** Use previews for interim integration proof. After the upstream work lands and passes its gates, publish new GitHub releases through the existing owner-repository workflows, incrementing versions only as needed according to the existing pattern. Update Foundation to the exact released package versions and repeat the host proof. Follow the [release plan](../../reports/modular-hosting-release-plan.md); production deployment remains outside scope.
 9. **Candidate generation protection.** Provide generic lifecycle evidence early enough to protect the catalog used by a shell before its first initializer, through failure, promotion, drain and disposal. Adopt Foundation #2164 for the Elsa integration; a post-build generation property or post-refresh event alone must not be represented as closing that race.
 
 ## Success measures
@@ -32,8 +32,8 @@ Publish preview CShells primitives that let a host explicitly share a selected s
 - Package changes refresh the catalog after Nuplane has loaded assemblies; explicit reload works; Workbench does not automatically reload unless configured true.
 - Failed observer refresh/reload work remains pending for retry on a later delivered eligible reconciliation completion. An explicit shell reload/build can recover outstanding catalog freshness; no background retry timer is promised when empty unchanged cycles stay silent. A refused shell keeps serving its prior generation and remains visibly not promoted.
 - Pruning is either proven safe under the stated boundary or explicitly deferred. A lock-only test does not count.
-- Preview versions are identifiable, published by the existing pipelines, consumed by the host, and pass the milestone-specific proof.
+- Interim previews and final release packages have verified source/version identities. Final GitHub releases are published through existing workflows, and Foundation consumes the released package versions with passing adoption proof.
 
 ## Out of scope
 
-Stable release tags, production deployments, wholesale migration of Elsa schema/readability or route/security policy, an all-purpose Nuplane/CShells dependency, and package-store deletion without the M3 proof gate.
+Production deployments, wholesale migration of Elsa schema/readability or route/security policy, an all-purpose Nuplane/CShells dependency, and package-store deletion without the M3 proof gate.
