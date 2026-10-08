@@ -15,6 +15,8 @@ public sealed class InMemoryWorkflowSchedulerWorkQueue : IWorkflowSchedulerWorkQ
 
     public bool SupportsClaimTransitions => true;
 
+    public bool SupportsTargetedDeletion => true;
+
     public bool SupportsClaimableBacklogDiscovery => true;
 
     public ValueTask<RuntimeSchedulerWorkItem> EnqueueAsync(RuntimeSchedulerWorkItem workItem, CancellationToken cancellationToken = default)
