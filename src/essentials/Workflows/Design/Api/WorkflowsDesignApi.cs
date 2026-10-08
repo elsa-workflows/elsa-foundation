@@ -18,7 +18,7 @@ public static class WorkflowsDesignApi
     {
         ArgumentNullException.ThrowIfNull(endpoints);
 
-        var api = endpoints.MapEndpointGroup(OwnerId, WorkflowsDesignJsonContext.Default);
+        var api = endpoints.MapEndpointGroup(OwnerId, WorkflowsDesignJsonOptions.WireContext);
 
         // Endpoint classes are scanned from this module's own assembly: each declares its route,
         // metadata, and permission on itself under Endpoints/<Resource>/<Operation>/Endpoint.cs.
