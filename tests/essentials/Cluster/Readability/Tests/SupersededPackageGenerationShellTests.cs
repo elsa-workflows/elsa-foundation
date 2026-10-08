@@ -32,6 +32,9 @@ public sealed class SupersededPackageGenerationShellTests : IAsyncDisposable
     private readonly SlowDisposal _slow = new();
     private readonly Armed _failingDrainHandlers = new();
     private readonly Armed _failingDisposal = new();
+    private readonly BuildBarrier _build = new();
+    private readonly DisposedNotifications _notifications = new();
+    private readonly DisposalCount _disposals = new();
     private readonly ServiceProvider _host;
 
     public SupersededPackageGenerationShellTests()
@@ -40,13 +43,15 @@ public sealed class SupersededPackageGenerationShellTests : IAsyncDisposable
             .AddSingleton<IConfiguration>(new ConfigurationBuilder().Build())
             .Configure<ClusterMembershipOptions>(options => options.HostId = $"superseded-shells-{Guid.NewGuid():N}")
             .AddSingleton<IPackageAssemblyCatalog>(_package.Catalog);
-        // Registered before readability's own, so every shell container creates these before this host's tracking and
-        // disposes them after it, as a host-level initializer composed earlier is.
+        // Initializers on both sides of readability composition prove release depends on whole-provider teardown,
+        // including early-created services that are disposed last.
         services.AddSingleton<IShellInitializer>(_ => _failing);
         services.AddSingleton<IShellInitializer>(_ => new SlowDisposalOf(_slow));
         services.AddEfSchemaReadability();
-        // Registered after readability's own, so every shell container creates it after this host's tracking and disposes
-        // it before, as a service a feature composes is.
+        services.AddSingleton<IShellGenerationBuildParticipant>(_build);
+        services.AddSingleton<IShellLifecycleSubscriber>(_notifications);
+        services.AddSingleton<IShellInitializer>(_ => new CountDisposal(_disposals));
+        // A later-created initializer can fail disposal before the earlier slow disposable has finished.
         services.AddSingleton<IShellInitializer>(_ => new FailingDisposal(_failingDisposal));
         // CShells resolves a draining shell's handlers inside its drain, and a drain whose handlers cannot be resolved faults
         // after it has disposed the shell's provider.
@@ -54,7 +59,8 @@ public sealed class SupersededPackageGenerationShellTests : IAsyncDisposable
         services.AddCShells(shells => shells
             .WithAssemblyProvider(_loaded)
             .ConfigureGracePeriod(TimeSpan.FromMilliseconds(100))
-            .AddShell(ShellName, shell => shell.WithFeature(Feature)));
+            .AddShell(ShellName, shell => shell.WithFeature(Feature))
+            .AddShell("empty", _ => { }));
         _host = services.BuildServiceProvider();
 
         Loaded(_package.Previous);
@@ -63,6 +69,134 @@ public sealed class SupersededPackageGenerationShellTests : IAsyncDisposable
     private IShellRegistry Shells => _host.GetRequiredService<IShellRegistry>();
 
     private IRuntimeFeatureCatalog FeatureCatalog => _host.GetRequiredService<IRuntimeFeatureCatalog>();
+
+    [Fact]
+    public async Task A_candidate_pins_unknown_generations_before_the_registry_reads_its_catalog()
+    {
+        _ = Shells;
+        Loaded(_package.Current);
+        await FeatureCatalog.RefreshAsync();
+        Assert.Equal(Both, await ReadableAsync());
+        _build.HoldBegin = true;
+        var activation = Shells.GetOrActivateAsync(ShellName);
+        try
+        {
+            await _build.Began.Task.WaitAsync(Patience);
+            Assert.Equal(PreviousOnly, await ReadableAsync());
+        }
+        finally
+        {
+            _build.ContinueBegin.TrySetResult();
+            await activation.WaitAsync(Patience);
+        }
+        var shell = await activation.WaitAsync(Patience);
+        Assert.Same(_host.GetRequiredService<Elsa.Persistence.Schema.ISupersededAssemblySource>(), shell.ServiceProvider.GetRequiredService<Elsa.Persistence.Schema.ISupersededAssemblySource>());
+        Assert.Empty(shell.ServiceProvider.GetServices<IShellGenerationBuildParticipant>());
+        Assert.Null(shell.ServiceProvider.GetService<NuplanePackageGenerationBuildParticipant>());
+        Assert.Equal(Both, await ReadableAsync());
+    }
+
+    [Fact]
+    public async Task An_old_selected_candidate_remains_pinned_after_the_catalog_advances_and_the_other_old_shell_drains()
+    {
+        var previous = await Shells.GetOrActivateAsync(ShellName);
+        _build.HoldSelection = true;
+        var replacement = Shells.ReloadAsync(ShellName);
+        try
+        {
+            await _build.Selected.Task.WaitAsync(Patience);
+            Loaded(_package.Current);
+            await FeatureCatalog.RefreshAsync();
+            await (await Shells.DrainAsync(previous)).WaitAsync().WaitAsync(Patience);
+            Assert.Equal(PreviousOnly, await ReadableAsync());
+        }
+        finally
+        {
+            _build.ContinueSelection.TrySetResult();
+            await replacement.WaitAsync(Patience);
+        }
+        var result = await replacement.WaitAsync(Patience);
+        Assert.Null(result.Error);
+        var selectedOld = Assert.IsAssignableFrom<IShell>(Shells.GetActive(ShellName));
+        Assert.Contains(selectedOld.ServiceProvider.GetRequiredService<IReadOnlyCollection<ShellFeatureDescriptor>>(), descriptor => descriptor.StartupType == FeatureOf(_package.Previous));
+        Assert.Equal(PreviousOnly, await ReadableAsync());
+        await (await Shells.DrainAsync(selectedOld)).WaitAsync().WaitAsync(Patience);
+        Assert.Equal(Both, await ReadableAsync());
+    }
+
+    [Fact]
+    public async Task A_feature_not_enabled_for_the_shell_still_pins_its_selected_catalog_context()
+    {
+        var shell = await Shells.GetOrActivateAsync("empty");
+        Assert.Contains(shell.ServiceProvider.GetRequiredService<IReadOnlyCollection<ShellFeatureDescriptor>>(), descriptor => descriptor.StartupType == FeatureOf(_package.Previous));
+        Loaded(_package.Current);
+        await FeatureCatalog.RefreshAsync();
+        Assert.Equal(PreviousOnly, await ReadableAsync());
+        await (await Shells.DrainAsync(shell)).WaitAsync().WaitAsync(Patience);
+        Assert.Equal(Both, await ReadableAsync());
+    }
+
+    [Fact]
+    public async Task Repeated_failure_before_provider_construction_releases_each_candidate_on_unwind()
+    {
+        _ = Shells;
+        _package.Catalog.Active = [_package.Current];
+        _build.FailSelection = true;
+        for (var attempt = 0; attempt < 5; attempt++)
+        {
+            _loaded.Assemblies = [_package.Previous];
+            await FeatureCatalog.RefreshAsync();
+            await Assert.ThrowsAsync<InvalidOperationException>(() => Shells.GetOrActivateAsync(ShellName));
+            _loaded.Assemblies = [_package.Current];
+            await FeatureCatalog.RefreshAsync();
+            Assert.Equal(Both, await ReadableAsync());
+        }
+        Assert.Equal(0, _disposals.Count);
+        Assert.Equal(0, _notifications.Count);
+    }
+
+    [Fact]
+    public async Task Failed_unpublished_initialization_releases_after_full_teardown_without_a_Disposed_notification()
+    {
+        _notifications.Fail = true;
+        await FailFirstActivationAsync();
+        Assert.Equal(1, _disposals.Count);
+        Assert.Equal(0, _notifications.Count);
+        Loaded(_package.Current);
+        await FeatureCatalog.RefreshAsync();
+        Assert.Equal(Both, await ReadableAsync());
+    }
+
+    [Fact]
+    public async Task Failed_Disposed_notification_retains_the_pin_even_when_provider_teardown_and_drain_complete()
+    {
+        var previous = await Shells.GetOrActivateAsync(ShellName);
+        await PublishAsync();
+        Loaded(_package.Current);
+        _notifications.Fail = true;
+        var reload = await ReloadAsync(drain: false);
+        await reload.Drain!.WaitAsync().WaitAsync(Patience);
+        Assert.Equal(1, _disposals.Count);
+        Assert.Equal(1, _notifications.Count);
+        Assert.DoesNotContain(previous, Shells.GetAll(ShellName));
+        Assert.Equal(PreviousOnly, await ReadableAsync());
+        await PublishAsync();
+        Assert.Equal(PreviousOnly, await _package.PublishedAsync(_host));
+        _notifications.Fail = false;
+    }
+
+    [Fact]
+    public async Task Late_lifecycle_notifications_do_not_recreate_a_released_generation_pin()
+    {
+        var previous = await Shells.GetOrActivateAsync(ShellName);
+        Loaded(_package.Current);
+        await ReloadAsync();
+        Assert.Equal(Both, await ReadableAsync());
+
+        var source = Assert.IsType<NuplanePackageGenerations>(_host.GetRequiredService<Elsa.Persistence.Schema.ISupersededAssemblySource>());
+        await source.OnStateChangedAsync(previous, ShellLifecycleState.Initializing, ShellLifecycleState.Active);
+        Assert.Equal(Both, await ReadableAsync());
+    }
 
     /// <summary>
     /// Eager activation that failed after it had initialized the feature catalog leaves no shell active and the catalog
@@ -191,6 +325,9 @@ public sealed class SupersededPackageGenerationShellTests : IAsyncDisposable
 
     public async ValueTask DisposeAsync()
     {
+        _build.ContinueBegin.TrySetResult();
+        _build.ContinueSelection.TrySetResult();
+        _notifications.Fail = false;
         _slow.Release.TrySetResult();
         foreach (var shell in Shells.GetActiveShells())
             await (await Shells.DrainAsync(shell)).WaitAsync().WaitAsync(Patience);
@@ -245,6 +382,69 @@ public sealed class SupersededPackageGenerationShellTests : IAsyncDisposable
 
         public Task<IEnumerable<Assembly>> GetAssembliesAsync(IServiceProvider serviceProvider, CancellationToken cancellationToken = default) =>
             Task.FromResult<IEnumerable<Assembly>>(Assemblies);
+    }
+
+    private sealed class BuildBarrier : IShellGenerationBuildParticipant, IShellGenerationBuildLease
+    {
+        public bool HoldBegin { get; set; }
+        public bool HoldSelection { get; set; }
+        public bool FailSelection { get; set; }
+        public TaskCompletionSource Began { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public TaskCompletionSource Selected { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public TaskCompletionSource ContinueBegin { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public TaskCompletionSource ContinueSelection { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public async ValueTask<IShellGenerationBuildLease> BeginAsync(ShellGenerationBuildContext context, CancellationToken cancellationToken = default)
+        {
+            if (HoldBegin)
+            {
+                Began.TrySetResult();
+                await ContinueBegin.Task.WaitAsync(cancellationToken);
+            }
+            return this;
+        }
+
+        public async ValueTask OnSnapshotSelectedAsync(RuntimeFeatureCatalogSnapshot snapshot, CancellationToken cancellationToken = default)
+        {
+            if (FailSelection)
+                throw new InvalidOperationException("The candidate failed before provider construction.");
+            if (HoldSelection)
+            {
+                Selected.TrySetResult();
+                await ContinueSelection.Task.WaitAsync(cancellationToken);
+            }
+        }
+
+        public ValueTask DisposeAsync() => ValueTask.CompletedTask;
+    }
+
+    private sealed class DisposedNotifications : IShellLifecycleSubscriber
+    {
+        private int _count;
+        public int Count => Volatile.Read(ref _count);
+        public bool Fail { get; set; }
+
+        public Task OnStateChangedAsync(IShell shell, ShellLifecycleState previous, ShellLifecycleState current, CancellationToken cancellationToken = default)
+        {
+            if (current == ShellLifecycleState.Disposed)
+            {
+                Interlocked.Increment(ref _count);
+                if (Fail)
+                    throw new InvalidOperationException("The Disposed notification failed.");
+            }
+            return Task.CompletedTask;
+        }
+    }
+
+    private sealed class DisposalCount
+    {
+        public int Count;
+    }
+
+    private sealed class CountDisposal(DisposalCount count) : IShellInitializer, IDisposable
+    {
+        public Task InitializeAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;
+        public void Dispose() => Interlocked.Increment(ref count.Count);
     }
 
     private sealed class FailingActivation : IShellInitializer

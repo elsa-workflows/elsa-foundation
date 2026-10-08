@@ -21,54 +21,41 @@ namespace Elsa.Cluster.Readability;
 /// </summary>
 /// <remarks>
 /// <para>
-/// <b>Replaced</b> is Nuplane's positive evidence, read afresh from <see cref="IPackageAssemblyCatalog"/> on every call:
-/// an assembly in a load context Nuplane created is replaced when the catalog lists a loaded assembly of the same name
-/// for the active package set and does not list this one. Nothing else is: not the default context, not a context
-/// Nuplane did not create, not an assembly whose name the catalog lists nowhere - which is what an old generation looks
-/// like while its successor is still loading, or after its successor failed to load. Each of those keeps counting.
+/// <b>Replaced</b> requires positive evidence from the host's <see cref="IPackageAssemblyCatalog"/>: an assembly in a
+/// Nuplane-created load context is replaced when the active package set names another assembly with the same name.
+/// Default/non-Nuplane contexts, names absent from the catalog, and unreadable catalogs never establish replacement.
 /// </para>
 /// <para>
-/// <b>Retired</b> is replaced and no longer runnable, which takes positive evidence from both places code could run it:
-/// </para>
-/// <list type="bullet">
-/// <item><description>
-/// <b>A shell generation that exists.</b> Every shell container CShells builds copies this host's registrations, so each
-/// one constructs its own tracking initializer before its first initializer runs, and that is when this starts counting
-/// the generation: before any of its code has read a row. It pins every load context, other than the default one, that
-/// a feature in its container comes from - every feature of the catalog snapshot it was built from, enabled or not,
-/// since that is what CShells gives every shell container - so a replaced assembly beside an unchanged feature in the
-/// same load context keeps counting, as that feature binds it. A generation whose features cannot be read pins every
-/// replaced assembly. It stops pinning only once its container has finished disposing: when CShells drained it, once
-/// that drain completes, which it does only after the shell's provider has been disposed; otherwise, or when that drain
-/// fails, once the container has disposed the tracking initializer, which it does after everything the container created
-/// later. A drain that fails before then leaves the generation pinned until then, since its provider may be only partly
-/// disposed and still running it.
-/// </description></item>
-/// <item><description>
-/// <b>The shell generation not built yet.</b> CShells builds the next generation from its runtime feature catalog's
-/// current snapshot, which a host refreshes only when it chooses to: <c>Elsa.Foundation.Host</c> skips the refresh after a
-/// reconcile while no shell is active. So every load context of a feature the snapshot names, and of a replaced assembly
-/// it names, is pinned too, and so is every replaced assembly while the catalog has not been initialized, or cannot be
-/// read, since the first build may be reading any of them.
-/// </description></item>
-/// </list>
-/// <para>
-/// When something retires, this publishes the host's report again, so a module gate waiting on the old generation
-/// evaluates at once instead of at whatever publish comes next: nothing else republishes a report whose declarations did
-/// not change. Two things retire a release: a generation that stops pinning, and a refresh of the feature catalog that
-/// stops naming it while no generation pins it. A generation stops pinning inside CShells' disposal of its provider, so
-/// it is only marked released there, and the publish runs on a single loop of this host's own, which coalesces every
-/// request made while one publish is under way into the next, and publishes only when the retired set grew. CShells
-/// raises nothing when it commits a catalog refresh, so while a replaced release is held back by the catalog alone this
-/// checks the catalog's snapshot generation every <see cref="CatalogWatchInterval"/>, and asks that loop to evaluate
-/// once it has moved; a catalog that cannot be read is not watched, and the next publish reads it again. The watch starts
-/// wherever the retired set is read - every publish reads it - and ends once the catalog moves or the host is disposed.
+/// <b>Retired</b> additionally requires that neither a shell generation nor the next shell's catalog can run it.
+/// The root-only <see cref="NuplanePackageGenerationBuildParticipant"/> acquires an unknown, conservative pin before
+/// catalog access, then narrows it to every feature in the exact selected snapshot, enabled or not. Features pin their
+/// entire non-default load context, including sibling assemblies. Only upstream-confirmed pre-provider unwind or
+/// complete provider teardown releases that build lease. Lifecycle notifications observe drain failures but never
+/// release lease-owned generations. Late notifications cannot recreate their pins.
 /// </para>
 /// <para>
-/// One instance serves the whole host: it is registered by instance, so every shell container CShells builds from the
-/// host's registrations shares it, and it reads Nuplane's catalog, CShells' feature catalog and the membership it
-/// publishes through from the host's own container, bound by <see cref="BindTo"/>. Resolved inside a shell, Nuplane's
-/// loader would be a fresh copy that has loaded nothing.
+/// A custom registry without build-participant support is pinned from its first lifecycle notification until its drain
+/// succeeds. A failed legacy drain keeps its pin indefinitely because that path supplies no later teardown authority.
+/// This fallback cannot provide the stock registry's protection before catalog selection.
+/// </para>
+/// <para>
+/// The current feature catalog also pins the contexts of its features and any replaced assemblies it names. An
+/// uninitialized or unreadable catalog pins every replacement. Catalog reads finish before live/build pins are copied
+/// under a short gate; no user code or asynchronous work runs under that gate.
+/// </para>
+/// <para>
+/// Begin, selection, release, and committed-catalog notifications queue coalesced asynchronous reevaluation. Any change
+/// to the complete retired set, including reintroduction, republishes membership; unchanged evidence is quiet. Stock
+/// catalog notifications are subscribed before initial reconciliation and detached at root shutdown. Custom catalogs
+/// without that capability use <see cref="CatalogWatchInterval"/> polling while replacements exist, including after
+/// retirement so rollback can be detected. If only a custom detailed-snapshot read fails while its readable generation
+/// remains unchanged, recovery requires a later generation change or another evaluation trigger.
+/// </para>
+/// <para>
+/// One nondisposable instance is registered by instance and shared with shell providers. The separate root adapter binds
+/// it to the host's own catalogs and membership through <see cref="BindTo"/>; copied shell registrations must not create
+/// a second Nuplane loader or take ownership of this source. Asynchronous publication does not promise persisted
+/// readability before an initializer runs.
 /// </para>
 /// </remarks>
 public sealed class NuplanePackageGenerations : ISupersededAssemblySource, IShellLifecycleSubscriber
@@ -81,7 +68,7 @@ public sealed class NuplanePackageGenerations : ISupersededAssemblySource, IShel
     /// </summary>
     public const string NuplaneLoadingAssembly = "Nuplane.Loading";
 
-    /// <summary>How often the feature catalog's snapshot generation is read while a replaced release is held back by it alone.</summary>
+    /// <summary>How often a custom feature catalog's snapshot generation is read while replacements exist.</summary>
     public static readonly TimeSpan CatalogWatchInterval = TimeSpan.FromSeconds(1);
 
     /// <summary>A snapshot generation for a catalog that has not been initialized: CShells numbers its snapshots from 1.</summary>
@@ -90,8 +77,19 @@ public sealed class NuplanePackageGenerations : ISupersededAssemblySource, IShel
     /// <summary>Every shell generation that can still run code, until its container has finished disposing.</summary>
     private readonly ConcurrentDictionary<Generation, byte> _live = new();
 
+    /// <summary>Build candidates and published shells protected by the upstream build lease.</summary>
+    private readonly HashSet<BuildLease> _buildLeases = [];
+
+    /// <summary>Strong identity mapping only while a lease is unresolved/live.</summary>
+    private readonly Dictionary<ShellDescriptor, BuildLease> _leasesByDescriptor = [];
+
+    private readonly Lock _pinGate = new();
+
     /// <summary>The generation each shell CShells has shown this host belongs to, so a lifecycle notification finds it.</summary>
     private readonly ConditionalWeakTable<IShell, Generation> _shells = new();
+
+    /// <summary>Weak identity retained for late lifecycle notifications after the lease is released.</summary>
+    private readonly ConditionalWeakTable<IShell, BuildLease> _buildOwnedShells = new();
 
     private readonly HostContainer _host = new();
     private ILogger _logger = NullLogger.Instance;
@@ -107,6 +105,10 @@ public sealed class NuplanePackageGenerations : ISupersededAssemblySource, IShel
 
     /// <summary>1 while the feature catalog is watched for a refresh.</summary>
     private int _watchingCatalog;
+
+    private readonly CancellationTokenSource _watchStop = new();
+    private int _stopped;
+    private int _commitNotificationsAvailable;
 
     private IServiceProvider? Host => _host.Root;
 
@@ -152,8 +154,8 @@ public sealed class NuplanePackageGenerations : ISupersededAssemblySource, IShel
 
     /// <inheritdoc />
     /// <remarks>
-    /// A replaced assembly that only the feature catalog holds back has the catalog watched for the refresh that lifts it,
-    /// whoever asked: every publish reads this.
+    /// Custom catalogs without commit notifications remain watched while replacements exist, so both retirement and
+    /// reintroduction can be detected. Live pins are copied only after the asynchronous catalog reads finish.
     /// </remarks>
     public async ValueTask<IReadOnlySet<Assembly>> GetRetiredAsync(CancellationToken cancellationToken = default)
     {
@@ -164,19 +166,25 @@ public sealed class NuplanePackageGenerations : ISupersededAssemblySource, IShel
         // Read before the snapshot the pins come from, so a refresh that commits in between shows as a move.
         var catalogGeneration = FeatureCatalogGeneration();
         var byCatalog = await PinnedByFeatureCatalogAsync(replaced, cancellationToken);
+        IReadOnlySet<Assembly>?[] pins;
+        lock (_pinGate)
+        {
+            pins = _live.Keys.Select(generation => generation.Features)
+                .Concat(_buildLeases.Select(lease => lease.Features))
+                .ToArray();
+        }
         var byGenerations = new HashSet<AssemblyLoadContext>();
-        foreach (var generation in _live.Keys)
-            byGenerations.UnionWith(PackageContexts(generation.Features ?? replaced));
+        foreach (var pin in pins)
+            byGenerations.UnionWith(PackageContexts(pin ?? replaced));
 
-        if (catalogGeneration is { } seen && replaced.Any(assembly => byCatalog.Contains(ContextOf(assembly)) && !byGenerations.Contains(ContextOf(assembly))))
-            WatchFeatureCatalog(seen);
+        if (Volatile.Read(ref _commitNotificationsAvailable) == 0 && Host?.GetService<IRuntimeFeatureCatalog>() is not null && replaced.Count > 0)
+            WatchFeatureCatalog(catalogGeneration ?? Uninitialized);
         return replaced.Where(assembly => !byCatalog.Contains(ContextOf(assembly)) && !byGenerations.Contains(ContextOf(assembly))).ToHashSet();
     }
 
     /// <summary>
-    /// Attaches the drain CShells runs a generation down with, so the generation stops pinning only once that drain has
-    /// completed. Also tracks a shell this host never saw initialize, which a CShells shell container always does unless
-    /// its copy of the tracking initializer was removed; such a generation is released only by a drain that completes.
+    /// Attaches the drain for an unleased legacy shell, which is pinned from its first lifecycle notification until that
+    /// drain completes. Lease-owned generations never use lifecycle callbacks as a release authority.
     /// </summary>
     public Task OnStateChangedAsync(
         IShell shell,
@@ -184,6 +192,20 @@ public sealed class NuplanePackageGenerations : ISupersededAssemblySource, IShel
         ShellLifecycleState current,
         CancellationToken cancellationToken = default)
     {
+        BuildLease? buildLease;
+        lock (_pinGate)
+        {
+            if (!_buildOwnedShells.TryGetValue(shell, out buildLease) && _leasesByDescriptor.TryGetValue(shell.Descriptor, out buildLease))
+                _buildOwnedShells.Add(shell, buildLease);
+        }
+
+        if (buildLease is not null)
+        {
+            if (current is ShellLifecycleState.Draining or ShellLifecycleState.Drained && shell.Drain is { } buildDrain && buildLease.ObserveDrain())
+                _ = ObserveDrainFailureAsync(buildLease, buildDrain);
+            return Task.CompletedTask;
+        }
+
         if (!_shells.TryGetValue(shell, out var generation))
         {
             if (current == ShellLifecycleState.Disposed)
@@ -194,7 +216,7 @@ public sealed class NuplanePackageGenerations : ISupersededAssemblySource, IShel
                 "a drain of it completes.",
                 shell.Descriptor,
                 current);
-            generation = Track(shell, shell.ServiceProvider, leased: false);
+            generation = Track(shell, shell.ServiceProvider);
         }
 
         // Drained is awaited by the drain before it disposes the shell; Draining is not, and Drained is skipped when the host's
@@ -204,38 +226,60 @@ public sealed class NuplanePackageGenerations : ISupersededAssemblySource, IShel
         return Task.CompletedTask;
     }
 
-    /// <summary>
-    /// What every shell container constructs among its initializers, before any of them runs: it counts the generation the
-    /// container belongs to until the container disposes it. A container that is not a shell's gets an initializer that
-    /// tracks nothing.
-    /// </summary>
-    internal IShellInitializer Track(IServiceProvider container)
+    /// <summary>Starts conservative accounting before the runtime feature catalog is read.</summary>
+    internal IShellGenerationBuildLease Begin(ShellGenerationBuildContext context)
     {
-        ArgumentNullException.ThrowIfNull(container);
-        IShell? shell;
-        try
+        var lease = new BuildLease(this, context.Descriptor);
+        lock (_pinGate)
         {
-            shell = container.GetService<IShell>();
-            if (shell is null)
-                return NotAShell.Instance;
+            _buildLeases.Add(lease);
+            _leasesByDescriptor.Add(context.Descriptor, lease);
         }
-        catch (Exception exception) when (!IsCritical(exception))
-        {
-            // IShell is registered, so this is a shell container; which one cannot be told, so it is tracked as one whose
-            // features cannot be read either, until its container disposes it.
-            _logger.LogWarning(exception, "A shell generation could not be identified, so every superseded package generation keeps counting for this host's readability report until its container is disposed.");
-            return Track(null, null, leased: true);
-        }
-
-        return Track(shell, container, leased: true);
+        RequestPublish();
+        return lease;
     }
 
-    private Generation Track(IShell? shell, IServiceProvider? container, bool leased)
+    /// <summary>Stops the fallback catalog watcher at root lifetime end.</summary>
+    internal void StopCatalogTracking()
     {
-        var generation = new Generation(this, shell, container is null ? null : FeatureAssemblies(container, shell), leased);
-        if (shell is not null)
-            _shells.AddOrUpdate(shell, generation);
-        _live.TryAdd(generation, 0);
+        if (Interlocked.Exchange(ref _stopped, 1) == 0)
+            _watchStop.Cancel();
+    }
+
+    internal void EnableCommitNotifications() => Volatile.Write(ref _commitNotificationsAvailable, 1);
+
+    internal void CatalogCommitted()
+    {
+        if (Volatile.Read(ref _stopped) == 0)
+            RequestPublish();
+    }
+
+    internal void CommitSubscriptionFailed(Exception exception) =>
+        _logger.LogWarning(exception, "Runtime feature catalog commit notifications could not be attached; readability will use the conservative catalog watch.");
+
+    internal void CommitUnsubscriptionFailed(Exception exception) =>
+        _logger.LogWarning(exception, "Runtime feature catalog commit notifications could not be detached cleanly; host readability tracking has stopped.");
+
+    private Generation Track(IShell shell, IServiceProvider container)
+    {
+        var generation = new Generation(shell, features: null);
+        lock (_pinGate)
+        {
+            if (_shells.TryGetValue(shell, out var existing))
+                return existing;
+            _shells.Add(shell, generation);
+            _live.TryAdd(generation, 0);
+        }
+        RequestPublish();
+
+        // Establish the conservative pin before resolving a shell's copied feature descriptors.
+        var features = FeatureAssemblies(container, shell);
+        lock (_pinGate)
+        {
+            if (_live.ContainsKey(generation))
+                generation.SetFeatures(features);
+        }
+        RequestPublish();
         return generation;
     }
 
@@ -271,7 +315,7 @@ public sealed class NuplanePackageGenerations : ISupersededAssemblySource, IShel
     /// them: every load context of a feature its current snapshot names, and of a replaced assembly it names. Before the
     /// catalog is initialized, or when it cannot be read, that is every load context a replaced assembly is in. A host
     /// without CShells builds no shell generation, so it pins nothing. A refresh that lifts the last of these pins is seen
-    /// by the watch <see cref="GetRetiredAsync"/> starts, which has the host's report published again.
+    /// by committed notifications, or the custom-catalog watch <see cref="GetRetiredAsync"/> starts.
     /// </summary>
     private async ValueTask<HashSet<AssemblyLoadContext>> PinnedByFeatureCatalogAsync(IReadOnlySet<Assembly> replaced, CancellationToken cancellationToken)
     {
@@ -330,21 +374,25 @@ public sealed class NuplanePackageGenerations : ISupersededAssemblySource, IShel
 
     /// <summary>
     /// Watches the feature catalog, unless it is watched already, until its snapshot has moved from <paramref name="seen"/>,
-    /// then has the republish loop evaluate, which watches it again while it still holds a replaced release back alone.
+    /// then has the republish loop evaluate, which watches it again while replacements still exist.
     /// </summary>
     private void WatchFeatureCatalog(long seen)
     {
-        if (Interlocked.CompareExchange(ref _watchingCatalog, 1, 0) == 0)
-            _ = Task.Run(() => WatchFeatureCatalogAsync(seen));
+        if (Volatile.Read(ref _stopped) == 0 && Volatile.Read(ref _commitNotificationsAvailable) == 0 && Interlocked.CompareExchange(ref _watchingCatalog, 1, 0) == 0)
+            _ = Task.Run(() => WatchFeatureCatalogAsync(seen, _watchStop.Token));
     }
 
-    private async Task WatchFeatureCatalogAsync(long seen)
+    private async Task WatchFeatureCatalogAsync(long seen, CancellationToken cancellationToken)
     {
         try
         {
             // A catalog that turns unreadable is watched until it can be read again, or the host is disposed.
             while (FeatureCatalogGeneration() is not { } current || current == seen)
-                await Task.Delay(CatalogWatchInterval);
+                await Task.Delay(CatalogWatchInterval, cancellationToken);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            return;
         }
         catch (ObjectDisposedException)
         {
@@ -367,28 +415,10 @@ public sealed class NuplanePackageGenerations : ISupersededAssemblySource, IShel
         }
         catch (Exception exception) when (!IsCritical(exception))
         {
-            // The drain completes only after the shell's DisposeAsync returns, and faults when it or the drain threw; which
-            // one cannot be told. Its container disposes the tracking before everything it created earlier and after
-            // everything it created since, so once that is done nothing of the generation's own is left running; until
-            // then the provider may be only partly disposed and still running it.
-            if (generation.ReleasedByFailedDrain())
-            {
-                _logger.LogWarning(
-                    exception,
-                    "The drain of shell generation {Shell} failed after its container had disposed everything it created for the generation, so " +
-                    "the package generations it composed from no longer count for it in this host's readability report.",
-                    generation.Name);
-                Release(generation);
-            }
-            else
-            {
-                _logger.LogWarning(
-                    exception,
-                    "The drain of shell generation {Shell} failed, so its provider may not have been disposed: every package generation it " +
-                    "composed from keeps counting for this host's readability report until its container has disposed what it created for it.",
-                    generation.Name);
-            }
-
+            _logger.LogWarning(
+                exception,
+                "The drain of unleased shell generation {Shell} failed, so every package generation it composed from keeps counting for this host's readability report.",
+                generation.Name);
             return;
         }
 
@@ -396,14 +426,64 @@ public sealed class NuplanePackageGenerations : ISupersededAssemblySource, IShel
     }
 
     /// <summary>
-    /// Stops <paramref name="generation"/> pinning, at once, and has the republish loop publish the host's report again if
-    /// that retired something. It runs inside a container's disposal and on a drain's completion, so it neither waits nor
-    /// throws.
+    /// Stops a legacy <paramref name="generation"/> pinning after successful drain completion and queues reevaluation.
     /// </summary>
     private void Release(Generation generation)
     {
-        if (_live.TryRemove(generation, out _))
+        var released = false;
+        lock (_pinGate)
+            released = _live.TryRemove(generation, out _);
+        if (released)
             RequestPublish();
+    }
+
+    private void Select(BuildLease lease, RuntimeFeatureCatalogSnapshot snapshot)
+    {
+        IReadOnlySet<Assembly>? assemblies;
+        try
+        {
+            assemblies = snapshot.FeatureDescriptors
+                .Select(descriptor => descriptor.StartupType?.Assembly)
+                .OfType<Assembly>()
+                .ToHashSet();
+        }
+        catch (Exception exception) when (!IsCritical(exception))
+        {
+            _logger.LogWarning(exception, "The selected features of shell generation {Shell} could not be read, so every superseded package generation keeps counting until its build lease is released.", lease.Descriptor);
+            assemblies = null;
+        }
+        lock (_pinGate)
+        {
+            if (!_buildLeases.Contains(lease))
+                return;
+            lease.Features = assemblies;
+        }
+        RequestPublish();
+    }
+
+    private async Task ObserveDrainFailureAsync(BuildLease lease, IDrainOperation drain)
+    {
+        try
+        {
+            await drain.WaitAsync();
+        }
+        catch (Exception exception) when (!IsCritical(exception))
+        {
+            // Diagnostic only: a failed drain never grants authority to release the build lease.
+            _logger.LogWarning(exception, "The drain of shell generation {Shell} failed; its package generations remain governed by the confirmed build-lease teardown boundary.", lease.Descriptor);
+        }
+    }
+
+    private void ProviderDisposed(BuildLease lease)
+    {
+        lock (_pinGate)
+        {
+            if (!_buildLeases.Remove(lease))
+                return;
+            if (_leasesByDescriptor.TryGetValue(lease.Descriptor, out var current) && ReferenceEquals(current, lease))
+                _leasesByDescriptor.Remove(lease.Descriptor);
+        }
+        RequestPublish();
     }
 
     /// <summary>
@@ -412,8 +492,10 @@ public sealed class NuplanePackageGenerations : ISupersededAssemblySource, IShel
     /// </summary>
     private void RequestPublish()
     {
+        if (Volatile.Read(ref _stopped) != 0)
+            return;
         Volatile.Write(ref _publishRequested, 1);
-        if (Interlocked.CompareExchange(ref _publishing, 1, 0) == 0)
+        if (Volatile.Read(ref _stopped) == 0 && Interlocked.CompareExchange(ref _publishing, 1, 0) == 0)
             _ = Task.Run(PublishWhileRequestedAsync);
     }
 
@@ -421,31 +503,40 @@ public sealed class NuplanePackageGenerations : ISupersededAssemblySource, IShel
     {
         do
         {
-            while (Interlocked.Exchange(ref _publishRequested, 0) == 1)
+            while (Volatile.Read(ref _stopped) == 0 && Interlocked.Exchange(ref _publishRequested, 0) == 1)
                 await PublishIfRetiredAsync();
             Volatile.Write(ref _publishing, 0);
         }
         // A request made after the last evaluation and before the loop stopped would otherwise wait for the next one.
-        while (Volatile.Read(ref _publishRequested) == 1 && Interlocked.CompareExchange(ref _publishing, 1, 0) == 0);
+        while (Volatile.Read(ref _stopped) == 0 && Volatile.Read(ref _publishRequested) == 1 && Interlocked.CompareExchange(ref _publishing, 1, 0) == 0);
     }
 
     /// <summary>
-    /// Publishes the host's report again when something has retired since the last evaluation, so the report stops
-    /// narrowing on it now rather than at whatever publish happens to come next. Never throws.
+    /// Publishes after any retired-set change, restoring constraints on reintroduction as well as lifting retired ones.
+    /// Noncritical failures are isolated; a later normal membership publish carries the current source evidence.
     /// </summary>
     private async Task PublishIfRetiredAsync()
     {
         try
         {
             var retired = await GetRetiredAsync();
-            var newly = retired.Except(_retiredWhenLastEvaluated).ToArray();
-            _retiredWhenLastEvaluated = retired;
-            if (newly.Length == 0 || Host?.GetService<IClusterMembership>() is not { } membership)
+            if (retired.SetEquals(_retiredWhenLastEvaluated))
                 return;
 
-            _logger.LogInformation(
-                "Nothing on this host can run {Assemblies} any more, so they no longer count for its readability report, which is published again.",
-                string.Join(", ", newly.Select(assembly => assembly.GetName().ToString())));
+            var newly = retired.Except(_retiredWhenLastEvaluated).ToArray();
+            var reintroduced = _retiredWhenLastEvaluated.Except(retired).ToArray();
+            _retiredWhenLastEvaluated = retired;
+            if (Host?.GetService<IClusterMembership>() is not { } membership)
+                return;
+
+            if (newly.Length > 0)
+                _logger.LogInformation(
+                    "Nothing on this host can run {Assemblies} any more, so they no longer count for its readability report, which is published again.",
+                    string.Join(", ", newly.Select(assembly => assembly.GetName().ToString())));
+            if (reintroduced.Length > 0)
+                _logger.LogInformation(
+                    "The host's catalog again names {Assemblies}, so the readability constraints are restored in its report.",
+                    string.Join(", ", reintroduced.Select(assembly => assembly.GetName().ToString())));
             await membership.PublishReportAsync();
         }
         catch (ObjectDisposedException)
@@ -475,93 +566,61 @@ public sealed class NuplanePackageGenerations : ISupersededAssemblySource, IShel
 
     private static string NameOf(Assembly assembly) => assembly.GetName().Name ?? assembly.FullName ?? "";
 
+    private sealed class BuildLease(NuplanePackageGenerations owner, ShellDescriptor descriptor) : IShellGenerationBuildLease
+    {
+        private int _observingDrain;
+
+        public ShellDescriptor Descriptor { get; } = descriptor;
+
+        public IReadOnlySet<Assembly>? Features { get; set; }
+
+        public bool ObserveDrain() => Interlocked.Exchange(ref _observingDrain, 1) == 0;
+
+        public ValueTask OnSnapshotSelectedAsync(RuntimeFeatureCatalogSnapshot snapshot, CancellationToken cancellationToken)
+        {
+            ArgumentNullException.ThrowIfNull(snapshot);
+            cancellationToken.ThrowIfCancellationRequested();
+            owner.Select(this, snapshot);
+            cancellationToken.ThrowIfCancellationRequested();
+            return ValueTask.CompletedTask;
+        }
+
+        public ValueTask DisposeAsync()
+        {
+            owner.ProviderDisposed(this);
+            return ValueTask.CompletedTask;
+        }
+    }
+
     /// <summary>
-    /// One shell generation, from before its first initializer runs until its container has finished disposing. Its
-    /// container creates it as a singleton when CShells resolves the shell's initializers, before any of them runs, and so
-    /// disposes it after everything it created since; a drain, when the generation has one, completes only after the whole
-    /// provider has been disposed.
+    /// A legacy shell generation, pinned from its first lifecycle notification until successful drain completion.
     /// </summary>
-    private sealed class Generation(NuplanePackageGenerations owner, IShell? shell, IReadOnlySet<Assembly>? features, bool leased)
-        : IShellInitializer, IAsyncDisposable, IDisposable
+    private sealed class Generation(IShell shell, IReadOnlySet<Assembly>? features)
     {
         private readonly Lock _gate = new();
         private IDrainOperation? _drain;
-        private bool _disposed;
-        private bool _drainFailed;
 
         /// <summary>
         /// The assemblies its features come from, whose every load context but the default one it pins, or
         /// <see langword="null"/> when they could not be read, which pins every load context a replaced assembly is in.
         /// </summary>
-        public IReadOnlySet<Assembly>? Features => features;
+        public IReadOnlySet<Assembly>? Features { get; private set; } = features;
 
-        public string Name => shell?.Descriptor.ToString() ?? "(unidentified)";
+        public void SetFeatures(IReadOnlySet<Assembly>? value) => Features = value;
 
-        public Task InitializeAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;
+        public string Name => shell.Descriptor.ToString();
 
-        /// <summary>Attaches the drain that releases it, unless one already is or its container already released it.</summary>
+        /// <summary>Attaches the first drain that can release this legacy pin on successful completion.</summary>
         public bool Attach(IDrainOperation drain)
         {
             lock (_gate)
             {
-                if (_drain is not null || _disposed)
+                if (_drain is not null)
                     return false;
                 _drain = drain;
                 return true;
             }
         }
 
-        /// <summary>
-        /// Released here only when its container's disposal says it is over; the republish that may follow runs on the
-        /// owner's loop, never on the container's disposal.
-        /// </summary>
-        public ValueTask DisposeAsync()
-        {
-            Dispose();
-            return ValueTask.CompletedTask;
-        }
-
-        public void Dispose()
-        {
-            if (ReleasedByDisposal())
-                owner.Release(this);
-        }
-
-        /// <summary>
-        /// Whether its drain failing releases it: only once its container has disposed it, which it does after everything
-        /// it created since the generation began. Until then its container's disposal releases it instead, as it would one
-        /// that was never drained.
-        /// </summary>
-        public bool ReleasedByFailedDrain()
-        {
-            lock (_gate)
-            {
-                _drainFailed = true;
-                return _disposed;
-            }
-        }
-
-        /// <summary>
-        /// Whether its container's disposal releases it: only when no drain is attached, since a drain completes after the
-        /// whole provider has been disposed, or the one attached failed; and only when the container is what tracked it.
-        /// </summary>
-        private bool ReleasedByDisposal()
-        {
-            lock (_gate)
-            {
-                if (_disposed)
-                    return false;
-                _disposed = true;
-                return leased && (_drain is null || _drainFailed);
-            }
-        }
-    }
-
-    /// <summary>What a container that is not a shell's constructs: nothing to track.</summary>
-    private sealed class NotAShell : IShellInitializer
-    {
-        public static readonly NotAShell Instance = new();
-
-        public Task InitializeAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;
     }
 }

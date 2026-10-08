@@ -1,5 +1,6 @@
 using System.Reflection;
 using System.Runtime.Loader;
+using CShells;
 using CShells.Features;
 using CShells.Lifecycle;
 using Elsa.Cluster.Core.Contracts;
@@ -44,7 +45,8 @@ public sealed class SupersededPackageGenerationTests : IAsyncDisposable
     private readonly FeatureCatalog _features = new();
     private readonly RecordingLogger _log = new();
     private readonly GatedPublishes _publishes = new(open: true);
-    private readonly List<ServiceProvider> _containers = [];
+    private readonly List<TestShellContainer> _containers = [];
+    private readonly Dictionary<ISupersededAssemblySource, ServiceProvider> _boundHosts = [];
     private readonly IServiceCollection _services;
     private readonly ServiceProvider _host;
 
@@ -430,7 +432,7 @@ public sealed class SupersededPackageGenerationTests : IAsyncDisposable
     public async ValueTask DisposeAsync()
     {
         foreach (var container in _containers)
-            await container.DisposeAsync();
+            await container.CleanupAsync();
         await _host.DisposeAsync();
         _package.Dispose();
     }
@@ -455,20 +457,21 @@ public sealed class SupersededPackageGenerationTests : IAsyncDisposable
     }
 
     /// <summary>Binds <paramref name="host"/> the way CShells binds it: by resolving its lifecycle subscribers.</summary>
-    private static ServiceProvider Bound(ServiceProvider host)
+    private ServiceProvider Bound(ServiceProvider host)
     {
         _ = host.GetServices<IShellLifecycleSubscriber>().ToArray();
+        _boundHosts[host.GetRequiredService<ISupersededAssemblySource>()] = host;
         return host;
     }
 
-    private ServiceProvider Shell(params Type[] features) => Shell(new FakeShell(), features);
+    private TestShellContainer Shell(params Type[] features) => Shell(new FakeShell(), features);
 
     /// <summary>A shell generation of <paramref name="feature"/> copied from <paramref name="from"/>, another host's registrations.</summary>
-    private ServiceProvider Shell(Type feature, IServiceCollection from) =>
+    private TestShellContainer Shell(Type feature, IServiceCollection from) =>
         Shell(new FakeShell(), services => services.AddSingleton<IReadOnlyCollection<ShellFeatureDescriptor>>(Descriptors(feature)), from);
 
     /// <summary>A shell generation of the previous generation's feature, active and then draining, with its drain attached.</summary>
-    private async Task<(FakeShell Shell, ServiceProvider Container, FakeDrain Drain)> DrainingAsync()
+    private async Task<(FakeShell Shell, TestShellContainer Container, FakeDrain Drain)> DrainingAsync()
     {
         var shell = new FakeShell();
         var container = Shell(shell, FeatureOf(_package.Previous));
@@ -478,31 +481,65 @@ public sealed class SupersededPackageGenerationTests : IAsyncDisposable
         return (shell, container, drain);
     }
 
-    private ServiceProvider Shell(FakeShell shell, params Type[] features) =>
+    private TestShellContainer Shell(FakeShell shell, params Type[] features) =>
         Shell(shell, services => services.AddSingleton<IReadOnlyCollection<ShellFeatureDescriptor>>(Descriptors(features)));
 
-    private ServiceProvider Shell(Action<IServiceCollection> describe) => Shell(new FakeShell(), describe);
+    private TestShellContainer Shell(Action<IServiceCollection> describe) => Shell(new FakeShell(), describe);
 
-    /// <summary>A shell generation's container, with every initializer constructed, as CShells constructs them all before it runs any.</summary>
-    private ServiceProvider Shell(FakeShell shell, Action<IServiceCollection> describe, IServiceCollection? from = null)
+    /// <summary>A manually built shell candidate with a root-owned lease and its exact selected feature evidence.</summary>
+    private TestShellContainer Shell(FakeShell shell, Action<IServiceCollection> describe, IServiceCollection? from = null)
     {
+        var source = (ISupersededAssemblySource)(from ?? _services).Single(descriptor => descriptor.ServiceType == typeof(ISupersededAssemblySource)).ImplementationInstance!;
+        var participant = _boundHosts[source].GetRequiredService<NuplanePackageGenerationBuildParticipant>();
+        var lease = participant.BeginAsync(new ShellGenerationBuildContext(shell.Descriptor, new ShellId(shell.Descriptor.Name))).AsTask().GetAwaiter().GetResult();
         var container = Container(shell, describe, from);
-        _ = container.GetServices<IShellInitializer>().ToArray();
-        return container;
+        try
+        {
+            IReadOnlyCollection<ShellFeatureDescriptor> descriptors;
+            try
+            {
+                descriptors = container.GetService<IReadOnlyCollection<ShellFeatureDescriptor>>()
+                    ?? new UnreadableFeatures(new InvalidOperationException("The candidate's feature evidence is unavailable."));
+            }
+            catch (Exception exception)
+            {
+                descriptors = new UnreadableFeatures(exception);
+            }
+            var snapshot = new RuntimeFeatureCatalogSnapshot(
+                1,
+                [],
+                descriptors,
+                new Dictionary<string, ShellFeatureDescriptor>(StringComparer.OrdinalIgnoreCase),
+                DateTimeOffset.UtcNow);
+            lease.OnSnapshotSelectedAsync(snapshot).AsTask().GetAwaiter().GetResult();
+            container.AttachLease(lease);
+            return container;
+        }
+        catch
+        {
+            container.DisposeAsync().AsTask().GetAwaiter().GetResult();
+            lease.DisposeAsync().AsTask().GetAwaiter().GetResult();
+            throw;
+        }
     }
 
-    private ServiceProvider Container(FakeShell shell, Action<IServiceCollection> describe, IServiceCollection? from = null)
+    private TestShellContainer Container(FakeShell shell, Action<IServiceCollection> describe, IServiceCollection? from = null)
     {
         var services = new ServiceCollection();
-        foreach (var descriptor in (from ?? _services).Where(descriptor => descriptor.ServiceType != typeof(IShellLifecycleSubscriber)))
+        foreach (var descriptor in (from ?? _services).Where(descriptor => descriptor.ServiceType != typeof(IShellLifecycleSubscriber) && !IsBuildParticipantDescriptor(descriptor)))
             services.Add(descriptor);
         services.AddSingleton<IShell>(shell);
         describe(services);
-        var container = services.BuildServiceProvider();
+        var container = new TestShellContainer(services.BuildServiceProvider(), shell, Lifecycle);
         shell.ServiceProvider = container;
         _containers.Add(container);
         return container;
     }
+
+    private static bool IsBuildParticipantDescriptor(ServiceDescriptor descriptor) =>
+        typeof(IShellGenerationBuildParticipant).IsAssignableFrom(descriptor.ServiceType) ||
+        descriptor.ImplementationType is { } implementationType && typeof(IShellGenerationBuildParticipant).IsAssignableFrom(implementationType) ||
+        descriptor.ImplementationInstance is IShellGenerationBuildParticipant;
 
     private static IReadOnlyCollection<ShellFeatureDescriptor> Descriptors(params Type[] features) =>
         [.. features.Select(feature => new ShellFeatureDescriptor(feature.Name) { StartupType = feature })];
@@ -514,6 +551,10 @@ public sealed class SupersededPackageGenerationTests : IAsyncDisposable
             var previous = shell.State;
             shell.State = state;
             await Lifecycle.OnStateChangedAsync(shell, previous, state);
+            if (state == ShellLifecycleState.Active)
+                shell.WasActive = true;
+            if (state == ShellLifecycleState.Disposed)
+                shell.DisposedNotificationDelivered = true;
         }
     }
 
@@ -538,7 +579,9 @@ public sealed class SupersededPackageGenerationTests : IAsyncDisposable
     /// <summary>A shell generation as a lifecycle subscriber and its own container see it.</summary>
     private sealed class FakeShell : IShell
     {
-        public ShellDescriptor Descriptor { get; } = ShellDescriptor.Create("default", 1);
+        private static int _generation;
+
+        public ShellDescriptor Descriptor { get; } = ShellDescriptor.Create("default", Interlocked.Increment(ref _generation));
 
         public ShellLifecycleState State { get; set; } = ShellLifecycleState.Initializing;
 
@@ -546,13 +589,81 @@ public sealed class SupersededPackageGenerationTests : IAsyncDisposable
 
         public IDrainOperation? Drain { get; set; }
 
+        public bool WasActive { get; set; }
+
+        public bool DisposedNotificationDelivered { get; set; }
+
         public IShellScope BeginScope() => throw new NotSupportedException();
+    }
+
+    /// <summary>Signals a build lease only after the synthetic provider has fully disposed.</summary>
+    private sealed class TestShellContainer(ServiceProvider provider, FakeShell shell, IShellLifecycleSubscriber lifecycle) : IServiceProvider, IAsyncDisposable
+    {
+        private IShellGenerationBuildLease? _lease;
+        private int _disposed;
+        private Task _release = Task.CompletedTask;
+
+        public object? GetService(Type serviceType) => provider.GetService(serviceType);
+
+        public void AttachLease(IShellGenerationBuildLease lease) => _lease = lease;
+
+        public async ValueTask DisposeAsync()
+        {
+            if (Interlocked.Exchange(ref _disposed, 1) != 0)
+                return;
+            if (shell.WasActive && !shell.DisposedNotificationDelivered)
+            {
+                await lifecycle.OnStateChangedAsync(shell, shell.State, ShellLifecycleState.Disposed);
+                shell.State = ShellLifecycleState.Disposed;
+                shell.DisposedNotificationDelivered = true;
+            }
+            await provider.DisposeAsync();
+            if (_lease is { } lease && (!shell.WasActive || shell.DisposedNotificationDelivered))
+            {
+                _release = ReleaseAfterConfirmationAsync(lease);
+                if (shell.Drain is not FakeDrain drain || drain.Settled)
+                    await _release;
+            }
+        }
+
+        private async Task ReleaseAfterConfirmationAsync(IShellGenerationBuildLease lease)
+        {
+            if (shell.Drain is FakeDrain drain)
+            {
+                try
+                {
+                    await drain.WaitAsync();
+                }
+                catch (InvalidOperationException)
+                {
+                    // The fixture has separately confirmed full provider teardown; drain-handler failure is not teardown failure.
+                }
+            }
+            await lease.DisposeAsync();
+        }
+
+        public async ValueTask CleanupAsync()
+        {
+            await DisposeAsync();
+            if (shell.Drain is FakeDrain drain)
+                drain.CompleteForCleanup(shell.Descriptor);
+            await _release;
+        }
+    }
+
+    private sealed class UnreadableFeatures(Exception failure) : IReadOnlyCollection<ShellFeatureDescriptor>
+    {
+        public int Count => throw failure;
+        public IEnumerator<ShellFeatureDescriptor> GetEnumerator() => throw failure;
+        System.Collections.IEnumerator System.Collections.IEnumerable.GetEnumerator() => GetEnumerator();
     }
 
     /// <summary>A drain whose completion a test decides; CShells completes one only after the shell's provider is disposed.</summary>
     private sealed class FakeDrain : IDrainOperation
     {
         private readonly TaskCompletionSource<DrainResult> _completion = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public bool Settled => _completion.Task.IsCompleted;
 
         public DrainStatus Status => DrainStatus.Completed;
 
@@ -563,6 +674,8 @@ public sealed class SupersededPackageGenerationTests : IAsyncDisposable
         public Task ForceAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;
 
         public void Complete(ShellDescriptor shell) => _completion.SetResult(new DrainResult(shell, DrainStatus.Completed, TimeSpan.Zero, 0, []));
+
+        public void CompleteForCleanup(ShellDescriptor shell) => _completion.TrySetResult(new DrainResult(shell, DrainStatus.Completed, TimeSpan.Zero, 0, []));
 
         public void Fail() => _completion.SetException(new InvalidOperationException("The shell's provider threw while it was disposed."));
     }

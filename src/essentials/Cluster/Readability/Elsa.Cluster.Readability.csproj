@@ -14,8 +14,8 @@
   -->
   <!--
     Which package generations an in-place upgrade superseded (spec 183, FR-021, amended 2026-09-29): Nuplane's catalog of
-    the active package set says what was replaced, and CShells' shell lifecycle says when the last generation that could
-    still run it is gone. Their abstractions only, which both hosts that compose this share with their packages: a host
+    the active package set says what was replaced, and CShells' build leases protect each selected generation until
+    confirmed teardown. The current feature catalog protects the next build as well. Their abstractions only, which both hosts that compose this share with their packages: a host
     without Nuplane or CShells takes neither runtime by composing readability, and has nothing superseded.
   -->
   <ItemGroup>

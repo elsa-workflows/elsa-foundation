@@ -22,6 +22,8 @@
 
 **Decision**: Keep the public `BindTo`/`IShellLifecycleSubscriber` facade. When a lifecycle notification identifies a shell descriptor that has never been build-owned, retain a conservative pin from that first notification through confirmed drain. A build-owned descriptor remains marked as lease-owned through its terminal lifecycle notification, even after its lease leaves the live-pin set, so a late callback cannot create a zombie fallback pin. Lifecycle callbacks never release a lease; only its completion does.
 
+Normal lifecycle callbacks may observe a drain failure for diagnostics, preserving the existing warning objective. Observation does not grant release authority: published leases are disposed by CShells only after full provider teardown and a successful terminal notification. An unpublished candidate can unwind without that notification.
+
 **Rationale**: An existing test verifies tracking a shell whose host-local initializer was removed. The refactor may change test wiring, but §2.21.1 requires preserving that test's subject and objective. The descriptor-scoped fallback preserves the boundary without creating two release authorities for normal generations.
 
 **Alternatives considered**: Drop lifecycle tracking and remove the existing test (not approved); keep lifecycle notifications as a second release path for leased generations (can release before confirmed provider teardown); delete lease-owned identity when its live pin is released (a late notification can recreate a fallback pin); use shell-object identity alone (does not match the immutable generation identity used by build callbacks).

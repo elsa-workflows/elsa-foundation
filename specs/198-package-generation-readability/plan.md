@@ -90,3 +90,11 @@ tests/essentials/Cluster/Readability/Tests/
 ## Complexity Tracking
 
 No constitutional violations or project-count exceptions are proposed.
+
+### Implementation review clarifications (2026-10-08)
+
+- Public CShells `.166` owns the combined release boundary: complete provider teardown and, for published generations, a successful `Disposed` notification. Foundation does not add a second lifecycle release gate. Actual-registry tests cover failed notification with successful teardown and unpublished failure with no notification.
+- Normal lifecycle callbacks may retain observational drain-failure diagnostics to preserve existing warning assertions. They never release build-owned pins. This keeps the previous diagnostic objective in the product rather than manufacturing logging in a stub.
+- Missing or throwing selected-feature evidence remains an unresolved conservative pin. Manual fixture inputs represent unavailable evidence through the public detailed-snapshot contract; the source emits the warning. The test-owned provider wrapper confirms full disposal separately from fake-drain settlement and only then signals the upstream lease boundary.
+- Custom catalogs are watched while replacement evidence exists, including after retirement, so rollback/reintroduction can restore constraints. The stock notification capability suppresses polling.
+- One writer owns the coordinator and existing fixtures. A separate, isolated worktree produced only the new participant test class; root integrated and corrected that patch. Required gates and final acceptance remain root-owned. No existing test case or assertion was deleted.

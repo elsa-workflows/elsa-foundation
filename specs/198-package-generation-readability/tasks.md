@@ -8,13 +8,13 @@
 
 ## Phase 1: Setup
 
-- [ ] T001 Inventory existing assertions and confirm no competing #2164 claim/PR before edits; record the retained test objectives in `specs/198-package-generation-readability/quickstart.md`.
-- [ ] T002 Prepare an isolated private copy for public `.166`/`.99` preflight, with that copy's own `Directory.Packages.props` and `packages.lock.json` files; record reproducible copy/restore commands in `specs/198-package-generation-readability/quickstart.md`. Do not change the committed Foundation pins/locks.
+- [X] T001 Inventory existing assertions and confirm no competing #2164 claim/PR before edits; record the retained test objectives in `specs/198-package-generation-readability/quickstart.md`.
+- [X] T002 Prepare an isolated private copy for public `.166`/`.99` preflight, with that copy's own `Directory.Packages.props` and `packages.lock.json` files; record reproducible copy/restore commands in `specs/198-package-generation-readability/quickstart.md`. Do not change the committed Foundation pins/locks.
 
 ## Phase 2: Foundational Wiring
 
-- [ ] T003 Add the root-only public sealed adapter in `src/essentials/Cluster/Readability/NuplanePackageGenerationBuildParticipant.cs` and update `src/essentials/Cluster/Readability/EfSchemaReadabilityServiceCollectionExtensions.cs`: one canonical root adapter, participant alias, lifecycle factory that resolves it before binding, shared nondisposable/nonparticipant source, idempotent shutdown, no initializer-based release proxy.
-- [ ] T004 Verify registration identity, custom-source override, duplicate composition, child-provider source identity, participant exclusion, and root shutdown ownership in `tests/essentials/Cluster/Readability/Tests/NuplanePackageGenerationBuildParticipantTests.cs` and the existing `SupersededPackageGenerationShellTests.cs`.
+- [X] T003 Add the root-only public sealed adapter in `src/essentials/Cluster/Readability/NuplanePackageGenerationBuildParticipant.cs` and update `src/essentials/Cluster/Readability/EfSchemaReadabilityServiceCollectionExtensions.cs`: one canonical root adapter, participant alias, lifecycle factory that resolves it before binding, shared nondisposable/nonparticipant source, idempotent shutdown, no initializer-based release proxy.
+- [X] T004 Verify registration identity, custom-source override, duplicate composition, child-provider source identity, participant exclusion, and root shutdown ownership in `tests/essentials/Cluster/Readability/Tests/NuplanePackageGenerationBuildParticipantTests.cs` and the existing `SupersededPackageGenerationShellTests.cs`.
 
 ## Phase 3: User Story 1 — Protect Exact Selected Generations (P1)
 
@@ -22,9 +22,9 @@
 
 **Independent test**: Hold an old-selected candidate before its first initializer, commit a newer catalog, and drain all other old generations. The old declaration must remain counted until that candidate's provider has finished disposing.
 
-- [ ] T005 [US1] Implement unresolved Begin pins, atomic exact-feature selection, and point-in-time live-pin copying after awaited catalog reads in `src/essentials/Cluster/Readability/NuplanePackageGenerations.cs`; never await or call user code under the tracking gate.
-- [ ] T006 [US1] Add deterministic real-registry pre-read and old-selected-snapshot barriers in `tests/essentials/Cluster/Readability/Tests/SupersededPackageGenerationShellTests.cs`, including disabled features and sibling-context protection without pinning unrelated scanned assemblies.
-- [ ] T007 [US1] Cover direct lease selection, cancellation, duplicate release, unknown feature evidence, short-gate races, and repeated pre-provider unwind/descriptor cleanup with stub dependencies in `tests/essentials/Cluster/Readability/Tests/NuplanePackageGenerationBuildParticipantTests.cs`.
+- [X] T005 [US1] Implement unresolved Begin pins, atomic exact-feature selection, and point-in-time live-pin copying after awaited catalog reads in `src/essentials/Cluster/Readability/NuplanePackageGenerations.cs`; never await or call user code under the tracking gate.
+- [X] T006 [US1] Add deterministic real-registry pre-read and old-selected-snapshot barriers in `tests/essentials/Cluster/Readability/Tests/SupersededPackageGenerationShellTests.cs`, including disabled features and sibling-context protection without pinning unrelated scanned assemblies.
+- [X] T007 [US1] Cover direct lease selection, cancellation, duplicate release, unknown feature evidence, short-gate races, and repeated pre-provider unwind/descriptor cleanup with stub dependencies in `tests/essentials/Cluster/Readability/Tests/NuplanePackageGenerationBuildParticipantTests.cs`.
 
 ## Phase 4: User Story 2 — Preserve Failure and Overlap Safety (P1)
 
@@ -32,9 +32,9 @@
 
 **Independent test**: Failed initialization, overlapping old/new candidates, slow provider teardown, and throwing disposal retain or release only the affected generation at the confirmed boundary.
 
-- [ ] T008 [US2] Retain the public lifecycle facade's conservative fallback only for shells never owned by a build lease; prevent late callbacks from recreating released pins in `src/essentials/Cluster/Readability/NuplanePackageGenerations.cs`.
-- [ ] T009 [US2] Adapt manual providers to a test-owned provider/lease wrapper and explicit fake-drain confirmation in `tests/essentials/Cluster/Readability/Tests/SupersededPackageGenerationTests.cs`; preserve current assertions/objectives, including the unobserved-shell fallback and failed-drain cases.
-- [ ] T010 [US2] Add actual-CShells failure-before-provider, failed-initializer cleanup, overlapping generations, blocked full-provider disposal, incomplete teardown retention, and late lifecycle callback regressions in `tests/essentials/Cluster/Readability/Tests/SupersededPackageGenerationShellTests.cs`.
+- [X] T008 [US2] Retain the public lifecycle facade's conservative fallback only for shells never owned by a build lease; prevent late callbacks from recreating released pins in `src/essentials/Cluster/Readability/NuplanePackageGenerations.cs`.
+- [X] T009 [US2] Adapt manual providers to a test-owned provider/lease wrapper and explicit fake-drain confirmation in `tests/essentials/Cluster/Readability/Tests/SupersededPackageGenerationTests.cs`; preserve current assertions/objectives, including the unobserved-shell fallback and failed-drain cases.
+- [X] T010 [US2] Add actual-CShells failure-before-provider, failed-initializer cleanup, overlapping generations, blocked full-provider disposal, incomplete teardown retention, and late lifecycle callback regressions in `tests/essentials/Cluster/Readability/Tests/SupersededPackageGenerationShellTests.cs`.
 
 ## Phase 5: User Story 3 — Publish Changed Readability Evidence (P1)
 
@@ -42,14 +42,14 @@
 
 **Independent test**: Retire an exact assembly, reintroduce it, and commit unchanged evidence. Changed constraints publish in both directions; unchanged evidence is quiet; root shutdown detaches subscriptions and stops the fallback watch.
 
-- [ ] T011 [US3] Implement subscribe-before-read reconciliation, enqueue-only commit handlers, custom-catalog watcher fallback, and owned shutdown in `src/essentials/Cluster/Readability/NuplanePackageGenerationBuildParticipant.cs` and `NuplanePackageGenerations.cs`.
-- [ ] T012 [US3] Queue reevaluation on Begin/selection/release/commit and compare complete retired sets in `src/essentials/Cluster/Readability/NuplanePackageGenerations.cs`; preserve asynchronous coalescing and failure isolation without claiming synchronous report persistence before initialization.
-- [ ] T013 [US3] Add commit, late subscription, rollback/reintroduction, unchanged-set quietness, custom-catalog fallback, and stop/unsubscribe tests in `tests/essentials/Cluster/Readability/Tests/NuplanePackageGenerationBuildParticipantTests.cs` and `SupersededPackageGenerationTests.cs`; establish deterministic fixture baselines for existing exact publication-count assertions.
+- [X] T011 [US3] Implement subscribe-before-read reconciliation, enqueue-only commit handlers, custom-catalog watcher fallback, and owned shutdown in `src/essentials/Cluster/Readability/NuplanePackageGenerationBuildParticipant.cs` and `NuplanePackageGenerations.cs`.
+- [X] T012 [US3] Queue reevaluation on Begin/selection/release/commit and compare complete retired sets in `src/essentials/Cluster/Readability/NuplanePackageGenerations.cs`; preserve asynchronous coalescing and failure isolation without claiming synchronous report persistence before initialization.
+- [X] T013 [US3] Add commit, late subscription, rollback/reintroduction, unchanged-set quietness, custom-catalog fallback, and stop/unsubscribe tests in `tests/essentials/Cluster/Readability/Tests/NuplanePackageGenerationBuildParticipantTests.cs` and `SupersededPackageGenerationTests.cs`; establish deterministic fixture baselines for existing exact publication-count assertions.
 
 ## Phase 6: Integration, Review, and Final Qualification
 
-- [ ] T014 Run the affected readability project against actual public preview packages in the private copy, independently review the full candidate diff, and execute reversible bypass-Begin/current-snapshot/early-release/growth-only mutations; record exact commands/results and provenance in `specs/198-package-generation-readability/quickstart.md`.
-- [ ] T015 Review duplication and cleanup, preserve the abstractions-only/EF-free closure, reconcile program execution/evidence in `docs/program-goals/modular-hosting-upstream-delivery.md` and `docs/plans/modular-hosting-upstream/evidence.md`, and commit the prepared source without claiming unchanged-default-pin CI or final acceptance.
+- [X] T014 Run the affected readability project against actual public preview packages in the private copy, independently review the full candidate diff, and execute reversible bypass-Begin/current-snapshot/early-release/growth-only mutations; record exact commands/results and provenance in `specs/198-package-generation-readability/quickstart.md`.
+- [X] T015 Review duplication and cleanup, preserve the abstractions-only/EF-free closure, reconcile program execution/evidence in `docs/program-goals/modular-hosting-upstream-delivery.md` and `docs/plans/modular-hosting-upstream/evidence.md`, and commit the prepared source without claiming unchanged-default-pin CI or final acceptance.
 - [ ] T016 After upstream stable publication, coordinate final pins/locks and actual Foundation-host readability qualification with #2509, run affected suites/e2e, architecture and map gates, independent exact-head review and resulting-main checks; record acceptance in `specs/198-package-generation-readability/quickstart.md` before merge/Done. Do not wait for coordinating Features #145/#2509 to close before performing the consumer proof that supplies their acceptance.
 
 ## Dependencies and Execution
