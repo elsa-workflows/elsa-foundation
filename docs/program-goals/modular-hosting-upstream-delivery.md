@@ -1,8 +1,8 @@
 # Modular Hosting Upstream Delivery
 
-Area: reusable modular-host infrastructure across CShells, Nuplane, and Elsa Foundation. Status: active delivery for issue [#2500](https://github.com/elsa-workflows/elsa-foundation/issues/2500); no implementation or gate is claimed. Scheduling surface: [Project 58](https://github.com/orgs/elsa-workflows/projects/58).
+Area: reusable modular-host infrastructure across CShells, Nuplane, and Elsa Foundation. Status: active delivery for issue [#2500](https://github.com/elsa-workflows/elsa-foundation/issues/2500); no milestone is complete. Scheduling surface: [Project 58](https://github.com/orgs/elsa-workflows/projects/58).
 
-Stewards: Sipke and the program delivery lead. The active implementation leaf is [CShells #144](https://github.com/valence-works/cshells/issues/144), explicit host singleton sharing, on `016-share-host-singletons`. Local implementation is underway; pushing and opening PRs await the repository-required Git/session preference answer.
+Stewards: Sipke and the program delivery lead. The current delivery leaf is [CShells #144](https://github.com/valence-works/cshells/issues/144), explicit host singleton sharing, on `016-share-host-singletons`. Local implementation and root review passed 32 focused/affected tests; full CI/release qualification remains outstanding. Pushing and opening PRs await the repository-required Git/session preference answer. Exact evidence is in the [register](../plans/modular-hosting-upstream/evidence.md).
 
 Deliver and adopt explicit host-owned services, committed CShells catalog notifications, and an optional Nuplane-to-CShells adapter. Add a Nuplane package-store pruning feature only after a bounded safety spike proves that package files are unused by active, candidate, and sibling generations. Preserve the host and Workbench policies described in [decisions](../plans/modular-hosting-upstream/decisions.md).
 

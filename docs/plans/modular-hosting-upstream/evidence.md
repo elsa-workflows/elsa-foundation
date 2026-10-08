@@ -1,6 +1,14 @@
 # Baselines and Evidence Register
 
-Snapshot read for draft planning on 2026-10-08. This is source and issue inspection only. **No build, test, map check, package publication, review, merge, or runtime proof was performed for this draft.** Update each row from the exact revision before implementation or completion claims.
+Initial source/issue snapshot read on 2026-10-08; that baseline inspection ran no builds/tests. Later execution evidence is recorded below. Update each row from the exact revision before implementation or completion claims.
+
+## Local CShells ownership checkpoint
+
+CShells #144 is locally implemented on `016-share-host-singletons`, commit `9e66d41321083a456e132a4979c3ed997a367d9f`, clean worktree `/tmp/hosting-cshells-ownership`. The worker ran 11 ownership tests and built CShells for net8/net9/net10 with zero warnings/errors. Root reviewed the final source and ran service-registration, reload and ownership tests against the built Debug output: **32 passed, zero failed/skipped**. Root's first no-build invocation requested absent Release output and executed no tests; the corrected Debug invocation is the passing evidence.
+
+The ownership mutation test failed as intended when instance descriptors were replaced with child factories: draining the old generation disposed the borrowed host object. The mutation was reverted, then the final implementation passed. Root-requested keyed independence, two named shells, caller disposal and null/generic diagnostics were incorporated. See the [owning issue checkpoint](https://github.com/valence-works/cshells/issues/144#issuecomment-6055941969).
+
+Full CI, external current-head review, push/PR, merge, resulting-main checks, published preview and Foundation adoption remain outstanding. No milestone is complete. Git/session preference is pending before push/PR. Delegate model fallback was Luna High because Luna Extra High was unavailable.
 
 ## Source baselines
 
