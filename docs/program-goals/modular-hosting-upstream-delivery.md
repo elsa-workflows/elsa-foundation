@@ -8,6 +8,8 @@ Deliver and adopt explicit host-owned services, committed CShells catalog notifi
 
 Locally qualified #148 prevents provisional activation success while preserving routing identity. Qualified #149 provides explicitly registered generic activation execution; host adapters remain adoption work. Optional Nuplane integration remains a reviewed draft design dependent on published ownership/catalog/build primitives. Its deferred freshness and single-coordinator registration contracts are recorded in the [candidate](../reports/modular-hosting-integration-candidate.md).
 
+The latest combined candidate also passed Release solution gates locally: 728 library tests and 31 CShells.Workbench end-to-end tests, zero failed/skipped. All nine packages were packed coherently under a private local version; an external package consumer passed on .NET 8/9/10. The [package qualification report](../reports/modular-hosting-package-qualification.md) distinguishes this evidence from upstream publication and Foundation adoption.
+
 Use the canonical [framework glossary](../glossary/root.md) and [Elsa glossary](../glossary/elsa.md) for Host, Shell, feature composition, and Nuplane terms.
 
 ## Milestones
