@@ -19,7 +19,7 @@ An operator installs or replaces a package and expects each host to discover the
 
 1. **Given** Foundation's default configuration and an active shell, **when** an eligible reconciliation completes, **then** the catalog refreshes and automatic reload is attempted for active shells.
 2. **Given** Workbench's default configuration and an active shell, **when** a package changes, **then** catalog freshness is updated and the serving generation changes only after explicit reload.
-3. **Given** a cold host or failed initial activation, **when** a package changes and a shell build is later requested, **then** the build observes outstanding package freshness before selecting its feature composition.
+3. **Given** a cold host or failed initial activation, **when** an eligible completion records package changes while the integration is enabled and a shell build is later requested, **then** the build observes outstanding package freshness before selecting its feature composition.
 4. **Given** either host, **when** its root composition and a shell resolve the package observer, **then** they use the same upstream coordinator, after package autoload and earlier observers.
 
 ### User Story 2 - Change reload policy without rebuilding the host (Priority: P1)
@@ -74,6 +74,8 @@ An operator needs each failed shell reload reported without exposing arbitrary e
 - **FR-009**: Foundation's feature-free host, existing feed setup, readability integration and Workbench catalog projection MUST remain valid. This unit MUST NOT implement startup/readiness policy, host-library extraction, assembly unloading or package deletion.
 - **FR-010**: Final adoption MUST consume the verified stable Nuplane and complete CShells release families, update reached locks and generated maps together, and pass rebuilt real Host/Workbench and relevant backend E2E proof before closure.
 
+- **FR-011**: The frozen demo's Acts1/2 rehearsal (`bash tools/demo/rehearse.sh`) MUST pass after adoption, alongside the named actual-host and backend E2E gates; preview preparation alone cannot satisfy this acceptance.
+
 ### Key Entities
 
 - **Host profile**: Existing host-specific refresh, enablement and reload policy.
@@ -87,7 +89,7 @@ An operator needs each failed shell reload reported without exposing arbitrary e
 - **SC-001**: Both hosts expose exactly one package-change coordination path, with zero remaining duplicate host provider/observer implementations for this integration.
 - **SC-002**: The complete two-host absent/invalid/true/false policy matrix and runtime toggle scenarios pass without rebuilding a root provider.
 - **SC-003**: Every failed shell in mixed results is reported correctly, recognized refusals preserve actionable details, and ordinary operator-facing failures expose no arbitrary exception message.
-- **SC-004**: Rebuilt hosts demonstrate package delivery, cold activation, refusal retention and later recovery against the exact stable release family; existing affected regression suites and relevant backend E2E pass.
+- **SC-004**: Rebuilt hosts demonstrate package delivery, cold activation, refusal retention and later recovery against the exact stable release family; existing affected regression suites, relevant backend E2E and the frozen Acts1/2 demo rehearsal pass.
 
 ## Assumptions
 

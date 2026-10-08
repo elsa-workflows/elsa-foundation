@@ -26,3 +26,5 @@
 ## Notes
 
 Root reviewed the specification against the existing #2314 issue and program decisions. Concrete package/repository names constrain integration scope; API design and shared helper placement are intentionally deferred to the plan. This checklist approves planning, not stable adoption or publication.
+
+Independent review found the named Acts1/2 demo rehearsal missing from final acceptance. Root added FR-011 and SC-004 coverage, and clarified that cold deferred freshness begins with an enabled eligible completion.
