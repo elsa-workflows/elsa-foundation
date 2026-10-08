@@ -30,7 +30,7 @@ Publish preview CShells primitives that let a host explicitly share a selected s
 - Unshared registrations stay generation-local, including their `IEnumerable<T>` position and multiplicity.
 - A catalog consumer receives a committed snapshot signal without polling.
 - Package changes refresh the catalog after Nuplane has loaded assemblies; explicit reload works; Workbench does not automatically reload unless configured true.
-- A failed refresh/reload remains pending and is retried; a refused shell keeps serving its prior generation and remains visibly not promoted.
+- Failed observer refresh/reload work remains pending for retry on a later delivered eligible reconciliation completion. An explicit shell reload/build can recover outstanding catalog freshness; no background retry timer is promised when empty unchanged cycles stay silent. A refused shell keeps serving its prior generation and remains visibly not promoted.
 - Pruning is either proven safe under the stated boundary or explicitly deferred. A lock-only test does not count.
 - Preview versions are identifiable, published by the existing pipelines, consumed by the host, and pass the milestone-specific proof.
 
