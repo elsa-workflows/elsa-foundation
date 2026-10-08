@@ -699,6 +699,31 @@ public sealed class EfRuntimeArtifactScopeTests
     }
 
     [Fact]
+    public async Task Executable_idempotent_save_preserves_the_first_pinned_side_effect_profile()
+    {
+        await using var database = await Database.CreateAsync();
+        await using var fixture = database.Open("tenant-a");
+        var original = Executable(
+            "profile-artifact",
+            "profile-hash",
+            activityContract: PinnedContract(SideEffectProfile.External));
+        var candidate = Executable(
+            "profile-artifact",
+            "profile-hash",
+            activityContract: PinnedContract(SideEffectProfile.ReplaySafe));
+
+        await fixture.Executable.SaveAsync(original);
+        // Same identity/hash is an immutable no-op; the candidate profile must not overwrite the first row.
+        await fixture.Executable.SaveAsync(candidate);
+
+        var persisted = await fixture.Executable.FindAsync(original.Identity.ArtifactId);
+        Assert.NotNull(persisted);
+        Assert.Equal(SideEffectProfile.External, persisted!.RootActivity.ActivityContract!.SideEffectProfile);
+        Assert.Equal(original.RootActivity.ActivityContract.SchemaFingerprint, persisted.RootActivity.ActivityContract.SchemaFingerprint);
+        Assert.NotEqual(candidate.RootActivity.ActivityContract.SchemaFingerprint, persisted.RootActivity.ActivityContract.SchemaFingerprint);
+    }
+
+    [Fact]
     public async Task Executable_idempotent_save_rejects_mismatched_existing_incarnations()
     {
         await using var database = await Database.CreateAsync();
@@ -1397,11 +1422,23 @@ public sealed class EfRuntimeArtifactScopeTests
     private static WorkflowExecutable Executable(
         string artifactId,
         string? artifactHash = null,
-        IReadOnlyDictionary<string, string>? compatibilityMetadata = null)
+        IReadOnlyDictionary<string, string>? compatibilityMetadata = null,
+        ActivityContract? activityContract = null)
     {
-        var node = new ExecutableNode("node", "node", "test", "1", "consumer", JsonSerializer.SerializeToElement(new { }), new Dictionary<string, RuntimeInputBinding>(), new Dictionary<string, string>(), outputCaptures: new Dictionary<string, RuntimeOutputCapture>());
+        var node = new ExecutableNode("node", "node", "test", "1", "consumer", JsonSerializer.SerializeToElement(new { }), new Dictionary<string, RuntimeInputBinding>(), new Dictionary<string, string>(), activityContract: activityContract, outputCaptures: new Dictionary<string, RuntimeOutputCapture>());
         return new WorkflowExecutable(new WorkflowExecutableIdentity(artifactId, "definition", "version", "1", artifactHash ?? $"hash-{artifactId}"), node, new Dictionary<string, WorkflowExecutableResumeTarget>(), DateTimeOffset.UtcNow, compatibilityMetadata ?? new Dictionary<string, string>(), IncidentStrategyBuiltIns.FaultReference);
     }
+
+    private static ActivityContract PinnedContract(SideEffectProfile profile) => new(
+        "test.activity",
+        "1",
+        "test",
+        JsonSerializer.SerializeToElement(new { }),
+        [],
+        new ActivityResultContract(new ValueTypeDescriptor("Elsa.Unit"), true, ActivityValuePolicy.Default, []),
+        [ActivityOutcomes.Done],
+        new ActivityActivationRequirement("test", "test"),
+        profile);
 
     private static WorkflowExecutable ProfileExecutable(SideEffectProfile profile, bool omitContractFromHash = false)
     {

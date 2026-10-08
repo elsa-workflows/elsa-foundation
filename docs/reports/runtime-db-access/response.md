@@ -2,6 +2,8 @@
 
 # Response to the Elsa checkpoint latency findings
 
+The [program delivery response](delivery-response.md) is the current draft synthesis of accepted work and remaining gates. It does not replace the historical provenance below or claim final measurements.
+
 Prepared from the supplied report and a read-only source review. The measurements below are the report's measurements; I have not reproduced its workload. Source was checked against the reported commit `f97d7f614fd57115fd94916f13fa6c3e3ae7ef10` and local HEAD `6c3a9fe59f25c48cfef1e8fd8b8b742e674043ee`. The coalescing merger, activity invocation handler, and instance-detail projection discussed below are unchanged between those commits.
 
 **Suggested response**

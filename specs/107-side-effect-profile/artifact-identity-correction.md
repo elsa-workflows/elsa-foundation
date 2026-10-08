@@ -3,7 +3,7 @@
 Issue: [#2515](https://github.com/elsa-workflows/elsa-foundation/issues/2515), owned by
 [Feature #2398](https://github.com/elsa-workflows/elsa-foundation/issues/2398) in
 [Program #2382](https://github.com/elsa-workflows/elsa-foundation/issues/2382).
-Status: correction implemented; focused proofs passed; complete affected and integration gates pending.
+Status: delivered through #2517, resulting-main verification and the accepted current-format response fixture handoff.
 
 ## Requirement and owner decision
 
@@ -70,13 +70,13 @@ constitutional rule or default is adopted. The owner accepts the pre-release ide
 - [x] C003: Verify actual EF persistence/readback in both insertion orders and current-format
   import success/profile tamper rejection, with no persisted partial import.
 - [x] C004: Verify placed-template and child-dependency propagation through existing fixtures.
-- [ ] C005: Run complete affected suites, relevant rebuilt-host publication/HTTP e2e,
+- [x] C005: Run complete affected suites, relevant rebuilt-host publication/HTTP e2e,
   architecture and generated-maps checks. Run local builds serially through the shared-machine
   wrapper; the canonical architecture CI gate may supply the complete restored-graph check.
   Preserve any existing #2293/#2185 failures separately. Update genuinely stale maps only.
-- [ ] C006: Root review, independent review, exact-head PR checks and resulting-main gates.
+- [x] C006: Root review, independent review, exact-head PR checks and resulting-main gates.
   Post the accepted evidence on the PR and issue before closing #2515.
-- [ ] C007: Integrate the accepted correction into the retained #2400 response branch, adapt
+- [x] C007: Integrate the accepted correction into the retained #2400 response branch, adapt
   its owned publication fixtures to the current format, and resume its conditional proof.
 
 The failing compiler regression is the causal before-fix control; a direct hasher mutation
@@ -129,3 +129,27 @@ updated for the same profile projection; its contract-fingerprint assertions sta
 The focused corrected test passed 1/1. The first CI run was cancelled after the known local
 failure while preparing the corrected head; that cancellation is not accepted evidence.
 The complete affected and PR gates must run on the corrected candidate before acceptance.
+
+## Merged correction checkpoint
+
+[PR #2517](https://github.com/elsa-workflows/elsa-foundation/pull/2517) merged as
+`9c9f475929018d96a16fb3a24549a304a7612254`. The
+[pre-merge receipt](https://github.com/elsa-workflows/elsa-foundation/pull/2517#issuecomment-6065881852)
+records 3,843 full affected tests, rebuilt Workbench publication 24/24 and HTTP methods
+4/4, architecture 635/635, Maps, exact-head CI and root/independent/CodeRabbit review.
+Copilot did not supply a review and is not counted as approval. The
+[resulting-main receipt](https://github.com/elsa-workflows/elsa-foundation/pull/2517#issuecomment-6066239722)
+accepts CI 37820309119, Maps 37820308354, filters, Code Quality, Docker and the authorized
+automatic preview workflow. These completed gates supersede the pending statements in the
+historical focused receipt above; its failed attempts remain retained.
+
+The response branch integrated this correction at `11c852be19a24fd173edb77ab2cdbfc0aa977c42`.
+Its production tree equals the accepted main tree and keeps WriteHttpResponse External.
+The merged compiler/golden/refusal checks passed 21/21, and EF profile/non-overwrite checks
+passed 3/3, all without skips. Its rebuilt normal Workbench produced the
+[fresh External fixture](../198-response-replay-safety/evidence/current-format-publication.md).
+The current-runtime child import/execution check passed 1/1 without skips on
+`b42a3995da836a4773832b69df275f179bb42979`, completing C007. Its TRX SHA-256 is
+`4fd5d224d6cb8e8d8778ff42a0abc1b16e4a93283c31422e3802cebf5f102fc5`.
+The conditional response declaration and its candidate-specific guards remain #2400 work;
+no new query or latency gain follows from this corrective handoff.
