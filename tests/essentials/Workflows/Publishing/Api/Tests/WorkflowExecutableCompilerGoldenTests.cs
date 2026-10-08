@@ -33,8 +33,8 @@ namespace Elsa.Workflows.Publishing.Api.Tests;
 /// Same-input/same-output characterization harness for <see cref="WorkflowExecutableCompiler"/> (W30b, #418).
 /// Compiles a corpus spanning the input-type x structure x resume-target surface and pins, per definition,
 /// BOTH the full canonically-serialized <see cref="WorkflowExecutable"/> AND its content-addressable
-/// <c>ArtifactHash</c>. The decomposition of the compiler is pure code motion: every golden here must stay
-/// byte-identical across the refactor. The hash is the sharpest guard (any drift in the canonical hashing
+/// <c>ArtifactHash</c>. Compiler refactors must keep these snapshots byte-identical unless they deliberately
+/// change a semantic input to content hashing. The hash is the sharpest guard (any drift in the canonical hashing
 /// payload changes it), so it is asserted explicitly in addition to being embedded in the serialized golden.
 /// </summary>
 public sealed class WorkflowExecutableCompilerGoldenTests
