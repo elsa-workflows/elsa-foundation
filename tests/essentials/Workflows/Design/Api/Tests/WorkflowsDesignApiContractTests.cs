@@ -336,6 +336,130 @@ public sealed class WorkflowsDesignApiContractTests
     }
 
     [Fact]
+    public async Task Submit_binds_and_writes_the_schema_enum_contract()
+    {
+        await using var host = await AuthorizationHost.StartAsync();
+        const string body = """
+            {
+              "operationKey": "enum-contract",
+              "name": "Enum contract",
+              "state": {
+                "rootActivity": {
+                  "nodeId": "root",
+                  "activityVersionId": "activity-version",
+                  "inputs": [
+                    {
+                      "referenceKey": "input",
+                      "value": { "value": "value" },
+                      "conversion": { "mode": "json" }
+                    }
+                  ],
+                  "outputs": [],
+                  "intrinsic": {
+                    "kind": "setOutput",
+                    "valueType": { "alias": "String", "collectionKind": "single" }
+                  }
+                },
+                "outputs": [
+                  {
+                    "referenceKey": "output",
+                    "name": "Output",
+                    "type": { "alias": "String", "collectionKind": "single" },
+                    "displayName": "Output",
+                    "isNullable": false,
+                    "sourceRepresentation": "textValue"
+                  }
+                ]
+              }
+            }
+            """;
+
+        using var request = LifecycleRequest(HttpMethod.Post, "/design/workflows/definitions/submit", body);
+        using var response = await host.Client.SendAsync(request);
+
+        Assert.True(response.IsSuccessStatusCode, await response.Content.ReadAsStringAsync());
+        var state = Assert.IsType<WorkflowDefinitionState>(host.Domain.LastSubmittedState);
+        Assert.Equal(AuthoredWorkflowIntrinsicKind.SetOutput, state.RootActivity!.Intrinsic!.Kind);
+        Assert.Equal(AuthoredValueConversionMode.Json, state.RootActivity.Inputs.Single().Conversion!.Mode);
+        Assert.Equal(Elsa.Primitives.Models.CollectionKind.Single, state.RootActivity.Intrinsic.ValueType!.CollectionKind);
+        Assert.Equal(Elsa.Primitives.Models.ValueRepresentation.TextValue, state.Outputs.Single().SourceRepresentation);
+
+        using var responseJson = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        var responseState = responseJson.RootElement.GetProperty("version").GetProperty("state");
+        var responseRoot = responseState.GetProperty("rootActivity");
+        Assert.Equal("setOutput", responseRoot.GetProperty("intrinsic").GetProperty("kind").GetString());
+        Assert.Equal("json", responseRoot.GetProperty("inputs")[0].GetProperty("conversion").GetProperty("mode").GetString());
+        Assert.Equal("Single", responseRoot.GetProperty("intrinsic").GetProperty("valueType").GetProperty("collectionKind").GetString());
+        Assert.Equal("TextValue", responseState.GetProperty("outputs")[0].GetProperty("sourceRepresentation").GetString());
+
+        // Existing Studio authors PascalCase values for the type-attributed enums and enum names
+        // for the intrinsic. Reads remain case-insensitive while responses use the schema's new
+        // camel-case wire spelling only for the two previously unsupported enum fields.
+        var studioBody = body
+            .Replace("\"setOutput\"", "\"SetOutput\"", StringComparison.Ordinal)
+            .Replace("\"single\"", "\"Single\"", StringComparison.Ordinal)
+            .Replace("\"textValue\"", "\"TextValue\"", StringComparison.Ordinal);
+        using var studioRequest = LifecycleRequest(HttpMethod.Post, "/design/workflows/definitions/submit", studioBody);
+        using var studioResponse = await host.Client.SendAsync(studioRequest);
+
+        Assert.True(studioResponse.IsSuccessStatusCode, await studioResponse.Content.ReadAsStringAsync());
+    }
+
+    [Fact]
+    public async Task Submit_round_trips_every_schema_intrinsic_and_conversion_enum_value()
+    {
+        await using var host = await AuthorizationHost.StartAsync();
+
+        foreach (var kind in new[] { "set", "merge", "reduce", "return", "control", "setCorrelationId", "setInstanceName", "setOutput", "finish" })
+            await AssertRoundTripAsync(kind, "auto");
+
+        foreach (var mode in new[] { "auto", "none", "json", "xml", "profile" })
+            await AssertRoundTripAsync("setOutput", mode);
+
+        async Task AssertRoundTripAsync(string kind, string mode)
+        {
+            var intrinsic = new Dictionary<string, object?> { ["kind"] = kind };
+            if (kind is not ("control" or "finish"))
+                intrinsic["valueType"] = new { alias = "String", collectionKind = "single" };
+            if (kind is "set" or "merge" or "reduce")
+                intrinsic["variable"] = new { referenceKey = "target", declaringScopeId = "workflow" };
+
+            var payload = new
+            {
+                name = "Enum contract",
+                state = new
+                {
+                    rootActivity = new
+                    {
+                        nodeId = "root",
+                        activityVersionId = "activity-version",
+                        inputs = new[]
+                        {
+                            new
+                            {
+                                referenceKey = "input",
+                                value = new { value = "value" },
+                                conversion = new { mode }
+                            }
+                        },
+                        outputs = Array.Empty<object>(),
+                        intrinsic
+                    }
+                }
+            };
+            var body = JsonSerializer.Serialize(payload, new JsonSerializerOptions(JsonSerializerDefaults.Web));
+            using var request = LifecycleRequest(HttpMethod.Post, "/design/workflows/definitions/submit", body);
+            using var response = await host.Client.SendAsync(request);
+
+            Assert.True(response.IsSuccessStatusCode, await response.Content.ReadAsStringAsync());
+            using var responseJson = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+            var responseRoot = responseJson.RootElement.GetProperty("version").GetProperty("state").GetProperty("rootActivity");
+            Assert.Equal(kind, responseRoot.GetProperty("intrinsic").GetProperty("kind").GetString());
+            Assert.Equal(mode, responseRoot.GetProperty("inputs")[0].GetProperty("conversion").GetProperty("mode").GetString());
+        }
+    }
+
+    [Fact]
     public async Task Promote_binds_operation_key_and_route_id_before_command_dispatch()
     {
         await using var host = await AuthorizationHost.StartAsync();
