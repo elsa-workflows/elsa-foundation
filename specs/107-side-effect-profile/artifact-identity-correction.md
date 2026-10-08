@@ -3,7 +3,7 @@
 Issue: [#2515](https://github.com/elsa-workflows/elsa-foundation/issues/2515), owned by
 [Feature #2398](https://github.com/elsa-workflows/elsa-foundation/issues/2398) in
 [Program #2382](https://github.com/elsa-workflows/elsa-foundation/issues/2382).
-Status: correction merged through #2517; resulting-main gates passed; current-format response fixture handoff pending.
+Status: delivered through #2517, resulting-main verification and the accepted current-format response fixture handoff.
 
 ## Requirement and owner decision
 
@@ -76,7 +76,7 @@ constitutional rule or default is adopted. The owner accepts the pre-release ide
   Preserve any existing #2293/#2185 failures separately. Update genuinely stale maps only.
 - [x] C006: Root review, independent review, exact-head PR checks and resulting-main gates.
   Post the accepted evidence on the PR and issue before closing #2515.
-- [ ] C007: Integrate the accepted correction into the retained #2400 response branch, adapt
+- [x] C007: Integrate the accepted correction into the retained #2400 response branch, adapt
   its owned publication fixtures to the current format, and resume its conditional proof.
 
 The failing compiler regression is the causal before-fix control; a direct hasher mutation
@@ -148,5 +148,8 @@ Its production tree equals the accepted main tree and keeps WriteHttpResponse Ex
 The merged compiler/golden/refusal checks passed 21/21, and EF profile/non-overwrite checks
 passed 3/3, all without skips. Its rebuilt normal Workbench produced the
 [fresh External fixture](../198-response-replay-safety/evidence/current-format-publication.md).
-The current-runtime child import check and C007 completion are pending; candidate-specific
-ReplaySafe guards remain intentionally unaccepted while the declaration is External.
+The current-runtime child import/execution check passed 1/1 without skips on
+`b42a3995da836a4773832b69df275f179bb42979`, completing C007. Its TRX SHA-256 is
+`4fd5d224d6cb8e8d8778ff42a0abc1b16e4a93283c31422e3802cebf5f102fc5`.
+The conditional response declaration and its candidate-specific guards remain #2400 work;
+no new query or latency gain follows from this corrective handoff.

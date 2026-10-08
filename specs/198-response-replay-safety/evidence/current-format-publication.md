@@ -54,7 +54,15 @@ filenames. The original `pre-candidate-external-*` files retain their original b
 source claims as historical evidence. Current-runtime tests use the new files; they do not
 require old-export import compatibility. No database migration or rewriting is involved.
 
-The existing child-host import/execution test is the next gate and has not yet passed at
-this checkpoint. The candidate declaration remains External. This capture establishes a
-current-format baseline, not ReplaySafe classification acceptance, matched query counts,
-latency, crash recovery on the final candidate or completion of #2400.
+The unchanged assertions in `CapturedExternalClosure_ImportsAndExecutesThroughChildHttpHost`
+passed 1/1 without skips at clean `b42a3995da836a4773832b69df275f179bb42979`. It imported
+the exact current-format closure through production reconciliation and executed the child
+HTTP host, checking the persisted artifact/profile, Completed outcome, HTTP status/body
+and committed response body. Root inspected the actual TRX (SHA-256
+`4fd5d224d6cb8e8d8778ff42a0abc1b16e4a93283c31422e3802cebf5f102fc5`) and unchanged source
+receipt; independent review found no material fixture handoff issue. This completes #2515's
+current-format integration handoff.
+
+The candidate declaration remains External. This establishes a current-format baseline,
+not ReplaySafe classification acceptance, matched query counts, latency, crash recovery
+on the final candidate or completion of #2400.
