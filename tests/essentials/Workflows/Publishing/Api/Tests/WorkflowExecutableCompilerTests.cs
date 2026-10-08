@@ -1,6 +1,7 @@
+using System.Reflection;
+using System.Text.Json;
 using Elsa.Workflows.Publishing.Handlers;
 using Elsa.Workflows.Publishing.Services;
-using System.Text.Json;
 using Elsa.Activities.Design.Core.Models;
 using Elsa.Activities.Http.Activities;
 using Elsa.Activities.Primitives.Activities;
@@ -717,6 +718,130 @@ public sealed class WorkflowExecutableCompilerTests
         Assert.Equal(
             Elsa.Activities.Runtime.Core.Models.SideEffectProfile.External,
             writeLine.ActivityContract!.SideEffectProfile);
+    }
+
+    [Fact]
+    public async Task WriteHttpResponse_candidate_profile_preserves_current_binding_families_and_pure_expression_contract()
+    {
+        static WorkflowArgumentState Input(string key, object? value, string expressionType) =>
+            new(key, new ArgumentValue(value, expressionType), null, null, null, null);
+
+        static Task<WorkflowExecutable> CompileAsync(
+            WorkflowArgumentState input,
+            IReadOnlyCollection<Elsa.Expressions.Core.Models.VariableDefinition>? variables = null) =>
+            SecretBindingCompilerFixture.CompileAsync(
+            SecretBindingCompilerFixture.Node(typeof(WriteHttpResponse), input),
+            [typeof(WriteHttpResponse)],
+            variables: variables,
+            includeDeclaredInputDefaults: true);
+
+        var literal = await CompileAsync(Input(nameof(WriteHttpResponse.Body), "literal-body", "Literal"));
+        var objectValue = await CompileAsync(Input(
+            nameof(WriteHttpResponse.Headers),
+            JsonSerializer.SerializeToElement(new Dictionary<string, string[]> { ["X-Test"] = ["one", "two"] }),
+            "Object"));
+        var request = await CompileAsync(Input(
+            nameof(WriteHttpResponse.Body),
+            JsonSerializer.SerializeToElement(new { memberKey = "body" }),
+            "WorkflowRequest"));
+        var variableDefinition = new Elsa.Expressions.Core.Models.VariableDefinition(
+            "response-body",
+            "Response Body",
+            new TypeReference("String"),
+            null,
+            new ArgumentValue("variable-body", "Literal"));
+        var variable = await CompileAsync(
+            Input(
+                nameof(WriteHttpResponse.Body),
+                JsonSerializer.SerializeToElement(new { referenceKey = "response-body" }),
+                "Variable"),
+            [variableDefinition]);
+        var expression = await CompileAsync(Input(nameof(WriteHttpResponse.StatusCode), "40 + 2", "JavaScript"));
+        var bodyExpression = await CompileAsync(Input(nameof(WriteHttpResponse.Body), "getVariable('response-body')", "JavaScript"));
+
+        Assert.All(
+            new[] { literal, objectValue, request, variable, expression, bodyExpression },
+            executable => Assert.Equal(
+                Elsa.Activities.Runtime.Core.Models.SideEffectProfile.ReplaySafe,
+                executable.RootActivity.ActivityContract!.SideEffectProfile));
+        Assert.Equal(RuntimeInputBindingSource.Literal, literal.RootActivity.InputBindings[nameof(WriteHttpResponse.Body)].Source);
+        Assert.Equal(RuntimeInputBindingSource.Literal, objectValue.RootActivity.InputBindings[nameof(WriteHttpResponse.Headers)].Source);
+        Assert.Equal(
+            RuntimeInputBindingSource.WorkflowRequest,
+            request.RootActivity.InputBindings[nameof(WriteHttpResponse.Body)].Source);
+        Assert.Equal(
+            RuntimeInputBindingSource.VariableRead,
+            variable.RootActivity.InputBindings[nameof(WriteHttpResponse.Body)].Source);
+        var expressionBinding = expression.RootActivity.InputBindings[nameof(WriteHttpResponse.StatusCode)];
+        Assert.Equal(RuntimeInputBindingSource.Expression, expressionBinding.Source);
+        Assert.Equal(
+            Elsa.Expressions.Core.Models.ExpressionCapabilityProfiles.BindingPureV1,
+            expressionBinding.Expression!.CapabilityProfile);
+        Assert.Equal(
+            Elsa.Expressions.Core.Models.ExpressionCapabilityProfiles.BindingPureV1,
+            bodyExpression.RootActivity.InputBindings[nameof(WriteHttpResponse.Body)].Expression!.CapabilityProfile);
+
+        var statusInput = typeof(WriteHttpResponse)
+            .GetProperty(nameof(WriteHttpResponse.StatusCode))!
+            .GetCustomAttribute<ActivityInputAttribute>()!;
+        Assert.Equal("200", statusInput.DefaultValue);
+        Assert.Equal("Literal", statusInput.DefaultSyntax);
+        var omittedStatusCode = literal.RootActivity.InputBindings[nameof(WriteHttpResponse.StatusCode)];
+        Assert.Equal(RuntimeInputBindingSource.Literal, omittedStatusCode.Source);
+        Assert.Equal(200, omittedStatusCode.Literal!.InlineValue!.Value.GetInt32());
+    }
+
+    [Fact]
+    public async Task HttpEndpoint_remains_external_when_response_candidate_is_replay_safe()
+    {
+        var endpoint = await SecretBindingCompilerFixture.CompileAsync(
+            SecretBindingCompilerFixture.Node(
+                typeof(HttpEndpoint),
+                new WorkflowArgumentState(nameof(HttpEndpoint.Path), new ArgumentValue("/replay-safety", "Literal"), null, null, null, null)),
+            [typeof(HttpEndpoint), typeof(WriteHttpResponse)]);
+
+        Assert.Equal(
+            Elsa.Activities.Runtime.Core.Models.SideEffectProfile.External,
+            endpoint.RootActivity.ActivityContract!.SideEffectProfile);
+
+        var response = await SecretBindingCompilerFixture.CompileAsync(
+            SecretBindingCompilerFixture.Node(typeof(WriteHttpResponse)),
+            [typeof(HttpEndpoint), typeof(WriteHttpResponse)]);
+
+        Assert.Equal(
+            Elsa.Activities.Runtime.Core.Models.SideEffectProfile.ReplaySafe,
+            response.RootActivity.ActivityContract!.SideEffectProfile);
+    }
+
+    [Theory]
+    [InlineData(nameof(WriteHttpResponse.Body))]
+    [InlineData(nameof(WriteHttpResponse.ContentType))]
+    public async Task WriteHttpResponse_keeps_its_existing_echoed_output_secret_refusals(string inputKey)
+    {
+        var exception = await SecretBindingCompilerFixture.AssertRefusedAsync(
+            SecretBindingCompilerFixture.Node(typeof(WriteHttpResponse), SecretBindingCompilerFixture.Secret(inputKey)),
+            [typeof(WriteHttpResponse)]);
+
+        var refusal = SecretBindingDiagnostics.SecretBindingRefused(
+            SecretBindingCompilerFixture.NodeId,
+            inputKey,
+            SecretBindingRefusalReason.EchoedToOutput);
+        Assert.Contains(refusal.Message, exception.Message, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData(nameof(WriteHttpResponse.StatusCode))]
+    [InlineData(nameof(WriteHttpResponse.Headers))]
+    public async Task WriteHttpResponse_rejects_secret_fields_without_a_supported_text_conversion(string inputKey)
+    {
+        var exception = await SecretBindingCompilerFixture.AssertRefusedAsync(
+            SecretBindingCompilerFixture.Node(typeof(WriteHttpResponse), SecretBindingCompilerFixture.Secret(inputKey)),
+            [typeof(WriteHttpResponse)]);
+
+        Assert.StartsWith("VF-COER-001:", exception.Message, StringComparison.Ordinal);
+        var conversionFailure = Assert.IsType<ValueConversionPublicationException>(exception.InnerException);
+        Assert.Equal(SecretBindingCompilerFixture.NodeId, conversionFailure.Binding?.NodeId);
+        Assert.Equal(inputKey, conversionFailure.Binding?.ReferenceKey);
     }
 
     [Fact]

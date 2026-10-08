@@ -68,7 +68,8 @@ internal static class SecretBindingCompilerFixture
         ActivityNode root,
         IReadOnlyCollection<Type> activityTypes,
         IReadOnlyCollection<ActivityDefinitionVersion>? otherVersions = null,
-        IReadOnlyCollection<VariableDefinition>? variables = null)
+        IReadOnlyCollection<VariableDefinition>? variables = null,
+        bool includeDeclaredInputDefaults = false)
     {
         var registry = TestWellKnownTypeRegistry.Create();
         foreach (var activityType in activityTypes)
@@ -81,7 +82,7 @@ internal static class SecretBindingCompilerFixture
                 Definition = new WorkflowDefinition { Id = "definition-1", Name = "Secret bindings" },
                 State = new WorkflowDefinitionState(variables ?? [], root, [], [], null)
             }),
-            new FakeActivityVersionStore([.. activityTypes.Select(ClrActivityVersion), .. otherVersions ?? []]),
+            new FakeActivityVersionStore([.. activityTypes.Select(type => ClrActivityVersion(type, includeDeclaredInputDefaults)), .. otherVersions ?? []]),
             StructureService,
             registry);
         return await compiler.CompileAsync(new WorkflowExecutableCompileRequest(
@@ -121,7 +122,7 @@ internal static class SecretBindingCompilerFixture
             () => CompileAsync(root, activityTypes, otherVersions, variables));
 
     /// <summary>The catalog version the CLR scanner would reconcile for <paramref name="activityType"/>.</summary>
-    public static ActivityDefinitionVersion ClrActivityVersion(Type activityType) =>
+    public static ActivityDefinitionVersion ClrActivityVersion(Type activityType, bool includeDeclaredInputDefaults = false) =>
         ActivityVersion(
             activityType.FullName!,
             WellKnownRuntimeActivityConsumers.ClrActivity,
@@ -138,6 +139,26 @@ internal static class SecretBindingCompilerFixture
                     Category: null,
                     IsNullable: true,
                     IsSensitive: candidate.Attribute.IsSensitive || candidate.Attribute.IsCredential ? true : null,
-                    IsCredential: candidate.Attribute.IsCredential ? true : null))
+                    IsCredential: candidate.Attribute.IsCredential ? true : null,
+                    DefaultValue: includeDeclaredInputDefaults ? ReadDefaultValue(candidate.Attribute.DefaultValue, candidate.Property.PropertyType) : null,
+                    DefaultSyntax: includeDeclaredInputDefaults ? candidate.Attribute.DefaultSyntax : null))
                 .ToArray());
+
+    private static JsonElement? ReadDefaultValue(string? value, Type valueType)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+            return null;
+
+        if (valueType == typeof(string))
+            return JsonSerializer.SerializeToElement(value);
+
+        try
+        {
+            return JsonSerializer.SerializeToElement(JsonSerializer.Deserialize(value, valueType), valueType);
+        }
+        catch (JsonException)
+        {
+            return JsonSerializer.SerializeToElement(value);
+        }
+    }
 }
