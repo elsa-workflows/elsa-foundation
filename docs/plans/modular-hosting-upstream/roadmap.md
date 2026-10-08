@@ -6,13 +6,13 @@ Program issue: [#2500](https://github.com/elsa-workflows/elsa-foundation/issues/
 
 | Epic | Features and current task |
 |---|---|
-| [Shell infrastructure #2506](https://github.com/elsa-workflows/elsa-foundation/issues/2506) | CShells [ownership #140](https://github.com/valence-works/cshells/issues/140) with active [task #144](https://github.com/valence-works/cshells/issues/144); [catalog #141](https://github.com/valence-works/cshells/issues/141); [optional integration #142](https://github.com/valence-works/cshells/issues/142); [activation #143](https://github.com/valence-works/cshells/issues/143) |
+| [Shell infrastructure #2506](https://github.com/elsa-workflows/elsa-foundation/issues/2506) | CShells [ownership #140](https://github.com/valence-works/cshells/issues/140)/[#144](https://github.com/valence-works/cshells/issues/144), [catalog #141](https://github.com/valence-works/cshells/issues/141)/[#146](https://github.com/valence-works/cshells/issues/146) and [build lifetime #145](https://github.com/valence-works/cshells/issues/145)/[#147](https://github.com/valence-works/cshells/issues/147) are locally in review; [optional integration #142](https://github.com/valence-works/cshells/issues/142) remains dependent; [activation #143](https://github.com/valence-works/cshells/issues/143) owns active settlement [task #148](https://github.com/valence-works/cshells/issues/148). |
 | [Store maintenance #2507](https://github.com/elsa-workflows/elsa-foundation/issues/2507) | Nuplane [safe pruning #108](https://github.com/valence-works/nuplane/issues/108), not implementation-ready before the safety spike |
 | [Foundation adoption #2508](https://github.com/elsa-workflows/elsa-foundation/issues/2508) | [Qualification #2509](https://github.com/elsa-workflows/elsa-foundation/issues/2509), including existing [observer adoption #2314](https://github.com/elsa-workflows/elsa-foundation/issues/2314) |
 
 Native parent relations connect this hierarchy. Native dependencies block integration on ownership/catalog, and final qualification on integration, activation and safe pruning. Later tasks are refined after their contracts stabilize. Related #2354/#2362 remain with their existing program and claims; they are not duplicate child work here.
 
-[CShells #145](https://github.com/valence-works/cshells/issues/145) also belongs to the shell-infrastructure Epic: it owns the generic catalog/build lifetime prerequisite for adopted [Foundation #2164](https://github.com/elsa-workflows/elsa-foundation/issues/2164), under qualification #2509. Its bounded design gate must resolve synchronization before it becomes implementation-ready. A post-commit notification alone cannot protect a candidate that selected the old catalog before reaching its first initializer.
+[CShells #145](https://github.com/valence-works/cshells/issues/145) owns the generic catalog/build lifetime prerequisite for adopted [Foundation #2164](https://github.com/elsa-workflows/elsa-foundation/issues/2164), under qualification #2509. Its synchronization design was resolved in #147, now locally qualified with the combined prerequisites. A post-commit notification alone cannot protect a candidate that selected the old catalog before reaching its first initializer. Local evidence is in the [register](evidence.md); remote review/publication and consumer proof remain outstanding.
 
 ## M0 — ownership and API design
 
@@ -43,11 +43,12 @@ Adopt Foundation #2314 for one package observer/provider implementation. Keep Nu
 
 **Acceptance and measurable proof:**
 
-- The shared observer runs after Nuplane autoload/reconcile completion and refreshes only after package changes; committed catalog notification is used where possible.
+- The shared observer runs after Nuplane autoload/reconcile completion. Separate enablement, refresh trigger and reload policy preserve Foundation.Host's every-enabled-cycle behavior and Workbench's changed/pending refresh behavior. Committed catalog notification is used where possible; resolve inactive/failed-first-activation recovery explicitly in the adapter task.
 - A Workbench setting absent/false does not reload active shells; `true` does. Foundation.Host retains its current enabled default. Tests cover current package-change vs unchanged-cycle behavior and refusal/failure retry.
 - A package added/updated by reconcile reaches the catalog and a subsequent explicit reload; verify a shell serving the new generation while the old one drains.
 - Existing host-owned Nuplane coordinator/trigger services remain shared at root; shell copies cannot enqueue on a queue no dispatcher reads.
 - Startup/retry/readiness APIs remain opt-in/configurable. Demonstrate failure then recovery and preserve Workbench's separate warm-default-shell behavior.
+- First deliver #148: early candidate publication remains available to routing, but `GetOrActivateAsync` waits for Commit/rollback settlement. Prove gated initial/reload success and failure, old-generation reuse before publication and independent waiter cancellation. The runner must never stop recovery based on an Active notification or provisional candidate.
 - Foundation preview consumers pass the applicable modularity, readability, host process, cluster/EF, Workbench, package-lock, architecture, maps and affected end-to-end suites. Review exact current head and resulting main; record exact package versions and proof. No tests have been run for this plan.
 
 ## M3 — package-store pruning safety spike, then decision
