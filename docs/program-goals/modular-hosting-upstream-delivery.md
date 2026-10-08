@@ -12,6 +12,8 @@ The latest combined candidate also passed Release solution gates locally: 728 li
 
 The non-destructive Nuplane safety spike also proved that distinct state files allow concurrent reconciliation against one configured install root. The [safety draft](../reports/modular-hosting-store-safety-spike.md) now requires enforceable shared-root authority and complete persistent protection; coordinated binary upgrades alone are insufficient. Actual safe pruning remains deferred and required.
 
+Seven reviewer-facing PR bodies and isolated candidate diffs are prepared in the [publication preparation report](../reports/modular-hosting-publication-preparation.md). An independent recovery audit found the initial CShells bundle incomplete across a shallow-history boundary; replacement full-history CShells/Nuplane bundles now pass fresh-clone, exact-ref/tree and strict-fsck checks. The report corrects the earlier backup claim. Foundation's documentation branch incorporates main `249cd2132`; its delta remains documentation-only.
+
 Use the canonical [framework glossary](../glossary/root.md) and [Elsa glossary](../glossary/elsa.md) for Host, Shell, feature composition, and Nuplane terms.
 
 ## Milestones
