@@ -55,6 +55,8 @@ The spike must establish exact package-generation identities and atomic revalida
 
 **Gate:** M3 becomes ready only when all cases have bounded proof and an API/design review accepts the deletion invariant. If not proven, defer destructive pruning; deliver only a read-only inventory/retention report and documented recovery guidance if separately accepted. Actual collectible assembly unloading remains Foundation #2362's upstream Nuplane scope.
 
+The report-only fallback does not satisfy #108 or unblock final qualification #2509 under the current delivery scope. It requires an explicit owner decision amending the program outcome and dependencies. Until then, retain the hard dependency and keep safe execution outstanding.
+
 ## M4 — integrated delivery and resulting-main proof
 
 After previews are published, adopt exact versions, remove only superseded local glue, and prove the composed result.
