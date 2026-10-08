@@ -379,7 +379,8 @@ public sealed class WorkflowsDesignApiContractTests
         using var request = LifecycleRequest(HttpMethod.Post, "/design/workflows/definitions/submit", body);
         using var response = await host.Client.SendAsync(request);
 
-        Assert.True(response.IsSuccessStatusCode, await response.Content.ReadAsStringAsync());
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal("application/json", response.Content.Headers.ContentType?.MediaType);
         AssertEnumContractState(host.Domain.LastSubmittedState);
 
         using var responseJson = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
@@ -401,8 +402,11 @@ public sealed class WorkflowsDesignApiContractTests
         using var studioRequest = LifecycleRequest(HttpMethod.Post, "/design/workflows/definitions/submit", studioBody);
         using var studioResponse = await host.Client.SendAsync(studioRequest);
 
-        Assert.True(studioResponse.IsSuccessStatusCode, await studioResponse.Content.ReadAsStringAsync());
+        Assert.Equal(HttpStatusCode.OK, studioResponse.StatusCode);
+        Assert.Equal("application/json", studioResponse.Content.Headers.ContentType?.MediaType);
         AssertEnumContractState(host.Domain.LastSubmittedState);
+        using var studioJson = JsonDocument.Parse(await studioResponse.Content.ReadAsStringAsync());
+        Assert.Equal(responseState.GetRawText(), studioJson.RootElement.GetProperty("version").GetProperty("state").GetRawText());
     }
 
     [Theory]
@@ -482,7 +486,8 @@ public sealed class WorkflowsDesignApiContractTests
             using var request = LifecycleRequest(HttpMethod.Post, "/design/workflows/definitions/submit", body);
             using var response = await host.Client.SendAsync(request);
 
-            Assert.True(response.IsSuccessStatusCode, await response.Content.ReadAsStringAsync());
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+            Assert.Equal("application/json", response.Content.Headers.ContentType?.MediaType);
             using var responseJson = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
             var responseRoot = responseJson.RootElement.GetProperty("version").GetProperty("state").GetProperty("rootActivity");
             Assert.Equal(kind, responseRoot.GetProperty("intrinsic").GetProperty("kind").GetString());
