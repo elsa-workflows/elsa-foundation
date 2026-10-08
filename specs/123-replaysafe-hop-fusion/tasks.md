@@ -293,3 +293,14 @@ ControlFlow **196**, Bpmn **107**, Publishing.Api **401**; full `dotnet build El
 - Every fallback must leave state the discrete path would produce; the byte-identical + crash suites are
   the gate, not inspection.
 - Run FULL test projects, never `--filter` subsets, at every GATE (per project convention).
+
+## Corrective follow-up #2497 — execution tasks
+
+- [X] C001 Reproduce the current cap-2 Running/no-redrive failure with EF/SQLite; retain original regression and both database images. Additional unchanged-main missing-anchor cuts and FIFO red/green evidence are recorded in the [corrective evidence](evidence/cap-recovery.md).
+- [X] C002 Review CR-001–CR-008 and the corrective plan, preserving under-cap batching and the separate Spec198 scope.
+- [X] C003 Add pre-inner/decorator, cap-1 attempt, cap-2 Started, Schedule-cap typed/intrinsic and nested-D2 regression cases using shared fixture setup; verify relevant failures on unchanged production source.
+- [X] C004 Implement scoped in-memory original-Schedule registration, pre-continuing-write durability and ordered-prefix queue reconciliation; prove ensure failure/cancellation stops checkpoint progression.
+- [X] C005 Implement only the pinned typed-ReplaySafe Running redrive through existing Start/Invoke, and verified successful D2 cleanup. Preserve External/unmarked, cancelled and terminal controls.
+- [X] C006 Verify the complete focused matrix, fusion engagement, unchanged under-cap queue-write count, required-cut access cost, and no stranded queue/outbox work. Record failed attempts without reinterpretation.
+- [X] C007 Run complete affected project suites, rebuilt normal-host backend checks, architecture/maps and independent/root diff review on the final candidate; retain exact source identities and any unavailable gates.
+- [ ] C008 Commit/push/open the scoped corrective PR, converge review/CI, merge only on the green gate and accept resulting-main checks. Then release the issue claim and unblock #2400 for integration; no publication/deployment is added.

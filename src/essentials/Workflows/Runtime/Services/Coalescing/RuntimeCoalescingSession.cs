@@ -22,7 +22,9 @@ public sealed class RuntimeCoalescingSession
 {
     private readonly IWorkflowSchedulerWorkQueue _innerQueue;
     private readonly InMemoryWorkflowSchedulerWorkQueue _overlayQueue = new();
-    private readonly List<string> _seededWorkItemIds = [];
+    private readonly List<string> _durableWorkItemIds = [];
+    private readonly Dictionary<string, RuntimeSchedulerWorkItem> _activeFusedScheduleAnchors = new(StringComparer.Ordinal);
+    private readonly List<string> _activeFusedScheduleAnchorOrder = [];
     private readonly ConcurrentDictionary<RuntimeSchedulerWorkClaim, byte> _overlayClaims =
         new(ReferenceEqualityComparer.Instance);
     private bool _queueSeeded;
@@ -157,6 +159,59 @@ public sealed class RuntimeCoalescingSession
 
     /// <summary>Whether a mid-drain flush already durably persisted this outbox item.</summary>
     public bool IsOutboxDurablyPersisted(string outboxItemId) => _durablyPersistedOutboxIds.Contains(outboxItemId);
+
+    internal void RegisterFusedScheduleAnchor(RuntimeSchedulerWorkItem workItem)
+    {
+        ArgumentNullException.ThrowIfNull(workItem);
+        if (workItem.CommandKind != WorkflowExecutionCommandKind.ScheduleActivity)
+            throw new ArgumentException("A fused-span anchor must be an original ScheduleActivity work item.", nameof(workItem));
+        if (!StringComparer.Ordinal.Equals(workItem.WorkflowExecutionId, WorkflowExecutionId))
+            throw new ArgumentException("A fused-span anchor must belong to this coalescing session.", nameof(workItem));
+
+        if (_activeFusedScheduleAnchors.TryAdd(workItem.WorkItemId, workItem))
+            _activeFusedScheduleAnchorOrder.Add(workItem.WorkItemId);
+    }
+
+    internal void CompleteFusedScheduleAnchor(string workItemId)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(workItemId);
+        _activeFusedScheduleAnchors.Remove(workItemId);
+        _activeFusedScheduleAnchorOrder.Remove(workItemId);
+    }
+
+    /// <summary>
+    /// Persists original fused Schedule items before a continuing checkpoint can advance durable runtime state.
+    /// Registration itself is memory-only; this method is called only at cap-fold and continuing attempt boundaries.
+    /// </summary>
+    internal async ValueTask EnsureActiveFusedScheduleAnchorsAsync(CancellationToken cancellationToken)
+    {
+        if (_activeFusedScheduleAnchorOrder.Count == 0)
+            return;
+
+        await EnsureQueueSeededAsync(cancellationToken);
+        var durableIds = CreateDurableWorkItemIdSet();
+        var enqueuedAnchor = false;
+        foreach (var workItemId in _activeFusedScheduleAnchorOrder)
+        {
+            if (!durableIds.Add(workItemId))
+                continue;
+
+            var anchor = _activeFusedScheduleAnchors[workItemId];
+            var persisted = await _innerQueue.EnqueueAsync(anchor, cancellationToken);
+            if (!StringComparer.Ordinal.Equals(persisted.WorkflowExecutionId, WorkflowExecutionId) ||
+                !StringComparer.Ordinal.Equals(persisted.WorkItemId, anchor.WorkItemId) ||
+                persisted.CommandKind != WorkflowExecutionCommandKind.ScheduleActivity)
+            {
+                throw new InvalidOperationException(
+                    $"The durable scheduler queue returned a conflicting item while persisting fused Schedule anchor '{anchor.WorkItemId}'.");
+            }
+
+            enqueuedAnchor = true;
+        }
+
+        if (enqueuedAnchor)
+            await RefreshDurableQueueOrderAsync(durableIds, cancellationToken);
+    }
 
     /// <summary>
     /// Whether any durably persisted outbox item has since reached a completed overlay outcome that the durable store
@@ -589,14 +644,15 @@ public sealed class RuntimeCoalescingSession
         if (_queueSeeded)
             return;
 
-        _queueSeeded = true;
-
+        _durableWorkItemIds.Clear();
         var innerItems = await _innerQueue.ListAllAsync(WorkflowExecutionId, cancellationToken);
         foreach (var item in innerItems)
         {
             await _overlayQueue.EnqueueAsync(item, cancellationToken);
-            _seededWorkItemIds.Add(item.WorkItemId);
+            _durableWorkItemIds.Add(item.WorkItemId);
         }
+
+        _queueSeeded = true;
     }
 
     public async ValueTask<RuntimeSchedulerWorkItem> EnqueueOverlayAsync(RuntimeSchedulerWorkItem workItem, CancellationToken cancellationToken)
@@ -741,9 +797,9 @@ public sealed class RuntimeCoalescingSession
     }
 
     /// <summary>
-    /// Advances the durable inner queue to reflect the coalesced segment: deletes the consumed segment-entry items
-    /// (a FIFO prefix of the seeded items) and durably enqueues any remaining unconsumed continuation. Called only as
-    /// part of a flush, after the folded checkpoint commit has landed durably (condition B).
+    /// Advances the durable inner queue to reflect the coalesced segment: deletes only the maximal consumed FIFO
+    /// prefix and durably enqueues any remaining unconsumed continuation. Called as part of a flush, after the folded
+    /// checkpoint commit has landed durably (condition B).
     /// </summary>
     /// <param name="consumeInFlightClaims">
     /// The overlay lists a claimed work item until its claim completes, so the item whose dispatch triggered this very
@@ -756,12 +812,17 @@ public sealed class RuntimeCoalescingSession
     /// user code, pass <see langword="false"/>: there the durable copy is the crash-redrive guarantee for that user
     /// code and the next flush counts it consumed once its claim completes.
     /// </param>
-    public async ValueTask AdvanceInnerQueueAsync(bool consumeInFlightClaims, CancellationToken cancellationToken)
+    public ValueTask AdvanceInnerQueueAsync(bool consumeInFlightClaims, CancellationToken cancellationToken) =>
+        AdvanceInnerQueueAsync(consumeInFlightClaims, cancellationToken, preserveActiveFusedScheduleAnchors: false);
+
+    internal async ValueTask AdvanceInnerQueueAsync(
+        bool consumeInFlightClaims,
+        CancellationToken cancellationToken,
+        bool preserveActiveFusedScheduleAnchors)
     {
         if (!_queueSeeded)
             return;
 
-        var seeded = new HashSet<string>(_seededWorkItemIds, StringComparer.Ordinal);
         IReadOnlyCollection<RuntimeSchedulerWorkItem> remaining =
             await _overlayQueue.ListAllAsync(WorkflowExecutionId, cancellationToken);
 
@@ -773,21 +834,78 @@ public sealed class RuntimeCoalescingSession
             remaining = remaining.Where(item => !inFlight.Contains(item.WorkItemId)).ToArray();
         }
 
-        var remainingSeeded = remaining.Count(item => seeded.Contains(item.WorkItemId));
-        var consumedSeeded = _seededWorkItemIds.Count - remainingSeeded;
+        var remainingIds = new HashSet<string>(remaining.Select(item => item.WorkItemId), StringComparer.Ordinal);
+        if (preserveActiveFusedScheduleAnchors)
+            remainingIds.UnionWith(_activeFusedScheduleAnchorOrder);
 
-        for (var i = 0; i < consumedSeeded; i++)
-            await _innerQueue.DequeueAsync(WorkflowExecutionId, cancellationToken);
-
-        foreach (var item in remaining)
+        // Queue providers order by their durable work key, not by overlay insertion order. Remove the consumed
+        // maximal prefix before adding any continuation that could sort ahead of its head.
+        var consumedPrefixCount = 0;
+        while (consumedPrefixCount < _durableWorkItemIds.Count &&
+               !remainingIds.Contains(_durableWorkItemIds[consumedPrefixCount]))
         {
-            if (!seeded.Contains(item.WorkItemId))
-                await _innerQueue.EnqueueAsync(item, cancellationToken);
+            consumedPrefixCount++;
         }
 
-        // The durable queue now matches the overlay's remaining frontier. Treat that frontier as the entry point for
-        // a possible next coalesced segment in this drain so a later boundary advances only work consumed since here.
-        _seededWorkItemIds.Clear();
-        _seededWorkItemIds.AddRange(remaining.Select(item => item.WorkItemId));
+        for (var i = 0; i < consumedPrefixCount; i++)
+        {
+            var expectedWorkItemId = _durableWorkItemIds[0];
+            var dequeued = await _innerQueue.DequeueAsync(WorkflowExecutionId, cancellationToken);
+            if (dequeued is null || !StringComparer.Ordinal.Equals(dequeued.WorkItemId, expectedWorkItemId))
+            {
+                throw new InvalidOperationException(
+                    $"The durable scheduler queue did not dequeue the expected FIFO head '{expectedWorkItemId}'.");
+            }
+            _durableWorkItemIds.RemoveAt(0);
+        }
+
+        var expectedDurableIds = CreateDurableWorkItemIdSet();
+        var enqueuedContinuation = false;
+        foreach (var item in remaining)
+        {
+            if (!expectedDurableIds.Add(item.WorkItemId))
+                continue;
+
+            var persisted = await _innerQueue.EnqueueAsync(item, cancellationToken);
+            if (!StringComparer.Ordinal.Equals(persisted.WorkflowExecutionId, WorkflowExecutionId) ||
+                !StringComparer.Ordinal.Equals(persisted.WorkItemId, item.WorkItemId) ||
+                persisted.CommandKind != item.CommandKind)
+            {
+                throw new InvalidOperationException(
+                    $"The durable scheduler queue returned a conflicting item while advancing continuation '{item.WorkItemId}'.");
+            }
+
+            enqueuedContinuation = true;
+        }
+
+        // Enqueue may move an item ahead of older rows by WorkOrderKey. Refresh only after actual missing items were
+        // written, and retain the provider's paged order for the next boundary. Existing rows need no extra read.
+        if (enqueuedContinuation)
+            await RefreshDurableQueueOrderAsync(expectedDurableIds, cancellationToken);
+    }
+
+    private HashSet<string> CreateDurableWorkItemIdSet()
+    {
+        var ids = new HashSet<string>(_durableWorkItemIds, StringComparer.Ordinal);
+        if (ids.Count != _durableWorkItemIds.Count)
+            throw new InvalidOperationException("The tracked durable scheduler queue contains duplicate work-item identities.");
+        return ids;
+    }
+
+    private async ValueTask RefreshDurableQueueOrderAsync(
+        IReadOnlySet<string> expectedIds,
+        CancellationToken cancellationToken)
+    {
+        var actualItems = await _innerQueue.ListAllAsync(WorkflowExecutionId, cancellationToken);
+        var actualIds = actualItems.Select(item => item.WorkItemId).ToArray();
+        var actualIdSet = new HashSet<string>(actualIds, StringComparer.Ordinal);
+        if (actualIdSet.Count != actualIds.Length || !actualIdSet.SetEquals(expectedIds))
+        {
+            throw new InvalidOperationException(
+                "The durable scheduler queue contents changed outside the active coalescing session; its observed order cannot be reconciled safely.");
+        }
+
+        _durableWorkItemIds.Clear();
+        _durableWorkItemIds.AddRange(actualIds);
     }
 }

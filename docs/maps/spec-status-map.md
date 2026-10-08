@@ -155,7 +155,7 @@ Reads current `specs/*` folders and task checkboxes. Status clues are textual, n
 | [120-bpmn-boundary-events](../../specs/120-bpmn-boundary-events/spec.md) | 120-bpmn-boundary-events | Implemented | - | 0 | 0 | superseded, deferred, out of scope |
 | [121-bpmn-multi-instance](../../specs/121-bpmn-multi-instance/spec.md) | 121-bpmn-multi-instance | Implemented | - | 0 | 0 | superseded, retained, deferred, out of scope |
 | [122-bpmn-cyclic-flows](../../specs/122-bpmn-cyclic-flows/spec.md) | 122-bpmn-cyclic-flows | Implemented | - | 0 | 0 | retained, deferred, out of scope |
-| [123-replaysafe-hop-fusion](../../specs/123-replaysafe-hop-fusion/spec.md) | ReplaySafe hop fusion — fused schedule→start→invoke + inline single-predecessor completion (ADR 0047 D1+D2) | unknown | - | 0 | 0 | deferred, out of scope |
+| [123-replaysafe-hop-fusion](../../specs/123-replaysafe-hop-fusion/spec.md) | ReplaySafe hop fusion — fused schedule→start→invoke + inline single-predecessor completion (ADR 0047 D1+D2) | unknown | - | 0 | 0 | retained, deferred, out of scope |
 | [123-runtime-scoped-variable-read](../../specs/123-runtime-scoped-variable-read/spec.md) | 123-runtime-scoped-variable-read | unknown | - | 0 | 0 | retained, deferred, out of scope |
 | [124-bpmn-compensation](../../specs/124-bpmn-compensation/spec.md) | 124-bpmn-compensation | Implemented | - | 0 | 0 | retained, out of scope |
 | [125-bpmn-transactions](../../specs/125-bpmn-transactions/spec.md) | 125-bpmn-transactions | Implemented | - | 0 | 0 | deferred, out of scope |

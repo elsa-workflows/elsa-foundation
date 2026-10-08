@@ -91,6 +91,8 @@ public sealed class CoalescingRuntimeCheckpointCommitStore(
             // itself, so it is validated here before the durable store sees it; every other path forwards the
             // committer's already-validated commit unchanged.
             RuntimeCheckpointCommitValidator.Validate(foldedCommit);
+            if (continueAfterBoundary)
+                await session.EnsureActiveFusedScheduleAnchorsAsync(cancellationToken);
             await CommitInnerAsync(session, foldedCommit, ImmediateDecision, cancellationToken);
             session.InvalidateInspectionBaselines();
             if (capFold)
@@ -106,7 +108,10 @@ public sealed class CoalescingRuntimeCheckpointCommitStore(
             // A deactivating boundary — and a cap fold, whose trailing commit rode the in-flight dispatch — already
             // carries the in-flight item's effect in this flush, so the item must be consumed here instead of surviving
             // as a durable duplicate (see AdvanceInnerQueueAsync). Only the pre-activation attempt boundary keeps it.
-            await session.AdvanceInnerQueueAsync(consumeInFlightClaims: capFold || !continueAfterBoundary, cancellationToken);
+            await session.AdvanceInnerQueueAsync(
+                consumeInFlightClaims: capFold || !continueAfterBoundary,
+                cancellationToken,
+                preserveActiveFusedScheduleAnchors: capFold);
             session.ClearBuffer();
             if (!continueAfterBoundary)
                 session.Deactivate();
@@ -115,12 +120,17 @@ public sealed class CoalescingRuntimeCheckpointCommitStore(
 
         // Nothing buffered: pass this commit straight through, then reconcile the durable queue with any overlay
         // consumption that happened before the first checkpoint.
+        if (continueAfterBoundary)
+            await session.EnsureActiveFusedScheduleAnchorsAsync(cancellationToken);
         var passthrough = await CommitInnerAsync(session, commit, decision, cancellationToken);
         session.InvalidateInspectionBaselines();
         if (continueAfterBoundary)
             session.RecordDurableBoundaryState(commit.StateChanges);
         await session.ReconcileDurablyPersistedOutboxAsync(commit.Checkpoint.OccurredAt, cancellationToken);
-        await session.AdvanceInnerQueueAsync(consumeInFlightClaims: !continueAfterBoundary, cancellationToken);
+        await session.AdvanceInnerQueueAsync(
+            consumeInFlightClaims: !continueAfterBoundary,
+            cancellationToken,
+            preserveActiveFusedScheduleAnchors: false);
         session.ClearBuffer();
         if (!continueAfterBoundary)
             session.Deactivate();
