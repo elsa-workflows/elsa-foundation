@@ -380,11 +380,7 @@ public sealed class WorkflowsDesignApiContractTests
         using var response = await host.Client.SendAsync(request);
 
         Assert.True(response.IsSuccessStatusCode, await response.Content.ReadAsStringAsync());
-        var state = Assert.IsType<WorkflowDefinitionState>(host.Domain.LastSubmittedState);
-        Assert.Equal(AuthoredWorkflowIntrinsicKind.SetOutput, state.RootActivity!.Intrinsic!.Kind);
-        Assert.Equal(AuthoredValueConversionMode.Json, state.RootActivity.Inputs.Single().Conversion!.Mode);
-        Assert.Equal(Elsa.Primitives.Models.CollectionKind.Single, state.RootActivity.Intrinsic.ValueType!.CollectionKind);
-        Assert.Equal(Elsa.Primitives.Models.ValueRepresentation.TextValue, state.Outputs.Single().SourceRepresentation);
+        AssertEnumContractState(host.Domain.LastSubmittedState);
 
         using var responseJson = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
         var responseState = responseJson.RootElement.GetProperty("version").GetProperty("state");
@@ -399,12 +395,14 @@ public sealed class WorkflowsDesignApiContractTests
         // camel-case wire spelling only for the two previously unsupported enum fields.
         var studioBody = body
             .Replace("\"setOutput\"", "\"SetOutput\"", StringComparison.Ordinal)
+            .Replace("\"json\"", "\"Json\"", StringComparison.Ordinal)
             .Replace("\"single\"", "\"Single\"", StringComparison.Ordinal)
             .Replace("\"textValue\"", "\"TextValue\"", StringComparison.Ordinal);
         using var studioRequest = LifecycleRequest(HttpMethod.Post, "/design/workflows/definitions/submit", studioBody);
         using var studioResponse = await host.Client.SendAsync(studioRequest);
 
         Assert.True(studioResponse.IsSuccessStatusCode, await studioResponse.Content.ReadAsStringAsync());
+        AssertEnumContractState(host.Domain.LastSubmittedState);
     }
 
     [Theory]
@@ -578,6 +576,15 @@ public sealed class WorkflowsDesignApiContractTests
         };
         request.Headers.TryAddWithoutValidation(AuthorizationHost.IdentityHeader, "trusted-manage");
         return request;
+    }
+
+    private static void AssertEnumContractState(WorkflowDefinitionState? submittedState)
+    {
+        var state = Assert.IsType<WorkflowDefinitionState>(submittedState);
+        Assert.Equal(AuthoredWorkflowIntrinsicKind.SetOutput, state.RootActivity!.Intrinsic!.Kind);
+        Assert.Equal(AuthoredValueConversionMode.Json, state.RootActivity.Inputs.Single().Conversion!.Mode);
+        Assert.Equal(Elsa.Primitives.Models.CollectionKind.Single, state.RootActivity.Intrinsic.ValueType!.CollectionKind);
+        Assert.Equal(Elsa.Primitives.Models.ValueRepresentation.TextValue, state.Outputs.Single().SourceRepresentation);
     }
 
     private static async Task AssertWorkflowDesignProblemAsync(HttpResponseMessage response, HttpStatusCode expectedStatus)
