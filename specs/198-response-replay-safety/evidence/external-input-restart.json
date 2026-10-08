@@ -1,0 +1,153 @@
+{
+  "schema": "response-replay-external-input-restart/v1",
+  "baseCommit": "b46f5587a9f187ed27912eb99d36fa5d361b13ec",
+  "productionChangeInThisIncrement": false,
+  "settings": {
+    "provider": "EF SQLite",
+    "cadence": "Coalesced",
+    "maxSegmentCheckpoints": 2,
+    "fusionEnabled": false,
+    "externalPayloadStore": "test-only stable file provider implementing IExternalPayloadStore",
+    "primary": "HttpEndpoint -> SetVariable -> WriteHttpResponse",
+    "input": "Alice / Smith",
+    "committedResponse": "HTTP200 text/plain Alice Smith"
+  },
+  "focused": {
+    "exitCode": 0,
+    "sourceHashes": {
+      "tests/essentials/Activities/Http/IntegrationTests/Fixtures/ResponseReplayHost/Program.cs": "db455318aa16546d5fd5b56e428866109c10ef7616917def3caea3281bf4dbb8",
+      "tests/essentials/Activities/Http/IntegrationTests/Fixtures/ResponseReplayHost/ResponseReplayCommitGate.cs": "6d8fc06211cc6c1243faffca818b3037e9dcad4fa3ecf1c19ad7acb11aeab6bf",
+      "tests/essentials/Activities/Http/IntegrationTests/Fixtures/ResponseReplayHost/ResponseReplayPublicationHost.cs": "86390bb95d3a3c3789ca13277f7c068f7a78b6a511677ce12a82c834b7eff60b",
+      "tests/essentials/Activities/Http/IntegrationTests/Fixtures/ResponseReplayHost/ResponseReplayFileExternalPayloadStore.cs": "8609d420e5385051ed208575aecc515e5043b4eea1e3c540df8c2923c00dcad5",
+      "tests/essentials/Activities/Http/IntegrationTests/ResponseReplaySafetyProcessTests.cs": "65ac38b2d428e741b307d6d5d41f7ff8c376867719b60de97d25372dc45d5aa7"
+    },
+    "sourcesUnchanged": true,
+    "testCounters": {
+      "total": "1",
+      "executed": "1",
+      "passed": "1",
+      "failed": "0",
+      "error": "0",
+      "timeout": "0",
+      "aborted": "0",
+      "inconclusive": "0",
+      "passedButRunAborted": "0",
+      "notRunnable": "0",
+      "notExecuted": "0",
+      "disconnected": "0",
+      "warning": "0",
+      "completed": "0",
+      "inProgress": "0",
+      "pending": "0"
+    },
+    "trxSha256": "c01e81adbfa20812af128c3819b54eed8e4f9ddbc50b37948604b0ca6738034f",
+    "logSha256": "5072e19aafe22952de8e8535c67cd4a9701a4e7ba418f010d7728d9bde609b34",
+    "receiptSha256": "3a0c06e8818126fd9d8013dc3398e5ac4046ce7c4a79c0256c590d82a33389c6",
+    "uptime": "8:53  up 8 days, 20:19, 2 users, load averages: 51.42 35.41 27.05"
+  },
+  "completeHttpIntegrationProject": {
+    "exitCode": 0,
+    "sourceHashes": {
+      "tests/essentials/Activities/Http/IntegrationTests/Fixtures/ResponseReplayHost/Program.cs": "db455318aa16546d5fd5b56e428866109c10ef7616917def3caea3281bf4dbb8",
+      "tests/essentials/Activities/Http/IntegrationTests/Fixtures/ResponseReplayHost/ResponseReplayCommitGate.cs": "6d8fc06211cc6c1243faffca818b3037e9dcad4fa3ecf1c19ad7acb11aeab6bf",
+      "tests/essentials/Activities/Http/IntegrationTests/Fixtures/ResponseReplayHost/ResponseReplayPublicationHost.cs": "86390bb95d3a3c3789ca13277f7c068f7a78b6a511677ce12a82c834b7eff60b",
+      "tests/essentials/Activities/Http/IntegrationTests/Fixtures/ResponseReplayHost/ResponseReplayFileExternalPayloadStore.cs": "8609d420e5385051ed208575aecc515e5043b4eea1e3c540df8c2923c00dcad5",
+      "tests/essentials/Activities/Http/IntegrationTests/ResponseReplaySafetyProcessTests.cs": "65ac38b2d428e741b307d6d5d41f7ff8c376867719b60de97d25372dc45d5aa7"
+    },
+    "sourcesUnchanged": true,
+    "testCounters": {
+      "total": "40",
+      "executed": "40",
+      "passed": "40",
+      "failed": "0",
+      "error": "0",
+      "timeout": "0",
+      "aborted": "0",
+      "inconclusive": "0",
+      "passedButRunAborted": "0",
+      "notRunnable": "0",
+      "notExecuted": "0",
+      "disconnected": "0",
+      "warning": "0",
+      "completed": "0",
+      "inProgress": "0",
+      "pending": "0"
+    },
+    "trxSha256": "ea43b2956184c076f29843c8e8f894022d4ffe29d84cb7ec114deaab06498750",
+    "logSha256": "f205043619a876c1316729ba56f8af9a4556f44f275d4604bb98f3647a80459b",
+    "receiptSha256": "d7ec2605ccfb121bd1a04f250148b02430c5a9ecc0442ba35566216d92dd769f",
+    "uptime": "8:58  up 8 days, 20:24, 2 users, load averages: 17.24 35.15 30.39"
+  },
+  "rootReadback": {
+    "utc": "2026-10-08T06:59:40.399087+00:00",
+    "executionId": "14BM4QofeAu",
+    "status": "Completed",
+    "counts": {
+      "elsa_runtime_scheduler_work_item": 0,
+      "elsa_runtime_incident_state": 0
+    },
+    "targetInvokeOutbox": "Delivered",
+    "gateCheckpoint": "ActivityStarted",
+    "gateCadenceCap": 2,
+    "gateResponseState": "Running",
+    "externalPayloadSha256": "5ed21b7f0020465ee241735760f59befa29ed1248798b7e1eb3de057819078bf",
+    "crashedProcessId": 25805,
+    "recoveryProcessId": 27635,
+    "distinctProviderInstances": true,
+    "databaseBackupSha256": "cc4246ff0293a14097da67a8015a30477e0ae2d4e0aa5ba8dcccc95a219edd85",
+    "limitation": "Coalesced cap2 with fusion disabled; this does not prove fused cap recovery.",
+    "privateReadbackSha256": "129848bab084cbe8ab1b9716a7576afc4edc90fae8a9deca1ef8cb6f760dd912"
+  },
+  "stageExitCodes": {
+    "normal-runtime-recovery": 0,
+    "response-replay-crash-window": 137,
+    "publication-setup": 0
+  },
+  "retainedFailedAttempts": [
+    {
+      "attempt": 1,
+      "exitCode": 1,
+      "receiptSha256": "640807b956c019e975d686fae5b70f14f27ff534e02e7e433a445bf97aa79ef4"
+    },
+    {
+      "attempt": 2,
+      "exitCode": 1,
+      "receiptSha256": "1e1a10649d3486a9239040e289a8bf019a9a6bff0ea04e7644b2b933056f964f"
+    },
+    {
+      "attempt": 3,
+      "exitCode": 1,
+      "receiptSha256": "af49816098d5acba0cc415aaec701d983df8d59ee76aa4574e284f8e385aa38e"
+    },
+    {
+      "attempt": 4,
+      "exitCode": 1,
+      "receiptSha256": "3104827c83167c6c240a92b9a173f3d50714147a57a4ff5dda2dc3b177860327"
+    },
+    {
+      "attempt": 5,
+      "exitCode": 1,
+      "receiptSha256": "8d3b137bd5e0af3035c5a56d0aa7d74cb5e3fcb1b60d5f8e5d8a3e0c42fe11ab"
+    },
+    {
+      "attempt": 6,
+      "exitCode": 1,
+      "receiptSha256": "4d721212a6e58d0934ff8ff90e2babe5d1c384e8d6cd495fe54b624683d5ccf0"
+    },
+    {
+      "attempt": 7,
+      "exitCode": 1,
+      "receiptSha256": "b9dca81bd5c2832eeb6dc104e56d13b7281c64223a96add363cf1d61820c4fd2"
+    }
+  ],
+  "evidenceHashes": {
+    "gateMessages": "896afe8dcd38d28bd68236f1334d083f26067afdc03a24adf475b8cbb099cd43",
+    "publishedClosure": "bbc09da0d0269830d7c1a4fbf74dffb45d9ec3575848ef30e2c53207b74fcf4b"
+  },
+  "limitations": [
+    "No original HTTP connection is claimed to survive process loss; proof is the equivalent committed response instruction and terminal output.",
+    "The supported provider contract is exercised by a test-only file-backed provider; no production payload provider is added.",
+    "Fusion is disabled for this external-input cut. The separate fused checkpoint recovery defect is tracked by #2497.",
+    "This is correctness evidence, not timing or final PostgreSQL query accounting."
+  ]
+}

@@ -28,6 +28,8 @@ public sealed class ResponseReplaySafetyProcessTests
     private const string HttpNodeId = "http-in";
     private const string ResponseNodeId = "write-response";
     private const string ReplayCorrelationHeader = "X-Response-Replay-Correlation";
+    private const string ExternalPayloadRoutePath = "response-replay-external-input";
+    private const string ExternalPayloadProfile = "response-replay-file-v1";
     private static readonly JsonSerializerOptions RuntimeJsonOptions = CreateRuntimeJsonOptions();
     private readonly ITestOutputHelper _output;
 
@@ -362,7 +364,14 @@ public sealed class ResponseReplaySafetyProcessTests
     }
 
     [Fact]
-    public async Task ReplaySafeResponseCompletion_IsRecoveredAfterHardProcessLossWithoutResendingRequest()
+    public Task ReplaySafeResponseCompletion_IsRecoveredAfterHardProcessLossWithoutResendingRequest() =>
+        RunHardCrashRecoveryProofAsync(useExternalBodyPayload: false);
+
+    [Fact]
+    public Task ExternalBodyReference_IsReadAgainAfterHardProcessLossAndRestart() =>
+        RunHardCrashRecoveryProofAsync(useExternalBodyPayload: true);
+
+    private async Task RunHardCrashRecoveryProofAsync(bool useExternalBodyPayload)
     {
         var repositoryRoot = FindRepositoryRoot();
         var fixtureDirectory = Path.Combine(repositoryRoot,
@@ -374,24 +383,28 @@ public sealed class ResponseReplaySafetyProcessTests
 
         using var manifest = JsonDocument.Parse(await File.ReadAllTextAsync(manifestPath));
         var baselinePublication = manifest.RootElement.GetProperty("publication");
-        var routePath = baselinePublication.GetProperty("routePath").GetString()
+        var baselineRoutePath = baselinePublication.GetProperty("routePath").GetString()
             ?? throw new InvalidDataException("The immutable baseline manifest has no endpoint route path.");
+        var routePath = useExternalBodyPayload ? ExternalPayloadRoutePath : baselineRoutePath;
         var configuration = new DirectoryInfo(AppContext.BaseDirectory).Parent!.Name;
         var childDll = Path.Combine(childProjectDirectory, "bin", configuration, "net10.0", "ResponseReplayHost.dll");
         Assert.True(File.Exists(childDll), $"The referenced child project was not built: {childDll}");
 
-        var ownedRoot = Path.Combine(Path.GetTempPath(), $"elsa-response-replay-t009-{Guid.NewGuid():N}");
+        var ownedRoot = Path.Combine(Path.GetTempPath(), $"elsa-response-replay-{(useExternalBodyPayload ? "t019" : "t009")}-{Guid.NewGuid():N}");
         Directory.CreateDirectory(ownedRoot);
         var databasePath = Path.Combine(ownedRoot, "runtime.db");
+        var externalPayloadRoot = Path.Combine(ownedRoot, "external-payloads");
         var retainSuccessfulEvidence = string.Equals(
             Environment.GetEnvironmentVariable("ELSA_RESPONSE_REPLAY_RETAIN_EVIDENCE"), "1", StringComparison.Ordinal);
         var passed = false;
 
         try
         {
+            var setupArguments = useExternalBodyPayload
+                ? new[] { "--external-input-publication-proof", closurePath, databasePath, ownedRoot, externalPayloadRoot }
+                : new[] { "--publication-proof", closurePath, databasePath, ownedRoot };
             var setup = await RunChildProcessAsync(
-                childDll, ownedRoot, TimeSpan.FromSeconds(150), "response-replay publication setup",
-                "--publication-proof", closurePath, databasePath, ownedRoot);
+                childDll, ownedRoot, TimeSpan.FromSeconds(150), "response-replay publication setup", setupArguments);
             Assert.Equal(0, setup.ExitCode);
             using var setupResult = ReadSingleResult(setup.Stdout, PublicationResultPrefix);
             var publication = setupResult.RootElement;
@@ -400,20 +413,35 @@ public sealed class ResponseReplaySafetyProcessTests
             Assert.Equal("ReplaySafe", publication.GetProperty("candidateProfile").GetString());
             Assert.Equal(candidateArtifactHash, publication.GetProperty("candidateExecutableArtifactHash").GetString());
             Assert.Equal(candidateArtifactId, publication.GetProperty("activeSharedRouteArtifactId").GetString());
+            if (useExternalBodyPayload)
+            {
+                Assert.Equal(ExternalPayloadRoutePath, publication.GetProperty("candidateRoutePath").GetString());
+                Assert.Equal(ExternalPayloadProfile, publication.GetProperty("candidateBodyStorageProfile").GetString());
+                Assert.Equal("2", publication.GetProperty("candidateCheckpointMaxSegmentCheckpoints").GetString());
+            }
 
             var existingCandidateExecutionIds = await ReadCandidateExecutionIdsAsync(databasePath, candidateArtifactId);
             Assert.Contains(publication.GetProperty("candidateHttpExecutionId").GetString()!, existingCandidateExecutionIds);
             Assert.Single(existingCandidateExecutionIds);
 
             var pipeName = $"rr-{Guid.NewGuid():N}"[..19];
-            var correlationId = $"t009-{Guid.NewGuid():N}";
+            var correlationId = $"{(useExternalBodyPayload ? "t019" : "t009")}-{Guid.NewGuid():N}";
             var endpoint = new NamedPipeServerStream(
                 pipeName, PipeDirection.InOut, 1, PipeTransmissionMode.Byte, PipeOptions.Asynchronous);
             await using var pipeServer = endpoint;
+            var crashArguments = useExternalBodyPayload
+                ? new[]
+                {
+                    "--external-input-crash-stage", closurePath, databasePath, ownedRoot, pipeName,
+                    candidateArtifactId, candidateArtifactHash, correlationId, externalPayloadRoot
+                }
+                : new[]
+                {
+                    "--crash-stage", closurePath, databasePath, ownedRoot, pipeName,
+                    candidateArtifactId, candidateArtifactHash, correlationId
+                };
             await using var crashChild = StartChildProcess(
-                childDll, ownedRoot, "response-replay crash-window child",
-                "--crash-stage", closurePath, databasePath, ownedRoot, pipeName,
-                candidateArtifactId, candidateArtifactHash, correlationId);
+                childDll, ownedRoot, "response-replay crash-window child", crashArguments);
 
             await WaitForPipeConnectionAsync(pipeServer, crashChild, TimeSpan.FromMinutes(2));
             using var reader = new StreamReader(pipeServer, new UTF8Encoding(false), false, 1024, leaveOpen: true);
@@ -445,7 +473,7 @@ public sealed class ResponseReplaySafetyProcessTests
             var attemptId = AssertNonEmpty(claim.GetProperty("attemptId").GetString());
 
             var durableClaim = await ReadIndependentRuntimeStateAsync(databasePath, executionId);
-            AssertEffectiveCoalescedCadence(durableClaim.Execution);
+            AssertEffectiveCoalescedCadence(durableClaim.Execution, useExternalBodyPayload ? "2" : "50");
             var claimLease = AssertDurableRequestAndClaim(
                 durableClaim, candidateArtifactId, candidateArtifactHash, routePath, correlationId,
                 endpointActivityExecutionId, schedulerWorkItemId, commandId, attemptId, childOwnerId);
@@ -453,56 +481,137 @@ public sealed class ResponseReplaySafetyProcessTests
             await SendGateCommandAsync(writer, "continue", gateEvidencePath);
 
             using var responseMessage = await ReadGateMessageAsync(reader, TimeSpan.FromMinutes(2), gateEvidencePath);
-            Assert.Equal("response-buffered", responseMessage.RootElement.GetProperty("type").GetString());
             var response = responseMessage.RootElement.GetProperty("payload");
-            Assert.Equal(executionId, response.GetProperty("executionId").GetString());
-            Assert.Equal(candidateArtifactId, response.GetProperty("artifactId").GetString());
-            Assert.Equal(candidateArtifactHash, response.GetProperty("artifactHash").GetString());
-            Assert.Equal(HttpNodeId, response.GetProperty("endpointNodeId").GetString());
-            Assert.Equal(endpointActivityExecutionId, response.GetProperty("endpointActivityExecutionId").GetString());
-            Assert.Equal(schedulerWorkItemId, response.GetProperty("schedulerWorkItemId").GetString());
-            Assert.Equal(commandId, response.GetProperty("commandId").GetString());
-            Assert.Equal(attemptId, response.GetProperty("claimAttemptId").GetString());
-            Assert.Equal(ResponseNodeId, response.GetProperty("responseNodeId").GetString());
-            Assert.True(response.GetProperty("sessionActive").GetBoolean());
-            Assert.True(response.GetProperty("sessionAppliesToExecution").GetBoolean());
-            Assert.True(response.GetProperty("hasBufferedChanges").GetBoolean());
-            Assert.True(response.GetProperty("hopCount").GetInt32() > 0);
-            Assert.Equal("Deferred", response.GetProperty("decision").GetString());
-            AssertNonEmpty(response.GetProperty("responseActivityExecutionId").GetString());
-            Assert.Equal(200, response.GetProperty("instruction").GetProperty("statusCode").GetInt32());
-            Assert.Equal("Alice Smith", response.GetProperty("instruction").GetProperty("body").GetString());
-            Assert.Equal("text/plain", response.GetProperty("instruction").GetProperty("contentType").GetString());
-            Assert.Equal(0, response.GetProperty("instruction").GetProperty("headerCount").GetInt32());
-
             var durableWindow = await ReadIndependentRuntimeStateAsync(databasePath, executionId);
-            AssertEffectiveCoalescedCadence(durableWindow.Execution);
-            var windowLease = AssertDurableRequestAndClaim(
-                durableWindow, candidateArtifactId, candidateArtifactHash, routePath, correlationId,
-                endpointActivityExecutionId, schedulerWorkItemId, commandId, attemptId, childOwnerId);
-            Assert.False(durableWindow.ActivityStates.Any(state =>
-                    StringComparer.Ordinal.Equals(state.Execution.AuthoredActivityId, ResponseNodeId) && state.Completion is not null),
-                "A response-node completion was already durable before the parent kill boundary.");
+            AssertEffectiveCoalescedCadence(durableWindow.Execution, useExternalBodyPayload ? "2" : "50");
+
+            RuntimeExecutionLease windowLease;
+            ExternalBodyReferenceSnapshot? externalBodyReference = null;
+            string? pendingInvokeOutboxItemId = null;
+            ExternalPayloadOperation? crashWrite = null;
+            if (useExternalBodyPayload)
+            {
+                Assert.Equal("response-activity-started", responseMessage.RootElement.GetProperty("type").GetString());
+                Assert.Equal("ActivityStarted", response.GetProperty("checkpointName").GetString());
+                Assert.Equal(executionId, response.GetProperty("executionId").GetString());
+                Assert.Equal(candidateArtifactId, response.GetProperty("artifactId").GetString());
+                Assert.Equal(candidateArtifactHash, response.GetProperty("artifactHash").GetString());
+                Assert.Equal(ResponseNodeId, response.GetProperty("responseNodeId").GetString());
+                Assert.Equal("Running", response.GetProperty("responseStatus").GetString());
+                Assert.True(response.GetProperty("sessionActive").GetBoolean());
+                Assert.True(response.GetProperty("sessionAppliesToExecution").GetBoolean());
+                Assert.Equal(2, response.GetProperty("maxSegmentCheckpoints").GetInt32());
+                Assert.Equal("InvokeActivity", response.GetProperty("invokeCommandKind").GetString());
+
+                AssertDurableRequestAndTrigger(durableWindow, candidateArtifactId, candidateArtifactHash, routePath, correlationId);
+                var responseActivityExecutionId = AssertNonEmpty(response.GetProperty("responseActivityExecutionId").GetString());
+                externalBodyReference = AssertExternalResponseBodyReference(
+                    durableWindow, responseActivityExecutionId, externalPayloadRoot, ActivityExecutionStatus.Running);
+                var gateBody = response.GetProperty("responseInputBody");
+                Assert.Equal("Present", gateBody.GetProperty("presence").GetString());
+                Assert.False(gateBody.GetProperty("inlineValuePresent").GetBoolean());
+                Assert.Equal("External", gateBody.GetProperty("storage").GetString());
+                Assert.Equal(ExternalPayloadProfile, gateBody.GetProperty("storageProfile").GetString());
+                Assert.Equal(externalBodyReference.Locator, gateBody.GetProperty("locator").GetString());
+                Assert.Equal(externalBodyReference.EnvelopeTypeAlias, gateBody.GetProperty("typeAlias").GetString());
+                Assert.Equal(externalBodyReference.EnvelopeCollectionKind, gateBody.GetProperty("collectionKind").GetString());
+                Assert.Equal(externalBodyReference.EnvelopeSchemaVersion,
+                    gateBody.GetProperty("schemaVersion").ValueKind == JsonValueKind.Null
+                        ? null
+                        : gateBody.GetProperty("schemaVersion").GetInt32());
+                Assert.Equal(externalBodyReference.EnvelopeSchema,
+                    gateBody.GetProperty("schema").ValueKind == JsonValueKind.Null
+                        ? null
+                        : gateBody.GetProperty("schema").GetString());
+                var gateMetadata = JsonSerializer.Deserialize<Dictionary<string, string>>(
+                    gateBody.GetProperty("metadata").GetRawText())
+                    ?? throw new InvalidDataException("The ActivityStarted gate did not report external Body metadata.");
+                Assert.Equal(externalBodyReference.CanonicalMetadata, CanonicalizeMetadata(gateMetadata));
+                Assert.Equal(externalBodyReference.PayloadSha256,
+                    gateBody.GetProperty("metadata").GetProperty("payloadSha256").GetString());
+
+                var gateInvokeOutboxItemId = AssertNonEmpty(response.GetProperty("invokeOutboxItemId").GetString());
+                pendingInvokeOutboxItemId = gateInvokeOutboxItemId;
+                AssertPendingResponseInvokeOutbox(
+                    durableWindow, pendingInvokeOutboxItemId, executionId, responseActivityExecutionId,
+                    candidateArtifactId, candidateArtifactHash);
+                windowLease = AssertOwnerLeaseIdentity(durableWindow, childOwnerId);
+                var operations = ReadExternalPayloadOperations(externalPayloadRoot);
+                crashWrite = operations.FirstOrDefault(operation =>
+                    operation.Operation == "write" &&
+                    operation.ProcessId == childProcessId &&
+                    operation.Locator == externalBodyReference.Locator &&
+                    operation.PayloadSha256 == externalBodyReference.PayloadSha256);
+                Assert.NotNull(crashWrite);
+                await SendGateCommandAsync(writer, "external-input-window-confirmed", gateEvidencePath);
+            }
+            else
+            {
+                Assert.Equal("response-buffered", responseMessage.RootElement.GetProperty("type").GetString());
+                Assert.Equal(executionId, response.GetProperty("executionId").GetString());
+                Assert.Equal(candidateArtifactId, response.GetProperty("artifactId").GetString());
+                Assert.Equal(candidateArtifactHash, response.GetProperty("artifactHash").GetString());
+                Assert.Equal(HttpNodeId, response.GetProperty("endpointNodeId").GetString());
+                Assert.Equal(endpointActivityExecutionId, response.GetProperty("endpointActivityExecutionId").GetString());
+                Assert.Equal(schedulerWorkItemId, response.GetProperty("schedulerWorkItemId").GetString());
+                Assert.Equal(commandId, response.GetProperty("commandId").GetString());
+                Assert.Equal(attemptId, response.GetProperty("claimAttemptId").GetString());
+                Assert.Equal(ResponseNodeId, response.GetProperty("responseNodeId").GetString());
+                Assert.True(response.GetProperty("sessionActive").GetBoolean());
+                Assert.True(response.GetProperty("sessionAppliesToExecution").GetBoolean());
+                Assert.True(response.GetProperty("hasBufferedChanges").GetBoolean());
+                Assert.True(response.GetProperty("hopCount").GetInt32() > 0);
+                Assert.Equal("Deferred", response.GetProperty("decision").GetString());
+                AssertNonEmpty(response.GetProperty("responseActivityExecutionId").GetString());
+                Assert.Equal(200, response.GetProperty("instruction").GetProperty("statusCode").GetInt32());
+                Assert.Equal("Alice Smith", response.GetProperty("instruction").GetProperty("body").GetString());
+                Assert.Equal("text/plain", response.GetProperty("instruction").GetProperty("contentType").GetString());
+                Assert.Equal(0, response.GetProperty("instruction").GetProperty("headerCount").GetInt32());
+
+                windowLease = AssertDurableRequestAndClaim(
+                    durableWindow, candidateArtifactId, candidateArtifactHash, routePath, correlationId,
+                    endpointActivityExecutionId, schedulerWorkItemId, commandId, attemptId, childOwnerId);
+                Assert.False(durableWindow.ActivityStates.Any(state =>
+                        StringComparer.Ordinal.Equals(state.Execution.AuthoredActivityId, ResponseNodeId) && state.Completion is not null),
+                    "A response-node completion was already durable before the parent kill boundary.");
+            }
+
             AssertOwnerLeaseLive(windowLease, DateTimeOffset.UtcNow);
             AssertSameOwnerLease(claimLease, windowLease);
 
-            // The child never receives a response-barrier acknowledgement, so it must still be alive inside CommitAsync.
+            // T009 never receives an acknowledgement; T019's acknowledgement only confirms the parent read the
+            // durable ActivityStarted/outbox/reference window. Both barriers remain held until this process kill.
             Assert.False(crashChild.HasExited, "The child left the response barrier before the parent could kill it.");
             var killedChild = await crashChild.KillAndWaitAsync();
             Assert.NotEqual(0, killedChild.ExitCode);
 
             var afterKill = await ReadIndependentRuntimeStateAsync(databasePath, executionId);
-            AssertEffectiveCoalescedCadence(afterKill.Execution);
+            AssertEffectiveCoalescedCadence(afterKill.Execution, useExternalBodyPayload ? "2" : "50");
             Assert.Equal(durableWindow.Execution.SystemMetadata[RuntimeMetadataKeys.CheckpointCadence],
                 afterKill.Execution.SystemMetadata[RuntimeMetadataKeys.CheckpointCadence]);
             Assert.Equal(durableWindow.Execution.SystemMetadata[RuntimeMetadataKeys.CheckpointMaxSegmentCheckpoints],
                 afterKill.Execution.SystemMetadata[RuntimeMetadataKeys.CheckpointMaxSegmentCheckpoints]);
-            var killedOwnerLease = AssertDurableRequestAndClaim(
-                afterKill, candidateArtifactId, candidateArtifactHash, routePath, correlationId,
-                endpointActivityExecutionId, schedulerWorkItemId, commandId, attemptId, childOwnerId);
-            Assert.False(afterKill.ActivityStates.Any(state =>
-                    StringComparer.Ordinal.Equals(state.Execution.AuthoredActivityId, ResponseNodeId) && state.Completion is not null),
-                "A response-node completion became durable during the process kill.");
+            RuntimeExecutionLease killedOwnerLease;
+            if (useExternalBodyPayload)
+            {
+                AssertDurableRequestAndTrigger(afterKill, candidateArtifactId, candidateArtifactHash, routePath, correlationId);
+                var responseActivityExecutionId = response.GetProperty("responseActivityExecutionId").GetString()!;
+                Assert.Equal(externalBodyReference, AssertExternalResponseBodyReference(
+                    afterKill, responseActivityExecutionId, externalPayloadRoot, ActivityExecutionStatus.Running));
+                AssertPendingResponseInvokeOutbox(
+                    afterKill, pendingInvokeOutboxItemId!, executionId, responseActivityExecutionId,
+                    candidateArtifactId, candidateArtifactHash);
+                killedOwnerLease = AssertOwnerLeaseIdentity(afterKill, childOwnerId);
+            }
+            else
+            {
+                killedOwnerLease = AssertDurableRequestAndClaim(
+                    afterKill, candidateArtifactId, candidateArtifactHash, routePath, correlationId,
+                    endpointActivityExecutionId, schedulerWorkItemId, commandId, attemptId, childOwnerId);
+                Assert.False(afterKill.ActivityStates.Any(state =>
+                        StringComparer.Ordinal.Equals(state.Execution.AuthoredActivityId, ResponseNodeId) && state.Completion is not null),
+                    "A response-node completion became durable during the process kill.");
+            }
             AssertSameOwnerLease(windowLease, killedOwnerLease);
 
             // Hold restart until the persisted owner lease is stale. This exercises recovery after the real owner
@@ -516,18 +625,42 @@ public sealed class ResponseReplaySafetyProcessTests
                 await Task.Delay(waitForOwnerLease);
 
             var eligibleState = await ReadIndependentRuntimeStateAsync(databasePath, executionId);
-            AssertEffectiveCoalescedCadence(eligibleState.Execution);
-            var eligibleOwnerLease = AssertDurableRequestAndClaim(
-                eligibleState, candidateArtifactId, candidateArtifactHash, routePath, correlationId,
-                endpointActivityExecutionId, schedulerWorkItemId, commandId, attemptId, childOwnerId);
+            AssertEffectiveCoalescedCadence(eligibleState.Execution, useExternalBodyPayload ? "2" : "50");
+            RuntimeExecutionLease eligibleOwnerLease;
+            if (useExternalBodyPayload)
+            {
+                AssertDurableRequestAndTrigger(eligibleState, candidateArtifactId, candidateArtifactHash, routePath, correlationId);
+                var responseActivityExecutionId = response.GetProperty("responseActivityExecutionId").GetString()!;
+                Assert.Equal(externalBodyReference, AssertExternalResponseBodyReference(
+                    eligibleState, responseActivityExecutionId, externalPayloadRoot, ActivityExecutionStatus.Running));
+                AssertPendingResponseInvokeOutbox(
+                    eligibleState, pendingInvokeOutboxItemId!, executionId, responseActivityExecutionId,
+                    candidateArtifactId, candidateArtifactHash);
+                eligibleOwnerLease = AssertOwnerLeaseIdentity(eligibleState, childOwnerId);
+            }
+            else
+            {
+                eligibleOwnerLease = AssertDurableRequestAndClaim(
+                    eligibleState, candidateArtifactId, candidateArtifactHash, routePath, correlationId,
+                    endpointActivityExecutionId, schedulerWorkItemId, commandId, attemptId, childOwnerId);
+            }
             AssertSameOwnerLease(killedOwnerLease, eligibleOwnerLease);
             Assert.True(DateTimeOffset.UtcNow >= eligibleOwnerLease.ExpiresAt.AddSeconds(1),
                 "The persisted execution-owner lease has not expired for the controlled stale-owner restart.");
 
+            var recoveryArguments = useExternalBodyPayload
+                ? new[]
+                {
+                    "--external-input-resume-recovery", closurePath, databasePath, ownedRoot,
+                    executionId, candidateArtifactId, candidateArtifactHash, externalPayloadRoot
+                }
+                : new[]
+                {
+                    "--resume-recovery", closurePath, databasePath, ownedRoot,
+                    executionId, candidateArtifactId, candidateArtifactHash
+                };
             var recovery = await RunChildProcessAsync(
-                childDll, ownedRoot, TimeSpan.FromMinutes(4), "normal runtime recovery child",
-                "--resume-recovery", closurePath, databasePath, ownedRoot,
-                executionId, candidateArtifactId, candidateArtifactHash);
+                childDll, ownedRoot, TimeSpan.FromMinutes(4), "normal runtime recovery child", recoveryArguments);
             Assert.Equal(0, recovery.ExitCode);
             using var recoveryResult = ReadSingleResult(recovery.Stdout, RecoveryResultPrefix);
             var recovered = recoveryResult.RootElement;
@@ -545,7 +678,7 @@ public sealed class ResponseReplaySafetyProcessTests
 
             var finalState = await ReadIndependentRuntimeStateAsync(databasePath, executionId);
             AssertDurableRequestAndTrigger(finalState, candidateArtifactId, candidateArtifactHash, routePath, correlationId);
-            AssertEffectiveCoalescedCadence(finalState.Execution);
+            AssertEffectiveCoalescedCadence(finalState.Execution, useExternalBodyPayload ? "2" : "50");
             Assert.Equal(durableWindow.Execution.SystemMetadata[RuntimeMetadataKeys.CheckpointCadence],
                 finalState.Execution.SystemMetadata[RuntimeMetadataKeys.CheckpointCadence]);
             Assert.Equal(durableWindow.Execution.SystemMetadata[RuntimeMetadataKeys.CheckpointMaxSegmentCheckpoints],
@@ -556,6 +689,28 @@ public sealed class ResponseReplaySafetyProcessTests
             Assert.Equal("Alice Smith", ReadStringVariable(finalState.Execution.RootVariableFrame!, "referenceText"));
             var finalResponse = Assert.Single(finalState.ActivityStates,
                 state => state.Execution.AuthoredActivityId == ResponseNodeId && state.Completion is not null);
+            if (useExternalBodyPayload)
+            {
+                var responseActivityExecutionId = response.GetProperty("responseActivityExecutionId").GetString()!;
+                Assert.Equal(responseActivityExecutionId, finalResponse.Execution.ActivityExecutionId);
+                Assert.Equal(externalBodyReference, AssertExternalResponseBodyReference(
+                    finalState, responseActivityExecutionId, externalPayloadRoot, ActivityExecutionStatus.Completed));
+                var deliveredOutbox = Assert.Single(finalState.OutboxItems,
+                    item => StringComparer.Ordinal.Equals(item.Item.OutboxItemId, pendingInvokeOutboxItemId));
+                Assert.Equal(RuntimePostCommitOutboxStatus.Delivered, deliveredOutbox.Item.Status);
+                Assert.Equal((int)RuntimePostCommitOutboxStatus.Delivered, deliveredOutbox.Row.Status);
+
+                var recoveryProcessId = recovered.GetProperty("hostProcessId").GetInt32();
+                Assert.NotEqual(childProcessId, recoveryProcessId);
+                var externalWrite = Assert.IsType<ExternalPayloadOperation>(crashWrite);
+                var recoveryRead = ReadExternalPayloadOperations(externalPayloadRoot).FirstOrDefault(operation =>
+                    operation.Operation == "read" &&
+                    operation.ProcessId == recoveryProcessId &&
+                    operation.Locator == externalBodyReference!.Locator &&
+                    operation.PayloadSha256 == externalBodyReference.PayloadSha256);
+                Assert.NotNull(recoveryRead);
+                Assert.NotEqual(externalWrite.ProviderInstanceId, recoveryRead.ProviderInstanceId);
+            }
             var finalInstruction = finalResponse.Completion!.Result.InlineValue!.Value;
             Assert.Equal(200, finalInstruction.GetProperty("statusCode").GetInt32());
             Assert.Equal("Alice Smith", finalInstruction.GetProperty("body").GetString());
@@ -1148,11 +1303,14 @@ public sealed class ResponseReplaySafetyProcessTests
         await connection;
     }
 
-    private static void AssertEffectiveCoalescedCadence(WorkflowExecutionState execution)
+    private static void AssertEffectiveCoalescedCadence(
+        WorkflowExecutionState execution,
+        string expectedMaxSegmentCheckpoints = "50")
     {
         Assert.Equal(WorkflowExecutableCheckpointCadence.CoalescedMode,
             execution.SystemMetadata[RuntimeMetadataKeys.CheckpointCadence]);
-        Assert.Equal("50", execution.SystemMetadata[RuntimeMetadataKeys.CheckpointMaxSegmentCheckpoints]);
+        Assert.Equal(expectedMaxSegmentCheckpoints,
+            execution.SystemMetadata[RuntimeMetadataKeys.CheckpointMaxSegmentCheckpoints]);
     }
 
     private static ChildProcessSession StartChildProcess(
@@ -1243,6 +1401,7 @@ public sealed class ResponseReplaySafetyProcessTests
         await using var db = CreateReadOnlyRuntimeDbContext(databasePath);
         await db.Database.OpenConnectionAsync();
         var executionHash = EfRelationalIdentity.Hash(executionId);
+        var encodedExecutionId = EfRelationalIdentity.Encode(executionId);
 
         var workflowContents = await db.WorkflowExecutionStates.AsNoTracking()
             .Where(row => row.WorkflowExecutionIdHash == executionHash)
@@ -1278,15 +1437,17 @@ public sealed class ResponseReplaySafetyProcessTests
             ? null
             : DeserializeRuntimeJson<ExecutionLivenessState>(liveness.ContentJson);
         var incidentCount = await db.IncidentStates.AsNoTracking()
-            .CountAsync(row => row.WorkflowExecutionIdHash == executionHash && row.WorkflowExecutionId == executionId);
-        var outboxStatuses = await db.RuntimePostCommitOutbox.AsNoTracking()
-            .Where(row => row.WorkflowExecutionIdHash == executionHash && row.WorkflowExecutionId == executionId)
-            .Select(row => row.Status)
+            .CountAsync(row => row.WorkflowExecutionIdHash == executionHash && row.WorkflowExecutionId == encodedExecutionId);
+        var outboxRows = await db.RuntimePostCommitOutbox.AsNoTracking()
+            .Where(row => row.WorkflowExecutionIdHash == executionHash && row.WorkflowExecutionId == encodedExecutionId)
             .ToArrayAsync();
+        var outboxItems = outboxRows.Select(row =>
+            (row, DeserializeRuntimeJson<RuntimePostCommitOutboxItem>(row.ContentJson))).ToArray();
 
         return new IndependentRuntimeState(execution, stimulus, triggerNode, triggerMetadata, activityStates,
             workRows.Select(row => (row, DeserializeRuntimeJson<RuntimeSchedulerWorkItem>(row.ContentJson))).ToArray(),
-            outboxStatuses.Select(status => (RuntimePostCommitOutboxStatus)status).ToArray(), incidentCount, liveness, livenessContent);
+            outboxRows.Select(row => (RuntimePostCommitOutboxStatus)row.Status).ToArray(), outboxItems,
+            incidentCount, liveness, livenessContent);
     }
 
     private static RuntimeExecutionLease AssertDurableRequestAndClaim(
@@ -1364,6 +1525,129 @@ public sealed class ResponseReplaySafetyProcessTests
         var triggerMetadata = state.TriggerMetadata.InlineValue!.Value;
         Assert.Equal(routePath.Trim('/'), triggerMetadata.GetProperty("http:template").GetString()!.Trim('/'), ignoreCase: true);
         Assert.Equal("post", triggerMetadata.GetProperty("http:method").GetString(), ignoreCase: true);
+    }
+
+    private static ExternalBodyReferenceSnapshot AssertExternalResponseBodyReference(
+        IndependentRuntimeState state,
+        string responseActivityExecutionId,
+        string externalPayloadRoot,
+        ActivityExecutionStatus expectedStatus)
+    {
+        var responseState = Assert.Single(state.ActivityStates,
+            activity => StringComparer.Ordinal.Equals(activity.Execution.ActivityExecutionId, responseActivityExecutionId));
+        Assert.Equal(ResponseNodeId, responseState.Execution.AuthoredActivityId);
+        Assert.Equal(expectedStatus, responseState.Status);
+        if (expectedStatus == ActivityExecutionStatus.Running)
+            Assert.Null(responseState.Completion);
+        else
+            Assert.NotNull(responseState.Completion);
+
+        var body = responseState.InputSnapshot?.Values.GetValueOrDefault("Body");
+        Assert.NotNull(body);
+        Assert.Equal(ValuePresence.Present, body.Presence);
+        Assert.Null(body.InlineValue);
+        Assert.Equal(DurableValueStorage.External, body.Policy.Storage);
+        var reference = Assert.IsType<DurableValueExternalReference>(body.ExternalReference);
+        Assert.Equal(ExternalPayloadProfile, reference.StorageProfile);
+        Assert.False(string.IsNullOrWhiteSpace(reference.Locator));
+        Assert.EndsWith(".json", reference.Locator, StringComparison.Ordinal);
+        Assert.Equal(64, reference.Locator.Length - ".json".Length);
+
+        var payloadPath = Path.Combine(externalPayloadRoot, reference.Locator);
+        Assert.Equal(Path.GetFullPath(payloadPath), payloadPath);
+        var payloadBytes = File.ReadAllBytes(payloadPath);
+        var payloadSha256 = Convert.ToHexString(SHA256.HashData(payloadBytes)).ToLowerInvariant();
+        Assert.Equal(reference.Metadata["payloadSha256"], payloadSha256);
+        Assert.Equal(reference.Locator[..64], reference.Metadata["ownerKeySha256"]);
+        Assert.Equal(payloadBytes.LongLength, long.Parse(reference.Metadata["payloadLength"], CultureInfo.InvariantCulture));
+        using var payload = JsonDocument.Parse(payloadBytes);
+        Assert.Equal("Alice Smith", payload.RootElement.GetString());
+
+        var typeAlias = body.Type.Alias;
+        var collectionKind = body.Type.CollectionKind.ToString();
+        var providerTypeAlias = reference.Metadata.TryGetValue("typeAlias", out var alias)
+            ? alias
+            : throw new InvalidDataException("The external Body reference metadata has no typeAlias.");
+        var providerCollectionKind = reference.Metadata.TryGetValue("collectionKind", out var kind)
+            ? kind
+            : throw new InvalidDataException("The external Body reference metadata has no collectionKind.");
+        Assert.Equal(typeAlias, providerTypeAlias);
+        Assert.Equal(collectionKind, providerCollectionKind);
+
+        return new ExternalBodyReferenceSnapshot(
+            reference.StorageProfile,
+            reference.Locator,
+            payloadSha256,
+            reference.Metadata["ownerKeySha256"],
+            payloadBytes.LongLength,
+            typeAlias,
+            collectionKind,
+            body.Type.SchemaVersion,
+            body.Type.Schema?.GetRawText(),
+            CanonicalizeMetadata(reference.Metadata));
+    }
+
+    private static string CanonicalizeMetadata(IReadOnlyDictionary<string, string> metadata) =>
+        JsonSerializer.Serialize(metadata
+            .OrderBy(pair => pair.Key, StringComparer.Ordinal)
+            .ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.Ordinal));
+
+    private static void AssertPendingResponseInvokeOutbox(
+        IndependentRuntimeState state,
+        string expectedOutboxItemId,
+        string executionId,
+        string responseActivityExecutionId,
+        string artifactId,
+        string artifactHash)
+    {
+        var outbox = Assert.Single(state.OutboxItems, item =>
+            StringComparer.Ordinal.Equals(item.Item.OutboxItemId, expectedOutboxItemId));
+        Assert.Equal(expectedOutboxItemId, outbox.Item.OutboxItemId);
+        Assert.Equal(RuntimePostCommitIntentKinds.EnqueueSchedulerWork, outbox.Item.Intent.Kind);
+        Assert.Equal(RuntimePostCommitOutboxStatus.Pending, outbox.Item.Status);
+        Assert.Equal((int)RuntimePostCommitOutboxStatus.Pending, outbox.Row.Status);
+        Assert.Equal(executionId, outbox.Item.Intent.WorkflowExecutionId);
+        Assert.Equal(responseActivityExecutionId, outbox.Item.Intent.ActivityExecutionId);
+        Assert.Equal(executionId, EfRelationalIdentity.Decode(outbox.Row.WorkflowExecutionId));
+        Assert.Equal(RuntimePostCommitIntentKinds.EnqueueSchedulerWork, outbox.Row.IntentKind);
+
+        var payload = outbox.Item.Intent.Payload
+            ?? throw new InvalidDataException("The pending response InvokeActivity outbox has no scheduler payload.");
+        // RuntimeArtifactJson protects the outer outbox strings, but Intent.Payload is an embedded raw JsonElement.
+        // Match the production intent dispatcher when materializing the ordinary scheduler-work JSON.
+        var work = payload.Deserialize<RuntimeSchedulerWorkItem>()
+            ?? throw new InvalidDataException("The pending InvokeActivity outbox payload did not deserialize to scheduler work.");
+        Assert.Equal(executionId, work.WorkflowExecutionId);
+        Assert.Equal(WorkflowExecutionCommandKind.InvokeActivity, work.CommandKind);
+        var invoke = work.Payload?.Deserialize<RuntimeInvokeActivityCommandPayload>()
+            ?? throw new InvalidDataException("The pending InvokeActivity scheduler work has no valid command payload.");
+        Assert.Equal(responseActivityExecutionId, invoke.ActivityExecutionId);
+        Assert.Equal("write-response", invoke.ExecutableNodeId);
+        Assert.Equal(artifactId, invoke.PinnedExecutable.ArtifactId);
+        Assert.Equal(artifactHash, invoke.PinnedExecutable.ArtifactHash);
+        Assert.Equal(expectedOutboxItemId, EfRelationalIdentity.Decode(outbox.Row.OutboxItemId));
+
+    }
+
+    private static IReadOnlyCollection<ExternalPayloadOperation> ReadExternalPayloadOperations(string externalPayloadRoot)
+    {
+        var operationsDirectory = Path.Combine(externalPayloadRoot, "operations");
+        if (!Directory.Exists(operationsDirectory))
+            return [];
+
+        return Directory.EnumerateFiles(operationsDirectory, "*.json")
+            .Select(path =>
+            {
+                using var document = JsonDocument.Parse(File.ReadAllBytes(path));
+                var record = document.RootElement;
+                return new ExternalPayloadOperation(
+                    record.GetProperty("operation").GetString()!,
+                    record.GetProperty("processId").GetInt32(),
+                    record.GetProperty("providerInstanceId").GetString()!,
+                    record.GetProperty("locator").GetString()!,
+                    record.GetProperty("payloadSha256").GetString()!);
+            })
+            .ToArray();
     }
 
     private static RuntimeExecutionLease AssertOwnerLeaseIdentity(IndependentRuntimeState state, string expectedOwnerId)
@@ -1446,6 +1730,7 @@ public sealed class ResponseReplaySafetyProcessTests
         IReadOnlyCollection<ActivityExecutionState> ActivityStates,
         IReadOnlyCollection<(SchedulerWorkItemEntity Row, RuntimeSchedulerWorkItem Work)> SchedulerItems,
         IReadOnlyCollection<RuntimePostCommitOutboxStatus> OutboxStatuses,
+        IReadOnlyCollection<(RuntimePostCommitOutboxEntity Row, RuntimePostCommitOutboxItem Item)> OutboxItems,
         int IncidentCount,
         ExecutionLivenessStateEntity? Liveness,
         ExecutionLivenessState? LivenessContent)
@@ -1453,6 +1738,25 @@ public sealed class ResponseReplaySafetyProcessTests
         public (SchedulerWorkItemEntity Row, RuntimeSchedulerWorkItem Work) SchedulerFor(string workItemId) =>
             SchedulerItems.Single(item => StringComparer.Ordinal.Equals(item.Work.WorkItemId, workItemId));
     }
+
+    private sealed record ExternalBodyReferenceSnapshot(
+        string StorageProfile,
+        string Locator,
+        string PayloadSha256,
+        string OwnerKeySha256,
+        long PayloadLength,
+        string EnvelopeTypeAlias,
+        string EnvelopeCollectionKind,
+        int? EnvelopeSchemaVersion,
+        string? EnvelopeSchema,
+        string CanonicalMetadata);
+
+    private sealed record ExternalPayloadOperation(
+        string Operation,
+        int ProcessId,
+        string ProviderInstanceId,
+        string Locator,
+        string PayloadSha256);
 
     private sealed class LosslessRuntimeStringConverter : JsonConverter<string>
     {
