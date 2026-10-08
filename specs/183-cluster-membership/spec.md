@@ -507,14 +507,18 @@ for identical fleets.
   1. The host's package runtime has positive evidence that a newer generation replaced it: for Nuplane, its active
      package set lists a loaded assembly of the same name and not this one, and this one is in a load context Nuplane
      created.
-  2. No shell generation that can still run code composes a feature from its load context. A shell generation counts
-     from before its first initializer runs until its container has finished disposing: when it was drained, until
-     that drain completes, which the shell runtime completes only after the generation's service provider has been
-     disposed; otherwise, or when that drain fails, until its container has disposed everything it created after the
-     generation began. It counts every load context, other than the default one, of a feature its container names -
-     for CShells, every feature of the catalog snapshot it was built from, enabled or not - so a replaced declaration
-     beside an unchanged feature in the same load context keeps counting. A generation whose features cannot be read counts for every replaced
-     declaration.
+  2. No shell generation that can still run code composes a feature from its load context. A candidate generation
+     counts before its feature catalog is read, while its selection is unresolved, as potentially selecting every
+     otherwise-retirable package generation that the unresolved catalog could name. Once the exact selected snapshot is
+     known, it counts every load context, other than the default one, of a feature that snapshot names, enabled or not;
+     a replaced declaration beside an unchanged feature in the same load context keeps counting. A candidate or shell
+     generation with a created service provider remains counted until that provider has finished disposing. If a build
+     fails before a provider is created, it remains counted until the runtime completes its pre-provider build unwind.
+     For a drained shell, the drain completes only after
+     provider disposal. A failed candidate, failed drain, or uncertain teardown does not itself stop counting; when a
+     provider exists, its generation remains counted until disposal is confirmed. A generation whose selected features
+     cannot be read counts for every replaced declaration. Amended 2026-10-08 (#2164): counting begins before catalog
+     selection and narrows only to the exact snapshot selected for that candidate.
   3. The feature catalog the next shell generation will be built from names neither it nor a feature in its load
      context. A catalog that has not been initialized yet, or that cannot be read, counts for every replaced
      declaration: the first build may be reading any of them.
