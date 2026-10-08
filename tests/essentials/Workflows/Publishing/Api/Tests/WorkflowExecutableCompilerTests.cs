@@ -470,6 +470,35 @@ public sealed class WorkflowExecutableCompilerTests
     }
 
     [Fact]
+    public async Task Placed_template_profile_changes_the_consuming_workflow_identity()
+    {
+        var authoredInput = new WorkflowArgumentState(
+            "value",
+            new ArgumentValue(JsonSerializer.SerializeToElement(42), "Literal"),
+            null, null, null, null);
+        var request = NewRequest(DateTimeOffset.UtcNow);
+        var external = await PlacedReusableCompiler(authoredInput).CompileAsync(request);
+        var replaySafe = await PlacedReusableCompiler(
+                authoredInput,
+                templateRootProfile: Elsa.Activities.Runtime.Core.Models.SideEffectProfile.ReplaySafe)
+            .CompileAsync(request);
+        var replaySafeRepeat = await PlacedReusableCompiler(
+                authoredInput,
+                templateRootProfile: Elsa.Activities.Runtime.Core.Models.SideEffectProfile.ReplaySafe)
+            .CompileAsync(request);
+
+        Assert.Equal(external.RootActivity.ExecutableNodeId, replaySafe.RootActivity.ExecutableNodeId);
+        Assert.Equal(external.RootActivity.DescriptorPayload.GetRawText(), replaySafe.RootActivity.DescriptorPayload.GetRawText());
+        Assert.Equal(Elsa.Activities.Runtime.Core.Models.SideEffectProfile.External, external.RootActivity.ActivityContract!.SideEffectProfile);
+        Assert.Equal(Elsa.Activities.Runtime.Core.Models.SideEffectProfile.ReplaySafe, replaySafe.RootActivity.ActivityContract!.SideEffectProfile);
+        Assert.NotEqual(external.RootActivity.ActivityContract.SchemaFingerprint, replaySafe.RootActivity.ActivityContract.SchemaFingerprint);
+        Assert.NotEqual(external.Identity.ArtifactHash, replaySafe.Identity.ArtifactHash);
+        Assert.NotEqual(external.Identity.ArtifactId, replaySafe.Identity.ArtifactId);
+        Assert.Equal(replaySafe.Identity.ArtifactHash, replaySafeRepeat.Identity.ArtifactHash);
+        Assert.Equal(replaySafe.Identity.ArtifactId, replaySafeRepeat.Identity.ArtifactId);
+    }
+
+    [Fact]
     public async Task Placed_reusable_activity_refuses_a_secret_reference_on_its_boundary_input()
     {
         // Spec 188: a reusable boundary is activated by its template root, which here is not a CLR activity, so it
@@ -498,6 +527,7 @@ public sealed class WorkflowExecutableCompilerTests
         var compiler = PlacedReusableCompiler(
             SecretInput("value"),
             "String",
+            Elsa.Activities.Runtime.Core.Models.SideEffectProfile.External,
             ("Int32", new WorkflowArgumentState(
                 "aaa",
                 new ArgumentValue(JsonSerializer.SerializeToElement("not-a-number"), "Literal"),
@@ -515,7 +545,11 @@ public sealed class WorkflowExecutableCompilerTests
     [Fact]
     public async Task Placed_reusable_activity_refusal_names_the_ordinally_first_secret_input()
     {
-        var compiler = PlacedReusableCompiler(SecretInput("value"), "String", ("String", SecretInput("beta")));
+        var compiler = PlacedReusableCompiler(
+            SecretInput("value"),
+            "String",
+            Elsa.Activities.Runtime.Core.Models.SideEffectProfile.External,
+            ("String", SecretInput("beta")));
 
         var exception = await Assert.ThrowsAsync<WorkflowExecutableCompilationException>(
             () => compiler.CompileAsync(NewRequest(DateTimeOffset.UtcNow)).AsTask());
@@ -539,6 +573,7 @@ public sealed class WorkflowExecutableCompilerTests
     private WorkflowExecutableCompiler PlacedReusableCompiler(
         WorkflowArgumentState authoredInput,
         string valueTypeAlias = "Int32",
+        Elsa.Activities.Runtime.Core.Models.SideEffectProfile templateRootProfile = Elsa.Activities.Runtime.Core.Models.SideEffectProfile.External,
         params (string TypeAlias, WorkflowArgumentState State)[] extraInputs)
     {
         var contract = new DesignActivityContract("1", [new DesignActivityInputContract(
@@ -555,7 +590,10 @@ public sealed class WorkflowExecutableCompilerTests
                 "local-child", "local-child", "test.child", "1",
                 new("test.child", "1", JsonSerializer.SerializeToElement(new { plan = 2 })),
                 new Dictionary<string, RuntimeInputBinding>(), new Dictionary<string, RuntimeOutputCapture>(), new Dictionary<string, string>())])],
-            activityContract: BoundaryRuntimeContract(hasValueInput: true, valueTypeAlias));
+            activityContract: BoundaryRuntimeContract(
+                hasValueInput: true,
+                valueTypeAlias: valueTypeAlias,
+                sideEffectProfile: templateRootProfile));
         var template = new ExecutableActivityTemplate(
             "template-greet", "hash-greet", root, new Dictionary<string, WorkflowExecutableResumeTarget>(),
             [], [], [], "fingerprint", new Dictionary<string, string>(), DateTimeOffset.UnixEpoch);
@@ -717,6 +755,45 @@ public sealed class WorkflowExecutableCompilerTests
         Assert.Equal(
             Elsa.Activities.Runtime.Core.Models.SideEffectProfile.External,
             writeLine.ActivityContract!.SideEffectProfile);
+    }
+
+    [Fact]
+    public async Task Compiler_artifact_identity_changes_when_only_the_pinned_side_effect_profile_changes()
+    {
+        var workflow = WorkflowVersion(Node("write-one", Text("hello")));
+        var request = NewRequest(DateTimeOffset.UtcNow);
+        var external = await Compiler(workflow).CompileAsync(request);
+        var externalRepeat = await Compiler(workflow).CompileAsync(request);
+        var replaySafe = await Compiler(
+                workflow,
+                metadataEnricher: new PinnedSideEffectProfileEnricher(Elsa.Activities.Runtime.Core.Models.SideEffectProfile.ReplaySafe))
+            .CompileAsync(request);
+
+        var externalContract = external.RootActivity.ActivityContract!;
+        var replaySafeContract = replaySafe.RootActivity.ActivityContract!;
+        Assert.Equal(external.RootActivity.ExecutableNodeId, replaySafe.RootActivity.ExecutableNodeId);
+        Assert.Equal(external.RootActivity.ActivityType, replaySafe.RootActivity.ActivityType);
+        Assert.Equal(external.RootActivity.DescriptorType, replaySafe.RootActivity.DescriptorType);
+        Assert.Equal(external.RootActivity.DescriptorPayload.GetRawText(), replaySafe.RootActivity.DescriptorPayload.GetRawText());
+        Assert.Equal(JsonSerializer.Serialize(external.RootActivity.InputBindings), JsonSerializer.Serialize(replaySafe.RootActivity.InputBindings));
+        Assert.Equal(Elsa.Activities.Runtime.Core.Models.SideEffectProfile.External, externalContract.SideEffectProfile);
+        Assert.Equal(Elsa.Activities.Runtime.Core.Models.SideEffectProfile.ReplaySafe, replaySafeContract.SideEffectProfile);
+        Assert.NotEqual(externalContract.SchemaFingerprint, replaySafeContract.SchemaFingerprint);
+        // The pinned profile is the only behavioral input changed by the enricher.
+        Assert.NotEqual(external.Identity.ArtifactHash, replaySafe.Identity.ArtifactHash);
+        Assert.NotEqual(external.Identity.ArtifactId, replaySafe.Identity.ArtifactId);
+        Assert.Equal(external.Identity.ArtifactHash, externalRepeat.Identity.ArtifactHash);
+        Assert.Equal(external.Identity.ArtifactId, externalRepeat.Identity.ArtifactId);
+        // This pre-fix value is pinned from baseline 6b36c94; it guards against leaving External on the old shared identity.
+        const string preFixSharedHash = "sha256:a6e20acedd46dc3fff2408d5c6bdae3fc5ee8f34519b608f086f0563a9c544bf";
+        Assert.NotEqual(preFixSharedHash, external.Identity.ArtifactHash);
+        Assert.NotEqual(preFixSharedHash, replaySafe.Identity.ArtifactHash);
+        var replaySafeRepeat = await Compiler(
+                workflow,
+                metadataEnricher: new PinnedSideEffectProfileEnricher(Elsa.Activities.Runtime.Core.Models.SideEffectProfile.ReplaySafe))
+            .CompileAsync(request);
+        Assert.Equal(replaySafe.Identity.ArtifactHash, replaySafeRepeat.Identity.ArtifactHash);
+        Assert.Equal(replaySafe.Identity.ArtifactId, replaySafeRepeat.Identity.ArtifactId);
     }
 
     [Fact]
@@ -1370,6 +1447,34 @@ public sealed class WorkflowExecutableCompilerTests
         Assert.NotEqual(firstGrandchild.Identity.ArtifactHash, changedGrandchild.Identity.ArtifactHash);
         Assert.NotEqual(firstChild.Identity.ArtifactHash, changedChild.Identity.ArtifactHash);
         Assert.NotEqual(firstParent.Identity.ArtifactHash, changedParent.Identity.ArtifactHash);
+    }
+
+    [Fact]
+    public async Task Pinned_child_dependency_profile_change_propagates_into_parent_identity()
+    {
+        var childWorkflow = WorkflowVersion(Node("child", Text("same behavior")));
+        var request = NewRequest(DateTimeOffset.UtcNow);
+        var externalChild = await Compiler(childWorkflow).CompileAsync(request);
+        var replaySafeChild = await Compiler(
+                childWorkflow,
+                metadataEnricher: new PinnedSideEffectProfileEnricher(Elsa.Activities.Runtime.Core.Models.SideEffectProfile.ReplaySafe))
+            .CompileAsync(request);
+        var parentWorkflow = WorkflowVersion(Node("dispatch-child"));
+        var externalParent = await CompileWithDependenciesAsync(
+            parentWorkflow,
+            [new ExecutableDependencyClaim("dispatch-child", externalChild.Identity.ArtifactId, externalChild.Identity.ArtifactHash)]);
+        var replaySafeParent = await CompileWithDependenciesAsync(
+            parentWorkflow,
+            [new ExecutableDependencyClaim("dispatch-child", replaySafeChild.Identity.ArtifactId, replaySafeChild.Identity.ArtifactHash)]);
+
+        Assert.Equal(externalChild.RootActivity.ExecutableNodeId, replaySafeChild.RootActivity.ExecutableNodeId);
+        Assert.Equal(Elsa.Activities.Runtime.Core.Models.SideEffectProfile.External, externalChild.RootActivity.ActivityContract!.SideEffectProfile);
+        Assert.Equal(Elsa.Activities.Runtime.Core.Models.SideEffectProfile.ReplaySafe, replaySafeChild.RootActivity.ActivityContract!.SideEffectProfile);
+        Assert.NotEqual(externalChild.Identity.ArtifactHash, replaySafeChild.Identity.ArtifactHash);
+        Assert.NotEqual(externalChild.Identity.ArtifactId, replaySafeChild.Identity.ArtifactId);
+        Assert.Equal(externalParent.RootActivity.ExecutableNodeId, replaySafeParent.RootActivity.ExecutableNodeId);
+        Assert.NotEqual(externalParent.Identity.ArtifactHash, replaySafeParent.Identity.ArtifactHash);
+        Assert.NotEqual(externalParent.Identity.ArtifactId, replaySafeParent.Identity.ArtifactId);
     }
 
     [Fact]
@@ -2376,7 +2481,8 @@ public sealed class WorkflowExecutableCompilerTests
 
     private WorkflowExecutableCompiler Compiler(
         WorkflowDefinitionVersion workflowVersion,
-        IIncidentStrategyCatalog? incidentStrategyCatalog = null)
+        IIncidentStrategyCatalog? incidentStrategyCatalog = null,
+        IExecutableNodeMetadataEnricher? metadataEnricher = null)
     {
         var registry = TestWellKnownTypeRegistry.Create();
         registry.RegisterType(typeof(LegacyTriggerActivity), TypeAliasConvention.CanonicalAlias(typeof(LegacyTriggerActivity)));
@@ -2385,6 +2491,7 @@ public sealed class WorkflowExecutableCompilerTests
             new FakeActivityVersionStore([_writeLineActivity, _writeLinesActivity, _sequenceActivity, _legacyTriggerActivity]),
             _activityStructureService,
             registry,
+            metadataEnricher: metadataEnricher,
             incidentStrategyCatalog: incidentStrategyCatalog);
     }
 
@@ -2517,7 +2624,10 @@ public sealed class WorkflowExecutableCompilerTests
         RuntimeRequirements = []
     };
 
-    private static Elsa.Activities.Runtime.Core.Models.ActivityContract BoundaryRuntimeContract(bool hasValueInput, string valueTypeAlias = "Int32")
+    private static Elsa.Activities.Runtime.Core.Models.ActivityContract BoundaryRuntimeContract(
+        bool hasValueInput,
+        string valueTypeAlias = "Int32",
+        Elsa.Activities.Runtime.Core.Models.SideEffectProfile sideEffectProfile = Elsa.Activities.Runtime.Core.Models.SideEffectProfile.External)
     {
         var descriptor = JsonSerializer.SerializeToElement(new { plan = 1 });
         var valueType = new ValueTypeDescriptor("Object");
@@ -2552,7 +2662,8 @@ public sealed class WorkflowExecutableCompilerTests
                     isRequired: true,
                     policy: ActivityValuePolicy.Default with { Lifecycle = ActivityValueLifecycle.Result })]),
             [ActivityOutcomes.Done],
-            new ActivityActivationRequirement("test.boundary", "test"));
+            new ActivityActivationRequirement("test.boundary", "test"),
+            sideEffectProfile);
     }
 
     private static WorkflowArgumentState Text(string value) =>
@@ -2799,5 +2910,42 @@ public sealed class WorkflowExecutableCompilerTests
 
         public Task Publish(IEvent @event, CancellationToken cancellationToken = default) =>
             _handler.Handle(Assert.IsType<ExecutableCompilationCollecting>(@event), cancellationToken);
+    }
+
+    private sealed class PinnedSideEffectProfileEnricher(Elsa.Activities.Runtime.Core.Models.SideEffectProfile profile) : IExecutableNodeMetadataEnricher
+    {
+        public ValueTask<ExecutableNode> EnrichAsync(
+            WorkflowExecutableCompileRequest request,
+            WorkflowExecutableCompileSource source,
+            ExecutableNode rootActivity,
+            CancellationToken cancellationToken = default)
+        {
+            var contract = rootActivity.ActivityContract ?? throw new InvalidOperationException("The test activity must have a pinned contract.");
+            var replacement = new Elsa.Activities.Runtime.Core.Models.ActivityContract(
+                contract.ActivityTypeKey,
+                contract.ContractVersion,
+                contract.DescriptorKind,
+                contract.DescriptorPayload,
+                contract.Inputs.Values,
+                contract.Result,
+                contract.Outcomes,
+                contract.Activation,
+                profile);
+            var node = new ExecutableNode(
+                rootActivity.ExecutableNodeId,
+                rootActivity.AuthoredActivityId,
+                rootActivity.ActivityType,
+                rootActivity.ActivityTypeVersion,
+                rootActivity.Descriptor,
+                rootActivity.InputBindings,
+                rootActivity.OutputCaptures,
+                rootActivity.Metadata,
+                rootActivity.ChildSlots,
+                rootActivity.Structure,
+                replacement,
+                rootActivity.IntrinsicKind,
+                rootActivity.IntrinsicVariable);
+            return ValueTask.FromResult(node);
+        }
     }
 }
