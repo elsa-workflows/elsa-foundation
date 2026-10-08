@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 180" role="img" aria-labelledby="title desc">
+  <title id="title">A Foundation folder mapped to one GitBook space</title>
+  <desc id="desc">A repository content folder connects to one isolated GitBook trial space.</desc>
+  <rect width="640" height="180" rx="18" fill="#f4f7fb"/>
+  <rect x="38" y="46" width="210" height="88" rx="12" fill="#fff" stroke="#64748b" stroke-width="2"/>
+  <path d="M54 46v-8a6 6 0 0 1 6-6h63l14 14" fill="#e2e8f0" stroke="#64748b" stroke-width="2"/>
+  <text x="143" y="88" text-anchor="middle" font-family="system-ui,sans-serif" font-size="18" font-weight="700" fill="#0f172a">Foundation</text>
+  <text x="143" y="112" text-anchor="middle" font-family="ui-monospace,monospace" font-size="14" fill="#334155">content/</text>
+  <path d="M270 90h98m-12-12 12 12-12 12" fill="none" stroke="#2563eb" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+  <rect x="390" y="46" width="210" height="88" rx="12" fill="#fff" stroke="#2563eb" stroke-width="2"/>
+  <path d="M424 71h26v38h-26zM430 65h26v38" fill="none" stroke="#2563eb" stroke-width="2"/>
+  <text x="500" y="91" text-anchor="middle" font-family="system-ui,sans-serif" font-size="18" font-weight="700" fill="#0f172a">One trial space</text>
+  <text x="500" y="115" text-anchor="middle" font-family="system-ui,sans-serif" font-size="13" fill="#475569">Git Sync not yet connected</text>
+</svg>
