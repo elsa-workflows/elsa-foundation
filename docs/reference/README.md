@@ -10,7 +10,7 @@ Use the constitution files in `.specify/memory/` for gates, allowed exceptions, 
 - [Framework examples](framework-examples.md) - synthetic and application-instance examples formerly embedded in `constitution-framework.md`.
 - [Architecture rationale](architecture-rationale.md) - explanatory context, rejected alternatives, and decision rationale moved out of the constitutions.
 - [Agent preferences](agent-preferences.md) - committed catalog of local agent preference file rules and templates; personal selections belong in `.agent-prefs/`.
-- [Git operating models](git-operating-models.md) - committed catalog of supported Git workflow shapes; personal selections belong in `.agent-prefs/`.
+- [Git operating models](git-operating-models.md) - maintainer organization-branch and contributor fork workflows; no publication-time model selection is required.
 - [Spec lifecycle](spec-lifecycle.md) - how specs under `specs/` are numbered, the closed status vocabulary, when a spec reaches a terminal status, and why specs are never moved or deleted.
 - [First-user prompt options](first-user-prompts.md) - simple prompts for new architects and engineers entering the workspace.
 - [Developer solution filters](developer-solution-filters.md) - generated, task-oriented `.slnf` profiles for faster inner-loop work without weakening the full solution gate.

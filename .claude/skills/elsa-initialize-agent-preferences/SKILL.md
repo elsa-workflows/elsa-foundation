@@ -23,7 +23,7 @@ $ARGUMENTS
 3. Read `docs/reference/agent-preferences.md#expected-preference-files` to discover known preference files and ask triggers.
 4. Read `docs/reference/git-operating-models.md` only when Git workflow setup is relevant.
 5. If `.agent-prefs/` already has preference files besides `.gitkeep`, summarize the existing preferences and do not overwrite them without explicit user approval.
-6. Ask brief setup questions only for preferences needed by the current task.
+6. Apply the maintainer/contributor Git publication path without asking for a model selection. Missing preferences do not gate publication. Ask brief setup questions only for personal choices needed by the current task.
 7. Create selected local `.agent-prefs/*.md` files using `docs/skills/catalog.md#create-agent-preference`.
 8. Leave skipped preferences unset; deciding per session is valid.
 
