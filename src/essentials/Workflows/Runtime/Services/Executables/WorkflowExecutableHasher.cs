@@ -310,6 +310,8 @@ public sealed class WorkflowExecutableHasher : IWorkflowExecutableHasher
         writer.WriteString("nodeId", node.ExecutableNodeId);
         writer.WriteString("activityType", node.ActivityType);
         writer.WriteString("activityTypeVersion", node.ActivityTypeVersion);
+        if (node.ActivityContract is { } activityContract)
+            writer.WriteString("sideEffectProfile", activityContract.SideEffectProfile.ToString());
         writer.WriteStartObject("descriptor");
         writer.WriteString("consumerKey", node.Descriptor.ConsumerKey);
         writer.WriteString("schemaVersion", node.Descriptor.SchemaVersion);
