@@ -31,6 +31,7 @@ export function WorkflowActivityNode({ id, data, selected }: NodeProps) {
     <div
       className={["wf-node", selected ? "selected" : "", runtime ? "wf-node-runtime" : "", runtime?.hasBlockingIncident ? "faulted" : "", availability ? "wf-node-unavailable" : "", nodeData.ghost ? "wf-node-ghost" : "", nodeData.isStartNode ? "wf-node-start" : ""].filter(Boolean).join(" ")}
       data-start-node={nodeData.isStartNode ? "true" : undefined}
+      data-trigger-enabled={nodeData.canStartWorkflow ? "true" : undefined}
       data-icon={nodeData.icon ?? "activity"}
       data-runtime-node-id={nodeData.runtimeNodeId ?? id}
       title={[nodeData.label, nodeData.description].filter(Boolean).join(" — ")}

@@ -3660,6 +3660,24 @@
     inset 0 1px 0 color-mix(in srgb, white 42%, transparent);
 }
 
+/* Keep the trigger halo on its own layer so selection, focus and incident rings remain intact. */
+.wf-node[data-trigger-enabled="true"]::before {
+  content: "";
+  position: absolute;
+  inset: -1px;
+  border-radius: inherit;
+  box-shadow:
+    0 0 20px 4px color-mix(in srgb, var(--studio-accent) 28%, transparent),
+    0 0 48px 12px color-mix(in srgb, var(--studio-accent) 14%, transparent);
+  pointer-events: none;
+}
+
+html[data-theme-appearance="high-contrast"] .wf-node[data-trigger-enabled="true"]::before {
+  box-shadow: none;
+  outline: 2px solid var(--studio-accent);
+  outline-offset: 5px;
+}
+
 .wf-node.selected {
   border-color: var(--wf-accent);
   box-shadow:
