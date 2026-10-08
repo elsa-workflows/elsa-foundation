@@ -1,11 +1,11 @@
 # Implementation Plan: Shared Nuplane Adapter Adoption
 
 **Branch**: `2340-shared-nuplane-adoption` | **Date**: 2026-10-09 | **Spec**: [spec.md](spec.md)
-**Status**: Draft — source/discovery design prepared; the bounded diagnostic confirmed the catalog-refresh exception-observability gap. The upstream correction, tests and package qualification remain outstanding.
+**Status**: Draft — source/discovery design prepared. The upstream exception-observability correction is delivered and has public `.171`/Nuplane `.99` consumer proof on .NET 8/9/10. Foundation host implementation, its actual-host proof and final stable adoption remain outstanding.
 
 ## Summary
 
-Replace the two host package providers/observers with the public upstream adapter. Retain app-local standard monitored-option mappings and Elsa diagnostic callbacks. Preserve existing test assertions and final stable adoption gates. See [research](research.md) for source evidence and the one engineering prerequisite under investigation.
+Replace the two host package providers/observers with the public upstream adapter. Retain app-local standard monitored-option mappings and Elsa diagnostic callbacks. Preserve existing test assertions and final stable adoption gates. See [research](research.md) for source evidence and the preview-only qualification boundary.
 
 ## Technical Context
 
@@ -23,18 +23,19 @@ Replace the two host package providers/observers with the public upstream adapte
 
 - Framework §2.7: upstream optional adapter isolates reusable behavior; Elsa-specific refusal interpretation remains local.
 - Framework §2.16/§2.17: no new project; preserve feature-free host closure and accept a few intentionally different profile-mapping lines.
-- Framework §2.21.1 and Elsa §E1: existing regression methods/assertions retained; repair fixture composition, not expected outcomes. The source-observed Error-versus-Warning gap must be resolved before source implementation is ready.
+- Framework §2.21.1 and Elsa §E1: existing regression methods/assertions retained; repair fixture composition, not expected outcomes. The upstream Error/original-exception logging correction is qualified; Foundation tests must preserve existing Error assertions while recording Nuplane's additional dispatcher Warning. Direct caller cancellation remains separately tested without error logging.
 - Framework §2.23: exercise each new logic-bearing options setup through its public surface and actual DI composition, including all default/invalid/configuration-reload and refusal branches. Use public sealed setup implementations in nonpackable app projects; no new feature class.
+- Test cadence: no derived application constitution was found that declares TDD or another cadence. Framework §2.21.1 requires preserving refactored test subjects/objectives; it does not require test-first ordering. New tests should follow implementation dependencies and prove the completed behavior without claiming a required fail-first run.
 - Existing host boundaries: preserve feed/base-path setup, observer order, host-provided assemblies, unrelated sharing and per-host startup policy. Do not relax architecture allowlists to admit a convenience helper dependency.
 - Draft framework §2.24 and Elsa §E2.9 are not relied on as new ratified gates.
 
-**Pre-design assessment**: no product-policy ambiguity in this observer-only scope. **Post-design assessment**: the bounded public-package diagnostic and independent review confirmed the existing catalog-refresh logging gap and selected log-and-rethrow correction. Planning remains Draft pending implementation, actual-DI tests and package qualification; no implementation-ready task has been created yet.
+**Pre-design assessment**: no product-policy ambiguity in this observer-only scope. **Post-design assessment**: the upstream correction is delivered and qualified through the actual public adapter and Nuplane dispatcher on three runtimes. Foundation source, profile tests and real-host adoption remain unverified. The canonical preparation branch remains documentation-only with `.159`/`.94` pins and locks unchanged. Final stable-family adoption remains a separate gate.
 
 ## Project Structure
 
 ### Documentation
 
-`specs/199-shared-nuplane-adoption/`: spec, plan, research, data model, contracts, quickstart, then tasks after design readiness.
+`specs/199-shared-nuplane-adoption/`: spec, plan, research, data model, contracts, quickstart and tasks. Tasks distinguish preview preparation from gated final stable adoption.
 
 ### Source Code
 
@@ -48,13 +49,13 @@ Replace the two host package providers/observers with the public upstream adapte
 
 ## Validation Sequence
 
-1. Implement and qualify the upstream exception-observability correction. The completed public-package diagnostic confirmed that catalog-refresh failure currently produces only Nuplane’s generic Warning. The manually constructed coordinator must receive the optional DI logger from the holder factory; actual-DI capture tests must prove Error logging with the original exception plus dispatcher Warning/later-observer delivery, while preserving the existing thrown-exception contract.
-2. Finalize design/contracts/tasks, commit the reviewed plan, and implement bounded app-local profiles and upstream composition in the owned preparation worktree.
-3. Qualify in a separate copy with exact audited previews; retain existing assertions, add runtime configuration reload, cold Begin freshness, one coordinator identity and refusal/redaction tests. Run scoped builds only through the shared build-slot wrapper.
-4. Root reviews the complete diff and delegated work. Run causal reversible mutations for live option invalidation and alias/order behavior where applicable. Preserve unsuccessful attempts honestly.
-5. Publish prepared organization branch with exact evidence; keep final stable merge/adoption task unchecked.
-6. Once required upstream work is released, integrate exact stable family/pins/locks/maps, rebuild real hosts and execute named regression, backend E2E and frozen Acts1/2 demo proof. Complete current-head and resulting-main gates before closure.
+1. Prepare the candidate source and coherent `.171`/`.99` central package overlay in the separately owned qualification worktree only; regenerate reached lockfiles there. Keep the canonical preparation branch's `.159`/`.94` pins and locks unchanged.
+2. Implement the two host compositions and app-local monitored option profiles. Preserve autoload/observer order, one coordinator identity, Foundation.Host's feature-free boundary, Workbench's existing feature catalog, feed setup, and unrelated shared-service behavior.
+3. Preserve and adapt the existing regression suite through the qualified public adapter. Add actual options-DI/configuration Reload coverage for both legacy defaults and invalid values; prove that a Workbench setting change alone schedules nothing and a later eligible completion uses the new snapshot. Test coordinator identity/order, cold-build freshness, callback semantics, refusal/redaction, ordinary exceptions through the actual dispatcher, and direct cancellation.
+4. Build and run only touched projects in the qualification worktree through the shared build-slot wrapper; run affected Modularity and Cluster/EF tests and actual rebuilt Host/Workbench checks available there. Record exact preview package/archive/cache/source identities and each command result. Do not call these stable acceptance.
+5. Root reviews the complete candidate diff and runs appropriate reversible causal mutations for live option invalidation and coordinator alias/order. Preserve unsuccessful attempts honestly; keep stable merge/adoption unchecked.
+6. After stable family publication, replay the reviewed application-source changes into the final adoption branch; set normal centrally managed stable versions including `CShells.Nuplane`, update reached locks, applicable Docker graph and maps, then rebuild real hosts and run named regressions, backend E2E and frozen Acts1/2 rehearsal. Complete current-head and resulting-main gates before closure.
 
 ## Complexity Tracking
 
-No constitutional exception is approved. The Error logging mismatch is recorded for correction, not waived. No blanket permission or review gate is introduced.
+No constitutional exception is approved. The upstream Error logging correction is qualified; Foundation callback behavior remains to be validated. No blanket permission or review gate is introduced.

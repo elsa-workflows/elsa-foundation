@@ -33,8 +33,8 @@ An operator changes the existing reload setting and expects subsequent deliverie
 **Acceptance Scenarios**:
 
 1. **Given** Foundation, **when** the setting is absent or invalid, **then** refresh and automatic reload remain enabled; explicit false disables both for subsequent callbacks.
-2. **Given** Workbench, **when** the setting is absent or invalid, **then** refresh remains enabled and automatic reload remains disabled; explicit true enables automatic reload.
-3. **Given** pending work, **when** configuration disables delivery or automatic reload, **then** upstream retained work follows its qualified pause/recovery semantics without an additional host scheduler.
+2. **Given** Workbench, **when** the setting is absent or invalid, **then** refresh remains enabled and automatic reload remains disabled; explicit true enables automatic reload on the next eligible completion. Changing the setting alone MUST NOT schedule work.
+3. **Given** pending work, **when** configuration disables delivery or automatic reload, **then** upstream retained work follows its qualified pause/recovery semantics without an additional host scheduler. A later eligible completion captures the changed policy; changing configuration alone does not schedule a callback or reload.
 
 ### User Story 3 - Understand failed package activation (Priority: P1)
 
