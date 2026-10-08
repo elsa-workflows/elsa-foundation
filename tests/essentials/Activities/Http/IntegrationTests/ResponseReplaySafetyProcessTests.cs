@@ -20,6 +20,8 @@ namespace Elsa.Activities.Http.IntegrationTests;
 
 public sealed class ResponseReplaySafetyProcessTests
 {
+    private const string ExternalClosureFileName = "current-format-external-closure.json";
+    private const string ExternalManifestFileName = "current-format-external-manifest.json";
     private const string ResultPrefix = "RESPONSE_REPLAY_RESULT=";
     private const string PublicationResultPrefix = "RESPONSE_REPLAY_PUBLICATION_RESULT=";
     private const string RecoveryResultPrefix = "RESPONSE_REPLAY_RECOVERY_RESULT=";
@@ -41,8 +43,8 @@ public sealed class ResponseReplaySafetyProcessTests
         var repositoryRoot = FindRepositoryRoot();
         var fixtureDirectory = Path.Combine(repositoryRoot,
             "tests", "essentials", "Activities", "Http", "IntegrationTests", "Fixtures", "ResponseReplayHost", "Fixtures");
-        var closurePath = Path.Combine(fixtureDirectory, "pre-candidate-external-closure.json");
-        var manifestPath = Path.Combine(fixtureDirectory, "pre-candidate-external-manifest.json");
+        var closurePath = Path.Combine(fixtureDirectory, ExternalClosureFileName);
+        var manifestPath = Path.Combine(fixtureDirectory, ExternalManifestFileName);
         var childProjectDirectory = Path.Combine(repositoryRoot,
             "tests", "essentials", "Activities", "Http", "IntegrationTests", "Fixtures", "ResponseReplayHost");
 
@@ -107,8 +109,8 @@ public sealed class ResponseReplaySafetyProcessTests
         var repositoryRoot = FindRepositoryRoot();
         var fixtureDirectory = Path.Combine(repositoryRoot,
             "tests", "essentials", "Activities", "Http", "IntegrationTests", "Fixtures", "ResponseReplayHost", "Fixtures");
-        var closurePath = Path.Combine(fixtureDirectory, "pre-candidate-external-closure.json");
-        var manifestPath = Path.Combine(fixtureDirectory, "pre-candidate-external-manifest.json");
+        var closurePath = Path.Combine(fixtureDirectory, ExternalClosureFileName);
+        var manifestPath = Path.Combine(fixtureDirectory, ExternalManifestFileName);
         var childProjectDirectory = Path.Combine(repositoryRoot,
             "tests", "essentials", "Activities", "Http", "IntegrationTests", "Fixtures", "ResponseReplayHost");
 
@@ -214,8 +216,8 @@ public sealed class ResponseReplaySafetyProcessTests
         var repositoryRoot = FindRepositoryRoot();
         var fixtureDirectory = Path.Combine(repositoryRoot,
             "tests", "essentials", "Activities", "Http", "IntegrationTests", "Fixtures", "ResponseReplayHost", "Fixtures");
-        var closurePath = Path.Combine(fixtureDirectory, "pre-candidate-external-closure.json");
-        var manifestPath = Path.Combine(fixtureDirectory, "pre-candidate-external-manifest.json");
+        var closurePath = Path.Combine(fixtureDirectory, ExternalClosureFileName);
+        var manifestPath = Path.Combine(fixtureDirectory, ExternalManifestFileName);
         var childProjectDirectory = Path.Combine(repositoryRoot,
             "tests", "essentials", "Activities", "Http", "IntegrationTests", "Fixtures", "ResponseReplayHost");
 
@@ -271,7 +273,7 @@ public sealed class ResponseReplaySafetyProcessTests
                 candidateDefinitionId, candidateArtifactId, candidateArtifactHash, expectedCandidateProfile);
             Assert.Equal(0, unpublish.ExitCode);
 
-            // A separate ordinary host then applies the unchanged historical JSON source through the production
+            // A separate ordinary host then applies the unchanged captured current-format JSON source through the production
             // reconciler, leaving both immutable artifacts present and the External route active.
             var reconcile = await RunChildProcessAsync(
                 childDll, ownedRoot, TimeSpan.FromMinutes(2), "response-replay External comparison reconcile",
@@ -390,8 +392,8 @@ public sealed class ResponseReplaySafetyProcessTests
         var repositoryRoot = FindRepositoryRoot();
         var fixtureDirectory = Path.Combine(repositoryRoot,
             "tests", "essentials", "Activities", "Http", "IntegrationTests", "Fixtures", "ResponseReplayHost", "Fixtures");
-        var closurePath = Path.Combine(fixtureDirectory, "pre-candidate-external-closure.json");
-        var manifestPath = Path.Combine(fixtureDirectory, "pre-candidate-external-manifest.json");
+        var closurePath = Path.Combine(fixtureDirectory, ExternalClosureFileName);
+        var manifestPath = Path.Combine(fixtureDirectory, ExternalManifestFileName);
         var childProjectDirectory = Path.Combine(repositoryRoot,
             "tests", "essentials", "Activities", "Http", "IntegrationTests", "Fixtures", "ResponseReplayHost");
 

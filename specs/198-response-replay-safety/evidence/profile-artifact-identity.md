@@ -2,7 +2,7 @@
 
 ## Status and scope
 
-On 8 October 2026, root and independent review found a material publication-identity defect while verifying #2400. The production structured executable hasher omits the pinned `ActivityContract`. This report corrects the earlier [replay-safety audit](../../../docs/reports/runtime-db-access/replay-safety-audit.md); the response annotation remains unaccepted. No database was changed during evidence readback.
+On 8 October 2026, root and independent review found a material publication-identity defect while verifying #2400. At that historical source, the production structured executable hasher omitted the pinned `ActivityContract`. This report corrects the earlier [replay-safety audit](../../../docs/reports/runtime-db-access/replay-safety-audit.md); the response annotation remains unaccepted. No database was changed during evidence readback.
 
 The bounded question is whether changing only the pinned side-effect profile changes the identity emitted by the normal workflow compiler, while existing stored artifacts retain their published interpretation. It does not claim corruption or overwrite of existing artifacts, a timing regression, or an accepted query reduction.
 
@@ -57,3 +57,16 @@ Correction selection and post-correction publication, persistence, compatibility
 ## Evidence retention
 
 Private evidence is retained under the program journal's `2400-post2497-verification-v2/`: `profile-artifact-identity-audit.md`, `root-profile-artifact-readback.json`, `root-profile-artifact-summary.json`, `identity-compiler-before/` and `identity-store-before/` with source patch, source-input manifest, command log, receipt and actual TRX. Paths identify retained local evidence, not a portable test dependency.
+
+
+## Resolved owner decision and correction
+
+The owner confirmed on 8 October that Foundation has never been released or used, so its
+workflow exports need no backwards compatibility. The choice discussed above is resolved.
+[PR #2517](https://github.com/elsa-workflows/elsa-foundation/pull/2517) directly includes the
+effective pinned profile in structured hashing, with no legacy importer, dual hash or
+migration. It merged as `9c9f475929018d96a16fb3a24549a304a7612254` and passed
+[resulting-main verification](https://github.com/elsa-workflows/elsa-foundation/pull/2517#issuecomment-6066239722).
+The [new normal-publication fixture](current-format-publication.md) replaces the old closure
+as a current-runtime test input while preserving all original evidence. #2400's conditional
+classification, new profile-pair proof and combined-source counts remain separate gates.
