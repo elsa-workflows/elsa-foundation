@@ -363,9 +363,11 @@ public sealed class WriteHttpResponseExecutionTests
             WellKnownRuntimeActivityConsumers.ClrActivity,
             RuntimeActivityDescriptor.InitialSchemaVersion,
             node.DescriptorPayload);
+        var contract = node.ActivityContract;
+        Assert.NotNull(contract);
         await using var lease = await activator.ActivateAsync(new ActivityActivationRequest(
             "wf-1",
-            node.ActivityContract!,
+            contract,
             snapshot,
             attempt,
             Descriptor: descriptor));
@@ -378,7 +380,7 @@ public sealed class WriteHttpResponseExecutionTests
         var projected = new ActivityCompletionProjector().Project(
             snapshot.InvocationId,
             attempt,
-            node.ActivityContract,
+            contract,
             transition,
             WorkflowExecutionHarness.Timestamp);
 
