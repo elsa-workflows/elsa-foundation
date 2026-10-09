@@ -63,7 +63,7 @@ As built (slice 8), where the code settled what the table leaves open:
   decide whether to replace an exception, the second to release the values. Both stay on the contract (review round
   1). `HasRegistrations` cannot be derived from `Mask`, because an exception is replaced whenever a value is
   registered, whether or not its text contains one. `Release` is kept because the reviewers accepted releasing once
-  the outcome is recorded rather than at scope disposal, and a replacement must see that call to honour it; releasing
+  the outcome is recorded rather than at scope disposal, and a replacement must see that call to honor it; releasing
   only through `DefaultRuntimeSecretMask` would leave a replacement holding values until the scope ends. The contract
   documents what a replacement owes: `HasRegistrations` answers `true` from the first non-empty registration until
   `Release`, and a replacement that answers `false` while holding a value turns masking off for that execution
@@ -111,6 +111,10 @@ Known limits of slice 8, recorded and not fixed (review round 1):
   today, and graph activities cannot bind secrets (`VF-ACT-012`), so no masked exception loses a causation it had.
 - The span test pins the activity fault path only (`FaultIncidentExecutionTests`); the drainer's handler-fault catch
   is left to slice 9's injected scenario S9.
+- Codes are never masked. A third-party activity that puts a resolved value in `ActivityFault.Code`, `Category` or
+  `FaultType`, or in the `FailureCode` of its own `IRuntimeFaultClassification` exception, persists it unmasked in the
+  fault and incident. The built-in activities are safe (the `Fault` activity's inputs refuse secret bindings, IP22);
+  research R9 masks the message only.
 
 Not covered by masking in phase 0 (spec assumption): text an activity writes to the console or its own logger, values
 it returns as outputs, and values it places in private state or bookmark payloads. For the built-ins, publish refuses a

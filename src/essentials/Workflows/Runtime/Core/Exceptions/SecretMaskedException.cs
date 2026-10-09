@@ -22,7 +22,7 @@ namespace Elsa.Workflows.Runtime.Core.Exceptions;
 /// The failure code is copied as it is, not passed through the mask: masking a short value that happens to occur in a
 /// code (a value <c>e</c> in <c>StoreUnavailable</c>) would corrupt the persisted code. A secret resolution failure code
 /// is validated as an ASCII code name (<see cref="RuntimeSecretResolution.Failure"/>); a code another
-/// <see cref="IRuntimeFaultClassification"/> implementation reports is persisted as that implementation chose it. The
+/// <see cref="IRuntimeFaultClassification"/> implementation reports is persisted as that implementation chose it, validated only as non-blank. The
 /// type names are not masked either: they come from the <see cref="Type"/>, not from text activity code wrote.
 /// </para>
 /// <para>

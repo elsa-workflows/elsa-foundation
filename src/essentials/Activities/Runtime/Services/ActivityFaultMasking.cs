@@ -24,7 +24,7 @@ namespace Elsa.Activities.Runtime.Services;
 /// The cancellation a cancellation arm rethrows is not masked: it is rethrown unchanged, so it stays a cancellation and
 /// is not recorded as a fault. When disposal also failed, the arm throws an aggregate instead, which the drainer
 /// records as a handler fault; that aggregate holds a masked copy of the cancellation, for the same token, and the
-/// masked disposal failures (<see cref="ActivityActivationLeaseDisposer.DisposeAfterCancellationAsync"/>).
+/// masked disposal failures that the lease disposer reports for a cancellation arm.
 /// </para>
 /// </remarks>
 public sealed class ActivityFaultMasking(IRuntimeSecretMask mask, string activityExecutionId) : IDisposable
