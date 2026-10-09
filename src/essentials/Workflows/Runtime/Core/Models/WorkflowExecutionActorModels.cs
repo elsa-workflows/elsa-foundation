@@ -1,3 +1,6 @@
+using System.Globalization;
+using Elsa.Workflows.Runtime.Core.Constants;
+
 namespace Elsa.Workflows.Runtime.Core.Models;
 
 /// <summary>Immutable provider-neutral partition identity transported with an execution command.</summary>
@@ -99,6 +102,24 @@ public sealed class WorkflowExecutionCommandDispatchResult
     public DateTimeOffset RecordedAt { get; }
     public string? Reason { get; }
     public IReadOnlyDictionary<string, string> Metadata { get; }
+
+    /// <summary>
+    /// Whether runtime admission refused the command at capacity (RB1, #1235). A shed start wrote nothing and left its
+    /// idempotency key unconsumed, so the caller must retry it rather than treat it as started (#2548). <c>Deferred</c>
+    /// alone does not identify a shed: the distributed leaf also returns it for "forwarded to the owning node".
+    /// </summary>
+    public bool IsShed =>
+        Metadata.TryGetValue(RuntimeMetadataKeys.DispatchShed, out var shed) &&
+        string.Equals(shed, "true", StringComparison.Ordinal);
+
+    /// <summary>The Retry-After hint accompanying a shed result, or <c>null</c> when none was given.</summary>
+    public TimeSpan? ShedRetryAfter =>
+        IsShed &&
+        Metadata.TryGetValue(RuntimeMetadataKeys.DispatchRetryAfterSeconds, out var seconds) &&
+        int.TryParse(seconds, NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsed) &&
+        parsed > 0
+            ? TimeSpan.FromSeconds(parsed)
+            : null;
 }
 
 public sealed class WorkflowExecutionCommandDispatchOptions

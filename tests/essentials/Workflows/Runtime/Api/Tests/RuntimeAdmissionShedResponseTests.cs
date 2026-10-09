@@ -51,6 +51,33 @@ public sealed class RuntimeAdmissionShedResponseTests
     }
 
     [Fact]
+    public async Task Dispatch_stimulus_returns_429_with_retry_after_when_its_only_start_was_shed()
+    {
+        var shed = new StimulusStartView("binding-1", "artifact-1", nameof(StimulusStartStatus.Shed), null);
+        await using var host = await RuntimeApiHost.StartAsync(ShedView(null), new DispatchStimulusResponse(0, 0, 0, [shed], [], ShedStartCount: 1, RetryAfterSeconds: 3));
+        using var response = await host.Client.PostAsJsonAsync("/runtime/workflows/stimuli", new { stimulusType = "t", stimulusHash = "h" });
+
+        // A shed start wrote nothing; answering 200 would tell the caller it started (#2548).
+        Assert.Equal(HttpStatusCode.TooManyRequests, response.StatusCode);
+        Assert.Equal(3, response.Headers.RetryAfter?.Delta?.TotalSeconds);
+        var body = await response.Content.ReadFromJsonAsync<DispatchStimulusResponse>();
+        Assert.Equal(1, body!.ShedStartCount);
+    }
+
+    [Fact]
+    public async Task Dispatch_stimulus_returns_200_when_a_start_went_through_beside_a_shed_one()
+    {
+        var started = new StimulusStartView("binding-1", "artifact-1", nameof(StimulusStartStatus.Started), "wfexec-1");
+        var shed = new StimulusStartView("binding-2", "artifact-2", nameof(StimulusStartStatus.Shed), null);
+        await using var host = await RuntimeApiHost.StartAsync(ShedView(null), new DispatchStimulusResponse(1, 0, 0, [started, shed], [], ShedStartCount: 1, RetryAfterSeconds: 3));
+        using var response = await host.Client.PostAsJsonAsync("/runtime/workflows/stimuli", new { stimulusType = "t", stimulusHash = "h" });
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<DispatchStimulusResponse>();
+        Assert.Equal(1, body!.ShedStartCount);
+    }
+
+    [Fact]
     public void View_lifts_the_shed_marker_out_of_the_dispatch_metadata()
     {
         var result = NewDispatchResult(new Dictionary<string, string>(StringComparer.Ordinal)
@@ -89,7 +116,7 @@ public sealed class RuntimeAdmissionShedResponseTests
     {
         public HttpClient Client { get; } = client;
 
-        public static async Task<RuntimeApiHost> StartAsync(WorkflowExecutionStartDispatchView view)
+        public static async Task<RuntimeApiHost> StartAsync(WorkflowExecutionStartDispatchView view, DispatchStimulusResponse? stimulusResponse = null)
         {
             var builder = WebApplication.CreateBuilder();
             builder.Services.AddElsaEndpoints();
@@ -100,6 +127,8 @@ public sealed class RuntimeAdmissionShedResponseTests
                 options.NormalizedAuthenticationTypes = new HashSet<string>(StringComparer.Ordinal) { "RuntimeApiTest" });
             builder.Services.AddAuthorization();
             builder.Services.AddSingleton<IWorkflowExecutionStartService>(new StubStartService(view));
+            if (stimulusResponse is not null)
+                builder.Services.AddSingleton<IStimulusDispatchService>(new StubStimulusDispatchService(stimulusResponse));
             var app = builder.Build();
             app.Use(async (context, next) =>
             {
@@ -126,6 +155,12 @@ public sealed class RuntimeAdmissionShedResponseTests
     {
         public Task<WorkflowExecutionStartDispatchView> ExecuteAsync(ExecuteWorkflow request, CancellationToken cancellationToken) =>
             Task.FromResult(view);
+    }
+
+    private sealed class StubStimulusDispatchService(DispatchStimulusResponse response) : IStimulusDispatchService
+    {
+        public Task<DispatchStimulusResponse> DispatchAsync(DispatchStimulus request, CancellationToken cancellationToken) =>
+            Task.FromResult(response);
     }
 
     private sealed class AllowAuthenticationHandler(

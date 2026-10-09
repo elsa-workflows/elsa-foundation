@@ -182,9 +182,13 @@ public sealed class StimulusRouter : IStimulusRouter
             // never persisted (see StimulusDispatchRequest.DispatchOptions), dropped by construction across process
             // boundaries. Stimulus-triggered starts are published dispatches (default reference scope, ADR 0040).
             var result = await _startDispatcher.DispatchAsync(startRequest, dispatchOptions: request.DispatchOptions, cancellationToken: cancellationToken);
-            outcomes.Add(keyed is not null && result.CommandDispatch.Status == WorkflowExecutionCommandDispatchStatus.Duplicate
-                ? StimulusStartOutcome.SkippedDuplicate(binding.TriggerBindingId, binding.ArtifactId)
-                : StimulusStartOutcome.Started(binding.TriggerBindingId, binding.ArtifactId, result.WorkflowExecutionId));
+            // A shed start wrote nothing and left its key unconsumed (#2548). Reporting it as started hands every caller an
+            // execution id that will never exist: an HTTP 202, a settled recurring occurrence, a delivered publish.
+            outcomes.Add(result.CommandDispatch.IsShed
+                ? StimulusStartOutcome.Shed(binding.TriggerBindingId, binding.ArtifactId, result.CommandDispatch.ShedRetryAfter)
+                : keyed is not null && result.CommandDispatch.Status == WorkflowExecutionCommandDispatchStatus.Duplicate
+                    ? StimulusStartOutcome.SkippedDuplicate(binding.TriggerBindingId, binding.ArtifactId)
+                    : StimulusStartOutcome.Started(binding.TriggerBindingId, binding.ArtifactId, result.WorkflowExecutionId));
         }
 
         return outcomes;

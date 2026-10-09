@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Services.Bookmarks;
@@ -159,6 +160,60 @@ public sealed class StimulusRouterTests
 
         Assert.Equal(1, retry.StartedCount);
         Assert.Equal(0, retry.SkippedStartCount);
+    }
+
+    [Fact]
+    public async Task Route_ReportsAnAdmissionShedStartAsShed_NeverAsStarted()
+    {
+        // #2548: a shed start wrote nothing. Reporting it as started handed callers an execution id that never exists.
+        var bindingStore = new InMemoryWorkflowTriggerBindingStore();
+        await bindingStore.SaveAsync(Binding("artifact-1", "node-a"));
+        var startDispatcher = new RecordingStartDispatcher { ShedNext = true };
+        var router = Router(bindingStore, new InMemoryBookmarkStateStore(), startDispatcher, new RecordingResumeDispatcher());
+
+        var result = await router.RouteAsync(Request(mode: StimulusRoutingMode.StartOnly));
+
+        Assert.Equal(0, result.StartedCount);
+        Assert.Equal(1, result.ShedStartCount);
+        var shed = Assert.Single(result.Starts);
+        Assert.Equal(StimulusStartStatus.Shed, shed.Status);
+        Assert.Null(shed.WorkflowExecutionId);
+        Assert.Equal(TimeSpan.FromSeconds(3), shed.RetryAfter);
+        Assert.Equal(TimeSpan.FromSeconds(3), result.ShedRetryAfter);
+    }
+
+    [Fact]
+    public async Task Route_WithIdempotencyKey_RetriesAShedStart_AsAFreshStart()
+    {
+        // A shed start leaves its key unconsumed, so the retry starts the workflow rather than answering a duplicate.
+        var bindingStore = new InMemoryWorkflowTriggerBindingStore();
+        await bindingStore.SaveAsync(Binding("artifact-1", "node-a"));
+        var startDispatcher = new RecordingStartDispatcher { ShedNext = true };
+        var router = Router(bindingStore, new InMemoryBookmarkStateStore(), startDispatcher, new RecordingResumeDispatcher());
+
+        var shed = await router.RouteAsync(Request(mode: StimulusRoutingMode.StartOnly, idempotencyKey: "delivery-1"));
+        var retry = await router.RouteAsync(Request(mode: StimulusRoutingMode.StartOnly, idempotencyKey: "delivery-1"));
+
+        Assert.Equal(1, shed.ShedStartCount);
+        Assert.Equal(1, retry.StartedCount);
+        Assert.Equal(0, retry.ShedStartCount);
+        Assert.Equal(0, retry.SkippedStartCount);
+    }
+
+    [Fact]
+    public async Task Route_ADeferredStartWithoutTheShedMarker_IsStarted()
+    {
+        // Deferred alone is not backpressure: the distributed leaf answers it for a start forwarded to its owning node.
+        var bindingStore = new InMemoryWorkflowTriggerBindingStore();
+        await bindingStore.SaveAsync(Binding("artifact-1", "node-a"));
+        var startDispatcher = new RecordingStartDispatcher { ForwardNext = true };
+        var router = Router(bindingStore, new InMemoryBookmarkStateStore(), startDispatcher, new RecordingResumeDispatcher());
+
+        var result = await router.RouteAsync(Request(mode: StimulusRoutingMode.StartOnly));
+
+        Assert.Equal(1, result.StartedCount);
+        Assert.Equal(0, result.ShedStartCount);
+        Assert.NotNull(Assert.Single(result.Starts).WorkflowExecutionId);
     }
 
     [Fact]
@@ -495,6 +550,12 @@ public sealed class StimulusRouterTests
         public List<WorkflowExecutionCommandDispatchOptions?> DispatchOptions { get; } = [];
         public Exception? FailNext { get; set; }
 
+        /// <summary>Answers the next dispatch as runtime admission would at capacity: Deferred, shed, nothing written.</summary>
+        public bool ShedNext { get; set; }
+
+        /// <summary>Answers the next dispatch Deferred without the shed marker, as the distributed leaf does when forwarding.</summary>
+        public bool ForwardNext { get; set; }
+
         public ValueTask<WorkflowExecutionStartDispatchResult> DispatchAsync(WorkflowExecutionStartDispatchRequest request, WorkflowExecutableReferenceScope requiredScope = WorkflowExecutableReferenceScope.Published, WorkflowExecutionCommandDispatchOptions? dispatchOptions = null, CancellationToken cancellationToken = default)
         {
             Requests.Add(request);
@@ -506,6 +567,29 @@ public sealed class StimulusRouterTests
             }
 
             var executionId = request.WorkflowExecutionId ?? $"wfexec-new-{++_counter}";
+            if (ShedNext)
+            {
+                ShedNext = false;
+                return new ValueTask<WorkflowExecutionStartDispatchResult>(Result(
+                    request.ArtifactId,
+                    executionId,
+                    WorkflowExecutionCommandDispatchStatus.Deferred,
+                    "Runtime dispatch admission is at capacity.",
+                    new Dictionary<string, string>
+                    {
+                        [RuntimeMetadataKeys.DispatchShed] = "true",
+                        [RuntimeMetadataKeys.DispatchRetryAfterSeconds] = "3"
+                    }));
+            }
+
+            if (ForwardNext)
+            {
+                ForwardNext = false;
+                _started.Add(executionId);
+                return new ValueTask<WorkflowExecutionStartDispatchResult>(Result(
+                    request.ArtifactId, executionId, WorkflowExecutionCommandDispatchStatus.Deferred, "Forwarded to the owning node."));
+            }
+
             var status = _started.Add(executionId)
                 ? WorkflowExecutionCommandDispatchStatus.Accepted
                 : WorkflowExecutionCommandDispatchStatus.Duplicate;
@@ -514,7 +598,12 @@ public sealed class StimulusRouterTests
             return new ValueTask<WorkflowExecutionStartDispatchResult>(Result(request.ArtifactId, executionId, status));
         }
 
-        private static WorkflowExecutionStartDispatchResult Result(string artifactId, string executionId, WorkflowExecutionCommandDispatchStatus status) =>
+        private static WorkflowExecutionStartDispatchResult Result(
+            string artifactId,
+            string executionId,
+            WorkflowExecutionCommandDispatchStatus status,
+            string? reason = null,
+            IReadOnlyDictionary<string, string>? metadata = null) =>
             new(
                 executionId,
                 new WorkflowExecutableIdentity(artifactId, "definition-1", "version-1", "1.0.0", "sha256:artifact"),
@@ -522,7 +611,9 @@ public sealed class StimulusRouterTests
                     envelopeId: $"envelope-{executionId}",
                     workflowExecutionId: executionId,
                     status: status,
-                    recordedAt: DateTimeOffset.UnixEpoch),
+                    recordedAt: DateTimeOffset.UnixEpoch,
+                    reason: reason,
+                    metadata: metadata),
                 new WorkflowExecutionActorDescriptor(
                     workflowExecutionId: executionId,
                     agentId: $"agent-{executionId}",

@@ -147,6 +147,37 @@ public sealed class HttpEndpointMiddlewareTests
     }
 
     [Fact]
+    public async Task MatchingRequest_WhoseOnlyStartWasShedByAdmission_Replies429WithRetryAfter_NotAccepted()
+    {
+        // #2548: a shed start wrote nothing. A 202 carried a started execution id that never exists, and a 404 would
+        // claim the route is dead; 429 with Retry-After tells the caller to retry.
+        var router = new RecordingStimulusRouter(StimulusStartOutcome.Shed("binding-1", "artifact-1", TimeSpan.FromSeconds(3)));
+        var store = await StoreWith(Binding("artifact-1", "orders/webhook", "POST"));
+        var middleware = Middleware(router, store, "orders/webhook");
+        var context = NewContext("/workflows/http/orders/webhook", "POST", body: """{"id":7}""");
+
+        await middleware.InvokeAsync(context, _ => Task.CompletedTask);
+
+        Assert.Equal(StatusCodes.Status429TooManyRequests, context.Response.StatusCode);
+        Assert.Equal("3", context.Response.Headers.RetryAfter.ToString());
+    }
+
+    [Fact]
+    public async Task MatchingRequest_WithAStartAndAShedStart_RepliesAccepted_ForTheStartedOne()
+    {
+        var router = new RecordingStimulusRouter(
+            StimulusStartOutcome.Started("binding-1", "artifact-1", "wf-exec-1"),
+            StimulusStartOutcome.Shed("binding-2", "artifact-1", retryAfter: null));
+        var store = await StoreWith(Binding("artifact-1", "orders/webhook", "POST"));
+        var middleware = Middleware(router, store, "orders/webhook");
+        var context = NewContext("/workflows/http/orders/webhook", "POST", body: """{"id":7}""");
+
+        await middleware.InvokeAsync(context, _ => Task.CompletedTask);
+
+        Assert.Equal(StatusCodes.Status202Accepted, context.Response.StatusCode);
+    }
+
+    [Fact]
     public async Task MatchingTemplate_WithNoStartedTriggers_RepliesNotFound()
     {
         // The template is in the table (so it resolves and reaches dispatch) but the router starts nothing.
