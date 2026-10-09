@@ -1173,7 +1173,7 @@ public sealed class EfRuntimeArtifactScopeTests
         var now = DateTimeOffset.UtcNow;
 
         await using var competitor = database.Open("tenant-a");
-        var contention = new CompetingHolderBeforeEverySaveInterceptor(async attempt =>
+        var contention = new CompetingHolderInterceptor(async attempt =>
             Assert.NotNull(await competitor.Executable.TryAcquireRootWriteLeaseAsync(
                 "same-artifact-acquire", $"competitor-{attempt}", now.AddMinutes(5), now)));
         await using var subject = database.Open("tenant-a", contention);
@@ -1181,7 +1181,7 @@ public sealed class EfRuntimeArtifactScopeTests
         var lease = await subject.Executable.TryAcquireRootWriteLeaseAsync("same-artifact-acquire", "subject", now.AddMinutes(5), now);
 
         Assert.NotNull(lease);
-        Assert.True(contention.Attempts > 0);
+        contention.AssertContendedWithoutExhaustingCompetition();
         Assert.True(await competitor.Executable.RenewRootWriteLeaseAsync(lease!, now.AddMinutes(6), now));
     }
 
@@ -1196,13 +1196,13 @@ public sealed class EfRuntimeArtifactScopeTests
         Assert.NotNull(lease);
 
         await using var competitor = database.Open("tenant-a");
-        var contention = new CompetingHolderBeforeEverySaveInterceptor(async attempt =>
+        var contention = new CompetingHolderInterceptor(async attempt =>
             Assert.NotNull(await competitor.Executable.TryAcquireRootWriteLeaseAsync(
                 "same-artifact-renew", $"competitor-{attempt}", now.AddMinutes(5), now)));
         await using var subject = database.Open("tenant-a", contention);
 
         Assert.True(await subject.Executable.RenewRootWriteLeaseAsync(lease!, now.AddMinutes(10), now));
-        Assert.True(contention.Attempts > 0);
+        contention.AssertContendedWithoutExhaustingCompetition();
     }
 
     [Fact]
@@ -1216,14 +1216,14 @@ public sealed class EfRuntimeArtifactScopeTests
         Assert.NotNull(lease);
 
         await using var competitor = database.Open("tenant-a");
-        var contention = new CompetingHolderBeforeEverySaveInterceptor(async attempt =>
+        var contention = new CompetingHolderInterceptor(async attempt =>
             Assert.NotNull(await competitor.Executable.TryAcquireRootWriteLeaseAsync(
                 "same-artifact-release", $"competitor-{attempt}", now.AddMinutes(5), now)));
         await using var subject = database.Open("tenant-a", contention);
 
         await subject.Executable.ReleaseRootWriteLeaseAsync(lease!);
 
-        Assert.True(contention.Attempts > 0);
+        contention.AssertContendedWithoutExhaustingCompetition();
         Assert.False(await competitor.Executable.RenewRootWriteLeaseAsync(lease!, now.AddMinutes(6), now));
     }
 
@@ -1754,25 +1754,74 @@ public sealed class EfRuntimeArtifactScopeTests
     }
 
     /// <summary>
-    /// Commits a competing holder's write before every save of the intercepted context, up to a bound so a
-    /// design that keeps retrying cannot loop forever. The bound exceeds <c>EfWriteRetry.DefaultMaxAttempts</c>.
+    /// Commits a competing holder's write before every point where the intercepted context can write: before
+    /// <c>SaveChanges</c>, before a transaction starts, and before any command issued outside a transaction (which
+    /// covers set-based updates and deletes). Competition is unbounded up to a safety cap; an operation that only
+    /// succeeds once competition stops reaches the cap and fails the assertion, so retry-until-quiet designs cannot
+    /// pass. No competition runs inside an open transaction, so it never contends with the subject's own locks.
     /// </summary>
-    private sealed class CompetingHolderBeforeEverySaveInterceptor(Func<int, Task> compete) : SaveChangesInterceptor
+    private sealed class CompetingHolderInterceptor(Func<int, Task> compete)
+        : ISaveChangesInterceptor, IDbTransactionInterceptor, IDbCommandInterceptor
     {
-        private const int MaxCompetingWrites = EfWriteRetry.DefaultMaxAttempts * 2;
+        private const int MaxCompetingWrites = 512;
         private int attempts;
 
         public int Attempts => Volatile.Read(ref attempts);
 
-        public override async ValueTask<InterceptionResult<int>> SavingChangesAsync(
-            DbContextEventData eventData,
-            InterceptionResult<int> result,
+        public void AssertContendedWithoutExhaustingCompetition()
+        {
+            Assert.True(Attempts > 0, "No competing write was injected; the subject's write path was not intercepted.");
+            Assert.True(Attempts < MaxCompetingWrites, $"The subject only succeeded after {MaxCompetingWrites} competing writes stopped.");
+        }
+
+        public async ValueTask<InterceptionResult<int>> SavingChangesAsync(
+            DbContextEventData eventData, InterceptionResult<int> result, CancellationToken cancellationToken = default)
+        {
+            if (eventData.Context?.Database.CurrentTransaction is null)
+                await CompeteAsync();
+            return result;
+        }
+
+        public async ValueTask<InterceptionResult<DbTransaction>> TransactionStartingAsync(
+            DbConnection connection, TransactionStartingEventData eventData, InterceptionResult<DbTransaction> result,
             CancellationToken cancellationToken = default)
         {
-            var attempt = Interlocked.Increment(ref attempts);
-            if (attempt <= MaxCompetingWrites)
-                await compete(attempt);
+            await CompeteAsync();
             return result;
+        }
+
+        public async ValueTask<InterceptionResult<DbDataReader>> ReaderExecutingAsync(
+            DbCommand command, CommandEventData eventData, InterceptionResult<DbDataReader> result,
+            CancellationToken cancellationToken = default)
+        {
+            if (command.Transaction is null)
+                await CompeteAsync();
+            return result;
+        }
+
+        public async ValueTask<InterceptionResult<int>> NonQueryExecutingAsync(
+            DbCommand command, CommandEventData eventData, InterceptionResult<int> result,
+            CancellationToken cancellationToken = default)
+        {
+            if (command.Transaction is null)
+                await CompeteAsync();
+            return result;
+        }
+
+        public async ValueTask<InterceptionResult<object>> ScalarExecutingAsync(
+            DbCommand command, CommandEventData eventData, InterceptionResult<object> result,
+            CancellationToken cancellationToken = default)
+        {
+            if (command.Transaction is null)
+                await CompeteAsync();
+            return result;
+        }
+
+        private async Task CompeteAsync()
+        {
+            var attempt = Interlocked.Increment(ref attempts);
+            if (attempt < MaxCompetingWrites)
+                await compete(attempt);
         }
     }
 
