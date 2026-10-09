@@ -1,7 +1,6 @@
 using System.Diagnostics;
 using System.Net;
 using System.Net.Http.Json;
-using System.Runtime.CompilerServices;
 using System.Security.Claims;
 using System.Text;
 using System.Text.Encodings.Web;
@@ -35,6 +34,7 @@ using Elsa.Serialization.SystemText;
 using Elsa.Tasks;
 using Elsa.Workflows.Design.Api;
 using Elsa.Workflows.Design.Persistence.EntityFrameworkCore;
+using Elsa.Git;
 using Elsa.Workflows.Design.Reconciliation.Git;
 using Elsa.Workflows.Design.Reconciliation.Git.Contracts;
 using Elsa.Workflows.Design.Validations;
@@ -59,6 +59,7 @@ using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Xunit;
 
@@ -152,7 +153,8 @@ public sealed class SecretsCanaryWorkflowHost : IAsyncDisposable
         {
             Directory.CreateDirectory(Path.Join(root.FullName, "design"));
             Directory.CreateDirectory(Path.Join(root.FullName, "runtime"));
-            await CreateGitRemoteAsync(Path.Join(root.FullName, "git-remote.git"), Path.Join(root.FullName, "git-seed"));
+            await File.WriteAllTextAsync(EmptyGitConfigPath(root.FullName), "");
+            await CreateGitRemoteAsync(root.FullName, Path.Join(root.FullName, "git-remote.git"), Path.Join(root.FullName, "git-seed"));
 
             var configuration = new ConfigurationBuilder().AddInMemoryCollection(ShellSettings(root.FullName, mode)).Build();
             var builder = WebApplication.CreateBuilder(new WebApplicationOptions { EnvironmentName = "Development" });
@@ -167,6 +169,8 @@ public sealed class SecretsCanaryWorkflowHost : IAsyncDisposable
             builder.Services.AddSingleton(new CanaryRecorder());
             builder.Services.AddSingleton(new CanaryInjections());
             builder.Services.AddSingleton<IDistributedLockProvider, ProcessLockProvider>();
+            // Registered ahead of the git feature's AddGitClient, which only adds a client when none is registered.
+            builder.Services.AddSingleton<IGitClient>(new ConfigIsolatedGitClient(new GitClient("git", NullLogger.Instance), EmptyGitConfigPath(root.FullName)));
             builder.Services.AddFoundationIdentityAbstractions(options =>
                 options.NormalizedAuthenticationTypes = new HashSet<string>(StringComparer.Ordinal) { AuthenticationScheme });
             builder.Services.AddAuthentication(AuthenticationScheme).AddScheme<AuthenticationSchemeOptions, CanaryAuthenticationHandler>(AuthenticationScheme, _ => { });
@@ -331,7 +335,7 @@ public sealed class SecretsCanaryWorkflowHost : IAsyncDisposable
         {
             ["nodeId"] = nodeId,
             ["activityVersionId"] = activityVersionId,
-            ["inputs"] = new JsonArray(inputs.Select(JsonNode (input) => input).ToArray()),
+            ["inputs"] = new JsonArray(inputs.Cast<JsonNode>().ToArray()),
             ["outputs"] = new JsonArray()
         };
         var (definitionId, versionId) = await SubmitAsync(name, root);
@@ -537,7 +541,7 @@ public sealed class SecretsCanaryWorkflowHost : IAsyncDisposable
     }
 
     /// <summary>The export branch's history with every patch, as text: git stores blobs compressed, so its object files show nothing.</summary>
-    public async Task<string> ReadGitHistoryAsync() => await RunGitAsync(GitClonePath, "log", "-p", "--all", "--no-color");
+    public async Task<string> ReadGitHistoryAsync() => await RunGitAsync(_root.FullName, GitClonePath, "log", "-p", "--all", "--no-color");
 
     /// <summary>The export tree's files, outside the clone's own <c>.git</c> folder.</summary>
     public IReadOnlyList<string> GitTreeFiles() =>
@@ -554,14 +558,11 @@ public sealed class SecretsCanaryWorkflowHost : IAsyncDisposable
     {
         await using var scope = Shell.ServiceProvider.CreateAsyncScope();
         var store = scope.ServiceProvider.GetRequiredService<IActivityExecutionInspectionStore>();
-        var projections = new List<ActivityExecutionInspectionProjection>();
+        var lookups = new List<ActivityExecutionInspectionProjection?>();
         foreach (var state in await scope.ServiceProvider.GetRequiredService<IActivityExecutionStateStore>().ListAllAsync(workflowExecutionId))
-        {
-            if (await store.FindAsync(workflowExecutionId, state.InvocationId) is { } projection)
-                projections.Add(projection);
-        }
+            lookups.Add(await store.FindAsync(workflowExecutionId, state.InvocationId));
 
-        return projections;
+        return lookups.Where(projection => projection is not null).Select(projection => projection!).ToList();
     }
 
     public static string Serialize<T>(T value) => JsonSerializer.Serialize(value, Web);
@@ -624,22 +625,23 @@ public sealed class SecretsCanaryWorkflowHost : IAsyncDisposable
     private static string GeneratedKey() => $"{Guid.NewGuid():N}{Guid.NewGuid():N}";
 
     /// <summary>A bare repository whose <c>main</c> branch has one commit, so the Writer's clone can check it out.</summary>
-    private static async Task CreateGitRemoteAsync(string remote, string seed)
+    private static async Task CreateGitRemoteAsync(string root, string remote, string seed)
     {
         Directory.CreateDirectory(remote);
         Directory.CreateDirectory(seed);
-        await RunGitAsync(remote, "init", "--bare", "-b", GitBranch);
-        await RunGitAsync(seed, "init", "-b", GitBranch);
+        await RunGitAsync(root, remote, "init", "--bare", "-b", GitBranch);
+        await RunGitAsync(root, seed, "init", "-b", GitBranch);
         await File.WriteAllTextAsync(Path.Join(seed, "README.md"), "canary");
-        await RunGitAsync(seed, "add", "README.md");
-        await RunGitAsync(seed, "-c", "user.email=canary@elsa.local", "-c", "user.name=Canary", "commit", "-m", "init");
-        await RunGitAsync(seed, "remote", "add", "origin", remote);
-        await RunGitAsync(seed, "push", "origin", GitBranch);
+        await RunGitAsync(root, seed, "add", "README.md");
+        await RunGitAsync(root, seed, "-c", "user.email=canary@elsa.local", "-c", "user.name=Canary", "commit", "-m", "init");
+        await RunGitAsync(root, seed, "remote", "add", "origin", remote);
+        await RunGitAsync(root, seed, "push", "origin", GitBranch);
     }
 
-    private static async Task<string> RunGitAsync(string workingDirectory, params string[] arguments)
+    private static async Task<string> RunGitAsync(string root, string workingDirectory, params string[] arguments)
     {
         var start = new ProcessStartInfo("git") { WorkingDirectory = workingDirectory, RedirectStandardOutput = true, RedirectStandardError = true };
+        ApplyEmptyGitConfig(start.Environment, EmptyGitConfigPath(root));
         foreach (var argument in arguments)
             start.ArgumentList.Add(argument);
         using var process = Process.Start(start)!;
@@ -678,15 +680,44 @@ public sealed class SecretsCanaryWorkflowHost : IAsyncDisposable
         }
     }
 
+    /// <summary>The empty file a host points git's global and system config at, so each OS reads an empty config.</summary>
+    private static string EmptyGitConfigPath(string root) => Path.Join(root, "git-empty.config");
+
     /// <summary>
-    /// Isolates every git process this test assembly starts from the developer's global and system git config, as the
-    /// GitOps tests do: a global <c>commit.gpgsign = true</c> would make each commit ask a GPG agent to sign.
+    /// Points git's global and system config at <paramref name="emptyConfig"/> (a path, so it works on every OS, unlike
+    /// <c>/dev/null</c>), as the GitOps tests isolate from the developer's config: a global <c>commit.gpgsign = true</c>
+    /// would make each commit ask a GPG agent to sign. The export commits carry their identity as <c>-c user.*</c> arguments
+    /// (<c>GitExportIdentity.CommitArgs</c>) and the seed commit does too, so nothing needs a configured identity.
     /// </summary>
-    [ModuleInitializer]
-    internal static void IsolateFromDeveloperGitConfig()
+    private static void ApplyEmptyGitConfig(IDictionary<string, string?> environment, string emptyConfig)
     {
-        Environment.SetEnvironmentVariable("GIT_CONFIG_GLOBAL", "/dev/null");
-        Environment.SetEnvironmentVariable("GIT_CONFIG_NOSYSTEM", "1");
+        environment["GIT_CONFIG_GLOBAL"] = emptyConfig;
+        environment["GIT_CONFIG_SYSTEM"] = emptyConfig;
+        environment["GIT_CONFIG_NOSYSTEM"] = "1";
+    }
+
+    /// <summary>
+    /// The git client of one host: the feature's own client, with git's global and system config pointed at an empty
+    /// file for the processes the feature starts through <see cref="IGitClient.RunAsync(string, IReadOnlyDictionary{string, string}, CancellationToken, string[])"/>,
+    /// which is all the git reconciliation feature calls. The two synchronous reads are not isolated and delegate as they are.
+    /// </summary>
+    private sealed class ConfigIsolatedGitClient(IGitClient inner, string emptyConfig) : IGitClient
+    {
+        public Task<string> RunAsync(string workingDirectory, CancellationToken cancellationToken, params string[] arguments) =>
+            RunAsync(workingDirectory, new Dictionary<string, string>(), cancellationToken, arguments);
+
+        public Task<string> RunAsync(string workingDirectory, IReadOnlyDictionary<string, string> environment, CancellationToken cancellationToken, params string[] arguments)
+        {
+            var isolated = new Dictionary<string, string?>();
+            ApplyEmptyGitConfig(isolated, emptyConfig);
+            foreach (var (name, value) in environment)
+                isolated[name] = value;
+            return inner.RunAsync(workingDirectory, isolated.ToDictionary(pair => pair.Key, pair => pair.Value!), cancellationToken, arguments);
+        }
+
+        public string RunOrDefault(string workingDirectory, params string[] arguments) => inner.RunOrDefault(workingDirectory, arguments);
+
+        public bool IsGitRepository(string repositoryPath) => inner.IsGitRepository(repositoryPath);
     }
 
     /// <summary>A lock provider for one process, which is all one canary host needs.</summary>
