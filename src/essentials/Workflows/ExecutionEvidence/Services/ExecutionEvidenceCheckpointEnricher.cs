@@ -138,8 +138,8 @@ public sealed class ExecutionEvidenceCheckpointEnricher(
         // RedactSensitiveValues says, so it is recorded as a value withheld for encryption. Producer withholding keeps one
         // out of runtime state and the commit backstop refuses a commit that carries one, but enrichers run before that
         // backstop.
-        if (envelope is { Presence: ValuePresence.Present, Policy.RequiresEncryption: true })
-            return CaptureWithheld(new WithheldValue(WithheldValueKind.PolicyRequiresEncryption));
+        if (envelope.HoldsValueRequiringEncryption())
+            return CaptureWithheld(WithheldValue.PolicyRequiresEncryption());
 
         // Content identity is derived once, up front, from whatever the envelope actually holds — never from a prefix,
         // a length, or a field that only some dispositions populate. Every silent-lost-write defect in this module has

@@ -154,8 +154,8 @@ public sealed class WorkflowExecutableInspector(
         var compiledInputs = executable.Nodes
             .SelectMany(node => node.InputBindings.Values.Select(binding => new WorkflowExecutableCompiledInputView(
                 node.ExecutableNodeId,
-                Binding(binding, includeSourceDetails: !HidesValue(binding.EffectivePolicy), includeSecretReference: true),
-                HidesValue(binding.EffectivePolicy) ? "redacted" : "allowed")))
+                Binding(binding, includeSourceDetails: !binding.EffectivePolicy.HidesValue(), includeSecretReference: true),
+                binding.EffectivePolicy.HidesValue() ? "redacted" : "allowed")))
             .ToArray();
 
         return new WorkflowExecutableInputSourcesView(
@@ -183,11 +183,6 @@ public sealed class WorkflowExecutableInspector(
             retained,
             retained > 0 || references.Any(reference => reference.IsLive(now)));
     }
-
-    /// <summary>
-    /// A value whose policy marks it sensitive or as requiring encryption is never shown by these views (spec 188).
-    /// </summary>
-    private static bool HidesValue(ValueProtectionPolicy policy) => policy.IsSensitive || policy.RequiresEncryption;
 
     /// <summary>
     /// An authored input's own sensitivity flag is only the author's choice: an activity's input declaration reaches the
@@ -220,9 +215,9 @@ public sealed class WorkflowExecutableInspector(
     private static IEnumerable<bool> CompiledVerdicts(ExecutableNode node, string inputKey)
     {
         if (node.InputBindings.TryGetValue(inputKey, out var binding))
-            yield return HidesValue(binding.EffectivePolicy);
+            yield return binding.EffectivePolicy.HidesValue();
         if (node.ActivityContract?.Inputs.GetValueOrDefault(inputKey) is { } contract)
-            yield return contract.Policy.IsSensitive || contract.Policy.RequiresEncryption;
+            yield return contract.Policy.HidesValue();
     }
 
     private async ValueTask<IReadOnlyDictionary<string, int>> RetainedCountsAsync(CancellationToken cancellationToken) =>
@@ -432,7 +427,7 @@ public sealed class WorkflowExecutableInspector(
             binding.Source.ToString(),
             includeSourceDetails ? Preview(binding) : secret?.Name,
             binding.InputKey,
-            HidesValue(binding.EffectivePolicy),
+            binding.EffectivePolicy.HidesValue(),
             includeSourceDetails ? binding.LiteralValue : null,
             includeSourceDetails ? binding.Expression : null,
             includeSourceDetails ? binding.WorkflowRequest : null,

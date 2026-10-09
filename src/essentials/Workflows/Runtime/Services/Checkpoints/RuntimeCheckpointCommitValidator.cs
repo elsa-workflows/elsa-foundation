@@ -112,10 +112,11 @@ public static class RuntimeCheckpointCommitValidator
     /// envelopes this rule reads withhold such a value before it reaches state through one rule,
     /// <see cref="Values.RuntimeEncryptionWithholding"/>: <see cref="Values.RuntimeExternalEnvelopeStorage"/> for input
     /// materialization and intrinsic writes, and the activity completion projector for a completion result. So a value
-    /// refused here comes from a producer that bypasses those, such as a replacement materializer, or from a value the
-    /// commit copies without a producer, such as a variable initial value or an output capture into a variable declared
-    /// to require encryption, from a runtime artifact imported without publication. The message names the state and the
-    /// value's key, never the value.
+    /// refused here comes from one of two places. The first is a producer that bypasses those, such as a replacement
+    /// materializer. The second is a value the commit copies without a producer, which only a runtime artifact imported
+    /// without publication can declare: a variable initial value whose policy requires encryption, or an output capture,
+    /// of a result whose policy does not require encryption, into a variable declared to require it. The message names
+    /// the state and the value's key, never the value.
     /// </summary>
     /// <remarks>
     /// It reads every value envelope a workflow or activity execution state carries, and each durable value whose
@@ -168,8 +169,7 @@ public static class RuntimeCheckpointCommitValidator
         (frame?.Values ?? new Dictionary<string, ValueEnvelope>()).Select(value => ($"{location} '{value.Key}'", value.Value));
 
     private static bool IsPlainTextEncryptionRequired(ValueEnvelope value) =>
-        value is { Presence: ValuePresence.Present, Policy.RequiresEncryption: true } &&
-        (value.InlineValue.HasValue || value.ExternalReference is not null);
+        value.HoldsValueRequiringEncryption() && (value.InlineValue.HasValue || value.ExternalReference is not null);
 
     // A durable value records its policy as metadata. An inline JSON null is an explicit null, which holds no value.
     private static bool IsPlainTextEncryptionRequired(DurableValueState value) =>

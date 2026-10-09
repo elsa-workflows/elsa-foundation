@@ -53,7 +53,10 @@ they do not join to publishing records. Runtime deliberately exposes no deactiva
 
 Workflow secret safety (spec 188) decides what the inspection reads show for a secret-bound input and for any value
 whose policy marks it sensitive or as requiring encryption. A secret reference names where a value comes from and is
-not a value, so the reads show it; they never show the value.
+not a value, so the reads show it. The executable reads below show no such value. The activity-execution reads show
+no value for a withheld record. They show no value of a sensitive record either under the default payload capture
+policy, which captures no payload for one; under a replacement policy that captures one, a caller authorized to
+resolve value payloads can read it through the value-payload read.
 
 - **Executable detail** (`GET .../executables/{artifactId}`) shows no binding source detail at all: every input binding's
   `summary`, literal, expression, references, conversion plan, metadata and `secret` are null there.
@@ -73,6 +76,11 @@ not a value, so the reads show it; they never show the value.
   marker. For any other record, `isSensitive` is the flag the runtime recorded: the invoke path flags an input when
   its value's effective policy or its pinned input contract marks it sensitive.
 - **Descendants** (`.../activity-executions/{activityExecutionId}/descendants`) carry no value evidence.
+
+Known limit: an unmatched authored input (no executable node matched by its node id holds a compiled binding or a
+pinned input contract for its input key) is reported as `isSensitive: true` with access state `redacted`. There it
+reports the redaction, not a known sensitivity. Over-masking is safe, and a distinct access state would add a value
+that Studio's typing of this view does not expect, so the wire shape stays as is.
 
 ## Alteration plan API
 

@@ -67,12 +67,23 @@ public sealed class RuntimeOutputCaptureProjector
                 throw new InvalidOperationException($"Activity completion did not produce declared output projection '{capture.OutputName}'.");
             if (projected.Presence == ValuePresence.Absent)
                 continue;
+            var targetsVariable = capture.ValueId.StartsWith(RuntimeWorkflowStateSeed.VariableValueIdPrefix, StringComparison.Ordinal);
             // A result whose policy requires encryption is withheld by the completion projector (spec 188, FR-010) and
-            // holds no value to capture. Neither a durable output nor a captured variable write has a withheld form, so
-            // the capture is refused before the storage driver sees anything, and so is a present projection whose
-            // policy requires encryption, which only a projection built outside the completion projector can carry.
-            if (projected.Presence == ValuePresence.Withheld || RuntimeEncryptionWithholding.TryWithhold(projected, projected.Policy, out _))
-                throw SecretBindingDiagnostics.WithheldOutputNotCaptured(capture.OutputName);
+            // holds no value to capture; a present projection whose policy requires encryption, which only a projection
+            // built outside the completion projector can carry, is treated the same. Neither reaches a storage driver.
+            // A workflow variable has a withheld form: the capture writes the marker into the variable frame, as Set
+            // does, and a reader of the variable refuses it with VF-ACT-010. A durable output has none, so the capture
+            // is refused.
+            if (projected.Presence == ValuePresence.Withheld || projected.HoldsValueRequiringEncryption())
+            {
+                if (!targetsVariable)
+                    throw SecretBindingDiagnostics.WithheldOutputNotCaptured(capture.OutputName);
+
+                var withheld = RuntimeEncryptionWithholding.TryWithhold(projected, projected.Policy, out var marker) ? marker : projected;
+                workflowVariableWrites[TargetVariableKey(capture, node)] = RuntimeDurableValueEncoding.ForWithheld(withheld);
+                continue;
+            }
+
             ValidateDurableCaptureBoundary(capture, projected);
 
             var value = capture.ConversionPlan is null
@@ -92,16 +103,9 @@ public sealed class RuntimeOutputCaptureProjector
 
             // A workflow-variable capture writes the canonical root variable frame (#972), not a durable
             // value row — the frame is the one runtime truth for workflow-scope variables.
-            if (capture.ValueId.StartsWith(RuntimeWorkflowStateSeed.VariableValueIdPrefix, StringComparison.Ordinal))
+            if (targetsVariable)
             {
-                if (!capture.Metadata.TryGetValue(RuntimeMetadataKeys.TargetVariableReferenceKey, out var variableKey) ||
-                    string.IsNullOrWhiteSpace(variableKey))
-                {
-                    throw new InvalidOperationException(
-                        $"Output capture '{capture.OutputName}' on executable node '{node.ExecutableNodeId}' targets a workflow variable but carries no '{RuntimeMetadataKeys.TargetVariableReferenceKey}' metadata.");
-                }
-
-                workflowVariableWrites[variableKey] = encoding;
+                workflowVariableWrites[TargetVariableKey(capture, node)] = encoding;
                 continue;
             }
 
@@ -130,6 +134,13 @@ public sealed class RuntimeOutputCaptureProjector
 
         return new RuntimeOutputCaptureProjection(changes, workflowVariableWrites);
     }
+
+    private static string TargetVariableKey(RuntimeOutputCapture capture, ExecutableNode node) =>
+        capture.Metadata.TryGetValue(RuntimeMetadataKeys.TargetVariableReferenceKey, out var variableKey) &&
+        !string.IsNullOrWhiteSpace(variableKey)
+            ? variableKey
+            : throw new InvalidOperationException(
+                $"Output capture '{capture.OutputName}' on executable node '{node.ExecutableNodeId}' targets a workflow variable but carries no '{RuntimeMetadataKeys.TargetVariableReferenceKey}' metadata.");
 
     private static void ValidateDurableCaptureBoundary(RuntimeOutputCapture capture, ValueEnvelope projected)
     {

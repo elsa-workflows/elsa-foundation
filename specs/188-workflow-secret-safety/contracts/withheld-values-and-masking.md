@@ -17,11 +17,20 @@ Proposed behavior for FR-010 to FR-012. Decisions are in [research R3, R8 and R9
   (`RuntimeEncryptionWithholding`) runs in `ActivityCompletionProjector` before it decides whether to externalize an
   activity result, so the completion result and its projections carry the marker. These two are the only callers of
   `IExternalPayloadStore.WriteAsync` in `src`, so neither writes such a value to an `IExternalPayloadStore`; a
-  replacement `IRuntimeActivityInputMaterializer` or any other host-supplied writer is outside this. An output capture
-  refuses a withheld result with `VF-ACT-010` before its storage driver encodes it, because neither a durable output
-  nor a captured variable write has a withheld form. Of the intrinsics, `Set` keeps the marker in its variable and
-  `Return` as its completion result; `Control`, `SetCorrelationId`, `SetInstanceName` and `SetOutput` refuse it with
-  `VF-ACT-010`.
+  replacement `IRuntimeActivityInputMaterializer` or any other host-supplied writer is outside this. The rule's
+  predicate, a present value whose own policy (or the destination's) requires encryption, is
+  `ValueEnvelope.HoldsValueRequiringEncryption` in `Elsa.Workflows.Runtime.Core`, and its marker is
+  `WithheldValue.PolicyRequiresEncryption()`; producer withholding, the output capture, the commit backstop and the
+  execution evidence enricher all use that one predicate. An output capture of a withheld result, or of a present
+  one whose policy requires encryption (only a projection built outside the completion projector carries one), never
+  reaches its storage driver. As built in review round 2: a capture into a workflow variable, the only target
+  `RuntimeOutputCaptureCompiler` emits, writes the withheld marker into the root variable frame, as `Set` does: the
+  projection's own withheld envelope, or a `PolicyRequiresEncryption` marker built by `RuntimeEncryptionWithholding`.
+  The activity completes, and a reader of the variable refuses the marker with `VF-ACT-010`. A capture into a durable
+  value row (any other value id, such as a workflow output `output:<name>`, which only a hand-built or imported
+  artifact declares) has no withheld form and is refused with `VF-ACT-010`. Of the intrinsics, `Set` keeps the marker
+  in its variable and `Return` as its completion result; `Control`, `SetCorrelationId`, `SetInstanceName` and
+  `SetOutput` refuse it with `VF-ACT-010`.
 
 ## Surfaces and what they show
 
@@ -71,7 +80,15 @@ What slice 7 leaves unguarded, recorded as follow-ups in `tasks.md` T090:
 - `DeterministicResultCollector` moves envelopes without reading their values, and has no production consumer.
 - An output capture into a workflow variable whose declaration requires encryption, of a result whose policy does
   not: the storage driver encodes the value before the variable's declared policy is read, and the commit backstop
-  then refuses the commit. The in-tree JSON driver writes nothing outside the commit; a custom driver might.
+  then refuses the commit. The capture path does not yet know the destination policy, so a custom
+  `IRuntimeDurableValueStorageDriver` must persist nothing outside the commit from `EncodeAsync`: the encoding it
+  returns is all that may be stored. The in-tree JSON driver writes nothing outside the commit.
+- `GraphActivityScope` (`Elsa.Activities.Graph.Runtime`) is a second in-tree caller of
+  `IRuntimeDurableValueStorageDriver.EncodeAsync`. It carries no protection policy and writes no
+  `runtime.requiresEncryption` metadata on the durable values it stores, so the commit backstop cannot judge them.
+  Nothing first-party reaches it with such a value: graph contracts declare `ActivityValuePolicy.Default` for their
+  inputs and results (the result with a `Result` lifecycle), which does not require encryption, and graph nodes refuse
+  `Secret` bindings (`VF-ACT-012`). A follow-up under T090.
 
 ## Masking (FR-012)
 

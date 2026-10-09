@@ -130,7 +130,7 @@ internal static class ActivityExecutionInspection
                     : new RuntimeValueTypeDescriptor("alias", projection.Type.Alias, projection.Type.Schema);
                 // An output whose policy requires encryption is treated as sensitive too (spec 188, FR-010), so the
                 // payload capture policy withholds it like any sensitive output. Nothing scans this record at commit.
-                var isSensitive = HidesValue(contract?.Result.Policy) || HidesValue(projection?.Policy);
+                var isSensitive = contract?.Result.Policy.HidesValue() == true || projection?.Policy.HidesValue() == true;
                 var decision = payloadCapturePolicy.Decide(new RuntimePayloadCaptureRequest(
                     RuntimePayloadCaptureSubject.ActivityOutput,
                     workItem.WorkflowExecutionId,
@@ -155,8 +155,6 @@ internal static class ActivityExecutionInspection
                     metadata: decision.Metadata);
             })
             .ToArray();
-
-    private static bool HidesValue(ActivityValuePolicy? policy) => policy is not null && (policy.IsSensitive || policy.RequiresEncryption);
 
     public static RuntimeValueTypeDescriptor RuntimeObjectType { get; } = new("clr", typeof(object).FullName, null);
 

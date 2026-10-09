@@ -303,7 +303,9 @@ A `sensitive` or `truncated` value still emits a record whenever the underlying 
 detection uses a SHA-256 digest of the full content, so rotating a secret or rewriting an over-large payload
 produces evidence that a write happened, without the value itself ever entering the buffer. A `withheld`
 variable has no content to digest; its marker is compared instead, so moving to another secret reference, or
-between a secret reference and a value withheld for encryption, emits a record.
+between a secret reference and a value withheld for encryption, emits a record. A present value whose policy
+requires encryption is compared by the same constant marker, so rewriting it with another such value emits no
+further record.
 
 ### Kinds
 
