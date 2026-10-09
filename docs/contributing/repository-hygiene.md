@@ -55,9 +55,10 @@ An open issue is a commitment someone can act on, not a log entry.
   triage or is closed; the weekly report lists them.
 - **Close finished work as completed, not as not planned.** An issue whose work landed but was never
   closed looks idle by every other signal. Before closing one as not planned, check whether a commit on
-  `main` references it and finished the work:
-  `git log origin/main -E --grep '#<number>([^0-9]|$)'`. The weekly report lists the open issues a commit
-  on `main` references.
+  `main` references it and finished the work. The check skips references to other repositories
+  (`owner/repo#<number>`):
+  `git log origin/main -E --grep '(^|[^[:alnum:]_./-])#<number>([^0-9]|$)'`. The weekly report lists the
+  open issues a commit on `main` references.
 
 ## Ownership and cadence
 
