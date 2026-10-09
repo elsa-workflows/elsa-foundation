@@ -17542,8 +17542,68 @@
       "edges": [
         {
           "type": "internal",
+          "id": "Elsa.Activities.Design.Api",
+          "path": "src/essentials/Activities/Design/Api/Elsa.Activities.Design.Api.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Activities.Design.Persistence.EntityFrameworkCore",
+          "path": "src/essentials/Activities/Design/Persistence/EntityFrameworkCore/Elsa.Activities.Design.Persistence.EntityFrameworkCore.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Activities.Design.Reconciliation.Clr",
+          "path": "src/essentials/Activities/Design/Reconciliation/Clr/Elsa.Activities.Design.Reconciliation.Clr.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Activities.Design.Reconciliation",
+          "path": "src/essentials/Activities/Design/Reconciliation/Elsa.Activities.Design.Reconciliation.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Activities.Primitives",
+          "path": "src/essentials/Activities/Primitives/Elsa.Activities.Primitives.csproj"
+        },
+        {
+          "type": "internal",
           "id": "Elsa.Activities.Runtime",
           "path": "src/essentials/Activities/Runtime/Elsa.Activities.Runtime.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Api.Capabilities",
+          "path": "src/essentials/Api/Capabilities/Elsa.Api.Capabilities.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Diagnostics.OpenTelemetry.Core",
+          "path": "src/essentials/Diagnostics/OpenTelemetry/Core/Elsa.Diagnostics.OpenTelemetry.Core.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Events",
+          "path": "src/essentials/Events/Elsa.Events.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Expressions",
+          "path": "src/essentials/Expressions/Elsa.Expressions.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Foundation.Identity",
+          "path": "src/essentials/Foundation/Identity/Elsa.Foundation.Identity.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Mediator",
+          "path": "src/essentials/Mediator/Elsa.Mediator.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Primitives.Hosting",
+          "path": "src/essentials/Primitives/Hosting/Elsa.Primitives.Hosting.csproj"
         },
         {
           "type": "internal",
@@ -17562,8 +17622,63 @@
         },
         {
           "type": "internal",
+          "id": "Elsa.Serialization.SystemText",
+          "path": "src/essentials/Serialization/SystemText/Elsa.Serialization.SystemText.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Tasks",
+          "path": "src/essentials/Tasks/Elsa.Tasks.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Workflows.Design.Api",
+          "path": "src/essentials/Workflows/Design/Api/Elsa.Workflows.Design.Api.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Workflows.Design.Core",
+          "path": "src/essentials/Workflows/Design/Core/Elsa.Workflows.Design.Core.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Workflows.Design.Persistence.EntityFrameworkCore",
+          "path": "src/essentials/Workflows/Design/Persistence/EntityFrameworkCore/Elsa.Workflows.Design.Persistence.EntityFrameworkCore.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Workflows.Design.Reconciliation.Git",
+          "path": "src/essentials/Workflows/Design/Reconciliation/Git/Elsa.Workflows.Design.Reconciliation.Git.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Workflows.Design.Validations",
+          "path": "src/essentials/Workflows/Design/Validations/Elsa.Workflows.Design.Validations.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Workflows.ExecutionEvidence",
+          "path": "src/essentials/Workflows/ExecutionEvidence/Elsa.Workflows.ExecutionEvidence.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Workflows.Publishing.Api",
+          "path": "src/essentials/Workflows/Publishing/Api/Elsa.Workflows.Publishing.Api.csproj"
+        },
+        {
+          "type": "internal",
           "id": "Elsa.Workflows.Publishing",
           "path": "src/essentials/Workflows/Publishing/Elsa.Workflows.Publishing.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore",
+          "path": "src/essentials/Workflows/Publishing/Persistence/EntityFrameworkCore/Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Workflows.Runtime.Api",
+          "path": "src/essentials/Workflows/Runtime/Api/Elsa.Workflows.Runtime.Api.csproj"
         },
         {
           "type": "internal",
@@ -17577,6 +17692,16 @@
         },
         {
           "type": "internal",
+          "id": "Elsa.Workflows.Runtime.Resumption",
+          "path": "src/essentials/Workflows/Runtime/Resumption/Elsa.Workflows.Runtime.Resumption.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Workflows.Runtime.Scheduling",
+          "path": "src/essentials/Workflows/Runtime/Scheduling/Elsa.Workflows.Runtime.Scheduling.csproj"
+        },
+        {
+          "type": "internal",
           "id": "Elsa.Activities.Testing",
           "path": "tests/essentials/Activities/Testing/Elsa.Activities.Testing.csproj"
         },
@@ -17587,12 +17712,17 @@
         },
         {
           "type": "external",
-          "id": "Microsoft.EntityFrameworkCore.Sqlite",
+          "id": "CShells.AspNetCore",
+          "version": "0.0.30-preview.159"
+        },
+        {
+          "type": "external",
+          "id": "Microsoft.AspNetCore.TestHost",
           "version": "10.0.10"
         },
         {
           "type": "external",
-          "id": "Microsoft.Extensions.DependencyInjection",
+          "id": "Microsoft.EntityFrameworkCore.Sqlite",
           "version": "10.0.10"
         },
         {
