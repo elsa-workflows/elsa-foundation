@@ -1,3 +1,4 @@
+using System.ComponentModel;
 using System.Diagnostics;
 using System.Net;
 using System.Net.Http.Json;
@@ -697,27 +698,50 @@ public sealed class SecretsCanaryWorkflowHost : IAsyncDisposable
     }
 
     /// <summary>
-    /// The git client of one host: the feature's own client, with git's global and system config pointed at an empty
-    /// file for the processes the feature starts through <see cref="IGitClient.RunAsync(string, IReadOnlyDictionary{string, string}, CancellationToken, string[])"/>,
-    /// which is all the git reconciliation feature calls. The two synchronous reads are not isolated and delegate as they are.
+    /// The git client of one host: every <see cref="IGitClient"/> member starts its git process with git's global and
+    /// system config pointed at an empty file. <c>RunAsync</c> goes through the feature's own client with that environment;
+    /// the two synchronous members have no environment overload, so they start the process here through
+    /// <see cref="GitClient.CreateStartInfo"/> (which adds <c>GIT_TERMINAL_PROMPT=0</c>) and mirror
+    /// <see cref="GitClient.RunOrDefault"/> and <see cref="GitClient.IsGitRepository"/>: trimmed output on exit code 0, an
+    /// empty string on any other exit or a failed start, and the same <c>rev-parse</c> test for a repository.
     /// </summary>
     private sealed class ConfigIsolatedGitClient(IGitClient inner, string emptyConfig) : IGitClient
     {
         public Task<string> RunAsync(string workingDirectory, CancellationToken cancellationToken, params string[] arguments) =>
             RunAsync(workingDirectory, new Dictionary<string, string>(), cancellationToken, arguments);
 
-        public Task<string> RunAsync(string workingDirectory, IReadOnlyDictionary<string, string> environment, CancellationToken cancellationToken, params string[] arguments)
+        public Task<string> RunAsync(string workingDirectory, IReadOnlyDictionary<string, string> environment, CancellationToken cancellationToken, params string[] arguments) =>
+            inner.RunAsync(workingDirectory, Isolate(environment), cancellationToken, arguments);
+
+        public string RunOrDefault(string workingDirectory, params string[] arguments)
+        {
+            try
+            {
+                using var process = Process.Start(GitClient.CreateStartInfo("git", workingDirectory, arguments, Isolate(new Dictionary<string, string>())))
+                    ?? throw new InvalidOperationException("Could not start 'git'.");
+                var output = process.StandardOutput.ReadToEnd();
+                _ = process.StandardError.ReadToEnd();
+                process.WaitForExit();
+                return process.ExitCode == 0 ? output.Trim() : "";
+            }
+            catch (Exception ex) when (ex is InvalidOperationException or Win32Exception or IOException)
+            {
+                return "";
+            }
+        }
+
+        public bool IsGitRepository(string repositoryPath) =>
+            RunOrDefault(repositoryPath, "rev-parse", "--is-inside-work-tree", "--show-prefix") == "true";
+
+        /// <summary>The isolation variables, under the caller's own, which win.</summary>
+        private Dictionary<string, string> Isolate(IReadOnlyDictionary<string, string> environment)
         {
             var isolated = new Dictionary<string, string?>();
             ApplyEmptyGitConfig(isolated, emptyConfig);
             foreach (var (name, value) in environment)
                 isolated[name] = value;
-            return inner.RunAsync(workingDirectory, isolated.ToDictionary(pair => pair.Key, pair => pair.Value!), cancellationToken, arguments);
+            return isolated.ToDictionary(pair => pair.Key, pair => pair.Value!);
         }
-
-        public string RunOrDefault(string workingDirectory, params string[] arguments) => inner.RunOrDefault(workingDirectory, arguments);
-
-        public bool IsGitRepository(string repositoryPath) => inner.IsGitRepository(repositoryPath);
     }
 
     /// <summary>A lock provider for one process, which is all one canary host needs.</summary>
