@@ -89,6 +89,9 @@ What slice 7 leaves unguarded, recorded as follow-ups in `tasks.md` T090:
   Nothing first-party reaches it with such a value: graph contracts declare `ActivityValuePolicy.Default` for their
   inputs and results (the result with a `Result` lifecycle), which does not require encryption, and graph nodes refuse
   `Secret` bindings (`VF-ACT-012`). A follow-up under T090.
+- Found by slice 9's review: an author's sensitivity on a Set Variable literal is dropped at compile time, because
+  `ExecutableNodeCompiler` builds the intrinsic's `InputDefinition` without `IsSensitive`, so the evidence enricher sees
+  a non-sensitive envelope and a sensitive non-credential literal reaches the evidence in clear (T090).
 
 ## Masking (FR-012)
 
