@@ -84,6 +84,8 @@ public sealed class WorkflowNotifyParentActivitySchedulerWorkHandler : RuntimeSc
         var inspectionAccumulator = serviceProvider.GetService<IRuntimeActivityExecutionInspectionAccumulator>();
         var activityFaultIncidentRecorder = serviceProvider.GetRequiredService<ActivityFaultIncidentRecorder>();
         var payloadCapturePolicy = serviceProvider.GetService<IRuntimePayloadCapturePolicy>() ?? new DefaultRuntimePayloadCapturePolicy();
+        // Released once the outcome is recorded, after every fault boundary below has masked its text (spec 188, FR-012).
+        using var faultMasking = ActivityFaultMasking.For(serviceProvider, payload.ActivityExecutionId);
         var scopeService = new RuntimeContainerScopeService(
             activityExecutionStateStore,
             serviceProvider.GetRequiredService<IWorkflowExecutionStateStore>());
@@ -209,7 +211,7 @@ public sealed class WorkflowNotifyParentActivitySchedulerWorkHandler : RuntimeSc
         }
         catch (OperationCanceledException cancellationException) when (cancellationToken.IsCancellationRequested)
         {
-            if (await ActivityActivationLeaseDisposer.DisposeAfterCancellationAsync(activationLease, cancellationException, "Structural notification callback cancellation and activation disposal both failed.") is { } cleanupFailure)
+            if (await ActivityActivationLeaseDisposer.DisposeAfterCancellationAsync(activationLease, cancellationException, "Structural notification callback cancellation and activation disposal both failed.", faultMasking.Mask) is { } cleanupFailure)
                 throw cleanupFailure;
             throw;
         }
@@ -220,7 +222,7 @@ public sealed class WorkflowNotifyParentActivitySchedulerWorkHandler : RuntimeSc
             var fault = disposalException is null ? exception : ActivityActivationLeaseDisposer.CombineExecutionFailure(exception, disposalException);
             var subStatus = disposalException is null ? "ParentNotificationFaulted" : "ActivityDisposalFailed";
             await RecordParentFaultAsync(
-                activityFaultIncidentRecorder, activityExecutionStateStore, checkpointCommitter,
+                activityFaultIncidentRecorder, activityExecutionStateStore, checkpointCommitter, faultMasking,
                 workItem, payload, parentState, fault, subStatus, valueSnapshots, cancellationToken);
             return;
         }
@@ -230,7 +232,7 @@ public sealed class WorkflowNotifyParentActivitySchedulerWorkHandler : RuntimeSc
         if (activationDisposalException is not null)
         {
             await RecordParentFaultAsync(
-                activityFaultIncidentRecorder, activityExecutionStateStore, checkpointCommitter,
+                activityFaultIncidentRecorder, activityExecutionStateStore, checkpointCommitter, faultMasking,
                 workItem, payload, parentState, activationDisposalException, "ActivityDisposalFailed", valueSnapshots, cancellationToken);
             return;
         }
@@ -253,7 +255,7 @@ public sealed class WorkflowNotifyParentActivitySchedulerWorkHandler : RuntimeSc
 
         if (resolvedContinuation.Kind == RuntimeStructuralContinuationKind.Fault)
         {
-            var fault = resolvedContinuation.Fault!;
+            var fault = faultMasking.Mask(resolvedContinuation.Fault!);
             var faultedParentState = currentParentState with
             {
                 Fault = fault.ToNormalized()
@@ -362,7 +364,7 @@ public sealed class WorkflowNotifyParentActivitySchedulerWorkHandler : RuntimeSc
         catch (Exception exception)
         {
             await RecordParentFaultAsync(
-                activityFaultIncidentRecorder, activityExecutionStateStore, checkpointCommitter,
+                activityFaultIncidentRecorder, activityExecutionStateStore, checkpointCommitter, faultMasking,
                 workItem, payload, currentParentState, exception, "ParentNotificationFaulted", valueSnapshots, cancellationToken);
             return;
         }
@@ -377,6 +379,7 @@ public sealed class WorkflowNotifyParentActivitySchedulerWorkHandler : RuntimeSc
         ActivityFaultIncidentRecorder activityFaultIncidentRecorder,
         IActivityExecutionStateStore activityExecutionStateStore,
         RuntimeCheckpointCommitter checkpointCommitter,
+        ActivityFaultMasking faultMasking,
         RuntimeSchedulerWorkItem workItem,
         RuntimeNotifyParentCommandPayload payload,
         ActivityExecutionState fallbackState,
@@ -387,7 +390,8 @@ public sealed class WorkflowNotifyParentActivitySchedulerWorkHandler : RuntimeSc
     {
         var latestFaultedParentState = await activityExecutionStateStore.FindAsync(
             workItem.WorkflowExecutionId, payload.ActivityExecutionId, cancellationToken) ?? fallbackState;
-        var request = NewFaultIncidentRecordRequest(checkpointCommitter, workItem, payload, latestFaultedParentState, exception, subStatus, valueSnapshots);
+        // Every fault arm records through here, so this is where a value resolved for the parent leaves its text.
+        var request = NewFaultIncidentRecordRequest(checkpointCommitter, workItem, payload, latestFaultedParentState, faultMasking.Mask(exception), subStatus, valueSnapshots);
         var incidentId = ActivityFaultIncidentRecorder.IncidentId(workItem.WorkItemId, payload.ActivityExecutionId, subStatus);
         var parentEvaluation = await ChildFaultParentEvaluation.TryBuildAsync(
             activityExecutionStateStore, TimeProvider, workItem, payload.PinnedExecutable, latestFaultedParentState, incidentId, cancellationToken);

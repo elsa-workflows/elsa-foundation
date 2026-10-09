@@ -30,8 +30,10 @@ public class ActivitiesRuntimeFeature : IShellFeature
         services.TryAddSingleton(TimeProvider.System);
         services.TryAddSingleton<ActivityInputHydrator>();
         services.TryAddScoped<ActivitySecretInputResolver>();
-        // IRuntimeSecretResolver is a replacement contract: more than one composed fails shell activation.
+        // IRuntimeSecretResolver and IRuntimeSecretMask are replacement contracts: more than one composed fails shell
+        // activation. The runtime registers the mask's default; the activator and the work handlers consume it.
         RuntimeSecretResolverCompositionValidator.Register(services);
+        RuntimeSecretMaskCompositionValidator.Register(services);
         services.TryAddScoped<IActivityActivator, ActivityActivator>();
         services.TryAddScoped<IRuntimeActivityInputMaterializer, RuntimeActivityInputMaterializer>();
         services.TryAddSingleton<ActivityCompletionProjector>();

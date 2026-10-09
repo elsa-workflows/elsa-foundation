@@ -23,11 +23,9 @@ internal sealed class RuntimeSecretResolverCompositionValidator(RuntimeSecretRes
 {
     public Task InitializeAsync(CancellationToken cancellationToken = default)
     {
-        var registrations = composition.Services
-            .Where(descriptor => descriptor.ServiceType == typeof(IRuntimeSecretResolver) && !descriptor.IsKeyedService)
-            .ToArray();
-        if (registrations.Length > 1)
-            throw new MultipleRuntimeSecretResolversException(registrations.Select(Describe).ToArray());
+        var registrations = ReplacementContractRegistrations.Describe<IRuntimeSecretResolver>(composition.Services);
+        if (registrations.Count > 1)
+            throw new MultipleRuntimeSecretResolversException(registrations);
 
         return Task.CompletedTask;
     }
@@ -41,11 +39,4 @@ internal sealed class RuntimeSecretResolverCompositionValidator(RuntimeSecretRes
         services.AddSingleton(new RuntimeSecretResolverComposition(services));
         services.AddShellInitializer<RuntimeSecretResolverCompositionValidator>(LifecyclePhase.Prepare, 0);
     }
-
-    private static string Describe(ServiceDescriptor descriptor) =>
-        descriptor.ImplementationType?.FullName is { } implementationType
-            ? $"'{implementationType}'"
-            : descriptor.ImplementationInstance?.GetType().FullName is { } instanceType
-                ? $"an instance of '{instanceType}'"
-                : "a factory registration";
 }

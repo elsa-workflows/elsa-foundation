@@ -36,6 +36,7 @@
     <ProjectReference Include="..\..\..\..\..\src\essentials\Workflows\Runtime\Api\Elsa.Workflows.Runtime.Api.csproj" />
     <ProjectReference Include="..\..\..\..\..\src\essentials\Workflows\Runtime\JavaScript\Elsa.Workflows.Runtime.JavaScript.csproj" />
     <ProjectReference Include="..\..\Testing\Elsa.Activities.Testing.csproj" />
+    <ProjectReference Include="..\..\..\Testing\Elsa.Testing.csproj" />
   </ItemGroup>
 
 </Project>

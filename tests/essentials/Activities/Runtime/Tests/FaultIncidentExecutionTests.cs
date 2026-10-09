@@ -1,16 +1,29 @@
+using System.Globalization;
 using System.Text.Json;
 using Elsa.Activities.Primitives.Activities;
 using Elsa.Activities.Runtime;
 using Elsa.Activities.Runtime.Contracts;
 using Elsa.Activities.Runtime.Core.Contracts;
 using Elsa.Activities.Runtime.Core.Models;
+using Elsa.Activities.Testing;
 using Elsa.Primitives.Models;
+using Elsa.Testing;
 using Elsa.Workflows.Runtime.Api;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Diagnostics;
+using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Workflows.Runtime.Diagnostics;
+using Elsa.Workflows.Runtime.Services.Incidents;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Logging;
 using Xunit;
+using ActivityListener = System.Diagnostics.ActivityListener;
+using ActivitySamplingResult = System.Diagnostics.ActivitySamplingResult;
+using ActivitySource = System.Diagnostics.ActivitySource;
+using Span = System.Diagnostics.Activity;
 
 namespace Elsa.Activities.Runtime.Tests;
 
@@ -20,9 +33,28 @@ namespace Elsa.Activities.Runtime.Tests;
 /// out to the host. The agent accepts the command, the run does not surface the exception to the caller,
 /// the activity state is Faulted, and an <c>IncidentState</c> is persisted for inspection/intervention.
 /// </summary>
+/// <remarks>
+/// It also guards masking (spec 188, slice 8: T073, T094): a value resolved from a secret for an activity execution
+/// never reaches that execution's recorded fault or incident, whether activity code throws it or returns it in a fault,
+/// on the invoke, bookmark resume, parent completion and parent notification paths. The text shows
+/// <c>[secret:&lt;name&gt;]</c> instead, the original exception type name is kept, and masking changes neither a
+/// fault's classification nor an activation failure's.
+/// </remarks>
 public sealed class FaultIncidentExecutionTests
 {
+    private const string SecretNodeId = "node-secret";
+    private const string SecretExecutionId = "actexec-secret";
+    private const string ParentNodeId = "node-parent";
+    private const string ParentExecutionId = "actexec-parent";
+    private const string Marker = "[secret:payments.api-key]";
+
     private readonly DateTimeOffset _now = new(2026, 6, 12, 12, 0, 0, TimeSpan.Zero);
+    private readonly FakeRuntimeSecretResolver _resolver = new();
+    private readonly RecordingFaultCapturePolicy _capturePolicy = new();
+    private readonly ObservedSecretMask _secretMask = new();
+    private readonly string _value = $"canary{Guid.NewGuid():N}";
+
+    public FaultIncidentExecutionTests() => _resolver.Respond = (_, _) => RuntimeSecretResolution.Success(_value);
 
     [Fact]
     public async Task FaultActivity_RecordsBlockingIncident_WithoutThrowingToHost()
@@ -107,6 +139,305 @@ public sealed class FaultIncidentExecutionTests
         var workflowState = await provider.GetRequiredService<IWorkflowExecutionStateStore>().FindAsync("wfexec-1");
         Assert.Equal(WorkflowExecutionStatus.Running, workflowState!.Status);
     }
+
+    [Fact]
+    public async Task An_exception_carrying_a_resolved_value_is_recorded_masked_on_the_invoke_path()
+    {
+        await using var harness = NewMaskingHarness(new SecretFailurePlan(), [SecretExecutionId]);
+
+        var run = await harness.RunAsync(WorkflowExecutionHarness.NewExecutable(
+            SecretResolutionTestSupport.NewSecretNode(SecretNodeId, typeof(SecretFailingActivity))));
+
+        await AssertThrownFaultMaskedAsync(harness, run.State(SecretNodeId), "ActivityFaulted");
+    }
+
+    [Fact]
+    public async Task A_fault_returned_with_a_resolved_value_is_recorded_masked_on_the_invoke_path()
+    {
+        await using var harness = NewMaskingHarness(new SecretFailurePlan { ReturnFault = true }, [SecretExecutionId]);
+
+        var run = await harness.RunAsync(WorkflowExecutionHarness.NewExecutable(
+            SecretResolutionTestSupport.NewSecretNode(SecretNodeId, typeof(SecretFailingActivity))));
+
+        await AssertReturnedFaultMaskedAsync(harness, run.State(SecretNodeId));
+    }
+
+    [Fact]
+    public async Task An_exception_carrying_a_resolved_value_is_recorded_masked_on_the_resume_path()
+    {
+        await using var harness = NewMaskingHarness(new SecretFailurePlan { FailOnResume = true }, [SecretExecutionId]);
+
+        var state = await RunAndResumeAsync(harness);
+
+        await AssertThrownFaultMaskedAsync(harness, state, "ActivityResumeFaulted");
+    }
+
+    [Fact]
+    public async Task A_fault_returned_with_a_resolved_value_is_recorded_masked_on_the_resume_path()
+    {
+        await using var harness = NewMaskingHarness(new SecretFailurePlan { FailOnResume = true, ReturnFault = true }, [SecretExecutionId]);
+
+        var state = await RunAndResumeAsync(harness);
+
+        await AssertReturnedFaultMaskedAsync(harness, state);
+    }
+
+    [Fact]
+    public async Task An_exception_carrying_a_resolved_value_is_recorded_masked_on_the_parent_completion_path()
+    {
+        await using var harness = NewMaskingHarness(new SecretFailurePlan(), [ParentExecutionId, "actexec-leaf"]);
+
+        var run = await harness.RunAsync(StructuralExecutionTestSupport.NewExecutable(
+            SecretResolutionTestSupport.NewSecretNode(ParentNodeId, typeof(SecretFailingParentActivity), WorkflowExecutionHarness.NewProbeNode("node-leaf"))));
+
+        await AssertThrownFaultMaskedAsync(harness, run.State(ParentNodeId), "ParentCompletionFaulted");
+    }
+
+    [Fact]
+    public async Task A_fault_returned_with_a_resolved_value_is_recorded_masked_on_the_parent_completion_path()
+    {
+        await using var harness = NewMaskingHarness(new SecretFailurePlan { ReturnFault = true }, [ParentExecutionId, "actexec-leaf"]);
+
+        var run = await harness.RunAsync(StructuralExecutionTestSupport.NewExecutable(
+            SecretResolutionTestSupport.NewSecretNode(ParentNodeId, typeof(SecretFailingParentActivity), WorkflowExecutionHarness.NewProbeNode("node-leaf"))));
+
+        await AssertReturnedFaultMaskedAsync(harness, run.State(ParentNodeId));
+    }
+
+    [Fact]
+    public async Task An_exception_carrying_a_resolved_value_is_recorded_masked_on_the_parent_notification_path()
+    {
+        await using var harness = NewMaskingHarness(new SecretFailurePlan(), [ParentExecutionId, "actexec-child", "actexec-leaf"], NotifyOnce);
+
+        var run = await harness.RunAsync(NewNotifyingExecutable());
+
+        await AssertThrownFaultMaskedAsync(harness, run.State(ParentNodeId), "ParentNotificationFaulted");
+    }
+
+    [Fact]
+    public async Task A_fault_returned_with_a_resolved_value_is_recorded_masked_on_the_parent_notification_path()
+    {
+        await using var harness = NewMaskingHarness(new SecretFailurePlan { ReturnFault = true }, [ParentExecutionId, "actexec-child", "actexec-leaf"], NotifyOnce);
+
+        var run = await harness.RunAsync(NewNotifyingExecutable());
+
+        await AssertReturnedFaultMaskedAsync(harness, run.State(ParentNodeId));
+    }
+
+    /// <summary>
+    /// T094 (research R9): masking replaces text, never classification. The first input resolves, so its value is
+    /// registered and the second input's failure is masked; it still records as retryable, with its code and its type.
+    /// </summary>
+    [Fact]
+    public async Task A_masked_store_outage_stays_retryable_with_its_code_and_original_type_name()
+    {
+        _resolver.Respond = (request, _) => request.Reference.Name == SecretResolutionTestSupport.ReferenceName
+            ? RuntimeSecretResolution.Success(_value)
+            : RuntimeSecretResolution.Failure("StoreUnavailable", isRetryable: true);
+        await using var harness = NewMaskingHarness(new SecretFailurePlan(), [SecretExecutionId]);
+
+        var run = await harness.RunAsync(WorkflowExecutionHarness.NewExecutable(
+            TwoSecretInputActivity.NewNode(SecretNodeId, SecretResolutionTestSupport.ReferenceName, "payments.webhook-key")));
+
+        var state = run.State(SecretNodeId);
+        Assert.Equal(["payments.api-key", "payments.webhook-key"], _resolver.Requests.Select(request => request.Reference.Name));
+        Assert.Equal(ActivityExecutionStatus.Faulted, state.Status);
+        Assert.Equal("ActivityConstructionFailed", state.SubStatus);
+        Assert.True(state.Fault!.IsRetryable);
+        Assert.Equal("StoreUnavailable", state.Fault.Code);
+        Assert.Equal(typeof(RuntimeSecretResolutionException).FullName, state.Fault.ExceptionType);
+        Assert.Equal("Secret 'payments.webhook-key' could not be resolved (StoreUnavailable).", state.Fault.Message);
+        AssertRegisteredAndReleased(state);
+        await AssertValueAbsentAsync(harness);
+    }
+
+    /// <summary>
+    /// A missing durable-value storage driver is a deployment problem that parks the activity (constitution §E2.6.1),
+    /// classified by its exception type. A registered value must not turn it into a fault by masking it away.
+    /// </summary>
+    [Fact]
+    public async Task A_missing_storage_driver_still_parks_the_activity_when_a_resolved_value_is_registered()
+    {
+        var plan = new SecretFailurePlan { Exception = _ => new RuntimeDurableValueStorageDriverNotFoundException("missing-driver") };
+        await using var harness = NewMaskingHarness(plan, [SecretExecutionId]);
+
+        var run = await harness.RunAsync(WorkflowExecutionHarness.NewExecutable(
+            SecretResolutionTestSupport.NewSecretNode(SecretNodeId, typeof(SecretFailingActivity))));
+
+        var state = run.State(SecretNodeId);
+        Assert.Equal(ActivityExecutionStatus.Waiting, state.Status);
+        Assert.Equal(ActivityActivationFailureHandler.IncidentFailureType, state.SubStatus);
+        var incident = await SingleIncidentAsync(harness, state);
+        Assert.Equal(ActivityActivationFailureHandler.IncidentFailureType, incident.FailureType);
+        Assert.Equal("missing-driver", incident.Metadata[ActivityActivationFailureHandler.StorageDriverKeyMetadataKey]);
+    }
+
+    /// <summary>
+    /// Runtime spans carry identifiers, kinds and the exception type only (contract: withheld values and masking); a test
+    /// pins that no fault text, masked or not, reaches a span.
+    /// </summary>
+    [Fact]
+    public async Task Runtime_spans_of_a_masked_fault_carry_no_fault_text()
+    {
+        using var source = new ActivitySource(WorkflowEngineTelemetry.ActivitySourceName);
+        var spans = new List<Span>();
+        using var listener = new ActivityListener
+        {
+            // ActivityListener is process-global; ignore same-name sources owned by parallel tests.
+            ShouldListenTo = candidate => ReferenceEquals(candidate, source),
+            Sample = (ref System.Diagnostics.ActivityCreationOptions<System.Diagnostics.ActivityContext> _) => ActivitySamplingResult.AllDataAndRecorded,
+            ActivityStopped = span =>
+            {
+                lock (spans)
+                    spans.Add(span);
+            }
+        };
+        ActivitySource.AddActivityListener(listener);
+        await using var harness = NewMaskingHarness(new SecretFailurePlan(), [SecretExecutionId],
+            services => services.Replace(ServiceDescriptor.Singleton<IWorkflowEngineTracer>(new ActivitySourceWorkflowEngineTracer(source))));
+
+        var run = await harness.RunAsync(WorkflowExecutionHarness.NewExecutable(
+            SecretResolutionTestSupport.NewSecretNode(SecretNodeId, typeof(SecretFailingActivity))));
+
+        Assert.Equal(ActivityExecutionStatus.Faulted, run.State(SecretNodeId).Status);
+        Span[] recorded;
+        lock (spans)
+            recorded = [.. spans];
+        // Precondition: the faulting activity's execution was traced.
+        Assert.Contains(recorded, span => span.OperationName == WorkflowEngineTelemetry.ActivityExecuteSpanName);
+        Assert.All(recorded.Select(Render), text =>
+        {
+            Assert.DoesNotContain(_value, text, StringComparison.Ordinal);
+            Assert.DoesNotContain("refused", text, StringComparison.Ordinal);
+            Assert.DoesNotContain(Marker, text, StringComparison.Ordinal);
+        });
+    }
+
+    private WorkflowExecutionHarness NewMaskingHarness(
+        SecretFailurePlan plan,
+        IReadOnlyCollection<string> activityExecutionIds,
+        Action<IServiceCollection>? configure = null) =>
+        SecretResolutionTestSupport.NewHarness(_resolver, new SecretValueRecorder(), activityExecutionIds, services =>
+        {
+            services.AddSingleton(plan);
+            services.Replace(ServiceDescriptor.Singleton<IRuntimeFaultCapturePolicy>(_capturePolicy));
+            // One mask for every scope, so the test can see what each work handler left registered.
+            services.Replace(ServiceDescriptor.Singleton<IRuntimeSecretMask>(_secretMask));
+            configure?.Invoke(services);
+        });
+
+    private static void NotifyOnce(IServiceCollection services) =>
+        services.AddSingleton(new ParentNotificationDirective { InvokeCodes = ["escalate"] });
+
+    private static WorkflowExecutable NewNotifyingExecutable() =>
+        StructuralExecutionTestSupport.NewExecutable(
+            SecretResolutionTestSupport.NewSecretNode(ParentNodeId, typeof(SecretFailingParentActivity),
+                StructuralExecutionTestSupport.NewStructuralNode("node-child", typeof(NotifyingStructuralChildActivity),
+                    WorkflowExecutionHarness.NewProbeNode("node-leaf"))));
+
+    /// <summary>Runs a <see cref="SecretFailingActivity"/> that suspends, then resumes it, and returns its state.</summary>
+    private static async Task<ActivityExecutionState> RunAndResumeAsync(WorkflowExecutionHarness harness)
+    {
+        var suspended = (await harness.RunAsync(SecretResolutionTestSupport.NewWaitingExecutable(SecretNodeId, typeof(SecretFailingActivity)))).State(SecretNodeId);
+        Assert.Equal(ActivityExecutionStatus.Suspended, suspended.Status);
+
+        var resumed = await harness.ResumeAsync(
+            WorkflowExecutionHarness.Identity,
+            Assert.Single(suspended.BookmarkIds),
+            suspended.InvocationId,
+            SecretNodeId,
+            SecretResolutionTestSupport.WaitResumeTargetId(SecretNodeId),
+            SecretWaitingActivity.StimulusType,
+            SecretWaitingActivity.StimulusHash,
+            JsonSerializer.SerializeToElement(new WaitTrigger(true)));
+        return resumed.State(SecretNodeId);
+    }
+
+    /// <summary>
+    /// Asserts the exception <see cref="SecretFailurePlan"/> throws by default was recorded with its value masked in the
+    /// fault, the incident and its inner exception's metadata, under the original type names.
+    /// </summary>
+    private async Task AssertThrownFaultMaskedAsync(WorkflowExecutionHarness harness, ActivityExecutionState state, string subStatus)
+    {
+        Assert.Equal(ActivityExecutionStatus.Faulted, state.Status);
+        Assert.Equal(subStatus, state.SubStatus);
+        Assert.Equal($"refused {Marker}", state.Fault!.Message);
+        Assert.Equal(typeof(InvalidOperationException).FullName, state.Fault.ExceptionType);
+        var incident = await SingleIncidentAsync(harness, state);
+        Assert.Equal($"refused {Marker}", incident.Message);
+        Assert.Equal($"refused {Marker}", incident.Metadata[RuntimeMetadataKeys.FaultMessage]);
+        Assert.Equal(typeof(InvalidOperationException).FullName, incident.Metadata[RuntimeMetadataKeys.FaultType]);
+        Assert.Equal($"inner {Marker}", incident.Metadata[RuntimeMetadataKeys.FaultInnerMessage]);
+        Assert.Equal(typeof(FormatException).FullName, incident.Metadata[RuntimeMetadataKeys.FaultInnerType]);
+        AssertRegisteredAndReleased(state);
+        await AssertValueAbsentAsync(harness);
+        AssertLoggedMasked();
+    }
+
+    /// <summary>Asserts the fault <see cref="SecretFailurePlan"/> returns by default was recorded with its value masked.</summary>
+    private async Task AssertReturnedFaultMaskedAsync(WorkflowExecutionHarness harness, ActivityExecutionState state)
+    {
+        Assert.Equal(ActivityExecutionStatus.Faulted, state.Status);
+        Assert.Equal("ActivityReturnedFault", state.SubStatus);
+        Assert.Equal("secret.echoed", state.Fault!.Code);
+        Assert.Equal($"returned {Marker}", state.Fault.Message);
+        Assert.Equal(typeof(ActivityFault).FullName, state.Fault.ExceptionType);
+        var incident = await SingleIncidentAsync(harness, state);
+        Assert.Equal($"returned {Marker}", incident.Message);
+        AssertRegisteredAndReleased(state);
+        await AssertValueAbsentAsync(harness);
+        AssertLoggedMasked();
+    }
+
+    /// <summary>
+    /// Asserts activation registered a value for <paramref name="state"/>'s execution and its work handler released it once
+    /// the outcome was recorded, so the mask held it no longer than that.
+    /// </summary>
+    private void AssertRegisteredAndReleased(ActivityExecutionState state)
+    {
+        Assert.True(_secretMask.WasRegistered(state.Execution.ActivityExecutionId));
+        Assert.False(_secretMask.HasRegistrations(state.Execution.ActivityExecutionId));
+    }
+
+    private static async Task<IncidentState> SingleIncidentAsync(WorkflowExecutionHarness harness, ActivityExecutionState state) =>
+        Assert.Single(
+            await harness.Services.GetRequiredService<IIncidentStateStore>().ListAsync(harness.ExecutionId),
+            incident => incident.ActivityExecutionId == state.Execution.ActivityExecutionId);
+
+    /// <summary>Asserts the value is in no persisted activity state, inspection projection or incident of the run.</summary>
+    private async Task AssertValueAbsentAsync(WorkflowExecutionHarness harness)
+    {
+        await SecretResolutionTestSupport.AssertNotPersistedAsync(harness, [_value]);
+        var incidents = JsonSerializer.Serialize(await harness.Services.GetRequiredService<IIncidentStateStore>().ListAsync(harness.ExecutionId));
+        Assert.DoesNotContain(_value, incidents, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// Renders every exception the fault boundary handed to the fault capture policy through a
+    /// <see cref="RecordingLogger"/>, as a runtime log line that includes the exception would, and asserts each line
+    /// shows the marker and not the value.
+    /// </summary>
+    private void AssertLoggedMasked()
+    {
+        var logger = new RecordingLogger();
+        foreach (var exception in _capturePolicy.Captured)
+            logger.LogError(exception, "Activity fault recorded: {FaultMessage}", exception.Message);
+
+        var lines = logger.Entries.Select(entry => $"{entry.Message}{Environment.NewLine}{entry.Exception}").ToArray();
+        Assert.NotEmpty(lines);
+        Assert.All(lines, line => Assert.DoesNotContain(_value, line, StringComparison.Ordinal));
+        Assert.Contains(lines, line => line.Contains(Marker, StringComparison.Ordinal));
+    }
+
+    private static string Render(Span span) =>
+        string.Join(
+            Environment.NewLine,
+            [
+                span.DisplayName,
+                span.StatusDescription ?? string.Empty,
+                .. span.TagObjects.Select(tag => $"{tag.Key}={Convert.ToString(tag.Value, CultureInfo.InvariantCulture)}"),
+                .. span.Events.SelectMany(spanEvent => spanEvent.Tags.Select(tag => $"{spanEvent.Name}:{tag.Key}={Convert.ToString(tag.Value, CultureInfo.InvariantCulture)}"))
+            ]);
 
     private ServiceProvider NewProvider(IEnumerable<string> activityExecutionIds)
     {

@@ -23,6 +23,7 @@ namespace Elsa.Activities.Runtime.Tests;
 public sealed class ClrActivityActivatorTests : IAsyncDisposable
 {
     private const string WorkflowExecutionId = "wfexec-1";
+    private const string ActivityExecutionId = "invocation-1";
     private const string Partition = "tenant-a";
     private const string ReferenceName = SecretResolutionTestSupport.ReferenceName;
     private const string ResolverSentinel = "resolver-detail-sentinel";
@@ -37,6 +38,7 @@ public sealed class ClrActivityActivatorTests : IAsyncDisposable
     private readonly CountingPartitionAccessor _partition = new(Partition);
     private readonly SingleInstanceStateStore _instances = new(Instance(tenantId: null));
     private readonly RecordingConversionExecutor _conversions = new();
+    private readonly DefaultRuntimeSecretMask _mask = new();
 
     public ClrActivityActivatorTests() => ScopedDependency.Reset();
 
@@ -74,6 +76,7 @@ public sealed class ClrActivityActivatorTests : IAsyncDisposable
             DateTimeOffset.UtcNow);
         var request = new ActivityActivationRequest(
             WorkflowExecutionId,
+            ActivityExecutionId,
             contract,
             snapshot,
             new ActivityAttempt("attempt-1", "invocation-1", 1, ActivityAttemptReason.Initial, DateTimeOffset.UtcNow),
@@ -295,6 +298,31 @@ public sealed class ClrActivityActivatorTests : IAsyncDisposable
         Assert.Equal(FakeRuntimeSecretResolver.ValueOf("payments.webhook-key"), activity.Second);
         Assert.Equal(["payments.api-key", "payments.webhook-key"], _resolver.Requests.Select(request => request.Reference.Name));
         Assert.Equal(1, _instances.Reads);
+    }
+
+    /// <summary>
+    /// T075 (spec 188, FR-012): each resolved value is registered with the mask under the activity execution being
+    /// activated as soon as it resolves, so a later reference that fails in the same activation finds it registered,
+    /// and it is registered for that execution only.
+    /// </summary>
+    [Fact]
+    public async Task A_resolved_value_is_registered_with_the_mask_before_the_next_reference_resolves()
+    {
+        var value = $"canary{Guid.NewGuid():N}";
+        _resolver.Respond = (request, _) => request.Reference.Name == "payments.api-key"
+            ? RuntimeSecretResolution.Success(value)
+            : RuntimeSecretResolution.Failure("StoreUnavailable", isRetryable: true);
+
+        await Assert.ThrowsAsync<RuntimeSecretResolutionException>(() => SecretActivator().ActivateAsync(Request(
+            Contract(typeof(TwoInputActivity), "first", "second"),
+            new Dictionary<string, ValueEnvelope>
+            {
+                ["first"] = SecretResolutionTestSupport.Withheld("payments.api-key"),
+                ["second"] = SecretResolutionTestSupport.Withheld("payments.webhook-key")
+            })).AsTask());
+
+        Assert.Equal("seen [secret:payments.api-key]", _mask.Mask(ActivityExecutionId, $"seen {value}"));
+        Assert.False(_mask.HasRegistrations("another-execution"));
     }
 
     [Theory]
@@ -811,7 +839,7 @@ public sealed class ClrActivityActivatorTests : IAsyncDisposable
         (ValueTask<Exception?>)typeof(ActivityActivator).Assembly
             .GetType("Elsa.Activities.Runtime.Services.ActivityActivationLeaseDisposer", throwOnError: true)!
             .GetMethod("DisposeAfterCancellationAsync", BindingFlags.Public | BindingFlags.Static)!
-            .Invoke(null, [lease, cancellation, CleanupMessage])!;
+            .Invoke(null, [lease, cancellation, CleanupMessage, (Func<Exception, Exception>)(failure => failure)])!;
 
     private static IServiceCollection Services() =>
         new ServiceCollection().AddScoped<ScopedDependency>();
@@ -831,7 +859,7 @@ public sealed class ClrActivityActivatorTests : IAsyncDisposable
 
     /// <summary>A secret input collaborator that resolves through <see cref="_resolver"/> under <paramref name="partitionAccessor"/>.</summary>
     private ActivitySecretInputResolver ResolvingSecretInputResolver(IWorkflowExecutionPartitionAccessor partitionAccessor) =>
-        new(partitionAccessor, _instances, _conversions, _resolver);
+        new(partitionAccessor, _instances, _conversions, _mask, _resolver);
 
     private static ClrActivityActivator ClrStrategy(IServiceProvider services)
     {
@@ -857,6 +885,7 @@ public sealed class ClrActivityActivatorTests : IAsyncDisposable
     private static ActivityActivationRequest Request(ActivityContract contract, string attemptId, string message) =>
         new(
             WorkflowExecutionId,
+            ActivityExecutionId,
             contract,
             Snapshot(contract, message),
             new ActivityAttempt(attemptId, "invocation-1", attemptId == "attempt-1" ? 1 : 2, ActivityAttemptReason.Initial, DateTimeOffset.UtcNow),
@@ -865,6 +894,7 @@ public sealed class ClrActivityActivatorTests : IAsyncDisposable
     private static ActivityActivationRequest Request(ActivityContract contract, IReadOnlyDictionary<string, ValueEnvelope> values) =>
         new(
             WorkflowExecutionId,
+            ActivityExecutionId,
             contract,
             new ActivityInputSnapshot("invocation-1", contract.SchemaFingerprint, "bindings", values, DateTimeOffset.UtcNow),
             new ActivityAttempt("attempt-1", "invocation-1", 1, ActivityAttemptReason.Initial, DateTimeOffset.UtcNow),

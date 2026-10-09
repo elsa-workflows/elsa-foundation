@@ -178,6 +178,8 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
         ActivityAttempt? claimedAttempt,
         CancellationToken cancellationToken)
     {
+        // Released once the outcome is recorded, after every fault boundary below has masked its text (spec 188, FR-012).
+        using var faultMasking = ActivityFaultMasking.For(serviceProvider, resumePayload.ActivityExecutionId);
         ActivityExecutionState executionState = state;
         ActivityAttempt resumeAttempt;
         if (claimedAttempt is null)
@@ -231,7 +233,7 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
         }
         catch (Exception exception)
         {
-            await RecordFaultAsync(serviceProvider, activityFaultIncidentRecorder, checkpointCommitter, workItem, resumePayload, executionState, exception, "InputMaterializationFailed", [], cancellationToken);
+            await RecordFaultAsync(serviceProvider, activityFaultIncidentRecorder, checkpointCommitter, faultMasking, workItem, resumePayload, executionState, exception, "InputMaterializationFailed", [], cancellationToken);
             return;
         }
         var valueSnapshots = new List<ActivityExecutionInspectionValueSnapshot>();
@@ -258,7 +260,7 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
             // as a blocking incident faults the activity and surfaces a queryable cause, distinct from
             // InputMaterializationFailed and the ActivityResumeFaulted resume-method failure below.
             activationLease = await serviceProvider.GetRequiredService<IActivityActivator>().ActivateAsync(
-                new ActivityActivationRequest(workItem.WorkflowExecutionId, contract, executionState.InputSnapshot!, resumeAttempt, state.PrivateState, triggerDelivery, executableNode.Descriptor),
+                new ActivityActivationRequest(workItem.WorkflowExecutionId, resumePayload.ActivityExecutionId, contract, executionState.InputSnapshot!, resumeAttempt, state.PrivateState, triggerDelivery, executableNode.Descriptor),
                 cancellationToken);
             activity = activationLease.Activity;
 
@@ -284,7 +286,7 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
         }
         catch (OperationCanceledException cancellationException) when (cancellationToken.IsCancellationRequested)
         {
-            if (await ActivityActivationLeaseDisposer.DisposeAfterCancellationAsync(activationLease, cancellationException, "Activity activation cancellation and disposal both failed.") is { } cleanupFailure)
+            if (await ActivityActivationLeaseDisposer.DisposeAfterCancellationAsync(activationLease, cancellationException, "Activity activation cancellation and disposal both failed.", faultMasking.Mask) is { } cleanupFailure)
                 throw cleanupFailure;
             throw;
         }
@@ -297,7 +299,7 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
                 ? exception
                 : ActivityActivationLeaseDisposer.CombineActivationFailure(exception, disposalException, canceled: false);
             var subStatus = disposalException is null ? "ActivityResumeConstructionFailed" : "ActivityDisposalFailed";
-            await RecordFaultAsync(serviceProvider, activityFaultIncidentRecorder, checkpointCommitter, workItem, resumePayload, executionState, fault, subStatus, valueSnapshots, cancellationToken);
+            await RecordFaultAsync(serviceProvider, activityFaultIncidentRecorder, checkpointCommitter, faultMasking, workItem, resumePayload, executionState, fault, subStatus, valueSnapshots, cancellationToken);
             return;
         }
 
@@ -358,7 +360,7 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
         }
         catch (OperationCanceledException cancellationException) when (cancellationToken.IsCancellationRequested)
         {
-            if (await ActivityActivationLeaseDisposer.DisposeAfterCancellationAsync(activationLease, cancellationException, "Activity resume cancellation and disposal both failed.") is { } cleanupFailure)
+            if (await ActivityActivationLeaseDisposer.DisposeAfterCancellationAsync(activationLease, cancellationException, "Activity resume cancellation and disposal both failed.", faultMasking.Mask) is { } cleanupFailure)
                 throw cleanupFailure;
             throw;
         }
@@ -370,7 +372,7 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
                 ? exception
                 : ActivityActivationLeaseDisposer.CombineExecutionFailure(exception, disposalException);
             var subStatus = disposalException is null ? "ActivityResumeFaulted" : "ActivityDisposalFailed";
-            await RecordFaultAsync(serviceProvider, activityFaultIncidentRecorder, checkpointCommitter, workItem, resumePayload, executionState, fault, subStatus, valueSnapshots, cancellationToken);
+            await RecordFaultAsync(serviceProvider, activityFaultIncidentRecorder, checkpointCommitter, faultMasking, workItem, resumePayload, executionState, fault, subStatus, valueSnapshots, cancellationToken);
             return;
         }
 
@@ -382,6 +384,7 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
                 serviceProvider,
                 activityFaultIncidentRecorder,
                 checkpointCommitter,
+                faultMasking,
                 workItem,
                 resumePayload,
                 executionState,
@@ -394,6 +397,7 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
 
         if (returnedFault is not null)
         {
+            returnedFault = faultMasking.Mask(returnedFault);
             var faultedState = executionState with
             {
                 Fault = returnedFault.ToNormalized()
@@ -402,6 +406,7 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
                 serviceProvider,
                 activityFaultIncidentRecorder,
                 checkpointCommitter,
+                faultMasking,
                 workItem,
                 resumePayload,
                 faultedState,
@@ -865,6 +870,7 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
         IServiceProvider serviceProvider,
         ActivityFaultIncidentRecorder activityFaultIncidentRecorder,
         RuntimeCheckpointCommitter checkpointCommitter,
+        ActivityFaultMasking faultMasking,
         RuntimeSchedulerWorkItem workItem,
         RuntimeResumeBookmarkCommandPayload resumePayload,
         ActivityExecutionState state,
@@ -880,7 +886,8 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
             _timeProvider.GetUtcNow(),
             incidentId);
         state = ActivityAttemptActivationClaimer.CompactTriggerDeliveryHistory(state);
-        var request = NewFaultIncidentRecordRequest(checkpointCommitter, workItem, resumePayload, state, exception, subStatus, valueSnapshots);
+        // Every fault arm records through here, so this is where a value resolved for the execution leaves its text.
+        var request = NewFaultIncidentRecordRequest(checkpointCommitter, workItem, resumePayload, state, faultMasking.Mask(exception), subStatus, valueSnapshots);
         var activityExecutionStateStore = serviceProvider.GetRequiredService<IActivityExecutionStateStore>();
         var parentEvaluation = await ChildFaultParentEvaluation.TryBuildAsync(
             activityExecutionStateStore, _timeProvider, workItem, resumePayload.PinnedExecutable, state, incidentId, cancellationToken);

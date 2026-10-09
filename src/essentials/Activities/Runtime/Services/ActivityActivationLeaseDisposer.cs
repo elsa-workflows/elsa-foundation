@@ -27,13 +27,19 @@ internal static class ActivityActivationLeaseDisposer
     /// <see langword="null"/> when no disposal failed, so the arm rethrows the cancellation unchanged. Otherwise it is an
     /// <see cref="AggregateException"/> with <paramref name="message"/> holding the cancellation followed by every
     /// disposal failure: the failure of disposing <paramref name="lease"/>, then the one a canceled activation carried
-    /// out of the activator for a lease the handler never got. When both exist, both are kept.
+    /// out of the activator for a lease the handler never got. When both exist, both are kept. Each disposal failure is
+    /// passed through <paramref name="maskDisposalFailure"/>, the handler's masking of its execution's failure text
+    /// (<see cref="ActivityFaultMasking.Mask(Exception)"/>); the cancellation is not.
     /// </summary>
-    public static async ValueTask<Exception?> DisposeAfterCancellationAsync(ActivityActivationLease? lease, OperationCanceledException cancellation, string message)
+    public static async ValueTask<Exception?> DisposeAfterCancellationAsync(
+        ActivityActivationLease? lease,
+        OperationCanceledException cancellation,
+        string message,
+        Func<Exception, Exception> maskDisposalFailure)
     {
         var leaseFailure = await TryDisposeAsync(lease);
         var carriedFailure = (cancellation as ActivityActivationCanceledCleanupException)?.DisposalException;
-        Exception[] disposalFailures = [.. new[] { leaseFailure, carriedFailure }.OfType<Exception>()];
+        Exception[] disposalFailures = [.. new[] { leaseFailure, carriedFailure }.OfType<Exception>().Select(maskDisposalFailure)];
         return disposalFailures.Length == 0 ? null : new AggregateException(message, [cancellation, .. disposalFailures]);
     }
 

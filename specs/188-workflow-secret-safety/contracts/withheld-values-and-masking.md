@@ -49,6 +49,33 @@ values and inspection projections. The message names the state id and value key,
 The marker is `[secret:<reference name>]`. Values are matched ordinally in raw and JSON-escaped form. The mask lives
 in the work item's DI scope and is never persisted or logged.
 
+As built (slice 8), where the code settled what the table leaves open:
+
+- **Contract.** `IRuntimeSecretMask` is a replacement contract with a scoped default (`DefaultRuntimeSecretMask`); a
+  second registration fails shell activation (`MultipleRuntimeSecretMasksException`), as the secret resolver's does.
+  Besides `Register` and `Mask` it has `HasRegistrations` and `Release`, which the fault boundaries need: the first to
+  decide whether to replace an exception, the second to release the values.
+- **Registration.** The activator's resolution step (`ActivitySecretInputResolver`) registers each value under
+  `ActivityActivationRequest.ActivityExecutionId`, a member slice 8 adds, as soon as it resolves, so a later reference
+  failing in the same activation is masked (T094).
+- **When an exception is replaced.** Whenever any value is registered for the execution, whether or not its text
+  contains one, because an exception can carry a value where the mask cannot see it. Two exceptions: an exception the
+  activation-failure handler classifies (a missing storage driver, activity consumer or secret resolver) is handed on
+  as it is, because its text is built from deployment identifiers and replacing it would turn a deployment problem
+  that parks the activity into a fault; and a cancellation is never replaced, so it stays a cancellation. A cancellation
+  arm's disposal failures, which it reports after the cancellation, are masked.
+- **Where.** Every fault arm of the invoke, resume, parent completion and parent notification handlers records through
+  one method per handler, which masks the exception; the returned-fault paths mask `ActivityFault.Message` before
+  `ToNormalized` at all four call sites.
+- **Lifetime.** Each handler releases the execution's values once it has recorded the outcome, not at lease disposal:
+  every fault arm disposes the lease before it records, and the activator disposes the lease of a failed activation
+  before the handler sees the failure (the T094 case), so values released at disposal would be gone exactly when needed.
+- **Short values.** Only an empty value is ignored. Every non-empty value is masked however short: a minimum length
+  would let a short secret through silently, while masking a one-character value only makes the text hard to read.
+- **Log lines.** No runtime log line on these paths includes the recorded exception today; T073 renders the exception
+  the boundary hands on through `RecordingLogger` to prove that one that did would show the marker. The canary
+  (slice 9) captures every log category in a full host.
+
 Not covered by masking in phase 0 (spec assumption): text an activity writes to the console or its own logger, values
 it returns as outputs, and values it places in private state or bookmark payloads. For the built-ins, publish refuses a
 `Secret` binding on every input found returned, copied or persisted (research R3a IP14 to IP22), so the remaining

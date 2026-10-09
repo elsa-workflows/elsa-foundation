@@ -12060,6 +12060,11 @@
           "path": "tests/essentials/Activities/Testing/Elsa.Activities.Testing.csproj"
         },
         {
+          "type": "internal",
+          "id": "Elsa.Testing",
+          "path": "tests/essentials/Testing/Elsa.Testing.csproj"
+        },
+        {
           "type": "external",
           "id": "CShells",
           "version": "0.0.30-preview.159"
