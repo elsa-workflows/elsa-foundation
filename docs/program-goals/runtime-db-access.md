@@ -1,6 +1,6 @@
 # Runtime Database Access
 
-- **Status:** In Progress. M2/M3/M4 and integrated correctness #2412 are accepted. Final measurements, package-consumer verification and findings response #2413 remain.
+- **Status:** Final evidence assembled. M2/M3/M4 and integrated correctness are accepted; the [acceptance crosswalk](../reports/runtime-db-access/final-acceptance.md) records M1/M5 outcomes and residual limits. #2413 and Project 55 carry final publication/closure state.
 - **Area:** Workflow runtime / EF persistence access / HTTP workload correctness.
 - **Stewards:** Sipke and the runtime database access program lead; root lead owns integration and QA.
 - **Program:** [#2382](https://github.com/elsa-workflows/elsa-foundation/issues/2382).
@@ -12,11 +12,15 @@ Explain and reduce avoidable database access for short durable HTTP workflows. P
 
 The owner-approved primary scenario uses HttpEndpoint startup and a deterministic computation; original transform artifacts are not a prerequisite.
 
-## Active objectives
+## Delivery outcome
 
-1. Deliver bounded before/after accounting, timing and final responses [#2413](https://github.com/elsa-workflows/elsa-foundation/issues/2413), the remaining delivery leaf. The [reviewed draft](../reports/runtime-db-access/delivery-response.md) remains incomplete until matched PostgreSQL measurements and the final package composition are verified.
-2. Preserve [accepted integrated correctness](../reports/runtime-db-access/integrated-correctness.md) at `7357b91e012c56cb34f1259ef7a60ef56e144afe`: 18 PostgreSQL cases, persisted-state joins, current-head CI/provider/architecture/Maps and bounded adopted SQLite recovery proofs. #2400 is delivered through PR #2518; the Design API enum correction needed by the matrix is delivered through PR #2372.
-3. Reconcile M1/M5 and parent acceptance from the original criteria. Feature #2384 awaits final request-to-settlement accounting and residual attribution under #2413. Twenty-three of 24 leaves have accepted outcomes. No owner input is outstanding.
+The [final response](../reports/runtime-db-access/delivery-response.md) and [acceptance crosswalk](../reports/runtime-db-access/final-acceptance.md) link the complete evidence. Coalesced HTTP request-associated commands fell from 277 to 134, with persisted checkpoint markers from three to two; Immediate stayed unchanged. The [timing series](../reports/runtime-db-access/final-timing.md) retains all 14 windows and its failed before-source concurrency control. The [package composition and operator guide](../reports/runtime-db-access/package-consumer/README.md) are verified within their stated Development scope.
+
+Root owns final review, exact-head publication gates, resulting-main verification and issue/Project closure through #2413. No owner decision is outstanding. Attribution, physical RTT and deleted-history limits have named owners and revisit triggers; none is relabelled as proven.
+
+### Earlier delivery checkpoints
+
+The records below retain their original evidence and scheduling context. The delivery outcome above and GitHub issue/Project state supersede then-current scheduling descriptions.
 
 Corrective [#2497](https://github.com/elsa-workflows/elsa-foundation/issues/2497) is delivered through PR #2511 at `249cd21329a13d6d67da5fd8e2b0974579cb044b`; its [acceptance receipt](https://github.com/elsa-workflows/elsa-foundation/pull/2511#issuecomment-6059255969) records current-head review and resulting-main CI/Maps/filter/Code Quality/Docker gates. It restores the existing fused-checkpoint recovery contract. The separate passing hosted EF suite does not explain the retained local timeout. Copilot review was unavailable, not counted as approval. No SQL saving is attributed to this correction.
 

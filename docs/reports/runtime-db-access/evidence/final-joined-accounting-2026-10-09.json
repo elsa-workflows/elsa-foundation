@@ -1,0 +1,4039 @@
+{
+  "cases": [
+    {
+      "cadence": "Immediate",
+      "case": "immediate-final-7357",
+      "caseAnalysis": {
+        "acceptanceIssueCount": 0,
+        "rootReviewStillRequired": true,
+        "status": "passed_per_case_source_candidate",
+        "verifiedArtifactPinCount": 15
+      },
+      "efCommandAccounting": {
+        "checkpointOperationPairsByTrace": {
+          "HTTP": 180,
+          "REST": 153
+        },
+        "commandPairs": 1221,
+        "commandPairsByTraceAndProviderFamily": [
+          {
+            "commandPairs": 130,
+            "providerFamily": "sqlite",
+            "trace": "HTTP"
+          },
+          {
+            "commandPairs": 505,
+            "providerFamily": "postgresql",
+            "trace": "HTTP"
+          },
+          {
+            "commandPairs": 115,
+            "providerFamily": "sqlite",
+            "trace": "REST"
+          },
+          {
+            "commandPairs": 441,
+            "providerFamily": "postgresql",
+            "trace": "REST"
+          },
+          {
+            "commandPairs": 30,
+            "providerFamily": "postgresql",
+            "trace": "background_or_unassigned"
+          }
+        ],
+        "dispatchNoMethodAncestorResidualsByTrace": {
+          "HTTP": 1,
+          "REST": 1
+        },
+        "exactMethodAncestorJoins": 747,
+        "exactMethodOperationFamiliesByTrace": {
+          "HTTP": {
+            "checkpoint": 211,
+            "durable_value": 7,
+            "post_commit_outbox": 47,
+            "scheduler_queue": 127
+          },
+          "REST": {
+            "checkpoint": 186,
+            "durable_value": 5,
+            "post_commit_outbox": 41,
+            "scheduler_queue": 113
+          },
+          "background_or_unassigned": {
+            "post_commit_outbox": 5,
+            "scheduler_queue": 5
+          }
+        },
+        "noMethodAncestorResidualTotalsByTableFamily": {
+          "other_or_mixed": 1,
+          "placement": 4,
+          "runtime_state": 229,
+          "telemetry": 240
+        },
+        "noMethodAncestorResiduals": 474,
+        "noMethodAncestorResidualsByTraceProviderAndTableFamily": [
+          {
+            "commandPairs": 113,
+            "providerFamily": "postgresql",
+            "tableFamily": "runtime_state",
+            "trace": "HTTP"
+          },
+          {
+            "commandPairs": 2,
+            "providerFamily": "sqlite",
+            "tableFamily": "placement",
+            "trace": "HTTP"
+          },
+          {
+            "commandPairs": 128,
+            "providerFamily": "sqlite",
+            "tableFamily": "telemetry",
+            "trace": "HTTP"
+          },
+          {
+            "commandPairs": 96,
+            "providerFamily": "postgresql",
+            "tableFamily": "runtime_state",
+            "trace": "REST"
+          },
+          {
+            "commandPairs": 1,
+            "providerFamily": "sqlite",
+            "tableFamily": "other_or_mixed",
+            "trace": "REST"
+          },
+          {
+            "commandPairs": 2,
+            "providerFamily": "sqlite",
+            "tableFamily": "placement",
+            "trace": "REST"
+          },
+          {
+            "commandPairs": 112,
+            "providerFamily": "sqlite",
+            "tableFamily": "telemetry",
+            "trace": "REST"
+          },
+          {
+            "commandPairs": 20,
+            "providerFamily": "postgresql",
+            "tableFamily": "runtime_state",
+            "trace": "background_or_unassigned"
+          }
+        ],
+        "schedulerDispatchOperationPairsByTrace": {
+          "HTTP": 71,
+          "REST": 63,
+          "background_or_unassigned": 5
+        },
+        "temporalBuckets": {
+          "client_response_received": {
+            "classificationUncertaintyNs": 1809904,
+            "clockMappingVerified": true,
+            "efCommandPairTotals": {
+              "clock_mapping_unavailable": 0,
+              "completed_before": 641,
+              "spans_boundary": 0,
+              "started_after": 580,
+              "timestamp_invalid": 0,
+              "uncertainty_overlap": 0
+            },
+            "efCommandPairsByTrace": {
+              "HTTP": {
+                "clock_mapping_unavailable": 0,
+                "completed_before": 635,
+                "spans_boundary": 0,
+                "started_after": 0,
+                "timestamp_invalid": 0,
+                "uncertainty_overlap": 0
+              },
+              "REST": {
+                "clock_mapping_unavailable": 0,
+                "completed_before": 0,
+                "spans_boundary": 0,
+                "started_after": 556,
+                "timestamp_invalid": 0,
+                "uncertainty_overlap": 0
+              },
+              "background_or_unassigned": {
+                "clock_mapping_unavailable": 0,
+                "completed_before": 6,
+                "spans_boundary": 0,
+                "started_after": 24,
+                "timestamp_invalid": 0,
+                "uncertainty_overlap": 0
+              }
+            },
+            "globalCommandCompleteStatements": {
+              "after": 1199,
+              "before": 4091,
+              "clock_mapping_unavailable": 0,
+              "timestamp_invalid": 0,
+              "uncertainty_overlap": 0
+            },
+            "globalReadyForQueryCycles": {
+              "query": {
+                "after": 488,
+                "before": 1381,
+                "clock_mapping_unavailable": 0,
+                "timestamp_invalid": 0,
+                "uncertainty_overlap": 0
+              },
+              "sync": {
+                "after": 653,
+                "before": 2359,
+                "clock_mapping_unavailable": 0,
+                "timestamp_invalid": 0,
+                "uncertainty_overlap": 0
+              }
+            },
+            "globalStatementConservationPassed": true
+          },
+          "database_snapshot": {
+            "classificationUncertaintyNs": 1809904,
+            "clockMappingVerified": true,
+            "efCommandPairTotals": {
+              "clock_mapping_unavailable": 0,
+              "completed_before": 1203,
+              "spans_boundary": 0,
+              "started_after": 18,
+              "timestamp_invalid": 0,
+              "uncertainty_overlap": 0
+            },
+            "efCommandPairsByTrace": {
+              "HTTP": {
+                "clock_mapping_unavailable": 0,
+                "completed_before": 635,
+                "spans_boundary": 0,
+                "started_after": 0,
+                "timestamp_invalid": 0,
+                "uncertainty_overlap": 0
+              },
+              "REST": {
+                "clock_mapping_unavailable": 0,
+                "completed_before": 556,
+                "spans_boundary": 0,
+                "started_after": 0,
+                "timestamp_invalid": 0,
+                "uncertainty_overlap": 0
+              },
+              "background_or_unassigned": {
+                "clock_mapping_unavailable": 0,
+                "completed_before": 12,
+                "spans_boundary": 0,
+                "started_after": 18,
+                "timestamp_invalid": 0,
+                "uncertainty_overlap": 0
+              }
+            },
+            "globalCommandCompleteStatements": {
+              "after": 184,
+              "before": 5106,
+              "clock_mapping_unavailable": 0,
+              "timestamp_invalid": 0,
+              "uncertainty_overlap": 0
+            },
+            "globalReadyForQueryCycles": {
+              "query": {
+                "after": 92,
+                "before": 1777,
+                "clock_mapping_unavailable": 0,
+                "timestamp_invalid": 0,
+                "uncertainty_overlap": 0
+              },
+              "sync": {
+                "after": 92,
+                "before": 2920,
+                "clock_mapping_unavailable": 0,
+                "timestamp_invalid": 0,
+                "uncertainty_overlap": 0
+              }
+            },
+            "globalStatementConservationPassed": true
+          },
+          "settlement_marker": {
+            "classificationUncertaintyNs": 1809904,
+            "clockMappingVerified": true,
+            "efCommandPairTotals": {
+              "clock_mapping_unavailable": 0,
+              "completed_before": 1203,
+              "spans_boundary": 0,
+              "started_after": 17,
+              "timestamp_invalid": 0,
+              "uncertainty_overlap": 1
+            },
+            "efCommandPairsByTrace": {
+              "HTTP": {
+                "clock_mapping_unavailable": 0,
+                "completed_before": 635,
+                "spans_boundary": 0,
+                "started_after": 0,
+                "timestamp_invalid": 0,
+                "uncertainty_overlap": 0
+              },
+              "REST": {
+                "clock_mapping_unavailable": 0,
+                "completed_before": 556,
+                "spans_boundary": 0,
+                "started_after": 0,
+                "timestamp_invalid": 0,
+                "uncertainty_overlap": 0
+              },
+              "background_or_unassigned": {
+                "clock_mapping_unavailable": 0,
+                "completed_before": 12,
+                "spans_boundary": 0,
+                "started_after": 17,
+                "timestamp_invalid": 0,
+                "uncertainty_overlap": 1
+              }
+            },
+            "globalCommandCompleteStatements": {
+              "after": 146,
+              "before": 5144,
+              "clock_mapping_unavailable": 0,
+              "timestamp_invalid": 0,
+              "uncertainty_overlap": 0
+            },
+            "globalReadyForQueryCycles": {
+              "query": {
+                "after": 73,
+                "before": 1796,
+                "clock_mapping_unavailable": 0,
+                "timestamp_invalid": 0,
+                "uncertainty_overlap": 0
+              },
+              "sync": {
+                "after": 73,
+                "before": 2939,
+                "clock_mapping_unavailable": 0,
+                "timestamp_invalid": 0,
+                "uncertainty_overlap": 0
+              }
+            },
+            "globalStatementConservationPassed": true
+          }
+        },
+        "unitLimit": "EF provider command attempts are not PostgreSQL statements, physical round trips, or affected rows.",
+        "methodAncestryBoundary": {
+          "exactMethodAncestorCommandPairs": 747,
+          "noMethodAncestorResidualCommandPairs": 474,
+          "allCommandPairsConserved": true
+        }
+      },
+      "evidencePins": {
+        "analysisReadbackSha256": "0faed9f00335a4364b0b09c4970d39f3460132603f4e0a12ad77bad24df36159",
+        "caseArchiveSha256": "c85862b2640a2986f43d3164bc3cf0dfa11968d8b9992e67177a7b952d367cb0",
+        "descriptorSha256": "d15298e85c41a6fe0924a4dd80ca940f88639e9bf4af245acfafd72616eec16f",
+        "innerFinalReceiptSha256": "c0fe6fda711580224e431c3907b74b830101c11fc689efb76afb7cd0509813fe",
+        "outerGuardReceiptSha256": "56760b4f434dcadf3015b2f46c6b2cb90907c49a4cfcead6f32d2e369840a987",
+        "protocolProbeDataSha256": "86b9c32f82a5054571d6cc08639a5a5574ba9e22f4452ff3efb206a25cd2bb6e",
+        "protocolProbeToolSha256": "33090ff3e64acfc7fb508bd1e86f098b9a24fff10d6ccb87c8b90e6e1253fdbb",
+        "settlementMarkerSha256": "3df0fd0b94a90a2e828b8a4561330476a6a7c72000303cb347b94f6cef23fe3c",
+        "snapshotReadbackSha256": "09fae259ba19e2a66ff7dbfc9c86b703a1d00efa7384210dcc2a84d0a0205cd9"
+      },
+      "fixtureChecks": {
+        "HTTP": {
+          "cadence": "Immediate",
+          "checkpointLimit": null,
+          "executionStatus": "Completed",
+          "expectedOutputAssertionPassed": true,
+          "incidentCount": 0,
+          "inspectionGranularity": "activity-level",
+          "requestInvocations": 1,
+          "statusCode": 200
+        },
+        "REST": {
+          "cadence": "Immediate",
+          "checkpointLimit": null,
+          "executionStatus": "Completed",
+          "expectedOutputAssertionPassed": true,
+          "incidentCount": 0,
+          "inspectionGranularity": "activity-level",
+          "requestInvocations": 1,
+          "statusCode": 200
+        }
+      },
+      "observationWindow": {
+        "additionalRequestsIssued": false,
+        "elapsedMs": 12000.297,
+        "httpRetries": 0,
+        "receiptSha256": "df68788360b3c89cd01657193d0a009c18ffdb42833fb4bffbcd0c3edde5461f",
+        "requestedSeconds": 12.0,
+        "restRetries": 0,
+        "sweepCompletionClaimed": false,
+        "valid": true
+      },
+      "pointSnapshot": {
+        "deliveredOutboxRows": 15,
+        "executionStatus": "Completed",
+        "outboxRows": 15,
+        "queueCount": 0,
+        "readbackKind": "read_only_postgresql_repeatable_read",
+        "snapshotMatchesMarkerAndRequestDrain": true,
+        "successfulPrimarySettled": true,
+        "targetSettledSnapshot": true,
+        "terminal": true
+      },
+      "postgresProtocolAccounting": {
+        "captureWideProtocolFrameCount": 41417,
+        "captureWideReadyForQueryCycles": {
+          "query": 1869,
+          "sync": 3012
+        },
+        "captureWideSuccessfulCommandCompleteStatements": 5290,
+        "protocolToolVersion": "t18-protocol-probe-v2",
+        "rawFrameCountMatchesSummary": true,
+        "temporalBuckets": {
+          "client_response_received": {
+            "clockMappingVerified": true,
+            "globalCommandCompleteStatements": {
+              "after": 1199,
+              "before": 4091,
+              "clock_mapping_unavailable": 0,
+              "timestamp_invalid": 0,
+              "uncertainty_overlap": 0
+            },
+            "globalReadyForQueryCycles": {
+              "query": {
+                "after": 488,
+                "before": 1381,
+                "clock_mapping_unavailable": 0,
+                "timestamp_invalid": 0,
+                "uncertainty_overlap": 0
+              },
+              "sync": {
+                "after": 653,
+                "before": 2359,
+                "clock_mapping_unavailable": 0,
+                "timestamp_invalid": 0,
+                "uncertainty_overlap": 0
+              }
+            },
+            "statementConservationPassed": true
+          },
+          "database_snapshot": {
+            "clockMappingVerified": true,
+            "globalCommandCompleteStatements": {
+              "after": 184,
+              "before": 5106,
+              "clock_mapping_unavailable": 0,
+              "timestamp_invalid": 0,
+              "uncertainty_overlap": 0
+            },
+            "globalReadyForQueryCycles": {
+              "query": {
+                "after": 92,
+                "before": 1777,
+                "clock_mapping_unavailable": 0,
+                "timestamp_invalid": 0,
+                "uncertainty_overlap": 0
+              },
+              "sync": {
+                "after": 92,
+                "before": 2920,
+                "clock_mapping_unavailable": 0,
+                "timestamp_invalid": 0,
+                "uncertainty_overlap": 0
+              }
+            },
+            "statementConservationPassed": true
+          },
+          "settlement_marker": {
+            "clockMappingVerified": true,
+            "globalCommandCompleteStatements": {
+              "after": 146,
+              "before": 5144,
+              "clock_mapping_unavailable": 0,
+              "timestamp_invalid": 0,
+              "uncertainty_overlap": 0
+            },
+            "globalReadyForQueryCycles": {
+              "query": {
+                "after": 73,
+                "before": 1796,
+                "clock_mapping_unavailable": 0,
+                "timestamp_invalid": 0,
+                "uncertainty_overlap": 0
+              },
+              "sync": {
+                "after": 73,
+                "before": 2939,
+                "clock_mapping_unavailable": 0,
+                "timestamp_invalid": 0,
+                "uncertainty_overlap": 0
+              }
+            },
+            "statementConservationPassed": true
+          }
+        },
+        "uniqueProviderIntervalAttribution": {
+          "attributionConserved": true,
+          "clockMappingVerified": true,
+          "commandCompleteAttributionResiduals": {
+            "ambiguous_clock_uncertainty_boundary": 1853,
+            "ambiguous_overlapping_provider_intervals": 60,
+            "outside_provider_interval": 3267,
+            "provider_pid_not_observed": 16,
+            "uniquely_attributed": 94
+          },
+          "commandCompleteByTrace": {
+            "HTTP": 84,
+            "REST": 9,
+            "background_or_unassigned": 1
+          },
+          "providerAttemptIntervalCount": 976,
+          "providerAttemptIntervalRejections": 0
+        },
+        "unitLimit": "These counts cover all captured PostgreSQL protocol traffic, including setup, fixtures and background. Query and Sync cycles are separate global counts. Unique interval joins are conservative trace-group attribution, not proof of causal request ownership. SQL text is not included."
+      },
+      "protocolErrorTiming": {
+        "definitelyBeforePrimaryRequestStart": 4,
+        "errorResponseCount": 4,
+        "interpretation": "Temporal only; no SQL cause inferred.",
+        "minimumLeadMs": 11772.496,
+        "readbackStatus": "separate_root_temporal_readback"
+      },
+      "requestDrainAndTail": {
+        "commandPairsAtMethodStop": {
+          "completed": 609,
+          "inFlight": 0,
+          "started": 609
+        },
+        "openTailBoundaryCountAtFinalization": 0,
+        "postStopCallbackCount": 24,
+        "probeAnchorIdentityAndTickJoinPassed": true,
+        "saveChangesAtMethodStop": {
+          "completed": 152,
+          "inFlight": 0,
+          "started": 152
+        },
+        "tailCompleteAtFinalization": true,
+        "tailCompleteAtReceipt": false,
+        "tailKinds": {
+          "request_drain": 2,
+          "resumption_sweep": 5
+        },
+        "tailOwnershipCounts": {
+          "unknown_not_awaited": 7
+        },
+        "targetDrainJoinPassed": true,
+        "targetJoinCount": 1,
+        "transactionGenerationsAtMethodStop": {
+          "completed": 37,
+          "inFlight": 0,
+          "started": 37
+        }
+      },
+      "resumptionEvidence": {
+        "globalSweepEndCount": 5,
+        "globalSweepOutcomes": {
+          "completed": 5
+        },
+        "globalSweepOwnership": "unowned_global",
+        "globalSweepStartCount": 5,
+        "markerMeaning": "The marker records observation at sweep start; marker absence at an earlier point is not a database queue read.",
+        "markerObserved": true,
+        "purgeCausality": "No direct residual-row purge count is available; no per-case purge or performance claim is made.",
+        "targetLinkedCandidateCount": 0,
+        "targetLinkedRedriveOrPurgeEndCount": 0,
+        "targetRequestDrainMatchCount": 1
+      },
+      "sourceAndHelperPins": {
+        "captureRunnerSourceSha256": "b09d842e3d691ebf5e80f094f99ba04ccbecfed552050eb22ef810b41570a7b4",
+        "modelFingerprintSourceSha256": "78d6761fd6be180da8a315be0afd67935ea00b09fb0435b5a40d1a0be71d1ece",
+        "modelPinBinarySha256": "1a0dc76fb48d30dd9fe6907fa9b7e3e3f42d693d37722508e76f88b294521748",
+        "operationHelperAssemblySha256": "16b2f6fdc0540882665099a380b8b9b60a2e998598cbf25882cc449f52e1eacf",
+        "protocolProbeSourceSha256": "33090ff3e64acfc7fb508bd1e86f098b9a24fff10d6ccb87c8b90e6e1253fdbb",
+        "requestClientSourceSha256": "0958c1d42672fbecdf98b12e17076a058c3b357efa079b62e68c296f4e889023",
+        "runtimeAssemblySha256": "736a1dbe1da4fffd8d4ff4087e0d8109c9f08d285c02b319810a28178d70b427",
+        "runtimeSourceDeltaSha256": "4be9ce624fe13650e24b3698b451353558d3e81a1fdd78465dc8670bf104e8d7",
+        "snapshotHelperBinarySha256": "2434e75d4881b5dc44a6391606b4d6e44864f3a5b2a678d9cc268a06251740e5",
+        "snapshotSupervisorSourceSha256": "0b827d8cf0f173e3b9d01ff127177119b145175859d071a3e05f168a4b6225d2",
+        "sourceBlobRegistrySha256": "eee2fd24d8de6c939db2d2e298b3f758d97ad2d23b165a206eccfea4a6459940",
+        "typedHashSourceSha256": "772a1be9d97eedb0aba5ea75e67ce707bc2372b022db407bd603c84d2a68232e",
+        "workbenchBinarySha256": "08afaaab4b4637ae4f1b0c1c489fb1a5bb86b5660cd8caef8714bb96700bb9e0",
+        "workbenchClosureBytes": 324271542,
+        "workbenchClosureFileCount": 520,
+        "workbenchClosureManifestSha256": "b0c0a1f085810f4833d27eed4e97317a6b2b121160d6f54353008b5b5bdd3075"
+      },
+      "sourceRevision": "7357b91e012c56cb34f1259ef7a60ef56e144afe",
+      "residualQueryNature": {
+        "commandPairsWithoutExactMethodAncestor": 474,
+        "classificationBoundary": "These pairs have no exact operation-method ancestor. Table identifiers and leading verbs come from the analyzer parsed residual groups; family labels are inferred from the public table-identifier prefix and do not assign a caller or method.",
+        "familyPrefixRules": {
+          "telemetry": "elsa_otel_*",
+          "runtime_state": "elsa_runtime_*",
+          "placement": "elsa_distributed_*",
+          "identity": "identity_*",
+          "other_or_unmapped": "all remaining parsed identifiers"
+        },
+        "byTrace": {
+          "HTTP": {
+            "noMethodAncestorCommandPairs": 243,
+            "familyCountsFromTableIdentifierPrefix": {
+              "telemetry": 128,
+              "runtime_state": 113,
+              "placement": 2
+            },
+            "parsedTableIdentifiers": [
+              {
+                "providerFamily": "postgresql",
+                "tableIdentifier": "elsa_runtime_activity_execution_inspection",
+                "commandPairs": 15,
+                "leadingVerbCounts": {
+                  "SELECT": 15
+                }
+              },
+              {
+                "providerFamily": "postgresql",
+                "tableIdentifier": "elsa_runtime_activity_execution_state",
+                "commandPairs": 31,
+                "leadingVerbCounts": {
+                  "SELECT": 31
+                }
+              },
+              {
+                "providerFamily": "postgresql",
+                "tableIdentifier": "elsa_runtime_bookmark_state",
+                "commandPairs": 1,
+                "leadingVerbCounts": {
+                  "SELECT": 1
+                }
+              },
+              {
+                "providerFamily": "postgresql",
+                "tableIdentifier": "elsa_runtime_execution_liveness_state",
+                "commandPairs": 6,
+                "leadingVerbCounts": {
+                  "INSERT": 1,
+                  "SELECT": 4,
+                  "UPDATE": 1
+                }
+              },
+              {
+                "providerFamily": "postgresql",
+                "tableIdentifier": "elsa_runtime_incident_state",
+                "commandPairs": 1,
+                "leadingVerbCounts": {
+                  "SELECT": 1
+                }
+              },
+              {
+                "providerFamily": "postgresql",
+                "tableIdentifier": "elsa_runtime_workflow_dispatch",
+                "commandPairs": 1,
+                "leadingVerbCounts": {
+                  "SELECT": 1
+                }
+              },
+              {
+                "providerFamily": "postgresql",
+                "tableIdentifier": "elsa_runtime_workflow_executable_source_reference",
+                "commandPairs": 1,
+                "leadingVerbCounts": {
+                  "SELECT": 1
+                }
+              },
+              {
+                "providerFamily": "postgresql",
+                "tableIdentifier": "elsa_runtime_workflow_execution_state",
+                "commandPairs": 48,
+                "leadingVerbCounts": {
+                  "SELECT": 48
+                }
+              },
+              {
+                "providerFamily": "postgresql",
+                "tableIdentifier": "elsa_runtime_workflow_hold_state",
+                "commandPairs": 7,
+                "leadingVerbCounts": {
+                  "SELECT": 7
+                }
+              },
+              {
+                "providerFamily": "postgresql",
+                "tableIdentifier": "elsa_runtime_workflow_trigger_binding",
+                "commandPairs": 2,
+                "leadingVerbCounts": {
+                  "SELECT": 2
+                }
+              },
+              {
+                "providerFamily": "sqlite",
+                "tableIdentifier": "elsa_distributed_execution_placement",
+                "commandPairs": 2,
+                "leadingVerbCounts": {
+                  "INSERT": 1,
+                  "SELECT": 1
+                }
+              },
+              {
+                "providerFamily": "sqlite",
+                "tableIdentifier": "elsa_otel_capture_ledger",
+                "commandPairs": 16,
+                "leadingVerbCounts": {
+                  "DELETE": 16
+                }
+              },
+              {
+                "providerFamily": "sqlite",
+                "tableIdentifier": "elsa_otel_instruments",
+                "commandPairs": 16,
+                "leadingVerbCounts": {
+                  "SELECT": 16
+                }
+              },
+              {
+                "providerFamily": "sqlite",
+                "tableIdentifier": "elsa_otel_logs",
+                "commandPairs": 16,
+                "leadingVerbCounts": {
+                  "SELECT": 16
+                }
+              },
+              {
+                "providerFamily": "sqlite",
+                "tableIdentifier": "elsa_otel_metric_points",
+                "commandPairs": 16,
+                "leadingVerbCounts": {
+                  "SELECT": 16
+                }
+              },
+              {
+                "providerFamily": "sqlite",
+                "tableIdentifier": "elsa_otel_resources",
+                "commandPairs": 16,
+                "leadingVerbCounts": {
+                  "SELECT": 16
+                }
+              },
+              {
+                "providerFamily": "sqlite",
+                "tableIdentifier": "elsa_otel_spans",
+                "commandPairs": 16,
+                "leadingVerbCounts": {
+                  "SELECT": 16
+                }
+              },
+              {
+                "providerFamily": "sqlite",
+                "tableIdentifier": "elsa_otel_traces",
+                "commandPairs": 32,
+                "leadingVerbCounts": {
+                  "SELECT": 32
+                }
+              }
+            ]
+          },
+          "REST": {
+            "noMethodAncestorCommandPairs": 211,
+            "familyCountsFromTableIdentifierPrefix": {
+              "telemetry": 112,
+              "runtime_state": 96,
+              "placement": 2,
+              "identity": 1
+            },
+            "parsedTableIdentifiers": [
+              {
+                "providerFamily": "postgresql",
+                "tableIdentifier": "elsa_runtime_activity_execution_inspection",
+                "commandPairs": 13,
+                "leadingVerbCounts": {
+                  "SELECT": 13
+                }
+              },
+              {
+                "providerFamily": "postgresql",
+                "tableIdentifier": "elsa_runtime_activity_execution_state",
+                "commandPairs": 26,
+                "leadingVerbCounts": {
+                  "SELECT": 26
+                }
+              },
+              {
+                "providerFamily": "postgresql",
+                "tableIdentifier": "elsa_runtime_execution_liveness_state",
+                "commandPairs": 6,
+                "leadingVerbCounts": {
+                  "INSERT": 1,
+                  "SELECT": 4,
+                  "UPDATE": 1
+                }
+              },
+              {
+                "providerFamily": "postgresql",
+                "tableIdentifier": "elsa_runtime_incident_state",
+                "commandPairs": 1,
+                "leadingVerbCounts": {
+                  "SELECT": 1
+                }
+              },
+              {
+                "providerFamily": "postgresql",
+                "tableIdentifier": "elsa_runtime_workflow_dispatch",
+                "commandPairs": 1,
+                "leadingVerbCounts": {
+                  "SELECT": 1
+                }
+              },
+              {
+                "providerFamily": "postgresql",
+                "tableIdentifier": "elsa_runtime_workflow_executable_source_reference",
+                "commandPairs": 1,
+                "leadingVerbCounts": {
+                  "SELECT": 1
+                }
+              },
+              {
+                "providerFamily": "postgresql",
+                "tableIdentifier": "elsa_runtime_workflow_execution_state",
+                "commandPairs": 43,
+                "leadingVerbCounts": {
+                  "SELECT": 43
+                }
+              },
+              {
+                "providerFamily": "postgresql",
+                "tableIdentifier": "elsa_runtime_workflow_hold_state",
+                "commandPairs": 5,
+                "leadingVerbCounts": {
+                  "SELECT": 5
+                }
+              },
+              {
+                "providerFamily": "sqlite",
+                "tableIdentifier": "elsa_distributed_execution_placement",
+                "commandPairs": 2,
+                "leadingVerbCounts": {
+                  "INSERT": 1,
+                  "SELECT": 1
+                }
+              },
+              {
+                "providerFamily": "sqlite",
+                "tableIdentifier": "elsa_otel_capture_ledger",
+                "commandPairs": 14,
+                "leadingVerbCounts": {
+                  "DELETE": 14
+                }
+              },
+              {
+                "providerFamily": "sqlite",
+                "tableIdentifier": "elsa_otel_instruments",
+                "commandPairs": 14,
+                "leadingVerbCounts": {
+                  "SELECT": 14
+                }
+              },
+              {
+                "providerFamily": "sqlite",
+                "tableIdentifier": "elsa_otel_logs",
+                "commandPairs": 14,
+                "leadingVerbCounts": {
+                  "SELECT": 14
+                }
+              },
+              {
+                "providerFamily": "sqlite",
+                "tableIdentifier": "elsa_otel_metric_points",
+                "commandPairs": 14,
+                "leadingVerbCounts": {
+                  "SELECT": 14
+                }
+              },
+              {
+                "providerFamily": "sqlite",
+                "tableIdentifier": "elsa_otel_resources",
+                "commandPairs": 14,
+                "leadingVerbCounts": {
+                  "SELECT": 14
+                }
+              },
+              {
+                "providerFamily": "sqlite",
+                "tableIdentifier": "elsa_otel_spans",
+                "commandPairs": 14,
+                "leadingVerbCounts": {
+                  "SELECT": 14
+                }
+              },
+              {
+                "providerFamily": "sqlite",
+                "tableIdentifier": "elsa_otel_traces",
+                "commandPairs": 28,
+                "leadingVerbCounts": {
+                  "SELECT": 28
+                }
+              },
+              {
+                "providerFamily": "sqlite",
+                "tableIdentifier": "identity_users",
+                "commandPairs": 1,
+                "leadingVerbCounts": {
+                  "SELECT": 1
+                }
+              }
+            ]
+          },
+          "background_or_unassigned": {
+            "noMethodAncestorCommandPairs": 20,
+            "familyCountsFromTableIdentifierPrefix": {
+              "runtime_state": 20
+            },
+            "parsedTableIdentifiers": [
+              {
+                "providerFamily": "postgresql",
+                "tableIdentifier": "elsa_runtime_execution_liveness_state",
+                "commandPairs": 20,
+                "leadingVerbCounts": {
+                  "SELECT": 20
+                }
+              }
+            ]
+          }
+        },
+        "conservationPassed": true
+      },
+      "observedOperationsAndEfLifecycle": {
+        "operationPairUnit": "Paired safe operation metadata observations; not EF provider commands, successful writes, durable records, queue rows, or completed dispatches.",
+        "byTrace": {
+          "HTTP": {
+            "checkpointOperationPairs": {
+              "checkpoint.commit": 22,
+              "checkpoint.marker_flush": 22,
+              "checkpoint.marker_lookup": 22,
+              "checkpoint.participant_flush": 22,
+              "checkpoint.participant_stage": 92
+            },
+            "checkpointOperationPairTotal": 180,
+            "schedulerQueueDispatchOperationPairs": {
+              "scheduler_queue.claim": 37,
+              "scheduler_queue.complete_claim": 12,
+              "scheduler_queue.enqueue": 22
+            },
+            "schedulerQueueDispatchOperationPairTotal": 71
+          },
+          "REST": {
+            "checkpointOperationPairs": {
+              "checkpoint.commit": 18,
+              "checkpoint.marker_flush": 18,
+              "checkpoint.marker_lookup": 18,
+              "checkpoint.participant_flush": 18,
+              "checkpoint.participant_stage": 81
+            },
+            "checkpointOperationPairTotal": 153,
+            "schedulerQueueDispatchOperationPairs": {
+              "scheduler_queue.claim": 33,
+              "scheduler_queue.complete_claim": 10,
+              "scheduler_queue.enqueue": 20
+            },
+            "schedulerQueueDispatchOperationPairTotal": 63
+          },
+          "background_or_unassigned": {
+            "checkpointOperationPairs": {},
+            "checkpointOperationPairTotal": 0,
+            "schedulerQueueDispatchOperationPairs": {
+              "scheduler_queue.list_claimable_executions": 5
+            },
+            "schedulerQueueDispatchOperationPairTotal": 5
+          }
+        },
+        "methodStopCounters": {
+          "commandPairs": {
+            "completed": 609,
+            "inFlight": 0,
+            "started": 609
+          },
+          "saveChangesPairs": {
+            "completed": 152,
+            "inFlight": 0,
+            "started": 152
+          },
+          "transactionPairs": {
+            "completed": 37,
+            "inFlight": 0,
+            "started": 37
+          },
+          "unit": "Separate method-stop lifecycle counters; transaction counters are not inferred by summing EF log events."
+        },
+        "efTransactionLifecycleLogEventsByTrace": {
+          "HTTP": {
+            "CreatedTransactionSavepoint": 44,
+            "CreatingTransactionSavepoint": 44,
+            "ReleasedTransactionSavepoint": 44,
+            "ReleasingTransactionSavepoint": 44,
+            "TransactionCommitted": 38,
+            "TransactionCommitting": 38,
+            "TransactionStarted": 38,
+            "TransactionStarting": 38
+          },
+          "REST": {
+            "CreatedTransactionSavepoint": 36,
+            "CreatingTransactionSavepoint": 36,
+            "ReleasedTransactionSavepoint": 36,
+            "ReleasingTransactionSavepoint": 36,
+            "TransactionCommitted": 32,
+            "TransactionCommitting": 32,
+            "TransactionStarted": 32,
+            "TransactionStarting": 32
+          }
+        },
+        "lifecycleEventUnit": "Observed EF transaction/savepoint log-event occurrences, not deduplicated transaction totals or successful SQL statements."
+      }
+    },
+    {
+      "cadence": "Coalesced",
+      "case": "coalesced-final-7357",
+      "caseAnalysis": {
+        "acceptanceIssueCount": 0,
+        "rootReviewStillRequired": true,
+        "status": "passed_per_case_source_candidate",
+        "verifiedArtifactPinCount": 15
+      },
+      "efCommandAccounting": {
+        "checkpointOperationPairsByTrace": {
+          "HTTP": 19,
+          "REST": 10
+        },
+        "commandPairs": 243,
+        "commandPairsByTraceAndProviderFamily": [
+          {
+            "commandPairs": 50,
+            "providerFamily": "sqlite",
+            "trace": "HTTP"
+          },
+          {
+            "commandPairs": 84,
+            "providerFamily": "postgresql",
+            "trace": "HTTP"
+          },
+          {
+            "commandPairs": 19,
+            "providerFamily": "sqlite",
+            "trace": "REST"
+          },
+          {
+            "commandPairs": 54,
+            "providerFamily": "postgresql",
+            "trace": "REST"
+          },
+          {
+            "commandPairs": 3,
+            "providerFamily": "sqlite",
+            "trace": "background_or_unassigned"
+          },
+          {
+            "commandPairs": 33,
+            "providerFamily": "postgresql",
+            "trace": "background_or_unassigned"
+          }
+        ],
+        "dispatchNoMethodAncestorResidualsByTrace": {
+          "HTTP": 1,
+          "REST": 1
+        },
+        "exactMethodAncestorJoins": 84,
+        "exactMethodOperationFamiliesByTrace": {
+          "HTTP": {
+            "checkpoint": 33,
+            "durable_value": 2,
+            "post_commit_outbox": 2,
+            "scheduler_queue": 10
+          },
+          "REST": {
+            "checkpoint": 17,
+            "durable_value": 1,
+            "post_commit_outbox": 2,
+            "scheduler_queue": 5
+          },
+          "background_or_unassigned": {
+            "post_commit_outbox": 5,
+            "scheduler_queue": 7
+          }
+        },
+        "noMethodAncestorResidualTotalsByTableFamily": {
+          "other_or_mixed": 1,
+          "placement": 7,
+          "runtime_state": 87,
+          "telemetry": 64
+        },
+        "noMethodAncestorResiduals": 159,
+        "noMethodAncestorResidualsByTraceProviderAndTableFamily": [
+          {
+            "commandPairs": 37,
+            "providerFamily": "postgresql",
+            "tableFamily": "runtime_state",
+            "trace": "HTTP"
+          },
+          {
+            "commandPairs": 2,
+            "providerFamily": "sqlite",
+            "tableFamily": "placement",
+            "trace": "HTTP"
+          },
+          {
+            "commandPairs": 48,
+            "providerFamily": "sqlite",
+            "tableFamily": "telemetry",
+            "trace": "HTTP"
+          },
+          {
+            "commandPairs": 29,
+            "providerFamily": "postgresql",
+            "tableFamily": "runtime_state",
+            "trace": "REST"
+          },
+          {
+            "commandPairs": 1,
+            "providerFamily": "sqlite",
+            "tableFamily": "other_or_mixed",
+            "trace": "REST"
+          },
+          {
+            "commandPairs": 2,
+            "providerFamily": "sqlite",
+            "tableFamily": "placement",
+            "trace": "REST"
+          },
+          {
+            "commandPairs": 16,
+            "providerFamily": "sqlite",
+            "tableFamily": "telemetry",
+            "trace": "REST"
+          },
+          {
+            "commandPairs": 21,
+            "providerFamily": "postgresql",
+            "tableFamily": "runtime_state",
+            "trace": "background_or_unassigned"
+          },
+          {
+            "commandPairs": 3,
+            "providerFamily": "sqlite",
+            "tableFamily": "placement",
+            "trace": "background_or_unassigned"
+          }
+        ],
+        "schedulerDispatchOperationPairsByTrace": {
+          "HTTP": 6,
+          "REST": 3,
+          "background_or_unassigned": 7
+        },
+        "temporalBuckets": {
+          "client_response_received": {
+            "classificationUncertaintyNs": 1571864,
+            "clockMappingVerified": true,
+            "efCommandPairTotals": {
+              "clock_mapping_unavailable": 0,
+              "completed_before": 134,
+              "spans_boundary": 0,
+              "started_after": 109,
+              "timestamp_invalid": 0,
+              "uncertainty_overlap": 0
+            },
+            "efCommandPairsByTrace": {
+              "HTTP": {
+                "clock_mapping_unavailable": 0,
+                "completed_before": 134,
+                "spans_boundary": 0,
+                "started_after": 0,
+                "timestamp_invalid": 0,
+                "uncertainty_overlap": 0
+              },
+              "REST": {
+                "clock_mapping_unavailable": 0,
+                "completed_before": 0,
+                "spans_boundary": 0,
+                "started_after": 73,
+                "timestamp_invalid": 0,
+                "uncertainty_overlap": 0
+              },
+              "background_or_unassigned": {
+                "clock_mapping_unavailable": 0,
+                "completed_before": 0,
+                "spans_boundary": 0,
+                "started_after": 36,
+                "timestamp_invalid": 0,
+                "uncertainty_overlap": 0
+              }
+            },
+            "globalCommandCompleteStatements": {
+              "after": 816,
+              "before": 2778,
+              "clock_mapping_unavailable": 0,
+              "timestamp_invalid": 0,
+              "uncertainty_overlap": 0
+            },
+            "globalReadyForQueryCycles": {
+              "query": {
+                "after": 392,
+                "before": 829,
+                "clock_mapping_unavailable": 0,
+                "timestamp_invalid": 0,
+                "uncertainty_overlap": 0
+              },
+              "sync": {
+                "after": 409,
+                "before": 1643,
+                "clock_mapping_unavailable": 0,
+                "timestamp_invalid": 0,
+                "uncertainty_overlap": 0
+              }
+            },
+            "globalStatementConservationPassed": true
+          },
+          "database_snapshot": {
+            "classificationUncertaintyNs": 1571864,
+            "clockMappingVerified": true,
+            "efCommandPairTotals": {
+              "clock_mapping_unavailable": 0,
+              "completed_before": 225,
+              "spans_boundary": 0,
+              "started_after": 18,
+              "timestamp_invalid": 0,
+              "uncertainty_overlap": 0
+            },
+            "efCommandPairsByTrace": {
+              "HTTP": {
+                "clock_mapping_unavailable": 0,
+                "completed_before": 134,
+                "spans_boundary": 0,
+                "started_after": 0,
+                "timestamp_invalid": 0,
+                "uncertainty_overlap": 0
+              },
+              "REST": {
+                "clock_mapping_unavailable": 0,
+                "completed_before": 73,
+                "spans_boundary": 0,
+                "started_after": 0,
+                "timestamp_invalid": 0,
+                "uncertainty_overlap": 0
+              },
+              "background_or_unassigned": {
+                "clock_mapping_unavailable": 0,
+                "completed_before": 18,
+                "spans_boundary": 0,
+                "started_after": 18,
+                "timestamp_invalid": 0,
+                "uncertainty_overlap": 0
+              }
+            },
+            "globalCommandCompleteStatements": {
+              "after": 176,
+              "before": 3418,
+              "clock_mapping_unavailable": 0,
+              "timestamp_invalid": 0,
+              "uncertainty_overlap": 0
+            },
+            "globalReadyForQueryCycles": {
+              "query": {
+                "after": 88,
+                "before": 1133,
+                "clock_mapping_unavailable": 0,
+                "timestamp_invalid": 0,
+                "uncertainty_overlap": 0
+              },
+              "sync": {
+                "after": 88,
+                "before": 1964,
+                "clock_mapping_unavailable": 0,
+                "timestamp_invalid": 0,
+                "uncertainty_overlap": 0
+              }
+            },
+            "globalStatementConservationPassed": true
+          },
+          "settlement_marker": {
+            "classificationUncertaintyNs": 1571864,
+            "clockMappingVerified": true,
+            "efCommandPairTotals": {
+              "clock_mapping_unavailable": 0,
+              "completed_before": 225,
+              "spans_boundary": 0,
+              "started_after": 17,
+              "timestamp_invalid": 0,
+              "uncertainty_overlap": 1
+            },
+            "efCommandPairsByTrace": {
+              "HTTP": {
+                "clock_mapping_unavailable": 0,
+                "completed_before": 134,
+                "spans_boundary": 0,
+                "started_after": 0,
+                "timestamp_invalid": 0,
+                "uncertainty_overlap": 0
+              },
+              "REST": {
+                "clock_mapping_unavailable": 0,
+                "completed_before": 73,
+                "spans_boundary": 0,
+                "started_after": 0,
+                "timestamp_invalid": 0,
+                "uncertainty_overlap": 0
+              },
+              "background_or_unassigned": {
+                "clock_mapping_unavailable": 0,
+                "completed_before": 18,
+                "spans_boundary": 0,
+                "started_after": 17,
+                "timestamp_invalid": 0,
+                "uncertainty_overlap": 1
+              }
+            },
+            "globalCommandCompleteStatements": {
+              "after": 138,
+              "before": 3456,
+              "clock_mapping_unavailable": 0,
+              "timestamp_invalid": 0,
+              "uncertainty_overlap": 0
+            },
+            "globalReadyForQueryCycles": {
+              "query": {
+                "after": 69,
+                "before": 1152,
+                "clock_mapping_unavailable": 0,
+                "timestamp_invalid": 0,
+                "uncertainty_overlap": 0
+              },
+              "sync": {
+                "after": 69,
+                "before": 1983,
+                "clock_mapping_unavailable": 0,
+                "timestamp_invalid": 0,
+                "uncertainty_overlap": 0
+              }
+            },
+            "globalStatementConservationPassed": true
+          }
+        },
+        "unitLimit": "EF provider command attempts are not PostgreSQL statements, physical round trips, or affected rows.",
+        "methodAncestryBoundary": {
+          "exactMethodAncestorCommandPairs": 84,
+          "noMethodAncestorResidualCommandPairs": 159,
+          "allCommandPairsConserved": true
+        }
+      },
+      "evidencePins": {
+        "analysisReadbackSha256": "12ed435558a4a3c5e8f9af46aa0ce1cfed02900d6c3ef17dc8621c5bae4c5ae9",
+        "caseArchiveSha256": "6c297b7c3618f70400910253d1e956a62156cd2318963c195bb1a90f08ac6231",
+        "descriptorSha256": "33b547ab73a22a9ff947617a9c4e1e4bb491a8967d0d980e920f1633af304029",
+        "innerFinalReceiptSha256": "68a1b92492d11eb26ec93f2206ad74bb14d025f07677d0818d0a305d397cdff9",
+        "outerGuardReceiptSha256": "120d14fa056e9ac4140c6c1ace03a570f13a0fe41883f8b26c3119e73e3a49d8",
+        "protocolProbeDataSha256": "8931f9ee47603754bd8c0ec25c4fb34510caea521f047816360007b07a298f01",
+        "protocolProbeToolSha256": "33090ff3e64acfc7fb508bd1e86f098b9a24fff10d6ccb87c8b90e6e1253fdbb",
+        "settlementMarkerSha256": "0c9b3875b8dae525bc908b3df86a9e4de35a4f98cfb7840a270098c2276dc57d",
+        "snapshotReadbackSha256": "29ecf824fbe6682b1b0b5986c614b1f3d3c9a35f22e1590961d46a3a6ad004f8"
+      },
+      "fixtureChecks": {
+        "HTTP": {
+          "cadence": "Coalesced",
+          "checkpointLimit": 50,
+          "executionStatus": "Completed",
+          "expectedOutputAssertionPassed": true,
+          "incidentCount": 0,
+          "inspectionGranularity": "boundary-level",
+          "requestInvocations": 1,
+          "statusCode": 200
+        },
+        "REST": {
+          "cadence": "Coalesced",
+          "checkpointLimit": 50,
+          "executionStatus": "Completed",
+          "expectedOutputAssertionPassed": true,
+          "incidentCount": 0,
+          "inspectionGranularity": "boundary-level",
+          "requestInvocations": 1,
+          "statusCode": 200
+        }
+      },
+      "observationWindow": {
+        "additionalRequestsIssued": false,
+        "elapsedMs": 12000.134,
+        "httpRetries": 0,
+        "receiptSha256": "0a499c4c6f45af31091d4056423d997c55a2c94440de8a0d02597cb19a4d6301",
+        "requestedSeconds": 12.0,
+        "restRetries": 0,
+        "sweepCompletionClaimed": false,
+        "valid": true
+      },
+      "pointSnapshot": {
+        "deliveredOutboxRows": 0,
+        "executionStatus": "Completed",
+        "outboxRows": 0,
+        "queueCount": 0,
+        "readbackKind": "read_only_postgresql_repeatable_read",
+        "snapshotMatchesMarkerAndRequestDrain": true,
+        "successfulPrimarySettled": true,
+        "targetSettledSnapshot": true,
+        "terminal": true
+      },
+      "postgresProtocolAccounting": {
+        "captureWideProtocolFrameCount": 28687,
+        "captureWideReadyForQueryCycles": {
+          "query": 1221,
+          "sync": 2052
+        },
+        "captureWideSuccessfulCommandCompleteStatements": 3594,
+        "protocolToolVersion": "t18-protocol-probe-v2",
+        "rawFrameCountMatchesSummary": true,
+        "temporalBuckets": {
+          "client_response_received": {
+            "clockMappingVerified": true,
+            "globalCommandCompleteStatements": {
+              "after": 816,
+              "before": 2778,
+              "clock_mapping_unavailable": 0,
+              "timestamp_invalid": 0,
+              "uncertainty_overlap": 0
+            },
+            "globalReadyForQueryCycles": {
+              "query": {
+                "after": 392,
+                "before": 829,
+                "clock_mapping_unavailable": 0,
+                "timestamp_invalid": 0,
+                "uncertainty_overlap": 0
+              },
+              "sync": {
+                "after": 409,
+                "before": 1643,
+                "clock_mapping_unavailable": 0,
+                "timestamp_invalid": 0,
+                "uncertainty_overlap": 0
+              }
+            },
+            "statementConservationPassed": true
+          },
+          "database_snapshot": {
+            "clockMappingVerified": true,
+            "globalCommandCompleteStatements": {
+              "after": 176,
+              "before": 3418,
+              "clock_mapping_unavailable": 0,
+              "timestamp_invalid": 0,
+              "uncertainty_overlap": 0
+            },
+            "globalReadyForQueryCycles": {
+              "query": {
+                "after": 88,
+                "before": 1133,
+                "clock_mapping_unavailable": 0,
+                "timestamp_invalid": 0,
+                "uncertainty_overlap": 0
+              },
+              "sync": {
+                "after": 88,
+                "before": 1964,
+                "clock_mapping_unavailable": 0,
+                "timestamp_invalid": 0,
+                "uncertainty_overlap": 0
+              }
+            },
+            "statementConservationPassed": true
+          },
+          "settlement_marker": {
+            "clockMappingVerified": true,
+            "globalCommandCompleteStatements": {
+              "after": 138,
+              "before": 3456,
+              "clock_mapping_unavailable": 0,
+              "timestamp_invalid": 0,
+              "uncertainty_overlap": 0
+            },
+            "globalReadyForQueryCycles": {
+              "query": {
+                "after": 69,
+                "before": 1152,
+                "clock_mapping_unavailable": 0,
+                "timestamp_invalid": 0,
+                "uncertainty_overlap": 0
+              },
+              "sync": {
+                "after": 69,
+                "before": 1983,
+                "clock_mapping_unavailable": 0,
+                "timestamp_invalid": 0,
+                "uncertainty_overlap": 0
+              }
+            },
+            "statementConservationPassed": true
+          }
+        },
+        "uniqueProviderIntervalAttribution": {
+          "attributionConserved": true,
+          "clockMappingVerified": true,
+          "commandCompleteAttributionResiduals": {
+            "ambiguous_clock_uncertainty_boundary": 268,
+            "ambiguous_overlapping_provider_intervals": 1,
+            "outside_provider_interval": 3213,
+            "provider_pid_not_observed": 16,
+            "uniquely_attributed": 96
+          },
+          "commandCompleteByTrace": {
+            "HTTP": 62,
+            "REST": 25,
+            "background_or_unassigned": 9
+          },
+          "providerAttemptIntervalCount": 171,
+          "providerAttemptIntervalRejections": 0
+        },
+        "unitLimit": "These counts cover all captured PostgreSQL protocol traffic, including setup, fixtures and background. Query and Sync cycles are separate global counts. Unique interval joins are conservative trace-group attribution, not proof of causal request ownership. SQL text is not included."
+      },
+      "protocolErrorTiming": {
+        "definitelyBeforePrimaryRequestStart": 4,
+        "errorResponseCount": 4,
+        "interpretation": "Temporal only; no SQL cause inferred.",
+        "minimumLeadMs": 11517.277,
+        "readbackStatus": "separate_root_temporal_readback"
+      },
+      "requestDrainAndTail": {
+        "commandPairsAtMethodStop": {
+          "completed": 115,
+          "inFlight": 0,
+          "started": 115
+        },
+        "openTailBoundaryCountAtFinalization": 0,
+        "postStopCallbackCount": 0,
+        "probeAnchorIdentityAndTickJoinPassed": true,
+        "saveChangesAtMethodStop": {
+          "completed": 23,
+          "inFlight": 0,
+          "started": 23
+        },
+        "tailCompleteAtFinalization": true,
+        "tailCompleteAtReceipt": false,
+        "tailKinds": {
+          "request_drain": 2,
+          "resumption_sweep": 5
+        },
+        "tailOwnershipCounts": {
+          "unknown_not_awaited": 7
+        },
+        "targetDrainJoinPassed": true,
+        "targetJoinCount": 1,
+        "transactionGenerationsAtMethodStop": {
+          "completed": 8,
+          "inFlight": 0,
+          "started": 8
+        }
+      },
+      "resumptionEvidence": {
+        "globalSweepEndCount": 5,
+        "globalSweepOutcomes": {
+          "completed": 5
+        },
+        "globalSweepOwnership": "unowned_global",
+        "globalSweepStartCount": 5,
+        "markerMeaning": "The marker records observation at sweep start; marker absence at an earlier point is not a database queue read.",
+        "markerObserved": true,
+        "purgeCausality": "No direct residual-row purge count is available; no per-case purge or performance claim is made.",
+        "targetLinkedCandidateCount": 0,
+        "targetLinkedRedriveOrPurgeEndCount": 0,
+        "targetRequestDrainMatchCount": 1
+      },
+      "sourceAndHelperPins": {
+        "captureRunnerSourceSha256": "b09d842e3d691ebf5e80f094f99ba04ccbecfed552050eb22ef810b41570a7b4",
+        "modelFingerprintSourceSha256": "78d6761fd6be180da8a315be0afd67935ea00b09fb0435b5a40d1a0be71d1ece",
+        "modelPinBinarySha256": "1a0dc76fb48d30dd9fe6907fa9b7e3e3f42d693d37722508e76f88b294521748",
+        "operationHelperAssemblySha256": "16b2f6fdc0540882665099a380b8b9b60a2e998598cbf25882cc449f52e1eacf",
+        "protocolProbeSourceSha256": "33090ff3e64acfc7fb508bd1e86f098b9a24fff10d6ccb87c8b90e6e1253fdbb",
+        "requestClientSourceSha256": "0958c1d42672fbecdf98b12e17076a058c3b357efa079b62e68c296f4e889023",
+        "runtimeAssemblySha256": "736a1dbe1da4fffd8d4ff4087e0d8109c9f08d285c02b319810a28178d70b427",
+        "runtimeSourceDeltaSha256": "4be9ce624fe13650e24b3698b451353558d3e81a1fdd78465dc8670bf104e8d7",
+        "snapshotHelperBinarySha256": "2434e75d4881b5dc44a6391606b4d6e44864f3a5b2a678d9cc268a06251740e5",
+        "snapshotSupervisorSourceSha256": "0b827d8cf0f173e3b9d01ff127177119b145175859d071a3e05f168a4b6225d2",
+        "sourceBlobRegistrySha256": "eee2fd24d8de6c939db2d2e298b3f758d97ad2d23b165a206eccfea4a6459940",
+        "typedHashSourceSha256": "772a1be9d97eedb0aba5ea75e67ce707bc2372b022db407bd603c84d2a68232e",
+        "workbenchBinarySha256": "08afaaab4b4637ae4f1b0c1c489fb1a5bb86b5660cd8caef8714bb96700bb9e0",
+        "workbenchClosureBytes": 324271542,
+        "workbenchClosureFileCount": 520,
+        "workbenchClosureManifestSha256": "b0c0a1f085810f4833d27eed4e97317a6b2b121160d6f54353008b5b5bdd3075"
+      },
+      "sourceRevision": "7357b91e012c56cb34f1259ef7a60ef56e144afe",
+      "residualQueryNature": {
+        "commandPairsWithoutExactMethodAncestor": 159,
+        "classificationBoundary": "These pairs have no exact operation-method ancestor. Table identifiers and leading verbs come from the analyzer parsed residual groups; family labels are inferred from the public table-identifier prefix and do not assign a caller or method.",
+        "familyPrefixRules": {
+          "telemetry": "elsa_otel_*",
+          "runtime_state": "elsa_runtime_*",
+          "placement": "elsa_distributed_*",
+          "identity": "identity_*",
+          "other_or_unmapped": "all remaining parsed identifiers"
+        },
+        "byTrace": {
+          "HTTP": {
+            "noMethodAncestorCommandPairs": 87,
+            "familyCountsFromTableIdentifierPrefix": {
+              "telemetry": 48,
+              "runtime_state": 37,
+              "placement": 2
+            },
+            "parsedTableIdentifiers": [
+              {
+                "providerFamily": "postgresql",
+                "tableIdentifier": "elsa_runtime_activity_execution_inspection",
+                "commandPairs": 6,
+                "leadingVerbCounts": {
+                  "SELECT": 6
+                }
+              },
+              {
+                "providerFamily": "postgresql",
+                "tableIdentifier": "elsa_runtime_activity_execution_state",
+                "commandPairs": 9,
+                "leadingVerbCounts": {
+                  "SELECT": 9
+                }
+              },
+              {
+                "providerFamily": "postgresql",
+                "tableIdentifier": "elsa_runtime_bookmark_state",
+                "commandPairs": 1,
+                "leadingVerbCounts": {
+                  "SELECT": 1
+                }
+              },
+              {
+                "providerFamily": "postgresql",
+                "tableIdentifier": "elsa_runtime_execution_liveness_state",
+                "commandPairs": 6,
+                "leadingVerbCounts": {
+                  "INSERT": 1,
+                  "SELECT": 4,
+                  "UPDATE": 1
+                }
+              },
+              {
+                "providerFamily": "postgresql",
+                "tableIdentifier": "elsa_runtime_incident_state",
+                "commandPairs": 1,
+                "leadingVerbCounts": {
+                  "SELECT": 1
+                }
+              },
+              {
+                "providerFamily": "postgresql",
+                "tableIdentifier": "elsa_runtime_workflow_dispatch",
+                "commandPairs": 1,
+                "leadingVerbCounts": {
+                  "SELECT": 1
+                }
+              },
+              {
+                "providerFamily": "postgresql",
+                "tableIdentifier": "elsa_runtime_workflow_executable_source_reference",
+                "commandPairs": 1,
+                "leadingVerbCounts": {
+                  "SELECT": 1
+                }
+              },
+              {
+                "providerFamily": "postgresql",
+                "tableIdentifier": "elsa_runtime_workflow_execution_state",
+                "commandPairs": 8,
+                "leadingVerbCounts": {
+                  "SELECT": 8
+                }
+              },
+              {
+                "providerFamily": "postgresql",
+                "tableIdentifier": "elsa_runtime_workflow_hold_state",
+                "commandPairs": 2,
+                "leadingVerbCounts": {
+                  "SELECT": 2
+                }
+              },
+              {
+                "providerFamily": "postgresql",
+                "tableIdentifier": "elsa_runtime_workflow_trigger_binding",
+                "commandPairs": 2,
+                "leadingVerbCounts": {
+                  "SELECT": 2
+                }
+              },
+              {
+                "providerFamily": "sqlite",
+                "tableIdentifier": "elsa_distributed_execution_placement",
+                "commandPairs": 2,
+                "leadingVerbCounts": {
+                  "INSERT": 1,
+                  "SELECT": 1
+                }
+              },
+              {
+                "providerFamily": "sqlite",
+                "tableIdentifier": "elsa_otel_capture_ledger",
+                "commandPairs": 6,
+                "leadingVerbCounts": {
+                  "DELETE": 6
+                }
+              },
+              {
+                "providerFamily": "sqlite",
+                "tableIdentifier": "elsa_otel_instruments",
+                "commandPairs": 6,
+                "leadingVerbCounts": {
+                  "SELECT": 6
+                }
+              },
+              {
+                "providerFamily": "sqlite",
+                "tableIdentifier": "elsa_otel_logs",
+                "commandPairs": 6,
+                "leadingVerbCounts": {
+                  "SELECT": 6
+                }
+              },
+              {
+                "providerFamily": "sqlite",
+                "tableIdentifier": "elsa_otel_metric_points",
+                "commandPairs": 6,
+                "leadingVerbCounts": {
+                  "SELECT": 6
+                }
+              },
+              {
+                "providerFamily": "sqlite",
+                "tableIdentifier": "elsa_otel_resources",
+                "commandPairs": 6,
+                "leadingVerbCounts": {
+                  "SELECT": 6
+                }
+              },
+              {
+                "providerFamily": "sqlite",
+                "tableIdentifier": "elsa_otel_spans",
+                "commandPairs": 6,
+                "leadingVerbCounts": {
+                  "SELECT": 6
+                }
+              },
+              {
+                "providerFamily": "sqlite",
+                "tableIdentifier": "elsa_otel_traces",
+                "commandPairs": 12,
+                "leadingVerbCounts": {
+                  "SELECT": 12
+                }
+              }
+            ]
+          },
+          "REST": {
+            "noMethodAncestorCommandPairs": 48,
+            "familyCountsFromTableIdentifierPrefix": {
+              "telemetry": 16,
+              "runtime_state": 29,
+              "placement": 2,
+              "identity": 1
+            },
+            "parsedTableIdentifiers": [
+              {
+                "providerFamily": "postgresql",
+                "tableIdentifier": "elsa_runtime_activity_execution_inspection",
+                "commandPairs": 4,
+                "leadingVerbCounts": {
+                  "SELECT": 4
+                }
+              },
+              {
+                "providerFamily": "postgresql",
+                "tableIdentifier": "elsa_runtime_activity_execution_state",
+                "commandPairs": 8,
+                "leadingVerbCounts": {
+                  "SELECT": 8
+                }
+              },
+              {
+                "providerFamily": "postgresql",
+                "tableIdentifier": "elsa_runtime_execution_liveness_state",
+                "commandPairs": 6,
+                "leadingVerbCounts": {
+                  "INSERT": 1,
+                  "SELECT": 4,
+                  "UPDATE": 1
+                }
+              },
+              {
+                "providerFamily": "postgresql",
+                "tableIdentifier": "elsa_runtime_incident_state",
+                "commandPairs": 1,
+                "leadingVerbCounts": {
+                  "SELECT": 1
+                }
+              },
+              {
+                "providerFamily": "postgresql",
+                "tableIdentifier": "elsa_runtime_workflow_dispatch",
+                "commandPairs": 1,
+                "leadingVerbCounts": {
+                  "SELECT": 1
+                }
+              },
+              {
+                "providerFamily": "postgresql",
+                "tableIdentifier": "elsa_runtime_workflow_executable_source_reference",
+                "commandPairs": 1,
+                "leadingVerbCounts": {
+                  "SELECT": 1
+                }
+              },
+              {
+                "providerFamily": "postgresql",
+                "tableIdentifier": "elsa_runtime_workflow_execution_state",
+                "commandPairs": 8,
+                "leadingVerbCounts": {
+                  "SELECT": 8
+                }
+              },
+              {
+                "providerFamily": "sqlite",
+                "tableIdentifier": "elsa_distributed_execution_placement",
+                "commandPairs": 2,
+                "leadingVerbCounts": {
+                  "INSERT": 1,
+                  "SELECT": 1
+                }
+              },
+              {
+                "providerFamily": "sqlite",
+                "tableIdentifier": "elsa_otel_capture_ledger",
+                "commandPairs": 2,
+                "leadingVerbCounts": {
+                  "DELETE": 2
+                }
+              },
+              {
+                "providerFamily": "sqlite",
+                "tableIdentifier": "elsa_otel_instruments",
+                "commandPairs": 2,
+                "leadingVerbCounts": {
+                  "SELECT": 2
+                }
+              },
+              {
+                "providerFamily": "sqlite",
+                "tableIdentifier": "elsa_otel_logs",
+                "commandPairs": 2,
+                "leadingVerbCounts": {
+                  "SELECT": 2
+                }
+              },
+              {
+                "providerFamily": "sqlite",
+                "tableIdentifier": "elsa_otel_metric_points",
+                "commandPairs": 2,
+                "leadingVerbCounts": {
+                  "SELECT": 2
+                }
+              },
+              {
+                "providerFamily": "sqlite",
+                "tableIdentifier": "elsa_otel_resources",
+                "commandPairs": 2,
+                "leadingVerbCounts": {
+                  "SELECT": 2
+                }
+              },
+              {
+                "providerFamily": "sqlite",
+                "tableIdentifier": "elsa_otel_spans",
+                "commandPairs": 2,
+                "leadingVerbCounts": {
+                  "SELECT": 2
+                }
+              },
+              {
+                "providerFamily": "sqlite",
+                "tableIdentifier": "elsa_otel_traces",
+                "commandPairs": 4,
+                "leadingVerbCounts": {
+                  "SELECT": 4
+                }
+              },
+              {
+                "providerFamily": "sqlite",
+                "tableIdentifier": "identity_users",
+                "commandPairs": 1,
+                "leadingVerbCounts": {
+                  "SELECT": 1
+                }
+              }
+            ]
+          },
+          "background_or_unassigned": {
+            "noMethodAncestorCommandPairs": 24,
+            "familyCountsFromTableIdentifierPrefix": {
+              "runtime_state": 21,
+              "placement": 3
+            },
+            "parsedTableIdentifiers": [
+              {
+                "providerFamily": "postgresql",
+                "tableIdentifier": "elsa_runtime_execution_liveness_state",
+                "commandPairs": 20,
+                "leadingVerbCounts": {
+                  "SELECT": 20
+                }
+              },
+              {
+                "providerFamily": "postgresql",
+                "tableIdentifier": "elsa_runtime_workflow_execution_state",
+                "commandPairs": 1,
+                "leadingVerbCounts": {
+                  "SELECT": 1
+                }
+              },
+              {
+                "providerFamily": "sqlite",
+                "tableIdentifier": "elsa_distributed_execution_placement",
+                "commandPairs": 3,
+                "leadingVerbCounts": {
+                  "SELECT": 2,
+                  "UPDATE": 1
+                }
+              }
+            ]
+          }
+        },
+        "conservationPassed": true
+      },
+      "observedOperationsAndEfLifecycle": {
+        "operationPairUnit": "Paired safe operation metadata observations; not EF provider commands, successful writes, durable records, queue rows, or completed dispatches.",
+        "byTrace": {
+          "HTTP": {
+            "checkpointOperationPairs": {
+              "checkpoint.commit": 2,
+              "checkpoint.marker_flush": 2,
+              "checkpoint.marker_lookup": 2,
+              "checkpoint.participant_flush": 2,
+              "checkpoint.participant_stage": 11
+            },
+            "checkpointOperationPairTotal": 19,
+            "schedulerQueueDispatchOperationPairs": {
+              "scheduler_queue.delete": 2,
+              "scheduler_queue.enqueue": 2,
+              "scheduler_queue.list": 2
+            },
+            "schedulerQueueDispatchOperationPairTotal": 6
+          },
+          "REST": {
+            "checkpointOperationPairs": {
+              "checkpoint.commit": 1,
+              "checkpoint.marker_flush": 1,
+              "checkpoint.marker_lookup": 1,
+              "checkpoint.participant_flush": 1,
+              "checkpoint.participant_stage": 6
+            },
+            "checkpointOperationPairTotal": 10,
+            "schedulerQueueDispatchOperationPairs": {
+              "scheduler_queue.delete": 1,
+              "scheduler_queue.enqueue": 1,
+              "scheduler_queue.list": 1
+            },
+            "schedulerQueueDispatchOperationPairTotal": 3
+          },
+          "background_or_unassigned": {
+            "checkpointOperationPairs": {},
+            "checkpointOperationPairTotal": 0,
+            "schedulerQueueDispatchOperationPairs": {
+              "scheduler_queue.list": 1,
+              "scheduler_queue.list_claimable_executions": 5,
+              "scheduler_queue.list_next_work_items": 1
+            },
+            "schedulerQueueDispatchOperationPairTotal": 7
+          }
+        },
+        "methodStopCounters": {
+          "commandPairs": {
+            "completed": 115,
+            "inFlight": 0,
+            "started": 115
+          },
+          "saveChangesPairs": {
+            "completed": 23,
+            "inFlight": 0,
+            "started": 23
+          },
+          "transactionPairs": {
+            "completed": 8,
+            "inFlight": 0,
+            "started": 8
+          },
+          "unit": "Separate method-stop lifecycle counters; transaction counters are not inferred by summing EF log events."
+        },
+        "efTransactionLifecycleLogEventsByTrace": {
+          "HTTP": {
+            "CreatedTransactionSavepoint": 4,
+            "CreatingTransactionSavepoint": 4,
+            "ReleasedTransactionSavepoint": 4,
+            "ReleasingTransactionSavepoint": 4,
+            "TransactionCommitted": 8,
+            "TransactionCommitting": 8,
+            "TransactionStarted": 8,
+            "TransactionStarting": 8
+          },
+          "REST": {
+            "CreatedTransactionSavepoint": 2,
+            "CreatingTransactionSavepoint": 2,
+            "ReleasedTransactionSavepoint": 2,
+            "ReleasingTransactionSavepoint": 2,
+            "TransactionCommitted": 3,
+            "TransactionCommitting": 3,
+            "TransactionStarted": 3,
+            "TransactionStarting": 3
+          }
+        },
+        "lifecycleEventUnit": "Observed EF transaction/savepoint log-event occurrences, not deduplicated transaction totals or successful SQL statements."
+      }
+    },
+    {
+      "cadence": "Immediate",
+      "case": "immediate-before-e6",
+      "caseAnalysis": {
+        "acceptanceIssueCount": 0,
+        "rootReviewStillRequired": true,
+        "status": "passed_per_case_source_candidate",
+        "verifiedArtifactPinCount": 15
+      },
+      "efCommandAccounting": {
+        "checkpointOperationPairsByTrace": {
+          "HTTP": 180,
+          "REST": 153
+        },
+        "commandPairs": 1227,
+        "commandPairsByTraceAndProviderFamily": [
+          {
+            "commandPairs": 130,
+            "providerFamily": "sqlite",
+            "trace": "HTTP"
+          },
+          {
+            "commandPairs": 505,
+            "providerFamily": "postgresql",
+            "trace": "HTTP"
+          },
+          {
+            "commandPairs": 115,
+            "providerFamily": "sqlite",
+            "trace": "REST"
+          },
+          {
+            "commandPairs": 441,
+            "providerFamily": "postgresql",
+            "trace": "REST"
+          },
+          {
+            "commandPairs": 36,
+            "providerFamily": "postgresql",
+            "trace": "background_or_unassigned"
+          }
+        ],
+        "dispatchNoMethodAncestorResidualsByTrace": {
+          "HTTP": 1,
+          "REST": 1
+        },
+        "exactMethodAncestorJoins": 749,
+        "exactMethodOperationFamiliesByTrace": {
+          "HTTP": {
+            "checkpoint": 211,
+            "durable_value": 7,
+            "post_commit_outbox": 47,
+            "scheduler_queue": 127
+          },
+          "REST": {
+            "checkpoint": 186,
+            "durable_value": 5,
+            "post_commit_outbox": 41,
+            "scheduler_queue": 113
+          },
+          "background_or_unassigned": {
+            "post_commit_outbox": 6,
+            "scheduler_queue": 6
+          }
+        },
+        "noMethodAncestorResidualTotalsByTableFamily": {
+          "other_or_mixed": 1,
+          "placement": 4,
+          "runtime_state": 233,
+          "telemetry": 240
+        },
+        "noMethodAncestorResiduals": 478,
+        "noMethodAncestorResidualsByTraceProviderAndTableFamily": [
+          {
+            "commandPairs": 113,
+            "providerFamily": "postgresql",
+            "tableFamily": "runtime_state",
+            "trace": "HTTP"
+          },
+          {
+            "commandPairs": 2,
+            "providerFamily": "sqlite",
+            "tableFamily": "placement",
+            "trace": "HTTP"
+          },
+          {
+            "commandPairs": 128,
+            "providerFamily": "sqlite",
+            "tableFamily": "telemetry",
+            "trace": "HTTP"
+          },
+          {
+            "commandPairs": 96,
+            "providerFamily": "postgresql",
+            "tableFamily": "runtime_state",
+            "trace": "REST"
+          },
+          {
+            "commandPairs": 1,
+            "providerFamily": "sqlite",
+            "tableFamily": "other_or_mixed",
+            "trace": "REST"
+          },
+          {
+            "commandPairs": 2,
+            "providerFamily": "sqlite",
+            "tableFamily": "placement",
+            "trace": "REST"
+          },
+          {
+            "commandPairs": 112,
+            "providerFamily": "sqlite",
+            "tableFamily": "telemetry",
+            "trace": "REST"
+          },
+          {
+            "commandPairs": 24,
+            "providerFamily": "postgresql",
+            "tableFamily": "runtime_state",
+            "trace": "background_or_unassigned"
+          }
+        ],
+        "schedulerDispatchOperationPairsByTrace": {
+          "HTTP": 71,
+          "REST": 63,
+          "background_or_unassigned": 6
+        },
+        "temporalBuckets": {
+          "client_response_received": {
+            "classificationUncertaintyNs": 1472114,
+            "clockMappingVerified": true,
+            "efCommandPairTotals": {
+              "clock_mapping_unavailable": 0,
+              "completed_before": 636,
+              "spans_boundary": 0,
+              "started_after": 591,
+              "timestamp_invalid": 0,
+              "uncertainty_overlap": 0
+            },
+            "efCommandPairsByTrace": {
+              "HTTP": {
+                "clock_mapping_unavailable": 0,
+                "completed_before": 635,
+                "spans_boundary": 0,
+                "started_after": 0,
+                "timestamp_invalid": 0,
+                "uncertainty_overlap": 0
+              },
+              "REST": {
+                "clock_mapping_unavailable": 0,
+                "completed_before": 0,
+                "spans_boundary": 0,
+                "started_after": 556,
+                "timestamp_invalid": 0,
+                "uncertainty_overlap": 0
+              },
+              "background_or_unassigned": {
+                "clock_mapping_unavailable": 0,
+                "completed_before": 1,
+                "spans_boundary": 0,
+                "started_after": 35,
+                "timestamp_invalid": 0,
+                "uncertainty_overlap": 0
+              }
+            },
+            "globalCommandCompleteStatements": {
+              "after": 1288,
+              "before": 4009,
+              "clock_mapping_unavailable": 0,
+              "timestamp_invalid": 0,
+              "uncertainty_overlap": 0
+            },
+            "globalReadyForQueryCycles": {
+              "query": {
+                "after": 532,
+                "before": 1340,
+                "clock_mapping_unavailable": 0,
+                "timestamp_invalid": 0,
+                "uncertainty_overlap": 0
+              },
+              "sync": {
+                "after": 698,
+                "before": 2318,
+                "clock_mapping_unavailable": 0,
+                "timestamp_invalid": 0,
+                "uncertainty_overlap": 0
+              }
+            },
+            "globalStatementConservationPassed": true
+          },
+          "database_snapshot": {
+            "classificationUncertaintyNs": 1472114,
+            "clockMappingVerified": true,
+            "efCommandPairTotals": {
+              "clock_mapping_unavailable": 0,
+              "completed_before": 1203,
+              "spans_boundary": 0,
+              "started_after": 24,
+              "timestamp_invalid": 0,
+              "uncertainty_overlap": 0
+            },
+            "efCommandPairsByTrace": {
+              "HTTP": {
+                "clock_mapping_unavailable": 0,
+                "completed_before": 635,
+                "spans_boundary": 0,
+                "started_after": 0,
+                "timestamp_invalid": 0,
+                "uncertainty_overlap": 0
+              },
+              "REST": {
+                "clock_mapping_unavailable": 0,
+                "completed_before": 556,
+                "spans_boundary": 0,
+                "started_after": 0,
+                "timestamp_invalid": 0,
+                "uncertainty_overlap": 0
+              },
+              "background_or_unassigned": {
+                "clock_mapping_unavailable": 0,
+                "completed_before": 12,
+                "spans_boundary": 0,
+                "started_after": 24,
+                "timestamp_invalid": 0,
+                "uncertainty_overlap": 0
+              }
+            },
+            "globalCommandCompleteStatements": {
+              "after": 191,
+              "before": 5106,
+              "clock_mapping_unavailable": 0,
+              "timestamp_invalid": 0,
+              "uncertainty_overlap": 0
+            },
+            "globalReadyForQueryCycles": {
+              "query": {
+                "after": 95,
+                "before": 1777,
+                "clock_mapping_unavailable": 0,
+                "timestamp_invalid": 0,
+                "uncertainty_overlap": 0
+              },
+              "sync": {
+                "after": 96,
+                "before": 2920,
+                "clock_mapping_unavailable": 0,
+                "timestamp_invalid": 0,
+                "uncertainty_overlap": 0
+              }
+            },
+            "globalStatementConservationPassed": true
+          },
+          "settlement_marker": {
+            "classificationUncertaintyNs": 1472114,
+            "clockMappingVerified": true,
+            "efCommandPairTotals": {
+              "clock_mapping_unavailable": 0,
+              "completed_before": 1203,
+              "spans_boundary": 0,
+              "started_after": 23,
+              "timestamp_invalid": 0,
+              "uncertainty_overlap": 1
+            },
+            "efCommandPairsByTrace": {
+              "HTTP": {
+                "clock_mapping_unavailable": 0,
+                "completed_before": 635,
+                "spans_boundary": 0,
+                "started_after": 0,
+                "timestamp_invalid": 0,
+                "uncertainty_overlap": 0
+              },
+              "REST": {
+                "clock_mapping_unavailable": 0,
+                "completed_before": 556,
+                "spans_boundary": 0,
+                "started_after": 0,
+                "timestamp_invalid": 0,
+                "uncertainty_overlap": 0
+              },
+              "background_or_unassigned": {
+                "clock_mapping_unavailable": 0,
+                "completed_before": 12,
+                "spans_boundary": 0,
+                "started_after": 23,
+                "timestamp_invalid": 0,
+                "uncertainty_overlap": 1
+              }
+            },
+            "globalCommandCompleteStatements": {
+              "after": 152,
+              "before": 5145,
+              "clock_mapping_unavailable": 0,
+              "timestamp_invalid": 0,
+              "uncertainty_overlap": 0
+            },
+            "globalReadyForQueryCycles": {
+              "query": {
+                "after": 76,
+                "before": 1796,
+                "clock_mapping_unavailable": 0,
+                "timestamp_invalid": 0,
+                "uncertainty_overlap": 0
+              },
+              "sync": {
+                "after": 76,
+                "before": 2940,
+                "clock_mapping_unavailable": 0,
+                "timestamp_invalid": 0,
+                "uncertainty_overlap": 0
+              }
+            },
+            "globalStatementConservationPassed": true
+          }
+        },
+        "unitLimit": "EF provider command attempts are not PostgreSQL statements, physical round trips, or affected rows.",
+        "methodAncestryBoundary": {
+          "exactMethodAncestorCommandPairs": 749,
+          "noMethodAncestorResidualCommandPairs": 478,
+          "allCommandPairsConserved": true
+        }
+      },
+      "evidencePins": {
+        "analysisReadbackSha256": "eb3cbc54293b77d4d8738e038a232bc999b144414278db7ca4fa3204144d04d4",
+        "caseArchiveSha256": "c8db8eee118d6c5b219d50879dc8daf9336a7a17ac85c13a4d55e6d7ed2b8db5",
+        "descriptorSha256": "745bb532edd82621c9ddda023b4b47d8650ce3dbb93c70605b3f843e2ae25c9f",
+        "innerFinalReceiptSha256": "89a43dfd1f67deff928102309092419e95f1c9618c02a41bee5a02739487a36d",
+        "outerGuardReceiptSha256": "942f2380dc954d69a34722b50edd51069f773a7d610f9750e5e9e8cdf4486eca",
+        "protocolProbeDataSha256": "0f0053e6a290ba0609d956bdd286c297e7be9eaf1073de05f788ec20723ca9e3",
+        "protocolProbeToolSha256": "33090ff3e64acfc7fb508bd1e86f098b9a24fff10d6ccb87c8b90e6e1253fdbb",
+        "settlementMarkerSha256": "d69d8a5702acc24299f8aadde4fe71a6642714974d475b143056853e57f10e11",
+        "snapshotReadbackSha256": "a5e24b3c56ab6e75b7f1c3935123efef9fbfb80a5a4876b361a7da3a9b143e19"
+      },
+      "fixtureChecks": {
+        "HTTP": {
+          "cadence": "Immediate",
+          "checkpointLimit": null,
+          "executionStatus": "Completed",
+          "expectedOutputAssertionPassed": true,
+          "incidentCount": 0,
+          "inspectionGranularity": "activity-level",
+          "requestInvocations": 1,
+          "statusCode": 200
+        },
+        "REST": {
+          "cadence": "Immediate",
+          "checkpointLimit": null,
+          "executionStatus": "Completed",
+          "expectedOutputAssertionPassed": true,
+          "incidentCount": 0,
+          "inspectionGranularity": "activity-level",
+          "requestInvocations": 1,
+          "statusCode": 200
+        }
+      },
+      "observationWindow": {
+        "additionalRequestsIssued": false,
+        "elapsedMs": 12000.155,
+        "httpRetries": 0,
+        "receiptSha256": "497301255506211d2b42af169747e34ea204a7687344e6d889ddbe1a445afac6",
+        "requestedSeconds": 12.0,
+        "restRetries": 0,
+        "sweepCompletionClaimed": false,
+        "valid": true
+      },
+      "pointSnapshot": {
+        "deliveredOutboxRows": 15,
+        "executionStatus": "Completed",
+        "outboxRows": 15,
+        "queueCount": 0,
+        "readbackKind": "read_only_postgresql_repeatable_read",
+        "snapshotMatchesMarkerAndRequestDrain": true,
+        "successfulPrimarySettled": true,
+        "targetSettledSnapshot": true,
+        "terminal": true
+      },
+      "postgresProtocolAccounting": {
+        "captureWideProtocolFrameCount": 41496,
+        "captureWideReadyForQueryCycles": {
+          "query": 1872,
+          "sync": 3016
+        },
+        "captureWideSuccessfulCommandCompleteStatements": 5297,
+        "protocolToolVersion": "t18-protocol-probe-v2",
+        "rawFrameCountMatchesSummary": true,
+        "temporalBuckets": {
+          "client_response_received": {
+            "clockMappingVerified": true,
+            "globalCommandCompleteStatements": {
+              "after": 1288,
+              "before": 4009,
+              "clock_mapping_unavailable": 0,
+              "timestamp_invalid": 0,
+              "uncertainty_overlap": 0
+            },
+            "globalReadyForQueryCycles": {
+              "query": {
+                "after": 532,
+                "before": 1340,
+                "clock_mapping_unavailable": 0,
+                "timestamp_invalid": 0,
+                "uncertainty_overlap": 0
+              },
+              "sync": {
+                "after": 698,
+                "before": 2318,
+                "clock_mapping_unavailable": 0,
+                "timestamp_invalid": 0,
+                "uncertainty_overlap": 0
+              }
+            },
+            "statementConservationPassed": true
+          },
+          "database_snapshot": {
+            "clockMappingVerified": true,
+            "globalCommandCompleteStatements": {
+              "after": 191,
+              "before": 5106,
+              "clock_mapping_unavailable": 0,
+              "timestamp_invalid": 0,
+              "uncertainty_overlap": 0
+            },
+            "globalReadyForQueryCycles": {
+              "query": {
+                "after": 95,
+                "before": 1777,
+                "clock_mapping_unavailable": 0,
+                "timestamp_invalid": 0,
+                "uncertainty_overlap": 0
+              },
+              "sync": {
+                "after": 96,
+                "before": 2920,
+                "clock_mapping_unavailable": 0,
+                "timestamp_invalid": 0,
+                "uncertainty_overlap": 0
+              }
+            },
+            "statementConservationPassed": true
+          },
+          "settlement_marker": {
+            "clockMappingVerified": true,
+            "globalCommandCompleteStatements": {
+              "after": 152,
+              "before": 5145,
+              "clock_mapping_unavailable": 0,
+              "timestamp_invalid": 0,
+              "uncertainty_overlap": 0
+            },
+            "globalReadyForQueryCycles": {
+              "query": {
+                "after": 76,
+                "before": 1796,
+                "clock_mapping_unavailable": 0,
+                "timestamp_invalid": 0,
+                "uncertainty_overlap": 0
+              },
+              "sync": {
+                "after": 76,
+                "before": 2940,
+                "clock_mapping_unavailable": 0,
+                "timestamp_invalid": 0,
+                "uncertainty_overlap": 0
+              }
+            },
+            "statementConservationPassed": true
+          }
+        },
+        "uniqueProviderIntervalAttribution": {
+          "attributionConserved": true,
+          "clockMappingVerified": true,
+          "commandCompleteAttributionResiduals": {
+            "ambiguous_clock_uncertainty_boundary": 1798,
+            "ambiguous_overlapping_provider_intervals": 19,
+            "outside_provider_interval": 3262,
+            "provider_pid_not_observed": 16,
+            "uniquely_attributed": 202
+          },
+          "commandCompleteByTrace": {
+            "HTTP": 122,
+            "REST": 72,
+            "background_or_unassigned": 8
+          },
+          "providerAttemptIntervalCount": 982,
+          "providerAttemptIntervalRejections": 0
+        },
+        "unitLimit": "These counts cover all captured PostgreSQL protocol traffic, including setup, fixtures and background. Query and Sync cycles are separate global counts. Unique interval joins are conservative trace-group attribution, not proof of causal request ownership. SQL text is not included."
+      },
+      "protocolErrorTiming": {
+        "definitelyBeforePrimaryRequestStart": 4,
+        "errorResponseCount": 4,
+        "interpretation": "Temporal only; no SQL cause inferred.",
+        "minimumLeadMs": 11510.602,
+        "readbackStatus": "separate_root_temporal_readback"
+      },
+      "requestDrainAndTail": {
+        "commandPairsAtMethodStop": {
+          "completed": 609,
+          "inFlight": 0,
+          "started": 609
+        },
+        "openTailBoundaryCountAtFinalization": 0,
+        "postStopCallbackCount": 22,
+        "probeAnchorIdentityAndTickJoinPassed": true,
+        "saveChangesAtMethodStop": {
+          "completed": 152,
+          "inFlight": 0,
+          "started": 152
+        },
+        "tailCompleteAtFinalization": true,
+        "tailCompleteAtReceipt": false,
+        "tailKinds": {
+          "request_drain": 2,
+          "resumption_sweep": 6
+        },
+        "tailOwnershipCounts": {
+          "unknown_not_awaited": 8
+        },
+        "targetDrainJoinPassed": true,
+        "targetJoinCount": 1,
+        "transactionGenerationsAtMethodStop": {
+          "completed": 37,
+          "inFlight": 1,
+          "started": 38
+        }
+      },
+      "resumptionEvidence": {
+        "globalSweepEndCount": 6,
+        "globalSweepOutcomes": {
+          "completed": 6
+        },
+        "globalSweepOwnership": "unowned_global",
+        "globalSweepStartCount": 6,
+        "markerMeaning": "The marker records observation at sweep start; marker absence at an earlier point is not a database queue read.",
+        "markerObserved": true,
+        "purgeCausality": "No direct residual-row purge count is available; no per-case purge or performance claim is made.",
+        "targetLinkedCandidateCount": 0,
+        "targetLinkedRedriveOrPurgeEndCount": 0,
+        "targetRequestDrainMatchCount": 1
+      },
+      "sourceAndHelperPins": {
+        "captureRunnerSourceSha256": "49ab447a6bffbb6dcbd3fdf9e4a1c40fb0ec64f39a1a01a9e47ac303e99aa01a",
+        "modelFingerprintSourceSha256": "78d6761fd6be180da8a315be0afd67935ea00b09fb0435b5a40d1a0be71d1ece",
+        "modelPinBinarySha256": "1a0dc76fb48d30dd9fe6907fa9b7e3e3f42d693d37722508e76f88b294521748",
+        "operationHelperAssemblySha256": "03d34e8fbe0b7d0c073f29e131e1182dc28c7b8f09d357aa44238d9d2aba7eff",
+        "protocolProbeSourceSha256": "33090ff3e64acfc7fb508bd1e86f098b9a24fff10d6ccb87c8b90e6e1253fdbb",
+        "requestClientSourceSha256": "0958c1d42672fbecdf98b12e17076a058c3b357efa079b62e68c296f4e889023",
+        "runtimeAssemblySha256": "4f67aa1a9d24a9074533c273d53259cdd3c8d2b7f25e7c984aaa0c7bd630b5fb",
+        "runtimeSourceDeltaSha256": "7639374923067c81bd0542e5d1b147cd77a9e9645d2eb9a021ea1c6d40f83577",
+        "snapshotHelperBinarySha256": "aefd40c9425af40efe8f0945aaac12ed7af79c4f1d590ed02f7b24051403c26f",
+        "snapshotSupervisorSourceSha256": "0b827d8cf0f173e3b9d01ff127177119b145175859d071a3e05f168a4b6225d2",
+        "sourceBlobRegistrySha256": "05abf1dfa79de48f3a087ba1e523ab429d8b78bdd38dbf00f2b8a4d120ec0a12",
+        "typedHashSourceSha256": "772a1be9d97eedb0aba5ea75e67ce707bc2372b022db407bd603c84d2a68232e",
+        "workbenchBinarySha256": "c419f6131b81901492186432c0d90194cc2e7225371cc621a9822b821c394cdf",
+        "workbenchClosureBytes": 324205298,
+        "workbenchClosureFileCount": 520,
+        "workbenchClosureManifestSha256": "582012f86888785d4a7053ec3291a57505307ce64808f5ab079663cc888662d2"
+      },
+      "sourceRevision": "e6faa5689814c33353009b13f5b9e44d0e9982a4",
+      "residualQueryNature": {
+        "commandPairsWithoutExactMethodAncestor": 478,
+        "classificationBoundary": "These pairs have no exact operation-method ancestor. Table identifiers and leading verbs come from the analyzer parsed residual groups; family labels are inferred from the public table-identifier prefix and do not assign a caller or method.",
+        "familyPrefixRules": {
+          "telemetry": "elsa_otel_*",
+          "runtime_state": "elsa_runtime_*",
+          "placement": "elsa_distributed_*",
+          "identity": "identity_*",
+          "other_or_unmapped": "all remaining parsed identifiers"
+        },
+        "byTrace": {
+          "HTTP": {
+            "noMethodAncestorCommandPairs": 243,
+            "familyCountsFromTableIdentifierPrefix": {
+              "telemetry": 128,
+              "runtime_state": 113,
+              "placement": 2
+            },
+            "parsedTableIdentifiers": [
+              {
+                "providerFamily": "postgresql",
+                "tableIdentifier": "elsa_runtime_activity_execution_inspection",
+                "commandPairs": 15,
+                "leadingVerbCounts": {
+                  "SELECT": 15
+                }
+              },
+              {
+                "providerFamily": "postgresql",
+                "tableIdentifier": "elsa_runtime_activity_execution_state",
+                "commandPairs": 31,
+                "leadingVerbCounts": {
+                  "SELECT": 31
+                }
+              },
+              {
+                "providerFamily": "postgresql",
+                "tableIdentifier": "elsa_runtime_bookmark_state",
+                "commandPairs": 1,
+                "leadingVerbCounts": {
+                  "SELECT": 1
+                }
+              },
+              {
+                "providerFamily": "postgresql",
+                "tableIdentifier": "elsa_runtime_execution_liveness_state",
+                "commandPairs": 6,
+                "leadingVerbCounts": {
+                  "INSERT": 1,
+                  "SELECT": 4,
+                  "UPDATE": 1
+                }
+              },
+              {
+                "providerFamily": "postgresql",
+                "tableIdentifier": "elsa_runtime_incident_state",
+                "commandPairs": 1,
+                "leadingVerbCounts": {
+                  "SELECT": 1
+                }
+              },
+              {
+                "providerFamily": "postgresql",
+                "tableIdentifier": "elsa_runtime_workflow_dispatch",
+                "commandPairs": 1,
+                "leadingVerbCounts": {
+                  "SELECT": 1
+                }
+              },
+              {
+                "providerFamily": "postgresql",
+                "tableIdentifier": "elsa_runtime_workflow_executable_source_reference",
+                "commandPairs": 1,
+                "leadingVerbCounts": {
+                  "SELECT": 1
+                }
+              },
+              {
+                "providerFamily": "postgresql",
+                "tableIdentifier": "elsa_runtime_workflow_execution_state",
+                "commandPairs": 48,
+                "leadingVerbCounts": {
+                  "SELECT": 48
+                }
+              },
+              {
+                "providerFamily": "postgresql",
+                "tableIdentifier": "elsa_runtime_workflow_hold_state",
+                "commandPairs": 7,
+                "leadingVerbCounts": {
+                  "SELECT": 7
+                }
+              },
+              {
+                "providerFamily": "postgresql",
+                "tableIdentifier": "elsa_runtime_workflow_trigger_binding",
+                "commandPairs": 2,
+                "leadingVerbCounts": {
+                  "SELECT": 2
+                }
+              },
+              {
+                "providerFamily": "sqlite",
+                "tableIdentifier": "elsa_distributed_execution_placement",
+                "commandPairs": 2,
+                "leadingVerbCounts": {
+                  "INSERT": 1,
+                  "SELECT": 1
+                }
+              },
+              {
+                "providerFamily": "sqlite",
+                "tableIdentifier": "elsa_otel_capture_ledger",
+                "commandPairs": 16,
+                "leadingVerbCounts": {
+                  "DELETE": 16
+                }
+              },
+              {
+                "providerFamily": "sqlite",
+                "tableIdentifier": "elsa_otel_instruments",
+                "commandPairs": 16,
+                "leadingVerbCounts": {
+                  "SELECT": 16
+                }
+              },
+              {
+                "providerFamily": "sqlite",
+                "tableIdentifier": "elsa_otel_logs",
+                "commandPairs": 16,
+                "leadingVerbCounts": {
+                  "SELECT": 16
+                }
+              },
+              {
+                "providerFamily": "sqlite",
+                "tableIdentifier": "elsa_otel_metric_points",
+                "commandPairs": 16,
+                "leadingVerbCounts": {
+                  "SELECT": 16
+                }
+              },
+              {
+                "providerFamily": "sqlite",
+                "tableIdentifier": "elsa_otel_resources",
+                "commandPairs": 16,
+                "leadingVerbCounts": {
+                  "SELECT": 16
+                }
+              },
+              {
+                "providerFamily": "sqlite",
+                "tableIdentifier": "elsa_otel_spans",
+                "commandPairs": 16,
+                "leadingVerbCounts": {
+                  "SELECT": 16
+                }
+              },
+              {
+                "providerFamily": "sqlite",
+                "tableIdentifier": "elsa_otel_traces",
+                "commandPairs": 32,
+                "leadingVerbCounts": {
+                  "SELECT": 32
+                }
+              }
+            ]
+          },
+          "REST": {
+            "noMethodAncestorCommandPairs": 211,
+            "familyCountsFromTableIdentifierPrefix": {
+              "telemetry": 112,
+              "runtime_state": 96,
+              "placement": 2,
+              "identity": 1
+            },
+            "parsedTableIdentifiers": [
+              {
+                "providerFamily": "postgresql",
+                "tableIdentifier": "elsa_runtime_activity_execution_inspection",
+                "commandPairs": 13,
+                "leadingVerbCounts": {
+                  "SELECT": 13
+                }
+              },
+              {
+                "providerFamily": "postgresql",
+                "tableIdentifier": "elsa_runtime_activity_execution_state",
+                "commandPairs": 26,
+                "leadingVerbCounts": {
+                  "SELECT": 26
+                }
+              },
+              {
+                "providerFamily": "postgresql",
+                "tableIdentifier": "elsa_runtime_execution_liveness_state",
+                "commandPairs": 6,
+                "leadingVerbCounts": {
+                  "INSERT": 1,
+                  "SELECT": 4,
+                  "UPDATE": 1
+                }
+              },
+              {
+                "providerFamily": "postgresql",
+                "tableIdentifier": "elsa_runtime_incident_state",
+                "commandPairs": 1,
+                "leadingVerbCounts": {
+                  "SELECT": 1
+                }
+              },
+              {
+                "providerFamily": "postgresql",
+                "tableIdentifier": "elsa_runtime_workflow_dispatch",
+                "commandPairs": 1,
+                "leadingVerbCounts": {
+                  "SELECT": 1
+                }
+              },
+              {
+                "providerFamily": "postgresql",
+                "tableIdentifier": "elsa_runtime_workflow_executable_source_reference",
+                "commandPairs": 1,
+                "leadingVerbCounts": {
+                  "SELECT": 1
+                }
+              },
+              {
+                "providerFamily": "postgresql",
+                "tableIdentifier": "elsa_runtime_workflow_execution_state",
+                "commandPairs": 43,
+                "leadingVerbCounts": {
+                  "SELECT": 43
+                }
+              },
+              {
+                "providerFamily": "postgresql",
+                "tableIdentifier": "elsa_runtime_workflow_hold_state",
+                "commandPairs": 5,
+                "leadingVerbCounts": {
+                  "SELECT": 5
+                }
+              },
+              {
+                "providerFamily": "sqlite",
+                "tableIdentifier": "elsa_distributed_execution_placement",
+                "commandPairs": 2,
+                "leadingVerbCounts": {
+                  "INSERT": 1,
+                  "SELECT": 1
+                }
+              },
+              {
+                "providerFamily": "sqlite",
+                "tableIdentifier": "elsa_otel_capture_ledger",
+                "commandPairs": 14,
+                "leadingVerbCounts": {
+                  "DELETE": 14
+                }
+              },
+              {
+                "providerFamily": "sqlite",
+                "tableIdentifier": "elsa_otel_instruments",
+                "commandPairs": 14,
+                "leadingVerbCounts": {
+                  "SELECT": 14
+                }
+              },
+              {
+                "providerFamily": "sqlite",
+                "tableIdentifier": "elsa_otel_logs",
+                "commandPairs": 14,
+                "leadingVerbCounts": {
+                  "SELECT": 14
+                }
+              },
+              {
+                "providerFamily": "sqlite",
+                "tableIdentifier": "elsa_otel_metric_points",
+                "commandPairs": 14,
+                "leadingVerbCounts": {
+                  "SELECT": 14
+                }
+              },
+              {
+                "providerFamily": "sqlite",
+                "tableIdentifier": "elsa_otel_resources",
+                "commandPairs": 14,
+                "leadingVerbCounts": {
+                  "SELECT": 14
+                }
+              },
+              {
+                "providerFamily": "sqlite",
+                "tableIdentifier": "elsa_otel_spans",
+                "commandPairs": 14,
+                "leadingVerbCounts": {
+                  "SELECT": 14
+                }
+              },
+              {
+                "providerFamily": "sqlite",
+                "tableIdentifier": "elsa_otel_traces",
+                "commandPairs": 28,
+                "leadingVerbCounts": {
+                  "SELECT": 28
+                }
+              },
+              {
+                "providerFamily": "sqlite",
+                "tableIdentifier": "identity_users",
+                "commandPairs": 1,
+                "leadingVerbCounts": {
+                  "SELECT": 1
+                }
+              }
+            ]
+          },
+          "background_or_unassigned": {
+            "noMethodAncestorCommandPairs": 24,
+            "familyCountsFromTableIdentifierPrefix": {
+              "runtime_state": 24
+            },
+            "parsedTableIdentifiers": [
+              {
+                "providerFamily": "postgresql",
+                "tableIdentifier": "elsa_runtime_execution_liveness_state",
+                "commandPairs": 24,
+                "leadingVerbCounts": {
+                  "SELECT": 24
+                }
+              }
+            ]
+          }
+        },
+        "conservationPassed": true
+      },
+      "observedOperationsAndEfLifecycle": {
+        "operationPairUnit": "Paired safe operation metadata observations; not EF provider commands, successful writes, durable records, queue rows, or completed dispatches.",
+        "byTrace": {
+          "HTTP": {
+            "checkpointOperationPairs": {
+              "checkpoint.commit": 22,
+              "checkpoint.marker_flush": 22,
+              "checkpoint.marker_lookup": 22,
+              "checkpoint.participant_flush": 22,
+              "checkpoint.participant_stage": 92
+            },
+            "checkpointOperationPairTotal": 180,
+            "schedulerQueueDispatchOperationPairs": {
+              "scheduler_queue.claim": 37,
+              "scheduler_queue.complete_claim": 12,
+              "scheduler_queue.enqueue": 22
+            },
+            "schedulerQueueDispatchOperationPairTotal": 71
+          },
+          "REST": {
+            "checkpointOperationPairs": {
+              "checkpoint.commit": 18,
+              "checkpoint.marker_flush": 18,
+              "checkpoint.marker_lookup": 18,
+              "checkpoint.participant_flush": 18,
+              "checkpoint.participant_stage": 81
+            },
+            "checkpointOperationPairTotal": 153,
+            "schedulerQueueDispatchOperationPairs": {
+              "scheduler_queue.claim": 33,
+              "scheduler_queue.complete_claim": 10,
+              "scheduler_queue.enqueue": 20
+            },
+            "schedulerQueueDispatchOperationPairTotal": 63
+          },
+          "background_or_unassigned": {
+            "checkpointOperationPairs": {},
+            "checkpointOperationPairTotal": 0,
+            "schedulerQueueDispatchOperationPairs": {
+              "scheduler_queue.list_claimable_executions": 6
+            },
+            "schedulerQueueDispatchOperationPairTotal": 6
+          }
+        },
+        "methodStopCounters": {
+          "commandPairs": {
+            "completed": 609,
+            "inFlight": 0,
+            "started": 609
+          },
+          "saveChangesPairs": {
+            "completed": 152,
+            "inFlight": 0,
+            "started": 152
+          },
+          "transactionPairs": {
+            "completed": 37,
+            "inFlight": 1,
+            "started": 38
+          },
+          "unit": "Separate method-stop lifecycle counters; transaction counters are not inferred by summing EF log events."
+        },
+        "efTransactionLifecycleLogEventsByTrace": {
+          "HTTP": {
+            "CreatedTransactionSavepoint": 44,
+            "CreatingTransactionSavepoint": 44,
+            "ReleasedTransactionSavepoint": 44,
+            "ReleasingTransactionSavepoint": 44,
+            "TransactionCommitted": 38,
+            "TransactionCommitting": 38,
+            "TransactionStarted": 38,
+            "TransactionStarting": 38
+          },
+          "REST": {
+            "CreatedTransactionSavepoint": 36,
+            "CreatingTransactionSavepoint": 36,
+            "ReleasedTransactionSavepoint": 36,
+            "ReleasingTransactionSavepoint": 36,
+            "TransactionCommitted": 32,
+            "TransactionCommitting": 32,
+            "TransactionStarted": 32,
+            "TransactionStarting": 32
+          }
+        },
+        "lifecycleEventUnit": "Observed EF transaction/savepoint log-event occurrences, not deduplicated transaction totals or successful SQL statements."
+      }
+    },
+    {
+      "cadence": "Coalesced",
+      "case": "coalesced-before-e6",
+      "caseAnalysis": {
+        "acceptanceIssueCount": 0,
+        "rootReviewStillRequired": true,
+        "status": "passed_per_case_source_candidate",
+        "verifiedArtifactPinCount": 15
+      },
+      "efCommandAccounting": {
+        "checkpointOperationPairsByTrace": {
+          "HTTP": 28,
+          "REST": 10
+        },
+        "commandPairs": 414,
+        "commandPairsByTraceAndProviderFamily": [
+          {
+            "commandPairs": 82,
+            "providerFamily": "sqlite",
+            "trace": "HTTP"
+          },
+          {
+            "commandPairs": 195,
+            "providerFamily": "postgresql",
+            "trace": "HTTP"
+          },
+          {
+            "commandPairs": 19,
+            "providerFamily": "sqlite",
+            "trace": "REST"
+          },
+          {
+            "commandPairs": 82,
+            "providerFamily": "postgresql",
+            "trace": "REST"
+          },
+          {
+            "commandPairs": 36,
+            "providerFamily": "postgresql",
+            "trace": "background_or_unassigned"
+          }
+        ],
+        "dispatchNoMethodAncestorResidualsByTrace": {
+          "HTTP": 1,
+          "REST": 1
+        },
+        "exactMethodAncestorJoins": 180,
+        "exactMethodOperationFamiliesByTrace": {
+          "HTTP": {
+            "checkpoint": 49,
+            "durable_value": 65,
+            "post_commit_outbox": 2,
+            "scheduler_queue": 13
+          },
+          "REST": {
+            "checkpoint": 17,
+            "durable_value": 15,
+            "post_commit_outbox": 2,
+            "scheduler_queue": 5
+          },
+          "background_or_unassigned": {
+            "post_commit_outbox": 6,
+            "scheduler_queue": 6
+          }
+        },
+        "noMethodAncestorResidualTotalsByTableFamily": {
+          "other_or_mixed": 1,
+          "placement": 4,
+          "runtime_state": 133,
+          "telemetry": 96
+        },
+        "noMethodAncestorResiduals": 234,
+        "noMethodAncestorResidualsByTraceProviderAndTableFamily": [
+          {
+            "commandPairs": 66,
+            "providerFamily": "postgresql",
+            "tableFamily": "runtime_state",
+            "trace": "HTTP"
+          },
+          {
+            "commandPairs": 2,
+            "providerFamily": "sqlite",
+            "tableFamily": "placement",
+            "trace": "HTTP"
+          },
+          {
+            "commandPairs": 80,
+            "providerFamily": "sqlite",
+            "tableFamily": "telemetry",
+            "trace": "HTTP"
+          },
+          {
+            "commandPairs": 43,
+            "providerFamily": "postgresql",
+            "tableFamily": "runtime_state",
+            "trace": "REST"
+          },
+          {
+            "commandPairs": 1,
+            "providerFamily": "sqlite",
+            "tableFamily": "other_or_mixed",
+            "trace": "REST"
+          },
+          {
+            "commandPairs": 2,
+            "providerFamily": "sqlite",
+            "tableFamily": "placement",
+            "trace": "REST"
+          },
+          {
+            "commandPairs": 16,
+            "providerFamily": "sqlite",
+            "tableFamily": "telemetry",
+            "trace": "REST"
+          },
+          {
+            "commandPairs": 24,
+            "providerFamily": "postgresql",
+            "tableFamily": "runtime_state",
+            "trace": "background_or_unassigned"
+          }
+        ],
+        "schedulerDispatchOperationPairsByTrace": {
+          "HTTP": 7,
+          "REST": 3,
+          "background_or_unassigned": 6
+        },
+        "temporalBuckets": {
+          "client_response_received": {
+            "classificationUncertaintyNs": 1832640,
+            "clockMappingVerified": true,
+            "efCommandPairTotals": {
+              "clock_mapping_unavailable": 0,
+              "completed_before": 263,
+              "spans_boundary": 0,
+              "started_after": 145,
+              "timestamp_invalid": 0,
+              "uncertainty_overlap": 6
+            },
+            "efCommandPairsByTrace": {
+              "HTTP": {
+                "clock_mapping_unavailable": 0,
+                "completed_before": 263,
+                "spans_boundary": 0,
+                "started_after": 8,
+                "timestamp_invalid": 0,
+                "uncertainty_overlap": 6
+              },
+              "REST": {
+                "clock_mapping_unavailable": 0,
+                "completed_before": 0,
+                "spans_boundary": 0,
+                "started_after": 101,
+                "timestamp_invalid": 0,
+                "uncertainty_overlap": 0
+              },
+              "background_or_unassigned": {
+                "clock_mapping_unavailable": 0,
+                "completed_before": 0,
+                "spans_boundary": 0,
+                "started_after": 36,
+                "timestamp_invalid": 0,
+                "uncertainty_overlap": 0
+              }
+            },
+            "globalCommandCompleteStatements": {
+              "after": 885,
+              "before": 3005,
+              "clock_mapping_unavailable": 0,
+              "timestamp_invalid": 0,
+              "uncertainty_overlap": 0
+            },
+            "globalReadyForQueryCycles": {
+              "query": {
+                "after": 426,
+                "before": 935,
+                "clock_mapping_unavailable": 0,
+                "timestamp_invalid": 0,
+                "uncertainty_overlap": 0
+              },
+              "sync": {
+                "after": 444,
+                "before": 1758,
+                "clock_mapping_unavailable": 0,
+                "timestamp_invalid": 0,
+                "uncertainty_overlap": 0
+              }
+            },
+            "globalStatementConservationPassed": true
+          },
+          "database_snapshot": {
+            "classificationUncertaintyNs": 1832640,
+            "clockMappingVerified": true,
+            "efCommandPairTotals": {
+              "clock_mapping_unavailable": 0,
+              "completed_before": 390,
+              "spans_boundary": 0,
+              "started_after": 24,
+              "timestamp_invalid": 0,
+              "uncertainty_overlap": 0
+            },
+            "efCommandPairsByTrace": {
+              "HTTP": {
+                "clock_mapping_unavailable": 0,
+                "completed_before": 277,
+                "spans_boundary": 0,
+                "started_after": 0,
+                "timestamp_invalid": 0,
+                "uncertainty_overlap": 0
+              },
+              "REST": {
+                "clock_mapping_unavailable": 0,
+                "completed_before": 101,
+                "spans_boundary": 0,
+                "started_after": 0,
+                "timestamp_invalid": 0,
+                "uncertainty_overlap": 0
+              },
+              "background_or_unassigned": {
+                "clock_mapping_unavailable": 0,
+                "completed_before": 12,
+                "spans_boundary": 0,
+                "started_after": 24,
+                "timestamp_invalid": 0,
+                "uncertainty_overlap": 0
+              }
+            },
+            "globalCommandCompleteStatements": {
+              "after": 195,
+              "before": 3695,
+              "clock_mapping_unavailable": 0,
+              "timestamp_invalid": 0,
+              "uncertainty_overlap": 0
+            },
+            "globalReadyForQueryCycles": {
+              "query": {
+                "after": 97,
+                "before": 1264,
+                "clock_mapping_unavailable": 0,
+                "timestamp_invalid": 0,
+                "uncertainty_overlap": 0
+              },
+              "sync": {
+                "after": 98,
+                "before": 2104,
+                "clock_mapping_unavailable": 0,
+                "timestamp_invalid": 0,
+                "uncertainty_overlap": 0
+              }
+            },
+            "globalStatementConservationPassed": true
+          },
+          "settlement_marker": {
+            "classificationUncertaintyNs": 1832640,
+            "clockMappingVerified": true,
+            "efCommandPairTotals": {
+              "clock_mapping_unavailable": 0,
+              "completed_before": 390,
+              "spans_boundary": 0,
+              "started_after": 23,
+              "timestamp_invalid": 0,
+              "uncertainty_overlap": 1
+            },
+            "efCommandPairsByTrace": {
+              "HTTP": {
+                "clock_mapping_unavailable": 0,
+                "completed_before": 277,
+                "spans_boundary": 0,
+                "started_after": 0,
+                "timestamp_invalid": 0,
+                "uncertainty_overlap": 0
+              },
+              "REST": {
+                "clock_mapping_unavailable": 0,
+                "completed_before": 101,
+                "spans_boundary": 0,
+                "started_after": 0,
+                "timestamp_invalid": 0,
+                "uncertainty_overlap": 0
+              },
+              "background_or_unassigned": {
+                "clock_mapping_unavailable": 0,
+                "completed_before": 12,
+                "spans_boundary": 0,
+                "started_after": 23,
+                "timestamp_invalid": 0,
+                "uncertainty_overlap": 1
+              }
+            },
+            "globalCommandCompleteStatements": {
+              "after": 152,
+              "before": 3738,
+              "clock_mapping_unavailable": 0,
+              "timestamp_invalid": 0,
+              "uncertainty_overlap": 0
+            },
+            "globalReadyForQueryCycles": {
+              "query": {
+                "after": 76,
+                "before": 1285,
+                "clock_mapping_unavailable": 0,
+                "timestamp_invalid": 0,
+                "uncertainty_overlap": 0
+              },
+              "sync": {
+                "after": 76,
+                "before": 2126,
+                "clock_mapping_unavailable": 0,
+                "timestamp_invalid": 0,
+                "uncertainty_overlap": 0
+              }
+            },
+            "globalStatementConservationPassed": true
+          }
+        },
+        "unitLimit": "EF provider command attempts are not PostgreSQL statements, physical round trips, or affected rows.",
+        "methodAncestryBoundary": {
+          "exactMethodAncestorCommandPairs": 180,
+          "noMethodAncestorResidualCommandPairs": 234,
+          "allCommandPairsConserved": true
+        }
+      },
+      "evidencePins": {
+        "analysisReadbackSha256": "a95c3a4389bfa9b10e955572c74589fbfff43c58b661b14b5ea5b00ebd577455",
+        "caseArchiveSha256": "2053fb50f2d5e4a211d34b6e3e2e7b4c68ba9a17092a873b8943cae81be9cfbb",
+        "descriptorSha256": "b0c550f99507e5619b379fde9dab9a61d224404b3404503ee7044f74c7ce1a7a",
+        "innerFinalReceiptSha256": "c0cf47e99e9ec3f17f1d11da86221f58c8a3d1ce7d37d61344278ae12c447498",
+        "outerGuardReceiptSha256": "4ff809cfeeccec3bff24fadd2221385f85761ee812353736d0653cef846cf0d0",
+        "protocolProbeDataSha256": "1872e332a617d8bd045094f6225d987483165772845328fb00e0899ab7fa5f5a",
+        "protocolProbeToolSha256": "33090ff3e64acfc7fb508bd1e86f098b9a24fff10d6ccb87c8b90e6e1253fdbb",
+        "settlementMarkerSha256": "9b6f29580226bf20fc13f9a3d8efb83f580198f426e43e15c33d78d26cbca95d",
+        "snapshotReadbackSha256": "9da6206123d3b384c18af06a78e3e5905022ee7e8efb62aa5c3f5a2ccdf91eff"
+      },
+      "fixtureChecks": {
+        "HTTP": {
+          "cadence": "Coalesced",
+          "checkpointLimit": 50,
+          "executionStatus": "Completed",
+          "expectedOutputAssertionPassed": true,
+          "incidentCount": 0,
+          "inspectionGranularity": "boundary-level",
+          "requestInvocations": 1,
+          "statusCode": 200
+        },
+        "REST": {
+          "cadence": "Coalesced",
+          "checkpointLimit": 50,
+          "executionStatus": "Completed",
+          "expectedOutputAssertionPassed": true,
+          "incidentCount": 0,
+          "inspectionGranularity": "boundary-level",
+          "requestInvocations": 1,
+          "statusCode": 200
+        }
+      },
+      "observationWindow": {
+        "additionalRequestsIssued": false,
+        "elapsedMs": 12000.145,
+        "httpRetries": 0,
+        "receiptSha256": "1fbc7bce4cb2518e7a32a79360ecb1a85506c4f36a963e085fd260d8b00e3685",
+        "requestedSeconds": 12.0,
+        "restRetries": 0,
+        "sweepCompletionClaimed": false,
+        "valid": true
+      },
+      "pointSnapshot": {
+        "deliveredOutboxRows": 0,
+        "executionStatus": "Completed",
+        "outboxRows": 0,
+        "queueCount": 0,
+        "readbackKind": "read_only_postgresql_repeatable_read",
+        "snapshotMatchesMarkerAndRequestDrain": true,
+        "successfulPrimarySettled": true,
+        "targetSettledSnapshot": true,
+        "terminal": true
+      },
+      "postgresProtocolAccounting": {
+        "captureWideProtocolFrameCount": 30824,
+        "captureWideReadyForQueryCycles": {
+          "query": 1361,
+          "sync": 2202
+        },
+        "captureWideSuccessfulCommandCompleteStatements": 3890,
+        "protocolToolVersion": "t18-protocol-probe-v2",
+        "rawFrameCountMatchesSummary": true,
+        "temporalBuckets": {
+          "client_response_received": {
+            "clockMappingVerified": true,
+            "globalCommandCompleteStatements": {
+              "after": 885,
+              "before": 3005,
+              "clock_mapping_unavailable": 0,
+              "timestamp_invalid": 0,
+              "uncertainty_overlap": 0
+            },
+            "globalReadyForQueryCycles": {
+              "query": {
+                "after": 426,
+                "before": 935,
+                "clock_mapping_unavailable": 0,
+                "timestamp_invalid": 0,
+                "uncertainty_overlap": 0
+              },
+              "sync": {
+                "after": 444,
+                "before": 1758,
+                "clock_mapping_unavailable": 0,
+                "timestamp_invalid": 0,
+                "uncertainty_overlap": 0
+              }
+            },
+            "statementConservationPassed": true
+          },
+          "database_snapshot": {
+            "clockMappingVerified": true,
+            "globalCommandCompleteStatements": {
+              "after": 195,
+              "before": 3695,
+              "clock_mapping_unavailable": 0,
+              "timestamp_invalid": 0,
+              "uncertainty_overlap": 0
+            },
+            "globalReadyForQueryCycles": {
+              "query": {
+                "after": 97,
+                "before": 1264,
+                "clock_mapping_unavailable": 0,
+                "timestamp_invalid": 0,
+                "uncertainty_overlap": 0
+              },
+              "sync": {
+                "after": 98,
+                "before": 2104,
+                "clock_mapping_unavailable": 0,
+                "timestamp_invalid": 0,
+                "uncertainty_overlap": 0
+              }
+            },
+            "statementConservationPassed": true
+          },
+          "settlement_marker": {
+            "clockMappingVerified": true,
+            "globalCommandCompleteStatements": {
+              "after": 152,
+              "before": 3738,
+              "clock_mapping_unavailable": 0,
+              "timestamp_invalid": 0,
+              "uncertainty_overlap": 0
+            },
+            "globalReadyForQueryCycles": {
+              "query": {
+                "after": 76,
+                "before": 1285,
+                "clock_mapping_unavailable": 0,
+                "timestamp_invalid": 0,
+                "uncertainty_overlap": 0
+              },
+              "sync": {
+                "after": 76,
+                "before": 2126,
+                "clock_mapping_unavailable": 0,
+                "timestamp_invalid": 0,
+                "uncertainty_overlap": 0
+              }
+            },
+            "statementConservationPassed": true
+          }
+        },
+        "uniqueProviderIntervalAttribution": {
+          "attributionConserved": true,
+          "clockMappingVerified": true,
+          "commandCompleteAttributionResiduals": {
+            "ambiguous_clock_uncertainty_boundary": 587,
+            "ambiguous_overlapping_provider_intervals": 3,
+            "outside_provider_interval": 3221,
+            "provider_pid_not_observed": 16,
+            "uniquely_attributed": 63
+          },
+          "commandCompleteByTrace": {
+            "HTTP": 44,
+            "REST": 14,
+            "background_or_unassigned": 5
+          },
+          "providerAttemptIntervalCount": 313,
+          "providerAttemptIntervalRejections": 0
+        },
+        "unitLimit": "These counts cover all captured PostgreSQL protocol traffic, including setup, fixtures and background. Query and Sync cycles are separate global counts. Unique interval joins are conservative trace-group attribution, not proof of causal request ownership. SQL text is not included."
+      },
+      "protocolErrorTiming": {
+        "definitelyBeforePrimaryRequestStart": 4,
+        "errorResponseCount": 4,
+        "interpretation": "Temporal only; no SQL cause inferred.",
+        "minimumLeadMs": 11784.979,
+        "readbackStatus": "separate_root_temporal_readback"
+      },
+      "requestDrainAndTail": {
+        "commandPairsAtMethodStop": {
+          "completed": 226,
+          "inFlight": 0,
+          "started": 226
+        },
+        "openTailBoundaryCountAtFinalization": 0,
+        "postStopCallbackCount": 96,
+        "probeAnchorIdentityAndTickJoinPassed": true,
+        "saveChangesAtMethodStop": {
+          "completed": 29,
+          "inFlight": 0,
+          "started": 29
+        },
+        "tailCompleteAtFinalization": true,
+        "tailCompleteAtReceipt": false,
+        "tailKinds": {
+          "request_drain": 2,
+          "resumption_sweep": 6
+        },
+        "tailOwnershipCounts": {
+          "unknown_not_awaited": 8
+        },
+        "targetDrainJoinPassed": true,
+        "targetJoinCount": 1,
+        "transactionGenerationsAtMethodStop": {
+          "completed": 9,
+          "inFlight": 0,
+          "started": 9
+        }
+      },
+      "resumptionEvidence": {
+        "globalSweepEndCount": 6,
+        "globalSweepOutcomes": {
+          "completed": 6
+        },
+        "globalSweepOwnership": "unowned_global",
+        "globalSweepStartCount": 6,
+        "markerMeaning": "The marker records observation at sweep start; marker absence at an earlier point is not a database queue read.",
+        "markerObserved": true,
+        "purgeCausality": "No direct residual-row purge count is available; no per-case purge or performance claim is made.",
+        "targetLinkedCandidateCount": 0,
+        "targetLinkedRedriveOrPurgeEndCount": 0,
+        "targetRequestDrainMatchCount": 1
+      },
+      "sourceAndHelperPins": {
+        "captureRunnerSourceSha256": "49ab447a6bffbb6dcbd3fdf9e4a1c40fb0ec64f39a1a01a9e47ac303e99aa01a",
+        "modelFingerprintSourceSha256": "78d6761fd6be180da8a315be0afd67935ea00b09fb0435b5a40d1a0be71d1ece",
+        "modelPinBinarySha256": "1a0dc76fb48d30dd9fe6907fa9b7e3e3f42d693d37722508e76f88b294521748",
+        "operationHelperAssemblySha256": "03d34e8fbe0b7d0c073f29e131e1182dc28c7b8f09d357aa44238d9d2aba7eff",
+        "protocolProbeSourceSha256": "33090ff3e64acfc7fb508bd1e86f098b9a24fff10d6ccb87c8b90e6e1253fdbb",
+        "requestClientSourceSha256": "0958c1d42672fbecdf98b12e17076a058c3b357efa079b62e68c296f4e889023",
+        "runtimeAssemblySha256": "4f67aa1a9d24a9074533c273d53259cdd3c8d2b7f25e7c984aaa0c7bd630b5fb",
+        "runtimeSourceDeltaSha256": "7639374923067c81bd0542e5d1b147cd77a9e9645d2eb9a021ea1c6d40f83577",
+        "snapshotHelperBinarySha256": "aefd40c9425af40efe8f0945aaac12ed7af79c4f1d590ed02f7b24051403c26f",
+        "snapshotSupervisorSourceSha256": "0b827d8cf0f173e3b9d01ff127177119b145175859d071a3e05f168a4b6225d2",
+        "sourceBlobRegistrySha256": "05abf1dfa79de48f3a087ba1e523ab429d8b78bdd38dbf00f2b8a4d120ec0a12",
+        "typedHashSourceSha256": "772a1be9d97eedb0aba5ea75e67ce707bc2372b022db407bd603c84d2a68232e",
+        "workbenchBinarySha256": "c419f6131b81901492186432c0d90194cc2e7225371cc621a9822b821c394cdf",
+        "workbenchClosureBytes": 324205298,
+        "workbenchClosureFileCount": 520,
+        "workbenchClosureManifestSha256": "582012f86888785d4a7053ec3291a57505307ce64808f5ab079663cc888662d2"
+      },
+      "sourceRevision": "e6faa5689814c33353009b13f5b9e44d0e9982a4",
+      "residualQueryNature": {
+        "commandPairsWithoutExactMethodAncestor": 234,
+        "classificationBoundary": "These pairs have no exact operation-method ancestor. Table identifiers and leading verbs come from the analyzer parsed residual groups; family labels are inferred from the public table-identifier prefix and do not assign a caller or method.",
+        "familyPrefixRules": {
+          "telemetry": "elsa_otel_*",
+          "runtime_state": "elsa_runtime_*",
+          "placement": "elsa_distributed_*",
+          "identity": "identity_*",
+          "other_or_unmapped": "all remaining parsed identifiers"
+        },
+        "byTrace": {
+          "HTTP": {
+            "noMethodAncestorCommandPairs": 148,
+            "familyCountsFromTableIdentifierPrefix": {
+              "telemetry": 80,
+              "runtime_state": 66,
+              "placement": 2
+            },
+            "parsedTableIdentifiers": [
+              {
+                "providerFamily": "postgresql",
+                "tableIdentifier": "elsa_runtime_activity_execution_inspection",
+                "commandPairs": 8,
+                "leadingVerbCounts": {
+                  "SELECT": 8
+                }
+              },
+              {
+                "providerFamily": "postgresql",
+                "tableIdentifier": "elsa_runtime_activity_execution_state",
+                "commandPairs": 34,
+                "leadingVerbCounts": {
+                  "SELECT": 34
+                }
+              },
+              {
+                "providerFamily": "postgresql",
+                "tableIdentifier": "elsa_runtime_bookmark_state",
+                "commandPairs": 1,
+                "leadingVerbCounts": {
+                  "SELECT": 1
+                }
+              },
+              {
+                "providerFamily": "postgresql",
+                "tableIdentifier": "elsa_runtime_execution_liveness_state",
+                "commandPairs": 6,
+                "leadingVerbCounts": {
+                  "INSERT": 1,
+                  "SELECT": 4,
+                  "UPDATE": 1
+                }
+              },
+              {
+                "providerFamily": "postgresql",
+                "tableIdentifier": "elsa_runtime_incident_state",
+                "commandPairs": 1,
+                "leadingVerbCounts": {
+                  "SELECT": 1
+                }
+              },
+              {
+                "providerFamily": "postgresql",
+                "tableIdentifier": "elsa_runtime_workflow_dispatch",
+                "commandPairs": 1,
+                "leadingVerbCounts": {
+                  "SELECT": 1
+                }
+              },
+              {
+                "providerFamily": "postgresql",
+                "tableIdentifier": "elsa_runtime_workflow_executable_source_reference",
+                "commandPairs": 1,
+                "leadingVerbCounts": {
+                  "SELECT": 1
+                }
+              },
+              {
+                "providerFamily": "postgresql",
+                "tableIdentifier": "elsa_runtime_workflow_execution_state",
+                "commandPairs": 8,
+                "leadingVerbCounts": {
+                  "SELECT": 8
+                }
+              },
+              {
+                "providerFamily": "postgresql",
+                "tableIdentifier": "elsa_runtime_workflow_hold_state",
+                "commandPairs": 4,
+                "leadingVerbCounts": {
+                  "SELECT": 4
+                }
+              },
+              {
+                "providerFamily": "postgresql",
+                "tableIdentifier": "elsa_runtime_workflow_trigger_binding",
+                "commandPairs": 2,
+                "leadingVerbCounts": {
+                  "SELECT": 2
+                }
+              },
+              {
+                "providerFamily": "sqlite",
+                "tableIdentifier": "elsa_distributed_execution_placement",
+                "commandPairs": 2,
+                "leadingVerbCounts": {
+                  "INSERT": 1,
+                  "SELECT": 1
+                }
+              },
+              {
+                "providerFamily": "sqlite",
+                "tableIdentifier": "elsa_otel_capture_ledger",
+                "commandPairs": 10,
+                "leadingVerbCounts": {
+                  "DELETE": 10
+                }
+              },
+              {
+                "providerFamily": "sqlite",
+                "tableIdentifier": "elsa_otel_instruments",
+                "commandPairs": 10,
+                "leadingVerbCounts": {
+                  "SELECT": 10
+                }
+              },
+              {
+                "providerFamily": "sqlite",
+                "tableIdentifier": "elsa_otel_logs",
+                "commandPairs": 10,
+                "leadingVerbCounts": {
+                  "SELECT": 10
+                }
+              },
+              {
+                "providerFamily": "sqlite",
+                "tableIdentifier": "elsa_otel_metric_points",
+                "commandPairs": 10,
+                "leadingVerbCounts": {
+                  "SELECT": 10
+                }
+              },
+              {
+                "providerFamily": "sqlite",
+                "tableIdentifier": "elsa_otel_resources",
+                "commandPairs": 10,
+                "leadingVerbCounts": {
+                  "SELECT": 10
+                }
+              },
+              {
+                "providerFamily": "sqlite",
+                "tableIdentifier": "elsa_otel_spans",
+                "commandPairs": 10,
+                "leadingVerbCounts": {
+                  "SELECT": 10
+                }
+              },
+              {
+                "providerFamily": "sqlite",
+                "tableIdentifier": "elsa_otel_traces",
+                "commandPairs": 20,
+                "leadingVerbCounts": {
+                  "SELECT": 20
+                }
+              }
+            ]
+          },
+          "REST": {
+            "noMethodAncestorCommandPairs": 62,
+            "familyCountsFromTableIdentifierPrefix": {
+              "telemetry": 16,
+              "runtime_state": 43,
+              "placement": 2,
+              "identity": 1
+            },
+            "parsedTableIdentifiers": [
+              {
+                "providerFamily": "postgresql",
+                "tableIdentifier": "elsa_runtime_activity_execution_inspection",
+                "commandPairs": 4,
+                "leadingVerbCounts": {
+                  "SELECT": 4
+                }
+              },
+              {
+                "providerFamily": "postgresql",
+                "tableIdentifier": "elsa_runtime_activity_execution_state",
+                "commandPairs": 22,
+                "leadingVerbCounts": {
+                  "SELECT": 22
+                }
+              },
+              {
+                "providerFamily": "postgresql",
+                "tableIdentifier": "elsa_runtime_execution_liveness_state",
+                "commandPairs": 6,
+                "leadingVerbCounts": {
+                  "INSERT": 1,
+                  "SELECT": 4,
+                  "UPDATE": 1
+                }
+              },
+              {
+                "providerFamily": "postgresql",
+                "tableIdentifier": "elsa_runtime_incident_state",
+                "commandPairs": 1,
+                "leadingVerbCounts": {
+                  "SELECT": 1
+                }
+              },
+              {
+                "providerFamily": "postgresql",
+                "tableIdentifier": "elsa_runtime_workflow_dispatch",
+                "commandPairs": 1,
+                "leadingVerbCounts": {
+                  "SELECT": 1
+                }
+              },
+              {
+                "providerFamily": "postgresql",
+                "tableIdentifier": "elsa_runtime_workflow_executable_source_reference",
+                "commandPairs": 1,
+                "leadingVerbCounts": {
+                  "SELECT": 1
+                }
+              },
+              {
+                "providerFamily": "postgresql",
+                "tableIdentifier": "elsa_runtime_workflow_execution_state",
+                "commandPairs": 8,
+                "leadingVerbCounts": {
+                  "SELECT": 8
+                }
+              },
+              {
+                "providerFamily": "sqlite",
+                "tableIdentifier": "elsa_distributed_execution_placement",
+                "commandPairs": 2,
+                "leadingVerbCounts": {
+                  "INSERT": 1,
+                  "SELECT": 1
+                }
+              },
+              {
+                "providerFamily": "sqlite",
+                "tableIdentifier": "elsa_otel_capture_ledger",
+                "commandPairs": 2,
+                "leadingVerbCounts": {
+                  "DELETE": 2
+                }
+              },
+              {
+                "providerFamily": "sqlite",
+                "tableIdentifier": "elsa_otel_instruments",
+                "commandPairs": 2,
+                "leadingVerbCounts": {
+                  "SELECT": 2
+                }
+              },
+              {
+                "providerFamily": "sqlite",
+                "tableIdentifier": "elsa_otel_logs",
+                "commandPairs": 2,
+                "leadingVerbCounts": {
+                  "SELECT": 2
+                }
+              },
+              {
+                "providerFamily": "sqlite",
+                "tableIdentifier": "elsa_otel_metric_points",
+                "commandPairs": 2,
+                "leadingVerbCounts": {
+                  "SELECT": 2
+                }
+              },
+              {
+                "providerFamily": "sqlite",
+                "tableIdentifier": "elsa_otel_resources",
+                "commandPairs": 2,
+                "leadingVerbCounts": {
+                  "SELECT": 2
+                }
+              },
+              {
+                "providerFamily": "sqlite",
+                "tableIdentifier": "elsa_otel_spans",
+                "commandPairs": 2,
+                "leadingVerbCounts": {
+                  "SELECT": 2
+                }
+              },
+              {
+                "providerFamily": "sqlite",
+                "tableIdentifier": "elsa_otel_traces",
+                "commandPairs": 4,
+                "leadingVerbCounts": {
+                  "SELECT": 4
+                }
+              },
+              {
+                "providerFamily": "sqlite",
+                "tableIdentifier": "identity_users",
+                "commandPairs": 1,
+                "leadingVerbCounts": {
+                  "SELECT": 1
+                }
+              }
+            ]
+          },
+          "background_or_unassigned": {
+            "noMethodAncestorCommandPairs": 24,
+            "familyCountsFromTableIdentifierPrefix": {
+              "runtime_state": 24
+            },
+            "parsedTableIdentifiers": [
+              {
+                "providerFamily": "postgresql",
+                "tableIdentifier": "elsa_runtime_execution_liveness_state",
+                "commandPairs": 24,
+                "leadingVerbCounts": {
+                  "SELECT": 24
+                }
+              }
+            ]
+          }
+        },
+        "conservationPassed": true
+      },
+      "observedOperationsAndEfLifecycle": {
+        "operationPairUnit": "Paired safe operation metadata observations; not EF provider commands, successful writes, durable records, queue rows, or completed dispatches.",
+        "byTrace": {
+          "HTTP": {
+            "checkpointOperationPairs": {
+              "checkpoint.commit": 3,
+              "checkpoint.marker_flush": 3,
+              "checkpoint.marker_lookup": 3,
+              "checkpoint.participant_flush": 3,
+              "checkpoint.participant_stage": 16
+            },
+            "checkpointOperationPairTotal": 28,
+            "schedulerQueueDispatchOperationPairs": {
+              "scheduler_queue.dequeue": 3,
+              "scheduler_queue.enqueue": 3,
+              "scheduler_queue.list": 1
+            },
+            "schedulerQueueDispatchOperationPairTotal": 7
+          },
+          "REST": {
+            "checkpointOperationPairs": {
+              "checkpoint.commit": 1,
+              "checkpoint.marker_flush": 1,
+              "checkpoint.marker_lookup": 1,
+              "checkpoint.participant_flush": 1,
+              "checkpoint.participant_stage": 6
+            },
+            "checkpointOperationPairTotal": 10,
+            "schedulerQueueDispatchOperationPairs": {
+              "scheduler_queue.dequeue": 1,
+              "scheduler_queue.enqueue": 1,
+              "scheduler_queue.list": 1
+            },
+            "schedulerQueueDispatchOperationPairTotal": 3
+          },
+          "background_or_unassigned": {
+            "checkpointOperationPairs": {},
+            "checkpointOperationPairTotal": 0,
+            "schedulerQueueDispatchOperationPairs": {
+              "scheduler_queue.list_claimable_executions": 6
+            },
+            "schedulerQueueDispatchOperationPairTotal": 6
+          }
+        },
+        "methodStopCounters": {
+          "commandPairs": {
+            "completed": 226,
+            "inFlight": 0,
+            "started": 226
+          },
+          "saveChangesPairs": {
+            "completed": 29,
+            "inFlight": 0,
+            "started": 29
+          },
+          "transactionPairs": {
+            "completed": 9,
+            "inFlight": 0,
+            "started": 9
+          },
+          "unit": "Separate method-stop lifecycle counters; transaction counters are not inferred by summing EF log events."
+        },
+        "efTransactionLifecycleLogEventsByTrace": {
+          "HTTP": {
+            "CreatedTransactionSavepoint": 6,
+            "CreatingTransactionSavepoint": 6,
+            "ReleasedTransactionSavepoint": 6,
+            "ReleasingTransactionSavepoint": 6,
+            "TransactionCommitted": 13,
+            "TransactionCommitting": 13,
+            "TransactionStarted": 13,
+            "TransactionStarting": 13
+          },
+          "REST": {
+            "CreatedTransactionSavepoint": 2,
+            "CreatingTransactionSavepoint": 2,
+            "ReleasedTransactionSavepoint": 2,
+            "ReleasingTransactionSavepoint": 2,
+            "TransactionCommitted": 3,
+            "TransactionCommitting": 3,
+            "TransactionStarted": 3,
+            "TransactionStarting": 3
+          }
+        },
+        "lifecycleEventUnit": "Observed EF transaction/savepoint log-event occurrences, not deduplicated transaction totals or successful SQL statements."
+      }
+    }
+  ],
+  "historicalSupportingEvidence": {
+    "t02ExtendedCaptures": [
+      {
+        "boundary": "separate historical T02 extended capture; not included in v9 case totals",
+        "case": "historical-immediate",
+        "evidencePins": {
+          "captureArchiveSha256": "16326aa45e1c638ff4ef566cc799a3d7826a8f30de5264fcdb29c7e7944a1c30",
+          "descriptorSha256": "e698c8c3064147ca48a41aebeb4c58d8d03e730ff7032d1c5997462655f1a3bf",
+          "publicProjectionReviewSha256": "c787118324795e5585655ff8977d0ec9443ddb62f2bd3f960d22af59b9442c7b",
+          "rawProbeSha256": "12495885af9f6e64263f636d8d8360306073cd5fe425f068830876cd03364753"
+        },
+        "historicalEfAccounting": {
+          "commandPairs": 1227,
+          "exactMethodJoins": 749,
+          "http": 635,
+          "noMethodAncestorResiduals": 478,
+          "rest": 556,
+          "separatelyLabelledSweeps": 36
+        },
+        "qualification": "Separate accepted-capture checkpoint and independently reviewed public projection; historical scope only."
+      },
+      {
+        "boundary": "separate historical T02 extended capture; not included in v9 case totals",
+        "case": "historical-coalesced",
+        "evidencePins": {
+          "captureArchiveSha256": "2a9d0434209f8694f194ce0efe33ab2236d6d9f07def068a625936f3f5a5e3f5",
+          "publicProjectionReviewSha256": "afbc17b0b1a1c6835fca59ca1e712adc75760a5d33e2f34ca84b06ebdc50a2f0",
+          "rawProbeSha256": "3261099441a6ca5adcbf5e1c92965e1d7bccdf59d85c757e34050f1ccd7d4b88",
+          "sourceManifestSha256": "a5d3975236272e524585769c8af1a6ee9e32be49ce7d1f63d90516c7896ac713"
+        },
+        "historicalEfAccounting": {
+          "commandPairs": 420,
+          "exactMethodJoins": 182,
+          "http": 277,
+          "noMethodAncestorResiduals": 238,
+          "rest": 101,
+          "separatelyLabelledSweeps": 42
+        },
+        "qualification": "Separate accepted-capture checkpoint and independently reviewed public projection; historical scope only."
+      }
+    ],
+    "t04TypedSourceAndControlSupport": {
+      "allNineteenSourceChecksMatched": true,
+      "boundary": "Historical T04 typed/source/control qualification. It is not a live v9 result and contributes no runtime counters.",
+      "exactPinnedFiniteControlExecution": "accepted",
+      "liveCaptureReadiness": "not_established",
+      "probeControlReviewSha256": "ae9e563f5d3736f867ef96d9af359bfbfda5e39731cc302ea05ca4558becfac9",
+      "sourceBlobRootVerificationSha256": "8eeb59a57c21a2426659ea73a5c1031483ba8eafbba9365eca714fa98613eeeb",
+      "sourceRepair": "accepted",
+      "typedSyntheticSourceReviewDecision": "accepted",
+      "typedSyntheticSourceReviewSha256": "c100b72c79bc29c5779832fb804e6c345a131f3784d83077e69e4bb8ee543a74"
+    }
+  },
+  "measurementDefinitions": {
+    "efCommandPair": "Provider command start/terminal pair; identity includes trace hash, command ordinal, and occurrence. This is not a SQL statement or round-trip count.",
+    "globalPostgreSqlCounts": "Successful CommandComplete messages and ReadyForQuery query/Sync cycles are separate capture-wide protocol units.",
+    "observationWindow": "The 12-second window follows verified requests, permits no retries or extra requests, and explicitly makes no sweep-completion claim.",
+    "providerIntervalAttribution": "A protocol statement is attributed only through one unique positive backend PID and one unique calibrated provider-attempt interval. Trace-group association is not causal request ownership.",
+    "responseBoundary": "The boundary is fixture-client response receipt, not server response-finished.",
+    "settlement": "A point-in-time repeatable-read snapshot proves the state read at that point. A sweep-start marker is an observation marker, not a direct queue read or row-purge count.",
+    "temporalAttribution": "Same-host monotonic identity and calibration are required; EF classifications use a doubled calibration uncertainty bound. Overlap and uncertainty buckets are retained.",
+    "residualQueryNature": "Residual EF provider command attempts with no exact operation-method ancestor; table-identifier families are inferred from parser-extracted public identifiers and do not establish caller attribution.",
+    "observedOperationPairs": "Paired operation metadata observations by HTTP/REST/background trace. These are separate from exact method-ancestor EF command-pair joins and do not count successful or durable state changes."
+  },
+  "publicationStatus": "finite diagnostic evidence with explicit attribution limits",
+  "readiness": {
+    "analysisHelperSha256": "488a4d1123520eaca0db926f78190bb9127bccd25f17823e1950b2ba35a79f54",
+    "fourPerCaseReadbacksPassed": true,
+    "independentAttributionLimitsApplied": true,
+    "independentFourCaseReviewSha256": "9f51401281603286530143a38ca29cd670b9079d2efe3642f07ac5d48a8d6eee",
+    "independentFourCaseReviewStatus": "pass_with_attribution_limit",
+    "packetManifestSha256": "3ac9f62ad4ed51c9dba693bfd560a5be478887ac12525169df0741a09cb01c65",
+    "programCompletionClaim": false,
+    "rootFourCaseReconciliationSha256": "a8e52f668b0e986ac2ed5ff7d1990bc3a131d3bc594ee126dfab8f6c83076089",
+    "rootFourCaseReconciliationStatus": "passed-bounded-raw-count-and-state-review",
+    "rootProtocolErrorBoundaryReadbackSha256": "781535c3e2cdac237dd794696cb354db9ed1fc9e74c01eb1ca25c6584d925b3b",
+    "rootProtocolErrorBoundaryReadbackStatus": "temporal_only_no_cause_inferred"
+  },
+  "schema": "elsa-runtime-db-final-accounting-public-projection/v1",
+  "residualTableIdentifierSourceSupport": {
+    "distinctParsedIdentifiers": 19,
+    "identifiersPresentInPinnedFoundationCSharpSource": true,
+    "pinnedSourceRevisionsChecked": [
+      "7357b91e012c56cb34f1259ef7a60ef56e144afe",
+      "e6faa5689814c33353009b13f5b9e44d0e9982a4"
+    ],
+    "checkMethod": "Exact literal identifier presence check in C# source at each pinned revision. This supports the public table identifiers and prefix-family labels; it does not prove which method issued a residual command."
+  }
+}
