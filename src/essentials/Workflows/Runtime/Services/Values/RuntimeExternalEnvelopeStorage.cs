@@ -8,6 +8,14 @@ namespace Elsa.Workflows.Runtime.Services.Values;
 /// Applies a durable destination policy to a value envelope and rewrites its external payload when
 /// the existing reference does not satisfy that policy.
 /// </summary>
+/// <remarks>
+/// This is the destination-storage decision for activity input materialization and intrinsic value writes. A present
+/// value whose policy requires encryption is withheld here (spec 188, FR-010), by <see cref="RuntimeEncryptionWithholding"/>
+/// before anything else: phase 0 has no encryption at rest, so it becomes a
+/// <see cref="WithheldValueKind.PolicyRequiresEncryption"/> marker that holds no value, and is neither kept inline nor
+/// written to external payload storage. The value cannot be recovered; a reader that needs it refuses the marker with
+/// <c>VF-ACT-010</c>.
+/// </remarks>
 internal sealed class RuntimeExternalEnvelopeStorage(IExternalPayloadStore? externalPayloadStore)
 {
     public async ValueTask<ValueEnvelope> RewriteAsync(
@@ -20,6 +28,9 @@ internal sealed class RuntimeExternalEnvelopeStorage(IExternalPayloadStore? exte
         ArgumentNullException.ThrowIfNull(request.Value);
         ArgumentNullException.ThrowIfNull(request.SourcePolicy);
         ArgumentNullException.ThrowIfNull(request.EffectivePolicy);
+
+        if (RuntimeEncryptionWithholding.TryWithhold(request.Value, request.EffectivePolicy, out var withheld))
+            return withheld;
 
         if (request.Value.Presence != ValuePresence.Present ||
             !request.ForceExternal && request.EffectivePolicy.Storage == DurableValueStorage.Inline)

@@ -140,18 +140,22 @@ public sealed class WorkflowExecutableInspector(
         if (executable is null || reference is null || !StringComparer.Ordinal.Equals(reference.ArtifactId, artifactId))
             return null;
 
-        var authoredInputs = reference.AuthoredInputs.Select(input => new WorkflowExecutableAuthoredInputView(
-            input.ExecutableNodeId,
-            input.InputKey,
-            input.ExpressionType,
-            input.IsSensitive ? null : input.Value,
-            input.IsSensitive,
-            input.IsSensitive ? "redacted" : "allowed")).ToArray();
+        var authoredInputs = reference.AuthoredInputs.Select(input =>
+        {
+            var redacted = RedactsAuthoredInput(executable, input);
+            return new WorkflowExecutableAuthoredInputView(
+                input.ExecutableNodeId,
+                input.InputKey,
+                input.ExpressionType,
+                redacted ? null : input.Value,
+                redacted,
+                redacted ? "redacted" : "allowed");
+        }).ToArray();
         var compiledInputs = executable.Nodes
             .SelectMany(node => node.InputBindings.Values.Select(binding => new WorkflowExecutableCompiledInputView(
                 node.ExecutableNodeId,
-                Binding(binding, includeSourceDetails: !binding.EffectivePolicy.IsSensitive),
-                binding.EffectivePolicy.IsSensitive ? "redacted" : "allowed")))
+                Binding(binding, includeSourceDetails: !binding.EffectivePolicy.HidesValue(), includeSecretReference: true),
+                binding.EffectivePolicy.HidesValue() ? "redacted" : "allowed")))
             .ToArray();
 
         return new WorkflowExecutableInputSourcesView(
@@ -178,6 +182,42 @@ public sealed class WorkflowExecutableInspector(
             references.Select(reference => ExecutableSourceReferenceView.From(reference, now)).ToArray(),
             retained,
             retained > 0 || references.Any(reference => reference.IsLive(now)));
+    }
+
+    /// <summary>
+    /// An authored input's own sensitivity flag is only the author's choice: an activity's input declaration reaches the
+    /// compiled policy, not the authored record (spec 188, FR-007). So an authored value is shown only when its own flag,
+    /// and every compiled binding and pinned input contract the executable holds for that input, allow it. A record's
+    /// node id is the authored node id the publish sidecar records. The compiler keeps that id as the executable node id
+    /// of an authored node, including a container's children (proved for a sequence by a publish test), so a node is
+    /// matched by its executable id, or by its authored id for a reusable activity placed as the workflow root, whose
+    /// executable id is generated.
+    /// </summary>
+    /// <remarks>
+    /// An unmatched record is redacted, fail closed, rather than shown on its authored flag alone. Unmatched means that no
+    /// executable node matched by the record's node id holds a compiled input binding or a pinned input contract for the
+    /// record's input key: the node is missing from the executable, or the node is there but the executable compiled
+    /// nothing for that input. Its <c>isSensitive</c> then reports the redaction, not a known sensitivity.
+    /// </remarks>
+    private static bool RedactsAuthoredInput(WorkflowExecutable executable, WorkflowExecutableAuthoredInputRecord input)
+    {
+        if (input.IsSensitive)
+            return true;
+
+        var verdicts = executable.Nodes
+            .Where(node => StringComparer.Ordinal.Equals(node.ExecutableNodeId, input.ExecutableNodeId) ||
+                           StringComparer.Ordinal.Equals(node.AuthoredActivityId, input.ExecutableNodeId))
+            .SelectMany(node => CompiledVerdicts(node, input.InputKey))
+            .ToArray();
+        return verdicts.Length == 0 || verdicts.Any(hidden => hidden);
+    }
+
+    private static IEnumerable<bool> CompiledVerdicts(ExecutableNode node, string inputKey)
+    {
+        if (node.InputBindings.TryGetValue(inputKey, out var binding))
+            yield return binding.EffectivePolicy.HidesValue();
+        if (node.ActivityContract?.Inputs.GetValueOrDefault(inputKey) is { } contract)
+            yield return contract.Policy.HidesValue();
     }
 
     private async ValueTask<IReadOnlyDictionary<string, int>> RetainedCountsAsync(CancellationToken cancellationToken) =>
@@ -370,20 +410,33 @@ public sealed class WorkflowExecutableInspector(
             ? property.GetBoolean()
             : null;
 
-    private static WorkflowExecutableInputBindingView Binding(RuntimeInputBinding binding, bool includeSourceDetails) =>
-        new(
+    /// <summary>
+    /// Projects one compiled binding. Source details stay out unless <paramref name="includeSourceDetails"/> allows them.
+    /// A secret reference is not a value (spec 188), so where <paramref name="includeSecretReference"/> allows it a
+    /// secret read shows its reference, as its summary and in <see cref="WorkflowExecutableInputBindingView.Secret"/>,
+    /// even though its policy keeps every other source detail out.
+    /// </summary>
+    private static WorkflowExecutableInputBindingView Binding(
+        RuntimeInputBinding binding,
+        bool includeSourceDetails,
+        bool includeSecretReference = false)
+    {
+        var secret = includeSecretReference || includeSourceDetails ? binding.Secret : null;
+        return new(
             binding.InputName,
             binding.Source.ToString(),
-            includeSourceDetails ? Preview(binding) : null,
+            includeSourceDetails ? Preview(binding) : secret?.Name,
             binding.InputKey,
-            binding.EffectivePolicy.IsSensitive,
+            binding.EffectivePolicy.HidesValue(),
             includeSourceDetails ? binding.LiteralValue : null,
             includeSourceDetails ? binding.Expression : null,
             includeSourceDetails ? binding.WorkflowRequest : null,
             includeSourceDetails ? binding.Variable : null,
             includeSourceDetails ? binding.ActivityResult : null,
             includeSourceDetails ? binding.ConversionPlan : null,
-            includeSourceDetails ? binding.Metadata : null);
+            includeSourceDetails ? binding.Metadata : null,
+            secret);
+    }
 
     private static WorkflowExecutableInputContractView? InputContract(WorkflowExecutableInputContract? contract) =>
         contract is null
@@ -408,6 +461,8 @@ public sealed class WorkflowExecutableInspector(
             RuntimeInputBindingSource.WorkflowRequest => binding.WorkflowRequest?.MemberKey,
             RuntimeInputBindingSource.VariableRead => binding.Variable?.VariableKey,
             RuntimeInputBindingSource.ActivityResult => binding.ActivityResult?.ProjectionKey,
+            // The reference, never a value: activation alone resolves a secret.
+            RuntimeInputBindingSource.SecretRead => binding.Secret?.Name,
             _ => null
         };
         return text is null || text.Length <= PreviewLength ? text : $"{text[..PreviewLength]}…";

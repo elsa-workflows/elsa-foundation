@@ -28,6 +28,7 @@ using Elsa.Workflows.Publishing.Core.Contracts;
 using Elsa.Workflows.Publishing.Core.Models;
 using Elsa.Workflows.Publishing.Core.Requests;
 using Elsa.Workflows.Publishing.Core.Services;
+using Elsa.Workflows.Runtime.Api.Services;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
@@ -749,6 +750,53 @@ public sealed class PublishWorkflowRequestHandlerTests
 
         var executable = await _store.FindAsync(view.ArtifactId);
         Assert.Equal(view.ArtifactHash, executable!.Identity.ArtifactHash);
+    }
+
+    /// <summary>
+    /// The authored-inputs view over a real publish of nested nodes (spec 188, T070): each authored input of a container's
+    /// children is matched to its compiled node, so an ordinary literal is shown and a literal on an input the activity
+    /// declares sensitive is redacted by its compiled policy, although its author did not mark it. Nothing else is
+    /// redacted.
+    /// </summary>
+    [Fact]
+    public async Task AuthoredInputSourcesOfNestedNodesAreRedactedOnlyWhereTheCompiledPolicyHidesThem()
+    {
+        var root = SequenceNode(
+            "sequence",
+            [
+                Node("write-one", Text("one")),
+                new ActivityNode(
+                    "note-one",
+                    typeof(DeclaredInputsActivity).FullName!,
+                    [new WorkflowArgumentState(nameof(DeclaredInputsActivity.Note), new ArgumentValue("classified", "Literal"), null, null, null, null)],
+                    Outputs: [])
+            ]);
+        var published = await Handler(
+                WorkflowVersion(root),
+                _writeLineActivity,
+                SecretBindingCompilerFixture.ClrActivityVersion(typeof(DeclaredInputsActivity)),
+                _sequenceActivity)
+            .Handle(new PublishWorkflow("version-1"), CancellationToken.None);
+
+        var sources = await new WorkflowExecutableInspector(_store, _referenceStore, new InMemoryWorkflowExecutionStateStore())
+            .GetInputSourcesAsync(published.ArtifactId, published.SourceReferenceId);
+
+        Assert.Collection(
+            sources!.AuthoredInputs.OrderBy(input => input.ExecutableNodeId, StringComparer.Ordinal),
+            note =>
+            {
+                Assert.Equal(("note-one", nameof(DeclaredInputsActivity.Note)), (note.ExecutableNodeId, note.InputKey));
+                Assert.True(note.IsSensitive);
+                Assert.Equal("redacted", note.AccessState);
+                Assert.Null(note.Value);
+            },
+            write =>
+            {
+                Assert.Equal(("write-one", "Text"), (write.ExecutableNodeId, write.InputKey));
+                Assert.False(write.IsSensitive);
+                Assert.Equal("allowed", write.AccessState);
+                Assert.Equal("one", write.Value!.Value.GetString());
+            });
     }
 
     [Fact]

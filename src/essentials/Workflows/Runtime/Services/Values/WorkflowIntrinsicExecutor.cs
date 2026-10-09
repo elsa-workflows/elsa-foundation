@@ -178,6 +178,7 @@ public sealed class WorkflowIntrinsicExecutor(
         ValueEnvelope result;
         if (intrinsicKind == WorkflowIntrinsicKind.Control)
         {
+            ThrowIfWithheld(materialized, inputKey);
             if (materialized.Presence != ValuePresence.Present ||
                 materialized.InlineValue is not { ValueKind: JsonValueKind.String } outcomeValue ||
                 string.IsNullOrWhiteSpace(outcomeValue.GetString()))
@@ -194,6 +195,9 @@ public sealed class WorkflowIntrinsicExecutor(
         }
         else
         {
+            // A withheld value (its policy requires encryption) stays the result as its marker, holding no value, as Set
+            // keeps one in a variable. The runtime's activity-result readers, an input binding and an expression
+            // parameter, refuse it with VF-ACT-010.
             outcome = "Done";
             result = materialized;
         }
@@ -229,7 +233,7 @@ public sealed class WorkflowIntrinsicExecutor(
             node,
             intrinsicState,
             cancellationToken);
-        var assigned = ReadOptionalString(value, intrinsicKind, node.ExecutableNodeId);
+        var assigned = ReadOptionalString(value, WorkflowIntrinsicInputKeys.Value, intrinsicKind, node.ExecutableNodeId);
         var occurredAt = timeProvider.GetUtcNow();
         var workflowState = await workflowExecutionStateStore.FindAsync(startWorkItem.WorkflowExecutionId, cancellationToken)
             ?? throw new InvalidOperationException($"{intrinsicKind} intrinsic '{node.ExecutableNodeId}' references missing workflow execution '{startWorkItem.WorkflowExecutionId}'.");
@@ -275,7 +279,7 @@ public sealed class WorkflowIntrinsicExecutor(
         ThrowIfWithheld(nameBinding);
         if (nameBinding.Source != RuntimeInputBindingSource.Literal || nameBinding.Literal is not { } nameLiteral)
             throw new InvalidOperationException($"SetOutput intrinsic '{node.ExecutableNodeId}' requires a literal output name.");
-        var outputName = ReadRequiredString(nameLiteral, WorkflowIntrinsicKind.SetOutput, node.ExecutableNodeId);
+        var outputName = ReadRequiredString(nameLiteral, WorkflowIntrinsicInputKeys.Name, WorkflowIntrinsicKind.SetOutput, node.ExecutableNodeId);
         var value = await MaterializeRequiredInputAsync(
             WorkflowIntrinsicInputKeys.Value,
             startWorkItem,
@@ -319,7 +323,7 @@ public sealed class WorkflowIntrinsicExecutor(
         if (outcomeBinding.Source != RuntimeInputBindingSource.Literal ||
             outcomeBinding.Literal is not { } literal)
             throw new InvalidOperationException($"Finish intrinsic '{node.ExecutableNodeId}' requires a literal outcome key.");
-        var outcome = ReadRequiredString(literal, WorkflowIntrinsicKind.Finish, node.ExecutableNodeId);
+        var outcome = ReadRequiredString(literal, WorkflowIntrinsicInputKeys.Outcome, WorkflowIntrinsicKind.Finish, node.ExecutableNodeId);
         var workflowState = await workflowExecutionStateStore.FindAsync(startWorkItem.WorkflowExecutionId, cancellationToken)
             ?? throw new InvalidOperationException($"Finish intrinsic '{node.ExecutableNodeId}' references missing workflow execution '{startWorkItem.WorkflowExecutionId}'.");
         var occurredAt = timeProvider.GetUtcNow();
@@ -493,13 +497,22 @@ public sealed class WorkflowIntrinsicExecutor(
             throw SecretBindingDiagnostics.WithheldInputNotResolved(binding.InputName);
     }
 
-    private static string ReadRequiredString(ValueEnvelope value, WorkflowIntrinsicKind kind, string nodeId) =>
-        ReadOptionalString(value, kind, nodeId) is { } text && !string.IsNullOrWhiteSpace(text)
+    // A materialized value is withheld when its policy requires encryption (RuntimeExternalEnvelopeStorage): it holds no
+    // value for the intrinsic to read or to write into workflow state, so it is refused by name before any read.
+    private static void ThrowIfWithheld(ValueEnvelope value, string inputKey)
+    {
+        if (value.Presence == ValuePresence.Withheld)
+            throw SecretBindingDiagnostics.WithheldInputNotResolved(inputKey);
+    }
+
+    private static string ReadRequiredString(ValueEnvelope value, string inputKey, WorkflowIntrinsicKind kind, string nodeId) =>
+        ReadOptionalString(value, inputKey, kind, nodeId) is { } text && !string.IsNullOrWhiteSpace(text)
             ? text
             : throw new InvalidOperationException($"{kind} intrinsic '{nodeId}' requires a non-blank string value.");
 
-    private static string? ReadOptionalString(ValueEnvelope value, WorkflowIntrinsicKind kind, string nodeId)
+    private static string? ReadOptionalString(ValueEnvelope value, string inputKey, WorkflowIntrinsicKind kind, string nodeId)
     {
+        ThrowIfWithheld(value, inputKey);
         if (value.Presence == ValuePresence.ExplicitNull)
             return null;
         if (value.Presence != ValuePresence.Present || value.InlineValue is not { ValueKind: JsonValueKind.String } json)
@@ -527,6 +540,8 @@ public sealed class WorkflowIntrinsicExecutor(
         ValueEnvelope value,
         DateTimeOffset capturedAt)
     {
+        // A durable output value has no withheld form: written without its payload, a parent would read it as absent.
+        ThrowIfWithheld(value, WorkflowIntrinsicInputKeys.Value);
         var metadata = new Dictionary<string, string>(value.Policy.Metadata, StringComparer.Ordinal)
         {
             [RuntimeMetadataKeys.OutputName] = outputName

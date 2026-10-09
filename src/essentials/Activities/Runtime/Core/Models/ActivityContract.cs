@@ -373,6 +373,13 @@ public sealed record ActivityValuePolicy(
         IsPersistable: true,
         IsSensitive: false,
         RequiresEncryption: false);
+
+    /// <summary>
+    /// True when inspection must not show a value under this policy: it is sensitive or requires encryption (spec 188).
+    /// The same rule for a runtime value's policy is <c>ValueProtectionPolicy.HidesValue</c>; this is its twin for the
+    /// declared policy type, because the two types do not convert into each other without the runtime's combiner.
+    /// </summary>
+    public bool HidesValue() => IsSensitive || RequiresEncryption;
 }
 
 public enum ActivityValueLifecycle

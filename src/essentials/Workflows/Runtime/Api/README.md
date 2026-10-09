@@ -49,6 +49,39 @@ Activation slots are the runtime-owned ledger for the live activation of a `(def
 The read-only views expose the slot identity, active activation, source ownership, revision, and update time;
 they do not join to publishing records. Runtime deliberately exposes no deactivation endpoint.
 
+## Withheld and protected values
+
+Workflow secret safety (spec 188) decides what the inspection reads show for a secret-bound input and for any value
+whose policy marks it sensitive or as requiring encryption. A secret reference names where a value comes from and is
+not a value, so the reads show it. The executable reads below show no such value. The activity-execution reads show
+no value for a withheld record. They show no value of a sensitive record either under the default payload capture
+policy, which captures no payload for one; under a replacement policy that captures one, a caller authorized to
+resolve value payloads can read it through the value-payload read.
+
+- **Executable detail** (`GET .../executables/{artifactId}`) shows no binding source detail at all: every input binding's
+  `summary`, literal, expression, references, conversion plan, metadata and `secret` are null there.
+- **Compiled input sources** (`GET .../executables/{artifactId}/source-references/{sourceReferenceId}/input-sources`):
+  a binding whose effective policy is sensitive or requires encryption has `isSensitive: true` and access state
+  `redacted`, and its `summary` and every source detail are null. A secret read (`source: "SecretRead"`) is such a
+  binding, but it still shows its reference: `secret` carries the name, type and scope, and `summary` the name.
+- **Authored input sources** in the same read: an authored value is shown only when its own sensitivity flag, and
+  every compiled binding and pinned input contract the executable holds for that input, allow it. So a value on an
+  input that the activity declares sensitive is redacted although its author did not mark it, and a value the
+  executable holds neither a binding nor an input contract for is redacted as well.
+- **Activity-execution detail** (`GET .../instances/{workflowExecutionId}/activity-executions/{activityExecutionId}`):
+  a value evidence record (`valueSnapshots[]`) of a withheld input carries `withheldKind` (`SecretReference` or
+  `PolicyRequiresEncryption`) and, for a secret reference, `secretReferenceName`, for every caller that may inspect
+  the execution. It is always `isSensitive: true` with capture state and access state `unavailable`, and the value-payload read
+  (`.../value-evidence/{evidenceId}/payload`) answers `unavailable` for it, whatever the record carries beside its
+  marker. For any other record, `isSensitive` is the flag the runtime recorded: the invoke path flags an input when
+  its value's effective policy or its pinned input contract marks it sensitive.
+- **Descendants** (`.../activity-executions/{activityExecutionId}/descendants`) carry no value evidence.
+
+Known limit: an unmatched authored input (no executable node matched by its node id holds a compiled binding or a
+pinned input contract for its input key) is reported as `isSensitive: true` with access state `redacted`. There it
+reports the redaction, not a known sensitivity. Over-masking is safe, and a distinct access state would add a value
+that Studio's typing of this view does not expect, so the wire shape stays as is.
+
 ## Alteration plan API
 
 `POST /runtime/workflows/alteration-plans` is the sole submission path. It requires
