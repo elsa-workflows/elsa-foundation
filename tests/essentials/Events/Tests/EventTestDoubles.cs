@@ -22,8 +22,9 @@ internal static class TestEvents
 
 /// <summary>
 /// Stands in for the <see cref="IEventPublisher"/> the background worker drains through. Records how
-/// many events were dispatched, and the token each was dispatched under, and exposes an honest <see cref="WaitForAsync"/> barrier that completes only once the requested
-/// number of events have actually been dispatched.
+/// many events were dispatched and the token each was dispatched under, and exposes an honest
+/// <see cref="WaitForAsync"/> barrier that completes only once the requested number of events have
+/// actually been dispatched.
 /// </summary>
 internal sealed class CountingEventPublisher : IEventPublisher
 {
