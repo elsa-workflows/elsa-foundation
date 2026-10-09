@@ -74,6 +74,19 @@ public sealed class SendHttpRequest(
     [ActivityInput(Key = nameof(RequestHeaders))]
     public IDictionary<string, string>? RequestHeaders { get; set; }
 
+    /// <summary>
+    /// Optional credential for the request's <c>Authorization</c> header. A credential input (spec 188): an author
+    /// binds a stored secret to it and writes no literal, so the definition holds the secret reference and the value is
+    /// resolved when the activity runs. A non-empty value is sent verbatim as the whole header value (for example
+    /// <c>Bearer</c>, a space and a token), because the activity adds no scheme, and it replaces an
+    /// <c>Authorization</c> entry in <see cref="RequestHeaders"/> whatever that entry's letter case. When it is unbound or
+    /// empty, <see cref="RequestHeaders"/> applies unchanged. The activity's own result is built from the response
+    /// only, so this value is not part of it; a server that reflects the value in its response puts it into the
+    /// result. The value goes to whatever <see cref="Url"/> resolves to. Phase 1's http Connection replaces this input.
+    /// </summary>
+    [ActivityInput(Key = nameof(Authorization), DisplayName = "Authorization", IsCredential = true)]
+    public string? Authorization { get; set; }
+
     /// <summary>Optional set of status codes that should branch on the matching numeric outcome; others branch on <c>Unmatched</c>.</summary>
     [ActivityInput(Key = nameof(ExpectedStatusCodes))]
     public ICollection<int>? ExpectedStatusCodes { get; set; }
@@ -81,6 +94,8 @@ public sealed class SendHttpRequest(
     /// <summary>Optional per-request timeout overriding <c>HttpActivityOptions.DefaultTimeout</c>.</summary>
     [ActivityInput(Key = nameof(Timeout))]
     public TimeSpan? Timeout { get; set; }
+
+    private const string AuthorizationHeaderName = "Authorization";
 
     protected override async ValueTask<ActivityTransition<SendHttpRequestResult>> ExecuteAsync(ActivityExecutionContext context)
     {
@@ -127,11 +142,19 @@ public sealed class SendHttpRequest(
 
     private void AddHeaders(HttpRequestMessage request)
     {
-        if (RequestHeaders is null)
+        if (RequestHeaders is not null)
+        {
+            foreach (var (name, value) in RequestHeaders)
+                request.Headers.TryAddWithoutValidation(name, value);
+        }
+
+        // Applied after RequestHeaders so the credential input wins. TryAddWithoutValidation never throws, so the
+        // value cannot reach exception text through header validation.
+        if (string.IsNullOrEmpty(Authorization))
             return;
 
-        foreach (var (name, value) in RequestHeaders)
-            request.Headers.TryAddWithoutValidation(name, value);
+        request.Headers.Remove(AuthorizationHeaderName);
+        request.Headers.TryAddWithoutValidation(AuthorizationHeaderName, Authorization);
     }
 
     private void AddContent(HttpRequestMessage request)

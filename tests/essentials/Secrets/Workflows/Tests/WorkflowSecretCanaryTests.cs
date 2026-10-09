@@ -387,7 +387,7 @@ public abstract class WorkflowSecretCanaryTests(CanaryHostFixture fixture, ITest
     }
 
     /// <summary>The scenario labels, which name each scenario's node, secret and definition.</summary>
-    public static readonly string[] ScenarioLabels = ["s1", "s2", "s2b", "s3", "s3b", "s4", "s4b", "s5", "s6", "s7", "s8", "s8b", "s8c", "s9", "s10"];
+    public static readonly string[] ScenarioLabels = ["s1", "s2", "s2b", "s3", "s3b", "s4", "s4b", "s5", "s6", "s7", "s8", "s8b", "s8c", "s9", "s10", "http"];
 
     /// <summary>A scenario's secret reference name: a scenario label and a hexadecimal suffix, which no redactor matches (T078).</summary>
     public static string ReferenceName(string label, string suffix) => $"canary.{label}.{suffix}";
@@ -557,32 +557,14 @@ public abstract class WorkflowSecretCanaryTests(CanaryHostFixture fixture, ITest
     /// Reads each of <paramref name="surfaces"/>, asserting its precondition for every run first, and asserts that none of
     /// <paramref name="values"/> occurs on it in any form the scanner searches for (SC-004).
     /// </summary>
-    protected async Task AssertAbsentAsync(
+    protected Task AssertAbsentAsync(
         CanaryScenario scenario,
         IReadOnlyCollection<CanaryRun> runs,
         IReadOnlyCollection<string> values,
         IEnumerable<CanarySurface> surfaces,
         IReadOnlySet<string>? excludedRuntimeTables = null,
-        CanaryCaller inspectorCaller = CanaryCaller.Operator)
-    {
-        var options = new CanaryReadOptions(RuntimeDiagnosticsSettingsResolver.ToCaptureMode(scenario.Level), excludedRuntimeTables, inspectorCaller);
-        var reader = new CanarySurfaces(Host);
-        var leaks = new List<string>();
-        var preconditions = new List<string>();
-        foreach (var surface in surfaces)
-        {
-            var read = await reader.ReadAsync(surface, runs, options);
-            preconditions.AddRange(read.FailedPreconditions);
-            leaks.AddRange(values.SelectMany(value => read.Contents.SelectMany(content => CanaryScanner.Find(content.Bytes, value, content.Location)))
-                .Select(hit => $"{surface}: {hit.Form} at {hit.Location} (offset {hit.Offset})"));
-        }
-
-        // Both are reported: a leak is never hidden behind a precondition that failed on another surface.
-        Assert.True(
-            leaks.Count == 0 && preconditions.Count == 0,
-            $"{scenario.Name}: a canary value was found {leaks.Count} times, and {preconditions.Count} preconditions did not hold.\n" +
-            $"Leaks:\n{string.Join('\n', leaks.Take(40))}\nFailed preconditions:\n{string.Join('\n', preconditions)}");
-    }
+        CanaryCaller inspectorCaller = CanaryCaller.Operator) =>
+        new CanarySurfaces(Host).AssertAbsentAsync(scenario.Name, scenario.Level, runs, values, surfaces, excludedRuntimeTables, inspectorCaller);
 }
 
 [CollectionDefinition(Name, DisableParallelization = true)]
@@ -596,11 +578,11 @@ public sealed class CanaryHostCollection
 }
 
 /// <summary>One canary host for every scenario of a test class.</summary>
-public abstract class CanaryHostFixture(CanaryStartMode mode) : IAsyncLifetime
+public abstract class CanaryHostFixture(CanaryStartMode mode, bool withHttpActivities = false) : IAsyncLifetime
 {
     public SecretsCanaryWorkflowHost Host { get; private set; } = null!;
 
-    public async Task InitializeAsync() => Host = await StartAsync(mode);
+    public async Task InitializeAsync() => Host = await StartAsync(mode, withHttpActivities);
 
     public async Task DisposeAsync()
     {
@@ -613,6 +595,9 @@ public abstract class CanaryHostFixture(CanaryStartMode mode) : IAsyncLifetime
 public sealed class DiscreteCanaryHostFixture() : CanaryHostFixture(CanaryStartMode.Discrete);
 
 public sealed class FusedCanaryHostFixture() : CanaryHostFixture(CanaryStartMode.Fused);
+
+/// <summary>A discrete canary host that also composes the HTTP activities, behind the canary's local endpoint.</summary>
+public sealed class DiscreteHttpCanaryHostFixture() : CanaryHostFixture(CanaryStartMode.Discrete, withHttpActivities: true);
 
 /// <summary>The canary with each stage of a run its own dispatch and commit.</summary>
 [Collection(CanaryHostCollection.Name)]
