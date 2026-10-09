@@ -1,0 +1,1613 @@
+{
+  "schema": "elsa-runtime-db-final-timing/v1",
+  "status": "root-reconciled-independent-review-findings-addressed",
+  "planSha256": "c931f6479944ba04a4e580bd6368c5cc73dba5bd4576d02b48b9555faaae3d59",
+  "rootReviewSha256": "06926d7a14f3f91cd51131b34ff3ca768cb6d81e7b269a806bebe4a3f24cad38",
+  "plannedWindows": 14,
+  "passingWindows": 13,
+  "failedWindows": 1,
+  "warmupsPerWindow": 25,
+  "measuredAttemptsPerWindow": 60,
+  "passingCases": [
+    {
+      "index": 1,
+      "role": "before",
+      "case": "Http4Sequential",
+      "cadence": "Immediate",
+      "source": "e6faa5689814c33353009b13f5b9e44d0e9982a4",
+      "fixture": "b9f854cb493c2945c14790bab75c991f46f9307a",
+      "metadataSha256": "069104ec3ef57f3c39aece780289d4d5c28e1f1c7ccbe3d83d3026bacd977ef1",
+      "samplesSha256": "48d4d3e26604f3784d7f5cccad9db8967c0532c2034acba7275049cd3453f63e",
+      "sourceBuildReceipt": "3d22c029e0fdb050697f05e35447dffd88882f7e11a00f455543814eb3d38205",
+      "closureReceipt": "b5fab26062518d1e1a1cf2956f66d8dac3dce7caebf7deddf2bd2363595b5c2a",
+      "statistics": {
+        "n": 60,
+        "meanMs": 851.3729183333334,
+        "p50Ms": 868.8814,
+        "p95NearestRankMs": 1048.3195,
+        "minMs": 623.5609,
+        "maxMs": 1120.023,
+        "standardDeviationMs": 135.61294085981228
+      },
+      "correctResponses": 86,
+      "uniqueCompletedIncidentFreeExecutions": 86,
+      "configurationHashes": {
+        "appsettings.json": "fb63948c832328c56eea5f9c224733722d0fcb52f8becd4815e47642913fe39f",
+        "appsettings.Development.json": "e98675f0922574263376a941fdc4519e1bb54bc83a369557df20d41c12fb8bc2",
+        "shells.json": "4e7d8edb3943536a248de5465766d87f06e792bf7cd56afb050b8c407ccd9d77"
+      },
+      "semanticConfigurationHashes": {
+        "appsettings.json": "777a9f615e6314c9e38f5a9e36198f572e4a2a790ef4673d62e77ff3c918f0fb",
+        "appsettings.Development.json": "0ad3d2e9b7ef694335c258b817a070e31c46ecb17ab093a99c212eb72e546a69",
+        "shells.json": "d0ca03166f015c108485eb07038d3d83aefcc54f1338793983066f27b65fa331"
+      },
+      "provider": "postgres@sha256:ca0bd484cb98bf4b24eb1010e73fb3fcbd6714d240fbc1a10eea5b7dbecb641d",
+      "fixtureScriptSha256": "67830a5b25eb5de645c2c5a7e5b03badd5e9a6ab8b29db1af1b22c44b286bed6",
+      "concurrentClients": 1,
+      "load": {
+        "startBeforeMeasuredBatch": {
+          "capturedAtUtc": "2026-10-08T23:34:06.0589178Z",
+          "osDescription": "Ubuntu 24.04.4 LTS",
+          "architecture": "X64",
+          "logicalProcessorCount": 8,
+          "loadAverage1m5m15m": [
+            0.69,
+            0.36,
+            0.45
+          ]
+        },
+        "endAfterMeasuredBatch": {
+          "capturedAtUtc": "2026-10-08T23:34:57.1721175Z",
+          "osDescription": "Ubuntu 24.04.4 LTS",
+          "architecture": "X64",
+          "logicalProcessorCount": 8,
+          "loadAverage1m5m15m": [
+            1.83,
+            0.73,
+            0.57
+          ]
+        }
+      },
+      "preflightLoadObservations": [
+        {
+          "observation": 1,
+          "snapshot": {
+            "capturedAtUtc": "2026-10-08T23:33:36.0426925Z",
+            "osDescription": "Ubuntu 24.04.4 LTS",
+            "architecture": "X64",
+            "logicalProcessorCount": 8,
+            "loadAverage1m5m15m": [
+              1.14,
+              0.4,
+              0.47
+            ]
+          },
+          "loadAvailable": true,
+          "logicalProcessorCount": 8,
+          "load1m": 1.14,
+          "load5m": 0.4,
+          "bothLoadsBelowProcessorCount": true
+        },
+        {
+          "observation": 2,
+          "snapshot": {
+            "capturedAtUtc": "2026-10-08T23:34:06.0589178Z",
+            "osDescription": "Ubuntu 24.04.4 LTS",
+            "architecture": "X64",
+            "logicalProcessorCount": 8,
+            "loadAverage1m5m15m": [
+              0.69,
+              0.36,
+              0.45
+            ]
+          },
+          "loadAvailable": true,
+          "logicalProcessorCount": 8,
+          "load1m": 0.69,
+          "load5m": 0.36,
+          "bothLoadsBelowProcessorCount": true
+        }
+      ],
+      "loggingConfigured": "EF Warning",
+      "effectiveLoggingIntrospection": false,
+      "persistedDiagnosticsEnabled": true,
+      "instrumentation": "none; timing fixture has no observer/startup-hook injection",
+      "targetReadbackSha256": "50f506be18429ba7b209287880e4a33b2d8fa79ba633093825978bb2149c8abb"
+    },
+    {
+      "index": 2,
+      "role": "after",
+      "case": "Http4Sequential",
+      "cadence": "Immediate",
+      "source": "7357b91e012c56cb34f1259ef7a60ef56e144afe",
+      "fixture": "b9f854cb493c2945c14790bab75c991f46f9307a",
+      "metadataSha256": "77003015cde3a85baed9d9a45355d66bb9f5cf2e09fc214216304768e05f6694",
+      "samplesSha256": "5c88ce33d1dd5a5a17d418d8de68b0e12735d12783876eb60fe02f80b5db98fe",
+      "sourceBuildReceipt": "b628b4698d9932f7e921e0f4cf3adad19168a9916e7e1d5946250ec16b749b50",
+      "closureReceipt": "d2be60bf27d44f4b4098f4d2b7281aecc9581606f279de9782c359de600fc342",
+      "statistics": {
+        "n": 60,
+        "meanMs": 837.3771883333334,
+        "p50Ms": 850.61925,
+        "p95NearestRankMs": 1026.0634,
+        "minMs": 612.5245,
+        "maxMs": 1120.384,
+        "standardDeviationMs": 131.9031066406587
+      },
+      "correctResponses": 86,
+      "uniqueCompletedIncidentFreeExecutions": 86,
+      "configurationHashes": {
+        "appsettings.Development.json": "e98675f0922574263376a941fdc4519e1bb54bc83a369557df20d41c12fb8bc2",
+        "shells.json": "4e7d8edb3943536a248de5465766d87f06e792bf7cd56afb050b8c407ccd9d77",
+        "appsettings.json": "fb63948c832328c56eea5f9c224733722d0fcb52f8becd4815e47642913fe39f"
+      },
+      "semanticConfigurationHashes": {
+        "appsettings.Development.json": "0ad3d2e9b7ef694335c258b817a070e31c46ecb17ab093a99c212eb72e546a69",
+        "shells.json": "d0ca03166f015c108485eb07038d3d83aefcc54f1338793983066f27b65fa331",
+        "appsettings.json": "777a9f615e6314c9e38f5a9e36198f572e4a2a790ef4673d62e77ff3c918f0fb"
+      },
+      "provider": "postgres@sha256:ca0bd484cb98bf4b24eb1010e73fb3fcbd6714d240fbc1a10eea5b7dbecb641d",
+      "fixtureScriptSha256": "67830a5b25eb5de645c2c5a7e5b03badd5e9a6ab8b29db1af1b22c44b286bed6",
+      "concurrentClients": 1,
+      "load": {
+        "startBeforeMeasuredBatch": {
+          "capturedAtUtc": "2026-10-08T23:36:24.5773918Z",
+          "osDescription": "Ubuntu 24.04.4 LTS",
+          "architecture": "X64",
+          "logicalProcessorCount": 8,
+          "loadAverage1m5m15m": [
+            1.01,
+            0.8,
+            0.62
+          ]
+        },
+        "endAfterMeasuredBatch": {
+          "capturedAtUtc": "2026-10-08T23:37:14.8512364Z",
+          "osDescription": "Ubuntu 24.04.4 LTS",
+          "architecture": "X64",
+          "logicalProcessorCount": 8,
+          "loadAverage1m5m15m": [
+            2.01,
+            1.11,
+            0.74
+          ]
+        }
+      },
+      "preflightLoadObservations": [
+        {
+          "observation": 1,
+          "snapshot": {
+            "capturedAtUtc": "2026-10-08T23:35:54.5564450Z",
+            "osDescription": "Ubuntu 24.04.4 LTS",
+            "architecture": "X64",
+            "logicalProcessorCount": 8,
+            "loadAverage1m5m15m": [
+              1.67,
+              0.89,
+              0.64
+            ]
+          },
+          "loadAvailable": true,
+          "logicalProcessorCount": 8,
+          "load1m": 1.67,
+          "load5m": 0.89,
+          "bothLoadsBelowProcessorCount": true
+        },
+        {
+          "observation": 2,
+          "snapshot": {
+            "capturedAtUtc": "2026-10-08T23:36:24.5773918Z",
+            "osDescription": "Ubuntu 24.04.4 LTS",
+            "architecture": "X64",
+            "logicalProcessorCount": 8,
+            "loadAverage1m5m15m": [
+              1.01,
+              0.8,
+              0.62
+            ]
+          },
+          "loadAvailable": true,
+          "logicalProcessorCount": 8,
+          "load1m": 1.01,
+          "load5m": 0.8,
+          "bothLoadsBelowProcessorCount": true
+        }
+      ],
+      "loggingConfigured": "EF Warning",
+      "effectiveLoggingIntrospection": false,
+      "persistedDiagnosticsEnabled": true,
+      "instrumentation": "none; timing fixture has no observer/startup-hook injection",
+      "targetReadbackSha256": "0483c7b3667f5e2fdd419e5a9c38b182d697fe3369e6e63a9c48285496d119fd"
+    },
+    {
+      "index": 3,
+      "role": "after",
+      "case": "Http4Sequential",
+      "cadence": "Coalesced",
+      "source": "7357b91e012c56cb34f1259ef7a60ef56e144afe",
+      "fixture": "b9f854cb493c2945c14790bab75c991f46f9307a",
+      "metadataSha256": "581785cee797b041e01cfab339d5e5752145c8340ff606e51486a3af68ab102d",
+      "samplesSha256": "d160f3f6ef91ee1f5b18fc93d655336e52e182f93a5db5dd756aff4a8f961756",
+      "sourceBuildReceipt": "b628b4698d9932f7e921e0f4cf3adad19168a9916e7e1d5946250ec16b749b50",
+      "closureReceipt": "d2be60bf27d44f4b4098f4d2b7281aecc9581606f279de9782c359de600fc342",
+      "statistics": {
+        "n": 60,
+        "meanMs": 200.54100333333332,
+        "p50Ms": 149.48845,
+        "p95NearestRankMs": 368.1065,
+        "minMs": 134.0831,
+        "maxMs": 614.387,
+        "standardDeviationMs": 93.71425929286225
+      },
+      "correctResponses": 86,
+      "uniqueCompletedIncidentFreeExecutions": 86,
+      "configurationHashes": {
+        "appsettings.Development.json": "e98675f0922574263376a941fdc4519e1bb54bc83a369557df20d41c12fb8bc2",
+        "shells.json": "c16ec90f4c4eb9c4d30549dd2cb0adb14c043c13ace8b6a7c62a4f5cf2ec5747",
+        "appsettings.json": "fb63948c832328c56eea5f9c224733722d0fcb52f8becd4815e47642913fe39f"
+      },
+      "semanticConfigurationHashes": {
+        "appsettings.Development.json": "0ad3d2e9b7ef694335c258b817a070e31c46ecb17ab093a99c212eb72e546a69",
+        "shells.json": "a217962aaed76674b7d0547e9bad26a41bcf579237b01d68c7ae9c3437f2f265",
+        "appsettings.json": "777a9f615e6314c9e38f5a9e36198f572e4a2a790ef4673d62e77ff3c918f0fb"
+      },
+      "provider": "postgres@sha256:ca0bd484cb98bf4b24eb1010e73fb3fcbd6714d240fbc1a10eea5b7dbecb641d",
+      "fixtureScriptSha256": "67830a5b25eb5de645c2c5a7e5b03badd5e9a6ab8b29db1af1b22c44b286bed6",
+      "concurrentClients": 1,
+      "load": {
+        "startBeforeMeasuredBatch": {
+          "capturedAtUtc": "2026-10-08T23:38:27.3060388Z",
+          "osDescription": "Ubuntu 24.04.4 LTS",
+          "architecture": "X64",
+          "logicalProcessorCount": 8,
+          "loadAverage1m5m15m": [
+            1.25,
+            1.08,
+            0.75
+          ]
+        },
+        "endAfterMeasuredBatch": {
+          "capturedAtUtc": "2026-10-08T23:38:39.3696795Z",
+          "osDescription": "Ubuntu 24.04.4 LTS",
+          "architecture": "X64",
+          "logicalProcessorCount": 8,
+          "loadAverage1m5m15m": [
+            1.47,
+            1.14,
+            0.78
+          ]
+        }
+      },
+      "preflightLoadObservations": [
+        {
+          "observation": 1,
+          "snapshot": {
+            "capturedAtUtc": "2026-10-08T23:37:57.2865817Z",
+            "osDescription": "Ubuntu 24.04.4 LTS",
+            "architecture": "X64",
+            "logicalProcessorCount": 8,
+            "loadAverage1m5m15m": [
+              1.84,
+              1.16,
+              0.77
+            ]
+          },
+          "loadAvailable": true,
+          "logicalProcessorCount": 8,
+          "load1m": 1.84,
+          "load5m": 1.16,
+          "bothLoadsBelowProcessorCount": true
+        },
+        {
+          "observation": 2,
+          "snapshot": {
+            "capturedAtUtc": "2026-10-08T23:38:27.3060388Z",
+            "osDescription": "Ubuntu 24.04.4 LTS",
+            "architecture": "X64",
+            "logicalProcessorCount": 8,
+            "loadAverage1m5m15m": [
+              1.25,
+              1.08,
+              0.75
+            ]
+          },
+          "loadAvailable": true,
+          "logicalProcessorCount": 8,
+          "load1m": 1.25,
+          "load5m": 1.08,
+          "bothLoadsBelowProcessorCount": true
+        }
+      ],
+      "loggingConfigured": "EF Warning",
+      "effectiveLoggingIntrospection": false,
+      "persistedDiagnosticsEnabled": true,
+      "instrumentation": "none; timing fixture has no observer/startup-hook injection",
+      "targetReadbackSha256": "0483c7b3667f5e2fdd419e5a9c38b182d697fe3369e6e63a9c48285496d119fd"
+    },
+    {
+      "index": 4,
+      "role": "before",
+      "case": "Http4Sequential",
+      "cadence": "Coalesced",
+      "source": "e6faa5689814c33353009b13f5b9e44d0e9982a4",
+      "fixture": "b9f854cb493c2945c14790bab75c991f46f9307a",
+      "metadataSha256": "2b668c486bea280233d795479050a977d697efc833edcbcccaac75a317503c38",
+      "samplesSha256": "8735c3ca5ae23c5561ec70ef3d79a0410f3098fcae45fe2b7302d250d75371ed",
+      "sourceBuildReceipt": "3d22c029e0fdb050697f05e35447dffd88882f7e11a00f455543814eb3d38205",
+      "closureReceipt": "b5fab26062518d1e1a1cf2956f66d8dac3dce7caebf7deddf2bd2363595b5c2a",
+      "statistics": {
+        "n": 60,
+        "meanMs": 302.9548833333333,
+        "p50Ms": 239.35715,
+        "p95NearestRankMs": 493.8145,
+        "minMs": 195.2151,
+        "maxMs": 655.3227,
+        "standardDeviationMs": 109.6970042013882
+      },
+      "correctResponses": 86,
+      "uniqueCompletedIncidentFreeExecutions": 86,
+      "configurationHashes": {
+        "appsettings.Development.json": "e98675f0922574263376a941fdc4519e1bb54bc83a369557df20d41c12fb8bc2",
+        "shells.json": "56de4d2de243f39b4d666fd211ebb045cbefffb2e5f060cd373aabe144486e0b",
+        "appsettings.json": "48f5a96873fa977ed43cb91736cfdaf548c6a84b6bd83e663a708dccfaa33c9b"
+      },
+      "semanticConfigurationHashes": {
+        "appsettings.Development.json": "0ad3d2e9b7ef694335c258b817a070e31c46ecb17ab093a99c212eb72e546a69",
+        "shells.json": "a217962aaed76674b7d0547e9bad26a41bcf579237b01d68c7ae9c3437f2f265",
+        "appsettings.json": "777a9f615e6314c9e38f5a9e36198f572e4a2a790ef4673d62e77ff3c918f0fb"
+      },
+      "provider": "postgres@sha256:ca0bd484cb98bf4b24eb1010e73fb3fcbd6714d240fbc1a10eea5b7dbecb641d",
+      "fixtureScriptSha256": "67830a5b25eb5de645c2c5a7e5b03badd5e9a6ab8b29db1af1b22c44b286bed6",
+      "concurrentClients": 1,
+      "load": {
+        "startBeforeMeasuredBatch": {
+          "capturedAtUtc": "2026-10-08T23:39:53.3127778Z",
+          "osDescription": "Ubuntu 24.04.4 LTS",
+          "architecture": "X64",
+          "logicalProcessorCount": 8,
+          "loadAverage1m5m15m": [
+            0.84,
+            1.04,
+            0.78
+          ]
+        },
+        "endAfterMeasuredBatch": {
+          "capturedAtUtc": "2026-10-08T23:40:11.5224372Z",
+          "osDescription": "Ubuntu 24.04.4 LTS",
+          "architecture": "X64",
+          "logicalProcessorCount": 8,
+          "loadAverage1m5m15m": [
+            1.17,
+            1.11,
+            0.8
+          ]
+        }
+      },
+      "preflightLoadObservations": [
+        {
+          "observation": 1,
+          "snapshot": {
+            "capturedAtUtc": "2026-10-08T23:39:23.2931317Z",
+            "osDescription": "Ubuntu 24.04.4 LTS",
+            "architecture": "X64",
+            "logicalProcessorCount": 8,
+            "loadAverage1m5m15m": [
+              1.39,
+              1.16,
+              0.8
+            ]
+          },
+          "loadAvailable": true,
+          "logicalProcessorCount": 8,
+          "load1m": 1.39,
+          "load5m": 1.16,
+          "bothLoadsBelowProcessorCount": true
+        },
+        {
+          "observation": 2,
+          "snapshot": {
+            "capturedAtUtc": "2026-10-08T23:39:53.3127778Z",
+            "osDescription": "Ubuntu 24.04.4 LTS",
+            "architecture": "X64",
+            "logicalProcessorCount": 8,
+            "loadAverage1m5m15m": [
+              0.84,
+              1.04,
+              0.78
+            ]
+          },
+          "loadAvailable": true,
+          "logicalProcessorCount": 8,
+          "load1m": 0.84,
+          "load5m": 1.04,
+          "bothLoadsBelowProcessorCount": true
+        }
+      ],
+      "loggingConfigured": "EF Warning",
+      "effectiveLoggingIntrospection": false,
+      "persistedDiagnosticsEnabled": true,
+      "instrumentation": "none; timing fixture has no observer/startup-hook injection",
+      "targetReadbackSha256": "50f506be18429ba7b209287880e4a33b2d8fa79ba633093825978bb2149c8abb"
+    },
+    {
+      "index": 5,
+      "role": "before",
+      "case": "Http16Sequential",
+      "cadence": "Immediate",
+      "source": "e6faa5689814c33353009b13f5b9e44d0e9982a4",
+      "fixture": "b9f854cb493c2945c14790bab75c991f46f9307a",
+      "metadataSha256": "6e78a99c0e8df03952972815943bd0938e0b5b8cadd0a9f8a36f9c9bcf6980b1",
+      "samplesSha256": "2b9df368bd3610a0705066f3ff5b8779c3fe57891a82b937b61d7044e0fba3f2",
+      "sourceBuildReceipt": "3d22c029e0fdb050697f05e35447dffd88882f7e11a00f455543814eb3d38205",
+      "closureReceipt": "b5fab26062518d1e1a1cf2956f66d8dac3dce7caebf7deddf2bd2363595b5c2a",
+      "statistics": {
+        "n": 60,
+        "meanMs": 2889.74158,
+        "p50Ms": 2845.67825,
+        "p95NearestRankMs": 3259.5919,
+        "minMs": 2562.2723,
+        "maxMs": 3348.2138,
+        "standardDeviationMs": 201.78393530597782
+      },
+      "correctResponses": 86,
+      "uniqueCompletedIncidentFreeExecutions": 86,
+      "configurationHashes": {
+        "appsettings.json": "48f5a96873fa977ed43cb91736cfdaf548c6a84b6bd83e663a708dccfaa33c9b",
+        "appsettings.Development.json": "e98675f0922574263376a941fdc4519e1bb54bc83a369557df20d41c12fb8bc2",
+        "shells.json": "4e7d8edb3943536a248de5465766d87f06e792bf7cd56afb050b8c407ccd9d77"
+      },
+      "semanticConfigurationHashes": {
+        "appsettings.json": "777a9f615e6314c9e38f5a9e36198f572e4a2a790ef4673d62e77ff3c918f0fb",
+        "appsettings.Development.json": "0ad3d2e9b7ef694335c258b817a070e31c46ecb17ab093a99c212eb72e546a69",
+        "shells.json": "d0ca03166f015c108485eb07038d3d83aefcc54f1338793983066f27b65fa331"
+      },
+      "provider": "postgres@sha256:ca0bd484cb98bf4b24eb1010e73fb3fcbd6714d240fbc1a10eea5b7dbecb641d",
+      "fixtureScriptSha256": "67830a5b25eb5de645c2c5a7e5b03badd5e9a6ab8b29db1af1b22c44b286bed6",
+      "concurrentClients": 1,
+      "load": {
+        "startBeforeMeasuredBatch": {
+          "capturedAtUtc": "2026-10-08T23:42:25.9231352Z",
+          "osDescription": "Ubuntu 24.04.4 LTS",
+          "architecture": "X64",
+          "logicalProcessorCount": 8,
+          "loadAverage1m5m15m": [
+            1.53,
+            1.37,
+            0.95
+          ]
+        },
+        "endAfterMeasuredBatch": {
+          "capturedAtUtc": "2026-10-08T23:45:19.3428817Z",
+          "osDescription": "Ubuntu 24.04.4 LTS",
+          "architecture": "X64",
+          "logicalProcessorCount": 8,
+          "loadAverage1m5m15m": [
+            2.52,
+            1.88,
+            1.22
+          ]
+        }
+      },
+      "preflightLoadObservations": [
+        {
+          "observation": 1,
+          "snapshot": {
+            "capturedAtUtc": "2026-10-08T23:41:55.9070219Z",
+            "osDescription": "Ubuntu 24.04.4 LTS",
+            "architecture": "X64",
+            "logicalProcessorCount": 8,
+            "loadAverage1m5m15m": [
+              2.16,
+              1.46,
+              0.97
+            ]
+          },
+          "loadAvailable": true,
+          "logicalProcessorCount": 8,
+          "load1m": 2.16,
+          "load5m": 1.46,
+          "bothLoadsBelowProcessorCount": true
+        },
+        {
+          "observation": 2,
+          "snapshot": {
+            "capturedAtUtc": "2026-10-08T23:42:25.9231352Z",
+            "osDescription": "Ubuntu 24.04.4 LTS",
+            "architecture": "X64",
+            "logicalProcessorCount": 8,
+            "loadAverage1m5m15m": [
+              1.53,
+              1.37,
+              0.95
+            ]
+          },
+          "loadAvailable": true,
+          "logicalProcessorCount": 8,
+          "load1m": 1.53,
+          "load5m": 1.37,
+          "bothLoadsBelowProcessorCount": true
+        }
+      ],
+      "loggingConfigured": "EF Warning",
+      "effectiveLoggingIntrospection": false,
+      "persistedDiagnosticsEnabled": true,
+      "instrumentation": "none; timing fixture has no observer/startup-hook injection",
+      "targetReadbackSha256": "50f506be18429ba7b209287880e4a33b2d8fa79ba633093825978bb2149c8abb"
+    },
+    {
+      "index": 6,
+      "role": "after",
+      "case": "Http16Sequential",
+      "cadence": "Immediate",
+      "source": "7357b91e012c56cb34f1259ef7a60ef56e144afe",
+      "fixture": "b9f854cb493c2945c14790bab75c991f46f9307a",
+      "metadataSha256": "3023e6297d44071ea68e1b90135bedd57764ae5da97af5683d2ef4cc1982e598",
+      "samplesSha256": "68ae3a5a5d8bdab0a819a531501eacf9dffc5758a336fb4724b092b5634f8684",
+      "sourceBuildReceipt": "b628b4698d9932f7e921e0f4cf3adad19168a9916e7e1d5946250ec16b749b50",
+      "closureReceipt": "d2be60bf27d44f4b4098f4d2b7281aecc9581606f279de9782c359de600fc342",
+      "statistics": {
+        "n": 60,
+        "meanMs": 2905.788115,
+        "p50Ms": 2874.8881,
+        "p95NearestRankMs": 3326.7218,
+        "minMs": 2515.9679,
+        "maxMs": 3682.373,
+        "standardDeviationMs": 243.15926123572663
+      },
+      "correctResponses": 86,
+      "uniqueCompletedIncidentFreeExecutions": 86,
+      "configurationHashes": {
+        "shells.json": "f8231ebfbc4d0e17abb360ce82c4b7b313ac5b6e806122c9924c6ca3af015ee1",
+        "appsettings.json": "fb63948c832328c56eea5f9c224733722d0fcb52f8becd4815e47642913fe39f",
+        "appsettings.Development.json": "e98675f0922574263376a941fdc4519e1bb54bc83a369557df20d41c12fb8bc2"
+      },
+      "semanticConfigurationHashes": {
+        "shells.json": "d0ca03166f015c108485eb07038d3d83aefcc54f1338793983066f27b65fa331",
+        "appsettings.json": "777a9f615e6314c9e38f5a9e36198f572e4a2a790ef4673d62e77ff3c918f0fb",
+        "appsettings.Development.json": "0ad3d2e9b7ef694335c258b817a070e31c46ecb17ab093a99c212eb72e546a69"
+      },
+      "provider": "postgres@sha256:ca0bd484cb98bf4b24eb1010e73fb3fcbd6714d240fbc1a10eea5b7dbecb641d",
+      "fixtureScriptSha256": "67830a5b25eb5de645c2c5a7e5b03badd5e9a6ab8b29db1af1b22c44b286bed6",
+      "concurrentClients": 1,
+      "load": {
+        "startBeforeMeasuredBatch": {
+          "capturedAtUtc": "2026-10-08T23:47:39.5167929Z",
+          "osDescription": "Ubuntu 24.04.4 LTS",
+          "architecture": "X64",
+          "logicalProcessorCount": 8,
+          "loadAverage1m5m15m": [
+            1.53,
+            1.87,
+            1.32
+          ]
+        },
+        "endAfterMeasuredBatch": {
+          "capturedAtUtc": "2026-10-08T23:50:33.8989986Z",
+          "osDescription": "Ubuntu 24.04.4 LTS",
+          "architecture": "X64",
+          "logicalProcessorCount": 8,
+          "loadAverage1m5m15m": [
+            2.83,
+            2.31,
+            1.59
+          ]
+        }
+      },
+      "preflightLoadObservations": [
+        {
+          "observation": 1,
+          "snapshot": {
+            "capturedAtUtc": "2026-10-08T23:47:09.4998223Z",
+            "osDescription": "Ubuntu 24.04.4 LTS",
+            "architecture": "X64",
+            "logicalProcessorCount": 8,
+            "loadAverage1m5m15m": [
+              2.53,
+              2.07,
+              1.36
+            ]
+          },
+          "loadAvailable": true,
+          "logicalProcessorCount": 8,
+          "load1m": 2.53,
+          "load5m": 2.07,
+          "bothLoadsBelowProcessorCount": true
+        },
+        {
+          "observation": 2,
+          "snapshot": {
+            "capturedAtUtc": "2026-10-08T23:47:39.5167929Z",
+            "osDescription": "Ubuntu 24.04.4 LTS",
+            "architecture": "X64",
+            "logicalProcessorCount": 8,
+            "loadAverage1m5m15m": [
+              1.53,
+              1.87,
+              1.32
+            ]
+          },
+          "loadAvailable": true,
+          "logicalProcessorCount": 8,
+          "load1m": 1.53,
+          "load5m": 1.87,
+          "bothLoadsBelowProcessorCount": true
+        }
+      ],
+      "loggingConfigured": "EF Warning",
+      "effectiveLoggingIntrospection": false,
+      "persistedDiagnosticsEnabled": true,
+      "instrumentation": "none; timing fixture has no observer/startup-hook injection",
+      "targetReadbackSha256": "0483c7b3667f5e2fdd419e5a9c38b182d697fe3369e6e63a9c48285496d119fd"
+    },
+    {
+      "index": 7,
+      "role": "after",
+      "case": "Http16Sequential",
+      "cadence": "Coalesced",
+      "source": "7357b91e012c56cb34f1259ef7a60ef56e144afe",
+      "fixture": "b9f854cb493c2945c14790bab75c991f46f9307a",
+      "metadataSha256": "0489c879900a1207c07fad9906ddac2347037329dfa81904945ebb77bf1e8a08",
+      "samplesSha256": "319a9314c0a90823814da2b1ac7ebc0c745a4cc55eaf237eedee9ffc68e51808",
+      "sourceBuildReceipt": "b628b4698d9932f7e921e0f4cf3adad19168a9916e7e1d5946250ec16b749b50",
+      "closureReceipt": "d2be60bf27d44f4b4098f4d2b7281aecc9581606f279de9782c359de600fc342",
+      "statistics": {
+        "n": 60,
+        "meanMs": 467.49725,
+        "p50Ms": 480.40135,
+        "p95NearestRankMs": 764.6843,
+        "minMs": 272.0457,
+        "maxMs": 1392.5829,
+        "standardDeviationMs": 205.8464064021024
+      },
+      "correctResponses": 86,
+      "uniqueCompletedIncidentFreeExecutions": 86,
+      "configurationHashes": {
+        "appsettings.Development.json": "e98675f0922574263376a941fdc4519e1bb54bc83a369557df20d41c12fb8bc2",
+        "shells.json": "c16ec90f4c4eb9c4d30549dd2cb0adb14c043c13ace8b6a7c62a4f5cf2ec5747",
+        "appsettings.json": "fb63948c832328c56eea5f9c224733722d0fcb52f8becd4815e47642913fe39f"
+      },
+      "semanticConfigurationHashes": {
+        "appsettings.Development.json": "0ad3d2e9b7ef694335c258b817a070e31c46ecb17ab093a99c212eb72e546a69",
+        "shells.json": "a217962aaed76674b7d0547e9bad26a41bcf579237b01d68c7ae9c3437f2f265",
+        "appsettings.json": "777a9f615e6314c9e38f5a9e36198f572e4a2a790ef4673d62e77ff3c918f0fb"
+      },
+      "provider": "postgres@sha256:ca0bd484cb98bf4b24eb1010e73fb3fcbd6714d240fbc1a10eea5b7dbecb641d",
+      "fixtureScriptSha256": "67830a5b25eb5de645c2c5a7e5b03badd5e9a6ab8b29db1af1b22c44b286bed6",
+      "concurrentClients": 1,
+      "load": {
+        "startBeforeMeasuredBatch": {
+          "capturedAtUtc": "2026-10-08T23:52:17.4167298Z",
+          "osDescription": "Ubuntu 24.04.4 LTS",
+          "architecture": "X64",
+          "logicalProcessorCount": 8,
+          "loadAverage1m5m15m": [
+            1.65,
+            2.06,
+            1.57
+          ]
+        },
+        "endAfterMeasuredBatch": {
+          "capturedAtUtc": "2026-10-08T23:52:45.4960178Z",
+          "osDescription": "Ubuntu 24.04.4 LTS",
+          "architecture": "X64",
+          "logicalProcessorCount": 8,
+          "loadAverage1m5m15m": [
+            1.99,
+            2.09,
+            1.59
+          ]
+        }
+      },
+      "preflightLoadObservations": [
+        {
+          "observation": 1,
+          "snapshot": {
+            "capturedAtUtc": "2026-10-08T23:51:47.3966628Z",
+            "osDescription": "Ubuntu 24.04.4 LTS",
+            "architecture": "X64",
+            "logicalProcessorCount": 8,
+            "loadAverage1m5m15m": [
+              2.23,
+              2.19,
+              1.59
+            ]
+          },
+          "loadAvailable": true,
+          "logicalProcessorCount": 8,
+          "load1m": 2.23,
+          "load5m": 2.19,
+          "bothLoadsBelowProcessorCount": true
+        },
+        {
+          "observation": 2,
+          "snapshot": {
+            "capturedAtUtc": "2026-10-08T23:52:17.4167298Z",
+            "osDescription": "Ubuntu 24.04.4 LTS",
+            "architecture": "X64",
+            "logicalProcessorCount": 8,
+            "loadAverage1m5m15m": [
+              1.65,
+              2.06,
+              1.57
+            ]
+          },
+          "loadAvailable": true,
+          "logicalProcessorCount": 8,
+          "load1m": 1.65,
+          "load5m": 2.06,
+          "bothLoadsBelowProcessorCount": true
+        }
+      ],
+      "loggingConfigured": "EF Warning",
+      "effectiveLoggingIntrospection": false,
+      "persistedDiagnosticsEnabled": true,
+      "instrumentation": "none; timing fixture has no observer/startup-hook injection",
+      "targetReadbackSha256": "0483c7b3667f5e2fdd419e5a9c38b182d697fe3369e6e63a9c48285496d119fd"
+    },
+    {
+      "index": 8,
+      "role": "before",
+      "case": "Http16Sequential",
+      "cadence": "Coalesced",
+      "source": "e6faa5689814c33353009b13f5b9e44d0e9982a4",
+      "fixture": "b9f854cb493c2945c14790bab75c991f46f9307a",
+      "metadataSha256": "9b42a0b53f2ccdf3a8b71e1c0243b3d175bfb1453c53f92c751d83400e9eac73",
+      "samplesSha256": "d085f3190f537a00d39f59d7876ece5a0d0aece99539612edc2b3efcd22bf6ec",
+      "sourceBuildReceipt": "3d22c029e0fdb050697f05e35447dffd88882f7e11a00f455543814eb3d38205",
+      "closureReceipt": "b5fab26062518d1e1a1cf2956f66d8dac3dce7caebf7deddf2bd2363595b5c2a",
+      "statistics": {
+        "n": 60,
+        "meanMs": 1126.1644733333333,
+        "p50Ms": 1120.9762,
+        "p95NearestRankMs": 1351.0086,
+        "minMs": 922.2732,
+        "maxMs": 1774.802,
+        "standardDeviationMs": 169.4753487761727
+      },
+      "correctResponses": 86,
+      "uniqueCompletedIncidentFreeExecutions": 86,
+      "configurationHashes": {
+        "appsettings.json": "fb63948c832328c56eea5f9c224733722d0fcb52f8becd4815e47642913fe39f",
+        "shells.json": "56de4d2de243f39b4d666fd211ebb045cbefffb2e5f060cd373aabe144486e0b",
+        "appsettings.Development.json": "e98675f0922574263376a941fdc4519e1bb54bc83a369557df20d41c12fb8bc2"
+      },
+      "semanticConfigurationHashes": {
+        "appsettings.json": "777a9f615e6314c9e38f5a9e36198f572e4a2a790ef4673d62e77ff3c918f0fb",
+        "shells.json": "a217962aaed76674b7d0547e9bad26a41bcf579237b01d68c7ae9c3437f2f265",
+        "appsettings.Development.json": "0ad3d2e9b7ef694335c258b817a070e31c46ecb17ab093a99c212eb72e546a69"
+      },
+      "provider": "postgres@sha256:ca0bd484cb98bf4b24eb1010e73fb3fcbd6714d240fbc1a10eea5b7dbecb641d",
+      "fixtureScriptSha256": "67830a5b25eb5de645c2c5a7e5b03badd5e9a6ab8b29db1af1b22c44b286bed6",
+      "concurrentClients": 1,
+      "load": {
+        "startBeforeMeasuredBatch": {
+          "capturedAtUtc": "2026-10-08T23:54:21.9646910Z",
+          "osDescription": "Ubuntu 24.04.4 LTS",
+          "architecture": "X64",
+          "logicalProcessorCount": 8,
+          "loadAverage1m5m15m": [
+            1.64,
+            2.03,
+            1.63
+          ]
+        },
+        "endAfterMeasuredBatch": {
+          "capturedAtUtc": "2026-10-08T23:55:29.5782014Z",
+          "osDescription": "Ubuntu 24.04.4 LTS",
+          "architecture": "X64",
+          "logicalProcessorCount": 8,
+          "loadAverage1m5m15m": [
+            2.04,
+            2.09,
+            1.68
+          ]
+        }
+      },
+      "preflightLoadObservations": [
+        {
+          "observation": 1,
+          "snapshot": {
+            "capturedAtUtc": "2026-10-08T23:53:51.9477993Z",
+            "osDescription": "Ubuntu 24.04.4 LTS",
+            "architecture": "X64",
+            "logicalProcessorCount": 8,
+            "loadAverage1m5m15m": [
+              2.62,
+              2.23,
+              1.68
+            ]
+          },
+          "loadAvailable": true,
+          "logicalProcessorCount": 8,
+          "load1m": 2.62,
+          "load5m": 2.23,
+          "bothLoadsBelowProcessorCount": true
+        },
+        {
+          "observation": 2,
+          "snapshot": {
+            "capturedAtUtc": "2026-10-08T23:54:21.9646910Z",
+            "osDescription": "Ubuntu 24.04.4 LTS",
+            "architecture": "X64",
+            "logicalProcessorCount": 8,
+            "loadAverage1m5m15m": [
+              1.64,
+              2.03,
+              1.63
+            ]
+          },
+          "loadAvailable": true,
+          "logicalProcessorCount": 8,
+          "load1m": 1.64,
+          "load5m": 2.03,
+          "bothLoadsBelowProcessorCount": true
+        }
+      ],
+      "loggingConfigured": "EF Warning",
+      "effectiveLoggingIntrospection": false,
+      "persistedDiagnosticsEnabled": true,
+      "instrumentation": "none; timing fixture has no observer/startup-hook injection",
+      "targetReadbackSha256": "50f506be18429ba7b209287880e4a33b2d8fa79ba633093825978bb2149c8abb"
+    },
+    {
+      "index": 9,
+      "role": "before",
+      "case": "Http4Concurrency4",
+      "cadence": "Immediate",
+      "source": "e6faa5689814c33353009b13f5b9e44d0e9982a4",
+      "fixture": "b9f854cb493c2945c14790bab75c991f46f9307a",
+      "metadataSha256": "bc49ca368de9aabf535424455725b51ff2c2f3246d411bccbd7ab74b89c0ca82",
+      "samplesSha256": "eea94b6add9d77908abbd14609844925f9060b944bfe489fff0d5492fac881bf",
+      "sourceBuildReceipt": "3d22c029e0fdb050697f05e35447dffd88882f7e11a00f455543814eb3d38205",
+      "closureReceipt": "b5fab26062518d1e1a1cf2956f66d8dac3dce7caebf7deddf2bd2363595b5c2a",
+      "statistics": {
+        "n": 60,
+        "meanMs": 1372.2463833333334,
+        "p50Ms": 1376.5376999999999,
+        "p95NearestRankMs": 1709.7483,
+        "minMs": 1048.8478,
+        "maxMs": 1790.3468,
+        "standardDeviationMs": 202.54950744388074
+      },
+      "correctResponses": 86,
+      "uniqueCompletedIncidentFreeExecutions": 86,
+      "configurationHashes": {
+        "shells.json": "4e7d8edb3943536a248de5465766d87f06e792bf7cd56afb050b8c407ccd9d77",
+        "appsettings.Development.json": "e98675f0922574263376a941fdc4519e1bb54bc83a369557df20d41c12fb8bc2",
+        "appsettings.json": "fb63948c832328c56eea5f9c224733722d0fcb52f8becd4815e47642913fe39f"
+      },
+      "semanticConfigurationHashes": {
+        "shells.json": "d0ca03166f015c108485eb07038d3d83aefcc54f1338793983066f27b65fa331",
+        "appsettings.Development.json": "0ad3d2e9b7ef694335c258b817a070e31c46ecb17ab093a99c212eb72e546a69",
+        "appsettings.json": "777a9f615e6314c9e38f5a9e36198f572e4a2a790ef4673d62e77ff3c918f0fb"
+      },
+      "provider": "postgres@sha256:ca0bd484cb98bf4b24eb1010e73fb3fcbd6714d240fbc1a10eea5b7dbecb641d",
+      "fixtureScriptSha256": "67830a5b25eb5de645c2c5a7e5b03badd5e9a6ab8b29db1af1b22c44b286bed6",
+      "concurrentClients": 4,
+      "load": {
+        "startBeforeMeasuredBatch": {
+          "capturedAtUtc": "2026-10-08T23:57:00.1705364Z",
+          "osDescription": "Ubuntu 24.04.4 LTS",
+          "architecture": "X64",
+          "logicalProcessorCount": 8,
+          "loadAverage1m5m15m": [
+            1.07,
+            1.8,
+            1.61
+          ]
+        },
+        "endAfterMeasuredBatch": {
+          "capturedAtUtc": "2026-10-08T23:57:20.9953027Z",
+          "osDescription": "Ubuntu 24.04.4 LTS",
+          "architecture": "X64",
+          "logicalProcessorCount": 8,
+          "loadAverage1m5m15m": [
+            2.4,
+            2.05,
+            1.7
+          ]
+        }
+      },
+      "preflightLoadObservations": [
+        {
+          "observation": 1,
+          "snapshot": {
+            "capturedAtUtc": "2026-10-08T23:56:30.1547251Z",
+            "osDescription": "Ubuntu 24.04.4 LTS",
+            "architecture": "X64",
+            "logicalProcessorCount": 8,
+            "loadAverage1m5m15m": [
+              1.77,
+              1.99,
+              1.67
+            ]
+          },
+          "loadAvailable": true,
+          "logicalProcessorCount": 8,
+          "load1m": 1.77,
+          "load5m": 1.99,
+          "bothLoadsBelowProcessorCount": true
+        },
+        {
+          "observation": 2,
+          "snapshot": {
+            "capturedAtUtc": "2026-10-08T23:57:00.1705364Z",
+            "osDescription": "Ubuntu 24.04.4 LTS",
+            "architecture": "X64",
+            "logicalProcessorCount": 8,
+            "loadAverage1m5m15m": [
+              1.07,
+              1.8,
+              1.61
+            ]
+          },
+          "loadAvailable": true,
+          "logicalProcessorCount": 8,
+          "load1m": 1.07,
+          "load5m": 1.8,
+          "bothLoadsBelowProcessorCount": true
+        }
+      ],
+      "loggingConfigured": "EF Warning",
+      "effectiveLoggingIntrospection": false,
+      "persistedDiagnosticsEnabled": true,
+      "instrumentation": "none; timing fixture has no observer/startup-hook injection",
+      "targetReadbackSha256": "50f506be18429ba7b209287880e4a33b2d8fa79ba633093825978bb2149c8abb"
+    },
+    {
+      "index": 10,
+      "role": "after",
+      "case": "Http4Concurrency4",
+      "cadence": "Immediate",
+      "source": "7357b91e012c56cb34f1259ef7a60ef56e144afe",
+      "fixture": "b9f854cb493c2945c14790bab75c991f46f9307a",
+      "metadataSha256": "81addd3abe05e4ecb2dd15aed3dde66ab638c172b25d7268fd909b1777eb568d",
+      "samplesSha256": "e02d80f6488d5567e41af60cd918a827471698605ca74a452f84cf377833a48e",
+      "sourceBuildReceipt": "b628b4698d9932f7e921e0f4cf3adad19168a9916e7e1d5946250ec16b749b50",
+      "closureReceipt": "d2be60bf27d44f4b4098f4d2b7281aecc9581606f279de9782c359de600fc342",
+      "statistics": {
+        "n": 60,
+        "meanMs": 1292.09604,
+        "p50Ms": 1288.4295000000002,
+        "p95NearestRankMs": 1540.0783,
+        "minMs": 1015.6195,
+        "maxMs": 2257.5086,
+        "standardDeviationMs": 210.7927008105294
+      },
+      "correctResponses": 86,
+      "uniqueCompletedIncidentFreeExecutions": 86,
+      "configurationHashes": {
+        "appsettings.json": "fb63948c832328c56eea5f9c224733722d0fcb52f8becd4815e47642913fe39f",
+        "shells.json": "4e7d8edb3943536a248de5465766d87f06e792bf7cd56afb050b8c407ccd9d77",
+        "appsettings.Development.json": "e98675f0922574263376a941fdc4519e1bb54bc83a369557df20d41c12fb8bc2"
+      },
+      "semanticConfigurationHashes": {
+        "appsettings.json": "777a9f615e6314c9e38f5a9e36198f572e4a2a790ef4673d62e77ff3c918f0fb",
+        "shells.json": "d0ca03166f015c108485eb07038d3d83aefcc54f1338793983066f27b65fa331",
+        "appsettings.Development.json": "0ad3d2e9b7ef694335c258b817a070e31c46ecb17ab093a99c212eb72e546a69"
+      },
+      "provider": "postgres@sha256:ca0bd484cb98bf4b24eb1010e73fb3fcbd6714d240fbc1a10eea5b7dbecb641d",
+      "fixtureScriptSha256": "67830a5b25eb5de645c2c5a7e5b03badd5e9a6ab8b29db1af1b22c44b286bed6",
+      "concurrentClients": 4,
+      "load": {
+        "startBeforeMeasuredBatch": {
+          "capturedAtUtc": "2026-10-08T23:58:48.6032599Z",
+          "osDescription": "Ubuntu 24.04.4 LTS",
+          "architecture": "X64",
+          "logicalProcessorCount": 8,
+          "loadAverage1m5m15m": [
+            1.33,
+            1.85,
+            1.67
+          ]
+        },
+        "endAfterMeasuredBatch": {
+          "capturedAtUtc": "2026-10-08T23:59:08.4929054Z",
+          "osDescription": "Ubuntu 24.04.4 LTS",
+          "architecture": "X64",
+          "logicalProcessorCount": 8,
+          "loadAverage1m5m15m": [
+            2.07,
+            1.99,
+            1.72
+          ]
+        }
+      },
+      "preflightLoadObservations": [
+        {
+          "observation": 1,
+          "snapshot": {
+            "capturedAtUtc": "2026-10-08T23:58:18.5867259Z",
+            "osDescription": "Ubuntu 24.04.4 LTS",
+            "architecture": "X64",
+            "logicalProcessorCount": 8,
+            "loadAverage1m5m15m": [
+              2.2,
+              2.04,
+              1.72
+            ]
+          },
+          "loadAvailable": true,
+          "logicalProcessorCount": 8,
+          "load1m": 2.2,
+          "load5m": 2.04,
+          "bothLoadsBelowProcessorCount": true
+        },
+        {
+          "observation": 2,
+          "snapshot": {
+            "capturedAtUtc": "2026-10-08T23:58:48.6032599Z",
+            "osDescription": "Ubuntu 24.04.4 LTS",
+            "architecture": "X64",
+            "logicalProcessorCount": 8,
+            "loadAverage1m5m15m": [
+              1.33,
+              1.85,
+              1.67
+            ]
+          },
+          "loadAvailable": true,
+          "logicalProcessorCount": 8,
+          "load1m": 1.33,
+          "load5m": 1.85,
+          "bothLoadsBelowProcessorCount": true
+        }
+      ],
+      "loggingConfigured": "EF Warning",
+      "effectiveLoggingIntrospection": false,
+      "persistedDiagnosticsEnabled": true,
+      "instrumentation": "none; timing fixture has no observer/startup-hook injection",
+      "targetReadbackSha256": "0483c7b3667f5e2fdd419e5a9c38b182d697fe3369e6e63a9c48285496d119fd"
+    },
+    {
+      "index": 11,
+      "role": "after",
+      "case": "Http4Concurrency4",
+      "cadence": "Coalesced",
+      "source": "7357b91e012c56cb34f1259ef7a60ef56e144afe",
+      "fixture": "b9f854cb493c2945c14790bab75c991f46f9307a",
+      "metadataSha256": "49f1b6dac901bc29b031c8e407dd71f2488291f96b06881e71f28d6c3967da5a",
+      "samplesSha256": "c877650d2a3a955e8308dfde90d690c33ae1f0bac99a489e79ca373d141f87e9",
+      "sourceBuildReceipt": "b628b4698d9932f7e921e0f4cf3adad19168a9916e7e1d5946250ec16b749b50",
+      "closureReceipt": "d2be60bf27d44f4b4098f4d2b7281aecc9581606f279de9782c359de600fc342",
+      "statistics": {
+        "n": 60,
+        "meanMs": 297.76722333333333,
+        "p50Ms": 276.06005,
+        "p95NearestRankMs": 453.8259,
+        "minMs": 175.462,
+        "maxMs": 882.8379,
+        "standardDeviationMs": 126.05663421131341
+      },
+      "correctResponses": 86,
+      "uniqueCompletedIncidentFreeExecutions": 86,
+      "configurationHashes": {
+        "shells.json": "256c92653124dcc30bdc2e6eda00b2a52732c3eb2fa7a44c241f4a89599211d2",
+        "appsettings.Development.json": "e98675f0922574263376a941fdc4519e1bb54bc83a369557df20d41c12fb8bc2",
+        "appsettings.json": "fb63948c832328c56eea5f9c224733722d0fcb52f8becd4815e47642913fe39f"
+      },
+      "semanticConfigurationHashes": {
+        "shells.json": "a217962aaed76674b7d0547e9bad26a41bcf579237b01d68c7ae9c3437f2f265",
+        "appsettings.Development.json": "0ad3d2e9b7ef694335c258b817a070e31c46ecb17ab093a99c212eb72e546a69",
+        "appsettings.json": "777a9f615e6314c9e38f5a9e36198f572e4a2a790ef4673d62e77ff3c918f0fb"
+      },
+      "provider": "postgres@sha256:ca0bd484cb98bf4b24eb1010e73fb3fcbd6714d240fbc1a10eea5b7dbecb641d",
+      "fixtureScriptSha256": "67830a5b25eb5de645c2c5a7e5b03badd5e9a6ab8b29db1af1b22c44b286bed6",
+      "concurrentClients": 4,
+      "load": {
+        "startBeforeMeasuredBatch": {
+          "capturedAtUtc": "2026-10-09T00:00:20.0010917Z",
+          "osDescription": "Ubuntu 24.04.4 LTS",
+          "architecture": "X64",
+          "logicalProcessorCount": 8,
+          "loadAverage1m5m15m": [
+            1.43,
+            1.86,
+            1.69
+          ]
+        },
+        "endAfterMeasuredBatch": {
+          "capturedAtUtc": "2026-10-09T00:00:24.7923042Z",
+          "osDescription": "Ubuntu 24.04.4 LTS",
+          "architecture": "X64",
+          "logicalProcessorCount": 8,
+          "loadAverage1m5m15m": [
+            1.56,
+            1.88,
+            1.7
+          ]
+        }
+      },
+      "preflightLoadObservations": [
+        {
+          "observation": 1,
+          "snapshot": {
+            "capturedAtUtc": "2026-10-08T23:59:49.9850297Z",
+            "osDescription": "Ubuntu 24.04.4 LTS",
+            "architecture": "X64",
+            "logicalProcessorCount": 8,
+            "loadAverage1m5m15m": [
+              2.28,
+              2.04,
+              1.75
+            ]
+          },
+          "loadAvailable": true,
+          "logicalProcessorCount": 8,
+          "load1m": 2.28,
+          "load5m": 2.04,
+          "bothLoadsBelowProcessorCount": true
+        },
+        {
+          "observation": 2,
+          "snapshot": {
+            "capturedAtUtc": "2026-10-09T00:00:20.0010917Z",
+            "osDescription": "Ubuntu 24.04.4 LTS",
+            "architecture": "X64",
+            "logicalProcessorCount": 8,
+            "loadAverage1m5m15m": [
+              1.43,
+              1.86,
+              1.69
+            ]
+          },
+          "loadAvailable": true,
+          "logicalProcessorCount": 8,
+          "load1m": 1.43,
+          "load5m": 1.86,
+          "bothLoadsBelowProcessorCount": true
+        }
+      ],
+      "loggingConfigured": "EF Warning",
+      "effectiveLoggingIntrospection": false,
+      "persistedDiagnosticsEnabled": true,
+      "instrumentation": "none; timing fixture has no observer/startup-hook injection",
+      "targetReadbackSha256": "0483c7b3667f5e2fdd419e5a9c38b182d697fe3369e6e63a9c48285496d119fd"
+    },
+    {
+      "index": 13,
+      "role": "before",
+      "case": "RestCompanionCoalesced",
+      "cadence": "Coalesced",
+      "source": "e6faa5689814c33353009b13f5b9e44d0e9982a4",
+      "fixture": "b9f854cb493c2945c14790bab75c991f46f9307a",
+      "metadataSha256": "7a345c164498db12a581f08ce9e33ff115c36effc241a0475f1c048d2418ecdb",
+      "samplesSha256": "81809eeaf28039f99f9108ecc282c54b7b145a060ee43cc86a1b642281c81ab5",
+      "sourceBuildReceipt": "3d22c029e0fdb050697f05e35447dffd88882f7e11a00f455543814eb3d38205",
+      "closureReceipt": "b5fab26062518d1e1a1cf2956f66d8dac3dce7caebf7deddf2bd2363595b5c2a",
+      "statistics": {
+        "n": 60,
+        "meanMs": 115.41697833333333,
+        "p50Ms": 91.75534999999999,
+        "p95NearestRankMs": 272.4144,
+        "minMs": 77.7587,
+        "maxMs": 391.0052,
+        "standardDeviationMs": 64.58410901015793
+      },
+      "correctResponses": 86,
+      "uniqueCompletedIncidentFreeExecutions": 86,
+      "configurationHashes": {
+        "shells.json": "72e74050c3287263e429da8bb035be1be9bbf39dbb3182810cb635822c52bdd8",
+        "appsettings.json": "fb63948c832328c56eea5f9c224733722d0fcb52f8becd4815e47642913fe39f",
+        "appsettings.Development.json": "e98675f0922574263376a941fdc4519e1bb54bc83a369557df20d41c12fb8bc2"
+      },
+      "semanticConfigurationHashes": {
+        "shells.json": "a217962aaed76674b7d0547e9bad26a41bcf579237b01d68c7ae9c3437f2f265",
+        "appsettings.json": "777a9f615e6314c9e38f5a9e36198f572e4a2a790ef4673d62e77ff3c918f0fb",
+        "appsettings.Development.json": "0ad3d2e9b7ef694335c258b817a070e31c46ecb17ab093a99c212eb72e546a69"
+      },
+      "provider": "postgres@sha256:ca0bd484cb98bf4b24eb1010e73fb3fcbd6714d240fbc1a10eea5b7dbecb641d",
+      "fixtureScriptSha256": "67830a5b25eb5de645c2c5a7e5b03badd5e9a6ab8b29db1af1b22c44b286bed6",
+      "concurrentClients": 1,
+      "load": {
+        "startBeforeMeasuredBatch": {
+          "capturedAtUtc": "2026-10-09T00:05:46.1204587Z",
+          "osDescription": "Ubuntu 24.04.4 LTS",
+          "architecture": "X64",
+          "logicalProcessorCount": 8,
+          "loadAverage1m5m15m": [
+            0.78,
+            1.15,
+            1.44
+          ]
+        },
+        "endAfterMeasuredBatch": {
+          "capturedAtUtc": "2026-10-09T00:05:53.0915178Z",
+          "osDescription": "Ubuntu 24.04.4 LTS",
+          "architecture": "X64",
+          "logicalProcessorCount": 8,
+          "loadAverage1m5m15m": [
+            1.2,
+            1.23,
+            1.46
+          ]
+        }
+      },
+      "preflightLoadObservations": [
+        {
+          "observation": 1,
+          "snapshot": {
+            "capturedAtUtc": "2026-10-09T00:05:16.1019091Z",
+            "osDescription": "Ubuntu 24.04.4 LTS",
+            "architecture": "X64",
+            "logicalProcessorCount": 8,
+            "loadAverage1m5m15m": [
+              1.01,
+              1.22,
+              1.47
+            ]
+          },
+          "loadAvailable": true,
+          "logicalProcessorCount": 8,
+          "load1m": 1.01,
+          "load5m": 1.22,
+          "bothLoadsBelowProcessorCount": true
+        },
+        {
+          "observation": 2,
+          "snapshot": {
+            "capturedAtUtc": "2026-10-09T00:05:46.1204587Z",
+            "osDescription": "Ubuntu 24.04.4 LTS",
+            "architecture": "X64",
+            "logicalProcessorCount": 8,
+            "loadAverage1m5m15m": [
+              0.78,
+              1.15,
+              1.44
+            ]
+          },
+          "loadAvailable": true,
+          "logicalProcessorCount": 8,
+          "load1m": 0.78,
+          "load5m": 1.15,
+          "bothLoadsBelowProcessorCount": true
+        }
+      ],
+      "loggingConfigured": "EF Warning",
+      "effectiveLoggingIntrospection": false,
+      "persistedDiagnosticsEnabled": true,
+      "instrumentation": "none; timing fixture has no observer/startup-hook injection",
+      "targetReadbackSha256": "50f506be18429ba7b209287880e4a33b2d8fa79ba633093825978bb2149c8abb"
+    },
+    {
+      "index": 14,
+      "role": "after",
+      "case": "RestCompanionCoalesced",
+      "cadence": "Coalesced",
+      "source": "7357b91e012c56cb34f1259ef7a60ef56e144afe",
+      "fixture": "b9f854cb493c2945c14790bab75c991f46f9307a",
+      "metadataSha256": "b4f0e2b05651bfb5663bf1968b7cedd8ca964ddd4340da8d8e2929adf98fb306",
+      "samplesSha256": "15aad2f055123b14abd946ec9b407b9d24af8084af161c4b33b059b971bebb53",
+      "sourceBuildReceipt": "b628b4698d9932f7e921e0f4cf3adad19168a9916e7e1d5946250ec16b749b50",
+      "closureReceipt": "d2be60bf27d44f4b4098f4d2b7281aecc9581606f279de9782c359de600fc342",
+      "statistics": {
+        "n": 60,
+        "meanMs": 106.16066833333333,
+        "p50Ms": 82.4255,
+        "p95NearestRankMs": 242.5818,
+        "minMs": 72.0873,
+        "maxMs": 299.6796,
+        "standardDeviationMs": 55.568458243401366
+      },
+      "correctResponses": 86,
+      "uniqueCompletedIncidentFreeExecutions": 86,
+      "configurationHashes": {
+        "appsettings.Development.json": "e98675f0922574263376a941fdc4519e1bb54bc83a369557df20d41c12fb8bc2",
+        "shells.json": "56de4d2de243f39b4d666fd211ebb045cbefffb2e5f060cd373aabe144486e0b",
+        "appsettings.json": "fb63948c832328c56eea5f9c224733722d0fcb52f8becd4815e47642913fe39f"
+      },
+      "semanticConfigurationHashes": {
+        "appsettings.Development.json": "0ad3d2e9b7ef694335c258b817a070e31c46ecb17ab093a99c212eb72e546a69",
+        "shells.json": "a217962aaed76674b7d0547e9bad26a41bcf579237b01d68c7ae9c3437f2f265",
+        "appsettings.json": "777a9f615e6314c9e38f5a9e36198f572e4a2a790ef4673d62e77ff3c918f0fb"
+      },
+      "provider": "postgres@sha256:ca0bd484cb98bf4b24eb1010e73fb3fcbd6714d240fbc1a10eea5b7dbecb641d",
+      "fixtureScriptSha256": "67830a5b25eb5de645c2c5a7e5b03badd5e9a6ab8b29db1af1b22c44b286bed6",
+      "concurrentClients": 1,
+      "load": {
+        "startBeforeMeasuredBatch": {
+          "capturedAtUtc": "2026-10-09T00:07:02.3573328Z",
+          "osDescription": "Ubuntu 24.04.4 LTS",
+          "architecture": "X64",
+          "logicalProcessorCount": 8,
+          "loadAverage1m5m15m": [
+            0.84,
+            1.15,
+            1.41
+          ]
+        },
+        "endAfterMeasuredBatch": {
+          "capturedAtUtc": "2026-10-09T00:07:08.7733601Z",
+          "osDescription": "Ubuntu 24.04.4 LTS",
+          "architecture": "X64",
+          "logicalProcessorCount": 8,
+          "loadAverage1m5m15m": [
+            1.32,
+            1.24,
+            1.44
+          ]
+        }
+      },
+      "preflightLoadObservations": [
+        {
+          "observation": 1,
+          "snapshot": {
+            "capturedAtUtc": "2026-10-09T00:06:32.3385052Z",
+            "osDescription": "Ubuntu 24.04.4 LTS",
+            "architecture": "X64",
+            "logicalProcessorCount": 8,
+            "loadAverage1m5m15m": [
+              1.29,
+              1.25,
+              1.46
+            ]
+          },
+          "loadAvailable": true,
+          "logicalProcessorCount": 8,
+          "load1m": 1.29,
+          "load5m": 1.25,
+          "bothLoadsBelowProcessorCount": true
+        },
+        {
+          "observation": 2,
+          "snapshot": {
+            "capturedAtUtc": "2026-10-09T00:07:02.3573328Z",
+            "osDescription": "Ubuntu 24.04.4 LTS",
+            "architecture": "X64",
+            "logicalProcessorCount": 8,
+            "loadAverage1m5m15m": [
+              0.84,
+              1.15,
+              1.41
+            ]
+          },
+          "loadAvailable": true,
+          "logicalProcessorCount": 8,
+          "load1m": 0.84,
+          "load5m": 1.15,
+          "bothLoadsBelowProcessorCount": true
+        }
+      ],
+      "loggingConfigured": "EF Warning",
+      "effectiveLoggingIntrospection": false,
+      "persistedDiagnosticsEnabled": true,
+      "instrumentation": "none; timing fixture has no observer/startup-hook injection",
+      "targetReadbackSha256": "0483c7b3667f5e2fdd419e5a9c38b182d697fe3369e6e63a9c48285496d119fd"
+    }
+  ],
+  "comparisons": [
+    {
+      "case": "Http4Sequential",
+      "cadence": "Immediate",
+      "beforeIndex": 1,
+      "afterIndex": 2,
+      "sameFixtureConfigProvider": true,
+      "relativeAfterMinusBeforePercent": {
+        "meanMs": -1.6439012445214174,
+        "p50Ms": -2.101800084568506,
+        "p95NearestRankMs": -2.1230264246730135
+      }
+    },
+    {
+      "case": "Http4Sequential",
+      "cadence": "Coalesced",
+      "beforeIndex": 4,
+      "afterIndex": 3,
+      "sameFixtureConfigProvider": true,
+      "relativeAfterMinusBeforePercent": {
+        "meanMs": -33.80499395592073,
+        "p50Ms": -37.54585981659624,
+        "p95NearestRankMs": -25.456522641599232
+      }
+    },
+    {
+      "case": "Http16Sequential",
+      "cadence": "Immediate",
+      "beforeIndex": 5,
+      "afterIndex": 6,
+      "sameFixtureConfigProvider": true,
+      "relativeAfterMinusBeforePercent": {
+        "meanMs": 0.5552930791825395,
+        "p50Ms": 1.026463550473422,
+        "p95NearestRankMs": 2.0594571976939813
+      }
+    },
+    {
+      "case": "Http16Sequential",
+      "cadence": "Coalesced",
+      "beforeIndex": 8,
+      "afterIndex": 7,
+      "sameFixtureConfigProvider": true,
+      "relativeAfterMinusBeforePercent": {
+        "meanMs": -58.48765779156082,
+        "p50Ms": -57.14437558977613,
+        "p95NearestRankMs": -43.399005750222464
+      }
+    },
+    {
+      "case": "Http4Concurrency4",
+      "cadence": "Immediate",
+      "beforeIndex": 9,
+      "afterIndex": 10,
+      "sameFixtureConfigProvider": true,
+      "relativeAfterMinusBeforePercent": {
+        "meanMs": -5.84081286763094,
+        "p50Ms": -6.4007110012315405,
+        "p95NearestRankMs": -9.923682918707977
+      }
+    },
+    {
+      "case": "RestCompanionCoalesced",
+      "cadence": "Coalesced",
+      "beforeIndex": 13,
+      "afterIndex": 14,
+      "sameFixtureConfigProvider": true,
+      "relativeAfterMinusBeforePercent": {
+        "meanMs": -8.01988592464017,
+        "p50Ms": -10.168180928959448,
+        "p95NearestRankMs": -10.951183197364022
+      }
+    }
+  ],
+  "failedBaseline": {
+    "index": 12,
+    "case": "Http4Concurrency4",
+    "cadence": "Coalesced",
+    "source": "e6faa5689814c33353009b13f5b9e44d0e9982a4",
+    "metadataSha256": "150db3c58a895ec62a001de002e78a1900832925d6f1cd6e26382a53f837496d",
+    "measuredResponses": {
+      "200Matched": 38,
+      "500": 16,
+      "202": 6
+    },
+    "expectedExecutions": 86,
+    "readbacks": 79,
+    "executionStates": {
+      "CompletedZeroIncidents": 67,
+      "FaultedOneIncident": 6,
+      "CompletedOneIncident": 5,
+      "RunningOneIncident": 1
+    },
+    "replacementAttempts": 0,
+    "successfulLatencyBaseline": false,
+    "observedErrors": {
+      "concurrentDbContextObservations": 31,
+      "NpgsqlOperationInProgressExceptionObservations": 1
+    },
+    "isolatedFixAttribution": false
+  },
+  "limits": [
+    "One finite window per source/configuration; p95 exploratory.",
+    "Load gates passed but exact load differs; no statistical significance or isolated causal claim.",
+    "Owner launcher readback and retained configuration bytes set EF Warning; the workload sampler does not verify it and effective filter introspection remains unavailable.",
+    "Ancillary diagnostics enabled on SQLite.",
+    "Timing packets do not supply command or transaction accounting.",
+    "Startup migration and pruning warnings retained separately from successful measured requests.",
+    "REST timing ends at admission; durable completion and output are verified separately.",
+    "HTTP samples do not include execution IDs; their terminal identity evidence is the expected unique execution population.",
+    "The failed before concurrency window is retained and excluded from successful latency comparisons."
+  ],
+  "loggingEvidence": {
+    "basis": "Separate owner-launcher configuration readback plus hash-verified retained configuration bytes. The workload sampler itself does not verify logging filters.",
+    "cases": [
+      {
+        "index": 1,
+        "metadataSha256": "069104ec3ef57f3c39aece780289d4d5c28e1f1c7ccbe3d83d3026bacd977ef1",
+        "developmentConfigurationSha256": "e98675f0922574263376a941fdc4519e1bb54bc83a369557df20d41c12fb8bc2",
+        "ownerLauncherPreflightReadback": "Warning",
+        "retainedConfigurationEfLevel": "Warning",
+        "effectiveRuntimeFilterIntrospection": false
+      },
+      {
+        "index": 2,
+        "metadataSha256": "77003015cde3a85baed9d9a45355d66bb9f5cf2e09fc214216304768e05f6694",
+        "developmentConfigurationSha256": "e98675f0922574263376a941fdc4519e1bb54bc83a369557df20d41c12fb8bc2",
+        "ownerLauncherPreflightReadback": "Warning",
+        "retainedConfigurationEfLevel": "Warning",
+        "effectiveRuntimeFilterIntrospection": false
+      },
+      {
+        "index": 3,
+        "metadataSha256": "581785cee797b041e01cfab339d5e5752145c8340ff606e51486a3af68ab102d",
+        "developmentConfigurationSha256": "e98675f0922574263376a941fdc4519e1bb54bc83a369557df20d41c12fb8bc2",
+        "ownerLauncherPreflightReadback": "Warning",
+        "retainedConfigurationEfLevel": "Warning",
+        "effectiveRuntimeFilterIntrospection": false
+      },
+      {
+        "index": 4,
+        "metadataSha256": "2b668c486bea280233d795479050a977d697efc833edcbcccaac75a317503c38",
+        "developmentConfigurationSha256": "e98675f0922574263376a941fdc4519e1bb54bc83a369557df20d41c12fb8bc2",
+        "ownerLauncherPreflightReadback": "Warning",
+        "retainedConfigurationEfLevel": "Warning",
+        "effectiveRuntimeFilterIntrospection": false
+      },
+      {
+        "index": 5,
+        "metadataSha256": "6e78a99c0e8df03952972815943bd0938e0b5b8cadd0a9f8a36f9c9bcf6980b1",
+        "developmentConfigurationSha256": "e98675f0922574263376a941fdc4519e1bb54bc83a369557df20d41c12fb8bc2",
+        "ownerLauncherPreflightReadback": "Warning",
+        "retainedConfigurationEfLevel": "Warning",
+        "effectiveRuntimeFilterIntrospection": false
+      },
+      {
+        "index": 6,
+        "metadataSha256": "3023e6297d44071ea68e1b90135bedd57764ae5da97af5683d2ef4cc1982e598",
+        "developmentConfigurationSha256": "e98675f0922574263376a941fdc4519e1bb54bc83a369557df20d41c12fb8bc2",
+        "ownerLauncherPreflightReadback": "Warning",
+        "retainedConfigurationEfLevel": "Warning",
+        "effectiveRuntimeFilterIntrospection": false
+      },
+      {
+        "index": 7,
+        "metadataSha256": "0489c879900a1207c07fad9906ddac2347037329dfa81904945ebb77bf1e8a08",
+        "developmentConfigurationSha256": "e98675f0922574263376a941fdc4519e1bb54bc83a369557df20d41c12fb8bc2",
+        "ownerLauncherPreflightReadback": "Warning",
+        "retainedConfigurationEfLevel": "Warning",
+        "effectiveRuntimeFilterIntrospection": false
+      },
+      {
+        "index": 8,
+        "metadataSha256": "9b42a0b53f2ccdf3a8b71e1c0243b3d175bfb1453c53f92c751d83400e9eac73",
+        "developmentConfigurationSha256": "e98675f0922574263376a941fdc4519e1bb54bc83a369557df20d41c12fb8bc2",
+        "ownerLauncherPreflightReadback": "Warning",
+        "retainedConfigurationEfLevel": "Warning",
+        "effectiveRuntimeFilterIntrospection": false
+      },
+      {
+        "index": 9,
+        "metadataSha256": "bc49ca368de9aabf535424455725b51ff2c2f3246d411bccbd7ab74b89c0ca82",
+        "developmentConfigurationSha256": "e98675f0922574263376a941fdc4519e1bb54bc83a369557df20d41c12fb8bc2",
+        "ownerLauncherPreflightReadback": "Warning",
+        "retainedConfigurationEfLevel": "Warning",
+        "effectiveRuntimeFilterIntrospection": false
+      },
+      {
+        "index": 10,
+        "metadataSha256": "81addd3abe05e4ecb2dd15aed3dde66ab638c172b25d7268fd909b1777eb568d",
+        "developmentConfigurationSha256": "e98675f0922574263376a941fdc4519e1bb54bc83a369557df20d41c12fb8bc2",
+        "ownerLauncherPreflightReadback": "Warning",
+        "retainedConfigurationEfLevel": "Warning",
+        "effectiveRuntimeFilterIntrospection": false
+      },
+      {
+        "index": 11,
+        "metadataSha256": "49f1b6dac901bc29b031c8e407dd71f2488291f96b06881e71f28d6c3967da5a",
+        "developmentConfigurationSha256": "e98675f0922574263376a941fdc4519e1bb54bc83a369557df20d41c12fb8bc2",
+        "ownerLauncherPreflightReadback": "Warning",
+        "retainedConfigurationEfLevel": "Warning",
+        "effectiveRuntimeFilterIntrospection": false
+      },
+      {
+        "index": 12,
+        "metadataSha256": "150db3c58a895ec62a001de002e78a1900832925d6f1cd6e26382a53f837496d",
+        "developmentConfigurationSha256": "e98675f0922574263376a941fdc4519e1bb54bc83a369557df20d41c12fb8bc2",
+        "ownerLauncherPreflightReadback": "Warning",
+        "retainedConfigurationEfLevel": "Warning",
+        "effectiveRuntimeFilterIntrospection": false
+      },
+      {
+        "index": 13,
+        "metadataSha256": "7a345c164498db12a581f08ce9e33ff115c36effc241a0475f1c048d2418ecdb",
+        "developmentConfigurationSha256": "e98675f0922574263376a941fdc4519e1bb54bc83a369557df20d41c12fb8bc2",
+        "ownerLauncherPreflightReadback": "Warning",
+        "retainedConfigurationEfLevel": "Warning",
+        "effectiveRuntimeFilterIntrospection": false
+      },
+      {
+        "index": 14,
+        "metadataSha256": "b4f0e2b05651bfb5663bf1968b7cedd8ca964ddd4340da8d8e2929adf98fb306",
+        "developmentConfigurationSha256": "e98675f0922574263376a941fdc4519e1bb54bc83a369557df20d41c12fb8bc2",
+        "ownerLauncherPreflightReadback": "Warning",
+        "retainedConfigurationEfLevel": "Warning",
+        "effectiveRuntimeFilterIntrospection": false
+      }
+    ]
+  },
+  "independentReview": {
+    "artifactSha256": "f355cfe1cdf08fb3fd27d63bac0a242af40f49bcb7f01e1e24af8c8697b09624",
+    "reviewedPassingWindows": 13,
+    "retainedFailedWindows": 1,
+    "followup": "Separate owner logging configuration evidence is supplied; sampler/effective-filter limitation remains explicit."
+  }
+}
