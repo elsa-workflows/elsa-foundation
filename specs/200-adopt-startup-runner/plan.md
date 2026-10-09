@@ -12,7 +12,7 @@ Use the existing opt-in root `IShellActivationRunner` inside the three existing 
 
 **Language/Version**: Existing C#/.NET10 host applications; upstream abstractions support .NET8/9/10.
 **Primary Dependencies**: CShells hosting/lifecycle abstractions, standard DI/logging/options, existing host TimeProvider and Elsa diagnostic types. No new third-party package or feature closure.
-**Prepared-package baseline**: This descendant currently carries `.171`/`.99` preview pins from `af83b06`; source qualification must coherently update its reached CShells family to qualified public `.173` for ReturnedGeneration and refresh reached locks/maps. Canonical main remains `.159`/`.94`. Final adoption still replaces previews with the complete verified stable families.
+**Prepared-package baseline**: Planning began from `.171`/`.99` preview pins in `af83b06`; preparation commit `9efaedffce13a34b034c13c80922449aec9a6a04` now coherently pins qualified public `.173` for ReturnedGeneration and retains `.99`, with reached locks updated. The main snapshot at planning time used `.159`/`.94`. Final adoption still replaces previews with the complete verified stable families and checks maps.
 **Storage**: No new store; only owned activation handles and bounded host policy metadata.
 **Testing**: Existing Modularity startup/readiness tests, actual Cluster/SQLite recovery/boot/refusal processes, affected Workbench composition tests and architecture/maps. Preserve all existing test objectives.
 **Target Platform**: Supported host platforms and current CI matrix.
@@ -44,6 +44,7 @@ Use the existing opt-in root `IShellActivationRunner` inside the three existing 
 - `src/apps/Elsa.Workbench/Boot/EagerShellActivationHostedService.cs`, `Readiness/DefaultShellWarmup.cs`, existing readiness state and `Program.cs`.
 - `tests/essentials/Modularity/Tests/FoundationHostEagerActivationTests.cs`, `EagerShellActivationTests.cs`, `ShellReadinessTests.cs`, `HostOwnedServicesAreSharedWithShellsTests.cs` and shared fixtures where useful.
 - `tests/essentials/Cluster/EntityFrameworkCore/Tests/FoundationHostEagerActivationRetryTests.cs`, relevant boot/refusal/Workbench process tests; affected architecture/maps.
+- `FoundationHostReconcileTests.cs` and an explicitly composed, test-only `FeedModuleStartupControlFeature.cs` in the existing FeedModule fixture support the FR019 deactivation probe. The real configuration provider cannot unregister its immutable blueprint, and package removal can leave a serving shell. The fixture instead triggers bounded drain work after the control response. The external activation must remain current through the runner's first scheduled observation boundary before drain; another full retry interval then checks terminal recovery and live not-ready health. The registry releases the drained generation from its current slot, so the health result is inactive rather than a retained disposed slot. No production control endpoint or readiness policy is added. Public process evidence is observer logs, lifecycle completion and health state; it does not expose the runner's internal terminal snapshot or unregister the blueprint. Snapshot-triggered earlier observation is an upstream runner contract, not an automatic push guarantee from the host's Active lifecycle notification.
 - Stable adoption updates `Directory.Packages.props` and reached lockfiles with complete observer/startup source and maps.
 
 **Structure Decision**: retain three adapters because their phases and policies differ. Extract helpers only for real repeated setup or safe outcome projection; do not add an Elsa scheduler.
@@ -59,4 +60,4 @@ Use the existing opt-in root `IShellActivationRunner` inside the three existing 
 
 ## Complexity Tracking
 
-No constitutional exception is approved. Fatal-error retention remains exceptional propagation state, not duplicate attempt/scheduling state. Explicit compatibility clarifications in FR016–FR020 must be documented and tested; existing assertions remain effective. Root and independent design reviews are complete; tasks and executable acceptance remain outstanding.
+No constitutional exception is approved. Fatal-error retention remains exceptional propagation state, not duplicate attempt/scheduling state. Explicit compatibility clarifications in FR016–FR020 must be documented and tested; existing assertions remain effective. Root and independent design reviews are complete; implementation and executable acceptance progress is recorded in [tasks.md](tasks.md).
