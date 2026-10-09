@@ -52,3 +52,5 @@ After making and validating the change, review your diff and commit the intended
 The repository is [MIT licensed](LICENSE). Pull requests may show the existing `license/cla` check from [Microsoft GitHub Policy Service](https://github.com/apps/microsoft-github-policy-service); follow the check's status and any instructions it provides. This guide does not add a separate signing process or infer an exemption.
 
 When the change is ready for review, mark the draft PR ready. Respond to review requests, update the branch, and rerun and report checks affected by the changes. Keep the PR in draft while it is still in progress. A maintainer can merge only after the required review and gates pass; do not merge past a red or missing required check.
+
+Branches and pull requests in the organization repository have a lifecycle: a branch without an open PR is archived and deleted by the weekly sweep when its work is already in `main` or it has had no commit for 14 days, and a PR without activity for 21 days is marked stale and then closed. See [Repository hygiene](docs/contributing/repository-hygiene.md).
