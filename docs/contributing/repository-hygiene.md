@@ -42,8 +42,10 @@ An open issue is a commitment someone can act on, not a log entry.
 - **Progress goes on the existing record.** Checkpoints, receipts and gate evidence belong in PR
   comments or on the issue being worked, not in new issues. Do not file tracking, sweep or checkpoint
   issues.
-- **Work-in-progress caps:** at most 2 open `type:program` issues and at most 20 `ready-for-agent`
-  issues. At the cap, add scope to the existing parent instead of filing more.
+- **Work-in-progress caps:** at most 2 active `type:program` issues and at most 20 `ready-for-agent`
+  issues. A program labelled `status:parked` stays open but does not count toward the cap, and gets no
+  new child issues until it is reactivated. At the cap, add scope to the existing parent instead of
+  filing more.
 - **Stale intake closes.** An issue labelled `needs-triage` or `needs-info` with no activity for 30 days
   is labelled `stale` and closes as not planned 14 days later. Programs, epics, `security`, `bug` and
   `keep-open` issues are exempt.
