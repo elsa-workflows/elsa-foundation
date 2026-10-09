@@ -7,8 +7,8 @@ The public interface does not change: no member is added or removed, and no sign
 | Operation | Returns | Behavior |
 |---|---|---|
 | `TryAcquireRootWriteLeaseAsync(artifactId, leaseId, expiresAt, now)` | lease or `null` | Returns `null` when the artifact is missing or a live deletion guard exists, including one committed concurrently with this call. A live lease with the same `leaseId` returns the existing token. Otherwise it grants a new lease. It **never fails or retries because another holder took, renewed or released a different lease on the same artifact.** |
-| `RenewRootWriteLeaseAsync(lease, expiresAt, now)` | `bool` | `true` exactly when the lease is live, the token matches, and the incarnation is current. Other holders' activity never affects it. |
-| `ReleaseRootWriteLeaseAsync(lease)` | — | Removes the lease when the token matches. Otherwise it is a no-op, including after the artifact has been deleted. Other holders' activity never makes it fail. |
+| `RenewRootWriteLeaseAsync(lease, expiresAt, now)` | `bool` | `true` exactly when the lease is live, the token matches, and the incarnation is current. Other holders' activity never affects it. It reads only the holder's own lease record, never the executable pair, so an orphaned or corrupt pair yields `false` rather than an exception (owner decision, PR #2539). |
+| `ReleaseRootWriteLeaseAsync(lease)` | — | Removes the lease when the token matches. Otherwise it is a no-op, including after the artifact has been deleted and when the pair is orphaned or corrupt (owner decision, PR #2539). Other holders' activity never makes it fail. |
 
 ## Deletion guard operations
 

@@ -82,6 +82,7 @@ All operations run on the isolated context from R4.
 - A host configures a connection string, so the sibling also gets its own pooled connection: a renewal that fires while a checkpoint write holds the shared context open does not touch that context. (A test fixture that hands EF one `DbConnection` object shares it; such fixtures never renew during an open transaction.)
 - No `IServiceScopeFactory` is needed, so the store's construction and registration are unchanged. The persistence access context stays the store's own.
 - The guard side (begin, cancel, guarded delete) stays on the injected context, as before: only collection uses it.
+- **Accepted constraint (owner decision, PR #2539):** a composition that hands EF a `DbConnection` instance instead of a connection string shares that connection with the sibling. A renewal that fires while a checkpoint transaction holds it open can then fail. First-party registrations always pass a connection string, so no guard is added.
 
 The plan's first draft resolved the context from a child scope. That was dropped: a child scope would need the scoped access context carried across, and it changes the store's constructor for no gain over the sibling.
 
