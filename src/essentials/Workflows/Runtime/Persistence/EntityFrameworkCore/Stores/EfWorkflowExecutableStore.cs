@@ -709,8 +709,9 @@ public sealed class EfWorkflowExecutableStore(
                         cancellationToken));
             if (artifact is null && coordination is null)
                 return null;
-            if (artifact is not null && coordination is not null && StringComparer.Ordinal.Equals(artifact, coordination.IncarnationId))
-                return (artifact, ReadCoordination(coordination, scope, artifactId, id));
+            var state = coordination is null ? null : ReadCoordination(coordination, scope, artifactId, id);
+            if (artifact is not null && state is not null && StringComparer.Ordinal.Equals(artifact, coordination!.IncarnationId))
+                return (artifact, state);
             // A delete or create committed between the two reads; observe the pair once more before calling it corrupt.
             if (attempt > 0)
                 throw new InvalidDataException($"Workflow executable '{id}' has incomplete persisted state.");
@@ -731,9 +732,11 @@ public sealed class EfWorkflowExecutableStore(
     {
         db.ChangeTracker.Clear();
         var coordination = await FindCoordinationAsync(db, scope, artifactId, tracking: false, cancellationToken);
-        if (coordination is null || !StringComparer.Ordinal.Equals(coordination.IncarnationId, incarnationId))
+        if (coordination is null)
             return false;
         var state = ReadCoordination(coordination, scope, artifactId, CreateId(scope, artifactId));
+        if (!StringComparer.Ordinal.Equals(coordination.IncarnationId, incarnationId))
+            return false;
         return state.Guard is null || await ClearExpiredGuardAsync(db, scope, artifactId, incarnationId, now, cancellationToken);
     }
 
@@ -757,9 +760,11 @@ public sealed class EfWorkflowExecutableStore(
         try
         {
             var row = await FindCoordinationAsync(db, scope, artifactId, tracking: true, cancellationToken);
-            if (row is null || !StringComparer.Ordinal.Equals(row.IncarnationId, incarnationId))
+            if (row is null)
                 return false;
             var state = ReadCoordination(row, scope, artifactId, CreateId(scope, artifactId));
+            if (!StringComparer.Ordinal.Equals(row.IncarnationId, incarnationId))
+                return false;
             if (state.Guard is null)
                 return true;
             if (GuardIsLive(state, now))
@@ -806,12 +811,13 @@ public sealed class EfWorkflowExecutableStore(
     {
         var row = await RuntimeArtifactEfPersistenceBoundary.QueryAsync(
             db, "reading", artifactId, () => db.WorkflowExecutableRootWriteLeases.SingleOrDefaultAsync(x => x.Id == id, cancellationToken));
-        if (row is not null &&
-            (EfSchemaVersion.NotReadable(RuntimeArtifactEfModule.Chain, row.SchemaVersion) ||
-             row.ScopeKey != Encode(scope) || row.ScopeKeyHash != Hash(scope) ||
-             row.ArtifactId != Encode(artifactId) || row.ArtifactIdHash != Hash(artifactId) ||
-             row.LeaseId != Encode(leaseId) || string.IsNullOrWhiteSpace(row.Token) ||
-             string.IsNullOrWhiteSpace(row.IncarnationId) || row.Revision <= 0))
+        if (row is null)
+            return null;
+        if (EfSchemaVersion.NotReadable(RuntimeArtifactEfModule.Chain, row.SchemaVersion) ||
+            row.ScopeKey != Encode(scope) || row.ScopeKeyHash != Hash(scope) ||
+            row.ArtifactId != Encode(artifactId) || row.ArtifactIdHash != Hash(artifactId) ||
+            row.LeaseId != Encode(leaseId) || string.IsNullOrWhiteSpace(row.Token) ||
+            string.IsNullOrWhiteSpace(row.IncarnationId) || row.Revision <= 0)
             throw new InvalidDataException("The persisted workflow executable root-write lease row is corrupt.");
         return row;
     }
