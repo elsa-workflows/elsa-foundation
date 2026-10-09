@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "last_publish_commit": "51efd8eaa89a90ada0b0a679534c2bbd06dc208b",
+  "last_publish_commit": "3de3b85b152f466d1a787009f5c351f2e183dc84",
   "packages": [
     {
       "package_id": "Elsa.Activities.Bpmn",
@@ -89,13 +89,13 @@
     },
     {
       "package_id": "Elsa.Activities.Runtime",
-      "version": "4.0.12-preview",
-      "commit": "51efd8eaa89a90ada0b0a679534c2bbd06dc208b"
+      "version": "4.0.13-preview",
+      "commit": "3de3b85b152f466d1a787009f5c351f2e183dc84"
     },
     {
       "package_id": "Elsa.Activities.Runtime.Core",
-      "version": "4.0.8-preview",
-      "commit": "a88e37629c87c4c3f400b7a9d5750219848fda29"
+      "version": "4.0.9-preview",
+      "commit": "3de3b85b152f466d1a787009f5c351f2e183dc84"
     },
     {
       "package_id": "Elsa.Activities.Scheduling",
@@ -579,8 +579,8 @@
     },
     {
       "package_id": "Elsa.Workflows.ExecutionEvidence",
-      "version": "4.0.5-preview",
-      "commit": "a88e37629c87c4c3f400b7a9d5750219848fda29"
+      "version": "4.0.6-preview",
+      "commit": "3de3b85b152f466d1a787009f5c351f2e183dc84"
     },
     {
       "package_id": "Elsa.Workflows.Publishing",
@@ -604,18 +604,18 @@
     },
     {
       "package_id": "Elsa.Workflows.Runtime",
-      "version": "4.0.26-preview",
-      "commit": "51efd8eaa89a90ada0b0a679534c2bbd06dc208b"
+      "version": "4.0.27-preview",
+      "commit": "3de3b85b152f466d1a787009f5c351f2e183dc84"
     },
     {
       "package_id": "Elsa.Workflows.Runtime.Api",
-      "version": "4.0.12-preview",
-      "commit": "9a472affde60978cb15743fbc0e5ce22ee0581a9"
+      "version": "4.0.13-preview",
+      "commit": "3de3b85b152f466d1a787009f5c351f2e183dc84"
     },
     {
       "package_id": "Elsa.Workflows.Runtime.Core",
-      "version": "4.0.23-preview",
-      "commit": "51efd8eaa89a90ada0b0a679534c2bbd06dc208b"
+      "version": "4.0.24-preview",
+      "commit": "3de3b85b152f466d1a787009f5c351f2e183dc84"
     },
     {
       "package_id": "Elsa.Workflows.Runtime.Distributed",
