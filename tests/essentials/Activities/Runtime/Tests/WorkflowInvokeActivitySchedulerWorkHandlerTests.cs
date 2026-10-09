@@ -315,7 +315,7 @@ public sealed partial class WorkflowInvokeActivitySchedulerWorkHandlerTests
     public async Task HandleAsync_ExecutionCanceledAfterASecretResolved_StaysACancellationAndRecordsNoFault()
     {
         using var cancellation = new CancellationTokenSource();
-        await using var provider = await NewSecretInvocationAsync(new CancellingSecretActivity(cancellation, failDisposal: false));
+        await using var provider = await NewSecretInvocationAsync(new CancelingSecretActivity(cancellation, failDisposal: false));
 
         var exception = await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
             NewHandler(provider).HandleAsync(NewInvokeWorkItem(NewIdentity()), cancellation.Token).AsTask());
@@ -333,7 +333,7 @@ public sealed partial class WorkflowInvokeActivitySchedulerWorkHandlerTests
     public async Task HandleAsync_ExecutionCanceledAfterASecretResolvedWhileDisposalFails_ReportsTheDisposalFailureMasked()
     {
         using var cancellation = new CancellationTokenSource();
-        await using var provider = await NewSecretInvocationAsync(new CancellingSecretActivity(cancellation, failDisposal: true));
+        await using var provider = await NewSecretInvocationAsync(new CancelingSecretActivity(cancellation, failDisposal: true));
 
         var exception = await Assert.ThrowsAsync<AggregateException>(() =>
             NewHandler(provider).HandleAsync(NewInvokeWorkItem(NewIdentity()), cancellation.Token).AsTask());
@@ -341,6 +341,41 @@ public sealed partial class WorkflowInvokeActivitySchedulerWorkHandlerTests
         SecretResolutionTestSupport.AssertCanceledWithDisposalFailure(
             exception, "Activity execution cancellation and disposal both failed.", cancellation.Token, "disposal saw [secret:payments.api-key]");
         Assert.DoesNotContain(_secretValue, exception.ToString(), StringComparison.Ordinal);
+        await AssertNoFaultRecordedAsync();
+    }
+
+    /// <summary>
+    /// The aggregate a cancellation arm throws when disposal also failed is recorded by the drainer as a handler fault,
+    /// so the cancellation in it is masked too when activity code wrote the value into it; it stays a cancellation for
+    /// the same token. Without a disposal failure the original cancellation is rethrown as it is.
+    /// </summary>
+    [Fact]
+    public async Task HandleAsync_CancellationCarryingTheValueWhileDisposalFails_ReportsTheCancellationMasked()
+    {
+        using var cancellation = new CancellationTokenSource();
+        await using var provider = await NewSecretInvocationAsync(new CancelingSecretActivity(cancellation, failDisposal: true, echoInCancellation: true));
+
+        var exception = await Assert.ThrowsAsync<AggregateException>(() =>
+            NewHandler(provider).HandleAsync(NewInvokeWorkItem(NewIdentity()), cancellation.Token).AsTask());
+
+        SecretResolutionTestSupport.AssertCanceledWithDisposalFailure(
+            exception, "Activity execution cancellation and disposal both failed.", cancellation.Token, "disposal saw [secret:payments.api-key]");
+        Assert.Equal("canceled with [secret:payments.api-key]", exception.InnerExceptions[0].Message);
+        Assert.DoesNotContain(_secretValue, exception.ToString(), StringComparison.Ordinal);
+        await AssertNoFaultRecordedAsync();
+    }
+
+    [Fact]
+    public async Task HandleAsync_CancellationCarryingTheValueWithoutADisposalFailure_RethrowsTheOriginalCancellation()
+    {
+        using var cancellation = new CancellationTokenSource();
+        var activity = new CancelingSecretActivity(cancellation, failDisposal: false, echoInCancellation: true);
+        await using var provider = await NewSecretInvocationAsync(activity);
+
+        var exception = await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            NewHandler(provider).HandleAsync(NewInvokeWorkItem(NewIdentity()), cancellation.Token).AsTask());
+
+        Assert.Same(activity.Thrown, exception);
         await AssertNoFaultRecordedAsync();
     }
 
@@ -1160,18 +1195,23 @@ public sealed partial class WorkflowInvokeActivitySchedulerWorkHandlerTests
 
     /// <summary>
     /// Cancels the work while it runs, after its secret-bound <c>text</c> input was hydrated, and with
-    /// <paramref name="failDisposal"/> fails its disposal with that value in the failure text.
+    /// <paramref name="failDisposal"/> fails its disposal with that value in the failure text. With
+    /// <paramref name="echoInCancellation"/> the cancellation it throws carries that value in its message.
     /// </summary>
-    private sealed class CancellingSecretActivity(CancellationTokenSource cancellation, bool failDisposal) : Activity<TypedResult>, IDisposable
+    private sealed class CancelingSecretActivity(CancellationTokenSource cancellation, bool failDisposal, bool echoInCancellation = false) : Activity<TypedResult>, IDisposable
     {
         [ActivityInput(Key = "text")]
         public string Text { get; set; } = null!;
 
+        public OperationCanceledException? Thrown { get; private set; }
+
         protected override ValueTask<ActivityTransition<TypedResult>> ExecuteAsync(ActivityExecutionContext context)
         {
             cancellation.Cancel();
-            context.CancellationToken.ThrowIfCancellationRequested();
-            throw new InvalidOperationException("The cancelled activity should not continue.");
+            Thrown = echoInCancellation
+                ? new OperationCanceledException($"canceled with {Text}", context.CancellationToken)
+                : new OperationCanceledException(context.CancellationToken);
+            throw Thrown;
         }
 
         public void Dispose()

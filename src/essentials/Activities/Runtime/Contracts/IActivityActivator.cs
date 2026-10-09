@@ -17,6 +17,12 @@ public interface IActivityActivator
 /// being activated, under which activation registers each value it resolves from a secret with
 /// <see cref="Elsa.Workflows.Runtime.Core.Contracts.IRuntimeSecretMask"/>.
 /// </summary>
+/// <remarks>
+/// <paramref name="WorkflowExecutionId"/> and <paramref name="ActivityExecutionId"/> are adjacent strings, so the compiler
+/// does not catch them transposed. A transposition fails open on masking: the values are registered under the workflow
+/// execution id, the work handler masks under the activity execution id, finds nothing registered, and records the
+/// failure text unmasked. Construct the request with named arguments for both.
+/// </remarks>
 public sealed record ActivityActivationRequest(
     string WorkflowExecutionId,
     string ActivityExecutionId,

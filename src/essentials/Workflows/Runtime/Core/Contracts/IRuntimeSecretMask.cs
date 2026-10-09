@@ -9,9 +9,12 @@ public sealed class RuntimeSecretMaskReplacementContractAttribute : Attribute;
 
 /// <summary>
 /// Holds the values resolved from secrets for the activity executions handled in one dependency scope, and replaces
-/// them in text produced for the execution that resolved them, so that a resolved value does not reach that
-/// execution's fault, its incident, or a log line that renders the exception the fault boundary hands on (spec 188,
-/// FR-012).
+/// them in text produced for the execution that resolved them (spec 188, FR-012). The activities runtime's work
+/// handlers mask with it the message, stack trace and inner exception chain of the exception a fault boundary records,
+/// the message of an <c>ActivityFault</c> the activity returned, and the disposal failures a cancellation arm reports
+/// with the cancellation, so those reach the execution's fault, incident and <c>runtime.fault*</c> metadata masked.
+/// Not masked: fault codes, a returned fault's category and fault type, exception type names, and what the activity
+/// writes to the console or its own logger, returns as outputs, or keeps in private state or bookmarks.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -32,8 +35,8 @@ public sealed class RuntimeSecretMaskReplacementContractAttribute : Attribute;
 /// </description></item>
 /// <item><description>
 /// An empty value is ignored: it cannot be told apart in text, and registering it must not make every text "masked".
-/// Every non-empty value is masked however short; a one-character value makes the text hard to read but never lets
-/// the value through, which a minimum length would.
+/// Every non-empty value is masked however short; a one-character value makes the text hard to read, while a minimum
+/// length would let a short value through in the forms the mask matches.
 /// </description></item>
 /// <item><description>
 /// A value is matched ordinally, as written and in its JSON-escaped forms, and replaced by the marker
@@ -41,7 +44,18 @@ public sealed class RuntimeSecretMaskReplacementContractAttribute : Attribute;
 /// </description></item>
 /// <item><description>
 /// Values are held in memory only, until <see cref="Release"/> or the end of the dependency scope, whichever comes
-/// first. They are never persisted, logged or serialized.
+/// first. An implementation must not persist, log or serialize them.
+/// </description></item>
+/// <item><description>
+/// <see cref="HasRegistrations"/> answers faithfully: <see langword="true"/> from the first <see cref="Register"/> of a
+/// non-empty value for the execution until <see cref="Release"/>. The fault boundaries mask only while it is
+/// <see langword="true"/>, so an implementation that answers <see langword="false"/> while it holds a value disables
+/// masking for that execution: the original exception and returned fault are recorded unmasked (fail-open).
+/// </description></item>
+/// <item><description>
+/// <see cref="Release"/> forgets the execution's values. The work handlers call it once they have recorded the outcome,
+/// which bounds how long a value is held by the outcome rather than by the scope's lifetime. An implementation that
+/// ignores it keeps the values until the scope ends; nothing is masked less.
 /// </description></item>
 /// </list>
 /// </remarks>
@@ -54,7 +68,11 @@ public interface IRuntimeSecretMask
     /// </summary>
     void Register(string activityExecutionId, string referenceName, string value);
 
-    /// <summary>Whether any value is registered for <paramref name="activityExecutionId"/>.</summary>
+    /// <summary>
+    /// Whether any value is registered for <paramref name="activityExecutionId"/>. The fault boundaries replace an
+    /// exception only while this is <see langword="true"/>; a <see langword="false"/> answer while a value is held turns
+    /// masking off for the execution.
+    /// </summary>
     bool HasRegistrations(string activityExecutionId);
 
     /// <summary>

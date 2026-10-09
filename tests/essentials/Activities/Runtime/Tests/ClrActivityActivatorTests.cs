@@ -75,8 +75,8 @@ public sealed class ClrActivityActivatorTests : IAsyncDisposable
             new Dictionary<string, ValueEnvelope>(),
             DateTimeOffset.UtcNow);
         var request = new ActivityActivationRequest(
-            WorkflowExecutionId,
-            ActivityExecutionId,
+            WorkflowExecutionId: WorkflowExecutionId,
+            ActivityExecutionId: ActivityExecutionId,
             contract,
             snapshot,
             new ActivityAttempt("attempt-1", "invocation-1", 1, ActivityAttemptReason.Initial, DateTimeOffset.UtcNow),

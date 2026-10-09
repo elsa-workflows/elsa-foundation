@@ -189,7 +189,7 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : RuntimeSchedule
             state = activationClaim.State;
             valueFlowAttempt = activationClaim.Attempt;
             activationLease = await serviceProvider.GetRequiredService<IActivityActivator>().ActivateAsync(
-                new ActivityActivationRequest(workItem.WorkflowExecutionId, invokePayload.ActivityExecutionId, activityContract, valueFlowSnapshot, valueFlowAttempt, Descriptor: executableNode.Descriptor),
+                new ActivityActivationRequest(WorkflowExecutionId: workItem.WorkflowExecutionId, ActivityExecutionId: invokePayload.ActivityExecutionId, activityContract, valueFlowSnapshot, valueFlowAttempt, Descriptor: executableNode.Descriptor),
                 cancellationToken);
             activity = activationLease.Activity;
 
@@ -530,16 +530,17 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : RuntimeSchedule
 
         if (returnedFault is not null)
         {
+            // Masked once, here: the durable fault and the incident both read this text, so masking the exception built
+            // from it again would mask a value occurring inside an inserted marker and make the two differ.
             returnedFault = faultMasking.Mask(returnedFault);
             var faultedState = state with
             {
                 Fault = returnedFault.ToNormalized()
             };
-            await RecordFaultAsync(
+            await RecordMaskedFaultAsync(
                 activityFaultIncidentRecorder,
                 activityExecutionStateStore,
                 checkpointCommitter,
-                faultMasking,
                 workItem,
                 invokePayload,
                 faultedState,
@@ -648,7 +649,11 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : RuntimeSchedule
     // the parent can resolve its join deterministically (#308) instead of waiting forever for a completion that
     // never arrives. Parents that do not implement IRuntimeActivityChildFaultHandler no-op on that work item, so the fault
     // remains a plain blocking incident for sequential containers.
-    private async ValueTask RecordFaultAsync(
+    //
+    // Every arm that records a thrown exception records through here, so this is where a value resolved for the
+    // execution leaves that exception's text. The returned-fault arm masks its fault itself and records through
+    // RecordMaskedFaultAsync, so its text is masked once.
+    private ValueTask RecordFaultAsync(
         ActivityFaultIncidentRecorder activityFaultIncidentRecorder,
         IActivityExecutionStateStore activityExecutionStateStore,
         RuntimeCheckpointCommitter checkpointCommitter,
@@ -659,10 +664,24 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : RuntimeSchedule
         Exception exception,
         string subStatus,
         IReadOnlyCollection<ActivityExecutionInspectionValueSnapshot> valueSnapshots,
+        CancellationToken cancellationToken) =>
+        RecordMaskedFaultAsync(
+            activityFaultIncidentRecorder, activityExecutionStateStore, checkpointCommitter, workItem, invokePayload, state,
+            faultMasking.Mask(exception), subStatus, valueSnapshots, cancellationToken);
+
+    private async ValueTask RecordMaskedFaultAsync(
+        ActivityFaultIncidentRecorder activityFaultIncidentRecorder,
+        IActivityExecutionStateStore activityExecutionStateStore,
+        RuntimeCheckpointCommitter checkpointCommitter,
+        RuntimeSchedulerWorkItem workItem,
+        RuntimeInvokeActivityCommandPayload invokePayload,
+        ActivityExecutionState state,
+        Exception maskedException,
+        string subStatus,
+        IReadOnlyCollection<ActivityExecutionInspectionValueSnapshot> valueSnapshots,
         CancellationToken cancellationToken)
     {
-        // Every fault arm records through here, so this is where a value resolved for the execution leaves its text.
-        var request = ActivityExecutionInspection.NewFaultIncidentRecordRequest(checkpointCommitter, workItem, invokePayload, state, faultMasking.Mask(exception), subStatus, valueSnapshots);
+        var request = ActivityExecutionInspection.NewFaultIncidentRecordRequest(checkpointCommitter, workItem, invokePayload, state, maskedException, subStatus, valueSnapshots);
         var incidentId = ActivityFaultIncidentRecorder.IncidentId(workItem.WorkItemId, invokePayload.ActivityExecutionId, subStatus);
         var parentEvaluation = await ChildFaultParentEvaluation.TryBuildAsync(
             activityExecutionStateStore, TimeProvider, workItem, invokePayload.PinnedExecutable, state, incidentId, cancellationToken);

@@ -27,7 +27,10 @@ namespace Elsa.Workflows.Runtime.Services.Values;
 public sealed class DefaultRuntimeSecretMask : IRuntimeSecretMask
 {
     private readonly Lock _lock = new();
-    private readonly Dictionary<string, List<Replacement>> _registrations = new(StringComparer.Ordinal);
+
+    // Per execution, every registered form in registration order. Each registration replaces the array, so Mask reads
+    // the current one without copying it.
+    private readonly Dictionary<string, Replacement[]> _registrations = new(StringComparer.Ordinal);
 
     public void Register(string activityExecutionId, string referenceName, string value)
     {
@@ -48,9 +51,8 @@ public sealed class DefaultRuntimeSecretMask : IRuntimeSecretMask
             .Select(form => new Replacement(form, marker));
         lock (_lock)
         {
-            if (!_registrations.TryGetValue(activityExecutionId, out var replacements))
-                _registrations[activityExecutionId] = replacements = [];
-            replacements.AddRange(forms.Where(replacement => !replacements.Contains(replacement)).ToArray());
+            var registered = _registrations.GetValueOrDefault(activityExecutionId, []);
+            _registrations[activityExecutionId] = [.. registered, .. forms.Where(replacement => !registered.Contains(replacement))];
         }
     }
 
@@ -65,26 +67,36 @@ public sealed class DefaultRuntimeSecretMask : IRuntimeSecretMask
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(activityExecutionId);
         ArgumentNullException.ThrowIfNull(text);
-        Replacement[] replacements;
+        Replacement[]? replacements;
         lock (_lock)
-        {
-            if (!_registrations.TryGetValue(activityExecutionId, out var registered))
-                return text;
-            replacements = [.. registered];
-        }
+            _registrations.TryGetValue(activityExecutionId, out replacements);
+        if (replacements is null)
+            return text;
 
-        var next = FindNext(text, 0, replacements);
-        if (next is null)
+        // The next occurrence of each form at or after the current position, or -1 when there is none. An index at or
+        // after the position stays valid as the position advances, so only the forms it passed are searched again.
+        var next = new int[replacements.Length];
+        for (var form = 0; form < replacements.Length; form++)
+            next[form] = text.IndexOf(replacements[form].Form, StringComparison.Ordinal);
+
+        var match = Earliest(replacements, next);
+        if (match < 0)
             return text;
 
         var masked = new StringBuilder(text.Length);
         var position = 0;
-        while (next is { } match)
+        while (match >= 0)
         {
-            var (index, replacement) = match;
-            masked.Append(text, position, index - position).Append(replacement.Marker);
-            position = index + replacement.Form.Length;
-            next = FindNext(text, position, replacements);
+            var replacement = replacements[match];
+            masked.Append(text, position, next[match] - position).Append(replacement.Marker);
+            position = next[match] + replacement.Form.Length;
+            for (var form = 0; form < replacements.Length; form++)
+            {
+                if (next[form] >= 0 && next[form] < position)
+                    next[form] = text.IndexOf(replacements[form].Form, position, StringComparison.Ordinal);
+            }
+
+            match = Earliest(replacements, next);
         }
 
         return masked.Append(text, position, text.Length - position).ToString();
@@ -98,17 +110,22 @@ public sealed class DefaultRuntimeSecretMask : IRuntimeSecretMask
     }
 
     /// <summary>
-    /// The earliest occurrence of a registered form at or after <paramref name="start"/>, and of the forms found there,
-    /// the longest; of equally long ones, the first registered.
+    /// The form whose next occurrence comes first, and of the forms occurring there, the longest; of equally long ones,
+    /// the first registered. -1 when no form occurs again.
     /// </summary>
-    private static (int Index, Replacement Replacement)? FindNext(string text, int start, IReadOnlyList<Replacement> replacements) =>
-        replacements
-            .Select(replacement => (Index: text.IndexOf(replacement.Form, start, StringComparison.Ordinal), Replacement: replacement))
-            .Where(match => match.Index >= 0)
-            .OrderBy(match => match.Index)
-            .ThenByDescending(match => match.Replacement.Form.Length)
-            .Select(match => ((int, Replacement)?)match)
-            .FirstOrDefault();
+    private static int Earliest(Replacement[] replacements, int[] next)
+    {
+        var earliest = -1;
+        for (var form = 0; form < replacements.Length; form++)
+        {
+            if (next[form] >= 0 && (earliest < 0
+                    || next[form] < next[earliest]
+                    || next[form] == next[earliest] && replacements[form].Form.Length > replacements[earliest].Form.Length))
+                earliest = form;
+        }
+
+        return earliest;
+    }
 
     /// <summary>One form of a registered value and the marker it is replaced by.</summary>
     private sealed record Replacement(string Form, string Marker)

@@ -252,6 +252,52 @@ public sealed class FaultIncidentExecutionTests
     }
 
     /// <summary>
+    /// A code is not masked (contract: withheld values and masking): the resolved value "Unavailable" occurs in the
+    /// second input's failure code, which is still recorded whole while the message around it is masked.
+    /// </summary>
+    [Fact]
+    public async Task A_failure_code_containing_a_resolved_value_is_recorded_intact()
+    {
+        _resolver.Respond = (request, _) => request.Reference.Name == SecretResolutionTestSupport.ReferenceName
+            ? RuntimeSecretResolution.Success("Unavailable")
+            : RuntimeSecretResolution.Failure("StoreUnavailable", isRetryable: true);
+        await using var harness = NewMaskingHarness(new SecretFailurePlan(), [SecretExecutionId]);
+
+        var run = await harness.RunAsync(WorkflowExecutionHarness.NewExecutable(
+            TwoSecretInputActivity.NewNode(SecretNodeId, SecretResolutionTestSupport.ReferenceName, "payments.webhook-key")));
+
+        var state = run.State(SecretNodeId);
+        Assert.Equal("StoreUnavailable", state.Fault!.Code);
+        Assert.True(state.Fault.IsRetryable);
+        Assert.Equal($"Secret 'payments.webhook-key' could not be resolved (Store{Marker}).", state.Fault.Message);
+        var incident = await SingleIncidentAsync(harness, state);
+        Assert.Equal($"Secret 'payments.webhook-key' could not be resolved (Store{Marker}).", incident.Message);
+    }
+
+    [Fact]
+    public async Task A_returned_fault_whose_value_occurs_in_the_marker_is_masked_once_on_the_invoke_path()
+    {
+        _resolver.Respond = (_, _) => RuntimeSecretResolution.Success("api");
+        await using var harness = NewMaskingHarness(new SecretFailurePlan { ReturnFault = true }, [SecretExecutionId]);
+
+        var run = await harness.RunAsync(WorkflowExecutionHarness.NewExecutable(
+            SecretResolutionTestSupport.NewSecretNode(SecretNodeId, typeof(SecretFailingActivity))));
+
+        await AssertReturnedFaultMaskedOnceAsync(harness, run.State(SecretNodeId));
+    }
+
+    [Fact]
+    public async Task A_returned_fault_whose_value_occurs_in_the_marker_is_masked_once_on_the_resume_path()
+    {
+        _resolver.Respond = (_, _) => RuntimeSecretResolution.Success("api");
+        await using var harness = NewMaskingHarness(new SecretFailurePlan { FailOnResume = true, ReturnFault = true }, [SecretExecutionId]);
+
+        var state = await RunAndResumeAsync(harness);
+
+        await AssertReturnedFaultMaskedOnceAsync(harness, state);
+    }
+
+    /// <summary>
     /// A missing durable-value storage driver is a deployment problem that parks the activity (constitution §E2.6.1),
     /// classified by its exception type. A registered value must not turn it into a fault by masking it away.
     /// </summary>
@@ -387,6 +433,19 @@ public sealed class FaultIncidentExecutionTests
         AssertRegisteredAndReleased(state);
         await AssertValueAbsentAsync(harness);
         AssertLoggedMasked();
+    }
+
+    /// <summary>
+    /// Asserts a returned fault whose value "api" also occurs inside its own marker was masked exactly once: the durable
+    /// fault and the incident carry the same text, with one marker and nothing masked inside it.
+    /// </summary>
+    private static async Task AssertReturnedFaultMaskedOnceAsync(WorkflowExecutionHarness harness, ActivityExecutionState state)
+    {
+        Assert.Equal("ActivityReturnedFault", state.SubStatus);
+        Assert.Equal($"returned {Marker}", state.Fault!.Message);
+        var incident = await SingleIncidentAsync(harness, state);
+        Assert.Equal(state.Fault.Message, incident.Message);
+        Assert.Equal(state.Fault.Message, incident.Metadata[RuntimeMetadataKeys.FaultMessage]);
     }
 
     /// <summary>

@@ -79,8 +79,8 @@ internal static class TypedActivityTestActivation
             envelopes,
             DateTimeOffset.UtcNow);
         var request = new ActivityActivationRequest(
-            "workflow-execution-1",
-            "invocation-1",
+            WorkflowExecutionId: "workflow-execution-1",
+            ActivityExecutionId: "invocation-1",
             contract,
             snapshot,
             new ActivityAttempt("attempt-1", "invocation-1", 1, ActivityAttemptReason.Initial, DateTimeOffset.UtcNow),

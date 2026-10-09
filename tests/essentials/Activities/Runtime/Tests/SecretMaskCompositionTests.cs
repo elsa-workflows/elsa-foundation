@@ -1,6 +1,7 @@
 using CShells.DependencyInjection;
 using CShells.Features;
 using CShells.Lifecycle;
+using Elsa.Activities.Runtime.Services;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Extensions;
@@ -19,9 +20,6 @@ namespace Elsa.Activities.Runtime.Tests;
 public sealed class SecretMaskCompositionTests
 {
     private const string ShellName = "secret-masks";
-    // The composition record and the check are internal to the activities runtime, so they are matched by name.
-    private const string CompositionRecordTypeName = "RuntimeSecretMaskComposition";
-    private const string ValidatorTypeName = "RuntimeSecretMaskCompositionValidator";
     private readonly ServiceCollection _services = new();
 
     public SecretMaskCompositionTests() => new ActivitiesRuntimeFeature().ConfigureServices(_services);
@@ -52,12 +50,17 @@ public sealed class SecretMaskCompositionTests
     }
 
     [Fact]
-    public async Task The_default_replaced_with_services_Replace_starts()
+    public async Task The_default_replaced_with_services_Replace_starts_and_resolves_the_replacement()
     {
         _services.TryAddScoped<IRuntimeSecretMask, DefaultRuntimeSecretMask>();
         _services.Replace(ServiceDescriptor.Scoped<IRuntimeSecretMask, FirstSecretMask>());
 
         await InitializeAsync();
+
+        Assert.Equal(typeof(FirstSecretMask), Assert.Single(_services, descriptor => descriptor.ServiceType == typeof(IRuntimeSecretMask)).ImplementationType);
+        await using var provider = _services.BuildServiceProvider(validateScopes: true);
+        await using var scope = provider.CreateAsyncScope();
+        Assert.IsType<FirstSecretMask>(scope.ServiceProvider.GetRequiredService<IRuntimeSecretMask>());
     }
 
     [Fact]
@@ -65,9 +68,9 @@ public sealed class SecretMaskCompositionTests
     {
         new ActivitiesRuntimeFeature().ConfigureServices(_services);
 
-        Assert.Single(_services, descriptor => descriptor.ServiceType.Name == CompositionRecordTypeName);
+        Assert.Single(_services, descriptor => descriptor.ServiceType == typeof(RuntimeSecretMaskComposition));
         await using var provider = _services.BuildServiceProvider();
-        Assert.Single(provider.GetServices<IShellInitializer>(), initializer => initializer.GetType().Name == ValidatorTypeName);
+        Assert.Single(provider.GetServices<IShellInitializer>(), initializer => initializer is RuntimeSecretMaskCompositionValidator);
     }
 
     [Fact]

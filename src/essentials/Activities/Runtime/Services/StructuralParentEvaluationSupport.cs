@@ -57,7 +57,7 @@ internal static class StructuralParentEvaluationSupport
             ?? throw new InvalidOperationException($"VF-ACT-009: Running typed activity invocation '{state.InvocationId}' has no open committed attempt.");
         var activator = serviceProvider.GetRequiredService<IActivityActivator>();
         var activationLease = await activator.ActivateAsync(
-            new ActivityActivationRequest(state.Execution.WorkflowExecutionId, state.Execution.ActivityExecutionId, contract, snapshot, attempt, state.PrivateState, Descriptor: executableNode.Descriptor),
+            new ActivityActivationRequest(WorkflowExecutionId: state.Execution.WorkflowExecutionId, ActivityExecutionId: state.Execution.ActivityExecutionId, contract, snapshot, attempt, state.PrivateState, Descriptor: executableNode.Descriptor),
             cancellationToken);
 
         if (inputRematerializer is null || executable is null || activationLease.Activity is not IRuntimeRematerializeInputsOnChildCompletion)
@@ -88,7 +88,7 @@ internal static class StructuralParentEvaluationSupport
 
         await activationLease.DisposeAsync();
         var freshLease = await activator.ActivateAsync(
-            new ActivityActivationRequest(state.Execution.WorkflowExecutionId, state.Execution.ActivityExecutionId, contract, freshSnapshot, attempt, state.PrivateState, Descriptor: executableNode.Descriptor),
+            new ActivityActivationRequest(WorkflowExecutionId: state.Execution.WorkflowExecutionId, ActivityExecutionId: state.Execution.ActivityExecutionId, contract, freshSnapshot, attempt, state.PrivateState, Descriptor: executableNode.Descriptor),
             cancellationToken);
         return new ConstructedActivity(freshLease.Activity, freshSnapshot, freshLease);
     }

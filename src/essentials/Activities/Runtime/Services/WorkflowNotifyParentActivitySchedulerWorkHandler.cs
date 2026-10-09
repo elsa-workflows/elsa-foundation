@@ -390,7 +390,9 @@ public sealed class WorkflowNotifyParentActivitySchedulerWorkHandler : RuntimeSc
     {
         var latestFaultedParentState = await activityExecutionStateStore.FindAsync(
             workItem.WorkflowExecutionId, payload.ActivityExecutionId, cancellationToken) ?? fallbackState;
-        // Every fault arm records through here, so this is where a value resolved for the parent leaves its text.
+        // Every arm that records a thrown exception records through here, so this is where a value resolved for the
+        // parent leaves that exception's text. The returned-fault arm masks its fault once and builds its request from
+        // that masked fault directly, without coming through here.
         var request = NewFaultIncidentRecordRequest(checkpointCommitter, workItem, payload, latestFaultedParentState, faultMasking.Mask(exception), subStatus, valueSnapshots);
         var incidentId = ActivityFaultIncidentRecorder.IncidentId(workItem.WorkItemId, payload.ActivityExecutionId, subStatus);
         var parentEvaluation = await ChildFaultParentEvaluation.TryBuildAsync(

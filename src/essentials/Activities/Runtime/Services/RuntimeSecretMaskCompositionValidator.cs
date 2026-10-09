@@ -6,7 +6,7 @@ using Microsoft.Extensions.DependencyInjection;
 namespace Elsa.Activities.Runtime.Services;
 
 /// <summary>The service collection the runtime was composed in, read again at shell activation.</summary>
-internal sealed record RuntimeSecretMaskComposition(IServiceCollection Services);
+public sealed record RuntimeSecretMaskComposition(IServiceCollection Services);
 
 /// <summary>
 /// Fails shell activation when the host composes more than one <see cref="IRuntimeSecretMask"/>, naming every
@@ -20,7 +20,7 @@ internal sealed record RuntimeSecretMaskComposition(IServiceCollection Services)
 /// reads the composed service collection once every feature has registered, and counts registrations rather than
 /// resolving them, as <see cref="RuntimeSecretResolverCompositionValidator"/> does for the secret resolver.
 /// </remarks>
-internal sealed class RuntimeSecretMaskCompositionValidator(RuntimeSecretMaskComposition composition) : IShellInitializer
+public sealed class RuntimeSecretMaskCompositionValidator(RuntimeSecretMaskComposition composition) : IShellInitializer
 {
     public Task InitializeAsync(CancellationToken cancellationToken = default)
     {
@@ -40,25 +40,4 @@ internal sealed class RuntimeSecretMaskCompositionValidator(RuntimeSecretMaskCom
         services.AddSingleton(new RuntimeSecretMaskComposition(services));
         services.AddShellInitializer<RuntimeSecretMaskCompositionValidator>(LifecyclePhase.Prepare, 0);
     }
-}
-
-/// <summary>Describes a replacement contract's composed registrations for a startup composition check.</summary>
-internal static class ReplacementContractRegistrations
-{
-    /// <summary>
-    /// Every non-keyed registration of <typeparamref name="TContract"/> in <paramref name="services"/>, in registration
-    /// order: its implementation type, the type of a registered instance, or "a factory registration".
-    /// </summary>
-    public static IReadOnlyList<string> Describe<TContract>(IServiceCollection services) =>
-        services
-            .Where(descriptor => descriptor.ServiceType == typeof(TContract) && !descriptor.IsKeyedService)
-            .Select(Describe)
-            .ToArray();
-
-    private static string Describe(ServiceDescriptor descriptor) =>
-        descriptor.ImplementationType?.FullName is { } implementationType
-            ? $"'{implementationType}'"
-            : descriptor.ImplementationInstance?.GetType().FullName is { } instanceType
-                ? $"an instance of '{instanceType}'"
-                : "a factory registration";
 }

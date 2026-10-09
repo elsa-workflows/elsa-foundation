@@ -260,7 +260,7 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
             // as a blocking incident faults the activity and surfaces a queryable cause, distinct from
             // InputMaterializationFailed and the ActivityResumeFaulted resume-method failure below.
             activationLease = await serviceProvider.GetRequiredService<IActivityActivator>().ActivateAsync(
-                new ActivityActivationRequest(workItem.WorkflowExecutionId, resumePayload.ActivityExecutionId, contract, executionState.InputSnapshot!, resumeAttempt, state.PrivateState, triggerDelivery, executableNode.Descriptor),
+                new ActivityActivationRequest(WorkflowExecutionId: workItem.WorkflowExecutionId, ActivityExecutionId: resumePayload.ActivityExecutionId, contract, executionState.InputSnapshot!, resumeAttempt, state.PrivateState, triggerDelivery, executableNode.Descriptor),
                 cancellationToken);
             activity = activationLease.Activity;
 
@@ -397,16 +397,17 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
 
         if (returnedFault is not null)
         {
+            // Masked once, here: the durable fault and the incident both read this text, so masking the exception built
+            // from it again would mask a value occurring inside an inserted marker and make the two differ.
             returnedFault = faultMasking.Mask(returnedFault);
             var faultedState = executionState with
             {
                 Fault = returnedFault.ToNormalized()
             };
-            await RecordFaultAsync(
+            await RecordMaskedFaultAsync(
                 serviceProvider,
                 activityFaultIncidentRecorder,
                 checkpointCommitter,
-                faultMasking,
                 workItem,
                 resumePayload,
                 faultedState,
@@ -866,7 +867,11 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
     // Like the invoke path, it rides a child-fault parent-evaluation work item along when the faulted activity has
     // a parent fork/join, so a branch that suspends then faults on resume still resolves its parent's join
     // deterministically (#308).
-    private async ValueTask RecordFaultAsync(
+    //
+    // Every arm that records a thrown exception records through here, so this is where a value resolved for the
+    // execution leaves that exception's text. The returned-fault arm masks its fault itself and records through
+    // RecordMaskedFaultAsync, so its text is masked once.
+    private ValueTask RecordFaultAsync(
         IServiceProvider serviceProvider,
         ActivityFaultIncidentRecorder activityFaultIncidentRecorder,
         RuntimeCheckpointCommitter checkpointCommitter,
@@ -875,6 +880,21 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
         RuntimeResumeBookmarkCommandPayload resumePayload,
         ActivityExecutionState state,
         Exception exception,
+        string subStatus,
+        IReadOnlyCollection<ActivityExecutionInspectionValueSnapshot> valueSnapshots,
+        CancellationToken cancellationToken) =>
+        RecordMaskedFaultAsync(
+            serviceProvider, activityFaultIncidentRecorder, checkpointCommitter, workItem, resumePayload, state,
+            faultMasking.Mask(exception), subStatus, valueSnapshots, cancellationToken);
+
+    private async ValueTask RecordMaskedFaultAsync(
+        IServiceProvider serviceProvider,
+        ActivityFaultIncidentRecorder activityFaultIncidentRecorder,
+        RuntimeCheckpointCommitter checkpointCommitter,
+        RuntimeSchedulerWorkItem workItem,
+        RuntimeResumeBookmarkCommandPayload resumePayload,
+        ActivityExecutionState state,
+        Exception maskedException,
         string subStatus,
         IReadOnlyCollection<ActivityExecutionInspectionValueSnapshot> valueSnapshots,
         CancellationToken cancellationToken)
@@ -886,8 +906,7 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
             _timeProvider.GetUtcNow(),
             incidentId);
         state = ActivityAttemptActivationClaimer.CompactTriggerDeliveryHistory(state);
-        // Every fault arm records through here, so this is where a value resolved for the execution leaves its text.
-        var request = NewFaultIncidentRecordRequest(checkpointCommitter, workItem, resumePayload, state, faultMasking.Mask(exception), subStatus, valueSnapshots);
+        var request = NewFaultIncidentRecordRequest(checkpointCommitter, workItem, resumePayload, state, maskedException, subStatus, valueSnapshots);
         var activityExecutionStateStore = serviceProvider.GetRequiredService<IActivityExecutionStateStore>();
         var parentEvaluation = await ChildFaultParentEvaluation.TryBuildAsync(
             activityExecutionStateStore, _timeProvider, workItem, resumePayload.PinnedExecutable, state, incidentId, cancellationToken);

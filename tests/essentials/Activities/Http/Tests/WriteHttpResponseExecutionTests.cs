@@ -366,8 +366,8 @@ public sealed class WriteHttpResponseExecutionTests
         var contract = node.ActivityContract;
         Assert.NotNull(contract);
         await using var lease = await activator.ActivateAsync(new ActivityActivationRequest(
-            "wf-1",
-            snapshot.InvocationId,
+            WorkflowExecutionId: "wf-1",
+            ActivityExecutionId: snapshot.InvocationId,
             contract,
             snapshot,
             attempt,

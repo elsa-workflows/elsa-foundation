@@ -1,5 +1,6 @@
 using System.Text.Encodings.Web;
 using System.Text.Json;
+using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Services.Values;
 using Xunit;
 
@@ -19,6 +20,12 @@ public sealed class RuntimeSecretMaskTests
 
     private readonly DefaultRuntimeSecretMask _mask = new();
     private readonly string _value = $"canary{Guid.NewGuid():N}";
+
+    [Fact]
+    public void The_mask_contract_declares_single_implementation_replacement_semantics()
+    {
+        Assert.True(typeof(IRuntimeSecretMask).IsDefined(typeof(RuntimeSecretMaskReplacementContractAttribute), inherit: false));
+    }
 
     [Fact]
     public void A_registered_value_is_replaced_by_its_reference_marker_wherever_it_occurs()
@@ -131,5 +138,15 @@ public sealed class RuntimeSecretMaskTests
         _mask.Register(Execution, "long", longer);
 
         Assert.Equal("x [secret:long] y [secret:short]", _mask.Mask(Execution, $"x {longer} y {_value}"));
+    }
+
+    [Fact]
+    public void A_value_whose_occurrence_an_earlier_match_consumed_is_masked_where_it_occurs_again()
+    {
+        // "ab" wins at 0 and consumes the "b" of the first "bc", so "bc" is masked only where it occurs after that.
+        _mask.Register(Execution, "first", "ab");
+        _mask.Register(Execution, "second", "bc");
+
+        Assert.Equal("[secret:first]c[secret:second]", _mask.Mask(Execution, "abcbc"));
     }
 }

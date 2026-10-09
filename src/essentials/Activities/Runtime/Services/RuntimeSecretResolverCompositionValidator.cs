@@ -6,7 +6,7 @@ using Microsoft.Extensions.DependencyInjection;
 namespace Elsa.Activities.Runtime.Services;
 
 /// <summary>The service collection the runtime was composed in, read again at shell activation.</summary>
-internal sealed record RuntimeSecretResolverComposition(IServiceCollection Services);
+public sealed record RuntimeSecretResolverComposition(IServiceCollection Services);
 
 /// <summary>
 /// Fails shell activation when the host composes more than one <see cref="IRuntimeSecretResolver"/>, naming every
@@ -19,7 +19,7 @@ internal sealed record RuntimeSecretResolverComposition(IServiceCollection Servi
 /// service collection once every feature has registered. It counts registrations rather than resolving them: this is
 /// detection, not a contribution-style consumer of the contract, which §2.6.2 forbids.
 /// </remarks>
-internal sealed class RuntimeSecretResolverCompositionValidator(RuntimeSecretResolverComposition composition) : IShellInitializer
+public sealed class RuntimeSecretResolverCompositionValidator(RuntimeSecretResolverComposition composition) : IShellInitializer
 {
     public Task InitializeAsync(CancellationToken cancellationToken = default)
     {

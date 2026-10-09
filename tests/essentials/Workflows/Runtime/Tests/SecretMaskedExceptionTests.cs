@@ -81,6 +81,18 @@ public sealed class SecretMaskedExceptionTests
     }
 
     [Fact]
+    public void A_failure_code_containing_a_masked_value_is_copied_intact()
+    {
+        // A value "Unavailable" occurs in the code; a code is copied, not masked, so the persisted code stays whole.
+        var masked = new SecretMaskedException(
+            new RuntimeSecretResolutionException("payments.webhook-key", "StoreUnavailable", isRetryable: true),
+            text => text.Replace("Unavailable", Marker, StringComparison.Ordinal));
+
+        Assert.Equal("StoreUnavailable", masked.FailureCode);
+        Assert.Equal($"Secret 'payments.webhook-key' could not be resolved (Store{Marker}).", masked.Message);
+    }
+
+    [Fact]
     public void An_unclassified_exception_stays_unretryable_and_without_a_code()
     {
         var masked = Mask(new InvalidOperationException($"failed {_value}"));
@@ -104,20 +116,29 @@ public sealed class SecretMaskedExceptionTests
         Assert.Equal($"inner {Marker}", inner.Message);
     }
 
-    [Fact]
-    public void The_fault_capture_policy_falls_back_to_the_original_type_name_when_the_message_is_blank()
+    [Theory]
+    [InlineData(typeof(StackCarryingException), "StackCarryingException")]
+    [InlineData(typeof(GenericStackCarryingException<int>), "GenericStackCarryingException`1")]
+    public void The_fault_capture_policy_falls_back_to_the_original_type_name_when_the_message_is_blank(Type exceptionType, string expectedName)
     {
         var policy = DefaultRuntimeFaultCapturePolicy.CreateDefault();
+        var original = (Exception)Activator.CreateInstance(exceptionType, "   ", null)!;
 
-        var fault = policy.Capture(Mask(new StackCarryingException("   ", stackTrace: null)));
+        var fault = policy.Capture(Mask(original));
 
-        Assert.Equal(nameof(StackCarryingException), fault.Message);
+        Assert.Equal(expectedName, fault.Message);
+        Assert.Equal(exceptionType.FullName, fault.ExceptionType);
     }
 
     private SecretMaskedException Mask(Exception exception) =>
         new(exception, text => text.Replace(_value, Marker, StringComparison.Ordinal));
 
     private sealed class StackCarryingException(string message, string? stackTrace) : Exception(message)
+    {
+        public override string? StackTrace => stackTrace;
+    }
+
+    private sealed class GenericStackCarryingException<T>(string message, string? stackTrace) : Exception(message)
     {
         public override string? StackTrace => stackTrace;
     }
