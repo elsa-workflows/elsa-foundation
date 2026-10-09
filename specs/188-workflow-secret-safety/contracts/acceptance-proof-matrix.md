@@ -87,6 +87,19 @@ protection the last one standing.
 
 SC-005 is proved when the canary PR's table has one red row per id above (15 rows) and none green.
 
+**As built in slice 9.** P8 is guarded by an added scenario, S8c: an imported artifact declares a workflow variable
+sensitive with canary value C3 as its initial value, and disabling P8 puts C3 into the execution evidence. S8 cannot
+reach P8, because execution evidence records root variables, activity facts and incident messages, never an
+activity's input, and a published design cannot declare a sensitive workflow variable. P5's refusals moved to
+`RuntimeInputBindingCompiler.EnsureSecretBindingsAdmissible` (graph and checkpoint participant) beside the intrinsic one
+in `ExecutableNodeCompiler`, and S7 publishes onto an intrinsic and a checkpoint participant; the canary composes no
+graph feature. P9's executable-inspector half is reached by S5's imported literal, through the input-sources view.
+S10's projection of `Plain` reports `isSensitive: true`, because slice 7 renders every withheld record sensitive, so
+S10's positive control asserts that the snapshot's envelope policy and the pinned contract policy are not sensitive. S9's
+injection also plants the incident the drainer raises with the escaped message, so the incident state, the inspection
+projection, the evidence and the inspector are left out of S9's scan with the poison record. The PR records every row,
+the mutation site each id was disabled at, and the fused-mode results ([tasks.md](../tasks.md#slice-9-canary-end-to-end-with-per-protection-bite-proof-fr-013-fr-014), slice 9 as-built note).
+
 **Isolation re-checked after the S10 change (round 3).** P1, P2 and P6 (S10) now run on `Plain`, whose binding and
 pinned contract are both not sensitive and whose name no redactor matches, so with each disabled alone nothing else
 stands between C1 and the named surface: P1 and P2 put C1 into a committed snapshot that producer withholding and the
