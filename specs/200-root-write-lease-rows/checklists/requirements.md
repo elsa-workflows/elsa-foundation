@@ -35,5 +35,5 @@
 - The spec names the four supported database providers and specific regression tests. These are part of the product's supported-platform and evidence contract, not implementation choices.
 - The concrete mechanism is left to the plan: record layout, locking or commit-then-check ordering, and migration shape.
 - "One record per lease" appears in the spec because the owner selected that direction. That decision is recorded under Assumptions; the spec does not prescribe a schema.
-- FR-012 / User Story 4 are deliberately conditional on a safety proof in the plan. They are not open clarifications.
+- The lease skip for non-root-changing commits (former User Story 4 / FR-012) was moved to a follow-up unit by owner decision.
 - Validation passed on the first iteration.
