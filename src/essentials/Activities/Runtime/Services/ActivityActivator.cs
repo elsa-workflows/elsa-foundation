@@ -12,9 +12,11 @@ namespace Elsa.Activities.Runtime.Services;
 /// <remarks>
 /// A hydrating strategy's activation is the only place a secret-bound input is resolved. The committed snapshot holds
 /// a withheld envelope for it; <see cref="ActivitySecretInputResolver"/> resolves the reference for the partition the
-/// execution runs under, converts the text with the plan the envelope carries, and the activity is hydrated from that
-/// transient copy of the snapshot. The request's snapshot is never changed, so nothing the activity was hydrated with
-/// is written back to state. Every activation resolves again; nothing resolved is kept.
+/// execution runs under, registers the value with <see cref="IRuntimeSecretMask"/> under the request's activity execution
+/// id, converts the text with the plan the envelope carries, and the activity is hydrated from that transient copy of
+/// the snapshot. The request's snapshot is never changed, so nothing the activity was hydrated with is written back to
+/// state. Every activation resolves again; nothing resolved is kept beyond the mask registration, which the work handler
+/// that asked for the activation releases once it has recorded the outcome.
 /// </remarks>
 public sealed class ActivityActivator(
     IEnumerable<IActivityActivationStrategy> strategies,
@@ -73,7 +75,7 @@ public sealed class ActivityActivator(
         {
             var inputs = await DereferenceInputsAsync(request.Inputs, cancellationToken);
             if (secretInputs is not null)
-                inputs = await secretInputResolver.ResolveAsync(secretInputs, request.WorkflowExecutionId, inputs, cancellationToken);
+                inputs = await secretInputResolver.ResolveAsync(secretInputs, request.WorkflowExecutionId, request.ActivityExecutionId, inputs, cancellationToken);
             inputHydrator.Hydrate(lease.Activity, request.Contract, inputs);
             return lease;
         }

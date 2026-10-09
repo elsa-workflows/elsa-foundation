@@ -57,6 +57,11 @@ cancel is not a fault. The other three activity-facing handlers (`WorkflowResume
 `WorkflowParentActivityCompletion...`, `WorkflowNotifyParentActivity...`) use the same recorder with
 the same shape.
 
+Between that catch and the capture, these four handlers mask any value resolved from a secret for the
+execution with [`IRuntimeSecretMask`](../src/essentials/Workflows/Runtime/EXTENSION_POINTS.md#iruntimesecretmask-core-elsaworkflowsruntimecore) (spec 188): the thrown arms through `RecordFaultAsync` (the parent handlers'
+`RecordParentFaultAsync`), and the returned-fault arm by masking the fault's message once before it
+records.
+
 ### What it records
 
 `ActivityFaultIncidentRecorder.CommitAsync` commits one `IncidentRecorded` checkpoint holding both:
@@ -165,7 +170,10 @@ also lands here, via the internal `FaultingMissingSchedulerWorkHandler`.
 
 ### What it does
 
-1. Captures fault info (and inner fault info) through `IRuntimeFaultCapturePolicy`.
+1. Captures fault info (and inner fault info) through `IRuntimeFaultCapturePolicy`. An exception an
+   activity handler lets escape is not masked here; the masking step sits in the handler, between its
+   catch and the capture, and covers what such a handler throws only for the aggregate a cancellation
+   arm reports when disposal also failed (see [`IRuntimeSecretMask`](../src/essentials/Workflows/Runtime/EXTENSION_POINTS.md#iruntimesecretmask-core-elsaworkflowsruntimecore)).
 2. **Ack-deletes the work item first**, before any poison handling. A handler fault is a decided
    outcome, not a crash, so the source item must leave the queue or a deterministically-poisoning
    handler would be redelivered forever. (A process crash never reaches this line, which is exactly
@@ -321,7 +329,7 @@ when it lands, cite it for the exhaustive list rather than duplicating one here.
 | `IIncidentStrategy` (per workflow, pinned at publish) | `Fault/1` (`FaultIncidentStrategy`) | an unhandled activity fault terminalizes the run |
 | `IRuntimeDomainRetryPolicy` | `NoopRuntimeDomainRetryPolicy` → `DoNotRetry` | no handler-fault retries; poison on first failure |
 | `IWorkflowSchedulerPoisonStore` | `InMemoryWorkflowSchedulerPoisonStore` | poison records are process-local until a durable provider is composed; the drainer requires one by construction, so there is no "no store" mode |
-| `IRuntimeFaultCapturePolicy` | `DefaultRuntimeFaultCapturePolicy` | what of the exception reaches durable state |
+| `IRuntimeFaultCapturePolicy` | `DefaultRuntimeFaultCapturePolicy` | what of the exception reaches durable state; an activity handler masks resolved secret values before the capture ([`IRuntimeSecretMask`](../src/essentials/Workflows/Runtime/EXTENSION_POINTS.md#iruntimesecretmask-core-elsaworkflowsruntimecore)), and the policy reports the original type for a `SecretMaskedException` |
 | `IIncidentStateStore` | `InMemoryIncidentStateStore` | same caveat as the poison store |
 
 The four seams are registered with `TryAdd`, so a host or module that registers its own first wins.

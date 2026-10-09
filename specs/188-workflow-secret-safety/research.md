@@ -633,6 +633,8 @@ failure originates:
    activation or activity code with `SecretMaskedException` before `RecordFaultAsync`, logging or telemetry see it.
    The masked exception carries the masked message, masked stack text, the original type name, and inner exceptions
    flattened and masked. `DefaultRuntimeFaultCapturePolicy` reports the original type name for it.
+   As built: the inner exceptions are not flattened; the chain is masked per level, one `SecretMaskedException` for
+   each, and the failure code is copied unmasked.
    Masking must not change how the fault is classified. `SecretMaskedException` implements
    `IRuntimeFaultClassification` (R4) and copies `IsRetryable` and `FailureCode` from the exception it wraps, so a
    `RuntimeSecretResolutionException` for `StoreUnavailable` that is masked (because an earlier secret in the same

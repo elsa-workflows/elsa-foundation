@@ -126,6 +126,8 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandler : Runti
         var inspectionAccumulator = serviceProvider.GetService<IRuntimeActivityExecutionInspectionAccumulator>();
         var activityFaultIncidentRecorder = serviceProvider.GetRequiredService<ActivityFaultIncidentRecorder>();
         var payloadCapturePolicy = serviceProvider.GetService<IRuntimePayloadCapturePolicy>() ?? new DefaultRuntimePayloadCapturePolicy();
+        // Released once the outcome is recorded, after every fault boundary below has masked its text (spec 188, FR-012).
+        using var faultMasking = ActivityFaultMasking.For(serviceProvider, payload.ActivityExecutionId);
 
         // One scope service serves both the self-owner scope built for the child-completion evaluation below
         // and the completed-scope evidence capture on the completion path (ADR 0027/0030).
@@ -313,7 +315,7 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandler : Runti
         }
         catch (OperationCanceledException cancellationException) when (cancellationToken.IsCancellationRequested)
         {
-            if (await ActivityActivationLeaseDisposer.DisposeAfterCancellationAsync(activationLease, cancellationException, "Structural callback cancellation and activation disposal both failed.") is { } cleanupFailure)
+            if (await ActivityActivationLeaseDisposer.DisposeAfterCancellationAsync(activationLease, cancellationException, "Structural callback cancellation and activation disposal both failed.", faultMasking.Mask) is { } cleanupFailure)
                 throw cleanupFailure;
             throw;
         }
@@ -327,13 +329,14 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandler : Runti
             var subStatus = disposalException is null ? "ParentCompletionFaulted" : "ActivityDisposalFailed";
             if (checkpointCommitter is null)
             {
-                System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(fault).Throw();
+                System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(faultMasking.Mask(fault)).Throw();
                 throw;
             }
             await RecordParentFaultAsync(
                 activityFaultIncidentRecorder,
                 activityExecutionStateStore,
                 checkpointCommitter,
+                faultMasking,
                 workItem,
                 payload,
                 parentState,
@@ -352,6 +355,7 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandler : Runti
                 activityFaultIncidentRecorder,
                 activityExecutionStateStore,
                 checkpointCommitter!,
+                faultMasking,
                 workItem,
                 payload,
                 parentState,
@@ -399,7 +403,7 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandler : Runti
             if (checkpointCommitter is null)
                 throw new InvalidOperationException("A checkpoint committer is required to persist a structural activity fault.");
 
-            var fault = resolvedContinuation.Fault!;
+            var fault = faultMasking.Mask(resolvedContinuation.Fault!);
             var faultedParentState = currentParentState with
             {
                 Fault = fault.ToNormalized()
@@ -577,7 +581,7 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandler : Runti
         {
             if (checkpointCommitter is null)
             {
-                System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(exception).Throw();
+                System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(faultMasking.Mask(exception)).Throw();
                 throw;
             }
 
@@ -585,6 +589,7 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandler : Runti
                 activityFaultIncidentRecorder,
                 activityExecutionStateStore,
                 checkpointCommitter,
+                faultMasking,
                 workItem,
                 payload,
                 currentParentState,
@@ -707,6 +712,7 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandler : Runti
         ActivityFaultIncidentRecorder activityFaultIncidentRecorder,
         IActivityExecutionStateStore activityExecutionStateStore,
         RuntimeCheckpointCommitter checkpointCommitter,
+        ActivityFaultMasking faultMasking,
         RuntimeSchedulerWorkItem workItem,
         RuntimeCompleteActivityCommandPayload payload,
         ActivityExecutionState fallbackState,
@@ -720,12 +726,15 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandler : Runti
                                            payload.ActivityExecutionId,
                                            cancellationToken)
                                        ?? fallbackState;
+        // Every arm that records a thrown exception records through here, so this is where a value resolved for the
+        // parent leaves that exception's text. The returned-fault arm masks its fault once and builds its request from
+        // that masked fault directly, without coming through here.
         var request = NewFaultIncidentRecordRequest(
             checkpointCommitter,
             workItem,
             payload,
             latestFaultedParentState,
-            exception,
+            faultMasking.Mask(exception),
             subStatus,
             valueSnapshots);
 

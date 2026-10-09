@@ -357,7 +357,7 @@ public sealed class WriteHttpResponseExecutionTests
                 Serializer,
                 new GlobalPersistenceAccessContextAccessor())],
             new ActivityInputHydrator(),
-            new ActivitySecretInputResolver(null!, null!, null!),
+            new ActivitySecretInputResolver(null!, null!, null!, null!),
             externalPayloadStore);
         var descriptor = new RuntimeActivityDescriptor(
             WellKnownRuntimeActivityConsumers.ClrActivity,
@@ -366,7 +366,8 @@ public sealed class WriteHttpResponseExecutionTests
         var contract = node.ActivityContract;
         Assert.NotNull(contract);
         await using var lease = await activator.ActivateAsync(new ActivityActivationRequest(
-            "wf-1",
+            WorkflowExecutionId: "wf-1",
+            ActivityExecutionId: snapshot.InvocationId,
             contract,
             snapshot,
             attempt,

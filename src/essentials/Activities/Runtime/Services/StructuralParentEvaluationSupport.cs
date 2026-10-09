@@ -29,7 +29,9 @@ internal static class StructuralParentEvaluationSupport
 
     /// <summary>
     /// Reactivates the structural activity for <paramref name="state"/> from its pinned executable node and
-    /// committed input snapshot, returning the lease the caller must dispose. Used by every parent-evaluation
+    /// committed input snapshot, returning the lease the caller must dispose. Each activation registers the values it
+    /// resolves from secrets under the activity's own execution id, which the caller's fault boundary masks with
+    /// (<see cref="ActivityFaultMasking"/>). Used by every parent-evaluation
     /// handler before dispatching a structural callback. When the activity opts into
     /// <see cref="IRuntimeRematerializeInputsOnChildCompletion"/> and the caller supplies
     /// <paramref name="inputRematerializer"/> (the child-completion evaluation does; the notification and
@@ -55,7 +57,7 @@ internal static class StructuralParentEvaluationSupport
             ?? throw new InvalidOperationException($"VF-ACT-009: Running typed activity invocation '{state.InvocationId}' has no open committed attempt.");
         var activator = serviceProvider.GetRequiredService<IActivityActivator>();
         var activationLease = await activator.ActivateAsync(
-            new ActivityActivationRequest(state.Execution.WorkflowExecutionId, contract, snapshot, attempt, state.PrivateState, Descriptor: executableNode.Descriptor),
+            new ActivityActivationRequest(WorkflowExecutionId: state.Execution.WorkflowExecutionId, ActivityExecutionId: state.Execution.ActivityExecutionId, contract, snapshot, attempt, state.PrivateState, Descriptor: executableNode.Descriptor),
             cancellationToken);
 
         if (inputRematerializer is null || executable is null || activationLease.Activity is not IRuntimeRematerializeInputsOnChildCompletion)
@@ -86,7 +88,7 @@ internal static class StructuralParentEvaluationSupport
 
         await activationLease.DisposeAsync();
         var freshLease = await activator.ActivateAsync(
-            new ActivityActivationRequest(state.Execution.WorkflowExecutionId, contract, freshSnapshot, attempt, state.PrivateState, Descriptor: executableNode.Descriptor),
+            new ActivityActivationRequest(WorkflowExecutionId: state.Execution.WorkflowExecutionId, ActivityExecutionId: state.Execution.ActivityExecutionId, contract, freshSnapshot, attempt, state.PrivateState, Descriptor: executableNode.Descriptor),
             cancellationToken);
         return new ConstructedActivity(freshLease.Activity, freshSnapshot, freshLease);
     }

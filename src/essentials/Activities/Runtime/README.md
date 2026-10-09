@@ -16,9 +16,18 @@ secret reference and its conversion plan from text. `ActivityActivator` resolves
 parent evaluation, and the re-materialized activation after a child completes) through `IRuntimeSecretResolver`, for
 the partition the execution runs under, which is the scope the instance's own rows are stored under, and refuses with `TenantMismatch`
 before reading anything when the instance records a different tenant. It converts the resolved text with the envelope's
-plan and hydrates the activity from a transient copy of the snapshot; nothing resolved is written back or kept. A
+plan and hydrates the activity from a transient copy of the snapshot; nothing resolved is written back. Each resolved
+value is registered with `IRuntimeSecretMask` for the activity execution until its work handler has recorded the
+outcome. While it is registered, the invoke, resume, parent completion and parent notification handlers show
+`[secret:<reference name>]` instead of the value in the text they record for that execution: the message, stack trace
+and inner exception chain of an exception activation or activity code threw (an activation failure that parks the
+activity is recorded as it is), the message of an `ActivityFault` the
+activity returned, the incident message and its `runtime.fault*` metadata, and the aggregate a cancellation arm
+reports when disposal also failed. Not masked: a fault's code, a returned fault's category and fault type, exception
+type names, and what the activity writes to the console or its own logger, returns as outputs, or keeps in private
+state or bookmarks (spec 188 assumptions). A
 failed resolution faults the activity with `RuntimeSecretResolutionException`, which names the reference and the
-failure code and carries no value; the fault records the code and whether it is retryable. A host that composes no
+failure code and carries no value; the fault records the code and whether it is retryable, also when it is masked. A host that composes no
 resolver cannot resolve at all, so the activity waits with an activation-failure incident instead of faulting; a host
 that composes more than one does not start, because `ActivitiesRuntimeFeature`'s startup check fails its shell
 activation. A

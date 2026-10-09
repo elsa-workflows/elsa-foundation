@@ -11,14 +11,18 @@ namespace Elsa.Activities.Runtime.Services;
 /// state, and nothing resolved is kept: every activation resolves again.
 /// </summary>
 /// <remarks>
-/// Only <see cref="IRuntimeSecretResolver"/> is optional: a host that composes none parks the activity with the
-/// missing-resolver activation failure instead of faulting it. A host that composes more than one does not start:
-/// <see cref="RuntimeSecretResolverCompositionValidator"/> fails its shell activation.
+/// Each value is registered with <see cref="IRuntimeSecretMask"/> under the activity execution being activated as soon
+/// as it is resolved, before the next reference is resolved, before it is converted and before the activity is
+/// hydrated, so when any of those fails, or the activity itself does, the work handler's fault boundary masks the value
+/// in the message, stack trace and inner exception chain it records (spec 188, FR-012). Only <see cref="IRuntimeSecretResolver"/> is optional: a host that composes none
+/// parks the activity with the missing-resolver activation failure instead of faulting it. A host that composes more
+/// than one does not start: <see cref="RuntimeSecretResolverCompositionValidator"/> fails its shell activation.
 /// </remarks>
 public sealed class ActivitySecretInputResolver(
     IWorkflowExecutionPartitionAccessor partitionAccessor,
     IWorkflowExecutionStateStore workflowExecutionStateStore,
     IRuntimeValueConversionExecutor valueConversionExecutor,
+    IRuntimeSecretMask secretMask,
     IRuntimeSecretResolver? secretResolver = null)
 {
     /// <summary>
@@ -52,18 +56,25 @@ public sealed class ActivitySecretInputResolver(
 
     /// <summary>
     /// Returns a transient copy of <paramref name="snapshot"/> whose secret inputs, as <see cref="Prepare"/> accepted
-    /// them, hold their resolved, converted values. <paramref name="snapshot"/> itself is not changed.
+    /// them, hold their resolved, converted values, each registered with the mask under
+    /// <paramref name="activityExecutionId"/>. <paramref name="snapshot"/> itself is not changed.
     /// </summary>
     internal async ValueTask<ActivityInputSnapshot> ResolveAsync(
         PendingSecretInputs pending,
         string workflowExecutionId,
+        string activityExecutionId,
         ActivityInputSnapshot snapshot,
         CancellationToken cancellationToken)
     {
+        ArgumentException.ThrowIfNullOrWhiteSpace(activityExecutionId);
         var tenantId = await ReadExecutingTenantAsync(workflowExecutionId, pending.Secrets[0].Reference.Name, cancellationToken);
         var values = new Dictionary<string, ValueEnvelope>(snapshot.Values, StringComparer.Ordinal);
         foreach (var secret in pending.Secrets)
-            values[secret.Key] = ConvertResolvedSecret(secret, await ResolveReferenceAsync(pending.Resolver, tenantId, secret.Reference, cancellationToken), cancellationToken);
+        {
+            var value = await ResolveReferenceAsync(pending.Resolver, tenantId, secret.Reference, cancellationToken);
+            secretMask.Register(activityExecutionId, secret.Reference.Name, value);
+            values[secret.Key] = ConvertResolvedSecret(secret, value, cancellationToken);
+        }
 
         return ActivityActivator.WithValues(snapshot, values);
     }

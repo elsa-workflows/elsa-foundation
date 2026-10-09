@@ -207,6 +207,9 @@ public static class RuntimeCoreServiceCollectionExtensions
         services.TryAddScoped<ActivityActivationFailureHandler>();
         services.AddOptions<RuntimeFaultCaptureOptions>();
         services.TryAddSingleton<IRuntimeFaultCapturePolicy, DefaultRuntimeFaultCapturePolicy>();
+        // Scoped: one per scheduler work item's scope, holding only the values resolved for the executions it handles
+        // (spec 188, FR-012). A replacement contract: the activities runtime fails shell activation on a second one.
+        services.TryAddScoped<IRuntimeSecretMask, DefaultRuntimeSecretMask>();
         services.TryAddSingleton<IWorkflowSchedulerPoisonStore, InMemoryWorkflowSchedulerPoisonStore>();
         services.TryAddSingleton<IRuntimeVolatileWaitPolicy, DefaultRuntimeVolatileWaitPolicy>();
         services.TryAddScoped<IRuntimeGeneratorEmissionScheduler, RuntimeGeneratorEmissionScheduler>();

@@ -2361,6 +2361,7 @@ public sealed class WorkflowExecutableCompilerTests
 
         var services = new ServiceCollection();
         services.AddScoped<IActivityActivator>(_ => new FixedActivityActivator(new OutputtingCompositeActivity(outputValue)));
+        services.AddScoped<IRuntimeSecretMask, DefaultRuntimeSecretMask>();
         services.AddSingleton<IWorkflowExecutableStore>(executableStore);
         services.AddSingleton<IActivityExecutionStateStore>(activityStore);
         services.AddSingleton<IWorkflowExecutionStateStore>(workflowStateStore);
