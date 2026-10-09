@@ -4,7 +4,7 @@
 
 **Created**: 2026-10-09
 
-**Status**: Preview locally qualified; stable acceptance remains open
+**Status**: Draft — preview locally qualified; stable acceptance (T019) remains open
 
 **Input**: Deliver the modular-hosting upstream program end to end, adopting general startup activation support in Foundation.Host and Workbench while retaining Elsa policy and existing host behavior.
 
@@ -71,7 +71,7 @@ An operator stops either host during startup recovery or warmup. New work stops 
 
 ### Functional Requirements
 
-- **FR-001**: The hosts MUST use the delivered general startup activation runner for serial attempts, retry scheduling and owned run lifetime; they MUST remove superseded local activation/retry loops.
+- **FR-001**: The hosts MUST use the delivered general startup activation runner for serial attempts, retry scheduling and owned run lifetime; they MUST remove the replaced local activation/retry loops.
 - **FR-002**: Foundation MUST retain its default-on/explicit-opt-out policy, configured target order, pre-listen first pass and independent continuing recovery per failed target.
 - **FR-003**: Foundation MUST retain existing capped exponential/jitter retry behavior and maximum-interval EF refusal checks, including operator guidance, sanitized health/Attention projections and diagnostic exception handling.
 - **FR-004**: Foundation MUST preserve its fatal-exception boundary separately for initial startup and background retry, including original failure propagation, unaffected-target progress and joined/bounded shutdown behavior.
