@@ -48,6 +48,11 @@ public sealed class RuntimeArtifactsSqlServerSmokeTests(RuntimeBookmarksSqlServe
         RuntimeArtifactsProviderSmoke.RunAsync(fixture, "SqlServer", connection => new RuntimeSqlServerDbContext(
             new DbContextOptionsBuilder<RuntimeSqlServerDbContext>().UseSqlServer(connection).Options),
             RuntimeSqlServerDbContext.ExpectedProviderName);
+
+    [SkippableFact]
+    public Task SqlServer_concurrent_root_write_lease_holders_of_one_artifact_all_succeed() =>
+        RuntimeArtifactsProviderSmoke.RunConcurrentRootWriteLeaseHoldersAsync(fixture, "SqlServer", connection => new RuntimeSqlServerDbContext(
+            new DbContextOptionsBuilder<RuntimeSqlServerDbContext>().UseSqlServer(connection).Options));
 }
 
 [Collection(RuntimeBookmarksMySqlFixture.CollectionName)]
@@ -58,6 +63,11 @@ public sealed class RuntimeArtifactsMySqlSmokeTests(RuntimeBookmarksMySqlFixture
         RuntimeArtifactsProviderSmoke.RunAsync(fixture, "MySql", connection => new RuntimeMySqlDbContext(
             new DbContextOptionsBuilder<RuntimeMySqlDbContext>().UseMySQL(connection).Options),
             RuntimeMySqlDbContext.ExpectedProviderName);
+
+    [SkippableFact]
+    public Task MySql_concurrent_root_write_lease_holders_of_one_artifact_all_succeed() =>
+        RuntimeArtifactsProviderSmoke.RunConcurrentRootWriteLeaseHoldersAsync(fixture, "MySql", connection => new RuntimeMySqlDbContext(
+            new DbContextOptionsBuilder<RuntimeMySqlDbContext>().UseMySQL(connection).Options));
 }
 
 internal static class RuntimeArtifactsProviderSmoke

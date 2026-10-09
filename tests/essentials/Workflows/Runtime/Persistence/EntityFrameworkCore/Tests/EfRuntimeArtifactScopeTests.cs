@@ -1122,7 +1122,8 @@ public sealed class EfRuntimeArtifactScopeTests
 
         await using var current = database.Open("tenant-a");
         WorkflowExecutableRootWriteLease? newer = null;
-        var interleaving = new RecreateBeforeSaveInterceptor(async () =>
+        // Release is one statement on its own lease row (spec 200), so the newer lease commits just before that statement.
+        var interleaving = new RecreateBeforeFirstCommandInterceptor(async () =>
         {
             newer = await current.Executable.TryAcquireRootWriteLeaseAsync("release-contention", "newer", now.AddMinutes(5), now);
             Assert.NotNull(newer);
@@ -1225,6 +1226,234 @@ public sealed class EfRuntimeArtifactScopeTests
 
         contention.AssertContendedWithoutExhaustingCompetition();
         Assert.False(await competitor.Executable.RenewRootWriteLeaseAsync(lease!, now.AddMinutes(6), now));
+    }
+
+    [Fact]
+    public async Task Root_write_lease_operations_do_not_save_or_discard_changes_staged_on_the_callers_context()
+    {
+        await using var database = await Database.CreateAsync();
+        await using var fixture = database.Open("tenant-a");
+        await fixture.Executable.SaveAsync(Executable("staged-lease"));
+        await fixture.Executable.SaveAsync(Executable("staged-other"));
+        var encodedOther = EfRelationalIdentity.Encode("staged-other");
+        var staged = await fixture.Context.WorkflowExecutables.SingleAsync(x => x.ArtifactId == encodedOther);
+        var persisted = staged.ContentJson;
+        staged.ContentJson = "staged-by-the-caller";
+        var now = DateTimeOffset.UtcNow;
+
+        var lease = await fixture.Executable.TryAcquireRootWriteLeaseAsync("staged-lease", "lease", now.AddMinutes(5), now);
+        Assert.NotNull(lease);
+        Assert.True(await fixture.Executable.RenewRootWriteLeaseAsync(lease!, now.AddMinutes(6), now));
+        await fixture.Executable.ReleaseRootWriteLeaseAsync(lease!);
+
+        var entry = Assert.Single(fixture.Context.ChangeTracker.Entries<WorkflowExecutableEntity>());
+        Assert.Equal(EntityState.Modified, entry.State);
+        Assert.Same(staged, entry.Entity);
+        Assert.Equal("staged-by-the-caller", staged.ContentJson);
+        await using var observer = database.Open("tenant-a");
+        Assert.Equal(persisted, await observer.Context.WorkflowExecutables.AsNoTracking()
+            .Where(x => x.ArtifactId == encodedOther).Select(x => x.ContentJson).SingleAsync());
+    }
+
+    [Fact]
+    public async Task Acquire_withdraws_and_returns_null_when_a_guard_commits_between_its_lease_commit_and_check()
+    {
+        await using var database = await Database.CreateAsync();
+        await using var seed = database.Open("tenant-a");
+        await seed.Executable.SaveAsync(Executable("race-acquire"));
+        var now = DateTimeOffset.UtcNow;
+
+        // The guard begins after the acquirer read the pair and before its lease commits, so the guard's own check finds
+        // no lease and the guard stands. Only the acquirer's check after its commit can see it.
+        await using var collector = database.Open("tenant-a");
+        WorkflowExecutableDeletionGuard? guard = null;
+        var interleaving = new RecreateBeforeSaveInterceptor(async () =>
+            guard = await collector.Executable.TryBeginDeletionAsync("race-acquire", "delete", now.AddMinutes(5), now));
+        await using var acquirer = database.Open("tenant-a", interleaving);
+
+        var lease = await acquirer.Executable.TryAcquireRootWriteLeaseAsync("race-acquire", "lease", now.AddMinutes(5), now);
+
+        Assert.Null(lease);
+        Assert.NotNull(guard);
+        Assert.Empty(await collector.Context.WorkflowExecutableRootWriteLeases.AsNoTracking().ToListAsync());
+        Assert.True(await collector.Executable.DeleteAsync(guard!, now));
+    }
+
+    [Fact]
+    public async Task Begin_deletion_cancels_and_returns_null_when_a_lease_commits_between_its_guard_commit_and_count()
+    {
+        await using var database = await Database.CreateAsync();
+        await using var seed = database.Open("tenant-a");
+        await seed.Executable.SaveAsync(Executable("race-guard"));
+        var now = DateTimeOffset.UtcNow;
+        var incarnation = await seed.Context.WorkflowExecutables.AsNoTracking().Select(x => x.IncarnationId).SingleAsync();
+
+        // A lease whose acquirer read the pair before the guard committed lands just after the guard's commit; only the
+        // guard's count after its commit can see it.
+        await using var holder = database.Open("tenant-a");
+        var interleaving = new AfterFirstSaveInterceptor(async () =>
+        {
+            holder.Context.WorkflowExecutableRootWriteLeases.Add(LeaseRow("tenant-a", "race-guard", "late", "late-token", now.AddMinutes(5), incarnation));
+            await holder.Context.SaveChangesAsync();
+        });
+        await using var collector = database.Open("tenant-a", interleaving);
+
+        Assert.Null(await collector.Executable.TryBeginDeletionAsync("race-guard", "delete", now.AddMinutes(5), now));
+
+        // The refused guard was cancelled, not left live: once the late lease is gone another operation can begin.
+        await holder.Executable.ReleaseRootWriteLeaseAsync(new WorkflowExecutableRootWriteLease("race-guard", "late", "late-token"));
+        Assert.NotNull(await holder.Executable.TryBeginDeletionAsync("race-guard", "other", now.AddMinutes(5), now));
+    }
+
+    [Fact]
+    public async Task Guarded_delete_refuses_while_a_lease_committed_after_the_guard_is_live()
+    {
+        await using var database = await Database.CreateAsync();
+        await using var fixture = database.Open("tenant-a");
+        await fixture.Executable.SaveAsync(Executable("race-delete"));
+        var now = DateTimeOffset.UtcNow;
+        var guard = await fixture.Executable.TryBeginDeletionAsync("race-delete", "delete", now.AddMinutes(5), now);
+        Assert.NotNull(guard);
+        var incarnation = await fixture.Context.WorkflowExecutables.AsNoTracking().Select(x => x.IncarnationId).SingleAsync();
+
+        // An acquirer between its lease commit and its check: its row is live although the guard is too.
+        await using var holder = database.Open("tenant-a");
+        holder.Context.WorkflowExecutableRootWriteLeases.Add(LeaseRow("tenant-a", "race-delete", "between", "between-token", now.AddMinutes(5), incarnation));
+        await holder.Context.SaveChangesAsync();
+
+        Assert.False(await fixture.Executable.DeleteAsync(guard!, now));
+        Assert.NotNull(await fixture.Executable.FindAsync("race-delete"));
+
+        // The acquirer's check sees the guard and withdraws; the guarded delete then goes ahead and takes every lease row.
+        await holder.Executable.ReleaseRootWriteLeaseAsync(new WorkflowExecutableRootWriteLease("race-delete", "between", "between-token"));
+        Assert.True(await fixture.Executable.DeleteAsync(guard!, now));
+        Assert.Null(await fixture.Executable.FindAsync("race-delete"));
+        Assert.Empty(await fixture.Context.WorkflowExecutableRootWriteLeases.AsNoTracking().ToListAsync());
+    }
+
+    [Fact]
+    public async Task Acquire_returns_null_and_withdraws_when_the_artifact_is_deleted_before_its_lease_commits()
+    {
+        await using var database = await Database.CreateAsync();
+        await using var seed = database.Open("tenant-a");
+        await seed.Executable.SaveAsync(Executable("race-recreate"));
+        var now = DateTimeOffset.UtcNow;
+
+        await using var collector = database.Open("tenant-a");
+        var interleaving = new RecreateBeforeSaveInterceptor(async () =>
+        {
+            var guard = await collector.Executable.TryBeginDeletionAsync("race-recreate", "delete", now.AddMinutes(5), now);
+            Assert.True(await collector.Executable.DeleteAsync(guard!, now));
+            await collector.Executable.SaveAsync(Executable("race-recreate"));
+        });
+        await using var acquirer = database.Open("tenant-a", interleaving);
+
+        Assert.Null(await acquirer.Executable.TryAcquireRootWriteLeaseAsync("race-recreate", "lease", now.AddMinutes(5), now));
+        Assert.Empty(await collector.Context.WorkflowExecutableRootWriteLeases.AsNoTracking().ToListAsync());
+        Assert.NotNull(await collector.Executable.TryBeginDeletionAsync("race-recreate", "next", now.AddMinutes(5), now));
+    }
+
+    [Fact]
+    public async Task Legacy_shared_row_leases_block_deletion_until_they_expire()
+    {
+        await using var database = await Database.CreateAsync();
+        await using var fixture = database.Open("tenant-a");
+        await fixture.Executable.SaveAsync(Executable("legacy"));
+        var now = DateTimeOffset.UtcNow;
+        var legacyExpiry = now.AddMinutes(5);
+        var afterLegacy = now.AddMinutes(6);
+        await SeedLegacyLeaseAsync(fixture, "legacy", legacyExpiry, guard: null);
+
+        Assert.Null(await fixture.Executable.TryBeginDeletionAsync("legacy", "delete", now.AddMinutes(30), now));
+
+        var guard = await fixture.Executable.TryBeginDeletionAsync("legacy", "delete", now.AddMinutes(30), afterLegacy);
+        Assert.NotNull(guard);
+
+        // A guard and a live legacy lease can only coexist in data written by an earlier build; the guarded delete still
+        // refuses until the legacy lease expires.
+        await SeedLegacyLeaseAsync(fixture, "legacy", legacyExpiry, guard: (guard!.OperationId, guard.ConcurrencyToken, now.AddMinutes(30)));
+        Assert.False(await fixture.Executable.DeleteAsync(guard, now));
+        Assert.True(await fixture.Executable.DeleteAsync(guard, afterLegacy));
+        Assert.Null(await fixture.Executable.FindAsync("legacy"));
+    }
+
+    [Fact]
+    public async Task Leases_from_a_deleted_incarnation_are_not_honoured_after_recreate()
+    {
+        await using var database = await Database.CreateAsync();
+        await using var fixture = database.Open("tenant-a");
+        await fixture.Executable.SaveAsync(Executable("fenced"));
+        var now = DateTimeOffset.UtcNow;
+        var lease = await fixture.Executable.TryAcquireRootWriteLeaseAsync("fenced", "lease", now.AddMinutes(5), now);
+        Assert.NotNull(lease);
+        var deletedIncarnation = await fixture.Context.WorkflowExecutables.AsNoTracking().Select(x => x.IncarnationId).SingleAsync();
+
+        Assert.True(await fixture.Executable.DeleteAsync("fenced"));
+        Assert.Empty(await fixture.Context.WorkflowExecutableRootWriteLeases.AsNoTracking().ToListAsync());
+        await fixture.Executable.SaveAsync(Executable("fenced"));
+
+        // A row the deleted incarnation left behind (an acquirer that crashed before withdrawing) is not honoured.
+        fixture.Context.WorkflowExecutableRootWriteLeases.Add(LeaseRow("tenant-a", "fenced", "orphan", "orphan-token", now.AddMinutes(5), deletedIncarnation));
+        await fixture.Context.SaveChangesAsync();
+        fixture.Context.ChangeTracker.Clear();
+
+        Assert.False(await fixture.Executable.RenewRootWriteLeaseAsync(lease!, now.AddMinutes(6), now));
+        var guard = await fixture.Executable.TryBeginDeletionAsync("fenced", "delete", now.AddMinutes(5), now);
+        Assert.NotNull(guard);
+        Assert.Empty(await fixture.Context.WorkflowExecutableRootWriteLeases.AsNoTracking().ToListAsync());
+        Assert.True(await fixture.Executable.DeleteAsync(guard!, now));
+    }
+
+    private static WorkflowExecutableRootWriteLeaseEntity LeaseRow(
+        string scope,
+        string artifactId,
+        string leaseId,
+        string token,
+        DateTimeOffset expiresAt,
+        string incarnationId) => new()
+        {
+            Id = EfRelationalIdentity.Hash($"{scope.Length}:{scope}{artifactId.Length}:{artifactId}{leaseId.Length}:{leaseId}"),
+            ScopeKey = EfRelationalIdentity.Encode(scope),
+            ScopeKeyHash = EfRelationalIdentity.Hash(scope),
+            ArtifactId = EfRelationalIdentity.Encode(artifactId),
+            ArtifactIdHash = EfRelationalIdentity.Hash(artifactId),
+            LeaseId = EfRelationalIdentity.Encode(leaseId),
+            Token = token,
+            ExpiresAtUtcTicks = expiresAt.UtcTicks,
+            IncarnationId = incarnationId,
+            Revision = 1,
+            SchemaVersion = RuntimeArtifactEfModule.SchemaVersion
+        };
+
+    private static async Task SeedLegacyLeaseAsync(
+        Fixture fixture,
+        string artifactId,
+        DateTimeOffset expiresAt,
+        (string OperationId, string Token, DateTimeOffset ExpiresAt)? guard)
+    {
+        var encoded = EfRelationalIdentity.Encode(artifactId);
+        var row = await fixture.Context.WorkflowExecutableCoordinations.SingleAsync(x => x.ArtifactId == encoded);
+        // The coordination payload stores every string in its encoded projection, dictionary keys included.
+        var legacyId = EfRelationalIdentity.Encode("legacy");
+        var content = new JsonObject
+        {
+            ["Leases"] = new JsonObject
+            {
+                [legacyId] = new JsonObject { ["Id"] = legacyId, ["Token"] = EfRelationalIdentity.Encode("legacy-token"), ["ExpiresAt"] = expiresAt }
+            },
+            ["Guard"] = guard is { } value
+                ? new JsonObject
+                {
+                    ["OperationId"] = EfRelationalIdentity.Encode(value.OperationId),
+                    ["Token"] = EfRelationalIdentity.Encode(value.Token),
+                    ["ExpiresAt"] = value.ExpiresAt
+                }
+                : null
+        };
+        row.ContentJson = content.ToJsonString();
+        row.Revision++;
+        await fixture.Context.SaveChangesAsync();
+        fixture.Context.ChangeTracker.Clear();
     }
 
     [Fact]
@@ -1396,10 +1625,11 @@ public sealed class EfRuntimeArtifactScopeTests
             .TryAcquireRootWriteLeaseAsync("orphan", "lease", now.AddMinutes(5), now).AsTask());
         await Assert.ThrowsAsync<InvalidDataException>(() => fixture.Executable
             .TryBeginDeletionAsync("orphan", "operation", now.AddMinutes(5), now).AsTask());
-        await Assert.ThrowsAsync<InvalidDataException>(() => fixture.Executable
-            .RenewRootWriteLeaseAsync(new("orphan", "lease", "token"), now.AddMinutes(5), now).AsTask());
-        await Assert.ThrowsAsync<InvalidDataException>(() => fixture.Executable
-            .ReleaseRootWriteLeaseAsync(new("orphan", "lease", "token")).AsTask());
+        // Renewal and release touch only the holder's own lease row and never read the pair (spec 200, FR-002), so an
+        // orphan pair cannot be treated as leased: there is no lease to renew, and nothing to release.
+        Assert.False(await fixture.Executable.RenewRootWriteLeaseAsync(new("orphan", "lease", "token"), now.AddMinutes(5), now));
+        await fixture.Executable.ReleaseRootWriteLeaseAsync(new("orphan", "lease", "token"));
+        Assert.Empty(await fixture.Context.WorkflowExecutableRootWriteLeases.AsNoTracking().ToListAsync());
         await Assert.ThrowsAsync<InvalidDataException>(() => fixture.Executable
             .CancelDeletionAsync(new("orphan", "operation", "token")).AsTask());
 
@@ -1736,6 +1966,46 @@ public sealed class EfRuntimeArtifactScopeTests
             InterceptionResult<int> result,
             CancellationToken cancellationToken = default) =>
             throw new InvalidOperationException("provider save failure");
+    }
+
+    private sealed class AfterFirstSaveInterceptor(Func<Task> after) : SaveChangesInterceptor
+    {
+        private int invoked;
+
+        public override async ValueTask<int> SavedChangesAsync(
+            SaveChangesCompletedEventData eventData,
+            int result,
+            CancellationToken cancellationToken = default)
+        {
+            if (Interlocked.Exchange(ref invoked, 1) == 0)
+                await after();
+            return result;
+        }
+    }
+
+    private sealed class RecreateBeforeFirstCommandInterceptor(Func<Task> recreate) : DbCommandInterceptor
+    {
+        private int invoked;
+
+        public override async ValueTask<InterceptionResult<DbDataReader>> ReaderExecutingAsync(
+            DbCommand command, CommandEventData eventData, InterceptionResult<DbDataReader> result, CancellationToken cancellationToken = default)
+        {
+            await RecreateOnceAsync();
+            return result;
+        }
+
+        public override async ValueTask<InterceptionResult<int>> NonQueryExecutingAsync(
+            DbCommand command, CommandEventData eventData, InterceptionResult<int> result, CancellationToken cancellationToken = default)
+        {
+            await RecreateOnceAsync();
+            return result;
+        }
+
+        private async Task RecreateOnceAsync()
+        {
+            if (Interlocked.Exchange(ref invoked, 1) == 0)
+                await recreate();
+        }
     }
 
     private sealed class RecreateBeforeSaveInterceptor(Func<Task> recreate) : SaveChangesInterceptor
