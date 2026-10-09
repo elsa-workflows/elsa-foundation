@@ -38,8 +38,10 @@ public sealed class BackgroundEventPublisher(
 {
     private readonly IsolatingProcessingStrategy _strategy = new(logger);
 
+    /// <summary>Completes immediately; channel consumption begins in <see cref="ExecuteAsync"/>.</summary>
     public Task StartAsync(CancellationToken cancellationToken) => Task.CompletedTask;
 
+    /// <summary>Drains queued events in order until the channel completes or the host cancels execution.</summary>
     public async Task ExecuteAsync(CancellationToken cancellationToken)
     {
         try
@@ -68,6 +70,10 @@ public sealed class BackgroundEventPublisher(
         return Task.CompletedTask;
     }
 
+    /// <summary>
+    /// Dispatches one queued event in a fresh scope with handler isolation and the host lifetime token.
+    /// Logs failures outside handlers and treats host cancellation as expected shutdown.
+    /// </summary>
     private async Task DispatchOneAsync(IEventContext queuedContext, CancellationToken cancellationToken)
     {
         try

@@ -13,6 +13,10 @@ namespace Elsa.Events.Channels;
 /// </summary>
 internal sealed class IsolatingProcessingStrategy(ILogger logger) : IEventPublishingStrategy
 {
+    /// <summary>
+    /// Awaits each handler in order, logging failures and continuing with the remaining handlers.
+    /// Propagates cancellation exceptions when the dispatch token is cancelled.
+    /// </summary>
     public async Task PublishAsync(IEventStrategyContext context)
     {
         foreach (var handler in context.Handlers)

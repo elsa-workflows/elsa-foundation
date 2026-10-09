@@ -53,6 +53,10 @@ internal sealed class CountingEventPublisher : IEventPublisher
         }
     }
 
+    /// <summary>
+    /// Records a dispatch and its token, then releases waiters whose target count has been reached.
+    /// Does not invoke handlers or execute the supplied strategy.
+    /// </summary>
     public Task Publish(IEvent @event, IEventPublishingStrategy? strategy = null, CancellationToken cancellationToken = default)
     {
         lock (_gate)

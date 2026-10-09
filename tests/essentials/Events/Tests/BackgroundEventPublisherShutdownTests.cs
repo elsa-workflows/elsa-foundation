@@ -14,6 +14,7 @@ namespace Elsa.Events.Tests;
 /// </summary>
 public class BackgroundEventPublisherShutdownTests
 {
+    /// <summary>Verifies that stopping the worker drains queued events and closes the channel to new writes.</summary>
     [Fact]
     public async Task StopAsyncDrainsAllQueuedEventsThenExitsCleanly()
     {
@@ -41,6 +42,7 @@ public class BackgroundEventPublisherShutdownTests
         Assert.False(channel.Writer.TryWrite(TestEvents.Background())); // writer completed
     }
 
+    /// <summary>Verifies that task-manager shutdown dispatches every queued event before cancelling execution.</summary>
     [Fact]
     public async Task HostShutdownDispatchesAllQueuedEventsAndExitsCleanly()
     {

@@ -25,6 +25,7 @@ public class DeferredEventPublisherTests
 
     private sealed class ContributingHandler(TaskCompletionSource ran) : IEventHandler<ContributingEvent>
     {
+        /// <summary>Marks the event handled and signals that its contribution is observable.</summary>
         public Task Handle(ContributingEvent @event, CancellationToken cancellationToken)
         {
             @event.Handled = true;
@@ -33,6 +34,7 @@ public class DeferredEventPublisherTests
         }
     }
 
+    /// <summary>Verifies that deferred publication returns before handlers run and draining applies their effects.</summary>
     [Fact]
     public async Task Publish_returns_before_the_handler_runs_and_the_effect_appears_only_after_draining()
     {
@@ -78,6 +80,7 @@ public class DeferredEventPublisherTests
 
     private sealed class FirstHandler : IEventHandler<IsolationEvent>
     {
+        /// <summary>Records that the subscriber preceding the failing handler ran.</summary>
         public Task Handle(IsolationEvent @event, CancellationToken cancellationToken)
         {
             @event.Ran.Enqueue("first");
@@ -87,12 +90,14 @@ public class DeferredEventPublisherTests
 
     private sealed class BrokenHandler : IEventHandler<IsolationEvent>
     {
+        /// <summary>Throws a subscriber failure to exercise isolation of the remaining handlers.</summary>
         public Task Handle(IsolationEvent @event, CancellationToken cancellationToken) =>
             throw new InvalidOperationException("broken subscriber");
     }
 
     private sealed class LastHandler(TaskCompletionSource ran) : IEventHandler<IsolationEvent>
     {
+        /// <summary>Records and signals that dispatch reached the subscriber after the failing handler.</summary>
         public Task Handle(IsolationEvent @event, CancellationToken cancellationToken)
         {
             @event.Ran.Enqueue("last");

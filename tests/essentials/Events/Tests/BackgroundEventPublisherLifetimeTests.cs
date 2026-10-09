@@ -19,6 +19,7 @@ namespace Elsa.Events.Tests;
 /// </summary>
 public class BackgroundEventPublisherLifetimeTests
 {
+    /// <summary>Verifies that disposing the initializer scope leaves the shared channel and worker usable.</summary>
     [Fact]
     public async Task ChannelSurvivesInitializerScopeDisposalAndKeepsDispatching()
     {
