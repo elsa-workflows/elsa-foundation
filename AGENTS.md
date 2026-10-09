@@ -261,5 +261,5 @@ New work should move toward this rule:
 <!-- SPECKIT START -->
 For additional context about technologies to be used, project structure,
 shell commands, and other important information, read the current plan
-at specs/198-package-generation-readability/plan.md
+at specs/201-package-generation-readability/plan.md
 <!-- SPECKIT END -->

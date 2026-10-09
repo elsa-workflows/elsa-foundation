@@ -2,7 +2,9 @@
 
 **Branch**: `2339-package-generation-readability` | **Date**: 2026-10-08 | **Spec**: [spec.md](spec.md)
 
-**Input**: Feature specification from `specs/198-package-generation-readability/spec.md`
+**Numbering note (2026-10-09)**: Renumbered the preserved #2164 work unit from Spec198 to Spec201 because current main owns Spec198 response replay safety. The organization branch and immutable prepared-source commit remain unchanged.
+
+**Input**: Feature specification from `specs/201-package-generation-readability/spec.md`
 
 ## Summary
 
@@ -62,7 +64,7 @@ Track a shell's package-generation readability from before its catalog read thro
 ### Documentation (this feature)
 
 ```text
-specs/198-package-generation-readability/
+specs/201-package-generation-readability/
 ├── plan.md
 ├── research.md
 ├── data-model.md

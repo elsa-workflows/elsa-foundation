@@ -8,8 +8,8 @@
 
 ## Phase 1: Setup
 
-- [X] T001 Inventory existing assertions and confirm no competing #2164 claim/PR before edits; record the retained test objectives in `specs/198-package-generation-readability/quickstart.md`.
-- [X] T002 Prepare an isolated private copy for public `.166`/`.99` preflight, with that copy's own `Directory.Packages.props` and `packages.lock.json` files; record reproducible copy/restore commands in `specs/198-package-generation-readability/quickstart.md`. Do not change the committed Foundation pins/locks.
+- [X] T001 Inventory existing assertions and confirm no competing #2164 claim/PR before edits; record the retained test objectives in `specs/201-package-generation-readability/quickstart.md`.
+- [X] T002 Prepare an isolated private copy for public `.166`/`.99` preflight, with that copy's own `Directory.Packages.props` and `packages.lock.json` files; record reproducible copy/restore commands in `specs/201-package-generation-readability/quickstart.md`. Do not change the committed Foundation pins/locks.
 
 ## Phase 2: Foundational Wiring
 
@@ -48,9 +48,9 @@
 
 ## Phase 6: Integration, Review, and Final Qualification
 
-- [X] T014 Run the affected readability project against actual public preview packages in the private copy, independently review the full candidate diff, and execute reversible bypass-Begin/current-snapshot/early-release/growth-only mutations; record exact commands/results and provenance in `specs/198-package-generation-readability/quickstart.md`.
+- [X] T014 Run the affected readability project against actual public preview packages in the private copy, independently review the full candidate diff, and execute reversible bypass-Begin/current-snapshot/early-release/growth-only mutations; record exact commands/results and provenance in `specs/201-package-generation-readability/quickstart.md`.
 - [X] T015 Review duplication and cleanup, preserve the abstractions-only/EF-free closure, reconcile program execution/evidence in `docs/program-goals/modular-hosting-upstream-delivery.md` and `docs/plans/modular-hosting-upstream/evidence.md`, and commit the prepared source without claiming unchanged-default-pin CI or final acceptance.
-- [ ] T016 After upstream stable publication, coordinate final pins/locks and actual Foundation-host readability qualification with #2509, run affected suites/e2e, architecture and map gates, independent exact-head review and resulting-main checks; record acceptance in `specs/198-package-generation-readability/quickstart.md` before merge/Done. Do not wait for coordinating Features #145/#2509 to close before performing the consumer proof that supplies their acceptance.
+- [ ] T016 After upstream stable publication, coordinate final pins/locks and actual Foundation-host readability qualification with #2509, run affected suites/e2e, architecture and map gates, independent exact-head review and resulting-main checks; record acceptance in `specs/201-package-generation-readability/quickstart.md` before merge/Done. Do not wait for coordinating Features #145/#2509 to close before performing the consumer proof that supplies their acceptance.
 
 ## Dependencies and Execution
 

@@ -62,7 +62,7 @@ Normal lifecycle callbacks may observe a drain failure for diagnostics, preservi
 
 ## Evidence Sources
 
-- [Spec 198](spec.md), especially FR-002–FR-010 and SC-001–SC-004.
+- [Spec 201](spec.md), especially FR-002–FR-010 and SC-001–SC-004.
 - [Canonical Spec 183](../183-cluster-membership/spec.md), FR-021 readability and retirement meanings.
 - `src/essentials/Cluster/Readability/NuplanePackageGenerations.cs` and `EfSchemaReadabilityServiceCollectionExtensions.cs`, current source and registration behavior.
 - `src/essentials/Persistence/Schema/ISupersededAssemblySource.cs`, existing query contract.
