@@ -8,8 +8,8 @@ namespace Elsa.Workflows.Runtime.Core.Exceptions;
 /// and activation refuse a secret the same way. No message carries a value or a reference payload. A
 /// <see cref="SecretBindingRefusedCode"/> refusal names the node, the input and the reason; an
 /// <see cref="EncryptionRequiredBindingCode"/> refusal names the node and the input; a
-/// <see cref="WithheldInputCode"/> refusal names the input, the variable or the conversion target that met a withheld
-/// value.
+/// <see cref="WithheldInputCode"/> refusal names the input, the variable, the conversion target or the captured output
+/// that met a withheld value.
 /// </summary>
 public static class SecretBindingDiagnostics
 {
@@ -43,6 +43,13 @@ public static class SecretBindingDiagnostics
     /// <summary>A withheld variable value reached a reader that needs its value and cannot resolve it.</summary>
     public static WithheldValueException WithheldVariableNotResolved(string variableName) =>
         new($"{WithheldInputCode}: Variable '{variableName}' holds a withheld value that is not resolved in this host.");
+
+    /// <summary>
+    /// A withheld activity result reached an output capture, which reads the value to write it into a workflow output or
+    /// variable and cannot resolve it.
+    /// </summary>
+    public static WithheldValueException WithheldOutputNotCaptured(string outputName) =>
+        new($"{WithheldInputCode}: Activity output '{outputName}' was withheld and cannot be captured: it is not resolved in this host.");
 
     /// <summary>A withheld value reached value conversion, which reads the value and cannot resolve it.</summary>
     public static WithheldValueException WithheldValueNotConverted(string targetTypeAlias) =>

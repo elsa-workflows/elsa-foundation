@@ -68,7 +68,7 @@ not a value, so the reads show it; they never show the value.
 - **Activity-execution detail** (`GET .../instances/{workflowExecutionId}/activity-executions/{activityExecutionId}`):
   a value evidence record (`valueSnapshots[]`) of a withheld input carries `withheldKind` (`SecretReference` or
   `PolicyRequiresEncryption`) and, for a secret reference, `secretReferenceName`, for every caller that may inspect
-  the execution. It is always `isSensitive: true` with access state `unavailable`, and the value-payload read
+  the execution. It is always `isSensitive: true` with capture state and access state `unavailable`, and the value-payload read
   (`.../value-evidence/{evidenceId}/payload`) answers `unavailable` for it, whatever the record carries beside its
   marker. For any other record, `isSensitive` is the flag the runtime recorded: the invoke path flags an input when
   its value's effective policy or its pinned input contract marks it sensitive.

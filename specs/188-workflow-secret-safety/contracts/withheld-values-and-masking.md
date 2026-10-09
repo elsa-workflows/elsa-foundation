@@ -13,9 +13,15 @@ Proposed behavior for FR-010 to FR-012. Decisions are in [research R3, R8 and R9
   `VF-ACT-010`. This is a backstop: publish refuses literal and expression bindings on encryption-required inputs
   (`VF-ACT-011`), so only paths that skip publish (runtime artifact import, research R13) or future producers reach
   it. As built in slice 7: the rewriter withholds when the destination's effective policy or the value's own policy
-  requires encryption, before it decides between inline and external storage, so nothing is written to an
-  `IExternalPayloadStore` either. Of the intrinsics, `Set` keeps the marker in its variable and `Return` as its
-  completion result; `Control`, `SetCorrelationId`, `SetInstanceName` and `SetOutput` refuse it with `VF-ACT-010`.
+  requires encryption, before it decides between inline and external storage. The same rule
+  (`RuntimeEncryptionWithholding`) runs in `ActivityCompletionProjector` before it decides whether to externalize an
+  activity result, so the completion result and its projections carry the marker. These two are the only callers of
+  `IExternalPayloadStore.WriteAsync` in `src`, so neither writes such a value to an `IExternalPayloadStore`; a
+  replacement `IRuntimeActivityInputMaterializer` or any other host-supplied writer is outside this. An output capture
+  refuses a withheld result with `VF-ACT-010` before its storage driver encodes it, because neither a durable output
+  nor a captured variable write has a withheld form. Of the intrinsics, `Set` keeps the marker in its variable and
+  `Return` as its completion result; `Control`, `SetCorrelationId`, `SetInstanceName` and `SetOutput` refuse it with
+  `VF-ACT-010`.
 
 ## Surfaces and what they show
 
@@ -24,7 +30,7 @@ Proposed behavior for FR-010 to FR-012. Decisions are in [research R3, R8 and R9
 | Persisted activity execution state (`ContentJson`) | committed `ActivityExecutionState.InputSnapshot` | the withheld envelope |
 | Persisted workflow instance state | `WorkflowExecutionState`, durable values | no secret value; `SecretRead` cannot target variables, outputs or graph boundary values, because publish refuses `Secret` bindings on intrinsics, graph activities and checkpoint participants (`VF-ACT-012`, research R12) |
 | Execution evidence | `ExecutionEvidenceCheckpointEnricher` over commits | a withheld disposition with the reference name; `DescribeContent` never reads a value from a withheld envelope. As built: disposition `withheld` and `secretReferenceName`, whatever `RedactSensitiveValues` says |
-| Run inspector: activity inputs | `ActivityExecutionInspection.BuildInputValueSnapshots` | `isSensitive: true`, value absent, a withheld marker with the reference name. As built: the activity-execution view carries `withheldKind` and `secretReferenceName` for every caller, reports the record sensitive with access state `unavailable`, and the value-payload read answers `unavailable` for it |
+| Run inspector: activity inputs | `ActivityExecutionInspection.BuildInputValueSnapshots` | `isSensitive: true`, value absent, a withheld marker with the reference name. As built: the activity-execution view carries `withheldKind` and `secretReferenceName` for every caller, reports the record sensitive with capture state and access state `unavailable`, and the value-payload read answers `unavailable` for it |
 | Run inspector: executable bindings | `WorkflowExecutableInspector` | the reference (name, type, scope) even though the binding is sensitive; references are not material. As built: in the input-sources view, as `secret` and as `summary`; the structural detail view shows no source detail for any binding |
 | Diagnostic snapshots | `DefaultDiagnosticSnapshotFactory` via `ActivityExecutionInspection` and `RuntimeContainerVariableEvidence` | nothing from the value: the payload capture policy captures nothing for sensitive payloads, and a withheld envelope has no value to capture |
 
@@ -44,7 +50,28 @@ trigger deliveries), and each written durable value whose metadata (`runtime.req
 requiring encryption and that carries an external reference or a non-null inline value. It does not scan an
 inspection projection: a projection holds captured payloads and an `IsSensitive` flag, with no envelope and no
 policy, so the rule has nothing to judge there. A projection's input value records are rendered from the activity
-state's committed input snapshot, which the rule scans.
+state's committed input snapshot, which the rule scans. Its output value records are not: they are built from the
+completion projector's projections, which hold no value when the result policy requires encryption (the projector
+withholds them), and `ActivityExecutionInspection.BuildOutputValueSnapshots` flags such a record sensitive, so the
+default payload capture policy captures nothing for it.
+
+## Known gaps
+
+What slice 7 leaves unguarded, recorded as follow-ups in `tasks.md` T090:
+
+- Loop iteration values ride scheduler payloads in the post-commit outbox as JSON, which the backstop does not read as
+  envelopes. Only a third-party caller of `ScheduleChildActivity` can reach this: for the first-party producers the
+  iteration collection arrives withheld and fails activation first.
+- Bookmark payloads and outbox payloads are not scanned by the backstop.
+- `WorkflowScheduleActivitySchedulerWorkHandler` saves a new activity execution state directly, without the
+  committer and so without the backstop, when it is constructed without a `RuntimeCheckpointCommitter` or an
+  inspection accumulator. No shipped composition reaches that fallback: `AddWorkflowRuntime` registers the handler,
+  the committer and the accumulator unconditionally, and the handler's constructor gives neither parameter a default,
+  so the container always supplies both. Only direct construction with nulls, as some tests do, reaches it.
+- `DeterministicResultCollector` moves envelopes without reading their values, and has no production consumer.
+- An output capture into a workflow variable whose declaration requires encryption, of a result whose policy does
+  not: the storage driver encodes the value before the variable's declared policy is read, and the commit backstop
+  then refuses the commit. The in-tree JSON driver writes nothing outside the commit; a custom driver might.
 
 ## Masking (FR-012)
 

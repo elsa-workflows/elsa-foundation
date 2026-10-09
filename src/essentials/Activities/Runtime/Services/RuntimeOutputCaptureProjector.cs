@@ -2,6 +2,7 @@ using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Primitives.Models;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Services.Values;
 
@@ -66,6 +67,12 @@ public sealed class RuntimeOutputCaptureProjector
                 throw new InvalidOperationException($"Activity completion did not produce declared output projection '{capture.OutputName}'.");
             if (projected.Presence == ValuePresence.Absent)
                 continue;
+            // A result whose policy requires encryption is withheld by the completion projector (spec 188, FR-010) and
+            // holds no value to capture. Neither a durable output nor a captured variable write has a withheld form, so
+            // the capture is refused before the storage driver sees anything, and so is a present projection whose
+            // policy requires encryption, which only a projection built outside the completion projector can carry.
+            if (projected.Presence == ValuePresence.Withheld || RuntimeEncryptionWithholding.TryWithhold(projected, projected.Policy, out _))
+                throw SecretBindingDiagnostics.WithheldOutputNotCaptured(capture.OutputName);
             ValidateDurableCaptureBoundary(capture, projected);
 
             var value = capture.ConversionPlan is null

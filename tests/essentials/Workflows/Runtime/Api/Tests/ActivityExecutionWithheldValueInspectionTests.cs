@@ -16,7 +16,7 @@ namespace Elsa.Workflows.Runtime.Api.Tests;
 /// The run inspector's activity-execution and value-payload reads of a withheld input (spec 188, FR-011, T067). A withheld
 /// input is rendered by its marker and secret reference, which are not values, for every caller that may inspect the
 /// execution; it is always reported sensitive, and its payload is never released. The descendants read carries no value
-/// evidence at all (<c>ActivityExecutionHierarchyTests</c> in <c>Elsa.Workflows.Runtime.Tests</c>).
+/// evidence, so it has no withheld branch to test.
 /// </summary>
 public sealed class ActivityExecutionWithheldValueInspectionTests
 {
@@ -59,18 +59,6 @@ public sealed class ActivityExecutionWithheldValueInspectionTests
     }
 
     [Fact]
-    public async Task The_value_payload_read_of_a_withheld_input_is_unavailable()
-    {
-        await SaveAsync(WithheldInput(isSensitive: true));
-        var evidenceId = Assert.Single((await ViewAsync(canInspectSensitiveValues: true, canResolve: true)).ValueSnapshots).EvidenceId;
-
-        var read = await Reader(canResolve: true).ReadAsync(WorkflowExecutionId, ActivityExecutionId, evidenceId, default);
-
-        Assert.Equal(ActivityExecutionValuePayloadReadOutcome.Unavailable, read.Outcome);
-        Assert.Null(read.Value);
-    }
-
-    [Fact]
     public async Task A_payload_recorded_beside_a_withheld_marker_is_never_offered_or_released()
     {
         // No shipped producer records one: inspection renders a withheld input without a payload. This is the shape a
@@ -81,7 +69,9 @@ public sealed class ActivityExecutionWithheldValueInspectionTests
         var input = Assert.Single(view.ValueSnapshots);
         var read = await Reader(canResolve: true).ReadAsync(WorkflowExecutionId, ActivityExecutionId, input.EvidenceId, default);
 
+        Assert.Equal("unavailable", input.CaptureState);
         Assert.Equal("unavailable", input.AccessState);
+        Assert.True(input.IsSensitive);
         Assert.Equal(ActivityExecutionValuePayloadReadOutcome.Unavailable, read.Outcome);
         Assert.Null(read.Value);
         Assert.DoesNotContain(Sentinel, JsonSerializer.Serialize(view), StringComparison.Ordinal);

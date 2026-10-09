@@ -107,6 +107,7 @@ Response — abridged to four of the twenty-nine records, otherwise verbatim:
       "name": null,
       "value": null,
       "valueDisposition": null,
+      "secretReferenceName": null,
       "message": null
     },
     {
@@ -124,6 +125,7 @@ Response — abridged to four of the twenty-nine records, otherwise verbatim:
       "name": "orderId",
       "value": "ORD-1001",
       "valueDisposition": "captured",
+      "secretReferenceName": null,
       "message": null
     },
     {
@@ -141,6 +143,7 @@ Response — abridged to four of the twenty-nine records, otherwise verbatim:
       "name": null,
       "value": null,
       "valueDisposition": null,
+      "secretReferenceName": null,
       "message": null
     },
     {
@@ -158,6 +161,7 @@ Response — abridged to four of the twenty-nine records, otherwise verbatim:
       "name": null,
       "value": null,
       "valueDisposition": null,
+      "secretReferenceName": null,
       "message": null
     }
   ],
@@ -293,7 +297,7 @@ A `value` of `null` is never self-explanatory, so every `VariableSet` says why i
 | `external` | The runtime holds the value by external reference; this module does not resolve external storage. |
 | `sensitive` | Withheld — the value's protection policy marks it sensitive. |
 | `truncated` | Withheld — the value exceeded `MaxInlineValueLength`. |
-| `withheld` | The runtime holds a withheld marker instead of the value (spec 188): a secret reference, named in `secretReferenceName`, or a value whose policy requires encryption, with no reference. There is no value to capture, so this disposition applies whatever `RedactSensitiveValues` says. |
+| `withheld` | The runtime holds a withheld marker instead of the value (spec 188): a secret reference, named in `secretReferenceName`, or a value whose policy requires encryption, with no reference. There is no value to capture, so this disposition applies whatever `RedactSensitiveValues` says. A present value whose policy requires encryption, which only a producer that skipped withholding can put into a commit, is recorded the same way, as withheld for encryption: the enricher runs before the commit backstop that refuses such a commit. |
 
 A `sensitive` or `truncated` value still emits a record whenever the underlying value *changes*: change
 detection uses a SHA-256 digest of the full content, so rotating a secret or rewriting an over-large payload
@@ -382,6 +386,7 @@ Captured verbatim:
   "name": null,
   "value": null,
   "valueDisposition": null,
+  "secretReferenceName": null,
   "message": "Scheduler work item '3d57bd9fe44ac304:start:12VyOSr3yw7' (StartActivity) was poisoned during dispatch by handler 'WorkflowStartActivitySchedulerWorkHandler' after 1 failure(s): System.InvalidOperationException: Input 'text' on executable node 'boom' failed to materialize or evaluate its portable 'JavaScript' expression with fingerprint 'sha256:647c1bf6e5b645cd260d586b448882e96a55f9b5f39cd370511ffd73081813f7'. ---> Jint.Runtime.JavaScriptException: evidence demo failure"
 }
 ```
@@ -458,7 +463,7 @@ Bindable from `shells.json` under the feature's key, e.g.
 
 ## Tests
 
-`tests/essentials/Workflows/ExecutionEvidence/Tests` — 80 tests covering feature registration and settings flow,
+`tests/essentials/Workflows/ExecutionEvidence/Tests` — 85 tests covering feature registration and settings flow,
 the commit-to-record mapping, all seven value dispositions and their change detection, replay dedupe and its
 bounded window, atomic append under mid-batch failure, buffer caps and the `firstSequence` gap signal,
 concurrent capture and query, and all three endpoints over a TestServer host.

@@ -372,7 +372,8 @@ public sealed record ActivityExecutionIncidentCausationView(
 /// A withheld value (spec 188) is rendered by its marker: <see cref="WithheldKind"/> names the
 /// <c>WithheldValueKind</c> and <see cref="SecretReferenceName"/> the secret reference behind a secret-bound input. Both
 /// are shown to every caller that may inspect the execution, because neither is a value. A withheld record is always
-/// reported as sensitive, and its access state is always <c>unavailable</c>: there is no value to resolve.
+/// reported as sensitive, and its capture state and access state are always <c>unavailable</c>, whatever payload it
+/// carries beside its marker: there is no value to show or resolve.
 /// </remarks>
 public sealed record ActivityExecutionInspectionValueSnapshotView(
     string EvidenceId,
@@ -412,7 +413,7 @@ public sealed record ActivityExecutionInspectionValueSnapshotView(
             snapshot.Name,
             snapshot.Subject.ToString(),
             snapshot.CaptureMode.ToString(),
-            DetermineCaptureState(snapshot),
+            withheldKind is null ? DetermineCaptureState(snapshot) : "unavailable",
             snapshot.Type,
             snapshot.CapturedAt,
             null,

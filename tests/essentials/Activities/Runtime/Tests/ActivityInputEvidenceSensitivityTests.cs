@@ -44,6 +44,8 @@ public sealed class ActivityInputEvidenceSensitivityTests : IAsyncDisposable
         Assert.Equal([Sentinel], _recorder.Values);
         var input = await InputEvidenceAsync();
         Assert.True(input.IsSensitive);
+        Assert.Equal("notCaptured", input.CaptureState);
+        Assert.Equal("unavailable", input.AccessState);
         Assert.Null(input.WithheldKind);
         await AssertValueAbsentFromEvidenceAsync(input);
     }
@@ -59,6 +61,8 @@ public sealed class ActivityInputEvidenceSensitivityTests : IAsyncDisposable
         Assert.Empty(_recorder.Values);
         var input = await InputEvidenceAsync();
         Assert.True(input.IsSensitive);
+        Assert.Equal("unavailable", input.CaptureState);
+        Assert.Equal("unavailable", input.AccessState);
         Assert.Equal(nameof(WithheldValueKind.PolicyRequiresEncryption), input.WithheldKind);
         Assert.Null(input.SecretReferenceName);
         await AssertValueAbsentFromEvidenceAsync(input);

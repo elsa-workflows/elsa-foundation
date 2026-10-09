@@ -10,10 +10,11 @@ namespace Elsa.Workflows.Runtime.Services.Values;
 /// </summary>
 /// <remarks>
 /// This is the destination-storage decision for activity input materialization and intrinsic value writes. A present
-/// value whose policy requires encryption is withheld here (spec 188, FR-010): phase 0 has no encryption at rest, so it
-/// becomes a <see cref="WithheldValueKind.PolicyRequiresEncryption"/> marker that holds no value, and is neither kept
-/// inline nor written to external payload storage. The value cannot be recovered; a reader that needs it refuses the
-/// marker with <c>VF-ACT-010</c>.
+/// value whose policy requires encryption is withheld here (spec 188, FR-010), by <see cref="RuntimeEncryptionWithholding"/>
+/// before anything else: phase 0 has no encryption at rest, so it becomes a
+/// <see cref="WithheldValueKind.PolicyRequiresEncryption"/> marker that holds no value, and is neither kept inline nor
+/// written to external payload storage. The value cannot be recovered; a reader that needs it refuses the marker with
+/// <c>VF-ACT-010</c>.
 /// </remarks>
 internal sealed class RuntimeExternalEnvelopeStorage(IExternalPayloadStore? externalPayloadStore)
 {
@@ -28,8 +29,8 @@ internal sealed class RuntimeExternalEnvelopeStorage(IExternalPayloadStore? exte
         ArgumentNullException.ThrowIfNull(request.SourcePolicy);
         ArgumentNullException.ThrowIfNull(request.EffectivePolicy);
 
-        if (request.Value.Presence == ValuePresence.Present && EncryptionRequiringPolicy(request) is { } withheldPolicy)
-            return ValueEnvelope.Withheld(request.Value.Type, new WithheldValue(WithheldValueKind.PolicyRequiresEncryption), withheldPolicy);
+        if (RuntimeEncryptionWithholding.TryWithhold(request.Value, request.EffectivePolicy, out var withheld))
+            return withheld;
 
         if (request.Value.Presence != ValuePresence.Present ||
             !request.ForceExternal && request.EffectivePolicy.Storage == DurableValueStorage.Inline)
@@ -72,15 +73,6 @@ internal sealed class RuntimeExternalEnvelopeStorage(IExternalPayloadStore? exte
 
         return ValueEnvelope.External(request.Value.Type, reference, request.EffectivePolicy);
     }
-
-    // The destination's effective policy decides, and the value's own policy is honored too, so a value that already
-    // requires encryption is never released by a destination that does not say so.
-    private static ValueProtectionPolicy? EncryptionRequiringPolicy(RuntimeExternalEnvelopeRewriteRequest request) =>
-        request.EffectivePolicy.RequiresEncryption
-            ? request.EffectivePolicy
-            : request.Value.Policy.RequiresEncryption
-                ? request.Value.Policy
-                : null;
 
     private static string ResolveStorageProfile(
         ValueProtectionPolicy effectivePolicy,

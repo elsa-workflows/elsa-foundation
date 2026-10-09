@@ -3,6 +3,7 @@ using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Primitives.Models;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Workflows.Runtime.Services.Values;
 
 namespace Elsa.Activities.Runtime.Services;
 
@@ -181,10 +182,16 @@ public sealed class ActivityCompletionProjector(IExternalPayloadStore? externalP
         var effectivePolicy = ValuePolicyCombiner.ToProtectionPolicy(policy);
         if (value.ValueKind is JsonValueKind.Null or JsonValueKind.Undefined)
             return ValueEnvelope.Null(type, effectivePolicy);
+        // A value whose policy requires encryption is withheld before the inline or external decision (spec 188,
+        // FR-010), so it is never written to external payload storage, and the completion and its projections carry
+        // the marker instead of the value.
+        var inline = ValueEnvelope.Inline(type, value, effectivePolicy);
+        if (RuntimeEncryptionWithholding.TryWithhold(inline, effectivePolicy, out var withheld))
+            return withheld;
         // Named projections are read-only views over the atomic result and are never independent
         // durable output slots. Keep those views local; only the owning whole result is externalized.
         if (effectivePolicy.Storage != DurableValueStorage.External || !externalize)
-            return ValueEnvelope.Inline(type, value, effectivePolicy);
+            return inline;
         if (workflowExecutionId is null)
             throw new InvalidOperationException("VF-ACT-005: External result persistence requires asynchronous projection with a workflow execution ID.");
         if (externalPayloadStore is null)

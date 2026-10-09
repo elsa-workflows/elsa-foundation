@@ -121,6 +121,16 @@ internal static class EvidenceFactory
     public static ValueEnvelope WithheldForEncryption() =>
         ValueEnvelope.Withheld(StringType, new WithheldValue(WithheldValueKind.PolicyRequiresEncryption), EncryptionRequiredPolicy);
 
+    /// <summary>
+    /// A present value whose policy requires encryption, which producer withholding keeps out of runtime state and only a
+    /// producer that skipped it can commit (spec 188, research R13).
+    /// </summary>
+    public static ValueEnvelope PresentRequiringEncryption(string value, bool isSensitive) =>
+        ValueEnvelope.Inline(
+            StringType,
+            JsonSerializer.SerializeToElement(value),
+            new ValueProtectionPolicy(DurableValueLifecycle.Instance, DurableValueStorage.Inline, isSensitive, requiresEncryption: true));
+
     public static ValueEnvelope NullValue() => ValueEnvelope.Null(StringType, InlinePolicy);
 
     public static ValueEnvelope AbsentValue() => ValueEnvelope.Absent(StringType, InlinePolicy);

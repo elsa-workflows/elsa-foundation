@@ -192,11 +192,18 @@ public sealed class WorkflowExecutableInspector(
     /// <summary>
     /// An authored input's own sensitivity flag is only the author's choice: an activity's input declaration reaches the
     /// compiled policy, not the authored record (spec 188, FR-007). So an authored value is shown only when its own flag,
-    /// and every compiled binding and pinned input contract the executable holds for that input, allow it. When the
-    /// executable holds neither for it, it is redacted rather than shown on the authored flag alone. A node is matched by
-    /// its executable id, or by its authored id for a reusable activity placed as the workflow root, whose executable id
-    /// is generated.
+    /// and every compiled binding and pinned input contract the executable holds for that input, allow it. A record's
+    /// node id is the authored node id the publish sidecar records. The compiler keeps that id as the executable node id
+    /// of an authored node, including a container's children (proved for a sequence by a publish test), so a node is
+    /// matched by its executable id, or by its authored id for a reusable activity placed as the workflow root, whose
+    /// executable id is generated.
     /// </summary>
+    /// <remarks>
+    /// An unmatched record is redacted, fail closed, rather than shown on its authored flag alone. Unmatched means that no
+    /// executable node matched by the record's node id holds a compiled input binding or a pinned input contract for the
+    /// record's input key: the node is missing from the executable, or the node is there but the executable compiled
+    /// nothing for that input. Its <c>isSensitive</c> then reports the redaction, not a known sensitivity.
+    /// </remarks>
     private static bool RedactsAuthoredInput(WorkflowExecutable executable, WorkflowExecutableAuthoredInputRecord input)
     {
         if (input.IsSensitive)

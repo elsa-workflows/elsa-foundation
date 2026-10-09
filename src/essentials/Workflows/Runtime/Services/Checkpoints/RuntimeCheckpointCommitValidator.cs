@@ -107,11 +107,15 @@ public static class RuntimeCheckpointCommitValidator
 
     /// <summary>
     /// The encryption backstop (spec 188, FR-010). Phase 0 has no encryption at rest, so a value whose policy requires
-    /// encryption may be committed only as a withheld marker, never as an inline or external payload. Producer
-    /// withholding in <see cref="Values.RuntimeExternalEnvelopeStorage"/> replaces such a value before it reaches state,
-    /// and publication refuses the bindings that would produce one (<c>VF-ACT-011</c>, <c>VF-ACT-012</c>), so this rule
-    /// refuses only what a producer outside both let through, such as a runtime artifact imported without publication.
-    /// The message names the state and the value's key, never the value.
+    /// encryption may be committed only as a withheld marker, never as an inline or external payload. Publication refuses
+    /// the bindings that would produce one (<c>VF-ACT-011</c>, <c>VF-ACT-012</c>). Behind it, the in-tree producers of the
+    /// envelopes this rule reads withhold such a value before it reaches state through one rule,
+    /// <see cref="Values.RuntimeEncryptionWithholding"/>: <see cref="Values.RuntimeExternalEnvelopeStorage"/> for input
+    /// materialization and intrinsic writes, and the activity completion projector for a completion result. So a value
+    /// refused here comes from a producer that bypasses those, such as a replacement materializer, or from a value the
+    /// commit copies without a producer, such as a variable initial value or an output capture into a variable declared
+    /// to require encryption, from a runtime artifact imported without publication. The message names the state and the
+    /// value's key, never the value.
     /// </summary>
     /// <remarks>
     /// It reads every value envelope a workflow or activity execution state carries, and each durable value whose

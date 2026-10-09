@@ -1,3 +1,4 @@
+using System.Reflection;
 using System.Text.Json;
 using Elsa.Primitives.Models;
 using Elsa.Workflows.Runtime.Core.Constants;
@@ -86,6 +87,24 @@ public sealed class RuntimeCheckpointCommitValidatorTests
         Assert.DoesNotContain(Sentinel, exception.Message, StringComparison.Ordinal);
     }
 
+    /// <summary>
+    /// Guards the backstop's hand-maintained scan: every member of a workflow or activity execution state that can carry
+    /// a <see cref="ValueEnvelope"/>, found by walking the two state types and the types they compose, must be the member
+    /// of a <see cref="Locations"/> row, and the refusal theory above proves the validator scans each row. A new
+    /// envelope-bearing member turns this red until a row, and the scan it proves, are added.
+    /// </summary>
+    [Fact]
+    public void Every_state_member_that_can_carry_an_envelope_is_a_scanned_location()
+    {
+        var discovered = EnvelopeMembers(typeof(WorkflowExecutionState))
+            .Concat(EnvelopeMembers(typeof(ActivityExecutionState)))
+            .Order(StringComparer.Ordinal)
+            .ToArray();
+
+        Assert.NotEmpty(discovered);
+        Assert.Equal(discovered, Locations.Values.Select(location => location.Member).Order(StringComparer.Ordinal));
+    }
+
     [Theory]
     [MemberData(nameof(AcceptedRows))]
     public void A_value_with_nothing_to_encrypt_or_nothing_that_requires_it_is_accepted(string location, string value)
@@ -148,38 +167,38 @@ public sealed class RuntimeCheckpointCommitValidatorTests
 
     private static readonly IReadOnlyDictionary<string, Location> Locations = new Dictionary<string, Location>
     {
-        ["input"] = new($"Activity execution '{ActivityExecutionId}' input 'apiKey'", value => ActivityChanges(ActivityState() with
+        ["input"] = new("ActivityExecutionState.InputSnapshot.Values[]", $"Activity execution '{ActivityExecutionId}' input 'apiKey'", value => ActivityChanges(ActivityState() with
         {
             InputSnapshot = new ActivityInputSnapshot(ActivityExecutionId, "contract", "binding", new Dictionary<string, ValueEnvelope> { ["apiKey"] = value }, OccurredAt)
         })),
-        ["completion result"] = new($"Activity execution '{ActivityExecutionId}' completion result", value => ActivityChanges(ActivityState() with
+        ["completion result"] = new("ActivityExecutionState.Completion.Result", $"Activity execution '{ActivityExecutionId}' completion result", value => ActivityChanges(ActivityState() with
         {
             Completion = new ActivityCompletion(ActivityExecutionId, "attempt-1", value, "Done", OccurredAt, "contract")
         })),
-        ["private state"] = new($"Activity execution '{ActivityExecutionId}' private state", value => ActivityChanges(ActivityState() with
+        ["private state"] = new("ActivityExecutionState.PrivateState.Value", $"Activity execution '{ActivityExecutionId}' private state", value => ActivityChanges(ActivityState() with
         {
             PrivateState = new ActivityPrivateState(ActivityExecutionId, 1, value, "attempt-1", OccurredAt)
         })),
-        ["trigger delivery"] = new($"Activity execution '{ActivityExecutionId}' trigger delivery 'delivery-1'", value => ActivityChanges(ActivityState() with
+        ["trigger delivery"] = new("ActivityExecutionState.TriggerDeliveries[].Payload", $"Activity execution '{ActivityExecutionId}' trigger delivery 'delivery-1'", value => ActivityChanges(ActivityState() with
         {
             TriggerDeliveries =
             [
                 new ActivityTriggerDelivery("delivery-1", "registration-1", StringType, value, "provider", OccurredAt, "dedup-1", ActivityTriggerDeliveryStatus.Received)
             ]
         })),
-        ["variable"] = new($"Activity execution '{ActivityExecutionId}' variable 'token'", value => ActivityChanges(ActivityState() with
+        ["variable"] = new("ActivityExecutionState.VariableFrame.Values[]", $"Activity execution '{ActivityExecutionId}' variable 'token'", value => ActivityChanges(ActivityState() with
         {
             VariableFrame = Frame(VariableFrameKind.Container, value)
         })),
-        ["iteration variable"] = new($"Activity execution '{ActivityExecutionId}' iteration variable 'token'", value => ActivityChanges(ActivityState() with
+        ["iteration variable"] = new("ActivityExecutionState.IterationVariableFrame.Values[]", $"Activity execution '{ActivityExecutionId}' iteration variable 'token'", value => ActivityChanges(ActivityState() with
         {
             IterationVariableFrame = Frame(VariableFrameKind.Iteration, value)
         })),
-        ["iteration variable request"] = new($"Activity execution '{ActivityExecutionId}' iteration variable request 'token'", value => ActivityChanges(ActivityState() with
+        ["iteration variable request"] = new("ActivityExecutionState.IterationFrameRequest.Values[]", $"Activity execution '{ActivityExecutionId}' iteration variable request 'token'", value => ActivityChanges(ActivityState() with
         {
             IterationFrameRequest = new LoopIterationScopeRequest("loop", "iteration-1", new Dictionary<string, ValueEnvelope> { ["token"] = value })
         })),
-        ["root variable"] = new($"Workflow execution '{WorkflowExecutionId}' root variable 'token'", value => new RuntimeCheckpointStateChangeSet(
+        ["root variable"] = new("WorkflowExecutionState.RootVariableFrame.Values[]", $"Workflow execution '{WorkflowExecutionId}' root variable 'token'", value => new RuntimeCheckpointStateChangeSet(
             new RuntimeStateChange<WorkflowExecutionState>(WorkflowExecutionId, RuntimeStateChangeOperation.Upsert, WorkflowState(Frame(VariableFrameKind.Root, value)), new Dictionary<string, string>()),
             null, [], [], [], [], []))
     };
@@ -275,8 +294,48 @@ public sealed class RuntimeCheckpointCommitValidatorTests
             0,
             new Dictionary<string, string>());
 
-    /// <summary>Where a commit carries a value, and the subject the refusal names for it.</summary>
-    private sealed record Location(string Subject, Func<ValueEnvelope, RuntimeCheckpointStateChangeSet> Build);
+    /// <summary>
+    /// Where a commit carries a value: the state member, as <see cref="EnvelopeMembers(Type)"/> names it, the subject the
+    /// refusal names for it, and a commit that carries the value there.
+    /// </summary>
+    private sealed record Location(string Member, string Subject, Func<ValueEnvelope, RuntimeCheckpointStateChangeSet> Build);
+
+    /// <summary>
+    /// Every public instance property path under <paramref name="root"/> that can hold a <see cref="ValueEnvelope"/>,
+    /// descending into Elsa types and into the elements of collections and dictionary values (written <c>[]</c>), and
+    /// stopping at the envelope itself. A type already on the path is not entered again.
+    /// </summary>
+    private static IEnumerable<string> EnvelopeMembers(Type root) => EnvelopeMembers(root, root.Name, new HashSet<Type> { root });
+
+    private static IEnumerable<string> EnvelopeMembers(Type type, string path, IReadOnlySet<Type> onPath) =>
+        type.GetProperties(BindingFlags.Public | BindingFlags.Instance)
+            .Where(property => property.GetIndexParameters().Length == 0)
+            .SelectMany(property => EnvelopeCarriers(property.PropertyType, $"{path}.{property.Name}", onPath));
+
+    private static IEnumerable<string> EnvelopeCarriers(Type type, string path, IReadOnlySet<Type> onPath)
+    {
+        type = Nullable.GetUnderlyingType(type) ?? type;
+        if (type == typeof(ValueEnvelope))
+            return [path];
+        if (ElementType(type) is { } element)
+            return EnvelopeCarriers(element, $"{path}[]", onPath);
+        if (type.IsEnum || onPath.Contains(type) || type.Namespace?.StartsWith("Elsa.", StringComparison.Ordinal) != true)
+            return [];
+        return EnvelopeMembers(type, path, new HashSet<Type>(onPath) { type });
+    }
+
+    // A dictionary's value type, or an enumerable's element type; a dictionary is matched first, because it is also an
+    // enumerable of key-value pairs.
+    private static Type? ElementType(Type type)
+    {
+        if (type == typeof(string))
+            return null;
+        var interfaces = type.GetInterfaces().Append(type).Where(candidate => candidate.IsGenericType).ToArray();
+        var dictionary = interfaces.FirstOrDefault(candidate => candidate.GetGenericTypeDefinition() == typeof(IReadOnlyDictionary<,>));
+        if (dictionary is not null)
+            return dictionary.GetGenericArguments()[1];
+        return interfaces.FirstOrDefault(candidate => candidate.GetGenericTypeDefinition() == typeof(IEnumerable<>))?.GetGenericArguments()[0];
+    }
 
     private static RuntimeCheckpointCommit Commit(IReadOnlyList<RuntimePostCommitIntent> intents) => new(
         "commit-a",
