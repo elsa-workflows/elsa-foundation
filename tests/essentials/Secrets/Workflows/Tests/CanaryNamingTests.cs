@@ -39,7 +39,7 @@ public sealed class CanaryNamingTests
     [Fact]
     public void The_canary_activities_are_found() =>
         Assert.Equal(
-            [typeof(CanaryActivity), typeof(CanaryCheckpointActivity), typeof(CanaryChildActivity), typeof(CanaryStructuralActivity)],
+            [typeof(CanaryActivity), typeof(CanaryCheckpointActivity), typeof(CanaryChildActivity), typeof(CanaryNotifiedStructuralActivity), typeof(CanaryNotifyingChildActivity), typeof(CanaryStructuralActivity)],
             CanaryActivityTypes.OrderBy(type => type.Name, StringComparer.Ordinal));
 
     [Theory]

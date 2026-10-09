@@ -521,18 +521,12 @@ public sealed class SecretsCanaryWorkflowHost : IAsyncDisposable
         return cells;
     }
 
-    /// <summary>The names of the tables of every SQLite database under <paramref name="directory"/>.</summary>
-    public static async Task<IReadOnlyList<string>> ReadTableNamesAsync(string directory)
+    /// <summary>The names of the tables of the SQLite database <paramref name="database"/>.</summary>
+    public static async Task<IReadOnlyList<string>> ReadTableNamesOfAsync(string database)
     {
-        var tables = new List<string>();
-        foreach (var database in Directory.EnumerateFiles(directory, "*.db"))
-        {
-            await using var connection = new SqliteConnection($"Data Source={database};Mode=ReadOnly;Pooling=False");
-            await connection.OpenAsync();
-            tables.AddRange(await ReadStringsAsync(connection, "SELECT name FROM sqlite_master WHERE type = 'table'"));
-        }
-
-        return tables;
+        await using var connection = new SqliteConnection($"Data Source={database};Mode=ReadOnly;Pooling=False");
+        await connection.OpenAsync();
+        return await ReadStringsAsync(connection, "SELECT name FROM sqlite_master WHERE type = 'table'");
     }
 
     /// <summary>Runs the Writer's export pass, as its startup task does, so the export tree reflects the catalog now.</summary>
@@ -606,13 +600,20 @@ public sealed class SecretsCanaryWorkflowHost : IAsyncDisposable
         return (string?)node ?? throw new InvalidOperationException($"The response lacks '{string.Join('.', path)}'.");
     }
 
+    /// <summary>Stops the host; the span listener is detached and the temporary directory deleted even when stopping the app throws.</summary>
     public async ValueTask DisposeAsync()
     {
-        Client.Dispose();
-        await _app.DisposeAsync();
-        Spans.Dispose();
-        SqliteConnection.ClearAllPools();
-        DeleteQuietly(_root);
+        try
+        {
+            Client.Dispose();
+            await _app.DisposeAsync();
+        }
+        finally
+        {
+            Spans.Dispose();
+            SqliteConnection.ClearAllPools();
+            DeleteQuietly(_root);
+        }
     }
 
     // ---- Setup helpers -------------------------------------------------------------------------------------------

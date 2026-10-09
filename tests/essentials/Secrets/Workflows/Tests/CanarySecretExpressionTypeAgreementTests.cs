@@ -11,7 +11,7 @@ namespace Elsa.Secrets.Workflows.Tests;
 /// they agree (spec 188, T082). Were one to drift, a secret reference the Studio picker writes would compile as an
 /// expression, or be refused at save as a literal.
 /// </summary>
-public sealed class SecretExpressionTypeAgreementTests
+public sealed class CanarySecretExpressionTypeAgreementTests
 {
     [Fact]
     public void The_publishing_compiler_reads_the_expression_type_the_Secrets_module_declares() =>

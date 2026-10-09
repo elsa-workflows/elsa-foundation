@@ -15,30 +15,50 @@ namespace Elsa.Secrets.Workflows.Tests.Support;
 
 /// <summary>
 /// The canary's hand-built runtime artifacts, imported without publish (spec 188, research R13): the structural run
-/// shape of S4, whose child slot no published design can carry for a test activity, and the literal of S5 and S6 on an
+/// shapes of S4 and S4b, whose child slot no published design can carry for a test activity, and the literal of S5 and S6 on an
 /// input whose pinned policy requires encryption, which publish refuses.
 /// </summary>
 public static class CanaryArtifacts
 {
     public const string ChildNodeId = "canary-child";
+    public const string GrandchildNodeId = "canary-grandchild";
     private const string ChildSlotName = "Canary.Children";
 
     /// <summary>
     /// S4: a <see cref="CanaryStructuralActivity"/> root over one <see cref="CanaryChildActivity"/>, whose credential input
     /// is bound to <paramref name="secretName"/> as publish compiles a secret reference.
     /// </summary>
-    public static WorkflowExecutable Structural(string artifactId, string nodeId, string secretName, IWellKnownTypeRegistry types)
+    public static WorkflowExecutable Structural(string artifactId, string nodeId, string secretName, IWellKnownTypeRegistry types) =>
+        StructuralOver(artifactId, nodeId, secretName, types, typeof(CanaryStructuralActivity), ClrNode(ChildNodeId, typeof(CanaryChildActivity), new Dictionary<string, RuntimeInputBinding>(), null));
+
+    /// <summary>
+    /// S4b: a <see cref="CanaryNotifiedStructuralActivity"/> root, its credential input bound as in
+    /// <see cref="Structural"/>, over one <see cref="CanaryNotifyingChildActivity"/>, which notifies it and waits on a
+    /// suspended <see cref="CanaryActivity"/>.
+    /// </summary>
+    public static WorkflowExecutable Notified(string artifactId, string nodeId, string secretName, IWellKnownTypeRegistry types)
+    {
+        var grandchild = ClrNode(
+            GrandchildNodeId,
+            typeof(CanaryActivity),
+            new Dictionary<string, RuntimeInputBinding> { [nameof(CanaryActivity.Companion)] = Literal(nameof(CanaryActivity.Companion), CanaryModes.Suspend, ValueProtectionPolicy.InstanceInline) },
+            null);
+        var child = ClrNode(ChildNodeId, typeof(CanaryNotifyingChildActivity), new Dictionary<string, RuntimeInputBinding>(), [new ExecutableChildSlot(ChildSlotName, [grandchild])]);
+        return StructuralOver(artifactId, nodeId, secretName, types, typeof(CanaryNotifiedStructuralActivity), child);
+    }
+
+    /// <summary>A structural <paramref name="parentType"/> root over <paramref name="child"/>, its <c>Primary</c> bound to <paramref name="secretName"/>.</summary>
+    private static WorkflowExecutable StructuralOver(string artifactId, string nodeId, string secretName, IWellKnownTypeRegistry types, Type parentType, ExecutableNode child)
     {
         var compiler = new RuntimeInputBindingCompiler(types);
         var reference = new JsonObject { ["name"] = secretName, ["typeName"] = SecretTypeNames.Text };
         var binding = compiler.Compile(
             nodeId,
-            Input(typeof(CanaryStructuralActivity), nameof(CanaryStructuralActivity.Primary)),
+            Input(parentType, nameof(CanaryStructuralActivity.Primary)),
             new ArgumentValue(JsonSerializer.SerializeToElement(reference), SecretExpressionTypes.Secret));
-        var child = ClrNode(ChildNodeId, typeof(CanaryChildActivity), new Dictionary<string, RuntimeInputBinding>(), null);
         var root = ClrNode(
             nodeId,
-            typeof(CanaryStructuralActivity),
+            parentType,
             new Dictionary<string, RuntimeInputBinding>
             {
                 [binding.InputKey] = binding,

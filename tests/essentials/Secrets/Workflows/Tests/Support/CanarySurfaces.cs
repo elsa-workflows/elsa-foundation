@@ -35,6 +35,11 @@ public enum CanarySurface
 /// Whether the subject input reaches the inspection surfaces as the withheld reference; false where an injection replaced
 /// the withheld envelope with a planted value.
 /// </param>
+/// <param name="CompletesInOneSegment">
+/// Whether the run completes without suspending or faulting. Under coalesced persistence such a run's value records are
+/// folded to the segment's durable boundary, so none of the subject input is kept; a run that suspends or faults keeps
+/// them at that boundary.
+/// </param>
 public sealed record CanaryRun(
     string Scenario,
     string NodeId,
@@ -45,7 +50,8 @@ public sealed record CanaryRun(
     string SubjectInput,
     string? ReferenceName,
     string RuntimeMarker,
-    bool SubjectWithheld = true)
+    bool SubjectWithheld = true,
+    bool CompletesInOneSegment = false)
 {
     /// <summary>The reference the inspection surfaces must show for the subject input, if they show one.</summary>
     public string? ShownReference => SubjectWithheld ? ReferenceName : null;
@@ -85,6 +91,9 @@ public sealed record CanarySurfaceRead(CanarySurface Surface, IReadOnlyList<Cana
 public sealed class CanarySurfaces(SecretsCanaryWorkflowHost host)
 {
     private const string RuntimeExecutablesTable = "elsa_runtime_workflow_executable";
+    private const string RuntimeActivityStatesTable = "elsa_runtime_activity_execution_state";
+    private const string RuntimeWorkflowStatesTable = "elsa_runtime_workflow_execution_state";
+    private const string RuntimeInspectionsTable = "elsa_runtime_activity_execution_inspection";
 
     /// <summary>The surface's content, with every precondition that did not hold for a run in <paramref name="runs"/>.</summary>
     public async Task<CanarySurfaceRead> ReadAsync(CanarySurface surface, IReadOnlyCollection<CanaryRun> runs, CanaryReadOptions options)
@@ -141,18 +150,15 @@ public sealed class CanarySurfaces(SecretsCanaryWorkflowHost host)
 
     /// <summary>
     /// The runtime database: every file under the runtime directory, and every cell of every table in it. When an
-    /// injection planted a value in some tables, the files, which cannot leave those tables out, are not read, and every
-    /// other table's cells are.
+    /// injection planted a value in some tables (S5, S6, S8, S8b and S8c), every other table's cells are read, and so
+    /// are the raw files of every database the host writes that holds none of those tables: the design databases, which
+    /// no injection plants into, and any other runtime database. The raw bytes of the database that holds the planted
+    /// tables (its file, <c>-wal</c> and <c>-shm</c>, freelist pages included) are not scanned in those scenarios: a
+    /// planted table's residue there cannot be told apart from a leak, so a value that reaches that database only as
+    /// raw bytes outside a live cell is not found by them.
     /// </summary>
     private async Task<IReadOnlyList<CanaryContent>> ReadRuntimeStateAsync(IReadOnlyCollection<CanaryRun> runs, IReadOnlySet<string>? excludedTables, List<string> failures)
     {
-        if (excludedTables is not null)
-        {
-            var tables = await SecretsCanaryWorkflowHost.ReadTableNamesAsync(host.RuntimeDirectory);
-            foreach (var table in excludedTables.Where(table => !tables.Contains(table)))
-                failures.Add($"runtime state: the excluded table '{table}' does not exist, so the exclusion names nothing the injection planted.");
-        }
-
         var cells = await SecretsCanaryWorkflowHost.ReadDatabaseCellsAsync(host.RuntimeDirectory, excludedTables);
         foreach (var run in runs)
         {
@@ -160,7 +166,35 @@ public sealed class CanarySurfaces(SecretsCanaryWorkflowHost host)
             Require(failures, Holds(cells, run.RuntimeMarker), $"{run.Scenario} precondition (runtime state): no runtime row holds '{run.RuntimeMarker}', the marker the run's state carries.");
         }
 
-        return excludedTables is null ? [.. Files(host.RuntimeDirectory, failures), .. cells] : cells;
+        if (excludedTables is null)
+            return [.. Files(host.RuntimeDirectory, failures), .. cells];
+        return [.. await UnplantedDatabaseFilesAsync(excludedTables, failures), .. cells];
+    }
+
+    /// <summary>
+    /// The raw files of every database the host writes that holds none of <paramref name="excludedTables"/>, which must
+    /// each exist in a runtime database, so the exclusion names something the injection planted.
+    /// </summary>
+    private async Task<IReadOnlyList<CanaryContent>> UnplantedDatabaseFilesAsync(IReadOnlySet<string> excludedTables, List<string> failures)
+    {
+        var plantedDatabases = new List<string>();
+        var tables = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var database in Directory.EnumerateFiles(host.RuntimeDirectory, "*.db"))
+        {
+            var names = await SecretsCanaryWorkflowHost.ReadTableNamesOfAsync(database);
+            tables.UnionWith(names);
+            if (names.Any(excludedTables.Contains))
+                plantedDatabases.Add(Path.GetFileName(database));
+        }
+
+        foreach (var table in excludedTables.Where(table => !tables.Contains(table)))
+            failures.Add($"runtime state: the excluded table '{table}' does not exist, so the exclusion names nothing the injection planted.");
+
+        var files = Files(host.DesignDirectory, failures)
+            .Concat(Files(host.RuntimeDirectory, failures).Where(file => !plantedDatabases.Any(planted => Path.GetFileName(file.Location).StartsWith(planted, StringComparison.Ordinal))))
+            .ToArray();
+        Require(failures, files.Length > 0, "runtime state: no raw database file outside the planted database to scan.");
+        return files;
     }
 
     /// <summary>The evidence records of each run, as the evidence store holds them.</summary>
@@ -193,11 +227,12 @@ public sealed class CanarySurfaces(SecretsCanaryWorkflowHost host)
             var instancePath = $"runtime/workflows/instances/{run.WorkflowExecutionId}";
             var instance = await ReadRequiredAsync(run, instancePath, caller, contents, failures);
             Require(failures, instance.Contains(run.WorkflowExecutionId, StringComparison.Ordinal), $"{run.Scenario} precondition (inspector): the instance response does not name run '{run.WorkflowExecutionId}'.");
-            var activityLevel = Granularity(run, instance, failures) == CanaryInspectionGranularity.ActivityLevel;
+            var keepsValueRecords = KeepsValueRecords(run, instance, failures);
 
             var (activities, _) = await host.ReadRunAsync(run.WorkflowExecutionId);
             Require(failures, activities.Count > 0, $"{run.Scenario} precondition (inspector): run '{run.WorkflowExecutionId}' has no activity execution to read.");
             var subjectShown = false;
+            var subjectRecorded = false;
             foreach (var activity in activities)
             {
                 var activityPath = $"{instancePath}/activity-executions/{activity.InvocationId}";
@@ -206,16 +241,21 @@ public sealed class CanarySurfaces(SecretsCanaryWorkflowHost host)
                 await ReadAnsweredAsync($"{activityPath}/descendants", caller, contents);
                 foreach (var snapshot in view["valueSnapshots"]?.AsArray() ?? [])
                 {
-                    if ((string?)snapshot?["inputKey"] == run.SubjectInput && run.ShownReference is { } reference)
-                        subjectShown |= (string?)snapshot["secretReferenceName"] == reference;
+                    var isSubject = (string?)snapshot?["inputKey"] == run.SubjectInput;
+                    subjectRecorded |= isSubject;
+                    if (isSubject && run.ShownReference is { } reference)
+                        subjectShown |= (string?)snapshot!["secretReferenceName"] == reference;
                     await ReadAnsweredAsync($"{activityPath}/value-evidence/{(string?)snapshot?["evidenceId"]}/payload", caller, contents);
                 }
             }
 
-            // Under boundary-level inspection the runtime folds a run's value records to its last durable boundary, so a
-            // view may show none; the granularity, which the instance view reports, is then what the precondition proves.
-            if (run.ShownReference is not null && activityLevel)
+            if (run.ShownReference is not null && keepsValueRecords)
                 Require(failures, subjectShown, $"{run.Scenario} precondition (inspector): no activity execution view shows reference '{run.ShownReference}' for input '{run.SubjectInput}'.");
+            // A run folded under coalescing keeps no value record of the subject input, so the run inspector's
+            // sensitive-value rule has nothing to hide there. That absence is asserted: a value record of the subject
+            // input there is something the canary would have to bite on, so it turns the canary red.
+            if (!keepsValueRecords)
+                Require(failures, !subjectRecorded, $"{run.Scenario} (inspector, folded): an activity execution view shows a value record of input '{run.SubjectInput}', which coalesced persistence does not keep for a run that completes in one segment.");
 
             await ReadRequiredAsync(run, $"{instancePath}/incidents", caller, contents, failures);
             var executable = await ReadRequiredAsync(run, $"runtime/workflows/executables/{run.ArtifactId}", caller, contents, failures);
@@ -244,21 +284,27 @@ public sealed class CanarySurfaces(SecretsCanaryWorkflowHost host)
             contents.AddRange(projections.Select(projection => CanaryContent.Text($"inspection {projection.ActivityExecutionId}", SecretsCanaryWorkflowHost.Serialize(projection))));
             using var response = await host.Send(HttpMethod.Get, $"runtime/workflows/instances/{run.WorkflowExecutionId}", CanaryCaller.Operator);
             var instance = response.IsSuccessStatusCode ? await response.Content.ReadAsStringAsync() : string.Empty;
-            if (Granularity(run, instance, failures) == CanaryInspectionGranularity.BoundaryLevel)
+            var snapshots = projections.SelectMany(projection => projection.ValueSnapshots).ToArray();
+            var subject = snapshots.Where(snapshot => snapshot.InputKey == run.SubjectInput).ToArray();
+            if (!KeepsValueRecords(run, instance, failures))
             {
                 // Under coalesced checkpoints the runtime folds inspection evidence to the segment's durable boundary
-                // (ADR 0032 R3), which the instance view reports; the value records the precondition below looks for do
-                // not survive the fold. Whatever survives is scanned.
+                // (ADR 0032 R3), which the instance view reports, so a run that completes in one segment leaves no value
+                // record of the subject input, and the capture rules that protect one (P6, P7) have nothing to act on.
+                // That absence is asserted rather than assumed: a value record of the subject input there turns the
+                // canary red. Whatever the store does hold is scanned.
+                Require(
+                    failures,
+                    subject.Length == 0,
+                    $"{run.Scenario} (diagnostic snapshots, folded): the inspection store holds {subject.Length} value records of input '{run.SubjectInput}' in run '{run.WorkflowExecutionId}', which coalesced persistence does not keep for a run that completes in one segment.");
                 continue;
             }
 
-            var snapshots = projections.SelectMany(projection => projection.ValueSnapshots).ToArray();
             // The factory ran: a non-sensitive input was captured at the configured level.
             Require(
                 failures,
                 snapshots.Any(snapshot => snapshot.InputKey == nameof(CanaryActivity.Companion) && snapshot.Payload is not null && snapshot.CaptureMode == companionCapture),
                 $"{run.Scenario} precondition (diagnostic snapshots): the companion input's projection of run '{run.WorkflowExecutionId}' holds no snapshot captured at {companionCapture}.");
-            var subject = snapshots.Where(snapshot => snapshot.InputKey == run.SubjectInput).ToArray();
             Require(failures, subject.Length > 0, $"{run.Scenario} precondition (diagnostic snapshots): input '{run.SubjectInput}' has no projection in run '{run.WorkflowExecutionId}'.");
             if (run.ShownReference is { } reference)
                 Require(
@@ -320,13 +366,17 @@ public sealed class CanarySurfaces(SecretsCanaryWorkflowHost host)
         contents.Add(CanaryContent.Text($"GET {path} ({(int)response.StatusCode})", await response.Content.ReadAsStringAsync()));
     }
 
-    /// <summary>The inspection granularity an instance view reports, which must be the one the host's checkpoint cadence implies.</summary>
-    private string? Granularity(CanaryRun run, string instanceView, List<string> failures)
+    /// <summary>
+    /// Whether the run's value records are kept: always under activity-level inspection, and under boundary-level
+    /// inspection unless the run completes in one segment. The granularity the instance view reports must be the one the
+    /// host's checkpoint cadence implies.
+    /// </summary>
+    private bool KeepsValueRecords(CanaryRun run, string instanceView, List<string> failures)
     {
         var granularity = instanceView.Length == 0 ? null : (string?)JsonNode.Parse(instanceView)?["inspectionGranularity"];
         var expected = host.Mode == CanaryStartMode.Fused ? CanaryInspectionGranularity.BoundaryLevel : CanaryInspectionGranularity.ActivityLevel;
         Require(failures, granularity == expected, $"{run.Scenario} precondition (inspection granularity): the instance view reports '{granularity}', not the '{expected}' a {host.Mode} host implies.");
-        return granularity;
+        return expected == CanaryInspectionGranularity.ActivityLevel || !run.CompletesInOneSegment;
     }
 
     private static void Require(List<string> failures, bool holds, string precondition)
@@ -353,6 +403,21 @@ public sealed class CanarySurfaces(SecretsCanaryWorkflowHost host)
 
     /// <summary>The runtime table the executable artifacts are stored in: an imported artifact plants its literal there.</summary>
     public static IReadOnlySet<string> ExecutableArtifactTables { get; } = new HashSet<string>(StringComparer.Ordinal) { RuntimeExecutablesTable };
+
+    /// <summary>The runtime table S8 plants into: the replanted input snapshot is committed with the activity execution state.</summary>
+    public static IReadOnlySet<string> ReplantedSnapshotTables { get; } = new HashSet<string>(StringComparer.Ordinal) { RuntimeActivityStatesTable };
+
+    /// <summary>
+    /// The runtime tables S8b plants into: the replanted input snapshot, and the inspection projection the
+    /// capture-everything policy captured it in.
+    /// </summary>
+    public static IReadOnlySet<string> CapturedSnapshotTables { get; } = new HashSet<string>(StringComparer.Ordinal) { RuntimeActivityStatesTable, RuntimeInspectionsTable };
+
+    /// <summary>
+    /// The runtime tables S8c plants into: the artifact, which carries the sensitive variable's initial value, and the
+    /// workflow execution state, whose root variable frame holds it.
+    /// </summary>
+    public static IReadOnlySet<string> SensitiveVariableTables { get; } = new HashSet<string>(StringComparer.Ordinal) { RuntimeExecutablesTable, RuntimeWorkflowStatesTable };
 
     /// <summary>The runtime table the drainer records a handler fault in: S9's planted exception message lands there.</summary>
     public static IReadOnlySet<string> PoisonTables { get; } = new HashSet<string>(StringComparer.Ordinal) { "elsa_runtime_scheduler_poison" };

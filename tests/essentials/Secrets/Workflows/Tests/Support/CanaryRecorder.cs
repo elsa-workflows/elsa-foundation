@@ -12,6 +12,7 @@ public sealed class CanaryRecorder
     public const string Execute = "execute";
     public const string Resume = "resume";
     public const string ChildCompleted = "child-completed";
+    public const string ChildNotified = "child-notified";
 
     private readonly List<CanaryActivation> _activations = [];
 

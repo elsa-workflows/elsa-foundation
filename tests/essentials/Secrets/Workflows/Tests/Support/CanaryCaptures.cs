@@ -83,7 +83,7 @@ public sealed class CanarySpanRecorder : IDisposable
             ActivityStopped = activity => _spans.Enqueue(new CanarySpan(
                 activity.OperationName,
                 activity.TagObjects.ToDictionary(tag => tag.Key, tag => Convert.ToString(tag.Value, System.Globalization.CultureInfo.InvariantCulture)),
-                activity.Events.Select(@event => $"{@event.Name} {string.Join(' ', @event.Tags.Select(tag => $"{tag.Key}={tag.Value}"))}").ToArray(),
+                activity.Events.Select(@event => $"{@event.Name} {string.Join(' ', @event.Tags.Select(tag => $"{tag.Key}={Convert.ToString(tag.Value, System.Globalization.CultureInfo.InvariantCulture)}"))}").ToArray(),
                 activity.Status,
                 activity.StatusDescription))
         };

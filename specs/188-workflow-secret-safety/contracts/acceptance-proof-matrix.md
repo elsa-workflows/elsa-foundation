@@ -81,11 +81,18 @@ protection the last one standing.
 | M1 | Mask registration of resolved values (`ActivitySecretInputResolver.ResolveAsync`, the activator's resolution step) | S2 | none | skip registration | runtime database (UTF-16LE Base64 of the fault message) and captured logs |
 | M2 | Exception masking at the invoke boundary (`WorkflowInvokeActivitySchedulerWorkHandler`) | S2 | none | pass the original exception through | runtime database and captured logs |
 | M3 | Exception masking at the resume boundary (`WorkflowResumeBookmarkSchedulerWorkHandler`) | S3b | none | pass the original exception through | runtime database and captured logs |
-| M4 | Exception masking at the structural boundaries (`RecordParentFaultAsync` in `WorkflowParentActivityCompletionSchedulerWorkHandler` and in `WorkflowNotifyParentActivitySchedulerWorkHandler`) | S4 | none | pass the original exception through at both sites (S4 throws from the child-completion callback, so the completion handler's site is the one S4 reaches; disabling only the notification handler's site needs a notifying variant of S4) | runtime database and captured logs |
+| M4 | Exception masking at the structural boundaries (`RecordParentFaultAsync` in `WorkflowParentActivityCompletionSchedulerWorkHandler` and in `WorkflowNotifyParentActivitySchedulerWorkHandler`) | S4, S4b | none | pass the original exception through at both sites (S4 throws from the child-completion callback, so the completion handler's site is the one S4 reaches; S4b, the notifying variant, throws from the child-notification callback and reaches the notification handler's site) | runtime database and captured logs |
 | M5 | `ActivityFault.Message` masking before `ActivityFaultProjection.ToNormalized` | S2b | none | skip it | runtime database (persisted fault) |
 | M6 | Runtime spans carry the exception type only (`WorkflowSchedulerDrainer` sets the error status to the captured type name) | S9 | work-handler decorator | add the exception message to the span status | runtime telemetry surface finds C4 |
 
-SC-005 is proved when the canary PR's table has one red row per id above (15 rows) and none green.
+SC-005 is proved when the canary PR's table has one red row per id above (15 rows) and none green, in the discrete
+class. In the fused class P6, P7 and P9's run-inspector half are not bitten, because their scenarios' runs complete in
+one segment and coalesced persistence keeps no value record of the input they protect; that absence is asserted (see
+the as-built note below).
+
+**As built in slice 9, expected red of M1 to M4.** The red is the runtime database half of the cells above. The
+captured-logs half is unreachable by construction: slice 8 established that no runtime log line on these paths
+carries the exception (A13), and the canary found the captured logs empty of C1 with each of M1 to M4 disabled.
 
 **As built in slice 9.** P8 is guarded by an added scenario, S8c: an imported artifact declares a workflow variable
 sensitive with canary value C3 as its initial value, and disabling P8 puts C3 into the execution evidence. S8 cannot
@@ -93,7 +100,18 @@ reach P8, because execution evidence records root variables, activity facts and 
 activity's input, and a published design cannot declare a sensitive workflow variable. P5's refusals moved to
 `RuntimeInputBindingCompiler.EnsureSecretBindingsAdmissible` (graph and checkpoint participant) beside the intrinsic one
 in `ExecutableNodeCompiler`, and S7 publishes onto an intrinsic and a checkpoint participant; the canary composes no
-graph feature. P9's executable-inspector half is reached by S5's imported literal, through the input-sources view.
+graph feature, so it does not bite P5's graph refusal site alone: composing one costs more than a project reference
+and a feature line (a graph activity must be authored through the Activities Design API, with a graph manifest, a
+publication preflight and a publish, before a workflow can bind its input), and slice 2's T010 graph row
+(`SecretBindingCompilationTests.A_graph_activity_node_refuses_a_secret_reference`) bites that site (T090). M4 has two
+sites, each bitten alone: S4 reaches the completion handler's `RecordParentFaultAsync`, and S4b, a hand-built
+structural parent whose child notifies it and never completes, reaches the notification handler's. In the fused
+class, P6, P7 and P9's run-inspector half are not bitten: their scenarios (S10, S8, S8b) complete in one segment, and
+coalesced persistence folds such a run's value records to the segment's durable boundary, so no value record of the
+subject input exists to protect. The canary asserts that absence (the inspection store and the inspector's activity
+views hold no value record of the subject input), so a change that persists one under coalescing turns the fused class
+red. A run that suspends or faults keeps its value records at that boundary, and the fused class applies the input
+preconditions to it. P9's executable-inspector half is reached by S5's imported literal, through the input-sources view.
 S10's projection of `Plain` reports `isSensitive: true`, because slice 7 renders every withheld record sensitive, so
 S10's positive control asserts that the snapshot's envelope policy and the pinned contract policy are not sensitive. S9's
 injection also plants the incident the drainer raises with the escaped message, so the incident state, the inspection

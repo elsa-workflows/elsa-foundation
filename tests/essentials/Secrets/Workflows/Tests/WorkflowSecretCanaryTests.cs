@@ -7,6 +7,7 @@ using Elsa.Serialization.Core;
 using Elsa.Workflows.ExecutionEvidence.Models;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Diagnostics;
+using Elsa.Workflows.Runtime.Services.Incidents;
 using Elsa.Workflows.Runtime.Core.Models;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
@@ -18,9 +19,13 @@ namespace Elsa.Secrets.Workflows.Tests;
 /// <summary>
 /// The canary (spec 188, T081, FR-013, SC-004). A secret's value, planted through the real Secrets bridge, is consumed by
 /// a canary activity in each run shape of FR-013 (success, a faulting exception, a returned fault, suspend and resume, a
-/// throw on resume, a structural child-completion throw, and rotation, S1 to S4), and is then found zero times on each
-/// of the eight surfaces, each read only after its precondition proved it holds the run (<see cref="CanarySurfaces"/>).
-/// The injection scenarios of A15 (S5 to S10) each remove an upstream protection through a test-only seam
+/// throw on resume, a structural child-completion throw and child-notification throw, and rotation, S1 to S4b), and is
+/// then found zero times on each surface the scenario scans: the eight surfaces for a published canary, and the six run
+/// surfaces for an imported artifact (S4, S4b), which has no definition to store or export. Each surface is read only
+/// after its precondition proved it holds the run (<see cref="CanarySurfaces"/>); in the fused class a run that completes
+/// in one segment (S1, S8, S8b, S8c, S10) keeps no value record of the subject input in the diagnostic snapshots or the
+/// inspector's activity views, and that absence is asserted in place of the precondition that a record shows the
+/// reference. The injection scenarios of A15 (S5 to S10) each remove an upstream protection through a test-only seam
 /// (<see cref="SecretsCanaryInjectionFeature"/>), so the protection under test is the only thing between a planted
 /// value and a surface; each asserts its own positive control and leaves out the surface its injection planted. Every
 /// scenario that runs a workflow runs once with runtime diagnostics at <c>DiagnosticSnapshot</c> and once at
@@ -57,7 +62,7 @@ public abstract class WorkflowSecretCanaryTests(CanaryHostFixture fixture, ITest
 
         Assert.Equal([scenario.Value], Host.Activations.For(first).Select(activation => activation.Primary));
         Assert.Equal([rotated], Host.Activations.For(second).Select(activation => activation.Primary));
-        await AssertAbsentAsync(scenario, [Run(scenario, first, publication), Run(scenario, second, publication)], [scenario.Value, rotated], AllSurfaces);
+        await AssertAbsentAsync(scenario, [Run(scenario, first, publication) with { CompletesInOneSegment = true }, Run(scenario, second, publication) with { CompletesInOneSegment = true }], [scenario.Value, rotated], AllSurfaces);
         await AssertSnapshotWithholdsAsync(first, scenario, nameof(CanaryActivity.Primary));
     }
 
@@ -146,6 +151,31 @@ public abstract class WorkflowSecretCanaryTests(CanaryHostFixture fixture, ITest
         await AssertFaultMaskedAsync(run, scenario);
     }
 
+    /// <summary>
+    /// S4b, the notifying variant of S4 (A15, M4): the structural parent's child-notification callback throws the value,
+    /// so the parent-notification handler's fault boundary, not the completion handler's, is the one the run reaches.
+    /// </summary>
+    [Theory]
+    [MemberData(nameof(Levels))]
+    public async Task S4b_a_structural_child_notification_throwing_the_value_is_recorded_masked_and_leaves_it_on_no_run_surface(RuntimeDiagnosticsEvidenceLevel level)
+    {
+        var scenario = await BeginAsync("s4b", level);
+        var executable = CanaryArtifacts.Notified(scenario.ArtifactId, scenario.NodeId, scenario.ReferenceName, Host.Shell.ServiceProvider.GetRequiredService<IWellKnownTypeRegistry>());
+        var sourceReferenceId = await Host.ImportAsync(executable);
+
+        var run = await Host.ExecuteAsync(scenario.ArtifactId, sourceReferenceId);
+        var state = await WaitForAsync(run, Faulted(scenario.NodeId));
+
+        // The parent's notification callback ran, and the notifying child did not complete, so no child-completion
+        // evaluation of the parent took place (the grandchild, unbound on Primary, records nothing the filter keeps).
+        Assert.Equal(
+            [(CanaryRecorder.Execute, scenario.Value), (CanaryRecorder.ChildNotified, scenario.Value)],
+            Host.Activations.For(run).Where(activation => activation.Primary is not null).Select(activation => (activation.Step, activation.Primary)));
+        Assert.NotEqual(ActivityExecutionStatus.Completed, state.Node(CanaryArtifacts.ChildNodeId)?.Status);
+        await AssertAbsentAsync(scenario, [Imported(scenario, run, sourceReferenceId, scenario.ReferenceName, scenario.ReferenceName)], [scenario.Value], RunSurfaces);
+        await AssertFaultMaskedAsync(run, scenario);
+    }
+
     // ---- A15 injection scenarios (S5 to S10) ---------------------------------------------------------------------
 
     [Theory]
@@ -209,50 +239,6 @@ public abstract class WorkflowSecretCanaryTests(CanaryHostFixture fixture, ITest
         await AssertPlantedInArtifactsAsync(planted);
     }
 
-    [Fact]
-    public async Task S7_publish_refuses_a_secret_on_a_set_variable_intrinsic()
-    {
-        var reference = ReferenceName("s7", Suffix());
-        var root = new JsonObject
-        {
-            ["nodeId"] = "s7-set",
-            ["activityVersionId"] = "$intrinsic",
-            ["inputs"] = new JsonArray(SecretReference(WorkflowIntrinsicInputKeys.Value, reference)),
-            ["outputs"] = new JsonArray(),
-            ["intrinsic"] = new JsonObject
-            {
-                ["kind"] = "set",
-                ["valueType"] = new JsonObject { ["alias"] = "String", ["collectionKind"] = "single" },
-                ["variable"] = new JsonObject { ["referenceKey"] = "held", ["declaringScopeId"] = "workflow" }
-            }
-        };
-        var variables = new JsonArray(new JsonObject
-        {
-            ["referenceKey"] = "held",
-            ["name"] = "Held",
-            ["type"] = new JsonObject { ["alias"] = "String", ["collectionKind"] = "single" },
-            ["storageDriverType"] = null,
-            ["default"] = null
-        });
-
-        await AssertPublishRefusedAsync($"canary s7 set {reference}", root, variables);
-    }
-
-    [Fact]
-    public async Task S7_publish_refuses_a_secret_on_a_checkpoint_participant()
-    {
-        var reference = ReferenceName("s7", Suffix());
-        var root = new JsonObject
-        {
-            ["nodeId"] = "s7-checkpoint",
-            ["activityVersionId"] = await Host.FindActivityVersionIdAsync(typeof(CanaryCheckpointActivity)),
-            ["inputs"] = new JsonArray(SecretReference(nameof(CanaryCheckpointActivity.Text), reference)),
-            ["outputs"] = new JsonArray()
-        };
-
-        await AssertPublishRefusedAsync($"canary s7 checkpoint {reference}", root);
-    }
-
     [Theory]
     [MemberData(nameof(Levels))]
     public async Task S8_a_present_sensitive_input_value_reaches_no_diagnostic_snapshot(RuntimeDiagnosticsEvidenceLevel level)
@@ -269,9 +255,10 @@ public abstract class WorkflowSecretCanaryTests(CanaryHostFixture fixture, ITest
         await AssertSnapshotHoldsAsync(run, nameof(CanaryActivity.Primary), planted);
         await AssertAbsentAsync(
             scenario,
-            [Run(scenario, run, publication) with { SubjectWithheld = false }],
+            [Run(scenario, run, publication) with { SubjectWithheld = false, CompletesInOneSegment = true }],
             [planted],
-            AllSurfaces.Except([CanarySurface.RuntimeState]));
+            AllSurfaces,
+            excludedRuntimeTables: CanarySurfaces.ReplantedSnapshotTables);
     }
 
     [Theory]
@@ -291,9 +278,10 @@ public abstract class WorkflowSecretCanaryTests(CanaryHostFixture fixture, ITest
         Assert.Contains((nameof(CanaryActivity.Primary), true), Host.Injections.CapturedEverything(scenario.NodeId));
         await AssertAbsentAsync(
             scenario,
-            [Run(scenario, run, publication) with { SubjectWithheld = false }],
+            [Run(scenario, run, publication) with { SubjectWithheld = false, CompletesInOneSegment = true }],
             [planted],
-            AllSurfaces.Except([CanarySurface.RuntimeState, CanarySurface.DiagnosticSnapshots]),
+            AllSurfaces.Except([CanarySurface.DiagnosticSnapshots]),
+            excludedRuntimeTables: CanarySurfaces.CapturedSnapshotTables,
             inspectorCaller: CanaryCaller.StructureOnly);
     }
 
@@ -325,9 +313,10 @@ public abstract class WorkflowSecretCanaryTests(CanaryHostFixture fixture, ITest
         // The artifact and the variable frame, in the runtime state, hold the value the import planted.
         await AssertAbsentAsync(
             scenario,
-            [Imported(scenario, run, sourceReferenceId, referenceName: null, scenario.NodeId) with { SubjectInput = nameof(CanaryActivity.Companion) }],
+            [Imported(scenario, run, sourceReferenceId, referenceName: null, scenario.NodeId) with { SubjectInput = nameof(CanaryActivity.Companion), CompletesInOneSegment = true }],
             [planted],
-            RunSurfaces.Except([CanarySurface.RuntimeState]));
+            RunSurfaces,
+            excludedRuntimeTables: CanarySurfaces.SensitiveVariableTables);
         // The evidence recorded the variable's write, withheld as sensitive.
         Assert.Contains(Host.EvidenceRecords(run), record => record.Name == HeldVariable && record.ValueDisposition == ExecutionEvidenceValueDisposition.Sensitive);
     }
@@ -381,7 +370,7 @@ public abstract class WorkflowSecretCanaryTests(CanaryHostFixture fixture, ITest
         Assert.Equal([scenario.Value], Host.Activations.For(run).Select(activation => activation.Plain));
         var executable = await Host.ReadExecutableAsync(publication.ArtifactId);
         Assert.False(executable.RootActivity.ActivityContract!.Inputs[nameof(CanaryActivity.Plain)].Policy.IsSensitive);
-        await AssertAbsentAsync(scenario, [Run(scenario, run, publication, nameof(CanaryActivity.Plain))], [scenario.Value], AllSurfaces);
+        await AssertAbsentAsync(scenario, [Run(scenario, run, publication, nameof(CanaryActivity.Plain)) with { CompletesInOneSegment = true }], [scenario.Value], AllSurfaces);
         // The committed snapshot holds the reference under the lowered policy, so no sensitive-value rule stands in front
         // of the value: only the withholding protections keep it out.
         var plain = await AssertSnapshotWithholdsAsync(run, scenario, nameof(CanaryActivity.Plain));
@@ -398,12 +387,12 @@ public abstract class WorkflowSecretCanaryTests(CanaryHostFixture fixture, ITest
     }
 
     /// <summary>The scenario labels, which name each scenario's node, secret and definition.</summary>
-    public static readonly string[] ScenarioLabels = ["s1", "s2", "s2b", "s3", "s3b", "s4", "s5", "s6", "s7", "s8", "s8b", "s8c", "s9", "s10"];
+    public static readonly string[] ScenarioLabels = ["s1", "s2", "s2b", "s3", "s3b", "s4", "s4b", "s5", "s6", "s7", "s8", "s8b", "s8c", "s9", "s10"];
 
     /// <summary>A scenario's secret reference name: a scenario label and a hexadecimal suffix, which no redactor matches (T078).</summary>
     public static string ReferenceName(string label, string suffix) => $"canary.{label}.{suffix}";
 
-    private static string Suffix() => Guid.NewGuid().ToString("N")[..8];
+    internal static string Suffix() => Guid.NewGuid().ToString("N")[..8];
 
     /// <summary>Saves the diagnostics level and creates the scenario's secret.</summary>
     protected async Task<CanaryScenario> BeginAsync(string name, RuntimeDiagnosticsEvidenceLevel level)
@@ -440,9 +429,12 @@ public abstract class WorkflowSecretCanaryTests(CanaryHostFixture fixture, ITest
     }
 
     /// <summary>
-    /// The run's dispatch spans show the start mode the host selected: in discrete mode the canary's start and invoke
-    /// stages are dispatches of their own; in fused mode the runtime ran them inside the schedule dispatch, so neither is.
+    /// Whether the canary's invoke stage is a dispatch of its own in this class's start mode: in discrete mode it is; in
+    /// fused mode the runtime runs the start and invoke stages inside the schedule dispatch.
     /// </summary>
+    protected abstract bool InvokeIsOwnDispatch { get; }
+
+    /// <summary>The run's dispatch spans show the start mode the host selected (<see cref="InvokeIsOwnDispatch"/>).</summary>
     protected void AssertStartMode(string workflowExecutionId)
     {
         var dispatched = Host.Spans.Spans
@@ -450,10 +442,7 @@ public abstract class WorkflowSecretCanaryTests(CanaryHostFixture fixture, ITest
             .Select(span => span.Tags.GetValueOrDefault(WorkflowEngineTelemetry.CommandKindTag))
             .ToArray();
         Assert.Contains(nameof(WorkflowExecutionCommandKind.ScheduleActivity), dispatched);
-        if (Host.Mode == CanaryStartMode.Discrete)
-            Assert.Contains(nameof(WorkflowExecutionCommandKind.InvokeActivity), dispatched);
-        else
-            Assert.DoesNotContain(nameof(WorkflowExecutionCommandKind.InvokeActivity), dispatched);
+        Assert.Equal(InvokeIsOwnDispatch, dispatched.Contains(nameof(WorkflowExecutionCommandKind.InvokeActivity)));
     }
 
     protected static CanaryRun Run(CanaryScenario scenario, string workflowExecutionId, CanaryPublication publication, string subjectInput = nameof(CanaryActivity.Primary)) =>
@@ -474,23 +463,40 @@ public abstract class WorkflowSecretCanaryTests(CanaryHostFixture fixture, ITest
 
     protected static Func<RunState, bool> Suspended(string nodeId) => run => run.Node(nodeId)?.Status == ActivityExecutionStatus.Suspended;
 
-    /// <summary>Polls the run's committed state until <paramref name="settled"/> holds; the drain may outlive the request that started it.</summary>
+    /// <summary>
+    /// Polls the run's committed state until <paramref name="settled"/> holds; the drain may outlive the request that
+    /// started it. A run that records an activity fault or an incident <paramref name="settled"/> does not accept fails
+    /// at once, naming that state, rather than waiting out the timeout: a handler fault (poisoned work) and an activity
+    /// fault both record one. The incidents are read before the run state, so an incident committed with an activity
+    /// fault is never seen without that fault. A checkpoint-rule incident does not fail the wait: it records a commit the
+    /// backstop refused, which the settle predicates of S5 and S6 judge through the refusal's log line, written after it.
+    /// </summary>
     protected async Task<RunState> WaitForAsync(string workflowExecutionId, Func<RunState, bool> settled)
     {
         var deadline = Stopwatch.StartNew();
         while (true)
         {
+            var incidents = await Host.ReadIncidentsAsync(workflowExecutionId);
             var (activities, workflow) = await Host.ReadRunAsync(workflowExecutionId);
             var state = new RunState(activities, workflow);
             if (settled(state))
                 return state;
-            Assert.True(
-                deadline.Elapsed < SettleTimeout,
-                $"Run '{workflowExecutionId}' did not settle: workflow {workflow?.Status}, activities {string.Join(", ", activities.Select(activity => $"{activity.Execution.ExecutableNodeId}={activity.Status}"))}.");
+            var describedState = $"workflow {workflow?.Status}, activities {string.Join(", ", activities.Select(activity => $"{activity.Execution.ExecutableNodeId}={activity.Status}{(activity.Fault is { } fault ? $" (fault {fault.Code})" : string.Empty)}"))}";
+            var faults = incidents.Where(incident => incident.FailureType != CheckpointRuleViolationWorkflowFaulter.IncidentFailureType)
+                .Select(incident => $"{incident.FailureType} on node {incident.ExecutableNodeId ?? "(none)"}")
+                .Concat(activities.Where(activity => activity.Fault is not null).Select(activity => $"activity fault on node {activity.Execution.ExecutableNodeId}"))
+                .ToArray();
+            Assert.True(faults.Length == 0, $"Run '{workflowExecutionId}' faulted before it settled: {string.Join("; ", faults)}; {describedState}.");
+            Assert.True(deadline.Elapsed < SettleTimeout, $"Run '{workflowExecutionId}' did not settle: {describedState}.");
             await Task.Delay(100);
         }
     }
 
+    /// <summary>
+    /// Generous because the tests run on a shared machine whose parallel sessions compete for the CPU, which stretches
+    /// every timing (AGENTS.md, "Builds on a shared machine"). No scenario relies on reaching it: a fault fails the wait
+    /// at once.
+    /// </summary>
     private static readonly TimeSpan SettleTimeout = TimeSpan.FromSeconds(60);
 
     /// <summary>Whether the commit backstop refused a commit of the run, as the log line that reports the refusal says.</summary>
@@ -548,21 +554,6 @@ public abstract class WorkflowSecretCanaryTests(CanaryHostFixture fixture, ITest
     }
 
     /// <summary>
-    /// Submits a definition whose root is <paramref name="root"/> (the Design API admits a secret reference anywhere),
-    /// then asserts that publish refuses it with <c>VF-ACT-012</c> and writes no artifact.
-    /// </summary>
-    protected async Task AssertPublishRefusedAsync(string name, JsonObject root, JsonArray? variables = null)
-    {
-        var (_, versionId) = await Host.SubmitAsync(name, root, variables);
-
-        using var response = await Host.TryPublishAsync(versionId);
-
-        var body = await response.Content.ReadAsStringAsync();
-        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
-        Assert.Contains("VF-ACT-012", body, StringComparison.Ordinal);
-    }
-
-    /// <summary>
     /// Reads each of <paramref name="surfaces"/>, asserting its precondition for every run first, and asserts that none of
     /// <paramref name="values"/> occurs on it in any form the scanner searches for (SC-004).
     /// </summary>
@@ -611,7 +602,12 @@ public abstract class CanaryHostFixture(CanaryStartMode mode) : IAsyncLifetime
 
     public async Task InitializeAsync() => Host = await StartAsync(mode);
 
-    public async Task DisposeAsync() => await Host.DisposeAsync();
+    public async Task DisposeAsync()
+    {
+        // A host that failed to start is null here; its startup exception is the failure to report, not this one.
+        if (Host is not null)
+            await Host.DisposeAsync();
+    }
 }
 
 public sealed class DiscreteCanaryHostFixture() : CanaryHostFixture(CanaryStartMode.Discrete);
@@ -621,9 +617,84 @@ public sealed class FusedCanaryHostFixture() : CanaryHostFixture(CanaryStartMode
 /// <summary>The canary with each stage of a run its own dispatch and commit.</summary>
 [Collection(CanaryHostCollection.Name)]
 public sealed class WorkflowSecretCanaryDiscreteTests(DiscreteCanaryHostFixture fixture, ITestOutputHelper output)
-    : WorkflowSecretCanaryTests(fixture, output), IClassFixture<DiscreteCanaryHostFixture>;
+    : WorkflowSecretCanaryTests(fixture, output), IClassFixture<DiscreteCanaryHostFixture>
+{
+    protected override bool InvokeIsOwnDispatch => true;
+}
 
 /// <summary>The canary with the canary activity's schedule, start and invoke stages fused into one dispatch.</summary>
 [Collection(CanaryHostCollection.Name)]
 public sealed class WorkflowSecretCanaryFusedTests(FusedCanaryHostFixture fixture, ITestOutputHelper output)
-    : WorkflowSecretCanaryTests(fixture, output), IClassFixture<FusedCanaryHostFixture>;
+    : WorkflowSecretCanaryTests(fixture, output), IClassFixture<FusedCanaryHostFixture>
+{
+    protected override bool InvokeIsOwnDispatch => false;
+}
+
+/// <summary>
+/// S7 (A15, P5): publish refuses a secret reference on a node that reads its inputs outside activation. A publish refusal
+/// runs no workflow, so it does not depend on the start mode, and runs once, on a discrete host.
+/// </summary>
+[Collection(CanaryHostCollection.Name)]
+public sealed class WorkflowSecretCanaryPublishRefusalTests(DiscreteCanaryHostFixture fixture) : IClassFixture<DiscreteCanaryHostFixture>
+{
+    private SecretsCanaryWorkflowHost Host => fixture.Host;
+
+    [Fact]
+    public async Task S7_publish_refuses_a_secret_on_a_set_variable_intrinsic()
+    {
+        var reference = WorkflowSecretCanaryTests.ReferenceName("s7", WorkflowSecretCanaryTests.Suffix());
+        var root = new JsonObject
+        {
+            ["nodeId"] = "s7-set",
+            ["activityVersionId"] = "$intrinsic",
+            ["inputs"] = new JsonArray(SecretReference(WorkflowIntrinsicInputKeys.Value, reference)),
+            ["outputs"] = new JsonArray(),
+            ["intrinsic"] = new JsonObject
+            {
+                ["kind"] = "set",
+                ["valueType"] = new JsonObject { ["alias"] = "String", ["collectionKind"] = "single" },
+                ["variable"] = new JsonObject { ["referenceKey"] = "held", ["declaringScopeId"] = "workflow" }
+            }
+        };
+        var variables = new JsonArray(new JsonObject
+        {
+            ["referenceKey"] = "held",
+            ["name"] = "Held",
+            ["type"] = new JsonObject { ["alias"] = "String", ["collectionKind"] = "single" },
+            ["storageDriverType"] = null,
+            ["default"] = null
+        });
+
+        await AssertPublishRefusedAsync($"canary s7 set {reference}", root, variables);
+    }
+
+    [Fact]
+    public async Task S7_publish_refuses_a_secret_on_a_checkpoint_participant()
+    {
+        var reference = WorkflowSecretCanaryTests.ReferenceName("s7", WorkflowSecretCanaryTests.Suffix());
+        var root = new JsonObject
+        {
+            ["nodeId"] = "s7-checkpoint",
+            ["activityVersionId"] = await Host.FindActivityVersionIdAsync(typeof(CanaryCheckpointActivity)),
+            ["inputs"] = new JsonArray(SecretReference(nameof(CanaryCheckpointActivity.Text), reference)),
+            ["outputs"] = new JsonArray()
+        };
+
+        await AssertPublishRefusedAsync($"canary s7 checkpoint {reference}", root);
+    }
+
+    /// <summary>
+    /// Submits a definition whose root is <paramref name="root"/> (the Design API admits a secret reference anywhere),
+    /// then asserts that publish refuses it with <c>VF-ACT-012</c> and writes no artifact.
+    /// </summary>
+    private async Task AssertPublishRefusedAsync(string name, JsonObject root, JsonArray? variables = null)
+    {
+        var (_, versionId) = await Host.SubmitAsync(name, root, variables);
+
+        using var response = await Host.TryPublishAsync(versionId);
+
+        var body = await response.Content.ReadAsStringAsync();
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Contains("VF-ACT-012", body, StringComparison.Ordinal);
+    }
+}
