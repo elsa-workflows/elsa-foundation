@@ -36,12 +36,12 @@ namespace Elsa.Modularity.Tests;
 /// a fleet of its own (#2159). This builds the real <c>Elsa.Foundation.Host</c> and <c>Elsa.Workbench</c> compositions by running
 /// their entry points up to the built host, activates a shell through CShells, and compares every singleton the host registers
 /// under a type of an <c>Elsa.*</c> or <c>Nuplane.*</c> assembly: each must be the same instance in the shell as at the root, or
-/// be named in <see cref="PerShell"/> with the reason it is not.
+/// be named in <see cref="PerShell"/> with the reason it is not, or be explicitly <see cref="RootOnly"/> and absent from the shell.
 /// </summary>
 /// <remarks>
 /// The comparison is over what the host registered, so a service someone adds later is held without anyone remembering to list
 /// it. A new difference fails with the type named: share it with <c>ShareWithShells</c> when a shell can reach the host's
-/// state through it, or list it with the reason a shell's own copy is right.
+/// state through it, list it with the reason a shell's own copy is right, or require its explicit exclusion from shells.
 /// </remarks>
 public sealed class HostOwnedServicesAreSharedWithShellsTests
 {
@@ -80,6 +80,12 @@ public sealed class HostOwnedServicesAreSharedWithShellsTests
     private const string IntentionallyPerShell = "intentionally per shell: ";
 
     private const string UnreachableFromShells = "unreachable from shell code today; an upstream Nuplane instance registration would remove the entry";
+
+    /// <summary>Root registrations CShells must exclude from shell containers; their absence is asserted, not treated as per-shell ownership.</summary>
+    private static readonly IReadOnlyDictionary<Type, string> RootOnly = new Dictionary<Type, string>
+    {
+        [typeof(NuplanePackageGenerationBuildParticipant)] = "The root registry owns this participant's readability leases and catalog subscription; CShells excludes build participants from shell providers."
+    };
 
     /// <summary>
     /// The singletons a shell is meant to hold its own copy of, or that nothing in a shell reaches, by the name the failure gives,
@@ -184,13 +190,19 @@ public sealed class HostOwnedServicesAreSharedWithShellsTests
 
         Assert.Equal(durableMembership ? ClusterProviderKind.Durable : ClusterProviderKind.InProcess, root.GetRequiredService<IClusterMembership>().ProviderKind);
         var compared = SingletonServiceTypes(root).Select(type => (Type: type, Difference: Difference(type, root, shell.ServiceProvider))).ToArray();
+        foreach (var (type, reason) in RootOnly)
+        {
+            Assert.Contains(type, compared.Select(service => service.Type));
+            Assert.True(Resolve(root, type) is { Count: 1 }, $"{host} must register exactly one root {Describe(type)}. {reason}");
+            Assert.True(Resolve(shell.ServiceProvider, type) is { Count: 0 }, $"{host}'s shell must exclude {Describe(type)}. {reason}");
+        }
         var notShared = compared
-            .Where(service => service.Difference is not null && !PerShell.ContainsKey(Describe(service.Type)))
+            .Where(service => service.Difference is not null && !PerShell.ContainsKey(Describe(service.Type)) && !RootOnly.ContainsKey(service.Type))
             .Select(service => $"{Describe(service.Type)} ({service.Difference})")
             .ToArray();
         Assert.True(
             notShared.Length == 0,
-            $"{host}'s shell holds a different instance from the host's of: {string.Join("; ", notShared)}. Share each with ShareWithShells if a shell can reach the host's state through it, or list it in {nameof(PerShell)} with the reason it is per shell.");
+            $"{host}'s shell holds a different instance from the host's of: {string.Join("; ", notShared)}. Share each with ShareWithShells if a shell can reach the host's state through it, list it in {nameof(PerShell)} with the reason it is per shell, or require its absence in {nameof(RootOnly)}.");
         // The allowlist and the other things this compared are only worth anything if the comparison saw the services it exists for.
         Assert.Contains(typeof(IReconciliationTriggerIngress), compared.Select(service => service.Type));
         Assert.Contains(typeof(IEfSchemaFleet), compared.Select(service => service.Type));
@@ -310,6 +322,8 @@ public sealed class HostOwnedServicesAreSharedWithShellsTests
             observerTypes.IndexOf(AutoLoader) < observerTypes.IndexOf(adapter.GetType().FullName),
             "The auto-loader must be registered before feature discovery so newly loaded assemblies are visible.");
         Assert.Same(adapter, root.GetRequiredService<IShellGenerationBuildParticipant>());
+        var readabilityParticipant = Assert.Single(root.GetServices<NuplanePackageGenerationBuildParticipant>());
+        Assert.Same(readabilityParticipant, Assert.Single(root.GetServices<IShellGenerationBuildParticipant>().OfType<NuplanePackageGenerationBuildParticipant>()));
 
         var shell = await root.GetRequiredService<IShellRegistry>().GetOrActivateAsync(ProbeShell);
         var borrowedAdapter = Assert.Single(shell.ServiceProvider.GetServices<INuplaneObserver>()
@@ -317,6 +331,7 @@ public sealed class HostOwnedServicesAreSharedWithShellsTests
         Assert.Same(adapter, borrowedAdapter);
         // Build participants belong to the root registry and are excluded from shell providers.
         Assert.Empty(shell.ServiceProvider.GetServices<IShellGenerationBuildParticipant>());
+        Assert.Empty(shell.ServiceProvider.GetServices<NuplanePackageGenerationBuildParticipant>());
         var monitor = root.GetRequiredService<IOptionsMonitor<NuplaneIntegrationOptions>>();
         var configuration = (IConfigurationRoot)root.GetRequiredService<IConfiguration>();
         var initialReload = host == "Elsa.Foundation.Host";
