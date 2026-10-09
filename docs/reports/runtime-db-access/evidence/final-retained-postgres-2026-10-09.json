@@ -1,0 +1,252 @@
+{
+  "caseResults": [
+    {
+      "cadence": "Coalesced",
+      "checkpointMarkerRows": 2,
+      "dispatchCurrentRows": 0,
+      "executionStateRows": 1,
+      "executionStatusCodes": [
+        3
+      ],
+      "nonzeroMarkerScopeCounts": [
+        1
+      ],
+      "outboxCurrentDeliveredRows": 0,
+      "outboxCurrentRows": 0,
+      "role": "primary",
+      "schedulerResidualRows": 0,
+      "sourcePin": "7357b91"
+    },
+    {
+      "cadence": "Coalesced",
+      "checkpointMarkerRows": 1,
+      "dispatchCurrentRows": 0,
+      "executionStateRows": 1,
+      "executionStatusCodes": [
+        3
+      ],
+      "nonzeroMarkerScopeCounts": [
+        1
+      ],
+      "outboxCurrentDeliveredRows": 0,
+      "outboxCurrentRows": 0,
+      "role": "rest",
+      "schedulerResidualRows": 0,
+      "sourcePin": "7357b91"
+    },
+    {
+      "cadence": "Immediate",
+      "checkpointMarkerRows": 22,
+      "dispatchCurrentRows": 0,
+      "executionStateRows": 1,
+      "executionStatusCodes": [
+        3
+      ],
+      "nonzeroMarkerScopeCounts": [
+        1
+      ],
+      "outboxCurrentDeliveredRows": 15,
+      "outboxCurrentRows": 15,
+      "role": "primary",
+      "schedulerResidualRows": 0,
+      "sourcePin": "7357b91"
+    },
+    {
+      "cadence": "Immediate",
+      "checkpointMarkerRows": 18,
+      "dispatchCurrentRows": 0,
+      "executionStateRows": 1,
+      "executionStatusCodes": [
+        3
+      ],
+      "nonzeroMarkerScopeCounts": [
+        1
+      ],
+      "outboxCurrentDeliveredRows": 13,
+      "outboxCurrentRows": 13,
+      "role": "rest",
+      "schedulerResidualRows": 0,
+      "sourcePin": "7357b91"
+    },
+    {
+      "cadence": "Coalesced",
+      "checkpointMarkerRows": 3,
+      "dispatchCurrentRows": 0,
+      "executionStateRows": 1,
+      "executionStatusCodes": [
+        3
+      ],
+      "nonzeroMarkerScopeCounts": [
+        1
+      ],
+      "outboxCurrentDeliveredRows": 0,
+      "outboxCurrentRows": 0,
+      "role": "primary",
+      "schedulerResidualRows": 0,
+      "sourcePin": "e6faa"
+    },
+    {
+      "cadence": "Coalesced",
+      "checkpointMarkerRows": 1,
+      "dispatchCurrentRows": 0,
+      "executionStateRows": 1,
+      "executionStatusCodes": [
+        3
+      ],
+      "nonzeroMarkerScopeCounts": [
+        1
+      ],
+      "outboxCurrentDeliveredRows": 0,
+      "outboxCurrentRows": 0,
+      "role": "rest",
+      "schedulerResidualRows": 0,
+      "sourcePin": "e6faa"
+    },
+    {
+      "cadence": "Immediate",
+      "checkpointMarkerRows": 22,
+      "dispatchCurrentRows": 0,
+      "executionStateRows": 1,
+      "executionStatusCodes": [
+        3
+      ],
+      "nonzeroMarkerScopeCounts": [
+        1
+      ],
+      "outboxCurrentDeliveredRows": 15,
+      "outboxCurrentRows": 15,
+      "role": "primary",
+      "schedulerResidualRows": 0,
+      "sourcePin": "e6faa"
+    },
+    {
+      "cadence": "Immediate",
+      "checkpointMarkerRows": 18,
+      "dispatchCurrentRows": 0,
+      "executionStateRows": 1,
+      "executionStatusCodes": [
+        3
+      ],
+      "nonzeroMarkerScopeCounts": [
+        1
+      ],
+      "outboxCurrentDeliveredRows": 13,
+      "outboxCurrentRows": 13,
+      "role": "rest",
+      "schedulerResidualRows": 0,
+      "sourcePin": "e6faa"
+    }
+  ],
+  "conservation": {
+    "allMatchedStatesCompleted": true,
+    "checkpointMarkerRows": 87,
+    "completedStatusCode": 3,
+    "consumedSchedulerMarkerArrayLengthSum": 40,
+    "dispatchCurrentRows": 0,
+    "executionStateRows": 8,
+    "markerDetailRows": 87,
+    "markerSchemaIdentityBooleanFailures": 0,
+    "outboxCurrentDeliveredRows": 56,
+    "outboxCurrentRows": 56,
+    "pendingMarkerArrayLengthSum": 56,
+    "schedulerResidualRows": 0
+  },
+  "interpretation": {
+    "consumedSchedulerArrays": "The summed marker-array length is a reference count only. The query intentionally omits raw logical IDs, so it does not deduplicate across markers or prove a historical global consumption total.",
+    "contentCheckLimit": "The sanitized SQL checks marker ContentJson execution identity and commit-ID presence, but does not emit raw commit IDs or prove the commit hash/content equality directly; that part remains the source store contract.",
+    "dispatch": "Zero surviving workflow-dispatch rows was observed. Dispatch retention/deletion means this is not proof of zero historical dispatches.",
+    "durableCheckpointMarkers": "The matched immutable marker rows are direct retained evidence of durable checkpoint-marker creation for these execution identities; marker schema/revision and sanitized execution/commit-presence checks passed for all retained marker rows.",
+    "operations": "The existing probe remains the source for command/statement/transaction/operation attribution. Marker rows must not be relabeled as operation spans; these results do not prove physical network round trips or affected-row counts.",
+    "outbox": "The current retained outbox rows were all Delivered for the Immediate cases; no current outbox rows remained for Coalesced. These are current-state observations, not historical creation totals.",
+    "scheduler": "Zero residual scheduler rows was observed. Consumed/deleted scheduler history cannot be reconstructed posthoc."
+  },
+  "kind": "sanitized-retained-postgres-accounting-readback",
+  "observedDate": "2026-10-09",
+  "ownedResiduals": [
+    "Historical failed valid-input 202/500, C4 and related attribution remain historical and are not repaired by these readbacks.",
+    "A durable checkpoint marker row is proven; marker rows are not a direct count of every provider SQL statement or physical round trip.",
+    "Historical dispatch totals cannot be recovered from zero surviving dispatch rows under retention.",
+    "Deleted scheduler work-item history cannot be recovered; consumed-array sums are not a deduplicated global count.",
+    "Root/control room owns final publication and any board/issue closure wording."
+  ],
+  "provider": {
+    "engine": "PostgreSQL",
+    "imageDigest": "sha256:ca0bd484cb98bf4b24eb1010e73fb3fcbd6714d240fbc1a10eea5b7dbecb641d",
+    "platform": "linux/amd64",
+    "version": "16.15"
+  },
+  "r1R8Audit": [
+    {
+      "requirement": "R1",
+      "scope": "Source/cadence/provider/host identity and exact retained PostgreSQL system identity were read back; publication omits raw IDs.",
+      "status": "evidence-complete"
+    },
+    {
+      "requirement": "R2",
+      "scope": "Probe and marker evidence distinguish commands, statements, transactions, markers and current work rows; physical round trips and some historical operation ownership remain outside this readback.",
+      "status": "evidence-complete-with-owned-limits"
+    },
+    {
+      "requirement": "R3",
+      "scope": "Existing paging and continuation artifacts remain the authority; this database readback adds no new paging claim.",
+      "status": "adopted-existing-evidence"
+    },
+    {
+      "requirement": "R4",
+      "scope": "Existing materialization strategy selection and no-change dispositions remain adopted; no new gain is inferred here.",
+      "status": "adopted-existing-evidence"
+    },
+    {
+      "requirement": "R5",
+      "scope": "Existing cadence/ReplaySafe evidence and both source configurations remain adopted.",
+      "status": "adopted-existing-evidence"
+    },
+    {
+      "requirement": "R6",
+      "scope": "Existing atomic/fence/reconciliation proofs plus direct retained marker rows support the bounded contract.",
+      "status": "evidence-complete"
+    },
+    {
+      "requirement": "R7",
+      "scope": "Current outbox delivery and zero residual scheduler state agree with accepted queue/retry evidence; dispatch history and deleted scheduler history remain unavailable.",
+      "status": "evidence-complete-with-retention-limits"
+    },
+    {
+      "requirement": "R8",
+      "scope": "Integrated correctness and finite before/after timing/accounting packets are retained; root still owns final response/publication and explicit residual wording.",
+      "status": "evidence-complete-with-publication-pending"
+    }
+  ],
+  "readback": {
+    "allContainersStopped": true,
+    "matchedExecutionIdentityCount": 8,
+    "querySha256": "dfbc5ebadc4439d7e04fb9c2c171a40decc8220fef878e61a2c119d24083dd9c",
+    "readOnlyTransactions": 4,
+    "receiptSha256": "e89fe38289bd571b4a0cda5867fb1d69b9f7edc529a6125e2c98d4d8538f64f6",
+    "resultBytes": {
+      "run-coalesced-before-e6-v9": 4544,
+      "run-coalesced-final-7357-v9": 4282,
+      "run-immediate-before-e6-v9": 14041,
+      "run-immediate-final-7357-v9": 14081
+    },
+    "resultFiles": {
+      "run-coalesced-before-e6-v9": "ee805a5ac55bcac20fcbc3da2c9414f18b205f3eed8f41bc918b2fd4b69581a4",
+      "run-coalesced-final-7357-v9": "21e29b89b2a62a47f2a97b16aed60064ff5898d2ac041c5bf38f8abd708adc0e",
+      "run-immediate-before-e6-v9": "67e321b67ef35ab8e8c144320141877da316870e62bc637d276ff039336328b2",
+      "run-immediate-final-7357-v9": "960bb1fff51d0ad7c83e47f5d17ff742233f3aa394bd2c2da2c9dd15c04c6ff8"
+    },
+    "retainedCaseCount": 4,
+    "systemIdentityVerifiedCases": 4,
+    "wrapperSha256": "88b390049266d0b3db0a1a7855300ddbecfb484b77784cbafb3c9001ca93132d",
+    "independentReviewSha256": "c087fb9148789f7de9eb4503b4ed8c47309eabc7498655e3138bd45fe7dd4046"
+  },
+  "revisitTriggers": [
+    "Any later matched execution with non-Completed state, marker schema/identity failure, nonzero scheduler residual, or undelivered outbox after terminal completion.",
+    "A requirement for historical dispatch totals or globally unique consumed-work totals would require append-only retained identities or a fresh approved capture with raw ID joins.",
+    "A claim about physical round trips or exact statement ownership would require the already-scoped protocol/EF correlation evidence, not this row audit."
+  ],
+  "sourcePins": {
+    "after": "7357b91e012c56cb34f1259ef7a60ef56e144afe",
+    "before": "e6faa5689814c33353009b13f5b9e44d0e9982a4"
+  }
+}

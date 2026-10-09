@@ -1,6 +1,6 @@
 # Final clean-source request-trace command accounting
 
-**Accepted scope: 9 October 2026.** Request-associated EF commands are reconciled by root and independent review. The program remains open for full joined accounting and packaged-host verification. The [separate timing report](final-timing.md) retains its own workload and evidence.
+**Accepted scope: 9 October 2026.** Request-associated EF commands are reconciled by root and independent review. The [final joined diagnostic account](final-joined-accounting.md) and [packaged-host proof](package-consumer/README.md) separately cover their broader scopes; [program acceptance](final-acceptance.md) records remaining attribution limits. The [separate timing report](final-timing.md) retains its own workload and evidence.
 
 This is a bounded accounting of accepted EF command events for one successful HTTP workflow request and one valid companion REST request per cadence and source revision. Both requests in every case returned HTTP 200, completed with zero incidents, and matched the expected output. Every admitted command start had a matching terminal event.
 
