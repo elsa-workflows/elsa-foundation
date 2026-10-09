@@ -7,7 +7,8 @@
         "acceptanceIssueCount": 0,
         "rootReviewStillRequired": true,
         "status": "passed_per_case_source_candidate",
-        "verifiedArtifactPinCount": 15
+        "verifiedArtifactPinCount": 15,
+        "interpretation": "Original per-case reader output before root and independent review; rootReviewStillRequired describes that earlier stage. The top-level readiness receipts record the subsequent completed reviews without rewriting the reader result."
       },
       "efCommandAccounting": {
         "checkpointOperationPairsByTrace": {
@@ -990,7 +991,8 @@
         "acceptanceIssueCount": 0,
         "rootReviewStillRequired": true,
         "status": "passed_per_case_source_candidate",
-        "verifiedArtifactPinCount": 15
+        "verifiedArtifactPinCount": 15,
+        "interpretation": "Original per-case reader output before root and independent review; rootReviewStillRequired describes that earlier stage. The top-level readiness receipts record the subsequent completed reviews without rewriting the reader result."
       },
       "efCommandAccounting": {
         "checkpointOperationPairsByTrace": {
@@ -1996,7 +1998,8 @@
         "acceptanceIssueCount": 0,
         "rootReviewStillRequired": true,
         "status": "passed_per_case_source_candidate",
-        "verifiedArtifactPinCount": 15
+        "verifiedArtifactPinCount": 15,
+        "interpretation": "Original per-case reader output before root and independent review; rootReviewStillRequired describes that earlier stage. The top-level readiness receipts record the subsequent completed reviews without rewriting the reader result."
       },
       "efCommandAccounting": {
         "checkpointOperationPairsByTrace": {
@@ -2979,7 +2982,8 @@
         "acceptanceIssueCount": 0,
         "rootReviewStillRequired": true,
         "status": "passed_per_case_source_candidate",
-        "verifiedArtifactPinCount": 15
+        "verifiedArtifactPinCount": 15,
+        "interpretation": "Original per-case reader output before root and independent review; rootReviewStillRequired describes that earlier stage. The top-level readiness receipts record the subsequent completed reviews without rewriting the reader result."
       },
       "efCommandAccounting": {
         "checkpointOperationPairsByTrace": {

@@ -1,12 +1,12 @@
 # Final bounded timing comparison
 
-**Draft, 9 October 2026.** Root and independent review reconciled all 14 planned windows. The logging-evidence clarification from review is recorded below. Thirteen windows passed, and the failed before-source concurrency window is retained. These are finite observations, not a timing CI gate or an isolated estimate of any individual fix.
+**Accepted bounded evidence, 9 October 2026.** Root and independent review reconciled all 14 planned windows. The logging-evidence clarification from review is recorded below. Thirteen windows passed, and the failed before-source concurrency window is retained. These are finite observations, not a timing CI gate or an isolated estimate of any individual fix.
 
 ## Observed result
 
 In the selected four-activity sequential HTTP workflow, Coalesced mean response time moved from 303.0 ms to 200.5 ms (33.8% lower), with median 239.4 ms to 149.5 ms. The 16-activity Coalesced control moved from 1,126.2 ms to 467.5 ms (58.5% lower mean). Immediate sequential results were broadly similar across sources. The small differences in Immediate and REST windows do not establish a meaningful speedup.
 
-These timing observations cannot supply query-count reductions. [Integrated correctness](integrated-correctness.md) and the final request/settlement accounting have separate evidence requirements.
+These timing observations cannot supply query-count reductions. [Integrated correctness](integrated-correctness.md) and [final request/settlement accounting](final-joined-accounting.md) have separate evidence.
 
 | Scenario | Cadence | Before: mean / median / p95, ms | After: mean / median / p95, ms | Mean change |
 |---|---|---:|---:|---:|
@@ -40,4 +40,4 @@ The driver stopped on the failure. The original plan and execution ledger remain
 
 There is one finite window per source/configuration, with 60 measured samples. Nearest-rank p95 is exploratory. The [sanitized evidence projection](evidence/final-timing-2026-10-09.json) contains recomputed statistics, standard deviations, configuration/build/fixture hashes, load observations and failure disposition. These are workload/environment-specific observations; they are not a 30 ms promise, a production SLA, a process-cold-start measurement, or proof of physical network round trips.
 
-The first timed request followed host startup, fixture publication, preflight and warmups. Startup migration-history errors and pruning warnings remain in the private logs and are kept separate from the passing measured requests. Exact database command, statement, commit and dispatch accounting remains the final companion deliverable.
+The first timed request followed host startup, fixture publication, preflight and warmups. Startup migration-history errors and pruning warnings remain in the private logs and are kept separate from the passing measured requests. The [final joined account](final-joined-accounting.md) supplies the companion command, statement, persisted-marker and retained-work evidence, with dispatch-history and physical-round-trip limits stated explicitly.

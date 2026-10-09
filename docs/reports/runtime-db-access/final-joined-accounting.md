@@ -115,7 +115,7 @@ At request-drain method stop, command and SaveChanges pairs balance with zero in
 
 ## Provenance and historical boundary
 
-The JSON pins each case archive, descriptor, guard and final receipt, raw probe, analyzer readback, helper sources/binaries, workbench binary/closure, source revision/delta, source registry and root/independent review receipts. The four v9 evidence sets remain separate.
+The JSON pins each case archive, descriptor, guard and final receipt, raw probe, analyzer readback, helper sources/binaries, workbench binary/closure, source revision/delta, source registry and root/independent review receipts. The four v9 evidence sets remain separate. Each `caseAnalysis` object preserves the reader’s original pre-review state, including `rootReviewStillRequired`; the top-level `readiness` receipts record the subsequent root and independent reviews.
 
 Earlier T02 extended Immediate and Coalesced captures are listed as historical evidence with their own archive/probe/review digests and EF totals; they are not merged into the v9 totals. T04 typed-source and finite-control reviews are also listed separately: they qualify source/control checks, while live-capture readiness was not established by those synthetic controls.
 
