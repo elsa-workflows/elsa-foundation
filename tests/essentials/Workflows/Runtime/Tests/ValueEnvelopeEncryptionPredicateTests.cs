@@ -21,47 +21,37 @@ public sealed class ValueEnvelopeEncryptionPredicateTests
     private static readonly ValueProtectionPolicy ExternalEncryptionRequired =
         new(DurableValueLifecycle.Instance, DurableValueStorage.External, isSensitive: true, requiresEncryption: true);
 
-    private static readonly IReadOnlyDictionary<string, (ValueEnvelope Value, ValueProtectionPolicy? Destination)> Rows =
-        new Dictionary<string, (ValueEnvelope, ValueProtectionPolicy?)>(StringComparer.Ordinal)
+    public static TheoryData<string, ValueEnvelope, ValueProtectionPolicy?, bool> Rows => new()
+    {
+        { "present inline, own policy requires encryption", ValueEnvelope.Inline(StringType, Text, EncryptionRequired), null, true },
         {
-            ["present inline, own policy requires encryption"] = (ValueEnvelope.Inline(StringType, Text, EncryptionRequired), null),
-            ["present external, own policy requires encryption"] = (ValueEnvelope.External(
-                StringType, new DurableValueExternalReference("test.store", "locator-1", new Dictionary<string, string>()), ExternalEncryptionRequired), null),
-            ["present inline, only the destination requires encryption"] = (ValueEnvelope.Inline(StringType, Text, Plain), EncryptionRequired),
-            ["present inline, nothing requires encryption"] = (ValueEnvelope.Inline(StringType, Text, Plain), Plain),
-            ["present inline, sensitive without encryption"] = (ValueEnvelope.Inline(StringType, Text, SensitiveOnly), null),
-            ["explicit null, own policy requires encryption"] = (ValueEnvelope.Null(StringType, EncryptionRequired), EncryptionRequired),
-            ["absent, own policy requires encryption"] = (ValueEnvelope.Absent(StringType, EncryptionRequired), EncryptionRequired),
-            ["withheld marker, own policy requires encryption"] = (
-                ValueEnvelope.Withheld(StringType, WithheldValue.PolicyRequiresEncryption(), EncryptionRequired), EncryptionRequired)
-        };
+            "present external, own policy requires encryption",
+            ValueEnvelope.External(
+                StringType, new DurableValueExternalReference("test.store", "locator-1", new Dictionary<string, string>()), ExternalEncryptionRequired),
+            null,
+            true
+        },
+        { "present inline, only the destination requires encryption", ValueEnvelope.Inline(StringType, Text, Plain), EncryptionRequired, true },
+        { "present inline, nothing requires encryption", ValueEnvelope.Inline(StringType, Text, Plain), Plain, false },
+        { "present inline, sensitive without encryption", ValueEnvelope.Inline(StringType, Text, SensitiveOnly), null, false },
+        { "explicit null, own policy requires encryption", ValueEnvelope.Null(StringType, EncryptionRequired), EncryptionRequired, false },
+        { "absent, own policy requires encryption", ValueEnvelope.Absent(StringType, EncryptionRequired), EncryptionRequired, false },
+        {
+            "withheld marker, own policy requires encryption",
+            ValueEnvelope.Withheld(StringType, WithheldValue.PolicyRequiresEncryption(), EncryptionRequired),
+            EncryptionRequired,
+            false
+        }
+    };
 
     [Theory]
-    [InlineData("present inline, own policy requires encryption", true)]
-    [InlineData("present external, own policy requires encryption", true)]
-    [InlineData("present inline, only the destination requires encryption", true)]
-    [InlineData("present inline, nothing requires encryption", false)]
-    [InlineData("present inline, sensitive without encryption", false)]
-    [InlineData("explicit null, own policy requires encryption", false)]
-    [InlineData("absent, own policy requires encryption", false)]
-    [InlineData("withheld marker, own policy requires encryption", false)]
-    public void Only_a_present_value_under_a_policy_that_requires_encryption_matches(string row, bool expected)
+    [MemberData(nameof(Rows))]
+    public void Only_a_present_value_under_a_policy_that_requires_encryption_matches(
+        string row, ValueEnvelope value, ValueProtectionPolicy? destination, bool expected)
     {
-        var (value, destination) = Rows[row];
-
+        Assert.False(string.IsNullOrWhiteSpace(row));
         Assert.Equal(expected, value.HoldsValueRequiringEncryption(destination));
     }
-
-    [Fact]
-    public void Every_row_is_exercised() =>
-        Assert.Equal(
-            Rows.Keys.Order(StringComparer.Ordinal),
-            typeof(ValueEnvelopeEncryptionPredicateTests)
-                .GetMethod(nameof(Only_a_present_value_under_a_policy_that_requires_encryption_matches))!
-                .GetCustomAttributes(typeof(InlineDataAttribute), inherit: false)
-                .Cast<InlineDataAttribute>()
-                .Select(data => (string)data.GetData(null!).Single()[0])
-                .Order(StringComparer.Ordinal));
 
     [Fact]
     public void The_encryption_marker_carries_its_kind_and_nothing_of_the_value()

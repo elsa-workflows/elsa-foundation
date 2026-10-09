@@ -84,10 +84,10 @@ public static class RuntimeWorkflowVariableCaptureWriteBack
             // lives (a custom driver may externalize, which the envelope represents natively). A withheld
             // capture (spec 188, FR-010) is written as its marker, with the policy that required it, as Set
             // writes one.
-            var envelope = encoding.Withheld is { } withheld
-                ? withheld.Retype(declared.Type)
-                : encoding.ExternalReference is { } external
-                ? ValueEnvelope.External(
+            var envelope = encoding switch
+            {
+                { Withheld: { } withheld } => withheld.Retype(declared.Type),
+                { ExternalReference: { } external } => ValueEnvelope.External(
                     declared.Type,
                     external,
                     new ValueProtectionPolicy(
@@ -97,10 +97,11 @@ public static class RuntimeWorkflowVariableCaptureWriteBack
                         declared.Policy.RequiresEncryption,
                         declared.Policy.RedactionMode,
                         declared.Policy.RetentionPolicy,
-                        declared.Policy.Metadata))
-                : encoding.InlineValue is { } inline && inline.ValueKind is not (JsonValueKind.Null or JsonValueKind.Undefined)
-                    ? ValueEnvelope.Inline(declared.Type, inline, declared.Policy)
-                    : ValueEnvelope.Null(declared.Type, declared.Policy);
+                        declared.Policy.Metadata)),
+                { InlineValue: { ValueKind: not (JsonValueKind.Null or JsonValueKind.Undefined) } inline } =>
+                    ValueEnvelope.Inline(declared.Type, inline, declared.Policy),
+                _ => ValueEnvelope.Null(declared.Type, declared.Policy)
+            };
             frame = frame.Set(variableKey, envelope, frame.Revision);
         }
 

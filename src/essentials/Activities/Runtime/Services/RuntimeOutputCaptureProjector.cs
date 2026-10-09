@@ -79,6 +79,7 @@ public sealed class RuntimeOutputCaptureProjector
                 if (!targetsVariable)
                     throw SecretBindingDiagnostics.WithheldOutputNotCaptured(capture.OutputName);
 
+                // The Withheld presence was handled by the guard above, so when TryWithhold declines, projected is itself a Withheld envelope.
                 var withheld = RuntimeEncryptionWithholding.TryWithhold(projected, projected.Policy, out var marker) ? marker : projected;
                 workflowVariableWrites[TargetVariableKey(capture, node)] = RuntimeDurableValueEncoding.ForWithheld(withheld);
                 continue;

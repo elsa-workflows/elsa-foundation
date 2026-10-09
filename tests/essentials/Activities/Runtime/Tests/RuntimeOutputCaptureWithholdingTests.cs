@@ -33,31 +33,31 @@ public sealed class RuntimeOutputCaptureWithholdingTests
     [Fact]
     public async Task A_withheld_result_captured_into_a_variable_is_written_as_its_marker_without_reaching_the_storage_driver()
     {
-        var projection = await CaptureAsync(VariableTarget, ProjectedCompletion(requiresEncryption: true));
+        var projection = await CaptureAsync(VariableTarget, ProjectedCompletion(requiresEncryption: true), contractRequiresEncryption: true);
 
         AssertWithheldVariableWrite(projection);
     }
 
     [Fact]
-    public async Task A_present_projection_that_requires_encryption_captured_into_a_variable_is_withheld_too()
+    public async Task A_present_projection_that_requires_encryption_captured_into_a_variable_is_withheld_even_under_an_ordinary_contract()
     {
-        var projection = await CaptureAsync(VariableTarget, HandBuiltPresentCompletion());
+        var projection = await CaptureAsync(VariableTarget, HandBuiltPresentCompletion(), contractRequiresEncryption: false);
 
         AssertWithheldVariableWrite(projection);
     }
 
     [Fact]
     public async Task A_withheld_result_captured_into_a_durable_output_is_refused_before_the_storage_driver_encodes_it() =>
-        await AssertRefusedAsync(ProjectedCompletion(requiresEncryption: true));
+        await AssertRefusedAsync(ProjectedCompletion(requiresEncryption: true), contractRequiresEncryption: true);
 
     [Fact]
-    public async Task A_present_projection_that_requires_encryption_captured_into_a_durable_output_is_refused_too() =>
-        await AssertRefusedAsync(HandBuiltPresentCompletion());
+    public async Task A_present_projection_that_requires_encryption_captured_into_a_durable_output_is_refused_even_under_an_ordinary_contract() =>
+        await AssertRefusedAsync(HandBuiltPresentCompletion(), contractRequiresEncryption: false);
 
     [Fact]
     public async Task An_ordinary_result_is_still_encoded_and_captured()
     {
-        var projection = await CaptureAsync(OutputTarget, ProjectedCompletion(requiresEncryption: false));
+        var projection = await CaptureAsync(OutputTarget, ProjectedCompletion(requiresEncryption: false), contractRequiresEncryption: false);
 
         Assert.Equal(Sentinel, Assert.Single(_driver.Encoded));
         Assert.Equal(Sentinel, Assert.Single(projection.DurableValues).State!.InlineValue!.Value.GetString());
@@ -73,9 +73,9 @@ public sealed class RuntimeOutputCaptureWithholdingTests
         Assert.Empty(_driver.Encoded);
     }
 
-    private async Task AssertRefusedAsync(ActivityCompletionProjection completion)
+    private async Task AssertRefusedAsync(ActivityCompletionProjection completion, bool contractRequiresEncryption)
     {
-        var exception = await Assert.ThrowsAsync<WithheldValueException>(() => CaptureAsync(OutputTarget, completion));
+        var exception = await Assert.ThrowsAsync<WithheldValueException>(() => CaptureAsync(OutputTarget, completion, contractRequiresEncryption));
 
         Assert.Equal(SecretBindingDiagnostics.WithheldOutputNotCaptured(OutputName).Message, exception.Message);
         Assert.Empty(_driver.Encoded);
@@ -118,9 +118,9 @@ public sealed class RuntimeOutputCaptureWithholdingTests
             }
         };
 
-    private Task<RuntimeOutputCaptureProjection> CaptureAsync(string valueId, ActivityCompletionProjection completion)
+    private Task<RuntimeOutputCaptureProjection> CaptureAsync(string valueId, ActivityCompletionProjection completion, bool contractRequiresEncryption)
     {
-        var contract = Contract(requiresEncryption: true);
+        var contract = Contract(contractRequiresEncryption);
         var capture = new RuntimeOutputCapture(
             OutputName,
             valueId,
