@@ -16,6 +16,7 @@ public abstract class RuntimeDbContext(DbContextOptions options) : DbContext(opt
     public DbSet<BookmarkStateEntity> Bookmarks => Set<BookmarkStateEntity>();
     public DbSet<WorkflowExecutableEntity> WorkflowExecutables => Set<WorkflowExecutableEntity>();
     public DbSet<WorkflowExecutableCoordinationEntity> WorkflowExecutableCoordinations => Set<WorkflowExecutableCoordinationEntity>();
+    public DbSet<WorkflowExecutableRootWriteLeaseEntity> WorkflowExecutableRootWriteLeases => Set<WorkflowExecutableRootWriteLeaseEntity>();
     public DbSet<ExecutableActivityTemplateEntity> ExecutableActivityTemplates => Set<ExecutableActivityTemplateEntity>();
     public DbSet<ExecutableActivityTemplateHashClaimEntity> ExecutableActivityTemplateHashClaims => Set<ExecutableActivityTemplateHashClaimEntity>();
     public DbSet<WorkflowExecutableSourceReferenceEntity> WorkflowExecutableSourceReferences => Set<WorkflowExecutableSourceReferenceEntity>();
@@ -51,6 +52,7 @@ public abstract class RuntimeDbContext(DbContextOptions options) : DbContext(opt
         modelBuilder.ApplyConfiguration(new BookmarkStateEntityConfiguration());
         modelBuilder.ApplyConfiguration(new WorkflowExecutableEntityConfiguration());
         modelBuilder.ApplyConfiguration(new WorkflowExecutableCoordinationEntityConfiguration());
+        modelBuilder.ApplyConfiguration(new WorkflowExecutableRootWriteLeaseEntityConfiguration());
         modelBuilder.ApplyConfiguration(new ExecutableActivityTemplateEntityConfiguration());
         modelBuilder.ApplyConfiguration(new ExecutableActivityTemplateHashClaimEntityConfiguration());
         modelBuilder.ApplyConfiguration(new WorkflowExecutableSourceReferenceEntityConfiguration());
