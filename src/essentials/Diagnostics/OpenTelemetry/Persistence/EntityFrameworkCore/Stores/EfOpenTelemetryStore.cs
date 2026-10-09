@@ -128,7 +128,8 @@ public sealed class EfOpenTelemetryStore : IOpenTelemetryStore, IDiagnosticsPers
         try
         {
             await acknowledgement.WaitAsync(cancellationToken);
-            await drain.ApplyPendingRetentionAsync(cancellationToken);
+            // RetentionInterval is 1, so the loop's own pass normally already covers this commit (#2533).
+            await drain.ApplyRetentionIfPendingAsync(cancellationToken);
         }
         catch (DiagnosticsDrainException exception)
         {
