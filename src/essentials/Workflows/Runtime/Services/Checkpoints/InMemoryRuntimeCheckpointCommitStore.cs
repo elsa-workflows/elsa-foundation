@@ -280,9 +280,11 @@ public sealed class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheckpointCom
         if (_rootWriteLeaseManager is null)
             throw new InvalidOperationException("A workflow executable root-write lease manager is required before workflow execution state can be persisted.");
 
+        // The lease is this attempt's alone (#2286). Two attempts of one commit (a retry that overlaps a slow first
+        // attempt) would otherwise share one lease, and the first to release it would leave the other's closure unfenced.
         await _rootWriteLeaseManager.ExecuteAsync(
             workflowExecutionChange.State.PinnedExecutable,
-            $"checkpoint:{commit.CommitId}",
+            $"checkpoint:{commit.CommitId}:{Guid.NewGuid():N}",
             write,
             cancellationToken);
     }

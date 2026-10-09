@@ -99,6 +99,31 @@ public sealed class EfRuntimeCheckpointCommitStoreTests
     }
 
     [Fact]
+    public async Task Attempts_of_one_commit_hold_independent_root_write_leases()
+    {
+        await using var database = await TestDatabase.CreateAsync();
+        await using var context = database.Open("tenant-a");
+        var accessor = new FixedAccessor("tenant-a");
+        var commit = Commit("commit-attempts") with
+        {
+            StateChanges = new RuntimeCheckpointStateChangeSet(
+                new RuntimeStateChange<WorkflowExecutionState>("workflow-a", RuntimeStateChangeOperation.Upsert, Execution("workflow-a", "tenant-a"), new Dictionary<string, string>()),
+                null, [], [], [], [], [])
+        };
+        var manager = new PassThroughRootWriteLeaseManager { FailFirstAttempt = true };
+        var store = new EfRuntimeCheckpointCommitStore(context, accessor, new FixedTimeProvider(OccurredAt), manager);
+
+        await Assert.ThrowsAsync<WorkflowExecutableRootWriteLeaseUnavailableException>(() => store.CommitAsync(commit, Decision()).AsTask());
+        await store.CommitAsync(commit, Decision());
+
+        // A retry that overlaps a slow first attempt must not share its lease, or the first release unfences the retry.
+        Assert.Equal(2, manager.LeaseIds.Count);
+        Assert.All(manager.LeaseIds, leaseId => Assert.StartsWith("checkpoint:commit-attempts:", leaseId, StringComparison.Ordinal));
+        Assert.NotEqual(manager.LeaseIds[0], manager.LeaseIds[1]);
+        Assert.Single(await context.RuntimeCheckpointCommits.ToArrayAsync());
+    }
+
+    [Fact]
     public async Task Nonempty_execution_scheduler_and_fence_commit_as_one_replayable_unit()
     {
         await using var database = await TestDatabase.CreateAsync();
@@ -128,7 +153,8 @@ public sealed class EfRuntimeCheckpointCommitStoreTests
             Assert.Empty(first.PendingPostCommitWorkIds);
             Assert.Empty(replay.PendingPostCommitWorkIds);
             Assert.Equal("artifact-workflow-a", manager.ArtifactId);
-            Assert.Equal("checkpoint:commit-nonempty", manager.LeaseId);
+            // Per attempt (#2286): the commit id, then a fresh nonce.
+            Assert.Matches("^checkpoint:commit-nonempty:[0-9a-f]{32}$", manager.LeaseId);
             Assert.Equal(1, (await context.WorkflowExecutionStates.SingleAsync()).Revision);
             Assert.Equal(0, (await context.WorkflowRunHealthStates.SingleAsync()).IncidentCount);
             Assert.Equal(1, (await context.SchedulerStates.SingleAsync()).Revision);
@@ -1446,6 +1472,10 @@ public sealed class EfRuntimeCheckpointCommitStoreTests
     {
         public string? ArtifactId { get; private set; }
         public string? LeaseId { get; private set; }
+        public List<string> LeaseIds { get; } = [];
+
+        /// <summary>Refuses the first lease, as a deletion guard would, so the commit is attempted again.</summary>
+        public bool FailFirstAttempt { get; init; }
 
         public ValueTask ExecuteAsync(
             string artifactId,
@@ -1455,6 +1485,9 @@ public sealed class EfRuntimeCheckpointCommitStoreTests
         {
             ArtifactId = artifactId;
             LeaseId = leaseId;
+            LeaseIds.Add(leaseId);
+            if (FailFirstAttempt && LeaseIds.Count == 1)
+                throw new WorkflowExecutableRootWriteLeaseUnavailableException(artifactId, leaseId);
             return write(cancellationToken);
         }
     }
