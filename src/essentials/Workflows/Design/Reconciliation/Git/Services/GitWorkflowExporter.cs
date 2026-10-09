@@ -5,6 +5,8 @@ using Elsa.Workflows.Design.Persistence.Core.Filters;
 using Elsa.Workflows.Design.Persistence.Core.Stores;
 using Elsa.Workflows.Design.Reconciliation.Git.Contracts;
 using Elsa.Workflows.Design.Reconciliation.Git.Options;
+using Elsa.Workflows.Design.Validations.Core.Contracts;
+using Elsa.Workflows.Design.Validations.Core.Models;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
@@ -23,6 +25,10 @@ namespace Elsa.Workflows.Design.Reconciliation.Git.Services;
 /// other writer has to build on. A writer whose push is refused because the remote moved resets onto the remote through
 /// the workspace and sweeps again, and since another writer of the same catalog pushed the same files, it normally finds
 /// nothing left to commit. A push refused for any other reason throws, as it always has.
+/// A version not yet committed is written only once it passes the credential-literal rule (spec 188, FR-008),
+/// <see cref="ICredentialLiteralValidator"/>: a refused version gets no directory, file, commit or tag, and the pass logs a
+/// value-free warning, exports everything else and does not fail. A committed version file is skipped before the rule
+/// runs, and a node whose activity the catalog does not hold is not judged.
 /// </remarks>
 public sealed class GitWorkflowExporter(
     IGitWorkspace workspace,
@@ -31,6 +37,7 @@ public sealed class GitWorkflowExporter(
     IWorkflowDefinitionStore definitionStore,
     IWorkflowDefinitionVersionStore versionStore,
     IOptions<GitReconciliationOptions> options,
+    ICredentialLiteralValidator credentialLiterals,
     ILogger<GitWorkflowExporter> logger) : IGitWorkflowExporter
 {
     /// <summary>Pushes one pass attempts against a remote other writers keep moving before it leaves the rest to the next pass.</summary>
@@ -135,6 +142,13 @@ public sealed class GitWorkflowExporter(
         if (committed.Contains(path))
             return; // immutable: committed ⇒ skip (idempotent, structural loop-avoidance).
 
+        var refusals = await credentialLiterals.Validate(version.State, cancellationToken);
+        if (refusals.Count > 0)
+        {
+            LogRefused(definition.Id, version.Version, refusals);
+            return;
+        }
+
         Directory.CreateDirectory(Path.GetDirectoryName(file)!);
         var indented = GitCanonicalJson.Indent(GitCanonicalJson.ToCompact(version.State, payloadSerializer));
         await File.WriteAllTextAsync(file, indented, cancellationToken);
@@ -236,6 +250,15 @@ public sealed class GitWorkflowExporter(
 
     private static string RepositoryPath(string repoPath, string file) =>
         Path.GetRelativePath(repoPath, file).Replace(Path.DirectorySeparatorChar, '/');
+
+    private void LogRefused(string definitionId, string version, IReadOnlyList<ValidationError> refusals)
+    {
+        // Each finding names the rule, the node and the input; none carries the bound value.
+        foreach (var refusal in refusals)
+            logger.LogWarning(
+                "Not exporting workflow definition '{definitionId}' v{version}: {refusal}",
+                definitionId, version, refusal.Message);
+    }
 
     private void LogPush(string branch)
     {

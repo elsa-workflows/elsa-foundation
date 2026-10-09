@@ -1,4 +1,5 @@
 using Elsa.Activities.Design.Persistence.Core.Entities;
+using Elsa.Workflows.Design.Core.Models;
 using Elsa.Workflows.Design.Persistence.Core.Entities;
 using Elsa3.Models;
 using System.Buffers;
@@ -90,10 +91,15 @@ public sealed record ReusableActivityImportMutation(
     ReusableActivityImportAccessScope? AccessScope = null,
     string? IdempotencyKey = null);
 
+/// <summary>
+/// One reusable Elsa 3 workflow mapped to a graph activity. <paramref name="Body"/> is the mapped workflow state the
+/// version's descriptor payload carries, kept so the import can admit it before the commit (spec 188, FR-008).
+/// </summary>
 public sealed record ImportedReusableActivity(
     ActivityDefinition Definition,
     ActivityDefinitionVersion Version,
-    ActivityDefinitionAuthoringState AuthoringState);
+    ActivityDefinitionAuthoringState AuthoringState,
+    WorkflowDefinitionState Body);
 
 public sealed record ImportedWorkflow(
     string SourceDefinitionId,

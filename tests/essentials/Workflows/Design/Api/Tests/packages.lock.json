@@ -344,6 +344,16 @@
           "Elsa.Workflows.Design.Validations.Core": "[4.0.0-dev, )"
         }
       },
+      "elsa.workflows.design.validations": {
+        "type": "Project",
+        "dependencies": {
+          "CShells.Abstractions": "[0.0.30-preview.159, )",
+          "Elsa.Activities.Design.Core": "[4.0.0-dev, )",
+          "Elsa.Events.Core": "[4.0.0-dev, )",
+          "Elsa.Expressions.Core": "[4.0.0-dev, )",
+          "Elsa.Workflows.Design.Validations.Core": "[4.0.0-dev, )"
+        }
+      },
       "elsa.workflows.design.validations.core": {
         "type": "Project",
         "dependencies": {

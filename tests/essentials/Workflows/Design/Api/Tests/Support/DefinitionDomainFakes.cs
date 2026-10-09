@@ -39,6 +39,16 @@ public sealed class DefinitionDomainFakes(IHttpContextAccessor contextAccessor)
     public UpdateDraftRequest? LastDraftUpdate { get; private set; }
     public string? LastDraftUpdateOperationKey { get; private set; }
     public WorkflowDefinitionState? LastSubmittedState { get; private set; }
+    public string? LastPromoteExpectedStateHash { get; private set; }
+
+    /// <summary>The state of every draft the draft store serves.</summary>
+    public WorkflowDefinitionState DraftState { get; set; } = WorkflowDefinitionState.Empty;
+
+    /// <summary>A failure the promotion command throws instead of promoting, when set.</summary>
+    public Exception? PromoteFailure { get; set; }
+
+    /// <summary>The names of the commands that wrote workflow state, in call order.</summary>
+    public List<string> StateWrites { get; } = [];
 
     /// <summary>
     /// The sample is both restorable and soft-deletable: DeletedAt stays null so a soft delete
@@ -122,11 +132,11 @@ public sealed class DefinitionDomainFakes(IHttpContextAccessor contextAccessor)
         /// </summary>
         private static bool Serves(string draftId) => draftId is "sample" or "route-draft";
 
-        private static WorkflowDefinitionDraft Draft(string draftId) => new()
+        private WorkflowDefinitionDraft Draft(string draftId) => new()
         {
             Id = draftId,
             WorkflowDefinitionId = "sample-definition",
-            State = WorkflowDefinitionState.Empty
+            State = fakes.DraftState
         };
 
         public Task<WorkflowDefinitionDraft?> FindByIdAsync(string draftId, CancellationToken cancellationToken = default)
@@ -167,14 +177,16 @@ public sealed class DefinitionDomainFakes(IHttpContextAccessor contextAccessor)
 
     private sealed class PromoteCommand(DefinitionDomainFakes fakes) : IPromoteDraftToVersionCommand
     {
-        public Task<string> Execute(DesignOperationKey operationKey, string draftId, CancellationToken cancellationToken = default) =>
-            Execute(operationKey, draftId, null, cancellationToken);
-
-        public Task<string> Execute(DesignOperationKey operationKey, string draftId, string? requestedVersion, CancellationToken cancellationToken = default)
+        public Task<string> Execute(
+            DesignOperationKey operationKey, string draftId, string? requestedVersion, string expectedStateHash, CancellationToken cancellationToken = default)
         {
             fakes.LastPromoteOperationKey = operationKey.Value;
             fakes.LastPromoteDraftId = draftId;
             fakes.LastPromoteRequestedVersion = requestedVersion;
+            fakes.LastPromoteExpectedStateHash = expectedStateHash;
+            if (fakes.PromoteFailure is { } failure)
+                return Task.FromException<string>(failure);
+            fakes.StateWrites.Add(nameof(IPromoteDraftToVersionCommand));
             return fakes.Scenario switch
             {
                 "trusted-promote-404" => throw new EntityNotFoundException("draft sample was not found"),
@@ -185,11 +197,14 @@ public sealed class DefinitionDomainFakes(IHttpContextAccessor contextAccessor)
         }
     }
 
-    private sealed class AddVersionCommand : IAddWorkflowDefinitionVersionCommand
+    private sealed class AddVersionCommand(DefinitionDomainFakes fakes) : IAddWorkflowDefinitionVersionCommand
     {
         public Task<WorkflowDefinitionVersionAdded> Execute(
-            DesignOperationKey operationKey, string definitionId, WorkflowDefinitionState state, CancellationToken cancellationToken = default) =>
-            Task.FromResult(new WorkflowDefinitionVersionAdded(definitionId, "sample-version", "1.0.0"));
+            DesignOperationKey operationKey, string definitionId, WorkflowDefinitionState state, CancellationToken cancellationToken = default)
+        {
+            fakes.StateWrites.Add(nameof(IAddWorkflowDefinitionVersionCommand));
+            return Task.FromResult(new WorkflowDefinitionVersionAdded(definitionId, "sample-version", "1.0.0"));
+        }
     }
 
     /// <summary>No validation contributors: every draft derives a deterministic empty error set.</summary>
@@ -230,18 +245,22 @@ public sealed class DefinitionDomainFakes(IHttpContextAccessor contextAccessor)
             DesignOperationKey operationKey, string name, string? description, WorkflowDefinitionState state, CancellationToken cancellationToken = default)
         {
             fakes.LastSubmittedState = state;
+            fakes.StateWrites.Add(nameof(ISubmitWorkflowDefinitionCommand));
             return Task.FromResult(new SubmittedWorkflowDefinition("sample-definition", "sample-draft", "sample-version"));
         }
     }
 
-    private sealed class AddCommand : IAddWorkflowDefinitionCommand
+    private sealed class AddCommand(DefinitionDomainFakes fakes) : IAddWorkflowDefinitionCommand
     {
         public Task<WorkflowDefinitionCreated> Execute(
             DesignOperationKey operationKey,
             WorkflowDefinition workflowDefinition,
             WorkflowDefinitionDraft draft,
-            CancellationToken cancellationToken = default) =>
-            Task.FromResult(new WorkflowDefinitionCreated(workflowDefinition.Id, draft.Id));
+            CancellationToken cancellationToken = default)
+        {
+            fakes.StateWrites.Add(nameof(IAddWorkflowDefinitionCommand));
+            return Task.FromResult(new WorkflowDefinitionCreated(workflowDefinition.Id, draft.Id));
+        }
     }
 
     private sealed class UpdateDraft(DefinitionDomainFakes fakes) : IUpdateDraftCommand
@@ -250,6 +269,7 @@ public sealed class DefinitionDomainFakes(IHttpContextAccessor contextAccessor)
         {
             fakes.LastDraftUpdateOperationKey = operationKey.Value;
             fakes.LastDraftUpdate = request;
+            fakes.StateWrites.Add(nameof(IUpdateDraftCommand));
             return Task.CompletedTask;
         }
     }
@@ -271,10 +291,10 @@ public sealed class DefinitionDomainFakes(IHttpContextAccessor contextAccessor)
         services.AddSingleton<ISaveWorkflowDefinitionCommand>(sp => new SaveCommand(sp.GetRequiredService<DefinitionDomainFakes>()));
         services.AddSingleton<IDeleteWorkflowDefinitionPermanentlyCommand>(sp => new DeleteCommand(sp.GetRequiredService<DefinitionDomainFakes>()));
         services.AddSingleton<ISubmitWorkflowDefinitionCommand>(sp => new SubmitCommand(sp.GetRequiredService<DefinitionDomainFakes>()));
-        services.AddSingleton<IAddWorkflowDefinitionCommand, AddCommand>();
+        services.AddSingleton<IAddWorkflowDefinitionCommand>(sp => new AddCommand(sp.GetRequiredService<DefinitionDomainFakes>()));
         services.AddSingleton<IUpdateDraftCommand>(sp => new UpdateDraft(sp.GetRequiredService<DefinitionDomainFakes>()));
         services.AddSingleton<IDiscardDraftCommand>(sp => new DiscardCommand(sp.GetRequiredService<DefinitionDomainFakes>()));
-        services.AddSingleton<IAddWorkflowDefinitionVersionCommand, AddVersionCommand>();
+        services.AddSingleton<IAddWorkflowDefinitionVersionCommand>(sp => new AddVersionCommand(sp.GetRequiredService<DefinitionDomainFakes>()));
         services.AddSingleton<IPromoteDraftToVersionCommand>(sp => new PromoteCommand(sp.GetRequiredService<DefinitionDomainFakes>()));
         services.AddSingleton<Elsa.Events.Core.Contracts.IInlineEventPublisher, NoOpInlineEventPublisher>();
         services.AddSingleton(TimeProvider.System);

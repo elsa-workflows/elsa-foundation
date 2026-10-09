@@ -53,7 +53,7 @@ The per-domain catalog (framework §2.22.1). Anchored at `Elsa.Workflows.Design.
 ### WorkflowVersionsReconciled
 `(IReadOnlyList<WorkflowVersionSourceClaim> Claims)`
 
-**Semantic.** A workflow-version reconcile pass completed with every contributed version materialized (or verified present). Not published when the pass aborts. Payload is the pass's provenance claims, in contribution order.
+**Semantic.** A workflow-version reconcile pass completed with every contributed version materialized, verified present, or skipped: as outdated, or refused by the credential-literal rule (spec 188, FR-008). Not published when the pass aborts. Payload is the claims of the versions the pass reconciled, in contribution order; a skipped version's claim is left out.
 
 **Delivery strategy.** Sequential (`IInlineEventPublisher`) — subscribers run inside the reconcile startup task, before shell activation completes (and therefore before `/health/ready` turns ready). The task takes no lock and runs on every node (#2192), so subscribers on several nodes can run at once and must converge as the reconciler's own writes do (#2189).
 

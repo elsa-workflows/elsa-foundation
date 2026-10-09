@@ -24,9 +24,17 @@
     <ProjectReference Include="..\..\..\..\..\..\src\essentials\Workflows\Design\Api\Elsa.Workflows.Design.Api.csproj" />
     <ProjectReference Include="..\..\..\..\..\..\src\essentials\Workflows\Design\Core\Elsa.Workflows.Design.Core.csproj" />
     <ProjectReference Include="..\..\..\..\..\..\src\essentials\Workflows\Design\Persistence\Core\Elsa.Workflows.Design.Persistence.Core.csproj" />
+    <!-- The credential-literal admission the state-writing endpoints take (spec 188). -->
+    <ProjectReference Include="..\..\..\..\..\..\src\essentials\Workflows\Design\Validations\Elsa.Workflows.Design.Validations.csproj" />
     <ProjectReference Include="..\..\..\..\..\..\src\essentials\Mediator\Core\Elsa.Mediator.Core.csproj" />
     <ProjectReference Include="..\..\..\..\Api\Compatibility\Testing\Elsa.Api.Compatibility.Testing.csproj" />
     <ProjectReference Include="..\..\..\..\Testing\Elsa.Testing.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- The credential-literal fixture the Design test project owns, shared rather than duplicated (spec 188). -->
+    <Compile Include="..\..\Tests\Infrastructure\CredentialLiteralTestSupport.cs" Link="Support\CredentialLiteralTestSupport.cs" />
+    <Compile Include="..\..\Tests\Unit\BaselineValidatorTests\StubActivityCatalog.cs" Link="Support\StubActivityCatalog.cs" />
   </ItemGroup>
 
 </Project>

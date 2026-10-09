@@ -434,12 +434,15 @@ not trip it.
   `ActivityTreeWalker` and `CatalogVersionResolver`. The same class is also registered as an `IDraftValidator`, so
   the validation panel (`DraftValidating`) reports the same findings. That registration only reports; no entry point
   relies on it for enforcement.
-- One shared admission helper, `WorkflowStateAdmission`, a `public sealed` class in
-  `Elsa.Workflows.Design.Validations.Core` next to the existing `DraftValidationGate`, registered by
-  `WorkflowDesignValidations`. It is the only way an application-layer caller runs the rule:
-  `AdmitAsync(state)` raises `CredentialLiteralRefusedException` carrying `ValidationError`s (path
-  `{nodeId}/inputs/{referenceKey}`), and `FindRefusalsAsync(state)` returns the same findings without throwing, for the
-  per-item callers. Every caller of a state-writing design command takes it, which is what the coverage guard checks.
+- One shared admission helper, `WorkflowStateAdmission`, in `Elsa.Workflows.Design.Validations.Core` next to the
+  existing `DraftValidationGate`: `AdmitAsync` raises `CredentialLiteralRefusedException` carrying `ValidationError`s
+  (path `{nodeId}/inputs/{referenceKey}`). Every caller of a state-writing design command takes the rule's contract,
+  `ICredentialLiteralValidator`, which is what the coverage guard checks; the per-item callers read its findings
+  without throwing. As built in slice 6 the helper is a static extension over the contract, like `DraftValidationGate`,
+  not the `public sealed` class with an injected validator this decision first named: the architecture suite's
+  `.Core` shape ratchet admits no new class with injected dependencies in a `.Core` project, and moving the helper to
+  `Elsa.Workflows.Design.Validations` would have given the Design API and the reconciliation projects references to an
+  implementation project.
 - No persistence project gains a reference, a dependency or a rule, and `WorkflowsDesignEntityFrameworkCore` gains no
   `DependsOn`. The only persistence change is promote's content precondition (point 1 below), a storage-integrity
   compare-and-set that carries no rule.
@@ -495,16 +498,19 @@ not trip it.
   2. **`WorkflowsVersionReconciler.ReconcileVersion`**, per item, before any catalog mutation for that item (see
      the per-item contract in [the rule contract](contracts/credential-literal-rule.md)). This covers file
      reconciliation and git import, which both contribute through `WorkflowVersionsReconciling` sources (verified:
-     `WorkflowVersionsReconcilingHandler`). It calls `WorkflowStateAdmission.FindRefusalsAsync`.
+     `WorkflowVersionsReconcilingHandler`). It reads the findings of `ICredentialLiteralValidator`.
   3. **`RuntimeInputBindingCompiler.CompileAll`** (both overloads), which sees each input and its binding and
      applies the same predicate. This covers publish, publish-on-reconcile and draft test runs, with no catalog
      lookup. `Elsa.Workflows.Publishing` already references `Elsa.Workflows.Design.Core` and
      `Elsa.Workflows.Design.Validations` (verified).
-  4. **`GitWorkflowExporter`**, per version, before writing its file, through `WorkflowStateAdmission.FindRefusalsAsync`.
+  4. **`GitWorkflowExporter`**, per version, before writing its file, through the findings of `ICredentialLiteralValidator`.
+
+  As built in slice 6's review, a fifth integration point, `ReusableActivityCollectionImporter`, covers an eighth entry
+  point, the Elsa 3 collection import (see "Writers that bypass the commands" below).
 - Coverage guard (T055): an architecture test classifies every `*Command` contract in
   `Elsa.Workflows.Design.Persistence.Core.Contracts` as state-writing or not, and asserts one thing about the
   state-writing ones: every non-persistence `src/` type whose constructor takes one also takes
-  `WorkflowStateAdmission`. Promote is state-writing (it writes a version from a stored draft) and is not exempt. A
+  `ICredentialLiteralValidator` (as built in slice 6; see the shared helper above). Promote is state-writing (it writes a version from a stored draft) and is not exempt. A
   new state-writing command, or a new caller of an existing one, fails the guard until it is classified or admitted.
   The guard also asserts, by reflection, that every `Execute` method of `IPromoteDraftToVersionCommand` takes a
   non-nullable `expectedStateHash`, so a promote overload without the admitted hash cannot be added back.
@@ -518,6 +524,27 @@ version that already holds a literal is the residual case below, caught at promo
 `ISaveWorkflowDefinitionCommand` and `IMaterializeWorkflowDefinitionCommand` carry definition metadata only (name,
 description, deleted flag), and `IDiscardDraftCommand` and `IDeleteWorkflowDefinitionPermanentlyCommand` remove state;
 none writes workflow state.
+
+**Writers that bypass the commands (found in slice 6)**: the inventory above searched for callers of the command
+contracts, and two persistence-layer writers write workflow state without one. The Elsa 3 reusable-collection import
+(`EfReusableActivityImportCommand`, `src/extensions/Elsa3`) constructs `EfMaterializeWorkflowDefinitionVersionCommand`
+itself and stores the workflow versions it maps from Elsa 3 definitions, input values included; it is a definition
+import the seven entry points do not name. Slice 6 first recorded it as a follow-up; its review admitted it instead
+(spec FR-008 note), the same way file reconciliation is admitted: the import's application-layer service,
+`ReusableActivityCollectionImporter`, judges every activity node it maps (each workflow version's and each reusable
+activity's body, the root and every nested node) through `ICredentialLiteralValidator` before it calls its commit
+port, and the EF command holds no rule. Its apply is all or nothing, so a refusal refuses the whole apply through the
+import's existing 400 (`ArgumentException`) arm. That makes eight admitted entry points, and the coverage guard
+requires every caller of the import's commit port to take the rule. The mapping nests children under
+`elsa3.imported-activity.structure`, which no handler projects, so the rule's own walk sees only each state's root;
+round 1 relied on that walk and judged nothing beneath the root. As built in round 2, the extension, which owns the
+shape, enumerates every nested node (`Elsa3ImportedActivityStructure.Nodes`) and the importer judges each through the
+contract. Registering a structure handler for the kind instead was rejected: every design validator, the design
+commands' tree walks and the publishing compiler would start processing the imported children. Any other structure
+kind without a handler remains a gap for hand-authored state (contract, Known gaps; T090). An activity upgrade (`EfActivityUpgradePlanStore`) rewrites drafts directly, re-pointing nodes to another activity
+version and adding no authored content. The coverage guard (T055) lists every production file outside the design
+persistence project that reaches the design EF context or a design EF command, each with what it does, so a new
+bypassing writer fails it until classified.
 
 **Rationale**: business rules live in the application layer; stores keep only storage integrity. At the entry
 points that admit incoming state (draft save, add-version, submit, reconciliation, git export, publish) the rule is a

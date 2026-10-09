@@ -2,7 +2,10 @@ using System.Collections.Concurrent;
 using System.Data.Common;
 using Elsa.Activities.Design.Persistence.EntityFrameworkCore;
 using Elsa.Serialization.Core;
+using Elsa.Workflows.Design.Core.Models;
 using Elsa.Workflows.Design.Persistence.EntityFrameworkCore;
+using Elsa.Workflows.Design.Validations.Core.Contracts;
+using Elsa.Workflows.Design.Validations.Core.Models;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa3.Activities.Design.Import.Contracts;
 using Elsa3.Activities.Design.Import.Persistence.EntityFrameworkCore.Stores;
@@ -65,7 +68,7 @@ internal sealed partial class ImportDatabase(
     {
         clock ??= new MutableTimeProvider(ImportFixtures.Now);
         var analyzer = new ReusableActivityCollectionAnalyzer();
-        var importer = new ReusableActivityCollectionImporter(analyzer, ImportFixtures.Materializer(), command ?? Command(access, clock));
+        var importer = new ReusableActivityCollectionImporter(analyzer, ImportFixtures.Materializer(), command ?? Command(access, clock), new NoCredentialInputs());
         return new ReusableActivityImportOperationService(OperationStore(access), importer, ImportFixtures.Options(), clock, NullLogger<ReusableActivityImportOperationService>.Instance);
     }
 
@@ -103,6 +106,16 @@ internal sealed partial class ImportDatabase(
         created.Add(context);
         return context;
     }
+}
+
+/// <summary>
+/// The credential-literal rule over a catalog with no credential input, as <see cref="ImportFixtures.Materializer"/>'s
+/// activities declare none: it refuses nothing. The rule at the import is proved by the mapping suite.
+/// </summary>
+internal sealed class NoCredentialInputs : ICredentialLiteralValidator
+{
+    public ValueTask<IReadOnlyList<ValidationError>> Validate(WorkflowDefinitionState state, CancellationToken cancellationToken) =>
+        ValueTask.FromResult<IReadOnlyList<ValidationError>>([]);
 }
 
 /// <summary>Row counts of every table an import writes, across all tenants.</summary>

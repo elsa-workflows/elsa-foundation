@@ -27,6 +27,8 @@ using Elsa.Workflows.Design.Core.Models;
 using Elsa.Workflows.Design.Core.Services;
 using Elsa.Workflows.Design.Persistence.Core.Entities;
 using Elsa.Workflows.Design.Persistence.Core.Stores;
+using Elsa.Workflows.Design.Validations.Core.Exceptions;
+using Elsa.Workflows.Design.Validations.Core.Models;
 using Elsa.Workflows.Publishing.Core.Contracts;
 using Elsa.Workflows.Publishing.Core.Events;
 using Elsa.Workflows.Publishing.Core.Models;
@@ -161,9 +163,46 @@ public sealed class WorkflowExecutableCompilerTests
         Assert.False(inputs[nameof(DeclaredInputsActivity.Note)].IsCredential);
         Assert.Equal((true, false), (inputs[nameof(DeclaredInputsActivity.Note)].Policy.IsSensitive, inputs[nameof(DeclaredInputsActivity.Note)].Policy.RequiresEncryption));
 
-        var exception = Assert.Throws<ArgumentException>(() =>
+        var exception = Assert.Throws<CredentialLiteralRefusedException>(() =>
             compiler.CompileAll("occurrence-1", inputs.Values, [new WorkflowArgumentState(nameof(DeclaredInputsActivity.ApiKey), new ArgumentValue("typed-in", "Literal"), null, null, null, null)]));
-        Assert.Equal(SecretBindingDiagnostics.EncryptionRequiredBindingRefused("occurrence-1", nameof(DeclaredInputsActivity.ApiKey)).Message, exception.Message);
+        Assert.Equal(
+            CredentialLiteralFinding.For("occurrence-1", nameof(DeclaredInputsActivity.ApiKey), nameof(DeclaredInputsActivity.ApiKey)),
+            Assert.Single(exception.Findings));
+    }
+
+    /// <summary>A literal, a value read and an expression, each a binding the credential-literal rule refuses.</summary>
+    public static TheoryData<ArgumentValue> RefusedCredentialBindings => new()
+    {
+        new ArgumentValue(JsonSerializer.SerializeToElement("typed-in"), "Literal"),
+        new ArgumentValue(JsonSerializer.SerializeToElement("variable-reference"), "Variable"),
+        new ArgumentValue(JsonSerializer.SerializeToElement("'typed-in'"), "JavaScript")
+    };
+
+    [Theory]
+    [MemberData(nameof(RefusedCredentialBindings))]
+    public async Task A_literal_or_expression_on_a_credential_input_is_refused_by_the_credential_literal_rule_ahead_of_VF_ACT_011(ArgumentValue value)
+    {
+        // T054 (spec 188, FR-008, FR-009): the credential rule judges the binding before VF-ACT-011 is reached.
+        var exception = await SecretBindingCompilerFixture.AssertRefusedAsync(
+            SecretBindingCompilerFixture.Node(typeof(DeclaredInputsActivity), new WorkflowArgumentState(nameof(DeclaredInputsActivity.ApiKey), value, null, null, null, null)),
+            [typeof(DeclaredInputsActivity)]);
+
+        var refusal = Assert.IsType<CredentialLiteralRefusedException>(exception.InnerException);
+        Assert.Equal(
+            CredentialLiteralFinding.For(SecretBindingCompilerFixture.NodeId, nameof(DeclaredInputsActivity.ApiKey), nameof(DeclaredInputsActivity.ApiKey)),
+            Assert.Single(refusal.Findings));
+        Assert.StartsWith("Inputs/CredentialLiteral", exception.Message, StringComparison.Ordinal);
+        Assert.DoesNotContain(SecretBindingDiagnostics.EncryptionRequiredBindingCode, exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task A_secret_reference_on_a_credential_input_is_compiled()
+    {
+        var executable = await SecretBindingCompilerFixture.CompileAsync(
+            SecretBindingCompilerFixture.Node(typeof(DeclaredInputsActivity), SecretBindingCompilerFixture.Secret(nameof(DeclaredInputsActivity.ApiKey))),
+            [typeof(DeclaredInputsActivity)]);
+
+        Assert.Equal(RuntimeInputBindingSource.SecretRead, executable.RootActivity.InputBindings[nameof(DeclaredInputsActivity.ApiKey)].Source);
     }
 
     [Fact]

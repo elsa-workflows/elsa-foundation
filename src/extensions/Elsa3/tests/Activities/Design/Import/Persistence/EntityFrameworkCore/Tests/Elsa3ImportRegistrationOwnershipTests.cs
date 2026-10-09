@@ -2,6 +2,7 @@ using Elsa.Activities.Design.Persistence.EntityFrameworkCore.DependencyInjection
 using Elsa.Persistence.EntityFramework.Tests;
 using Elsa.Workflows.Design.Persistence.EntityFrameworkCore.DependencyInjection;
 using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Design.Validations.Core.Contracts;
 using Elsa3.Activities.Design.Import.Composition;
 using Elsa3.Activities.Design.Import.Contracts;
 using Elsa3.Activities.Design.Import.Models;
@@ -105,6 +106,8 @@ public sealed class Elsa3ImportRegistrationOwnershipTests
         services.AddScoped<IReusableActivityCollectionImporter, ReusableActivityCollectionImporter>();
         services.AddScoped<IReusableActivityImportOperationService, ReusableActivityImportOperationService>();
         services.AddLogging();
+        // In a host, WorkflowDesignValidations registers the credential-literal rule the importer admits through.
+        services.AddScoped<ICredentialLiteralValidator, NoCredentialInputs>();
         await using var provider = services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
         try
         {

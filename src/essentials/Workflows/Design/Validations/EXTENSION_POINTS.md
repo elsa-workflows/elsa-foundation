@@ -2,15 +2,25 @@
 
 The per-domain catalog (framework §2.22.1) of everything you can implement or override in the draft-validation sub-domain, plus the events it publishes. Anchored at `Elsa.Workflows.Design.Validations` — the composition root where `WorkflowDesignValidationsFeature` wires the aggregating handler `ExecuteValidations` and the four built-in baseline validators. Three sections:
 
-- **Overridable contracts** — none in this domain.
+- **Overridable contracts**: `ICredentialLiteralValidator`, the credential-literal rule (spec 188).
 - **Implementable contributor interfaces** — the `IDraftValidator` add-don't-replace seam.
 - **Events** — the validation gate (`DraftValidating`) and outcome notification (`DraftValidated`).
+
+A closing note describes the credential-literal admission helper and the rule's exceptions, which are not extension points.
 
 ---
 
 ## Overridable contracts
 
-This domain exposes no swappable default-impl service. The validation *behaviour* is contributed (see below); the validation *outcome* is derived state — recomputed in-lock on every create/update mutation and re-derived by the promotion gate. It is not persisted, so there is no read-model abstraction or storage seam to override.
+The draft-validation *behavior* is contributed (see below); the validation *outcome* is derived state, recomputed in-lock on every create/update mutation and re-derived by the promotion gate. It is not persisted, so there is no read-model abstraction or storage seam to override. The one swappable service is the credential-literal rule.
+
+### `ICredentialLiteralValidator` *(Core, `Elsa.Workflows.Design.Validations.Core`)*
+- **Kind:** Validator (returns findings), a single-implementation **replacement contract** (framework §2.6.2), declared by `[CredentialLiteralValidatorReplacementContract]`.
+- **Signature:** `ValueTask<IReadOnlyList<ValidationError>> Validate(WorkflowDefinitionState state, CancellationToken cancellationToken);`
+- **Returns** one `CredentialLiteralFinding` per binding the rule refuses (spec 188, FR-008): a literal, object, default request, value read, expression, or `Secret` binding whose bound payload is not a well-formed `SecretReferencePayload`, on an input the activity declares a credential. Path `{NodeId}/inputs/{ReferenceKey}`, type `Inputs/CredentialLiteral`, a message that starts with the rule id and never carries the bound value. A node whose activity version the catalog does not hold returns no finding.
+- **Default:** `CredentialLiteralValidator` (this feature), which applies `CredentialInputBinding.IsAccepted` (`Elsa.Workflows.Design.Core`) to every catalog-backed node, root and nested (the children a registered structure handler projects), down to `MaxRecursionDepth`.
+- **Register:** `WorkflowDesignValidations` registers the default. To replace it, swap the one registration after the feature has registered: `services.Replace(ServiceDescriptor.Scoped<ICredentialLiteralValidator, MyValidator>())`. The default's separate `IDraftValidator` registration stays, so the validation panel still reports the default's findings. A plain additional registration (`services.AddScoped<ICredentialLiteralValidator, MyValidator>()`, before or after the feature) leaves two, and the host does not start: a Prepare-phase shell initializer fails activation with `MultipleCredentialLiteralValidatorsException`, naming every registration, in either registration order (`ValidationsFeatureRegistrationTests` pins both).
+- **Consumed by:** the application-layer writers of workflow state the architecture suite's coverage guard knows of, each taking it as a constructor dependency: every constructor outside the design persistence project that takes a design command writing workflow state (the six Design API callers and `WorkflowsVersionReconciler`), every `IGitWorkflowExporter` implementation, and the Elsa 3 collection import's `ReusableActivityCollectionImporter`. The guard (`ArchitectureGuardTests`, `Every_*` tests in `ArchitectureGuardTests.CredentialLiteralAdmission.cs`) fails when a new caller takes such a command or the Elsa 3 import's commit port without it, and when a command contract is left unclassified. A Design API caller refuses its whole request through `WorkflowStateAdmission.AdmitAsync`; the Elsa 3 import reads the findings for every node it maps, nested ones included, and refuses the whole apply with one `CredentialLiteralRefusedException`; the reconciler and the exporter read the findings and skip the item. Publication does not consume it: the compiler applies `CredentialInputBinding.IsAccepted` itself.
 
 ---
 
@@ -31,6 +41,7 @@ This domain exposes no swappable default-impl service. The validation *behaviour
 - `Elsa.Workflows.Design.Validations` — `VariableUniquenessValidator` *(intra-domain — default)*
 - `Elsa.Workflows.Design.Validations` — `RequiredInputOutputValidator` *(intra-domain — default)*
 - `Elsa.Workflows.Design.Validations` — `VariableExpressionResolverValidator` *(intra-domain — default)*
+- `Elsa.Workflows.Design.Validations`: `CredentialLiteralValidator` *(intra-domain default; reports the credential-literal findings on the validation panel; the rule is enforced through `ICredentialLiteralValidator` by the writers listed under that contract, not by this registration)*
 - Activity feature validators *(cross-domain — each activity feature ships its own `IDraftValidator` per FR-034)*
 - Graph-specific validators such as orphan checks belong to the activity feature that owns graph semantics, such as a future Flowchart module.
 
@@ -78,6 +89,16 @@ Both events are `IEvent` (framework §2.6.1); they differ only in **delivery str
 **Publication site.** Every mutation command (and `ICreateDraftCommand`), after `SaveChangesAsync` and after the per-Draft lock has been released.
 
 **Ordering guarantees.** FIFO at enqueue. A subscriber exception is caught + logged; it never breaks the publisher. (Per-diff FR-018 mutation events are not published today — see the cross-reference below — so `DraftValidated` is the only post-mutation event on the create/update path.)
+
+---
+
+## The credential-literal admission helper and exceptions
+
+Not extension points: nothing here can be registered, replaced or contributed.
+
+- `WorkflowStateAdmission` *(Core, `Elsa.Workflows.Design.Validations.Core`)*: a static helper over `ICredentialLiteralValidator`, like `DraftValidationGate`. `Task AdmitAsync(this ICredentialLiteralValidator validator, WorkflowDefinitionState state, CancellationToken cancellationToken)` throws `CredentialLiteralRefusedException` when the validator returns a finding; a caller calls it before its write, so a refused state is not stored. It holds no rule of its own.
+- `CredentialLiteralRefusedException` *(Core, `Elsa.Workflows.Design.Validations.Core.Exceptions`)*: an `ArgumentException` carrying `Findings`; its message joins the findings' messages. The Design API maps it to 400 with `errors` keyed by each finding's path; publication reports it as a compile error (400); the Elsa 3 import answers 400 with the messages in `detail`.
+- `MultipleCredentialLiteralValidatorsException` *(Core, `Elsa.Workflows.Design.Validations.Core.Exceptions`)*: the startup diagnostic for a host that composes more than one `ICredentialLiteralValidator`. It fails shell activation and names every registration in `Implementations` (implementation type, registered instance's type, or "a factory registration").
 
 ---
 

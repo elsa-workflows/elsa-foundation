@@ -3,10 +3,19 @@ using Elsa.Activities.Design.Core.Contracts;
 using Elsa.Activities.Design.Core.Models;
 using Elsa.Serialization.SystemText.Services;
 using Elsa.Serialization.Core;
+using Elsa.Workflows.Design.Core.Services;
+using Elsa.Workflows.Design.Validations;
+using Elsa.Workflows.Design.Validations.Core.Contracts;
+using Elsa.Workflows.Design.Validations.Internal;
+using Elsa.Workflows.Design.Validations.Validators;
+using Elsa3.Activities.Design.Import;
+using Elsa3.Activities.Design.Import.Contracts;
 using Elsa3.Activities.Design.Import.Models;
 using Elsa3.Mapping.Mappings;
 using Elsa3.Mapping.Services;
 using Elsa3.Models;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
 
 namespace Elsa3.Mapping.Tests;
 
@@ -63,21 +72,76 @@ internal static class ReusableActivityImportFixtures
     public static ReusableActivityImportCollection Collection(params Elsa3WorkflowDefinition[] definitions) =>
         new("fixture-collection", definitions);
 
-    public static Elsa3ReusableActivityImportMaterializer Materializer()
+    public static Elsa3ReusableActivityImportMaterializer Materializer(BuiltInActivityLookup? catalog = null)
     {
-        var registry = new WellKnownTypeRegistry();
-        registry.RegisterType(typeof(string), "String");
-        registry.RegisterType(typeof(object), "Object");
+        var registry = TypeRegistry();
         var argumentMapper = new Elsa3ArgumentDefinitionToInputOutput(registry);
-        var activityMapper = new Elsa3ActivityToState(new BuiltInActivityLookup());
+        var activityMapper = new Elsa3ActivityToState(catalog ?? new BuiltInActivityLookup());
         var stateMapper = new Elsa3WorkflowDefinitionToState(registry, activityMapper, argumentMapper);
         return new(stateMapper, argumentMapper);
     }
 
-    private sealed class BuiltInActivityLookup : IActivityDefinitionLookup
+    /// <summary>
+    /// The real credential-literal validator (spec 188, FR-008) over a structure service with no handler, judging against
+    /// <paramref name="catalog"/>; for tests whose catalog declares no credential input, so the rule refuses nothing.
+    /// The tests of the rule at the import compose it as a host does, through <see cref="ImportServices"/>.
+    /// </summary>
+    public static ICredentialLiteralValidator Validator(BuiltInActivityLookup? catalog = null) => new CredentialLiteralValidator(
+        new CatalogVersionResolver(catalog ?? new BuiltInActivityLookup()),
+        Options.Create(new WorkflowDesignValidatorOptions()),
+        new ActivityTreeWalker(new DefaultActivityStructureService([])));
+
+    /// <summary>
+    /// The collection import as a host composes it: the registrations of <c>WorkflowDesignValidations</c> (the rule, its
+    /// tree walker and the host's structure service), <c>Elsa3Mapping</c> and <c>Elsa3ImportJsonActivities</c>, over
+    /// <paramref name="catalog"/> as the activity catalog and <paramref name="command"/> as the commit port. Like every
+    /// feature in <c>src</c>, none of them registers a structure handler for
+    /// <see cref="Elsa3ImportedActivityStructure.Kind"/>.
+    /// </summary>
+    public static ServiceProvider ImportServices(BuiltInActivityLookup catalog, IReusableActivityImportCommand command)
+    {
+        var services = new ServiceCollection();
+        services.AddLogging();
+        services.AddSingleton<IActivityDefinitionLookup>(catalog);
+        services.AddSingleton<IWellKnownTypeRegistry>(TypeRegistry());
+        services.AddSingleton(command);
+        new WorkflowDesignValidationsFeature().ConfigureServices(services);
+        new Elsa3MappingFeature().ConfigureServices(services);
+        new Elsa3ImportActivitiesFeature().ConfigureServices(services);
+        return services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
+    }
+
+    /// <summary>The payload serializer the design stores write workflow state with.</summary>
+    public static IPayloadSerializer PayloadSerializer() => new JsonPayloadSerializer(new JsonPayloadConverterRegistry());
+
+    private static WellKnownTypeRegistry TypeRegistry()
+    {
+        var registry = new WellKnownTypeRegistry();
+        registry.RegisterType(typeof(string), "String");
+        registry.RegisterType(typeof(object), "Object");
+        return registry;
+    }
+
+    /// <summary>A commit port that records the mutation it is handed and commits nothing.</summary>
+    internal sealed class CapturingCommand : IReusableActivityImportCommand
+    {
+        public ReusableActivityImportMutation? Mutation { get; private set; }
+
+        public ValueTask<ReusableActivityImportCommitResult> CommitAsync(ReusableActivityImportMutation mutation, CancellationToken cancellationToken = default)
+        {
+            Mutation = mutation;
+            return ValueTask.FromResult(new ReusableActivityImportCommitResult(false));
+        }
+    }
+
+    /// <summary>
+    /// A catalog holding one activity, <c>builtin-version</c>, that every Elsa 3 activity type maps to, declaring
+    /// <paramref name="inputs"/>.
+    /// </summary>
+    internal sealed class BuiltInActivityLookup(params InputDefinition[] inputs) : IActivityDefinitionLookup
     {
         private readonly IActivityDefinition definition = new Definition();
-        private readonly IActivityDefinitionVersion version = new VersionModel();
+        private readonly IActivityDefinitionVersion version = new VersionModel(inputs);
 
         public Task<IActivityDefinition> GetDefinition(string idOrActivityTypeKey, CancellationToken cancellationToken = default) => Task.FromResult(definition);
         public Task<IEnumerable<IActivityDefinition>> ListDefinitions(string? id = null, string? category = null, string? searchTerm = null, string? displayName = null, string? description = null, bool? tenantAgnostic = null, CancellationToken cancellationToken = default) => Task.FromResult<IEnumerable<IActivityDefinition>>([definition]);
@@ -94,7 +158,7 @@ internal static class ReusableActivityImportFixtures
             public string? Description => null;
         }
 
-        private sealed record VersionModel : IActivityDefinitionVersion
+        private sealed record VersionModel(IEnumerable<InputDefinition> Inputs) : IActivityDefinitionVersion
         {
             public string Id => "builtin-version";
             public string Version => "1.0.0";
@@ -107,7 +171,6 @@ internal static class ReusableActivityImportFixtures
             public string SourceKind => "CLR";
             public string SourceId => "Elsa.WriteLine";
             public IActivityDefinition Definition => new Definition();
-            public IEnumerable<InputDefinition> Inputs => [];
             public IEnumerable<OutputDefinition> Outputs => [];
             public IEnumerable<ActivityDesignFacet> DesignFacets => [];
             public ActivityExecutionType ExecutionType => ActivityExecutionType.Action;
