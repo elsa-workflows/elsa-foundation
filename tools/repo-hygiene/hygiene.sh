@@ -52,7 +52,7 @@ list_all() { # url-with-query jq-filter
 
 git fetch --quiet --prune origin '+refs/heads/*:refs/remotes/origin/*'
 main_tree=$(git rev-parse 'origin/main^{tree}')
-protected=$(gh api "repos/$repo/branches?protected=true&per_page=100" --jq '.[].name')
+protected=$(list_all "repos/$repo/branches?protected=true" '.name' | jq -r .)
 
 swept=()
 kept=()
@@ -62,8 +62,8 @@ while read -r sha ts branch; do
   total_branches=$((total_branches + 1))
   if [[ "$branch" =~ $exempt_re ]] || grep -qxF "$branch" <<<"$protected"; then continue; fi
 
-  prs=$(gh api -X GET "repos/$repo/pulls" -f state=all -f head="$owner:$branch" -F per_page=100 \
-    --jq '[.[] | {number, state, merged: (.merged_at != null), sha: .head.sha}]')
+  prs=$(list_all "repos/$repo/pulls?state=all&head=$(jq -rn --arg h "$owner:$branch" '$h|@uri')" \
+    '{number, state, merged: (.merged_at != null), sha: .head.sha}' | jq -s .)
   open_pr=$(jq -r '[.[] | select(.state == "open") | .number] | first // empty' <<<"$prs")
   if [[ -n "$open_pr" ]]; then
     kept+=("\`$branch\` | open PR #$open_pr")
@@ -85,13 +85,14 @@ while read -r sha ts branch; do
     kept+=("\`$branch\` | no open PR, idle ${age}d (sweep at ${stale_days}d)")
     continue
   fi
-  swept+=("$branch|$sha|$reason")
+  swept+=("$branch"$'\t'"$sha"$'\t'"$reason")
 done < <(git for-each-ref refs/remotes/origin --format='%(objectname) %(committerdate:unix) %(refname:lstrip=3)')
 
 deleted=0
+declare -A archived=() # branch -> archive tag, for branches actually deleted
 if [[ "$mode" == enforce ]]; then
   for row in "${swept[@]}"; do
-    IFS='|' read -r branch sha _ <<<"$row"
+    IFS=$'\t' read -r branch sha _ <<<"$row"
     tag="archive/$branch"
     existing=$(git ls-remote origin "refs/tags/$tag" | cut -f1)
     if [[ -n "$existing" && "$existing" != "$sha" ]]; then tag="$tag-${sha:0:12}"; fi
@@ -102,6 +103,7 @@ if [[ "$mode" == enforce ]]; then
     # The lease refuses the delete if someone pushed to the branch after it was inspected.
     if git push --quiet --force-with-lease="refs/heads/$branch:$sha" origin ":refs/heads/$branch"; then
       deleted=$((deleted + 1))
+      archived[$branch]=$tag
     else
       echo "::warning::kept $branch: it moved after inspection"
     fi
@@ -125,7 +127,7 @@ select_issues() {
   jq -r "[.[] | select($1)] | \"\(length)\t\" + ([.[:25][] | \"- #\(.number) \(.title)\"] | join(\"\n\"))" <<<"$open_issues"
 }
 has() { printf '(.labels | index("%s"))' "$1"; }
-structural="($(has type:program) or $(has type:epic))"
+structural="($(has type:program) or $(has type:epic) or $(has repo-hygiene))"
 triage_labels="($(has needs-triage) or $(has needs-info) or $(has ready-for-agent) or $(has ready-for-human) or any(.labels[]; startswith(\"status:\")))"
 
 IFS=$'\t' read -r -d '' n_programs l_programs < <(select_issues "$(has type:program)"; printf '\0') || true
@@ -167,8 +169,12 @@ section() { # title count list
   section "In progress but idle for ${in_progress_idle_days}+ days" "$n_wip_idle" "$l_wip_idle"
   section "Without a triage label" "$n_unlabelled" "$l_unlabelled"
   if (( ${#swept[@]} > 0 )); then
-    printf '\n<details><summary>Swept branches (%s)</summary>\n\n| Branch | Tip | Reason |\n|---|---|---|\n' "${#swept[@]}"
-    for row in "${swept[@]}"; do IFS='|' read -r b s r <<<"$row"; echo "| \`$b\` | \`${s:0:10}\` | $r |"; done
+    printf '\n<details><summary>Swept branches (%s)</summary>\n\n| Branch | Tip | Reason | Archive tag |\n|---|---|---|---|\n' "${#swept[@]}"
+    for row in "${swept[@]}"; do
+      IFS=$'\t' read -r b s r <<<"$row"
+      if [[ "$mode" == enforce ]]; then t="${archived[$b]:+\`${archived[$b]}\`}"; t="${t:-not deleted}"; else t="(report only)"; fi
+      echo "| \`$b\` | \`${s:0:10}\` | $r | $t |"
+    done
     printf '\n</details>\n'
   fi
   if (( ${#kept[@]} > 0 )); then
@@ -177,7 +183,7 @@ section() { # title count list
     printf '\n</details>\n'
   fi
   echo
-  echo "Policy: [repository hygiene](${GITHUB_SERVER_URL:-https://github.com}/$repo/blob/main/docs/contributing/repository-hygiene.md). Restore an archived branch with \`git push origin archive/<branch>:refs/heads/<branch>\`."
+  echo "Policy: [repository hygiene](${GITHUB_SERVER_URL:-https://github.com}/$repo/blob/main/docs/contributing/repository-hygiene.md). Restore a swept branch with \`git push origin <archive-tag>:refs/heads/<branch>\`, using the tag listed above."
 } > "$report"
 
 [[ -n "${GITHUB_STEP_SUMMARY:-}" ]] && cat "$report" >> "$GITHUB_STEP_SUMMARY"
