@@ -95,7 +95,10 @@ if [[ "$mode" == enforce ]]; then
     tag="archive/$branch"
     existing=$(git ls-remote origin "refs/tags/$tag" | cut -f1)
     if [[ -n "$existing" && "$existing" != "$sha" ]]; then tag="$tag-${sha:0:12}"; fi
-    git push --quiet origin "$sha:refs/tags/$tag"
+    if ! git push --quiet origin "$sha:refs/tags/$tag"; then
+      echo "::warning::kept $branch: could not push archive tag $tag"
+      continue
+    fi
     # The lease refuses the delete if someone pushed to the branch after it was inspected.
     if git push --quiet --force-with-lease="refs/heads/$branch:$sha" origin ":refs/heads/$branch"; then
       deleted=$((deleted + 1))
@@ -180,6 +183,9 @@ section() { # title count list
 [[ -n "${GITHUB_STEP_SUMMARY:-}" ]] && cat "$report" >> "$GITHUB_STEP_SUMMARY"
 
 if [[ "${POST_REPORT:-}" == true ]]; then
+  # The lookup below filters on this label, so make sure it exists before the first report.
+  gh api "repos/$repo/labels/repo-hygiene" >/dev/null 2>&1 ||
+    gh api "repos/$repo/labels" -f name=repo-hygiene -f color=0e8a16 -f description="Weekly repository hygiene report" >/dev/null
   issue=$(gh api "repos/$repo/issues?state=open&labels=repo-hygiene&per_page=1" --jq '.[0].number // empty')
   if [[ -z "$issue" ]]; then
     issue=$(gh api "repos/$repo/issues" -f title="Repository hygiene report" -f 'labels[]=repo-hygiene' \

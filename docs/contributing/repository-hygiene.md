@@ -13,12 +13,17 @@ A branch lives as long as its pull request.
   restore it: the work is in `main`, and the PR keeps its commits.
 - **The weekly sweep deletes a branch that has no open PR** when its work is already in `main` (directly,
   by a squash merge, or as the merged tip of a PR), or when it has had no commit for 14 days.
-- **Nothing is lost.** Before deleting, the sweep tags the branch tip as `archive/<branch>`. Restore one
-  with:
+- **Nothing is lost.** Before deleting, the sweep tags the branch tip as `archive/<branch>`, or
+  `archive/<branch>-<sha12>` when that tag already holds an earlier tip of the same name. The weekly
+  report lists each swept tip. To resume work on a swept branch, find its tag and restore it, then open
+  its PR:
 
   ```bash
-  git push origin archive/<branch>:refs/heads/<branch>
+  git ls-remote origin 'refs/tags/archive/<branch>*'
+  git push origin <archive-tag>:refs/heads/<branch>
   ```
+
+  Branches deleted on merge are not restored; their work is in `main`.
 
 - **Never swept:** `main`, `publish-state`, `release/*`, `rc/*` and any protected branch. A branch that
   must live longer than its PR (a demo, an integration line) needs an open PR or one of those patterns.
