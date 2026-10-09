@@ -156,6 +156,7 @@
   - Guard live-lease count removed: `Begin_deletion_cancels_and_returns_null_when_a_lease_commits_between_its_guard_commit_and_count` fails.
   - Guarded-delete live-lease re-check removed: `Guarded_delete_refuses_while_a_lease_committed_after_the_guard_is_live` fails.
   - The old throwing `ReleaseAllAsync` restored: `ExecuteAsync_ReportsASuccessfulWriteAsSuccessWhenALeaseReleaseFails` and `ExecuteAsync_SurfacesTheWriteFailureUnchangedWhenAReleaseAlsoFails` fail.
+  - Expired-guard clearing removed (CodeRabbit finding on research R2): `PostgreSql_a_guard_that_expires_during_its_delete_cannot_delete_under_a_late_lease` fails with the delete committed under a granted lease, and `Acquire_clears_an_expired_guard_by_revision_so_a_delete_still_holding_it_cannot_commit` fails.
   - Nonce removed: the in-memory and EF `...AttemptsOfOneCommitHoldIndependentRootWriteLeases` / `Attempts_of_one_commit_hold_independent_root_write_leases` tests fail.
 - **T007:** `module-migrate.sh script-check` does not apply. No `db/migrations` artifact is committed and CI does not run it. The EF migrations suite covers model/migration match.
 - **T026:** the architecture guards could not run locally, because they need `Bpmn.*` packages from the blocked feed. CI runs them.

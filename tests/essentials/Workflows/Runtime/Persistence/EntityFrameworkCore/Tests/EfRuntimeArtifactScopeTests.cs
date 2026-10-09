@@ -1354,6 +1354,31 @@ public sealed class EfRuntimeArtifactScopeTests
     }
 
     [Fact]
+    public async Task Acquire_clears_an_expired_guard_by_revision_so_a_delete_still_holding_it_cannot_commit()
+    {
+        await using var database = await Database.CreateAsync();
+        await using var fixture = database.Open("tenant-a");
+        await fixture.Executable.SaveAsync(Executable("expired-guard"));
+        var now = DateTimeOffset.UtcNow;
+        var guard = await fixture.Executable.TryBeginDeletionAsync("expired-guard", "delete", now.AddMinutes(1), now);
+        Assert.NotNull(guard);
+        var encoded = EfRelationalIdentity.Encode("expired-guard");
+        var revision = await fixture.Context.WorkflowExecutableCoordinations.AsNoTracking()
+            .Where(x => x.ArtifactId == encoded).Select(x => x.Revision).SingleAsync();
+
+        await using var acquirer = database.Open("tenant-a");
+        var lease = await acquirer.Executable.TryAcquireRootWriteLeaseAsync("expired-guard", "late", now.AddMinutes(3), now.AddMinutes(2));
+
+        Assert.NotNull(lease);
+        var coordination = await fixture.Context.WorkflowExecutableCoordinations.AsNoTracking().SingleAsync(x => x.ArtifactId == encoded);
+        Assert.Equal(revision + 1, coordination.Revision);
+        Assert.Null(JsonNode.Parse(coordination.ContentJson)!["guard"]);
+        // A delete whose clock still counts the guard live is refused: the guard is gone from the row it would delete.
+        Assert.False(await fixture.Executable.DeleteAsync(guard!, now.AddSeconds(30)));
+        Assert.NotNull(await fixture.Executable.FindAsync("expired-guard"));
+    }
+
+    [Fact]
     public async Task Legacy_shared_row_leases_block_deletion_until_they_expire()
     {
         await using var database = await Database.CreateAsync();

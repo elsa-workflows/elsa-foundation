@@ -35,6 +35,12 @@ The argument needs one property: a read issued after a commit has completed obse
 
 The implementation runs each step on a dedicated context with no ambient transaction (R4).
 
+**A guard that expires during its delete** (CodeRabbit on PR #2539). A guarded delete can validate a live guard and find no lease, then stay uncommitted past the guard's expiry. An acquirer whose clock counts the guard expired would commit a lease and pass its check, and the delete would then commit under it. The shared-row design was immune, because every acquire rewrote the coordination row the delete removes under its revision. Restored without a hot row:
+- An acquirer that meets a guard still on the row, expired, clears it by compare-and-swap on the row's revision, both before its lease write and in its post-commit check.
+- The guarded delete removes the coordination row under the revision it read, so whichever commits first makes the other fail its revision check. Either the delete retries, finds no guard and refuses, or the acquirer re-reads, finds the pair gone and withdraws.
+- Only acquirers that meet a guard write the row. Guards exist only for unreferenced artifacts that collection is removing, plus guards a crashed collector left behind.
+- Covered by `{PostgreSql,SqlServer,MySql}_a_guard_that_expires_during_its_delete_cannot_delete_under_a_late_lease`, which pauses the delete inside its transaction, and by `Acquire_clears_an_expired_guard_by_revision_so_a_delete_still_holding_it_cannot_commit` on SQLite. SQLite serializes writers, so a delete cannot be paused there with an acquirer committing inside it.
+
 **Guarded delete versus a late acquirer.** Suppose a lease is committed after the delete's lease check but before the delete commits. The acquirer's check then sees either the live guard (the delete has not committed yet) or a missing or recreated artifact (the delete has committed). In both cases the acquirer withdraws its lease and returns `null`. The delete removes all lease rows of the artifact, so any row it misses is fenced by incarnation (R6).
 
 **Alternatives considered.**

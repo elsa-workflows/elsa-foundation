@@ -30,6 +30,11 @@ public sealed class RuntimeArtifactsPostgreSqlSmokeTests(RuntimeBookmarksPostgre
             new DbContextOptionsBuilder<RuntimePostgreSqlDbContext>().UseNpgsql(connection).AddInterceptors(interceptors).Options));
 
     [SkippableFact]
+    public Task PostgreSql_a_guard_that_expires_during_its_delete_cannot_delete_under_a_late_lease() =>
+        RuntimeArtifactsProviderSmoke.RunGuardExpiryDuringDeleteRaceAsync(fixture, "PostgreSql", (connection, interceptors) => new RuntimePostgreSqlDbContext(
+            new DbContextOptionsBuilder<RuntimePostgreSqlDbContext>().UseNpgsql(connection).AddInterceptors(interceptors).Options));
+
+    [SkippableFact]
     public Task PostgreSql_concurrent_root_write_lease_holders_of_one_artifact_all_succeed() =>
         RuntimeArtifactsProviderSmoke.RunConcurrentRootWriteLeaseHoldersAsync(fixture, "PostgreSql", connection => new RuntimePostgreSqlDbContext(
             new DbContextOptionsBuilder<RuntimePostgreSqlDbContext>().UseNpgsql(connection).Options));
@@ -50,6 +55,11 @@ public sealed class RuntimeArtifactsSqlServerSmokeTests(RuntimeBookmarksSqlServe
             RuntimeSqlServerDbContext.ExpectedProviderName);
 
     [SkippableFact]
+    public Task SqlServer_a_guard_that_expires_during_its_delete_cannot_delete_under_a_late_lease() =>
+        RuntimeArtifactsProviderSmoke.RunGuardExpiryDuringDeleteRaceAsync(fixture, "SqlServer", (connection, interceptors) => new RuntimeSqlServerDbContext(
+            new DbContextOptionsBuilder<RuntimeSqlServerDbContext>().UseSqlServer(connection).AddInterceptors(interceptors).Options));
+
+    [SkippableFact]
     public Task SqlServer_concurrent_root_write_lease_holders_of_one_artifact_all_succeed() =>
         RuntimeArtifactsProviderSmoke.RunConcurrentRootWriteLeaseHoldersAsync(fixture, "SqlServer", connection => new RuntimeSqlServerDbContext(
             new DbContextOptionsBuilder<RuntimeSqlServerDbContext>().UseSqlServer(connection).Options));
@@ -63,6 +73,11 @@ public sealed class RuntimeArtifactsMySqlSmokeTests(RuntimeBookmarksMySqlFixture
         RuntimeArtifactsProviderSmoke.RunAsync(fixture, "MySql", connection => new RuntimeMySqlDbContext(
             new DbContextOptionsBuilder<RuntimeMySqlDbContext>().UseMySQL(connection).Options),
             RuntimeMySqlDbContext.ExpectedProviderName);
+
+    [SkippableFact]
+    public Task MySql_a_guard_that_expires_during_its_delete_cannot_delete_under_a_late_lease() =>
+        RuntimeArtifactsProviderSmoke.RunGuardExpiryDuringDeleteRaceAsync(fixture, "MySql", (connection, interceptors) => new RuntimeMySqlDbContext(
+            new DbContextOptionsBuilder<RuntimeMySqlDbContext>().UseMySQL(connection).AddInterceptors(interceptors).Options));
 
     [SkippableFact]
     public Task MySql_concurrent_root_write_lease_holders_of_one_artifact_all_succeed() =>
@@ -212,6 +227,47 @@ internal static class RuntimeArtifactsProviderSmoke
         Assert.Null((await activation.FindAsync(retired.SourceReferenceId))!.DeletedAt);
     }
 
+    /// <summary>
+    /// A guarded delete validates its guard and finds no lease, then the guard expires before the delete commits. An
+    /// acquirer whose clock says the guard expired commits a lease meanwhile. At most one may win: either the lease is
+    /// refused, or the delete is, and an artifact a returned lease protects is never deleted under it.
+    /// </summary>
+    public static async Task RunGuardExpiryDuringDeleteRaceAsync(
+        RuntimeBookmarksProviderFixture fixture,
+        string providerName,
+        Func<string, IInterceptor[], RuntimeDbContext> createContext)
+    {
+        Skip.IfNot(fixture.IsAvailable, fixture.SkipReason ?? $"Docker/{providerName} is unavailable.");
+        var scope = $"provider-guard-expiry-{Guid.NewGuid():N}";
+        const string artifactId = "provider-guard-expiry";
+        var start = DateTimeOffset.UtcNow;
+
+        await using var seedContext = createContext(fixture.ConnectionString, []);
+        await seedContext.Database.EnsureCreatedAsync();
+        var seed = new EfWorkflowExecutableStore(seedContext, new FixedAccessor(scope));
+        await seed.SaveAsync(Executable(artifactId));
+        var guard = await seed.TryBeginDeletionAsync(artifactId, "delete", start.AddMinutes(1), start);
+        Assert.NotNull(guard);
+
+        await using var acquirerContext = createContext(fixture.ConnectionString, []);
+        var acquirer = new EfWorkflowExecutableStore(acquirerContext, new FixedAccessor(scope));
+        WorkflowExecutableRootWriteLease? lease = null;
+        var interleaving = new BeforeLeaseRowsDeletedInTransaction(async () =>
+            lease = await acquirer.TryAcquireRootWriteLeaseAsync(artifactId, "late", start.AddMinutes(3), start.AddMinutes(2)));
+        await using var collectorContext = createContext(fixture.ConnectionString, [interleaving]);
+        var collector = new EfWorkflowExecutableStore(collectorContext, new FixedAccessor(scope));
+
+        var deleted = await collector.DeleteAsync(guard!, start.AddSeconds(30));
+
+        Assert.Equal(1, interleaving.Callbacks);
+        Assert.False(deleted && lease is not null, "The delete committed under a lease the acquirer was granted.");
+        if (lease is not null)
+        {
+            Assert.NotNull(await acquirer.FindAsync(artifactId));
+            Assert.True(await acquirer.RenewRootWriteLeaseAsync(lease, start.AddMinutes(4), start.AddMinutes(2)));
+        }
+    }
+
     public static async Task RunExecutableCoordinationRaceAsync(
         RuntimeBookmarksProviderFixture fixture,
         string providerName,
@@ -321,6 +377,28 @@ internal static class RuntimeArtifactsProviderSmoke
         var guard = await verifier.TryBeginDeletionAsync(artifactId, "verify-no-live-leases", verifiedAt.AddMinutes(1), verifiedAt);
         Assert.NotNull(guard);
         Assert.True(await verifier.CancelDeletionAsync(guard!));
+    }
+
+    /// <summary>Runs a callback once, just before a guarded delete removes the artifact's lease rows inside its transaction.</summary>
+    private sealed class BeforeLeaseRowsDeletedInTransaction(Func<Task> callback) : DbCommandInterceptor
+    {
+        private int callbacks;
+
+        public int Callbacks => Volatile.Read(ref callbacks);
+
+        public override async ValueTask<InterceptionResult<int>> NonQueryExecutingAsync(
+            System.Data.Common.DbCommand command,
+            CommandEventData eventData,
+            InterceptionResult<int> result,
+            CancellationToken cancellationToken = default)
+        {
+            if (command.Transaction is not null &&
+                command.CommandText.StartsWith("DELETE", StringComparison.OrdinalIgnoreCase) &&
+                command.CommandText.Contains(RuntimeArtifactEfModule.WorkflowExecutableRootWriteLeaseTableName, StringComparison.OrdinalIgnoreCase) &&
+                Interlocked.Exchange(ref callbacks, 1) == 0)
+                await callback();
+            return result;
+        }
     }
 
     private sealed class RestoreBeforeSaveInterceptor(Func<Task> restore) : SaveChangesInterceptor
