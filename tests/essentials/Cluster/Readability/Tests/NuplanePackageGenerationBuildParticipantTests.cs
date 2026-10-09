@@ -347,6 +347,7 @@ public sealed class NuplanePackageGenerationBuildParticipantTests
             using var timeout = new CancellationTokenSource(Patience);
             while (await _reads.Reader.ReadAsync(timeout.Token) != generation)
             {
+                // Discard earlier observations until the expected catalog generation is read.
             }
         }
 
