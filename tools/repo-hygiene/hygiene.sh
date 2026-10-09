@@ -130,7 +130,9 @@ has() { printf '(.labels | index("%s"))' "$1"; }
 structural="($(has type:program) or $(has type:epic) or $(has repo-hygiene))"
 triage_labels="($(has needs-triage) or $(has needs-info) or $(has ready-for-agent) or $(has ready-for-human) or any(.labels[]; startswith(\"status:\")))"
 
-IFS=$'\t' read -r -d '' n_programs l_programs < <(select_issues "$(has type:program)"; printf '\0') || true
+# Parked programs (status:parked) are open but do not count against the active-program cap.
+IFS=$'\t' read -r -d '' n_programs l_programs < <(select_issues "$(has type:program) and ($(has status:parked) | not)"; printf '\0') || true
+n_parked=$(jq "[.[] | select($(has type:program) and $(has status:parked))] | length" <<<"$open_issues")
 IFS=$'\t' read -r -d '' n_ready l_ready < <(select_issues "$(has ready-for-agent)"; printf '\0') || true
 IFS=$'\t' read -r -d '' n_untriaged l_untriaged < <(select_issues "$(has needs-triage) and .created_at < \"$(since $triage_days)\""; printf '\0') || true
 IFS=$'\t' read -r -d '' n_ready_idle l_ready_idle < <(select_issues "$(has ready-for-agent) and .updated_at < \"$(since $ready_idle_days)\""; printf '\0') || true
@@ -150,20 +152,21 @@ section() { # title count list
   echo "|---|---|---|"
   echo "| Open issues | $(jq length <<<"$open_issues") | < 100 |"
   echo "| Issues opened / closed, last 7 days | $created_7d / $closed_7d | closed ≥ opened |"
-  echo "| Open programs | $n_programs $(mark "$n_programs" $max_programs) | ≤ $max_programs |"
+  echo "| Active programs (excluding $n_parked parked) | $n_programs $(mark "$n_programs" $max_programs) | ≤ $max_programs |"
   echo "| \`ready-for-agent\` buffer | $n_ready $(mark "$n_ready" $max_ready_for_agent) | ≤ $max_ready_for_agent |"
   echo "| \`needs-triage\` older than ${triage_days}d | $n_untriaged $(mark "$n_untriaged" 0) | 0 |"
   echo "| \`ready-for-agent\` idle ≥ ${ready_idle_days}d | $n_ready_idle $(mark "$n_ready_idle" 0) | 0 |"
   echo "| \`status:in-progress\` idle ≥ ${in_progress_idle_days}d | $n_wip_idle $(mark "$n_wip_idle" 0) | 0 |"
   echo "| Issues without a triage label | $n_unlabelled $(mark "$n_unlabelled" 0) | 0 |"
-  echo "| Branches / open PRs | $total_branches / $open_prs | branches ≈ open PRs + exempt |"
+  # Counted after the sweep, so an enforce run reports what is left rather than what it started with.
+  echo "| Branches / open PRs | $((total_branches - deleted)) / $open_prs | branches ≈ open PRs + exempt |"
   if [[ "$mode" == enforce ]]; then
     echo "| Branches archived and deleted | $deleted of ${#swept[@]} | |"
   else
     echo "| Branches the sweep would delete | ${#swept[@]} | |"
   fi
 
-  section "Open programs" "$n_programs" "$l_programs"
+  section "Active programs" "$n_programs" "$l_programs"
   section "Needs triage for more than ${triage_days} days" "$n_untriaged" "$l_untriaged"
   section "Ready for an agent but idle for ${ready_idle_days}+ days: re-triage or close" "$n_ready_idle" "$l_ready_idle"
   section "In progress but idle for ${in_progress_idle_days}+ days" "$n_wip_idle" "$l_wip_idle"
