@@ -480,7 +480,7 @@ public sealed class WorkflowExecutableInspectorTests
             AuthoredInputs =
             [
                 new WorkflowExecutableAuthoredInputRecord(
-                    "executable-root",
+                    "root",
                     "text-input-key",
                     "JavaScript",
                     JsonSerializer.SerializeToElement("return variables.orderId;"))
@@ -534,6 +534,114 @@ public sealed class WorkflowExecutableInspectorTests
         Assert.Equal("redacted", Assert.Single(sources.CompiledInputs).AccessState);
         Assert.Null(Assert.Single(sources.CompiledInputs).Binding.LiteralValue);
         Assert.DoesNotContain("must-not-leak", json, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// A secret reference is not a value (spec 188, T067), so the input-sources view shows a secret read's reference as its
+    /// summary and in <c>secret</c>, although its policy keeps every other source detail out. The structural detail view
+    /// keeps every source detail out, the reference included.
+    /// </summary>
+    [Fact]
+    public async Task InputSourcesShowASecretReadByItsReferenceAndNeverAValue()
+    {
+        var reference = new RuntimeSecretReference("payments.api-key", "text", "billing");
+        var binding = new RuntimeInputBinding(
+            "api-key",
+            StringType,
+            new ValueProtectionPolicy(DurableValueLifecycle.Instance, DurableValueStorage.Inline, isSensitive: true, requiresEncryption: true),
+            RuntimeInputBindingSource.SecretRead,
+            conversionPlan: ValueConversionPlan.Identity(StringType, ValueRepresentation.TextValue),
+            secret: reference);
+        await _executableStore.SaveAsync(Executable(_now, inputBindings: new Dictionary<string, RuntimeInputBinding> { ["api-key"] = binding }));
+        await _referenceStore.SaveAsync(Reference("source-secret", WorkflowExecutableReferenceScope.Published, _now, "1.0.0"));
+
+        var compiled = Assert.Single((await _inspector.GetInputSourcesAsync("artifact-1", "source-secret"))!.CompiledInputs);
+        var structural = Assert.Single((await _inspector.GetAsync("artifact-1"))!.RootActivity.InputBindings);
+
+        Assert.Equal("redacted", compiled.AccessState);
+        Assert.Equal(nameof(RuntimeInputBindingSource.SecretRead), compiled.Binding.Source);
+        Assert.Equal("payments.api-key", compiled.Binding.Summary);
+        Assert.Equal(reference, compiled.Binding.Secret);
+        Assert.True(compiled.Binding.IsSensitive);
+        Assert.Null(compiled.Binding.LiteralValue);
+        Assert.Null(compiled.Binding.ConversionPlan);
+        Assert.Null(structural.Summary);
+        Assert.Null(structural.Secret);
+    }
+
+    /// <summary>
+    /// Studio prints a compiled binding's summary verbatim, so a binding whose policy marks its value sensitive or as
+    /// requiring encryption carries no value in it, nor anywhere else on the wire (spec 188, T070).
+    /// </summary>
+    [Theory]
+    [InlineData(true, false)]
+    [InlineData(false, true)]
+    [InlineData(true, true)]
+    public async Task InputSourcesKeepTheValueOutOfABindingWhosePolicyIsSensitiveOrRequiresEncryption(bool isSensitive, bool requiresEncryption)
+    {
+        var sentinel = $"plain{Guid.NewGuid():N}";
+        var policy = new ValueProtectionPolicy(DurableValueLifecycle.Instance, DurableValueStorage.Inline, isSensitive, requiresEncryption);
+        var binding = new RuntimeInputBinding(
+            "token",
+            StringType,
+            policy,
+            RuntimeInputBindingSource.Literal,
+            literal: ValueEnvelope.Inline(StringType, JsonSerializer.SerializeToElement(sentinel), policy));
+        await _executableStore.SaveAsync(Executable(_now, inputBindings: new Dictionary<string, RuntimeInputBinding> { ["token"] = binding }));
+        await _referenceStore.SaveAsync(Reference("source-protected", WorkflowExecutableReferenceScope.Published, _now, "1.0.0"));
+
+        var sources = await _inspector.GetInputSourcesAsync("artifact-1", "source-protected");
+        var compiled = Assert.Single(sources!.CompiledInputs);
+
+        Assert.Equal("redacted", compiled.AccessState);
+        Assert.True(compiled.Binding.IsSensitive);
+        Assert.Null(compiled.Binding.Summary);
+        Assert.Null(compiled.Binding.LiteralValue);
+        Assert.DoesNotContain(sentinel, JsonSerializer.Serialize(sources, WebJson), StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// The authored record carries only the author's own sensitivity flag; an activity's declaration reaches the compiled
+    /// binding and the pinned contract (spec 188, found in slice 5). The authored-inputs view redacts by those too, and
+    /// redacts an input the executable holds neither for.
+    /// </summary>
+    [Theory]
+    [InlineData("declared on the compiled binding")]
+    [InlineData("declared on the pinned contract only")]
+    [InlineData("no compiled input")]
+    public async Task InputSourcesRedactAnAuthoredValueByTheEffectivePolicyNotOnlyItsAuthoredFlag(string row)
+    {
+        var sentinel = $"plain{Guid.NewGuid():N}";
+        await _executableStore.SaveAsync(Executable(_now, AuthoredRedactionRoots[row]()));
+        await _referenceStore.SaveAsync(Reference("source-authored", WorkflowExecutableReferenceScope.Published, _now, "1.0.0") with
+        {
+            AuthoredInputs = [new WorkflowExecutableAuthoredInputRecord("root", "token", "Literal", JsonSerializer.SerializeToElement(sentinel))]
+        });
+
+        var sources = await _inspector.GetInputSourcesAsync("artifact-1", "source-authored");
+        var authored = Assert.Single(sources!.AuthoredInputs);
+
+        Assert.Equal("redacted", authored.AccessState);
+        Assert.True(authored.IsSensitive);
+        Assert.Null(authored.Value);
+        Assert.DoesNotContain(sentinel, JsonSerializer.Serialize(sources, WebJson), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task InputSourcesShowAnAuthoredValueOfAReusableActivityPlacedAsTheRootByItsAuthoredNodeId()
+    {
+        // A reusable activity placed as the workflow root keeps a generated executable id; its authored id still matches.
+        var root = Node("placed-1", "root", new Dictionary<string, RuntimeInputBinding> { ["token"] = Literal("token", "visible", ValueProtectionPolicy.InstanceInline) });
+        await _executableStore.SaveAsync(Executable(_now, root));
+        await _referenceStore.SaveAsync(Reference("source-placed", WorkflowExecutableReferenceScope.Published, _now, "1.0.0") with
+        {
+            AuthoredInputs = [new WorkflowExecutableAuthoredInputRecord("root", "token", "Literal", JsonSerializer.SerializeToElement("visible"))]
+        });
+
+        var authored = Assert.Single((await _inspector.GetInputSourcesAsync("artifact-1", "source-placed"))!.AuthoredInputs);
+
+        Assert.Equal("allowed", authored.AccessState);
+        Assert.Equal("visible", authored.Value!.Value.GetString());
     }
 
     [Fact]
@@ -852,6 +960,68 @@ public sealed class WorkflowExecutableInspectorTests
 
         Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(WorkflowExecutableInspector));
     }
+
+    private static readonly ValueTypeDescriptor StringType = new("String");
+    private static readonly JsonSerializerOptions WebJson = new(JsonSerializerDefaults.Web);
+    private static readonly ValueProtectionPolicy SensitivePolicy = new(DurableValueLifecycle.Instance, DurableValueStorage.Inline, isSensitive: true);
+
+    private static readonly IReadOnlyDictionary<string, Func<ExecutableNode>> AuthoredRedactionRoots = new Dictionary<string, Func<ExecutableNode>>
+    {
+        ["declared on the compiled binding"] = () => Node("root", "root", new Dictionary<string, RuntimeInputBinding>
+        {
+            ["token"] = Literal("token", "compiled", SensitivePolicy)
+        }),
+        ["declared on the pinned contract only"] = () => Node(
+            "root",
+            "root",
+            new Dictionary<string, RuntimeInputBinding>(),
+            new ActivityInputContract("token", "Token", StringType, false, true, false, null, ActivityValuePolicy.Default with { IsSensitive = true })),
+        ["no compiled input"] = () => Node("other", "other", new Dictionary<string, RuntimeInputBinding>())
+    };
+
+    private static RuntimeInputBinding Literal(string inputKey, string value, ValueProtectionPolicy policy) =>
+        new(inputKey, StringType, policy, RuntimeInputBindingSource.Literal,
+            literal: ValueEnvelope.Inline(StringType, JsonSerializer.SerializeToElement(value), policy));
+
+    private static ExecutableNode Node(
+        string executableNodeId,
+        string authoredActivityId,
+        IReadOnlyDictionary<string, RuntimeInputBinding> inputBindings,
+        ActivityInputContract? input = null)
+    {
+        var descriptor = JsonSerializer.SerializeToElement(new { });
+        return new ExecutableNode(
+            executableNodeId,
+            authoredActivityId,
+            "Test.Root",
+            "1.0.0",
+            new RuntimeActivityDescriptor("Test", RuntimeActivityDescriptor.InitialSchemaVersion, descriptor),
+            inputBindings,
+            new Dictionary<string, RuntimeOutputCapture>(),
+            new Dictionary<string, string>(),
+            activityContract: input is null
+                ? null
+                : new ActivityContract(
+                    "Test.Root",
+                    "1.0.0",
+                    "test",
+                    descriptor,
+                    [input],
+                    new ActivityResultContract(new ValueTypeDescriptor("Elsa.Unit"), true, ActivityValuePolicy.Default, []),
+                    ["Done"],
+                    new ActivityActivationRequirement("test", "Test.Root")));
+    }
+
+    private static WorkflowExecutable Executable(DateTimeOffset now, ExecutableNode root) =>
+        new(
+            new WorkflowExecutableIdentity("artifact-1", "definition-1", "version-1", "1.0.0", "sha256:test"),
+            root,
+            new Dictionary<string, WorkflowExecutableResumeTarget>(),
+            now,
+            new Dictionary<string, string>(),
+            inputContract: null,
+            dependencies: null,
+            IncidentStrategyBuiltIns.FaultReference);
 
     private static WorkflowExecutable Executable(
         DateTimeOffset now,

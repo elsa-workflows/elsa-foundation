@@ -219,6 +219,13 @@ public sealed record WorkflowExecutableConnectionView(
     WorkflowExecutableConnectionEndpointView Source,
     WorkflowExecutableConnectionEndpointView Target);
 
+/// <summary>One compiled input binding of an executable node.</summary>
+/// <remarks>
+/// <see cref="IsSensitive"/> is true when the binding's effective policy marks its value sensitive or as requiring
+/// encryption; the inspector then leaves <see cref="Summary"/> and every source detail out. <see cref="Secret"/> carries
+/// a secret read's reference (name, type and scope), which is not a value; for a secret read the inspector also uses the
+/// reference name as <see cref="Summary"/>.
+/// </remarks>
 public sealed record WorkflowExecutableInputBindingView(
     string InputName,
     string Source,
@@ -231,7 +238,8 @@ public sealed record WorkflowExecutableInputBindingView(
     RuntimeVariableReference? Variable = null,
     RuntimeActivityResultReference? ActivityResult = null,
     ValueConversionPlan? ConversionPlan = null,
-    IReadOnlyDictionary<string, string>? Metadata = null);
+    IReadOnlyDictionary<string, string>? Metadata = null,
+    RuntimeSecretReference? Secret = null);
 
 public sealed record WorkflowExecutableOutputCaptureView(
     string OutputName,

@@ -169,6 +169,49 @@ public sealed class ExecutionEvidenceCheckpointEnricherTests
         Assert.Equal("s3cret", record.Value?.GetString());
     }
 
+    /// <summary>
+    /// A withheld envelope holds no value to capture or redact (spec 188, T067), so it is recorded by its marker whether or
+    /// not sensitive values are redacted, and never as absent.
+    /// </summary>
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task A_withheld_secret_reference_is_recorded_as_withheld_with_its_reference_name(bool redactSensitiveValues)
+    {
+        await NewEnricher(options => options.RedactSensitiveValues = redactSensitiveValues).EnrichAsync(EvidenceFactory.Commit(
+            variables: EvidenceFactory.Variables(("apiKey", EvidenceFactory.WithheldSecret("payments.api-key")))));
+
+        AssertWithheld("apiKey", ExecutionEvidenceValueDisposition.Withheld);
+        Assert.Equal("payments.api-key", Assert.Single(Records(ExecutionEvidenceKinds.VariableSet)).SecretReferenceName);
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task A_value_withheld_for_encryption_is_recorded_as_withheld_without_a_reference(bool redactSensitiveValues)
+    {
+        await NewEnricher(options => options.RedactSensitiveValues = redactSensitiveValues).EnrichAsync(EvidenceFactory.Commit(
+            variables: EvidenceFactory.Variables(("token", EvidenceFactory.WithheldForEncryption()))));
+
+        AssertWithheld("token", ExecutionEvidenceValueDisposition.Withheld);
+        Assert.Null(Assert.Single(Records(ExecutionEvidenceKinds.VariableSet)).SecretReferenceName);
+    }
+
+    [Fact]
+    public async Task A_variable_moving_to_another_secret_reference_registers_as_a_write()
+    {
+        await EnrichAsync(EvidenceFactory.Commit(
+            checkpointId: "cp-1",
+            variables: EvidenceFactory.Variables(("apiKey", EvidenceFactory.WithheldSecret("payments.api-key")))));
+        await EnrichAsync(EvidenceFactory.Commit(
+            checkpointId: "cp-2",
+            variables: EvidenceFactory.Variables(("apiKey", EvidenceFactory.WithheldSecret("billing.api-key")))));
+
+        Assert.Equal(
+            ["payments.api-key", "billing.api-key"],
+            Records(ExecutionEvidenceKinds.VariableSet).Select(record => record.SecretReferenceName));
+    }
+
     [Fact]
     public async Task A_value_moving_to_external_storage_is_recorded_as_an_external_write()
     {

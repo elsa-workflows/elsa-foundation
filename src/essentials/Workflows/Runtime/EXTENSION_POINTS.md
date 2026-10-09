@@ -398,6 +398,7 @@ adapters validate and translate the selected context at their own persistence bo
 - **Kind:** Replacement (one materializer owns immutable invocation-input snapshots).
 - **Signature:** `MaterializeSnapshotAsync(ActivityContract contract, string invocationId, RuntimeInputBindingResolutionContext resolutionContext, CancellationToken cancellationToken)`.
 - **Usage:** resolves canonical bindings, evaluates portable expressions from their explicit immutable parameter map, validates persistability, and produces one typed `ActivityInputSnapshot` suitable for checkpointing before user code. It never creates argument wrappers, memory blocks, or an ambient expression context.
+- **Values that require encryption (spec 188, FR-010):** the default implementation replaces a present input value whose effective policy requires encryption with a withheld envelope of kind `PolicyRequiresEncryption`, which holds no value and is written neither inline nor to `IExternalPayloadStore`; activation then refuses it with `VF-ACT-010`. A replacement must withhold such a value too: `RuntimeCheckpointCommitValidator` refuses, with `VF-ACT-005`, a commit whose input snapshot carries one as an inline or external payload. See [README.md](README.md#values-that-require-encryption).
 - **Default implementation:** `RuntimeActivityInputMaterializer`.
 
 ### `IRuntimeSecretResolver` *(Core — `Elsa.Workflows.Runtime.Core`)*

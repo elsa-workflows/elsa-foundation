@@ -278,6 +278,7 @@ Supply 'workflowExecutionId' to drop one workflow execution's evidence, or 'all=
 | `name` | `string?` | `VariableSet` — the variable name |
 | `value` | JSON | `VariableSet`, only when `valueDisposition` is `captured` |
 | `valueDisposition` | `string?` | `VariableSet` — see below |
+| `secretReferenceName` | `string?` | `VariableSet` with disposition `withheld`, when the runtime holds a secret reference for the variable; a reference name is not a value |
 | `message` | `string?` | `Incident` — the failure message |
 
 ### Value dispositions
@@ -292,10 +293,13 @@ A `value` of `null` is never self-explanatory, so every `VariableSet` says why i
 | `external` | The runtime holds the value by external reference; this module does not resolve external storage. |
 | `sensitive` | Withheld — the value's protection policy marks it sensitive. |
 | `truncated` | Withheld — the value exceeded `MaxInlineValueLength`. |
+| `withheld` | The runtime holds a withheld marker instead of the value (spec 188): a secret reference, named in `secretReferenceName`, or a value whose policy requires encryption, with no reference. There is no value to capture, so this disposition applies whatever `RedactSensitiveValues` says. |
 
-A withheld value still emits a record whenever the underlying value *changes*: change detection uses a
-SHA-256 digest of the full content, so rotating a secret or rewriting an over-large payload produces
-evidence that a write happened, without the value itself ever entering the buffer.
+A `sensitive` or `truncated` value still emits a record whenever the underlying value *changes*: change
+detection uses a SHA-256 digest of the full content, so rotating a secret or rewriting an over-large payload
+produces evidence that a write happened, without the value itself ever entering the buffer. A `withheld`
+variable has no content to digest; its marker is compared instead, so moving to another secret reference, or
+between a secret reference and a value withheld for encryption, emits a record.
 
 ### Kinds
 
@@ -454,7 +458,7 @@ Bindable from `shells.json` under the feature's key, e.g.
 
 ## Tests
 
-`tests/essentials/Workflows/ExecutionEvidence/Tests` — 75 tests covering feature registration and settings flow,
-the commit-to-record mapping, all six value dispositions and their change detection, replay dedupe and its
+`tests/essentials/Workflows/ExecutionEvidence/Tests` — 80 tests covering feature registration and settings flow,
+the commit-to-record mapping, all seven value dispositions and their change detection, replay dedupe and its
 bounded window, atomic append under mid-batch failure, buffer caps and the `firstSequence` gap signal,
 concurrent capture and query, and all three endpoints over a TestServer host.

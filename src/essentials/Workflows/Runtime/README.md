@@ -42,6 +42,51 @@ handler, exposes an executable schema type, or contributes handler CLR identity 
 resolver dispatch only an exact `(kind, schemaVersion)` pair; duplicate pairs fail startup and there is no
 latest-version fallback.
 
+## Values that require encryption
+
+Phase 0 of workflow secret safety (spec 188, FR-010) adds no encryption at rest to the runtime. Publication keeps a
+value whose effective policy requires encryption out of an executable. Three runtime layers stand behind it for an
+artifact that skipped publication, such as a runtime artifact imported without publishing it: producer withholding
+records a marker in place of the value, a reader that needs the value refuses the marker, and the checkpoint-commit
+backstop refuses a commit that still carries the value.
+
+Publication refuses, before anything runs:
+
+- `VF-ACT-011`: an input whose effective policy requires encryption (a credential input, for example) bound to anything
+  but a secret reference or nothing, because a literal or an expression would have to be persisted before the activity
+  runs.
+- `VF-ACT-012`: a secret reference on an intrinsic node, on a node whose activity is not activated as a CLR activity
+  (a graph activity, for example) or whose CLR type cannot be resolved, on a checkpoint participant, on an input the
+  activity names in `[RefusesSecretBinding]` or `[ActivityValueOutcomes]`, or as a variable's initial value, because
+  each of those would read or store the value outside activation, or cannot be checked.
+- `VF-COER-001`: a secret reference on an input that the conversion rules cannot convert text into. Only a single
+  `String` input and a single input declared with a canonical any alias accept one.
+
+At run time:
+
+- **Producer withholding.** Input materialization and intrinsic value writes share one destination-storage decision,
+  `RuntimeExternalEnvelopeStorage`. It replaces a present value whose policy requires encryption with a withheld
+  envelope of kind `PolicyRequiresEncryption`, which holds no value and is written neither inline nor to external
+  payload storage. The value cannot be recovered. A secret read is withheld earlier, as a `SecretReference` marker that
+  only activation resolves.
+- **`VF-ACT-010` behind `VF-ACT-011`.** A reader that needs a withheld value refuses it with `VF-ACT-010` instead of
+  reading it as null. Among them are CLR activation, the `Control` intrinsic's outcome, the `SetCorrelationId` and
+  `SetInstanceName` intrinsics, and `SetOutput`, whose durable output has no withheld form. `Set` keeps the marker in
+  its variable and `Return` keeps it as its completion result; the input-binding and expression-parameter readers of a
+  variable or an activity result then refuse it with `VF-ACT-010`.
+- **The checkpoint-commit backstop.** `RuntimeCheckpointCommitValidator` refuses, with
+  `RuntimeCheckpointCommitValidationException` and `VF-ACT-005`, a commit that carries a present inline or external
+  value whose policy requires encryption: in a workflow's root variable frame, in an activity execution's input
+  snapshot, private state, completion result, trigger deliveries, variable frames and iteration frame request, or in a
+  durable value whose metadata marks it as requiring encryption. The message names the state and the value's key,
+  never the value. It cannot judge an inspection projection, which carries captured payloads without a policy. A
+  replacement `IRuntimeActivityInputMaterializer` that stores such a value in an input snapshot has its commit refused
+  here.
+
+The run inspector and execution evidence render a withheld value by its marker; see the
+[Runtime API](Api/README.md#withheld-and-protected-values) and
+[execution evidence](../ExecutionEvidence/README.md#value-dispositions) documentation.
+
 ## Composition
 
 Call `AddWorkflowRuntime()` for the host-agnostic runtime. It supplies in-memory development stores and a

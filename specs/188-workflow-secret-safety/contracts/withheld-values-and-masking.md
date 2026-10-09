@@ -12,7 +12,10 @@ Proposed behavior for FR-010 to FR-012. Decisions are in [research R3, R8 and R9
   other present value whose effective policy requires encryption. Not recoverable. Activation refuses it with
   `VF-ACT-010`. This is a backstop: publish refuses literal and expression bindings on encryption-required inputs
   (`VF-ACT-011`), so only paths that skip publish (runtime artifact import, research R13) or future producers reach
-  it.
+  it. As built in slice 7: the rewriter withholds when the destination's effective policy or the value's own policy
+  requires encryption, before it decides between inline and external storage, so nothing is written to an
+  `IExternalPayloadStore` either. Of the intrinsics, `Set` keeps the marker in its variable and `Return` as its
+  completion result; `Control`, `SetCorrelationId`, `SetInstanceName` and `SetOutput` refuse it with `VF-ACT-010`.
 
 ## Surfaces and what they show
 
@@ -20,9 +23,9 @@ Proposed behavior for FR-010 to FR-012. Decisions are in [research R3, R8 and R9
 |---|---|---|
 | Persisted activity execution state (`ContentJson`) | committed `ActivityExecutionState.InputSnapshot` | the withheld envelope |
 | Persisted workflow instance state | `WorkflowExecutionState`, durable values | no secret value; `SecretRead` cannot target variables, outputs or graph boundary values, because publish refuses `Secret` bindings on intrinsics, graph activities and checkpoint participants (`VF-ACT-012`, research R12) |
-| Execution evidence | `ExecutionEvidenceCheckpointEnricher` over commits | a withheld disposition with the reference name; `DescribeContent` never reads a value from a withheld envelope |
-| Run inspector: activity inputs | `ActivityExecutionInspection.BuildInputValueSnapshots` | `isSensitive: true`, value absent, a withheld marker with the reference name |
-| Run inspector: executable bindings | `WorkflowExecutableInspector` | the reference (name, type, scope) even though the binding is sensitive; references are not material |
+| Execution evidence | `ExecutionEvidenceCheckpointEnricher` over commits | a withheld disposition with the reference name; `DescribeContent` never reads a value from a withheld envelope. As built: disposition `withheld` and `secretReferenceName`, whatever `RedactSensitiveValues` says |
+| Run inspector: activity inputs | `ActivityExecutionInspection.BuildInputValueSnapshots` | `isSensitive: true`, value absent, a withheld marker with the reference name. As built: the activity-execution view carries `withheldKind` and `secretReferenceName` for every caller, reports the record sensitive with access state `unavailable`, and the value-payload read answers `unavailable` for it |
+| Run inspector: executable bindings | `WorkflowExecutableInspector` | the reference (name, type, scope) even though the binding is sensitive; references are not material. As built: in the input-sources view, as `secret` and as `summary`; the structural detail view shows no source detail for any binding |
 | Diagnostic snapshots | `DefaultDiagnosticSnapshotFactory` via `ActivityExecutionInspection` and `RuntimeContainerVariableEvidence` | nothing from the value: the payload capture policy captures nothing for sensitive payloads, and a withheld envelope has no value to capture |
 
 Each surface must tolerate `ValuePresence.Withheld` without throwing. A surface that throws on it would fault the
@@ -34,6 +37,14 @@ activity before activation, because `BuildInputValueSnapshots` runs on the invok
 `VF-ACT-005`, any commit containing a `ValueEnvelope` with `Presence == Present`, an inline or external payload, and
 `Policy.RequiresEncryption == true`. It scans activity execution states (input snapshot, completion), durable
 values and inspection projections. The message names the state id and value key, never the value.
+
+As built in slice 7: it scans every envelope a workflow or activity execution state carries (the root, container and
+iteration variable frames, the iteration frame request, the input snapshot, private state, completion result and
+trigger deliveries), and each written durable value whose metadata (`runtime.requiresEncryption`) marks it as
+requiring encryption and that carries an external reference or a non-null inline value. It does not scan an
+inspection projection: a projection holds captured payloads and an `IsSensitive` flag, with no envelope and no
+policy, so the rule has nothing to judge there. A projection's input value records are rendered from the activity
+state's committed input snapshot, which the rule scans.
 
 ## Masking (FR-012)
 

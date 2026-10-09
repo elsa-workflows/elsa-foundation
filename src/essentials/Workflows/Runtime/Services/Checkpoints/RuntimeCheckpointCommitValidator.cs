@@ -1,3 +1,5 @@
+using System.Text.Json;
+using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
@@ -75,6 +77,7 @@ public static class RuntimeCheckpointCommitValidator
         RequireUnique(changes.Incidents.Select(change => change.StateId), id => $"Incident '{id}' occurs more than once in one checkpoint commit.");
 
         ValidateChanges(commit, changes.DurableValues, "Durable value", state => state.WorkflowExecutionId, UpsertOrDelete);
+        RejectPlainTextEncryptionRequiredValues(changes);
         ValidateChanges(commit, changes.Bookmarks, "Bookmark", state => state.WorkflowExecutionId, UpsertOrDelete);
 
         ValidateChanges(commit, changes.Operational, "Operational", state => state.WorkflowExecutionId, UpsertOnly);
@@ -101,6 +104,74 @@ public static class RuntimeCheckpointCommitValidator
             !StringComparer.Ordinal.Equals(alteration.CheckpointCommitId, commit.CommitId))
             throw new RuntimeCheckpointCommitValidationException("Workflow alteration terminal evidence must reference its checkpoint commit ID.");
     }
+
+    /// <summary>
+    /// The encryption backstop (spec 188, FR-010). Phase 0 has no encryption at rest, so a value whose policy requires
+    /// encryption may be committed only as a withheld marker, never as an inline or external payload. Producer
+    /// withholding in <see cref="Values.RuntimeExternalEnvelopeStorage"/> replaces such a value before it reaches state,
+    /// and publication refuses the bindings that would produce one (<c>VF-ACT-011</c>, <c>VF-ACT-012</c>), so this rule
+    /// refuses only what a producer outside both let through, such as a runtime artifact imported without publication.
+    /// The message names the state and the value's key, never the value.
+    /// </summary>
+    /// <remarks>
+    /// It reads every value envelope a workflow or activity execution state carries, and each durable value whose
+    /// metadata marks it as requiring encryption. An inspection projection carries captured payloads without a protection
+    /// policy, so this rule cannot judge one; a deleted durable value is not written, so it is not judged either.
+    /// </remarks>
+    private static void RejectPlainTextEncryptionRequiredValues(RuntimeCheckpointStateChangeSet changes)
+    {
+        if (PlainTextEncryptionRequiredValues(changes).FirstOrDefault() is { } location)
+            throw new RuntimeCheckpointCommitValidationException($"VF-ACT-005: {location} requires encryption, so it cannot be committed in plain text.");
+    }
+
+    private static IEnumerable<string> PlainTextEncryptionRequiredValues(RuntimeCheckpointStateChangeSet changes)
+    {
+        var envelopes = WorkflowExecutionEnvelopes(changes.WorkflowExecution)
+            .Concat(changes.ActivityExecutions.SelectMany(change => ActivityExecutionEnvelopes(change.StateId, change.State)));
+        foreach (var (location, _) in envelopes.Where(item => IsPlainTextEncryptionRequired(item.Value)))
+            yield return location;
+
+        foreach (var change in changes.DurableValues.Where(change =>
+                     change.Operation != RuntimeStateChangeOperation.Delete && IsPlainTextEncryptionRequired(change.State)))
+            yield return $"Durable value '{change.StateId}'";
+    }
+
+    private static IEnumerable<(string Location, ValueEnvelope Value)> WorkflowExecutionEnvelopes(RuntimeStateChange<WorkflowExecutionState>? change) =>
+        change is null
+            ? []
+            : FrameEnvelopes($"Workflow execution '{change.StateId}' root variable", change.State.RootVariableFrame);
+
+    private static IEnumerable<(string Location, ValueEnvelope Value)> ActivityExecutionEnvelopes(string stateId, ActivityExecutionState state)
+    {
+        var subject = $"Activity execution '{stateId}'";
+        var single = new (string Location, ValueEnvelope? Value)[]
+        {
+            ($"{subject} private state", state.PrivateState?.Value),
+            ($"{subject} completion result", state.Completion?.Result)
+        };
+
+        return (state.InputSnapshot?.Values ?? new Dictionary<string, ValueEnvelope>())
+            .Select(input => ($"{subject} input '{input.Key}'", input.Value))
+            .Concat(single.Where(item => item.Value is not null).Select(item => (item.Location, item.Value!)))
+            .Concat((state.TriggerDeliveries ?? []).Select(delivery => ($"{subject} trigger delivery '{delivery.DeliveryId}'", delivery.Payload)))
+            .Concat(FrameEnvelopes($"{subject} variable", state.VariableFrame))
+            .Concat(FrameEnvelopes($"{subject} iteration variable", state.IterationVariableFrame))
+            .Concat((state.IterationFrameRequest?.Values ?? new Dictionary<string, ValueEnvelope>())
+                .Select(value => ($"{subject} iteration variable request '{value.Key}'", value.Value)));
+    }
+
+    private static IEnumerable<(string Location, ValueEnvelope Value)> FrameEnvelopes(string location, VariableFrameState? frame) =>
+        (frame?.Values ?? new Dictionary<string, ValueEnvelope>()).Select(value => ($"{location} '{value.Key}'", value.Value));
+
+    private static bool IsPlainTextEncryptionRequired(ValueEnvelope value) =>
+        value is { Presence: ValuePresence.Present, Policy.RequiresEncryption: true } &&
+        (value.InlineValue.HasValue || value.ExternalReference is not null);
+
+    // A durable value records its policy as metadata. An inline JSON null is an explicit null, which holds no value.
+    private static bool IsPlainTextEncryptionRequired(DurableValueState value) =>
+        value.Metadata.TryGetValue(RuntimeMetadataKeys.RequiresEncryption, out var flag) &&
+        bool.TryParse(flag, out var requiresEncryption) && requiresEncryption &&
+        (value.ExternalReference is not null || value.InlineValue is { ValueKind: not (JsonValueKind.Null or JsonValueKind.Undefined) });
 
     private static void ValidatePostCommitOutbox(RuntimeCheckpointCommit commit)
     {

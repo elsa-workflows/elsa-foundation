@@ -26,6 +26,9 @@ internal static class EvidenceFactory
     private static readonly ValueProtectionPolicy SensitivePolicy =
         new(DurableValueLifecycle.Instance, DurableValueStorage.Inline, isSensitive: true);
 
+    private static readonly ValueProtectionPolicy EncryptionRequiredPolicy =
+        new(DurableValueLifecycle.Instance, DurableValueStorage.Inline, isSensitive: true, requiresEncryption: true);
+
     private static readonly ValueProtectionPolicy ExternalPolicy =
         new(DurableValueLifecycle.Instance, DurableValueStorage.External);
 
@@ -109,6 +112,14 @@ internal static class EvidenceFactory
             StringType,
             new DurableValueExternalReference(storageProfile, locator, new Dictionary<string, string>()),
             ExternalPolicy);
+
+    /// <summary>What a secret read leaves in runtime state: the reference, no value (spec 188).</summary>
+    public static ValueEnvelope WithheldSecret(string referenceName) =>
+        ValueEnvelope.Withheld(StringType, WithheldValue.SecretReference(new RuntimeSecretReference(referenceName), null), EncryptionRequiredPolicy);
+
+    /// <summary>What producer withholding leaves in place of a value whose policy requires encryption (spec 188).</summary>
+    public static ValueEnvelope WithheldForEncryption() =>
+        ValueEnvelope.Withheld(StringType, new WithheldValue(WithheldValueKind.PolicyRequiresEncryption), EncryptionRequiredPolicy);
 
     public static ValueEnvelope NullValue() => ValueEnvelope.Null(StringType, InlinePolicy);
 

@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Elsa.Workflows.Runtime.Api.Models;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
@@ -313,6 +314,42 @@ public class ActivityExecutionHierarchyTests
         var view = ActivityExecutionHierarchyPageView.From(page!);
 
         Assert.Empty(Assert.Single(view.Items).Metadata);
+    }
+
+    /// <summary>
+    /// The descendants read of a run with a withheld input (spec 188, T067): a hierarchy item carries no value evidence,
+    /// so neither the marker nor a payload recorded beside it reaches the view, and the read does not throw.
+    /// </summary>
+    [Fact]
+    public async Task Hierarchy_view_carries_no_value_evidence_of_a_withheld_input()
+    {
+        var sentinel = $"plain{Guid.NewGuid():N}";
+        var store = Store();
+        await store.SaveAsync(Record(ActivityExecutionInspectionProjectionTests.Projection("outer", "outer", null, 1, ActivityExecutionStatus.Running, boundary: true)));
+        var child = ActivityExecutionInspectionProjectionTests.Projection("child", "outer", "outer", 2, ActivityExecutionStatus.Running) with
+        {
+            ValueSnapshots =
+            [
+                ActivityExecutionInspectionValueSnapshot.FromDecision(
+                    "token",
+                    ActivityExecutionInspectionValueSubject.ActivityInput,
+                    new RuntimePayloadCaptureDecision(RuntimePayloadCaptureMode.Payload, "Full payload captured by runtime diagnostics policy."),
+                    new RuntimeValueTypeDescriptor("alias", "String", null),
+                    DateTimeOffset.UnixEpoch,
+                    JsonSerializer.SerializeToElement(sentinel),
+                    isSensitive: true,
+                    ActivityExecutionInspectionValueSnapshot.MarkWithheld(
+                        new Dictionary<string, string>(),
+                        WithheldValue.SecretReference(new RuntimeSecretReference("payments.api-key"), null)),
+                    inputKey: "token")
+            ]
+        };
+        await store.SaveAsync(Record(child));
+
+        var view = ActivityExecutionHierarchyPageView.From((await store.ReadPageAsync(Query(limit: 100)))!);
+
+        Assert.Equal("child", Assert.Single(view.Items).ActivityExecutionId);
+        Assert.DoesNotContain(sentinel, JsonSerializer.Serialize(view), StringComparison.Ordinal);
     }
 
     private static RuntimeInMemoryActivityExecutionHierarchyStore Store() =>

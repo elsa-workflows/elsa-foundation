@@ -363,6 +363,17 @@ public sealed record ActivityExecutionIncidentCausationView(
             : new(causation.IncidentId, causation.ActivityExecutionId, causation.ExecutableNodeId, causation.Kind);
 }
 
+/// <summary>
+/// One value evidence record of an activity execution. Its factories leave <see cref="Payload"/> and
+/// <see cref="Snapshot"/> null, so a captured value reaches a client only through the separately authorized
+/// value-payload read.
+/// </summary>
+/// <remarks>
+/// A withheld value (spec 188) is rendered by its marker: <see cref="WithheldKind"/> names the
+/// <c>WithheldValueKind</c> and <see cref="SecretReferenceName"/> the secret reference behind a secret-bound input. Both
+/// are shown to every caller that may inspect the execution, because neither is a value. A withheld record is always
+/// reported as sensitive, and its access state is always <c>unavailable</c>: there is no value to resolve.
+/// </remarks>
 public sealed record ActivityExecutionInspectionValueSnapshotView(
     string EvidenceId,
     string Name,
@@ -381,7 +392,9 @@ public sealed record ActivityExecutionInspectionValueSnapshotView(
     string? EvaluationPhase = null,
     long? EvaluationSequence = null,
     string? AccessState = null,
-    RuntimeInputEvaluationFailure? Failure = null)
+    RuntimeInputEvaluationFailure? Failure = null,
+    string? WithheldKind = null,
+    string? SecretReferenceName = null)
 {
     public static ActivityExecutionInspectionValueSnapshotView From(ActivityExecutionInspectionValueSnapshot snapshot, bool canInspectSensitiveValues = false) =>
         From(snapshot, "unknown", 0, canInspectSensitiveValues, false);
@@ -391,8 +404,10 @@ public sealed record ActivityExecutionInspectionValueSnapshotView(
         string activityExecutionId,
         int ordinal,
         bool canInspectSensitiveValues,
-        bool canResolveValuePayloads) =>
-        new(
+        bool canResolveValuePayloads)
+    {
+        var withheldKind = ActivityExecutionInspectionDisclosure.WithheldKind(snapshot);
+        return new(
             snapshot.EvidenceId ?? ActivityExecutionValueEvidenceIdentity.Create(activityExecutionId, snapshot, ordinal),
             snapshot.Name,
             snapshot.Subject.ToString(),
@@ -403,14 +418,17 @@ public sealed record ActivityExecutionInspectionValueSnapshotView(
             null,
             null,
             snapshot.CaptureReason,
-            snapshot.IsSensitive,
+            snapshot.IsSensitive || withheldKind is not null,
             ActivityExecutionInspectionDisclosure.Metadata(snapshot.Metadata, canInspectSensitiveValues),
             snapshot.InputKey,
             snapshot.EvaluationId,
             snapshot.Phase,
             snapshot.Sequence,
-            DetermineAccessState(snapshot, canInspectSensitiveValues, canResolveValuePayloads),
-            canInspectSensitiveValues ? snapshot.Failure : null);
+            withheldKind is null ? DetermineAccessState(snapshot, canInspectSensitiveValues, canResolveValuePayloads) : "unavailable",
+            canInspectSensitiveValues ? snapshot.Failure : null,
+            withheldKind,
+            withheldKind is null ? null : snapshot.Metadata.GetValueOrDefault(RuntimeMetadataKeys.SecretReferenceName));
+    }
 
     private static string DetermineCaptureState(ActivityExecutionInspectionValueSnapshot snapshot) =>
         snapshot.Failure is not null
@@ -597,6 +615,15 @@ internal static class ActivityExecutionInspectionDisclosure
         IReadOnlyDictionary<string, string> metadata,
         bool canInspectSensitiveValues) =>
         canInspectSensitiveValues ? metadata : EmptyMetadata;
+
+    /// <summary>
+    /// The <c>WithheldValueKind</c> of a value evidence record whose envelope was withheld (spec 188), or null. The
+    /// marker is the inspection metadata the runtime records for it; a withheld record has no value to show or resolve.
+    /// </summary>
+    public static string? WithheldKind(ActivityExecutionInspectionValueSnapshot snapshot) =>
+        snapshot.Metadata.TryGetValue(RuntimeMetadataKeys.WithheldKind, out var kind) && !string.IsNullOrWhiteSpace(kind)
+            ? kind
+            : null;
 }
 
 public sealed record WorkflowExecutionStartDispatchView(
