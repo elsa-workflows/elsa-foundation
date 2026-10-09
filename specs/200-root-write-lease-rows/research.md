@@ -51,7 +51,11 @@ All operations run on the isolated context from R4.
   - If the same id is already live for the same incarnation, it returns the existing token without writing. This keeps the #2274 shared-token behavior.
   - On a primary-key conflict it reloads and returns the winner's token, retrying under `UniqueKey`.
   - An expired row, or a row from another incarnation, is overwritten by a compare-and-swap on `Revision`.
-- **Renew.** One `ExecuteUpdate`, filtered on id, token, `ExpiresAtUtcTicks > now` and incarnation. It returns `true` exactly when one row was affected. It never touches other leases.
+- **Renew.** One `ExecuteUpdate`, filtered on id, token and `ExpiresAtUtcTicks > now`. It returns `true` exactly when one row was affected, and it never touches other leases.
+  - It also advances `Revision`. Without that, an acquirer of the same id whose clock already counts the row expired could overwrite it with a revision read before the renewal.
+  - It does not filter on incarnation (as implemented). A token is unique to one grant, and a granted row cannot outlive its incarnation: every delete removes the artifact's lease rows with the pair, and a guarded delete refuses while one is live. The only rows of a dead incarnation are an acquirer's own row, which its check withdraws before it returns a lease, and crash orphans, which no live holder renews. An extra subquery on every renewal would buy nothing.
+  - It does not refuse while a guard is live, unlike the shared-row code. Under write-then-check a guard coexists with a live lease only between the guard's commit and its own count, which then cancels the guard. Refusing there would cancel a healthy write.
+- **Same id, concurrent acquirers.** They share one row and token (#2274 semantics), so the first to withdraw or release ends it for all, and the others learn that at their next renewal. First-party callers pass distinct ids: activation since #2274, checkpoint commits since #2286.
 - **Release.** One `ExecuteDelete`, filtered on id and token. Deleting nothing is a no-op, as today.
 
 **Consequence.** No lease operation reads or writes another holder's row, so FR-001 and FR-002 hold by construction.
@@ -66,9 +70,16 @@ All operations run on the isolated context from R4.
 
 **Risk.** A per-lease insert through `SaveChanges` on the shared context would persist staged sibling changes outside the checkpoint transaction. The existing `Clear()` may already discard them. A renewal that fires during a commit longer than 20 s may use the context concurrently.
 
-**Decision (plan default).** Lease and guard operations run on a dedicated short-lived `RuntimeDbContext`, resolved from a child scope through `IServiceScopeFactory`. That scope carries the same persistence access context. The store's other operations keep the injected context.
+**Decision (as implemented).** Acquire, renew and release run on a sibling `RuntimeDbContext`, created per operation from the injected context's own options (`IDbContextOptions`) through the context type's options constructor, and disposed when the operation ends.
+- It carries the same provider, interceptors and schema write gate, so lease inserts still pass `EfSchemaWriteGateInterceptor`.
+- It has its own change tracker, so a lease operation never saves or discards what a caller staged on the shared context.
+- A host configures a connection string, so the sibling also gets its own pooled connection: a renewal that fires while a checkpoint write holds the shared context open does not touch that context. (A test fixture that hands EF one `DbConnection` object shares it; such fixtures never renew during an open transaction.)
+- No `IServiceScopeFactory` is needed, so the store's construction and registration are unchanged. The persistence access context stays the store's own.
+- The guard side (begin, cancel, guarded delete) stays on the injected context, as before: only collection uses it.
 
-**Test.** Changes staged on the caller's context are neither saved nor discarded by acquire, renew or release. A renewal concurrent with an open commit transaction does not touch the caller's context.
+The plan's first draft resolved the context from a child scope. That was dropped: a child scope would need the scoped access context carried across, and it changes the store's constructor for no gain over the sibling.
+
+**Test.** `Root_write_lease_operations_do_not_save_or_discard_changes_staged_on_the_callers_context`. It fails on the base code, whose acquire calls `ChangeTracker.Clear()` and discards the staged change.
 
 **Alternatives considered.**
 - *Provider-specific raw `INSERT` statements.* Rejected: they duplicate per-provider SQL.
@@ -85,7 +96,7 @@ All operations run on the isolated context from R4.
 - Lease rows carry the `IncarnationId` that was current when they were granted.
 - Every check compares the row's incarnation with the current coordination incarnation. A row from an earlier incarnation is treated as absent and overwritten on reuse.
 - Guarded delete and the unguarded `DeleteAsync` remove the artifact's lease rows in the same transaction as the pair.
-- Crash-orphaned expired rows on a live artifact are purged, in bounded batches, by the begin-deletion and guarded-delete paths. They are also overwritten when their id is reused.
+- Crash-orphaned rows on a live artifact (expired, or from an earlier incarnation) are purged by a successful begin-deletion, and guarded and unguarded deletes remove every lease row of the artifact. They are also overwritten when their id is reused. Each purge is one set-based delete per artifact: an artifact's rows are bounded by its concurrent holders plus crashed ones, so no batching is needed.
 - **Accepted residual:** an artifact that is never collected keeps crash-orphaned rows. There is one inert row per crashed holder, and they never block anything. No new store contract member is added for a global sweep. If accounting shows growth, that becomes a follow-up.
 
 ## R7 — A durable commit is isolated from release failure (FR-011)

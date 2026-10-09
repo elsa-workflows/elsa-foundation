@@ -81,9 +81,8 @@ src/essentials/Workflows/Runtime/Persistence/EntityFrameworkCore/
 ├── Entities/RuntimeArtifactEntities.cs                                # + WorkflowExecutableRootWriteLeaseEntity
 ├── Configuration/RuntimeArtifactEntityConfigurations.cs               # + config, keys, index
 ├── RuntimeArtifactEfModule.cs, AssemblyInfo.cs, RuntimeProviderContexts.cs  # table name, schema family, text columns
-├── Stores/EfWorkflowExecutableStore.cs                                # R2–R6 lease/guard paths, isolated context
+├── Stores/EfWorkflowExecutableStore.cs                                # R2–R6 lease/guard paths, sibling lease context (R4)
 ├── Stores/EfRuntimeCheckpointCommitStore.cs                           # R8 per-attempt lease id
-├── DependencyInjection/RuntimeArtifactsEntityFrameworkCoreRegistration.cs  # scope factory wiring if needed
 └── Migrations/Runtime/{Sqlite,PostgreSql,SqlServer,MySql}/*_WorkflowExecutableRootWriteLeases.*
 tests/essentials/Workflows/Runtime/
 ├── Persistence/EntityFrameworkCore/Tests/EfRuntimeArtifactScopeTests.cs     # regression (exists) + race/legacy/isolation
