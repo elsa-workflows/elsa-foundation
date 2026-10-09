@@ -1,4 +1,14 @@
-# Local CShells Package Qualification
+# CShells Package Qualification
+
+## Startup adoption preparation (2026-10-09)
+
+[Spec 200](../../specs/200-adopt-startup-runner/spec.md) and [task #2528](https://github.com/elsa-workflows/elsa-foundation/issues/2528) prepare all eight central CShells pins at `0.0.30-preview.173`, retaining Nuplane `0.0.11-preview.99`. This candidate requires the qualified additive `ReturnedGeneration` API from source `f5bfc0db5ef9440dd777c2dd0d97fbf817f22e2f`; it is not stable adoption.
+
+The [publisher run](https://github.com/valence-works/cshells/actions/runs/37878600719) and [public-package acceptance](https://github.com/valence-works/cshells/issues/167#issuecomment-6073687376) identify all ten matching public archives, three target frameworks per package and coherent family dependencies. A PackageReference-only consumer passed 132 assertions on actual .NET 8/9/10 runtimes. Root re-read the retained accepted archive audit and independent consumer review before this preparation. That proves the upstream package contract, not Foundation adapter execution.
+
+Prepared lock restoration, adapter tests, actual-host/backend E2E and final stable-family acceptance remain unchecked in [tasks.md](../../specs/200-adopt-startup-runner/tasks.md). The following sections preserve historical qualification checkpoints; their former active-issue statements are historical, not the current delivery queue.
+
+## Historical local qualification
 
 Program: [Modular Hosting Upstream Delivery](../program-goals/modular-hosting-upstream-delivery.md), [#2500](https://github.com/elsa-workflows/elsa-foundation/issues/2500). Evidence date: 2026-10-08. This qualifies an unpublished candidate; no milestone is complete.
 

@@ -407,6 +407,9 @@ builder.Services.AddCShellsAspNetCore(shells =>
         .ConfigureAllShells(shell => new WorkbenchEfToolingShellDefaults().Configure(shell, configuration));
 });
 
+// Shared root-only execution for the independent eager and post-listen warmup profiles.
+builder.Services.AddShellActivationRunner();
+
 // Opt-in eager shell activation (spec 132, First-Request/Cold-Start Readiness unit 4). Default OFF. When
 // Elsa:Boot:EagerShellActivation:Enabled is set, a host-level IHostedService activates the configured shell(s)
 // at boot through the same IShellRegistry.GetOrActivateAsync path the first request would (byte-identical shell

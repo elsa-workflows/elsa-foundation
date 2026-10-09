@@ -6,7 +6,7 @@ description: "Dependency-ordered work for adopting the shared shell activation r
 
 **Input**: `spec.md`, `plan.md`, `research.md`, `data-model.md`, `contracts/startup-profiles.md`, and `quickstart.md` in `specs/200-adopt-startup-runner/`.
 
-**Status**: Reviewed execution plan. Every task is unchecked. The preview package update is preparation for implementation; stable package adoption and actual-host acceptance remain a separate final gate.
+**Status**: Reviewed execution plan; implementation in progress. Completed steps are checked below. The preview package update is preparation for implementation; stable package adoption and actual-host acceptance remain a separate final gate.
 
 **Test cadence**: The derived application constitution does not declare test-first, test-after, or another cadence. The order below follows implementation dependencies and does not impose TDD. Preserve every existing test subject and objective under framework §2.21.1/§2.23. Add registration and per-implementation tests for changed logic-bearing implementations; never weaken or remove existing assertions.
 
@@ -16,14 +16,14 @@ description: "Dependency-ordered work for adopting the shared shell activation r
 
 **Purpose**: Pin the exact qualified preview API needed by the consumer work, without claiming stable adoption.
 
-- [ ] T001 Update the eight CShells central versions in `Directory.Packages.props` from `0.0.30-preview.171` to the exact qualified `0.0.30-preview.173` family, retain the current Nuplane `0.0.11-preview.99` pins, and record source/package identity in `docs/reports/modular-hosting-package-qualification.md`.
-- [ ] T002 Regenerate every reached `packages.lock.json` affected by T001, then verify coherent family versions and perform the affected locked restore from the configured qualified feed; leave unrelated lock entries unchanged.
+- [x] T001 Update the eight CShells central versions in `Directory.Packages.props` from `0.0.30-preview.171` to the exact qualified `0.0.30-preview.173` family, retain the current Nuplane `0.0.11-preview.99` pins, and record source/package identity in `docs/reports/modular-hosting-package-qualification.md`.
+- [x] T002 Regenerate every reached `packages.lock.json` affected by T001, then verify coherent family versions and perform the affected locked restore from the configured qualified feed; leave unrelated lock entries unchanged.
 
 ## Phase 2: Foundational
 
 **Purpose**: Establish the one root-owned runner registration both host profiles will consume before adapting either service.
 
-- [ ] T003 Register the upstream `IShellActivationRunner` once as a root-owned service in each host composition in `src/apps/Elsa.Foundation.Host/Program.cs` and `src/apps/Elsa.Workbench/Program.cs`; add real-DI assertions in `tests/essentials/Modularity/Tests/HostOwnedServicesAreSharedWithShellsTests.cs` proving root resolution, the runner and its concrete implementation are absent from child-shell containers under the existing upstream exclusion, no extra hosted service from runner registration, and preservation of existing intentional host/shell service sharing. Do not add a second sharing policy or hosted-service registration for the runner; hosted adapters resolve it at the root.
+- [x] T003 Register the upstream `IShellActivationRunner` once as a root-owned service in each host composition in `src/apps/Elsa.Foundation.Host/Program.cs` and `src/apps/Elsa.Workbench/Program.cs`; add real-DI assertions in `tests/essentials/Modularity/Tests/HostOwnedServicesAreSharedWithShellsTests.cs` proving root resolution, the runner and its concrete implementation are absent from child-shell containers under the existing upstream exclusion, no extra hosted service from runner registration, and preservation of existing intentional host/shell service sharing. Do not add a second sharing policy or hosted-service registration for the runner; hosted adapters resolve it at the root.
 
 **Checkpoint**: Complete setup and shared registration before implementing the story adapters. The Foundation and Workbench adapter changes can then proceed independently by application.
 

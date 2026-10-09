@@ -104,6 +104,9 @@ builder.Services.AddCShellsAspNetCore(shells => shells
         options.ExcludePaths = ["/health/live", "/health/ready"];
     }));
 
+// Root-only attempt scheduling; adapters retain the host's startup and recovery policy.
+builder.Services.AddShellActivationRunner();
+
 // Optional — eager activation: activate the configured shell(s) at boot so shell-lifetime work (most notably
 // the feed's Tasks feature: startup/background/recurring tasks) starts without waiting for the first request.
 // Gated by Elsa:Boot:EagerShellActivation:Enabled (default on). A shell that fails to activate is retried with a capped

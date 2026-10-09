@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Reflection;
 using CShells.DependencyInjection;
+using CShells.Hosting;
 using CShells.Lifecycle;
 using CShells.Nuplane;
 using Elsa.Attention.Core;
@@ -44,6 +45,36 @@ namespace Elsa.Modularity.Tests;
 /// </remarks>
 public sealed class HostOwnedServicesAreSharedWithShellsTests
 {
+    [Fact]
+    public void Registering_the_runner_twice_adds_one_root_service_and_no_hosted_service()
+    {
+        var services = new ServiceCollection();
+
+        services.AddShellActivationRunner();
+        services.AddShellActivationRunner();
+
+        Assert.Single(services, descriptor => descriptor.ServiceType == typeof(IShellActivationRunner));
+        Assert.DoesNotContain(services, descriptor => descriptor.ServiceType == typeof(IHostedService));
+    }
+
+    [Theory]
+    [InlineData("Elsa.Foundation.Host")]
+    [InlineData("Elsa.Workbench")]
+    public async Task The_real_host_resolves_one_runner_that_is_excluded_from_its_shells(string host)
+    {
+        using var content = ContentRoot.For(host);
+        using var built = BuiltHost.Run(EntryAssembly(host), content.Arguments(durableMembership: false));
+        var root = built.Host.Services;
+        var runner = root.GetRequiredService<IShellActivationRunner>();
+        Assert.Same(runner, root.GetRequiredService<IShellActivationRunner>());
+        Assert.Single(root.GetServices<IShellActivationRunner>());
+
+        var shell = await root.GetRequiredService<IShellRegistry>().GetOrActivateAsync(ProbeShell);
+
+        Assert.Null(shell.ServiceProvider.GetService<IShellActivationRunner>());
+        Assert.Null(shell.ServiceProvider.GetService(runner.GetType()));
+    }
+
     private const string ProbeShell = "probe";
 
     private const string IntentionallyPerShell = "intentionally per shell: ";

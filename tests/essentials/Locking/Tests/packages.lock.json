@@ -10,11 +10,11 @@
       },
       "CShells": {
         "type": "Direct",
-        "requested": "[0.0.30-preview.171, )",
-        "resolved": "0.0.30-preview.171",
-        "contentHash": "gY5D6v/eAfkWgYloYbGqWp1FMhxEH0CNDSDT1rWl+dOAHhPBR3zu7BDm7SzOdIVaG/KBek2pg53nKyqAUqUGLA==",
+        "requested": "[0.0.30-preview.173, )",
+        "resolved": "0.0.30-preview.173",
+        "contentHash": "Hf1ruHh3zk4NGnhWR2wazizQ0LbVFDAAgOTDNr5+8DHCK/7cxpc9ShFFq60iB8mFqQjJYKpBo7+O5D10XPEi3A==",
         "dependencies": {
-          "CShells.Abstractions": "0.0.30-preview.171",
+          "CShells.Abstractions": "0.0.30-preview.173",
           "JetBrains.Annotations": "2025.2.4",
           "Microsoft.Extensions.DependencyModel": "10.0.1"
         }
@@ -244,7 +244,7 @@
       "elsa.locking.database": {
         "type": "Project",
         "dependencies": {
-          "CShells.Abstractions": "[0.0.30-preview.171, )",
+          "CShells.Abstractions": "[0.0.30-preview.173, )",
           "DistributedLock.MySql": "[1.0.2, )",
           "DistributedLock.Postgres": "[1.3.1, )",
           "DistributedLock.SqlServer": "[1.0.7, )",
@@ -254,7 +254,7 @@
       "elsa.locking.filesystem": {
         "type": "Project",
         "dependencies": {
-          "CShells.Abstractions": "[0.0.30-preview.171, )",
+          "CShells.Abstractions": "[0.0.30-preview.173, )",
           "DistributedLock.FileSystem": "[1.0.3, )",
           "Elsa.Cluster.Core": "[4.0.0-dev, )",
           "Elsa.Locking.Core": "[4.0.0-dev, )"
@@ -265,9 +265,9 @@
       },
       "CShells.Abstractions": {
         "type": "CentralTransitive",
-        "requested": "[0.0.30-preview.171, )",
-        "resolved": "0.0.30-preview.171",
-        "contentHash": "2p6zgaxVhIuHEDoklz3t9PbReDmMgAUIHbw5zVZSV4uMR9kl7q+gftXX1K0woMWt55uvTnqJ+K1q6KVSoPRuVA==",
+        "requested": "[0.0.30-preview.173, )",
+        "resolved": "0.0.30-preview.173",
+        "contentHash": "sAgLwTkE/y4+1rtqRaBvL8KV/m3Y7oV3EEKsGVkXbIlKpdWWDVAQilCBy/iRU8nhANz7k8lvquULc1AJRSo8hA==",
         "dependencies": {
           "JetBrains.Annotations": "2025.2.4"
         }

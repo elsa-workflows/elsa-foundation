@@ -2,7 +2,7 @@
 
 **Branch**: `2341-adopt-startup-runner` | **Date**: 2026-10-09 | **Spec**: [spec.md](spec.md)
 
-**Status**: Reviewed plan; implementation not started. Root and independent review cover the requirements, research and Phase1 artifacts, including explicit fatal/cancellation/external-completion clarifications and the no-notification projection correction. Task sequencing and implementation verification follow this checkpoint. Returned-generation prerequisite [CShells #167](https://github.com/valence-works/cshells/issues/167) is qualified from public `.173`.
+**Status**: Reviewed plan; implementation in progress. Root and independent review cover the requirements, research and Phase1 artifacts, including explicit fatal/cancellation/external-completion clarifications and the no-notification projection correction. Task sequencing and implementation verification follow this checkpoint. Returned-generation prerequisite [CShells #167](https://github.com/valence-works/cshells/issues/167) is qualified from public `.173`.
 
 ## Summary
 
