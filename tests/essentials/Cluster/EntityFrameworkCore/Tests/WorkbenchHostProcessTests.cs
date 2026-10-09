@@ -18,6 +18,7 @@ public sealed class WorkbenchHostProcessTests(FoundationHostFeed feed, ITestOutp
     private static readonly TimeSpan Patience = TimeSpan.FromSeconds(90);
 
     private readonly string _databaseFile = Path.Join(Path.GetTempPath(), $"elsa-workbench-host-{Guid.NewGuid():N}.db");
+    private string? _readabilityRoot;
     private WorkbenchHostProcess? _host;
 
     private string ConnectionString => $"Data Source={_databaseFile};Pooling=False";
@@ -26,15 +27,38 @@ public sealed class WorkbenchHostProcessTests(FoundationHostFeed feed, ITestOutp
 
     public async Task DisposeAsync()
     {
+        Exception? cleanupFailure = null;
         try
         {
             if (_host is not null)
                 await _host.DisposeAsync();
         }
-        finally
+        catch (Exception exception)
+        {
+            cleanupFailure = exception;
+        }
+
+        try
         {
             DeleteDatabaseFiles(_databaseFile);
         }
+        catch (Exception exception)
+        {
+            cleanupFailure = cleanupFailure is null ? exception : new AggregateException(cleanupFailure, exception);
+        }
+
+        try
+        {
+            if (_readabilityRoot is { } directory && Directory.Exists(directory))
+                Directory.Delete(directory, recursive: true);
+        }
+        catch (Exception exception)
+        {
+            cleanupFailure = cleanupFailure is null ? exception : new AggregateException(cleanupFailure, exception);
+        }
+
+        if (cleanupFailure is not null)
+            System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(cleanupFailure).Throw();
     }
 
     [Theory]
@@ -144,7 +168,65 @@ public sealed class WorkbenchHostProcessTests(FoundationHostFeed feed, ITestOutp
         Assert.Contains(await FixtureAssemblyPathsAsync(), path => path.Contains("2.0.0", StringComparison.OrdinalIgnoreCase));
     }
 
-    private async Task StartAsync(bool autoReload, bool warmDefaultShell, IEnumerable<string>? packageFiles = null, bool automaticReconciliation = false)
+    [Fact]
+    public async Task Actual_workbench_reports_conservative_readability_while_a_replaced_package_request_drains()
+    {
+        _readabilityRoot = HostReadabilityScenario.CreateOwnedRoot();
+        var membershipDatabase = Path.Join(_readabilityRoot, "membership.db");
+        var controlDirectory = Path.Join(_readabilityRoot, "control");
+        var locksDirectory = Directory.CreateDirectory(Path.Join(_readabilityRoot, "locks")).FullName;
+        var hostId = $"workbench-readability-{Guid.NewGuid():N}";
+        await StartAsync(
+            autoReload: false,
+            warmDefaultShell: true,
+            packageFiles: [feed.PreviousPackage],
+            configureSettings: settings => HostReadabilityScenario.Configure(settings, hostId, membershipDatabase, controlDirectory, automaticReconciliation: false),
+            locksDirectory: locksDirectory,
+            includeStartupControl: true);
+        var host = _host!;
+        var initialShell = await ObserveDefaultAsync();
+        Assert.NotNull(initialShell.Generation);
+        await ReconcileAsync(FoundationHostFeed.FixturePackageId, "1.0.0");
+        await ReloadDefaultAsync(initialShell.Generation.Value, "1.0.0");
+
+        async Task ReloadAsync()
+        {
+            var (status, _) = await host.PostAsync(ReloadDefault, ManagementKey, Patience);
+            Assert.Equal(HttpStatusCode.OK, status);
+        }
+
+        var driver = new HostReadabilityDriver(
+            "Elsa.Workbench",
+            hostId,
+            membershipDatabase,
+            controlDirectory,
+            host.PackagesDirectory,
+            host.PackageInstallRoot,
+            host.ProcessId,
+            output,
+            (path, key, timeout) => host.PostAsync(path, key, timeout ?? Patience),
+            expectedVersion => ReconcileAsync(FoundationHostFeed.FixturePackageId, expectedVersion),
+            ReloadAsync,
+            OrdersAsync,
+            () => host.GetAsync(StartupControlStatusPath),
+            () => host.ActivePackagesAsync(),
+            () => host.MappedAssembliesAsync(),
+            (packageId, package) => host.UpgradeInPlace(packageId, package),
+            () => host.Output,
+            () => host.ProcessId,
+            () => host.IsRunning);
+
+        await HostReadabilityScenario.RunAsync(driver, feed.FixturePackage);
+    }
+
+    private async Task StartAsync(
+        bool autoReload,
+        bool warmDefaultShell,
+        IEnumerable<string>? packageFiles = null,
+        bool automaticReconciliation = false,
+        bool includeStartupControl = false,
+        string? locksDirectory = null,
+        Action<IDictionary<string, string>>? configureSettings = null)
     {
         var settings = Settings(feed);
         settings["Logging:LogLevel:Nuplane.Observability.ReconciliationLogger"] = "Information";
@@ -155,11 +237,12 @@ public sealed class WorkbenchHostProcessTests(FoundationHostFeed feed, ITestOutp
         settings["Nuplane:Setup:AutomaticReconciliation"] = automaticReconciliation.ToString();
         settings["Nuplane:Setup:PollInterval"] = "1.00:00:00";
         settings["Nuplane:Setup:Feeds:0:Directory:Watch"] = "false";
+        configureSettings?.Invoke(settings);
 
-        _host = await WorkbenchHostProcess.StartAsync(WithFixtureFeatures(), packageFiles ?? Array.Empty<string>(), settings, awaitShells: warmDefaultShell);
+        _host = await WorkbenchHostProcess.StartAsync(WithFixtureFeatures(includeStartupControl, locksDirectory), packageFiles ?? Array.Empty<string>(), settings, awaitShells: warmDefaultShell);
     }
 
-    private string WithFixtureFeatures()
+    private string WithFixtureFeatures(bool includeStartupControl = false, string? locksDirectory = null)
     {
         var document = JsonNode.Parse(WorkbenchHostProcess.DefaultShellsJson)!.AsObject();
         var features = document["CShells"]!["Shells"]!["default"]!["Features"]!.AsObject();
@@ -169,6 +252,10 @@ public sealed class WorkbenchHostProcessTests(FoundationHostFeed feed, ITestOutp
             ["Provider"] = "Sqlite"
         };
         features[OrdersFeature] = new JsonObject();
+        if (locksDirectory is not null)
+            features["FileSystemDistributedLocking"]!["LocksFolderPath"] = locksDirectory;
+        if (includeStartupControl)
+            features[StartupControlFeature] = new JsonObject();
         return document.ToJsonString();
     }
 

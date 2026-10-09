@@ -24,6 +24,7 @@ public sealed class FoundationHostReconcileTests(FoundationHostFeed feed, ITestO
 
     private readonly string _file = Path.Join(Path.GetTempPath(), $"elsa-foundation-host-reconcile-{Guid.NewGuid():N}.db");
     private string? _lateDatabaseDirectory;
+    private string? _readabilityRoot;
     private FoundationHostProcess? _host;
 
     private string ConnectionString => $"Data Source={_file};Pooling=False";
@@ -45,6 +46,16 @@ public sealed class FoundationHostReconcileTests(FoundationHostFeed feed, ITestO
         try
         {
             if (_lateDatabaseDirectory is { } directory && Directory.Exists(directory))
+                Directory.Delete(directory, recursive: true);
+        }
+        catch (Exception exception)
+        {
+            cleanupFailure = cleanupFailure is null ? exception : new AggregateException(cleanupFailure, exception);
+        }
+
+        try
+        {
+            if (_readabilityRoot is { } directory && Directory.Exists(directory))
                 Directory.Delete(directory, recursive: true);
         }
         catch (Exception exception)
@@ -125,6 +136,54 @@ public sealed class FoundationHostReconcileTests(FoundationHostFeed feed, ITestO
 
         Assert.Empty(await _host.ActivePackagesAsync());
         Assert.True(_host.IsRunning);
+    }
+
+    [Fact]
+    public async Task Actual_foundation_host_reports_conservative_readability_while_a_replaced_package_request_drains()
+    {
+        await SeedAsync(ConnectionString);
+        _readabilityRoot = HostReadabilityScenario.CreateOwnedRoot();
+        var membershipDatabase = Path.Join(_readabilityRoot, "membership.db");
+        var controlDirectory = Path.Join(_readabilityRoot, "control");
+        var hostId = $"foundation-readability-{Guid.NewGuid():N}";
+        var settings = Settings(feed);
+        EnableModuleManagement(settings, ModuleManagementKey);
+        HostReadabilityScenario.Configure(settings, hostId, membershipDatabase, controlDirectory, automaticReconciliation: true);
+        _host = await FoundationHostProcess.StartAsync(
+            Shells(ConnectionString, EntityFrameworkCoreFeature, OrdersFeature, StartupControlFeature),
+            [feed.PreviousPackage],
+            settings);
+        var host = _host!;
+
+        async Task ReconcileAsync()
+        {
+            var (status, body) = await host.PostModuleManagementAsync(Reconcile, ModuleManagementKey, Patience);
+            Assert.Equal(HttpStatusCode.OK, status);
+            Assert.Equal("Completed", JsonNode.Parse(body)!["outcomeCode"]!.GetValue<string>());
+        }
+
+        var driver = new HostReadabilityDriver(
+            "Elsa.Foundation.Host",
+            hostId,
+            membershipDatabase,
+            controlDirectory,
+            host.PackagesDirectory,
+            host.PackageInstallRoot,
+            host.ProcessId,
+            output,
+            (path, key, timeout) => host.PostModuleManagementAsync(path, key, timeout),
+            _ => ReconcileAsync(),
+            () => Task.CompletedTask,
+            () => OrdersAsync(host),
+            () => host.GetAsync(StartupControlStatusPath),
+            () => host.ActivePackagesAsync(),
+            () => host.MappedAssembliesAsync(),
+            (packageId, package) => host.UpgradeInPlace(packageId, package),
+            () => host.Output,
+            () => host.ProcessId,
+            () => host.IsRunning);
+
+        await HostReadabilityScenario.RunAsync(driver, feed.FixturePackage);
     }
 
     [Fact]
