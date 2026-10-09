@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "last_publish_commit": "7357b91e012c56cb34f1259ef7a60ef56e144afe",
+  "last_publish_commit": "ee24b874c10dc19084f25d838c571bad4316f902",
   "packages": [
     {
       "package_id": "Elsa.Activities.Bpmn",
@@ -184,8 +184,8 @@
     },
     {
       "package_id": "Elsa.Cluster.Readability",
-      "version": "4.0.14-preview",
-      "commit": "a88e37629c87c4c3f400b7a9d5750219848fda29"
+      "version": "4.0.15-preview",
+      "commit": "ee24b874c10dc19084f25d838c571bad4316f902"
     },
     {
       "package_id": "Elsa.Diagnostics.ConsoleLogStreaming",
@@ -419,8 +419,8 @@
     },
     {
       "package_id": "Elsa.Persistence.Schema",
-      "version": "4.0.8-preview",
-      "commit": "a88e37629c87c4c3f400b7a9d5750219848fda29"
+      "version": "4.0.9-preview",
+      "commit": "ee24b874c10dc19084f25d838c571bad4316f902"
     },
     {
       "package_id": "Elsa.Pipelines.Core",
