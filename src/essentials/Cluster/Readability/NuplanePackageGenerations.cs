@@ -21,14 +21,16 @@ namespace Elsa.Cluster.Readability;
 /// </summary>
 /// <remarks>
 /// <para>
-/// <b>Replaced</b> is Nuplane's positive evidence, read afresh from <see cref="IPackageAssemblyCatalog"/> on every call:
+/// <b>Replaced for activation</b> starts with positive evidence from <see cref="IPackageAssemblyCatalog"/>:
 /// an assembly in a load context Nuplane created is replaced when the catalog lists a loaded assembly of the same name
-/// for the active package set and does not list this one. Nothing else is: not the default context, not a context
-/// Nuplane did not create, not an assembly whose name the catalog lists nowhere - which is what an old generation looks
-/// like while its successor is still loading, or after its successor failed to load. Each of those keeps counting.
+/// for the active package set and does not list this one. Successful reads remember those identities weakly, so removing
+/// the last package does not restore an already replaced generation to EF discovery. Selecting an identity again clears
+/// its history, including on rollback. Missing or unreadable catalog evidence yields no replacements for that call;
+/// absence alone never proves replacement. The default context and contexts Nuplane did not create are never excluded.
 /// </para>
 /// <para>
-/// <b>Retired</b> is replaced and no longer runnable, which takes positive evidence from both places code could run it:
+/// <b>Retired</b> still requires fresh replacement evidence from the current package catalog, plus positive evidence
+/// that neither place code could run it still holds it. Activation history never retires a removed package:
 /// </para>
 /// <list type="bullet">
 /// <item><description>
@@ -93,6 +95,10 @@ public sealed class NuplanePackageGenerations : ISupersededAssemblySource, IShel
     /// <summary>The generation each shell CShells has shown this host belongs to, so a lifecycle notification finds it.</summary>
     private readonly ConditionalWeakTable<IShell, Generation> _shells = new();
 
+    // Weak keys preserve positive activation evidence without retaining an assembly or its load context.
+    private readonly ConditionalWeakTable<Assembly, object> _activationReplacements = new();
+    private readonly SemaphoreSlim _replacementReads = new(1, 1);
+
     private readonly HostContainer _host = new();
     private ILogger _logger = NullLogger.Instance;
 
@@ -124,30 +130,56 @@ public sealed class NuplanePackageGenerations : ISupersededAssemblySource, IShel
     }
 
     /// <inheritdoc />
-    public async ValueTask<IReadOnlySet<Assembly>> GetReplacedAsync(CancellationToken cancellationToken = default)
+    public ValueTask<IReadOnlySet<Assembly>> GetReplacedAsync(CancellationToken cancellationToken = default) =>
+        ReadReplacedAsync(includeActivationHistory: true, cancellationToken);
+
+    private async ValueTask<IReadOnlySet<Assembly>> ReadReplacedAsync(bool includeActivationHistory, CancellationToken cancellationToken)
     {
         if (Host?.GetService<IPackageAssemblyCatalog>() is not { } catalog)
             return LoadedAssemblies.NoneSuperseded;
 
-        HashSet<Assembly> current;
+        // Serialize the read as well as the update, so an older snapshot cannot reset newer history.
+        await _replacementReads.WaitAsync(cancellationToken);
         try
         {
-            current = [.. (await catalog.GetPackagedAssembliesAsync(cancellationToken)).SelectMany(package => package.Assemblies)];
-        }
-        catch (Exception exception) when (exception is not OperationCanceledException)
-        {
-            // No evidence is no replacement: every generation keeps counting, which only delays finalization, rather than
-            // failing the publish every module activation waits on.
-            _logger.LogWarning(exception, "Nuplane's package catalog could not be read, so no package generation is treated as superseded.");
-            return LoadedAssemblies.NoneSuperseded;
-        }
+            HashSet<Assembly> current;
+            try
+            {
+                current = [.. (await catalog.GetPackagedAssembliesAsync(cancellationToken)).SelectMany(package => package.Assemblies)];
+            }
+            catch (Exception exception) when (exception is not OperationCanceledException)
+            {
+                // No evidence is no replacement: every generation keeps counting, which only delays finalization, rather than
+                // failing the publish every module activation waits on.
+                _logger.LogWarning(exception, "Nuplane's package catalog could not be read, so no package generation is treated as superseded.");
+                return LoadedAssemblies.NoneSuperseded;
+            }
 
-        var currentNames = current.Select(NameOf).ToHashSet(StringComparer.OrdinalIgnoreCase);
-        return AssemblyLoadContext.All
-            .Where(context => context != AssemblyLoadContext.Default && context.GetType().Assembly.GetName().Name == NuplaneLoadingAssembly)
-            .SelectMany(context => context.Assemblies)
-            .Where(assembly => !current.Contains(assembly) && currentNames.Contains(NameOf(assembly)))
-            .ToHashSet();
+            var currentNames = current.Select(NameOf).ToHashSet(StringComparer.OrdinalIgnoreCase);
+            var loaded = AssemblyLoadContext.All
+                .Where(context => context != AssemblyLoadContext.Default && context.GetType().Assembly.GetName().Name == NuplaneLoadingAssembly)
+                .SelectMany(context => context.Assemblies)
+                .ToArray();
+            var replaced = loaded
+                .Where(assembly => !current.Contains(assembly) && currentNames.Contains(NameOf(assembly)))
+                .ToHashSet();
+
+            // A rollback may select an identity previously replaced. It stays eligible even after later removal.
+            foreach (var assembly in current)
+                _activationReplacements.Remove(assembly);
+            foreach (var assembly in replaced)
+                _activationReplacements.GetValue(assembly, static _ => new object());
+
+            if (!includeActivationHistory)
+                return replaced;
+
+            return loaded.Where(assembly => !current.Contains(assembly) &&
+                _activationReplacements.TryGetValue(assembly, out _)).ToHashSet();
+        }
+        finally
+        {
+            _replacementReads.Release();
+        }
     }
 
     /// <inheritdoc />
@@ -157,7 +189,8 @@ public sealed class NuplanePackageGenerations : ISupersededAssemblySource, IShel
     /// </remarks>
     public async ValueTask<IReadOnlySet<Assembly>> GetRetiredAsync(CancellationToken cancellationToken = default)
     {
-        var replaced = await GetReplacedAsync(cancellationToken);
+        // Retirement still requires current replacement evidence; removal alone never credits readability.
+        var replaced = await ReadReplacedAsync(includeActivationHistory: false, cancellationToken);
         if (replaced.Count == 0)
             return replaced;
 
