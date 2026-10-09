@@ -17,7 +17,7 @@ On 9 October 2026 Sipke approved both tracks and a **scoped ADR 0073 D7 exceptio
 
 | Track | Issue | Outcome |
 |---|---|---|
-| A1: concurrency correctness | [#2532](https://github.com/elsa-workflows/elsa-foundation/issues/2532) | `RuntimeDbPaging2392Reference` at 16 and 32 clients returns HTTP 200 `Alice Smith` for every request. Every execution settles with zero incidents. No timers. |
+| A1: concurrency correctness | [#2532](https://github.com/elsa-workflows/elsa-foundation/issues/2532) | `RuntimeDbPaging2392Reference` at 16 and 32 clients returns HTTP 200 `Alice Smith` for every request. Every execution settles with zero incidents. No timers. A 429 is admission backpressure, not a failure: the client retries it per `Retry-After`, and the run is judged by lost work, never by shed count (owner decision, 9 October 2026; #2548). |
 | A2: request-path telemetry writes | [#2533](https://github.com/elsa-workflows/elsa-foundation/issues/2533) | Explain the `elsa_otel_*` writes attributed to the request trace (48/134 Coalesced commands), then remove them from that path or document how to disable them. |
 | B: bounded throughput ramp | [#2534](https://github.com/elsa-workflows/elsa-foundation/issues/2534) | Release build, ramp of 1–64 clients, Immediate/Coalesced × persisted diagnostics on/off. Records the plateau and the saturating resource. One-off report. |
 

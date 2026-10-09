@@ -5,11 +5,14 @@
     Publishes a fresh copy of the four-node reference (Sequence / synchronous HttpEndpoint / SetVariable /
     WriteHttpResponse) under a unique route, then sends Clients x RequestsPerClient POSTs, with every client
     looping concurrently. It asserts correctness only:
-      - every response is HTTP 200 with body `Alice Smith` (any 202, 500, timeout or transport error fails);
+      - every request ends in HTTP 200 with body `Alice Smith` (any 202, 500, timeout or transport error fails);
       - exactly one durable instance exists per request, each Completed/Finished with zero incidents;
       - every instance carries the effective cadence the run was authored with.
     ADR 0073 D7 treats concurrency and SQLite contention as correctness requirements, not performance gates. This
-    script records no elapsed time and enforces no budget. Failed requests stay in the result and are never retried.
+    script records no elapsed time and enforces no budget. Failed requests stay in the result and are never retried,
+    with one exception: HTTP 429 is admission backpressure (nothing was written, #2548), so the client waits for its
+    Retry-After and resends, up to -MaxShedRetries times. Shed attempts are counted and reported, never failed; a
+    request still shed after the last retry is lost work and fails.
     Requires the server from source (see ../README.md). Run once per cadence, e.g. -Cadence Immediate and
     -Cadence Coalesced, and at -Clients 16 and -Clients 32.
 #>
@@ -21,7 +24,8 @@ param(
     [ValidateRange(1, 64)][int] $Clients = 16,
     [ValidateRange(1, 50)][int] $RequestsPerClient = 4,
     [ValidateSet("Coalesced", "Immediate")][string] $Cadence = "Coalesced",
-    [ValidateRange(10, 600)][int] $SettleTimeoutSeconds = 120
+    [ValidateRange(10, 600)][int] $SettleTimeoutSeconds = 120,
+    [ValidateRange(0, 100)][int] $MaxShedRetries = 30
 )
 $ErrorActionPreference = "Stop"
 $ExpectedText = "Alice Smith"
@@ -60,7 +64,7 @@ using System.Net.Http;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace ElsaRuntimeConcurrency2532
+namespace ElsaRuntimeConcurrency2532v2
 {
     public sealed class Result
     {
@@ -69,11 +73,12 @@ namespace ElsaRuntimeConcurrency2532
         public int StatusCode;
         public string Body;
         public string ErrorType;
+        public int ShedAttempts;
     }
 
     public static class Sender
     {
-        public static Result[] Run(HttpClient client, string relativeUri, string jsonBody, int clients, int requestsPerClient)
+        public static Result[] Run(HttpClient client, string relativeUri, string jsonBody, int clients, int requestsPerClient, int maxShedRetries)
         {
             var loops = new Task<List<Result>>[clients];
             for (var c = 0; c < clients; c++)
@@ -87,11 +92,22 @@ namespace ElsaRuntimeConcurrency2532
                         var result = new Result { Client = clientIndex + 1, Index = i + 1 };
                         try
                         {
-                            using (var content = new StringContent(jsonBody, Encoding.UTF8, "application/json"))
-                            using (var response = await client.PostAsync(relativeUri, content).ConfigureAwait(false))
+                            while (true)
                             {
-                                result.StatusCode = (int)response.StatusCode;
-                                result.Body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+                                TimeSpan? retryAfter;
+                                using (var content = new StringContent(jsonBody, Encoding.UTF8, "application/json"))
+                                using (var response = await client.PostAsync(relativeUri, content).ConfigureAwait(false))
+                                {
+                                    result.StatusCode = (int)response.StatusCode;
+                                    result.Body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+                                    retryAfter = response.Headers.RetryAfter != null ? response.Headers.RetryAfter.Delta : null;
+                                }
+                                // 429 is admission backpressure: the start was shed before anything was written (#2548).
+                                if (result.StatusCode != 429 || result.ShedAttempts >= maxShedRetries) break;
+                                result.ShedAttempts++;
+                                var wait = retryAfter ?? TimeSpan.FromSeconds(1);
+                                if (wait > TimeSpan.FromSeconds(10)) wait = TimeSpan.FromSeconds(10);
+                                await Task.Delay(wait).ConfigureAwait(false);
                             }
                         }
                         catch (Exception ex)
@@ -111,7 +127,8 @@ namespace ElsaRuntimeConcurrency2532
     }
 }
 '@
-if (-not ('ElsaRuntimeConcurrency2532.Sender' -as [type])) {
+# The type name carries a version so a session that loaded an older sender does not reuse it.
+if (-not ('ElsaRuntimeConcurrency2532v2.Sender' -as [type])) {
     Add-Type -AssemblyName System.Net.Http -ErrorAction SilentlyContinue
     Add-Type -TypeDefinition $senderSource -Language CSharp
 }
@@ -125,7 +142,7 @@ $client = [System.Net.Http.HttpClient]::new($handler)
 $client.BaseAddress = $baseUri
 $client.Timeout = [TimeSpan]::FromSeconds(60)
 try {
-    $results = [ElsaRuntimeConcurrency2532.Sender]::Run($client, "workflows/http/$route", $Payload, $Clients, $RequestsPerClient)
+    $results = [ElsaRuntimeConcurrency2532v2.Sender]::Run($client, "workflows/http/$route", $Payload, $Clients, $RequestsPerClient, $MaxShedRetries)
 } finally {
     $client.Dispose()
 }
@@ -133,9 +150,12 @@ try {
 $badResponses = @($results | Where-Object { $_.StatusCode -ne 200 -or [string]$_.Body -cne $ExpectedText })
 $statusHistogram = $results | Group-Object { if ($_.ErrorType) { "error:$($_.ErrorType)" } else { [string]$_.StatusCode } } |
     ForEach-Object { "{0}={1}" -f $_.Name, $_.Count }
+$shedAttempts = ($results | Measure-Object -Property ShedAttempts -Sum).Sum
+$shedRequests = @($results | Where-Object { $_.ShedAttempts -gt 0 }).Count
 Write-Host ("[responses] total={0}; bad={1}; status: {2}" -f $results.Count, $badResponses.Count, ($statusHistogram -join ', '))
+Write-Host ("[backpressure] 429 attempts={0} across {1} request(s); retried per Retry-After, max {2} per request" -f $shedAttempts, $shedRequests, $MaxShedRetries)
 foreach ($bad in ($badResponses | Select-Object -First 10)) {
-    Write-Host ("  client={0} index={1} status={2} error={3} body={4}" -f $bad.Client, $bad.Index, $bad.StatusCode, $bad.ErrorType, $bad.Body) -ForegroundColor Yellow
+    Write-Host ("  client={0} index={1} status={2} error={3} shedAttempts={4} body={5}" -f $bad.Client, $bad.Index, $bad.StatusCode, $bad.ErrorType, $bad.ShedAttempts, $bad.Body) -ForegroundColor Yellow
 }
 
 # Settlement: page through every instance of this run's unique definition until all are terminal or the bound expires.
@@ -185,7 +205,7 @@ $ok = $results.Count -eq $ExpectedTotal -and $badResponses.Count -eq 0 -and
     $instances.Count -eq $ExpectedTotal -and $uniqueIds.Count -eq $ExpectedTotal -and
     $notCompleted.Count -eq 0 -and $withIncidents.Count -eq 0 -and $cadenceMismatches.Count -eq 0
 if ($ok) {
-    Write-Host ("SUCCESS - {0} concurrent requests ({1} clients, {2}): all HTTP 200 '{3}', {0} distinct Completed instances, zero incidents." -f $ExpectedTotal, $Clients, $Cadence, $ExpectedText) -ForegroundColor Green
+    Write-Host ("SUCCESS - {0} concurrent requests ({1} clients, {2}): all HTTP 200 '{3}', {0} distinct Completed instances, zero incidents ({4} shed attempt(s) retried)." -f $ExpectedTotal, $Clients, $Cadence, $ExpectedText, $shedAttempts) -ForegroundColor Green
 } else {
     Write-Host ("FAIL - responses ok={0}/{1}; instances={2} unique={3} notCompleted={4} incidents={5}; cadence mismatches={6} ({7})" -f `
         ($results.Count - $badResponses.Count), $ExpectedTotal, $instances.Count, $uniqueIds.Count, $notCompleted.Count, $withIncidents.Count, $cadenceMismatches.Count, ($cadenceMismatches -join ', ')) -ForegroundColor Red
