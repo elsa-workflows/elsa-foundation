@@ -1,0 +1,188 @@
+{
+  "formatVersion": 1,
+  "source": {
+    "gitHead": "11c852be19a24fd173edb77ab2cdbfc0aa977c42",
+    "branch": "claude/runtime-db-response-2400",
+    "pinnedSourceFiles": [
+      {
+        "relativePath": "src/essentials/Workflows/Runtime/Services/Executables/WorkflowExecutableHasher.cs",
+        "sha256": "c861de3d6a81620328b9206cfc116a13dfbe86633d374bf1ca6bf152f2911d6a",
+        "byteLength": 23664
+      },
+      {
+        "relativePath": "src/essentials/Activities/Runtime/Core/Models/ActivityContract.cs",
+        "sha256": "8e8f212f87744118ade42cb3f576ad937062dda4f35f8981fcce8d6ee8fd132e",
+        "byteLength": 16749
+      },
+      {
+        "relativePath": "src/essentials/Activities/Http/Activities/WriteHttpResponse.cs",
+        "sha256": "6bb91415efb66137302687cdcf0d0376fc56c8a0387f877001542d5ac6d70b7b",
+        "byteLength": 2080
+      },
+      {
+        "relativePath": "src/apps/Elsa.Workbench/Program.cs",
+        "sha256": "f17b34d3302ff6c708aa8ab383c1e8f3abc0dec2e23fcad3e8e89cc5bcb7b6c3",
+        "byteLength": 29650
+      },
+      {
+        "relativePath": "src/apps/Elsa.Workbench/Elsa.Workbench.csproj",
+        "sha256": "a30f75023ead4401826878a1275798f1b89ee4fe0ba1eb8292f6f37b1a1ac46b",
+        "byteLength": 16710
+      },
+      {
+        "relativePath": "e2e-tests/_ElsaCommon.ps1",
+        "sha256": "16905ef3c7503c33308d596290601c2b94cd8e829220a08ab857d0680f6d469f",
+        "byteLength": 13547
+      },
+      {
+        "relativePath": "e2e-tests/_ServerLifecycle.ps1",
+        "sha256": "2b0e30734d369fc8b685bc360ce023a63ec33dde830da45722308dd21c472994",
+        "byteLength": 11335
+      }
+    ],
+    "workbenchAssemblies": [
+      {
+        "relativePath": "src/apps/Elsa.Workbench/bin/Debug/net10.0/Elsa.Workbench.dll",
+        "sha256": "56aaccc8b496bc3b7757ab3f959417c5bc2c5aa7beaf5fd9c5e7a9c359d3fbc6",
+        "byteLength": 311296,
+        "fileVersion": "1.0.0.0",
+        "productVersion": "1.0.0+11c852be19a24fd173edb77ab2cdbfc0aa977c42"
+      },
+      {
+        "relativePath": "src/apps/Elsa.Workbench/bin/Debug/net10.0/Elsa.Workflows.Runtime.dll",
+        "sha256": "40e5ffe57a55e204880b948acc0e2ceed307fb3d0a7f4224c90dc6f7700930ce",
+        "byteLength": 1696768,
+        "fileVersion": "1.0.0.0",
+        "productVersion": "1.0.0+11c852be19a24fd173edb77ab2cdbfc0aa977c42"
+      },
+      {
+        "relativePath": "src/apps/Elsa.Workbench/bin/Debug/net10.0/Elsa.Workflows.Runtime.Core.dll",
+        "sha256": "f0d22a62a115f170a717fe8d83e5a80bee083f9dcd4f048773f392510d13132e",
+        "byteLength": 1357824,
+        "fileVersion": "1.0.0.0",
+        "productVersion": "1.0.0+11c852be19a24fd173edb77ab2cdbfc0aa977c42"
+      },
+      {
+        "relativePath": "src/apps/Elsa.Workbench/bin/Debug/net10.0/Elsa.Workflows.Runtime.Api.dll",
+        "sha256": "7c707d2488ad0b90906508973a659419e98386d593e63a3cd37885f84e544a0d",
+        "byteLength": 1473024,
+        "fileVersion": "1.0.0.0",
+        "productVersion": "1.0.0+11c852be19a24fd173edb77ab2cdbfc0aa977c42"
+      },
+      {
+        "relativePath": "src/apps/Elsa.Workbench/bin/Debug/net10.0/Elsa.Workflows.Publishing.dll",
+        "sha256": "0e808796ca85db4ebad5de5feafda6a751efa5574f999178a156a7e26216423f",
+        "byteLength": 365568,
+        "fileVersion": "1.0.0.0",
+        "productVersion": "1.0.0+11c852be19a24fd173edb77ab2cdbfc0aa977c42"
+      },
+      {
+        "relativePath": "src/apps/Elsa.Workbench/bin/Debug/net10.0/Elsa.Workflows.Publishing.Core.dll",
+        "sha256": "67de5693699d0943b3c5e9ab126c1cda79459fdcc3fc80aa7f903b14041d37e8",
+        "byteLength": 170496,
+        "fileVersion": "1.0.0.0",
+        "productVersion": "1.0.0+11c852be19a24fd173edb77ab2cdbfc0aa977c42"
+      },
+      {
+        "relativePath": "src/apps/Elsa.Workbench/bin/Debug/net10.0/Elsa.Workflows.Publishing.Api.dll",
+        "sha256": "a4c8b5524f31f47223806b8a9d6e2465066b80909da0e02b6457e92409a7fec0",
+        "byteLength": 1151488,
+        "fileVersion": "1.0.0.0",
+        "productVersion": "1.0.0+11c852be19a24fd173edb77ab2cdbfc0aa977c42"
+      },
+      {
+        "relativePath": "src/apps/Elsa.Workbench/bin/Debug/net10.0/Elsa.Activities.Runtime.Core.dll",
+        "sha256": "28b0965278067c90d1baef80bf693a0155904063a7811b817a80173e513e3d6d",
+        "byteLength": 108032,
+        "fileVersion": "1.0.0.0",
+        "productVersion": "1.0.0+11c852be19a24fd173edb77ab2cdbfc0aa977c42"
+      },
+      {
+        "relativePath": "src/apps/Elsa.Workbench/bin/Debug/net10.0/Elsa.Activities.Http.dll",
+        "sha256": "323b8e7e723878840ffe56d1ea0bffbdea5ceba8e01ec445b593eb3b5cfa2242",
+        "byteLength": 98816,
+        "fileVersion": "1.0.0.0",
+        "productVersion": "1.0.0+11c852be19a24fd173edb77ab2cdbfc0aa977c42"
+      },
+      {
+        "relativePath": "src/apps/Elsa.Workbench/bin/Debug/net10.0/Elsa.Activities.Sequence.dll",
+        "sha256": "5973624bf1211326ad35e5063c0853db52dce87fae88dfd7ab40b0f9b4f8d16d",
+        "byteLength": 34304,
+        "fileVersion": "1.0.0.0",
+        "productVersion": "1.0.0+11c852be19a24fd173edb77ab2cdbfc0aa977c42"
+      }
+    ]
+  },
+  "configuration": {
+    "files": [
+      {
+        "fileName": "appsettings.json",
+        "sourceRelativePath": "src/apps/Elsa.Workbench/appsettings.json",
+        "sourceSha256": "a6b11656c87136d01541667af1438da5230402a7ed3395a9cf2952570cda41ab",
+        "contentRootSha256": "a6b11656c87136d01541667af1438da5230402a7ed3395a9cf2952570cda41ab"
+      },
+      {
+        "fileName": "appsettings.Development.json",
+        "sourceRelativePath": "src/apps/Elsa.Workbench/appsettings.Development.json",
+        "sourceSha256": "f7e53cd45186cf539f15b2bbbf1fcf7ef1801803049c84e40d22f4849a4af1a9",
+        "contentRootSha256": "f7e53cd45186cf539f15b2bbbf1fcf7ef1801803049c84e40d22f4849a4af1a9"
+      },
+      {
+        "fileName": "shells.json",
+        "sourceRelativePath": "src/apps/Elsa.Workbench/shells.json",
+        "sourceSha256": "cc338d16e232bd022f0fd30ea4271a878f6d75f3d0fe89685a9a9689dda21d6a",
+        "contentRootSha256": "cc338d16e232bd022f0fd30ea4271a878f6d75f3d0fe89685a9a9689dda21d6a"
+      }
+    ],
+    "contentRootRelativeSqliteConfigurationVerified": true,
+    "retainedIsolatedContentRoot": true,
+    "databaseFileName": "elsa.db"
+  },
+  "capturedAtUtc": "2026-10-08T18:24:10.6135310+00:00",
+  "publication": {
+    "workflowName": "ResponseReplayCurrentFormatExternal-5be54cae82a548c1a96efafc26fff6b7",
+    "workflowDefinitionId": "14C9KTKZfxp",
+    "workflowDraftId": "14C9KTKX9bq",
+    "workflowDefinitionVersionId": "14C9KTQmMAR",
+    "sourceReferenceId": "activation-ref:publication-14C9KVSBH9L",
+    "artifactId": "artifact-48fcccd01c49",
+    "artifactHash": "sha256:48fcccd01c4967d6ea576fdf6dc5a8d9383d6f6d858f9886c910cd3167ea5198",
+    "artifactVersion": "1.0.0",
+    "rootArtifactId": "artifact-48fcccd01c49",
+    "responseNodeId": "write-response",
+    "responseActivityType": "Elsa.Activities.Http.Activities.WriteHttpResponse",
+    "resolvedWriteHttpResponseProfile": "External",
+    "responseSideEffectProfilePropertySerialized": false,
+    "omittedDefaultProfileResolution": "ActivityContract defaults SideEffectProfile to External and omits the default property from JSON.",
+    "routePath": "response-replay-current-format-5be54cae82a548c1a96efafc26fff6b7",
+    "responseMethod": "POST"
+  },
+  "workload": {
+    "sequenceNodeIds": [
+      "root",
+      "http-in",
+      "set-reference-text",
+      "write-response"
+    ],
+    "sequenceChildNodeOrder": [
+      "http-in",
+      "set-reference-text",
+      "write-response"
+    ],
+    "requestContentType": "application/json",
+    "requestBody": "{\"firstName\":\"Alice\",\"lastName\":\"Smith\"}",
+    "computation": "getVariable('content').firstName + ' ' + getVariable('content').lastName",
+    "responseAssertionPassed": true,
+    "responseStatus": 200,
+    "responseBody": "Alice Smith",
+    "evidence": "A fresh normal Workbench publication was invoked over its published HTTP route before the exact executable export was saved."
+  },
+  "export": {
+    "route": "/publishing/workflows/{versionId}/executable-export",
+    "formatVersion": 1,
+    "fileName": "current-format-external-closure.json",
+    "byteLength": 29688,
+    "sha256": "cce757438f683fee93204df0dc3cda84531e09106787f99247868c837620b3f3",
+    "responseStatus": 200
+  }
+}

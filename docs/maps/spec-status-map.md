@@ -236,3 +236,7 @@ Reads current `specs/*` folders and task checkboxes. Status clues are textual, n
 | [195-authoring-api-boundary](../../specs/195-authoring-api-boundary/spec.md) | Authoring-only API | Draft | - | 0 | 0 | retained |
 | [196-coalesced-command-scope](../../specs/196-coalesced-command-scope/spec.md) | Coalesced Command Scope | Implemented | - | 10 | 1 | - |
 | [197-bounded-durable-value-page-reuse](../../specs/197-bounded-durable-value-page-reuse/spec.md) | Bounded Durable-Value Page Reuse | Draft | - | 17 | 0 | retained, deferred |
+| [198-response-replay-safety](../../specs/198-response-replay-safety/spec.md) | Response Replay Safety | Implemented — [PR #2518](https://github.com/elsa-workflows/elsa-foundation/pull/2518) | - | 19 | 0 | out of scope |
+| [199-shared-nuplane-adoption](../../specs/199-shared-nuplane-adoption/spec.md) | Shared Nuplane Adapter Adoption | Draft | - | 13 | 2 | retained |
+| [200-adopt-startup-runner](../../specs/200-adopt-startup-runner/spec.md) | Shared Startup Runner Adoption | Preview locally qualified; stable acceptance remains open | - | 18 | 1 | superseded, retained |
+| [201-package-generation-readability](../../specs/201-package-generation-readability/spec.md) | Protect Package Generations | Draft — prepared; current integration qualification and stable acceptance remain open | - | 17 | 4 | out of scope |

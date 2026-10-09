@@ -38,6 +38,7 @@ public sealed class DefinitionDomainFakes(IHttpContextAccessor contextAccessor)
     public string? LastPromoteRequestedVersion { get; private set; }
     public UpdateDraftRequest? LastDraftUpdate { get; private set; }
     public string? LastDraftUpdateOperationKey { get; private set; }
+    public WorkflowDefinitionState? LastSubmittedState { get; private set; }
 
     /// <summary>
     /// The sample is both restorable and soft-deletable: DeletedAt stays null so a soft delete
@@ -90,12 +91,12 @@ public sealed class DefinitionDomainFakes(IHttpContextAccessor contextAccessor)
             Task.FromResult<IReadOnlyList<WorkflowDefinition>>([]);
     }
 
-    private sealed class VersionStore : IWorkflowDefinitionVersionStore
+    private sealed class VersionStore(DefinitionDomainFakes fakes) : IWorkflowDefinitionVersionStore
     {
-        private static WorkflowDefinitionVersion Sample(string versionId) => new("sample-definition", "1.0.0")
+        private WorkflowDefinitionVersion Sample(string versionId) => new("sample-definition", "1.0.0")
         {
             Id = versionId,
-            State = WorkflowDefinitionState.Empty,
+            State = fakes.LastSubmittedState ?? WorkflowDefinitionState.Empty,
             Definition = new WorkflowDefinition { Id = "sample-definition", Name = "Sample definition" }
         };
 
@@ -223,11 +224,14 @@ public sealed class DefinitionDomainFakes(IHttpContextAccessor contextAccessor)
         }
     }
 
-    private sealed class SubmitCommand : ISubmitWorkflowDefinitionCommand
+    private sealed class SubmitCommand(DefinitionDomainFakes fakes) : ISubmitWorkflowDefinitionCommand
     {
         public Task<SubmittedWorkflowDefinition> Execute(
-            DesignOperationKey operationKey, string name, string? description, WorkflowDefinitionState state, CancellationToken cancellationToken = default) =>
-            Task.FromResult(new SubmittedWorkflowDefinition("sample-definition", "sample-draft", "sample-version"));
+            DesignOperationKey operationKey, string name, string? description, WorkflowDefinitionState state, CancellationToken cancellationToken = default)
+        {
+            fakes.LastSubmittedState = state;
+            return Task.FromResult(new SubmittedWorkflowDefinition("sample-definition", "sample-draft", "sample-version"));
+        }
     }
 
     private sealed class AddCommand : IAddWorkflowDefinitionCommand
@@ -260,13 +264,13 @@ public sealed class DefinitionDomainFakes(IHttpContextAccessor contextAccessor)
     {
         services.AddSingleton<DefinitionDomainFakes>();
         services.AddSingleton<IWorkflowDefinitionStore>(sp => new DefinitionStore(sp.GetRequiredService<DefinitionDomainFakes>()));
-        services.AddSingleton<IWorkflowDefinitionVersionStore, VersionStore>();
+        services.AddSingleton<IWorkflowDefinitionVersionStore>(sp => new VersionStore(sp.GetRequiredService<DefinitionDomainFakes>()));
         services.AddSingleton<IWorkflowDefinitionDraftStore>(sp => new DraftStore(sp.GetRequiredService<DefinitionDomainFakes>()));
         services.AddSingleton<IWorkflowDefinitionVersionLayoutStore, VersionLayoutStore>();
         services.AddSingleton<IWorkflowDefinitionListProjectionStore, ProjectionStore>();
         services.AddSingleton<ISaveWorkflowDefinitionCommand>(sp => new SaveCommand(sp.GetRequiredService<DefinitionDomainFakes>()));
         services.AddSingleton<IDeleteWorkflowDefinitionPermanentlyCommand>(sp => new DeleteCommand(sp.GetRequiredService<DefinitionDomainFakes>()));
-        services.AddSingleton<ISubmitWorkflowDefinitionCommand, SubmitCommand>();
+        services.AddSingleton<ISubmitWorkflowDefinitionCommand>(sp => new SubmitCommand(sp.GetRequiredService<DefinitionDomainFakes>()));
         services.AddSingleton<IAddWorkflowDefinitionCommand, AddCommand>();
         services.AddSingleton<IUpdateDraftCommand>(sp => new UpdateDraft(sp.GetRequiredService<DefinitionDomainFakes>()));
         services.AddSingleton<IDiscardDraftCommand>(sp => new DiscardCommand(sp.GetRequiredService<DefinitionDomainFakes>()));

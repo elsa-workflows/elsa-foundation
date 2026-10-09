@@ -21,41 +21,53 @@ namespace Elsa.Cluster.Readability;
 /// </summary>
 /// <remarks>
 /// <para>
-/// <b>Replaced</b> requires positive evidence from the host's <see cref="IPackageAssemblyCatalog"/>: an assembly in a
-/// Nuplane-created load context is replaced when the active package set names another assembly with the same name.
-/// Default/non-Nuplane contexts, names absent from the catalog, and unreadable catalogs never establish replacement.
+/// <b>Replaced for activation</b> starts with positive evidence from <see cref="IPackageAssemblyCatalog"/>:
+/// an assembly in a Nuplane-created load context is replaced when the active package set names another assembly of the
+/// same name. Successful catalog reads remember those exact identities weakly, so removing the last package does not
+/// restore a proven replaced generation to EF discovery. Selecting an identity again clears its history, including on
+/// rollback. Missing or unreadable catalog evidence yields no replacement evidence for that read; absence alone never
+/// proves replacement. The default context and contexts Nuplane did not create are never excluded.
 /// </para>
 /// <para>
-/// <b>Retired</b> additionally requires that neither a shell generation nor the next shell's catalog can run it.
-/// The root-only <see cref="NuplanePackageGenerationBuildParticipant"/> acquires an unknown, conservative pin before
-/// catalog access, then narrows it to every feature in the exact selected snapshot, enabled or not. Features pin their
-/// entire non-default load context, including sibling assemblies. Only upstream-confirmed pre-provider unwind or
-/// complete provider teardown releases that build lease. Lifecycle notifications observe drain failures but never
-/// release lease-owned generations. Late notifications cannot recreate their pins.
+/// <b>Retired</b> still requires fresh replacement evidence from the current package catalog; activation history never
+/// retires a removed package. It also requires that neither a shell generation nor the next shell's catalog can run that
+/// exact assembly. A build participant establishes an unknown conservative pin before catalog access, then narrows it
+/// to the assemblies of every feature in the exact selected snapshot, enabled or not. Each selected feature pins its
+/// entire non-default load context, including sibling assemblies, but unrelated scanned assemblies are not pinned.
+/// </para>
+/// <list type="bullet">
+/// <item><description>
+/// <b>A build candidate or published shell.</b> The root-only <see cref="NuplanePackageGenerationBuildParticipant"/>
+/// starts the candidate pin before the feature catalog is read. CShells supplies the exact detailed snapshot before
+/// feature construction. Only upstream-confirmed pre-provider unwind or complete provider teardown releases that
+/// build lease; a failed terminal notification keeps it. Lifecycle notifications may observe a drain failure but never
+/// release lease-owned generations. A weak shell association prevents late notifications from recreating a released
+/// lease as a legacy pin.
+/// </description></item>
+/// <item><description>
+/// <b>A shell with no build lease.</b> The public lifecycle fallback establishes an unknown pin at the first lifecycle
+/// notification and narrows it from that shell's descriptors. It releases only after a successful drain; an unknown or
+/// failed drain stays conservative. This fallback cannot protect stock registry builds before catalog selection.
+/// </description></item>
+/// <item><description>
+/// <b>The next shell generation.</b> CShells builds from the runtime feature catalog's current snapshot, which advances
+/// according to the host's refresh policy. The snapshot's features and any replaced assembly it names are therefore
+/// pinned too. An uninitialized or unreadable feature catalog
+/// conservatively pins every current replacement because the first build may select any of them.
+/// </description></item>
+/// </list>
+/// <para>
+/// Whenever the complete retired set changes, including reintroduction of an assembly, a coalesced asynchronous loop
+/// republishes the host's report. An unchanged set is quiet. Stock catalog commits queue reevaluation through a
+/// root-owned subscription; catalogs without commit notifications use a conservative snapshot-generation watch while
+/// replacements exist, including after retirement so rollback can be detected. Shutdown unsubscribes and stops the
+/// watch. A catalog whose detailed read alone fails while its readable generation stays unchanged needs a later
+/// generation change or another evaluation trigger to retry.
 /// </para>
 /// <para>
-/// A custom registry without build-participant support is pinned from its first lifecycle notification until its drain
-/// succeeds. A failed legacy drain keeps its pin indefinitely because that path supplies no later teardown authority.
-/// This fallback cannot provide the stock registry's protection before catalog selection.
-/// </para>
-/// <para>
-/// The current feature catalog also pins the contexts of its features and any replaced assemblies it names. An
-/// uninitialized or unreadable catalog pins every replacement. Catalog reads finish before live/build pins are copied
-/// under a short gate; no user code or asynchronous work runs under that gate.
-/// </para>
-/// <para>
-/// Begin, selection, release, and committed-catalog notifications queue coalesced asynchronous reevaluation. Any change
-/// to the complete retired set, including reintroduction, republishes membership; unchanged evidence is quiet. Stock
-/// catalog notifications are subscribed before initial reconciliation and detached at root shutdown. Custom catalogs
-/// without that capability use <see cref="CatalogWatchInterval"/> polling while replacements exist, including after
-/// retirement so rollback can be detected. If only a custom detailed-snapshot read fails while its readable generation
-/// remains unchanged, recovery requires a later generation change or another evaluation trigger.
-/// </para>
-/// <para>
-/// One nondisposable instance is registered by instance and shared with shell providers. The separate root adapter binds
-/// it to the host's own catalogs and membership through <see cref="BindTo"/>; copied shell registrations must not create
-/// a second Nuplane loader or take ownership of this source. Asynchronous publication does not promise persisted
-/// readability before an initializer runs.
+/// One nondisposable source instance serves the whole host and is bound to the host's own catalogs and membership.
+/// The separate adapter is root-only and is excluded from copied shell providers. The instance is not a Nuplane observer,
+/// and asynchronous publication does not promise persisted readability before an initializer runs.
 /// </para>
 /// </remarks>
 public sealed class NuplanePackageGenerations : ISupersededAssemblySource, IShellLifecycleSubscriber
@@ -90,6 +102,10 @@ public sealed class NuplanePackageGenerations : ISupersededAssemblySource, IShel
 
     /// <summary>Weak identity retained for late lifecycle notifications after the lease is released.</summary>
     private readonly ConditionalWeakTable<IShell, BuildLease> _buildOwnedShells = new();
+
+    // Weak keys preserve positive activation evidence without retaining an assembly or its load context.
+    private readonly ConditionalWeakTable<Assembly, object> _activationReplacements = new();
+    private readonly SemaphoreSlim _replacementReads = new(1, 1);
 
     private readonly HostContainer _host = new();
     private ILogger _logger = NullLogger.Instance;
@@ -126,30 +142,56 @@ public sealed class NuplanePackageGenerations : ISupersededAssemblySource, IShel
     }
 
     /// <inheritdoc />
-    public async ValueTask<IReadOnlySet<Assembly>> GetReplacedAsync(CancellationToken cancellationToken = default)
+    public ValueTask<IReadOnlySet<Assembly>> GetReplacedAsync(CancellationToken cancellationToken = default) =>
+        ReadReplacedAsync(includeActivationHistory: true, cancellationToken);
+
+    private async ValueTask<IReadOnlySet<Assembly>> ReadReplacedAsync(bool includeActivationHistory, CancellationToken cancellationToken)
     {
         if (Host?.GetService<IPackageAssemblyCatalog>() is not { } catalog)
             return LoadedAssemblies.NoneSuperseded;
 
-        HashSet<Assembly> current;
+        // Serialize the read as well as the update, so an older snapshot cannot reset newer history.
+        await _replacementReads.WaitAsync(cancellationToken);
         try
         {
-            current = [.. (await catalog.GetPackagedAssembliesAsync(cancellationToken)).SelectMany(package => package.Assemblies)];
-        }
-        catch (Exception exception) when (exception is not OperationCanceledException)
-        {
-            // No evidence is no replacement: every generation keeps counting, which only delays finalization, rather than
-            // failing the publish every module activation waits on.
-            _logger.LogWarning(exception, "Nuplane's package catalog could not be read, so no package generation is treated as superseded.");
-            return LoadedAssemblies.NoneSuperseded;
-        }
+            HashSet<Assembly> current;
+            try
+            {
+                current = [.. (await catalog.GetPackagedAssembliesAsync(cancellationToken)).SelectMany(package => package.Assemblies)];
+            }
+            catch (Exception exception) when (exception is not OperationCanceledException)
+            {
+                // No evidence is no replacement: every generation keeps counting, which only delays finalization, rather than
+                // failing the publish every module activation waits on.
+                _logger.LogWarning(exception, "Nuplane's package catalog could not be read, so no package generation is treated as superseded.");
+                return LoadedAssemblies.NoneSuperseded;
+            }
 
-        var currentNames = current.Select(NameOf).ToHashSet(StringComparer.OrdinalIgnoreCase);
-        return AssemblyLoadContext.All
-            .Where(context => context != AssemblyLoadContext.Default && context.GetType().Assembly.GetName().Name == NuplaneLoadingAssembly)
-            .SelectMany(context => context.Assemblies)
-            .Where(assembly => !current.Contains(assembly) && currentNames.Contains(NameOf(assembly)))
-            .ToHashSet();
+            var currentNames = current.Select(NameOf).ToHashSet(StringComparer.OrdinalIgnoreCase);
+            var loaded = AssemblyLoadContext.All
+                .Where(context => context != AssemblyLoadContext.Default && context.GetType().Assembly.GetName().Name == NuplaneLoadingAssembly)
+                .SelectMany(context => context.Assemblies)
+                .ToArray();
+            var replaced = loaded
+                .Where(assembly => !current.Contains(assembly) && currentNames.Contains(NameOf(assembly)))
+                .ToHashSet();
+
+            // A rollback may select an identity previously replaced. It stays eligible even after later removal.
+            foreach (var assembly in current)
+                _activationReplacements.Remove(assembly);
+            foreach (var assembly in replaced)
+                _activationReplacements.GetValue(assembly, static _ => new object());
+
+            if (!includeActivationHistory)
+                return replaced;
+
+            return loaded.Where(assembly => !current.Contains(assembly) &&
+                _activationReplacements.TryGetValue(assembly, out _)).ToHashSet();
+        }
+        finally
+        {
+            _replacementReads.Release();
+        }
     }
 
     /// <inheritdoc />
@@ -159,7 +201,8 @@ public sealed class NuplanePackageGenerations : ISupersededAssemblySource, IShel
     /// </remarks>
     public async ValueTask<IReadOnlySet<Assembly>> GetRetiredAsync(CancellationToken cancellationToken = default)
     {
-        var replaced = await GetReplacedAsync(cancellationToken);
+        // Retirement still requires current replacement evidence; removal alone never credits readability.
+        var replaced = await ReadReplacedAsync(includeActivationHistory: false, cancellationToken);
         if (replaced.Count == 0)
             return replaced;
 

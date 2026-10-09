@@ -1,0 +1,370 @@
+{
+  "schema": "elsa-2413-final-clean-ef-accounting/v1",
+  "status": "accepted_request_trace_accounting_only",
+  "scope": {
+    "measured": "EF DiagnosticListener command events admitted to exactly two request traces per source/cadence: one successful HTTP workflow request and one valid companion REST request.",
+    "claims": {
+      "efOnlyRequestTrace": true,
+      "t02T04Settlement": false,
+      "timing": false
+    },
+    "interpretation": "Counts are command-event counts, paired starts and terminals, split by Npgsql and SQLite provider. They are not SQL statement counts, durable checkpoint commits, physical network round trips, latency, statistical rates, or isolated attribution to one source change.",
+    "sampleSize": "One HTTP and one REST request per cadence for each of two source revisions; Immediate is a control for these traces, not a claim about all work.",
+    "excluded": [
+      "response phase",
+      "full settlement",
+      "durable checkpoint or outbox ownership",
+      "physical round trips",
+      "latency",
+      "statistical workload rates",
+      "isolated individual-change causality"
+    ]
+  },
+  "sourceArtifacts": {
+    "baseline": {
+      "sourceHead": "e6faa5689814c33353009b13f5b9e44d0e9982a4",
+      "assemblies": {
+        "workbench": "9cf2302ddcea39a8614adc4a06cf9d5068e872ea98d2dcb61a2cde452cb755bc",
+        "runtimeEfPersistence": "88f44da8384ecc58429caecf09b109f1ce2e518eea944a5eb291193c04755da2",
+        "runtimePersistenceHelper": "9a6e7da0ed23fad4ddf94e1d9e4250ca99e2af094a8150f7f4e4f7518b344aed"
+      }
+    },
+    "after": {
+      "sourceHead": "7357b91e012c56cb34f1259ef7a60ef56e144afe",
+      "assemblies": {
+        "workbench": "b85e5ffa51614aacadc0c1398a703db32f136e510fd398c6d64e9f9c0245fbbb",
+        "runtimeEfPersistence": "d235c0f9fb32ed8cc0a3e3beb96dd8c297c4925223fd21eb667d29556aeabca2",
+        "runtimePersistenceHelper": "176e8d5fa6008ec6d17af195ea586c8564bd4246c259b916d817005baf6db7f9"
+      }
+    },
+    "sharedFixtureHead": "b9f854cb493c2945c14790bab75c991f46f9307a"
+  },
+  "configuration": {
+    "semanticComparison": {
+      "beforeAfterEqualWithinCadence": true,
+      "matchesAcceptedFinalMainCadenceReferences": true,
+      "immediate": {
+        "appsettings.json": "6eea3664873208203a625cbe1e811bb9f1d01014e0d360cd6a2c74fcc401f0ad",
+        "appsettings.Development.json": "50a1353b2198ed3e179404e612bbf368ddf4bdd31e165c478d40d61684ff4c91",
+        "shells.json": "d3b058180537f97681235c5d0dad0d70e4cb9959f0f0dcd9c942820bfde6f49d"
+      },
+      "coalesced": {
+        "appsettings.json": "6eea3664873208203a625cbe1e811bb9f1d01014e0d360cd6a2c74fcc401f0ad",
+        "appsettings.Development.json": "50a1353b2198ed3e179404e612bbf368ddf4bdd31e165c478d40d61684ff4c91",
+        "shells.json": "786349947b696490758141259dff498763a49a3174b420f1fc7916e35797d63b"
+      }
+    },
+    "rawSha256ByCase": [
+      {
+        "source": "after",
+        "cadence": "Coalesced",
+        "files": {
+          "shells.json": "c701630054a3fb580db9e2f5cb0c4a3fd5101592d834efbe0dc737c06b0657da",
+          "appsettings.json": "0a5f9b82fb01fdf949f13d13267957848cc7513b94e5b8a43ea61d771b041383",
+          "appsettings.Development.json": "f7e53cd45186cf539f15b2bbbf1fcf7ef1801803049c84e40d22f4849a4af1a9"
+        }
+      },
+      {
+        "source": "after",
+        "cadence": "Immediate",
+        "files": {
+          "appsettings.json": "0a5f9b82fb01fdf949f13d13267957848cc7513b94e5b8a43ea61d771b041383",
+          "shells.json": "5bfd31c38a1ec90aeca1fad18cc5d9b51a490bad7f85ab5fdc7bc3e853641f62",
+          "appsettings.Development.json": "f7e53cd45186cf539f15b2bbbf1fcf7ef1801803049c84e40d22f4849a4af1a9"
+        }
+      },
+      {
+        "source": "baseline",
+        "cadence": "Coalesced",
+        "files": {
+          "appsettings.json": "0a5f9b82fb01fdf949f13d13267957848cc7513b94e5b8a43ea61d771b041383",
+          "shells.json": "38b8131bbf73321b42f6309ae1f227a3d3f9b0cc384440d42136d6368f993423",
+          "appsettings.Development.json": "f7e53cd45186cf539f15b2bbbf1fcf7ef1801803049c84e40d22f4849a4af1a9"
+        }
+      },
+      {
+        "source": "baseline",
+        "cadence": "Immediate",
+        "files": {
+          "appsettings.Development.json": "f7e53cd45186cf539f15b2bbbf1fcf7ef1801803049c84e40d22f4849a4af1a9",
+          "appsettings.json": "0a5f9b82fb01fdf949f13d13267957848cc7513b94e5b8a43ea61d771b041383",
+          "shells.json": "df84657931f0f013abebfc7d4385011f2d9dd90c1359568a26e84e6f664077d1"
+        }
+      }
+    ]
+  },
+  "helperHashes": {
+    "fixtureScripts": {
+      "serverLifecycle": "2b0e30734d369fc8b685bc360ce023a63ec33dde830da45722308dd21c472994",
+      "httpAndRestHelpers": "16905ef3c7503c33308d596290601c2b94cd8e829220a08ab857d0680f6d469f",
+      "variableHelpers": "8b806f99e765395a3a494b043a140fb03aff659426a098af358c56b79bd5a662",
+      "primaryHttpFixture": "dd5dcde585b8d9fe5c7a4b4b0ca364eafb0a88058f8111ac60d23186995e3df7",
+      "validRestFixture": "2c916c6a79bf8e8645b2bb5171a1c148e1442ba72a675d30bb213ca2287f3ddd"
+    },
+    "hostHarness": "2d3da8b634652a5676ba6a01c6445fefedd566c3738425881b8d5f18b4ceb7cc",
+    "requestHarness": "1323407b8dadba6b28d9814ae538f3e613a5a60050afa6cfe7c21359e75dafd6",
+    "collectorAssembly": "aba10828b05d23364fc73a3aac4839577cf186833d41f94546977e464f3d7926",
+    "collectorDependencies": "08ec3f0463cceb1742fa5c6af8c23eebdf714cd8e28cc37d567460419b9440a3"
+  },
+  "cases": [
+    {
+      "source": "baseline",
+      "sourceHead": "e6faa5689814c33353009b13f5b9e44d0e9982a4",
+      "cadence": "Immediate",
+      "configurationRawSha256": {
+        "appsettings.Development.json": "f7e53cd45186cf539f15b2bbbf1fcf7ef1801803049c84e40d22f4849a4af1a9",
+        "appsettings.json": "0a5f9b82fb01fdf949f13d13267957848cc7513b94e5b8a43ea61d771b041383",
+        "shells.json": "df84657931f0f013abebfc7d4385011f2d9dd90c1359568a26e84e6f664077d1"
+      },
+      "captureReceiptSha256": "91a3e7fec7d56697438a9b2782ed8e7c910690953dc0d54e7c1dd8a6d50a02a9",
+      "metadataReceiptSha256": "2abb33bf27af419a7710bf4eb137a70fd177a96d23a7c207b606a2c576845d8a",
+      "efIdentityProbeSha256": "3655e322fb19827a47e24573ad24e7007070b5402ad6ae12e6a3f46ccafa9b00",
+      "probeBytes": 4012261,
+      "probeRecords": 3576,
+      "outcomes": [
+        {
+          "kind": "http",
+          "httpStatus": 200,
+          "workflowStatus": "Completed",
+          "incidentCount": 0,
+          "expectedOutputMatched": true,
+          "efCommandEvents": 635,
+          "providerCommandEvents": {
+            "postgresql": 505,
+            "sqlite": 130
+          },
+          "commandStartsEqualTerminals": true
+        },
+        {
+          "kind": "rest",
+          "httpStatus": 200,
+          "workflowStatus": "Completed",
+          "incidentCount": 0,
+          "expectedOutputMatched": true,
+          "efCommandEvents": 556,
+          "providerCommandEvents": {
+            "postgresql": 441,
+            "sqlite": 115
+          },
+          "commandStartsEqualTerminals": true
+        }
+      ],
+      "host": {
+        "copiedBuildClosureFiles": 520,
+        "exitCode": 0,
+        "gracefulExitObserved": true
+      },
+      "postgresLifecycle": {
+        "imageId": "sha256:ca0bd484cb98bf4b24eb1010e73fb3fcbd6714d240fbc1a10eea5b7dbecb641d",
+        "postCaptureIdentityReadback": true,
+        "containerRunningBeforeStop": true,
+        "containerExitedAfterStop": true,
+        "sameContainerIdentityBeforeAfter": true,
+        "sameDataVolumeIdentityBeforeAfter": true,
+        "containerAndVolumeRetained": true,
+        "legacyMetadataTopLevelRetainedFlag": false,
+        "nestedMetadataRetainedFlag": true,
+        "captureReceiptNestedRetainedFlag": true
+      }
+    },
+    {
+      "source": "baseline",
+      "sourceHead": "e6faa5689814c33353009b13f5b9e44d0e9982a4",
+      "cadence": "Coalesced",
+      "configurationRawSha256": {
+        "appsettings.json": "0a5f9b82fb01fdf949f13d13267957848cc7513b94e5b8a43ea61d771b041383",
+        "shells.json": "38b8131bbf73321b42f6309ae1f227a3d3f9b0cc384440d42136d6368f993423",
+        "appsettings.Development.json": "f7e53cd45186cf539f15b2bbbf1fcf7ef1801803049c84e40d22f4849a4af1a9"
+      },
+      "captureReceiptSha256": "2c85d9cbab3a2b31abb970d46a648cb3ada2f7caf40f4aa5e2f382b62637e994",
+      "metadataReceiptSha256": "ae4d7a9868349704dedfb9dd10c90bc5d765c207a9e812a46c3452c738a2e85d",
+      "efIdentityProbeSha256": "39a53d132f3ee6f8d1aa9efbee1e5d0c4d69700602228eb02af93a704d333f4b",
+      "probeBytes": 1123485,
+      "probeRecords": 962,
+      "outcomes": [
+        {
+          "kind": "http",
+          "httpStatus": 200,
+          "workflowStatus": "Completed",
+          "incidentCount": 0,
+          "expectedOutputMatched": true,
+          "efCommandEvents": 277,
+          "providerCommandEvents": {
+            "postgresql": 195,
+            "sqlite": 82
+          },
+          "commandStartsEqualTerminals": true
+        },
+        {
+          "kind": "rest",
+          "httpStatus": 200,
+          "workflowStatus": "Completed",
+          "incidentCount": 0,
+          "expectedOutputMatched": true,
+          "efCommandEvents": 101,
+          "providerCommandEvents": {
+            "postgresql": 82,
+            "sqlite": 19
+          },
+          "commandStartsEqualTerminals": true
+        }
+      ],
+      "host": {
+        "copiedBuildClosureFiles": 520,
+        "exitCode": 0,
+        "gracefulExitObserved": true
+      },
+      "postgresLifecycle": {
+        "imageId": "sha256:ca0bd484cb98bf4b24eb1010e73fb3fcbd6714d240fbc1a10eea5b7dbecb641d",
+        "postCaptureIdentityReadback": true,
+        "containerRunningBeforeStop": true,
+        "containerExitedAfterStop": true,
+        "sameContainerIdentityBeforeAfter": true,
+        "sameDataVolumeIdentityBeforeAfter": true,
+        "containerAndVolumeRetained": true,
+        "legacyMetadataTopLevelRetainedFlag": false,
+        "nestedMetadataRetainedFlag": true,
+        "captureReceiptNestedRetainedFlag": true
+      }
+    },
+    {
+      "source": "after",
+      "sourceHead": "7357b91e012c56cb34f1259ef7a60ef56e144afe",
+      "cadence": "Immediate",
+      "configurationRawSha256": {
+        "appsettings.json": "0a5f9b82fb01fdf949f13d13267957848cc7513b94e5b8a43ea61d771b041383",
+        "shells.json": "5bfd31c38a1ec90aeca1fad18cc5d9b51a490bad7f85ab5fdc7bc3e853641f62",
+        "appsettings.Development.json": "f7e53cd45186cf539f15b2bbbf1fcf7ef1801803049c84e40d22f4849a4af1a9"
+      },
+      "captureReceiptSha256": "f93c6b862ac1d39e364c30e10c69489d2b405a49d2f7c6aaafc4541fef41e932",
+      "metadataReceiptSha256": "b4dd2a78058d60411e2ec3bd65a90c112cf6747f1e7894a253841c2ac27a1c4f",
+      "efIdentityProbeSha256": "ed4c4664ed0c43acb59a06260f6777288040c745e702b2a1b549f7b527547413",
+      "probeBytes": 4009859,
+      "probeRecords": 3572,
+      "outcomes": [
+        {
+          "kind": "http",
+          "httpStatus": 200,
+          "workflowStatus": "Completed",
+          "incidentCount": 0,
+          "expectedOutputMatched": true,
+          "efCommandEvents": 635,
+          "providerCommandEvents": {
+            "postgresql": 505,
+            "sqlite": 130
+          },
+          "commandStartsEqualTerminals": true
+        },
+        {
+          "kind": "rest",
+          "httpStatus": 200,
+          "workflowStatus": "Completed",
+          "incidentCount": 0,
+          "expectedOutputMatched": true,
+          "efCommandEvents": 556,
+          "providerCommandEvents": {
+            "postgresql": 441,
+            "sqlite": 115
+          },
+          "commandStartsEqualTerminals": true
+        }
+      ],
+      "host": {
+        "copiedBuildClosureFiles": 520,
+        "exitCode": 0,
+        "gracefulExitObserved": true
+      },
+      "postgresLifecycle": {
+        "imageId": "sha256:ca0bd484cb98bf4b24eb1010e73fb3fcbd6714d240fbc1a10eea5b7dbecb641d",
+        "postCaptureIdentityReadback": true,
+        "containerRunningBeforeStop": true,
+        "containerExitedAfterStop": true,
+        "sameContainerIdentityBeforeAfter": true,
+        "sameDataVolumeIdentityBeforeAfter": true,
+        "containerAndVolumeRetained": true,
+        "legacyMetadataTopLevelRetainedFlag": false,
+        "nestedMetadataRetainedFlag": true,
+        "captureReceiptNestedRetainedFlag": true
+      }
+    },
+    {
+      "source": "after",
+      "sourceHead": "7357b91e012c56cb34f1259ef7a60ef56e144afe",
+      "cadence": "Coalesced",
+      "configurationRawSha256": {
+        "shells.json": "c701630054a3fb580db9e2f5cb0c4a3fd5101592d834efbe0dc737c06b0657da",
+        "appsettings.json": "0a5f9b82fb01fdf949f13d13267957848cc7513b94e5b8a43ea61d771b041383",
+        "appsettings.Development.json": "f7e53cd45186cf539f15b2bbbf1fcf7ef1801803049c84e40d22f4849a4af1a9"
+      },
+      "captureReceiptSha256": "8ee7754ca14e1db67cdfc0585fbee298846186d17fc9150fe27a32ea6998bfe4",
+      "metadataReceiptSha256": "ba15667d8e5fd93a2deb5f1c76c5cc0e38ace4c5dba9bd546b57f527da4ecae8",
+      "efIdentityProbeSha256": "9580f64bf1893e6cd9ca860a3a1fa0addb0bbfa95275ecdc07849709e1dbabce",
+      "probeBytes": 647974,
+      "probeRecords": 564,
+      "outcomes": [
+        {
+          "kind": "http",
+          "httpStatus": 200,
+          "workflowStatus": "Completed",
+          "incidentCount": 0,
+          "expectedOutputMatched": true,
+          "efCommandEvents": 134,
+          "providerCommandEvents": {
+            "postgresql": 84,
+            "sqlite": 50
+          },
+          "commandStartsEqualTerminals": true
+        },
+        {
+          "kind": "rest",
+          "httpStatus": 200,
+          "workflowStatus": "Completed",
+          "incidentCount": 0,
+          "expectedOutputMatched": true,
+          "efCommandEvents": 73,
+          "providerCommandEvents": {
+            "postgresql": 54,
+            "sqlite": 19
+          },
+          "commandStartsEqualTerminals": true
+        }
+      ],
+      "host": {
+        "copiedBuildClosureFiles": 520,
+        "exitCode": 0,
+        "gracefulExitObserved": true
+      },
+      "postgresLifecycle": {
+        "imageId": "sha256:ca0bd484cb98bf4b24eb1010e73fb3fcbd6714d240fbc1a10eea5b7dbecb641d",
+        "postCaptureIdentityReadback": true,
+        "containerRunningBeforeStop": true,
+        "containerExitedAfterStop": true,
+        "sameContainerIdentityBeforeAfter": true,
+        "sameDataVolumeIdentityBeforeAfter": true,
+        "containerAndVolumeRetained": true,
+        "legacyMetadataTopLevelRetainedFlag": false,
+        "nestedMetadataRetainedFlag": true,
+        "captureReceiptNestedRetainedFlag": true
+      }
+    }
+  ],
+  "evidenceHashes": {
+    "pairReceiptSha256": "cf93a21dbc233591c8d6abf006143e4f51bfeb1628040c6da895b9a6a92e3afb",
+    "rootReconciliationSha256": "fd90d38d2e1c28a118a8239615fb9ace16ddd6471bf2872e5cf06ae82d7ffa1c",
+    "evidenceArchiveSha256": "2e7d4031c8a9aca2cdef62413adf9fdea2085b987e52540c84aab3429ef2ecad",
+    "independentReviewJsonSha256": "d2948b2206ae232a82732aaccb17cec4e5947af353ccc9b99762c8dec17a3d72",
+    "independentReviewStatus": "passed_with_nonblocking_metadata_finding",
+    "independentReviewCaseCount": 4,
+    "independentReviewUniqueTraceCount": 8,
+    "allIndependentReviewChecksPassed": true,
+    "nonblockingMetadataErratum": "metadata.json top-level postgresRetained=false conflicts with nested postgres.retained=true and capture receipt postgres.retainedContainerAndVolume=true; nested stop-before/after identity checks match and prove the owned container stopped while its data volume was retained."
+  },
+  "retentionErratumDisposition": {
+    "sourceMetadataRewritten": false,
+    "projectionUsesNestedIdentityReadbacks": true,
+    "containerState": "running before stop; same container identity exited afterward",
+    "volumeState": "same attached data-volume identity present before and after stop; retained",
+    "meaning": "PostgreSQL container is stopped and retained, not running; its data volume is retained."
+  },
+  "acceptedDate": "2026-10-09"
+}

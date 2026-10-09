@@ -1,5 +1,7 @@
 # Remaining command families and their disposition
 
+**Historical T02/T04 handoff, 7 October 2026.** The counts and then-current scheduling below are retained unchanged. Use the [final four-case account](final-joined-accounting.md) and [final residual dispositions](delivery-response.md#remaining-cost-and-owned-uncertainty) for the completed investigation.
+
 The accepted extended captures account for **1,647 EF command executions**: 420 Coalesced and 1,227 Immediate, each with one successful HttpEndpoint request, one valid REST companion and separately counted resumption sweeps. **931 commands join an observed repository-method span; 716 have no method ancestor.** This offline review reconciles those 716 commands without inventing caller, row, outcome or savings attribution. It uses the [accepted checkpoint/queue packets](checkpoint-queue-accounting.md) and publishes the full [45-group matrix](evidence/residual-disposition-2026-10-07.json).
 
 Every residual group retains the complete table-token array, observed trace/boundary, provider, context and verb. Each command belongs to one group. None of these residual groups contains multiple tables. Hierarchy commands are not absent from the capture; there are simply no hierarchy commands left in this no-method-ancestor subset. Transaction/SaveChanges boundaries, combined checkpoint flushes and exact typed identities stay in the original packets.

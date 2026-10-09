@@ -1,6 +1,7 @@
+using System.Reflection;
+using System.Text.Json;
 using Elsa.Workflows.Publishing.Handlers;
 using Elsa.Workflows.Publishing.Services;
-using System.Text.Json;
 using Elsa.Activities.Design.Core.Models;
 using Elsa.Activities.Http.Activities;
 using Elsa.Activities.Primitives.Activities;
@@ -191,9 +192,9 @@ public sealed class WorkflowExecutableCompilerTests
     [Fact]
     public async Task An_undeclared_input_keeps_its_contract_fingerprint_and_artifact_hash()
     {
-        // Captured before the sensitivity declaration existed (spec 188, slice 5): neither the contract fingerprint nor
-        // the artifact hash of a node whose inputs declare nothing may move. All three values were re-derived
-        // independently on unmodified main at df02ece3c and matched.
+        // These values were captured before the sensitivity declaration existed (spec 188, slice 5). #2515
+        // intentionally updates the structured artifact hashes to include the effective side-effect profile;
+        // the contract fingerprint remains unchanged for both input variants.
         var unbound = await SecretBindingCompilerFixture.CompileAsync(SecretBindingCompilerFixture.Node(typeof(TestWriteLineActivity)), [typeof(TestWriteLineActivity)]);
         var literal = await SecretBindingCompilerFixture.CompileAsync(
             SecretBindingCompilerFixture.Node(typeof(TestWriteLineActivity), new WorkflowArgumentState("Text", new ArgumentValue(JsonSerializer.SerializeToElement("hello"), "Literal"), null, null, null, null)),
@@ -201,8 +202,8 @@ public sealed class WorkflowExecutableCompilerTests
 
         Assert.Equal("sha256:d4c0e91ccccf8bfd0650d563b933c2dc24fa6acf5db71de7614cd82adecd3cb5", unbound.RootActivity.ActivityContract!.SchemaFingerprint);
         Assert.Equal(unbound.RootActivity.ActivityContract.SchemaFingerprint, literal.RootActivity.ActivityContract!.SchemaFingerprint);
-        Assert.Equal("sha256:05ae620ba51b3ae51f212e1506b691ba358561d42f10ab7286ed4cfbac11cce5", unbound.Identity.ArtifactHash);
-        Assert.Equal("sha256:6657ac74698170e3b3a592a64184c0a32edefa8db169fbf14fbb5578e2eb8edc", literal.Identity.ArtifactHash);
+        Assert.Equal("sha256:0e1f299d066b2d136264598e6b1725ba9a28e974807cd7db0df8a7330b4a67ff", unbound.Identity.ArtifactHash);
+        Assert.Equal("sha256:7b4d6b3a6d8b5c00b228dcb91f73de2f775839f9adc14beddd0b3639d96adf0d", literal.Identity.ArtifactHash);
     }
 
     [Fact]
@@ -470,6 +471,35 @@ public sealed class WorkflowExecutableCompilerTests
     }
 
     [Fact]
+    public async Task Placed_template_profile_changes_the_consuming_workflow_identity()
+    {
+        var authoredInput = new WorkflowArgumentState(
+            "value",
+            new ArgumentValue(JsonSerializer.SerializeToElement(42), "Literal"),
+            null, null, null, null);
+        var request = NewRequest(DateTimeOffset.UtcNow);
+        var external = await PlacedReusableCompiler(authoredInput).CompileAsync(request);
+        var replaySafe = await PlacedReusableCompiler(
+                authoredInput,
+                templateRootProfile: Elsa.Activities.Runtime.Core.Models.SideEffectProfile.ReplaySafe)
+            .CompileAsync(request);
+        var replaySafeRepeat = await PlacedReusableCompiler(
+                authoredInput,
+                templateRootProfile: Elsa.Activities.Runtime.Core.Models.SideEffectProfile.ReplaySafe)
+            .CompileAsync(request);
+
+        Assert.Equal(external.RootActivity.ExecutableNodeId, replaySafe.RootActivity.ExecutableNodeId);
+        Assert.Equal(external.RootActivity.DescriptorPayload.GetRawText(), replaySafe.RootActivity.DescriptorPayload.GetRawText());
+        Assert.Equal(Elsa.Activities.Runtime.Core.Models.SideEffectProfile.External, external.RootActivity.ActivityContract!.SideEffectProfile);
+        Assert.Equal(Elsa.Activities.Runtime.Core.Models.SideEffectProfile.ReplaySafe, replaySafe.RootActivity.ActivityContract!.SideEffectProfile);
+        Assert.NotEqual(external.RootActivity.ActivityContract.SchemaFingerprint, replaySafe.RootActivity.ActivityContract.SchemaFingerprint);
+        Assert.NotEqual(external.Identity.ArtifactHash, replaySafe.Identity.ArtifactHash);
+        Assert.NotEqual(external.Identity.ArtifactId, replaySafe.Identity.ArtifactId);
+        Assert.Equal(replaySafe.Identity.ArtifactHash, replaySafeRepeat.Identity.ArtifactHash);
+        Assert.Equal(replaySafe.Identity.ArtifactId, replaySafeRepeat.Identity.ArtifactId);
+    }
+
+    [Fact]
     public async Task Placed_reusable_activity_refuses_a_secret_reference_on_its_boundary_input()
     {
         // Spec 188: a reusable boundary is activated by its template root, which here is not a CLR activity, so it
@@ -498,6 +528,7 @@ public sealed class WorkflowExecutableCompilerTests
         var compiler = PlacedReusableCompiler(
             SecretInput("value"),
             "String",
+            Elsa.Activities.Runtime.Core.Models.SideEffectProfile.External,
             ("Int32", new WorkflowArgumentState(
                 "aaa",
                 new ArgumentValue(JsonSerializer.SerializeToElement("not-a-number"), "Literal"),
@@ -515,7 +546,11 @@ public sealed class WorkflowExecutableCompilerTests
     [Fact]
     public async Task Placed_reusable_activity_refusal_names_the_ordinally_first_secret_input()
     {
-        var compiler = PlacedReusableCompiler(SecretInput("value"), "String", ("String", SecretInput("beta")));
+        var compiler = PlacedReusableCompiler(
+            SecretInput("value"),
+            "String",
+            Elsa.Activities.Runtime.Core.Models.SideEffectProfile.External,
+            ("String", SecretInput("beta")));
 
         var exception = await Assert.ThrowsAsync<WorkflowExecutableCompilationException>(
             () => compiler.CompileAsync(NewRequest(DateTimeOffset.UtcNow)).AsTask());
@@ -539,6 +574,7 @@ public sealed class WorkflowExecutableCompilerTests
     private WorkflowExecutableCompiler PlacedReusableCompiler(
         WorkflowArgumentState authoredInput,
         string valueTypeAlias = "Int32",
+        Elsa.Activities.Runtime.Core.Models.SideEffectProfile templateRootProfile = Elsa.Activities.Runtime.Core.Models.SideEffectProfile.External,
         params (string TypeAlias, WorkflowArgumentState State)[] extraInputs)
     {
         var contract = new DesignActivityContract("1", [new DesignActivityInputContract(
@@ -555,7 +591,10 @@ public sealed class WorkflowExecutableCompilerTests
                 "local-child", "local-child", "test.child", "1",
                 new("test.child", "1", JsonSerializer.SerializeToElement(new { plan = 2 })),
                 new Dictionary<string, RuntimeInputBinding>(), new Dictionary<string, RuntimeOutputCapture>(), new Dictionary<string, string>())])],
-            activityContract: BoundaryRuntimeContract(hasValueInput: true, valueTypeAlias));
+            activityContract: BoundaryRuntimeContract(
+                hasValueInput: true,
+                valueTypeAlias: valueTypeAlias,
+                sideEffectProfile: templateRootProfile));
         var template = new ExecutableActivityTemplate(
             "template-greet", "hash-greet", root, new Dictionary<string, WorkflowExecutableResumeTarget>(),
             [], [], [], "fingerprint", new Dictionary<string, string>(), DateTimeOffset.UnixEpoch);
@@ -717,6 +756,169 @@ public sealed class WorkflowExecutableCompilerTests
         Assert.Equal(
             Elsa.Activities.Runtime.Core.Models.SideEffectProfile.External,
             writeLine.ActivityContract!.SideEffectProfile);
+    }
+
+    [Fact]
+    public async Task Compiler_artifact_identity_changes_when_only_the_pinned_side_effect_profile_changes()
+    {
+        var workflow = WorkflowVersion(Node("write-one", Text("hello")));
+        var request = NewRequest(DateTimeOffset.UtcNow);
+        var external = await Compiler(workflow).CompileAsync(request);
+        var externalRepeat = await Compiler(workflow).CompileAsync(request);
+        var replaySafe = await Compiler(
+                workflow,
+                metadataEnricher: new PinnedSideEffectProfileEnricher(Elsa.Activities.Runtime.Core.Models.SideEffectProfile.ReplaySafe))
+            .CompileAsync(request);
+
+        var externalContract = external.RootActivity.ActivityContract!;
+        var replaySafeContract = replaySafe.RootActivity.ActivityContract!;
+        Assert.Equal(external.RootActivity.ExecutableNodeId, replaySafe.RootActivity.ExecutableNodeId);
+        Assert.Equal(external.RootActivity.ActivityType, replaySafe.RootActivity.ActivityType);
+        Assert.Equal(external.RootActivity.DescriptorType, replaySafe.RootActivity.DescriptorType);
+        Assert.Equal(external.RootActivity.DescriptorPayload.GetRawText(), replaySafe.RootActivity.DescriptorPayload.GetRawText());
+        Assert.Equal(JsonSerializer.Serialize(external.RootActivity.InputBindings), JsonSerializer.Serialize(replaySafe.RootActivity.InputBindings));
+        Assert.Equal(Elsa.Activities.Runtime.Core.Models.SideEffectProfile.External, externalContract.SideEffectProfile);
+        Assert.Equal(Elsa.Activities.Runtime.Core.Models.SideEffectProfile.ReplaySafe, replaySafeContract.SideEffectProfile);
+        Assert.NotEqual(externalContract.SchemaFingerprint, replaySafeContract.SchemaFingerprint);
+        // The pinned profile is the only behavioral input changed by the enricher.
+        Assert.NotEqual(external.Identity.ArtifactHash, replaySafe.Identity.ArtifactHash);
+        Assert.NotEqual(external.Identity.ArtifactId, replaySafe.Identity.ArtifactId);
+        Assert.Equal(external.Identity.ArtifactHash, externalRepeat.Identity.ArtifactHash);
+        Assert.Equal(external.Identity.ArtifactId, externalRepeat.Identity.ArtifactId);
+        // This pre-fix value is pinned from baseline 6b36c94; it guards against leaving External on the old shared identity.
+        const string preFixSharedHash = "sha256:a6e20acedd46dc3fff2408d5c6bdae3fc5ee8f34519b608f086f0563a9c544bf";
+        Assert.NotEqual(preFixSharedHash, external.Identity.ArtifactHash);
+        Assert.NotEqual(preFixSharedHash, replaySafe.Identity.ArtifactHash);
+        var replaySafeRepeat = await Compiler(
+                workflow,
+                metadataEnricher: new PinnedSideEffectProfileEnricher(Elsa.Activities.Runtime.Core.Models.SideEffectProfile.ReplaySafe))
+            .CompileAsync(request);
+        Assert.Equal(replaySafe.Identity.ArtifactHash, replaySafeRepeat.Identity.ArtifactHash);
+        Assert.Equal(replaySafe.Identity.ArtifactId, replaySafeRepeat.Identity.ArtifactId);
+    }
+
+    [Fact]
+    public async Task WriteHttpResponse_candidate_profile_preserves_current_binding_families_and_pure_expression_contract()
+    {
+        static WorkflowArgumentState Input(string key, object? value, string expressionType) =>
+            new(key, new ArgumentValue(value, expressionType), null, null, null, null);
+
+        static Task<WorkflowExecutable> CompileAsync(
+            WorkflowArgumentState input,
+            IReadOnlyCollection<Elsa.Expressions.Core.Models.VariableDefinition>? variables = null) =>
+            SecretBindingCompilerFixture.CompileAsync(
+            SecretBindingCompilerFixture.Node(typeof(WriteHttpResponse), input),
+            [typeof(WriteHttpResponse)],
+            variables: variables,
+            includeDeclaredInputDefaults: true);
+
+        var literal = await CompileAsync(Input(nameof(WriteHttpResponse.Body), "literal-body", "Literal"));
+        var objectValue = await CompileAsync(Input(
+            nameof(WriteHttpResponse.Headers),
+            JsonSerializer.SerializeToElement(new Dictionary<string, string[]> { ["X-Test"] = ["one", "two"] }),
+            "Object"));
+        var request = await CompileAsync(Input(
+            nameof(WriteHttpResponse.Body),
+            JsonSerializer.SerializeToElement(new { memberKey = "body" }),
+            "WorkflowRequest"));
+        var variableDefinition = new Elsa.Expressions.Core.Models.VariableDefinition(
+            "response-body",
+            "Response Body",
+            new TypeReference("String"),
+            null,
+            new ArgumentValue("variable-body", "Literal"));
+        var variable = await CompileAsync(
+            Input(
+                nameof(WriteHttpResponse.Body),
+                JsonSerializer.SerializeToElement(new { referenceKey = "response-body" }),
+                "Variable"),
+            [variableDefinition]);
+        var expression = await CompileAsync(Input(nameof(WriteHttpResponse.StatusCode), "40 + 2", "JavaScript"));
+        var bodyExpression = await CompileAsync(Input(nameof(WriteHttpResponse.Body), "getVariable('response-body')", "JavaScript"));
+
+        Assert.All(
+            new[] { literal, objectValue, request, variable, expression, bodyExpression },
+            executable => Assert.Equal(
+                Elsa.Activities.Runtime.Core.Models.SideEffectProfile.ReplaySafe,
+                executable.RootActivity.ActivityContract!.SideEffectProfile));
+        Assert.Equal(RuntimeInputBindingSource.Literal, literal.RootActivity.InputBindings[nameof(WriteHttpResponse.Body)].Source);
+        Assert.Equal(RuntimeInputBindingSource.Literal, objectValue.RootActivity.InputBindings[nameof(WriteHttpResponse.Headers)].Source);
+        Assert.Equal(
+            RuntimeInputBindingSource.WorkflowRequest,
+            request.RootActivity.InputBindings[nameof(WriteHttpResponse.Body)].Source);
+        Assert.Equal(
+            RuntimeInputBindingSource.VariableRead,
+            variable.RootActivity.InputBindings[nameof(WriteHttpResponse.Body)].Source);
+        var expressionBinding = expression.RootActivity.InputBindings[nameof(WriteHttpResponse.StatusCode)];
+        Assert.Equal(RuntimeInputBindingSource.Expression, expressionBinding.Source);
+        Assert.Equal(
+            Elsa.Expressions.Core.Models.ExpressionCapabilityProfiles.BindingPureV1,
+            expressionBinding.Expression!.CapabilityProfile);
+        Assert.Equal(
+            Elsa.Expressions.Core.Models.ExpressionCapabilityProfiles.BindingPureV1,
+            bodyExpression.RootActivity.InputBindings[nameof(WriteHttpResponse.Body)].Expression!.CapabilityProfile);
+
+        var statusInput = typeof(WriteHttpResponse)
+            .GetProperty(nameof(WriteHttpResponse.StatusCode))!
+            .GetCustomAttribute<ActivityInputAttribute>()!;
+        Assert.Equal("200", statusInput.DefaultValue);
+        Assert.Equal("Literal", statusInput.DefaultSyntax);
+        var omittedStatusCode = literal.RootActivity.InputBindings[nameof(WriteHttpResponse.StatusCode)];
+        Assert.Equal(RuntimeInputBindingSource.Literal, omittedStatusCode.Source);
+        Assert.Equal(200, omittedStatusCode.Literal!.InlineValue!.Value.GetInt32());
+    }
+
+    [Fact]
+    public async Task HttpEndpoint_remains_external_when_response_candidate_is_replay_safe()
+    {
+        var endpoint = await SecretBindingCompilerFixture.CompileAsync(
+            SecretBindingCompilerFixture.Node(
+                typeof(HttpEndpoint),
+                new WorkflowArgumentState(nameof(HttpEndpoint.Path), new ArgumentValue("/replay-safety", "Literal"), null, null, null, null)),
+            [typeof(HttpEndpoint), typeof(WriteHttpResponse)]);
+
+        Assert.Equal(
+            Elsa.Activities.Runtime.Core.Models.SideEffectProfile.External,
+            endpoint.RootActivity.ActivityContract!.SideEffectProfile);
+
+        var response = await SecretBindingCompilerFixture.CompileAsync(
+            SecretBindingCompilerFixture.Node(typeof(WriteHttpResponse)),
+            [typeof(HttpEndpoint), typeof(WriteHttpResponse)]);
+
+        Assert.Equal(
+            Elsa.Activities.Runtime.Core.Models.SideEffectProfile.ReplaySafe,
+            response.RootActivity.ActivityContract!.SideEffectProfile);
+    }
+
+    [Theory]
+    [InlineData(nameof(WriteHttpResponse.Body))]
+    [InlineData(nameof(WriteHttpResponse.ContentType))]
+    public async Task WriteHttpResponse_keeps_its_existing_echoed_output_secret_refusals(string inputKey)
+    {
+        var exception = await SecretBindingCompilerFixture.AssertRefusedAsync(
+            SecretBindingCompilerFixture.Node(typeof(WriteHttpResponse), SecretBindingCompilerFixture.Secret(inputKey)),
+            [typeof(WriteHttpResponse)]);
+
+        var refusal = SecretBindingDiagnostics.SecretBindingRefused(
+            SecretBindingCompilerFixture.NodeId,
+            inputKey,
+            SecretBindingRefusalReason.EchoedToOutput);
+        Assert.Contains(refusal.Message, exception.Message, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData(nameof(WriteHttpResponse.StatusCode))]
+    [InlineData(nameof(WriteHttpResponse.Headers))]
+    public async Task WriteHttpResponse_rejects_secret_fields_without_a_supported_text_conversion(string inputKey)
+    {
+        var exception = await SecretBindingCompilerFixture.AssertRefusedAsync(
+            SecretBindingCompilerFixture.Node(typeof(WriteHttpResponse), SecretBindingCompilerFixture.Secret(inputKey)),
+            [typeof(WriteHttpResponse)]);
+
+        Assert.StartsWith("VF-COER-001:", exception.Message, StringComparison.Ordinal);
+        var conversionFailure = Assert.IsType<ValueConversionPublicationException>(exception.InnerException);
+        Assert.Equal(SecretBindingCompilerFixture.NodeId, conversionFailure.Binding?.NodeId);
+        Assert.Equal(inputKey, conversionFailure.Binding?.ReferenceKey);
     }
 
     [Fact]
@@ -1370,6 +1572,34 @@ public sealed class WorkflowExecutableCompilerTests
         Assert.NotEqual(firstGrandchild.Identity.ArtifactHash, changedGrandchild.Identity.ArtifactHash);
         Assert.NotEqual(firstChild.Identity.ArtifactHash, changedChild.Identity.ArtifactHash);
         Assert.NotEqual(firstParent.Identity.ArtifactHash, changedParent.Identity.ArtifactHash);
+    }
+
+    [Fact]
+    public async Task Pinned_child_dependency_profile_change_propagates_into_parent_identity()
+    {
+        var childWorkflow = WorkflowVersion(Node("child", Text("same behavior")));
+        var request = NewRequest(DateTimeOffset.UtcNow);
+        var externalChild = await Compiler(childWorkflow).CompileAsync(request);
+        var replaySafeChild = await Compiler(
+                childWorkflow,
+                metadataEnricher: new PinnedSideEffectProfileEnricher(Elsa.Activities.Runtime.Core.Models.SideEffectProfile.ReplaySafe))
+            .CompileAsync(request);
+        var parentWorkflow = WorkflowVersion(Node("dispatch-child"));
+        var externalParent = await CompileWithDependenciesAsync(
+            parentWorkflow,
+            [new ExecutableDependencyClaim("dispatch-child", externalChild.Identity.ArtifactId, externalChild.Identity.ArtifactHash)]);
+        var replaySafeParent = await CompileWithDependenciesAsync(
+            parentWorkflow,
+            [new ExecutableDependencyClaim("dispatch-child", replaySafeChild.Identity.ArtifactId, replaySafeChild.Identity.ArtifactHash)]);
+
+        Assert.Equal(externalChild.RootActivity.ExecutableNodeId, replaySafeChild.RootActivity.ExecutableNodeId);
+        Assert.Equal(Elsa.Activities.Runtime.Core.Models.SideEffectProfile.External, externalChild.RootActivity.ActivityContract!.SideEffectProfile);
+        Assert.Equal(Elsa.Activities.Runtime.Core.Models.SideEffectProfile.ReplaySafe, replaySafeChild.RootActivity.ActivityContract!.SideEffectProfile);
+        Assert.NotEqual(externalChild.Identity.ArtifactHash, replaySafeChild.Identity.ArtifactHash);
+        Assert.NotEqual(externalChild.Identity.ArtifactId, replaySafeChild.Identity.ArtifactId);
+        Assert.Equal(externalParent.RootActivity.ExecutableNodeId, replaySafeParent.RootActivity.ExecutableNodeId);
+        Assert.NotEqual(externalParent.Identity.ArtifactHash, replaySafeParent.Identity.ArtifactHash);
+        Assert.NotEqual(externalParent.Identity.ArtifactId, replaySafeParent.Identity.ArtifactId);
     }
 
     [Fact]
@@ -2376,7 +2606,8 @@ public sealed class WorkflowExecutableCompilerTests
 
     private WorkflowExecutableCompiler Compiler(
         WorkflowDefinitionVersion workflowVersion,
-        IIncidentStrategyCatalog? incidentStrategyCatalog = null)
+        IIncidentStrategyCatalog? incidentStrategyCatalog = null,
+        IExecutableNodeMetadataEnricher? metadataEnricher = null)
     {
         var registry = TestWellKnownTypeRegistry.Create();
         registry.RegisterType(typeof(LegacyTriggerActivity), TypeAliasConvention.CanonicalAlias(typeof(LegacyTriggerActivity)));
@@ -2385,6 +2616,7 @@ public sealed class WorkflowExecutableCompilerTests
             new FakeActivityVersionStore([_writeLineActivity, _writeLinesActivity, _sequenceActivity, _legacyTriggerActivity]),
             _activityStructureService,
             registry,
+            metadataEnricher: metadataEnricher,
             incidentStrategyCatalog: incidentStrategyCatalog);
     }
 
@@ -2517,7 +2749,10 @@ public sealed class WorkflowExecutableCompilerTests
         RuntimeRequirements = []
     };
 
-    private static Elsa.Activities.Runtime.Core.Models.ActivityContract BoundaryRuntimeContract(bool hasValueInput, string valueTypeAlias = "Int32")
+    private static Elsa.Activities.Runtime.Core.Models.ActivityContract BoundaryRuntimeContract(
+        bool hasValueInput,
+        string valueTypeAlias = "Int32",
+        Elsa.Activities.Runtime.Core.Models.SideEffectProfile sideEffectProfile = Elsa.Activities.Runtime.Core.Models.SideEffectProfile.External)
     {
         var descriptor = JsonSerializer.SerializeToElement(new { plan = 1 });
         var valueType = new ValueTypeDescriptor("Object");
@@ -2552,7 +2787,8 @@ public sealed class WorkflowExecutableCompilerTests
                     isRequired: true,
                     policy: ActivityValuePolicy.Default with { Lifecycle = ActivityValueLifecycle.Result })]),
             [ActivityOutcomes.Done],
-            new ActivityActivationRequirement("test.boundary", "test"));
+            new ActivityActivationRequirement("test.boundary", "test"),
+            sideEffectProfile);
     }
 
     private static WorkflowArgumentState Text(string value) =>
@@ -2799,5 +3035,42 @@ public sealed class WorkflowExecutableCompilerTests
 
         public Task Publish(IEvent @event, CancellationToken cancellationToken = default) =>
             _handler.Handle(Assert.IsType<ExecutableCompilationCollecting>(@event), cancellationToken);
+    }
+
+    private sealed class PinnedSideEffectProfileEnricher(Elsa.Activities.Runtime.Core.Models.SideEffectProfile profile) : IExecutableNodeMetadataEnricher
+    {
+        public ValueTask<ExecutableNode> EnrichAsync(
+            WorkflowExecutableCompileRequest request,
+            WorkflowExecutableCompileSource source,
+            ExecutableNode rootActivity,
+            CancellationToken cancellationToken = default)
+        {
+            var contract = rootActivity.ActivityContract ?? throw new InvalidOperationException("The test activity must have a pinned contract.");
+            var replacement = new Elsa.Activities.Runtime.Core.Models.ActivityContract(
+                contract.ActivityTypeKey,
+                contract.ContractVersion,
+                contract.DescriptorKind,
+                contract.DescriptorPayload,
+                contract.Inputs.Values,
+                contract.Result,
+                contract.Outcomes,
+                contract.Activation,
+                profile);
+            var node = new ExecutableNode(
+                rootActivity.ExecutableNodeId,
+                rootActivity.AuthoredActivityId,
+                rootActivity.ActivityType,
+                rootActivity.ActivityTypeVersion,
+                rootActivity.Descriptor,
+                rootActivity.InputBindings,
+                rootActivity.OutputCaptures,
+                rootActivity.Metadata,
+                rootActivity.ChildSlots,
+                rootActivity.Structure,
+                replacement,
+                rootActivity.IntrinsicKind,
+                rootActivity.IntrinsicVariable);
+            return ValueTask.FromResult(node);
+        }
     }
 }

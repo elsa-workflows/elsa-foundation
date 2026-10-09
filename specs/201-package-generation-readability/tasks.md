@@ -52,6 +52,16 @@
 - [X] T015 Review duplication and cleanup, preserve the abstractions-only/EF-free closure, reconcile program execution/evidence in `docs/program-goals/modular-hosting-upstream-delivery.md` and `docs/plans/modular-hosting-upstream/evidence.md`, and commit the prepared source without claiming unchanged-default-pin CI or final acceptance.
 - [ ] T016 After upstream stable publication, coordinate final pins/locks and actual Foundation-host readability qualification with #2509, run affected suites/e2e, architecture and map gates, independent exact-head review and resulting-main checks; record acceptance in `specs/201-package-generation-readability/quickstart.md` before merge/Done. Do not wait for coordinating Features #145/#2509 to close before performing the consumer proof that supplies their acceptance.
 
+## Current Preview Integration — 2026-10-09
+
+Historical T001–T015 describe the retained `.166/.99` preparation and remain tied to those inputs. They do not mark this port qualified. The existing stableT016 remains open and follows these new current-port steps; it is not bypassed or duplicated.
+
+- [X] T017 Integrate qualified PR2529 head38f8 on the preserved branch; retain both candidate build-lease/full-set-publication behavior and main #2522 weak-history/serialized-read/fresh-retirement behavior, all existing test subjects/assertions, newer documentation and unrelated Spec198. Root reviews the complete conflict resolution.
+- [X] T018 Qualify focused current-port readability/history/root-DI tests against coherent actual public `.173/.99`; compile and execute bypass-Begin, wrong-selected-snapshot, early-release and growth-only publication mutations, verify intended failures and byte-identical restoration followed by affected passes.
+- [ ] T019 Rebuild owned Foundation.Host and Workbench against the exact public preview assets; exercise package upgrade, old-provider retention/confirmed teardown and reintroduction/readability behavior with fresh owned stores and deterministic process cleanup. Distinguish actual-host proof from deterministic pre-catalog unit barriers.
+- [ ] T020 Run complete affected Readability/Cluster suites, architecture and generated-map gates, preserving current #2522 regressions and existing skips with explicit provenance; record failures and corrected reruns honestly.
+- [ ] T021 Complete root and independent exact-source review, DRY/assertion/cleanup audit, current evidence updates, commit and normal organization-branch publication/PR exact-head CI. Keep preview held from merge and final stableT016 open; release the preparation claim at qualification or abandonment.
+
 ## Dependencies and Execution
 
 Setup → wiring → US1 → US2 → US3 → integration/private qualification → stable qualification. The single writer serializes changes to the shared tracker and test fixtures. US1 is the first useful behavioral checkpoint; all three stories remain required for delivery.

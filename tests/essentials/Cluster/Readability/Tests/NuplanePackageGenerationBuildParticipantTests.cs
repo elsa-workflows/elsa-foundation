@@ -75,6 +75,36 @@ public sealed class NuplanePackageGenerationBuildParticipantTests
     }
 
     [Fact]
+    public async Task Proven_replacement_history_does_not_retire_a_removed_package_held_by_no_current_generation()
+    {
+        using var package = new UpgradedPackage();
+        package.Catalog.Active = [package.Current];
+        var catalog = new RuntimeCatalog(FeatureOf(package.Current));
+        await using var host = BuildHost(package, catalog);
+        var source = host.GetRequiredService<ISupersededAssemblySource>();
+
+        var lease = await host.GetRequiredService<IShellGenerationBuildParticipant>()
+            .BeginAsync(Context("history-with-build-lease", 1));
+        try
+        {
+            Assert.Contains(package.Previous, await source.GetReplacedAsync());
+
+            // The selected build and current feature catalog use only the new assembly. The old identity remains known
+            // for activation after package removal, but removal is not fresh evidence that it is retired/readable.
+            await lease.OnSnapshotSelectedAsync(await catalog.GetSnapshotAsync());
+            package.Catalog.Active = [];
+
+            Assert.Contains(package.Previous, await source.GetReplacedAsync());
+            Assert.Empty(await source.GetRetiredAsync());
+            Assert.Equal(PreviousOnly, await package.ReadableAsync(host));
+        }
+        finally
+        {
+            await lease.DisposeAsync();
+        }
+    }
+
+    [Fact]
     public async Task Selected_snapshot_does_not_pin_a_scanned_assembly_without_a_feature_descriptor()
     {
         using var package = new UpgradedPackage();

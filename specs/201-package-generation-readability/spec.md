@@ -4,9 +4,11 @@
 
 **Created**: 2026-10-08
 
-**Status**: Draft
+**Status**: Draft — prepared; current integration qualification and stable acceptance remain open
 
 **Input**: Foundation issue [#2164](https://github.com/elsa-workflows/elsa-foundation/issues/2164), which closes the remaining shell-build timing gap in [Spec 183](../183-cluster-membership/spec.md).
+
+**Integration amendment (2026-10-09)**: Spec201 preserves the previously reviewed Spec198 requirements after a numbering collision with unrelated main work. Current preview integration uses qualified PR2529 `.173/.99` pins on the preserved branch and must retain #2522 replacement-history/fresh-only-retirement semantics. Historical `.166/.99` evidence below is not current-port acceptance; final stable requirements remain unchanged. See the dated [plan amendment](plan.md#current-integration-amendment--2026-10-09).
 
 ## User Scenarios & Testing
 

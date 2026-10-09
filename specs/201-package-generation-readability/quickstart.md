@@ -1,10 +1,15 @@
 # Quickstart: Package Generation Readability
 
-## Prerequisites and package provenance
+## Current-port qualification (2026-10-09)
+
+Current source is being integrated on `2339-package-generation-readability`, Spec201 (renumbered from prepared198), using qualified PR2529 head38f8 with coherent public CShells `.173` / Nuplane `.99` branch pins/locks. Reuse this branch and an owned cache; the historical private-copy overlay below remains provenance for earlier `.166/.99` runs. Current Readability117 tests, four compiled mutation/restoration checks, public package/output provenance, locked restore and map freshness passed, with root and independent source review. Actual owned Foundation.Host/Workbench readability scenarios, full affected Cluster, current architecture and exact-head hosted checks remain pending. See the dated current integration checkpoint below for retained failure and rerun evidence. Do not attribute the historical110 tests/four mutations to current source. StableT016 remains open, with no merge/Done or physical collection/deletion claim.
+
+
+## Historical preparation prerequisites and package provenance (2026-10-08)
 
 - Use a .NET 10 SDK for the Foundation readability library and its current test project.
-- Current committed package references are CShells `0.0.30-preview.159` and Nuplane `0.0.11-preview.94`; they predate the required build-lease and committed-catalog APIs.
-- For API preflight, use an isolated private copy with the actual CShells `0.0.30-preview.166` and Nuplane `0.0.11-preview.99` packages and that copy's own package pins and lock files. Do not commit those preview pins/locks to Foundation.
+- At the historical preparation checkpoint, committed default-main package references were CShells `0.0.30-preview.159` and Nuplane `0.0.11-preview.94`; they predate the required build-lease and committed-catalog APIs.
+- For that historical `.166/.99` API preflight, use an isolated private copy with the actual CShells `0.0.30-preview.166` and Nuplane `0.0.11-preview.99` packages and that copy's own package pins and lock files. Do not commit those preview pins/locks to Foundation.
 - Before merge/Done, refresh D7 and the release plan, then validate the actual Foundation host against the published stable upstream package references. Upstream source-project substitution does not satisfy that final gate.
 
 ## Existing test subjects to retain
@@ -83,6 +88,16 @@ All four reversible product mutations compiled and failed the intended regressio
 Detailed source manifests, TRX/logs, cache/DLL audits, mutation negative/restored records and the independent review are **local-only evidence** under `/Users/sipke/.codex-workspaces/artifacts/modular-hosting-2500/publication-preparation/`: `2164-final-preflight-source-v2.json`, `2164-final-full-results-v2/`, `2164-root-final-qualification-v2.json`, `foundation-2164-preview-cache-provenance.json`, and `2164-mutation-*/result.json`. The organization branch and #2164 progress comments are the public preparation record. Copilot was not requested; Greptile was not awaited, following D15.
 
 This qualifies the prepared readability implementation, not an actual Foundation.Host/Workbench process using final stable packages. Committed central pins/locks remain `.159`/`.94`, which lack the required APIs. Keep #2164, Feature #145 and final qualification #2509 open; architecture/maps and actual stable-host E2E acceptance remain T016 work.
+
+## Current integration checkpoint — 2026-10-09
+
+The retained branch now integrates qualified observer/startup source `38f8cb6af318514e7b5d23f21033aea81d68f4a3`, preserving main #2522's weak positive replacement history and fresh-only retirement alongside candidate build leases and full-set publication. The current candidate uses the coherent branch `.173/.99` PackageReferences and reached locks; the historical private-copy commands above do not describe this run. Spec201 replaces the old candidate number without changing unrelated main Spec198.
+
+Locked affected-project restore passed. The complete current Readability project passed **117/117**, zero failed/skipped, Release/net10, both before and after four compiled reversible mutations. Each mutation failed its intended regression and passed after byte-identical source restoration: bypass Begin protection, ignore selected features, release from an early lifecycle notification, and suppress retirement-set shrink/reintroduction. Root audited all eight negative/restored TRX results. The first focused run retained one failure caused by a new test asserting before binding; the assertion moved after Begin and stayed before selection, and the corrected focused/full runs passed. No assertion or original public test subject was removed.
+
+Independent exact-source review found no correctness blocker. Root verified six reached `.173/.99` packages against audited public archives, SHA-512 metadata, nuspec versions/source commits and all six executed net10 DLLs. This is an owned cache cloned from the historical cache, **not clean-cache evidence**. CShells source is `f5bfc0db5ef9440dd777c2dd0d97fbf817f22e2f`; Nuplane source is `eb2cf6c2ee1f79dc2c45fb83cc415bbe4856d0d4`. Generated-map refresh and freshness check passed for this checkpoint.
+
+Local-only logs, exact input manifests, independent reviews, mutation raw TRXs/root audit and `readability-current-assets-audit.json` are retained under `/Users/sipke/.codex-workspaces/artifacts/modular-hosting-2500/readability-current-integration-readiness/integration/`. The runner records source inputs before and after each command; all accepted commands left their source inputs unchanged. Actual rebuilt Foundation.Host/Workbench readability scenarios, full affected Cluster, current architecture and publication/exact-head checks remain pending T019–T021. Stable T016 remains open; no preview merge, resulting-main, unload or deletion acceptance is claimed.
 
 ## Support boundaries
 

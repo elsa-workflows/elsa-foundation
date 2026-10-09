@@ -1,6 +1,6 @@
 # Runtime Database Access
 
-- **Status:** In Progress. Selected read reductions and reviewed checkpoint/queue no-change outcomes are delivered. Corrective #2497 owns the reproduced fused-checkpoint recovery defect; response classification #2400 and final integrated proof/measurements remain gated.
+- **Status:** Final evidence assembled. M2/M3/M4 and integrated correctness are accepted; the [acceptance crosswalk](../reports/runtime-db-access/final-acceptance.md) records M1/M5 outcomes and residual limits. #2413 and Project 55 carry final publication/closure state.
 - **Area:** Workflow runtime / EF persistence access / HTTP workload correctness.
 - **Stewards:** Sipke and the runtime database access program lead; root lead owns integration and QA.
 - **Program:** [#2382](https://github.com/elsa-workflows/elsa-foundation/issues/2382).
@@ -12,12 +12,17 @@ Explain and reduce avoidable database access for short durable HTTP workflows. P
 
 The owner-approved primary scenario uses HttpEndpoint startup and a deterministic computation; original transform artifacts are not a prerequisite.
 
-## Active objectives
+## Delivery outcome
 
-1. Deliver [#2497](https://github.com/elsa-workflows/elsa-foundation/issues/2497), the correction for lost durable redrive at a fused ReplaySafe checkpoint. It restores existing [Spec123 FR-006](../../specs/123-replaysafe-hop-fusion/spec.md). The [corrective evidence](../../specs/123-replaysafe-hop-fusion/evidence/cap-recovery.md) retains the original pinned checks; the [review-round-one supplement](../../specs/123-replaysafe-hop-fusion/evidence/cap-recovery-review-round1.md) records 60 passing focused recovery/reconciliation controls, including identity-targeted cleanup, concurrent outbox delivery and legacy-provider fallback. Added queue page reads are explicit, and one broader worker HTTP timeout remains unresolved. Final integration/review and delivery gates remain open. This is the sole active engineering objective, separately scoped from the response annotation.
-2. Deliver the conditional response classification [#2400](https://github.com/elsa-workflows/elsa-foundation/issues/2400) after #2497. Publication, HTTP/valid REST, inline hard-process-loss, matched SQLite EF counts and causal mutation are accepted within their recorded bounds. The additional external-reference process-loss proof passed 1/1 and the complete HTTP integration project passed 40/40 at test checkpoint `bff89e10b07bc0325f417ace294ae8510ef1ad2d`; fusion is disabled for that external-input cut, so it does not discharge #2497. Final classification/review and delivery gates remain open.
-3. Complete integrated correctness [#2412](https://github.com/elsa-workflows/elsa-foundation/issues/2412), then bounded before/after accounting and final responses [#2413](https://github.com/elsa-workflows/elsa-foundation/issues/2413). Azure instrumentation preparation can proceed independently, but failed smoke captures and successful helper checks are not accepted final workload measurements.
-4. Reconcile milestone acceptance using the original program criteria. Feature #2384 intentionally remains open after its two child handoffs: #2413 owns the final request-to-settlement proof and explicit residual-attribution disposition. No user input is outstanding. GitHub issues and Project 55 carry live state; this is a committed checkpoint with 19 resolved delivery leaves and the dependency chain `#2497 → #2400 → #2412 → #2413`.
+The [final response](../reports/runtime-db-access/delivery-response.md) and [acceptance crosswalk](../reports/runtime-db-access/final-acceptance.md) link the complete evidence. Coalesced HTTP request-associated commands fell from 277 to 134, with persisted checkpoint markers from three to two; Immediate stayed unchanged. The [timing series](../reports/runtime-db-access/final-timing.md) retains all 14 windows and its failed before-source concurrency control. The [package composition and operator guide](../reports/runtime-db-access/package-consumer/README.md) are verified within their stated Development scope.
+
+Root owns final review, exact-head publication gates, resulting-main verification and issue/Project closure through #2413. No owner decision is outstanding. Attribution, physical RTT and deleted-history limits have named owners and revisit triggers; none is relabelled as proven.
+
+### Earlier delivery checkpoints
+
+The records below retain their original evidence and scheduling context. The delivery outcome above and GitHub issue/Project state supersede then-current scheduling descriptions.
+
+Corrective [#2497](https://github.com/elsa-workflows/elsa-foundation/issues/2497) is delivered through PR #2511 at `249cd21329a13d6d67da5fd8e2b0974579cb044b`; its [acceptance receipt](https://github.com/elsa-workflows/elsa-foundation/pull/2511#issuecomment-6059255969) records current-head review and resulting-main CI/Maps/filter/Code Quality/Docker gates. It restores the existing fused-checkpoint recovery contract. The separate passing hosted EF suite does not explain the retained local timeout. Copilot review was unavailable, not counted as approval. No SQL saving is attributed to this correction.
 
 M4 is delivered with reviewed no-change outcomes: #1239 / PR #2493 rejected the checkpoint save-fusion trial, and #2407 / PR #2494 rejected the insert-first enqueue trial after current-head and resulting-main gates. #2404/#2405/#2408/#2409 are retired as not planned. No checkpoint/queue/outbox savings are claimed. Corrective #2497 concerns recovery correctness and does not revive those rejected optimization trials.
 
@@ -25,7 +30,7 @@ M4 is delivered with reviewed no-change outcomes: #1239 / PR #2493 rejected the 
 
 [#2388](https://github.com/elsa-workflows/elsa-foundation/issues/2388) and #2387 are closed as an accepted bounded diagnosis, not a fixed bug. The old failed C4 and isolated 202 causes remain unresolved under T18/control-room ownership. A current valid-input failure reopens the investigation and blocks integrated acceptance on any required correction. [The disposition](https://github.com/elsa-workflows/elsa-foundation/issues/2388#issuecomment-6047756284) preserves historical failures and missing joins. Corrective #2488/#2491 is delivered; its unrelated historical SQL timeout remains unexplained under #2293 despite a passing diagnostic and bounded retry.
 
-T02/#2386 and T04/#2389 are delivered as [qualified accounting handoffs](https://github.com/elsa-workflows/elsa-foundation/issues/2386#issuecomment-6037855554) through PR #2447 at `a6684744`; resulting-main CI/Maps/CodeQL passed. T07/#2395 is delivered as the qualified [strategy-selection spike](../reports/runtime-db-access/materialization-reuse-spike.md) through PR #2480 at `7bb1aaecb`; resulting-main [CI](https://github.com/elsa-workflows/elsa-foundation/actions/runs/37620919147), [Maps](https://github.com/elsa-workflows/elsa-foundation/actions/runs/37620918826) and CodeQL passed. This selects design work, not an implemented cache or primary-workload saving. T19/#2450 remains delivered. M1/M3/M5 and final T17/T18 remain incomplete.
+T02/#2386 and T04/#2389 are delivered as [qualified accounting handoffs](https://github.com/elsa-workflows/elsa-foundation/issues/2386#issuecomment-6037855554) through PR #2447 at `a6684744`; resulting-main CI/Maps/CodeQL passed. T07/#2395 is delivered as the qualified [strategy-selection spike](../reports/runtime-db-access/materialization-reuse-spike.md) through PR #2480 at `7bb1aaecb`; resulting-main [CI](https://github.com/elsa-workflows/elsa-foundation/actions/runs/37620919147), [Maps](https://github.com/elsa-workflows/elsa-foundation/actions/runs/37620918826) and CodeQL passed. This selects design work, not an implemented cache or primary-workload saving. T19/#2450 remains delivered. M1/M5 and final T18 remain incomplete; M3 and T17 are now accepted.
 
 ### Retained delivery checkpoints
 
@@ -59,7 +64,7 @@ T07 selected bounded raw provider-page reuse within an eligible coalescing owner
 - Select narrowly justified atomic checkpoint and queue/outbox reductions.
 - Prove the integrated normal-host result and respond to every supplied finding.
 
-[The canonical plan](../plans/runtime-db-access-program.md) carries requirements, all five epics/eight features/the twenty-one planned leaves plus corrective #2488 and #2497, milestone exits, ambiguity ownership and coverage. Issues contain task acceptance and delivery criteria. [Supplied findings](../reports/runtime-db-access/findings.md) and [historical source response](../reports/runtime-db-access/response.md) retain evidence provenance.
+[The canonical plan](../plans/runtime-db-access-program.md) carries requirements, all five epics/eight features/the twenty-one planned leaves plus corrective #2488, #2497 and #2515, milestone exits, ambiguity ownership and coverage. Issues contain task acceptance and delivery criteria. [Supplied findings](../reports/runtime-db-access/findings.md) and [historical source response](../reports/runtime-db-access/response.md) retain evidence provenance.
 
 ## Boundaries and coordination
 

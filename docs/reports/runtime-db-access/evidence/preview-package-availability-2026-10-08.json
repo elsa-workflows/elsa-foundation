@@ -1,0 +1,125 @@
+{
+  "schemaVersion": 1,
+  "verifiedAtUtc": "2026-10-08T13:30:26.725097+00:00",
+  "scope": "Historical preview availability for three merged program changes; not the final integrated package graph, stable-release or performance acceptance.",
+  "feed": "https://f.feedz.io/elsa-workflows/elsa-4/nuget/index.json",
+  "checks": [
+    "Exact successful main-push head equals the merge commit",
+    "Downloaded GitHub artifact ZIP SHA-256 equals the API digest",
+    "plan.json and computation.json commits equal the merge commit; plan mode publish and ref main",
+    "Each package nuspec repository commit equals the merge commit",
+    "Exact version is listed in the public Feedz package index",
+    "Downloaded Feedz nupkg bytes hash identically to the package inside the verified GitHub artifact"
+  ],
+  "runs": [
+    {
+      "runId": 37597278765,
+      "headSha": "82e10a82729a8fa94a1ca7ecb3d6e446e8e64e6f",
+      "runUrl": "https://github.com/elsa-workflows/elsa-foundation/actions/runs/37597278765",
+      "artifactId": 11470977374,
+      "artifactSha256": "dc1249d42b7aa578a3f44d2d6c2d50829394771e0b9203e15e3c69db91e5ebc3",
+      "planSha256": "7655fa416bf3e2904a8d8defbc0cf94d20519bf5cddc4661536bd5dac3a0ce0a",
+      "computationSha256": "115468b817b14db089d2a925d130d83d3e1d1ad8d1209ed44e7a71a3f9bd4ddd",
+      "planAndComputationMatchMerge": true,
+      "packages": [
+        {
+          "id": "Elsa.Workflows.Runtime.Api",
+          "version": "4.0.11-preview",
+          "sha256": "515bd9e463c11c88a50a9ac2a9c41e3c52373a48412cef9bdeeac4100dcfd47d",
+          "feedUrl": "https://f.feedz.io/elsa-workflows/elsa-4/nuget/v3/packages/elsa.workflows.runtime.api/4.0.11-preview/elsa.workflows.runtime.api.4.0.11-preview.nupkg",
+          "repositoryCommit": "82e10a82729a8fa94a1ca7ecb3d6e446e8e64e6f",
+          "versionListed": true,
+          "feedBytesEqualArtifact": true
+        }
+      ],
+      "githubRunStatus": "completed",
+      "githubRunConclusion": "success"
+    },
+    {
+      "runId": 37690629814,
+      "headSha": "9a472affde60978cb15743fbc0e5ce22ee0581a9",
+      "runUrl": "https://github.com/elsa-workflows/elsa-foundation/actions/runs/37690629814",
+      "artifactId": 11512548616,
+      "artifactSha256": "0a7fbab8c101bd74930463a76fefd23dd76a7684f6efb1fb6a1c4b23f0a722e3",
+      "planSha256": "b2dffa64a4a0a45a5adf5548e50ba8150c2ec7a3f798732e15f1da3c16309a24",
+      "computationSha256": "ad98b20abe8a0f9f673eb61be52727538cf7b19012177bbe8c0376df0d1d0137",
+      "planAndComputationMatchMerge": true,
+      "packages": [
+        {
+          "id": "Elsa.Workflows.Runtime",
+          "version": "4.0.23-preview",
+          "sha256": "c3ad9c19c8d0fa2d494d84041b575eaa685434af945ccfdc46086c04524aea3d",
+          "feedUrl": "https://f.feedz.io/elsa-workflows/elsa-4/nuget/v3/packages/elsa.workflows.runtime/4.0.23-preview/elsa.workflows.runtime.4.0.23-preview.nupkg",
+          "repositoryCommit": "9a472affde60978cb15743fbc0e5ce22ee0581a9",
+          "versionListed": true,
+          "feedBytesEqualArtifact": true
+        },
+        {
+          "id": "Elsa.Workflows.Runtime.Api",
+          "version": "4.0.12-preview",
+          "sha256": "39735031ecc1a4e2dbaa4b809e5a18e1cbe78f37e51eaa72a9a4826a45afc092",
+          "feedUrl": "https://f.feedz.io/elsa-workflows/elsa-4/nuget/v3/packages/elsa.workflows.runtime.api/4.0.12-preview/elsa.workflows.runtime.api.4.0.12-preview.nupkg",
+          "repositoryCommit": "9a472affde60978cb15743fbc0e5ce22ee0581a9",
+          "versionListed": true,
+          "feedBytesEqualArtifact": true
+        }
+      ],
+      "githubRunStatus": "completed",
+      "githubRunConclusion": "success"
+    },
+    {
+      "runId": 37769938623,
+      "headSha": "249cd21329a13d6d67da5fd8e2b0974579cb044b",
+      "runUrl": "https://github.com/elsa-workflows/elsa-foundation/actions/runs/37769938623",
+      "artifactId": 11547274144,
+      "artifactSha256": "d9472dca682652028f51069dde62a1628b2064f44bbfce01906b2ced74a3a39e",
+      "planSha256": "52ca3db8ab60b7b85a48b90278797eaf7cbdaa35fde7333d77341c5212f1566e",
+      "computationSha256": "44ee479e720c46d2311685bda88eaf5458dd2689c355b2d8587e6080bb9d886b",
+      "planAndComputationMatchMerge": true,
+      "packages": [
+        {
+          "id": "Elsa.Workflows.Runtime",
+          "version": "4.0.24-preview",
+          "sha256": "3cb3b9731ff3b06177f5de1cd830ad05b7f67a0cfafbd1a46223415cd6748724",
+          "feedUrl": "https://f.feedz.io/elsa-workflows/elsa-4/nuget/v3/packages/elsa.workflows.runtime/4.0.24-preview/elsa.workflows.runtime.4.0.24-preview.nupkg",
+          "repositoryCommit": "249cd21329a13d6d67da5fd8e2b0974579cb044b",
+          "versionListed": true,
+          "feedBytesEqualArtifact": true
+        },
+        {
+          "id": "Elsa.Workflows.Runtime.Core",
+          "version": "4.0.22-preview",
+          "sha256": "487a8a7b832896bf718a53a231c0859c97b985fd4e5994c6253a4e5343d136b8",
+          "feedUrl": "https://f.feedz.io/elsa-workflows/elsa-4/nuget/v3/packages/elsa.workflows.runtime.core/4.0.22-preview/elsa.workflows.runtime.core.4.0.22-preview.nupkg",
+          "repositoryCommit": "249cd21329a13d6d67da5fd8e2b0974579cb044b",
+          "versionListed": true,
+          "feedBytesEqualArtifact": true
+        },
+        {
+          "id": "Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore",
+          "version": "4.0.25-preview",
+          "sha256": "c085bdd701b2d123ca53c472823c1a8bf1fcad4eda527b957038c456dce9b9a5",
+          "feedUrl": "https://f.feedz.io/elsa-workflows/elsa-4/nuget/v3/packages/elsa.workflows.runtime.persistence.entityframeworkcore/4.0.25-preview/elsa.workflows.runtime.persistence.entityframeworkcore.4.0.25-preview.nupkg",
+          "repositoryCommit": "249cd21329a13d6d67da5fd8e2b0974579cb044b",
+          "versionListed": true,
+          "feedBytesEqualArtifact": true
+        }
+      ],
+      "githubRunStatus": "completed",
+      "githubRunConclusion": "success"
+    }
+  ],
+  "releaseReadback": [
+    {
+      "tag_name": "contributor-preview-2026-10-07.1",
+      "name": "Elsa 4 contributor compatibility checkpoint \u2014 7 October 2026",
+      "prerelease": true,
+      "draft": false,
+      "published_at": "2026-10-07T15:44:19Z",
+      "html_url": "https://github.com/elsa-workflows/elsa-foundation/releases/tag/contributor-preview-2026-10-07.1"
+    }
+  ],
+  "stableReleaseClaimed": false,
+  "finalIntegratedPackageSetVerified": false,
+  "publicationOrDeploymentPerformed": false
+}

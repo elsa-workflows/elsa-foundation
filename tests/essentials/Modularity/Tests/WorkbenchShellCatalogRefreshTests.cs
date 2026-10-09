@@ -1,41 +1,48 @@
 using CShells.Features;
+using CShells.DependencyInjection;
 using CShells.Lifecycle;
+using CShells.Nuplane;
+using CShells;
 using Elsa.Persistence.Schema;
 using Elsa.Testing;
 using Elsa.Workbench;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using Nuplane.Abstractions;
+using Nuplane.Events;
+using Nuplane.Observability;
 using Xunit;
 
 namespace Elsa.Modularity.Tests;
 
 /// <summary>
-/// The Workbench's observer of Nuplane reconciles, <see cref="ShellCatalogRefreshOnPackagesChanged"/>: after a reconcile that
+/// The Workbench's CShells.Nuplane profile: after a reconcile that
 /// added, updated or removed a package it refreshes the runtime feature catalog, so the next shell reload composes the new
 /// assemblies, and it reloads the active shells itself only when <c>Elsa:Shells:ReloadOnPackageChange</c> is true. That it runs
 /// after Nuplane's auto-loader, which loads those assemblies, is pinned against the Workbench's real composition in
 /// <see cref="HostOwnedServicesAreSharedWithShellsTests"/>.
 /// </summary>
-public sealed class WorkbenchShellCatalogRefreshTests
+public sealed class WorkbenchShellCatalogRefreshTests : IDisposable
 {
     private static readonly ResolvedPackage Notes = new("Elsa.Samples.Nuplane.Notes", "1.1.0", "local-packages", "/packages/notes", DateTimeOffset.UnixEpoch, "feed");
     private static readonly PackageChangeSet Unchanged = ChangeSet();
     private static readonly PackageChangeSet NotesUpdated = ChangeSet(updated: [Notes]);
 
-    private readonly CapturingLogger _log = new();
-    private readonly RefreshCountingCatalog _catalog = new();
-    private readonly ScriptedShellRegistry _registry = new();
-    private readonly IConfigurationRoot _configuration = new ConfigurationBuilder()
-        .AddInMemoryCollection(new Dictionary<string, string?> { ["CShells:Shells:default:Name"] = "default", ["CShells:Shells:tenant-a:Name"] = "tenant-a" })
-        .Build();
-    private readonly ShellCatalogRefreshOnPackagesChanged _observer;
+    private readonly NuplaneHostTestComposition.NuplaneHostTestFixture _fixture;
+    private CapturingLogger _log => _fixture.Logger;
+    private NuplaneHostTestComposition.RefreshCountingCatalog _catalog => _fixture.Catalog;
+    private NuplaneHostTestComposition.ScriptedShellRegistry _registry => _fixture.Registry;
+    private IConfigurationRoot _configuration => _fixture.Configuration;
+    private INuplaneObserver _observer => _fixture.Observer;
+    private IObserverEventDispatcher _dispatcher => _fixture.Dispatcher;
+    private NuplaneHostTestComposition.FollowingObserver _following => _fixture.Following;
 
-    public WorkbenchShellCatalogRefreshTests()
-    {
-        _registry.Activate("default");
-        _observer = new(_catalog, _registry, _configuration, new Logger<ShellCatalogRefreshOnPackagesChanged>(_log));
-    }
+    public WorkbenchShellCatalogRefreshTests() => _fixture = NuplaneHostTestComposition.CreateAdapter(false, "default");
+
+    public void Dispose() => _fixture.Dispose();
 
     [Fact]
     public async Task Does_nothing_while_no_shell_is_active_because_the_first_activation_builds_the_catalog_from_what_is_loaded()
@@ -90,16 +97,29 @@ public sealed class WorkbenchShellCatalogRefreshTests
         Assert.Equal((1, reloads), (_catalog.Refreshes, _registry.Reloads));
     }
 
+    [Fact(DisplayName = "Changing the reload setting alone schedules no catalog or shell work")]
+    public void ConfigurationChange_WithoutAnEligibleCompletion_DoesNotRefreshOrReload()
+    {
+        ReloadOnPackageChange("true");
+
+        Assert.Equal((0, 0), (_catalog.Refreshes, _registry.Reloads));
+        Assert.Equal(0, _following.ReconciledCalls);
+    }
+
     [Fact]
     public async Task A_failing_refresh_does_not_propagate_and_the_next_reconcile_tries_again_though_it_changed_nothing()
     {
         ReloadOnPackageChange("true");
         _catalog.Failure = new InvalidOperationException("The catalog could not be rebuilt.");
+        var callsBeforeFailure = _following.ReconciledCalls;
 
         await ReconcileAsync(NotesUpdated);
 
         Assert.Single(_log.Entries, entry => entry.Level == LogLevel.Error);
+        Assert.Contains(_log.Exceptions, exception => ReferenceEquals(exception, _catalog.Failure));
+        AssertFailureDispatchOrder(_catalog.Failure!);
         Assert.Equal(0, _registry.Reloads);
+        Assert.Equal(callsBeforeFailure + 1, _following.ReconciledCalls);
 
         _catalog.Failure = null;
         await ReconcileAsync(Unchanged);
@@ -113,10 +133,14 @@ public sealed class WorkbenchShellCatalogRefreshTests
     {
         ReloadOnPackageChange("true");
         _registry.Failure = new InvalidOperationException("The registry could not reload.");
+        var callsBeforeFailure = _following.ReconciledCalls;
 
         await ReconcileAsync(NotesUpdated);
 
         Assert.Single(_log.Entries, entry => entry.Level == LogLevel.Error);
+        Assert.Contains(_log.Exceptions, exception => ReferenceEquals(exception, _registry.Failure));
+        AssertFailureDispatchOrder(_registry.Failure!);
+        Assert.Equal(callsBeforeFailure + 1, _following.ReconciledCalls);
 
         _registry.Failure = null;
         await ReconcileAsync(Unchanged);
@@ -137,7 +161,9 @@ public sealed class WorkbenchShellCatalogRefreshTests
         [
             new ReloadResult("tenant-a", null, null, null),
             // Wrapped, as an initializer's failure can arrive out of a shell's activation.
-            new ReloadResult("default", null, null, new InvalidOperationException("Shell 'default' failed to activate.", new PendingRefusal()))
+            new ReloadResult("default", null, null, new AggregateException(
+                "Shell 'default' failed to activate.",
+                new InvalidOperationException("Initializer wrapped the refusal.", new AggregateException(new PendingRefusal()))))
         ];
 
         await ReconcileAsync(NotesUpdated);
@@ -182,77 +208,27 @@ public sealed class WorkbenchShellCatalogRefreshTests
         Assert.DoesNotContain(_log.Entries, entry => entry.Level >= LogLevel.Warning);
     }
 
-    private Task ReconcileAsync(PackageChangeSet changeSet) => _observer.OnPackagesReconciledAsync(changeSet, [Notes], CancellationToken.None);
+    private Task ReconcileAsync(PackageChangeSet changeSet) => _dispatcher.PublishReconciledAsync(changeSet, [Notes], CancellationToken.None);
 
-    private void ReloadOnPackageChange(string? value) => _configuration[ShellCatalogRefreshOnPackagesChanged.ReloadKey] = value;
+    private void ReloadOnPackageChange(string? value) =>
+        _fixture.SetReloadOnPackageChange(bool.TryParse(value, out var enabled) ? enabled : null);
+
+    private void AssertFailureDispatchOrder(Exception expectedException)
+    {
+        var entries = _log.Entries;
+        var errorIndex = entries.ToList().FindIndex(entry => entry.Level == LogLevel.Error);
+        var warningIndex = entries.ToList().FindIndex(entry => entry.Level == LogLevel.Warning && entry.Message.Contains("Observer callback error", StringComparison.Ordinal));
+        Assert.True(errorIndex >= 0 && warningIndex > errorIndex, "The adapter must log its original error before the dispatcher reports it and proceeds.");
+        Assert.Same(expectedException, _log.Exceptions[errorIndex]);
+        Assert.Contains("OnPackagesReconciledAsync", entries[errorIndex].Message, StringComparison.Ordinal);
+        Assert.Contains("correlation", entries[errorIndex].Message, StringComparison.Ordinal);
+        Assert.Contains("OnPackagesReconciledAsync", entries[warningIndex].Message, StringComparison.Ordinal);
+        Assert.Contains("correlation", entries[warningIndex].Message, StringComparison.Ordinal);
+        Assert.True(_following.ReconciledCalls > 0, "The dispatcher must continue to the following observer after isolating the adapter failure.");
+    }
 
     private static PackageChangeSet ChangeSet(ResolvedPackage[]? added = null, ResolvedPackage[]? updated = null, string[]? removed = null) =>
         new(added ?? [], updated ?? [], removed ?? [], "correlation", DateTimeOffset.UnixEpoch);
-
-    private sealed class RefreshCountingCatalog : IRuntimeFeatureCatalog
-    {
-        private readonly FakeRuntimeFeatureCatalog _snapshots = new();
-
-        public int Refreshes { get; private set; }
-
-        public Exception? Failure { get; set; }
-
-        public Task<IRuntimeFeatureCatalogSnapshot> RefreshAsync(CancellationToken cancellationToken = default)
-        {
-            Refreshes++;
-            return Failure is null ? Task.FromResult(_snapshots.CurrentSnapshot) : Task.FromException<IRuntimeFeatureCatalogSnapshot>(Failure);
-        }
-
-        public IRuntimeFeatureCatalogSnapshot CurrentSnapshot => _snapshots.CurrentSnapshot;
-        public Task<RuntimeFeatureCatalogSnapshot> GetSnapshotAsync(CancellationToken cancellationToken = default) => throw new NotSupportedException();
-        public Task EnsureInitializedAsync(CancellationToken cancellationToken = default) => throw new NotSupportedException();
-    }
-
-    /// <summary>Holds which shells are active, and answers a reload of them with what a test scripts, counting each one.</summary>
-    private sealed class ScriptedShellRegistry : IShellRegistry
-    {
-        private readonly HashSet<string> _active = new(StringComparer.Ordinal);
-
-        public int Reloads { get; private set; }
-
-        public IReadOnlyList<ReloadResult> Results { get; set; } = [new ReloadResult("default", null, null, null)];
-
-        public Exception? Failure { get; set; }
-
-        public void Activate(string name) => _active.Add(name);
-
-        public void Deactivate(string name) => _active.Remove(name);
-
-        public IShell? GetActive(string name) => _active.Contains(name) ? new StubShell(name) : null;
-
-        public Task<IReadOnlyList<ReloadResult>> ReloadActiveAsync(ReloadOptions? options = null, CancellationToken cancellationToken = default)
-        {
-            Reloads++;
-            return Failure is null ? Task.FromResult(Results) : Task.FromException<IReadOnlyList<ReloadResult>>(Failure);
-        }
-
-        public Task<IShell> GetOrActivateAsync(string name, CancellationToken cancellationToken = default) => throw new NotSupportedException();
-        public Task<IShell> ActivateAsync(string name, CancellationToken cancellationToken = default) => throw new NotSupportedException();
-        public Task<ReloadResult> ReloadAsync(string name, CancellationToken cancellationToken = default) => throw new NotSupportedException();
-        public Task<IDrainOperation> DrainAsync(IShell shell, CancellationToken cancellationToken = default) => throw new NotSupportedException();
-        public Task UnregisterBlueprintAsync(string name, CancellationToken cancellationToken = default) => throw new NotSupportedException();
-        public Task<ProvidedBlueprint?> GetBlueprintAsync(string name, CancellationToken cancellationToken = default) => throw new NotSupportedException();
-        public Task<IShellBlueprintManager?> GetManagerAsync(string name, CancellationToken cancellationToken = default) => throw new NotSupportedException();
-        public Task<ShellPage> ListAsync(ShellListQuery query, CancellationToken cancellationToken = default) => throw new NotSupportedException();
-        public IReadOnlyCollection<IShell> GetAll(string name) => [];
-        public IReadOnlyCollection<IShell> GetActiveShells() => [];
-        public void Subscribe(IShellLifecycleSubscriber subscriber) { }
-        public void Unsubscribe(IShellLifecycleSubscriber subscriber) { }
-    }
-
-    private sealed class StubShell(string name) : IShell
-    {
-        public ShellDescriptor Descriptor { get; } = ShellDescriptor.Create(name, 1);
-        public ShellLifecycleState State => ShellLifecycleState.Active;
-        public IServiceProvider ServiceProvider => throw new NotSupportedException();
-        public IShellScope BeginScope() => throw new NotSupportedException();
-        public IDrainOperation? Drain => null;
-    }
 
     /// <summary>An EF module's refusal as this host meets it: a type of the module's own, known here only by the shared interface.</summary>
     private sealed class PendingRefusal() : InvalidOperationException(
