@@ -173,7 +173,7 @@ section() { # title count list
     for row in "${swept[@]}"; do
       IFS=$'\t' read -r b s r <<<"$row"
       if [[ "$mode" == enforce ]]; then t="${archived[$b]:+\`${archived[$b]}\`}"; t="${t:-not deleted}"; else t="(report only)"; fi
-      echo "| \`$b\` | \`${s:0:10}\` | $r | $t |"
+      echo "| \`${b//|/\\|}\` | \`${s:0:10}\` | $r | $t |"
     done
     printf '\n</details>\n'
   fi
