@@ -1,8 +1,14 @@
 # Runtime database access reduction program
 
-Original planning baseline: 5 October 2026; delivery checkpoint: 8 October 2026. Initial-readiness columns retain the planning baseline; the checkpoint and native Project/issue states carry current delivery status.
+Original planning baseline: 5 October 2026; delivery checkpoint: 9 October 2026. Initial-readiness columns retain the planning baseline; the checkpoint and native Project/issue states carry current delivery status.
 
 Program: [#2382](https://github.com/elsa-workflows/elsa-foundation/issues/2382). Scheduling: [Project 55](https://github.com/orgs/elsa-workflows/projects/55). Goal bucket: [Runtime Database Access](../program-goals/runtime-db-access.md).
+
+## Current delivery checkpoint — 9 October 2026
+
+M2, M3 and M4 are accepted. Response classification #2400 is delivered through [PR #2518](https://github.com/elsa-workflows/elsa-foundation/pull/2518) at `9d8a4b7ed96de043924a85a51764dc8d6f956951`, after exact resulting-main gates. [Integrated correctness #2412](../reports/runtime-db-access/integrated-correctness.md) is accepted at final source `7357b91e012c56cb34f1259ef7a60ef56e144afe`: 18 normal-host PostgreSQL cases, direct persisted-state joins, exact resulting-main CI/provider/architecture/Maps gates, and explicitly scoped adopted recovery evidence. The pre-existing authored-enum API binding defect found by the matrix is corrected through adopted [PR #2372](https://github.com/elsa-workflows/elsa-foundation/pull/2372).
+
+The final [findings response](../reports/runtime-db-access/delivery-response.md) and [R1–R8/T18 acceptance crosswalk](../reports/runtime-db-access/final-acceptance.md) assemble the reviewed measurements, direct retained checkpoint proof, package composition and explicit residual dispositions. Coalesced HTTP request-associated commands are 277→134 and persisted checkpoint markers 3→2; Immediate is unchanged. All 14 timing windows are retained, including the failed before-source concurrency control. M1/M5 evidence is assembled; #2413, #2382 and Project 55 record final publication gates and closure. No owner decision is pending. The historical checkpoints below retain their original observations and then-current scheduling descriptions; this section supersedes those scheduling descriptions.
 
 ## Problem and intended outcome
 
@@ -224,7 +230,7 @@ A contingent implementation leaf may close as not planned only after the lead ac
 | No concurrency / larger workflow; transform cost unprofiled | T01 selects bounded controls; T02/T18 qualify workload and residual transform/serialization cost |
 | First request | T02 reports cold/warm identity separately; T18 scopes the final claim |
 
-## Scheduling, handoffs and proof
+## Historical scheduling, handoffs and proof
 
 **Current delivery checkpoint, 8 October:** T02/#2386 and T04/#2389 are delivered through PR #2447 at `a6684744` after resulting-main CI/Maps/CodeQL passed. Root accepts the [finite joined handoff](../reports/runtime-db-access/joined-request-settlement-accounting.md) with 931 exact method joins and 716 owned residuals among 1,647 commands. Missing method outcomes, all row/caller attribution and the same-run response boundary remain unproven. The [qualified acceptance](https://github.com/elsa-workflows/elsa-foundation/issues/2386#issuecomment-6037855554) leaves literal gaps unchecked and owned through final T17/T18.
 
@@ -298,4 +304,4 @@ Runtime implementations run only the affected projects/suites, relevant REST e2e
 
 Complete the program when every finding has evidence or an explicitly owned residual prerequisite, the paging correction demonstrates bounded access and preserved results, selected Coalesced reductions are proven on the normal host, contingent candidates are honestly disposed, and the final response states remaining cost and release availability. Do not infer completion from child closure counts or expect an Immediate speedup as a required result.
 
-Planning verification covered the issue hierarchy, dependency DAG, fields, queue and documentation consistency. The active control room now owns delivery, with bounded investigations running. T06 paging implementation and T19 local scope/sequential correctness proof are recorded above. Remaining selected implementations, comparable final before/after evidence, concurrent T17/T18 correctness and final delivery acceptance remain future work owned by the linked leaves; optional original/pinned recovery is not a gate. Scoped green-gate merges are authorized by the owner, including their existing automatic Feedz preview publication under the 7 October decision. Manual publication, releases and deployment remain excluded.
+The [final acceptance crosswalk](../reports/runtime-db-access/final-acceptance.md) maps every R1–R8 requirement, T18 deliverable and milestone to its evidence. The [final response](../reports/runtime-db-access/delivery-response.md) retains unknown caller/row ownership, historical anomaly attribution, physical RTT and deleted dispatch history as explicit owned limits. This is the original evidence-or-owned-uncertainty rule, not a claim that every measurement exists. The control room closes issues and Project items only after reviewed publication and exact resulting-main gates. Scoped green-gate merges and their automatic Feedz preview publication are authorized; manual publication, releases and deployment remain excluded.

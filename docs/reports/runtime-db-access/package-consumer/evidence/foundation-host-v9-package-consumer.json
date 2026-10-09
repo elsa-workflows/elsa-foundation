@@ -1,0 +1,196 @@
+{
+  "schema": "elsa-2413-foundation-host-package-evidence/v2",
+  "evidenceStatus": "runtime-passed",
+  "source": {
+    "expectedCommit": "7357b91e012c56cb34f1259ef7a60ef56e144afe",
+    "observedCommit": "7357b91e012c56cb34f1259ef7a60ef56e144afe",
+    "cleanTree": true
+  },
+  "image": {
+    "reference": "docker.io/elsaworkflows/elsa-foundation-host",
+    "expectedDigest": "sha256:d9599e50f094f4e7426313323730eba0caaef20090b16b413b74707436839c25",
+    "observedDigest": "sha256:d9599e50f094f4e7426313323730eba0caaef20090b16b413b74707436839c25",
+    "platform": "linux/amd64"
+  },
+  "packageClosure": {
+    "nugetRootRows": 230,
+    "directRoots": 184,
+    "activePackages": 199,
+    "activeByFeed": {
+      "elsa-4": 109,
+      "nuget.org": 90
+    },
+    "activeArtifactManifestSha256": "914f31fd08715fa7e8e7a8395c9e99c1d2a468b12a9e7dbd544fa8916f308e2b",
+    "externalLockSha256": "8a12d55ed89d053c5024da1ee74533d8e11196204f12f4fb3af621a2288f551d",
+    "externalLockReadOnly": true,
+    "offlineLocalFeeds": true,
+    "activeReadback": {
+      "status": "passed",
+      "recordCount": 199,
+      "summary": "199 active package IDs/versions/feeds matched the external lock; zero Nuplane failures."
+    }
+  },
+  "externalVerification": {
+    "archiveSha256CheckedBeforeLaunch": true,
+    "lockIdentityCoverageChecked": true,
+    "nuplaneEnforcesPackageBytesClaimed": false
+  },
+  "providerBinding": {
+    "provider": "PostgreSQL",
+    "connectionName": "ElsaRuntime2412",
+    "features": [
+      "WorkflowsRuntimeEntityFrameworkCore",
+      "WorkflowsDesignEntityFrameworkCore",
+      "ActivitiesDesignEntityFrameworkCore",
+      "WorkflowsPublishingEntityFrameworkCore"
+    ],
+    "configurationSha256": "6d1843e2270b149ff07e8fb393b7724fe74d33b808fb3f4e1df25fd0f66e3b10",
+    "configurationReadOnlyMounted": true,
+    "gate": {
+      "status": "passed",
+      "recordCount": 4,
+      "summary": "The four direct per-feature PostgreSQL bindings are in the pinned read-only shell configuration; the host accepted that configuration and passed the catalog, publish, HTTP, REST, and PostgreSQL readback path. Provider option objects were not separately emitted."
+    }
+  },
+  "clrDescriptorScan": {
+    "folderPath": "/app/curated-clr-scan",
+    "readOnlyMount": true,
+    "manifestSha256": "e2eaea3eea9b8222703e14fa719e230b64b2fc09cbdbfeadfc86bf91ae471546",
+    "assemblies": [
+      {
+        "packageId": "Elsa.Activities.Sequence",
+        "version": "4.0.4-preview",
+        "nupkgSha256": "6c344a7dcf5c8e8b3920c55ad8776bbc1e17a1d4581e9798cbf2a73c040158d5",
+        "assemblySha256": "c0dd81bbe8293b9e294f3df844b3bb9002b2c1f3eccea7f06718320367ec22e5"
+      },
+      {
+        "packageId": "Elsa.Activities.Http",
+        "version": "4.0.6-preview",
+        "nupkgSha256": "641e1e380fe0517b23e229d78dd0897f50111a745d9d7e977e553cf32ccf39d2",
+        "assemblySha256": "be97984576df329a08bfc71b851bef336ba5fe7844d10f624a99053a4f7f23f1"
+      }
+    ],
+    "requiredDescriptors": [
+      {
+        "activityTypeKey": "Elsa.Activities.Http.Activities.HttpEndpoint",
+        "activityVersionId": "actver_3dzhIuGiQIoccss8i7fCdgDf6cWOTGGOqDAu8BWXdz0"
+      },
+      {
+        "activityTypeKey": "Elsa.Activities.Http.Activities.WriteHttpResponse",
+        "activityVersionId": "actver_uunnCN914ObsDqODbh6XFAJhfqXASVt4pud_1cIRgtg"
+      },
+      {
+        "activityTypeKey": "Elsa.Activities.Sequence.Activities.Sequence",
+        "activityVersionId": "actver_VoK0cfC6llyGj9Y98WoPKEgf2WSJu6BB-Az7nQF1PZk"
+      }
+    ],
+    "intrinsicKinds": [
+      "Finish",
+      "Set",
+      "SetCorrelationId",
+      "SetInstanceName",
+      "SetOutput"
+    ],
+    "catalogGate": {
+      "status": "passed",
+      "recordCount": 9,
+      "summary": "HTTP 200 catalog; exactly three required CLR descriptors and five current intrinsics."
+    },
+    "totalActivityCount": 9
+  },
+  "environment": {
+    "aspnetcoreEnvironment": "Development",
+    "dotnetEnvironment": "Development",
+    "developmentSeedUsed": true,
+    "productionIdentityValidated": false
+  },
+  "runtimeGates": {
+    "hostReady": {
+      "status": "passed",
+      "recordCount": 1,
+      "summary": "Pinned Foundation Host reached ready."
+    },
+    "primaryHttp": {
+      "status": "passed",
+      "recordCount": 1,
+      "summary": "Accepted primary HTTP fixture exited 0 and returned HTTP 200 with terminal Completed status."
+    },
+    "validRest": {
+      "status": "passed",
+      "recordCount": 1,
+      "summary": "Accepted companion REST fixture exited 0, returned HTTP 200 and terminal Completed status."
+    },
+    "activePackageReadback": {
+      "status": "passed",
+      "recordCount": 199,
+      "summary": "Live active store exactly matched external lock identities; zero package failures."
+    }
+  },
+  "postgresPersistence": {
+    "readOnlyTransaction": true,
+    "identityProjection": "indexed WorkflowExecutionId compared to base64 UTF-16LE fixture ID; ContentJson.status read separately",
+    "schemaResolution": "active session search_path using pg_catalog.to_regclass",
+    "providerObserved": "PostgreSQL",
+    "uniqueExecutionIds": true,
+    "fixtureRows": [
+      {
+        "kind": "http",
+        "executionIdSha256": "0d37e098c167452351500bdc525cb43c93c80148ac1f215704c4d4dd1a6093ca",
+        "workflowRows": 1,
+        "contentStatus": "Completed",
+        "incidentRows": 0,
+        "indexedIdentityMatched": true,
+        "workflowTableSchema": "public",
+        "incidentTableSchema": "public"
+      },
+      {
+        "kind": "rest",
+        "executionIdSha256": "30406bf33b47940c117060e73b6f53d1ca159a248d4a37e53ad2a1a380ab771b",
+        "workflowRows": 1,
+        "contentStatus": "Completed",
+        "incidentRows": 0,
+        "indexedIdentityMatched": true,
+        "workflowTableSchema": "public",
+        "incidentTableSchema": "public"
+      }
+    ],
+    "gate": {
+      "status": "passed",
+      "recordCount": 2,
+      "summary": "One unique indexed match per actual fixture ID; both ContentJson.status values Completed and both incident counts zero; PostgreSQL read-only transaction rolled back."
+    },
+    "independentPosthocReadback": {
+      "status": "passed",
+      "readOnlyTransaction": true,
+      "hostRestarted": false,
+      "imageAndOwnershipVerified": true,
+      "matchedRows": 2,
+      "storedIdentityEqualsPayloadIdentity": true,
+      "storedStatusCode": 3,
+      "contentStatus": "Completed",
+      "incidentRows": 0,
+      "postgresStopped": true,
+      "volumeRetained": true
+    }
+  },
+  "limitations": [
+    "This projection covers the Foundation Host package-consumer gate only; it is not the overall #2413 program acceptance.",
+    "Nuplane lock writer issue #111 remains open; this run uses an external complete lock and pre-launch archive hash checks. Nuplane package-byte enforcement is not claimed.",
+    "The curated CLR scan covers only the three required fixture activity keys, not general package descriptor discovery.",
+    "The fixture run uses Development/demo identity seed credentials; production identity bootstrap and production settings are unverified.",
+    "V7 had HTTP/REST fixture results but persisted to SQLite; only this v9 receipt supplies the PostgreSQL persisted-state proof."
+  ],
+  "cleanup": {
+    "allOwnedContainersVerifiedStopped": true,
+    "containerCount": 3,
+    "retainedVolumeCount": 3,
+    "containerRemovalPerformed": false,
+    "volumeRemovalPerformed": false
+  },
+  "provenance": {
+    "privateReceiptSha256": "046f868f4cf53aedaafebf8cd23a141d2ca8a0980c419810345e49def22de32f",
+    "retainedEvidenceArchiveSha256": "e0c368e60c29c41e8d0638498f4ba7bf579f0673fceacc74fc1480b8091c0ea1",
+    "rawEvidenceRetainedPrivately": true,
+    "posthocReadbackSha256": "371aad04efe054049115b83babcc3ff5d8b806e9ec1cb1cf0c8273e991bfd3c1"
+  }
+}
