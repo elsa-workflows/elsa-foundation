@@ -139,6 +139,18 @@ IFS=$'\t' read -r -d '' n_ready_idle l_ready_idle < <(select_issues "$(has ready
 IFS=$'\t' read -r -d '' n_wip_idle l_wip_idle < <(select_issues "$(has status:in-progress) and .updated_at < \"$(since $in_progress_idle_days)\""; printf '\0') || true
 IFS=$'\t' read -r -d '' n_unlabelled l_unlabelled < <(select_issues "($triage_labels | not) and ($structural | not)"; printf '\0') || true
 
+# An issue whose work landed but was never closed looks stale by every signal above. Flag open issues
+# that a commit on main mentions as #N (newest commit wins; owner/repo#N references are skipped).
+landed=$(mktemp)
+git log origin/main --format='%x1e%h%x09%ct%x09%s%n%b' |
+  perl -e '$/ = "\x1e"; while (<>) { chomp; my ($sha, $ts, $subj) = split /\t/, (split /\n/)[0] // "", 3; next unless $sha;
+    while (/(?:^|[^\w\/.-])#(\d+)\b/g) { print "$1\t$sha\t$ts\t$subj\n" unless $seen{$1}++ } }' |
+  jq -Rn '[inputs | split("\t") | {key: .[0], value: {sha: .[1], ts: (.[2] | tonumber), subject: .[3]}}] | from_entries' >"$landed"
+IFS=$'\t' read -r -d '' n_landed l_landed < <(jq -r --slurpfile landed "$landed" "
+  [.[] | select(($structural | not) and \$landed[0][\"\(.number)\"] != null) | . + {ref: \$landed[0][\"\(.number)\"]}
+       | select(.ref.ts > (.created_at | fromdateiso8601))]
+  | \"\(length)\t\" + ([.[:25][] | \"- #\(.number) \(.title) — \`\(.ref.sha)\` \(.ref.subject)\"] | join(\"\n\"))" <<<"$open_issues"; printf '\0') || true
+
 mark() { if (( $1 > $2 )); then echo "⚠️"; else echo "✅"; fi; }
 section() { # title count list
   (( $2 == 0 )) && return
@@ -158,6 +170,7 @@ section() { # title count list
   echo "| \`ready-for-agent\` idle ≥ ${ready_idle_days}d | $n_ready_idle $(mark "$n_ready_idle" 0) | 0 |"
   echo "| \`status:in-progress\` idle ≥ ${in_progress_idle_days}d | $n_wip_idle $(mark "$n_wip_idle" 0) | 0 |"
   echo "| Issues without a triage label | $n_unlabelled $(mark "$n_unlabelled" 0) | 0 |"
+  echo "| Open issues referenced by a commit on main | $n_landed | check before closing as not planned |"
   # Counted after the sweep, so an enforce run reports what is left rather than what it started with.
   echo "| Branches / open PRs | $((total_branches - deleted)) / $open_prs | branches ≈ open PRs + exempt |"
   if [[ "$mode" == enforce ]]; then
@@ -171,6 +184,7 @@ section() { # title count list
   section "Ready for an agent but idle for ${ready_idle_days}+ days: re-triage or close" "$n_ready_idle" "$l_ready_idle"
   section "In progress but idle for ${in_progress_idle_days}+ days" "$n_wip_idle" "$l_wip_idle"
   section "Without a triage label" "$n_unlabelled" "$l_unlabelled"
+  section "Referenced by a commit on main since filed: close as completed if the work landed" "$n_landed" "$l_landed"
   if (( ${#swept[@]} > 0 )); then
     printf '\n<details><summary>Swept branches (%s)</summary>\n\n| Branch | Tip | Reason | Archive tag |\n|---|---|---|---|\n' "${#swept[@]}"
     for row in "${swept[@]}"; do
