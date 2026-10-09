@@ -1,3 +1,4 @@
+using Xunit.Abstractions;
 using System.Net;
 using System.Text.Json.Nodes;
 using static Elsa.Cluster.EntityFrameworkCore.Tests.FeedLoadedModuleHost;
@@ -11,7 +12,7 @@ namespace Elsa.Cluster.EntityFrameworkCore.Tests;
 /// refuses a request that carries no valid key.
 /// </summary>
 [Collection(FoundationHostCollection.Name)]
-public sealed class FoundationHostReconcileTests(FoundationHostFeed feed) : IAsyncLifetime
+public sealed class FoundationHostReconcileTests(FoundationHostFeed feed, ITestOutputHelper output) : IAsyncLifetime
 {
     private const string Reconcile = "/_module-management/reconcile";
     private const string ModuleManagementKey = "foundation-host-reconcile-tests";
@@ -59,6 +60,46 @@ public sealed class FoundationHostReconcileTests(FoundationHostFeed feed) : IAsy
         await Polling.UntilAsync(async () => (await OrdersAsync(_host)).Status == HttpStatusCode.OK, Patience, TimeSpan.FromMilliseconds(200), () => $"The package never served. Host output:{Environment.NewLine}{_host.Output}");
     }
 
+    [Fact]
+    public async Task Reconciling_a_feed_that_lost_its_only_package_removes_it_from_the_active_graph_and_shell()
+    {
+        await SeedAsync(ConnectionString);
+        await StartAsync([feed.FixturePackage]);
+
+        await Polling.UntilAsync(async () => (await OrdersAsync(_host!)).Status == HttpStatusCode.OK, Patience,
+            TimeSpan.FromMilliseconds(200), () => $"The package never served before removal. Host output:{Environment.NewLine}{_host!.Output}");
+        var before = await _host!.ActivePackagesAsync();
+        Assert.Equal("2.0.0", before[FoundationHostFeed.FixturePackageId]);
+
+        var mapped = await _host.MappedAssembliesAsync();
+        HostProcessAssemblyEvidence.Write(output, "Elsa.Foundation.Host", _host.ProcessId, mapped);
+        Assert.Contains(mapped, path =>
+            StringComparer.Ordinal.Equals(Path.GetFileName(path), FoundationHostFeed.FixturePackageId + ".dll") &&
+            HostProcessAssemblyEvidence.IsWithinInstallRoot(path, _host.PackageInstallRoot));
+
+        var package = FoundationHostProcess.Releases(_host.PackagesDirectory, FoundationHostFeed.FixturePackageId).Single();
+        File.Delete(package);
+        var (status, body) = await _host.PostModuleManagementAsync(Reconcile, ModuleManagementKey, Patience);
+
+        Assert.Equal(HttpStatusCode.OK, status);
+        var outcome = JsonNode.Parse(body)!;
+        Assert.Equal("Completed", outcome["outcomeCode"]!.GetValue<string>());
+        var removed = outcome["runResult"]!["changeSet"]!["removed"]!.AsArray()
+            .Select(package => package!.GetValue<string>())
+            .ToArray();
+        Assert.Contains(removed, id => StringComparer.OrdinalIgnoreCase.Equals(id, FoundationHostFeed.FixturePackageId));
+
+        await Polling.UntilAsync(async () =>
+        {
+            var active = await _host.ActivePackagesAsync();
+            var (routeStatus, _) = await OrdersAsync(_host);
+            return active.Count == 0 && routeStatus == HttpStatusCode.NotFound;
+        }, Patience, TimeSpan.FromMilliseconds(200), () => $"The removed package remained active or served. Host output:{Environment.NewLine}{_host.Output}");
+
+        Assert.Empty(await _host.ActivePackagesAsync());
+        Assert.True(_host.IsRunning);
+    }
+
     [Theory]
     [InlineData(null)]
     [InlineData("not-the-key")]
@@ -71,7 +112,9 @@ public sealed class FoundationHostReconcileTests(FoundationHostFeed feed) : IAsy
         Assert.Equal(HttpStatusCode.Unauthorized, status);
     }
 
-    private async Task StartAsync()
+    private Task StartAsync() => StartAsync([]);
+
+    private async Task StartAsync(IEnumerable<string> packageFiles)
     {
         var settings = Settings(feed);
         EnableModuleManagement(settings, ModuleManagementKey);
@@ -79,6 +122,6 @@ public sealed class FoundationHostReconcileTests(FoundationHostFeed feed) : IAsy
         // racing the request under test and answering it with a skipped outcome.
         settings["Nuplane:Setup:Feeds:0:Directory:Watch"] = "false";
         settings["Nuplane:Setup:PollInterval"] = "1.00:00:00";
-        _host = await FoundationHostProcess.StartAsync(Shells(ConnectionString, EntityFrameworkCoreFeature, OrdersFeature), [], settings);
+        _host = await FoundationHostProcess.StartAsync(Shells(ConnectionString, EntityFrameworkCoreFeature, OrdersFeature), packageFiles, settings);
     }
 }

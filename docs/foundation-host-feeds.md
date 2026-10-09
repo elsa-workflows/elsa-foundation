@@ -2,7 +2,7 @@
 
 `Elsa.Foundation.Host` compiles in no Elsa feature. Every feature — activities, HTTP, persistence,
 the Tasks feature — arrives as a NuGet package through a Nuplane feed and is discovered by CShells
-via `NuplaneAssemblyProvider`. This page is the worked reference for pointing the host at a feed, and,
+through the optional `CShells.Nuplane` integration. This page is the worked reference for pointing the host at a feed, and,
 in [Running several hosts as a cluster](#running-several-hosts-as-a-cluster), for pointing several of
 them at one database.
 
@@ -682,13 +682,13 @@ that nothing resolves (#2331). Two consequences:
 
 `Elsa.Foundation.Host` picks up a newly reconciled package without a restart. `Elsa.Workbench` refreshes its feature
 catalog when a package arrives and switches at the next shell reload (below).
-`ShellReloadOnPackagesChanged` (`src/apps/Elsa.Foundation.Host/Shells/ShellReloadOnPackagesChanged.cs`)
-is registered as a Nuplane observer in `src/apps/Elsa.Foundation.Host/Program.cs`, and when a
-reconciliation cycle completes — not when packages land on disk, which is before their assemblies are
-loaded — it refreshes the CShells runtime feature catalog and reloads every active shell. It is on unless
-`Elsa:Shells:ReloadOnPackageChange` is set to `false`, and it does nothing until a shell is active, so the
-startup cycle is left to ordinary shell activation. A reload failure is logged and the new assemblies
-apply at the next restart. The bridge performs no compatibility check of its own: it reloads whatever the
+`CShells.Nuplane` is configured through the host-local `NuplaneIntegrationOptionsSetup` and registered
+with `WithNuplaneFeatureDiscovery()` after Nuplane's auto-loader. When an eligible reconciliation cycle
+completes — not when packages land on disk, which is before their assemblies are loaded — the integration
+refreshes the CShells runtime feature catalog and reloads active shells. It is on unless
+`Elsa:Shells:ReloadOnPackageChange` is set to `false`. Before any shell is active, it records catalog freshness for
+the next shell build and does not schedule an automatic reload. A reload failure is logged and retained work is retried
+at the next eligible package completion. The integration performs no compatibility check of its own: it reloads whatever the
 cycle applied, which is why the refusal above has to happen at reconciliation — a refused package is
 never applied, so there is nothing for the reload to pick up.
 
@@ -746,20 +746,21 @@ recognised by the full name of the interface it implements. Once the command has
 and the shell's generation advances, with no restart.
 
 `Elsa.Workbench` refreshes its feature catalog when a package arrives, and its shells switch at the next shell reload.
-Its observer, `ShellCatalogRefreshOnPackagesChanged` (`src/apps/Elsa.Workbench/Modularity/ShellCatalogRefreshOnPackagesChanged.cs`),
-is the twin of the one above, registered in `src/apps/Elsa.Workbench/Program.cs` after Nuplane's auto-loader so that it
-runs once the cycle's assemblies are loaded. After a cycle that added, updated or removed a package, and once a shell is
-active, it refreshes the CShells runtime feature catalog; a cycle that changed nothing is skipped, and a change it could
-not act on (the refresh failed, or a reload it started left a shell on its previous generation) is tried again at the next
-cycle. The running shells keep the feature set they were built with until a shell is reloaded, which composes the
+The same `CShells.Nuplane` integration uses the host-local Workbench `NuplaneIntegrationOptionsSetup` and is registered
+after Nuplane's auto-loader so that it runs once the cycle's assemblies are loaded. After an eligible cycle that added,
+updated or removed a package, it refreshes the CShells runtime feature catalog when a shell is active; before the first
+activation it records the catalog work for the next shell build. A cycle that changed nothing is skipped, and a change it
+could not act on (the refresh failed, or a reload it started left a shell on its previous generation) is retried at
+the next eligible package completion. The running shells keep the feature set they were built with until a shell is reloaded, which composes the
 refreshed catalog:
 
 - by hand, with `POST /_admin/shells/reload/{name}` or `POST /_admin/shells/reload-all` and the
   `X-Elsa-Module-Management-Key` header;
 - by the observer itself, after the cycle, when `Elsa:Shells:ReloadOnPackageChange` is `true`. The Workbench's
-  `appsettings.json` sets it to `false`, which is also what the observer assumes when it is unset; on
-  `Elsa.Foundation.Host` it defaults to `true`. A shell whose reload failed keeps its previous generation, and the
-  observer logs it as Foundation.Host's does: at `Warning` for an EF module's refusal, with its command and the
+  `appsettings.json` sets it to `false`, which is also the Workbench fallback when it is unset; on
+  `Elsa.Foundation.Host` the option defaults to `true`. Changing the key alone schedules nothing: the profile is captured
+  on the next eligible package completion. A shell whose reload failed keeps its previous generation, and the
+  integration logs it as Foundation.Host's does: at `Warning` for an EF module's refusal, with its command and the
   Workbench's directory as `--host`, and at `Error` for anything else.
 
 The `/_elsa/module-management` upload and reconcile endpoints answer `"RequiresReload": true` for the same reason: the
@@ -782,10 +783,10 @@ header, like `reload`) runs one reconcile cycle now, the same cycle the folder w
 answers once it has finished. A wrong or missing key is answered `401`.
 
 Whether a package the cycle added is live in the running shells when the request returns depends on the hot-reload
-observer, described in the section "Hot reload after a package change": it reloads the active
-shells at the end of the cycle only when `Elsa:Shells:ReloadOnPackageChange` is on (it is by default) and a shell is
-already active. With it off, or before any shell has activated, the package is reconciled and its assemblies are loaded,
-but the shells keep the feature set they were built with until `POST /_module-management/reload` (or a restart). A shell
+integration, described in the section "Hot reload after a package change": it reloads active
+shells at the end of the cycle only when `Elsa:Shells:ReloadOnPackageChange` is on and a shell is already active. With it
+off, an active shell keeps the feature set it was built with until `POST /_module-management/reload` (or a restart). Before
+the first activation, the next shell build consumes the pending catalog freshness without an automatic reload. A shell
 whose reload was refused after the cycle is not reported by this request: the host logs it, and `reload` answers it
 with the `409` documented in that same section.
 

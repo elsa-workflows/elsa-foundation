@@ -43,8 +43,8 @@ public sealed class EagerShellActivationHostedService(
     // own configuration blueprint provider reads, so it matches shells.json exactly.
     private const string ConfiguredShellsSection = "CShells:Shells";
 
-    // Default ON in code (absent or unparseable value means enabled), mirroring
-    // ShellReloadOnPackagesChanged. The default lives here, not only in the shipped appsettings.json, so a
+    // Default ON in code (absent or unparseable value means enabled), matching the Foundation reload profile.
+    // The default lives here, not only in the shipped appsettings.json, so a
     // consumer who REPLACES appsettings.json (rather than layering onto it) still gets eager activation —
     // set the key to "false" to opt out.
     public static bool IsEnabled(IConfiguration configuration) =>

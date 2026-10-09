@@ -5,6 +5,7 @@ using CShells.AspNetCore.Extensions;
 using CShells.DependencyInjection;
 using CShells.Lifecycle;
 using CShells.Management.Api;
+using CShells.Nuplane;
 using Elsa.Activities.Design.Api;
 using Elsa.Activities.Design.Core.Options;
 using Elsa.Activities.Design.Reconciliation;
@@ -76,6 +77,7 @@ using Elsa.Workflows.Runtime.ReferenceGarbageCollection;
 using Elsa.Workflows.Runtime.Resumption;
 using Elsa.Workflows.Runtime.Tracing;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Options;
 using NativeEndpoints;
 using Nuplane;
 using Nuplane.Admin;
@@ -219,12 +221,10 @@ builder.Services.AddNuplane(nuplaneConfiguration, nuplane =>
     nuplane.UseBasePath(builder.Environment.ContentRootPath);
     nuplane.AddDirectoryFeedsFromConfiguration(nuplaneConfiguration);
     nuplane.AutoloadPackages(nuplaneConfiguration.GetSection("Loading"));
-    // Registered after AutoloadPackages: Nuplane calls its observers in registration order, so the new assemblies are
-    // loaded before the catalog is refreshed (HostOwnedServicesAreSharedWithShellsTests pins the order).
-    nuplane.OnPackagesChanged<ShellCatalogRefreshOnPackagesChanged>();
 });
-builder.Services.AddSingleton<ShellCatalogRefreshOnPackagesChanged>();
-builder.Services.AddSingleton<NuplaneAssemblyProvider>();
+builder.Services.ConfigureOptions<NuplaneIntegrationOptionsSetup>();
+builder.Services.AddSingleton<IOptionsChangeTokenSource<NuplaneIntegrationOptions>>(
+    new ConfigurationChangeTokenSource<NuplaneIntegrationOptions>(Options.DefaultName, configuration.GetSection("Elsa:Shells")));
 // Nuplane registers its trigger ingress, reconcile coordinator and admin operations by type or by factory, so every shell
 // container CShells builds from copies of these registrations would hold second instances of them, and a reconcile enqueued
 // on a shell's copy of the queue is read by no dispatcher (#2159). Shells, among them the shell-scoped package catalog
@@ -268,7 +268,7 @@ builder.Services.AddCShellsAspNetCore(shells =>
         .WithAssemblies(
             typeof(ActivitiesHttpFeature).Assembly,
             typeof(WorkflowsRuntimeHttpFeature).Assembly)
-        .WithAssemblyProvider<NuplaneAssemblyProvider>()
+        .WithNuplaneFeatureDiscovery()
 
         // Delegates authentication-scheme and authorization-policy resolution to the shell scope at
         // request time, so each shell's Identity composition (schemes, permission policies) is honored

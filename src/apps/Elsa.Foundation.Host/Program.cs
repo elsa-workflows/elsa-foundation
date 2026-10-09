@@ -1,11 +1,11 @@
 using CShells.AspNetCore.Configuration;
 using CShells.AspNetCore.Extensions;
 using CShells.DependencyInjection;
+using CShells.Nuplane;
 using Elsa.Attention.Core;
 using Elsa.Cluster.Hosting;
 using Elsa.Cluster.Readability;
 using Elsa.Foundation.DataProtection;
-using Elsa.Foundation.Host.Feed;
 using Elsa.Foundation.Host.Health;
 using Elsa.Foundation.Host.ModuleManagement;
 using Elsa.Foundation.Host.Shells;
@@ -14,6 +14,7 @@ using Nuplane.Admin;
 using Nuplane.Loading.Hosting.Builder;
 using Nuplane.Reconciliation;
 using Nuplane.Sources.Directory.Configuration;
+using Microsoft.Extensions.Options;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -33,8 +34,7 @@ var nuplaneConfiguration = configuration.GetSection("Nuplane");
 // * AddDirectoryFeedsFromConfiguration translates the entries carrying a DirectoryPath instead. It is a separate
 //   call only because the directory source ships in its own package, which AddNuplane cannot reach. A feed with
 //   Directory:Watch=true installs the folder listener that reconciles the package set when the drop-folder changes.
-// * AutoloadPackages installs the assembly-loading subsystem (IPackageAssemblyCatalog) that
-//   NuplaneAssemblyProvider hands to CShells for feature discovery.
+// * AutoloadPackages installs the assembly-loading subsystem used by CShells feature discovery.
 builder.Services.AddNuplane(nuplaneConfiguration, nuplane =>
 {
     // The content root, which is where this host's own appsettings.json was just read from. A module-owned
@@ -48,17 +48,10 @@ builder.Services.AddNuplane(nuplaneConfiguration, nuplane =>
     nuplane.UseBasePath(builder.Environment.ContentRootPath);
     nuplane.AddDirectoryFeedsFromConfiguration(nuplaneConfiguration);
     nuplane.AutoloadPackages(nuplaneConfiguration.GetSection("Loading"));
-
-    // Optional extra #2 — hot reload: when the feed applies a package change (folder listener or a manual
-    // reconcile), the observer refreshes the CShells runtime feature catalog and reloads the active shells so a
-    // running server picks up new assemblies without a restart. Always registered; no-ops unless
-    // Elsa:Shells:ReloadOnPackageChange is true and a shell is already active.
-    nuplane.OnPackagesChanged<ShellReloadOnPackagesChanged>();
 });
-
-// The bridge that hands Nuplane-loaded assemblies to CShells feature discovery.
-builder.Services.AddSingleton<NuplaneAssemblyProvider>();
-builder.Services.AddSingleton<ShellReloadOnPackagesChanged>();
+builder.Services.ConfigureOptions<NuplaneIntegrationOptionsSetup>();
+builder.Services.AddSingleton<IOptionsChangeTokenSource<NuplaneIntegrationOptions>>(
+    new ConfigurationChangeTokenSource<NuplaneIntegrationOptions>(Options.DefaultName, configuration.GetSection("Elsa:Shells")));
 
 // ---------------------------------------------------------------------------------------------------------
 // Cluster membership — selected once per host, on this container, never per shell (spec 183, FR-017; #2143).
@@ -93,7 +86,7 @@ builder.Services.AddShellStartupValidation();
 // ---------------------------------------------------------------------------------------------------------
 builder.Services.AddCShellsAspNetCore(shells => shells
     // Domain feature assemblies come from the Nuplane feed; the host compiles in no Elsa features of its own.
-    .WithAssemblyProvider<NuplaneAssemblyProvider>()
+    .WithNuplaneFeatureDiscovery()
     // Also scan the host's own referenced assemblies so the FastEndpoints runtime seam is available to every
     // shell without each feed feature declaring DependsOn "FastEndpoints". The only host assembly that carries
     // a [ShellFeature] is CShells.FastEndpoints (its built-in "FastEndpoints" feature, which scans a shell's

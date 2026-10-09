@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.Reflection;
 using CShells.DependencyInjection;
 using CShells.Lifecycle;
+using CShells.Nuplane;
 using Elsa.Attention.Core;
 using Elsa.Cluster.Core.Contracts;
 using Elsa.Cluster.Core.Models;
@@ -17,6 +18,7 @@ using Elsa.Workbench.OpenIddict;
 using Elsa.Workbench.OpenIddictEngines;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.DataProtection.KeyManagement;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
@@ -90,14 +92,6 @@ public sealed class HostOwnedServicesAreSharedWithShellsTests
         Entries(
             IntentionallyPerShell + "records what its own container's options pipeline resolved the store's AutoMigrate to, for the host's migrator, which a shell never starts",
             "Elsa.Workbench.WorkbenchOpenIddictMigrationSwitch"),
-        Entries(
-            "unreachable from shell code: only CShells' runtime feature catalog, which the host holds, resolves the feature assembly provider, and a shell's copy would read a Nuplane catalog that has loaded nothing",
-            "Elsa.Foundation.Host.Feed.NuplaneAssemblyProvider",
-            "Elsa.Workbench.NuplaneAssemblyProvider"),
-        Entries(
-            "unreachable from shell code: Nuplane's dispatcher, which runs on the host's own container, is the only caller of its observers",
-            "Elsa.Foundation.Host.Shells.ShellReloadOnPackagesChanged",
-            "Elsa.Workbench.ShellCatalogRefreshOnPackagesChanged"),
         Entries(
             UnreachableFromShells,
         "Nuplane.Abstractions.IActivePackageCatalog", "Nuplane.Abstractions.ICycleFailureContributor", "Nuplane.Abstractions.IDesiredPackageSource", "Nuplane.Abstractions.IDesiredStateContributor", "Nuplane.Abstractions.INuplaneObserver", "Nuplane.Abstractions.IPackageResolver",
@@ -262,24 +256,51 @@ public sealed class HostOwnedServicesAreSharedWithShellsTests
     }
 
     /// <summary>
-    /// Nuplane calls its observers in the order they were registered, and the Workbench's catalog refresh reads what Nuplane's
-    /// auto-loader loaded in the same reconcile, so Workbench's own entry point registers the refresh after the auto-loader.
-    /// Registered before it, the refresh would run ahead of the load and rebuild the catalog without the package that arrived.
+    /// Nuplane calls observers in registration order, so each host registers CShells.Nuplane after its auto-loader. The
+    /// coordinator is root-owned and the shell's borrowed observer resolves to that same object.
     /// </summary>
-    [Fact]
-    public void Workbench_registers_its_catalog_refresh_after_the_package_auto_loader()
+    [Theory(DisplayName = "Both host compositions register and borrow one root-owned Nuplane coordinator")]
+    [InlineData("Elsa.Foundation.Host")]
+    [InlineData("Elsa.Workbench")]
+    public async Task Each_host_registers_feature_discovery_after_the_package_auto_loader_and_shares_its_coordinator(string host)
     {
         const string AutoLoader = "Nuplane.Loading.PackageAutoLoadingObserver";
-        using var content = ContentRoot.For("Elsa.Workbench");
-        using var built = BuiltHost.Run(EntryAssembly("Elsa.Workbench"), content.Arguments(durableMembership: false));
+        using var content = ContentRoot.For(host);
+        using var built = BuiltHost.Run(EntryAssembly(host), content.Arguments(durableMembership: false));
 
-        var observers = built.Host.Services.GetServices<INuplaneObserver>().Select(observer => observer.GetType().FullName).ToList();
+        var root = built.Host.Services;
+        var observers = root.GetServices<INuplaneObserver>().ToArray();
+        var adapter = Assert.Single(observers.Where(observer => observer is IShellGenerationBuildParticipant));
+        var observerTypes = observers.Select(observer => observer.GetType().FullName).ToList();
 
-        Assert.Contains(AutoLoader, observers);
-        Assert.Contains(typeof(ShellCatalogRefreshOnPackagesChanged).FullName, observers);
+        Assert.Contains(AutoLoader, observerTypes);
+        Assert.Contains(adapter.GetType().FullName, observerTypes);
         Assert.True(
-            observers.IndexOf(AutoLoader) < observers.IndexOf(typeof(ShellCatalogRefreshOnPackagesChanged).FullName),
-            "The catalog refresh is called before the auto-loader, so it refreshes before the new assemblies are loaded.");
+            observerTypes.IndexOf(AutoLoader) < observerTypes.IndexOf(adapter.GetType().FullName),
+            "The auto-loader must be registered before feature discovery so newly loaded assemblies are visible.");
+        Assert.Same(adapter, root.GetRequiredService<IShellGenerationBuildParticipant>());
+
+        var shell = await root.GetRequiredService<IShellRegistry>().GetOrActivateAsync(ProbeShell);
+        var borrowedAdapter = Assert.Single(shell.ServiceProvider.GetServices<INuplaneObserver>()
+            .Where(observer => observer is IShellGenerationBuildParticipant));
+        Assert.Same(adapter, borrowedAdapter);
+        // Build participants belong to the root registry and are excluded from shell providers.
+        Assert.Empty(shell.ServiceProvider.GetServices<IShellGenerationBuildParticipant>());
+        var monitor = root.GetRequiredService<IOptionsMonitor<NuplaneIntegrationOptions>>();
+        var configuration = (IConfigurationRoot)root.GetRequiredService<IConfiguration>();
+        var initialReload = host == "Elsa.Foundation.Host";
+
+        Assert.Equal(initialReload, monitor.CurrentValue.AutoReload);
+        Assert.True(monitor.CurrentValue.Enabled);
+        Assert.Equal(
+            host == "Elsa.Foundation.Host" ? NuplaneRefreshTrigger.EveryEligibleCompletion : NuplaneRefreshTrigger.ChangedOrPending,
+            monitor.CurrentValue.RefreshTrigger);
+
+        content.SetReloadOnPackageChange(!initialReload);
+        configuration.Reload();
+
+        Assert.Equal(host == "Elsa.Foundation.Host" ? true : !initialReload, monitor.CurrentValue.AutoReload);
+        Assert.Equal(host == "Elsa.Foundation.Host" ? !initialReload : true, monitor.CurrentValue.Enabled);
     }
 
     /// <summary>
@@ -394,6 +415,22 @@ public sealed class HostOwnedServicesAreSharedWithShellsTests
                 ]);
 
             return [.. arguments];
+        }
+
+        public void SetReloadOnPackageChange(bool value)
+        {
+            var path = Path.Join(_directory, "appsettings.json");
+            var settings = System.Text.Json.Nodes.JsonNode.Parse(File.ReadAllText(path), documentOptions: new System.Text.Json.JsonDocumentOptions
+            {
+                CommentHandling = System.Text.Json.JsonCommentHandling.Skip,
+                AllowTrailingCommas = true
+            })!.AsObject();
+            var elsa = settings["Elsa"] as System.Text.Json.Nodes.JsonObject ?? new System.Text.Json.Nodes.JsonObject();
+            var shells = elsa["Shells"] as System.Text.Json.Nodes.JsonObject ?? new System.Text.Json.Nodes.JsonObject();
+            shells["ReloadOnPackageChange"] = value;
+            elsa["Shells"] = shells;
+            settings["Elsa"] = elsa;
+            File.WriteAllText(path, settings.ToJsonString(new System.Text.Json.JsonSerializerOptions { WriteIndented = true }));
         }
 
         /// <summary>The Data Protection key store a clustered host shares its key ring through (#2191).</summary>

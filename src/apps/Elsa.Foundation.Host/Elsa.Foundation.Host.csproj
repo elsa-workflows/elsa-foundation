@@ -10,7 +10,7 @@
     Nuplane (the package feed + runtime assembly loader) and CShells (shell activation, routing,
     per-shell middleware). Every actual feature — activities, HTTP, persistence, and the Tasks
     feature that runs startup/background/recurring tasks — arrives as a package through the Nuplane
-    feed and is discovered by CShells via NuplaneAssemblyProvider. Versions are centrally managed
+    feed and is discovered by CShells through CShells.Nuplane. Versions are centrally managed
     in the repository-root Directory.Packages.props. The shared Elsa.Api.AspNetCore reference below only
     publishes the typed host endpoint metadata contract; it does not bring an Elsa feature into this host.
   -->
@@ -32,8 +32,7 @@
          Brings FastEndpoints 7.2.0 and depends on CShells.AspNetCore (already referenced above). -->
     <PackageReference Include="CShells.FastEndpoints" />
 
-    <!-- Nuplane: package feed + runtime assembly loading. AutoloadPackages registers the
-         IPackageAssemblyCatalog that NuplaneAssemblyProvider hands to CShells. -->
+    <!-- Nuplane: package feed + runtime assembly loading. CShells.Nuplane bridges the loaded package catalog to feature discovery. -->
     <PackageReference Include="Nuplane" />
     <PackageReference Include="Nuplane.Loading" />
     <PackageReference Include="Nuplane.Sources.Directory" />
