@@ -17,6 +17,7 @@ public sealed class PublishStimulusExecutor : IRuntimePostCommitIntentHandler
 {
     private const string DeliveryFailureCode = "publish-stimulus-delivery-failed";
     private const string DeliveryFailureSummary = "The named-event stimulus could not be routed.";
+    private const string ShedFailureCode = "publish-stimulus-start-shed";
     private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web);
 
     private readonly IStimulusRouter _stimulusRouter;
@@ -56,9 +57,10 @@ public sealed class PublishStimulusExecutor : IRuntimePostCommitIntentHandler
             requestedBy: PublishStimulusConstants.RequestedBy,
             targetWorkflowExecutionId: localTarget);
 
+        StimulusRoutingResult result;
         try
         {
-            await _stimulusRouter.RouteAsync(request, cancellationToken);
+            result = await _stimulusRouter.RouteAsync(request, cancellationToken);
         }
         catch (OperationCanceledException)
         {
@@ -72,6 +74,17 @@ public sealed class PublishStimulusExecutor : IRuntimePostCommitIntentHandler
                 ? PostCommitFailureKind.Permanent
                 : PostCommitFailureKind.Transient;
             throw new RuntimePostCommitDeliveryException(kind, DeliveryFailureCode, DeliveryFailureSummary, exception);
+        }
+
+        // Admission shed a start at capacity (#2548): nothing was written and its key is unconsumed, so reporting the
+        // delivery as done would lose that start. Failing it as transient lets the outbox retry the whole delivery; the
+        // starts and resumes that did go through answer the retry as duplicates under the same keys.
+        if (result.ShedStartCount > 0)
+        {
+            throw new RuntimePostCommitDeliveryException(
+                PostCommitFailureKind.Transient,
+                ShedFailureCode,
+                $"{result.ShedStartCount} start(s) were refused by runtime admission at capacity and will be retried.");
         }
     }
 }
