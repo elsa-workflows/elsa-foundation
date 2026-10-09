@@ -4,7 +4,7 @@
 
 **Created**: 2026-10-09
 
-**Status**: Draft
+**Status**: Planned; implementation not started
 
 **Input**: Deliver the modular-hosting upstream program end to end, adopting general startup activation support in Foundation.Host and Workbench while retaining Elsa policy and existing host behavior.
 

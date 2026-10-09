@@ -261,5 +261,5 @@ New work should move toward this rule:
 <!-- SPECKIT START -->
 For additional context about technologies, project structure, shell commands, contracts, and
 validation scenarios for the active work unit, read
-`specs/199-shared-nuplane-adoption/plan.md`.
+`specs/200-adopt-startup-runner/plan.md`.
 <!-- SPECKIT END -->

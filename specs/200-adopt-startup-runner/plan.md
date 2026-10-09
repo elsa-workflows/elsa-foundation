@@ -2,7 +2,7 @@
 
 **Branch**: `2341-adopt-startup-runner` | **Date**: 2026-10-09 | **Spec**: [spec.md](spec.md)
 
-**Status**: Draft; preparation only. Requirements/research directions have independent source review, including the explicitly selected fatal/cancellation/external-completion clarifications and no-notification projection correction. Phase1 design artifacts and final plan review remain pending before task finalization or source implementation. Returned-generation prerequisite [CShells #167](https://github.com/valence-works/cshells/issues/167) is qualified from public `.173`.
+**Status**: Reviewed plan; implementation not started. Root and independent review cover the requirements, research and Phase1 artifacts, including explicit fatal/cancellation/external-completion clarifications and the no-notification projection correction. Task sequencing and implementation verification follow this checkpoint. Returned-generation prerequisite [CShells #167](https://github.com/valence-works/cshells/issues/167) is qualified from public `.173`.
 
 ## Summary
 
@@ -12,6 +12,7 @@ Use the existing opt-in root `IShellActivationRunner` inside the three existing 
 
 **Language/Version**: Existing C#/.NET10 host applications; upstream abstractions support .NET8/9/10.
 **Primary Dependencies**: CShells hosting/lifecycle abstractions, standard DI/logging/options, existing host TimeProvider and Elsa diagnostic types. No new third-party package or feature closure.
+**Prepared-package baseline**: This descendant currently carries `.171`/`.99` preview pins from `af83b06`; source qualification must coherently update its reached CShells family to qualified public `.173` for ReturnedGeneration and refresh reached locks/maps. Canonical main remains `.159`/`.94`. Final adoption still replaces previews with the complete verified stable families.
 **Storage**: No new store; only owned activation handles and bounded host policy metadata.
 **Testing**: Existing Modularity startup/readiness tests, actual Cluster/SQLite recovery/boot/refusal processes, affected Workbench composition tests and architecture/maps. Preserve all existing test objectives.
 **Target Platform**: Supported host platforms and current CI matrix.
@@ -29,13 +30,13 @@ Use the existing opt-in root `IShellActivationRunner` inside the three existing 
 - Test cadence is undeclared by the derived application constitution; record the gap without inventing mandatory test-first ordering. Existing refactor assertions remain mandatory.
 - Draft framework §2.24 and Elsa §E2.9 are not used as ratified new gates.
 
-**Pre-design**: scope and ownership are consistent. **Post-design**: final artifacts/review pending. Research explicitly selects configured-order concurrent fatal propagation, startup-token detachment, terminal external boot completion and the failure-base projection. This draft does not claim adapter execution proof or waive plan completion.
+**Pre-design**: scope and ownership are consistent. **Post-design**: passed root and independent source/design review. Research explicitly selects configured-order concurrent fatal propagation, startup-token detachment, terminal external boot completion and the failure-base projection. Existing test subjects/assertions remain mandatory; no new project, constitutional exception or readiness policy is introduced. This is design acceptance, not adapter execution proof.
 
 ## Project Structure
 
 ### Documentation
 
-`specs/200-adopt-startup-runner/`: specification, plan and research. Data model/contracts/quickstart/tasks follow accepted research. The official setup-plan script resolved the spec through `.specify/feature.json`; its empty branch output is a script metadata limitation, while actual Git branch is `2341-adopt-startup-runner`.
+`specs/200-adopt-startup-runner/`: specification, plan, [research](research.md), [data model](data-model.md), [startup contracts](contracts/startup-profiles.md) and [validation guide](quickstart.md). Tasks follow the reviewed design. The official setup-plan script resolved the spec through `.specify/feature.json`; its empty branch output is a script metadata limitation, while actual Git branch is `2341-adopt-startup-runner`.
 
 ### Source Code
 
@@ -58,4 +59,4 @@ Use the existing opt-in root `IShellActivationRunner` inside the three existing 
 
 ## Complexity Tracking
 
-No constitutional exception is approved. Fatal-error retention remains exceptional propagation state, not duplicate attempt/scheduling state. Explicit compatibility clarifications in FR016–FR020 must be documented and tested; existing assertions remain effective. Final design review is pending.
+No constitutional exception is approved. Fatal-error retention remains exceptional propagation state, not duplicate attempt/scheduling state. Explicit compatibility clarifications in FR016–FR020 must be documented and tested; existing assertions remain effective. Root and independent design reviews are complete; tasks and executable acceptance remain outstanding.
