@@ -70,6 +70,15 @@ Re-check for competing work before committing, not only at session start. That c
 
 A claim is advisory. It narrows the window rather than closing it, and two sessions starting within the same minute still race. When a unit is split into slices, prefer giving one session the whole stack, or naming an owner per slice in the issue, over relying on claims alone.
 
+## Branch and issue hygiene
+
+Follow [Repository hygiene](docs/contributing/repository-hygiene.md). In short:
+
+- Push a branch only when opening its PR (draft is fine) in the same session; otherwise keep the work local.
+- Never restore a head branch that was deleted on merge or by the weekly sweep. Archived tips live under `archive/<branch>` tags.
+- File new issues as `needs-triage` only. Put checkpoints, receipts and evidence on the PR or the issue being worked, never in a new issue.
+- Respect the caps: at most 2 open programs and 20 `ready-for-agent` issues. At the cap, extend the existing parent instead of filing more.
+
 ## Builds on a shared machine
 
 Parallel sessions on one machine compete for the same CPU. Four concurrent solution builds on an 8-core machine have pushed the load average past 400, which makes every build slower and makes timeout-based tests fail when nothing is wrong.

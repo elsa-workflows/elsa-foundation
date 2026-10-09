@@ -1,0 +1,43 @@
+name: Repository hygiene
+
+# Weekly branch sweep and branch/issue health report, posted to the open issue labelled repo-hygiene.
+# Policy and thresholds: docs/contributing/repository-hygiene.md
+#
+# Scheduled runs only report until the repository variable HYGIENE_ENFORCE is 'true'. A manual run
+# chooses its own mode. Enforce tags each swept branch tip as archive/<branch> before deleting it.
+
+on:
+  schedule:
+    - cron: '17 6 * * 1'
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: 'report changes nothing; enforce archives and deletes swept branches'
+        type: choice
+        options: [report, enforce]
+        default: report
+
+permissions:
+  contents: write
+  issues: write
+  pull-requests: read
+
+concurrency:
+  group: repo-hygiene
+  cancel-in-progress: false
+
+jobs:
+  hygiene:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Sweep branches and report
+        env:
+          GH_TOKEN: ${{ github.token }}
+          MODE: ${{ inputs.mode || (vars.HYGIENE_ENFORCE == 'true' && 'enforce' || 'report') }}
+          POST_REPORT: 'true'
+        run: bash tools/repo-hygiene/hygiene.sh "$MODE"
