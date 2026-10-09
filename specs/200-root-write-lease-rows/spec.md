@@ -70,7 +70,7 @@ When a checkpoint commit has durably succeeded, a later failure to release its l
 
 ### Edge Cases
 
-- **Same lease id from two holders:** two holders acquire the same lease id at once, for example overlapping retries of one commit. Today's shared-token behavior from #2274 is preserved; #2286 owns the separate per-attempt-identity defect.
+- **Same lease id from two holders:** two holders acquire the same lease id at once. The store keeps today's shared-token behavior (#2274). Checkpoint commits stop hitting this case because each attempt now gets its own lease id (FR-015).
 - **Crashed holders:** a holder dies without releasing. Its lease stops blocking collection once it expires, and expired lease records are eventually removed without needing a shared record.
 - **Expiry boundary:** a lease is renewed exactly at its expiry instant. Behavior matches today's comparison semantics, where `expiresAt <= now` means expired.
 - **Artifact missing or orphaned:** a lease request for an artifact that does not exist, or whose identity records are inconsistent, keeps today's outcomes (refusal or fault).
@@ -95,6 +95,7 @@ When a checkpoint commit has durably succeeded, a later failure to release its l
 - **FR-010**: Leases recorded in the pre-upgrade shared record MUST continue to block deletion until they expire. No operator data migration may be required.
 - **FR-011**: A checkpoint commit that succeeded durably MUST be reported as successful even if releasing its lease fails afterwards. The release failure MUST be observable to operators.
 - **FR-012**: *(Moved out of this unit by owner decision, 2026-10-09.)* Skipping the lease for commits that do not change an execution's pinned artifact is a separate follow-up unit, sized against Track B evidence.
+- **FR-015**: Each checkpoint commit attempt MUST hold its own root-write lease identity. If two attempts commit the same `CommitId` and overlap, releasing one attempt's lease MUST NOT remove the other's protection, and the second attempt's renewal MUST keep succeeding ([#2286](https://github.com/elsa-workflows/elsa-foundation/issues/2286)). Activation (#2274) and test-run leases keep their existing identity rules.
 - **FR-013**: Existing lease, guard, deletion and garbage-collection tests MUST pass unchanged, except where a test asserts the old storage layout itself. Any such test MUST be listed and justified in the plan.
 - **FR-014**: The regression tests added with this specification MUST pass on every supported provider. Each MUST fail when the implementation is reverted:
   - `Root_write_lease_acquire_is_not_failed_by_other_holders_of_the_same_artifact`
@@ -126,12 +127,12 @@ When a checkpoint commit has durably succeeded, a later failure to release its l
 - incarnation fencing;
 - migrations for the four providers;
 - in-memory parity;
-- isolating commit results from release failures.
+- isolating commit results from release failures;
+- per-attempt checkpoint lease identity ([#2286](https://github.com/elsa-workflows/elsa-foundation/issues/2286)).
 
 **Out of scope:**
 - Skipping the lease for commits that do not change an execution root. Owner decision of 9 October 2026: this becomes the follow-up unit after this one, informed by Track B.
 - [#2537](https://github.com/elsa-workflows/elsa-foundation/issues/2537): incident projection for executions poisoned before their first state row. A separate unit.
-- [#2286](https://github.com/elsa-workflows/elsa-foundation/issues/2286): per-attempt checkpoint lease identity.
 - The cause of the HTTP timeouts in [#2536](https://github.com/elsa-workflows/elsa-foundation/issues/2536) that are not explained by lease faults. This unit re-runs A1 to establish what remains.
 - Retry tuning as a substitute for the structural change.
 - Track B throughput measurement.
@@ -142,7 +143,7 @@ When a checkpoint commit has durably succeeded, a later failure to release its l
 1. **Leases written before the upgrade** stay honoured until they expire. Deletion checks read both the old shared record and the new per-lease records, and new leases are written only as per-lease records (FR-010). No data migration and no host drain are needed.
 2. **The lease skip for non-root-changing commits** is split into a later unit, so this unit only does the per-lease storage fix.
 3. **Mutual exclusion mechanism: write-then-check.** Each side commits its own record, then checks the other side's. This is portable across all four providers, uses no provider-specific locking SQL, and reintroduces no shared hot record. The plan must show why a lease grant and a deletion start can never both succeed under each provider's isolation level.
-4. **Adjacent defects #2286 and #2537:** pending owner confirmation. Until then, both stay out of scope.
+4. **Adjacent defects:** #2286 (per-attempt checkpoint lease identity) is **in scope** (FR-015). #2537 (incident projection for executions poisoned at their first checkpoint) stays a separate unit.
 
 ## Assumptions
 
