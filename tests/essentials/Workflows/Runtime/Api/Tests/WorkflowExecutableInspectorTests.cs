@@ -569,6 +569,28 @@ public sealed class WorkflowExecutableInspectorTests
         Assert.Null(structural.Secret);
     }
 
+    [Fact]
+    public async Task InputSourcesSummarizeASecretReadWhosePolicyIsNotSensitiveByItsReference()
+    {
+        // Publication always compiles a secret read as sensitive; a hand-built or imported artifact can carry a lower
+        // policy (research R13). Its source details are then shown, and its summary is still the reference.
+        var reference = new RuntimeSecretReference("payments.api-key");
+        var binding = new RuntimeInputBinding(
+            "api-key",
+            StringType,
+            ValueProtectionPolicy.InstanceInline,
+            RuntimeInputBindingSource.SecretRead,
+            secret: reference);
+        await _executableStore.SaveAsync(Executable(_now, inputBindings: new Dictionary<string, RuntimeInputBinding> { ["api-key"] = binding }));
+        await _referenceStore.SaveAsync(Reference("source-lowered-secret", WorkflowExecutableReferenceScope.Published, _now, "1.0.0"));
+
+        var compiled = Assert.Single((await _inspector.GetInputSourcesAsync("artifact-1", "source-lowered-secret"))!.CompiledInputs);
+
+        Assert.Equal("allowed", compiled.AccessState);
+        Assert.Equal("payments.api-key", compiled.Binding.Summary);
+        Assert.Equal(reference, compiled.Binding.Secret);
+    }
+
     /// <summary>
     /// Studio prints a compiled binding's summary verbatim, so a binding whose policy marks its value sensitive or as
     /// requiring encryption carries no value in it, nor anywhere else on the wire (spec 188, T070).
@@ -607,7 +629,7 @@ public sealed class WorkflowExecutableInspectorTests
     /// </summary>
     [Theory]
     [InlineData("declared on the compiled binding")]
-    [InlineData("declared on the pinned contract only")]
+    [InlineData("declared on the pinned contract, not on the binding")]
     [InlineData("no compiled input")]
     public async Task InputSourcesRedactAnAuthoredValueByTheEffectivePolicyNotOnlyItsAuthoredFlag(string row)
     {
@@ -971,10 +993,11 @@ public sealed class WorkflowExecutableInspectorTests
         {
             ["token"] = Literal("token", "compiled", SensitivePolicy)
         }),
-        ["declared on the pinned contract only"] = () => Node(
+        // A binding whose policy lost the declaration, as a hand-built or imported artifact can carry one.
+        ["declared on the pinned contract, not on the binding"] = () => Node(
             "root",
             "root",
-            new Dictionary<string, RuntimeInputBinding>(),
+            new Dictionary<string, RuntimeInputBinding> { ["token"] = Literal("token", "compiled", ValueProtectionPolicy.InstanceInline) },
             new ActivityInputContract("token", "Token", StringType, false, true, false, null, ActivityValuePolicy.Default with { IsSensitive = true })),
         ["no compiled input"] = () => Node("other", "other", new Dictionary<string, RuntimeInputBinding>())
     };
