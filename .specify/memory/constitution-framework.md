@@ -3,6 +3,18 @@ Draft history moved to ../../docs/reports/archive/constitution-draft-history.md.
 This constitution file is the generic quality-gate layer: gates, allowed exceptions,
 ratification state, and governance. Canonical term lookup lives in ../../docs/glossary/.
 
+SYNC IMPACT REPORT — 4.0.0 -> 4.0.1 (2026-10-09)
+Amendment: record which dispatcher failure policies the event substrate implements (#273).
+  PATCH per Governance > Versioning: a clarification of build status; no rule changes.
+Modified sections:
+  §2.6.6  - ADDED "Implementation status" after the built-in dispatcher failure policies:
+            Sequential = Throw immediately; Background = Log/handle and continue, per handler.
+            Run-all-then-aggregate, a per-publish policy selector, failure-classification metadata
+            and the Parallel strategy are not built and are added when a concrete publisher needs them.
+Added sections: none. Removed sections: none.
+Templates requiring updates: none.
+Approval: Sipke Schoorstra, 2026-10-09. Same consensus caveat as the 4.0.0 ratification below.
+
 SYNC IMPACT REPORT — 3.2.0 -> 4.0.0 (2026-08-08)
 Amendment: event types are never named with an `On` prefix.
   MAJOR per Governance > Versioning: this REDEFINES a previously prescribed convention.
@@ -25,7 +37,7 @@ Ratification: RATIFIED 2026-08-08 by Sipke Schoorstra, on his authority alone. G
 -->
 # Modular Software Design Framework Constitution
 
-**Version:** 4.0.0
+**Version:** 4.0.1
 **Status:** Ratified 2026-08-08 by Sipke Schoorstra. Governance > Amendment process calls for consensus among Joey Barten, Sipke Schoorstra, and Frans van Ek; this ratification was taken on Sipke Schoorstra's authority alone and is open to revision if the other architects dissent. Section-level gates still marked draft, provisional, or pending ratification — whether via their own `Status:` line (§2.24) or inline wording — remain so and are **not** covered by this ratification.
 **Layer:** Generic framework constitution. The Elsa workflow-engine constitution derives from this document — see `constitution.md`.
 
@@ -433,6 +445,8 @@ The delivery strategy passed to `IEventPublisher.Publish` is:
 - **Throw immediately** — stop the handler loop on the first failure and surface that failure to the publisher. This is the default for Sequential gate/contribution events where later handlers should not run after the gate has already failed.
 - **Run all then throw aggregate** — continue dispatching remaining handlers, collect failures, then fail the publisher with an aggregate exception after every handler had a chance to run. Use when the publisher must fail, but one broken handler must not starve other business-critical handlers.
 - **Log/handle gracefully and continue** — handle failures through logging/observability/retry/dead-letter policy and do not fail the publisher. This is the normal Background notification policy.
+
+**Implementation status (amended 4.0.1).** The event substrate builds two of these policies, each fixed by its delivery strategy. Sequential is *Throw immediately*. Background is *Log/handle gracefully and continue*, applied per handler: a failing handler is logged and the remaining handlers of the same event still run. *Run all then throw aggregate*, a per-publish policy selector, handler-level failure-classification metadata, and the Parallel delivery strategy are **not built**. They are added when a concrete publisher needs them. Until then, a publisher that needs one of them raises it as a work unit; it does not hand-roll the semantics at the call site.
 
 **Choosing a strategy — the diagnostic question.** *Does my own correctness depend on these handlers having run?*
 
@@ -1040,4 +1054,4 @@ The framework constitution is intentionally written with synthetic and `<App>`-p
 
 ---
 
-**Version:** 4.0.0 | **Ratified:** 2026-08-08 | **Last Amended:** 2026-08-08
+**Version:** 4.0.1 | **Ratified:** 2026-08-08 | **Last Amended:** 2026-10-09
