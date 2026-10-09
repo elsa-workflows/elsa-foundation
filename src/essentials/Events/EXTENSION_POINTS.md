@@ -34,7 +34,7 @@ Defined in `Elsa.Events.Strategies`. Each strategy determines how the published 
 | Strategy | Behaviour | Use when |
 |---|---|---|
 | **Sequential** (default) | Publisher awaits the full dispatch chain synchronously. Handler exceptions propagate to the publisher. | The publisher needs to read back contributions (`DraftValidating`). |
-| **Background** | Event is enqueued on `IEventChannel`; `BackgroundEventPublisher` drains asynchronously. Publisher returns before handlers run. Handler exceptions are caught + logged. | Notification / observation (`DraftCreated`, `DraftValidated`). One subscriber failure must not break others. |
+| **Background** | Event is enqueued on `IEventChannel`; `BackgroundEventPublisher` drains asynchronously. Publisher returns before handlers run. Each handler is isolated: a failing handler is logged and the remaining handlers of the same event still run. | Notification / observation (`DraftCreated`, `DraftValidated`). One subscriber failure must not break others. |
 
 ---
 

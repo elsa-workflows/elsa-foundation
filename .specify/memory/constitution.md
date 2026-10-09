@@ -126,7 +126,7 @@ Ratification: RATIFIED 2026-08-08 by Sipke Schoorstra, on his authority alone; J
 **Version:** 4.2.0
 **Status:** Ratified 2026-08-08 by Sipke Schoorstra. Governance > Amendment process calls for consensus among Joey Barten, Sipke Schoorstra, and Frans van Ek; this ratification was taken on Sipke Schoorstra's authority alone and is open to revision if the other architects dissent. Section-level gates still marked draft, provisional, or pending architecture-review ratification — whether via their own `Status:` line (§E5) or inline wording (§E2.8 Model X, §E2.9, §E2.9.7) — remain so and are **not** covered by this ratification.
 **Layer:** Elsa-specific specialization of the [Modular Software Design Framework Constitution](constitution-framework.md).
-**Derives from:** framework constitution **v4.0.0**.
+**Derives from:** framework constitution **v4.0.1**.
 
 **Knowledge boundary note:** treat this document as the Elsa-specific
 quality-gate layer. Canonical term lookup lives in `../../docs/glossary/`;
@@ -583,7 +583,7 @@ This constitution is amended together with the framework constitution where the 
 
 ### Sync rule with framework constitution
 
-This document declares the framework constitution version it derives from in the header (currently **v4.0.0**). When the framework constitution bumps:
+This document declares the framework constitution version it derives from in the header (currently **v4.0.1**). When the framework constitution bumps:
 
 - **PATCH** — re-pin the version; review for clarification impact; no Elsa SemVer bump unless wording downstream of an Elsa specialization is affected.
 - **MINOR** — re-pin the version; review every Elsa specialization for compatibility with new framework guidance.
@@ -605,4 +605,4 @@ Same rules as framework §4.2 applied to constitutional content:
 
 ---
 
-**Version:** 4.2.0 | **Ratified:** 2026-08-08 | **Last Amended:** 2026-09-17 | **Derives from framework constitution:** v4.0.0
+**Version:** 4.2.0 | **Ratified:** 2026-08-08 | **Last Amended:** 2026-09-17 | **Derives from framework constitution:** v4.0.1

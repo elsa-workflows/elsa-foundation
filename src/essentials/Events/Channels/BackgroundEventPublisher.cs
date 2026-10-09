@@ -8,13 +8,16 @@ namespace Elsa.Events.Channels;
 
 /// <summary>
 /// Reads queued event contexts off the <see cref="IEventChannel"/> and dispatches each via
-/// the <see cref="SequentialProcessingStrategy"/>. Single-reader, FIFO order — enqueue order
-/// is preserved at dispatch.
+/// <see cref="IsolatingProcessingStrategy"/>: awaited and in order, like
+/// <see cref="SequentialProcessingStrategy"/>, but with each handler isolated. Single-reader, FIFO
+/// order — enqueue order is preserved at dispatch.
 /// </summary>
 /// <remarks>
-/// Handler exceptions are caught + logged + swallowed; the loop continues. This is where
-/// fire-and-forget resilience lives: a flaky handler can't stall the queue or break the
-/// publisher. The default Sequential strategy carries no such shielding by design.
+/// This is where fire-and-forget resilience lives. A failing handler is logged and the remaining
+/// handlers of the same event still run; a failure outside the handlers (e.g. in pipeline middleware)
+/// is logged and the loop moves on to the next event. A flaky handler can't stall the queue, starve
+/// its sibling subscribers, or break the publisher. The default Sequential strategy carries no such
+/// shielding by design.
 ///
 /// Lifetime: dispatch is tied to the host/tenant lifetime token passed to <see cref="ExecuteAsync"/>.
 /// The enqueue-time caller token carried on the queued context is deliberately NOT linked into
@@ -33,6 +36,8 @@ public sealed class BackgroundEventPublisher(
 )
     : IBackgroundTask
 {
+    private readonly IsolatingProcessingStrategy _strategy = new(logger);
+
     public Task StartAsync(CancellationToken cancellationToken) => Task.CompletedTask;
 
     public async Task ExecuteAsync(CancellationToken cancellationToken)
@@ -68,14 +73,15 @@ public sealed class BackgroundEventPublisher(
         try
         {
             using var scope = scopeFactory.CreateScope();
-            // Drained events are delivered inline (awaited, in order) — the same sequential dispatch
-            // the deferred face defers. Resolving the inline face here is intent-revealing.
-            var eventPublisher = scope.ServiceProvider.GetRequiredService<IInlineEventPublisher>();
+            // Drained events are delivered awaited and in order, but with per-handler isolation: the
+            // inline face would stop at the first failing handler and silently skip the rest.
+            var eventPublisher = scope.ServiceProvider.GetRequiredService<IEventPublisher>();
 
             // Dispatch under host lifetime only. The queued context's own CancellationToken (captured
             // at enqueue time) is intentionally NOT linked here — see the class remarks on the caller token.
             await eventPublisher.Publish(
                 queuedContext.Event,
+                _strategy,
                 cancellationToken
             );
         }

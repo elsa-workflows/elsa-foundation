@@ -14,11 +14,11 @@ namespace Elsa.Events.Tests;
 /// </summary>
 public class BackgroundEventPublisherTokenTests
 {
-    private static (BackgroundEventPublisher publisher, EventChannel channel, CountingInlineEventPublisher counting) Build()
+    private static (BackgroundEventPublisher publisher, EventChannel channel, CountingEventPublisher counting) Build()
     {
-        var counting = new CountingInlineEventPublisher();
+        var counting = new CountingEventPublisher();
         var services = new ServiceCollection();
-        services.AddSingleton<IInlineEventPublisher>(counting);
+        services.AddSingleton<IEventPublisher>(counting);
         var provider = services.BuildServiceProvider();
         var scopeFactory = provider.GetRequiredService<IServiceScopeFactory>();
         var channel = new EventChannel();

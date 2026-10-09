@@ -22,7 +22,7 @@ public class BackgroundEventPublisherLifetimeTests
     [Fact]
     public async Task ChannelSurvivesInitializerScopeDisposalAndKeepsDispatching()
     {
-        var counting = new CountingInlineEventPublisher();
+        var counting = new CountingEventPublisher();
         await using var root = EventTestHosts.BuildProductionLikeProvider(counting);
 
         // Simulate CShells RunInitializersAsync: resolve the (singleton) TaskManager inside a child

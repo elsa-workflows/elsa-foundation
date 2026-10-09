@@ -21,12 +21,11 @@ internal static class TestEvents
 }
 
 /// <summary>
-/// Stands in for the intent-revealing <see cref="IInlineEventPublisher"/> face the background worker
-/// drains through. Records how many events were dispatched and the token each was dispatched under,
-/// and exposes an honest <see cref="WaitForAsync"/> barrier that completes only once the requested
+/// Stands in for the <see cref="IEventPublisher"/> the background worker drains through. Records how
+/// many events were dispatched, and the token each was dispatched under, and exposes an honest <see cref="WaitForAsync"/> barrier that completes only once the requested
 /// number of events have actually been dispatched.
 /// </summary>
-internal sealed class CountingInlineEventPublisher : IInlineEventPublisher
+internal sealed class CountingEventPublisher : IEventPublisher
 {
     private readonly object _gate = new();
     private readonly List<(int Target, TaskCompletionSource Tcs)> _waiters = [];
@@ -53,7 +52,7 @@ internal sealed class CountingInlineEventPublisher : IInlineEventPublisher
         }
     }
 
-    public Task Publish(IEvent @event, CancellationToken cancellationToken = default)
+    public Task Publish(IEvent @event, IEventPublishingStrategy? strategy = null, CancellationToken cancellationToken = default)
     {
         lock (_gate)
         {
@@ -97,7 +96,7 @@ internal static class EventTestHosts
     /// <c>ValidateScopes</c> is on so a captive-dependency regression (a singleton capturing a scoped
     /// service) fails the build rather than slipping through.
     /// </summary>
-    public static ServiceProvider BuildProductionLikeProvider(IInlineEventPublisher inlinePublisher)
+    public static ServiceProvider BuildProductionLikeProvider(IEventPublisher eventPublisher)
     {
         var services = new ServiceCollection();
         services.AddLogging();
@@ -105,7 +104,7 @@ internal static class EventTestHosts
 
         // EventsFeature lifetimes.
         services.AddSingleton<IEventChannel, EventChannel>();
-        services.AddSingleton(inlinePublisher);
+        services.AddSingleton(eventPublisher);
 
         // TasksFeature lifetimes (shell-singleton). A shell container has its ShellSettings; this one stands in for it.
         services.AddSingleton(new ShellSettings("default"));
