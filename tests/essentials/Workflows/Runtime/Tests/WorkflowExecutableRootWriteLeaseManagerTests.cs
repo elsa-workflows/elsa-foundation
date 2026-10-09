@@ -5,6 +5,7 @@ using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Services.Executables;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Xunit;
 
@@ -109,11 +110,89 @@ public sealed class WorkflowExecutableRootWriteLeaseManagerTests
         Assert.NotNull(await inner.TryBeginDeletionAsync("artifact-a", "gc-a", now.AddMinutes(1), now));
     }
 
-    private WorkflowExecutableRootWriteLeaseManager NewManager(IWorkflowExecutableStore store) =>
+    [Fact]
+    public async Task ExecuteAsync_ReportsASuccessfulWriteAsSuccessWhenALeaseReleaseFails()
+    {
+        var inner = new InMemoryWorkflowExecutableStore();
+        var child = Executable("artifact-a");
+        var root = Executable("artifact-z", child);
+        await inner.SaveAsync(child);
+        await inner.SaveAsync(root);
+        var store = new RecordingExecutableStore(inner) { FailReleases = true };
+        var logger = new RecordingLogger<WorkflowExecutableRootWriteLeaseManager>();
+        var manager = NewManager(store, logger);
+        var wrote = false;
+
+        await manager.ExecuteAsync(root.Identity, "writer", _ =>
+        {
+            wrote = true;
+            return ValueTask.CompletedTask;
+        });
+
+        Assert.True(wrote);
+        Assert.Equal(2, store.ReleaseAttempts);
+        Assert.Collection(
+            logger.Entries,
+            entry => Assert.Equal((LogLevel.Warning, typeof(InvalidOperationException)), (entry.Level, entry.Exception?.GetType())),
+            entry => Assert.Equal((LogLevel.Warning, typeof(InvalidOperationException)), (entry.Level, entry.Exception?.GetType())));
+        Assert.Contains(logger.Entries, entry => entry.Message.Contains("artifact-a", StringComparison.Ordinal));
+        Assert.Contains(logger.Entries, entry => entry.Message.Contains("artifact-z", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_SurfacesTheWriteFailureUnchangedWhenAReleaseAlsoFails()
+    {
+        var store = new RecordingExecutableStore(new InMemoryWorkflowExecutableStore()) { FailReleases = true };
+        await store.SaveAsync(Executable("artifact-1"));
+        var manager = NewManager(store, new RecordingLogger<WorkflowExecutableRootWriteLeaseManager>());
+        var writeFailure = new InvalidDataException("The write failed.");
+
+        var thrown = await Assert.ThrowsAsync<InvalidDataException>(() =>
+            manager.ExecuteAsync("artifact-1", "writer", _ => throw writeFailure).AsTask());
+
+        Assert.Same(writeFailure, thrown);
+        Assert.Equal(1, store.ReleaseAttempts);
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_CancelsTheWriteAndSurfacesTheLostLeaseWhenARenewalIsRefused()
+    {
+        var store = new RecordingExecutableStore(new InMemoryWorkflowExecutableStore()) { RefuseRenewals = true };
+        await store.SaveAsync(Executable("artifact-1"));
+        var manager = NewManager(store);
+        var writeStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var writeCancelled = false;
+
+        var writeTask = manager.ExecuteAsync("artifact-1", "writer", async cancellationToken =>
+        {
+            writeStarted.SetResult();
+            try
+            {
+                await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
+            }
+            catch (OperationCanceledException)
+            {
+                writeCancelled = true;
+                throw;
+            }
+        }).AsTask();
+
+        await writeStarted.Task.WaitAsync(AwaitTimeout);
+        await _timeProvider.TimerCreated.WaitAsync(AwaitTimeout);
+        _timeProvider.AdvanceAndFire(RenewalCadence);
+
+        await Assert.ThrowsAsync<WorkflowExecutableRootWriteLeaseLostException>(() => writeTask.WaitAsync(AwaitTimeout));
+        Assert.True(writeCancelled);
+    }
+
+    private WorkflowExecutableRootWriteLeaseManager NewManager(
+        IWorkflowExecutableStore store,
+        ILogger<WorkflowExecutableRootWriteLeaseManager>? logger = null) =>
         new(
             store,
             Options.Create(new WorkflowExecutableGarbageCollectionOptions()),
-            _timeProvider);
+            _timeProvider,
+            logger);
 
     private WorkflowExecutable Executable(string artifactId, params WorkflowExecutable[] dependencies) =>
         new(
@@ -148,6 +227,14 @@ public sealed class WorkflowExecutableRootWriteLeaseManagerTests
 
         public List<string> AcquiredArtifactIds { get; } = [];
 
+        /// <summary>Makes every release throw, as a store whose database is unreachable would.</summary>
+        public bool FailReleases { get; init; }
+
+        /// <summary>Makes every renewal report the lease lost.</summary>
+        public bool RefuseRenewals { get; init; }
+
+        public int ReleaseAttempts { get; private set; }
+
         /// <summary>Completes once a renewal has been applied, so the test can safely move the clock again.</summary>
         public Task FirstRenewalObserved => _firstRenewalObserved.Task;
 
@@ -174,13 +261,18 @@ public sealed class WorkflowExecutableRootWriteLeaseManagerTests
             DateTimeOffset now,
             CancellationToken cancellationToken = default)
         {
-            var renewed = await inner.RenewRootWriteLeaseAsync(lease, expiresAt, now, cancellationToken);
+            var renewed = !RefuseRenewals && await inner.RenewRootWriteLeaseAsync(lease, expiresAt, now, cancellationToken);
             _firstRenewalObserved.TrySetResult();
             return renewed;
         }
 
-        public ValueTask ReleaseRootWriteLeaseAsync(WorkflowExecutableRootWriteLease lease, CancellationToken cancellationToken = default) =>
-            inner.ReleaseRootWriteLeaseAsync(lease, cancellationToken);
+        public ValueTask ReleaseRootWriteLeaseAsync(WorkflowExecutableRootWriteLease lease, CancellationToken cancellationToken = default)
+        {
+            ReleaseAttempts++;
+            return FailReleases
+                ? throw new InvalidOperationException("The lease store is unreachable.")
+                : inner.ReleaseRootWriteLeaseAsync(lease, cancellationToken);
+        }
 
         public ValueTask<WorkflowExecutableDeletionGuard?> TryBeginDeletionAsync(
             string artifactId,
@@ -203,5 +295,17 @@ public sealed class WorkflowExecutableRootWriteLeaseManagerTests
             RuntimeStorePageRequest request,
             CancellationToken cancellationToken = default) =>
             inner.ListPageAsync(request, cancellationToken);
+    }
+
+    private sealed class RecordingLogger<T> : ILogger<T>
+    {
+        public List<(LogLevel Level, Exception? Exception, string Message)> Entries { get; } = [];
+
+        public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
+
+        public bool IsEnabled(LogLevel logLevel) => true;
+
+        public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter) =>
+            Entries.Add((logLevel, exception, formatter(state, exception)));
     }
 }

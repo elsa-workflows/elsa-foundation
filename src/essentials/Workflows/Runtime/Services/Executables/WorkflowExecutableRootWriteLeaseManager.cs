@@ -3,6 +3,8 @@ using Elsa.Workflows.Runtime.Core.Configuration;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 
 namespace Elsa.Workflows.Runtime.Services.Executables;
@@ -11,8 +13,11 @@ namespace Elsa.Workflows.Runtime.Services.Executables;
 public sealed class WorkflowExecutableRootWriteLeaseManager(
     IWorkflowExecutableStore executableStore,
     IOptions<WorkflowExecutableGarbageCollectionOptions> options,
-    TimeProvider timeProvider) : IWorkflowExecutableRootWriteLeaseManager
+    TimeProvider timeProvider,
+    ILogger<WorkflowExecutableRootWriteLeaseManager>? logger = null) : IWorkflowExecutableRootWriteLeaseManager
 {
+    private readonly ILogger _logger = logger ?? NullLogger<WorkflowExecutableRootWriteLeaseManager>.Instance;
+
     public async ValueTask ExecuteAsync(
         string artifactId,
         string leaseId,
@@ -156,9 +161,11 @@ public sealed class WorkflowExecutableRootWriteLeaseManager(
         }
     }
 
+    // A release only shortens a lease that would otherwise expire on its own, so it never decides the outcome: a write
+    // that succeeded stays a success, and a failed write surfaces its own exception (spec 200, FR-011). A lease that could
+    // not be released holds its artifact from collection until it expires.
     private async ValueTask ReleaseAllAsync(IEnumerable<WorkflowExecutableRootWriteLease> leases)
     {
-        Exception? firstFailure = null;
         foreach (var lease in leases.Reverse())
         {
             try
@@ -167,11 +174,12 @@ public sealed class WorkflowExecutableRootWriteLeaseManager(
             }
             catch (Exception exception)
             {
-                firstFailure ??= exception;
+                _logger.LogWarning(
+                    exception,
+                    "Root-write lease {LeaseId} on workflow executable {ArtifactId} could not be released; it holds the executable from collection until it expires.",
+                    lease.LeaseId,
+                    lease.ArtifactId);
             }
         }
-
-        if (firstFailure is not null)
-            ExceptionDispatchInfo.Capture(firstFailure).Throw();
     }
 }

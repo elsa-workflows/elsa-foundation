@@ -30,6 +30,25 @@ public sealed class WorkflowExecutableCoordinationEntity
     public string IncarnationId { get; set; } = null!;
 }
 
+/// <summary>
+/// One root-write lease on one workflow executable (spec 200). Each holder writes only its own row, so concurrent
+/// executions of one artifact never contend on a shared record; the coordination row keeps only the deletion guard.
+/// </summary>
+public sealed class WorkflowExecutableRootWriteLeaseEntity
+{
+    public string Id { get; set; } = null!;
+    public string ScopeKey { get; set; } = null!;
+    public string ScopeKeyHash { get; set; } = null!;
+    public string ArtifactId { get; set; } = null!;
+    public string ArtifactIdHash { get; set; } = null!;
+    public string LeaseId { get; set; } = null!;
+    public string Token { get; set; } = null!;
+    public long ExpiresAtUtcTicks { get; set; }
+    public string IncarnationId { get; set; } = null!;
+    public long Revision { get; set; }
+    public string SchemaVersion { get; set; } = null!;
+}
+
 [EfSchemaContentAddressed("An executable activity template is identified by the hash of its content (ADR 0038), which its row projects as TemplateHash.")]
 public sealed class ExecutableActivityTemplateEntity
 {
