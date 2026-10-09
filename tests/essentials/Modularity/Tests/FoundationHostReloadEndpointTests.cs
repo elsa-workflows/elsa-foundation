@@ -214,7 +214,7 @@ public sealed class FoundationHostReloadEndpointTests : IAsyncLifetime
     /// <c>Elsa.Persistence.Schema.IEfModuleRefusal</c>, the same full name as the host's and not the same type, as a module
     /// package's copy is in a load context of its own, and an exception that implements that.
     /// </summary>
-    private static class ForeignRefusal
+    internal static class ForeignRefusal
     {
         public static InvalidOperationException Create(string message)
         {

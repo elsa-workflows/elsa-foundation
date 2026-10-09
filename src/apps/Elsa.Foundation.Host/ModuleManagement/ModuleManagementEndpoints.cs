@@ -37,9 +37,9 @@ public static class ModuleManagementEndpoints
             Authorized(context.HttpContext, options) ? await next(context) : Results.Unauthorized());
 
         // The handler only triggers the cycle and answers with its outcome, once the cycle has finished. What makes a package
-        // that cycle added live in the running shells is ShellReloadOnPackagesChanged, the Nuplane observer that refreshes the
-        // runtime feature catalog and reloads the active shells at the reconciled phase, after the auto-loader has loaded the
-        // new assemblies (see docs/foundation-host-feeds.md, "Hot reload after a package change").
+        // that cycle added live in the running shells is the optional CShells.Nuplane integration, which refreshes the
+        // runtime feature catalog and reloads active shells after Nuplane's auto-loader has loaded the new assemblies
+        // (see docs/foundation-host-feeds.md, "Hot reload after a package change").
         //
         // The operations come from the host's root provider, never from the request's. The path-less shell resolves this
         // request, so the request's provider is that shell's, and CShells copies every root registration into every shell:

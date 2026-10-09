@@ -1,6 +1,12 @@
 # Baselines and Evidence Register
 
-Initial source/issue snapshot read on 2026-10-08; that baseline inspection ran no builds/tests. Earlier sections preserve their checkpoint-time facts, including holds later resolved; they are historical evidence, not live gates. The [latest adapter acceptance](#optional-adapter-publication-and-consumer-acceptance--2026-10-08) supersedes their execution status. Match every proof to its exact revision.
+Initial source/issue snapshot read on 2026-10-08; that baseline inspection ran no builds/tests. Earlier sections preserve their checkpoint-time facts, including holds later resolved; they are historical evidence, not live gates. The current preparation record below and the latest dated acceptance sections supersede earlier execution status. Match every proof to its exact revision.
+
+## Current Foundation startup preparation — 2026-10-09
+
+[Task #2528](https://github.com/elsa-workflows/elsa-foundation/issues/2528) is the single active preparation leaf. Setup commit `9efaedffce13a34b034c13c80922449aec9a6a04` on `2341-adopt-startup-runner` consumes the complete qualified public CShells `.173` family with Nuplane `.99`; adapter source remains unmerged. The [package qualification report](../../reports/modular-hosting-package-qualification.md#startup-adoption-preparation-2026-10-09) owns the current evidence detail, and [Spec200 tasks](../../../specs/200-adopt-startup-runner/tasks.md) owns executable progress. Root and independent review, exact input hashes, passing full Modularity (393), Workbench (39), architecture (635) and Cluster (158 passed, one existing skip) runs, the owned Workbench backend smoke, the Foundation process and deterministic snapshot/skipped-policy cases, and both compiled mutation/restoration proofs are retained. Generated-map freshness passed again for the final task-status snapshot (18 completed, stable T019 open). Earlier failed runs are retained rather than relabeled.
+
+This preparation does not close the stable adoption, readiness-policy, physical-pruning or resulting-main gates. Published returned-generation prerequisite [CShells #167](https://github.com/valence-works/cshells/issues/167#issuecomment-6073687376) is separately qualified from the [`.173` publisher](https://github.com/valence-works/cshells/actions/runs/37878600719) and an outside-checkout consumer with 132 assertions on actual .NET8/9/10 runtimes. That upstream evidence is not attributed to Foundation tests.
 
 ## Historical local CShells ownership checkpoint
 

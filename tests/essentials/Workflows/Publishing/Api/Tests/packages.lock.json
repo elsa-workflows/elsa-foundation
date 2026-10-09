@@ -10,12 +10,12 @@
       },
       "CShells.FastEndpoints": {
         "type": "Direct",
-        "requested": "[0.0.30-preview.159, )",
-        "resolved": "0.0.30-preview.159",
-        "contentHash": "pb3/5XWSdWQcaeG5NTLq+iIzXZ+6yhLJExri9pZnt9gZFmlcYVtwuBtP/bKCv0m/7w55pQwICn45Em90f0QFCg==",
+        "requested": "[0.0.30-preview.173, )",
+        "resolved": "0.0.30-preview.173",
+        "contentHash": "R7FuRO4D6xw0hESEv5P1WWBAgZMT10ETsI16qNenSxzY7SmSzfifNm0qpSBw2YUEjQfgPdM70qoFauEVogOWCw==",
         "dependencies": {
-          "CShells.AspNetCore": "0.0.30-preview.159",
-          "CShells.FastEndpoints.Abstractions": "0.0.30-preview.159",
+          "CShells.AspNetCore": "0.0.30-preview.173",
+          "CShells.FastEndpoints.Abstractions": "0.0.30-preview.173",
           "FastEndpoints": "7.2.0",
           "JetBrains.Annotations": "2025.2.4"
         }
@@ -233,7 +233,7 @@
       "elsa.activities.flowchart": {
         "type": "Project",
         "dependencies": {
-          "CShells.Abstractions": "[0.0.30-preview.159, )",
+          "CShells.Abstractions": "[0.0.30-preview.173, )",
           "Elsa.Activities.Runtime.Core": "[4.0.0-dev, )",
           "Elsa.Workflows.Design.Core": "[4.0.0-dev, )",
           "Elsa.Workflows.Runtime": "[4.0.0-dev, )",
@@ -243,7 +243,7 @@
       "elsa.activities.graph.runtime": {
         "type": "Project",
         "dependencies": {
-          "CShells.Abstractions": "[0.0.30-preview.159, )",
+          "CShells.Abstractions": "[0.0.30-preview.173, )",
           "Elsa.Activities.Runtime.Core": "[4.0.0-dev, )",
           "Elsa.Workflows.Runtime.Core": "[4.0.0-dev, )"
         }
@@ -251,8 +251,8 @@
       "elsa.activities.http": {
         "type": "Project",
         "dependencies": {
-          "CShells.Abstractions": "[0.0.30-preview.159, )",
-          "CShells.AspNetCore.Abstractions": "[0.0.30-preview.159, )",
+          "CShells.Abstractions": "[0.0.30-preview.173, )",
+          "CShells.AspNetCore.Abstractions": "[0.0.30-preview.173, )",
           "Elsa.Activities.Runtime.Core": "[4.0.0-dev, )",
           "Elsa.Http.Core": "[4.0.0-dev, )",
           "Elsa.Primitives": "[4.0.0-dev, )",
@@ -263,7 +263,7 @@
       "elsa.activities.primitives": {
         "type": "Project",
         "dependencies": {
-          "CShells.Abstractions": "[0.0.30-preview.159, )",
+          "CShells.Abstractions": "[0.0.30-preview.173, )",
           "Elsa.Activities.Runtime": "[4.0.0-dev, )",
           "Elsa.Activities.Runtime.Core": "[4.0.0-dev, )",
           "Elsa.Primitives": "[4.0.0-dev, )",
@@ -274,7 +274,7 @@
       "elsa.activities.runtime": {
         "type": "Project",
         "dependencies": {
-          "CShells.Abstractions": "[0.0.30-preview.159, )",
+          "CShells.Abstractions": "[0.0.30-preview.173, )",
           "Elsa.Activities.Runtime.Core": "[4.0.0-dev, )",
           "Elsa.Events.Core": "[4.0.0-dev, )",
           "Elsa.Primitives": "[4.0.0-dev, )",
@@ -294,7 +294,7 @@
       "elsa.activities.scheduling": {
         "type": "Project",
         "dependencies": {
-          "CShells.Abstractions": "[0.0.30-preview.159, )",
+          "CShells.Abstractions": "[0.0.30-preview.173, )",
           "Elsa.Activities.Runtime.Core": "[4.0.0-dev, )",
           "Elsa.Primitives": "[4.0.0-dev, )",
           "Elsa.Workflows.Runtime.Core": "[4.0.0-dev, )"
@@ -303,7 +303,7 @@
       "elsa.activities.sequence": {
         "type": "Project",
         "dependencies": {
-          "CShells.Abstractions": "[0.0.30-preview.159, )",
+          "CShells.Abstractions": "[0.0.30-preview.173, )",
           "Elsa.Activities.Runtime.Core": "[4.0.0-dev, )",
           "Elsa.Workflows.Design.Core": "[4.0.0-dev, )",
           "Elsa.Workflows.Runtime.Core": "[4.0.0-dev, )"
@@ -319,8 +319,8 @@
       "elsa.api.capabilities": {
         "type": "Project",
         "dependencies": {
-          "CShells.Abstractions": "[0.0.30-preview.159, )",
-          "CShells.AspNetCore.Abstractions": "[0.0.30-preview.159, )",
+          "CShells.Abstractions": "[0.0.30-preview.173, )",
+          "CShells.AspNetCore.Abstractions": "[0.0.30-preview.173, )",
           "Elsa.Api.AspNetCore": "[4.0.0-dev, )",
           "Elsa.Events.Core": "[4.0.0-dev, )",
           "Elsa.Foundation.Identity": "[4.0.0-dev, )",
@@ -331,7 +331,7 @@
       "elsa.api.compatibility.testing": {
         "type": "Project",
         "dependencies": {
-          "CShells.FastEndpoints": "[0.0.30-preview.159, )",
+          "CShells.FastEndpoints": "[0.0.30-preview.173, )",
           "Elsa.Api.AspNetCore": "[4.0.0-dev, )",
           "Elsa.Foundation.Identity": "[4.0.0-dev, )",
           "Elsa.Foundation.Identity.Core": "[4.0.0-dev, )",
@@ -357,8 +357,8 @@
       "elsa.foundation.identity": {
         "type": "Project",
         "dependencies": {
-          "CShells.Abstractions": "[0.0.30-preview.159, )",
-          "CShells.AspNetCore.Abstractions": "[0.0.30-preview.159, )",
+          "CShells.Abstractions": "[0.0.30-preview.173, )",
+          "CShells.AspNetCore.Abstractions": "[0.0.30-preview.173, )",
           "Elsa.Api.AspNetCore": "[4.0.0-dev, )",
           "Elsa.Foundation.Identity.Core": "[4.0.0-dev, )"
         }
@@ -394,7 +394,7 @@
       "elsa.serialization.systemtext": {
         "type": "Project",
         "dependencies": {
-          "CShells.Abstractions": "[0.0.30-preview.159, )",
+          "CShells.Abstractions": "[0.0.30-preview.173, )",
           "Elsa.Events.Core": "[4.0.0-dev, )",
           "Elsa.Expressions.Core": "[4.0.0-dev, )",
           "Elsa.Primitives": "[4.0.0-dev, )",
@@ -440,7 +440,7 @@
       "elsa.workflows.design.validations": {
         "type": "Project",
         "dependencies": {
-          "CShells.Abstractions": "[0.0.30-preview.159, )",
+          "CShells.Abstractions": "[0.0.30-preview.173, )",
           "Elsa.Activities.Design.Core": "[4.0.0-dev, )",
           "Elsa.Events.Core": "[4.0.0-dev, )",
           "Elsa.Expressions.Core": "[4.0.0-dev, )",
@@ -509,7 +509,7 @@
       "elsa.workflows.runtime": {
         "type": "Project",
         "dependencies": {
-          "CShells.Abstractions": "[0.0.30-preview.159, )",
+          "CShells.Abstractions": "[0.0.30-preview.173, )",
           "Elsa.Activities.Runtime.Core": "[4.0.0-dev, )",
           "Elsa.Attention.Core": "[4.0.0-dev, )",
           "Elsa.Tasks.Core": "[4.0.0-dev, )",
@@ -542,7 +542,7 @@
       "elsa.workflows.runtime.scheduling": {
         "type": "Project",
         "dependencies": {
-          "CShells.Abstractions": "[0.0.30-preview.159, )",
+          "CShells.Abstractions": "[0.0.30-preview.173, )",
           "Cronos": "[0.13.0, )",
           "Elsa.Tasks.Core": "[4.0.0-dev, )",
           "Elsa.Tasks.Schedules": "[4.0.0-dev, )",
@@ -558,52 +558,52 @@
       },
       "CShells": {
         "type": "CentralTransitive",
-        "requested": "[0.0.30-preview.159, )",
-        "resolved": "0.0.30-preview.159",
-        "contentHash": "x6qrRjUbjj9FbgeeqgUWrDoSxbW48zna/cvXhZYJGsKBmnS0cErPY/+QiFSmuAzXrcwuf9nDBod5DK7BbpIReA==",
+        "requested": "[0.0.30-preview.173, )",
+        "resolved": "0.0.30-preview.173",
+        "contentHash": "Hf1ruHh3zk4NGnhWR2wazizQ0LbVFDAAgOTDNr5+8DHCK/7cxpc9ShFFq60iB8mFqQjJYKpBo7+O5D10XPEi3A==",
         "dependencies": {
-          "CShells.Abstractions": "0.0.30-preview.159",
+          "CShells.Abstractions": "0.0.30-preview.173",
           "JetBrains.Annotations": "2025.2.4",
           "Microsoft.Extensions.DependencyModel": "10.0.1"
         }
       },
       "CShells.Abstractions": {
         "type": "CentralTransitive",
-        "requested": "[0.0.30-preview.159, )",
-        "resolved": "0.0.30-preview.159",
-        "contentHash": "es495Gvvqx1t0DJomzsfoxlIE/k8ZMEj3OaL/uKvdUd5cXpfQowko63T03LlRhTBS7Nhm6xoPoQW1cZAx6e8uQ==",
+        "requested": "[0.0.30-preview.173, )",
+        "resolved": "0.0.30-preview.173",
+        "contentHash": "sAgLwTkE/y4+1rtqRaBvL8KV/m3Y7oV3EEKsGVkXbIlKpdWWDVAQilCBy/iRU8nhANz7k8lvquULc1AJRSo8hA==",
         "dependencies": {
           "JetBrains.Annotations": "2025.2.4"
         }
       },
       "CShells.AspNetCore": {
         "type": "CentralTransitive",
-        "requested": "[0.0.30-preview.159, )",
-        "resolved": "0.0.30-preview.159",
-        "contentHash": "A8Ekcd7WHN/rVWLEEMtfA/P2UbJ2pbGLbkOtx7pwIx2kBYmzx5DwpzTyK+LBiCuGIAXODsZW8YUFwD9Yfk4Z5A==",
+        "requested": "[0.0.30-preview.173, )",
+        "resolved": "0.0.30-preview.173",
+        "contentHash": "gGJ/C8u7XS+d2GlMCcOX/0Wf+j/CFVIpejVpVb0Ii6hf4vIYbgpS4nGSOkAr8jD0L1vqCo2Ejb/w9oWwnF98Aw==",
         "dependencies": {
-          "CShells": "0.0.30-preview.159",
-          "CShells.AspNetCore.Abstractions": "0.0.30-preview.159",
+          "CShells": "0.0.30-preview.173",
+          "CShells.AspNetCore.Abstractions": "0.0.30-preview.173",
           "JetBrains.Annotations": "2025.2.4"
         }
       },
       "CShells.AspNetCore.Abstractions": {
         "type": "CentralTransitive",
-        "requested": "[0.0.30-preview.159, )",
-        "resolved": "0.0.30-preview.159",
-        "contentHash": "13PD+8QJBhWA9gwU3Io4bFRzSDpMJrvwjfKiW7AvfSY+EaSI5Aa7Jsa26O4N7n49eN/fWXMtRhbOibYUqnom1A==",
+        "requested": "[0.0.30-preview.173, )",
+        "resolved": "0.0.30-preview.173",
+        "contentHash": "iOBPODfx/C7PYlUWahRFV7s7/GJWpFXMKKI6esHGsKhbB02jcAo0mPJAbDwXbw0acz7oa4k2pSCSWM7wLPcyUg==",
         "dependencies": {
-          "CShells.Abstractions": "0.0.30-preview.159",
+          "CShells.Abstractions": "0.0.30-preview.173",
           "JetBrains.Annotations": "2025.2.4"
         }
       },
       "CShells.FastEndpoints.Abstractions": {
         "type": "CentralTransitive",
-        "requested": "[0.0.30-preview.159, )",
-        "resolved": "0.0.30-preview.159",
-        "contentHash": "kkCHfCtIKRLvpWtdHOvlrqHRifbYTC0OgBYMRJJ70Ximc/zdrvhfVwGb06HC9IxjLULMhZ02HeC1eDgpOmieLQ==",
+        "requested": "[0.0.30-preview.173, )",
+        "resolved": "0.0.30-preview.173",
+        "contentHash": "XDKynlKQca3IiI6ADMaHKxyP5MkIX2C/rbCmSo7LhW4NlUTmnMOqboKsoU9OZG9o4aldD4qP1HFASy/YWO8+Tg==",
         "dependencies": {
-          "CShells.Abstractions": "0.0.30-preview.159",
+          "CShells.Abstractions": "0.0.30-preview.173",
           "FastEndpoints": "7.2.0",
           "JetBrains.Annotations": "2025.2.4"
         }
