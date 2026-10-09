@@ -1160,6 +1160,73 @@ public sealed class EfRuntimeArtifactScopeTests
         Assert.NotNull(await current.Executable.FindAsync("renew-contention"));
     }
 
+    // #2538: concurrent executions of one published workflow each take their own root-write lease on the same
+    // artifact. Another holder's lease write must never make this holder's lease operation fail, however many
+    // of them interleave. Each test commits a competing holder's own lease before every save attempt of the
+    // subject, which reproduces sustained same-artifact contention deterministically.
+    [Fact]
+    public async Task Root_write_lease_acquire_is_not_failed_by_other_holders_of_the_same_artifact()
+    {
+        await using var database = await Database.CreateAsync();
+        await using var seed = database.Open("tenant-a");
+        await seed.Executable.SaveAsync(Executable("same-artifact-acquire"));
+        var now = DateTimeOffset.UtcNow;
+
+        await using var competitor = database.Open("tenant-a");
+        var contention = new CompetingHolderBeforeEverySaveInterceptor(async attempt =>
+            Assert.NotNull(await competitor.Executable.TryAcquireRootWriteLeaseAsync(
+                "same-artifact-acquire", $"competitor-{attempt}", now.AddMinutes(5), now)));
+        await using var subject = database.Open("tenant-a", contention);
+
+        var lease = await subject.Executable.TryAcquireRootWriteLeaseAsync("same-artifact-acquire", "subject", now.AddMinutes(5), now);
+
+        Assert.NotNull(lease);
+        Assert.True(contention.Attempts > 0);
+        Assert.True(await competitor.Executable.RenewRootWriteLeaseAsync(lease!, now.AddMinutes(6), now));
+    }
+
+    [Fact]
+    public async Task Root_write_lease_renew_is_not_failed_by_other_holders_of_the_same_artifact()
+    {
+        await using var database = await Database.CreateAsync();
+        await using var seed = database.Open("tenant-a");
+        await seed.Executable.SaveAsync(Executable("same-artifact-renew"));
+        var now = DateTimeOffset.UtcNow;
+        var lease = await seed.Executable.TryAcquireRootWriteLeaseAsync("same-artifact-renew", "subject", now.AddMinutes(5), now);
+        Assert.NotNull(lease);
+
+        await using var competitor = database.Open("tenant-a");
+        var contention = new CompetingHolderBeforeEverySaveInterceptor(async attempt =>
+            Assert.NotNull(await competitor.Executable.TryAcquireRootWriteLeaseAsync(
+                "same-artifact-renew", $"competitor-{attempt}", now.AddMinutes(5), now)));
+        await using var subject = database.Open("tenant-a", contention);
+
+        Assert.True(await subject.Executable.RenewRootWriteLeaseAsync(lease!, now.AddMinutes(10), now));
+        Assert.True(contention.Attempts > 0);
+    }
+
+    [Fact]
+    public async Task Root_write_lease_release_is_not_failed_by_other_holders_of_the_same_artifact()
+    {
+        await using var database = await Database.CreateAsync();
+        await using var seed = database.Open("tenant-a");
+        await seed.Executable.SaveAsync(Executable("same-artifact-release"));
+        var now = DateTimeOffset.UtcNow;
+        var lease = await seed.Executable.TryAcquireRootWriteLeaseAsync("same-artifact-release", "subject", now.AddMinutes(5), now);
+        Assert.NotNull(lease);
+
+        await using var competitor = database.Open("tenant-a");
+        var contention = new CompetingHolderBeforeEverySaveInterceptor(async attempt =>
+            Assert.NotNull(await competitor.Executable.TryAcquireRootWriteLeaseAsync(
+                "same-artifact-release", $"competitor-{attempt}", now.AddMinutes(5), now)));
+        await using var subject = database.Open("tenant-a", contention);
+
+        await subject.Executable.ReleaseRootWriteLeaseAsync(lease!);
+
+        Assert.True(contention.Attempts > 0);
+        Assert.False(await competitor.Executable.RenewRootWriteLeaseAsync(lease!, now.AddMinutes(6), now));
+    }
+
     [Fact]
     public async Task Cancel_deletion_guard_retries_after_unrelated_coordination_contention()
     {
@@ -1682,6 +1749,29 @@ public sealed class EfRuntimeArtifactScopeTests
         {
             if (Interlocked.Exchange(ref invoked, 1) == 0)
                 await recreate();
+            return result;
+        }
+    }
+
+    /// <summary>
+    /// Commits a competing holder's write before every save of the intercepted context, up to a bound so a
+    /// design that keeps retrying cannot loop forever. The bound exceeds <c>EfWriteRetry.DefaultMaxAttempts</c>.
+    /// </summary>
+    private sealed class CompetingHolderBeforeEverySaveInterceptor(Func<int, Task> compete) : SaveChangesInterceptor
+    {
+        private const int MaxCompetingWrites = EfWriteRetry.DefaultMaxAttempts * 2;
+        private int attempts;
+
+        public int Attempts => Volatile.Read(ref attempts);
+
+        public override async ValueTask<InterceptionResult<int>> SavingChangesAsync(
+            DbContextEventData eventData,
+            InterceptionResult<int> result,
+            CancellationToken cancellationToken = default)
+        {
+            var attempt = Interlocked.Increment(ref attempts);
+            if (attempt <= MaxCompetingWrites)
+                await compete(attempt);
             return result;
         }
     }

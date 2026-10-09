@@ -30,6 +30,11 @@ public sealed class RuntimeArtifactsPostgreSqlSmokeTests(RuntimeBookmarksPostgre
             new DbContextOptionsBuilder<RuntimePostgreSqlDbContext>().UseNpgsql(connection).AddInterceptors(interceptors).Options));
 
     [SkippableFact]
+    public Task PostgreSql_concurrent_root_write_lease_holders_of_one_artifact_all_succeed() =>
+        RuntimeArtifactsProviderSmoke.RunConcurrentRootWriteLeaseHoldersAsync(fixture, "PostgreSql", connection => new RuntimePostgreSqlDbContext(
+            new DbContextOptionsBuilder<RuntimePostgreSqlDbContext>().UseNpgsql(connection).Options));
+
+    [SkippableFact]
     public Task PostgreSql_concurrent_idempotent_executable_saves_reconcile_a_winner_before_coordination_read() =>
         RuntimeArtifactsProviderSmoke.RunExecutableCoordinationRaceAsync(fixture, "PostgreSql", (connection, interceptors) => new RuntimePostgreSqlDbContext(
             new DbContextOptionsBuilder<RuntimePostgreSqlDbContext>().UseNpgsql(connection).AddInterceptors(interceptors).Options));
@@ -244,6 +249,69 @@ internal static class RuntimeArtifactsProviderSmoke
         Assert.Equal(artifactRow.IncarnationId, coordinationRow.IncarnationId);
     }
 
+
+    /// <summary>
+    /// #2538: every concurrent execution of one published workflow takes and releases its own root-write lease on
+    /// the same artifact for each checkpoint commit. Real parallel holders must all succeed; none may fault because
+    /// other holders wrote their own leases first.
+    /// </summary>
+    public static async Task RunConcurrentRootWriteLeaseHoldersAsync(
+        RuntimeBookmarksProviderFixture fixture,
+        string providerName,
+        Func<string, RuntimeDbContext> createContext)
+    {
+        const int holders = 32;
+        const int cyclesPerHolder = 5;
+        Skip.IfNot(fixture.IsAvailable, fixture.SkipReason ?? $"Docker/{providerName} is unavailable.");
+        var scope = $"provider-lease-holders-{Guid.NewGuid():N}";
+        var artifactId = "provider-concurrent-lease-holders";
+
+        await using (var seedContext = createContext(fixture.ConnectionString))
+        {
+            await seedContext.Database.EnsureCreatedAsync();
+            await new EfWorkflowExecutableStore(seedContext, new FixedAccessor(scope)).SaveAsync(Executable(artifactId));
+        }
+
+        var start = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var failures = new System.Collections.Concurrent.ConcurrentBag<string>();
+        var tasks = Enumerable.Range(0, holders).Select(holder => Task.Run(async () =>
+        {
+            await using var context = createContext(fixture.ConnectionString);
+            var store = new EfWorkflowExecutableStore(context, new FixedAccessor(scope));
+            await start.Task;
+            for (var cycle = 0; cycle < cyclesPerHolder; cycle++)
+            {
+                try
+                {
+                    var now = DateTimeOffset.UtcNow;
+                    var lease = await store.TryAcquireRootWriteLeaseAsync(artifactId, $"holder-{holder}-cycle-{cycle}", now.AddMinutes(1), now);
+                    if (lease is null)
+                    {
+                        failures.Add($"holder {holder} cycle {cycle}: acquire returned null without a deletion guard");
+                        continue;
+                    }
+
+                    await store.ReleaseRootWriteLeaseAsync(lease);
+                }
+                catch (Exception exception) when (IsCatchable(exception))
+                {
+                    failures.Add($"holder {holder} cycle {cycle}: {exception.GetType().Name}: {exception.Message}");
+                }
+            }
+        })).ToArray();
+        start.SetResult();
+        await Task.WhenAll(tasks);
+
+        Assert.True(failures.IsEmpty, $"{failures.Count} of {holders * cyclesPerHolder} lease cycles failed:{Environment.NewLine}{string.Join(Environment.NewLine, failures.Take(10))}");
+
+        // Every lease was released, so a deletion guard is grantable now; cancel it to leave the artifact usable.
+        await using var verificationContext = createContext(fixture.ConnectionString);
+        var verifier = new EfWorkflowExecutableStore(verificationContext, new FixedAccessor(scope));
+        var verifiedAt = DateTimeOffset.UtcNow;
+        var guard = await verifier.TryBeginDeletionAsync(artifactId, "verify-no-live-leases", verifiedAt.AddMinutes(1), verifiedAt);
+        Assert.NotNull(guard);
+        Assert.True(await verifier.CancelDeletionAsync(guard!));
+    }
 
     private sealed class RestoreBeforeSaveInterceptor(Func<Task> restore) : SaveChangesInterceptor
     {
