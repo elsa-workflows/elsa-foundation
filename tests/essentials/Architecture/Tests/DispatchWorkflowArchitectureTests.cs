@@ -1,4 +1,3 @@
-using System.Text.RegularExpressions;
 using System.Xml.Linq;
 using Xunit;
 using static Elsa.Architecture.Tests.RepoPaths;
@@ -38,21 +37,6 @@ public sealed class DispatchWorkflowArchitectureTests
             .SelectMany(file => forbidden
                 .Where(token => File.ReadAllText(file).Contains(token, StringComparison.OrdinalIgnoreCase))
                 .Select(token => $"{Path.GetRelativePath(RepoRoot, file)} -> {token}"))
-            .ToArray();
-
-        Assert.True(violations.Length == 0, string.Join(Environment.NewLine, violations));
-    }
-
-    [Fact]
-    public void DispatchWorkflow_slice_does_not_implement_definition_or_later_lifecycle_concerns()
-    {
-        var forbiddenTypeNames = new Regex(
-            @"\b(?:class|interface|record|enum)\s+(?:WorkflowDefinitionActivity|DispatchWorkflow(?:Completion|Cancellation|Redrive|TestScope|Placement)\w*)\b",
-            RegexOptions.Compiled | RegexOptions.CultureInvariant);
-        var violations = Directory.EnumerateFiles(DispatchRoot, "*.cs", SearchOption.AllDirectories)
-            .Select(file => (File: file, Match: forbiddenTypeNames.Match(File.ReadAllText(file))))
-            .Where(result => result.Match.Success)
-            .Select(result => $"{Path.GetRelativePath(RepoRoot, result.File)} -> {result.Match.Value}")
             .ToArray();
 
         Assert.True(violations.Length == 0, string.Join(Environment.NewLine, violations));

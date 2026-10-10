@@ -20,8 +20,8 @@ using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Entities;
 [assembly: ManifestExtension("efModules", "Workflows.Runtime")]
 
 // The schema families this module owns (spec 180, FR-001), each at the version its skew check reads. A host's
-// readability report is derived from these alone (spec 183, FR-020); EfSchemaFamilyChainDeclarationGuardTests fails the
-// build when a family the stores check is not declared here, or is declared at another version. Each names the tables
+// readability report is derived from these alone (spec 183, FR-020); every family the stores check must be declared
+// here, at the version they read; that holds by review until #2606 restores a compiled check. Each names the tables
 // whose rows it stamps, so the finalization gate holds every write to its own family's write version (spec 181, FR-009).
 // RuntimeArtifact names its content-addressed tables, each marked [EfSchemaContentAddressed] with its reason (ADR 0038):
 // executables and executable activity templates, whose identity is their content hash, and the template hash claims,

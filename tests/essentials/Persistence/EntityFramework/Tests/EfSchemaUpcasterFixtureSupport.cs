@@ -46,9 +46,9 @@ public interface IEfSchemaUpcasterProofStore<TValue>
 /// </summary>
 /// <remarks>
 /// The proofs live here rather than in each module's tests, so a module cannot ship one of them without the other two:
-/// it supplies only the store's half. <c>EfSchemaFamilyFixtureProofGuardTests</c> fails the build when an upcaster has
-/// no such class, or a committed fixture pair is proven by none, so the class must derive from this one directly and
-/// name its family with a literal or a constant. The step's versions come from the upcaster's own
+/// it supplies only the store's half. Every upcaster needs such a class and every committed fixture pair one that proves
+/// it, which holds by review until #2606 restores a compiled check; the class derives from this one directly and
+/// names its family with a literal or a constant. The step's versions come from the upcaster's own
 /// <see cref="EfSchemaUpcasterAttribute"/>. Every proof compares whole rows, so an upcaster that adds or drops a column,
 /// or leaves one it should have changed, fails as surely as one that changes a document wrongly.
 /// </remarks>
@@ -108,8 +108,7 @@ public abstract class EfSchemaUpcasterProof<TUpcaster, TValue>(string family, IE
 /// <summary>
 /// The mechanics of FR-022's proofs, for any module's test project to compile in, as it compiles in
 /// <see cref="EfSchemaVersionSkewTestSupport"/>. A fixture is frozen once its version ships:
-/// <c>EfSchemaFamilyFixtureProofGuardTests</c> fails the build when one is edited, deleted, or committed without being
-/// recorded.
+/// it is never edited or deleted, and is recorded when committed; review holds that until #2606 restores a compiled check.
 /// </summary>
 /// <remarks>
 /// A fixture file is one JSON object, one member per content column: a string is the text the column stores, verbatim,

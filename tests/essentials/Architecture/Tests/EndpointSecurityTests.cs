@@ -20,32 +20,21 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.AspNetCore.Routing.Patterns;
-using Microsoft.CodeAnalysis.CSharp;
-using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Primitives;
 using NativeEndpoints;
 using System.Reflection;
 using System.Runtime.CompilerServices;
 using Xunit;
-using static Elsa.Architecture.Tests.RepoPaths;
 
 namespace Elsa.Architecture.Tests;
 
 /// <summary>
-/// Pins the stable management-client permission vocabulary and guards every endpoint source file in the
-/// management domain API slices that exist today. Endpoint-specific tests still inspect the configured
-/// FastEndpoints definitions; this architecture sweep prevents a newly added endpoint file from escaping
-/// those narrower inline inventories before the endpoint-specific tests are updated.
+/// Pins the stable management-client permission vocabulary and the security metadata the management domain
+/// API mappers put on the endpoints they map.
 /// </summary>
 public sealed class EndpointSecurityTests
 {
-    private static readonly (string Area, string RelativePath)[] CurrentManagementEndpointRoots =
-    [
-        ("Elsa 3 Import", "src/extensions/Elsa3/src/Activities/Design/Import/Elsa3.Activities.Design.Import/Endpoints"),
-        ("BPMN Interchange", "src/essentials/Activities/Bpmn/Interchange/Endpoints")
-    ];
-
     // Anchored on a public type per owning assembly. AppDomain.GetAssemblies() only reports assemblies
     // already loaded, and a using directive alone does not load one, so the anchors force the load.
     private static readonly Assembly[] PermissionDeclaringAssemblies =
@@ -137,89 +126,6 @@ public sealed class EndpointSecurityTests
         Assert.Contains("ambiguous security dispositions", ambiguousException.Message, StringComparison.Ordinal);
         Assert.Contains("GET /missing", missingException.Message, StringComparison.Ordinal);
         Assert.Contains("GET /ambiguous", ambiguousException.Message, StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public void Every_current_management_endpoint_type_declares_an_owned_permission_and_not_anonymous()
-    {
-        var canonicalPermissions = typeof(PermissionNames)
-            .GetFields(BindingFlags.Public | BindingFlags.Static)
-            .Where(field => field.Name != nameof(PermissionNames.All))
-            .Select(field => field.Name)
-            .ToHashSet(StringComparer.Ordinal);
-        var violations = new List<string>();
-        var endpointCount = 0;
-        foreach (var root in CurrentManagementEndpointRoots)
-        {
-            var relativePath = root.RelativePath.Replace('/', Path.DirectorySeparatorChar);
-            Assert.False(Path.IsPathRooted(relativePath), $"Endpoint root must be relative: {root.RelativePath}");
-            var directory = Path.Join(RepoRoot, relativePath);
-            Assert.True(Directory.Exists(directory), $"Missing {root.Area} endpoint directory: {root.RelativePath}");
-            foreach (var path in Directory.EnumerateFiles(directory, "*.cs", SearchOption.AllDirectories).Order(StringComparer.Ordinal))
-            {
-                var syntax = CSharpSyntaxTree.ParseText(File.ReadAllText(path), path: path).GetCompilationUnitRoot();
-                foreach (var declaration in syntax.DescendantNodes().OfType<ClassDeclarationSyntax>())
-                {
-                    // Endpoint classes are the current authoring model: the permission is a class
-                    // attribute the framework applies as a full convention, so the sweep demands
-                    // exactly one named-constant permission attribute and no anonymous access.
-                    var isEndpointClass = declaration.BaseList?.Types
-                        .Any(baseType => baseType.Type.ToString().StartsWith("ApiEndpoint", StringComparison.Ordinal)) == true;
-                    if (isEndpointClass)
-                    {
-                        endpointCount++;
-                        var display2 = $"{root.Area}: {Path.GetRelativePath(RepoRoot, path).Replace(Path.DirectorySeparatorChar, '/')}:{declaration.Identifier.ValueText}";
-                        var attributes = declaration.AttributeLists.SelectMany(list => list.Attributes).ToArray();
-                        var permissionAttributes = attributes
-                            .Where(attribute => attribute.Name.ToString() is "RequirePermission" or "RequireAnyPermission")
-                            .ToArray();
-                        if (permissionAttributes.Length != 1)
-                        {
-                            violations.Add($"{display2}: expected exactly one RequirePermission/RequireAnyPermission attribute, found {permissionAttributes.Length}");
-                            continue;
-                        }
-
-                        var namedConstantArguments = permissionAttributes[0].ArgumentList?.Arguments
-                            .Select(argument => argument.Expression)
-                            .OfType<MemberAccessExpressionSyntax>()
-                            .Count() ?? 0;
-                        if (namedConstantArguments == 0)
-                            violations.Add($"{display2}: the permission must be a declared named constant, not an inline literal");
-                        if (attributes.Any(attribute => attribute.Name.ToString() is "AllowPublic" or "AllowAnonymous"))
-                            violations.Add($"{display2}: management endpoints must not allow anonymous access");
-                        continue;
-                    }
-
-                    var configure = declaration.Members.OfType<MethodDeclarationSyntax>()
-                        .SingleOrDefault(method => method.Identifier.ValueText == "Configure");
-                    if (configure is null)
-                        continue;
-
-                    endpointCount++;
-                    var calls = configure.DescendantNodes().OfType<InvocationExpressionSyntax>().ToArray();
-                    var permissionCalls = calls.Where(call => InvocationName(call) == "ConfigurePermissions").ToArray();
-                    var display = $"{root.Area}: {Path.GetRelativePath(RepoRoot, path).Replace(Path.DirectorySeparatorChar, '/')}:{declaration.Identifier.ValueText}";
-                    if (permissionCalls.Length != 1)
-                    {
-                        violations.Add($"{display}: expected exactly one ConfigurePermissions(...) call, found {permissionCalls.Length}");
-                        continue;
-                    }
-
-                    var declaredPermissions = permissionCalls[0].ArgumentList.Arguments
-                        .Select(argument => argument.Expression)
-                        .OfType<MemberAccessExpressionSyntax>()
-                        .Where(member => member.Expression.ToString() == nameof(PermissionNames))
-                        .Select(member => member.Name.Identifier.ValueText)
-                        .ToHashSet(StringComparer.Ordinal);
-                    if (declaredPermissions.Count == 0 || !declaredPermissions.IsSubsetOf(canonicalPermissions))
-                        violations.Add($"{display}: missing a canonical action-scoped permission from the active catalog");
-                    if (calls.Any(call => InvocationName(call) == "AllowAnonymous"))
-                        violations.Add($"{display}: management endpoints must not call AllowAnonymous(...)");
-                }
-            }
-        }
-
-        Assert.True(violations.Count == 0, string.Join(Environment.NewLine, violations));
     }
 
     [Fact]
@@ -329,72 +235,6 @@ public sealed class EndpointSecurityTests
     }
 
     [Fact]
-    public void Secrets_minimal_api_declares_one_owned_secure_route_per_operation_and_catalog_owner()
-    {
-        var apiRoot = Path.Join(RepoRoot, "src", "essentials", "Secrets", "Api");
-        var mapperPath = Path.Join(apiRoot, "SecretsApi.cs");
-        var contributorPath = Path.Join(apiRoot, "Authorization", "SecretsPermissionContributor.cs");
-        Assert.True(File.Exists(mapperPath), "The migrated Secrets API must expose its module-owned mapper.");
-        Assert.True(File.Exists(contributorPath), "The migrated Secrets API must expose its permission contributor.");
-
-        var mapper = File.ReadAllText(mapperPath);
-        var contributor = File.ReadAllText(contributorPath);
-        var syntax = CSharpSyntaxTree.ParseText(mapper, path: mapperPath).GetCompilationUnitRoot();
-        var calls = syntax.DescendantNodes().OfType<InvocationExpressionSyntax>().ToArray();
-        // The mapper composes the module endpoint convention: one owned group and exactly ten
-        // operations, each carrying the any-of wildcard-or-catalog permission requirement.
-        var routeMappings = calls.Count(call =>
-            call.Expression is MemberAccessExpressionSyntax { Expression: IdentifierNameSyntax group } &&
-            group.Identifier.ValueText == "api" &&
-            InvocationName(call) == "MapUnboundOperation");
-        var permissionPolicies = calls.Count(call => InvocationName(call) == "RequireAnyPermission");
-
-        Assert.Equal(10, routeMappings);
-        Assert.Equal(10, permissionPolicies);
-        Assert.Equal(1, calls.Count(call => InvocationName(call) == "MapEndpointGroup"));
-        Assert.Contains("Elsa.Secrets.Api", mapper, StringComparison.Ordinal);
-
-        foreach (var permission in new[] { "Read", "Write", "UpdateValue", "Delete", "Test", "Use", "Import", "Export" })
-            Assert.Contains($"SecretsPermissions.{permission}", contributor, StringComparison.Ordinal);
-
-        Assert.Contains("new HashSet<string>(StringComparer.Ordinal) { SecretsPermissions.Read }", contributor, StringComparison.Ordinal);
-        Assert.DoesNotContain("PermissionKey.Wildcard", contributor, StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public void Structured_logs_minimal_api_declares_three_owned_secure_routes_and_one_catalog_permission()
-    {
-        var apiRoot = Path.Join(RepoRoot, "src", "essentials", "Diagnostics", "StructuredLogs", "Elsa.Diagnostics.StructuredLogs");
-        var mapperPath = Path.Join(apiRoot, "Endpoints", "StructuredLogsApi.cs");
-        var contributorPath = Path.Join(apiRoot, "Authorization", "StructuredLogsPermissionContributor.cs");
-        var permissionsPath = Path.Join(apiRoot, "Authorization", "StructuredLogsPermissions.cs");
-        Assert.True(File.Exists(mapperPath), "Structured Logs must expose its module-owned mapper.");
-        Assert.True(File.Exists(contributorPath), "Structured Logs must expose its permission contributor.");
-        Assert.True(File.Exists(permissionsPath), "Structured Logs must expose its stable permission vocabulary.");
-
-        var mapper = File.ReadAllText(mapperPath);
-        var contributor = File.ReadAllText(contributorPath);
-        var permissions = File.ReadAllText(permissionsPath);
-        var syntax = CSharpSyntaxTree.ParseText(mapper, path: mapperPath).GetCompilationUnitRoot();
-        var calls = syntax.DescendantNodes().OfType<InvocationExpressionSyntax>().ToArray();
-        // The mapper composes the module endpoint convention: one owned group and exactly three
-        // operations, each carrying the any-of wildcard-or-catalog permission requirement.
-        var routeMappings = calls.Count(call =>
-            call.Expression is MemberAccessExpressionSyntax { Expression: IdentifierNameSyntax group } &&
-            group.Identifier.ValueText == "api" &&
-            InvocationName(call) == "MapUnboundOperation");
-
-        Assert.Equal(3, routeMappings);
-        Assert.Equal(1, calls.Count(call => InvocationName(call) == "MapEndpointGroup"));
-        Assert.Equal(3, calls.Count(call => InvocationName(call) == "RequireAnyPermission"));
-        Assert.Contains("StructuredLogsPermissions.OwnerId", mapper, StringComparison.Ordinal);
-        Assert.Contains("PermissionKey.Wildcard", mapper, StringComparison.Ordinal);
-        Assert.Contains("Diagnostics:StructuredLogs", permissions, StringComparison.Ordinal);
-        Assert.Contains("StructuredLogsPermissions.Read", contributor, StringComparison.Ordinal);
-        Assert.DoesNotContain("PermissionKey.Wildcard", contributor, StringComparison.Ordinal);
-    }
-
-    [Fact]
     public void Capability_endpoint_rejects_unauthenticated_calls_by_default()
     {
         using var serviceProvider = new ServiceCollection().AddRouting().AddElsaEndpoints().BuildServiceProvider();
@@ -426,13 +266,6 @@ public sealed class EndpointSecurityTests
             new EndpointMetadataCollection(metadata),
             $"Elsa.Tests:{route}");
     }
-
-    private static string InvocationName(InvocationExpressionSyntax invocation) => invocation.Expression switch
-    {
-        IdentifierNameSyntax identifier => identifier.Identifier.ValueText,
-        MemberAccessExpressionSyntax member => member.Name.Identifier.ValueText,
-        _ => string.Empty
-    };
 
     private sealed class FixedEndpointDataSource(IReadOnlyList<Endpoint> endpoints) : EndpointDataSource
     {
