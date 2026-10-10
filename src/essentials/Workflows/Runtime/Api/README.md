@@ -104,7 +104,7 @@ handler CLR identities.
 
 ## Extension points
 
-See [EXTENSION_POINTS.md](EXTENSION_POINTS.md) for the API-facing stores and inspector seam, and the [Runtime domain catalog](../EXTENSION_POINTS.md) for the full engine and persistence surface.
+See [EXTENSION_POINTS.md](EXTENSION_POINTS.md) for the API-facing stores and inspector seam, and the [Runtime domain catalog](../Elsa.Workflows.Runtime/EXTENSION_POINTS.md) for the full engine and persistence surface.
 
 ## Incident health
 

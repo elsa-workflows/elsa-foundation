@@ -48,7 +48,7 @@
     $(...) and no @(...) - and the targets otherwise shape item lists through task outputs and metadata updates.
     tests/essentials/Versioning/Calculator/Tests/RootBuildFileTests.cs holds that line.
 
-    tests/essentials/Architecture/PackageVersionBuildCheckTests.cs proves the version choice and its checks, and
+    tests/essentials/Architecture/Tests/PackageVersionBuildCheckTests.cs proves the version choice and its checks, and
     PackageVersioningPackTests.cs beside it proves the packs: bounded ranges, the fingerprint and the source commit.
   -->
   <PropertyGroup>

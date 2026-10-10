@@ -53,7 +53,7 @@ so that mismatch, and the warning it produced, are both gone; the pin and the lo
 
 **A new project** gets its lock file from its first restore; commit it with the project. A locked restore of a project
 with no lock file does not fail: NuGet writes one and carries on, unlocked. So
-`tests/essentials/Architecture/NuGetLockFileTests.cs` fails for any project in `Elsa.Server.slnx` without a committed
+`tests/essentials/Architecture/Tests/NuGetLockFileTests.cs` fails for any project in `Elsa.Server.slnx` without a committed
 lock file beside it, for two projects sharing a directory (and so one lock file), and for a committed lock file with no
 project beside it.
 

@@ -5,7 +5,7 @@ the HTTP endpoint surface, transport authorization, and the activity-draft publi
 auth-free **publish + compile engine** — the executable compiler, the publication authority stores, policy /
 preflight / activation, the compilation fan-in, and the activity-template provider
 registries — moved to `Elsa.Workflows.Publishing`, which this feature obtains by `DependsOn` composition. For
-those seams see [the engine extension-point catalog](../EXTENSION_POINTS.md).
+those seams see [the engine extension-point catalog](../Elsa.Workflows.Publishing/EXTENSION_POINTS.md).
 
 Contracts live in `Elsa.Workflows.Publishing.Core`. The authority and failure invariants are owned by
 [ADR 0043](../../../../../docs/adr/0043-publication-slots-define-start-authority.md); shared terms remain in the
@@ -67,7 +67,7 @@ apply ordinary route-group conventions such as API-prefixing, CORS, rate limitin
 
 `Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore`'s `AddPublishingEntityFrameworkCore(...)` composes durable
 implementations for **both** the engine's authority stores (documented in the
-[engine persistence checklist](../EXTENSION_POINTS.md#persistence-provider-checklist)) and this feature's
+[engine persistence checklist](../Elsa.Workflows.Publishing/EXTENSION_POINTS.md#persistence-provider-checklist)) and this feature's
 `IActivityDraftTestRunStore`. A durable activity-draft receipt store must:
 
 - own one receipt per opaque hashed `(OperationScope, DraftId, IdempotencyKey)` identity;
@@ -79,6 +79,6 @@ implementations for **both** the engine's authority stores (documented in the
 ## References
 
 - Module behavior and endpoint surface: [README](README.md).
-- Engine seams (compiler, authority stores, policy/preflight/activation, compilation fan-in): [engine catalog](../EXTENSION_POINTS.md).
+- Engine seams (compiler, authority stores, policy/preflight/activation, compilation fan-in): [engine catalog](../Elsa.Workflows.Publishing/EXTENSION_POINTS.md).
 - Publication authority decision: [ADR 0043](../../../../../docs/adr/0043-publication-slots-define-start-authority.md).
 - Repo-wide index: [root extension-point index](../../../../../EXTENSION_POINTS.md).

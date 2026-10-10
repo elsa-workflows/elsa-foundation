@@ -17,7 +17,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\..\..\..\src\essentials\Activities\Runtime\Elsa.Activities.Runtime.csproj" />
+    <ProjectReference Include="..\..\..\..\..\src\essentials\Activities\Runtime\Elsa.Activities.Runtime\Elsa.Activities.Runtime.csproj" />
     <ProjectReference Include="..\..\..\..\..\src\essentials\Activities\Runtime\Core\Elsa.Activities.Runtime.Core.csproj" />
     <ProjectReference Include="..\..\..\..\..\src\essentials\Activities\Flowchart\Elsa.Activities.Flowchart.csproj" />
     <ProjectReference Include="..\..\..\..\..\src\essentials\Activities\Primitives\Elsa.Activities.Primitives.csproj" />
@@ -26,11 +26,11 @@
     <ProjectReference Include="..\..\..\..\..\src\essentials\Activities\Http\Elsa.Activities.Http.csproj" />
     <ProjectReference Include="..\..\..\..\..\src\essentials\Activities\Scheduling\Elsa.Activities.Scheduling.csproj" />
     <ProjectReference Include="..\..\..\..\..\src\essentials\Activities\Scripting\Elsa.Activities.Scripting.csproj" />
-    <ProjectReference Include="..\..\..\..\..\src\essentials\Expressions\Elsa.Expressions.csproj" />
-    <ProjectReference Include="..\..\..\..\..\src\essentials\Expressions\JavaScript\Elsa.Expressions.JavaScript.csproj" />
+    <ProjectReference Include="..\..\..\..\..\src\essentials\Expressions\Elsa.Expressions\Elsa.Expressions.csproj" />
+    <ProjectReference Include="..\..\..\..\..\src\essentials\Expressions\JavaScript\Elsa.Expressions.JavaScript\Elsa.Expressions.JavaScript.csproj" />
     <ProjectReference Include="..\..\..\..\..\src\essentials\Expressions\JavaScript\Jint\Elsa.Expressions.JavaScript.Jint.csproj" />
-    <ProjectReference Include="..\..\..\..\..\src\essentials\Events\Elsa.Events.csproj" />
-    <ProjectReference Include="..\..\..\..\..\src\essentials\Tasks\Elsa.Tasks.csproj" />
+    <ProjectReference Include="..\..\..\..\..\src\essentials\Events\Elsa.Events\Elsa.Events.csproj" />
+    <ProjectReference Include="..\..\..\..\..\src\essentials\Tasks\Elsa.Tasks\Elsa.Tasks.csproj" />
     <ProjectReference Include="..\..\..\..\..\src\essentials\Serialization\SystemText\Elsa.Serialization.SystemText.csproj" />
     <ProjectReference Include="..\..\..\..\..\src\essentials\Primitives\Primitives\Elsa.Primitives.csproj" />
     <ProjectReference Include="..\..\..\..\..\src\essentials\Workflows\Runtime\Api\Elsa.Workflows.Runtime.Api.csproj" />

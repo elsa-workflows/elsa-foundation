@@ -1,0 +1,37 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <PackAsTool>true</PackAsTool>
+    <ToolCommandName>dotnet-elsa</ToolCommandName>
+    <PackageId>dotnet-elsa</PackageId>
+    <Description>
+      The dotnet elsa command-line tool. It resolves nothing about persistence itself: every command runs
+      inside the target host's own dependency closure through a worker process (ADR 0076 D1), so the SQL it
+      produces is the SQL that host's own EF Core and provider engine produce.
+    </Description>
+    <PackageTags>$(PackageTags);cli;dotnet-tool;migrations</PackageTags>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="System.CommandLine" />
+    <!-- The provider-agreement check reads the host's shells.json plus its environment overlay (FR-035,
+         FR-038). It reads them through the same JSON configuration providers the host itself layers at
+         startup rather than a hand-rolled parser, so the two cannot disagree about what a file means.
+         Neither package is EF Core, an EF provider, or an Elsa persistence assembly, so FR-001 holds. -->
+    <PackageReference Include="Microsoft.Extensions.Configuration" />
+    <PackageReference Include="Microsoft.Extensions.Configuration.Json" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Offline composition inspection uses the shared pure planner; it never enters the persistence worker. -->
+    <ProjectReference Include="..\..\Modularity\Planning\Elsa.Modularity.Planning.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- The worker ships inside this tool's own package and is launched from beside it. The reference also
+         gives both halves one definition of the protocol they speak. -->
+    <ProjectReference Include="..\Worker\Elsa.Cli.Worker.csproj" />
+  </ItemGroup>
+
+</Project>

@@ -50,7 +50,7 @@ using the live configuration reader. The CLI remains EF-free and invokes the cap
 installed host closure. The Elsa-owned inspection path does not activate a shell or execute migration
 actions; the declared composer remains arbitrary trusted code, without a sandbox. The private protocol, bounds and evidence limits are defined in
 [the candidate contract](../../../../specs/187-effective-persistence-preview/contracts/candidate-inspection-v1.md);
-operators use [`composition inspect`](../../Cli/README.md#inspecting-an-accepted-runtime-candidate).
+operators use [`composition inspect`](../../Cli/Elsa.Cli/README.md#inspecting-an-accepted-runtime-candidate).
 
 ### Explicit environment inspection capability
 
@@ -138,7 +138,7 @@ directly (`IEfSchemaVersionedContext`) declares no upcasters: its value converte
 upcaster could run, so `EfSchemaVersionMaterializationInterceptor` accepts its current version alone. Every upcaster
 ships a committed fixture pair under `Fixtures/SchemaUpcasters/<family>/<from>-to-<to>/` in its module's test project,
 one row per pair, `<table>.source.json` and `<table>.expected.json`, each a JSON object of the row's content columns,
-frozen by `tests/essentials/Architecture/Baselines/schema-upcaster-fixtures.sha256`, and a test class deriving directly
+frozen by `tests/essentials/Architecture/Tests/Baselines/schema-upcaster-fixtures.sha256`, and a test class deriving directly
 from `EfSchemaUpcasterProof<TUpcaster, TValue>(family, store)`, which runs FR-022's three proofs over every pair of its
 step, comparing whole rows; the build fails without either (FR-022).
 

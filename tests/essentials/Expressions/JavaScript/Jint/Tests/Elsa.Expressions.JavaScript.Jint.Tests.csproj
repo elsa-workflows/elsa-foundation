@@ -15,9 +15,9 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\..\..\..\..\src\essentials\Expressions\Elsa.Expressions.csproj" />
+    <ProjectReference Include="..\..\..\..\..\..\src\essentials\Expressions\Elsa.Expressions\Elsa.Expressions.csproj" />
     <ProjectReference Include="..\..\..\..\..\..\src\essentials\Expressions\JavaScript\Jint\Elsa.Expressions.JavaScript.Jint.csproj" />
-    <ProjectReference Include="..\..\..\..\..\..\src\essentials\Expressions\JavaScript\Elsa.Expressions.JavaScript.csproj" />
+    <ProjectReference Include="..\..\..\..\..\..\src\essentials\Expressions\JavaScript\Elsa.Expressions.JavaScript\Elsa.Expressions.JavaScript.csproj" />
     <ProjectReference Include="..\..\..\..\..\..\src\essentials\Expressions\JavaScript\Core\Elsa.Expressions.JavaScript.Core.csproj" />
     <ProjectReference Include="..\..\..\..\..\..\src\essentials\Expressions\Core\Elsa.Expressions.Core.csproj" />
     <!-- Read-parity test (ADR 0036) drives the Liquid engine alongside Jint. -->

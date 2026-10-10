@@ -1,0 +1,32 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <!-- Every ASP.NET Core type this project uses comes from the shared framework. Do not add standalone
+         Microsoft.AspNetCore.* packages alongside it: they declare the same type names, and mixing the two
+         sources across a project boundary yields two distinct types of the same name that fail at load time.
+         Packages outside the shared framework (JwtBearer, OpenIdConnect, Identity.EntityFrameworkCore) are
+         unaffected and are still referenced normally. -->
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Expose the internal RouteTable to its unit tests so the atomic-swap semantics can be asserted directly. -->
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.Http" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" />
+    <PackageReference Include="Microsoft.Extensions.Options" />
+	  <PackageReference Include="CShells.Abstractions" />
+    <PackageReference Include="Elsa.Specifications.PackageManifest.Generator" PrivateAssets="all" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Core\Elsa.Http.Core.csproj" />
+    <ProjectReference Include="..\..\Api\AspNetCore\Elsa.Api.AspNetCore.csproj" />
+    <ProjectReference Include="..\..\Caching\Core\Elsa.Caching.Core.csproj" />
+    <ProjectReference Include="..\..\Primitives\Primitives\Elsa.Primitives.csproj" />
+    <ProjectReference Include="..\..\Serialization\Core\Elsa.Serialization.Core.csproj" />
+  </ItemGroup>
+
+</Project>

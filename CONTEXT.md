@@ -20,7 +20,7 @@ traces one request from `Program.cs` to a durable checkpoint.
   `WorkflowExecutable` and saves it through `IWorkflowExecutableStore`. This is the only bridge from Design to Runtime.
 - **Runtime** (`src/essentials/Workflows/Runtime`, `src/essentials/Activities/Runtime`): executes executables. Contracts and
   models live in `src/essentials/Workflows/Runtime/Core`; the engine (dispatcher, mailbox, drainer, work handlers,
-  checkpoint committer) lives in `src/essentials/Workflows/Runtime/Services`, one folder per concept; the API in
+  checkpoint committer) lives in `src/essentials/Workflows/Runtime/Elsa.Workflows.Runtime/Services`, one folder per concept; the API in
   `src/essentials/Workflows/Runtime/Api`. Runtime must not depend on Design.
 
 Activity implementations (`HttpEndpoint`, `Sequence`, `Flowchart`, ...) live under `src/essentials/Activities/<Name>`.
@@ -28,7 +28,7 @@ Activity implementations (`HttpEndpoint`, `Sequence`, `Flowchart`, ...) live und
 ## Persistence
 
 Every store contract has an in-memory default registered by `AddWorkflowRuntime()` in
-`src/essentials/Workflows/Runtime/Extensions/RuntimeCoreServiceCollectionExtensions.cs`. [ADR 0073](docs/adr/0073-ef-core-is-the-only-first-party-persistence-family.md)
+`src/essentials/Workflows/Runtime/Elsa.Workflows.Runtime/Extensions/RuntimeCoreServiceCollectionExtensions.cs`. [ADR 0073](docs/adr/0073-ef-core-is-the-only-first-party-persistence-family.md)
 establishes EF Core as the only first-party durable persistence destination, and it is the only one
 that ships: every runtime, design, publishing, identity, secrets, diagnostics and dashboard store has
 an EF Core implementation, selected per module by its own shell feature. The Workbench defaults to

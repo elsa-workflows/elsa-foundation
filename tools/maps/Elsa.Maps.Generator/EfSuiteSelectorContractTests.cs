@@ -100,8 +100,13 @@ public static class EfSuiteSelectorContractTests
             throw new InvalidOperationException("Main and an unavailable PR diff must fail closed to the full matrix.");
 
         var actualProjects = SolutionFilterGenerator.GetProjectReferences(repo);
-        if (!SolutionFilterGenerator.GetOutputPaths(repo).Contains("Elsa.Server.Workflows.Runtime.slnf", StringComparer.Ordinal))
-            throw new InvalidOperationException("The generated Runtime filter must be manifest-owned.");
+        var committedFilters = SolutionFilterGenerator.GetOutputPaths(repo);
+        if (!committedFilters.Contains("Elsa.Server.Core.slnf", StringComparer.Ordinal))
+            throw new InvalidOperationException("The generated Core filter must be manifest-owned.");
+        // The integration filter is generated on demand by the nightly lane and never committed, so a PR cannot change
+        // it and it must not be classified as a manifest-owned output.
+        if (committedFilters.Contains("Elsa.Server.Persistence.Integration.slnf", StringComparer.Ordinal))
+            throw new InvalidOperationException("The integration filter must not be a committed output.");
         var cliAcceptance = new EfSuite("cli-acceptance",
             "tests/essentials/Persistence/EntityFrameworkCore/CliAcceptance/ProviderTests/Elsa.Persistence.EntityFrameworkCore.CliAcceptance.ProviderTests.csproj", "");
         Assert(EfSuiteSelector.SelectPaths([cliAcceptance], actualProjects,
@@ -111,7 +116,7 @@ public static class EfSuiteSelectorContractTests
         Assert(EfSuiteSelector.SelectPaths([cliAcceptance], actualProjects,
             ["tests/essentials/Modularity/Planning/Tests/CompositionImportTests.cs"]), "none");
         Assert(EfSuiteSelector.SelectPaths([cliAcceptance], actualProjects,
-            ["src/essentials/Cli/Program.cs"]), "selected", "cli-acceptance");
+            ["src/essentials/Cli/Elsa.Cli/Program.cs"]), "selected", "cli-acceptance");
         Console.WriteLine("EF suite selector contract cases passed.");
     }
 

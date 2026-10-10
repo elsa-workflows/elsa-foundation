@@ -8,7 +8,7 @@ public sealed class StructuredLogsApiDependencyTests
     public void Production_structured_logs_project_no_longer_references_fast_endpoints_or_legacy_api_project()
     {
         var project = File.ReadAllText(Path.Join(
-            RepoRoot, "src", "essentials", "Diagnostics", "StructuredLogs", "Elsa.Diagnostics.StructuredLogs.csproj"));
+            RepoRoot, "src", "essentials", "Diagnostics", "StructuredLogs", "Elsa.Diagnostics.StructuredLogs", "Elsa.Diagnostics.StructuredLogs.csproj"));
 
         Assert.DoesNotContain("FastEndpoints", project, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("Elsa.Api.FastEndpoints", project, StringComparison.OrdinalIgnoreCase);

@@ -21,9 +21,9 @@ A 2026-07-07 feasibility pass accepted "git as a GitOps source/sink reconciled i
 rejected "git as a replacement operational store" (git is a poor OLTP store: no cross-store txn,
 per-session working copies for concurrency, no efficient `ListAsync(filter)`, commit latency vs draft
 autosave). The reconciliation seam already exists and is empty:
-[`IWorkflowReconciliationSource`](../../src/essentials/Workflows/Design/Reconciliation/Contracts/IWorkflowReconciliationSource.cs)
+[`IWorkflowReconciliationSource`](../../src/essentials/Workflows/Design/Reconciliation/Elsa.Workflows.Design.Reconciliation/Contracts/IWorkflowReconciliationSource.cs)
 names "git" in its doc, the abstract
-[`WorkflowsDesignReconciliationFeature`](../../src/essentials/Workflows/Design/Reconciliation/WorkflowsDesignReconciliationFeature.cs)
+[`WorkflowsDesignReconciliationFeature`](../../src/essentials/Workflows/Design/Reconciliation/Elsa.Workflows.Design.Reconciliation/WorkflowsDesignReconciliationFeature.cs)
 is built to be extended by source-variant features, and
 [`specs/002`](../../specs/002-workflow-state-scope/spec.md) lists git as a trusted external source —
 but no concrete git source exists yet, and the workflow reconciliation lifecycle is not wired into
@@ -300,7 +300,7 @@ of a work tree, so an empty directory nested in another repository gets a fresh 
   (`SourceKind = "git"`), read from the working clone, emitting `WorkflowVersionReconciliationModel`
   entries (`State = Published`, `SourceCreatedAt` from `git log -1 --format=%cI -- {path}` — the
   commit that introduced the immutable version file). The existing
-  [`WorkflowVersionsReconcilingHandler`](../../src/essentials/Workflows/Design/Reconciliation/Handlers/WorkflowVersionsReconcilingHandler.cs)
+  [`WorkflowVersionsReconcilingHandler`](../../src/essentials/Workflows/Design/Reconciliation/Elsa.Workflows.Design.Reconciliation/Handlers/WorkflowVersionsReconcilingHandler.cs)
   turns each model into the entity pair — no custom handler.
 - **`WorkflowVersionReconciliationModel` gains an optional `ContentHash`** (additive) so the source
   carries the canonical hash (D3) ahead of a persisted home; the reconciler enforces full Model X the

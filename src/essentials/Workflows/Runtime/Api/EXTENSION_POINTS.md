@@ -22,7 +22,7 @@
 | `IWorkflowAlterationAdmissionGate` | Checks bounded capacity before a durable alteration plan exists. A rejection maps to `429`; it must not consume the idempotency key. |
 | `IWorkflowAlterationStore` | Runtime's plan/job persistence port. The API uses redacted projections only and never decrypts `ProtectedPayload`. |
 
-The Runtime API also dispatches through the engine contracts composed by `AddWorkflowRuntime()`. Those execution, checkpoint, actor, trigger, scheduling, retention, and recovery seams are documented in the [Runtime domain extension catalog](../EXTENSION_POINTS.md); this API catalog does not duplicate them.
+The Runtime API also dispatches through the engine contracts composed by `AddWorkflowRuntime()`. Those execution, checkpoint, actor, trigger, scheduling, retention, and recovery seams are documented in the [Runtime domain extension catalog](../Elsa.Workflows.Runtime/EXTENSION_POINTS.md); this API catalog does not duplicate them.
 
 Optional stimulus/trigger providers are additive contributors to Runtime routing. Executable/reference/execution/dispatch stores are single-owner persistence ports and must be replaced deliberately. Dispatch endpoints always map records to `WorkflowDispatchView`; replacing a store does not widen the safe API projection.
 

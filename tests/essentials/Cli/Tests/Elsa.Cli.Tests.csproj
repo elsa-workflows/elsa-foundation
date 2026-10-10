@@ -19,7 +19,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\..\..\src\essentials\Cli\Elsa.Cli.csproj" />
+    <ProjectReference Include="..\..\..\..\src\essentials\Cli\Elsa.Cli\Elsa.Cli.csproj" />
     <ProjectReference Include="..\..\..\..\src\essentials\Cluster\Core\Elsa.Cluster.Core.csproj" />
     <ProjectReference Include="..\..\..\..\src\essentials\Modularity\Planning\Elsa.Modularity.Planning.csproj" />
     <ProjectReference Include="..\Fixtures\Widgets\Acme.Widgets.csproj" />
