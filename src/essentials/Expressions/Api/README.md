@@ -19,4 +19,4 @@ ASP.NET Core endpoint metadata.
 
 ## Extension points
 
-See [EXTENSION_POINTS.md](EXTENSION_POINTS.md). Canonical API ownership is in the [domain-owned API spec](../../../../specs/219-domain-owned-apis/spec.md), and shared terminology is in the [Elsa glossary](../../../../docs/glossary/elsa.md).
+See [EXTENSION_POINTS.md](EXTENSION_POINTS.md). Canonical API ownership is in the [domain-owned API spec](../../../../specs/220-domain-owned-apis/spec.md), and shared terminology is in the [Elsa glossary](../../../../docs/glossary/elsa.md).

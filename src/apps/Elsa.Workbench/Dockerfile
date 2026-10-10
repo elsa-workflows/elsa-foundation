@@ -124,7 +124,7 @@ ARG ELSA_PACKAGE_VERSIONS=source-build
 # on) — R2R images still participate in tiered compilation, so the defaults are
 # already optimal and are deliberately NOT overridden here. InvariantGlobalization
 # is deliberately NOT enabled: the host does auth + culture-sensitive work, so
-# dropping ICU is unsafe (see specs/231-container-readytorun-publish/research.md).
+# dropping ICU is unsafe (see specs/232-container-readytorun-publish/research.md).
 RUN RID="linux-$(echo "${TARGETARCH:-amd64}" | sed 's/amd64/x64/')" \
     && set -- \
     && case "$ELSA_PACKAGE_VERSIONS" in \

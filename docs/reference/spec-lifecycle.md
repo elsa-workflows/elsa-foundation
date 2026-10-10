@@ -21,7 +21,7 @@ that finished specs have moved to, and open pull requests that add a `specs/` fo
 
 The tree once held 27 duplicate numbers because a runtime lane and a groundwork lane allocated
 numbers concurrently. Issue #2567 (ADR 0080 D6) gave the later folder of each collision a new number
-(202 to 232) and repointed its path links; every spec number is now unique. Prose that cites a
+(203 to 233; 201 and 202 are taken by open PR #2530) and repointed its path links; every spec number is now unique. Prose that cites a
 renumbered spec by its old bare number (for example "spec 123") was not rewritten, so check the
 folder name when such a citation looks wrong.
 
@@ -62,7 +62,7 @@ A spec in a non-terminal status keeps its path. A spec with a terminal status (`
 MAY be moved to `specs/archive/<same folder name>` by a consolidation PR that cites the git evidence
 for the status and repoints every inbound link. Never move a spec whose files are read by tests or
 linked from a project file: find those with `grep -rn "specs/" tests/ tools/ --include=*.cs` and
-`grep -rn "specs/" --include=*.csproj .`. The current exceptions are `219-domain-owned-apis`,
+`grep -rn "specs/" --include=*.csproj .`. The current exceptions are `220-domain-owned-apis`,
 `094-harden-groundwork-stores`, `139-groundwork-diagnostics-persistence`, and `141-runtime-alterations`.
 
 Once a spec reaches a terminal status its `checklists/` folder and `requirements.md` are process

@@ -208,34 +208,34 @@ Reads current `specs/*` folders and task checkboxes. Status clues are textual, n
 | [198-response-replay-safety](../../specs/198-response-replay-safety/spec.md) | Response Replay Safety | Implemented — [PR #2518](https://github.com/elsa-workflows/elsa-foundation/pull/2518) | - | 19 | 0 | out of scope |
 | [199-shared-nuplane-adoption](../../specs/199-shared-nuplane-adoption/spec.md) | Shared Nuplane Adapter Adoption | Draft | - | 13 | 2 | retained |
 | [200-root-write-lease-rows](../../specs/200-root-write-lease-rows/spec.md) | Root-Write Lease Coordination Without a Hot Row | Implemented — PR #2539 | - | 30 | 0 | out of scope |
-| [202-groundwork-persistence-foundation](../../specs/202-groundwork-persistence-foundation/spec.md) | Groundwork Persistence Foundation | Draft | - | 23 | 2 | - |
-| [203-groundwork-core-manifest-planner](../../specs/203-groundwork-core-manifest-planner/spec.md) | Groundwork Core Manifest And Planner Kernel | Implemented | - | 38 | 0 | - |
-| [204-groundwork-sqlite-document-store](../../specs/204-groundwork-sqlite-document-store/spec.md) | Groundwork SQLite Document Store | Implemented | - | 17 | 0 | - |
-| [205-groundwork-elsa-bridge](../../specs/205-groundwork-elsa-bridge/spec.md) | Groundwork Elsa Bridge | Implemented | - | 18 | 0 | out of scope |
-| [206-workflow-execution-slice](../../specs/206-workflow-execution-slice/spec.md) | Workflow Execution Vertical Slice | Implemented | - | 40 | 0 | superseded, out of scope |
-| [207-groundwork-relational-providers](../../specs/207-groundwork-relational-providers/spec.md) | Groundwork SQL Server And PostgreSQL Providers | Implemented | - | 21 | 0 | - |
-| [208-groundwork-mongodb-provider](../../specs/208-groundwork-mongodb-provider/spec.md) | Groundwork MongoDB Provider | Implemented | - | 15 | 0 | - |
-| [209-groundwork-runtime-entities](../../specs/209-groundwork-runtime-entities/spec.md) | Groundwork Runtime-Defined Entities | Implemented | - | 9 | 0 | deferred |
-| [210-groundwork-physicalization-performance](../../specs/210-groundwork-physicalization-performance/spec.md) | Groundwork Physicalization And Performance | Implemented | - | 17 | 0 | deferred |
-| [211-groundwork-runtime-evaluation-hardening](../../specs/211-groundwork-runtime-evaluation-hardening/spec.md) | Groundwork Runtime Evaluation And Hardening | Implemented | - | 9 | 0 | - |
-| [212-groundwork-host-configurable-runtime-store-poc](../../specs/212-groundwork-host-configurable-runtime-store-poc/spec.md) | Groundwork Host-Configurable Runtime Store POC | Draft | - | 0 | 7 | - |
-| [213-diagnostics-structured-logs](../../specs/213-diagnostics-structured-logs/spec.md) | Diagnostics — Structured Logs (Capture, Live Streaming & Query) | Implemented | - | 37 | 0 | retained, deferred, out of scope |
-| [214-activity-execution-inspection](../../specs/214-activity-execution-inspection/spec.md) | Activity Execution Inspection | Implemented — all tasks checked in b08684db7 | - | 51 | 0 | deferred, out of scope |
-| [215-runtime-checkpoint-slot-decomposition](../../specs/215-runtime-checkpoint-slot-decomposition/spec.md) | Runtime Checkpoint Slot Decomposition (ADR 0029 Move 2, first slice) | Implemented — establishes the Move 2 decomposition pattern (first slice); the remaining handlers are spec 084. | - | 0 | 0 | retained, out of scope |
-| [216-runtime-http-performance](../../specs/216-runtime-http-performance/spec.md) | Runtime HTTP Hot-Path Performance | Implemented | - | 23 | 0 | - |
-| [217-trigger-contract-hardening](../../specs/217-trigger-contract-hardening/spec.md) | Trigger Publication Contract Hardening | Implemented (merged 2026-07-11 in PR #628) | - | 38 | 0 | retained |
-| [218-structured-logs-replay-cursors](../../specs/218-structured-logs-replay-cursors/spec.md) | Durable Structured Logs Replay Cursors | Ratified and verified (2026-07-12). | - | 0 | 0 | retained, out of scope |
-| [219-domain-owned-apis](../../specs/219-domain-owned-apis/spec.md) | Domain-Owned Management APIs | Implemented and verified (2026-07-13) | - | 108 | 0 | retained |
-| [220-reusable-activity-definitions](../../specs/220-reusable-activity-definitions/spec.md) | Reusable Activity Definitions | Implemented | - | 104 | 0 | retained, deferred, out of scope |
-| [221-groundwork-aspnetcore-identity](../../specs/221-groundwork-aspnetcore-identity/spec.md) | Groundwork ASP.NET Core Identity | Draft | - | 87 | 2 | - |
-| [222-runtime-intent-handlers](../../specs/222-runtime-intent-handlers/spec.md) | Contributed Runtime Intent Handlers | Approved | - | 24 | 0 | out of scope |
-| [223-openiddict-groundwork-stores](../../specs/223-openiddict-groundwork-stores/spec.md) | OpenIddict Groundwork Stores | Draft | - | 11 | 62 | superseded, retained, deferred |
-| [224-bpmn-container-activity](../../specs/224-bpmn-container-activity/spec.md) | 224-bpmn-container-activity | Implemented | - | 0 | 0 | deferred, out of scope |
-| [225-group-commit-fsync-sharing](../../specs/225-group-commit-fsync-sharing/spec.md) | Group-commit / cross-drain fsync sharing on the shared durable writer | Draft (design + implementation; measurement gated — see [research.md](./research.md)) | - | 0 | 0 | - |
-| [226-bpmn-event-based-gateway](../../specs/226-bpmn-event-based-gateway/spec.md) | 226-bpmn-event-based-gateway | Implemented | - | 0 | 0 | deferred, out of scope |
-| [227-replaysafe-hop-fusion](../../specs/227-replaysafe-hop-fusion/spec.md) | ReplaySafe hop fusion — fused schedule→start→invoke + inline single-predecessor completion (ADR 0047 D1+D2) | Implemented — original D1/D2 delivery; corrective #2497 delivery gates are tracked below. | - | 0 | 0 | retained, deferred, out of scope |
-| [228-runtime-actor-terminal-eviction](../../specs/228-runtime-actor-terminal-eviction/spec.md) | In-process workflow-execution actor terminal eviction / passivation trigger | Implemented — merged in PR #983 | - | 0 | 0 | retained, deferred |
-| [229-eager-shell-activation](../../specs/229-eager-shell-activation/spec.md) | 229-eager-shell-activation | unknown | - | 0 | 0 | - |
-| [230-bpmn-call-activity](../../specs/230-bpmn-call-activity/spec.md) | 230-bpmn-call-activity | Implemented | - | 0 | 0 | out of scope |
-| [231-container-readytorun-publish](../../specs/231-container-readytorun-publish/spec.md) | 231-container-readytorun-publish | unknown | - | 0 | 0 | out of scope |
-| [232-receive-correlation](../../specs/232-receive-correlation/spec.md) | Receive Event Correlation | Implemented — all tasks checked in ac027653e | - | 15 | 0 | retained, out of scope |
+| [203-groundwork-persistence-foundation](../../specs/203-groundwork-persistence-foundation/spec.md) | Groundwork Persistence Foundation | Draft | - | 23 | 2 | - |
+| [204-groundwork-core-manifest-planner](../../specs/204-groundwork-core-manifest-planner/spec.md) | Groundwork Core Manifest And Planner Kernel | Implemented | - | 38 | 0 | - |
+| [205-groundwork-sqlite-document-store](../../specs/205-groundwork-sqlite-document-store/spec.md) | Groundwork SQLite Document Store | Implemented | - | 17 | 0 | - |
+| [206-groundwork-elsa-bridge](../../specs/206-groundwork-elsa-bridge/spec.md) | Groundwork Elsa Bridge | Implemented | - | 18 | 0 | out of scope |
+| [207-workflow-execution-slice](../../specs/207-workflow-execution-slice/spec.md) | Workflow Execution Vertical Slice | Implemented | - | 40 | 0 | superseded, out of scope |
+| [208-groundwork-relational-providers](../../specs/208-groundwork-relational-providers/spec.md) | Groundwork SQL Server And PostgreSQL Providers | Implemented | - | 21 | 0 | - |
+| [209-groundwork-mongodb-provider](../../specs/209-groundwork-mongodb-provider/spec.md) | Groundwork MongoDB Provider | Implemented | - | 15 | 0 | - |
+| [210-groundwork-runtime-entities](../../specs/210-groundwork-runtime-entities/spec.md) | Groundwork Runtime-Defined Entities | Implemented | - | 9 | 0 | deferred |
+| [211-groundwork-physicalization-performance](../../specs/211-groundwork-physicalization-performance/spec.md) | Groundwork Physicalization And Performance | Implemented | - | 17 | 0 | deferred |
+| [212-groundwork-runtime-evaluation-hardening](../../specs/212-groundwork-runtime-evaluation-hardening/spec.md) | Groundwork Runtime Evaluation And Hardening | Implemented | - | 9 | 0 | - |
+| [213-groundwork-host-configurable-runtime-store-poc](../../specs/213-groundwork-host-configurable-runtime-store-poc/spec.md) | Groundwork Host-Configurable Runtime Store POC | Draft | - | 0 | 7 | - |
+| [214-diagnostics-structured-logs](../../specs/214-diagnostics-structured-logs/spec.md) | Diagnostics — Structured Logs (Capture, Live Streaming & Query) | Implemented | - | 37 | 0 | retained, deferred, out of scope |
+| [215-activity-execution-inspection](../../specs/215-activity-execution-inspection/spec.md) | Activity Execution Inspection | Implemented — all tasks checked in b08684db7 | - | 51 | 0 | deferred, out of scope |
+| [216-runtime-checkpoint-slot-decomposition](../../specs/216-runtime-checkpoint-slot-decomposition/spec.md) | Runtime Checkpoint Slot Decomposition (ADR 0029 Move 2, first slice) | Implemented — establishes the Move 2 decomposition pattern (first slice); the remaining handlers are spec 084. | - | 0 | 0 | retained, out of scope |
+| [217-runtime-http-performance](../../specs/217-runtime-http-performance/spec.md) | Runtime HTTP Hot-Path Performance | Implemented | - | 23 | 0 | - |
+| [218-trigger-contract-hardening](../../specs/218-trigger-contract-hardening/spec.md) | Trigger Publication Contract Hardening | Implemented (merged 2026-07-11 in PR #628) | - | 38 | 0 | retained |
+| [219-structured-logs-replay-cursors](../../specs/219-structured-logs-replay-cursors/spec.md) | Durable Structured Logs Replay Cursors | Ratified and verified (2026-07-12). | - | 0 | 0 | retained, out of scope |
+| [220-domain-owned-apis](../../specs/220-domain-owned-apis/spec.md) | Domain-Owned Management APIs | Implemented and verified (2026-07-13) | - | 108 | 0 | retained |
+| [221-reusable-activity-definitions](../../specs/221-reusable-activity-definitions/spec.md) | Reusable Activity Definitions | Implemented | - | 104 | 0 | retained, deferred, out of scope |
+| [222-groundwork-aspnetcore-identity](../../specs/222-groundwork-aspnetcore-identity/spec.md) | Groundwork ASP.NET Core Identity | Draft | - | 87 | 2 | - |
+| [223-runtime-intent-handlers](../../specs/223-runtime-intent-handlers/spec.md) | Contributed Runtime Intent Handlers | Approved | - | 24 | 0 | out of scope |
+| [224-openiddict-groundwork-stores](../../specs/224-openiddict-groundwork-stores/spec.md) | OpenIddict Groundwork Stores | Draft | - | 11 | 62 | superseded, retained, deferred |
+| [225-bpmn-container-activity](../../specs/225-bpmn-container-activity/spec.md) | 225-bpmn-container-activity | Implemented | - | 0 | 0 | deferred, out of scope |
+| [226-group-commit-fsync-sharing](../../specs/226-group-commit-fsync-sharing/spec.md) | Group-commit / cross-drain fsync sharing on the shared durable writer | Draft (design + implementation; measurement gated — see [research.md](./research.md)) | - | 0 | 0 | - |
+| [227-bpmn-event-based-gateway](../../specs/227-bpmn-event-based-gateway/spec.md) | 227-bpmn-event-based-gateway | Implemented | - | 0 | 0 | deferred, out of scope |
+| [228-replaysafe-hop-fusion](../../specs/228-replaysafe-hop-fusion/spec.md) | ReplaySafe hop fusion — fused schedule→start→invoke + inline single-predecessor completion (ADR 0047 D1+D2) | Implemented — original D1/D2 delivery; corrective #2497 delivery gates are tracked below. | - | 0 | 0 | retained, deferred, out of scope |
+| [229-runtime-actor-terminal-eviction](../../specs/229-runtime-actor-terminal-eviction/spec.md) | In-process workflow-execution actor terminal eviction / passivation trigger | Implemented — merged in PR #983 | - | 0 | 0 | retained, deferred |
+| [230-eager-shell-activation](../../specs/230-eager-shell-activation/spec.md) | 230-eager-shell-activation | unknown | - | 0 | 0 | - |
+| [231-bpmn-call-activity](../../specs/231-bpmn-call-activity/spec.md) | 231-bpmn-call-activity | Implemented | - | 0 | 0 | out of scope |
+| [232-container-readytorun-publish](../../specs/232-container-readytorun-publish/spec.md) | 232-container-readytorun-publish | unknown | - | 0 | 0 | out of scope |
+| [233-receive-correlation](../../specs/233-receive-correlation/spec.md) | Receive Event Correlation | Implemented — all tasks checked in ac027653e | - | 15 | 0 | retained, out of scope |

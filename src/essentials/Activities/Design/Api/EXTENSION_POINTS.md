@@ -43,4 +43,4 @@ Activity definitions are populated by Activity Design reconciliation sources, no
 
 The catalog endpoint normalizes those stored definitions and applies availability evaluation. Context-sensitive input options deliberately belong to Workflow Design API because they require submitted workflow state and node context.
 
-Canonical ownership is defined in the [domain-owned API spec](../../../../../specs/219-domain-owned-apis/spec.md); terminology is defined in the [Elsa glossary](../../../../../docs/glossary/elsa.md).
+Canonical ownership is defined in the [domain-owned API spec](../../../../../specs/220-domain-owned-apis/spec.md); terminology is defined in the [Elsa glossary](../../../../../docs/glossary/elsa.md).

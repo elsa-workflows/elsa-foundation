@@ -87,7 +87,7 @@ GET /runtime/workflows/instances/{workflowExecutionId}/activity-executions/{acti
 ```
 
 Response:
-- Returns committed activity execution inspection evidence from [Activity Execution Inspection](../../214-activity-execution-inspection/contracts/activity-execution-inspection.md).
+- Returns committed activity execution inspection evidence from [Activity Execution Inspection](../../215-activity-execution-inspection/contracts/activity-execution-inspection.md).
 - Payload visibility follows runtime payload capture policy.
 
 ## Studio UI Contract

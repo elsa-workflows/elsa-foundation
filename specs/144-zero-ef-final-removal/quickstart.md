@@ -474,7 +474,7 @@ foundations — storage manifest, records, serializer/codec, generic-query rejec
 failure mapper — are on `main`. What remains open is unchanged and is the substantive part: all four
 store implementations (145 members across `IOpenIddictApplicationStore`, `IOpenIddictAuthorizationStore`,
 `IOpenIddictScopeStore`, `IOpenIddictTokenStore` per
-`specs/223-openiddict-groundwork-stores/contracts/openiddict-member-ledger.md`), the production
+`specs/224-openiddict-groundwork-stores/contracts/openiddict-member-ledger.md`), the production
 registration, the atomic-mutation and relationship coordinators, four-provider evidence, and the still-open
 upstream Groundwork contracts #141/#143. Spec 106 Phase 3 onward is entirely unstarted.
 

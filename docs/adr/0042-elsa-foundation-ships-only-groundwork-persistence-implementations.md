@@ -57,7 +57,7 @@ rules, Groundwork defaults and exclusions, and explicit vendor boundary remain i
 EF Core provider.** OpenIddict ships its own EF Core and MongoDB persistence packages; a host that wants
 MongoDB selects `OpenIddict.MongoDb`, and one that wants something else selects that. Elsa does not
 maintain a first-party Groundwork adapter for a third-party component's storage. The adapter built under
-[spec 223](../../specs/223-openiddict-groundwork-stores/) is removed and that spec is superseded.
+[spec 223](../../specs/224-openiddict-groundwork-stores/) is removed and that spec is superseded.
 
 **Consequent narrowing of the completion criterion.** "Completion means no direct or transitive
 `Microsoft.EntityFrameworkCore*` dependency remains" is narrowed to **first-party persistence**: Elsa
@@ -83,7 +83,7 @@ protection the whole programme depends on.
 OpenIddict keeps its own vendor persistence packages (`OpenIddict.EntityFrameworkCore`, or
 `OpenIddict.MongoDb`) rather than gaining a first-party Groundwork adapter, on the grounds that they are
 adequate for anyone enabling OpenIddict. The Groundwork OpenIddict adapter built under
-[spec 223](../../specs/223-openiddict-groundwork-stores/) has been removed.
+[spec 223](../../specs/224-openiddict-groundwork-stores/) has been removed.
 
 With `OpenIddict.EntityFrameworkCore` referenced, **a transitive `Microsoft.EntityFrameworkCore*`
 dependency is permanent**, so "Completion means no direct or transitive `Microsoft.EntityFrameworkCore*`

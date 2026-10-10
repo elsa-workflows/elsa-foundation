@@ -2,7 +2,7 @@
 
 **Spec**: [spec.md](spec.md) · **Plan**: [plan.md](plan.md)
 
-Continues [spec 083](../215-runtime-checkpoint-slot-decomposition/tasks.md) (first slice, Cancel — done/#366). Delivered as ordered internal slices under one draft PR; full baseline at slices 4, 8, and final.
+Continues [spec 083](../216-runtime-checkpoint-slot-decomposition/tasks.md) (first slice, Cancel — done/#366). Delivered as ordered internal slices under one draft PR; full baseline at slices 4, 8, and final.
 
 ## RT-4 — Core-owned composition root
 - [x] **T001** `RuntimeCoreServiceCollectionExtensions.AddWorkflowRuntimeCore(IServiceCollection)` holds the full runtime registration set (`TryAdd*` throughout). (FR-005)

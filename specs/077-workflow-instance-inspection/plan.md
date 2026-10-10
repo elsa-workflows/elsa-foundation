@@ -6,7 +6,7 @@
 
 ## Summary
 
-Add a full workflow-instance inspection surface that keeps the existing instance list for triage, adds deep-linkable instance detail routes in Studio, and renders the executed workflow on a read-only designer canvas using the saved layout for the exact workflow definition version that produced the instance. Runtime evidence is supplied by runtime-owned instance and activity execution inspection contracts, with detailed per-execution evidence provided by the prerequisite [Activity Execution Inspection](../214-activity-execution-inspection/spec.md) work unit. The backend work completes the version-detail read contract by exposing version layout alongside authored state; runtime instance details remain runtime-owned and are joined with design-version data at the Studio/application layer.
+Add a full workflow-instance inspection surface that keeps the existing instance list for triage, adds deep-linkable instance detail routes in Studio, and renders the executed workflow on a read-only designer canvas using the saved layout for the exact workflow definition version that produced the instance. Runtime evidence is supplied by runtime-owned instance and activity execution inspection contracts, with detailed per-execution evidence provided by the prerequisite [Activity Execution Inspection](../215-activity-execution-inspection/spec.md) work unit. The backend work completes the version-detail read contract by exposing version layout alongside authored state; runtime instance details remain runtime-owned and are joined with design-version data at the Studio/application layer.
 
 ## Technical Context
 

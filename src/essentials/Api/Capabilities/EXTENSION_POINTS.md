@@ -1,7 +1,7 @@
 # Extension points — API Capabilities
 
 This module has one add-don't-replace contribution seam and one replaceable catalog service. Shared meanings
-remain in the [feature specification](../../../../specs/219-domain-owned-apis/spec.md).
+remain in the [feature specification](../../../../specs/220-domain-owned-apis/spec.md).
 
 ## Contributor seam
 
@@ -51,5 +51,5 @@ are a feature-owned public-contract statement, not an independent provider exten
 ## References
 
 - [Module README](README.md)
-- [Management API OpenAPI contract](../../../../specs/219-domain-owned-apis/contracts/management-api.openapi.yaml)
+- [Management API OpenAPI contract](../../../../specs/220-domain-owned-apis/contracts/management-api.openapi.yaml)
 - [Repository extension-point index](../../../../EXTENSION_POINTS.md)

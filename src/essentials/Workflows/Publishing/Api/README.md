@@ -174,5 +174,5 @@ a race to a publication already serving the artifact; the request is answered wi
 problem response's `errorCode`.
 
 See [the Publishing extension-point catalog](EXTENSION_POINTS.md) for supported replacements and provider work,
-and [the feature quickstart](../../../../../specs/219-domain-owned-apis/quickstart.md) for the `/foo` to `/bar`
+and [the feature quickstart](../../../../../specs/220-domain-owned-apis/quickstart.md) for the `/foo` to `/bar`
 replacement scenario.
