@@ -28,11 +28,19 @@ else
   rm -f "$script"
 fi
 
+exports() {
+  echo "export DOTNET_ROOT=\"$install_dir\""
+  echo "export PATH=\"$install_dir:\$PATH\""
+  echo "export DOTNET_CLI_TELEMETRY_OPTOUT=1"
+  echo "export DOTNET_NOLOGO=1"
+}
+
 if [ -n "${CLAUDE_ENV_FILE:-}" ]; then
-  {
-    echo "export DOTNET_ROOT=\"$install_dir\""
-    echo "export PATH=\"$install_dir:\$PATH\""
-    echo "export DOTNET_CLI_TELEMETRY_OPTOUT=1"
-    echo "export DOTNET_NOLOGO=1"
-  } >> "$CLAUDE_ENV_FILE"
+  exports >> "$CLAUDE_ENV_FILE"
+else
+  # No env file from the harness: later shells start from the profile, so persist the exports there once.
+  marker="# elsa-foundation: dotnet SDK"
+  if ! grep -qxF "$marker" "$HOME/.bashrc" 2>/dev/null; then
+    { echo "$marker"; exports; } >> "$HOME/.bashrc"
+  fi
 fi

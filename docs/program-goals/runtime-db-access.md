@@ -10,7 +10,7 @@
 
 ## Purpose
 
-Explain and reduce avoidable database access for short durable HTTP workflows. Preserve response/output, committed state and inspection, atomic checkpoint proof, fencing, partition isolation and crash/replay behavior. Keep Immediate as host default; prove improvements on explicit Coalesced mode and report Immediate controls separately. *(Historical: ADR 0080 D2 replaces Immediate/Coalesced with Durable/Balanced/Ephemeral, Balanced by default.)*
+Explain and reduce avoidable database access for short durable HTTP workflows. Preserve response/output, committed state and inspection, atomic checkpoint proof, fencing, partition isolation and crash/replay behavior. This program kept Immediate as the host default, proved improvements on explicit Coalesced mode, and reported Immediate controls separately. ADR 0080 D2 has since replaced Immediate/Coalesced with Durable/Balanced/Ephemeral, Balanced by default.
 
 The owner-approved primary scenario uses HttpEndpoint startup and a deterministic computation; original transform artifacts are not a prerequisite.
 
