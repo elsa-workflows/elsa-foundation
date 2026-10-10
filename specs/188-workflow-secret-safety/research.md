@@ -956,6 +956,10 @@ slice proves it with a capture test at `Trace` level (T106). If that test finds 
 adds `RedactLoggedHeaders` for the `Authorization` header on that client, without narrowing whatever the default
 already redacts.
 
+*As built (slice 11 review)*: the default redacts header values in the message text but keeps the raw values in the
+lines' structured state, which `RedactLoggedHeaders` does not change, so `ActivitiesHttpFeature` removes the default
+logging handlers from the named client and adds one logger that writes no header (tasks.md, slice 11 as built).
+
 **The other inputs are not regressed**: `Method`, `Content` and `ContentType` (string) keep their behavior and may
 take a `Secret` binding like any string input; `Url` (`Uri`), `RequestHeaders` (a dictionary) and `Timeout`
 (`TimeSpan`) cannot take one (R11); `ExpectedStatusCodes` refuses one (IP20). `SendHttpRequestExecutionTests` and the

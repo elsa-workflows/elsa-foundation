@@ -757,6 +757,32 @@ public sealed class ClrAssemblyScannerTests
     }
 
     [Fact]
+    public void SendHttpRequest_DeclaresOnlyAuthorizationAsASensitiveCredential_WithNoDefault()
+    {
+        // Spec 188, T105 (research R17): the one built-in credential input. A credential is also sensitive, accepts
+        // only a secret reference, and never carries a default; every other SendHttpRequest input stays undeclared.
+        using var folder = TempAssemblyFolder.WithCopyOf(typeof(SendHttpRequest).Assembly);
+        var inputs = CreateScanner().Scan(folder.Path)
+            .Single(model => model.ActivityTypeKey == typeof(SendHttpRequest).FullName)
+            .Inputs;
+
+        var authorization = Assert.Single(inputs, input => input.Name == nameof(SendHttpRequest.Authorization));
+        Assert.Equal("String", authorization.Type.Alias);
+        Assert.True(authorization.IsSensitive);
+        Assert.True(authorization.IsCredential);
+        Assert.Null(authorization.DefaultValue);
+        Assert.Null(authorization.DefaultSyntax);
+
+        var others = inputs.Where(input => input.Name != nameof(SendHttpRequest.Authorization)).ToList();
+        Assert.NotEmpty(others);
+        Assert.All(others, input =>
+        {
+            Assert.Null(input.IsSensitive);
+            Assert.Null(input.IsCredential);
+        });
+    }
+
+    [Fact]
     public void DiscoveredActivities_AreCategorised_ByAssemblyNameLastSegment()
     {
         using var folder = TempAssemblyFolder.WithCopyOf(typeof(UnannotatedFixtureActivity).Assembly);

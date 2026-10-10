@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.ComponentModel;
 using System.Diagnostics;
 using System.Net;
@@ -15,6 +16,7 @@ using Elsa.Activities.Design.Api;
 using Elsa.Activities.Design.Persistence.EntityFrameworkCore;
 using Elsa.Activities.Design.Reconciliation;
 using Elsa.Activities.Design.Reconciliation.Clr;
+using Elsa.Activities.Http;
 using Elsa.Activities.Primitives;
 using Elsa.Activities.Runtime;
 using Elsa.Api.Capabilities;
@@ -23,6 +25,7 @@ using Elsa.Events;
 using Elsa.Expressions;
 using Elsa.Foundation.Identity.Core.Authorization;
 using Elsa.Foundation.Identity.Extensions;
+using Elsa.Http;
 using Elsa.Locking.Core;
 using Elsa.Mediator;
 using Elsa.Persistence.EntityFramework;
@@ -48,9 +51,11 @@ using Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore;
 using Elsa.Workflows.Runtime.Api;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Workflows.Runtime.Http;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore;
 using Elsa.Workflows.Runtime.Resumption;
 using Elsa.Workflows.Runtime.Scheduling;
+using Elsa.Workflows.Runtime.Services.Incidents;
 using Elsa.Workflows.Runtime.Tracing;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Builder;
@@ -119,7 +124,7 @@ public sealed class SecretsCanaryWorkflowHost : IAsyncDisposable
 
     private readonly WebApplication _app;
     private readonly DirectoryInfo _root;
-    private string? _canaryActivityVersionId;
+    private readonly ConcurrentDictionary<Type, string> _activityVersionIds = new();
 
     private SecretsCanaryWorkflowHost(WebApplication app, IShell shell, DirectoryInfo root, CanaryStartMode mode, CanaryLogCapture logs, CanarySpanRecorder spans)
     {
@@ -139,13 +144,18 @@ public sealed class SecretsCanaryWorkflowHost : IAsyncDisposable
     public CanarySpanRecorder Spans { get; }
     public CanaryRecorder Activations => Shell.ServiceProvider.GetRequiredService<CanaryRecorder>();
     public CanaryInjections Injections => Shell.ServiceProvider.GetRequiredService<CanaryInjections>();
+    public CanaryHttpEndpoint HttpEndpoint => Shell.ServiceProvider.GetRequiredService<CanaryHttpEndpoint>();
     public string DesignDirectory => Path.Join(_root.FullName, "design");
     public string RuntimeDirectory => Path.Join(_root.FullName, "runtime");
     public string GitClonePath => Path.Join(_root.FullName, "git-clone");
     private string GitRemotePath => Path.Join(_root.FullName, "git-remote.git");
 
-    /// <summary>Starts a canary host, activates its shell, and waits for its startup tasks (catalog reconciliation among them).</summary>
-    public static async Task<SecretsCanaryWorkflowHost> StartAsync(CanaryStartMode mode)
+    /// <summary>
+    /// Starts a canary host, activates its shell, and waits for its startup tasks (catalog reconciliation among them).
+    /// With <paramref name="withHttpActivities"/> the shell also composes <c>ActivitiesHttp</c>, whose named client sends
+    /// to <see cref="HttpEndpoint"/> instead of the network (<see cref="SecretsCanaryHttpTransportFeature"/>).
+    /// </summary>
+    public static async Task<SecretsCanaryWorkflowHost> StartAsync(CanaryStartMode mode, bool withHttpActivities = false)
     {
         var root = Directory.CreateTempSubdirectory("elsa-secrets-canary-");
         var logs = new CanaryLogCapture();
@@ -157,7 +167,7 @@ public sealed class SecretsCanaryWorkflowHost : IAsyncDisposable
             await File.WriteAllTextAsync(EmptyGitConfigPath(root.FullName), "");
             await CreateGitRemoteAsync(root.FullName, Path.Join(root.FullName, "git-remote.git"), Path.Join(root.FullName, "git-seed"));
 
-            var configuration = new ConfigurationBuilder().AddInMemoryCollection(ShellSettings(root.FullName, mode)).Build();
+            var configuration = new ConfigurationBuilder().AddInMemoryCollection(ShellSettings(root.FullName, mode, withHttpActivities)).Build();
             var builder = WebApplication.CreateBuilder(new WebApplicationOptions { EnvironmentName = "Development" });
             builder.WebHost.UseTestServer();
             builder.Logging.ClearProviders();
@@ -169,6 +179,7 @@ public sealed class SecretsCanaryWorkflowHost : IAsyncDisposable
             // own singleton from a type registration, and the tests read the ones the shell's activities and seams use.
             builder.Services.AddSingleton(new CanaryRecorder());
             builder.Services.AddSingleton(new CanaryInjections());
+            builder.Services.AddSingleton(new CanaryHttpEndpoint());
             builder.Services.AddSingleton<IDistributedLockProvider, ProcessLockProvider>();
             // Registered ahead of the git feature's AddGitClient, which only adds a client when none is registered.
             builder.Services.AddSingleton<IGitClient>(new ConfigIsolatedGitClient(new GitClient("git", NullLogger.Instance), EmptyGitConfigPath(root.FullName)));
@@ -206,7 +217,12 @@ public sealed class SecretsCanaryWorkflowHost : IAsyncDisposable
                     typeof(SecretsFeature).Assembly,
                     typeof(SecretsWorkflowsFeature).Assembly,
                     typeof(WorkflowsExecutionEvidenceFeature).Assembly,
-                    typeof(SecretsCanaryInjectionFeature).Assembly)
+                    typeof(SecretsCanaryInjectionFeature).Assembly,
+                    // The feature assemblies a host that composes the HTTP activities adds; a host that does not enable the
+                    // features by name gets none of their services.
+                    typeof(HttpFeature).Assembly,
+                    typeof(WorkflowsRuntimeHttpFeature).Assembly,
+                    typeof(ActivitiesHttpFeature).Assembly)
                 .WithConfigurationProvider(configuration));
 
             var app = builder.Build();
@@ -226,7 +242,7 @@ public sealed class SecretsCanaryWorkflowHost : IAsyncDisposable
     }
 
     /// <summary>The shell's features and their settings: every feature the canary reads a surface from, and its seams.</summary>
-    private static Dictionary<string, string?> ShellSettings(string root, CanaryStartMode mode)
+    private static Dictionary<string, string?> ShellSettings(string root, CanaryStartMode mode, bool withHttpActivities)
     {
         var features = $"CShells:Shells:{ShellName}:Features:";
         var settings = new Dictionary<string, string?>
@@ -248,7 +264,7 @@ public sealed class SecretsCanaryWorkflowHost : IAsyncDisposable
         if (mode == CanaryStartMode.Fused)
             settings[$"{features}WorkflowsRuntimeCheckpointPersistence:Mode"] = "Coalesced";
 
-        foreach (var feature in Features)
+        foreach (var feature in Features.Concat(withHttpActivities ? HttpFeatures : []))
             settings.TryAdd($"{features}{feature}", null);
         return settings;
     }
@@ -287,6 +303,9 @@ public sealed class SecretsCanaryWorkflowHost : IAsyncDisposable
         "WorkflowsExecutionEvidence",
         SecretsCanaryInjectionFeature.Name
     ];
+
+    /// <summary>The features a host with the HTTP activities adds: the activities, and the canary's endpoint standing in for the network.</summary>
+    private static readonly string[] HttpFeatures = ["ActivitiesHttp", SecretsCanaryHttpTransportFeature.Name];
 
     // ---- Secrets -------------------------------------------------------------------------------------------------
 
@@ -329,20 +348,43 @@ public sealed class SecretsCanaryWorkflowHost : IAsyncDisposable
     /// <paramref name="inputs"/>, through the Design API (which admits it through the credential-literal rule), publishes
     /// its version through the Publishing API, and returns both.
     /// </summary>
-    public async Task<CanaryPublication> PublishCanaryAsync(string name, string nodeId, params JsonObject[] inputs)
+    public Task<CanaryPublication> PublishCanaryAsync(string name, string nodeId, params JsonObject[] inputs) =>
+        PublishActivityAsync(name, nodeId, typeof(CanaryActivity), inputs);
+
+    /// <summary>As <see cref="PublishCanaryAsync"/>, for a root node of the CLR activity <paramref name="activityType"/>.</summary>
+    public async Task<CanaryPublication> PublishActivityAsync(string name, string nodeId, Type activityType, params JsonObject[] inputs)
     {
-        var activityVersionId = _canaryActivityVersionId ??= await FindActivityVersionIdAsync(typeof(CanaryActivity));
-        var root = new JsonObject
+        var root = await RootNodeAsync(nodeId, activityType, inputs);
+        var (definitionId, versionId) = await SubmitAsync(name, root);
+        var published = await PostAsync($"publishing/workflows/{versionId}/publish", new JsonObject());
+        return new CanaryPublication(definitionId, versionId, Required(published, "artifactId"), Required(published, "sourceReferenceId"));
+    }
+
+    /// <summary>A definition state whose root is one node of the CLR activity <paramref name="activityType"/>, as the Design API takes it.</summary>
+    public async Task<JsonObject> StateOfAsync(string nodeId, Type activityType, params JsonObject[] inputs) =>
+        State(await RootNodeAsync(nodeId, activityType, inputs));
+
+    private async Task<JsonObject> RootNodeAsync(string nodeId, Type activityType, JsonObject[] inputs)
+    {
+        if (!_activityVersionIds.TryGetValue(activityType, out var activityVersionId))
+            _activityVersionIds[activityType] = activityVersionId = await FindActivityVersionIdAsync(activityType);
+        return new JsonObject
         {
             ["nodeId"] = nodeId,
             ["activityVersionId"] = activityVersionId,
             ["inputs"] = new JsonArray(inputs.Cast<JsonNode>().ToArray()),
             ["outputs"] = new JsonArray()
         };
-        var (definitionId, versionId) = await SubmitAsync(name, root);
-        var published = await PostAsync($"publishing/workflows/{versionId}/publish", new JsonObject());
-        return new CanaryPublication(definitionId, versionId, Required(published, "artifactId"), Required(published, "sourceReferenceId"));
     }
+
+    private static JsonObject State(JsonObject root, JsonArray? variables = null) => new()
+    {
+        ["variables"] = variables ?? new JsonArray(),
+        ["inputs"] = new JsonArray(),
+        ["outputs"] = new JsonArray(),
+        ["strategyOptions"] = null,
+        ["rootActivity"] = root
+    };
 
     /// <summary>Submits a definition whose root node is <paramref name="root"/>; returns the definition and version ids.</summary>
     public async Task<(string DefinitionId, string VersionId)> SubmitAsync(string name, JsonObject root, JsonArray? variables = null)
@@ -351,14 +393,7 @@ public sealed class SecretsCanaryWorkflowHost : IAsyncDisposable
         {
             ["name"] = name,
             ["description"] = "Spec 188 canary",
-            ["state"] = new JsonObject
-            {
-                ["variables"] = variables ?? new JsonArray(),
-                ["inputs"] = new JsonArray(),
-                ["outputs"] = new JsonArray(),
-                ["strategyOptions"] = null,
-                ["rootActivity"] = root
-            }
+            ["state"] = State(root, variables)
         });
         return (Required(submitted, "definition", "id"), Required(submitted, "version", "id"));
     }
@@ -458,6 +493,50 @@ public sealed class SecretsCanaryWorkflowHost : IAsyncDisposable
     {
         await using var scope = Shell.ServiceProvider.CreateAsyncScope();
         return await scope.ServiceProvider.GetRequiredService<IIncidentStateStore>().ListAsync(workflowExecutionId);
+    }
+
+    /// <summary>A run's committed state, as the settle predicates read it.</summary>
+    public sealed record RunState(IReadOnlyCollection<ActivityExecutionState> Activities, WorkflowExecutionState? Workflow)
+    {
+        public ActivityExecutionState? Node(string nodeId) => Activities.SingleOrDefault(activity => activity.Execution.ExecutableNodeId == nodeId);
+    }
+
+    public static bool Completed(RunState run) => run.Workflow?.Status == WorkflowExecutionStatus.Completed;
+
+    /// <summary>
+    /// Generous because the tests run on a shared machine whose parallel sessions compete for the CPU, which stretches
+    /// every timing (AGENTS.md, "Builds on a shared machine"). No scenario relies on reaching it: a fault fails the wait
+    /// at once.
+    /// </summary>
+    public static readonly TimeSpan SettleTimeout = TimeSpan.FromSeconds(60);
+
+    /// <summary>
+    /// Polls the run's committed state until <paramref name="settled"/> holds; the drain may outlive the request that
+    /// started it. A run that records an activity fault or an incident <paramref name="settled"/> does not accept fails
+    /// at once, naming that state, rather than waiting out the timeout: a handler fault (poisoned work) and an activity
+    /// fault both record one. The incidents are read before the run state, so an incident committed with an activity
+    /// fault is never seen without that fault. A checkpoint-rule incident does not fail the wait: it records a commit the
+    /// backstop refused, which the settle predicates of S5 and S6 judge through the refusal's log line, written after it.
+    /// </summary>
+    public async Task<RunState> WaitForAsync(string workflowExecutionId, Func<RunState, bool> settled)
+    {
+        var deadline = Stopwatch.StartNew();
+        while (true)
+        {
+            var incidents = await ReadIncidentsAsync(workflowExecutionId);
+            var (activities, workflow) = await ReadRunAsync(workflowExecutionId);
+            var state = new RunState(activities, workflow);
+            if (settled(state))
+                return state;
+            var describedState = $"workflow {workflow?.Status}, activities {string.Join(", ", activities.Select(activity => $"{activity.Execution.ExecutableNodeId}={activity.Status}{(activity.Fault is { } fault ? $" (fault {fault.Code})" : string.Empty)}"))}";
+            var faults = incidents.Where(incident => incident.FailureType != CheckpointRuleViolationWorkflowFaulter.IncidentFailureType)
+                .Select(incident => $"{incident.FailureType} on node {incident.ExecutableNodeId ?? "(none)"}")
+                .Concat(activities.Where(activity => activity.Fault is not null).Select(activity => $"activity fault on node {activity.Execution.ExecutableNodeId}"))
+                .ToArray();
+            Assert.True(faults.Length == 0, $"Run '{workflowExecutionId}' faulted before it settled: {string.Join("; ", faults)}; {describedState}.");
+            Assert.True(deadline.Elapsed < SettleTimeout, $"Run '{workflowExecutionId}' did not settle: {describedState}.");
+            await Task.Delay(100);
+        }
     }
 
     /// <summary>Saves the runtime diagnostics settings through the runtime API: <paramref name="level"/> by default and for every subject.</summary>

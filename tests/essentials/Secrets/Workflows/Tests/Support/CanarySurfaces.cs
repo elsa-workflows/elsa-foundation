@@ -5,6 +5,8 @@ using Elsa.Canary.Fixtures;
 using Elsa.Workflows.ExecutionEvidence.Models;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Workflows.Runtime.Diagnostics;
+using Xunit;
 
 namespace Elsa.Secrets.Workflows.Tests.Support;
 
@@ -40,6 +42,11 @@ public enum CanarySurface
 /// folded to the segment's durable boundary, so none of the subject input is kept; a run that suspends or faults keeps
 /// them at that boundary.
 /// </param>
+/// <param name="ActivityTypePrefix">The type name the run's activity facts in the execution evidence start with: the canary activities' namespace unless the run is of another activity.</param>
+/// <param name="CompanionInput">
+/// A non-sensitive input of the run's activity that the diagnostic snapshot factory captures at the diagnostics level's
+/// mode, which proves the factory ran: the canary activity's <c>Companion</c> unless the run is of another activity.
+/// </param>
 public sealed record CanaryRun(
     string Scenario,
     string NodeId,
@@ -51,8 +58,12 @@ public sealed record CanaryRun(
     string? ReferenceName,
     string RuntimeMarker,
     bool SubjectWithheld = true,
-    bool CompletesInOneSegment = false)
+    bool CompletesInOneSegment = false,
+    string ActivityTypePrefix = CanaryRun.CanaryActivityTypePrefix,
+    string CompanionInput = nameof(CanaryActivity.Companion))
 {
+    public const string CanaryActivityTypePrefix = "Elsa.Canary.Fixtures.";
+
     /// <summary>The reference the inspection surfaces must show for the subject input, if they show one.</summary>
     public string? ShownReference => SubjectWithheld ? ReferenceName : null;
 }
@@ -94,6 +105,37 @@ public sealed class CanarySurfaces(SecretsCanaryWorkflowHost host)
     private const string RuntimeActivityStatesTable = "elsa_runtime_activity_execution_state";
     private const string RuntimeWorkflowStatesTable = "elsa_runtime_workflow_execution_state";
     private const string RuntimeInspectionsTable = "elsa_runtime_activity_execution_inspection";
+
+    /// <summary>
+    /// Reads each of <paramref name="surfaces"/>, asserting its precondition for every run first, and asserts that none of
+    /// <paramref name="values"/> occurs on it in any form the scanner searches for (SC-004). A leak is reported beside
+    /// every precondition that failed, so neither hides the other.
+    /// </summary>
+    public async Task AssertAbsentAsync(
+        string scenario,
+        RuntimeDiagnosticsEvidenceLevel level,
+        IReadOnlyCollection<CanaryRun> runs,
+        IReadOnlyCollection<string> values,
+        IEnumerable<CanarySurface> surfaces,
+        IReadOnlySet<string>? excludedRuntimeTables = null,
+        CanaryCaller inspectorCaller = CanaryCaller.Operator)
+    {
+        var options = new CanaryReadOptions(RuntimeDiagnosticsSettingsResolver.ToCaptureMode(level), excludedRuntimeTables, inspectorCaller);
+        var leaks = new List<string>();
+        var preconditions = new List<string>();
+        foreach (var surface in surfaces)
+        {
+            var read = await ReadAsync(surface, runs, options);
+            preconditions.AddRange(read.FailedPreconditions);
+            leaks.AddRange(values.SelectMany(value => read.Contents.SelectMany(content => CanaryScanner.Find(content.Bytes, value, content.Location)))
+                .Select(hit => $"{surface}: {hit.Form} at {hit.Location} (offset {hit.Offset})"));
+        }
+
+        Assert.True(
+            leaks.Count == 0 && preconditions.Count == 0,
+            $"{scenario}: a canary value was found {leaks.Count} times, and {preconditions.Count} preconditions did not hold.\n" +
+            $"Leaks:\n{string.Join('\n', leaks.Take(40))}\nFailed preconditions:\n{string.Join('\n', preconditions)}");
+    }
 
     /// <summary>The surface's content, with every precondition that did not hold for a run in <paramref name="runs"/>.</summary>
     public async Task<CanarySurfaceRead> ReadAsync(CanarySurface surface, IReadOnlyCollection<CanaryRun> runs, CanaryReadOptions options)
@@ -207,8 +249,8 @@ public sealed class CanarySurfaces(SecretsCanaryWorkflowHost host)
             Require(failures, records.Count > 0, $"{run.Scenario} precondition (execution evidence): no evidence record of run '{run.WorkflowExecutionId}'.");
             Require(
                 failures,
-                records.Any(record => record.Kind == ExecutionEvidenceKinds.Activity && record.ActivityType?.StartsWith("Elsa.Canary.Fixtures.", StringComparison.Ordinal) == true),
-                $"{run.Scenario} precondition (execution evidence): no activity fact of a canary activity in run '{run.WorkflowExecutionId}'.");
+                records.Any(record => record.Kind == ExecutionEvidenceKinds.Activity && record.ActivityType?.StartsWith(run.ActivityTypePrefix, StringComparison.Ordinal) == true),
+                $"{run.Scenario} precondition (execution evidence): no activity fact of an activity of type '{run.ActivityTypePrefix}' in run '{run.WorkflowExecutionId}'.");
             contents.Add(CanaryContent.Text($"evidence of {run.WorkflowExecutionId}", SecretsCanaryWorkflowHost.Serialize(records)));
         }
 
@@ -303,8 +345,8 @@ public sealed class CanarySurfaces(SecretsCanaryWorkflowHost host)
             // The factory ran: a non-sensitive input was captured at the configured level.
             Require(
                 failures,
-                snapshots.Any(snapshot => snapshot.InputKey == nameof(CanaryActivity.Companion) && snapshot.Payload is not null && snapshot.CaptureMode == companionCapture),
-                $"{run.Scenario} precondition (diagnostic snapshots): the companion input's projection of run '{run.WorkflowExecutionId}' holds no snapshot captured at {companionCapture}.");
+                snapshots.Any(snapshot => snapshot.InputKey == run.CompanionInput && snapshot.Payload is not null && snapshot.CaptureMode == companionCapture),
+                $"{run.Scenario} precondition (diagnostic snapshots): the companion input '{run.CompanionInput}' projection of run '{run.WorkflowExecutionId}' holds no snapshot captured at {companionCapture}.");
             Require(failures, subject.Length > 0, $"{run.Scenario} precondition (diagnostic snapshots): input '{run.SubjectInput}' has no projection in run '{run.WorkflowExecutionId}'.");
             if (run.ShownReference is { } reference)
                 Require(

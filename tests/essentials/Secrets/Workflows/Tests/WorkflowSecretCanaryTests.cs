@@ -7,7 +7,6 @@ using Elsa.Serialization.Core;
 using Elsa.Workflows.ExecutionEvidence.Models;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Diagnostics;
-using Elsa.Workflows.Runtime.Services.Incidents;
 using Elsa.Workflows.Runtime.Core.Models;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
@@ -106,7 +105,7 @@ public abstract class WorkflowSecretCanaryTests(CanaryHostFixture fixture, ITest
         var run = await RunAsync(publication, Suspended(scenario.NodeId));
         await Host.RotateSecretAsync(scenario.ReferenceName, rotated);
         await Host.ResumeAsync(run);
-        await WaitForAsync(run, Completed);
+        await Host.WaitForAsync(run, Completed);
 
         Assert.Equal(
             [(CanaryRecorder.Execute, scenario.Value), (CanaryRecorder.Resume, rotated)],
@@ -124,7 +123,7 @@ public abstract class WorkflowSecretCanaryTests(CanaryHostFixture fixture, ITest
 
         var run = await RunAsync(publication, Suspended(scenario.NodeId));
         await Host.ResumeAsync(run);
-        await WaitForAsync(run, Faulted(scenario.NodeId));
+        await Host.WaitForAsync(run, Faulted(scenario.NodeId));
 
         Assert.Equal(
             [(CanaryRecorder.Execute, scenario.Value), (CanaryRecorder.Resume, scenario.Value)],
@@ -142,7 +141,7 @@ public abstract class WorkflowSecretCanaryTests(CanaryHostFixture fixture, ITest
         var sourceReferenceId = await Host.ImportAsync(executable);
 
         var run = await Host.ExecuteAsync(scenario.ArtifactId, sourceReferenceId);
-        await WaitForAsync(run, Faulted(scenario.NodeId));
+        await Host.WaitForAsync(run, Faulted(scenario.NodeId));
 
         Assert.Equal(
             [(CanaryRecorder.Execute, scenario.Value), (CanaryRecorder.ChildCompleted, scenario.Value)],
@@ -164,7 +163,7 @@ public abstract class WorkflowSecretCanaryTests(CanaryHostFixture fixture, ITest
         var sourceReferenceId = await Host.ImportAsync(executable);
 
         var run = await Host.ExecuteAsync(scenario.ArtifactId, sourceReferenceId);
-        var state = await WaitForAsync(run, Faulted(scenario.NodeId));
+        var state = await Host.WaitForAsync(run, Faulted(scenario.NodeId));
 
         // The parent's notification callback ran, and the notifying child did not complete, so no child-completion
         // evaluation of the parent took place (the grandchild, unbound on Primary, records nothing the filter keeps).
@@ -188,7 +187,7 @@ public abstract class WorkflowSecretCanaryTests(CanaryHostFixture fixture, ITest
 
         var (run, _) = await Host.StartAsync(scenario.ArtifactId, sourceReferenceId);
         // Settled once activation refused the marker, or once the commit backstop refused a value producer withholding let through.
-        var state = await WaitForAsync(run, settled => Faulted(scenario.NodeId)(settled) || CommitRefused(run));
+        var state = await Host.WaitForAsync(run, settled => Faulted(scenario.NodeId)(settled) || CommitRefused(run));
 
         // P3's own assertions: producer withholding recorded the marker, and activation refused it with VF-ACT-010 (the
         // commit backstop refuses a value producer withholding let through with VF-ACT-005 instead).
@@ -221,7 +220,7 @@ public abstract class WorkflowSecretCanaryTests(CanaryHostFixture fixture, ITest
 
         var (run, dispatch) = await Host.StartAsync(scenario.ArtifactId, sourceReferenceId);
         // Settled once the backstop refused the commit, or once a run the backstop let through completed.
-        await WaitForAsync(run, settled => Completed(settled) || CommitRefused(run));
+        await Host.WaitForAsync(run, settled => Completed(settled) || CommitRefused(run));
 
         // The refused commit left no inspection projection to read diagnostic snapshots or an activity view from.
         await AssertAbsentAsync(
@@ -303,7 +302,7 @@ public abstract class WorkflowSecretCanaryTests(CanaryHostFixture fixture, ITest
         var sourceReferenceId = await Host.ImportAsync(CanaryArtifacts.SensitiveVariable(scenario.ArtifactId, scenario.NodeId, HeldVariable, planted, CanaryModes.Record));
 
         var run = await Host.ExecuteAsync(scenario.ArtifactId, sourceReferenceId);
-        var state = await WaitForAsync(run, Completed);
+        var state = await Host.WaitForAsync(run, Completed);
 
         // Positive control: the root variable frame holds the value, present and sensitive, where the import put it.
         var held = state.Workflow!.RootVariableFrame!.Values[HeldVariable];
@@ -387,7 +386,7 @@ public abstract class WorkflowSecretCanaryTests(CanaryHostFixture fixture, ITest
     }
 
     /// <summary>The scenario labels, which name each scenario's node, secret and definition.</summary>
-    public static readonly string[] ScenarioLabels = ["s1", "s2", "s2b", "s3", "s3b", "s4", "s4b", "s5", "s6", "s7", "s8", "s8b", "s8c", "s9", "s10"];
+    public static readonly string[] ScenarioLabels = ["s1", "s2", "s2b", "s3", "s3b", "s4", "s4b", "s5", "s6", "s7", "s8", "s8b", "s8c", "s9", "s10", "http"];
 
     /// <summary>A scenario's secret reference name: a scenario label and a hexadecimal suffix, which no redactor matches (T078).</summary>
     public static string ReferenceName(string label, string suffix) => $"canary.{label}.{suffix}";
@@ -423,7 +422,7 @@ public abstract class WorkflowSecretCanaryTests(CanaryHostFixture fixture, ITest
     protected async Task<string> RunAsync(CanaryPublication publication, Func<RunState, bool> settled)
     {
         var run = await Host.ExecuteAsync(publication);
-        await WaitForAsync(run, settled);
+        await Host.WaitForAsync(run, settled);
         AssertStartMode(run);
         return run;
     }
@@ -451,53 +450,9 @@ public abstract class WorkflowSecretCanaryTests(CanaryHostFixture fixture, ITest
     protected static CanaryRun Imported(CanaryScenario scenario, string workflowExecutionId, string sourceReferenceId, string? referenceName, string runtimeMarker) =>
         new(scenario.Name, scenario.NodeId, workflowExecutionId, scenario.ArtifactId, sourceReferenceId, DefinitionId: null, nameof(CanaryActivity.Primary), referenceName, runtimeMarker);
 
-    /// <summary>A run's committed state, as the settle predicates read it.</summary>
-    protected sealed record RunState(IReadOnlyCollection<ActivityExecutionState> Activities, WorkflowExecutionState? Workflow)
-    {
-        public ActivityExecutionState? Node(string nodeId) => Activities.SingleOrDefault(activity => activity.Execution.ExecutableNodeId == nodeId);
-    }
-
-    protected static bool Completed(RunState run) => run.Workflow?.Status == WorkflowExecutionStatus.Completed;
-
     protected static Func<RunState, bool> Faulted(string nodeId) => run => run.Node(nodeId)?.Fault is not null;
 
     protected static Func<RunState, bool> Suspended(string nodeId) => run => run.Node(nodeId)?.Status == ActivityExecutionStatus.Suspended;
-
-    /// <summary>
-    /// Polls the run's committed state until <paramref name="settled"/> holds; the drain may outlive the request that
-    /// started it. A run that records an activity fault or an incident <paramref name="settled"/> does not accept fails
-    /// at once, naming that state, rather than waiting out the timeout: a handler fault (poisoned work) and an activity
-    /// fault both record one. The incidents are read before the run state, so an incident committed with an activity
-    /// fault is never seen without that fault. A checkpoint-rule incident does not fail the wait: it records a commit the
-    /// backstop refused, which the settle predicates of S5 and S6 judge through the refusal's log line, written after it.
-    /// </summary>
-    protected async Task<RunState> WaitForAsync(string workflowExecutionId, Func<RunState, bool> settled)
-    {
-        var deadline = Stopwatch.StartNew();
-        while (true)
-        {
-            var incidents = await Host.ReadIncidentsAsync(workflowExecutionId);
-            var (activities, workflow) = await Host.ReadRunAsync(workflowExecutionId);
-            var state = new RunState(activities, workflow);
-            if (settled(state))
-                return state;
-            var describedState = $"workflow {workflow?.Status}, activities {string.Join(", ", activities.Select(activity => $"{activity.Execution.ExecutableNodeId}={activity.Status}{(activity.Fault is { } fault ? $" (fault {fault.Code})" : string.Empty)}"))}";
-            var faults = incidents.Where(incident => incident.FailureType != CheckpointRuleViolationWorkflowFaulter.IncidentFailureType)
-                .Select(incident => $"{incident.FailureType} on node {incident.ExecutableNodeId ?? "(none)"}")
-                .Concat(activities.Where(activity => activity.Fault is not null).Select(activity => $"activity fault on node {activity.Execution.ExecutableNodeId}"))
-                .ToArray();
-            Assert.True(faults.Length == 0, $"Run '{workflowExecutionId}' faulted before it settled: {string.Join("; ", faults)}; {describedState}.");
-            Assert.True(deadline.Elapsed < SettleTimeout, $"Run '{workflowExecutionId}' did not settle: {describedState}.");
-            await Task.Delay(100);
-        }
-    }
-
-    /// <summary>
-    /// Generous because the tests run on a shared machine whose parallel sessions compete for the CPU, which stretches
-    /// every timing (AGENTS.md, "Builds on a shared machine"). No scenario relies on reaching it: a fault fails the wait
-    /// at once.
-    /// </summary>
-    private static readonly TimeSpan SettleTimeout = TimeSpan.FromSeconds(60);
 
     /// <summary>Whether the commit backstop refused a commit of the run, as the log line that reports the refusal says.</summary>
     protected bool CommitRefused(string workflowExecutionId) =>
@@ -557,32 +512,14 @@ public abstract class WorkflowSecretCanaryTests(CanaryHostFixture fixture, ITest
     /// Reads each of <paramref name="surfaces"/>, asserting its precondition for every run first, and asserts that none of
     /// <paramref name="values"/> occurs on it in any form the scanner searches for (SC-004).
     /// </summary>
-    protected async Task AssertAbsentAsync(
+    protected Task AssertAbsentAsync(
         CanaryScenario scenario,
         IReadOnlyCollection<CanaryRun> runs,
         IReadOnlyCollection<string> values,
         IEnumerable<CanarySurface> surfaces,
         IReadOnlySet<string>? excludedRuntimeTables = null,
-        CanaryCaller inspectorCaller = CanaryCaller.Operator)
-    {
-        var options = new CanaryReadOptions(RuntimeDiagnosticsSettingsResolver.ToCaptureMode(scenario.Level), excludedRuntimeTables, inspectorCaller);
-        var reader = new CanarySurfaces(Host);
-        var leaks = new List<string>();
-        var preconditions = new List<string>();
-        foreach (var surface in surfaces)
-        {
-            var read = await reader.ReadAsync(surface, runs, options);
-            preconditions.AddRange(read.FailedPreconditions);
-            leaks.AddRange(values.SelectMany(value => read.Contents.SelectMany(content => CanaryScanner.Find(content.Bytes, value, content.Location)))
-                .Select(hit => $"{surface}: {hit.Form} at {hit.Location} (offset {hit.Offset})"));
-        }
-
-        // Both are reported: a leak is never hidden behind a precondition that failed on another surface.
-        Assert.True(
-            leaks.Count == 0 && preconditions.Count == 0,
-            $"{scenario.Name}: a canary value was found {leaks.Count} times, and {preconditions.Count} preconditions did not hold.\n" +
-            $"Leaks:\n{string.Join('\n', leaks.Take(40))}\nFailed preconditions:\n{string.Join('\n', preconditions)}");
-    }
+        CanaryCaller inspectorCaller = CanaryCaller.Operator) =>
+        new CanarySurfaces(Host).AssertAbsentAsync(scenario.Name, scenario.Level, runs, values, surfaces, excludedRuntimeTables, inspectorCaller);
 }
 
 [CollectionDefinition(Name, DisableParallelization = true)]
@@ -596,11 +533,11 @@ public sealed class CanaryHostCollection
 }
 
 /// <summary>One canary host for every scenario of a test class.</summary>
-public abstract class CanaryHostFixture(CanaryStartMode mode) : IAsyncLifetime
+public abstract class CanaryHostFixture(CanaryStartMode mode, bool withHttpActivities = false) : IAsyncLifetime
 {
     public SecretsCanaryWorkflowHost Host { get; private set; } = null!;
 
-    public async Task InitializeAsync() => Host = await StartAsync(mode);
+    public async Task InitializeAsync() => Host = await StartAsync(mode, withHttpActivities);
 
     public async Task DisposeAsync()
     {
@@ -613,6 +550,9 @@ public abstract class CanaryHostFixture(CanaryStartMode mode) : IAsyncLifetime
 public sealed class DiscreteCanaryHostFixture() : CanaryHostFixture(CanaryStartMode.Discrete);
 
 public sealed class FusedCanaryHostFixture() : CanaryHostFixture(CanaryStartMode.Fused);
+
+/// <summary>A discrete canary host that also composes the HTTP activities, behind the canary's local endpoint.</summary>
+public sealed class DiscreteHttpCanaryHostFixture() : CanaryHostFixture(CanaryStartMode.Discrete, withHttpActivities: true);
 
 /// <summary>The canary with each stage of a run its own dispatch and commit.</summary>
 [Collection(CanaryHostCollection.Name)]
