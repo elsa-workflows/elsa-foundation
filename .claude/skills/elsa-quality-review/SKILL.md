@@ -20,7 +20,7 @@ $ARGUMENTS
 
 1. Read `docs/skills/catalog.md#quality-review-routine` and `docs/adr/0080-elsa-4-simplification-decisions.md#d7--recurring-review-and-fix-routines`.
 2. Count open `auto-review` + `needs-triage` issues; at 15 or more, file nothing and report the count.
-3. Derive this run's lens and area from the catalog's rotation, unless the user input names them.
+3. Derive this run's lens and area from the catalog's rotation (slots counted from 2026-10-12; lens `k mod 7`, area `floor(k/7) mod N`), unless the user input names them.
 4. Review that area through that lens from code, with `file:line` evidence; edit nothing and open no PRs.
 5. Search open and closed issues for duplicates, then file at most three issues labelled `needs-triage`, `auto-review`, one `kind:*` and one `size:*`.
 

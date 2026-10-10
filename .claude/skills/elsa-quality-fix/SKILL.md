@@ -19,10 +19,11 @@ $ARGUMENTS
 ## Outline
 
 1. Read `docs/skills/catalog.md#quality-fix-routine`, `AGENTS.md#concurrent-work-claims`, and `docs/skills/catalog.md#merge-gate`.
-2. Service open `claude/auto-fix-*` PRs first; stop when three remain open.
-3. Pick one eligible issue per the catalog rules (not blocked, not `size:L`, not claimed, no open freeze window over its paths), claim it, and set `status:in-progress`.
-4. Branch `claude/auto-fix-<n>-<slug>` from `origin/main`, implement only the issue, build touched projects, run their test projects whole, and never skip, disable or quarantine tests.
-5. Open a ready PR with `Closes #<n>` and post the evidence as a PR comment.
-6. Auto-merge through `elsa-auto-review-merge` only when every catalog condition holds; otherwise leave it for a human and say which condition failed.
+2. Check `main` for a reverted auto-fix PR since `auto-merge-paused` was last removed from #2559; if one is new, add the label with a comment naming it.
+3. Service open `claude/auto-fix-*` PRs; stop when three remain open.
+4. Pick one eligible issue per the catalog rules (sized S or M, not an epic, not blocked, no unreleased claim, no open PR, no freeze window over its paths or kind of work), then claim it naming the worktree, branch and scope, and set `status:in-progress`.
+5. Branch `claude/auto-fix-<n>-<slug>` from `origin/main`, implement only the issue, build touched projects, run their test projects whole, run the maps check, and never skip, disable or quarantine tests.
+6. Re-check for competing claims and new freeze windows before committing; then open a ready PR with `Closes #<n>` and post the evidence as a PR comment.
+7. Auto-merge through `elsa-auto-review-merge` only when every catalog condition holds; otherwise leave it for a human and say which condition failed.
 
-Report PRs serviced, the issue picked, the PR opened, and whether it merged.
+Report whether auto-merge is paused, PRs serviced, the issue picked, the PR opened, and whether it merged.
