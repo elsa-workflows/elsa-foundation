@@ -26,7 +26,7 @@ On 9 October 2026 Sipke approved both tracks and a **scoped ADR 0073 D7 exceptio
 
 ## Boundaries
 
-- No durability weakening, default cadence flip, generic cache or inspection redesign (#1237 keeps inspection decoupling).
+- No durability weakening, default cadence flip (lifted by ADR 0080 D2), generic cache or inspection redesign (#1237 keeps inspection decoupling).
 - Rejected candidates #1239 and #2407 stay rejected unless new evidence addresses their failed guards.
 - Optimizations chosen from Track B evidence become separate, separately reviewed units.
 - Manual package publication, releases and deployment remain out of scope.

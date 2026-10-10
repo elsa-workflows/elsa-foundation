@@ -257,7 +257,7 @@ Read [docs/architecture-tour.md](docs/architecture-tour.md) for a concise orient
 
 ## Constitution boundary
 
-Both constitutions are ratified at the document level (v4.0.0, 2026-08-08; framework amended to v5.0.0 by ADR 0080), but individual sections
+Both constitutions are ratified at the document level (v4.0.0, 2026-08-08; both amended to v5.0.0 by ADR 0080), but individual sections
 that carry their own `Status:` line — framework §2.24, Elsa §E2.9 — remain draft/provisional and are
 explicitly excluded from that ratification. Warn users when a section's draft/provisional status
 matters to their task. If they want to focus on unratified material, route that through

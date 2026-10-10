@@ -19,7 +19,7 @@ Elsa 4 is an unreleased preview. The review measured where its complexity budget
   passes through about six queued hops and about five checkpoint commits. `Coalesced` exists but is host-wide,
   off by default, and still commits once per CLR activity that is not marked `ReplaySafe`. `CommitStrategyType`
   on `WorkflowStrategyOptions` is declared and never read.
-- **Public surface.** About 4,855 public types, roughly 90% of all types. 66% of public interfaces have exactly
+- **Public surface.** About 4,855 public types in `src/essentials`, 84% of all types there (`tools/quality-metrics`). 66% of public interfaces have exactly
   one implementation. Two constitution rules produce this: framework §2.23.3 makes every logic-bearing
   implementation `public sealed`, and framework §2.5 requires every collaborator to be registered and consumed
   through an interface.
@@ -31,11 +31,11 @@ Elsa 4 is an unreleased preview. The review measured where its complexity budget
 - **Structure.** 141 production projects, 30 of them under 300 LOC. About 157k LOC of EF migrations. Two version
   lines and about 700 lines of versioning MSBuild before any release. 26 `[Obsolete]` members guard
   compatibility with releases that never shipped.
-- **Tests.** 10.9k test methods, 409k LOC. Framework §2.23.1 requires a registration test per feature and
+- **Tests.** About 11.2k test methods and 407k LOC, excluding generated migrations. Framework §2.23.1 requires a registration test per feature and
   §2.23.2 requires every branch covered. An estimated 12–18% of test LOC is low value, including about 98 files
   that assert on markdown or source text. §2.21.1 and §2.23.4 make every test deletion an architect decision,
   which freezes simplification.
-- **Process.** About 45% of tracked bytes are meta (specs, docs, reports). About 4,000 spec/FR/ADR citations sit in
+- **Process.** About 42% of tracked bytes in `docs`, `specs`, `src` and `tests` are meta (specs, docs, reports). About 4,000 spec/FR/ADR citations sit in
   code comments. 15 program goals were active against a cap of 2.
 
 ## Decisions
@@ -44,7 +44,9 @@ Elsa 4 is an unreleased preview. The review measured where its complexity budget
 
 Two programs stay active: **Elsa 4 Simplification** (this ADR) and **Runtime Efficiency**, which merges the
 Runtime Database Access and Runtime Throughput goals. Every other program, including all delivery programs, is
-parked for six weeks from this ADR's date and reviewed at the end of that window.
+parked for six weeks from this ADR's date and reviewed at the end of that window. Goals whose remaining work
+already belongs to one of the two active programs are folded into it instead of parked (Code Reality And Test
+Maturity and Architecture Review Remediation fold into Elsa 4 Simplification).
 
 ### D1 — Risk-based testing
 

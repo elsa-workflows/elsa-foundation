@@ -16,8 +16,11 @@ grep_ok() { grep "$@" || [[ $? -eq 1 ]]; }
 count() { grep_ok -hEc "$1" /dev/null "${@:2}" | awk '{s+=$1} END {print s+0}'; }
 
 mapfile -t essentials < <(cs_files src/essentials)
-mapfile -t src_all < <(cs_files src)
-mapfile -t tests_all < <(find tests src -name '*.cs' -not -path '*/obj/*' -not -path '*/bin/*' \( -path 'tests/*' -o -path '*/tests/*' \))
+# Production and test files are disjoint, so a file under src/**/tests is counted once, as a test.
+mapfile -t src_all < <(cs_files src -not -path '*/tests/*')
+mapfile -t tests_all < <(cs_files tests src \( -path 'tests/*' -o -path '*/tests/*' \))
+# Test classes can sit in a Migrations folder (EF migration tests); count their methods, not generated migration LOC.
+mapfile -t test_classes < <(find tests src -name '*.cs' -not -path '*/obj/*' -not -path '*/bin/*' \( -path 'tests/*' -o -path '*/tests/*' \))
 
 type_decl='^\s*((public|internal|private|protected|file)\s+)?((sealed|static|abstract|partial|readonly|unsafe|ref)\s+)*(class|record|struct|interface|enum|delegate)\s'
 public_decl='^\s*public\s+((sealed|static|abstract|partial|readonly|unsafe|ref)\s+)*(class|record|struct|interface|enum|delegate)\s'
@@ -28,16 +31,16 @@ pct=$(( all_types > 0 ? public_types * 100 / all_types : 0 ))
 
 prod_projects=$(find src -name '*.csproj' -not -path '*/tests/*' -not -name '*Tests.csproj' | wc -l)
 test_loc=$(cat /dev/null "${tests_all[@]}" | wc -l)
-test_methods=$(count '^\s*\[(Fact|Theory)' "${tests_all[@]}")
+test_methods=$(count '^\s*\[[A-Za-z]*(Fact|Theory)[](]' "${test_classes[@]}")
 obsolete=$(count '\[Obsolete' "${src_all[@]}")
 citations=$(grep_ok -hEo 'spec [0-9]{3}|FR-[A-Z]?-?[0-9]{3}|ADR [0-9]{4}' /dev/null "${src_all[@]}" "${tests_all[@]}" | wc -l)
 glossary=$(cat docs/glossary/*.md | grep_ok -E '^\| ' | grep_ok -vE '^\| (Term|---)' | wc -l)
 constitution=$(cat .specify/memory/constitution*.md | wc -l)
 agents=$(wc -l < AGENTS.md)
-# Tracked files only, so local build output (bin/obj) never skews the share.
+# Committed blob sizes at HEAD, so neither build output nor local edits or deletions skew the share.
 kb() {
-  if git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
-    git ls-files -z -- "$@" | xargs -0 -r cat | wc -c | awk '{print int($1/1024)}'
+  if git rev-parse --verify -q HEAD >/dev/null; then
+    git ls-tree -r -l HEAD -- "$@" | awk '{s+=$4} END {print int(s/1024)}'
   else
     du -sk --exclude=bin --exclude=obj "$@" 2>/dev/null | awk '{s+=$1} END {print s+0}'
   fi

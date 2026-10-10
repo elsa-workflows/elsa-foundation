@@ -9,7 +9,7 @@
     ".claude/skills/elsa-add-unit-tests/SKILL.md": "a032d2ff3e14854dbb04a740a432581a0b779e1dcd2ef574c650f9d37680d2e7",
     ".claude/skills/elsa-architecture-tour/SKILL.md": "b6aed3d8eb28336a4ce780c207cc8fced2a151fe260d64dbb210242097aadf40",
     ".claude/skills/elsa-auto-review-merge/SKILL.md": "7551243b040cbb029a9ee9ba3eb643299edb811ec470c866155d89f381e456f7",
-    ".claude/skills/elsa-create-feature/SKILL.md": "c8322a1958b6c7a6d7e085cc8cc6116d49e03499fabc30e06fb10a15c82161b6",
+    ".claude/skills/elsa-create-feature/SKILL.md": "797bfa390f11eb423f0f810eb2e177628af0d408fa58de615dad74feb53d6190",
     ".claude/skills/elsa-create-agent-preference/SKILL.md": "af53620576102d1cb4ec52162759773a7ae9cc02d95102da0ff43674095d3ee9",
     ".claude/skills/elsa-critical-constitution-review/SKILL.md": "18cf3eb046d62aedebc1f2c12fe2d78849f40e79cd217ee68ebed54332fcfa21",
     ".claude/skills/elsa-cshells-appsettings/SKILL.md": "0604dc9c4578de733beaab7516609fc54e2f68e5b14009aef54b065cedea6228",
@@ -32,7 +32,7 @@
     ".claude/skills/speckit-implement/SKILL.md": "c81feb73d69ad89096625bee38e3909c3e64b27e9ec7a475eda0d5eaf709ca9b",
     ".claude/skills/speckit-plan/SKILL.md": "5dbf517056a7df98de24835cb44c582b8d9b5c95950f917b129a740ca7f6448b",
     ".claude/skills/speckit-specify/SKILL.md": "f78c3e27309aea9ae4e4f71b3abcffafb190f0c64bf709ac7616532ff19f4b1f",
-    ".claude/skills/speckit-tasks/SKILL.md": "99d60cc468fc2fc2d9103f28e57f56cd8bb343a7af1cc54b734bcd1ee434c026",
+    ".claude/skills/speckit-tasks/SKILL.md": "59038b219e4dcaff727a7cfbfe38321aaf2723013fffa878185085ce0b28a1b6",
     ".claude/skills/speckit-taskstoissues/SKILL.md": "ccacc12041d1e27d3afffc7a189ac3d17444836e10eeb4e128b272b5e8ae45cb"
   }
 }

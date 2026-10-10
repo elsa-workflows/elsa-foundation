@@ -9,6 +9,9 @@ Amendment: risk-based testing and internal-by-default visibility (ADR 0080 D1, D
 Modified sections:
   §2.5    - collaborators need a contract only when they are extension points; others MAY be concrete
             internal sealed types. A contract is introduced when a collaborator becomes an extension point.
+  §2.6.1  - `I<X>Extension` replaces `I<X>Contributor` as the push-style suffix (ADR 0080 D5); both are
+            accepted until each domain's rename batch lands.
+  §2.18.4 - restates the §2.21.1 rewrite/delete permission for refactor work.
   §2.21.1 - a refactor MAY rewrite or delete a test whose code was removed or whose behaviour is proven
             elsewhere; the per-deletion architect approval is withdrawn.
   §2.23   - §2.23.1 per-feature registration test replaced by one composition test;
@@ -18,7 +21,8 @@ Modified sections:
             tracked by PublicApiAnalyzers;
             §2.23.4 shortened to the hidden-coupling rule; defers to §2.21.1.
 Added sections: none. Removed sections: none (content of §2.23.1-.4 replaced).
-Templates requiring updates: .claude/skills/elsa-add-unit-tests, docs/skills/catalog.md testing entries,
+Templates requiring updates: .claude/skills/elsa-add-unit-tests, .claude/skills/elsa-create-feature,
+  .claude/skills/speckit-tasks, .specify/templates/tasks-template.md, docs/skills/catalog.md testing entries,
   .specify/memory/constitution.md (§2.21.1 reference; §E5 and §E6 R4 under ADR 0080 D4/D5).
 Approval: Sipke Schoorstra, 2026-10-10 (ADR 0080). Same consensus caveat as the 4.0.0 ratification below.
 
@@ -356,7 +360,7 @@ A fan-in event that gathers contributions from many features MUST use the **cont
 **The three contributor-interface kinds.** The suffix MUST match the method shape AND the event topology:
 
 - **`I<X>Source`** — the contributor **returns** its items and touches no shared object (a *pull*). Used when the sink is a flat collection. Signature returns `IEnumerable<T>` (or `ValueTask<IEnumerable<T>>`). The single handler aggregates every source's return into the event's `ICollection<T>`. **"Source" is preferred over "Provider".**
-- **`I<X>Contributor`** — the contributor **receives a context and acts on it** (a *push*), returning void / `ValueTask`. Used when the sink is a rich mutable context that accepts heterogeneous, multi-operation contributions (e.g. a declarations context exposing `AddVariable(...)`/`AddType(...)`). The single handler hands the context to each contributor in turn.
+- **`I<X>Contributor`** — the contributor **receives a context and acts on it** (a *push*). *(5.0.0: new push-style contracts use `I<X>Extension`, per ADR 0080 D5; `I<X>Contributor` stays valid until each domain's rename batch lands, and the rest of this section reads `Contributor` as either name.)*, returning void / `ValueTask`. Used when the sink is a rich mutable context that accepts heterogeneous, multi-operation contributions (e.g. a declarations context exposing `AddVariable(...)`/`AddType(...)`). The single handler hands the context to each contributor in turn.
 - **`I<X>PreProcessor` / `I<X>PostProcessor`** — the contributor **acts on a lifecycle context**, returning void / `ValueTask`. Used when the contribution event is one half of an **Xxxing / Xxxed (before / after) pair**: a pre-processor runs at the *before* event to prepare the context (register functions/values, set up state); a post-processor runs at the *after* event to act on the result (copy outputs back, clean up). Each event still has exactly one aggregating handler (e.g. `PreProcessScript` / `PostProcessScript`) injecting `IEnumerable<I<X>PreProcessor>` / `IEnumerable<I<X>PostProcessor>`. **When the events form a before/after pair, prefer this kind over `Contributor`** — `PreProcessor`/`PostProcessor` names the lifecycle position, which reads far more naturally than a generic "Contributor" for a paired hook.
 
 **Action-named suffixes (sanctioned alongside the four above).** When the suffix names the **specific action** the interface performs on the received context, an action-named suffix is preferred over the generic `Contributor` — e.g. **`I<X>Validator`** (inspects the context and *returns* findings, like `IDraftValidator.Validate`) and **`I<X>Handler`** (receives the context + a typed subject and *acts* at a named lifecycle point, like `IEntitySavingHandler.Handle` / `IEntityLoadingHandler.Handle` on the EF Core save/load seam). These are Contributor-kind (context-receiving — a *Validator* returns its findings; a *Handler* acts in place); they simply carry an intent-revealing, action-specific name instead of the bare `Contributor`. The topology rule is unchanged: the contributor interface is what features implement + register via DI, and the single aggregating `IEventHandler<PhaseEvent>` (e.g. `ExecuteValidations`, `ApplyEntitySavingHandlers`) still owns the event subscription and dispatches every implementation. Use an action-named suffix when one exists naturally; fall back to `Source`/`Contributor` when no single verb captures the contribution.
