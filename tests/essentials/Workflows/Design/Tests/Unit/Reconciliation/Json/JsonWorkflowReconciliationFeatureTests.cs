@@ -52,6 +52,7 @@ public sealed class JsonWorkflowReconciliationFeatureTests
         Assert.Throws<InvalidOperationException>(() => feature.ConfigureServices(new ServiceCollection()));
     }
 
+    // Kept beside the composition test (§2.23.1): conditional registration, the FilePath shape, which the composition test's FolderPath configuration does not take.
     [Fact]
     public void ConfigureServices_WithSingleFilePath_RegistersSource()
     {
@@ -66,6 +67,7 @@ public sealed class JsonWorkflowReconciliationFeatureTests
         Assert.Contains(services, d => d.ServiceType == typeof(IWorkflowReconciliationSource));
     }
 
+    // Kept beside the composition test (§2.23.1): conditional registration, the Files-list shape, which the composition test's FolderPath configuration does not take.
     [Fact]
     public void ConfigureServices_WithFilesList_RegistersSource()
     {
@@ -84,20 +86,7 @@ public sealed class JsonWorkflowReconciliationFeatureTests
         Assert.Contains(services, d => d.ServiceType == typeof(IWorkflowReconciliationSource));
     }
 
-    [Fact]
-    public void ConfigureServices_WithFolderPath_RegistersSource()
-    {
-        var feature = new JsonWorkflowReconciliationFeature
-        {
-            Options = { SourceId = "catalog", FolderPath = "/defs" },
-        };
-
-        var services = new ServiceCollection();
-        feature.ConfigureServices(services);
-
-        Assert.Contains(services, d => d.ServiceType == typeof(IWorkflowReconciliationSource));
-    }
-
+    // Kept beside the composition test (§2.23.1): conditional registration, the publish flag leaves the source registration unchanged.
     [Fact]
     public void ConfigureServices_WithPublishOnReconcile_StillRegistersSource()
     {

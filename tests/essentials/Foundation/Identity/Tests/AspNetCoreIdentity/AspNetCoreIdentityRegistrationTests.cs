@@ -7,12 +7,10 @@ using Elsa.Foundation.Identity.AspNetCoreIdentity;
 using Elsa.Foundation.Identity.AspNetCoreIdentity.EntityFrameworkCore;
 using Elsa.Foundation.Identity.AspNetCoreIdentity.EntityFrameworkCore.DependencyInjection;
 using Elsa.Foundation.Identity.AspNetCoreIdentity.EntityFrameworkCore.Seeding;
-using Elsa.Foundation.Identity.AspNetCoreIdentity.EntityFrameworkCore.Stores;
 using Elsa.Foundation.Identity.Persistence.EntityFrameworkCore;
 using Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.DependencyInjection;
 using Elsa.Foundation.Identity.AspNetCoreIdentity.Models;
 using Elsa.Foundation.Identity.AspNetCoreIdentity.Seeding;
-using Elsa.Foundation.Identity.AspNetCoreIdentity.Services;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -21,24 +19,6 @@ namespace Elsa.Foundation.Identity.Tests.AspNetCoreIdentity;
 public sealed class AspNetCoreIdentityRegistrationTests : IAsyncDisposable
 {
     private readonly AspNetCoreIdentityFixture _fixture = new();
-
-    [Fact]
-    public void EntityFrameworkCoreFeature_Registers_Full_SignIn_Stack()
-    {
-        var services = CreateServices();
-        NewFeature(isDevelopmentOrDemo: true).ConfigureServices(services);
-
-        using var provider = services.BuildServiceProvider();
-        using var scope = provider.CreateScope();
-        var sp = scope.ServiceProvider;
-
-        Assert.NotNull(sp.GetRequiredService<SignInManager<AspNetCoreIdentityUser>>());
-        Assert.NotNull(sp.GetRequiredService<UserManager<AspNetCoreIdentityUser>>());
-        Assert.NotNull(sp.GetRequiredService<IUserClaimsPrincipalFactory<AspNetCoreIdentityUser>>());
-        Assert.NotNull(sp.GetRequiredService<IIdentitySignInService>());
-        Assert.IsType<EfCoreIdentityUserStore>(sp.GetRequiredService<IUserStore<AspNetCoreIdentityUser>>());
-        Assert.Contains(sp.GetServices<IAuthenticationProviderModule>(), x => x.ProviderId == AspNetCoreIdentityDefaults.ProviderId);
-    }
 
     [Fact]
     public void Dev_Seeder_Runs_Under_Both_Lifecycle_Hooks()
@@ -57,6 +37,7 @@ public sealed class AspNetCoreIdentityRegistrationTests : IAsyncDisposable
             x => x is EfCoreIdentitySeeder);
     }
 
+    // Kept beside the composition test (§2.23.1): conditional registration, no seeder outside development without a configured admin.
     [Fact]
     public void Non_Dev_Does_Not_Register_The_Seeder()
     {
@@ -68,6 +49,7 @@ public sealed class AspNetCoreIdentityRegistrationTests : IAsyncDisposable
         Assert.DoesNotContain(provider.GetServices<IShellInitializer>(), x => x is EfCoreIdentitySeeder);
     }
 
+    // Kept beside the composition test (§2.23.1): conditional registration, a configured admin registers the seeder outside development.
     [Fact]
     public void Configured_Initial_Admin_Registers_Seeder_When_Not_Dev()
     {

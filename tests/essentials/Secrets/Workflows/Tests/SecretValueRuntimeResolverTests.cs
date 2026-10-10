@@ -123,6 +123,7 @@ public sealed class SecretValueRuntimeResolverTests
             $"The malformed result '{shape}' must resolve to permanent {nameof(SecretResolutionFailureCode.CorruptState)}, not {resolution}.");
     }
 
+    // Kept beside the composition test (§2.23.1): asserts what the bridge must not register, the resolver is its only contribution.
     [Fact]
     public void The_bridge_registers_no_runtime_contract_but_the_secret_resolver()
     {

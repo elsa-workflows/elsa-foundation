@@ -400,6 +400,7 @@ public sealed class StructuredLogsEntityFrameworkCoreTests
         await store.StopAsync();
     }
 
+    // Kept beside the composition test (§2.23.1): replacement, opt-in store replaces only the structured log store, one instance behind both contracts.
     [Fact]
     public async Task Feature_registration_is_opt_in_and_replaces_only_the_structured_log_store()
     {

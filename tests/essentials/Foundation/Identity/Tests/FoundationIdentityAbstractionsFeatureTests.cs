@@ -22,6 +22,7 @@ namespace Elsa.Foundation.Identity.Tests;
 
 public sealed class FoundationIdentityAbstractionsFeatureTests
 {
+    // Kept beside the composition test (§2.23.1): replacement, the permission policy provider replaces the framework default.
     [Fact]
     public void RegistersContractDefaults()
     {

@@ -14,19 +14,6 @@ namespace Elsa.Expressions.Tests;
 public sealed class LiquidExplicitParametersTests
 {
     [Fact]
-    public void Liquid_feature_registers_the_portable_handler()
-    {
-        var services = new ServiceCollection();
-        new LiquidExpressionsFeature().ConfigureServices(services);
-        using var provider = services.BuildServiceProvider();
-        using var scope = provider.CreateScope();
-
-        var handlers = scope.ServiceProvider.GetServices<IPortableExpressionHandler>();
-
-        Assert.IsType<PortableLiquidExpressionHandler>(Assert.Single(handlers));
-    }
-
-    [Fact]
     public async Task Exposes_only_declared_json_parameter_roots()
     {
         var request = Request(
