@@ -1,7 +1,10 @@
+using System.Collections.Concurrent;
 using System.Reflection;
 using System.Reflection.Emit;
+using System.Text.RegularExpressions;
 using System.Xml.Linq;
 using CShells;
+using CShells.AspNetCore.Configuration;
 using CShells.AspNetCore.Extensions;
 using CShells.Configuration;
 using CShells.DependencyInjection;
@@ -34,7 +37,9 @@ namespace Elsa.Architecture.Tests;
 /// library under <c>src/</c>, found by reflection over the assemblies this project loads, and a packable library this
 /// project does not load fails the first test by name. CShells composes them the way a host composes a shell: its catalog
 /// discovers them, it adds the <c>DependsOn</c> closure in dependency order, binds each feature's settings (validating
-/// those it is given), and activation runs the shell's initializers and its <c>ValidateOnStart</c> checks.
+/// those it is given), and activation runs the shell's initializers and its <c>ValidateOnStart</c> checks, maps every web
+/// feature's endpoints and composes the shell's middleware pipeline. CShells logs some failures and carries on past them,
+/// so what it logs as an error, or as a skip, fails the test as well.
 /// </para>
 /// <para>
 /// Every feature goes into one shell, except where two features are <see cref="Alternatives"/> that refuse to share one:
@@ -94,22 +99,30 @@ public sealed class FeatureCompositionTests
 
         await using var host = await CompositionHost.StartAsync(Compositions(features));
         var failures = new List<string>();
-        foreach (var shell in host.Shells)
-            failures.AddRange(await host.ResolveAsync(shell));
 
-        var composed = host.Recordings.SelectMany(recording => recording.Spans).Select(span => span.Feature).ToHashSet();
-        failures.InsertRange(0, features
-            .Where(feature => !composed.Contains(feature))
-            .Select(feature => $"{Describe(feature)}: composed by no shell" +
-                               (feature.IsVisible ? "." : "; CShells discovers exported feature types only.")));
-
-        // The two hand-kept tables name features; a name that matches none has gone stale and configures nothing.
+        // The two hand-kept tables name features and settings; one that matches nothing has gone stale and configures
+        // nothing, because CShells ignores a setting no property binds.
         var names = features.Select(ShellBuilder.ResolveFeatureName).ToHashSet(StringComparer.OrdinalIgnoreCase);
-        failures.InsertRange(0, Alternatives
+        failures.AddRange(Alternatives
             .SelectMany(alternative => alternative.First.Concat(alternative.Second))
             .Concat(host.Settings.FeatureNames)
             .Where(name => !names.Contains(name))
             .Select(name => $"'{name}' is named in this test's alternatives or settings but is not a feature."));
+        failures.AddRange(host.Settings.Unbound(features));
+
+        foreach (var shell in host.Shells)
+            failures.AddRange(await host.ResolveAsync(shell, names));
+
+        // A shell that refused to activate stopped composing at the failing feature, so the features after it were never
+        // composed: the refusal is the cause, and listing them would bury it.
+        var composed = host.Recordings.SelectMany(recording => recording.Spans).Select(span => span.Feature).ToHashSet();
+        if (!host.AnyRefused)
+            failures.AddRange(features
+                .Where(feature => !composed.Contains(feature))
+                .Select(feature => $"{Describe(feature)}: composed by no shell" +
+                                   (feature.IsVisible ? "." : "; CShells discovers exported feature types only.")));
+
+        failures.AddRange(host.Log.Failures());
 
         Assert.True(
             failures.Count == 0,
@@ -134,6 +147,8 @@ public sealed class FeatureCompositionTests
             return $"[{shell}] {feature}: {key} -> {exception.GetType().Name}: {exception.Message}";
         }
     }
+
+    private static readonly Regex FeatureMention = new(@"feature '(?<name>[^']+)'", RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
     private static string Describe(Type feature) => $"{ShellBuilder.ResolveFeatureName(feature)} ({feature.FullName})";
 
@@ -404,6 +419,38 @@ public sealed class FeatureCompositionTests
 
         public IEnumerable<string> FeatureNames => _byFeature.Keys;
 
+        /// <summary>
+        /// The per-feature settings no property of their feature takes. CShells binds a feature's public settable
+        /// properties and ignores every other key without a word, so a misspelt or renamed setting would leave the
+        /// feature on its default.
+        /// </summary>
+        public IEnumerable<string> Unbound(IEnumerable<Type> features) => features
+            .SelectMany(feature => (_byFeature.GetValueOrDefault(ShellBuilder.ResolveFeatureName(feature)) ?? [])
+                .Where(setting => !Binds(feature, setting.Key))
+                .Select(setting => $"{Describe(feature)}: setting '{setting.Key}' names no property, so CShells ignores it."));
+
+        /// <summary>Whether the path of a setting's key leads through properties: settable ones on the feature itself.</summary>
+        private static bool Binds(Type feature, string key)
+        {
+            var segments = key.Split(':');
+            var property = feature.GetProperty(segments[0], BindingFlags.Public | BindingFlags.Instance | BindingFlags.IgnoreCase);
+            if (property?.SetMethod?.IsPublic != true)
+                return false;
+
+            var type = property.PropertyType;
+            foreach (var segment in segments.Skip(1))
+            {
+                var next = int.TryParse(segment, out _)
+                    ? type.GetElementType() ?? type.GetGenericArguments().LastOrDefault() ?? typeof(object)
+                    : type.GetProperty(segment, BindingFlags.Public | BindingFlags.Instance | BindingFlags.IgnoreCase)?.PropertyType;
+                if (next is null)
+                    return false;
+                type = next;
+            }
+
+            return true;
+        }
+
         public Dictionary<string, object> For(Type feature, string shell)
         {
             var settings = ByProperty(shell)
@@ -455,50 +502,85 @@ public sealed class FeatureCompositionTests
         }
     }
 
-    private sealed class CompositionHost(WebApplication app, RecordingFeatureFactory factory, MinimumSettings settings, string directory)
-        : IAsyncDisposable
+    private sealed class CompositionHost(
+        WebApplication app,
+        RecordingFeatureFactory factory,
+        MinimumSettings settings,
+        CapturedLog log,
+        string directory) : IAsyncDisposable
     {
         private readonly Dictionary<string, IShell> _active = new(StringComparer.Ordinal);
         private readonly Dictionary<string, Exception> _refused = new(StringComparer.Ordinal);
 
         public IEnumerable<string> Shells => _active.Keys.Concat(_refused.Keys).Order(StringComparer.Ordinal);
 
+        public bool AnyRefused => _refused.Count > 0;
+
         public IReadOnlyCollection<ShellRecording> Recordings => factory.Recordings;
 
         public MinimumSettings Settings => settings;
 
+        public CapturedLog Log => log;
+
+        /// <summary>
+        /// Builds and starts the host the way the Workbench's <c>Program.cs</c> does, then activates every shell. A failure
+        /// before the host exists disposes what was built and deletes the directory, so a throw leaks nothing.
+        /// </summary>
         public static async Task<CompositionHost> StartAsync(IReadOnlyList<Composition> compositions)
         {
             var directory = Directory.CreateTempSubdirectory("elsa-feature-composition-").FullName;
-            var recorderType = EmitRecorderCatalogEntry();
-            var factory = new RecordingFeatureFactory(recorderType);
-
-            var builder = WebApplication.CreateBuilder(new WebApplicationOptions
+            WebApplication? app = null;
+            try
             {
-                EnvironmentName = "Development",
-                ContentRootPath = directory
-            });
-            builder.WebHost.UseTestServer();
-            builder.Logging.ClearProviders();
+                var recorderType = EmitRecorderCatalogEntry();
+                var factory = new RecordingFeatureFactory(recorderType);
+                var settings = new MinimumSettings(directory);
+                var log = new CapturedLog();
 
-            builder.Services.AddSingleton<IShellFeatureFactory>(services => factory.Decorating(new DefaultShellFeatureFactory(services)));
-            AddHostServices(builder.Services, directory);
+                var builder = WebApplication.CreateBuilder(new WebApplicationOptions
+                {
+                    EnvironmentName = "Development",
+                    ContentRootPath = directory
+                });
+                builder.WebHost.UseTestServer();
+                builder.Logging.ClearProviders().AddProvider(log).SetMinimumLevel(LogLevel.Warning);
 
-            var settings = new MinimumSettings(directory);
-            var features = compositions.SelectMany(composition => composition.Features).Distinct();
-            builder.Services.AddCShellsAspNetCore(shells =>
-            {
-                shells.WithAssemblies([recorderType.Assembly, .. features.Select(feature => feature.Assembly).Distinct()]);
+                builder.Services.AddSingleton<IShellFeatureFactory>(services => factory.Decorating(new DefaultShellFeatureFactory(services)));
+                AddHostServices(builder.Services, directory);
+
+                var features = compositions.SelectMany(composition => composition.Features).Distinct();
+                builder.Services.AddCShellsAspNetCore(shells =>
+                {
+                    shells
+                        .WithAssemblies([recorderType.Assembly, .. features.Select(feature => feature.Assembly).Distinct()])
+                        .WithAuthenticationAndAuthorization()
+                        .WithWebRouting(options => options.EnablePathRouting = true);
+                    foreach (var composition in compositions)
+                        shells.AddShell(composition.Shell, shell => Compose(shell, composition, recorderType, settings));
+                });
+                builder.Services.AddAuthentication();
+                builder.Services.AddAuthorization();
+
+                app = builder.Build();
+                // Without it CShells prepares no shell's endpoints or middleware pipeline: every web feature's
+                // MapEndpoints and every middleware feature is skipped with a warning.
+                app.MapShells();
+                app.UseAuthentication();
+                app.UseAuthorization();
+                await app.StartAsync();
+
+                var host = new CompositionHost(app, factory, settings, log, directory);
                 foreach (var composition in compositions)
-                    shells.AddShell(composition.Shell, shell => Compose(shell, composition, recorderType, settings));
-            });
-
-            var app = builder.Build();
-            await app.StartAsync();
-            var host = new CompositionHost(app, factory, settings, directory);
-            foreach (var composition in compositions)
-                await host.ActivateAsync(composition.Shell);
-            return host;
+                    await host.ActivateAsync(composition.Shell);
+                return host;
+            }
+            catch
+            {
+                if (app is not null)
+                    await app.DisposeAsync();
+                DeleteDirectory(directory);
+                throw;
+            }
         }
 
         /// <summary>
@@ -522,6 +604,8 @@ public sealed class FeatureCompositionTests
             Type recorderType,
             MinimumSettings settings)
         {
+            // A path of its own, as path routing gives each shell, so the two shells' endpoints do not overlap.
+            shell.WithConfiguration("WebRouting:Path", composition.Shell);
             shell.WithFeature(recorderType);
             foreach (var feature in composition.Features)
             {
@@ -547,10 +631,10 @@ public sealed class FeatureCompositionTests
             factory.Recordings.SingleOrDefault(recording => recording.Shell == shell)?.Complete();
         }
 
-        public async Task<IReadOnlyList<string>> ResolveAsync(string shell)
+        public async Task<IReadOnlyList<string>> ResolveAsync(string shell, IReadOnlySet<string> featureNames)
         {
             if (_refused.TryGetValue(shell, out var refusal))
-                return [$"[{shell}] the shell refused to activate: {refusal}"];
+                return [$"[{shell}] the shell refused to activate{NamedFeatures(refusal, featureNames)}: {refusal}"];
 
             var recording = factory.Recordings.SingleOrDefault(candidate => candidate.Shell == shell);
             if (recording is null || recording.Spans.Sum(span => span.Registrations.Count) == 0)
@@ -563,9 +647,34 @@ public sealed class FeatureCompositionTests
                 .ToArray();
         }
 
+        /// <summary>
+        /// The features a refusal names, as CShells names one ("Failed to configure services for feature 'X'") and as a
+        /// feature's own message may, so the one failure line says whose composition broke.
+        /// </summary>
+        private static string NamedFeatures(Exception refusal, IReadOnlySet<string> featureNames)
+        {
+            var named = Chain(refusal)
+                .SelectMany(exception => FeatureMention.Matches(exception.Message).Select(match => match.Groups["name"].Value))
+                .Where(featureNames.Contains)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToArray();
+            return named.Length == 0 ? "" : $" (feature {string.Join(", ", named)})";
+
+            static IEnumerable<Exception> Chain(Exception? exception)
+            {
+                for (; exception is not null; exception = exception.InnerException)
+                    yield return exception;
+            }
+        }
+
         public async ValueTask DisposeAsync()
         {
             await app.DisposeAsync();
+            DeleteDirectory(directory);
+        }
+
+        private static void DeleteDirectory(string directory)
+        {
             try
             {
                 Directory.Delete(directory, recursive: true);
@@ -595,5 +704,60 @@ public sealed class FeatureCompositionTests
         public Task<OperationalStateSnapshot> GetStateAsync(CancellationToken cancellationToken) => throw new NotSupportedException();
 
         public Task<ManualReconcileOutcome> TriggerReconcileAsync(CancellationToken cancellationToken) => throw new NotSupportedException();
+    }
+
+    /// <summary>
+    /// What the host and its shells log at Warning and above. CShells logs some failures and carries on, so a feature it
+    /// skipped would otherwise leave this test green: these entries fail it.
+    /// </summary>
+    private sealed class CapturedLog : ILoggerProvider
+    {
+        /// <summary>
+        /// The CShells warnings that mean it skipped something and carried on; every other warning is ordinary noise.
+        /// Endpoint mapping failures are logged as errors, which fail the test anyway.
+        /// </summary>
+        private static readonly string[] SkipWarnings =
+        [
+            // ShellProviderBuilder: binding a feature's settings threw, and the feature was configured on its defaults.
+            "Feature will use defaults",
+            // FeatureConfigurationBinder: one setting could not be converted, and its property kept its default.
+            "Failed to bind property",
+            // ShellEndpointRegistrationHandler: no endpoint or middleware of the shell was prepared.
+            "MapShells() has not run yet"
+        ];
+
+        private readonly ConcurrentQueue<Entry> _entries = new();
+
+        public IEnumerable<string> Failures() => _entries
+            .Where(entry => entry.Level >= LogLevel.Error ||
+                            SkipWarnings.Any(warning => entry.Template.Contains(warning, StringComparison.Ordinal)))
+            .Select(entry => $"[log] {entry.Level} {entry.Category}: {entry.Message}" +
+                             (entry.Exception is null ? "" : $" ({entry.Exception.GetType().Name}: {entry.Exception.Message})"));
+
+        public ILogger CreateLogger(string categoryName) => new Logger(categoryName, _entries);
+
+        public void Dispose()
+        {
+        }
+
+        private sealed record Entry(string Category, LogLevel Level, string Template, string Message, Exception? Exception);
+
+        private sealed class Logger(string category, ConcurrentQueue<Entry> entries) : ILogger
+        {
+            public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
+
+            public bool IsEnabled(LogLevel logLevel) => logLevel >= LogLevel.Warning;
+
+            public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter)
+            {
+                if (!IsEnabled(logLevel))
+                    return;
+
+                var message = formatter(state, exception);
+                var template = (state as IEnumerable<KeyValuePair<string, object?>>)?
+                    .FirstOrDefault(value => value.Key == "{OriginalFormat}").Value as string;
+                entries.Enqueue(new Entry(category, logLevel, template ?? message, message, exception));
+            }
+        }
     }
 }
