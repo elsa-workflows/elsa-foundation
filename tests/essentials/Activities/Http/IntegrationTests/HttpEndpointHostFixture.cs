@@ -106,16 +106,22 @@ public sealed class HttpEndpointHostFixture : IAsyncDisposable
     /// Starts the production HTTP runtime against an isolated EF Core SQLite database and applies the requested
     /// checkpoint persistence policy after the provider has replaced the in-memory runtime stores.
     /// </summary>
+    /// <param name="configureServices">Adds to the host's services before the EF provider and checkpoint policy are applied.</param>
     public static Task<HttpEndpointHostFixture> StartDurableSqliteAsync(
         CheckpointPersistenceMode checkpointPersistenceMode,
-        int maxSegmentCheckpoints)
+        int maxSegmentCheckpoints,
+        Action<IServiceCollection>? configureServices = null)
     {
         var databaseDirectory = Path.Join(Path.GetTempPath(), $"elsa-http-runtime-ef-{Guid.NewGuid():N}");
         Directory.CreateDirectory(databaseDirectory);
         var databasePath = Path.Join(databaseDirectory, "runtime.db");
 
         return StartAsync(
-            services => AddDurableSqlite(services, databasePath, checkpointPersistenceMode, maxSegmentCheckpoints),
+            services =>
+            {
+                configureServices?.Invoke(services);
+                AddDurableSqlite(services, databasePath, checkpointPersistenceMode, maxSegmentCheckpoints);
+            },
             databaseDirectory);
     }
 
@@ -306,8 +312,7 @@ public sealed class HttpEndpointHostFixture : IAsyncDisposable
         // Store the executable (start dispatch resolves it by artifact id) and index its trigger binding so the
         // stimulus router can match an inbound request to it — the two things the publish flow does. IndexAsync
         // also fires the route-table index observer, so the published template lands in the live route table.
-        await SaveExecutableAsync(executable);
-        await Services.GetRequiredService<IWorkflowTriggerIndexer>().IndexAsync(executable);
+        await PublishAsync(executable);
     }
 
     /// <summary>
@@ -469,9 +474,8 @@ public sealed class HttpEndpointHostFixture : IAsyncDisposable
             compatibilityMetadata: new Dictionary<string, string>(),
             incidentStrategy: IncidentStrategyBuiltIns.FaultReference);
 
-        await SaveExecutableAsync(executable);
         // Index so the START endpoint's (template, method) trigger binding lands in the route table.
-        await Services.GetRequiredService<IWorkflowTriggerIndexer>().IndexAsync(executable);
+        await PublishAsync(executable);
     }
 
     // ---- Spec 089 sub-unit E (synchronous responses) publish helpers ----
@@ -615,9 +619,8 @@ public sealed class HttpEndpointHostFixture : IAsyncDisposable
             compatibilityMetadata: new Dictionary<string, string>(),
             incidentStrategy: IncidentStrategyBuiltIns.FaultReference);
 
-        await SaveExecutableAsync(executable);
         // Index so the START endpoint's (template, method) trigger binding lands in the route table.
-        await Services.GetRequiredService<IWorkflowTriggerIndexer>().IndexAsync(executable);
+        await PublishAsync(executable);
     }
 
     /// <summary>Builds a real <see cref="SequenceActivity"/> container node (child slot + ordered structure) over <paramref name="children"/>.</summary>
@@ -838,6 +841,13 @@ public sealed class HttpEndpointHostFixture : IAsyncDisposable
     public async Task<WorkflowExecutionState> WorkflowExecutionAsync(string workflowExecutionId) =>
         await Services.GetRequiredService<IWorkflowExecutionStateStore>().FindAsync(workflowExecutionId)
         ?? throw new InvalidOperationException($"Workflow execution '{workflowExecutionId}' was not found.");
+
+    /// <summary>Stores <paramref name="executable"/> and indexes its trigger bindings, as the publish flow does.</summary>
+    public async Task PublishAsync(WorkflowExecutable executable)
+    {
+        await SaveExecutableAsync(executable);
+        await Services.GetRequiredService<IWorkflowTriggerIndexer>().IndexAsync(executable);
+    }
 
     private async Task SaveExecutableAsync(WorkflowExecutable executable)
     {
