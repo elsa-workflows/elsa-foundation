@@ -230,6 +230,24 @@ and an inspection projection in the same `IncidentRecorded` checkpoint.
 
 ### A poisoned first checkpoint
 
+In the A1 revision (`e59c9393e6f2b01e6e43686cea04da9767b21aef`),
+`EfWorkflowExecutableStore.TryAcquireRootWriteLeaseAsync` read and rewrote the shared per-artifact
+coordination row's lease dictionary. Concurrent starts of the same artifact competed on its revision;
+exhausting the optimistic-concurrency retries threw `Runtime coordination changed concurrently.` before
+`EfRuntimeCheckpointCommitStore` could write the `WorkflowStarted` checkpoint. This is a coordination
+revision conflict, not evidence of `SQLITE_BUSY` or `SQLITE_LOCKED`. [Spec 200](../specs/200-root-write-lease-rows/spec.md)
+replaced those shared lease writes with independent rows (#2539); the early-failure visibility contract
+below still needs to hold if a first checkpoint fails.
+
+`PoisonedFirstCheckpointContractTests.First_checkpoint_coordination_failure_is_poisoned_and_projected_durably`
+replays that exhausted-retry failure through `IWorkflowExecutableRootWriteLeaseManager` before the first
+write callback. The real checkpoint handler and scheduler drainer then produce the durable poison record.
+The SQLite test checks that no execution, incident, run-health projection, or checkpoint marker was written,
+then runs the observer and reads the faulted execution, blocking incident, and incident-bearing run-health
+projection through a fresh context. A repeated observer notification must not duplicate them. The seam
+reproduces the historical failure boundary deterministically; it does not recreate the removed shared-row
+race or explain the other cancelled requests reported separately in #2536.
+
 The one exception is a poisoned first checkpoint (#2537). The execution never reached a checkpoint, so it
 has no workflow to leave non-terminal, and a durable provider refuses an incident without its workflow and
 run-health projection. Before this, such a run appeared nowhere: not in the instance list, not as an

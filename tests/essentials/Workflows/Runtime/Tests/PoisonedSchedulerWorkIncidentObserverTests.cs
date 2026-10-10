@@ -551,10 +551,12 @@ public sealed class PoisonedSchedulerWorkIncidentObserverTests
         Assert.Equal(IncidentResolutionSystemSources.PoisonedSchedulerWork, incident.ResolutionOutcome.SystemSource);
     }
 
-    // #2537: a poisoned FIRST checkpoint leaves no workflow row. On a durable provider the incident-only commit is then
-    // refused (it needs the workflow and its run-health projection), so the execution was absent from every read model
-    // with no incident. The start command the drain ran still carries the execution's identity, so the observer records
-    // the execution as Faulted together with the blocking incident.
+    /// <summary>
+    /// #2537: a poisoned FIRST checkpoint leaves no workflow row. On a durable provider the incident-only commit is then
+    /// refused (it needs the workflow and its run-health projection), so the execution was absent from every read model
+    /// with no incident. The start command the drain ran still carries the execution's identity, so the observer records
+    /// the execution as Faulted together with the blocking incident.
+    /// </summary>
     [Fact]
     public async Task OnDrainedAsync_PoisonedFirstCheckpointOfARootStart_RecordsTheExecutionFaultedWithTheIncident()
     {
@@ -585,9 +587,11 @@ public sealed class PoisonedSchedulerWorkIncidentObserverTests
         Assert.Equal(WorkflowExecutionStatus.Faulted, (await _harness.WorkflowStore.FindAsync("wfexec-1"))!.Status);
     }
 
-    // A dispatched child is faulted into existence only when the dispatch store can project its parent's resume, the
-    // rule CheckpointRuleViolationWorkflowFaulter applies to a refused first commit (#1799): otherwise the synthesized
-    // terminal child would read as a delivered start that nothing can act on.
+    /// <summary>
+    /// A dispatched child is faulted into existence only when the dispatch store can project its parent's resume, the
+    /// rule CheckpointRuleViolationWorkflowFaulter applies to a refused first commit (#1799): otherwise the synthesized
+    /// terminal child would read as a delivered start that nothing can act on.
+    /// </summary>
     [Theory]
     [InlineData(true)]
     [InlineData(false)]
@@ -610,7 +614,9 @@ public sealed class PoisonedSchedulerWorkIncidentObserverTests
         Assert.Single(await _harness.IncidentStore.ListAsync("wfexec-1"));
     }
 
-    // Without this execution's start command there is no identity to fault it from; the incident is recorded as before.
+    /// <summary>
+    /// Without this execution's start command there is no identity to fault it from; the incident is recorded as before.
+    /// </summary>
     [Theory]
     [InlineData(WorkflowExecutionCommandKind.RunSchedulerWork, "wfexec-1")]
     [InlineData(WorkflowExecutionCommandKind.Start, "wfexec-other")]
@@ -631,7 +637,9 @@ public sealed class PoisonedSchedulerWorkIncidentObserverTests
         Assert.Null(commit.StateChanges.WorkflowExecution);
     }
 
-    // An execution that exists keeps the documented poison contract: a WaitForIntervention incident, lifecycle untouched.
+    /// <summary>
+    /// An execution that exists keeps the documented poison contract: a WaitForIntervention incident, lifecycle untouched.
+    /// </summary>
     [Fact]
     public async Task OnDrainedAsync_PoisonedRecordOfAnExistingExecution_DoesNotFaultItEvenFromItsStart()
     {
@@ -646,8 +654,10 @@ public sealed class PoisonedSchedulerWorkIncidentObserverTests
         Assert.Equal(IncidentResolutionActionKinds.WaitForIntervention, incident.ResolutionOutcome!.ActionKind);
     }
 
-    // The workflow read only chooses between faulting an unstarted execution and recording the incident alone. A read
-    // that fails must not cost the incident: it falls back to the incident-only commit the observer made before #2537.
+    /// <summary>
+    /// The workflow read only chooses between faulting an unstarted execution and recording the incident alone. A read
+    /// that fails must not cost the incident: it falls back to the incident-only commit the observer made before #2537.
+    /// </summary>
     [Fact]
     public async Task OnDrainedAsync_WhenTheWorkflowReadFails_StillRecordsTheIncident()
     {
@@ -672,33 +682,42 @@ public sealed class PoisonedSchedulerWorkIncidentObserverTests
 
     private sealed class FindThrowingWorkflowExecutionStateStore(IWorkflowExecutionStateStore inner) : IWorkflowExecutionStateStore
     {
+        /// <inheritdoc/>
         public ValueTask<WorkflowExecutionState> SaveAsync(WorkflowExecutionState state, CancellationToken cancellationToken = default) =>
             inner.SaveAsync(state, cancellationToken);
 
+        /// <summary>Simulates an unavailable workflow store while the observer tries to recover a start.</summary>
         public ValueTask<WorkflowExecutionState?> FindAsync(string workflowExecutionId, CancellationToken cancellationToken = default) =>
             throw new InvalidOperationException("workflow state store unavailable");
 
+        /// <inheritdoc/>
         public ValueTask<IReadOnlyCollection<WorkflowExecutionState>> ListAsync(CancellationToken cancellationToken = default) =>
             inner.ListAsync(cancellationToken);
 
+        /// <inheritdoc/>
         public ValueTask<WorkflowExecutionStatePage> QueryPageAsync(WorkflowExecutionStatePageQuery query, CancellationToken cancellationToken = default) =>
             inner.QueryPageAsync(query, cancellationToken);
 
+        /// <inheritdoc/>
         public ValueTask<IReadOnlyCollection<string>> ListPinnedExecutableArtifactIdsAsync(CancellationToken cancellationToken = default) =>
             inner.ListPinnedExecutableArtifactIdsAsync(cancellationToken);
 
+        /// <inheritdoc/>
         public ValueTask<bool> DeleteAsync(string workflowExecutionId, CancellationToken cancellationToken = default) =>
             inner.DeleteAsync(workflowExecutionId, cancellationToken);
     }
 
     private sealed class NonQueryableWorkflowDispatchStore : IWorkflowDispatchStore
     {
+        /// <inheritdoc/>
         public ValueTask<WorkflowDispatchRecord> SaveAsync(WorkflowDispatchRecord record, CancellationToken cancellationToken = default) =>
             ValueTask.FromResult(record);
 
+        /// <inheritdoc/>
         public ValueTask<WorkflowDispatchRecord?> FindAsync(string dispatchId, CancellationToken cancellationToken = default) =>
             ValueTask.FromResult<WorkflowDispatchRecord?>(null);
 
+        /// <inheritdoc/>
         public ValueTask<IReadOnlyCollection<WorkflowDispatchRecord>> ListAsync(string parentWorkflowExecutionId, CancellationToken cancellationToken = default) =>
             ValueTask.FromResult<IReadOnlyCollection<WorkflowDispatchRecord>>([]);
     }
@@ -708,6 +727,7 @@ public sealed class PoisonedSchedulerWorkIncidentObserverTests
         public static readonly WorkflowExecutableIdentity PinnedExecutable =
             new("artifact-1", "definition-1", "version-1", "1.0.0", "sha256:test");
 
+        /// <summary>Builds a root or child start envelope with stable identity and lineage for recovery assertions.</summary>
         public static WorkflowExecutionCommandEnvelope StartEnvelope(
             string? parentWorkflowExecutionId,
             WorkflowExecutionCommandKind kind = WorkflowExecutionCommandKind.Start,
@@ -746,6 +766,7 @@ public sealed class PoisonedSchedulerWorkIncidentObserverTests
                 enqueuedAt: DateTimeOffset.UnixEpoch);
         }
 
+        /// <summary>Creates an observer that can read workflow state and check the supplied dispatch capability.</summary>
         public PoisonedSchedulerWorkIncidentObserver CreateStartAwareObserver(IWorkflowDispatchStore? dispatchStore) =>
             new(
                 PoisonStore,

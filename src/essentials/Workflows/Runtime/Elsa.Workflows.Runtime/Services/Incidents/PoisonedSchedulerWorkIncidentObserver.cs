@@ -89,6 +89,10 @@ public sealed class PoisonedSchedulerWorkIncidentObserver : IWorkflowSchedulerDr
     {
     }
 
+    /// <summary>
+    /// Creates a poison observer with optional activity projections and start-command recovery. Supplying the workflow
+    /// store enables missing executions to be faulted; child recovery also requires a queryable dispatch store.
+    /// </summary>
     public PoisonedSchedulerWorkIncidentObserver(
         IWorkflowSchedulerPoisonStore poisonStore,
         IIncidentStateStore incidentStateStore,
@@ -132,6 +136,10 @@ public sealed class PoisonedSchedulerWorkIncidentObserver : IWorkflowSchedulerDr
         return $"incident:{RuntimeChainId.Fingerprint(workItemId)}:scheduler-poison";
     }
 
+    /// <summary>
+    /// Projects poisoned work from a faulted drain into blocking incidents, preserving existing incidents and
+    /// isolating projection failures so the remaining records can still be surfaced.
+    /// </summary>
     public async ValueTask OnDrainedAsync(
         WorkflowExecutionCommandEnvelope envelope,
         RuntimeSchedulerDrainResult result,
@@ -194,6 +202,10 @@ public sealed class PoisonedSchedulerWorkIncidentObserver : IWorkflowSchedulerDr
         }
     }
 
+    /// <summary>
+    /// Commits the blocking poison incident and associated projections, including a faulted execution when its first
+    /// checkpoint never persisted and the start envelope provides an eligible identity.
+    /// </summary>
     private async ValueTask CommitIncidentAsync(
         WorkflowExecutionCommandEnvelope envelope,
         string workflowExecutionId,
@@ -350,8 +362,10 @@ public sealed class PoisonedSchedulerWorkIncidentObserver : IWorkflowSchedulerDr
         await _checkpointCommitter.CommitAsync(commit, cancellationToken);
     }
 
-    // The execution this drain's start command would have created, already faulted, when the execution has no workflow
-    // yet: its first checkpoint is the poisoned item. Null in every other case, including when either store is absent.
+    /// <summary>
+    /// Reconstructs a missing execution as faulted from this drain's start command. Returns null for an existing or
+    /// unreadable execution, an unusable start, or a child whose dispatch cannot be projected.
+    /// </summary>
     private async ValueTask<WorkflowExecutionState?> ReadUnstartedExecutionAsync(
         WorkflowExecutionCommandEnvelope envelope,
         string workflowExecutionId,
