@@ -1,33 +1,13 @@
 # Architecture decision records
 
 Index of every ADR in this folder. Generated from each file's H1 and status line; the ADR files are the source of truth.
-Numbers are not unique: the folder holds two independent sequences (an early Extension Builder series and the main series), so link by file name.
+The early Extension Builder series carries its own `EB-` prefix; every ADR number is unique.
 
 | Number | Title | Status |
 |---|---|---|
 | 0001 | [Checkpoint-Gated Activity Execution Inspection](0001-checkpoint-gated-activity-execution-inspection.md) | Accepted |
-| 0001 | [Extension Builder Git identity](0001-extension-builder-git-identity.md) | Accepted |
-| 0001 | [Mediate agent harness capabilities through Elsa tools](0001-mediate-agent-harness-capabilities.md) | (none) |
 | 0002 | [Direct Weaver workflow edits target designer working state](0002-direct-weaver-workflow-edits-target-designer-working-state.md) | (none) |
-| 0002 | [Extension Builder managed repository remotes](0002-extension-builder-managed-repository-remotes.md) | Accepted |
-| 0003 | [Extension Builder build and promotion source](0003-extension-builder-build-and-promotion-source.md) | Accepted |
 | 0003 | [Weaver direct-apply risk classification is Elsa-owned](0003-weaver-direct-apply-risk-classification-is-elsa-owned.md) | (none) |
-| 0004 | [Extension Builder Git safety envelope](0004-extension-builder-git-safety-envelope.md) | Accepted |
-| 0005 | [Extension Builder pack and promote scope](0005-extension-builder-pack-and-promote-scope.md) | Accepted |
-| 0006 | [Extension Builder workspace storage](0006-extension-builder-workspace-storage.md) | Accepted |
-| 0007 | [Extension Builder collaboration through working copies](0007-extension-builder-collaboration-working-copies.md) | Accepted |
-| 0008 | [Extension Builder working-copy branch model](0008-extension-builder-working-copy-branch-model.md) | Accepted |
-| 0009 | [Extension Builder build execution boundary](0009-extension-builder-build-execution-boundary.md) | Accepted |
-| 0010 | [Extension Builder repository workbench UX](0010-extension-builder-repository-workbench-ux.md) | Accepted |
-| 0011 | [Extension Builder repository entry model](0011-extension-builder-repository-entry-model.md) | Accepted |
-| 0012 | [Extension Builder v1 editor scope](0012-extension-builder-v1-editor-scope.md) | Accepted |
-| 0013 | [Extension Builder source persistence](0013-extension-builder-source-persistence.md) | Accepted |
-| 0014 | [Extension Builder module and package boundary](0014-extension-builder-module-package-boundary.md) | Accepted |
-| 0015 | [Extension Builder API capability split](0015-extension-builder-api-capability-split.md) | Accepted |
-| 0016 | [Extension Builder conflict handling in v1](0016-extension-builder-conflict-handling-v1.md) | Accepted |
-| 0017 | [Extension Builder repository access control](0017-extension-builder-repository-access-control.md) | Accepted |
-| 0018 | [Extension Builder managed repository initial commit](0018-extension-builder-managed-repo-initial-commit.md) | Accepted |
-| 0019 | [Extension Builder template governance](0019-extension-builder-template-governance.md) | Accepted |
 | 0020 | [Runtime checkpoint commit records post-commit work without inline delivery](0020-runtime-checkpoint-commit-post-commit-work.md) | Accepted |
 | 0021 | [Copilot provider keeps tool mutation Elsa-owned](0021-copilot-provider-keeps-tool-mutation-elsa-owned.md) | (none) |
 | 0022 | [Copilot sessions use Elsa session identity](0022-copilot-sessions-use-elsa-session-identity.md) | (none) |
@@ -58,7 +38,6 @@ Numbers are not unique: the folder holds two independent sequences (an early Ext
 | 0047 | [ReplaySafe Activities Execute As Fused Hops With Precomputed Routing](0047-replaysafe-activities-execute-as-fused-hops-with-precomputed-routing.md) | Accepted |
 | 0048 | [Container Output Captures Resolve Through Producer-Visible Variable Frames](0048-container-output-captures-resolve-through-producer-visible-variable-frames.md) | Accepted |
 | 0049 | [Runtime alterations use snapshotted atomic jobs](0049-runtime-alterations-use-snapshotted-atomic-jobs.md) | Accepted |
-| 0050 | [Activity Presentation Is Source-Owned Metadata](0050-activity-presentation-is-source-owned-metadata.md) | Accepted |
 | 0050 | [Author-requested forward workflow versions preserve automatic assignment](0050-author-requested-forward-workflow-versions.md) | Proposed |
 | 0051 | [Interactive design commands recover from authoritative state](0051-interactive-design-commands-recover-from-authoritative-state.md) | Accepted |
 | 0052 | [Execution evidence is checkpoint-atomic and delivered at least once](0052-execution-evidence-is-checkpoint-atomic-and-at-least-once-delivered.md) | Proposed |
@@ -72,7 +51,6 @@ Numbers are not unique: the folder holds two independent sequences (an early Ext
 | 0060 | [Execution evidence ordering is workflow-local and causal](0060-execution-evidence-ordering-is-workflow-local-and-causal.md) | Proposed |
 | 0061 | [Baseline execution evidence records committed semantic transitions](0061-baseline-execution-evidence-records-committed-semantic-transitions.md) | Proposed |
 | 0062 | [Execution Evidence starts in memory and adds Groundwork durability](0062-execution-evidence-starts-in-memory-and-adds-groundwork-durability.md) | Proposed |
-| 0062 | [JavaScript Binding Grammar Is Selected by Host Policy and Pinned at Publish](0062-javascript-binding-grammar-is-pinned-at-publish.md) | Proposed |
 | 0063 | [BPMN moves to a host-agnostic library](0063-bpmn-moves-to-a-host-agnostic-library.md) | Proposed |
 | 0064 | [Flowchart Infers Joins From Propagated Dead Paths](0064-flowchart-infers-joins-from-propagated-dead-paths.md) | Proposed |
 | 0065 | [Groundwork Persistence Targets Are Named and Lanes Bind to Them](0065-groundwork-persistence-targets-are-named-and-lanes-bind-to-them.md) | Superseded |
@@ -91,3 +69,25 @@ Numbers are not unique: the folder holds two independent sequences (an early Ext
 | 0078 | [Workflow executions are virtual actors, and cluster membership is a foundation contract](0078-workflow-executions-are-virtual-actors-and-cluster-membership-is-a-foundation-contract.md) | Accepted |
 | 0079 | [Foundation.Host package sets are declared by a manifest, with a policy per package](0079-foundation-host-package-sets-are-declared-by-a-manifest-with-a-policy-per-package.md) | Accepted |
 | 0080 | [Elsa 4 simplification decisions](0080-elsa-4-simplification-decisions.md) | Accepted |
+| 0081 | [Mediate agent harness capabilities through Elsa tools](0081-mediate-agent-harness-capabilities.md) | (none) |
+| 0082 | [Activity Presentation Is Source-Owned Metadata](0082-activity-presentation-is-source-owned-metadata.md) | Accepted |
+| 0083 | [JavaScript Binding Grammar Is Selected by Host Policy and Pinned at Publish](0083-javascript-binding-grammar-is-pinned-at-publish.md) | Proposed |
+| EB-0001 | [Extension Builder Git identity](EB-0001-extension-builder-git-identity.md) | Accepted |
+| EB-0002 | [Extension Builder managed repository remotes](EB-0002-extension-builder-managed-repository-remotes.md) | Accepted |
+| EB-0003 | [Extension Builder build and promotion source](EB-0003-extension-builder-build-and-promotion-source.md) | Accepted |
+| EB-0004 | [Extension Builder Git safety envelope](EB-0004-extension-builder-git-safety-envelope.md) | Accepted |
+| EB-0005 | [Extension Builder pack and promote scope](EB-0005-extension-builder-pack-and-promote-scope.md) | Accepted |
+| EB-0006 | [Extension Builder workspace storage](EB-0006-extension-builder-workspace-storage.md) | Accepted |
+| EB-0007 | [Extension Builder collaboration through working copies](EB-0007-extension-builder-collaboration-working-copies.md) | Accepted |
+| EB-0008 | [Extension Builder working-copy branch model](EB-0008-extension-builder-working-copy-branch-model.md) | Accepted |
+| EB-0009 | [Extension Builder build execution boundary](EB-0009-extension-builder-build-execution-boundary.md) | Accepted |
+| EB-0010 | [Extension Builder repository workbench UX](EB-0010-extension-builder-repository-workbench-ux.md) | Accepted |
+| EB-0011 | [Extension Builder repository entry model](EB-0011-extension-builder-repository-entry-model.md) | Accepted |
+| EB-0012 | [Extension Builder v1 editor scope](EB-0012-extension-builder-v1-editor-scope.md) | Accepted |
+| EB-0013 | [Extension Builder source persistence](EB-0013-extension-builder-source-persistence.md) | Accepted |
+| EB-0014 | [Extension Builder module and package boundary](EB-0014-extension-builder-module-package-boundary.md) | Accepted |
+| EB-0015 | [Extension Builder API capability split](EB-0015-extension-builder-api-capability-split.md) | Accepted |
+| EB-0016 | [Extension Builder conflict handling in v1](EB-0016-extension-builder-conflict-handling-v1.md) | Accepted |
+| EB-0017 | [Extension Builder repository access control](EB-0017-extension-builder-repository-access-control.md) | Accepted |
+| EB-0018 | [Extension Builder managed repository initial commit](EB-0018-extension-builder-managed-repo-initial-commit.md) | Accepted |
+| EB-0019 | [Extension Builder template governance](EB-0019-extension-builder-template-governance.md) | Accepted |

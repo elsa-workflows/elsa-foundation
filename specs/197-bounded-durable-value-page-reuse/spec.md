@@ -4,7 +4,7 @@
 
 **Created**: 2026-10-07
 
-**Status**: Draft
+**Status**: Implemented — all tasks checked in 9a472affd (PR #2492)
 
 **Input**: User description: Reduce repeated durable-value page reads during eligible coalesced workflow execution while preserving workflow-visible values, identity, isolation, write freshness, and existing persistence contracts.
 

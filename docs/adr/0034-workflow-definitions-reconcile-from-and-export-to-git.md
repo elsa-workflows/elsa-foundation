@@ -376,4 +376,4 @@ are three prerequisites (one already satisfied) and one behavior change:
 - Cross-references: `IWorkflowReconciliationSource`; `WorkflowsDesignReconciliationFeature`;
   [`specs/002` Model X / FR-016 / FR-016a](../../specs/002-workflow-state-scope/spec.md);
   `WorkflowDefinitionVersion`; glossary [Content authority / Retention authority](../glossary/elsa.md);
-  Extension Builder ADRs 0001–0019 (git identity, safety envelope, branch model, conflict handling).
+  Extension Builder ADRs EB-0001–EB-0019 (git identity, safety envelope, branch model, conflict handling).

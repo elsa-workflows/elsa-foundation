@@ -4,7 +4,7 @@
 
 **Created**: 2026-06-24
 
-**Status**: Draft
+**Status**: Implemented — all tasks checked in 6e2c89145 (PR #106)
 
 **Input**: User description: "Spec this out and then implement it end to end. When done, do a self review until no more actionable issues remain." Context: the current workflow instance list shows quick instance details, but users need a wider inspection view and need each workflow instance displayed on the designer canvas using the workflow definition designer metadata such as node positions.
 
@@ -83,14 +83,14 @@ A user investigating a workflow execution can select a graph node, timeline item
 - **FR-011**: Users MUST be able to correlate graph nodes, activity history, and incidents by selecting any one of those evidence surfaces.
 - **FR-012**: The system MUST handle missing definition version data, missing layout metadata, and unmatched runtime activity records with clear non-blocking fallback states.
 - **FR-013**: The existing instance list MUST remain available for scanning and filtering workflow instances.
-- **FR-014**: The inspection view MUST consume committed activity execution inspection evidence from [Activity Execution Inspection](../079-activity-execution-inspection/spec.md) and MUST lazy-load detailed value snapshots only when a concrete activity execution is selected.
+- **FR-014**: The inspection view MUST consume committed activity execution inspection evidence from [Activity Execution Inspection](../214-activity-execution-inspection/spec.md) and MUST lazy-load detailed value snapshots only when a concrete activity execution is selected.
 
 ### Key Entities *(include if feature involves data)*
 
 - **Workflow Instance**: A runtime execution of a workflow, including status, timestamps, correlation, artifact identity, and definition version identity.
 - **Workflow Definition Version Snapshot**: The authored workflow state and designer layout for the exact definition version that produced an instance.
 - **Activity Execution Summary**: Runtime summary for one concrete activity execution, including authored activity identity, executable node identity, status, timing, checkpoint identity, scheduling provenance, and incident/bookmark counts.
-- **Activity Execution Inspection Projection**: Runtime-owned detailed evidence for one concrete activity execution, supplied by [Activity Execution Inspection](../079-activity-execution-inspection/spec.md).
+- **Activity Execution Inspection Projection**: Runtime-owned detailed evidence for one concrete activity execution, supplied by [Activity Execution Inspection](../214-activity-execution-inspection/spec.md).
 - **Incident**: A runtime failure or blocking condition associated with a workflow instance and optionally with an activity execution or executable node.
 - **Instance Inspection View**: The user-facing composition of summary, graph, activity history, and incident evidence for one workflow instance.
 
@@ -112,4 +112,4 @@ A user investigating a workflow execution can select a graph node, timeline item
 - The workflow graph should reflect the definition version that produced the runtime artifact, not the current mutable draft.
 - Flowchart and Sequence roots should be inspectable using the existing designer representation where supported.
 - Advanced path animation, replay controls, and edge-level execution semantics are deferred unless already available from current runtime records.
-- Detailed per-activity execution evidence is provided by the prerequisite [Activity Execution Inspection](../079-activity-execution-inspection/spec.md) work unit.
+- Detailed per-activity execution evidence is provided by the prerequisite [Activity Execution Inspection](../214-activity-execution-inspection/spec.md) work unit.

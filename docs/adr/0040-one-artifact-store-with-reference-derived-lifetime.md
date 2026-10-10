@@ -5,7 +5,7 @@ Amended: 2026-07-13 by spec 092 to include retained workflow-execution roots and
 Amended: 2026-07-16 by spec 097 to make retention transitive across immutable executable dependencies
 and to fence closure-root creation against collection
 Plan of record: `docs/plans/content-addressed-executables-and-inspector.md` and
-`specs/092-domain-owned-apis/`
+`specs/219-domain-owned-apis/`
 
 The transient test-run executable store is retired: all executables live in a single content-addressed
 store, scope and expiry move to the Source Reference, and artifact lifetime is derived from reference

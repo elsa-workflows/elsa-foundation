@@ -18,11 +18,11 @@ prompted this.
 **One lane, monotonically increasing.** The next spec takes the highest existing number plus one,
 across the whole `specs/` tree — not per topic, not per program-goal bucket.
 
-The tree currently contains **27 duplicate numbers** (`015-*` ×3, `090-*` ×3, `092-*` ×3, `095-*` ×3
-and 23 more) because a runtime lane and a groundwork lane allocated numbers concurrently. Those
-collisions are **not** to be repaired: renumbering would rewrite 884 spec-path links across 61
-markdown files plus 14 references from C#, for a cosmetic result. They are grandfathered. The rule
-above prevents new ones.
+The tree once held 27 duplicate numbers because a runtime lane and a groundwork lane allocated
+numbers concurrently. Issue #2567 (ADR 0080 D6) gave the later folder of each collision a new number
+(202 to 232) and repointed its path links; every spec number is now unique. Prose that cites a
+renumbered spec by its old bare number (for example "spec 123") was not rewritten, so check the
+folder name when such a citation looks wrong.
 
 When two work units start at once, allocate both numbers up front rather than letting each pick.
 
@@ -61,7 +61,7 @@ A spec in a non-terminal status keeps its path. A spec with a terminal status (`
 MAY be moved to `specs/archive/<same folder name>` by a consolidation PR that cites the git evidence
 for the status and repoints every inbound link. Never move a spec whose files are read by tests or
 linked from a project file: find those with `grep -rn "specs/" tests/ tools/ --include=*.cs` and
-`grep -rn "specs/" --include=*.csproj .`. The current exceptions are `092-domain-owned-apis`,
+`grep -rn "specs/" --include=*.csproj .`. The current exceptions are `219-domain-owned-apis`,
 `094-harden-groundwork-stores`, `139-groundwork-diagnostics-persistence`, and `141-runtime-alterations`.
 
 Once a spec reaches a terminal status its `checklists/` folder and `requirements.md` are process

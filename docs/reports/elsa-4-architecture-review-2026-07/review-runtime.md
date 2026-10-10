@@ -2,7 +2,7 @@
 
 Scope: `src/Elsa/Workflows/Runtime/**` (Core, Api, and the drainer/scheduler/checkpoint spine),
 `src/Elsa/Workflows/Primitives/**`, cross-referenced with `docs/adr/0020`, `docs/adr/0029`,
-`specs/082-runtime-pipeline-execution-spine`, `specs/083-runtime-checkpoint-slot-decomposition`.
+`specs/082-runtime-pipeline-execution-spine`, `specs/215-runtime-checkpoint-slot-decomposition`.
 The real activity-invocation handler (`WorkflowInvokeActivitySchedulerWorkHandler`, ~970 lines) lives in
 `src/Elsa/Activities/Runtime/Services/` and is *out of scope*; the runtime Core ships a faulting fallback for it.
 

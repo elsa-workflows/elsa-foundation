@@ -4,7 +4,7 @@
 
 **Created**: 2026-07-16
 
-**Status**: Draft
+**Status**: Implemented — all tasks checked in 655bcb54f (PR #691)
 
 **Input**: GitHub issue #677, “Keep published dispatch targets deterministic and bounded,” under parent #674
 

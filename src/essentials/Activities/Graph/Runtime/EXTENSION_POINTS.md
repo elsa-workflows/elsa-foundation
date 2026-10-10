@@ -1,6 +1,6 @@
 # Extension points — activity graph Runtime consumer
 
-This project owns the Runtime consumer for compiled reusable activity graphs. The canonical behavior and boundary are specified by [spec 092](../../../../../../specs/092-reusable-activity-definitions/spec.md) and its [provider/runtime contract](../../../../../../specs/092-reusable-activity-definitions/contracts/provider-runtime-seams.md).
+This project owns the Runtime consumer for compiled reusable activity graphs. The canonical behavior and boundary are specified by [spec 220](../../../../../../specs/220-reusable-activity-definitions/spec.md) and its [provider/runtime contract](../../../../../../specs/220-reusable-activity-definitions/contracts/provider-runtime-seams.md).
 
 ## Registration inventory
 

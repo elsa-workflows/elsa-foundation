@@ -4,7 +4,7 @@
 
 ## Summary
 
-Finish ADR 0029 **Move 2** across every remaining scheduler handler and fold in the surrounding runtime structural remediation from the elsa-4 review unit **W12**: split the hosting-agnostic composition root out of the API feature (RT-4), remove the two ambient service locators from the drain path (RT-7), collapse the telescoping constructors (RT-8), and deserialize the `CompleteActivity` payload once (RT-11). One behavior-preserving structural pass, delivered in ordered internal slices under a single draft PR. Continues [spec 083](../083-runtime-checkpoint-slot-decomposition/spec.md) (first slice, Cancel — done/#366).
+Finish ADR 0029 **Move 2** across every remaining scheduler handler and fold in the surrounding runtime structural remediation from the elsa-4 review unit **W12**: split the hosting-agnostic composition root out of the API feature (RT-4), remove the two ambient service locators from the drain path (RT-7), collapse the telescoping constructors (RT-8), and deserialize the `CompleteActivity` payload once (RT-11). One behavior-preserving structural pass, delivered in ordered internal slices under a single draft PR. Continues [spec 083](../215-runtime-checkpoint-slot-decomposition/spec.md) (first slice, Cancel — done/#366).
 
 ## Constitution Check
 

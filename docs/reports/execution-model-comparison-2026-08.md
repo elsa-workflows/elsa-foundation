@@ -795,7 +795,7 @@ queued", and that is a product decision, not an engine one.
 group commit that folds concurrent checkpoint commits into one shared unit-of-work and one fsync. It is
 opt-in via `AddGroundworkRuntimeGroupCommit` and **default off**, and the reason is measured: on a quiet
 machine "no level's ratio distribution is statistically distinguishable from 1.0"
-([spec 115 research](../../specs/115-group-commit-fsync-sharing/research.md)). The batching itself works
+([spec 225 research](../../specs/225-group-commit-fsync-sharing/research.md)). The batching itself works
 (at N=128, 119 to 123 of 128 commits fold into 9 to 18 transactions), but folding the fsyncs does not
 move the wall clock on WAL-mode SQLite.
 

@@ -10,8 +10,8 @@ Reads current `specs/*` folders and task checkboxes. Status clues are textual, n
 |---|---|---|---|---:|---:|---|
 | [001-activity-identity-catalog](../../specs/001-activity-identity-catalog/spec.md) | Activity Identity & Catalog as Source-of-Truth | Draft | - | 147 | 5 | superseded, deferred, out of scope |
 | [002-workflow-state-scope](../../specs/002-workflow-state-scope/spec.md) | WorkflowDefinitionState Scope Policy | Draft | PASS** with one Complexity Tracking entry (G27 — Mediator middleware tests deferred). Five provisional sub-rules are gate-flagged but not violations — they cascade per the working-loop §5 pattern. | 147 | 5 | superseded, deferred |
-| [003-single-update-command](../../specs/003-single-update-command/spec.md) | Single Diff-Based Draft Update Command | Draft | - | 38 | 0 | superseded, retained, out of scope |
-| [004-activity-semantic-versioning](../../specs/004-activity-semantic-versioning/spec.md) | Activity Semantic Versioning | Draft | - | 46 | 0 | retained, out of scope |
+| [003-single-update-command](../../specs/003-single-update-command/spec.md) | Single Diff-Based Draft Update Command | Implemented — all tasks checked in f590e4ce2 | - | 38 | 0 | superseded, retained, out of scope |
+| [004-activity-semantic-versioning](../../specs/004-activity-semantic-versioning/spec.md) | Activity Semantic Versioning | Implemented — all tasks checked in b5adc5c30 | - | 46 | 0 | retained, out of scope |
 | [005-workflow-as-activity](../../specs/005-workflow-as-activity/spec.md) | Workflow-as-Activity (Generalized Specialized-Activity Kind) | Superseded by 006 | - | 0 | 0 | superseded, retained, deferred, out of scope |
 | [006-activity-construction-seam](../../specs/006-activity-construction-seam/spec.md) | Descriptor-Type-Driven Activity Construction | Draft | - | 54 | 1 | superseded, retained, deferred, out of scope, construct-only |
 | [007-runtime-executable-state-contracts](../../specs/007-runtime-executable-state-contracts/spec.md) | Runtime Executable Artifact And Execution State Contracts | Implemented | - | 18 | 0 | deferred, out of scope |
@@ -19,28 +19,18 @@ Reads current `specs/*` folders and task checkboxes. Status clues are textual, n
 | [009-runtime-pipeline-slots](../../specs/009-runtime-pipeline-slots/spec.md) | Runtime Pipeline Slots And Inspectable Plans | Implemented | - | 7 | 0 | out of scope |
 | [010-runtime-bookmark-resume-contract](../../specs/010-runtime-bookmark-resume-contract/spec.md) | Runtime Bookmark Resume Contract | Implemented | - | 8 | 0 | out of scope |
 | [011-runtime-value-binding-contract](../../specs/011-runtime-value-binding-contract/spec.md) | Runtime Value Binding Contract | unknown | - | 9 | 0 | superseded, out of scope |
-| [012-groundwork-persistence-foundation](../../specs/012-groundwork-persistence-foundation/spec.md) | Groundwork Persistence Foundation | Draft | - | 23 | 2 | - |
 | [012-runtime-diagnostics-history-incidents](../../specs/012-runtime-diagnostics-history-incidents/spec.md) | Runtime Diagnostics History And Incidents | unknown | - | 9 | 0 | out of scope |
-| [013-groundwork-core-manifest-planner](../../specs/013-groundwork-core-manifest-planner/spec.md) | Groundwork Core Manifest And Planner Kernel | Implemented | - | 38 | 0 | - |
 | [013-runtime-operational-recovery-outbox](../../specs/013-runtime-operational-recovery-outbox/spec.md) | Runtime Operational Recovery And Post-Commit Outbox | unknown | - | 10 | 0 | out of scope |
-| [014-groundwork-sqlite-document-store](../../specs/014-groundwork-sqlite-document-store/spec.md) | Groundwork SQLite Document Store | Implemented | - | 17 | 0 | - |
 | [014-runtime-elsa3-migration-boundary](../../specs/014-runtime-elsa3-migration-boundary/spec.md) | Runtime Elsa 3 Migration Boundary | unknown | - | 8 | 0 | out of scope |
-| [015-groundwork-elsa-bridge](../../specs/015-groundwork-elsa-bridge/spec.md) | Groundwork Elsa Bridge | Implemented | - | 18 | 0 | out of scope |
 | [015-runtime-volatile-wait-contract](../../specs/015-runtime-volatile-wait-contract/spec.md) | Runtime Volatile Wait Contract | Draft | - | 7 | 1 | - |
-| [015-workflow-execution-slice](../../specs/015-workflow-execution-slice/spec.md) | Workflow Execution Vertical Slice | Implemented | - | 40 | 0 | superseded, out of scope |
-| [016-groundwork-relational-providers](../../specs/016-groundwork-relational-providers/spec.md) | Groundwork SQL Server And PostgreSQL Providers | Implemented | - | 21 | 0 | - |
 | [016-runtime-completion-propagation-contract](../../specs/016-runtime-completion-propagation-contract/spec.md) | Runtime Completion Propagation Contract | Draft | - | 6 | 1 | - |
-| [017-groundwork-mongodb-provider](../../specs/017-groundwork-mongodb-provider/spec.md) | Groundwork MongoDB Provider | Implemented | - | 15 | 0 | - |
 | [017-runtime-generator-contract](../../specs/017-runtime-generator-contract/spec.md) | Runtime Generator Contract | Implemented | - | 0 | 0 | - |
-| [018-groundwork-runtime-entities](../../specs/018-groundwork-runtime-entities/spec.md) | Groundwork Runtime-Defined Entities | Implemented | - | 9 | 0 | deferred |
 | [018-runtime-control-plane-contract](../../specs/018-runtime-control-plane-contract/spec.md) | Runtime Control Plane Contract | Implemented | - | 0 | 0 | - |
-| [019-groundwork-physicalization-performance](../../specs/019-groundwork-physicalization-performance/spec.md) | Groundwork Physicalization And Performance | Implemented | - | 17 | 0 | deferred |
 | [019-runtime-wait-intent-contract](../../specs/019-runtime-wait-intent-contract/spec.md) | Runtime Wait Registration And Post-Commit Intent Contract | Implemented | - | 0 | 0 | - |
-| [020-groundwork-runtime-evaluation-hardening](../../specs/020-groundwork-runtime-evaluation-hardening/spec.md) | Groundwork Runtime Evaluation And Hardening | Implemented | - | 9 | 0 | - |
-| [020-runtime-agent-provider-contract](../../specs/020-runtime-agent-provider-contract/spec.md) | Runtime Execution Agent Provider Contract | Draft | - | 0 | 0 | - |
-| [021-runtime-inprocess-agent-provider](../../specs/021-runtime-inprocess-agent-provider/spec.md) | Runtime In-Process Execution Agent Provider | Draft | - | 0 | 0 | - |
-| [022-runtime-scheduler-work-queue](../../specs/022-runtime-scheduler-work-queue/spec.md) | Runtime Scheduler Work Queue | Draft | - | 0 | 0 | - |
-| [023-runtime-scheduler-drain-contract](../../specs/023-runtime-scheduler-drain-contract/spec.md) | Runtime Scheduler Drain Contract | Draft | - | 0 | 0 | - |
+| [020-runtime-agent-provider-contract](../../specs/020-runtime-agent-provider-contract/spec.md) | Runtime Execution Agent Provider Contract | Implemented — all tasks checked in 34423695f | - | 0 | 0 | - |
+| [021-runtime-inprocess-agent-provider](../../specs/021-runtime-inprocess-agent-provider/spec.md) | Runtime In-Process Execution Agent Provider | Implemented — all tasks checked in 7213d26d2 | - | 0 | 0 | - |
+| [022-runtime-scheduler-work-queue](../../specs/022-runtime-scheduler-work-queue/spec.md) | Runtime Scheduler Work Queue | Implemented — all tasks checked in b5d1c9a5c | - | 0 | 0 | - |
+| [023-runtime-scheduler-drain-contract](../../specs/023-runtime-scheduler-drain-contract/spec.md) | Runtime Scheduler Drain Contract | Implemented — all tasks checked in e83f44793 | - | 0 | 0 | - |
 | [024-runtime-scheduler-command-drain-dispatch](../../specs/024-runtime-scheduler-command-drain-dispatch/spec.md) | 024-runtime-scheduler-command-drain-dispatch | unknown | - | 0 | 0 | - |
 | [025-runtime-api-agent-dispatch](../../specs/025-runtime-api-agent-dispatch/spec.md) | 025-runtime-api-agent-dispatch | unknown | - | 0 | 0 | - |
 | [026-runtime-start-command-scheduling](../../specs/026-runtime-start-command-scheduling/spec.md) | 026-runtime-start-command-scheduling | unknown | - | 0 | 0 | superseded |
@@ -87,57 +77,44 @@ Reads current `specs/*` folders and task checkboxes. Status clues are textual, n
 | [067-runtime-remove-direct-executor](../../specs/067-runtime-remove-direct-executor/spec.md) | Runtime Remove Direct Executor | Implemented | - | 9 | 0 | - |
 | [068-runtime-composed-activity-execution](../../specs/068-runtime-composed-activity-execution/spec.md) | Runtime Composed Activity Execution | Implemented | - | 7 | 0 | - |
 | [069-runtime-request-affine-execution](../../specs/069-runtime-request-affine-execution/spec.md) | Runtime Request-Affine Execution | Draft | - | 9 | 1 | - |
-| [070-workflow-root-activity-contract](../../specs/070-workflow-root-activity-contract/spec.md) | Workflow Root Activity Contract | Draft | - | 14 | 0 | superseded |
+| [070-workflow-root-activity-contract](../../specs/070-workflow-root-activity-contract/spec.md) | Workflow Root Activity Contract | Implemented — all tasks checked in 8df504191 (PR #72) | - | 14 | 0 | superseded |
 | [071-activity-owned-composite-structure](../../specs/071-activity-owned-composite-structure/spec.md) | Activity-Owned Composite Structure | Draft | - | 0 | 0 | - |
-| [071-groundwork-host-configurable-runtime-store-poc](../../specs/071-groundwork-host-configurable-runtime-store-poc/spec.md) | Groundwork Host-Configurable Runtime Store POC | Draft | - | 0 | 7 | - |
 | [072-shell-feature-management](../../specs/072-shell-feature-management/spec.md) | Shell Feature Management | Implemented | - | 19 | 0 | out of scope |
-| [073-diagnostics-structured-logs](../../specs/073-diagnostics-structured-logs/spec.md) | Diagnostics — Structured Logs (Capture, Live Streaming & Query) | Implemented | - | 37 | 0 | retained, deferred, out of scope |
-| [073-flowchart-scoped-execution](../../specs/073-flowchart-scoped-execution/spec.md) | Flowchart Scoped Execution | Draft | - | 67 | 0 | - |
+| [073-flowchart-scoped-execution](../../specs/073-flowchart-scoped-execution/spec.md) | Flowchart Scoped Execution | Implemented — all tasks checked in 7b203a09a | - | 67 | 0 | - |
 | [074-diagnostics-opentelemetry](../../specs/074-diagnostics-opentelemetry/spec.md) | Diagnostics — OpenTelemetry (Ingestion, Live Streaming & Query) | Draft | - | 0 | 0 | retained, deferred, out of scope |
 | [075-extension-builder-backend](../../specs/075-extension-builder-backend/spec.md) | Extension Builder — Backend Pipeline (Trusted-Team v1) | Implemented — restored as an optional extension (#2294) | - | 53 | 0 | superseded, deferred, out of scope |
-| [076-workflow-test-runs](../../specs/076-workflow-test-runs/spec.md) | Workflow Definition Test Runs | Draft | - | 39 | 0 | - |
-| [077-workflow-instance-inspection](../../specs/077-workflow-instance-inspection/spec.md) | Workflow Instance Inspection | Draft | - | 31 | 0 | deferred, out of scope |
+| [076-workflow-test-runs](../../specs/076-workflow-test-runs/spec.md) | Workflow Definition Test Runs | Implemented — all tasks checked in d4f1a5dc4 (PR #101) | - | 39 | 0 | - |
+| [077-workflow-instance-inspection](../../specs/077-workflow-instance-inspection/spec.md) | Workflow Instance Inspection | Implemented — all tasks checked in 6e2c89145 (PR #106) | - | 31 | 0 | deferred, out of scope |
 | [078-package-first-module-registry](../../specs/078-package-first-module-registry/spec.md) | Package-First Module Registry | unknown | - | 0 | 0 | - |
-| [079-activity-execution-inspection](../../specs/079-activity-execution-inspection/spec.md) | Activity Execution Inspection | Draft | - | 51 | 0 | deferred, out of scope |
 | [079-secrets-module](../../specs/079-secrets-module/spec.md) | Secrets Module | Draft | - | 64 | 6 | out of scope |
 | [080-runtime-checkpoint-commit](../../specs/080-runtime-checkpoint-commit/spec.md) | Runtime Checkpoint Commit | Draft | - | 0 | 0 | out of scope |
 | [081-typed-argument-model](../../specs/081-typed-argument-model/spec.md) | Typed Argument Model + Type Descriptor Registry (Backend) | Draft | - | 42 | 2 | retained, deferred, out of scope |
 | [082-runtime-pipeline-execution-spine](../../specs/082-runtime-pipeline-execution-spine/spec.md) | Runtime Pipeline Execution Spine (ADR 0029 Move 1) | Draft | - | 0 | 0 | out of scope |
-| [083-runtime-checkpoint-slot-decomposition](../../specs/083-runtime-checkpoint-slot-decomposition/spec.md) | Runtime Checkpoint Slot Decomposition (ADR 0029 Move 2, first slice) | Implemented — establishes the Move 2 decomposition pattern (first slice); the remaining handlers are spec 084. | - | 0 | 0 | retained, out of scope |
 | [083-runtime-execution-expression-carrier](../../specs/083-runtime-execution-expression-carrier/spec.md) | Runtime Execution-Time Expression Carrier | Implemented | - | 25 | 0 | superseded |
-| [084-runtime-move2-slot-decomposition-remainder](../../specs/084-runtime-move2-slot-decomposition-remainder/spec.md) | Runtime Structure — ADR 0029 Move 2 Remainder + Drain-Path De-ambienting (W12) | Draft — completes ADR 0029 **Move 2** across all remaining scheduler handlers and folds in the surrounding runtime structural remediation (RT-4/RT-7/RT-8/RT-11) from the elsa-4 architecture review. Behavior-preserving. | - | 0 | 0 | out of scope |
+| [084-runtime-move2-slot-decomposition-remainder](../../specs/084-runtime-move2-slot-decomposition-remainder/spec.md) | Runtime Structure — ADR 0029 Move 2 Remainder + Drain-Path De-ambienting (W12) | Implemented — all tasks checked in a3df11b40; completes ADR 0029 **Move 2** across all remaining scheduler handlers and folds in the surrounding runtime structural remediation (RT-4/RT-7/RT-8/RT-11) from the elsa-4 architecture review. Behavior-preserving. | - | 0 | 0 | out of scope |
 | [085-workflow-definition-gitops](../../specs/085-workflow-definition-gitops/spec.md) | Workflow-Definition GitOps — Git Reconciliation Source + Export Sink | Implemented — merged 2026-07-08 in PR #577 (squash `23056231`); tasks.md 35/35 complete. | - | 35 | 0 | superseded, deferred, out of scope |
 | [086-deterministic-payload-serialization](../../specs/086-deterministic-payload-serialization/spec.md) | Deterministic Payload Serialization | Implemented (merged to main, PR #549) — this spec documents the shipped behavior. The | - | 0 | 0 | out of scope |
 | [087-reconciler-definition-metadata-update](../../specs/087-reconciler-definition-metadata-update/spec.md) | Reconciler Definition-Metadata Update Path | Draft | - | 0 | 0 | out of scope |
 | [088-layout-metadata-opaque-jsonelement](../../specs/088-layout-metadata-opaque-jsonelement/spec.md) | Layout Metadata Bag Becomes Opaque JsonElement | Draft | - | 0 | 0 | out of scope |
 | [089-http-endpoint-parity](../../specs/089-http-endpoint-parity/spec.md) | HTTP Endpoint Full Parity | Implemented | - | 9 | 0 | deferred, out of scope |
 | [090-activity-input-editor-options](../../specs/090-activity-input-editor-options/spec.md) | Activity Input Editor Options | Approved for implementation | - | 30 | 0 | retained |
-| [090-runtime-http-performance](../../specs/090-runtime-http-performance/spec.md) | Runtime HTTP Hot-Path Performance | Implemented | - | 23 | 0 | - |
-| [090-trigger-contract-hardening](../../specs/090-trigger-contract-hardening/spec.md) | Trigger Publication Contract Hardening | Implemented (merged 2026-07-11 in PR #628) | - | 38 | 0 | retained |
 | [091-lazy-shell-activation](../../specs/091-lazy-shell-activation/spec.md) | Observable Shell Readiness and Cold Activation | Approved for implementation | - | 39 | 0 | - |
-| [091-structured-logs-replay-cursors](../../specs/091-structured-logs-replay-cursors/spec.md) | Durable Structured Logs Replay Cursors | Ratified and verified (2026-07-12). | - | 0 | 0 | retained, out of scope |
-| [092-domain-owned-apis](../../specs/092-domain-owned-apis/spec.md) | Domain-Owned Management APIs | Implemented and verified (2026-07-13) | - | 108 | 0 | retained |
-| [092-reusable-activity-definitions](../../specs/092-reusable-activity-definitions/spec.md) | Reusable Activity Definitions | Implemented | - | 104 | 0 | retained, deferred, out of scope |
 | [092-workflow-executable-cache](../../specs/092-workflow-executable-cache/spec.md) | Bounded Workflow Executable Cache | Approved for implementation | - | 32 | 0 | retained |
 | [093-groundwork-design-persistence](../../specs/093-groundwork-design-persistence/spec.md) | Groundwork Design Persistence | Draft | - | 87 | 1 | superseded |
 | [094-harden-groundwork-stores](../../specs/094-harden-groundwork-stores/spec.md) | Harden Groundwork Store Families | Draft | - | 100 | 5 | - |
-| [095-groundwork-aspnetcore-identity](../../specs/095-groundwork-aspnetcore-identity/spec.md) | Groundwork ASP.NET Core Identity | Draft | - | 87 | 2 | - |
-| [095-runtime-intent-handlers](../../specs/095-runtime-intent-handlers/spec.md) | Contributed Runtime Intent Handlers | Approved | - | 24 | 0 | out of scope |
 | [095-value-flow-redesign](../../specs/095-value-flow-redesign/spec.md) | Replace Memory-Block Value Flow | Implemented | - | 117 | 0 | retained, deferred, out of scope |
 | [096-dispatch-workflow-fire-and-forget](../../specs/096-dispatch-workflow-fire-and-forget/spec.md) | Dispatch a Published Workflow Fire-and-Forget | Approved | - | 40 | 0 | retained, out of scope, construct-only |
-| [097-dispatch-dependency-hardening](../../specs/097-dispatch-dependency-hardening/spec.md) | Deterministic and Bounded Workflow Dispatch | Draft | - | 60 | 0 | retained, deferred, construct-only |
+| [097-dispatch-dependency-hardening](../../specs/097-dispatch-dependency-hardening/spec.md) | Deterministic and Bounded Workflow Dispatch | Implemented — all tasks checked in 655bcb54f (PR #691) | - | 60 | 0 | retained, deferred, construct-only |
 | [098-dispatch-durability-inspection](../../specs/098-dispatch-durability-inspection/spec.md) | Durable and Inspectable Detached Dispatch | Approved | - | 53 | 0 | retained |
 | [099-dispatch-wait-success](../../specs/099-dispatch-wait-success/spec.md) | Wait for a Successful Child and Return Safe Outputs | Approved | - | 67 | 0 | retained, deferred, construct-only |
 | [100-dispatch-fault-cancellation](../../specs/100-dispatch-fault-cancellation/spec.md) | Complete Child Fault and Cancellation Semantics | Approved | - | 54 | 0 | deferred |
-| [101-dispatch-delivery-recovery](../../specs/101-dispatch-delivery-recovery/spec.md) | Dispatch Delivery Recovery | Draft | - | 60 | 0 | - |
+| [101-dispatch-delivery-recovery](../../specs/101-dispatch-delivery-recovery/spec.md) | Dispatch Delivery Recovery | Implemented — all tasks checked in 693765870 | - | 60 | 0 | - |
 | [102-dispatch-test-run-scope](../../specs/102-dispatch-test-run-scope/spec.md) | Preserve Dispatch Test-Run Scope | Implemented | - | 53 | 0 | retained, out of scope |
-| [103-dispatch-distributed-execution](../../specs/103-dispatch-distributed-execution/spec.md) | Execute DispatchWorkflow Across Distributed Nodes | Draft | - | 32 | 0 | - |
+| [103-dispatch-distributed-execution](../../specs/103-dispatch-distributed-execution/spec.md) | Execute DispatchWorkflow Across Distributed Nodes | Implemented — all tasks checked in bf7ea0c5b | - | 32 | 0 | - |
 | [104-dispatch-parent-audit](../../specs/104-dispatch-parent-audit/spec.md) | DispatchWorkflow Parent Audit Remediation | unknown | - | 27 | 0 | retained |
 | [105-drain-step-single-transaction](../../specs/105-drain-step-single-transaction/spec.md) | Single Durable Transaction per Drain Step (fold work-item ack into the checkpoint commit) | Implemented | - | 0 | 0 | deferred, out of scope |
-| [106-openiddict-groundwork-stores](../../specs/106-openiddict-groundwork-stores/spec.md) | OpenIddict Groundwork Stores | Draft | - | 11 | 62 | superseded, retained, deferred |
 | [106-runtime-live-drain-delivery](../../specs/106-runtime-live-drain-delivery/spec.md) | In-memory live-drain EnqueueSchedulerWork delivery (Immediate mode) | unknown | - | 0 | 0 | retained |
-| [107-side-effect-profile](../../specs/107-side-effect-profile/spec.md) | Author-Declared Side-Effect Profile Gates the Pre-Activation Claim Boundary | Draft | - | 0 | 0 | deferred, out of scope |
-| [108-bpmn-container-activity](../../specs/108-bpmn-container-activity/spec.md) | 108-bpmn-container-activity | Implemented | - | 0 | 0 | deferred, out of scope |
+| [107-side-effect-profile](../../specs/107-side-effect-profile/spec.md) | Author-Declared Side-Effect Profile Gates the Pre-Activation Claim Boundary | Implemented — all tasks checked in f5ef31c2f | - | 0 | 0 | deferred, out of scope |
 | [108-per-workflow-cadence](../../specs/108-per-workflow-cadence/spec.md) | Per-Workflow Checkpoint Cadence Authoring + Per-Run Cadence Stamp | Implemented | - | 11 | 0 | out of scope |
 | [109-runtime-inprocess-hop-fast-path](../../specs/109-runtime-inprocess-hop-fast-path/spec.md) | In-process-hop payload short-circuit (ADR 0031 fast path, item a) | unknown | - | 0 | 0 | out of scope |
 | [110-drain-turn-durable-roundtrips](../../specs/110-drain-turn-durable-roundtrips/spec.md) | Collapse per-drain-turn durable round-trips — characterize, and eliminate the redundant executable-artifact reads | Draft (characterization complete; premise re-aimed by evidence) | - | 4 | 7 | deferred |
@@ -145,37 +122,29 @@ Reads current `specs/*` folders and task checkboxes. Status clues are textual, n
 | [112-runtime-child-subtree-cancellation](../../specs/112-runtime-child-subtree-cancellation/spec.md) | 112-runtime-child-subtree-cancellation | unknown | - | 0 | 0 | deferred, out of scope |
 | [113-terminal-resumption-purge](../../specs/113-terminal-resumption-purge/spec.md) | Stop the perpetual post-completion resumption re-drive of terminal workflows | Implemented — merged in PR #894 | - | 12 | 0 | out of scope |
 | [114-concurrency-throughput-instrument](../../specs/114-concurrency-throughput-instrument/spec.md) | Concurrency / throughput instrument for the in-process runtime | Draft (instrument delivered; scaling curve captured — see [research.md](./research.md)) | - | 0 | 0 | - |
-| [115-group-commit-fsync-sharing](../../specs/115-group-commit-fsync-sharing/spec.md) | Group-commit / cross-drain fsync sharing on the shared durable writer | Draft (design + implementation; measurement gated — see [research.md](./research.md)) | - | 0 | 0 | - |
 | [115-runtime-handled-child-fault](../../specs/115-runtime-handled-child-fault/spec.md) | 115-runtime-handled-child-fault | unknown | - | 0 | 0 | deferred, out of scope |
 | [116-bpmn-catch-events](../../specs/116-bpmn-catch-events/spec.md) | 116-bpmn-catch-events | Implemented | - | 0 | 0 | deferred, out of scope |
 | [117-bpmn-event-start-events](../../specs/117-bpmn-event-start-events/spec.md) | 117-bpmn-event-start-events | Implemented | - | 0 | 0 | deferred, out of scope |
 | [118-bpmn-interchange-event-definitions](../../specs/118-bpmn-interchange-event-definitions/spec.md) | 118-bpmn-interchange-event-definitions | Implemented | - | 0 | 0 | retained, deferred, out of scope |
-| [119-bpmn-event-based-gateway](../../specs/119-bpmn-event-based-gateway/spec.md) | 119-bpmn-event-based-gateway | Implemented | - | 0 | 0 | deferred, out of scope |
 | [119-publish-time-routing-tables](../../specs/119-publish-time-routing-tables/spec.md) | Publish-time routing tables, recomputed on materialization (ADR 0047 D3) | unknown | - | 0 | 0 | retained |
 | [120-bpmn-boundary-events](../../specs/120-bpmn-boundary-events/spec.md) | 120-bpmn-boundary-events | Implemented | - | 0 | 0 | superseded, deferred, out of scope |
 | [121-bpmn-multi-instance](../../specs/121-bpmn-multi-instance/spec.md) | 121-bpmn-multi-instance | Implemented | - | 0 | 0 | superseded, retained, deferred, out of scope |
 | [122-bpmn-cyclic-flows](../../specs/122-bpmn-cyclic-flows/spec.md) | 122-bpmn-cyclic-flows | Implemented | - | 0 | 0 | retained, deferred, out of scope |
-| [123-replaysafe-hop-fusion](../../specs/123-replaysafe-hop-fusion/spec.md) | ReplaySafe hop fusion — fused schedule→start→invoke + inline single-predecessor completion (ADR 0047 D1+D2) | Implemented — original D1/D2 delivery; corrective #2497 delivery gates are tracked below. | - | 0 | 0 | retained, deferred, out of scope |
 | [123-runtime-scoped-variable-read](../../specs/123-runtime-scoped-variable-read/spec.md) | 123-runtime-scoped-variable-read | unknown | - | 0 | 0 | retained, deferred, out of scope |
 | [124-bpmn-compensation](../../specs/124-bpmn-compensation/spec.md) | 124-bpmn-compensation | Implemented | - | 0 | 0 | retained, out of scope |
 | [125-bpmn-transactions](../../specs/125-bpmn-transactions/spec.md) | 125-bpmn-transactions | Implemented | - | 0 | 0 | deferred, out of scope |
 | [126-runtime-child-parent-notification](../../specs/126-runtime-child-parent-notification/spec.md) | 126-runtime-child-parent-notification | unknown | - | 0 | 0 | out of scope |
 | [127-bpmn-escalation](../../specs/127-bpmn-escalation/spec.md) | 127-bpmn-escalation | Implemented | - | 0 | 0 | out of scope |
 | [128-bpmn-event-subprocesses](../../specs/128-bpmn-event-subprocesses/spec.md) | 128-bpmn-event-subprocesses | Implemented | - | 0 | 0 | deferred, out of scope |
-| [128-runtime-actor-terminal-eviction](../../specs/128-runtime-actor-terminal-eviction/spec.md) | In-process workflow-execution actor terminal eviction / passivation trigger | Implemented — merged in PR #983 | - | 0 | 0 | retained, deferred |
 | [129-cold-start-phase-instrument](../../specs/129-cold-start-phase-instrument/spec.md) | 129-cold-start-phase-instrument | unknown | - | 0 | 0 | deferred |
 | [130-runtime-envelope-build-cpu](../../specs/130-runtime-envelope-build-cpu/spec.md) | Per-hop envelope-building CPU — measure-first characterization | Complete — **KILL verdict** (envelope-building-CPU hypothesis refuted; instrument landed as permanent tripwire; store-read follow-up re-aimed). See [research.md](./research.md). | - | 0 | 0 | deferred |
 | [131-coalesced-inspection-read-memo](../../specs/131-coalesced-inspection-read-memo/spec.md) | 131-coalesced-inspection-read-memo | unknown | - | 0 | 0 | retained, out of scope |
 | [132-deferred-fault-absorption](../../specs/132-deferred-fault-absorption/spec.md) | 132-deferred-fault-absorption | unknown | - | 0 | 0 | deferred, out of scope |
-| [132-eager-shell-activation](../../specs/132-eager-shell-activation/spec.md) | 132-eager-shell-activation | unknown | - | 0 | 0 | - |
-| [133-bpmn-call-activity](../../specs/133-bpmn-call-activity/spec.md) | 133-bpmn-call-activity | Implemented | - | 0 | 0 | out of scope |
 | [133-schema-admission-skip-and-batch](../../specs/133-schema-admission-skip-and-batch/spec.md) | 133-schema-admission-skip-and-batch | unknown | - | 0 | 0 | deferred |
 | [134-bpmn-event-subprocess-tier2](../../specs/134-bpmn-event-subprocess-tier2/spec.md) | 134-bpmn-event-subprocess-tier2 | Implemented | - | 0 | 0 | superseded, deferred, out of scope |
-| [134-container-readytorun-publish](../../specs/134-container-readytorun-publish/spec.md) | 134-container-readytorun-publish | unknown | - | 0 | 0 | out of scope |
 | [135-bpmn-message-send](../../specs/135-bpmn-message-send/spec.md) | 135-bpmn-message-send | Implemented | - | 0 | 0 | out of scope |
 | [136-bpmn-collaboration-import](../../specs/136-bpmn-collaboration-import/spec.md) | 136-bpmn-collaboration-import | Implemented | - | 0 | 0 | out of scope |
-| [137-dispatch-cancel-on-subtree](../../specs/137-dispatch-cancel-on-subtree/spec.md) | Cancel Waited Dispatches on Subtree Teardown | Draft | - | 12 | 0 | - |
-| [137-receive-correlation](../../specs/137-receive-correlation/spec.md) | Receive Event Correlation | Draft | - | 15 | 0 | retained, out of scope |
+| [137-dispatch-cancel-on-subtree](../../specs/137-dispatch-cancel-on-subtree/spec.md) | Cancel Waited Dispatches on Subtree Teardown | Implemented — all tasks checked in 98877621b (PR #1035) | - | 12 | 0 | - |
 | [138-reusable-boundary-outcomes](../../specs/138-reusable-boundary-outcomes/spec.md) | Reusable Activity Boundary Outcomes | Draft | - | 18 | 1 | - |
 | [139-groundwork-diagnostics-persistence](../../specs/139-groundwork-diagnostics-persistence/spec.md) | Durable Diagnostics Persistence | Draft | - | 48 | 14 | retained, out of scope |
 | [140-incident-strategies](../../specs/140-incident-strategies/spec.md) | Extensible Incident Strategies | Approved | - | 54 | 0 | retained |
@@ -235,7 +204,38 @@ Reads current `specs/*` folders and task checkboxes. Status clues are textual, n
 | [194-portable-private-inputs](../../specs/194-portable-private-inputs/spec.md) | Portable compositions with required private inputs | Draft — specification checkpoint #2457; no production portability delivered | - | 0 | 0 | retained, deferred |
 | [195-authoring-api-boundary](../../specs/195-authoring-api-boundary/spec.md) | Authoring-only API | Draft | - | 0 | 0 | retained |
 | [196-coalesced-command-scope](../../specs/196-coalesced-command-scope/spec.md) | Coalesced Command Scope | Implemented | - | 10 | 1 | - |
-| [197-bounded-durable-value-page-reuse](../../specs/197-bounded-durable-value-page-reuse/spec.md) | Bounded Durable-Value Page Reuse | Draft | - | 17 | 0 | retained, deferred |
+| [197-bounded-durable-value-page-reuse](../../specs/197-bounded-durable-value-page-reuse/spec.md) | Bounded Durable-Value Page Reuse | Implemented — all tasks checked in 9a472affd (PR #2492) | - | 17 | 0 | retained, deferred |
 | [198-response-replay-safety](../../specs/198-response-replay-safety/spec.md) | Response Replay Safety | Implemented — [PR #2518](https://github.com/elsa-workflows/elsa-foundation/pull/2518) | - | 19 | 0 | out of scope |
 | [199-shared-nuplane-adoption](../../specs/199-shared-nuplane-adoption/spec.md) | Shared Nuplane Adapter Adoption | Draft | - | 13 | 2 | retained |
 | [200-root-write-lease-rows](../../specs/200-root-write-lease-rows/spec.md) | Root-Write Lease Coordination Without a Hot Row | Implemented — PR #2539 | - | 30 | 0 | out of scope |
+| [202-groundwork-persistence-foundation](../../specs/202-groundwork-persistence-foundation/spec.md) | Groundwork Persistence Foundation | Draft | - | 23 | 2 | - |
+| [203-groundwork-core-manifest-planner](../../specs/203-groundwork-core-manifest-planner/spec.md) | Groundwork Core Manifest And Planner Kernel | Implemented | - | 38 | 0 | - |
+| [204-groundwork-sqlite-document-store](../../specs/204-groundwork-sqlite-document-store/spec.md) | Groundwork SQLite Document Store | Implemented | - | 17 | 0 | - |
+| [205-groundwork-elsa-bridge](../../specs/205-groundwork-elsa-bridge/spec.md) | Groundwork Elsa Bridge | Implemented | - | 18 | 0 | out of scope |
+| [206-workflow-execution-slice](../../specs/206-workflow-execution-slice/spec.md) | Workflow Execution Vertical Slice | Implemented | - | 40 | 0 | superseded, out of scope |
+| [207-groundwork-relational-providers](../../specs/207-groundwork-relational-providers/spec.md) | Groundwork SQL Server And PostgreSQL Providers | Implemented | - | 21 | 0 | - |
+| [208-groundwork-mongodb-provider](../../specs/208-groundwork-mongodb-provider/spec.md) | Groundwork MongoDB Provider | Implemented | - | 15 | 0 | - |
+| [209-groundwork-runtime-entities](../../specs/209-groundwork-runtime-entities/spec.md) | Groundwork Runtime-Defined Entities | Implemented | - | 9 | 0 | deferred |
+| [210-groundwork-physicalization-performance](../../specs/210-groundwork-physicalization-performance/spec.md) | Groundwork Physicalization And Performance | Implemented | - | 17 | 0 | deferred |
+| [211-groundwork-runtime-evaluation-hardening](../../specs/211-groundwork-runtime-evaluation-hardening/spec.md) | Groundwork Runtime Evaluation And Hardening | Implemented | - | 9 | 0 | - |
+| [212-groundwork-host-configurable-runtime-store-poc](../../specs/212-groundwork-host-configurable-runtime-store-poc/spec.md) | Groundwork Host-Configurable Runtime Store POC | Draft | - | 0 | 7 | - |
+| [213-diagnostics-structured-logs](../../specs/213-diagnostics-structured-logs/spec.md) | Diagnostics — Structured Logs (Capture, Live Streaming & Query) | Implemented | - | 37 | 0 | retained, deferred, out of scope |
+| [214-activity-execution-inspection](../../specs/214-activity-execution-inspection/spec.md) | Activity Execution Inspection | Implemented — all tasks checked in b08684db7 | - | 51 | 0 | deferred, out of scope |
+| [215-runtime-checkpoint-slot-decomposition](../../specs/215-runtime-checkpoint-slot-decomposition/spec.md) | Runtime Checkpoint Slot Decomposition (ADR 0029 Move 2, first slice) | Implemented — establishes the Move 2 decomposition pattern (first slice); the remaining handlers are spec 084. | - | 0 | 0 | retained, out of scope |
+| [216-runtime-http-performance](../../specs/216-runtime-http-performance/spec.md) | Runtime HTTP Hot-Path Performance | Implemented | - | 23 | 0 | - |
+| [217-trigger-contract-hardening](../../specs/217-trigger-contract-hardening/spec.md) | Trigger Publication Contract Hardening | Implemented (merged 2026-07-11 in PR #628) | - | 38 | 0 | retained |
+| [218-structured-logs-replay-cursors](../../specs/218-structured-logs-replay-cursors/spec.md) | Durable Structured Logs Replay Cursors | Ratified and verified (2026-07-12). | - | 0 | 0 | retained, out of scope |
+| [219-domain-owned-apis](../../specs/219-domain-owned-apis/spec.md) | Domain-Owned Management APIs | Implemented and verified (2026-07-13) | - | 108 | 0 | retained |
+| [220-reusable-activity-definitions](../../specs/220-reusable-activity-definitions/spec.md) | Reusable Activity Definitions | Implemented | - | 104 | 0 | retained, deferred, out of scope |
+| [221-groundwork-aspnetcore-identity](../../specs/221-groundwork-aspnetcore-identity/spec.md) | Groundwork ASP.NET Core Identity | Draft | - | 87 | 2 | - |
+| [222-runtime-intent-handlers](../../specs/222-runtime-intent-handlers/spec.md) | Contributed Runtime Intent Handlers | Approved | - | 24 | 0 | out of scope |
+| [223-openiddict-groundwork-stores](../../specs/223-openiddict-groundwork-stores/spec.md) | OpenIddict Groundwork Stores | Draft | - | 11 | 62 | superseded, retained, deferred |
+| [224-bpmn-container-activity](../../specs/224-bpmn-container-activity/spec.md) | 224-bpmn-container-activity | Implemented | - | 0 | 0 | deferred, out of scope |
+| [225-group-commit-fsync-sharing](../../specs/225-group-commit-fsync-sharing/spec.md) | Group-commit / cross-drain fsync sharing on the shared durable writer | Draft (design + implementation; measurement gated — see [research.md](./research.md)) | - | 0 | 0 | - |
+| [226-bpmn-event-based-gateway](../../specs/226-bpmn-event-based-gateway/spec.md) | 226-bpmn-event-based-gateway | Implemented | - | 0 | 0 | deferred, out of scope |
+| [227-replaysafe-hop-fusion](../../specs/227-replaysafe-hop-fusion/spec.md) | ReplaySafe hop fusion — fused schedule→start→invoke + inline single-predecessor completion (ADR 0047 D1+D2) | Implemented — original D1/D2 delivery; corrective #2497 delivery gates are tracked below. | - | 0 | 0 | retained, deferred, out of scope |
+| [228-runtime-actor-terminal-eviction](../../specs/228-runtime-actor-terminal-eviction/spec.md) | In-process workflow-execution actor terminal eviction / passivation trigger | Implemented — merged in PR #983 | - | 0 | 0 | retained, deferred |
+| [229-eager-shell-activation](../../specs/229-eager-shell-activation/spec.md) | 229-eager-shell-activation | unknown | - | 0 | 0 | - |
+| [230-bpmn-call-activity](../../specs/230-bpmn-call-activity/spec.md) | 230-bpmn-call-activity | Implemented | - | 0 | 0 | out of scope |
+| [231-container-readytorun-publish](../../specs/231-container-readytorun-publish/spec.md) | 231-container-readytorun-publish | unknown | - | 0 | 0 | out of scope |
+| [232-receive-correlation](../../specs/232-receive-correlation/spec.md) | Receive Event Correlation | Implemented — all tasks checked in ac027653e | - | 15 | 0 | retained, out of scope |

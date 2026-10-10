@@ -4,9 +4,9 @@
 
 **Created**: 2026-07-04
 
-**Status**: Draft — completes ADR 0029 **Move 2** across all remaining scheduler handlers and folds in the surrounding runtime structural remediation (RT-4/RT-7/RT-8/RT-11) from the elsa-4 architecture review. Behavior-preserving.
+**Status**: Implemented — all tasks checked in a3df11b40; completes ADR 0029 **Move 2** across all remaining scheduler handlers and folds in the surrounding runtime structural remediation (RT-4/RT-7/RT-8/RT-11) from the elsa-4 architecture review. Behavior-preserving.
 
-**Input**: Continuation of [spec 083](../083-runtime-checkpoint-slot-decomposition/spec.md) (Move 2 first slice — Cancel only, merged as #366) and the [elsa-4 architecture review roadmap](../../docs/reports/elsa-4-architecture-review-2026-07/roadmap.md) unit **W12. Runtime structure** (findings RT-4, RT-6, RT-7, RT-8, RT-11). Spec 083 was deliberately scoped "first slice, Cancel only" and is **done**; this spec owns the remainder so history stays clean.
+**Input**: Continuation of [spec 083](../215-runtime-checkpoint-slot-decomposition/spec.md) (Move 2 first slice — Cancel only, merged as #366) and the [elsa-4 architecture review roadmap](../../docs/reports/elsa-4-architecture-review-2026-07/roadmap.md) unit **W12. Runtime structure** (findings RT-4, RT-6, RT-7, RT-8, RT-11). Spec 083 was deliberately scoped "first slice, Cancel only" and is **done**; this spec owns the remainder so history stays clean.
 
 ## Context
 

@@ -280,10 +280,10 @@ children, and diagnostics.
 
 ## Slice scope and phasing
 
-This module currently ships the Phase 1 core subset (see `specs/108-bpmn-container-activity/`) plus
+This module currently ships the Phase 1 core subset (see `specs/224-bpmn-container-activity/`) plus
 the Phase 2 catch-events (see `specs/116-bpmn-catch-events/`), event-start (see
 `specs/117-bpmn-event-start-events/`), event-based-gateway (see
-`specs/119-bpmn-event-based-gateway/`), boundary-events (see `specs/120-bpmn-boundary-events/`), and
+`specs/226-bpmn-event-based-gateway/`), boundary-events (see `specs/120-bpmn-boundary-events/`), and
 multi-instance (see `specs/121-bpmn-multi-instance/` and `specs/123-runtime-scoped-variable-read/`),
 cyclic-sequence-flow (see `specs/122-bpmn-cyclic-flows/`), compensation (see
 `specs/124-bpmn-compensation/`), and transactions (see `specs/125-bpmn-transactions/`) slices:
@@ -302,7 +302,7 @@ optional `activityRef`) and **transactions** (`<transaction>` + `cancelEventDefi
 a transaction and on a boundary attached to a transaction host) and **call activities** (`<callActivity>` with
 an `elsa:workflowDefinitionId` extension attribute → a bound `DispatchWorkflow` child, honoring
 `elsa:waitForCompletion="false"`; a plain `calledElement` imports unbound with an Info finding and a
-`bpmn.calledElement` passthrough — see `specs/133-bpmn-call-activity/`), so these constructs can now be authored
+`bpmn.calledElement` passthrough — see `specs/230-bpmn-call-activity/`), so these constructs can now be authored
 from XML; a cyclic document imports clean. The **message send surface** (see `specs/135-bpmn-message-send/`) adds
 message intermediate throw + message end events and `sendTask`/`receiveTask` (bound `PublishEvent` sends /
 `Event` catch), and round-trips them (`messageEventDefinition` + deduped root `<message>` declarations;
