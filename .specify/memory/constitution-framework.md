@@ -3,6 +3,12 @@ Draft history moved to ../../docs/reports/archive/constitution-draft-history.md.
 This constitution file is the generic quality-gate layer: gates, allowed exceptions,
 ratification state, and governance. Canonical term lookup lives in ../../docs/glossary/.
 
+SYNC IMPACT REPORT — 5.0.0 -> 5.0.1 (2026-10-10)
+Amendment: §2.22.1 no longer cites CatalogParityTests, which #2573 deleted under §2.23.2 (tests MUST NOT
+  assert on markdown). Catalog drift is caught at code review. PATCH: corrects a statement of fact.
+Templates requiring updates: .specify/memory/constitution.md (re-pin to v5.0.1).
+Approval: Sipke Schoorstra, 2026-10-10 (ADR 0080 D1).
+
 SYNC IMPACT REPORT — 4.0.1 -> 5.0.0 (2026-10-10)
 Amendment: risk-based testing, internal-by-default visibility and the Extension suffix (ADR 0080 D1, D3, D5).
   MAJOR per Governance > Versioning: removes and redefines prescribed rules.
@@ -60,7 +66,7 @@ Ratification: RATIFIED 2026-08-08 by Sipke Schoorstra, on his authority alone. G
 -->
 # Modular Software Design Framework Constitution
 
-**Version:** 5.0.0
+**Version:** 5.0.1
 **Status:** Ratified 2026-08-08 by Sipke Schoorstra. Governance > Amendment process calls for consensus among Joey Barten, Sipke Schoorstra, and Frans van Ek; this ratification was taken on Sipke Schoorstra's authority alone and is open to revision if the other architects dissent. Section-level gates still marked draft, provisional, or pending ratification — whether via their own `Status:` line (§2.24) or inline wording — remain so and are **not** covered by this ratification.
 **Layer:** Generic framework constitution. The Elsa workflow-engine constitution derives from this document — see `constitution.md`.
 
@@ -831,7 +837,7 @@ Generated maps are the current review surface for extension-point catalog/index 
 
 **(e) New feature or `.Core` project that exposes extension points** — the feature ships a new `EXTENSION_POINTS.md` as part of its initial deliverable, before merge.
 
-The `CatalogParityTests` reflection guard (§2.23-adjacent) catches event-heading drift automatically; contributor-interface and known-implementations drift is caught at code review. Both layers are required.
+Catalog drift (event headings, contributor interfaces, known implementations) is caught at code review. A test MUST NOT assert on catalog text (§2.23.2).
 
 #### §2.22.2 Repo-wide extension-points index
 
@@ -1048,4 +1054,4 @@ The framework constitution is intentionally written with synthetic and `<App>`-p
 
 ---
 
-**Version:** 5.0.0 | **Ratified:** 2026-08-08 | **Last Amended:** 2026-10-10
+**Version:** 5.0.1 | **Ratified:** 2026-08-08 | **Last Amended:** 2026-10-10
