@@ -55,13 +55,18 @@ public sealed class DependencyMapTests
     [Fact]
     public void No_project_directory_is_nested_inside_another()
     {
-        var nested = Nodes
-            .SelectMany(inner => Nodes
-                .Where(outer => inner.Directory.Length > outer.Directory.Length && inner.Directory.StartsWith(outer.Directory, StringComparison.Ordinal))
-                .Select(outer => $"{inner.Path} is inside {outer.Path}"))
+        // Every tracked project, not only the dependency map's nodes, so tools/ and samples/ are held to it too.
+        var directories = TrackedFiles("src", "tests", "tools", "samples")
+            .Where(file => file.EndsWith(".csproj", StringComparison.Ordinal))
+            .Select(file => file[..(file.LastIndexOf('/') + 1)])
+            .ToArray();
+        var nested = directories
+            .SelectMany(inner => directories
+                .Where(outer => inner.Length > outer.Length && inner.StartsWith(outer, StringComparison.Ordinal))
+                .Select(outer => $"{inner} is inside {outer}"))
             .ToArray();
 
-        Assert.True(Nodes.Count > 1, "The dependency map holds too few projects for the nesting check to mean anything.");
+        Assert.True(directories.Length > Nodes.Count, "The nesting check must cover more projects than the dependency map does.");
         Assert.True(nested.Length == 0,
             "Move the outer project into a sub-folder named after it instead of excluding the inner one from its globs:" +
             string.Concat(nested.Select(entry => $"{Environment.NewLine}  {entry}")));
