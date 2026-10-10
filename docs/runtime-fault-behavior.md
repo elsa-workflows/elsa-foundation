@@ -29,7 +29,7 @@ So this map starts from the observer list and the defaults, not from the loop.
 | Recorded as | a blocking `IncidentState` (severity `Error`), plus the activity state moved to `Faulted` | a `RuntimeSchedulerPoisonRecord` in the poison store |
 | Dispatch result | `Completed`, so the drain loop keeps going | `Faulted`, so the drain loop breaks |
 | Decided by | the workflow's authored `IIncidentStrategy`, applied at quiescence | `IRuntimeDomainRetryPolicy`, applied immediately |
-| Default outcome | workflow status becomes `Faulted` (default strategy is `Fault/1`) | item parked as `Poisoned`, projected into a blocking incident; **the workflow stays `Running`** |
+| Default outcome | workflow status becomes `Faulted` (default strategy is `Fault/1`) | item parked as `Poisoned`, projected into a blocking incident; **the workflow stays `Running`** (a poisoned first checkpoint is the exception, below) |
 | Activity state | `Faulted` with a fault sub-status | untouched, it stays whatever it was |
 | Retried by default | no | no (`NoopRuntimeDomainRetryPolicy` returns an explicit `DoNotRetry`) |
 
@@ -228,6 +228,21 @@ than quiescing and because its intervention outcome is already decided. Activity
 it was, typically `Scheduled` or `Running`; an attributable activity gains the incident association
 and an inspection projection in the same `IncidentRecorded` checkpoint.
 
+### A poisoned first checkpoint
+
+The one exception is a poisoned first checkpoint (#2537). The execution never reached a checkpoint, so it
+has no workflow to leave non-terminal, and a durable provider refuses an incident without its workflow and
+run-health projection. Before this, such a run appeared nowhere: not in the instance list, not as an
+incident. When the drain ran this execution's start command, the observer now builds the execution from
+that command and commits it `Faulted`, together with the incident, in one `WorkflowFaulted` checkpoint.
+The incident's outcome is `FaultWorkflow`, still with system source `PoisonedSchedulerWork`.
+
+A dispatched child qualifies only where the dispatch store can project its parent's resume, the same rule
+`CheckpointRuleViolationWorkflowFaulter` applies to a refused first commit (#1799). Unlike that faulter,
+this applies to root starts too: a poisoned start's caller has often already timed out, so the faulted
+execution is the operator's only trace. Without the start command, for example on a later re-drive, there
+is nothing to build the execution from, and only the incident is attempted, as before.
+
 Activity command payloads supply the exact activity execution and executable node address. A portable
 input failure also records its input key, expression language, phase and failure classification. The
 observer synthesizes payload-free failed-input evidence linked to the incident: there is no successful
@@ -355,6 +370,7 @@ Changing the catalog default only affects workflows published afterwards.
 | the dispatch deadline is routed into the poison ladder on purpose | `WorkflowSchedulerDrainer.RenewClaimUntilStoppedAsync`, `RuntimeSchedulerDispatchDeadlineExceededException` |
 | the default retry policy returns an explicit `DoNotRetry` | `src/essentials/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Incidents/NoopRuntimeDomainRetryPolicy.cs` |
 | poison records become blocking critical incidents with a `WaitForIntervention` outcome, idempotently and best-effort | `src/essentials/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Incidents/PoisonedSchedulerWorkIncidentObserver.cs` |
+| a poisoned first checkpoint records the execution `Faulted` from its start command, with the incident | `PoisonedSchedulerWorkIncidentObserver.ReadUnstartedExecutionAsync`, `StartCommandExecution` |
 | observer order, and the defaults table | `src/essentials/Workflows/Runtime/Elsa.Workflows.Runtime/Extensions/RuntimeCoreServiceCollectionExtensions.cs` |
 | quiescence is the orchestrator's aggregate stop reason, and observers are notified after the drain | `src/essentials/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Scheduler/WorkflowDrainOrchestrator.cs` (`DrainSchedulerAndPostCommitWorkAsync`, `NotifyObserversAsync`) |
 | a checkpoint rule refusal faults the workflow under the drain's lease, with a commit built from its last accepted state, or from the start command when a dispatched child's first commit was refused | `WorkflowDrainOrchestrator.DrainAsync`, `src/essentials/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Incidents/CheckpointRuleViolationWorkflowFaulter.cs`, `WorkflowSchedulerDrainer.DispatchAsync` (`checkpointRuleViolation`) |
@@ -368,6 +384,8 @@ Behavioral guards worth reading alongside the code:
 - `tests/essentials/Workflows/Runtime/Tests/PoisonedSchedulerWorkIncidentObserverTests.cs`:
   `ObserverChain_PoisonedRecord_PreservesSystemWaitAndNonterminalWorkflow` establishes that Path B
   leaves the workflow non-terminal.
+- `tests/essentials/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/PoisonedFirstCheckpointContractTests.cs`:
+  a poisoned first checkpoint records the execution `Faulted` with its incident on every store (#2537).
 - `tests/essentials/Workflows/Runtime/Tests/WorkflowSchedulerPoisonDrainTests.cs`: the retry-mode ladder,
   including that the default policy neither retries nor re-enqueues, and
   `DrainAsync_HandlerFaultWithNoRetryPolicyAtAll_StillLeavesADurableRecord`, which pins that an empty
