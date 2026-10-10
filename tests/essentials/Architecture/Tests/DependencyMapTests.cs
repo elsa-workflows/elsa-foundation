@@ -64,9 +64,14 @@ public sealed class DependencyMapTests
             .SelectMany(inner => directories
                 .Where(outer => inner.Length > outer.Length && inner.StartsWith(outer, StringComparison.Ordinal))
                 .Select(outer => $"{inner} is inside {outer}"))
+            .Concat(directories
+                .GroupBy(directory => directory, StringComparer.Ordinal)
+                .Where(group => group.Count() > 1)
+                .Select(group => $"{group.Key} holds {group.Count()} projects"))
             .ToArray();
 
-        Assert.True(directories.Length > Nodes.Count, "The nesting check must cover more projects than the dependency map does.");
+        Assert.All((string[])["src/", "tests/", "tools/", "samples/"],
+            root => Assert.Contains(directories, directory => directory.StartsWith(root, StringComparison.Ordinal)));
         Assert.True(nested.Length == 0,
             "Move the outer project into a sub-folder named after it instead of excluding the inner one from its globs:" +
             string.Concat(nested.Select(entry => $"{Environment.NewLine}  {entry}")));
