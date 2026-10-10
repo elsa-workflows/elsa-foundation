@@ -775,9 +775,11 @@ public sealed class WorkflowExecutableCompilerTests
         Assert.Equal("writeline-1a75fea9", Assert.Single(executable.RootActivity.ChildSlots).Activities.Single().ExecutableNodeId);
     }
 
-    // ADR 0032 R1 / spec 107: the [ActivitySideEffectProfile] attribute is folded into the pinned contract by
-    // the publish-time compiler. Flowchart is declared ReplaySafe; the test-only Test.WriteLine (TestWriteLineActivity,
-    // unmarked) defaults to External. The shipped WriteLine is ReplaySafe since #2581 and is not used here.
+    /// <summary>
+    /// Verifies that the compiler pins Flowchart's declared ReplaySafe profile and defaults the unmarked
+    /// Test.WriteLine activity to External (ADR 0032 R1 / spec 107). The shipped WriteLine is ReplaySafe
+    /// since #2581 and is not used here.
+    /// </summary>
     [Fact]
     public async Task Compiler_folds_the_declared_side_effect_profile_into_the_pinned_contract()
     {

@@ -17,6 +17,7 @@ public sealed class WriteLine : Activity<ActivityUnit>
     [Required]
     public string Text { get; set; } = null!;
 
+    /// <summary>Writes the hydrated text to the console and completes with a unit result.</summary>
     protected override ValueTask<ActivityTransition<ActivityUnit>> ExecuteAsync(ActivityExecutionContext context)
     {
         Console.WriteLine(Text);

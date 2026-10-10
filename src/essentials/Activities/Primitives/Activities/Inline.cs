@@ -29,6 +29,7 @@ public sealed class Inline : Activity<object?>
     [ActivityInput(Key = nameof(Expression))]
     public object? Expression { get; set; }
 
+    /// <summary>Completes with the expression value already materialized by the input-binding pipeline.</summary>
     protected override ValueTask<ActivityTransition<object?>> ExecuteAsync(ActivityExecutionContext context) =>
         ValueTask.FromResult(ActivityTransition.Complete(Expression));
 }

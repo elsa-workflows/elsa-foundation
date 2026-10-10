@@ -45,6 +45,7 @@ public sealed class Fault : Activity<ActivityUnit>
     [ActivityInput(Key = "faultType", Order = 30)]
     public string? FaultType { get; set; }
 
+    /// <summary>Returns a non-retryable fault using the hydrated inputs and defaults for blank code or message values.</summary>
     protected override ValueTask<ActivityTransition<ActivityUnit>> ExecuteAsync(ActivityExecutionContext context) =>
         ValueTask.FromResult(ActivityTransition.Fault<ActivityUnit>(new ActivityFault(
             Coalesce(Code, DefaultCode),

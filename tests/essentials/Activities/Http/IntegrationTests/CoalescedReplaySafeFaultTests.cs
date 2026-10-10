@@ -24,6 +24,7 @@ public sealed class CoalescedReplaySafeFaultTests
     private const string FaultCode = "replay-safe.fault";
     private const string FaultMessage = "The replay-safe fault ran.";
 
+    /// <summary>Verifies that coalesced execution durably commits the fault incident and deferred leaf claims at the incident boundary.</summary>
     [Fact]
     public async Task A_ReplaySafe_Fault_commits_its_incident_together_with_the_deferred_claims()
     {
@@ -71,6 +72,7 @@ public sealed class CoalescedReplaySafeFaultTests
         Assert.Contains(commitIds, id => id.EndsWith($":incident-recorded:{incident.IncidentId}", StringComparison.Ordinal));
     }
 
+    /// <summary>Asserts that the persisted state contains one ended attempt with the expected transition, incident, and activation claim.</summary>
     private static void AssertDurableClaimedAttempt(ActivityExecutionState state, ActivityTransitionKind transition, string? incidentId)
     {
         var attempt = Assert.Single(state.Attempts!);

@@ -93,6 +93,7 @@ internal static class ReferenceWorkflows
         return Executable("fork-join-resume", parallel, [], ResumeTarget(EventNodeId, Event.ResumeTargetId));
     }
 
+    /// <summary>Builds a test executable with the supplied root, variables, and resume targets using the fault incident strategy.</summary>
     internal static WorkflowExecutable Executable(
         string name,
         ExecutableNode root,
@@ -111,6 +112,7 @@ internal static class ReferenceWorkflows
             IncidentStrategyBuiltIns.FaultReference,
             workflowVariables: variables);
 
+    /// <summary>Builds a sequence node with child slots and execution order derived from the supplied children.</summary>
     internal static ExecutableNode Sequence(string nodeId, params ExecutableNode[] children) =>
         Clr(
             nodeId,
@@ -119,6 +121,7 @@ internal static class ReferenceWorkflows
             childSlots: SequenceShape.ChildSlots(children),
             structure: SequenceShape.Structure(children));
 
+    /// <summary>Builds a CLR activity node from its scanned contract, applying authored bindings and defaults for missing inputs.</summary>
     internal static ExecutableNode Clr(
         string nodeId,
         Type activityType,

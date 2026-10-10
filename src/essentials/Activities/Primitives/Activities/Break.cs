@@ -40,6 +40,7 @@ namespace Elsa.Activities.Primitives.Activities;
 [ActivitySideEffectProfile(SideEffectProfile.ReplaySafe)]
 public sealed class Break : Activity<ActivityUnit>
 {
+    /// <summary>Completes with the break outcome so the enclosing loop can stop.</summary>
     protected override ValueTask<ActivityTransition<ActivityUnit>> ExecuteAsync(ActivityExecutionContext context) =>
         ValueTask.FromResult(ActivityTransition.Complete(ActivityUnit.Value, ActivityOutcomes.Break));
 }

@@ -33,6 +33,7 @@ public sealed class ActivitySideEffectProfileTests
         typeof(While.Activities.While)
     ];
 
+    /// <summary>Verifies that the shipped activities classified as ReplaySafe exactly match the reviewed set.</summary>
     [Fact]
     public void Only_the_reviewed_activities_are_ReplaySafe()
     {

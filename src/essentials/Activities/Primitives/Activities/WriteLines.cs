@@ -22,6 +22,7 @@ public sealed class WriteLines : Activity<ActivityUnit>
     [ActivityInput(Key = nameof(Lines))]
     public List<string>? Lines { get; set; }
 
+    /// <summary>Writes each hydrated line in order, if any, and completes with a unit result.</summary>
     protected override ValueTask<ActivityTransition<ActivityUnit>> ExecuteAsync(ActivityExecutionContext context)
     {
         if (Lines is not null)
