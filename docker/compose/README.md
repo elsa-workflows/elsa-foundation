@@ -47,7 +47,8 @@ For a pinned, isolated check that Studio can create and run a workflow against W
 > The `elsa-data` volume needs an image built after #2191, which creates `/app/data` owned by the
 > image's `$APP_UID` (1654). With an older image the volume starts out owned by root and the container
 > cannot write to it: pull the newer image, or give the volume to `$APP_UID` once before the first start.
-> With Compose: `docker compose -f docker-compose.images.yml run --rm --no-deps --user root --entrypoint chown elsa-workbench 1654:1654 /app/data`;
+> With Compose, use the same project name and file as your startup command below (replace `elsa-demo`
+> if you chose another name): `docker compose -p elsa-demo -f docker-compose.images.yml run --rm --no-deps --user root --entrypoint chown elsa-workbench 1654:1654 /app/data`;
 > with the Docker CLI: `docker run --rm --user root --entrypoint chown -v elsa-data:/app/data elsaworkflows/elsa-workbench:latest 1654:1654 /app/data`.
 
 ### With Docker Compose
