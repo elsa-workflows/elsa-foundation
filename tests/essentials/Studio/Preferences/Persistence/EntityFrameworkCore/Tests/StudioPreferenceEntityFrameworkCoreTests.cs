@@ -437,6 +437,7 @@ public sealed class StudioPreferenceEntityFrameworkCoreTests
         }
     }
 
+    // Kept beside the composition test (§2.23.1): what a feature must not register (no in-memory store) and the backend it selects.
     [Fact]
     public void EF_module_registers_a_store_and_carries_no_foreign_persistence_dependency()
     {

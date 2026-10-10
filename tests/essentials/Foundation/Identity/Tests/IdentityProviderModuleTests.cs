@@ -3,13 +3,9 @@ using Elsa.Foundation.Identity.Core.Authentication;
 using Elsa.Foundation.Identity.Authorization;
 using Elsa.Foundation.Identity.Core.Authorization;
 using Elsa.Foundation.Identity.Core.Iam;
-using Elsa.Foundation.Identity.Api;
 using Elsa.Foundation.Identity.Api.Extensions;
-using Elsa.Foundation.Identity.AspNetCoreIdentity;
 using Elsa.Foundation.Identity.AspNetCoreIdentity.Extensions;
-using Elsa.Foundation.Identity.Oidc;
 using Elsa.Foundation.Identity.Oidc.Extensions;
-using Elsa.Foundation.Identity.OpenIddict;
 using Elsa.Foundation.Identity.OpenIddict.EntityFrameworkCore;
 using Elsa.Foundation.Identity.OpenIddict.Extensions;
 using Microsoft.EntityFrameworkCore;
@@ -19,26 +15,6 @@ namespace Elsa.Foundation.Identity.Tests;
 
 public sealed class IdentityProviderModuleTests
 {
-    [Fact]
-    public void FeatureClassesRegisterOwnedServices()
-    {
-        var services = new ServiceCollection();
-
-        new FoundationIdentityApiFeature().ConfigureServices(services);
-        new AspNetCoreIdentityFeature().ConfigureServices(services);
-        new OidcAuthenticationFeature().ConfigureServices(services);
-        services.AddOpenIddictVendorForTests(
-            builder => builder.UseInMemoryDatabase($"openiddict-{Guid.NewGuid():n}"));
-        new OpenIddictIdentityFeature().ConfigureServices(services);
-        using var provider = services.BuildServiceProvider();
-
-        Assert.NotNull(provider.GetRequiredService<IAuthSessionService>());
-        Assert.NotNull(provider.GetRequiredService<IPrincipalFactory>());
-        Assert.NotNull(provider.GetRequiredService<ITokenService>());
-        Assert.Contains(provider.GetServices<IAuthenticationProviderModule>(), x => x.ProviderId == "oidc");
-        Assert.Contains(provider.GetServices<IAuthenticationProviderModule>(), x => x.ProviderId == "openiddict");
-    }
-
     [Fact]
     public async Task OidcAndOpenIddictProvidersAreExposedThroughSameProviderManager()
     {

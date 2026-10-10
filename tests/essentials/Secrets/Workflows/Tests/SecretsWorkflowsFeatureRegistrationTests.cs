@@ -27,6 +27,7 @@ public sealed class SecretsWorkflowsFeatureRegistrationTests
     private const string ShellName = "secrets-workflows";
     private readonly ServiceCollection _services = new();
 
+    // Kept beside the composition test (§2.23.1): uniqueness, exactly one secret resolver, the bridge, beside AddSecrets.
     [Fact]
     public void The_feature_registers_exactly_one_secret_resolver_and_it_is_the_bridge()
     {
@@ -61,6 +62,7 @@ public sealed class SecretsWorkflowsFeatureRegistrationTests
         Assert.Equal(typeof(OtherSecretResolver), Assert.Single(_services, descriptor => descriptor.ServiceType == typeof(IRuntimeSecretResolver)).ImplementationType);
     }
 
+    // Kept beside the composition test (§2.23.1): replacement-contract rejection, a resolver beside the bridge is refused.
     [Fact]
     public void A_resolver_registered_beside_the_bridge_is_refused_when_the_bridge_is_composed_again()
     {

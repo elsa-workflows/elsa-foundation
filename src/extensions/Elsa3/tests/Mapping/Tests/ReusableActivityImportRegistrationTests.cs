@@ -8,7 +8,6 @@ using Elsa3.Activities.Design.Import;
 using Elsa3.Activities.Design.Import.Contracts;
 using Elsa3.Activities.Design.Import.Models;
 using Elsa3.Activities.Design.Import.Services;
-using Elsa3.Mapping;
 using Elsa3.Mapping.Mappings;
 using Elsa3.Mapping.Services;
 using Elsa3.Models;
@@ -19,19 +18,6 @@ namespace Elsa3.Mapping.Tests;
 
 public sealed class ReusableActivityImportRegistrationTests
 {
-    [Fact]
-    public void Features_register_analysis_mapping_orchestration_and_atomic_adapter()
-    {
-        var services = new ServiceCollection();
-
-        new Elsa3ImportActivitiesFeature().ConfigureServices(services);
-        new Elsa3MappingFeature().ConfigureServices(services);
-
-        Assert.Contains(services, x => x.ServiceType == typeof(IReusableActivityCollectionAnalyzer) && x.ImplementationType == typeof(ReusableActivityCollectionAnalyzer));
-        Assert.Contains(services, x => x.ServiceType == typeof(IReusableActivityCollectionImporter) && x.ImplementationType == typeof(ReusableActivityCollectionImporter));
-        Assert.Contains(services, x => x.ServiceType == typeof(IReusableActivityImportMaterializer) && x.ImplementationType == typeof(Elsa3ReusableActivityImportMaterializer));
-    }
-
     [Fact]
     public void Import_feature_builds_and_resolves_every_owned_service()
     {

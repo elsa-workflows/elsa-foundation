@@ -5,16 +5,9 @@ using Elsa.Activities.Design.Api.Services;
 using Elsa.Activities.Design.Core.Contracts;
 using Elsa.Activities.Design.Core.Models;
 using Elsa.Activities.Design.Core.Options;
-using Elsa.Activities.Design.Core.Stores;
-using Elsa.Activities.Design.Persistence.Core.Contracts;
-using Elsa.Activities.Design.Persistence.Core.Entities;
-using Elsa.Activities.Design.Persistence.Core.Filters;
-using Elsa.Activities.Design.Persistence.Core.Stores;
-using Elsa.Activities.Design.Reconciliation;
 using Elsa.Activities.Design.Reconciliation.Clr;
 using Elsa.Activities.Design.Reconciliation.Clr.Services;
 using Elsa.Activities.Design.Core.Reconciliation;
-using Elsa.Activities.Runtime;
 using Elsa.Api.Capabilities.Contracts;
 using Elsa.Api.Capabilities.Extensions;
 using Elsa.Events.Core.Contracts;
@@ -24,7 +17,6 @@ using Elsa.Primitives.Contracts;
 using Elsa.Primitives.Hosting.Services;
 using Elsa.Serialization.Core;
 using Elsa.Serialization.SystemText.Services;
-using Elsa.Tasks.Core;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc.Infrastructure;
 using Microsoft.Extensions.DependencyInjection;
@@ -48,52 +40,7 @@ namespace Elsa.Activities.Design.Tests.Registration;
 /// </summary>
 public sealed class ActivityDesignFeatureCompositionTests
 {
-    [Fact]
-    public void ActivitiesRuntimeFeature_RegistersCanonicalMaterializationAndTypeDiscovery()
-    {
-        var services = MinimalServices();
-        new ActivitiesRuntimeFeature().ConfigureServices(services);
-        using var provider = services.BuildServiceProvider();
-
-        Assert.Contains(services, d => d.ServiceType == typeof(Elsa.Workflows.Runtime.Core.Contracts.IRuntimeActivityInputMaterializer)
-            && d.ImplementationType == typeof(Elsa.Workflows.Runtime.Services.Values.RuntimeActivityInputMaterializer));
-        Assert.Contains(services, d => d.ServiceType == typeof(Elsa.Activities.Runtime.Services.ActivityInputHydrator));
-        Assert.Contains(services, d => d.ServiceType == typeof(IStartupTask)
-            && d.ImplementationType == typeof(Elsa.Activities.Runtime.Tasks.RegisterActivityTypesStartupTask));
-    }
-
-    [Fact]
-    public void ActivitiesDesignReconciliationFeature_RegistersReconcilerHasherStartupTaskAndHandler()
-    {
-        var services = MinimalServices();
-        StubReconcilerDependencies(services);
-
-        new ActivitiesDesignReconciliationFeature().ConfigureServices(services);
-
-        Assert.Contains(services, d => d.ServiceType == typeof(IStartupTask)
-            && d.ImplementationType == typeof(Elsa.Activities.Design.Reconciliation.Services.ActivityVersionReconcilerStartupTask));
-
-        Assert.Contains(services, d => d.ServiceType == typeof(IEventHandler)
-            && d.ImplementationType == typeof(Elsa.Activities.Design.Reconciliation.Handlers.CollectActivityVersions));
-
-        using var provider = services.BuildServiceProvider();
-
-        using var scope = provider.CreateScope();
-        Assert.NotNull(scope.ServiceProvider.GetService<IActivityVersionReconciler>());
-    }
-
-    [Fact]
-    public void ActivitiesDesignApiFeature_RegistersActivityAvailabilityEvaluator()
-    {
-        var services = MinimalServices();
-
-        new ActivitiesDesignApiFeature().ConfigureServices(services);
-
-        using var provider = services.BuildServiceProvider();
-
-        Assert.NotNull(provider.GetService<IActivityAvailabilityEvaluator>());
-    }
-
+    // Kept beside the composition test (§2.23.1): idempotence, registering twice adds the refresh once.
     [Fact]
     public void ActivitiesDesignApiFeature_Registers_Dynamic_ApiExplorer_Refresh_Once()
     {
@@ -246,6 +193,7 @@ public sealed class ActivityDesignFeatureCompositionTests
             managementCodec.Decode(managementCodec.Encode(new("scope", 25, -1))));
     }
 
+    // Kept beside the composition test (§2.23.1): resolves with its optional dependencies absent, which the composition test never exercises.
     [Fact]
     public void ActivitiesDesignApiFeature_RegistersActivityFeatureAttributionResolver()
     {
@@ -260,30 +208,6 @@ public sealed class ActivityDesignFeatureCompositionTests
 
         var resolver = scope.ServiceProvider.GetService<IActivityFeatureAttributionResolver>();
         Assert.IsType<ActivityFeatureAttributionResolver>(resolver);
-    }
-
-    [Fact]
-    public void ActivitiesDesignApiFeature_RegistersActivityAvailabilitySettingsStore()
-    {
-        var services = MinimalServices();
-
-        new ActivitiesDesignApiFeature().ConfigureServices(services);
-
-        using var provider = services.BuildServiceProvider();
-
-        Assert.NotNull(provider.GetService<IActivityAvailabilitySettingsStore>());
-    }
-
-    [Fact]
-    public void ActivitiesDesignApiFeature_RegistersActivityAvailabilityDiagnosticsProjector()
-    {
-        var services = MinimalServices();
-
-        new ActivitiesDesignApiFeature().ConfigureServices(services);
-
-        using var provider = services.BuildServiceProvider();
-
-        Assert.NotNull(provider.GetService<IActivityAvailabilityDiagnosticsProjector>());
     }
 
     [Fact]
@@ -341,69 +265,9 @@ public sealed class ActivityDesignFeatureCompositionTests
         return services;
     }
 
-    private static void StubReconcilerDependencies(IServiceCollection services)
-    {
-        services.AddSingleton<IIdentityGenerator, StubIdentityGenerator>();
-        services.AddSingleton<IActivityDefinitionHasher, StubActivityDefinitionHasher>();
-        services.AddSingleton<IActivityDefinitionStore, ThrowingActivityDefinitionStore>();
-        services.AddSingleton<IActivityDefinitionVersionStore, ThrowingActivityDefinitionVersionStore>();
-        services.AddSingleton<IAddActivityDefinitionCommand, StubAddActivityDefinitionCommand>();
-        services.AddSingleton<IAddActivityDefinitionVersionCommand, StubAddActivityDefinitionVersionCommand>();
-    }
-
     private sealed class StubEventPublisher : IInlineEventPublisher
     {
         public Task Publish(IEvent @event, CancellationToken cancellationToken = default) => Task.CompletedTask;
-    }
-
-    private sealed class StubIdentityGenerator : IIdentityGenerator
-    {
-        public string Generate() => Guid.NewGuid().ToString("N");
-    }
-
-    private sealed class StubActivityDefinitionHasher : IActivityDefinitionHasher
-    {
-        public string Hash(IActivityDefinition definition, IActivityDefinitionVersion version) => "stub";
-    }
-
-    private sealed class StubAddActivityDefinitionCommand : IAddActivityDefinitionCommand
-    {
-        public Task<ActivityDefinitionCreated> Execute(
-            Elsa.Workflows.Design.Persistence.Core.Models.DesignOperationKey operationKey,
-            ActivityDefinition definition,
-            ActivityDefinitionVersion version,
-            CancellationToken cancellation) =>
-            Task.FromResult(new ActivityDefinitionCreated(definition.Id, version.Id, version.Version, version.Hash));
-    }
-
-    private sealed class StubAddActivityDefinitionVersionCommand : IAddActivityDefinitionVersionCommand
-    {
-        public Task<ActivityDefinitionVersionAdded> Execute(
-            Elsa.Workflows.Design.Persistence.Core.Models.DesignOperationKey operationKey,
-            ActivityDefinitionVersion version,
-            CancellationToken cancellationToken = default) =>
-            Task.FromResult(new ActivityDefinitionVersionAdded(version.DefinitionId, version.Id, version.Version, version.Hash));
-    }
-
-    private sealed class ThrowingActivityDefinitionStore : IActivityDefinitionStore
-    {
-        private const string Message = "Reconciler registration test must not reach the definition store.";
-        public Task<ActivityDefinition> GetAsync(string id, CancellationToken cancellationToken = default) => throw new InvalidOperationException(Message);
-        public Task<ActivityDefinition?> FindAsync(ActivityDefinitionFilter filter, CancellationToken cancellationToken = default) => throw new InvalidOperationException(Message);
-        public Task<IReadOnlyList<ActivityDefinition>> ListAsync(ActivityDefinitionFilter filter, CancellationToken cancellationToken = default) => throw new InvalidOperationException(Message);
-        public Task<ActivityDefinition?> FindByIdOrActivityTypeKeyAsync(string id, string activityTypeKey, CancellationToken cancellationToken = default) => throw new InvalidOperationException(Message);
-        public Task<bool> ExistsByActivityTypeKeyAsync(string activityTypeKey, CancellationToken cancellationToken = default) => throw new InvalidOperationException(Message);
-    }
-
-    private sealed class ThrowingActivityDefinitionVersionStore : IActivityDefinitionVersionStore
-    {
-        private const string Message = "Reconciler registration test must not reach the version store.";
-        public Task<ActivityDefinitionVersion> GetAsync(string versionId, CancellationToken cancellationToken = default) => throw new InvalidOperationException(Message);
-        public Task<ActivityDefinitionVersion> GetWithDefinitionAsync(string versionId, CancellationToken cancellationToken = default) => throw new InvalidOperationException(Message);
-        public Task<ActivityDefinitionVersion?> FindByDefinitionAndSortKeyAsync(string definitionId, string semVerSortKey, CancellationToken cancellationToken = default) => throw new InvalidOperationException(Message);
-        public Task<IReadOnlyList<ActivityDefinitionVersion>> ListByDefinitionAsync(string definitionId, CancellationToken cancellationToken = default) => throw new InvalidOperationException(Message);
-        public Task<IReadOnlyList<ActivityDefinitionVersion>> ListByDefinitionIdsAsync(IEnumerable<string> definitionIds, CancellationToken cancellationToken = default) => throw new InvalidOperationException(Message);
-        public Task<IReadOnlyList<ActivityDefinitionVersion>> ListAsync(CancellationToken cancellationToken = default) => throw new InvalidOperationException(Message);
     }
 
     private class UnmarkedDependencyContract : IActivityDependencyContextAsync

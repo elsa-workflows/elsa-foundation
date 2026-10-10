@@ -54,9 +54,18 @@ public sealed class CoalescingRuntimeCheckpointCommitStore(
         if (commit.Checkpoint.Metadata.ContainsKey(RuntimeCoalescingMetadataKeys.CoalescedFlush))
         {
             var flushResult = await CommitInnerAsync(session, commit, decision, cancellationToken);
-            session.InvalidateInspectionBaselines();
-            await session.ReconcileDurablyPersistedOutboxAsync(commit.Checkpoint.OccurredAt, cancellationToken);
-            await session.AdvanceInnerQueueAsync(consumeInFlightClaims: true, cancellationToken);
+            try
+            {
+                session.InvalidateInspectionBaselines();
+                await session.ReconcileDurablyPersistedOutboxAsync(commit.Checkpoint.OccurredAt, cancellationToken);
+                await session.AdvanceInnerQueueAsync(consumeInFlightClaims: true, cancellationToken);
+            }
+            catch
+            {
+                AbandonAfterDurableCommit(session);
+                throw;
+            }
+
             session.ClearBuffer();
             session.Deactivate();
             return flushResult;
@@ -102,24 +111,34 @@ public sealed class CoalescingRuntimeCheckpointCommitStore(
             if (continueAfterBoundary)
                 await session.EnsureActiveFusedScheduleAnchorsAsync(cancellationToken);
             await CommitInnerAsync(session, foldedCommit, ImmediateDecision, cancellationToken);
-            session.InvalidateInspectionBaselines();
-            if (capFold)
+            try
             {
-                // The trailing commit's outbox items stay overlay-delivered for the next segment; the flush persisted
-                // them durably as the crash-redrive guarantee, so track them for reconciliation at the next flush.
-                session.RecordCapFlushState(commit.StateChanges);
-                session.MarkOutboxDurablyPersisted(outbox);
+                session.InvalidateInspectionBaselines();
+                if (capFold)
+                {
+                    // The trailing commit's outbox items stay overlay-delivered for the next segment; the flush persisted
+                    // them durably as the crash-redrive guarantee, so track them for reconciliation at the next flush.
+                    session.RecordCapFlushState(commit.StateChanges);
+                    session.MarkOutboxDurablyPersisted(outbox);
+                }
+                else if (continueAfterBoundary)
+                    session.RecordDurableBoundaryState(commit.StateChanges);
+                await session.ReconcileDurablyPersistedOutboxAsync(commit.Checkpoint.OccurredAt, cancellationToken);
+                // A deactivating boundary — and a cap fold, whose trailing commit rode the in-flight dispatch — already
+                // carries the in-flight item's effect in this flush, so the item must be consumed here instead of
+                // surviving as a durable duplicate (see AdvanceInnerQueueAsync). Only the pre-activation attempt boundary
+                // keeps it.
+                await session.AdvanceInnerQueueAsync(
+                    consumeInFlightClaims: capFold || !continueAfterBoundary,
+                    cancellationToken,
+                    preserveActiveFusedScheduleAnchors: capFold);
             }
-            else if (continueAfterBoundary)
-                session.RecordDurableBoundaryState(commit.StateChanges);
-            await session.ReconcileDurablyPersistedOutboxAsync(commit.Checkpoint.OccurredAt, cancellationToken);
-            // A deactivating boundary — and a cap fold, whose trailing commit rode the in-flight dispatch — already
-            // carries the in-flight item's effect in this flush, so the item must be consumed here instead of surviving
-            // as a durable duplicate (see AdvanceInnerQueueAsync). Only the pre-activation attempt boundary keeps it.
-            await session.AdvanceInnerQueueAsync(
-                consumeInFlightClaims: capFold || !continueAfterBoundary,
-                cancellationToken,
-                preserveActiveFusedScheduleAnchors: capFold);
+            catch
+            {
+                AbandonAfterDurableCommit(session);
+                throw;
+            }
+
             session.ClearBuffer();
             if (!continueAfterBoundary)
                 session.Deactivate();
@@ -131,18 +150,37 @@ public sealed class CoalescingRuntimeCheckpointCommitStore(
         if (continueAfterBoundary)
             await session.EnsureActiveFusedScheduleAnchorsAsync(cancellationToken);
         var passthrough = await CommitInnerAsync(session, commit, decision, cancellationToken);
-        session.InvalidateInspectionBaselines();
-        if (continueAfterBoundary)
-            session.RecordDurableBoundaryState(commit.StateChanges);
-        await session.ReconcileDurablyPersistedOutboxAsync(commit.Checkpoint.OccurredAt, cancellationToken);
-        await session.AdvanceInnerQueueAsync(
-            consumeInFlightClaims: !continueAfterBoundary,
-            cancellationToken,
-            preserveActiveFusedScheduleAnchors: false);
+        try
+        {
+            session.InvalidateInspectionBaselines();
+            if (continueAfterBoundary)
+                session.RecordDurableBoundaryState(commit.StateChanges);
+            await session.ReconcileDurablyPersistedOutboxAsync(commit.Checkpoint.OccurredAt, cancellationToken);
+            await session.AdvanceInnerQueueAsync(
+                consumeInFlightClaims: !continueAfterBoundary,
+                cancellationToken,
+                preserveActiveFusedScheduleAnchors: false);
+        }
+        catch
+        {
+            AbandonAfterDurableCommit(session);
+            throw;
+        }
+
         session.ClearBuffer();
         if (!continueAfterBoundary)
             session.Deactivate();
         return passthrough;
+    }
+
+    // The inner commit has landed, so everything the session buffered is durable whatever the reconciliation after it
+    // does. When that reconciliation fails, the drain records the failure against the in-flight item and carries on to
+    // its quiescence flush (#2601). Ending the segment here keeps that flush from re-applying the now older buffered
+    // state over the newer durable state, and stops the overlay from standing in for a durable queue it no longer tracks.
+    private static void AbandonAfterDurableCommit(RuntimeCoalescingSession session)
+    {
+        session.ClearBuffer();
+        session.Deactivate();
     }
 
     private async ValueTask<RuntimeCheckpointCommitStoreResult> CommitInnerAsync(

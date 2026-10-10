@@ -134,7 +134,8 @@ public sealed class SchedulerWorkQueueClaimableDiscoveryContractTests
             new FixedTimeProvider(Now),
             new InMemoryWorkflowExecutionStateStore(),
             new WorkflowSchedulerPauseGate(new RuntimePauseDecisionProvider(_holds), new FixedTimeProvider(Now)),
-            new RuntimeResumptionDiscoveryStateStore());
+            new RuntimeResumptionDiscoveryStateStore(),
+            new InMemoryExecutionLivenessStateStore());
 
         var result = await service.SweepAsync(new RuntimeResumptionSweepRequest(
             outboxBatchSize: _defaults.OutboxBatchSize,

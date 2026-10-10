@@ -789,15 +789,6 @@ public sealed class WorkflowExecutableInspectorTests
                         property.Name.Contains("Publication", StringComparison.Ordinal));
     }
 
-    [Fact]
-    public void Runtime_api_registers_the_inspector()
-    {
-        var services = new ServiceCollection();
-        new WorkflowsRuntimeApiFeature().ConfigureServices(services);
-
-        Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(WorkflowExecutableInspector));
-    }
-
     private static readonly ValueTypeDescriptor StringType = new("String");
     private static readonly JsonSerializerOptions WebJson = new(JsonSerializerDefaults.Web);
     private static readonly ValueProtectionPolicy SensitivePolicy = new(DurableValueLifecycle.Instance, DurableValueStorage.Inline, isSensitive: true);

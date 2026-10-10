@@ -34,6 +34,7 @@ public sealed class EfPublishingLedgerRegistrationTests
         typeof(ICommitActivityPublicationCommand<ExecutableActivityTemplate, WorkflowExecutableSourceReference, ActivityPublicationReceipt>)
     };
 
+    // Kept beside the composition test (§2.23.1): replacement-contract rejection without partial mutation.
     [Theory]
     [MemberData(nameof(ForeignContracts))]
     public void A_foreign_ledger_registration_is_refused_without_partial_mutation(Type contract)
@@ -47,6 +48,7 @@ public sealed class EfPublishingLedgerRegistrationTests
         Assert.Equal(before, services);
     }
 
+    // Kept beside the composition test (§2.23.1): ordering, EF stores replace the engine's in-memory fallbacks when selected first.
     [Fact]
     public void An_all_EF_composition_resolves_the_ledger_stores_and_the_ordered_publication_commands()
     {
