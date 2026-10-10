@@ -358,9 +358,28 @@ public sealed class PoisonedSchedulerWorkIncidentObserver : IWorkflowSchedulerDr
         DateTimeOffset occurredAt,
         CancellationToken cancellationToken)
     {
-        if (_workflowExecutionStateStore is null ||
-            await _workflowExecutionStateStore.FindAsync(workflowExecutionId, cancellationToken) is not null)
+        if (_workflowExecutionStateStore is null)
             return null;
+
+        // The read only chooses between faulting an unstarted execution and recording the incident alone. A failed read
+        // must not cost the incident, so it falls back to the incident-only commit, as before #2537.
+        try
+        {
+            if (await _workflowExecutionStateStore.FindAsync(workflowExecutionId, cancellationToken) is not null)
+                return null;
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception exception) when (IsCatchableObserverFailure(exception))
+        {
+            _logger.LogWarning(
+                exception,
+                "Failed to read workflow execution {WorkflowExecutionId} while surfacing a scheduler poison incident; recording the incident without checking for an unstarted execution.",
+                workflowExecutionId);
+            return null;
+        }
 
         var execution = StartCommandExecution.Read(envelope, workflowExecutionId, occurredAt, exception => _logger.LogWarning(
             exception,

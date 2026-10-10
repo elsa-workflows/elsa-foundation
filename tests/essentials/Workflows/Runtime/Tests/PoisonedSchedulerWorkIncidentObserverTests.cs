@@ -646,6 +646,51 @@ public sealed class PoisonedSchedulerWorkIncidentObserverTests
         Assert.Equal(IncidentResolutionActionKinds.WaitForIntervention, incident.ResolutionOutcome!.ActionKind);
     }
 
+    // The workflow read only chooses between faulting an unstarted execution and recording the incident alone. A read
+    // that fails must not cost the incident: it falls back to the incident-only commit the observer made before #2537.
+    [Fact]
+    public async Task OnDrainedAsync_WhenTheWorkflowReadFails_StillRecordsTheIncident()
+    {
+        await _harness.RecordPoison(RuntimeSchedulerPoisonDisposition.Poisoned);
+        var observer = new PoisonedSchedulerWorkIncidentObserver(
+            _harness.PoisonStore,
+            _harness.IncidentStore,
+            _harness.CheckpointCommitter,
+            _harness.TimeProvider,
+            _harness.ActivityStore,
+            inspectionAccumulator: null,
+            activityExecutionInspectionStore: _harness.InspectionStore,
+            workflowExecutionStateStore: new FindThrowingWorkflowExecutionStateStore(_harness.WorkflowStore),
+            workflowDispatchStore: null);
+
+        await observer.OnDrainedAsync(Harness.StartEnvelope(parentWorkflowExecutionId: null), _harness.FaultedDrainResult);
+
+        var incident = Assert.Single(await _harness.IncidentStore.ListAsync("wfexec-1"));
+        Assert.Equal(IncidentResolutionActionKinds.WaitForIntervention, incident.ResolutionOutcome!.ActionKind);
+        Assert.Equal(RuntimeCheckpointNames.IncidentRecorded, Assert.Single(_harness.CommitStore.ListCommits()).Commit.Checkpoint.Name);
+    }
+
+    private sealed class FindThrowingWorkflowExecutionStateStore(IWorkflowExecutionStateStore inner) : IWorkflowExecutionStateStore
+    {
+        public ValueTask<WorkflowExecutionState> SaveAsync(WorkflowExecutionState state, CancellationToken cancellationToken = default) =>
+            inner.SaveAsync(state, cancellationToken);
+
+        public ValueTask<WorkflowExecutionState?> FindAsync(string workflowExecutionId, CancellationToken cancellationToken = default) =>
+            throw new InvalidOperationException("workflow state store unavailable");
+
+        public ValueTask<IReadOnlyCollection<WorkflowExecutionState>> ListAsync(CancellationToken cancellationToken = default) =>
+            inner.ListAsync(cancellationToken);
+
+        public ValueTask<WorkflowExecutionStatePage> QueryPageAsync(WorkflowExecutionStatePageQuery query, CancellationToken cancellationToken = default) =>
+            inner.QueryPageAsync(query, cancellationToken);
+
+        public ValueTask<IReadOnlyCollection<string>> ListPinnedExecutableArtifactIdsAsync(CancellationToken cancellationToken = default) =>
+            inner.ListPinnedExecutableArtifactIdsAsync(cancellationToken);
+
+        public ValueTask<bool> DeleteAsync(string workflowExecutionId, CancellationToken cancellationToken = default) =>
+            inner.DeleteAsync(workflowExecutionId, cancellationToken);
+    }
+
     private sealed class NonQueryableWorkflowDispatchStore : IWorkflowDispatchStore
     {
         public ValueTask<WorkflowDispatchRecord> SaveAsync(WorkflowDispatchRecord record, CancellationToken cancellationToken = default) =>
