@@ -77,8 +77,8 @@ public sealed class SendHttpRequest(
     /// <summary>
     /// Optional credential for the request's <c>Authorization</c> header. A credential input (spec 188): an author
     /// binds a stored secret to it and writes no literal, so the definition holds the secret reference and the value is
-    /// resolved when the activity runs. A non-empty value is sent verbatim as the whole header value (for example
-    /// <c>Bearer</c>, a space and a token), because the activity adds no scheme, and it replaces an
+    /// resolved when the activity runs. A value with non-whitespace content is sent verbatim as the whole header value
+    /// (for example <c>Bearer</c>, a space and a token), because the activity adds no scheme, and it replaces an
     /// <c>Authorization</c> entry in <see cref="RequestHeaders"/> whatever that entry's letter case. When it is unbound,
     /// empty or whitespace only, <see cref="RequestHeaders"/> applies unchanged. A value containing a carriage return or
     /// a line feed faults the activity before any request is sent, with a message that names the input and not the

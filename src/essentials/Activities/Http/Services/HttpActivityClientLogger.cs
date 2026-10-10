@@ -14,11 +14,16 @@ namespace Elsa.Activities.Http.Services;
 /// </summary>
 /// <remarks>
 /// It logs under the category the default client handler used (<see cref="CategoryName"/>), with that handler's event
-/// ids and message templates, so a host's existing level filters still apply. The URI is redacted the way
-/// <c>Microsoft.Extensions.Http</c> 10 redacts it by default: scheme, host, port when not the default, and path, with a
-/// query replaced by <c>*</c>; user info and fragment are never logged.
+/// ids, so a host's existing level filters still apply. <c>RequestStart</c> and <c>RequestEnd</c> keep that handler's
+/// message templates; <c>RequestFailed</c> does not: the default writes "HTTP request failed after
+/// {ElapsedMilliseconds}ms" with the exception object, and this one appends " - {ExceptionType}" and passes no
+/// exception. The URI is redacted the way <c>Microsoft.Extensions.Http</c> 10 redacts it by default: scheme, host, port
+/// when not the default, and path, with a query replaced by <c>*</c>; user info and fragment are never logged.
+/// The redaction is a copy of that package's internal <c>UriRedactionHelper</c> (framework section 2.17: the helper is
+/// internal, so a dependency on it is not possible), and the package's switch that disables its redaction is not
+/// honored, by design: this logger exists so a raw query is never logged.
 /// </remarks>
-internal sealed class HttpActivityClientLogger(ILoggerFactory loggerFactory) : IHttpClientLogger
+public sealed class HttpActivityClientLogger(ILoggerFactory loggerFactory) : IHttpClientLogger
 {
     /// <summary>The default client handler's category for the named client.</summary>
     public const string CategoryName = "System.Net.Http.HttpClient." + HttpActivityConstants.HttpClientName + ".ClientHandler";
@@ -34,16 +39,19 @@ internal sealed class HttpActivityClientLogger(ILoggerFactory loggerFactory) : I
 
     private readonly ILogger _logger = loggerFactory.CreateLogger(CategoryName);
 
+    /// <inheritdoc />
     public object? LogRequestStart(HttpRequestMessage request)
     {
         RequestStart(_logger, request.Method, RedactedUri(request.RequestUri), null);
         return null;
     }
 
+    /// <inheritdoc />
     public void LogRequestStop(object? context, HttpRequestMessage request, HttpResponseMessage response, TimeSpan elapsed) =>
         RequestEnd(_logger, elapsed.TotalMilliseconds, (int)response.StatusCode, null);
 
     // The exception's type only: its message can carry request details, and the exception object would carry it.
+    /// <inheritdoc />
     public void LogRequestFailed(object? context, HttpRequestMessage request, HttpResponseMessage? response, Exception exception, TimeSpan elapsed) =>
         RequestFailed(_logger, elapsed.TotalMilliseconds, exception.GetType().Name, null);
 

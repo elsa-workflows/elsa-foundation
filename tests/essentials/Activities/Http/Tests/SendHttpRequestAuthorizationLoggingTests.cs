@@ -26,6 +26,9 @@ public sealed class SendHttpRequestAuthorizationLoggingTests
     // The category the named client's logger writes under (the default client handler's category, kept).
     private const string ClientLoggerCategory = "System.Net.Http.HttpClient." + HttpActivityConstants.HttpClientName + ".ClientHandler";
 
+    // The default logical handler's category, which the replaced logging no longer writes for this client.
+    private const string DefaultLogicalHandlerCategory = "System.Net.Http.HttpClient." + HttpActivityConstants.HttpClientName + ".LogicalHandler";
+
     private readonly string _authorizationValue = NewHeaderValue();
     private readonly CapturingLoggerProvider _logs = new();
     private string[]? _sentAuthorization;
@@ -71,6 +74,7 @@ public sealed class SendHttpRequestAuthorizationLoggingTests
         Assert.Equal(_authorizationValue, Assert.Single(_sentAuthorization ?? []));
         // Precondition: the client's logger wrote this send, so the absence below is not an unwired provider.
         Assert.Contains(lines, line => line.Category == ClientLoggerCategory);
+        Assert.DoesNotContain(lines, line => line.Category == DefaultLogicalHandlerCategory);
         Assert.All(lines, line => Assert.DoesNotContain(_authorizationValue, line.Text, StringComparison.Ordinal));
     }
 
@@ -105,14 +109,24 @@ public sealed class SendHttpRequestAuthorizationLoggingTests
         private static string Serialize(object? state)
         {
             var text = new StringBuilder();
-            Expand(state, text);
+            Expand(state, text, depth: 0);
             return text.ToString();
         }
 
-        // Writes a value's contents rather than its text: every pair's key and value, every element of a collection,
-        // recursively, so an array of header values prints its strings, not its type name.
-        private static void Expand(object? value, StringBuilder into)
+        // Deeper than any state the logging handlers build; a cyclic enumerable reaches it and fails the test.
+        private const int MaxDepth = 16;
+
+        /// <summary>
+        /// Writes a value's contents rather than its text: every pair's key and value, every element of a collection,
+        /// recursively, so an array of header values prints its strings, not its type name. Any other leaf is rendered
+        /// through its <c>ToString()</c>, which cannot see a value held only in one of its properties. Nesting deeper
+        /// than <see cref="MaxDepth"/> fails the test rather than truncating the text.
+        /// </summary>
+        private static void Expand(object? value, StringBuilder into, int depth)
         {
+            if (depth > MaxDepth)
+                Assert.Fail($"Log state nests deeper than {MaxDepth} levels; a cyclic value cannot be fully serialized.");
+
             switch (value)
             {
                 case null:
@@ -122,15 +136,15 @@ public sealed class SendHttpRequestAuthorizationLoggingTests
                     return;
                 case IEnumerable items:
                     foreach (var item in items)
-                        Expand(item, into);
+                        Expand(item, into, depth + 1);
                     return;
             }
 
             var type = value.GetType();
             if (type.IsGenericType && type.GetGenericTypeDefinition() == typeof(KeyValuePair<,>))
             {
-                Expand(type.GetProperty(nameof(KeyValuePair<object, object>.Key))!.GetValue(value), into);
-                Expand(type.GetProperty(nameof(KeyValuePair<object, object>.Value))!.GetValue(value), into);
+                Expand(type.GetProperty(nameof(KeyValuePair<object, object>.Key))!.GetValue(value), into, depth + 1);
+                Expand(type.GetProperty(nameof(KeyValuePair<object, object>.Value))!.GetValue(value), into, depth + 1);
                 return;
             }
 

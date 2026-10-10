@@ -139,7 +139,6 @@ public sealed class SendHttpRequestExecutionTests
 
         var run = await harness.RunAsync(WorkflowExecutionHarness.NewExecutable(NewSendNode(url: server.BaseAddress, authorization: value)));
 
-        Assert.DoesNotContain(server.Requests, request => request.Headers.ContainsKey("X-Injected"));
         Assert.Empty(server.Requests);
         var state = run.State(NodeId);
         Assert.Equal(ActivityExecutionStatus.Faulted, state.Status);
