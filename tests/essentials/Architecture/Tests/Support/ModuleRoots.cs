@@ -41,28 +41,13 @@ internal static class ModuleRoots
         return Path.Join(repoRoot, root);
     }
 
-    /// <summary>Every <c>.cs</c> file under the given roots, excluding build output.</summary>
-    internal static IEnumerable<string> SourceFiles(string repoRoot, params string[] roots) =>
-        Resolve(repoRoot, roots)
-            .SelectMany(directory => Directory.EnumerateFiles(directory, "*.cs", SearchOption.AllDirectories))
-            .Where(file => !RepoPaths.IsBuildOutput(repoRoot, file));
-
-    /// <summary>Shipping module source: <see cref="Production"/> with each extension's own tests left out.</summary>
-    /// <remarks>
-    /// A guard that sweeps <see cref="Production"/> raw also sweeps <c>src/extensions/&lt;bucket&gt;/tests/</c>, because an
-    /// extension carries its tests inside its own root rather than under the repository's <c>tests/</c>. Guards that
-    /// state a rule about production code — no EF namespace outside the admitted surfaces, no pruned contract
-    /// reappearing — then fail on test code that was always allowed to do those things. Every such guard wants this.
-    /// </remarks>
-    internal static IEnumerable<string> ProductionSourceFiles(string repoRoot) =>
-        SourceFiles(repoRoot, Production).Where(file => IsNotTestFile(repoRoot, file));
-
-    /// <summary>The same exclusion for a path that is not necessarily a <c>.cs</c> file, judged against <see cref="RepoPaths.RepoRoot"/>.</summary>
+    /// <summary>Whether <paramref name="path"/> lies outside every <c>tests/</c> directory, judged against <see cref="RepoPaths.RepoRoot"/>.</summary>
     internal static bool IsNotTestFile(string path) => IsNotTestFile(RepoPaths.RepoRoot, path);
 
     /// <summary>
-    /// The same exclusion for a path that is not necessarily a <c>.cs</c> file, judged by the path's location
-    /// relative to <paramref name="repoRoot"/> rather than the directories above the repository.
+    /// Whether <paramref name="path"/> lies outside every <c>tests/</c> directory, judged by the path's location
+    /// relative to <paramref name="repoRoot"/> rather than the directories above the repository. An extension
+    /// carries its own tests inside <c>src/</c>, so a production sweep over <see cref="Production"/> needs this.
     /// </summary>
     internal static bool IsNotTestFile(string repoRoot, string path) => !RepoPaths.HasSegment(repoRoot, path, "tests");
 }

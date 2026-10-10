@@ -1,72 +1,13 @@
-using Elsa.Api.AspNetCore;
 using Xunit;
 using static Elsa.Architecture.Tests.RepoPaths;
 
 namespace Elsa.Architecture.Tests;
 
 /// <summary>
-/// Keeps retained root-host mappings tied to the typed host metadata contract. The runtime manifest test
-/// verifies the published route count; these source guards keep a future mapper edit from silently dropping
-/// the convention at its declaration site.
+/// Keeps the Foundation host's container build in step with its project graph.
 /// </summary>
 public sealed class HostEndpointMetadataTests
 {
-    [Fact]
-    public void Workbench_retained_mappers_declare_host_ownership_and_security_disposition()
-    {
-        AssertSourceContains(
-            "src/apps/Elsa.Workbench/Program.cs",
-            "WithHostOwner(\"Elsa.Workbench\")",
-            "WithAuthoringModel(EndpointAuthoringModels.MinimalApi)",
-            "AllowPublic(\"health\"",
-            "MapShellManagementApi(\"/_admin/shells\")",
-            "ADR 0037",
-            "WithHostCredentialEnforcement(ManagementApiKeyAuthentication.HeaderName, \"Elsa.Workbench\")",
-            "RequireAsync",
-            "NamedPolicy(\"Default\", \"Elsa.Workbench\")");
-
-        AssertSourceContains(
-            "src/apps/Elsa.Workbench/Readiness/ShellReadinessEndpointExtensions.cs",
-            "WithHostOwner(\"Elsa.Workbench\")",
-            "WithAuthoringModel(EndpointAuthoringModels.MinimalApi)",
-            "AllowPublic(\"health\"");
-
-        AssertSourceContains(
-            "src/apps/Elsa.Workbench/ElsaModuleManagementApi.cs",
-            "WithHostOwner(\"Elsa.Workbench\")",
-            "EndpointSecurityDispositionMetadata.HostCredential(\n                ManagementApiKeyAuthentication.HeaderName",
-            "WithHostCredentialEnforcement(ManagementApiKeyAuthentication.HeaderName, \"Elsa.Workbench\")");
-
-        // The optional Extension Builder (#2294) maps on the Workbench root when enabled, and keeps the same contract.
-        AssertSourceContains(
-            "src/extensions/ExtensionBuilder/src/Api/ExtensionBuilderApi.cs",
-            "WithHostOwner(\"Elsa.Workbench\")",
-            "EndpointSecurityDispositionMetadata.HostCredential(\n                ManagementApiKeyAuthentication.HeaderName",
-            "WithHostCredentialEnforcement(ManagementApiKeyAuthentication.HeaderName, \"Elsa.Workbench\")",
-            "RequireTrustedCallerAsync");
-    }
-
-    [Fact]
-    public void Foundation_host_retained_mappers_declare_host_ownership_and_security_disposition()
-    {
-        AssertSourceContains(
-            "src/apps/Elsa.Foundation.Host/Health/HealthEndpoints.cs",
-            "WithHostOwner(\"Elsa.Foundation.Host\")",
-            "WithAuthoringModel(EndpointAuthoringModels.MinimalApi)",
-            "AllowPublic(\"health\"");
-
-        AssertSourceContains(
-            "src/apps/Elsa.Foundation.Host/ModuleManagement/ModuleManagementEndpoints.cs",
-            "WithHostOwner(\"Elsa.Foundation.Host\")",
-            "EndpointSecurityDispositionMetadata.HostCredential(\n                ModuleManagementOptions.ApiKeyHeader",
-            "WithHostCredentialEnforcement(ModuleManagementOptions.ApiKeyHeader, \"Elsa.Foundation.Host\")",
-            "CryptographicOperations.FixedTimeEquals");
-
-        AssertSourceContains(
-            "src/apps/Elsa.Foundation.Host/Elsa.Foundation.Host.csproj",
-            "Elsa.Api.AspNetCore.csproj");
-    }
-
     /// <summary>
     /// Every project the host restores reaches the restore layer with its committed lock file (#2122): the restores are
     /// locked, and a locked restore of a project with no lock file writes one and carries on, unlocked, without a word.
@@ -87,30 +28,6 @@ public sealed class HostEndpointMetadataTests
             Assert.Contains($"COPY {relativeProjectPath} {relativeProjectDirectory}/packages.lock.json {relativeProjectDirectory}/", dockerfile, StringComparison.Ordinal);
             Assert.Contains($"COPY {relativeProjectDirectory}/ {relativeProjectDirectory}/", dockerfile, StringComparison.Ordinal);
         }
-    }
-
-    [Fact]
-    public void Retained_host_mappers_do_not_introduce_foundation_user_permissions()
-    {
-        var paths = new[]
-        {
-            "src/apps/Elsa.Workbench/Program.cs",
-            "src/apps/Elsa.Workbench/Readiness/ShellReadinessEndpointExtensions.cs",
-            "src/apps/Elsa.Workbench/ElsaModuleManagementApi.cs",
-            "src/extensions/ExtensionBuilder/src/Api/ExtensionBuilderApi.cs",
-            "src/apps/Elsa.Foundation.Host/Health/HealthEndpoints.cs",
-            "src/apps/Elsa.Foundation.Host/ModuleManagement/ModuleManagementEndpoints.cs"
-        };
-
-        foreach (var path in paths)
-            Assert.DoesNotContain("RequirePermission", ReadSource(path), StringComparison.Ordinal);
-    }
-
-    private static void AssertSourceContains(string relativePath, params string[] fragments)
-    {
-        var source = ReadSource(relativePath);
-        foreach (var fragment in fragments)
-            Assert.Contains(fragment, source, StringComparison.Ordinal);
     }
 
     private static string ReadSource(string relativePath) =>

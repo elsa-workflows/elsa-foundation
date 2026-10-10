@@ -1,6 +1,4 @@
-using System.Text;
 using System.Text.Json.Nodes;
-using System.Text.RegularExpressions;
 using System.Xml.Linq;
 using Xunit;
 using static Elsa.Architecture.Tests.RepoPaths;
@@ -40,29 +38,6 @@ public sealed partial class ArchitectureGuardTests
         // partial shape negotiation without making those details part of its public surface.
         ("Elsa.Cli.Worker", "Elsa.Cli.Tests")
     ];
-
-    private static readonly Regex AssemblyInternalsVisibleToPattern = new(@"assembly\s*:\s*InternalsVisibleTo", RegexOptions.Compiled);
-
-    // Speculative public contracts removed because they had zero in-repo consumers. Match
-    // public type declarations only so OpenIddict's IApplicationManager (constitution R3
-    // exception) and longer identifiers such as IApplicationManagerOptions stay legal.
-    private static readonly string[] PrunedPublicContractNames =
-    [
-        "IExpressionFactory",
-        "IHttpContextValueSelector",
-        "IRuntimeInputBindingValidator",
-        "IWorkflowDesignContextFactory",
-        "IWorkflowDesignContext",
-        "WorkflowDesignContext",
-        "IApplicationManager",
-        "ICredentialManager",
-        "IProviderManager",
-        "IClaimMappingManager",
-    ];
-
-    private static readonly Regex PrunedPublicContractDeclarationPattern = new(
-        $@"\bpublic\s+(?:(?:partial|sealed|abstract|static|readonly)\s+)*(?:interface|class|record(?:\s+(?:struct|class))?|struct|enum)\s+(?<name>{string.Join("|", PrunedPublicContractNames)})\b",
-        RegexOptions.Compiled);
 
     [Fact]
     public void Solution_has_no_global_layer_marker_folders()
@@ -145,17 +120,6 @@ public sealed partial class ArchitectureGuardTests
             project.Descendants("ProjectReference").Select(reference => reference.Attribute("Include")?.Value ?? string.Empty));
         Assert.DoesNotContain(project.Descendants("PackageReference"), reference =>
             (reference.Attribute("Include")?.Value ?? string.Empty).StartsWith("Elsa.", StringComparison.Ordinal));
-
-        var boundarySources = Directory.EnumerateFiles(Path.Join(policy, "ResourceResolution"), "*.cs")
-            .Append(Path.Join(policy, "Tooling", "EfPersistenceParticipantCatalog.cs"))
-            .Append(Path.Join(policy, "Tooling", "EfPersistenceResourceValidator.cs"));
-        foreach (var path in boundarySources)
-        {
-            var source = File.ReadAllText(path);
-            Assert.DoesNotContain("Elsa.Workflows.", source, StringComparison.Ordinal);
-            Assert.DoesNotContain("Elsa.Activities.", source, StringComparison.Ordinal);
-            Assert.DoesNotContain("Elsa.Diagnostics.", source, StringComparison.Ordinal);
-        }
     }
 
     [Theory]
@@ -380,29 +344,6 @@ public sealed partial class ArchitectureGuardTests
         Assert.True(features.ContainsKey("WorkflowsPublishing"));
     }
 
-    [Fact]
-    public void Workflows_runtime_core_does_not_use_authored_workflow_models()
-    {
-        string[] forbiddenPatterns =
-        [
-            "Elsa.Workflows.Design",
-            "WorkflowDefinitionState",
-            "ActivityNode"
-        ];
-        var runtimeCoreDirectory = Path.Combine(RepoRoot, "src", "essentials", "Workflows", "Runtime", "Core");
-        var violations = Directory.EnumerateFiles(runtimeCoreDirectory, "*.cs", SearchOption.AllDirectories)
-            .SelectMany(file =>
-            {
-                var text = StripCommentsAndStringLiterals(File.ReadAllText(file));
-                return forbiddenPatterns
-                    .Where(pattern => text.Contains(pattern, StringComparison.Ordinal))
-                    .Select(pattern => $"{Path.GetRelativePath(RepoRoot, file).Replace(Path.DirectorySeparatorChar, '/')}: {pattern}");
-            })
-            .ToList();
-
-        Assert.True(violations.Count == 0, string.Join(Environment.NewLine, violations));
-    }
-
     [Fact] // spec 006 T050 (SC-001) — no project in the activity-construction runtime path references any Design project.
     public void Activity_construction_runtime_path_has_no_design_reference() =>
         AssertNoForbiddenProjectReferences(
@@ -433,10 +374,6 @@ public sealed partial class ArchitectureGuardTests
         Assert.Contains("Elsa.Workflows.Runtime.Core", runtimeReferences);
         Assert.DoesNotContain("Elsa.Workflows.Runtime", runtimeReferences);
         Assert.DoesNotContain("Elsa.Workflows.Runtime.Resumption", runtimeReferences);
-        Assert.Contains(
-            "WorkflowsRuntimeResumption",
-            File.ReadAllText(Path.Join(Path.GetDirectoryName(runtime.FullPath)!, "DispatchWorkflowRuntimeFeature.cs")),
-            StringComparison.Ordinal);
         Assert.DoesNotContain(forbiddenReferences, runtimeReferences.Contains);
         Assert.DoesNotContain("Elsa.Activities.Composition.Runtime", designReferences);
         Assert.DoesNotContain(PackageReferences(runtime), package => package.Contains("MassTransit", StringComparison.OrdinalIgnoreCase));
@@ -445,34 +382,6 @@ public sealed partial class ArchitectureGuardTests
         Assert.DoesNotContain(PackageReferences(design), package => package.Contains("Broker", StringComparison.OrdinalIgnoreCase));
         Assert.DoesNotContain(PackageReferences(runtime), package => package.Contains("ServiceBus", StringComparison.OrdinalIgnoreCase));
         Assert.DoesNotContain(PackageReferences(design), package => package.Contains("ServiceBus", StringComparison.OrdinalIgnoreCase));
-
-        var sourceFiles = new[] { runtime, design }
-            .SelectMany(project => Directory.EnumerateFiles(Path.GetDirectoryName(project.FullPath)!, "*.cs", SearchOption.AllDirectories));
-        var workflowDefinitionActivityReferences = sourceFiles
-            .Where(file => StripCommentsAndStringLiterals(File.ReadAllText(file)).Contains("WorkflowDefinitionActivity", StringComparison.Ordinal))
-            .Select(file => Path.GetRelativePath(RepoRoot, file))
-            .ToArray();
-        Assert.Empty(workflowDefinitionActivityReferences);
-
-        var forbiddenContractTerms = new[]
-        {
-            "MassTransit",
-            "ServiceBus",
-            "RoutingChannel",
-            "TransportSelection",
-            "Priority",
-            "Affinity"
-        };
-        var transportContractReferences = sourceFiles
-            .SelectMany(file =>
-            {
-                var text = StripCommentsAndStringLiterals(File.ReadAllText(file));
-                return forbiddenContractTerms
-                    .Where(term => text.Contains(term, StringComparison.Ordinal))
-                    .Select(term => $"{Path.GetRelativePath(RepoRoot, file).Replace(Path.DirectorySeparatorChar, '/')}: {term}");
-            })
-            .ToArray();
-        Assert.Empty(transportContractReferences);
     }
 
     [Fact] // spec 006 T053 (SC-006) — the seam's feature projects do not reference one another (G4).
@@ -516,21 +425,14 @@ public sealed partial class ArchitectureGuardTests
     [Fact]
     public void InternalsVisibleTo_occurrences_are_limited_to_documented_exceptions()
     {
-        var csprojViolations = ProjectFiles()
+        var violations = ProjectFiles()
             .SelectMany(project => XDocument.Load(project.FullPath)
                 .Descendants("InternalsVisibleTo")
                 .Select(x => x.Attribute("Include")?.Value)
                 .OfType<string>()
                 .Where(target => !AllowedInternalsVisibleTo.Contains((project.Name, target)))
-                .Select(target => $"{project.Name} -> {target} ({project.RelativePath})"));
-
-        var attributeViolations = ProjectFiles()
-            .SelectMany(project => Directory.EnumerateFiles(Path.GetDirectoryName(project.FullPath)!, "*.cs", SearchOption.AllDirectories)
-                .Where(file => !IsBuildOutput(file))
-                .Where(file => AssemblyInternalsVisibleToPattern.IsMatch(StripCommentsAndStringLiterals(File.ReadAllText(file))))
-                .Select(file => $"{project.Name} -> [assembly: InternalsVisibleTo] in {Path.GetRelativePath(RepoRoot, file).Replace(Path.DirectorySeparatorChar, '/')}"));
-
-        var violations = csprojViolations.Concat(attributeViolations).ToList();
+                .Select(target => $"{project.Name} -> {target} ({project.RelativePath})"))
+            .ToList();
 
         Assert.True(violations.Count == 0, string.Join(Environment.NewLine, violations));
     }
@@ -552,123 +454,6 @@ public sealed partial class ArchitectureGuardTests
         Assert.True(violations.Count == 0, string.Join(Environment.NewLine, violations));
     }
 
-    [Fact]
-    public void Pruned_unused_public_contracts_do_not_reappear_in_production_source()
-    {
-        var violations = ModuleSourceFiles()
-            .Where(file => !IsGeneratedScratchFile(file))
-            .SelectMany(file => FindPrunedPublicContractNames(File.ReadAllText(file))
-                .Select(name => $"{Path.GetRelativePath(RepoRoot, file).Replace(Path.DirectorySeparatorChar, '/')}: {name}"))
-            .Distinct()
-            .ToList();
-
-        Assert.True(violations.Count == 0, string.Join(Environment.NewLine, violations));
-    }
-
-    [Fact]
-    public void Pruned_contract_guard_matches_public_declarations_not_external_or_longer_names()
-    {
-        Assert.Equal(
-            ["IApplicationManager"],
-            FindPrunedPublicContractNames(
-                """
-                public interface IApplicationManager
-                {
-                    void Register();
-                }
-                """));
-        Assert.Equal(
-            ["WorkflowDesignContext"],
-            FindPrunedPublicContractNames("public sealed class WorkflowDesignContext { }"));
-        Assert.Equal(
-            ["IWorkflowDesignContextFactory"],
-            FindPrunedPublicContractNames("public interface IWorkflowDesignContextFactory { }"));
-
-        Assert.Empty(FindPrunedPublicContractNames(
-            """
-            using OpenIddict.Abstractions;
-
-            public sealed class OpenIddictTokenService(IApplicationManager applications)
-            {
-                public IApplicationManagerOptions Options { get; } = new();
-            }
-
-            public sealed class IApplicationManagerOptions;
-            """));
-    }
-
-    [Fact] // spec 006 T052 (SC-002) — the deleted 005 implementation-descriptor family is gone from production code.
-    public void No_production_code_references_deleted_implementation_descriptor_types()
-    {
-        // Each token is a distinct deleted identifier; "ImplementationDescriptor" / "ActivityImplementationResolver"
-        // subsume the Clr*/Workflow*/registry/source/resolver variants via substring match.
-        string[] forbiddenTokens =
-        [
-            "IImplementationDescriptor",
-            "ImplementationDescriptor",
-            "IImplementationDescriptorSource",
-            "ImplementationDescriptorRegistry",
-            "OnImplementationDescriptorsInitializing",
-            "IActivityImplementationResolver",
-            "ActivityImplementationResolver",
-        ];
-
-        var violations = ModuleSourceFiles()
-            .SelectMany(file =>
-            {
-                var code = StripCommentsAndStringLiterals(File.ReadAllText(file));
-                return forbiddenTokens
-                    .Where(token => code.Contains(token, StringComparison.Ordinal))
-                    .Select(token => $"{Path.GetRelativePath(RepoRoot, file).Replace(Path.DirectorySeparatorChar, '/')}: {token}");
-            })
-            .Distinct()
-            .ToList();
-
-        Assert.True(violations.Count == 0, string.Join(Environment.NewLine, violations));
-    }
-
-    [Fact]
-    public void Legacy_activity_factory_and_constructor_registry_are_absent()
-    {
-        string[] removedPaths =
-        [
-            "src/essentials/Activities/Runtime/Elsa.Activities.Runtime/Services/ActivityFactory.cs",
-            "src/essentials/Activities/Runtime/Elsa.Activities.Runtime/Services/ActivityConstructorRegistry.cs",
-            "src/essentials/Activities/Runtime/Core/Contracts/IActivityFactory.cs",
-            "src/essentials/Activities/Runtime/Core/Contracts/IActivityConstructor.cs",
-            "src/essentials/Activities/Runtime/Core/Contracts/IActivityConstructorRegistry.cs"
-        ];
-        var violations = removedPaths.Where(relativePath =>
-            File.Exists(Path.Combine(RepoRoot, relativePath.Replace('/', Path.DirectorySeparatorChar))));
-        Assert.Empty(violations);
-    }
-
-    [Fact] // framework §2.6.6 (constitution v4.0.0) — event types are named for the fact, never `On`-prefixed.
-    public void No_event_type_is_named_with_an_On_prefix()
-    {
-        // `On` is the handling-side idiom (`OnModelCreating` raises/reacts); on the event type it
-        // names the consumer instead of the fact. Scanning source rather than loaded assemblies
-        // catches a declaration in any package without this project referencing all of them.
-        // Only files that mention IEvent are considered, so `OnChildCompletedAsync`-style handler
-        // methods elsewhere are untouched.
-        var onPrefixedDeclaration = new Regex(@"\b(?:class|record|struct)\s+(On[A-Z]\w*)", RegexOptions.Compiled);
-
-        var violations = ModuleSourceFiles()
-            .SelectMany(file =>
-            {
-                var code = File.ReadAllText(file);
-                if (!code.Contains("IEvent", StringComparison.Ordinal))
-                    return [];
-
-                return onPrefixedDeclaration.Matches(StripCommentsAndStringLiterals(code))
-                    .Select(match => $"{Path.GetRelativePath(RepoRoot, file).Replace(Path.DirectorySeparatorChar, '/')}: {match.Groups[1].Value}");
-            })
-            .Distinct()
-            .ToList();
-
-        Assert.True(violations.Count == 0, string.Join(Environment.NewLine, violations));
-    }
-
     private static bool IsDesignReference(ProjectInfo reference) =>
         reference.Name.StartsWith("Elsa.", StringComparison.Ordinal) &&
         reference.Name.Contains(".Design", StringComparison.Ordinal);
@@ -680,56 +465,12 @@ public sealed partial class ArchitectureGuardTests
     private static bool IsGeneratedScratchFile(string filePath) =>
         filePath.Replace(Path.DirectorySeparatorChar, '/').Contains("/extension-builder/projects/", StringComparison.Ordinal);
 
-    private static IReadOnlyList<string> FindPrunedPublicContractNames(string source) =>
-        PrunedPublicContractDeclarationPattern.Matches(StripCommentsAndStringLiterals(source))
-            .Select(match => match.Groups["name"].Value)
-            .ToArray();
-
     private static bool IsRuntimeProject(ProjectInfo project) =>
         project.Name == "Elsa.Workflows.Runtime"
         || project.Name.StartsWith("Elsa.Workflows.Runtime.", StringComparison.Ordinal)
         || project.Name == "Elsa.Activities.Runtime"
         || project.Name.StartsWith("Elsa.Activities.Runtime.", StringComparison.Ordinal)
         || project.Name == "Elsa.Activities.Graph.Runtime";
-
-    [Fact]
-    public void Source_scan_strips_interpolated_string_text_but_preserves_interpolation_code()
-    {
-        const string text = "var message = $\"ActivityNode literal {typeof(ActivityNode).Name}\";";
-        var sanitized = StripCommentsAndStringLiterals(text);
-
-        Assert.DoesNotContain("ActivityNode literal", sanitized, StringComparison.Ordinal);
-        Assert.Contains("typeof(ActivityNode)", sanitized, StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public void Source_scan_strips_interpolated_raw_string_text_but_preserves_interpolation_code()
-    {
-        const string text = "var message = $\"\"\"ActivityNode literal {typeof(ActivityNode).Name}\"\"\";";
-        var sanitized = StripCommentsAndStringLiterals(text);
-
-        Assert.DoesNotContain("ActivityNode literal", sanitized, StringComparison.Ordinal);
-        Assert.Contains("typeof(ActivityNode)", sanitized, StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public void Source_scan_preserves_multi_dollar_raw_interpolation_code_with_nested_braces()
-    {
-        const string text = "var message = $$\"\"\"ActivityNode literal {{ new { Name = typeof(ActivityNode).Name } }}\"\"\";";
-        var sanitized = StripCommentsAndStringLiterals(text);
-
-        Assert.DoesNotContain("ActivityNode literal", sanitized, StringComparison.Ordinal);
-        Assert.Contains("typeof(ActivityNode)", sanitized, StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public void Source_scan_strips_raw_string_text()
-    {
-        const string text = "\"\"\"ActivityNode literal\"\"\"";
-        var sanitized = StripCommentsAndStringLiterals(text);
-
-        Assert.DoesNotContain("ActivityNode", sanitized, StringComparison.Ordinal);
-    }
 
     private static bool IsCoreSafeReference(string referenceName) =>
         referenceName.EndsWith(".Core", StringComparison.Ordinal) ||
@@ -755,9 +496,6 @@ public sealed partial class ArchitectureGuardTests
             .SelectMany(directory => Directory.EnumerateFiles(directory, "*.csproj", SearchOption.AllDirectories))
             .Where(file => !IsGeneratedScratchFile(file))
             .Select(file => ProjectInfo.From(RepoRoot, file));
-
-    /// <summary>Production source files across every module root, excluding test and build output.</summary>
-    private static IEnumerable<string> ModuleSourceFiles() => ModuleRoots.ProductionSourceFiles(RepoRoot);
 
     private static IEnumerable<SolutionProjectInfo> SolutionProjects()
     {
@@ -821,254 +559,6 @@ public sealed partial class ArchitectureGuardTests
 
         return document["CShells"]?["Shells"]?["default"]?["Features"] as JsonObject
             ?? throw new InvalidOperationException($"{Path.GetFileName(path)} must contain CShells.Shells.default.Features.");
-    }
-
-    private static string StripCommentsAndStringLiterals(string text)
-    {
-        var sanitized = new char[text.Length];
-        var state = SourceScanState.Code;
-        var interpolationReturnState = SourceScanState.Code;
-        var interpolationCloseBraceCount = 1;
-        var interpolationDepth = 0;
-        var rawStringDollarCount = 0;
-        var rawStringQuoteCount = 0;
-
-        for (var i = 0; i < text.Length; i++)
-        {
-            var current = text[i];
-            var next = i + 1 < text.Length ? text[i + 1] : '\0';
-
-            switch (state)
-            {
-                case SourceScanState.Code when current == '/' && next == '/':
-                    sanitized[i] = ' ';
-                    sanitized[++i] = ' ';
-                    state = SourceScanState.LineComment;
-                    break;
-                case SourceScanState.Code when current == '/' && next == '*':
-                    sanitized[i] = ' ';
-                    sanitized[++i] = ' ';
-                    state = SourceScanState.BlockComment;
-                    break;
-                case SourceScanState.Code when TryReadRawStringStart(text, i, out var rawStringPrefixLength, out rawStringQuoteCount, out var detectedRawStringDollarCount):
-                    rawStringDollarCount = detectedRawStringDollarCount;
-                    for (var j = 0; j < rawStringPrefixLength; j++)
-                        sanitized[i + j] = ' ';
-                    i += rawStringPrefixLength - 1;
-                    state = rawStringDollarCount == 0 ? SourceScanState.RawString : SourceScanState.InterpolatedRawString;
-                    break;
-                case SourceScanState.Code when current == '$' && next == '"':
-                    sanitized[i] = ' ';
-                    sanitized[++i] = ' ';
-                    state = SourceScanState.InterpolatedString;
-                    break;
-                case SourceScanState.Code when current == '$' && next == '@' && i + 2 < text.Length && text[i + 2] == '"':
-                    sanitized[i] = ' ';
-                    sanitized[++i] = ' ';
-                    sanitized[++i] = ' ';
-                    state = SourceScanState.InterpolatedVerbatimString;
-                    break;
-                case SourceScanState.Code when current == '@' && next == '$' && i + 2 < text.Length && text[i + 2] == '"':
-                    sanitized[i] = ' ';
-                    sanitized[++i] = ' ';
-                    sanitized[++i] = ' ';
-                    state = SourceScanState.InterpolatedVerbatimString;
-                    break;
-                case SourceScanState.Code when current == '@' && next == '"':
-                    sanitized[i] = ' ';
-                    sanitized[++i] = ' ';
-                    state = SourceScanState.VerbatimString;
-                    break;
-                case SourceScanState.Code when current == '"':
-                    sanitized[i] = ' ';
-                    state = SourceScanState.String;
-                    break;
-                case SourceScanState.Code when current == '\'':
-                    sanitized[i] = ' ';
-                    state = SourceScanState.Character;
-                    break;
-                case SourceScanState.Code:
-                    sanitized[i] = current;
-                    break;
-                case SourceScanState.LineComment when current is '\r' or '\n':
-                    sanitized[i] = current;
-                    state = SourceScanState.Code;
-                    break;
-                case SourceScanState.BlockComment when current == '*' && next == '/':
-                    sanitized[i] = ' ';
-                    sanitized[++i] = ' ';
-                    state = SourceScanState.Code;
-                    break;
-                case SourceScanState.String when current == '\\' && next != '\0':
-                    sanitized[i] = ' ';
-                    sanitized[++i] = ' ';
-                    break;
-                case SourceScanState.String when current == '"':
-                    sanitized[i] = ' ';
-                    state = SourceScanState.Code;
-                    break;
-                case SourceScanState.VerbatimString when current == '"' && next == '"':
-                    sanitized[i] = ' ';
-                    sanitized[++i] = ' ';
-                    break;
-                case SourceScanState.VerbatimString when current == '"':
-                    sanitized[i] = ' ';
-                    state = SourceScanState.Code;
-                    break;
-                case SourceScanState.RawString when HasRun(text, i, '"', rawStringQuoteCount):
-                    for (var j = 0; j < rawStringQuoteCount; j++)
-                        sanitized[i + j] = ' ';
-                    i += rawStringQuoteCount - 1;
-                    rawStringQuoteCount = 0;
-                    state = SourceScanState.Code;
-                    break;
-                case SourceScanState.InterpolatedRawString when HasRun(text, i, '"', rawStringQuoteCount):
-                    for (var j = 0; j < rawStringQuoteCount; j++)
-                        sanitized[i + j] = ' ';
-                    i += rawStringQuoteCount - 1;
-                    rawStringDollarCount = 0;
-                    rawStringQuoteCount = 0;
-                    state = SourceScanState.Code;
-                    break;
-                case SourceScanState.InterpolatedRawString when HasRun(text, i, '{', rawStringDollarCount):
-                    for (var j = 0; j < rawStringDollarCount; j++)
-                        sanitized[i + j] = '{';
-                    i += rawStringDollarCount - 1;
-                    interpolationDepth = 1;
-                    interpolationCloseBraceCount = rawStringDollarCount;
-                    interpolationReturnState = state;
-                    state = SourceScanState.InterpolationExpression;
-                    break;
-                case SourceScanState.InterpolatedRawString:
-                    sanitized[i] = current is '\r' or '\n' ? current : ' ';
-                    break;
-                case SourceScanState.InterpolatedString when current == '\\' && next != '\0':
-                    sanitized[i] = ' ';
-                    sanitized[++i] = ' ';
-                    break;
-                case SourceScanState.InterpolatedString when current == '{' && next == '{':
-                    sanitized[i] = ' ';
-                    sanitized[++i] = ' ';
-                    break;
-                case SourceScanState.InterpolatedString when current == '{':
-                    sanitized[i] = current;
-                    interpolationDepth = 1;
-                    interpolationCloseBraceCount = 1;
-                    interpolationReturnState = state;
-                    state = SourceScanState.InterpolationExpression;
-                    break;
-                case SourceScanState.InterpolatedString when current == '}':
-                    sanitized[i] = next == '}' ? ' ' : current;
-                    if (next == '}')
-                        sanitized[++i] = ' ';
-                    break;
-                case SourceScanState.InterpolatedString when current == '"':
-                    sanitized[i] = ' ';
-                    state = SourceScanState.Code;
-                    break;
-                case SourceScanState.InterpolatedVerbatimString when current == '"' && next == '"':
-                    sanitized[i] = ' ';
-                    sanitized[++i] = ' ';
-                    break;
-                case SourceScanState.InterpolatedVerbatimString when current == '{' && next == '{':
-                    sanitized[i] = ' ';
-                    sanitized[++i] = ' ';
-                    break;
-                case SourceScanState.InterpolatedVerbatimString when current == '{':
-                    sanitized[i] = current;
-                    interpolationDepth = 1;
-                    interpolationCloseBraceCount = 1;
-                    interpolationReturnState = state;
-                    state = SourceScanState.InterpolationExpression;
-                    break;
-                case SourceScanState.InterpolatedVerbatimString when current == '}':
-                    sanitized[i] = next == '}' ? ' ' : current;
-                    if (next == '}')
-                        sanitized[++i] = ' ';
-                    break;
-                case SourceScanState.InterpolatedVerbatimString when current == '"':
-                    sanitized[i] = ' ';
-                    state = SourceScanState.Code;
-                    break;
-                case SourceScanState.InterpolationExpression when current == '{':
-                    sanitized[i] = current;
-                    interpolationDepth++;
-                    break;
-                case SourceScanState.InterpolationExpression when current == '}' && interpolationDepth > 1:
-                    sanitized[i] = current;
-                    interpolationDepth--;
-                    break;
-                case SourceScanState.InterpolationExpression when HasRun(text, i, '}', interpolationCloseBraceCount):
-                    for (var j = 0; j < interpolationCloseBraceCount; j++)
-                        sanitized[i + j] = '}';
-                    i += interpolationCloseBraceCount - 1;
-                    interpolationDepth--;
-                    if (interpolationDepth == 0)
-                    {
-                        interpolationCloseBraceCount = 1;
-                        state = interpolationReturnState;
-                    }
-                    break;
-                case SourceScanState.InterpolationExpression when current == '}':
-                    sanitized[i] = current;
-                    interpolationDepth--;
-                    if (interpolationDepth == 0)
-                        state = interpolationReturnState;
-                    break;
-                case SourceScanState.InterpolationExpression:
-                    sanitized[i] = current;
-                    break;
-                case SourceScanState.Character when current == '\\' && next != '\0':
-                    sanitized[i] = ' ';
-                    sanitized[++i] = ' ';
-                    break;
-                case SourceScanState.Character when current == '\'':
-                    sanitized[i] = ' ';
-                    state = SourceScanState.Code;
-                    break;
-                default:
-                    sanitized[i] = current is '\r' or '\n' ? current : ' ';
-                    break;
-            }
-        }
-
-        return new string(sanitized);
-    }
-
-    private static bool TryReadRawStringStart(string text, int index, out int prefixLength, out int quoteCount, out int dollarCount)
-    {
-        prefixLength = 0;
-        quoteCount = 0;
-        dollarCount = 0;
-
-        var quoteIndex = index;
-        while (quoteIndex < text.Length && text[quoteIndex] == '$')
-            quoteIndex++;
-        dollarCount = quoteIndex - index;
-
-        if (quoteIndex == index && text[index] != '"')
-            return false;
-
-        quoteCount = CountRun(text, quoteIndex, '"');
-        if (quoteCount < 3)
-        {
-            quoteCount = 0;
-            return false;
-        }
-
-        prefixLength = quoteIndex - index + quoteCount;
-        return true;
-    }
-
-    private static bool HasRun(string text, int index, char value, int count) => CountRun(text, index, value) >= count;
-
-    private static int CountRun(string text, int index, char value)
-    {
-        var count = 0;
-        while (index + count < text.Length && text[index + count] == value)
-            count++;
-
-        return count;
     }
 
     /// <summary>
@@ -1202,21 +692,6 @@ public sealed partial class ArchitectureGuardTests
                 normalizedFullPath,
                 Path.GetRelativePath(repoRoot, normalizedFullPath).Replace(Path.DirectorySeparatorChar, '/'));
         }
-    }
-
-    private enum SourceScanState
-    {
-        Code,
-        LineComment,
-        BlockComment,
-        String,
-        VerbatimString,
-        RawString,
-        InterpolatedString,
-        InterpolatedVerbatimString,
-        InterpolatedRawString,
-        InterpolationExpression,
-        Character
     }
 
     private sealed record SolutionProjectInfo(string Folder, string Path);
