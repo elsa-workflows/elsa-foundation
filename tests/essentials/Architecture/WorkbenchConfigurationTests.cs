@@ -201,6 +201,7 @@ public sealed class WorkbenchConfigurationTests
     [InlineData("FoundationIdentityAspNetCoreIdentityEntityFrameworkCore:SeedAdminPassword")]
     [InlineData("WorkflowsRuntimeEntityFrameworkCore:RecoveryContinuationSigningKey")]
     [InlineData("WorkflowsRuntimeEntityFrameworkCore:HierarchyCursorSigningKey")]
+    [InlineData("Secrets:EncryptionKey")]
     public void Production_shell_overlay_clears_a_committed_development_secret(string featureSetting)
     {
         var path = $"CShells:Shells:default:Features:{featureSetting}";
@@ -252,6 +253,9 @@ public sealed class WorkbenchConfigurationTests
 
         var recoveryKey = features["WorkflowsRuntimeEntityFrameworkCore:RecoveryContinuationSigningKey"] ?? "";
         Assert.True(Encoding.UTF8.GetByteCount(recoveryKey) >= 32, "The recovery continuation signing key needs at least 32 UTF-8 bytes.");
+
+        // Not required for activation, but without it the stack cannot store an encrypted secret.
+        Assert.False(string.IsNullOrWhiteSpace(features["Secrets:EncryptionKey"]));
     }
 
     private static Dictionary<string, string> ReadWorkbenchEnvironment(string composePath)

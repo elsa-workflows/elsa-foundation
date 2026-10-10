@@ -4,6 +4,9 @@
     "Shells": {
       "default": {
         "Features": {
+          "Secrets": {
+            "EncryptionKey": ""
+          },
           "SecretsEntityFrameworkCore": {},
           "IdentityIamEntityFrameworkCore": {},
           "IdentityProviderConfigurationEntityFrameworkCore": {},

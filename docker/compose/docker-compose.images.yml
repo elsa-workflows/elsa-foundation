@@ -51,6 +51,11 @@ services:
       CShells__Shells__default__Features__WorkflowsRuntimeEntityFrameworkCore__RecoveryContinuationSigningKey: elsa-docker-demo-recovery-continuation-key
       # HMAC key for activity-execution hierarchy cursors, supplied the same way and for the same reason.
       CShells__Shells__default__Features__WorkflowsRuntimeEntityFrameworkCore__HierarchyCursorSigningKey: elsa-docker-demo-hierarchy-cursor-key
+      # Key the Secrets module encrypts stored secret values with. The image's shells.Production.json blanks the
+      # development value in shells.json, so without this env var an encrypted secret cannot be stored. Demo-only;
+      # change it for anything beyond local use, and read docs/secrets-key-rotation.md before replacing a key
+      # that has already encrypted values.
+      CShells__Shells__default__Features__Secrets__EncryptionKey: elsa-docker-demo-secrets-encryption-key
       # Identity secrets. The image's shells.Production.json turns off development mode for both identity
       # features and blanks the seed password, so these must be env vars. Without either one the default shell
       # fails activation. Demo-only values; change both for anything beyond local use.

@@ -156,7 +156,9 @@
           "MemoryCache": {},
           "ModularityApi": {},
           "Primitives": {},
-          "Secrets": {},
+          "Secrets": {
+            "EncryptionKey": "development-demo-only-secrets-encryption-key"
+          },
           "SecretsApi": {},
           "SecretsWorkflows": {},
           "SecretsEntityFrameworkCore": {},

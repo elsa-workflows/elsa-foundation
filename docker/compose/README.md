@@ -231,6 +231,7 @@ those go through the server-side Studio management bridge, which holds the Elsa 
 | Elsa host management key | `elsa-docker-demo-key` |
 | Studio / Workbench sign-in (seeded administrator) | `admin` / `Password123!` |
 | Access-token signing key | the demo RSA key committed in both compose files |
+| Secrets encryption key | `elsa-docker-demo-secrets-encryption-key` |
 
 The Elsa host management key wires the server-side Studio management bridge to the server: the
 server's `Elsa__ModuleManagement__ApiKey` **must match** Studio's
