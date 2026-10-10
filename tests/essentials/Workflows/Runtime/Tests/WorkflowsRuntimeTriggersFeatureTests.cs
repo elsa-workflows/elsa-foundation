@@ -35,6 +35,7 @@ public sealed class WorkflowsRuntimeTriggersFeatureTests
             descriptor.ServiceType == typeof(IBookmarkStimulusIndex));
     }
 
+    // Kept beside the composition test (§2.23.1): forwarding and scope, the bridged index is the runtime's own bookmark store, per scope.
     [Fact]
     public void ResolvesStimulusRouter_WhenComposedWithRuntimeApi()
     {

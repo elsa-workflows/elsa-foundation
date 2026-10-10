@@ -52,6 +52,7 @@ public sealed class ShellStartupValidationTests : IAsyncDisposable
         Assert.Equal([nameof(RecordingInitializer)], _log.Ran);
     }
 
+    // Kept beside the composition test (§2.23.1): idempotence, composing twice registers one initializer.
     [Fact]
     public void Composing_it_twice_registers_one_initializer()
     {

@@ -186,6 +186,7 @@ public sealed class EfWorkflowDesignPersistenceTests
     /// A pooled context's options are frozen before <c>OnConfiguring</c> runs, so the registration adds the check up
     /// front. Either way the context the container hands out carries it exactly once.
     /// </summary>
+    // Kept beside the composition test (§2.23.1): idempotence, the schema-version check is added once, pooled or not.
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
@@ -637,6 +638,7 @@ public sealed class EfWorkflowDesignPersistenceTests
         Assert.Equal(DesignPersistenceFailureKind.Provider, failure.FailureKind);
     }
 
+    // Kept beside the composition test (§2.23.1): replacement, a host's atomic writer survives the EF registration.
     [Fact]
     public void Ef_registration_resolves_owned_surfaces_and_provides_default_accessor()
     {
@@ -679,6 +681,7 @@ public sealed class EfWorkflowDesignPersistenceTests
             Assert.NotNull(serviceProvider.GetRequiredService(serviceType));
     }
 
+    // Kept beside the composition test (§2.23.1): replacement, the EF layout store replaces the publishing fallback.
     [Fact]
     public void Ef_registration_replaces_the_publishing_layout_fallback()
     {
@@ -699,6 +702,7 @@ public sealed class EfWorkflowDesignPersistenceTests
             descriptor.ImplementationFactory is not null);
     }
 
+    // Kept beside the composition test (§2.23.1): replacement-contract rejection, an arbitrary layout registration is refused.
     [Fact]
     public void Ef_registration_refuses_an_arbitrary_layout_registration()
     {
@@ -715,6 +719,7 @@ public sealed class EfWorkflowDesignPersistenceTests
         Assert.Contains("already present", exception.Message, StringComparison.Ordinal);
     }
 
+    // Kept beside the composition test (§2.23.1): replacement-contract rejection, a marked non-layout store is refused.
     [Fact]
     public void Ef_registration_refuses_a_marked_non_layout_store()
     {
@@ -774,6 +779,7 @@ public sealed class EfWorkflowDesignPersistenceTests
         Assert.Equal(WorkflowsDesignEfModule.DraftTable, db.Model.FindEntityType(typeof(WorkflowDefinitionDraft))!.GetTableName());
     }
 
+    // Kept beside the composition test (§2.23.1): replacement-contract validation survives an unrelated startup task.
     [Fact]
     public async Task Ef_registration_keeps_replacement_validation_when_an_unrelated_startup_task_precedes_it()
     {
@@ -798,6 +804,7 @@ public sealed class EfWorkflowDesignPersistenceTests
         Assert.Contains(nameof(IWorkflowDefinitionStore), exception.Message, StringComparison.Ordinal);
     }
 
+    // Kept beside the composition test (§2.23.1): replacement-contract validation, a late removal fails startup.
     [Fact]
     public async Task Ef_registration_fails_startup_when_a_replacement_contract_is_removed_late()
     {
@@ -818,6 +825,7 @@ public sealed class EfWorkflowDesignPersistenceTests
         Assert.Contains($"{nameof(IWorkflowDefinitionStore)} (0 registrations)", exception.Message, StringComparison.Ordinal);
     }
 
+    // Kept beside the composition test (§2.23.1): idempotence, repeated registration adds one validator.
     [Fact]
     public void Ef_repeated_registration_does_not_duplicate_replacement_validator()
     {
@@ -835,6 +843,7 @@ public sealed class EfWorkflowDesignPersistenceTests
             descriptor.ImplementationType == typeof(ValidateDesignPersistenceReplacementContractsStartupTask));
     }
 
+    // Kept beside the composition test (§2.23.1): ordering, EF registration and persistence core in either order.
     [Theory]
     [InlineData(true)]
     [InlineData(false)]
@@ -862,6 +871,7 @@ public sealed class EfWorkflowDesignPersistenceTests
         Assert.NotNull(serviceProvider.GetRequiredService<WorkflowsDesignDbContext>());
     }
 
+    // Kept beside the composition test (§2.23.1): replacement-contract rejection, a different selected backend.
     [Fact]
     public void Ef_registration_rejects_a_different_selected_backend()
     {
@@ -890,6 +900,7 @@ public sealed class EfWorkflowDesignPersistenceTests
         Assert.Equal("custom", backend.Name);
     }
 
+    // Kept beside the composition test (§2.23.1): replacement-contract rejection, a custom selected backend.
     [Fact]
     public void Ef_registration_rejects_a_custom_selected_backend()
     {
@@ -904,6 +915,7 @@ public sealed class EfWorkflowDesignPersistenceTests
         Assert.Contains(owned, services);
     }
 
+    // Kept beside the composition test (§2.23.1): options validation, a blank named connection is refused.
     [Fact]
     public void Ef_registration_refuses_a_blank_named_connection_instead_of_handing_it_to_the_provider()
     {
@@ -920,6 +932,7 @@ public sealed class EfWorkflowDesignPersistenceTests
         Assert.Contains("'workflow-design' was not found or was empty", exception.Message, StringComparison.Ordinal);
     }
 
+    // Kept beside the composition test (§2.23.1): the feature's settings flow into the registered options.
     [Fact]
     public void Ef_feature_registration_flows_settings_through_ConfigureServices()
     {

@@ -5,11 +5,8 @@ using Elsa.Workflows.Runtime.Core.Contracts.Alterations;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Models.Alterations;
 using Elsa.Workflows.Runtime.Services.Alterations;
-using Elsa.Tasks.Core;
-using Elsa.Workflows.Runtime.Extensions;
 using Elsa.Workflows.Runtime.Services.Checkpoints;
 using Elsa.Workflows.Runtime.Services.Executions;
-using Elsa.Workflows.Runtime.Services.Scheduler;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
@@ -22,23 +19,6 @@ public sealed class WorkflowAlterationActorIntegrationTests
 {
     private static readonly DateTimeOffset Now = new(2026, 7, 26, 12, 0, 0, TimeSpan.Zero);
     private static readonly WorkflowAlterationEphemeralKeyRing TestKeyRing = new();
-
-    [Fact]
-    public void RuntimeComposition_RegistersActorRouteCheckpointWriterAndBackgroundTasksAsScopedServices()
-    {
-        var services = new ServiceCollection().AddWorkflowRuntime();
-        services.AddLogging();
-        using var provider = services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
-        using var scope = provider.CreateScope();
-
-        Assert.IsType<RuntimeWorkflowAlterationCheckpointWriter>(scope.ServiceProvider.GetRequiredService<IWorkflowAlterationCheckpointWriter>());
-        Assert.IsType<WorkflowAlterationActorCommandExecutor>(scope.ServiceProvider.GetRequiredService<IWorkflowAlterationActorCommandExecutor>());
-        Assert.NotNull(scope.ServiceProvider.GetRequiredService<WorkflowAlterationTargetCaptureTask>());
-        Assert.NotNull(scope.ServiceProvider.GetRequiredService<WorkflowAlterationJobTask>());
-        Assert.NotNull(scope.ServiceProvider.GetRequiredService<WorkflowAlterationPlanReconciliationTask>());
-        Assert.NotNull(scope.ServiceProvider.GetRequiredService<WorkflowSchedulerCommandRouter>());
-        Assert.Contains(provider.GetServices<IRecurringTask>(), task => task is WorkflowAlterationOrchestrationPumpTask);
-    }
 
     [Fact]
     public async Task OrchestrationSweep_BoundsDiscoveryCapturesAndDispatches_AndPumpLifecycleIsCooperative()

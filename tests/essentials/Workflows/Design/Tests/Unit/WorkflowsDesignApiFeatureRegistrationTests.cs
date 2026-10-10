@@ -12,6 +12,7 @@ namespace Elsa.Workflows.Design.Tests.Unit;
 
 public sealed class WorkflowsDesignApiFeatureRegistrationTests
 {
+    // Kept beside the composition test (§2.23.1): resolves without the validations feature, which the composition test never exercises.
     [Fact]
     public void Feature_registers_scoped_variable_authoring_independently_of_validation_feature()
     {
@@ -25,25 +26,7 @@ public sealed class WorkflowsDesignApiFeatureRegistrationTests
         Assert.NotNull(provider.GetRequiredService<ScopedVariableAuthoringContract>());
     }
 
-    [Fact]
-    public void Feature_registers_the_endpoint_readers_and_owner_keyed_failure_services()
-    {
-        var services = new ServiceCollection();
-        new WorkflowsDesignApiFeature().ConfigureServices(services);
-        services.AddScoped<IWorkflowDefinitionStore>(_ => null!);
-        services.AddScoped<IWorkflowDefinitionVersionStore>(_ => null!);
-        services.AddScoped<IWorkflowDefinitionDraftStore>(_ => null!);
-        services.AddScoped<IWorkflowDefinitionVersionLayoutStore>(_ => null!);
-
-        using var provider = services.BuildServiceProvider();
-        using var scope = provider.CreateScope();
-
-        Assert.NotNull(scope.ServiceProvider.GetRequiredService<global::Elsa.Workflows.Design.Api.Endpoints.Definitions.IWorkflowDefinitionDetailsReader>());
-        Assert.NotNull(scope.ServiceProvider.GetRequiredService<global::Elsa.Workflows.Design.Api.Endpoints.Versions.IWorkflowVersionDetailsReader>());
-        Assert.NotNull(scope.ServiceProvider.GetRequiredKeyedService<IEndpointProblemWriter>("Elsa.Workflows.Design.Api"));
-        Assert.NotNull(scope.ServiceProvider.GetRequiredKeyedService<IEndpointExceptionTranslator>("Elsa.Workflows.Design.Api"));
-    }
-
+    // Kept beside the composition test (§2.23.1): resolves with and without the optional draft store, which the composition test exercises one way only.
     [Theory]
     [InlineData(false)]
     [InlineData(true)]

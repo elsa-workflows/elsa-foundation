@@ -55,6 +55,7 @@ public sealed class WorkflowArtifactExportTargetTests
         Assert.Equal(["download", "folder"], targetIds);
     }
 
+    // Kept beside the composition test (§2.23.1): idempotence, registering twice yields one download target.
     [Fact]
     public void Registering_the_built_in_twice_still_yields_one_download_target()
     {

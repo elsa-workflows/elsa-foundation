@@ -1,10 +1,6 @@
-using Elsa.Events.Core.Contracts;
 using Elsa.Mediator.Core.Contracts;
-using Elsa.Tasks.Core;
-using Elsa.Workflows.Design.Core.Reconciliation;
 using Elsa.Workflows.Publishing.Core.Contracts;
 using Elsa.Workflows.Publishing.Core.Models;
-using Elsa.Workflows.Publishing.Core.Requests;
 using Elsa.Workflows.Publishing.Handlers;
 using Elsa.Workflows.Publishing.Services;
 using Elsa.Workflows.Runtime.Core.Contracts;
@@ -36,32 +32,6 @@ public sealed class WorkflowsPublishingFeatureTests
     }
 
     [Fact]
-    public void Registers_the_workflow_publish_handler()
-    {
-        var services = ComposeEngine();
-
-        // The PublishWorkflow command + its PublishedWorkflowView response now live in …Publishing.Core,
-        // and the orchestration handler is owned by the engine — so the engine dispatches publish headless.
-        Assert.Contains(services, descriptor =>
-            descriptor.ServiceType == typeof(IRequestHandler<PublishWorkflow, PublishedWorkflowView>));
-    }
-
-    [Fact]
-    public void Registers_the_executable_compiler_and_publication_stores()
-    {
-        var services = ComposeEngine();
-
-        Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(IWorkflowExecutableCompiler));
-        Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(IWorkflowExecutableStore));
-        Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(IWorkflowExecutableSourceReferenceStore));
-        Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(IWorkflowActivationAuthority));
-        Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(IWorkflowActivationSwitch));
-        Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(IWorkflowActivationCoordinator));
-        Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(IPublicationRecordStore));
-        Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(IPublicationPolicyStore));
-    }
-
-    [Fact]
     public void Records_its_in_memory_record_and_receipt_stores_as_owners_only_when_it_added_them()
     {
         var services = ComposeEngine();
@@ -79,30 +49,7 @@ public sealed class WorkflowsPublishingFeatureTests
         Assert.NotNull(PublishingPersistenceFamilyBackend.Find(hostProvided, PublishingPersistenceFamilyBackend.ActivityPublicationReceipts));
     }
 
-    [Fact]
-    public void Registers_the_publish_on_reconcile_subscriber()
-    {
-        var services = ComposeEngine();
-
-        // spec 147: the engine subscribes to the Design-side reconcile completion event so sources with
-        // PublishOnReconcile become executable at startup. Independent subscriber — no contributor interface.
-        Assert.Contains(services, descriptor =>
-            descriptor.ServiceType == typeof(IEventHandler<WorkflowVersionsReconciled>) &&
-            descriptor.ImplementationType == typeof(PublishReconciledWorkflowVersions));
-    }
-
-    [Fact]
-    public void Registers_the_shell_start_pass_that_brings_the_publication_journal_into_line()
-    {
-        var services = ComposeEngine();
-
-        // #2223: without it a designer-published workflow interrupted after its switch keeps a candidate
-        // record, and nothing fails to say so.
-        Assert.Contains(services, descriptor =>
-            descriptor.ServiceType == typeof(IStartupTask) &&
-            descriptor.ImplementationType == typeof(CompleteInterruptedPublicationsStartupTask));
-    }
-
+    // Kept beside the composition test (§2.23.1): asserts what the engine must not register, the transport's authorization context.
     [Fact]
     public void Does_not_register_the_transport_authorization_context()
     {
@@ -114,6 +61,7 @@ public sealed class WorkflowsPublishingFeatureTests
             descriptor.ServiceType.FullName == AuthorizationContextTypeName);
     }
 
+    // Kept beside the composition test (§2.23.1): asserts what the engine must not register, FastEndpoints transport types.
     [Fact]
     public void Does_not_register_any_FastEndpoints_publish_endpoints()
     {

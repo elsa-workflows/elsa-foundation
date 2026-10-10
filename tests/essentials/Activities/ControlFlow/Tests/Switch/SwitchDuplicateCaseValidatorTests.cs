@@ -4,7 +4,6 @@ using Elsa.Activities.Switch.Internal;
 using Elsa.Workflows.Design.Core.Contracts;
 using Elsa.Workflows.Design.Core.Models;
 using Elsa.Workflows.Design.Core.Services;
-using Elsa.Workflows.Design.Validations.Core.Contracts;
 using Elsa.Workflows.Design.Validations.Core.Models;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
@@ -28,20 +27,6 @@ public sealed class SwitchDuplicateCaseValidatorTests : IDisposable
     }
 
     public void Dispose() => _provider.Dispose();
-
-    [Fact]
-    public void Feature_RegistersSwitchDuplicateCaseValidatorAsDraftValidator()
-    {
-        // Inspect the descriptor rather than activating: the validator's IActivityStructureService
-        // dependency is supplied by the design-validations feature at composition time, not by the
-        // activity feature in isolation.
-        var services = new ServiceCollection();
-        new ActivitiesControlFlowFeature().ConfigureServices(services);
-
-        Assert.Contains(services, descriptor =>
-            descriptor.ServiceType == typeof(IDraftValidator) &&
-            descriptor.ImplementationType == typeof(SwitchDuplicateCaseValidator));
-    }
 
     [Fact]
     public async Task DuplicateCaseMatchValues_ProduceValidationError()
