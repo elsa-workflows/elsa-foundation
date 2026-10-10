@@ -417,22 +417,6 @@ public sealed class PermissionAuthorizationHandler : AuthorizationHandler<Permis
         _authorization = authorization ?? throw new ArgumentNullException(nameof(authorization));
     }
 
-    [Obsolete("Use the IPermissionAuthorizationService constructor. This compatibility constructor fails closed when no trusted principal validator is supplied and will be removed in the next major version.")]
-    public PermissionAuthorizationHandler(IPermissionEvaluator evaluator, IEnumerable<IPermissionResourceHandler> resourceHandlers)
-    {
-        _authorization = new PermissionAuthorizationService(evaluator, resourceHandlers, validator: null, httpContextAccessor: null);
-    }
-
-    [Obsolete("Use the IPermissionAuthorizationService constructor. This compatibility constructor will be removed in the next major version.")]
-    public PermissionAuthorizationHandler(
-        IPermissionEvaluator evaluator,
-        IEnumerable<IPermissionResourceHandler> resourceHandlers,
-        NormalizedPrincipalValidator validator,
-        IHttpContextAccessor httpContextAccessor)
-    {
-        _authorization = new PermissionAuthorizationService(evaluator, resourceHandlers, validator, httpContextAccessor);
-    }
-
     protected override async Task HandleRequirementAsync(AuthorizationHandlerContext context, PermissionAuthorizationRequirement requirement)
     {
         var result = await _authorization.AuthorizeAsync(

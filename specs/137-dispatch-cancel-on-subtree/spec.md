@@ -4,7 +4,7 @@
 
 **Created**: 2026-07-23
 
-**Status**: Draft
+**Status**: Implemented — all tasks checked in 98877621b (PR #1035)
 
 **Input**: GitHub issue #998: seam-A subtree teardown cancels the parent-side wait for a waited dispatched workflow but leaves the child workflow instance running.
 

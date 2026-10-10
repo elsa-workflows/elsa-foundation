@@ -444,15 +444,12 @@ public class ActivityExecutionLayoutInspectionTests
         new ActivityInvocationOriginSegment(ActivityInvocationOriginSegmentKind.AuthoredNode, "node-boundary")
     });
 
-    private sealed class Authorization(bool structure, bool values) : IActivityExecutionInspectionAuthorizationContext, IActivityInspectionContextAsync
+    private sealed class Authorization(bool structure, bool values) : IActivityInspectionContextAsync
     {
         public string TenantScope => "tenant:a";
         public string AuthorizationProfile => $"structure:{structure};values:{values}";
         public string AuditSubject => "test";
         public string RequestCorrelationId => "test-request";
-        public bool CanInspectStructure(WorkflowExecutionState workflowExecution) => structure;
-        public bool CanInspectSensitiveValues(WorkflowExecutionState workflowExecution) => values;
-        public bool CanResolveSensitiveValuePayloads(WorkflowExecutionState workflowExecution) => false;
         public ValueTask<string> GetAuthorizationProfileAsync(CancellationToken cancellationToken = default) => ValueTask.FromResult(AuthorizationProfile);
         public ValueTask<bool> CanInspectStructureAsync(WorkflowExecutionState workflowExecution, CancellationToken cancellationToken = default) => ValueTask.FromResult(structure);
         public ValueTask<bool> CanInspectSensitiveValuesAsync(WorkflowExecutionState workflowExecution, CancellationToken cancellationToken = default) => ValueTask.FromResult(values);

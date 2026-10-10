@@ -110,16 +110,7 @@ public class WorkflowsRuntimeApiFeature : IWebShellFeature
         services.TryAddScoped<WorkflowAlterationPlanApiService>();
         services.TryAddScoped<IWorkflowAlterationPlanApiService>(sp => sp.GetRequiredService<WorkflowAlterationPlanApiService>());
 
-        var hasAsyncInspectionHost = services.Any(descriptor => descriptor.ServiceType == typeof(IActivityInspectionContextAsync));
-#pragma warning disable CS0618
-        if (!services.Any(descriptor => descriptor.ServiceType == typeof(IActivityExecutionInspectionAuthorizationContext)))
-            services.AddScoped<IActivityExecutionInspectionAuthorizationContext>(sp => sp.GetRequiredService<HttpContextActivityExecutionInspectionAuthorizationContext>());
-        if (!hasAsyncInspectionHost)
-            services.AddScoped<IActivityInspectionContextAsync>(sp =>
-                sp.GetRequiredService<IActivityExecutionInspectionAuthorizationContext>() is IActivityInspectionContextAsync asyncContext
-                    ? asyncContext
-                    : new LegacyActivityInspectionContextAdapter(sp.GetRequiredService<IActivityExecutionInspectionAuthorizationContext>()));
-#pragma warning restore CS0618
+        services.TryAddScoped<IActivityInspectionContextAsync>(sp => sp.GetRequiredService<HttpContextActivityExecutionInspectionAuthorizationContext>());
         services.EnsureReplacementContract<IActivityInspectionContextAsync, HttpContextActivityExecutionInspectionAuthorizationContext>();
         // Resolves the host's effective checkpoint cadence for the instance detail view (ADR 0032 R3). Reads the
         // coalescing options optionally (via IEnumerable), so it is Immediate unless the persistence feature enabled Coalesced.

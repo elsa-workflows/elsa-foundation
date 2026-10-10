@@ -20,7 +20,7 @@ The owner contributes `activity-design.read`, `activity-design.manage`, `activit
 | `IActivityAvailabilityDiagnosticsProjector` | `DefaultActivityAvailabilityDiagnosticsProjector` | Produces stable explanations for unavailable activities. |
 | `IActivityAvailabilitySettingsStore` | `InMemoryActivityAvailabilitySettingsStore` | Stores API-managed availability settings; durable providers may replace it. |
 | `IActivityFeatureAttributionResolver` | `ActivityFeatureAttributionResolver` | Best-effort resolution of the shell feature providing a CLR activity type key (the `featureId` in catalog/version `provenance`). The default resolves `activityTypeKey` → well-known type registry → assembly → runtime feature catalog, and returns `null` when either dependency is absent from the composition. |
-| `IActivityAuthoringContextAsync` / `IActivityDependencyContextAsync` | `HttpContextActivityDesignAuthorizationContext` | Async request authorization seams for authoring, provider payload, management, and tenant-scoped dependency decisions. They are replacement contracts backed by Foundation Identity; a host's legacy synchronous context is adapted only when no async replacement is supplied, and provider-specific rules receive a stable resource object. |
+| `IActivityAuthoringContextAsync` / `IActivityDependencyContextAsync` | `HttpContextActivityDesignAuthorizationContext` | Async request authorization seams for authoring, provider payload, management, and tenant-scoped dependency decisions. They are replacement contracts backed by Foundation Identity, and both resolve to the same per-request instance; provider-specific rules receive a stable resource object. |
 
 These are single-owner seams. Replace them through DI; do not register competing implementations and rely on resolution order.
 
@@ -43,4 +43,4 @@ Activity definitions are populated by Activity Design reconciliation sources, no
 
 The catalog endpoint normalizes those stored definitions and applies availability evaluation. Context-sensitive input options deliberately belong to Workflow Design API because they require submitted workflow state and node context.
 
-Canonical ownership is defined in the [domain-owned API spec](../../../../../specs/092-domain-owned-apis/spec.md); terminology is defined in the [Elsa glossary](../../../../../docs/glossary/elsa.md).
+Canonical ownership is defined in the [domain-owned API spec](../../../../../specs/220-domain-owned-apis/spec.md); terminology is defined in the [Elsa glossary](../../../../../docs/glossary/elsa.md).

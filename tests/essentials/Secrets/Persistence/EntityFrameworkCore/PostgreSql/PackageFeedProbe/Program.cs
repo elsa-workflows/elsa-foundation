@@ -137,7 +137,7 @@ internal static class Program
                 ["CShells:Shells:" + ShellName + ":Features:SecretsEntityFrameworkCore:Provider"] = "PostgreSql",
                 ["CShells:Shells:" + ShellName + ":Features:SecretsEntityFrameworkCore:ConnectionString"] = connectionString,
                 // The host-wide key on the shell's own Configuration node: Secrets' own MigratePolicy
-                // setting is retired (ADR 0076 D8), and a shell that still sets it refuses to start.
+                // setting is retired (ADR 0076 D8).
                 ["CShells:Shells:" + ShellName + ":Configuration:Elsa:Persistence:EntityFramework:Migrate:Policy"] = migratePolicy.ToString()
             })
             .Build();

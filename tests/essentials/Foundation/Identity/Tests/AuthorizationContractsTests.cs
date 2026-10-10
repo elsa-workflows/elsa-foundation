@@ -314,10 +314,11 @@ public sealed class AuthorizationContractsTests
     }
 
     [Fact]
-    public async Task CompatibilityPermissionHandlerConstructorFailsClosedWithoutNormalizedPrincipalValidator()
+    public async Task PermissionHandlerFailsClosedWithoutNormalizedPrincipalValidator()
     {
         var evaluator = new AlwaysGrantPermissionEvaluator();
-        var handler = new PermissionAuthorizationHandler(evaluator, []);
+        var handler = new PermissionAuthorizationHandler(
+            new PermissionAuthorizationService(evaluator, [], validator: null, httpContextAccessor: null));
         var requirement = new PermissionAuthorizationRequirement("read");
         var context = new AuthorizationHandlerContext(
             [requirement],
