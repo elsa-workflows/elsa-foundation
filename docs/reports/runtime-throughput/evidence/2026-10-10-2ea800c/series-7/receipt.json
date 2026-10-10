@@ -1,0 +1,33 @@
+{
+  "series": 7,
+  "provider": "SQLite",
+  "fixture": "Http4",
+  "cadence": "Immediate",
+  "persistedDiagnostics": "On",
+  "candidateSha": "2ea800cd5c17232cbfd50e0115344bab0ec79056",
+  "captureExitCode": 0,
+  "configSha256": {
+    "appsettings.json": "a6b11656c87136d01541667af1438da5230402a7ed3395a9cf2952570cda41ab",
+    "appsettings.Development.json": "e98675f0922574263376a941fdc4519e1bb54bc83a369557df20d41c12fb8bc2",
+    "shells.json": "5b5e359b3642c3651df3919736923e4738e99b87a26483445cf219b9997d911c"
+  },
+  "persistedDiagnosticsFeatureNamesPresent": [
+    "DiagnosticsOpenTelemetryEntityFrameworkCore",
+    "DiagnosticsStructuredLogsEntityFrameworkCore"
+  ],
+  "hostPid": 15171,
+  "scriptStopReason": "PlateauAtClients2",
+  "capturedLevels": [
+    1,
+    2
+  ],
+  "artifactSha256": "faa2c56995f212ebfd780a52420d4ca039f38d70f5897525a8826ccd85f8cdbd",
+  "readbackExitCode": 0,
+  "readback": {
+    "count": 127,
+    "cadenceMismatches": 0,
+    "detailReadCount": 127,
+    "fixtureExportSha256": "7c5571fb7c6e6255297be289afae85de36997530638457e599f742ccd7fad6e5"
+  },
+  "hostControllerExitCode": 0
+}

@@ -1,0 +1,16 @@
+[
+  {
+    "uptime": "02:29:47 up 23 min,  1 user,  load average: 4.85, 3.92, 2.30",
+    "oneMinute": 4.849609375,
+    "fiveMinute": 3.916015625,
+    "below8": true,
+    "monotonicSeconds": 1382.379816318
+  },
+  {
+    "uptime": "02:30:17 up 23 min,  1 user,  load average: 3.17, 3.60, 2.24",
+    "oneMinute": 3.1728515625,
+    "fiveMinute": 3.60302734375,
+    "below8": true,
+    "monotonicSeconds": 1412.38204804
+  }
+]

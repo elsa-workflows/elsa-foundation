@@ -1,0 +1,42 @@
+{
+  "series": 2,
+  "provider": "PostgreSQL + SQLite diagnostics",
+  "fixture": "Http4",
+  "cadence": "Coalesced",
+  "persistedDiagnostics": "On",
+  "candidateSha": "2ea800cd5c17232cbfd50e0115344bab0ec79056",
+  "captureExitCode": 0,
+  "containerId": "760ea6dcc02ecad45d8ef5b69af94678881bdfffede6ef6f6d0b320f04528972",
+  "containerName": "track-b-2534-s2-ed33656466",
+  "databaseName": "track_b_ed33656466",
+  "postgresImage": "postgres@sha256:ca0bd484cb98bf4b24eb1010e73fb3fcbd6714d240fbc1a10eea5b7dbecb641d",
+  "postgresSelectOneBeforeHost": true,
+  "postgresVersion": "16.15 (Debian 16.15-1.pgdg13+2)",
+  "configSha256": {
+    "appsettings.json": "2d678f0de2d0769a9df14a908a84f81a60695220c7a13270fb93b7a2f78731c1",
+    "appsettings.Development.json": "e98675f0922574263376a941fdc4519e1bb54bc83a369557df20d41c12fb8bc2",
+    "shells.json": "1416b8ee7ec42b7fce07c889d36d377a940e772e982847dfc8656fc5a87599b9"
+  },
+  "persistedDiagnosticsFeatureNamesPresent": [
+    "DiagnosticsOpenTelemetryEntityFrameworkCore",
+    "DiagnosticsStructuredLogsEntityFrameworkCore"
+  ],
+  "hostPid": 5629,
+  "scriptStopReason": "PlateauAtClients8",
+  "capturedLevels": [
+    1,
+    2,
+    4,
+    8
+  ],
+  "artifactSha256": "5d3c827437e67bf19718075e565b8b43ec8fcdddc250fa44292bf2a6825c3dc6",
+  "readbackExitCode": 0,
+  "readback": {
+    "cadenceMismatches": 0,
+    "count": 1974,
+    "detailReadCount": 1974,
+    "fixtureExportSha256": "ba5705b1bda91f64f10caf9193df58879b67af738220b56a65525c4e6d5c3e4c"
+  },
+  "hostControllerExitCode": 0,
+  "containerStopExitCode": 0
+}

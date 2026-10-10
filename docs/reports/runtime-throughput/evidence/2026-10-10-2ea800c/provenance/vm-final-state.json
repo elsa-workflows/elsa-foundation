@@ -1,0 +1,8 @@
+{
+  "location": "westeurope",
+  "name": "elsa-p2382-98e7664aa3",
+  "osDiskName": "elsa-p2382-98e7664aa3_OsDisk_1_587133649512417fa0b0f5926d06b897",
+  "powerState": "VM deallocated",
+  "resourceGroup": "rg-elsa-p2382-98e7664aa3",
+  "vmSize": "Standard_D8ds_v5"
+}

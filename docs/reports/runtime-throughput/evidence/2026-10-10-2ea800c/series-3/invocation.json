@@ -1,0 +1,11 @@
+{
+  "BaseUrl": "http://127.0.0.1:43909",
+  "CandidateSha": "2ea800cd5c17232cbfd50e0115344bab0ec79056",
+  "Fixture": "Http4",
+  "Cadence": "Immediate",
+  "PersistedDiagnostics": "Off",
+  "HostProcessId": 6708,
+  "HostLogPath": "/home/elsarunner/track-b-evidence/2ea800cd5c17232cbfd50e0115344bab0ec79056/series/series-3/content/server-1.out.log",
+  "Postgres": true,
+  "OutputPath": "/home/elsarunner/track-b-evidence/2ea800cd5c17232cbfd50e0115344bab0ec79056/series/series-3/series-3.json"
+}
