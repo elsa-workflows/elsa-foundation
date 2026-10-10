@@ -51,6 +51,21 @@ public sealed class JsonActivityReconciliationFeatureTests
         Assert.Throws<InvalidOperationException>(() => feature.ConfigureServices(new ServiceCollection()));
     }
 
+    // Kept beside the composition test (§2.23.1): conditional registration, the single FilePath branch registers the source.
+    [Fact]
+    public void ConfigureServices_WithSingleFilePath_RegistersSource()
+    {
+        var feature = new JsonActivityReconciliationFeature
+        {
+            Options = { SourceId = "catalog", FilePath = "catalog.json" },
+        };
+
+        var services = new ServiceCollection();
+        feature.ConfigureServices(services);
+
+        Assert.Contains(services, d => d.ServiceType == typeof(IActivityReconciliationSource));
+    }
+
     // Kept beside the composition test (§2.23.1): conditional registration, the Files-list shape, which the composition test's FilePath configuration does not take.
     [Fact]
     public void ConfigureServices_WithFilesList_RegistersSource()
