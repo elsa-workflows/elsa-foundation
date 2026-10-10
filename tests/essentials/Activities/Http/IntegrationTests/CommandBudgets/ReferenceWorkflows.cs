@@ -116,11 +116,8 @@ internal static class ReferenceWorkflows
             nodeId,
             typeof(SequenceActivity),
             [],
-            childSlots: [new ExecutableChildSlot(SequenceActivity.ActivitiesSlotName, children)],
-            structure: new ExecutableActivityStructure(
-                SequenceActivity.StructureKind,
-                SequenceActivity.StructureSchemaVersion,
-                JsonSerializer.SerializeToElement(new { activities = children.Select(child => child.ExecutableNodeId).ToArray() })));
+            childSlots: SequenceShape.ChildSlots(children),
+            structure: SequenceShape.Structure(children));
 
     private static ExecutableNode Clr(
         string nodeId,

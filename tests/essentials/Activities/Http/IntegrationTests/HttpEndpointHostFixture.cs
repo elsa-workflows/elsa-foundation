@@ -457,11 +457,8 @@ public sealed class HttpEndpointHostFixture : IAsyncDisposable
             descriptor: ClrRuntimeDescriptor(sequenceDescriptorPayload),
             inputBindings: new Dictionary<string, RuntimeInputBinding>(),
             metadata: new Dictionary<string, string>(),
-            childSlots: [new ExecutableChildSlot(SequenceActivity.ActivitiesSlotName, [startNode, callbackNode])],
-            structure: new ExecutableActivityStructure(
-                SequenceActivity.StructureKind,
-                SequenceActivity.StructureSchemaVersion,
-                JsonSerializer.SerializeToElement(new { activities = new[] { startNode.ExecutableNodeId, callbackNode.ExecutableNodeId } })),
+            childSlots: SequenceShape.ChildSlots([startNode, callbackNode]),
+            structure: SequenceShape.Structure([startNode, callbackNode]),
             activityContract: UnitActivityContract(typeof(SequenceActivity), sequenceDescriptorPayload, [], [ActivityOutcomes.Done, ActivityOutcomes.Break]));
 
         var resumeTargets = NewHttpEndpointResumeTargets(callbackNode.ExecutableNodeId);
@@ -637,11 +634,8 @@ public sealed class HttpEndpointHostFixture : IAsyncDisposable
             descriptor: ClrRuntimeDescriptor(descriptorPayload),
             inputBindings: new Dictionary<string, RuntimeInputBinding>(),
             metadata: new Dictionary<string, string>(),
-            childSlots: [new ExecutableChildSlot(SequenceActivity.ActivitiesSlotName, children)],
-            structure: new ExecutableActivityStructure(
-                SequenceActivity.StructureKind,
-                SequenceActivity.StructureSchemaVersion,
-                JsonSerializer.SerializeToElement(new { activities = children.Select(child => child.ExecutableNodeId).ToArray() })),
+            childSlots: SequenceShape.ChildSlots(children),
+            structure: SequenceShape.Structure(children),
             activityContract: UnitActivityContract(typeof(SequenceActivity), descriptorPayload, [], [ActivityOutcomes.Done, ActivityOutcomes.Break]));
     }
 
