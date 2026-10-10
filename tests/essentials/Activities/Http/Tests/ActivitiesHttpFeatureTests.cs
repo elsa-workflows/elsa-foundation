@@ -8,6 +8,7 @@ using Elsa.Http;
 using Elsa.Http.Core.Contracts;
 using Elsa.Http.Core.Options;
 using Elsa.Activities.Http.Options;
+using Elsa.Activities.Http.Services;
 using Elsa.Tasks.Core;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
@@ -64,6 +65,19 @@ public sealed class ActivitiesHttpFeatureTests
 
         // The activity disables the ambient client timeout and enforces its own via a linked token source.
         Assert.Equal(System.Threading.Timeout.InfiniteTimeSpan, client.Timeout);
+    }
+
+    [Fact]
+    public void RegistersTheHeaderFreeClientLogger()
+    {
+        var services = new ServiceCollection();
+        new ActivitiesHttpFeature().ConfigureServices(services);
+
+        using var provider = services.BuildServiceProvider();
+
+        // The default-logging suppression RemoveAllLoggers sets is internal to Microsoft.Extensions.Http and not
+        // observable on the public options; SendHttpRequestAuthorizationLoggingTests proves its effect end to end.
+        Assert.NotNull(provider.GetRequiredService<HttpActivityClientLogger>());
     }
 
     [Fact]

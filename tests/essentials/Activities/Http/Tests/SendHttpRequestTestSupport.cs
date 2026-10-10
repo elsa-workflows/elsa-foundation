@@ -20,6 +20,12 @@ namespace Elsa.Activities.Http.Tests;
 /// </summary>
 internal static class SendHttpRequestTestSupport
 {
+    /// <summary>
+    /// The category the named client's logger writes under (the default client handler's category), written out so a
+    /// change to the production constant turns the tests red.
+    /// </summary>
+    public const string ClientLoggerCategory = "System.Net.Http.HttpClient.Elsa.Activities.Http.ClientHandler";
+
     public const string NodeId = "node-send-http";
     public const string ActivityExecutionId = "actexec-http";
 

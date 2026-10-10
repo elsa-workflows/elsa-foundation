@@ -23,9 +23,6 @@ namespace Elsa.Activities.Http.Tests;
 /// </summary>
 public sealed class SendHttpRequestAuthorizationLoggingTests
 {
-    // The category the named client's logger writes under (the default client handler's category, kept).
-    private const string ClientLoggerCategory = "System.Net.Http.HttpClient." + HttpActivityConstants.HttpClientName + ".ClientHandler";
-
     // The default logical handler's category, which the replaced logging no longer writes for this client.
     private const string DefaultLogicalHandlerCategory = "System.Net.Http.HttpClient." + HttpActivityConstants.HttpClientName + ".LogicalHandler";
 

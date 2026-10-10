@@ -13,7 +13,6 @@ namespace Elsa.Activities.Http.Tests;
 /// </summary>
 public sealed class HttpActivityClientLoggerTests
 {
-    private const string Category = "System.Net.Http.HttpClient.Elsa.Activities.Http.ClientHandler";
     private const string OriginalFormat = "{OriginalFormat}";
     private static readonly TimeSpan Elapsed = TimeSpan.FromMilliseconds(12.5);
 
@@ -29,6 +28,7 @@ public sealed class HttpActivityClientLoggerTests
         { "https://example.test:8443/orders/7", "https://example.test:8443/orders/7" },
         { "https://example.test/orders/7?page=2&view=full", "https://example.test/orders/7?*" },
         { "https://someone@example.test/orders/7#section", "https://example.test/orders/7" },
+        { "https://example.test/p?", "https://example.test/p" },
         { "orders/7?page=2", "*" },
         { null, "" },
     };
@@ -85,7 +85,7 @@ public sealed class HttpActivityClientLoggerTests
     private void AssertSingleLine(int eventId, string eventName, string message, params (string Name, string Value)[] fields)
     {
         var line = Assert.Single(_factory.Lines);
-        Assert.Equal(Category, line.Category);
+        Assert.Equal(SendHttpRequestTestSupport.ClientLoggerCategory, line.Category);
         Assert.Equal(LogLevel.Information, line.Level);
         Assert.Equal(eventId, line.EventId.Id);
         Assert.Equal(eventName, line.EventId.Name);
