@@ -120,7 +120,8 @@
 - [x] T027 Bite-proof the regression tests. Temporarily restore the single-row lease path in `EfWorkflowExecutableStore.cs`. The 3 SQLite regression tests and the PostgreSQL parallel test must fail again. Restore the code and record the results.
 - [x] T028 Push. Watch CI ("Build & test", "EF container suites (runtime)" covering PostgreSQL, SQL Server and MySQL, "Core-only build & test", Maps) until it is green on the head. Handle every CodeRabbit finding per the PR rules.
 - [x] T029 Re-run the A1 end-to-end matrix on the Azure runner `rg-elsa-p2382-98e7664aa3` / `elsa-p2382-98e7664aa3` (8 cases, quickstart.md). This needs the owner to start the runner or relay a Codex run. All 8 must pass (SC-001). Post the results on #2532 and #2538.
-  - Done at `1bef1fe` after #2548/#2549: 7 of 8 passed, with zero lease errors. SQLite Immediate/32 fails on client timeouts only. The owner closed A1 as diagnosed on 10 October 2026; follow-up is #2553.
+  - Closed under an owner-approved exception, not as a pass. At `1bef1fe`, after #2548/#2549, 7 of 8 passed with zero lease errors. SQLite Immediate/32 fails on client timeouts only.
+  - On 10 October 2026 the owner closed A1 as diagnosed under the program's "passes or is diagnosed" rule, which also satisfies T030's "once T029 passes" gate. See SC-001 in spec.md. Follow-up: #2553.
 - [x] T030 Set the spec `**Status**` to `Implemented — PR #2539` in `specs/200-root-write-lease-rows/spec.md`. Update `docs/program-goals/runtime-throughput.md`: mark the lease unit done, and record that Track B is unblocked once T029 passes. Post the merge-gate evidence comment on PR #2539.
 
 ## Dependencies & Execution Order

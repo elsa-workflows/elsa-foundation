@@ -115,7 +115,8 @@ When a checkpoint commit has durably succeeded, a later failure to release its l
 ### Measurable Outcomes
 
 - **SC-001**: The A1 concurrency matrix passes all 8 cases: SQLite and PostgreSQL runtime, Immediate and Coalesced cadence, 16 and 32 clients. Every response correct, every execution Completed, zero incidents. Today 1 of 8 passes.
-  - **Outcome (10 October 2026):** 7 of 8 at `1bef1fe`, with zero lease errors and zero incidents. The remaining case, SQLite Immediate/32, fails on 60s client timeouts. It loses no acknowledged work and is not lease-related. The owner closed A1 as diagnosed, and the latency is tracked by #2553 for Track B. See [#2532](https://github.com/elsa-workflows/elsa-foundation/issues/2532#issuecomment-6092143824).
+  - **Owner-approved exception (10 October 2026):** SC-001 is closed as diagnosed, not as passed, under the program's completion rule "A1 passes or is diagnosed" ([runtime-throughput.md](../../docs/program-goals/runtime-throughput.md#completion)). The 8-of-8 bar itself is unchanged.
+  - **Outcome:** 7 of 8 at `1bef1fe`, with zero lease errors and zero incidents. The remaining case, SQLite Immediate/32, fails on 60s client timeouts. It loses no acknowledged work and is not lease-related. The owner closed A1 as diagnosed, and the latency is tracked by #2553 for Track B. See [#2532](https://github.com/elsa-workflows/elsa-foundation/issues/2532#issuecomment-6092143824).
 - **SC-002**: Under sustained contention from other holders of the same artifact, 100% of lease operations succeed on their first store write. Today the deterministic regression tests exhaust all 16 attempts.
 - **SC-003**: 32 real parallel holders × 5 lease cycles on one artifact complete with zero failed cycles on PostgreSQL.
 - **SC-004**: Zero regressions in existing lease, guard, deletion and garbage-collection tests across in-memory, SQLite and the three container providers.
