@@ -388,6 +388,49 @@ public sealed class RuntimeCheckpointCoalescingTests(ITestOutputHelper output)
         Assert.Equal(2, innerStore.ListCommits().Count);
     }
 
+    // #2601: a boundary's folded commit lands durably before the decorator reconciles the durable queue. When that
+    // reconciliation then fails (here: tracked work removed outside the drain), the drain records the failure and carries
+    // on to its quiescence flush. The buffered segment is already in the durable commit, so the session must not keep it:
+    // a quiescence flush would re-apply the older buffered state over the newer durable one.
+    [Fact]
+    public async Task BoundaryReconciliationFailure_AfterTheDurableCommit_LeavesNothingForTheQuiescenceFlush()
+    {
+        const string workflowExecutionId = "wfexec-1";
+        var innerQueue = new InMemoryWorkflowSchedulerWorkQueue();
+        await innerQueue.EnqueueAsync(NewReconciliationWorkItem(workflowExecutionId, 10));
+        await innerQueue.EnqueueAsync(NewReconciliationWorkItem(workflowExecutionId, 20));
+        var innerStore = new InMemoryRuntimeCheckpointCommitStore();
+        var session = new RuntimeCoalescingSession(
+            workflowExecutionId,
+            innerQueue,
+            new CoalescingRuntimeCheckpointPersistenceOptions());
+        var store = new CoalescingRuntimeCheckpointCommitStore(
+            new CoalescingInner<IRuntimeCheckpointCommitStore>(innerStore),
+            new FixedCoalescingSessionAccessor(session));
+        await session.EnsureQueueSeededAsync(CancellationToken.None);
+        Assert.Equal("work-10", (await session.DequeueOverlayAsync(CancellationToken.None))!.WorkItemId);
+
+        await store.CommitAsync(
+            NewEmptyCommit(workflowExecutionId, 1, RuntimeCheckpointNames.ActivityStarted) with
+            {
+                StateChanges = ActivityUpsert(NewRunningActivityState())
+            },
+            new(RuntimeCheckpointPersistenceMode.Deferred));
+        Assert.True(session.HasBufferedChanges);
+
+        // A continuation the boundary must persist makes it re-read the durable queue, which no longer holds work-20.
+        await session.EnqueueOverlayAsync(NewReconciliationWorkItem(workflowExecutionId, 30), CancellationToken.None);
+        Assert.True(await innerQueue.DeleteAsync(workflowExecutionId, "work-20"));
+
+        await Assert.ThrowsAsync<InvalidOperationException>(async () => await store.CommitAsync(
+            NewEmptyCommit(workflowExecutionId, 2, RuntimeCheckpointNames.WorkflowCompleted),
+            new(RuntimeCheckpointPersistenceMode.Immediate)));
+
+        Assert.Equal(RuntimeCheckpointNames.WorkflowCompleted, Assert.Single(innerStore.ListCommits()).Commit.Checkpoint.Name);
+        Assert.False(session.HasBufferedChanges);
+        Assert.False(session.IsActive);
+    }
+
     // The committer validated each commit on its own, but a boundary flush folds the buffered segment into a new commit that
     // can combine changes no single commit carried. The decorator validates that fold before the durable store sees it.
     [Fact]
