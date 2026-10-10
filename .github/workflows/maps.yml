@@ -1,4 +1,4 @@
-name: Hosted stable restore and maps qualification
+name: Hosted stable hosts and demo qualification
 
 on:
   workflow_dispatch:
@@ -7,26 +7,27 @@ permissions:
   contents: read
 
 jobs:
-  restore-and-maps:
+  stable-hosts-demo:
     runs-on: ubuntu-latest
-    timeout-minutes: 35
+    timeout-minutes: 60
 
     steps:
-      - name: Prepare fresh runner-local directories
+      - name: Prepare fresh runner-local evidence and NuGet cache
         shell: bash
         run: |
           set -euo pipefail
-          EVIDENCE_DIR="$RUNNER_TEMP/foundation-qualification"
-          NUGET_PACKAGES="$RUNNER_TEMP/foundation-stable-nuget-packages"
-          printf 'EVIDENCE_DIR=%s\nNUGET_PACKAGES=%s\n' "$EVIDENCE_DIR" "$NUGET_PACKAGES" >> "$GITHUB_ENV"
-          mkdir -p "$EVIDENCE_DIR"
-          if [ -e "$NUGET_PACKAGES" ]; then
-            echo "Expected a fresh runner-local NuGet package directory: $NUGET_PACKAGES" >&2
+          evidence_dir="$RUNNER_TEMP/foundation-stable-hosts-demo"
+          nuget_packages="$RUNNER_TEMP/foundation-stable-hosts-nuget"
+          mkdir -p "$evidence_dir"
+          printf 'EVIDENCE_DIR=%s\nNUGET_PACKAGES=%s\n' \
+            "$evidence_dir" "$nuget_packages" >> "$GITHUB_ENV"
+          if [ -e "$nuget_packages" ]; then
+            echo "Expected a fresh runner-local NuGet package directory: $nuget_packages" >&2
             exit 1
           fi
-          mkdir -p "$NUGET_PACKAGES"
-          printf 'runner=%s\nnugetPackages=%s\n' "$RUNNER_NAME" "$NUGET_PACKAGES" \
-            > "$EVIDENCE_DIR/runner.txt"
+          mkdir -p "$nuget_packages"
+          printf 'runner=%s\nnugetPackages=%s\n' "$RUNNER_NAME" "$nuget_packages" \
+            > "$evidence_dir/runner.txt"
 
       - name: Checkout exact dispatched commit
         uses: actions/checkout@v4
@@ -37,7 +38,10 @@ jobs:
       - name: Set up .NET 10
         uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: 10.0.x
+          dotnet-version: |
+            8.0.x
+            9.0.x
+            10.0.x
 
       - name: Capture checkout and input provenance
         shell: bash
@@ -61,98 +65,320 @@ jobs:
             ':(glob)**/*.csproj' \
             Directory.Build.props Directory.Packages.props PackageVersioning.props \
             VersionLines.props NuGet.config global.json Elsa.Server.slnx \
-            tools/maps/Elsa.Maps.Generator docs/maps docs/reports \
+            tools/architecture tools/demo docs/maps docs/reports \
             > "$EVIDENCE_DIR/input-files.nul"
           while IFS= read -r -d '' file; do
             sha256sum -- "$file"
           done < "$EVIDENCE_DIR/input-files.nul" > "$EVIDENCE_DIR/input-sha256.txt"
           dotnet --info 2>&1 | tee "$EVIDENCE_DIR/dotnet-info.log"
 
-      - name: Restore solution packages
+      - name: Restore locked Release and Debug project graphs
+        id: restore
         shell: bash
         run: |
           set -euo pipefail
-          dotnet restore Elsa.Server.slnx --no-http-cache --disable-parallel -m:1 -p:WarningsNotAsErrors=NU1603 \
-            2>&1 | tee "$EVIDENCE_DIR/restore.log"
+          bash tools/architecture/restore-ci-project-graph.sh \
+            --locked-mode --disable-parallel -m:1 -p:WarningsNotAsErrors=NU1603 \
+            2>&1 | tee "$EVIDENCE_DIR/restore-project-graphs.log"
 
-      - name: Build Maps generator
+      - name: Verify map freshness on the integrated stable tree
         shell: bash
         run: |
           set -euo pipefail
-          dotnet build tools/maps/Elsa.Maps.Generator/Elsa.Maps.Generator.csproj \
-            -c Release --no-restore -m:1 \
-            2>&1 | tee "$EVIDENCE_DIR/maps-build.log"
+          dotnet build tools/maps/Elsa.Maps.Generator -c Release --no-restore -m:1 2>&1 | tee "$EVIDENCE_DIR/maps-build.log"
+          dotnet run --project tools/maps/Elsa.Maps.Generator -c Release --no-build --no-restore -- check 2>&1 | tee "$EVIDENCE_DIR/maps-check.log"
 
-      - name: Regenerate all maps
+      - name: Run serialized Release test suites
         shell: bash
         run: |
           set -euo pipefail
-          dotnet run --project tools/maps/Elsa.Maps.Generator/Elsa.Maps.Generator.csproj \
-            -c Release --no-build --no-restore -- all \
-            2>&1 | tee "$EVIDENCE_DIR/maps-all.log"
+          overall=0
+          run_test() {
+            name="$1"
+            project="$2"
+            result_dir="$EVIDENCE_DIR/trx/$name"
+            mkdir -p "$result_dir"
+            set +e
+            dotnet test "$project" -c Release --no-restore -m:1 \
+              -p:WarningsNotAsErrors=NU1603 \
+              --logger "trx;LogFileName=${name}.trx" \
+              --results-directory "$result_dir" \
+              2>&1 | tee "$EVIDENCE_DIR/logs/$name.log"
+            pipeline_status=("${PIPESTATUS[@]}")
+            status="${pipeline_status[0]}"
+            tee_status="${pipeline_status[1]}"
+            set -e
+            printf 'dotnet=%s\ntee=%s\n' "$status" "$tee_status" \
+              > "$EVIDENCE_DIR/logs/$name.exit-code"
+            if [ "$status" -ne 0 ] || [ "$tee_status" -ne 0 ]; then
+              overall=1
+            fi
+          }
 
-      - name: Check generated maps
+          mkdir -p "$EVIDENCE_DIR/logs"
+          run_test readability tests/essentials/Cluster/Readability/Tests/Elsa.Cluster.Readability.Tests.csproj
+          run_test modularity-core tests/essentials/Modularity/Tests/Elsa.Modularity.Tests.csproj
+          run_test workbench tests/essentials/Workbench/Tests/Elsa.Workbench.Tests.csproj
+          run_test cluster-entity-framework-full tests/essentials/Cluster/EntityFrameworkCore/Tests/Elsa.Cluster.EntityFrameworkCore.Tests.csproj
+          run_test architecture tests/essentials/Architecture/Tests/Elsa.Architecture.Tests.csproj
+          exit "$overall"
+
+      - name: Verify public stable archives and both actual-host runtime assets
+        if: always() && steps.restore.outcome == 'success'
         shell: bash
         run: |
           set -euo pipefail
-          dotnet run --project tools/maps/Elsa.Maps.Generator/Elsa.Maps.Generator.csproj \
-            -c Release --no-build --no-restore -- check \
-            2>&1 | tee "$EVIDENCE_DIR/maps-check.log"
+          portable="$RUNNER_TEMP/portable-consumer"
+          if [ ! -d "$portable" ]; then
+            cp -a "$GITHUB_WORKSPACE/.qualification/portable-consumer" "$portable"
+          fi
+          python3 "$portable/download-public-archives.py" 2>&1 | tee "$EVIDENCE_DIR/public-archives.log"
+          python3 "$portable/host-audit/verify-project-upstream-assets.py" \
+            src/apps/Elsa.Foundation.Host/obj/project.assets.json \
+            src/apps/Elsa.Foundation.Host/bin/Release/net10.0 foundation-host-stable-upstream-assets-audit.json
+          python3 "$portable/host-audit/verify-project-upstream-assets.py" \
+            src/apps/Elsa.Workbench/obj/project.assets.json \
+            src/apps/Elsa.Workbench/bin/Release/net10.0 workbench-stable-upstream-assets-audit.json
+          python3 "$portable/host-audit/audit-actual-host-trx.py" \
+            "$EVIDENCE_DIR/trx/cluster-entity-framework-full/cluster-entity-framework-full.trx" \
+            stable-actual-host-trx-audit.json foundation-host-stable-upstream-assets-audit.json workbench-stable-upstream-assets-audit.json
+          cp "$portable/host-audit/"*-audit.json "$EVIDENCE_DIR/"
 
-      - name: Capture generated outputs and diff provenance
+      - name: Exercise stable consumer on net8, net9 and net10
+        if: always() && steps.restore.outcome == 'success'
+        shell: bash
+        run: |
+          set -euo pipefail
+          portable="$RUNNER_TEMP/portable-consumer"
+          if [ ! -d "$portable" ]; then
+            cp -a "$GITHUB_WORKSPACE/.qualification/portable-consumer" "$portable"
+          fi
+          python3 "$portable/download-public-archives.py" 2>&1 | tee "$EVIDENCE_DIR/consumer-public-archives.log"
+          python3 "$portable/stable-consumer/run-stable-consumer.py" \
+            hosted-stable-20261011 0.0.30 0.0.11 \
+            https://api.nuget.org/v3/index.json https://api.nuget.org/v3/index.json \
+            2>&1 | tee "$EVIDENCE_DIR/stable-consumer.log"
+
+      - name: Verify Docker and prepare PostgreSQL image
+        id: docker
+        if: always() && steps.restore.outcome == 'success'
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker info 2>&1 | tee "$EVIDENCE_DIR/docker-info.log"
+          docker pull postgres:16-alpine 2>&1 | tee "$EVIDENCE_DIR/docker-postgres-pull.log"
+
+      - name: Prepack demo without Act 3
+        id: prepack
+        if: always() && steps.restore.outcome == 'success' && steps.docker.outcome == 'success'
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash tools/demo/prepack.sh --no-act3 \
+            2>&1 | tee "$EVIDENCE_DIR/logs/demo-prepack.log"
+
+      - name: Rehearse demo Acts 1 and 2
+        if: always() && steps.prepack.outcome == 'success'
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash tools/demo/rehearse.sh --no-act3 \
+            2>&1 | tee "$EVIDENCE_DIR/logs/demo-rehearse.log"
+
+      - name: Stage exact package and host evidence
         if: always()
         shell: bash
         run: |
           set -euo pipefail
           cd "$GITHUB_WORKSPACE"
           if ! git rev-parse --show-toplevel >/dev/null 2>&1; then
-            printf 'Checkout unavailable; no repository output capture was possible.\n' \
-              > "$EVIDENCE_DIR/output-capture.txt"
+            printf 'Checkout unavailable; no repository evidence could be staged.\n' \
+              > "$EVIDENCE_DIR/staging-status.txt"
             exit 0
           fi
 
           printf 'head=%s\n' "$(git rev-parse HEAD)" > "$EVIDENCE_DIR/output-capture.txt"
           git status --porcelain=v1 --untracked-files=all \
             > "$EVIDENCE_DIR/status-after.txt"
-          git diff --binary HEAD -- \
-            ':(glob)**/packages.lock.json' docs/maps docs/reports \
-            > "$EVIDENCE_DIR/generated.diff"
+          git diff --binary HEAD > "$EVIDENCE_DIR/worktree.diff"
 
-          {
-            git diff --name-only -z HEAD -- \
-              ':(glob)**/packages.lock.json' docs/maps docs/reports
-            git ls-files --others --exclude-standard -z -- \
-              ':(glob)**/packages.lock.json' docs/maps docs/reports
-          } > "$EVIDENCE_DIR/generated-files.nul"
-
-          : > "$EVIDENCE_DIR/generated-existing-files.nul"
-          while IFS= read -r -d '' file; do
-            if [ -f "$file" ]; then
-              printf '%s\0' "$file" >> "$EVIDENCE_DIR/generated-existing-files.nul"
-            fi
-          done < "$EVIDENCE_DIR/generated-files.nul"
-
-          if [ -s "$EVIDENCE_DIR/generated-files.nul" ]; then
-            if [ -s "$EVIDENCE_DIR/generated-existing-files.nul" ]; then
-              tar --create --gzip \
-                --file="$EVIDENCE_DIR/generated-files.tar.gz" \
-                --null --files-from="$EVIDENCE_DIR/generated-existing-files.nul"
-            fi
-            while IFS= read -r -d '' file; do
-              sha256sum -- "$file"
-            done < "$EVIDENCE_DIR/generated-existing-files.nul" \
-              > "$EVIDENCE_DIR/generated-sha256.txt"
-          else
-            printf 'No package lock, docs/maps, or docs/reports files changed.\n' \
-              > "$EVIDENCE_DIR/generated-sha256.txt"
+          mkdir -p "$EVIDENCE_DIR/project-assets/foundation-host" \
+            "$EVIDENCE_DIR/project-assets/workbench" \
+            "$EVIDENCE_DIR/selected-cache" \
+            "$EVIDENCE_DIR/upstream-dlls/foundation-host" \
+            "$EVIDENCE_DIR/upstream-dlls/workbench"
+          if [ -d "$RUNNER_TEMP/portable-consumer/stable-consumer/evidence" ]; then
+            cp -a "$RUNNER_TEMP/portable-consumer/stable-consumer/evidence" "$EVIDENCE_DIR/stable-consumer-evidence"
+          fi
+          if [ -d "$RUNNER_TEMP/portable-consumer/host-audit" ]; then
+            find "$RUNNER_TEMP/portable-consumer/host-audit" -maxdepth 1 -name '*-audit.json' -exec cp {} "$EVIDENCE_DIR/" \;
+          fi
+          if [ -d artifacts/demo-rehearsal ]; then
+            cp -a artifacts/demo-rehearsal "$EVIDENCE_DIR/demo-rehearsal"
           fi
 
-      - name: Upload restore and maps evidence
+          python3 - "$EVIDENCE_DIR" "$NUGET_PACKAGES" "$GITHUB_WORKSPACE" <<'PY'
+          import hashlib, json, pathlib, shutil, sys
+
+          evidence = pathlib.Path(sys.argv[1])
+          packages_root = pathlib.Path(sys.argv[2])
+          repo = pathlib.Path(sys.argv[3])
+          packages = [
+              ('CShells', '0.0.30'),
+              ('CShells.Abstractions', '0.0.30'),
+              ('CShells.AspNetCore', '0.0.30'),
+              ('CShells.AspNetCore.Abstractions', '0.0.30'),
+              ('CShells.AspNetCore.Testing', '0.0.30'),
+              ('CShells.FastEndpoints', '0.0.30'),
+              ('CShells.FastEndpoints.Abstractions', '0.0.30'),
+              ('CShells.Management.Api', '0.0.30'),
+              ('CShells.Nuplane', '0.0.30'),
+              ('CShells.Providers.FluentStorage', '0.0.30'),
+              ('Nuplane.Abstractions', '0.0.11'),
+              ('Nuplane.Admin.Api', '0.0.11'),
+              ('Nuplane.Admin', '0.0.11'),
+              ('Nuplane.Loading.Abstractions', '0.0.11'),
+              ('Nuplane.Loading.Api', '0.0.11'),
+              ('Nuplane.Loading', '0.0.11'),
+              ('Nuplane.Sources.Directory', '0.0.11'),
+              ('Nuplane', '0.0.11'),
+          ]
+          # Only the upstream libraries reached by the two actual hosts belong in their cache proof.
+          reached_ids = set()
+          for relative in ['src/apps/Elsa.Foundation.Host/obj/project.assets.json', 'src/apps/Elsa.Workbench/obj/project.assets.json']:
+              path = repo / relative
+              if path.is_file():
+                  reached_ids.update(key.split('/', 1)[0].casefold() for key in json.loads(path.read_text())['libraries'])
+          packages = [(name, version) for name, version in packages if name.casefold() in reached_ids]
+          missing = []
+
+          def child_casefold(directory, name):
+              if not directory.is_dir():
+                  return None
+              matches = [path for path in directory.iterdir() if path.name.casefold() == name.casefold()]
+              return matches[0] if len(matches) == 1 else None
+
+          def sha256(path):
+              return hashlib.sha256(path.read_bytes()).hexdigest()
+
+          package_records = []
+          selected_root = evidence / 'selected-cache'
+          for package_id, version in packages:
+              package_dir = child_casefold(packages_root, package_id)
+              version_dir = child_casefold(package_dir, version) if package_dir else None
+              archive_name = package_id.lower() + '.' + version + '.nupkg'
+              archive = child_casefold(version_dir, archive_name) if version_dir else None
+              metadata = version_dir / '.nupkg.metadata' if version_dir else None
+              sha512 = pathlib.Path(str(archive) + '.sha512') if archive else None
+              if not archive or not archive.is_file() or not metadata or not metadata.is_file() or not sha512 or not sha512.is_file():
+                  missing.append(package_id + '/' + version)
+                  continue
+
+              destination = selected_root / package_id.lower() / version
+              destination.mkdir(parents=True, exist_ok=True)
+              staged_archive = destination / archive.name.lower()
+              staged_sha512 = pathlib.Path(str(staged_archive) + '.sha512')
+              staged_metadata = destination / '.nupkg.metadata'
+              shutil.copy2(archive, staged_archive)
+              shutil.copy2(sha512, staged_sha512)
+              shutil.copy2(metadata, staged_metadata)
+              package_records.append({
+                  'id': package_id,
+                  'version': version,
+                  'archive': str(staged_archive.relative_to(evidence)),
+                  'archiveSha256': sha256(staged_archive),
+                  'sha512': staged_sha512.read_text().strip(),
+                  'metadata': json.loads(staged_metadata.read_text()),
+              })
+
+          asset_records = []
+          dll_missing = []
+          release_versions = {name.casefold(): version for name, version in packages}
+          hosts = [
+              ('foundation-host', 'src/apps/Elsa.Foundation.Host', 'Elsa.Foundation.Host'),
+              ('workbench', 'src/apps/Elsa.Workbench', 'Elsa.Workbench'),
+          ]
+          for host_key, project_path, _ in hosts:
+              project = pathlib.Path(project_path)
+              assets_path = repo / project / 'obj/project.assets.json'
+              if not assets_path.is_file():
+                  missing.append(str(assets_path.relative_to(repo)))
+                  continue
+              staged_assets = evidence / 'project-assets' / host_key / 'project.assets.json'
+              staged_assets.parent.mkdir(parents=True, exist_ok=True)
+              shutil.copy2(assets_path, staged_assets)
+              assets = json.loads(assets_path.read_text())
+              target = assets.get('targets', {}).get('net10.0', {})
+              output_dir = repo / project / 'bin/Release/net10.0'
+              matches = 0
+
+              for library_key, library in assets.get('libraries', {}).items():
+                  if '/' not in library_key:
+                      continue
+                  package_id, version = library_key.split('/', 1)
+                  expected_version = release_versions.get(package_id.casefold())
+                  if expected_version is None:
+                      continue
+                  if version != expected_version:
+                      missing.append(host_key + ': unexpected stable package version ' + library_key)
+                      continue
+                  runtime = target.get(library_key, {}).get('runtime', {})
+                  for relative in runtime:
+                      if not relative.lower().endswith('.dll'):
+                          continue
+                      source = output_dir / pathlib.Path(relative).name
+                      if not source.is_file():
+                          dll_missing.append(str(source))
+                          continue
+                      destination = evidence / 'upstream-dlls' / host_key / source.name
+                      shutil.copy2(source, destination)
+                      asset_records.append({
+                          'host': host_key,
+                          'package': library_key,
+                          'archiveAsset': relative,
+                          'sourceDll': str(source),
+                          'stagedDll': str(destination.relative_to(evidence)),
+                          'sha256': sha256(destination),
+                      })
+                      matches += 1
+              if matches == 0:
+                  missing.append(host_key + ': no stable upstream runtime DLLs mapped from project.assets.json')
+
+          demo_logs = repo / 'artifacts/demo-rehearsal'
+          if demo_logs.is_dir() and not (evidence / 'demo-rehearsal').exists():
+              shutil.copytree(demo_logs, evidence / 'demo-rehearsal')
+
+          status = {
+              'expectedUpstreamPackages': len(packages),
+              'stagedUpstreamPackages': len(package_records),
+              'expectedHostAssetPairs': 25,
+              'stagedHostAssetPairs': len(asset_records),
+              'missingPackageAssetsOrInputs': missing,
+              'missingBuiltDlls': dll_missing,
+          }
+          (evidence / 'selected-evidence.json').write_text(json.dumps({
+              'stagingStatus': status,
+              'selectedCache': package_records,
+              'projectAssetFiles': [
+                  str((evidence / 'project-assets' / host_key / 'project.assets.json').relative_to(evidence))
+                  for host_key, _, _ in hosts
+                  if (evidence / 'project-assets' / host_key / 'project.assets.json').is_file()
+              ],
+              'builtUpstreamDlls': asset_records,
+          }, indent=2) + '\n')
+          (evidence / 'staging-status.txt').write_text(json.dumps(status, indent=2) + '\n')
+          print(json.dumps(status))
+          if missing or dll_missing or len(package_records) != len(packages) or len(asset_records) != 25:
+              raise SystemExit(1)
+          PY
+
+      - name: Upload hosted stable hosts and demo evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: foundation-hosted-restore-maps-${{ github.run_id }}
-          path: ${{ env.EVIDENCE_DIR }}/
+          name: foundation-stable-hosts-demo-${{ github.run_id }}
+          path: ${{ runner.temp }}/foundation-stable-hosts-demo
+          include-hidden-files: true
           if-no-files-found: warn
           retention-days: 14
 

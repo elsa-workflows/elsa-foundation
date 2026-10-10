@@ -25,6 +25,13 @@ namespace Elsa.Workflows.Runtime.Services.Incidents;
 /// incident's lifecycle and resolution fields, so an operator-resolved incident stays resolved and repeated drains
 /// are idempotent.</para>
 ///
+/// <para>A poisoned <b>first</b> checkpoint is the one exception (#2537). The execution never reached a checkpoint, so it
+/// has no workflow to leave non-terminal, and a durable provider refuses an incident without one. When the drain ran this
+/// execution's start command, the execution is recorded <see cref="WorkflowExecutionStatus.Faulted"/> from that command
+/// together with the incident, so it appears in the read models with its cause instead of not at all. A dispatched child
+/// qualifies only where its dispatch can be projected (<see cref="StartCommandExecution.CanFaultDispatchedChild"/>).
+/// Without the start command there is nothing to build the execution from, and only the incident is recorded.</para>
+///
 /// <para>This is the tail of the <b>handler</b>-fault path only; an activity fault takes an entirely different route and
 /// ends in an authored incident strategy. Both are mapped in <c>docs/runtime-fault-behavior.md</c>.</para>
 /// </summary>
@@ -41,6 +48,8 @@ public sealed class PoisonedSchedulerWorkIncidentObserver : IWorkflowSchedulerDr
     private readonly IActivityExecutionStateStore? _activityExecutionStateStore;
     private readonly IRuntimeActivityExecutionInspectionAccumulator? _inspectionAccumulator;
     private readonly IActivityExecutionInspectionStore? _activityExecutionInspectionStore;
+    private readonly IWorkflowExecutionStateStore? _workflowExecutionStateStore;
+    private readonly IWorkflowDispatchStore? _workflowDispatchStore;
 
     public PoisonedSchedulerWorkIncidentObserver(
         IWorkflowSchedulerPoisonStore poisonStore,
@@ -80,6 +89,10 @@ public sealed class PoisonedSchedulerWorkIncidentObserver : IWorkflowSchedulerDr
     {
     }
 
+    /// <summary>
+    /// Creates a poison observer with optional activity projections and start-command recovery. Supplying the workflow
+    /// store enables missing executions to be faulted; child recovery also requires a queryable dispatch store.
+    /// </summary>
     public PoisonedSchedulerWorkIncidentObserver(
         IWorkflowSchedulerPoisonStore poisonStore,
         IIncidentStateStore incidentStateStore,
@@ -88,7 +101,9 @@ public sealed class PoisonedSchedulerWorkIncidentObserver : IWorkflowSchedulerDr
         IActivityExecutionStateStore? activityExecutionStateStore,
         IRuntimeActivityExecutionInspectionAccumulator? inspectionAccumulator,
         IActivityExecutionInspectionStore? activityExecutionInspectionStore,
-        ILogger<PoisonedSchedulerWorkIncidentObserver>? logger = null)
+        ILogger<PoisonedSchedulerWorkIncidentObserver>? logger = null,
+        IWorkflowExecutionStateStore? workflowExecutionStateStore = null,
+        IWorkflowDispatchStore? workflowDispatchStore = null)
     {
         ArgumentNullException.ThrowIfNull(poisonStore);
         ArgumentNullException.ThrowIfNull(incidentStateStore);
@@ -103,6 +118,8 @@ public sealed class PoisonedSchedulerWorkIncidentObserver : IWorkflowSchedulerDr
         _activityExecutionStateStore = activityExecutionStateStore;
         _inspectionAccumulator = inspectionAccumulator;
         _activityExecutionInspectionStore = activityExecutionInspectionStore;
+        _workflowExecutionStateStore = workflowExecutionStateStore;
+        _workflowDispatchStore = workflowDispatchStore;
     }
 
     /// <summary>
@@ -119,6 +136,10 @@ public sealed class PoisonedSchedulerWorkIncidentObserver : IWorkflowSchedulerDr
         return $"incident:{RuntimeChainId.Fingerprint(workItemId)}:scheduler-poison";
     }
 
+    /// <summary>
+    /// Projects poisoned work from a faulted drain into blocking incidents, preserving existing incidents and
+    /// isolating projection failures so the remaining records can still be surfaced.
+    /// </summary>
     public async ValueTask OnDrainedAsync(
         WorkflowExecutionCommandEnvelope envelope,
         RuntimeSchedulerDrainResult result,
@@ -156,7 +177,7 @@ public sealed class PoisonedSchedulerWorkIncidentObserver : IWorkflowSchedulerDr
                     continue;
                 }
 
-                await CommitIncidentAsync(workflowExecutionId, incidentId, record, cancellationToken);
+                await CommitIncidentAsync(envelope, workflowExecutionId, incidentId, record, cancellationToken);
             }
             catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
             {
@@ -181,13 +202,19 @@ public sealed class PoisonedSchedulerWorkIncidentObserver : IWorkflowSchedulerDr
         }
     }
 
+    /// <summary>
+    /// Commits the blocking poison incident and associated projections, including a faulted execution when its first
+    /// checkpoint never persisted and the start envelope provides an eligible identity.
+    /// </summary>
     private async ValueTask CommitIncidentAsync(
+        WorkflowExecutionCommandEnvelope envelope,
         string workflowExecutionId,
         string incidentId,
         RuntimeSchedulerPoisonRecord record,
         CancellationToken cancellationToken)
     {
         var occurredAt = _timeProvider.GetUtcNow();
+        var unstartedExecution = await ReadUnstartedExecutionAsync(envelope, workflowExecutionId, occurredAt, cancellationToken);
         var metadata = NewMetadata(incidentId, record);
         var activityExecutionId = ValueOrNull(metadata, RuntimeMetadataKeys.ActivityExecutionId);
         var executableNodeId = ValueOrNull(metadata, RuntimeMetadataKeys.ExecutableNodeId);
@@ -232,14 +259,15 @@ public sealed class PoisonedSchedulerWorkIncidentObserver : IWorkflowSchedulerDr
             severity: IncidentSeverity.Critical,
             status: IncidentStatus.Blocking,
             resolutionOutcome: new IncidentResolutionOutcome(
-                IncidentResolutionActionKinds.WaitForIntervention,
+                unstartedExecution is null ? IncidentResolutionActionKinds.WaitForIntervention : IncidentResolutionActionKinds.FaultWorkflow,
                 occurredAt,
                 strategy: null,
                 systemSource: IncidentResolutionSystemSources.PoisonedSchedulerWork),
             failureType: IncidentFailureType,
             message: $"Scheduler work item '{record.WorkItemId}' ({record.CommandKind}) was poisoned during dispatch " +
                      $"by handler '{record.HandlerName}' after {record.FailureCount} failure(s): {record.Fault.ToSummaryString()}" +
-                     (record.InnerFault is null ? "" : $" ---> {record.InnerFault.ToSummaryString()}"),
+                     (record.InnerFault is null ? "" : $" ---> {record.InnerFault.ToSummaryString()}") +
+                     (unstartedExecution is null ? "" : ". The execution never reached its first checkpoint, so it was recorded as faulted."),
             createdAt: occurredAt,
             resolvedAt: null,
             metadata: metadata);
@@ -305,13 +333,15 @@ public sealed class PoisonedSchedulerWorkIncidentObserver : IWorkflowSchedulerDr
             CommitId: $"commit:{workflowExecutionId}:scheduler-poison:{workItemFingerprint}",
             Checkpoint: new RuntimeCheckpoint(
                 CheckpointId: checkpointId,
-                Name: RuntimeCheckpointNames.IncidentRecorded,
+                Name: unstartedExecution is null ? RuntimeCheckpointNames.IncidentRecorded : RuntimeCheckpointNames.WorkflowFaulted,
                 WorkflowExecutionId: workflowExecutionId,
                 OccurredAt: occurredAt,
                 ActivityExecutionIds: checkpointActivityExecutionIds,
                 Metadata: metadata),
             StateChanges: new RuntimeCheckpointStateChangeSet(
-                workflowExecution: null,
+                workflowExecution: unstartedExecution is null
+                    ? null
+                    : new RuntimeStateChange<WorkflowExecutionState>(workflowExecutionId, RuntimeStateChangeOperation.Upsert, unstartedExecution, metadata),
                 scheduler: null,
                 activityExecutions: activityStateChanges,
                 bookmarks: [],
@@ -330,6 +360,55 @@ public sealed class PoisonedSchedulerWorkIncidentObserver : IWorkflowSchedulerDr
             Metadata: metadata);
 
         await _checkpointCommitter.CommitAsync(commit, cancellationToken);
+    }
+
+    /// <summary>
+    /// Reconstructs a missing execution as faulted from this drain's start command. Returns null for an existing or
+    /// unreadable execution, an unusable start, or a child whose dispatch cannot be projected.
+    /// </summary>
+    private async ValueTask<WorkflowExecutionState?> ReadUnstartedExecutionAsync(
+        WorkflowExecutionCommandEnvelope envelope,
+        string workflowExecutionId,
+        DateTimeOffset occurredAt,
+        CancellationToken cancellationToken)
+    {
+        if (_workflowExecutionStateStore is null)
+            return null;
+
+        // The read only chooses between faulting an unstarted execution and recording the incident alone. A failed read
+        // must not cost the incident, so it falls back to the incident-only commit, as before #2537.
+        try
+        {
+            if (await _workflowExecutionStateStore.FindAsync(workflowExecutionId, cancellationToken) is not null)
+                return null;
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception exception) when (IsCatchableObserverFailure(exception))
+        {
+            _logger.LogWarning(
+                exception,
+                "Failed to read workflow execution {WorkflowExecutionId} while surfacing a scheduler poison incident; recording the incident without checking for an unstarted execution.",
+                workflowExecutionId);
+            return null;
+        }
+
+        var execution = StartCommandExecution.Read(envelope, workflowExecutionId, occurredAt, exception => _logger.LogWarning(
+            exception,
+            "Workflow execution {WorkflowExecutionId} has no workflow and its start command payload could not be read; its scheduler poison incident is recorded without the execution",
+            workflowExecutionId));
+        if (execution is null ||
+            execution.ParentWorkflowExecutionId is not null && !StartCommandExecution.CanFaultDispatchedChild(_workflowDispatchStore))
+            return null;
+
+        return RuntimeContainerScopeService.CloseRootFrame(execution with
+        {
+            Status = WorkflowExecutionStatus.Faulted,
+            UpdatedAt = occurredAt,
+            CompletedAt = occurredAt
+        });
     }
 
     private async ValueTask ReconcileExistingIncidentAsync(

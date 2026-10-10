@@ -9,8 +9,7 @@ Records project grouping and direct reference facts only. Roles are heuristic na
 - Source projects: 141
 - Test projects: 140
 - Domains: 32
-- Direct cross-domain references: 956
-
+- Direct cross-domain references: 958
 
 ## Domains
 

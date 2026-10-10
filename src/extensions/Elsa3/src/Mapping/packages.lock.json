@@ -10,9 +10,9 @@
       },
       "CShells.Abstractions": {
         "type": "Direct",
-        "requested": "[0.0.30-preview.173, )",
-        "resolved": "0.0.30-preview.173",
-        "contentHash": "sAgLwTkE/y4+1rtqRaBvL8KV/m3Y7oV3EEKsGVkXbIlKpdWWDVAQilCBy/iRU8nhANz7k8lvquULc1AJRSo8hA==",
+        "requested": "[0.0.30, )",
+        "resolved": "0.0.30",
+        "contentHash": "Kf3tyvnuRMIZui951/iZA95SCnb3zPjnK02x/JXJE1xNhqlYqbMKtIhqlUAj54dC33g3n5rWpXYSKK5cGe3RKw==",
         "dependencies": {
           "JetBrains.Annotations": "2025.2.4",
           "Microsoft.Extensions.Configuration": "10.0.0",
@@ -106,8 +106,8 @@
       "elsa.foundation.identity": {
         "type": "Project",
         "dependencies": {
-          "CShells.Abstractions": "[0.0.30-preview.173, )",
-          "CShells.AspNetCore.Abstractions": "[0.0.30-preview.173, )",
+          "CShells.Abstractions": "[0.0.30, )",
+          "CShells.AspNetCore.Abstractions": "[0.0.30, )",
           "Elsa.Api.AspNetCore": "[4.0.0-dev, )",
           "Elsa.Foundation.Identity.Core": "[4.0.0-dev, )"
         }
@@ -187,8 +187,8 @@
       "elsa3.activities.design.import": {
         "type": "Project",
         "dependencies": {
-          "CShells.Abstractions": "[0.0.30-preview.173, )",
-          "CShells.AspNetCore.Abstractions": "[0.0.30-preview.173, )",
+          "CShells.Abstractions": "[0.0.30, )",
+          "CShells.AspNetCore.Abstractions": "[0.0.30, )",
           "Elsa.Activities.Design.Core": "[4.0.0-dev, )",
           "Elsa.Activities.Design.Persistence.Core": "[4.0.0-dev, )",
           "Elsa.Api.AspNetCore": "[4.0.0-dev, )",
@@ -215,11 +215,11 @@
       },
       "CShells.AspNetCore.Abstractions": {
         "type": "CentralTransitive",
-        "requested": "[0.0.30-preview.173, )",
-        "resolved": "0.0.30-preview.173",
-        "contentHash": "iOBPODfx/C7PYlUWahRFV7s7/GJWpFXMKKI6esHGsKhbB02jcAo0mPJAbDwXbw0acz7oa4k2pSCSWM7wLPcyUg==",
+        "requested": "[0.0.30, )",
+        "resolved": "0.0.30",
+        "contentHash": "/RIj39NcSccZ+fFHYrf3ahXnh+jKq73O4OVWFGRKq82RIxFY8KT+ByL8Iy0TkCmXJCZP5SpOk4HyNeybJhoYOw==",
         "dependencies": {
-          "CShells.Abstractions": "0.0.30-preview.173",
+          "CShells.Abstractions": "0.0.30",
           "JetBrains.Annotations": "2025.2.4"
         }
       },

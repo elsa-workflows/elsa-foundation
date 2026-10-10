@@ -1,0 +1,866 @@
+{
+  "audited_at_utc": "2026-10-10T21:57:15.105208+00:00",
+  "feed_discovery": {
+    "feedz_service_index": {
+      "http_status": 200,
+      "package_base_address": {
+        "@id": "https://f.feedz.io/valence-works/cshells/nuget/v3/packages",
+        "@type": "PackageBaseAddress/3.0.0",
+        "comment": "Base URL of where NuGet packages are stored, in the format https://f.feedz.io/valence-works/cshells/nuget/v3/packages/{id-lower}/{version-lower}"
+      },
+      "url": "https://f.feedz.io/valence-works/cshells/nuget/index.json"
+    },
+    "nuget_org_service_index": "https://api.nuget.org/v3/index.json"
+  },
+  "final_nuget_recheck": {
+    "at_utc": "2026-10-10T21:57:15.105208+00:00",
+    "available_package_count": 10,
+    "pending_package_ids": [],
+    "total": 10
+  },
+  "limitations": [
+    "Public archive metadata and bytes only; no package was executed."
+  ],
+  "packages": [
+    {
+      "feedz": {
+        "archive_sha256": "a9fe177aae7315b39ec92eeb3a88c6382a2357c3302f6a6bd4d960896588b6dc",
+        "nupkg_http": 200,
+        "nupkg_url": "https://f.feedz.io/valence-works/cshells/nuget/v3/packages/cshells/0.0.30/cshells.0.0.30.nupkg",
+        "nuspec": {
+          "frameworks": [
+            "net10.0",
+            "net8.0",
+            "net9.0"
+          ],
+          "frameworks_match_net8_9_10": true,
+          "id": "CShells",
+          "identity_matches_expected": true,
+          "internal_dependencies": {
+            "CShells.Abstractions": [
+              "0.0.30"
+            ]
+          },
+          "internal_versions_match_cshells_0_0_30_nuplane_0_0_11": true,
+          "repository": {
+            "commit": "789e36cc1cec885d86a48e18b7b51437de519a39",
+            "type": "git",
+            "url": "https://github.com/valence-works/cshells"
+          },
+          "repository_commit_matches_release": true,
+          "version": "0.0.30",
+          "zip_entries": 12,
+          "zip_test": null
+        },
+        "only_different_entry_names": [
+          ".signature.p7s"
+        ],
+        "payload_comparison": "complete",
+        "payload_matches_except_signature": true,
+        "sha256": "a9fe177aae7315b39ec92eeb3a88c6382a2357c3302f6a6bd4d960896588b6dc",
+        "version_index_http": 200,
+        "version_index_url": "https://f.feedz.io/valence-works/cshells/nuget/v3/packages/cshells/index.json",
+        "version_indexed": true
+      },
+      "id": "CShells",
+      "nuget_org": {
+        "archive_file": "cshells.0.0.30.nupkg",
+        "bytes": 501288,
+        "nupkg_http": 200,
+        "nupkg_url": "https://api.nuget.org/v3-flatcontainer/cshells/0.0.30/cshells.0.0.30.nupkg",
+        "nuspec": {
+          "frameworks": [
+            "net10.0",
+            "net8.0",
+            "net9.0"
+          ],
+          "frameworks_match_net8_9_10": true,
+          "id": "CShells",
+          "identity_matches_expected": true,
+          "internal_dependencies": {
+            "CShells.Abstractions": [
+              "0.0.30"
+            ]
+          },
+          "internal_versions_match_cshells_0_0_30_nuplane_0_0_11": true,
+          "repository": {
+            "commit": "789e36cc1cec885d86a48e18b7b51437de519a39",
+            "type": "git",
+            "url": "https://github.com/valence-works/cshells"
+          },
+          "repository_commit_matches_release": true,
+          "version": "0.0.30",
+          "zip_entries": 13,
+          "zip_test": null
+        },
+        "observed_at_utc": "2026-10-10T21:54:57.117571+00:00",
+        "sha256": "cc1ab7e96c09b2256e9b95a33c356615459f3e1fd16ba3f7076013634d99cc6f",
+        "version_index_http": 200,
+        "version_index_url": "https://api.nuget.org/v3-flatcontainer/cshells/index.json",
+        "version_indexed": true
+      },
+      "version": "0.0.30"
+    },
+    {
+      "feedz": {
+        "archive_sha256": "68a0c292132a507c4b9392bef611a1a94c2999ab5fe7c544def1a2e3c071e717",
+        "nupkg_http": 200,
+        "nupkg_url": "https://f.feedz.io/valence-works/cshells/nuget/v3/packages/cshells.abstractions/0.0.30/cshells.abstractions.0.0.30.nupkg",
+        "nuspec": {
+          "frameworks": [
+            "net10.0",
+            "net8.0",
+            "net9.0"
+          ],
+          "frameworks_match_net8_9_10": true,
+          "id": "CShells.Abstractions",
+          "identity_matches_expected": true,
+          "internal_dependencies": {},
+          "internal_versions_match_cshells_0_0_30_nuplane_0_0_11": true,
+          "repository": {
+            "commit": "789e36cc1cec885d86a48e18b7b51437de519a39",
+            "type": "git",
+            "url": "https://github.com/valence-works/cshells"
+          },
+          "repository_commit_matches_release": true,
+          "version": "0.0.30",
+          "zip_entries": 12,
+          "zip_test": null
+        },
+        "only_different_entry_names": [
+          ".signature.p7s"
+        ],
+        "payload_comparison": "complete",
+        "payload_matches_except_signature": true,
+        "sha256": "68a0c292132a507c4b9392bef611a1a94c2999ab5fe7c544def1a2e3c071e717",
+        "version_index_http": 200,
+        "version_index_url": "https://f.feedz.io/valence-works/cshells/nuget/v3/packages/cshells.abstractions/index.json",
+        "version_indexed": true
+      },
+      "id": "CShells.Abstractions",
+      "nuget_org": {
+        "archive_file": "cshells.abstractions.0.0.30.nupkg",
+        "bytes": 302368,
+        "nupkg_http": 200,
+        "nupkg_url": "https://api.nuget.org/v3-flatcontainer/cshells.abstractions/0.0.30/cshells.abstractions.0.0.30.nupkg",
+        "nuspec": {
+          "frameworks": [
+            "net10.0",
+            "net8.0",
+            "net9.0"
+          ],
+          "frameworks_match_net8_9_10": true,
+          "id": "CShells.Abstractions",
+          "identity_matches_expected": true,
+          "internal_dependencies": {},
+          "internal_versions_match_cshells_0_0_30_nuplane_0_0_11": true,
+          "repository": {
+            "commit": "789e36cc1cec885d86a48e18b7b51437de519a39",
+            "type": "git",
+            "url": "https://github.com/valence-works/cshells"
+          },
+          "repository_commit_matches_release": true,
+          "version": "0.0.30",
+          "zip_entries": 13,
+          "zip_test": null
+        },
+        "observed_at_utc": "2026-10-10T21:57:12.692422+00:00",
+        "sha256": "f103dfd72bf920a2c362094b5e2d8d3fa5af5b1a9d622e12b03b72131b13a817",
+        "version_index_http": 200,
+        "version_index_url": "https://api.nuget.org/v3-flatcontainer/cshells.abstractions/index.json",
+        "version_indexed": true
+      },
+      "version": "0.0.30"
+    },
+    {
+      "feedz": {
+        "archive_sha256": "3f6c5d1497a5f8cdc4e74df199ffb068ed1fe6fa728bcf783f722955d184f771",
+        "nupkg_http": 200,
+        "nupkg_url": "https://f.feedz.io/valence-works/cshells/nuget/v3/packages/cshells.aspnetcore/0.0.30/cshells.aspnetcore.0.0.30.nupkg",
+        "nuspec": {
+          "frameworks": [
+            "net10.0",
+            "net8.0",
+            "net9.0"
+          ],
+          "frameworks_match_net8_9_10": true,
+          "id": "CShells.AspNetCore",
+          "identity_matches_expected": true,
+          "internal_dependencies": {
+            "CShells": [
+              "0.0.30"
+            ],
+            "CShells.AspNetCore.Abstractions": [
+              "0.0.30"
+            ]
+          },
+          "internal_versions_match_cshells_0_0_30_nuplane_0_0_11": true,
+          "repository": {
+            "commit": "789e36cc1cec885d86a48e18b7b51437de519a39",
+            "type": "git",
+            "url": "https://github.com/valence-works/cshells"
+          },
+          "repository_commit_matches_release": true,
+          "version": "0.0.30",
+          "zip_entries": 12,
+          "zip_test": null
+        },
+        "only_different_entry_names": [
+          ".signature.p7s"
+        ],
+        "payload_comparison": "complete",
+        "payload_matches_except_signature": true,
+        "sha256": "3f6c5d1497a5f8cdc4e74df199ffb068ed1fe6fa728bcf783f722955d184f771",
+        "version_index_http": 200,
+        "version_index_url": "https://f.feedz.io/valence-works/cshells/nuget/v3/packages/cshells.aspnetcore/index.json",
+        "version_indexed": true
+      },
+      "id": "CShells.AspNetCore",
+      "nuget_org": {
+        "archive_file": "cshells.aspnetcore.0.0.30.nupkg",
+        "bytes": 300870,
+        "nupkg_http": 200,
+        "nupkg_url": "https://api.nuget.org/v3-flatcontainer/cshells.aspnetcore/0.0.30/cshells.aspnetcore.0.0.30.nupkg",
+        "nuspec": {
+          "frameworks": [
+            "net10.0",
+            "net8.0",
+            "net9.0"
+          ],
+          "frameworks_match_net8_9_10": true,
+          "id": "CShells.AspNetCore",
+          "identity_matches_expected": true,
+          "internal_dependencies": {
+            "CShells": [
+              "0.0.30"
+            ],
+            "CShells.AspNetCore.Abstractions": [
+              "0.0.30"
+            ]
+          },
+          "internal_versions_match_cshells_0_0_30_nuplane_0_0_11": true,
+          "repository": {
+            "commit": "789e36cc1cec885d86a48e18b7b51437de519a39",
+            "type": "git",
+            "url": "https://github.com/valence-works/cshells"
+          },
+          "repository_commit_matches_release": true,
+          "version": "0.0.30",
+          "zip_entries": 13,
+          "zip_test": null
+        },
+        "observed_at_utc": "2026-10-10T21:54:59.360052+00:00",
+        "sha256": "23fb1c14a9881c5450b84334042828f830a9a541230f1356d50896b4cbc33d9e",
+        "version_index_http": 200,
+        "version_index_url": "https://api.nuget.org/v3-flatcontainer/cshells.aspnetcore/index.json",
+        "version_indexed": true
+      },
+      "version": "0.0.30"
+    },
+    {
+      "feedz": {
+        "archive_sha256": "2b0673c92c5084a7833535c279612f60fe5b3bb8bc86c2f5e66108925aa5bce6",
+        "nupkg_http": 200,
+        "nupkg_url": "https://f.feedz.io/valence-works/cshells/nuget/v3/packages/cshells.aspnetcore.abstractions/0.0.30/cshells.aspnetcore.abstractions.0.0.30.nupkg",
+        "nuspec": {
+          "frameworks": [
+            "net10.0",
+            "net8.0",
+            "net9.0"
+          ],
+          "frameworks_match_net8_9_10": true,
+          "id": "CShells.AspNetCore.Abstractions",
+          "identity_matches_expected": true,
+          "internal_dependencies": {
+            "CShells.Abstractions": [
+              "0.0.30"
+            ]
+          },
+          "internal_versions_match_cshells_0_0_30_nuplane_0_0_11": true,
+          "repository": {
+            "commit": "789e36cc1cec885d86a48e18b7b51437de519a39",
+            "type": "git",
+            "url": "https://github.com/valence-works/cshells"
+          },
+          "repository_commit_matches_release": true,
+          "version": "0.0.30",
+          "zip_entries": 12,
+          "zip_test": null
+        },
+        "only_different_entry_names": [
+          ".signature.p7s"
+        ],
+        "payload_comparison": "complete",
+        "payload_matches_except_signature": true,
+        "sha256": "2b0673c92c5084a7833535c279612f60fe5b3bb8bc86c2f5e66108925aa5bce6",
+        "version_index_http": 200,
+        "version_index_url": "https://f.feedz.io/valence-works/cshells/nuget/v3/packages/cshells.aspnetcore.abstractions/index.json",
+        "version_indexed": true
+      },
+      "id": "CShells.AspNetCore.Abstractions",
+      "nuget_org": {
+        "archive_file": "cshells.aspnetcore.abstractions.0.0.30.nupkg",
+        "bytes": 143495,
+        "nupkg_http": 200,
+        "nupkg_url": "https://api.nuget.org/v3-flatcontainer/cshells.aspnetcore.abstractions/0.0.30/cshells.aspnetcore.abstractions.0.0.30.nupkg",
+        "nuspec": {
+          "frameworks": [
+            "net10.0",
+            "net8.0",
+            "net9.0"
+          ],
+          "frameworks_match_net8_9_10": true,
+          "id": "CShells.AspNetCore.Abstractions",
+          "identity_matches_expected": true,
+          "internal_dependencies": {
+            "CShells.Abstractions": [
+              "0.0.30"
+            ]
+          },
+          "internal_versions_match_cshells_0_0_30_nuplane_0_0_11": true,
+          "repository": {
+            "commit": "789e36cc1cec885d86a48e18b7b51437de519a39",
+            "type": "git",
+            "url": "https://github.com/valence-works/cshells"
+          },
+          "repository_commit_matches_release": true,
+          "version": "0.0.30",
+          "zip_entries": 13,
+          "zip_test": null
+        },
+        "observed_at_utc": "2026-10-10T21:55:00.777175+00:00",
+        "sha256": "0be2ce0f42764d166705149fa34faadd8ddadb4896b3ad3472a54b057ecc2399",
+        "version_index_http": 200,
+        "version_index_url": "https://api.nuget.org/v3-flatcontainer/cshells.aspnetcore.abstractions/index.json",
+        "version_indexed": true
+      },
+      "version": "0.0.30"
+    },
+    {
+      "feedz": {
+        "archive_sha256": "e7d6b4ff2ae6ef1d281d689d385fd500f11918f85bf505baed985be15b24fb98",
+        "nupkg_http": 200,
+        "nupkg_url": "https://f.feedz.io/valence-works/cshells/nuget/v3/packages/cshells.aspnetcore.testing/0.0.30/cshells.aspnetcore.testing.0.0.30.nupkg",
+        "nuspec": {
+          "frameworks": [
+            "net10.0",
+            "net8.0",
+            "net9.0"
+          ],
+          "frameworks_match_net8_9_10": true,
+          "id": "CShells.AspNetCore.Testing",
+          "identity_matches_expected": true,
+          "internal_dependencies": {
+            "CShells.AspNetCore": [
+              "0.0.30"
+            ]
+          },
+          "internal_versions_match_cshells_0_0_30_nuplane_0_0_11": true,
+          "repository": {
+            "commit": "789e36cc1cec885d86a48e18b7b51437de519a39",
+            "type": "git",
+            "url": "https://github.com/valence-works/cshells"
+          },
+          "repository_commit_matches_release": true,
+          "version": "0.0.30",
+          "zip_entries": 12,
+          "zip_test": null
+        },
+        "only_different_entry_names": [
+          ".signature.p7s"
+        ],
+        "payload_comparison": "complete",
+        "payload_matches_except_signature": true,
+        "sha256": "e7d6b4ff2ae6ef1d281d689d385fd500f11918f85bf505baed985be15b24fb98",
+        "version_index_http": 200,
+        "version_index_url": "https://f.feedz.io/valence-works/cshells/nuget/v3/packages/cshells.aspnetcore.testing/index.json",
+        "version_indexed": true
+      },
+      "id": "CShells.AspNetCore.Testing",
+      "nuget_org": {
+        "archive_file": "cshells.aspnetcore.testing.0.0.30.nupkg",
+        "bytes": 120437,
+        "nupkg_http": 200,
+        "nupkg_url": "https://api.nuget.org/v3-flatcontainer/cshells.aspnetcore.testing/0.0.30/cshells.aspnetcore.testing.0.0.30.nupkg",
+        "nuspec": {
+          "frameworks": [
+            "net10.0",
+            "net8.0",
+            "net9.0"
+          ],
+          "frameworks_match_net8_9_10": true,
+          "id": "CShells.AspNetCore.Testing",
+          "identity_matches_expected": true,
+          "internal_dependencies": {
+            "CShells.AspNetCore": [
+              "0.0.30"
+            ]
+          },
+          "internal_versions_match_cshells_0_0_30_nuplane_0_0_11": true,
+          "repository": {
+            "commit": "789e36cc1cec885d86a48e18b7b51437de519a39",
+            "type": "git",
+            "url": "https://github.com/valence-works/cshells"
+          },
+          "repository_commit_matches_release": true,
+          "version": "0.0.30",
+          "zip_entries": 13,
+          "zip_test": null
+        },
+        "observed_at_utc": "2026-10-10T21:55:02.218312+00:00",
+        "sha256": "741537ec81953e39a7827f8834b6f7dbc04292488c9563f2650258038a4bceeb",
+        "version_index_http": 200,
+        "version_index_url": "https://api.nuget.org/v3-flatcontainer/cshells.aspnetcore.testing/index.json",
+        "version_indexed": true
+      },
+      "version": "0.0.30"
+    },
+    {
+      "feedz": {
+        "archive_sha256": "700ab8c6b6d99b5a44d7913b70e7e21fa4144f8e06a071a0b387d1709f7cf655",
+        "nupkg_http": 200,
+        "nupkg_url": "https://f.feedz.io/valence-works/cshells/nuget/v3/packages/cshells.fastendpoints/0.0.30/cshells.fastendpoints.0.0.30.nupkg",
+        "nuspec": {
+          "frameworks": [
+            "net10.0",
+            "net8.0",
+            "net9.0"
+          ],
+          "frameworks_match_net8_9_10": true,
+          "id": "CShells.FastEndpoints",
+          "identity_matches_expected": true,
+          "internal_dependencies": {
+            "CShells.AspNetCore": [
+              "0.0.30"
+            ],
+            "CShells.FastEndpoints.Abstractions": [
+              "0.0.30"
+            ]
+          },
+          "internal_versions_match_cshells_0_0_30_nuplane_0_0_11": true,
+          "repository": {
+            "commit": "789e36cc1cec885d86a48e18b7b51437de519a39",
+            "type": "git",
+            "url": "https://github.com/valence-works/cshells"
+          },
+          "repository_commit_matches_release": true,
+          "version": "0.0.30",
+          "zip_entries": 12,
+          "zip_test": null
+        },
+        "only_different_entry_names": [
+          ".signature.p7s"
+        ],
+        "payload_comparison": "complete",
+        "payload_matches_except_signature": true,
+        "sha256": "700ab8c6b6d99b5a44d7913b70e7e21fa4144f8e06a071a0b387d1709f7cf655",
+        "version_index_http": 200,
+        "version_index_url": "https://f.feedz.io/valence-works/cshells/nuget/v3/packages/cshells.fastendpoints/index.json",
+        "version_indexed": true
+      },
+      "id": "CShells.FastEndpoints",
+      "nuget_org": {
+        "archive_file": "cshells.fastendpoints.0.0.30.nupkg",
+        "bytes": 127568,
+        "nupkg_http": 200,
+        "nupkg_url": "https://api.nuget.org/v3-flatcontainer/cshells.fastendpoints/0.0.30/cshells.fastendpoints.0.0.30.nupkg",
+        "nuspec": {
+          "frameworks": [
+            "net10.0",
+            "net8.0",
+            "net9.0"
+          ],
+          "frameworks_match_net8_9_10": true,
+          "id": "CShells.FastEndpoints",
+          "identity_matches_expected": true,
+          "internal_dependencies": {
+            "CShells.AspNetCore": [
+              "0.0.30"
+            ],
+            "CShells.FastEndpoints.Abstractions": [
+              "0.0.30"
+            ]
+          },
+          "internal_versions_match_cshells_0_0_30_nuplane_0_0_11": true,
+          "repository": {
+            "commit": "789e36cc1cec885d86a48e18b7b51437de519a39",
+            "type": "git",
+            "url": "https://github.com/valence-works/cshells"
+          },
+          "repository_commit_matches_release": true,
+          "version": "0.0.30",
+          "zip_entries": 13,
+          "zip_test": null
+        },
+        "observed_at_utc": "2026-10-10T21:55:03.781561+00:00",
+        "sha256": "8d920be2cc12979550bb1275ef30d41e8853dc097f54eb8db638cc39dc3d5e6e",
+        "version_index_http": 200,
+        "version_index_url": "https://api.nuget.org/v3-flatcontainer/cshells.fastendpoints/index.json",
+        "version_indexed": true
+      },
+      "version": "0.0.30"
+    },
+    {
+      "feedz": {
+        "archive_sha256": "39241a0cbc0da9113411d4f29951c4262c77cea389cc4f6e6c72a61dfba77256",
+        "nupkg_http": 200,
+        "nupkg_url": "https://f.feedz.io/valence-works/cshells/nuget/v3/packages/cshells.fastendpoints.abstractions/0.0.30/cshells.fastendpoints.abstractions.0.0.30.nupkg",
+        "nuspec": {
+          "frameworks": [
+            "net10.0",
+            "net8.0",
+            "net9.0"
+          ],
+          "frameworks_match_net8_9_10": true,
+          "id": "CShells.FastEndpoints.Abstractions",
+          "identity_matches_expected": true,
+          "internal_dependencies": {
+            "CShells.Abstractions": [
+              "0.0.30"
+            ]
+          },
+          "internal_versions_match_cshells_0_0_30_nuplane_0_0_11": true,
+          "repository": {
+            "commit": "789e36cc1cec885d86a48e18b7b51437de519a39",
+            "type": "git",
+            "url": "https://github.com/valence-works/cshells"
+          },
+          "repository_commit_matches_release": true,
+          "version": "0.0.30",
+          "zip_entries": 12,
+          "zip_test": null
+        },
+        "only_different_entry_names": [
+          ".signature.p7s"
+        ],
+        "payload_comparison": "complete",
+        "payload_matches_except_signature": true,
+        "sha256": "39241a0cbc0da9113411d4f29951c4262c77cea389cc4f6e6c72a61dfba77256",
+        "version_index_http": 200,
+        "version_index_url": "https://f.feedz.io/valence-works/cshells/nuget/v3/packages/cshells.fastendpoints.abstractions/index.json",
+        "version_indexed": true
+      },
+      "id": "CShells.FastEndpoints.Abstractions",
+      "nuget_org": {
+        "archive_file": "cshells.fastendpoints.abstractions.0.0.30.nupkg",
+        "bytes": 116843,
+        "nupkg_http": 200,
+        "nupkg_url": "https://api.nuget.org/v3-flatcontainer/cshells.fastendpoints.abstractions/0.0.30/cshells.fastendpoints.abstractions.0.0.30.nupkg",
+        "nuspec": {
+          "frameworks": [
+            "net10.0",
+            "net8.0",
+            "net9.0"
+          ],
+          "frameworks_match_net8_9_10": true,
+          "id": "CShells.FastEndpoints.Abstractions",
+          "identity_matches_expected": true,
+          "internal_dependencies": {
+            "CShells.Abstractions": [
+              "0.0.30"
+            ]
+          },
+          "internal_versions_match_cshells_0_0_30_nuplane_0_0_11": true,
+          "repository": {
+            "commit": "789e36cc1cec885d86a48e18b7b51437de519a39",
+            "type": "git",
+            "url": "https://github.com/valence-works/cshells"
+          },
+          "repository_commit_matches_release": true,
+          "version": "0.0.30",
+          "zip_entries": 13,
+          "zip_test": null
+        },
+        "observed_at_utc": "2026-10-10T21:57:13.814067+00:00",
+        "sha256": "83eaed3213cf951834b7bbdfe6487c31bf2f61d0341c891193ff2222845e6d72",
+        "version_index_http": 200,
+        "version_index_url": "https://api.nuget.org/v3-flatcontainer/cshells.fastendpoints.abstractions/index.json",
+        "version_indexed": true
+      },
+      "version": "0.0.30"
+    },
+    {
+      "feedz": {
+        "archive_sha256": "864cb787cb3055368569d5dc53b965bf89bd0d928a189f4bf6b2a3cd93b97078",
+        "nupkg_http": 200,
+        "nupkg_url": "https://f.feedz.io/valence-works/cshells/nuget/v3/packages/cshells.management.api/0.0.30/cshells.management.api.0.0.30.nupkg",
+        "nuspec": {
+          "frameworks": [
+            "net10.0",
+            "net8.0",
+            "net9.0"
+          ],
+          "frameworks_match_net8_9_10": true,
+          "id": "CShells.Management.Api",
+          "identity_matches_expected": true,
+          "internal_dependencies": {
+            "CShells.Abstractions": [
+              "0.0.30"
+            ]
+          },
+          "internal_versions_match_cshells_0_0_30_nuplane_0_0_11": true,
+          "repository": {
+            "commit": "789e36cc1cec885d86a48e18b7b51437de519a39",
+            "type": "git",
+            "url": "https://github.com/valence-works/cshells"
+          },
+          "repository_commit_matches_release": true,
+          "version": "0.0.30",
+          "zip_entries": 12,
+          "zip_test": null
+        },
+        "only_different_entry_names": [
+          ".signature.p7s"
+        ],
+        "payload_comparison": "complete",
+        "payload_matches_except_signature": true,
+        "sha256": "864cb787cb3055368569d5dc53b965bf89bd0d928a189f4bf6b2a3cd93b97078",
+        "version_index_http": 200,
+        "version_index_url": "https://f.feedz.io/valence-works/cshells/nuget/v3/packages/cshells.management.api/index.json",
+        "version_indexed": true
+      },
+      "id": "CShells.Management.Api",
+      "nuget_org": {
+        "archive_file": "cshells.management.api.0.0.30.nupkg",
+        "bytes": 173240,
+        "nupkg_http": 200,
+        "nupkg_url": "https://api.nuget.org/v3-flatcontainer/cshells.management.api/0.0.30/cshells.management.api.0.0.30.nupkg",
+        "nuspec": {
+          "frameworks": [
+            "net10.0",
+            "net8.0",
+            "net9.0"
+          ],
+          "frameworks_match_net8_9_10": true,
+          "id": "CShells.Management.Api",
+          "identity_matches_expected": true,
+          "internal_dependencies": {
+            "CShells.Abstractions": [
+              "0.0.30"
+            ]
+          },
+          "internal_versions_match_cshells_0_0_30_nuplane_0_0_11": true,
+          "repository": {
+            "commit": "789e36cc1cec885d86a48e18b7b51437de519a39",
+            "type": "git",
+            "url": "https://github.com/valence-works/cshells"
+          },
+          "repository_commit_matches_release": true,
+          "version": "0.0.30",
+          "zip_entries": 13,
+          "zip_test": null
+        },
+        "observed_at_utc": "2026-10-10T21:55:05.403072+00:00",
+        "sha256": "d15f6dc7a9f0ba2771ca845590a023d1669ebedd2de19098b07e20ab2521f8fe",
+        "version_index_http": 200,
+        "version_index_url": "https://api.nuget.org/v3-flatcontainer/cshells.management.api/index.json",
+        "version_indexed": true
+      },
+      "version": "0.0.30"
+    },
+    {
+      "feedz": {
+        "archive_sha256": "67fbb766bc7ae04f80b24d03d4bb8fc15be853f3de354f2b59e328c81629b03d",
+        "nupkg_http": 200,
+        "nupkg_url": "https://f.feedz.io/valence-works/cshells/nuget/v3/packages/cshells.nuplane/0.0.30/cshells.nuplane.0.0.30.nupkg",
+        "nuspec": {
+          "frameworks": [
+            "net10.0",
+            "net8.0",
+            "net9.0"
+          ],
+          "frameworks_match_net8_9_10": true,
+          "id": "CShells.Nuplane",
+          "identity_matches_expected": true,
+          "internal_dependencies": {
+            "CShells": [
+              "0.0.30"
+            ],
+            "CShells.Abstractions": [
+              "0.0.30"
+            ],
+            "Nuplane.Abstractions": [
+              "0.0.11"
+            ],
+            "Nuplane.Loading.Abstractions": [
+              "0.0.11"
+            ]
+          },
+          "internal_versions_match_cshells_0_0_30_nuplane_0_0_11": true,
+          "repository": {
+            "commit": "789e36cc1cec885d86a48e18b7b51437de519a39",
+            "type": "git",
+            "url": "https://github.com/valence-works/cshells"
+          },
+          "repository_commit_matches_release": true,
+          "version": "0.0.30",
+          "zip_entries": 12,
+          "zip_test": null
+        },
+        "only_different_entry_names": [
+          ".signature.p7s"
+        ],
+        "payload_comparison": "complete",
+        "payload_matches_except_signature": true,
+        "sha256": "67fbb766bc7ae04f80b24d03d4bb8fc15be853f3de354f2b59e328c81629b03d",
+        "version_index_http": 200,
+        "version_index_url": "https://f.feedz.io/valence-works/cshells/nuget/v3/packages/cshells.nuplane/index.json",
+        "version_indexed": true
+      },
+      "id": "CShells.Nuplane",
+      "nuget_org": {
+        "archive_file": "cshells.nuplane.0.0.30.nupkg",
+        "bytes": 147492,
+        "nupkg_http": 200,
+        "nupkg_url": "https://api.nuget.org/v3-flatcontainer/cshells.nuplane/0.0.30/cshells.nuplane.0.0.30.nupkg",
+        "nuspec": {
+          "frameworks": [
+            "net10.0",
+            "net8.0",
+            "net9.0"
+          ],
+          "frameworks_match_net8_9_10": true,
+          "id": "CShells.Nuplane",
+          "identity_matches_expected": true,
+          "internal_dependencies": {
+            "CShells": [
+              "0.0.30"
+            ],
+            "CShells.Abstractions": [
+              "0.0.30"
+            ],
+            "Nuplane.Abstractions": [
+              "0.0.11"
+            ],
+            "Nuplane.Loading.Abstractions": [
+              "0.0.11"
+            ]
+          },
+          "internal_versions_match_cshells_0_0_30_nuplane_0_0_11": true,
+          "repository": {
+            "commit": "789e36cc1cec885d86a48e18b7b51437de519a39",
+            "type": "git",
+            "url": "https://github.com/valence-works/cshells"
+          },
+          "repository_commit_matches_release": true,
+          "version": "0.0.30",
+          "zip_entries": 13,
+          "zip_test": null
+        },
+        "observed_at_utc": "2026-10-10T21:55:06.779414+00:00",
+        "sha256": "274d164ed23531b516ceb01b1a43347485d2dd462fe55460c5914e6fd6bdb343",
+        "version_index_http": 200,
+        "version_index_url": "https://api.nuget.org/v3-flatcontainer/cshells.nuplane/index.json",
+        "version_indexed": true
+      },
+      "version": "0.0.30"
+    },
+    {
+      "feedz": {
+        "archive_sha256": "6dff8c18d710c2fc678c97230a9d1a317c74af6b2060d42347453ab5c524059a",
+        "nupkg_http": 200,
+        "nupkg_url": "https://f.feedz.io/valence-works/cshells/nuget/v3/packages/cshells.providers.fluentstorage/0.0.30/cshells.providers.fluentstorage.0.0.30.nupkg",
+        "nuspec": {
+          "frameworks": [
+            "net10.0",
+            "net8.0",
+            "net9.0"
+          ],
+          "frameworks_match_net8_9_10": true,
+          "id": "CShells.Providers.FluentStorage",
+          "identity_matches_expected": true,
+          "internal_dependencies": {
+            "CShells": [
+              "0.0.30"
+            ]
+          },
+          "internal_versions_match_cshells_0_0_30_nuplane_0_0_11": true,
+          "repository": {
+            "commit": "789e36cc1cec885d86a48e18b7b51437de519a39",
+            "type": "git",
+            "url": "https://github.com/valence-works/cshells"
+          },
+          "repository_commit_matches_release": true,
+          "version": "0.0.30",
+          "zip_entries": 12,
+          "zip_test": null
+        },
+        "only_different_entry_names": [
+          ".signature.p7s"
+        ],
+        "payload_comparison": "complete",
+        "payload_matches_except_signature": true,
+        "sha256": "6dff8c18d710c2fc678c97230a9d1a317c74af6b2060d42347453ab5c524059a",
+        "version_index_http": 200,
+        "version_index_url": "https://f.feedz.io/valence-works/cshells/nuget/v3/packages/cshells.providers.fluentstorage/index.json",
+        "version_indexed": true
+      },
+      "id": "CShells.Providers.FluentStorage",
+      "nuget_org": {
+        "archive_file": "cshells.providers.fluentstorage.0.0.30.nupkg",
+        "bytes": 150230,
+        "nupkg_http": 200,
+        "nupkg_url": "https://api.nuget.org/v3-flatcontainer/cshells.providers.fluentstorage/0.0.30/cshells.providers.fluentstorage.0.0.30.nupkg",
+        "nuspec": {
+          "frameworks": [
+            "net10.0",
+            "net8.0",
+            "net9.0"
+          ],
+          "frameworks_match_net8_9_10": true,
+          "id": "CShells.Providers.FluentStorage",
+          "identity_matches_expected": true,
+          "internal_dependencies": {
+            "CShells": [
+              "0.0.30"
+            ]
+          },
+          "internal_versions_match_cshells_0_0_30_nuplane_0_0_11": true,
+          "repository": {
+            "commit": "789e36cc1cec885d86a48e18b7b51437de519a39",
+            "type": "git",
+            "url": "https://github.com/valence-works/cshells"
+          },
+          "repository_commit_matches_release": true,
+          "version": "0.0.30",
+          "zip_entries": 13,
+          "zip_test": null
+        },
+        "observed_at_utc": "2026-10-10T21:57:14.669618+00:00",
+        "sha256": "7b645b380c4f604815d993579d4bc5e5f35a2fbe4986956d2638caa4a2531ca4",
+        "version_index_http": 200,
+        "version_index_url": "https://api.nuget.org/v3-flatcontainer/cshells.providers.fluentstorage/index.json",
+        "version_indexed": true
+      },
+      "version": "0.0.30"
+    }
+  ],
+  "release": {
+    "published_at": "2026-10-10T21:48:56Z",
+    "sha": "789e36cc1cec885d86a48e18b7b51437de519a39",
+    "tag": "0.0.30"
+  },
+  "workflow": {
+    "conclusion": "success",
+    "event": "release",
+    "head_sha": "789e36cc1cec885d86a48e18b7b51437de519a39",
+    "package_pushes": {
+      "feedz": 10,
+      "nuget_org": 10
+    },
+    "run_id": 38089057542,
+    "tests": {
+      "CShells.Tests": {
+        "failed": 0,
+        "passed": 811
+      },
+      "CShells.Tests.EndToEnd": {
+        "failed": 0,
+        "passed": 31
+      },
+      "total_failed": 0,
+      "total_passed": 842
+    },
+    "url": "https://github.com/valence-works/cshells/actions/runs/38089057542"
+  }
+}

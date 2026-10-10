@@ -1,0 +1,160 @@
+{
+  "schemaVersion": 1,
+  "source": "https://api.nuget.org/v3-flatcontainer/",
+  "acceptedAuditInputs": {
+    "CShells": {
+      "path": "cshells-0.0.30/archive-audit.json",
+      "sha256": "cc488961e84bc390378e6abc25d84448422e6fe1b8077bf8d11cc5e684e468a8"
+    },
+    "Nuplane": {
+      "path": "nuplane-0.0.11/archive-audit.json",
+      "sha256": "42b526e522488e42d92eb9ddc4ba73aec307490295f120e6dff04f2b9beeb7f6"
+    }
+  },
+  "packages": [
+    {
+      "family": "CShells",
+      "id": "CShells",
+      "version": "0.0.30",
+      "file": "cshells.0.0.30.nupkg",
+      "url": "https://api.nuget.org/v3-flatcontainer/cshells/0.0.30/cshells.0.0.30.nupkg",
+      "sha256": "cc1ab7e96c09b2256e9b95a33c356615459f3e1fd16ba3f7076013634d99cc6f"
+    },
+    {
+      "family": "CShells",
+      "id": "CShells.Abstractions",
+      "version": "0.0.30",
+      "file": "cshells.abstractions.0.0.30.nupkg",
+      "url": "https://api.nuget.org/v3-flatcontainer/cshells.abstractions/0.0.30/cshells.abstractions.0.0.30.nupkg",
+      "sha256": "f103dfd72bf920a2c362094b5e2d8d3fa5af5b1a9d622e12b03b72131b13a817"
+    },
+    {
+      "family": "CShells",
+      "id": "CShells.AspNetCore",
+      "version": "0.0.30",
+      "file": "cshells.aspnetcore.0.0.30.nupkg",
+      "url": "https://api.nuget.org/v3-flatcontainer/cshells.aspnetcore/0.0.30/cshells.aspnetcore.0.0.30.nupkg",
+      "sha256": "23fb1c14a9881c5450b84334042828f830a9a541230f1356d50896b4cbc33d9e"
+    },
+    {
+      "family": "CShells",
+      "id": "CShells.AspNetCore.Abstractions",
+      "version": "0.0.30",
+      "file": "cshells.aspnetcore.abstractions.0.0.30.nupkg",
+      "url": "https://api.nuget.org/v3-flatcontainer/cshells.aspnetcore.abstractions/0.0.30/cshells.aspnetcore.abstractions.0.0.30.nupkg",
+      "sha256": "0be2ce0f42764d166705149fa34faadd8ddadb4896b3ad3472a54b057ecc2399"
+    },
+    {
+      "family": "CShells",
+      "id": "CShells.AspNetCore.Testing",
+      "version": "0.0.30",
+      "file": "cshells.aspnetcore.testing.0.0.30.nupkg",
+      "url": "https://api.nuget.org/v3-flatcontainer/cshells.aspnetcore.testing/0.0.30/cshells.aspnetcore.testing.0.0.30.nupkg",
+      "sha256": "741537ec81953e39a7827f8834b6f7dbc04292488c9563f2650258038a4bceeb"
+    },
+    {
+      "family": "CShells",
+      "id": "CShells.FastEndpoints",
+      "version": "0.0.30",
+      "file": "cshells.fastendpoints.0.0.30.nupkg",
+      "url": "https://api.nuget.org/v3-flatcontainer/cshells.fastendpoints/0.0.30/cshells.fastendpoints.0.0.30.nupkg",
+      "sha256": "8d920be2cc12979550bb1275ef30d41e8853dc097f54eb8db638cc39dc3d5e6e"
+    },
+    {
+      "family": "CShells",
+      "id": "CShells.FastEndpoints.Abstractions",
+      "version": "0.0.30",
+      "file": "cshells.fastendpoints.abstractions.0.0.30.nupkg",
+      "url": "https://api.nuget.org/v3-flatcontainer/cshells.fastendpoints.abstractions/0.0.30/cshells.fastendpoints.abstractions.0.0.30.nupkg",
+      "sha256": "83eaed3213cf951834b7bbdfe6487c31bf2f61d0341c891193ff2222845e6d72"
+    },
+    {
+      "family": "CShells",
+      "id": "CShells.Management.Api",
+      "version": "0.0.30",
+      "file": "cshells.management.api.0.0.30.nupkg",
+      "url": "https://api.nuget.org/v3-flatcontainer/cshells.management.api/0.0.30/cshells.management.api.0.0.30.nupkg",
+      "sha256": "d15f6dc7a9f0ba2771ca845590a023d1669ebedd2de19098b07e20ab2521f8fe"
+    },
+    {
+      "family": "CShells",
+      "id": "CShells.Nuplane",
+      "version": "0.0.30",
+      "file": "cshells.nuplane.0.0.30.nupkg",
+      "url": "https://api.nuget.org/v3-flatcontainer/cshells.nuplane/0.0.30/cshells.nuplane.0.0.30.nupkg",
+      "sha256": "274d164ed23531b516ceb01b1a43347485d2dd462fe55460c5914e6fd6bdb343"
+    },
+    {
+      "family": "CShells",
+      "id": "CShells.Providers.FluentStorage",
+      "version": "0.0.30",
+      "file": "cshells.providers.fluentstorage.0.0.30.nupkg",
+      "url": "https://api.nuget.org/v3-flatcontainer/cshells.providers.fluentstorage/0.0.30/cshells.providers.fluentstorage.0.0.30.nupkg",
+      "sha256": "7b645b380c4f604815d993579d4bc5e5f35a2fbe4986956d2638caa4a2531ca4"
+    },
+    {
+      "family": "Nuplane",
+      "id": "Nuplane",
+      "version": "0.0.11",
+      "file": "nuplane.0.0.11.nupkg",
+      "url": "https://api.nuget.org/v3-flatcontainer/nuplane/0.0.11/nuplane.0.0.11.nupkg",
+      "sha256": "9a882bd5173508efc406e4835742ce61cb24f60ea71eb1faa53b30a4ef73ad06"
+    },
+    {
+      "family": "Nuplane",
+      "id": "Nuplane.Abstractions",
+      "version": "0.0.11",
+      "file": "nuplane.abstractions.0.0.11.nupkg",
+      "url": "https://api.nuget.org/v3-flatcontainer/nuplane.abstractions/0.0.11/nuplane.abstractions.0.0.11.nupkg",
+      "sha256": "25a63a17bdb00095420a39469ce6e4bdd67af5d772bcbf196e78f08c7b6e6d8f"
+    },
+    {
+      "family": "Nuplane",
+      "id": "Nuplane.Admin",
+      "version": "0.0.11",
+      "file": "nuplane.admin.0.0.11.nupkg",
+      "url": "https://api.nuget.org/v3-flatcontainer/nuplane.admin/0.0.11/nuplane.admin.0.0.11.nupkg",
+      "sha256": "b6befee75e0be7a170f6fe6482c88bfca728cb37d090fe36f209c8311d45b0b0"
+    },
+    {
+      "family": "Nuplane",
+      "id": "Nuplane.Admin.Api",
+      "version": "0.0.11",
+      "file": "nuplane.admin.api.0.0.11.nupkg",
+      "url": "https://api.nuget.org/v3-flatcontainer/nuplane.admin.api/0.0.11/nuplane.admin.api.0.0.11.nupkg",
+      "sha256": "079e03bcc6036d47df354e8aae60c8d113d0f968a7effce40efd3566404dbbfe"
+    },
+    {
+      "family": "Nuplane",
+      "id": "Nuplane.Loading",
+      "version": "0.0.11",
+      "file": "nuplane.loading.0.0.11.nupkg",
+      "url": "https://api.nuget.org/v3-flatcontainer/nuplane.loading/0.0.11/nuplane.loading.0.0.11.nupkg",
+      "sha256": "a037eb9749514324c6905cea0bcf9a41ac445f1a47f4535f7f6acbe71468802b"
+    },
+    {
+      "family": "Nuplane",
+      "id": "Nuplane.Loading.Abstractions",
+      "version": "0.0.11",
+      "file": "nuplane.loading.abstractions.0.0.11.nupkg",
+      "url": "https://api.nuget.org/v3-flatcontainer/nuplane.loading.abstractions/0.0.11/nuplane.loading.abstractions.0.0.11.nupkg",
+      "sha256": "2fc0a24f69dbd70fb76b48bed918ba36dfeb331a110d42697c37171b21d6690a"
+    },
+    {
+      "family": "Nuplane",
+      "id": "Nuplane.Loading.Api",
+      "version": "0.0.11",
+      "file": "nuplane.loading.api.0.0.11.nupkg",
+      "url": "https://api.nuget.org/v3-flatcontainer/nuplane.loading.api/0.0.11/nuplane.loading.api.0.0.11.nupkg",
+      "sha256": "165a1eb03f3f4d177ef26bf5a37cc6cc34e3a7a4d8d31d977c9553cc9c8d293a"
+    },
+    {
+      "family": "Nuplane",
+      "id": "Nuplane.Sources.Directory",
+      "version": "0.0.11",
+      "file": "nuplane.sources.directory.0.0.11.nupkg",
+      "url": "https://api.nuget.org/v3-flatcontainer/nuplane.sources.directory/0.0.11/nuplane.sources.directory.0.0.11.nupkg",
+      "sha256": "3273685f52e26bd6678eacfa5b03917256ecca19827de813307982746583f90d"
+    }
+  ]
+}

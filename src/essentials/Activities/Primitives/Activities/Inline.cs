@@ -18,13 +18,18 @@ namespace Elsa.Activities.Primitives.Activities;
 /// materialized value in the invocation snapshot, and hydrates this transient activity exactly once.
 /// The result type is <see cref="object"/> so any expression-produced value flows through unchanged.
 /// </remarks>
+// ReplaySafe (ADR 0032 R1, #2581): the body only returns the value already materialized for Expression, and an
+// expression binding is evaluated under binding-pure-v1 (no time, randomness, services or I/O), so a re-run returns
+// the same value. Secret bindings are refused above, so no value can change between runs.
 [RefusesSecretBinding(nameof(Expression), SecretBindingRefusalReason.EchoedToOutput)]
+[ActivitySideEffectProfile(SideEffectProfile.ReplaySafe)]
 public sealed class Inline : Activity<object?>
 {
     /// <summary>The already-materialized inline expression/code value.</summary>
     [ActivityInput(Key = nameof(Expression))]
     public object? Expression { get; set; }
 
+    /// <summary>Completes with the expression value already materialized by the input-binding pipeline.</summary>
     protected override ValueTask<ActivityTransition<object?>> ExecuteAsync(ActivityExecutionContext context) =>
         ValueTask.FromResult(ActivityTransition.Complete(Expression));
 }

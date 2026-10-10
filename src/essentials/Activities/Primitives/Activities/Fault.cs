@@ -18,6 +18,9 @@ namespace Elsa.Activities.Primitives.Activities;
 [RefusesSecretBinding("message", SecretBindingRefusalReason.EchoedToOutput)]
 [RefusesSecretBinding("category", SecretBindingRefusalReason.EchoedToOutput)]
 [RefusesSecretBinding("faultType", SecretBindingRefusalReason.EchoedToOutput)]
+// ReplaySafe (ADR 0032 R1, #2581): the body builds the same fault from the same inputs and performs no I/O. The
+// incident it causes is committed by the mandatory IncidentRecorded boundary after the body, not by the body.
+[ActivitySideEffectProfile(SideEffectProfile.ReplaySafe)]
 public sealed class Fault : Activity<ActivityUnit>
 {
     /// <summary>The fault code used when <see cref="Code"/> is unset.</summary>
@@ -42,6 +45,7 @@ public sealed class Fault : Activity<ActivityUnit>
     [ActivityInput(Key = "faultType", Order = 30)]
     public string? FaultType { get; set; }
 
+    /// <summary>Returns a non-retryable fault using the hydrated inputs and defaults for blank code or message values.</summary>
     protected override ValueTask<ActivityTransition<ActivityUnit>> ExecuteAsync(ActivityExecutionContext context) =>
         ValueTask.FromResult(ActivityTransition.Fault<ActivityUnit>(new ActivityFault(
             Coalesce(Code, DefaultCode),

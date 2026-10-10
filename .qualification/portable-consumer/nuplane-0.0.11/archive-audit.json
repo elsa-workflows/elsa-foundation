@@ -1,0 +1,383 @@
+{
+  "audited_at_utc": "2026-10-10T21:43:51.802491+00:00",
+  "feed_discovery": {
+    "earlier_observation": "An initial direct NuGet flat-container request returned 404 before a later audit pass returned HTTP 200 and version-indexed=true for all eight packages; consistent with transient indexing/propagation delay, not a remaining availability failure.",
+    "feedz": {
+      "index_http": 200,
+      "index_url": "https://f.feedz.io/valence-works/nuplane/nuget/index.json",
+      "package_base_address": {
+        "type": "PackageBaseAddress/3.0.0",
+        "url": "https://f.feedz.io/valence-works/nuplane/nuget/v3/packages"
+      }
+    },
+    "nuget_org": "https://api.nuget.org/v3/index.json"
+  },
+  "limitations": [
+    "Only public package metadata and archive bytes were inspected. No package was executed.",
+    "Feedz packages differ from NuGet.org archives only in the .signature.p7s entry; all remaining ZIP entry names and contents match."
+  ],
+  "packages": [
+    {
+      "archive": "nuplane.abstractions.0.0.11.nupkg",
+      "bytes": 321465,
+      "feedz": {
+        "archive_payload_identical_except_signature": true,
+        "index_http": 200,
+        "nupkg_http": 200,
+        "nupkg_sha256": "b3d0e9653bed5649762b3356ee8ce4d64de6a0db027e1faf739a1009fda5342d",
+        "only_different_zip_entry": ".signature.p7s",
+        "version_indexed": true
+      },
+      "id": "Nuplane.Abstractions",
+      "nuget_org": {
+        "index_http": 200,
+        "nupkg_http": 200,
+        "version_indexed": true
+      },
+      "nuspec": {
+        "all_internal_dependencies_stable_0_0_11": true,
+        "id": "Nuplane.Abstractions",
+        "internal_nuplane_dependencies": {},
+        "repo_commit_matches_release": true,
+        "repository": {
+          "commit": "32776c18ab8263c2ed7a9112ff58a7f3bcc7ead0",
+          "type": "git",
+          "url": "https://github.com/valence-works/nuplane"
+        },
+        "tfms": [
+          "net10.0",
+          "net8.0",
+          "net9.0"
+        ],
+        "tfms_match_net8_net9_net10": true,
+        "version": "0.0.11"
+      },
+      "sha256": "25a63a17bdb00095420a39469ce6e4bdd67af5d772bcbf196e78f08c7b6e6d8f",
+      "version": "0.0.11"
+    },
+    {
+      "archive": "nuplane.admin.api.0.0.11.nupkg",
+      "bytes": 247405,
+      "feedz": {
+        "archive_payload_identical_except_signature": true,
+        "index_http": 200,
+        "nupkg_http": 200,
+        "nupkg_sha256": "b9f1fbc0c29301e535c8d0c944f95fcffe5901504d086145fb374107c40ceb8e",
+        "only_different_zip_entry": ".signature.p7s",
+        "version_indexed": true
+      },
+      "id": "Nuplane.Admin.Api",
+      "nuget_org": {
+        "index_http": 200,
+        "nupkg_http": 200,
+        "version_indexed": true
+      },
+      "nuspec": {
+        "all_internal_dependencies_stable_0_0_11": true,
+        "id": "Nuplane.Admin.Api",
+        "internal_nuplane_dependencies": {
+          "Nuplane.Abstractions": "0.0.11",
+          "Nuplane.Admin": "0.0.11"
+        },
+        "repo_commit_matches_release": true,
+        "repository": {
+          "commit": "32776c18ab8263c2ed7a9112ff58a7f3bcc7ead0",
+          "type": "git",
+          "url": "https://github.com/valence-works/nuplane"
+        },
+        "tfms": [
+          "net10.0",
+          "net8.0",
+          "net9.0"
+        ],
+        "tfms_match_net8_net9_net10": true,
+        "version": "0.0.11"
+      },
+      "sha256": "079e03bcc6036d47df354e8aae60c8d113d0f968a7effce40efd3566404dbbfe",
+      "version": "0.0.11"
+    },
+    {
+      "archive": "nuplane.admin.0.0.11.nupkg",
+      "bytes": 235487,
+      "feedz": {
+        "archive_payload_identical_except_signature": true,
+        "index_http": 200,
+        "nupkg_http": 200,
+        "nupkg_sha256": "76f8ff2eda6e2440f9509534707c169d019a8c58002d273cbefc526e6fffb7ee",
+        "only_different_zip_entry": ".signature.p7s",
+        "version_indexed": true
+      },
+      "id": "Nuplane.Admin",
+      "nuget_org": {
+        "index_http": 200,
+        "nupkg_http": 200,
+        "version_indexed": true
+      },
+      "nuspec": {
+        "all_internal_dependencies_stable_0_0_11": true,
+        "id": "Nuplane.Admin",
+        "internal_nuplane_dependencies": {
+          "Nuplane": "0.0.11"
+        },
+        "repo_commit_matches_release": true,
+        "repository": {
+          "commit": "32776c18ab8263c2ed7a9112ff58a7f3bcc7ead0",
+          "type": "git",
+          "url": "https://github.com/valence-works/nuplane"
+        },
+        "tfms": [
+          "net10.0",
+          "net8.0",
+          "net9.0"
+        ],
+        "tfms_match_net8_net9_net10": true,
+        "version": "0.0.11"
+      },
+      "sha256": "b6befee75e0be7a170f6fe6482c88bfca728cb37d090fe36f209c8311d45b0b0",
+      "version": "0.0.11"
+    },
+    {
+      "archive": "nuplane.loading.abstractions.0.0.11.nupkg",
+      "bytes": 332257,
+      "feedz": {
+        "archive_payload_identical_except_signature": true,
+        "index_http": 200,
+        "nupkg_http": 200,
+        "nupkg_sha256": "a79444a3183c67c1ddeb7fc92aa5aaaf9d3ebae65444ad4f7fa2591ae332a8dd",
+        "only_different_zip_entry": ".signature.p7s",
+        "version_indexed": true
+      },
+      "id": "Nuplane.Loading.Abstractions",
+      "nuget_org": {
+        "index_http": 200,
+        "nupkg_http": 200,
+        "version_indexed": true
+      },
+      "nuspec": {
+        "all_internal_dependencies_stable_0_0_11": true,
+        "id": "Nuplane.Loading.Abstractions",
+        "internal_nuplane_dependencies": {
+          "Nuplane.Abstractions": "0.0.11"
+        },
+        "repo_commit_matches_release": true,
+        "repository": {
+          "commit": "32776c18ab8263c2ed7a9112ff58a7f3bcc7ead0",
+          "type": "git",
+          "url": "https://github.com/valence-works/nuplane"
+        },
+        "tfms": [
+          "net10.0",
+          "net8.0",
+          "net9.0"
+        ],
+        "tfms_match_net8_net9_net10": true,
+        "version": "0.0.11"
+      },
+      "sha256": "2fc0a24f69dbd70fb76b48bed918ba36dfeb331a110d42697c37171b21d6690a",
+      "version": "0.0.11"
+    },
+    {
+      "archive": "nuplane.loading.api.0.0.11.nupkg",
+      "bytes": 238868,
+      "feedz": {
+        "archive_payload_identical_except_signature": true,
+        "index_http": 200,
+        "nupkg_http": 200,
+        "nupkg_sha256": "f10650466625ef0ae05d41028614c1703b577d0a6a0f8ab440fa63b0d03f0a3e",
+        "only_different_zip_entry": ".signature.p7s",
+        "version_indexed": true
+      },
+      "id": "Nuplane.Loading.Api",
+      "nuget_org": {
+        "index_http": 200,
+        "nupkg_http": 200,
+        "version_indexed": true
+      },
+      "nuspec": {
+        "all_internal_dependencies_stable_0_0_11": true,
+        "id": "Nuplane.Loading.Api",
+        "internal_nuplane_dependencies": {
+          "Nuplane.Loading.Abstractions": "0.0.11"
+        },
+        "repo_commit_matches_release": true,
+        "repository": {
+          "commit": "32776c18ab8263c2ed7a9112ff58a7f3bcc7ead0",
+          "type": "git",
+          "url": "https://github.com/valence-works/nuplane"
+        },
+        "tfms": [
+          "net10.0",
+          "net8.0",
+          "net9.0"
+        ],
+        "tfms_match_net8_net9_net10": true,
+        "version": "0.0.11"
+      },
+      "sha256": "165a1eb03f3f4d177ef26bf5a37cc6cc34e3a7a4d8d31d977c9553cc9c8d293a",
+      "version": "0.0.11"
+    },
+    {
+      "archive": "nuplane.loading.0.0.11.nupkg",
+      "bytes": 542358,
+      "feedz": {
+        "archive_payload_identical_except_signature": true,
+        "index_http": 200,
+        "nupkg_http": 200,
+        "nupkg_sha256": "56b961119e11fa1871add51009b68007d5f22f7c35279818892716f71dbdd09b",
+        "only_different_zip_entry": ".signature.p7s",
+        "version_indexed": true
+      },
+      "id": "Nuplane.Loading",
+      "nuget_org": {
+        "index_http": 200,
+        "nupkg_http": 200,
+        "version_indexed": true
+      },
+      "nuspec": {
+        "all_internal_dependencies_stable_0_0_11": true,
+        "id": "Nuplane.Loading",
+        "internal_nuplane_dependencies": {
+          "Nuplane": "0.0.11",
+          "Nuplane.Abstractions": "0.0.11",
+          "Nuplane.Loading.Abstractions": "0.0.11"
+        },
+        "repo_commit_matches_release": true,
+        "repository": {
+          "commit": "32776c18ab8263c2ed7a9112ff58a7f3bcc7ead0",
+          "type": "git",
+          "url": "https://github.com/valence-works/nuplane"
+        },
+        "tfms": [
+          "net10.0",
+          "net8.0",
+          "net9.0"
+        ],
+        "tfms_match_net8_net9_net10": true,
+        "version": "0.0.11"
+      },
+      "sha256": "a037eb9749514324c6905cea0bcf9a41ac445f1a47f4535f7f6acbe71468802b",
+      "version": "0.0.11"
+    },
+    {
+      "archive": "nuplane.sources.directory.0.0.11.nupkg",
+      "bytes": 276251,
+      "feedz": {
+        "archive_payload_identical_except_signature": true,
+        "index_http": 200,
+        "nupkg_http": 200,
+        "nupkg_sha256": "aa4f9965e9ede74b9e0131fd3ff987a120edf0bd5bda1d972b64e62eb4e8e801",
+        "only_different_zip_entry": ".signature.p7s",
+        "version_indexed": true
+      },
+      "id": "Nuplane.Sources.Directory",
+      "nuget_org": {
+        "index_http": 200,
+        "nupkg_http": 200,
+        "version_indexed": true
+      },
+      "nuspec": {
+        "all_internal_dependencies_stable_0_0_11": true,
+        "id": "Nuplane.Sources.Directory",
+        "internal_nuplane_dependencies": {
+          "Nuplane": "0.0.11"
+        },
+        "repo_commit_matches_release": true,
+        "repository": {
+          "commit": "32776c18ab8263c2ed7a9112ff58a7f3bcc7ead0",
+          "type": "git",
+          "url": "https://github.com/valence-works/nuplane"
+        },
+        "tfms": [
+          "net10.0",
+          "net8.0",
+          "net9.0"
+        ],
+        "tfms_match_net8_net9_net10": true,
+        "version": "0.0.11"
+      },
+      "sha256": "3273685f52e26bd6678eacfa5b03917256ecca19827de813307982746583f90d",
+      "version": "0.0.11"
+    },
+    {
+      "archive": "nuplane.0.0.11.nupkg",
+      "bytes": 1154601,
+      "feedz": {
+        "archive_payload_identical_except_signature": true,
+        "index_http": 200,
+        "nupkg_http": 200,
+        "nupkg_sha256": "1c087216bddc61d9b01ff211da8ad5ee8046f41582198fc948f7ef9fa799612e",
+        "only_different_zip_entry": ".signature.p7s",
+        "version_indexed": true
+      },
+      "id": "Nuplane",
+      "nuget_org": {
+        "index_http": 200,
+        "nupkg_http": 200,
+        "version_indexed": true
+      },
+      "nuspec": {
+        "all_internal_dependencies_stable_0_0_11": true,
+        "id": "Nuplane",
+        "internal_nuplane_dependencies": {
+          "Nuplane.Abstractions": "0.0.11"
+        },
+        "repo_commit_matches_release": true,
+        "repository": {
+          "commit": "32776c18ab8263c2ed7a9112ff58a7f3bcc7ead0",
+          "type": "git",
+          "url": "https://github.com/valence-works/nuplane"
+        },
+        "tfms": [
+          "net10.0",
+          "net8.0",
+          "net9.0"
+        ],
+        "tfms_match_net8_net9_net10": true,
+        "version": "0.0.11"
+      },
+      "sha256": "9a882bd5173508efc406e4835742ce61cb24f60ea71eb1faa53b30a4ef73ad06",
+      "version": "0.0.11"
+    }
+  ],
+  "release": {
+    "commit": "32776c18ab8263c2ed7a9112ff58a7f3bcc7ead0",
+    "tag": "0.0.11"
+  },
+  "workflow": {
+    "conclusion": "success",
+    "event": "release",
+    "head_sha": "32776c18ab8263c2ed7a9112ff58a7f3bcc7ead0",
+    "id": 38087962139,
+    "nuget_binary_package_pushes": "All eight .nupkg pushes returned Created / \"Your package was pushed.\"; Feedz binary pushes returned OK.",
+    "status": "completed",
+    "tests": {
+      "Nuplane.Integration.Tests": {
+        "failed": 0,
+        "passed": 156
+      },
+      "Nuplane.Loading.Tests": {
+        "failed": 0,
+        "passed": 251
+      },
+      "Nuplane.NuGet.Tests": {
+        "failed": 0,
+        "passed": 25
+      },
+      "Nuplane.Runtime.Tests": {
+        "failed": 0,
+        "passed": 799
+      },
+      "Nuplane.Sources.Directory.Tests": {
+        "failed": 0,
+        "passed": 21
+      },
+      "Nuplane.Store.Tests": {
+        "failed": 0,
+        "passed": 72
+      },
+      "total_failed": 0,
+      "total_passed": 1324
+    },
+    "url": "https://github.com/valence-works/nuplane/actions/runs/38087962139"
+  }
+}
