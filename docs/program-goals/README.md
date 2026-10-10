@@ -26,27 +26,34 @@ Do not invent a named program-goal bucket just because one is missing. Propose c
 
 | Goal | Status | Area | Steward(s) | Current focus |
 |---|---|---|---|---|
-| [Elsa 4 Contributor Experience](workspace-launch-readiness.md) | Active | Human contributor journey across Foundation and Studio | Sipke plus the Contributor Experience control room | Program #2416: verify source setup, support first contributions, and make onboarding dependable; evolves Workspace Launch Readiness |
-| [Elsa Foundation Operating Model](elsa-foundation-operating-model.md) | Active | Repository operating model / AI workspace | Joey plus active architects/agents | Keep the shared routing layer stable; do not use this as the default next-work bucket |
-| [Runtime Execution Seam](runtime-execution-seam.md) | Active | Workflows Runtime architecture / executable artifact seam | Joey plus the incoming runtime architect | Prepare the Runtime execution seam for architect-owned Speckit planning |
-| [Runtime Database Access](runtime-db-access.md) | Active | Workflow runtime / causal DB accounting / bounded access reductions | Sipke plus the runtime database access control room | Program #2382 / Project 55: workload and pagination investigations running in isolated branches; runtime implementation not started |
-| [Runtime Throughput](runtime-throughput.md) | Active | Workflow runtime / concurrent correctness / bounded throughput evidence | Sipke plus the runtime throughput control room | Program #2531: concurrency correctness and request-path telemetry writes (Track A); one bounded throughput ramp under a scoped ADR 0073 D7 exception (Track B) |
-| [Runtime Execution Evidence](runtime-execution-evidence.md) | Active | Deterministic QA verification / committed workflow-runtime evidence | Sipke plus active runtime and QA architects/agents | Specify and deliver the six-feature Execution Evidence domain from in-memory vertical slice through J-Test conformance |
-| [Workflow Incident Troubleshooting](incident-troubleshooting.md) | Delivered | Runtime incident causality and Studio operator triage | Sipke plus the incident program lead | Product PRs2371/556 and resulting-main gates passed; final evidence/closure recorded on lead QA #2340 |
-| [Runtime Alterations](runtime-alterations.md) | Active | Workflows Runtime operator mutations / bulk alteration orchestration | Sipke plus the runtime-alterations control room | Deliver issue #1016's durable plan/job substrate and initial alteration handlers |
-| [Groundwork Persistence Readiness](groundwork-persistence-readiness.md) | Completed | Historical provider-neutral persistence framework / Elsa validation bridge | Joey plus active architects/agents | Completed its extraction/validation purpose; ADR 0073 moved remaining persistence replacement work to the EF Core Persistence goal |
-| [EF Core Persistence](ef-core-persistence.md) | Completed | Elsa persistence-family consolidation / four-provider EF Core delivery | Sipke plus the EF Core persistence control room | Completed 2026-09-16: all 95 storage units on EF Core across four providers, defaults flipped (#1763), Groundwork and MongoDB removed (#1764), ledger closed (#1765-#1767). Carry-forwards are listed in the completion ledger. |
-| [Zero-EF Persistence](zero-ef-persistence.md) | Superseded | Historical Elsa persistence-provider consolidation / Groundwork adoption | Sipke plus active architects/agents | Retained for provenance; ADR 0073 and the EF Core Persistence goal own the opposite all-EF replacement program |
-| [Constitution Readiness](constitution-readiness.md) | Active | Targeted constitution review / ratification readiness | Joey plus active architects/agents | Review only launch-blocking or work-unit-specific gates |
-| [Code Reality And Test Maturity](code-reality-and-test-maturity.md) | Active | Codebase verification / tests / weak implementations | Joey plus active engineers/agents | Route hard code/test verification findings into focused units |
-| [Modular Hosting Upstream Delivery](modular-hosting-upstream-delivery.md) | Active | CShells/Nuplane infrastructure and Foundation adoption | Sipke plus the delivery lead | Program #2500: explicit service ownership, catalog notifications, optional integration, safe store operations and published-package host proof |
-| [Runtime Composition & Configuration](feature-composition-readiness.md) | Active | Feature composition / shared persistence / developer and operator configuration | Joey plus active architects/agents | Program #1959: investigate persistence boundaries and runtime/tooling resolution, then specify the first shared-resource slice; later epics remain outlines |
-| [First-party REST API Consolidation](first-party-rest-api-consolidation.md) | Active | First-party REST APIs / shared authorization / FastEndpoints retirement | Sipke plus active API/security architects and agents | Ratify conventions and shared authorization before the first Minimal API canary |
-| [Workspace Split Readiness](workspace-split-readiness.md) | Active | Future `elsa-workspace` extraction / portable feature-development flow | Joey plus active architects/agents | Keep feature-development flows portable without blocking launch |
-| [Diagnostics Observability Readiness](diagnostics-observability-readiness.md) | Active | Diagnostics observability port (structured logs + OpenTelemetry) across foundation + studio | Joey plus active architects/agents | Port structured logs and OTEL to foundation architecture (EFCore persistence, studio bottom-panel tabs) |
-| [Elsa 4 Architecture Review Remediation](elsa-4-review-remediation.md) | Active | Cross-domain remediation of the 2026-07 review findings (W1–W21) | Sipke plus active architects/agents | Phase 0 first wave (W2/W3/W4/W6); W1/W5 held for specs/083 Move 2 |
-| [BPMN Engine](bpmn-engine.md) | Active | Executable BPMN 2.0 engine + interchange + the runtime seams it consumes | Sipke plus the BPMN control-room session | Phase 3 CONSTRUCT LIST COMPLETE (specs 123–128, 132–136); open follow-ups tracked in the bucket (#998, #1001, chips) |
-| [First-Request / Cold-Start Readiness](first-request-cold-start-readiness.md) | Superseded | Historical host boot / first-request measurement program | Sipke plus active performance/runtime agents | Performance measurement retired by owner policy; applicable untimed activation/migration correctness moves through EF Core Persistence and #1668 |
+| [Elsa 4 Simplification](elsa-4-simplification.md) | Active | Whole product: tests, API, language, structure, docs | Sipke | Program #2559, ADR 0080 |
+| [Runtime Efficiency](runtime-efficiency.md) | Active | Runtime database access, persistence modes, concurrent correctness | Sipke | Program #2531; persistence-mode epic #2564 |
+
+Every other goal is parked until 2026-11-21 ([ADR 0080 D0](../adr/0080-elsa-4-simplification-decisions.md#d0--focus)), merged into one of the two above, or already finished. Each file carries its own status line.
+
+| Goal | Status |
+|---|---|
+| [Elsa 4 Contributor Experience](workspace-launch-readiness.md) | Parked |
+| [Elsa Foundation Operating Model](elsa-foundation-operating-model.md) | Parked |
+| [Runtime Execution Seam](runtime-execution-seam.md) | Parked |
+| [Runtime Database Access](runtime-db-access.md) | Merged into Runtime Efficiency |
+| [Runtime Throughput](runtime-throughput.md) | Merged into Runtime Efficiency |
+| [Runtime Execution Evidence](runtime-execution-evidence.md) | Parked |
+| [Workflow Incident Troubleshooting](incident-troubleshooting.md) | Delivered |
+| [Runtime Alterations](runtime-alterations.md) | Parked |
+| [Groundwork Persistence Readiness](groundwork-persistence-readiness.md) | Completed |
+| [EF Core Persistence](ef-core-persistence.md) | Completed |
+| [Zero-EF Persistence](zero-ef-persistence.md) | Superseded |
+| [Constitution Readiness](constitution-readiness.md) | Parked |
+| [Code Reality And Test Maturity](code-reality-and-test-maturity.md) | Folded into Elsa 4 Simplification |
+| [Modular Hosting Upstream Delivery](modular-hosting-upstream-delivery.md) | Parked |
+| [Runtime Composition & Configuration](feature-composition-readiness.md) | Parked |
+| [First-party REST API Consolidation](first-party-rest-api-consolidation.md) | Parked |
+| [Workspace Split Readiness](workspace-split-readiness.md) | Parked |
+| [Diagnostics Observability Readiness](diagnostics-observability-readiness.md) | Parked |
+| [Elsa 4 Architecture Review Remediation](elsa-4-review-remediation.md) | Folded into Elsa 4 Simplification |
+| [BPMN Engine](bpmn-engine.md) | Parked |
+| [First-Request / Cold-Start Readiness](first-request-cold-start-readiness.md) | Superseded |
 
 ## Goal File Rules
 

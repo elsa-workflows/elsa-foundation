@@ -3,6 +3,29 @@ Draft history moved to ../../docs/reports/archive/constitution-draft-history.md.
 This constitution file is the generic quality-gate layer: gates, allowed exceptions,
 ratification state, and governance. Canonical term lookup lives in ../../docs/glossary/.
 
+SYNC IMPACT REPORT — 4.0.1 -> 5.0.0 (2026-10-10)
+Amendment: risk-based testing, internal-by-default visibility and the Extension suffix (ADR 0080 D1, D3, D5).
+  MAJOR per Governance > Versioning: removes and redefines prescribed rules.
+Modified sections:
+  §2.5    - collaborators need a contract only when they are extension points; others MAY be concrete
+            internal sealed types. A contract is introduced when a collaborator becomes an extension point.
+  §2.6.1  - `I<X>Extension` replaces `I<X>Contributor` as the push-style suffix (ADR 0080 D5); both are
+            accepted until each domain's rename batch lands.
+  §2.18.4 - restates the §2.21.1 rewrite/delete permission for refactor work.
+  §2.21.1 - a refactor MAY rewrite or delete a test whose code was removed or whose behaviour is proven
+            elsewhere; the per-deletion architect approval is withdrawn.
+  §2.23   - §2.23.1 per-feature registration test replaced by one composition test;
+            §2.23.2 every-branch mandate replaced by risk-based behaviour tests; tests MUST NOT assert on
+            markdown, documentation or source text;
+            §2.23.3 implementations are internal sealed, tested via InternalsVisibleTo; public surface
+            tracked by PublicApiAnalyzers;
+            §2.23.4 shortened to the hidden-coupling rule; defers to §2.21.1.
+Added sections: none. Removed sections: none (content of §2.23.1-.4 replaced).
+Templates requiring updates: .claude/skills/elsa-add-unit-tests, .claude/skills/elsa-create-feature,
+  .claude/skills/speckit-tasks, .specify/templates/tasks-template.md, docs/skills/catalog.md testing entries,
+  .specify/memory/constitution.md (§2.21.1 reference; §E5 and §E6 R4 under ADR 0080 D4/D5).
+Approval: Sipke Schoorstra, 2026-10-10 (ADR 0080). Same consensus caveat as the 4.0.0 ratification below.
+
 SYNC IMPACT REPORT — 4.0.0 -> 4.0.1 (2026-10-09)
 Amendment: record which dispatcher failure policies the event substrate implements (#273).
   PATCH per Governance > Versioning: a clarification of build status; no rule changes.
@@ -37,7 +60,7 @@ Ratification: RATIFIED 2026-08-08 by Sipke Schoorstra, on his authority alone. G
 -->
 # Modular Software Design Framework Constitution
 
-**Version:** 4.0.1
+**Version:** 5.0.0
 **Status:** Ratified 2026-08-08 by Sipke Schoorstra. Governance > Amendment process calls for consensus among Joey Barten, Sipke Schoorstra, and Frans van Ek; this ratification was taken on Sipke Schoorstra's authority alone and is open to revision if the other architects dissent. Section-level gates still marked draft, provisional, or pending ratification — whether via their own `Status:` line (§2.24) or inline wording — remain so and are **not** covered by this ratification.
 **Layer:** Generic framework constitution. The Elsa workflow-engine constitution derives from this document — see `constitution.md`.
 
@@ -76,7 +99,7 @@ shared program-goals planner.
   - [§2.20 Provider module decomposition](#220-provider-module-decomposition)
   - [§2.21 Test discipline](#221-test-discipline) · [§2.21.1 Golden rule of refactoring](#2211-the-golden-rule-of-refactoring) · [§2.21.2 Greenfield deferral](#2212-greenfield-test-discipline)
   - [§2.22 Feature documentation](#222-feature-documentation)
-  - [§2.23 Unit tests](#223-unit-tests) · [§2.23.1 Feature-class registration test](#2231-feature-class-registration-test) · [§2.23.2 Per-implementation unit test](#2232-per-implementation-unit-test-with-stubbed-dependencies) · [§2.23.3 Visibility rule](#2233-visibility-rule) · [§2.23.4 Refactoring obligations](#2234-refactoring-obligations-inherited-from-2211) · [§2.23.5 Exception boundaries](#2235-exception-boundaries--infrastructure-exceptions-are-wrapped) · [§2.23.6 Integration testing — out of scope](#2236-integration-testing--out-of-scope)
+  - [§2.23 Unit tests](#223-unit-tests) · [§2.23.1 Composition test](#2231-composition-test) · [§2.23.2 Behaviour tests](#2232-behaviour-tests) · [§2.23.3 Visibility rule](#2233-visibility-rule) · [§2.23.4 Refactoring obligations](#2234-refactoring-obligations) · [§2.23.5 Exception boundaries](#2235-exception-boundaries--infrastructure-exceptions-are-wrapped) · [§2.23.6 Integration testing — out of scope](#2236-integration-testing--out-of-scope)
   - [§2.24 Sanctioned patterns — the closed catalog](#224-sanctioned-patterns--the-closed-catalog) · [§2.24.1 Rationale reference](#2241-rationale-reference) · [§2.24.2 The catalog](#2242-the-catalog-draft-pending-ratification) · [§2.24.3 Adding a new pattern](#2243-adding-a-new-pattern)
   - [§2.25 Consolidation review — the subtractive obligation](#225-consolidation-review--the-subtractive-obligation) · [§2.25.1 The obligation](#2251-the-obligation) · [§2.25.2 Standing](#2252-standing) · [§2.25.3 Evidence bar](#2253-evidence-bar--subtraction-is-verified-never-inferred) · [§2.25.4 What the review reports](#2254-what-the-review-reports)
 - [§3 Runtime composition — Nuplane Strategy](#3-runtime-composition--nuplane-strategy)
@@ -257,7 +280,7 @@ Compile-time inheritance is the load-bearing mechanism; runtime references betwe
 **For inheritance-based override to actually work, two registration disciplines are mandatory on every feature:**
 
 - **`ConfigureServices` MUST be `virtual`.** A feature's registration entry point is declared `virtual` (and the feature class is not sealed, per §2.24's "feature classes are public and NOT sealed") so an inheriting feature can call `base.ConfigureServices(services)` to reuse the base setup and then add, replace, or remove individual registrations. A feature that hides its registrations behind a non-overridable method amputates §2.5.
-- **A feature MUST register every collaborator it owns against a contract, and depend on the contract — never the concrete type.** Each feature-internal service is registered as `services.AddScoped<IThing, Thing>()` and every consumer (including other services within the same feature) injects `IThing`, not `Thing`. This is what makes single-collaborator override possible: an inheriting feature replaces one piece by re-registering just that contract after `base.ConfigureServices`, with no edit to — and no recompilation seam through — the consumers that depend on it. Injecting a concrete feature-internal class is a violation: it forecloses the override even when the rest of the pipeline is contract-based.
+- **A collaborator that is an extension point MUST be registered against a contract, and its consumers depend on the contract.** An inheriting feature replaces it by re-registering that contract after `base.ConfigureServices`. Collaborators that are not extension points MAY be registered and injected as concrete `internal sealed` types. When an inheriting feature needs to replace one of those, the base feature promotes it to a contract in the same change: a contract is introduced when it becomes an extension point, not before (ADR 0080 D3).
 
 #### §2.5.1 Service lifetimes — scoped by default
 
@@ -337,7 +360,7 @@ A fan-in event that gathers contributions from many features MUST use the **cont
 **The three contributor-interface kinds.** The suffix MUST match the method shape AND the event topology:
 
 - **`I<X>Source`** — the contributor **returns** its items and touches no shared object (a *pull*). Used when the sink is a flat collection. Signature returns `IEnumerable<T>` (or `ValueTask<IEnumerable<T>>`). The single handler aggregates every source's return into the event's `ICollection<T>`. **"Source" is preferred over "Provider".**
-- **`I<X>Contributor`** — the contributor **receives a context and acts on it** (a *push*), returning void / `ValueTask`. Used when the sink is a rich mutable context that accepts heterogeneous, multi-operation contributions (e.g. a declarations context exposing `AddVariable(...)`/`AddType(...)`). The single handler hands the context to each contributor in turn.
+- **`I<X>Contributor`** — the contributor **receives a context and acts on it** (a *push*), returning void / `ValueTask`. Used when the sink is a rich mutable context that accepts heterogeneous, multi-operation contributions (e.g. a declarations context exposing `AddVariable(...)`/`AddType(...)`). The single handler hands the context to each contributor in turn. *(5.0.0: new push-style contracts use `I<X>Extension`, per ADR 0080 D5; `I<X>Contributor` stays valid until each domain's rename batch lands, and the rest of this section reads `Contributor` as either name.)*
 - **`I<X>PreProcessor` / `I<X>PostProcessor`** — the contributor **acts on a lifecycle context**, returning void / `ValueTask`. Used when the contribution event is one half of an **Xxxing / Xxxed (before / after) pair**: a pre-processor runs at the *before* event to prepare the context (register functions/values, set up state); a post-processor runs at the *after* event to act on the result (copy outputs back, clean up). Each event still has exactly one aggregating handler (e.g. `PreProcessScript` / `PostProcessScript`) injecting `IEnumerable<I<X>PreProcessor>` / `IEnumerable<I<X>PostProcessor>`. **When the events form a before/after pair, prefer this kind over `Contributor`** — `PreProcessor`/`PostProcessor` names the lifecycle position, which reads far more naturally than a generic "Contributor" for a paired hook.
 
 **Action-named suffixes (sanctioned alongside the four above).** When the suffix names the **specific action** the interface performs on the received context, an action-named suffix is preferred over the generic `Contributor` — e.g. **`I<X>Validator`** (inspects the context and *returns* findings, like `IDraftValidator.Validate`) and **`I<X>Handler`** (receives the context + a typed subject and *acts* at a named lifecycle point, like `IEntitySavingHandler.Handle` / `IEntityLoadingHandler.Handle` on the EF Core save/load seam). These are Contributor-kind (context-receiving — a *Validator* returns its findings; a *Handler* acts in place); they simply carry an intent-revealing, action-specific name instead of the bare `Contributor`. The topology rule is unchanged: the contributor interface is what features implement + register via DI, and the single aggregating `IEventHandler<PhaseEvent>` (e.g. `ExecuteValidations`, `ApplyEntitySavingHandlers`) still owns the event subscription and dispatches every implementation. Use an action-named suffix when one exists naturally; fall back to `Source`/`Contributor` when no single verb captures the contribution.
@@ -666,7 +689,7 @@ When two or more domains contain similar features (e.g., both perform serializat
 
 The constitution's refactor-cost test (§2.16) keeps Step-3 revisions affordable: where NuGet identity is preserved, consumers are insulated from the restructuring.
 
-**All refactor work performed under this methodology is governed by the golden rule of refactoring (§2.21.1).** Existing tests on the implementations being refactored MUST continue to succeed across the reorganization, and test deletions require explicit recorded approval from at least one architect.
+**All refactor work performed under this methodology is governed by the golden rule of refactoring (§2.21.1).** Tests that still describe valid behaviour MUST keep passing; a test whose code was removed, or whose behaviour is proven elsewhere, MAY be rewritten or deleted, with the PR naming which applies.
 
 ### §2.19 Feature identity — the feature `name`
 
@@ -723,15 +746,11 @@ The framework does not mandate a specific test-creation cadence (TDD, test-after
 
 #### §2.21.1 The golden rule of refactoring
 
-When refactoring existing implementations, **all current tests on those implementations MUST continue to succeed after the refactor**. Reorganization is allowed to:
+A refactor preserves behaviour. Tests that still describe valid behaviour MUST keep passing; their setup, fixtures, wiring, dependencies and location MAY change.
 
-- Change the test's setup, fixtures, or wiring.
-- Change the test's transitive dependencies.
-- Move the test to a different file, project, or test assembly.
+A refactor MAY rewrite or delete a test when the code it covers was removed, or when the behaviour it verifies is proven by another test. The PR names which of the two applies. No separate architect approval is required; the reviewer checks the claim.
 
-What MUST be preserved across the refactor is the **subject under test** and the **objective of the test** (the behaviour it verifies). If the subject or objective is no longer applicable, the test is a candidate for removal — but **removing a test requires explicit recorded approval from at least one architect** (unanimity is reserved for constitutional amendments per Governance). The approval is recorded in the PR description or in the plan's *Complexity Tracking* section; a passing CI is not sufficient justification for deletion.
-
-The rule prevents a class of silent refactor regressions: a test broken by reorganization is fixed by repairing its wiring, not by deleting it.
+A test that fails because the refactor changed behaviour it correctly asserted means the refactor is wrong: fix the implementation, not the test.
 
 #### §2.21.2 Greenfield test discipline
 
@@ -824,54 +843,29 @@ Beyond the per-feature documentation (§2.22 — *what does THIS feature registe
 
 ### §2.23 Unit tests
 
-The framework prescribes a unit-test discipline that complements §2.21 (test discipline) and §2.21.1 (golden rule of refactoring). The unit-test layer carries two obligations; both are required.
+Tests prove behaviour at risk, at the cheapest level that proves it (ADR 0080 D1).
 
-#### §2.23.1 Feature-class registration test
+#### §2.23.1 Composition test
 
-Every feature class MUST have a unit test that:
+One composition test builds a shell from every feature and asserts that each feature's registrations resolve. It replaces per-feature registration tests. A feature does not need a registration test of its own unless its wiring carries logic (conditional registration, decoration, options validation).
 
-- Constructs the feature.
-- Invokes its registration entry point (`Configure`, or the equivalent on the activation type) against an `IServiceCollection`.
-- Builds the resulting `IServiceProvider`.
-- Asserts that every service the feature is expected to register **resolves**.
+#### §2.23.2 Behaviour tests
 
-The test proves the wiring. It does not prove behaviour.
+Logic-bearing implementations are tested through their behaviour, with stubbed dependencies where that is the cheapest way to reach the logic.
 
-#### §2.23.2 Per-implementation unit test with stubbed dependencies
-
-Every logic-bearing implementation class within a feature MUST have its own unit tests:
-
-- Construct the class with stubbed/mocked dependencies.
-- Exercise its public surface (and relevant internal paths if needed).
-- **Every code branch MUST be covered.** Conditional paths, exception paths, default paths — each gets a test. Coverage is judged by branch, not by line.
-
-The test proves behaviour. It does not prove wiring.
-
-**The two obligations are independent.** Passing §2.23.1 (registration) does NOT excuse §2.23.2 (branch-covered implementation tests), and vice versa. Skipping either is forbidden.
+- Cover the paths that carry risk: decisions, failure paths, boundaries, concurrency and persistence semantics.
+- Coverage is a reviewer's judgement, not a quota. Trivial branches (guard clauses, pass-through mapping) need no dedicated test.
+- Tests MUST NOT assert on markdown, documentation or source text. A rule that admits mechanical checking is enforced by an analyzer or an architecture test over compiled code.
 
 #### §2.23.3 Visibility rule
 
-To make §2.23.1 and §2.23.2 cleanly testable without reflection or `[InternalsVisibleTo]`:
+- **Feature classes** are `public` and NOT sealed. Feature inheritance (§2.5) requires inheritability.
+- **Implementations** are `internal sealed` unless they are part of the public surface. Tests reach them through `[InternalsVisibleTo]` granted to the project's own test assembly.
+- **The public surface** is: contracts users implement or call, models that cross a package boundary, activities, feature classes, options and entry points. Every packable project tracks it with PublicApiAnalyzers, so a change to it is a reviewed diff.
 
-- **Feature classes** are `public` and NOT sealed. Feature inheritance (§2.5) requires inheritability; a sealed feature class would amputate the only sanctioned cross-feature coupling pattern.
-- **Logic-bearing implementations** are `public sealed`. They are not part of the §2.5 inheritance pattern; tests construct them directly. Sealing prevents accidental specialization.
+#### §2.23.4 Refactoring obligations
 
-This replaces the historical `internal sealed` convention, which forced tests to use reflection or `[InternalsVisibleTo]` — both code smells.
-
-#### §2.23.4 Refactoring obligations inherited from §2.21.1
-
-The §2.21.1 golden rule applies: existing tests on refactored implementations MUST continue to succeed **without changes to the test cases themselves**. Test setup, fixtures, wiring, transitive dependencies, and test-project location MAY change; **the subject under test and the objective of the test MUST be preserved**.
-
-**When a test fails because of a refactor, intervention is collaborative.** The diagnosis is not a solo developer decision. Flag the failure, discuss with the architects, decide on the resolution path together, and record the decision durably (PR description, plan Complexity Tracking, follow-up file, or design notes — wherever the next reader will find it).
-
-Diagnostic questions:
-
-- **Has the subject moved?** Repair the test's wiring; no behaviour change.
-- **Has the test's objective become invalid because the refactor resolved a bug the test was silently relying on?** Architects record the bug, the resolution, and any consumers that may have depended on the buggy behaviour. Test removal still requires architect approval per §2.21.1.
-- **Has the refactor broken behaviour the test correctly asserted?** The refactor is wrong; fix the implementation, not the test.
-- **Has the refactor exposed hidden coupling — a side effect of a concrete dependency that another implementation silently relied on?** This is a smell, not a feature to preserve. **Tight logic coupling between implementations is forbidden** (§2.6); only contract-level coupling is permitted (e.g. an event whose payload shape is the agreement; the publisher treats every handler uniformly; the system stays consistent and predictable). The resolution is to **lift the dependency to a contract** — typically a named event (§2.6.1) — or to remove the dependency entirely. The stub does NOT reproduce the side effect to make the test pass; that re-buries the coupling rather than resolving it. Flag, discuss with architects, decide, document.
-
-New implementation classes that emerge from a refactor pick up new §2.23.2 obligations; new feature classes pick up §2.23.1 obligations.
+§2.21.1 applies. When a refactor exposes hidden coupling — a side effect of a concrete dependency that another implementation silently relied on — the coupling is the defect. **Tight logic coupling between implementations is forbidden** (§2.6). Lift the dependency to a contract, typically a named event (§2.6.1), or remove it; a stub does NOT reproduce the side effect to make a test pass.
 
 #### §2.23.5 Exception boundaries — infrastructure exceptions are wrapped
 
@@ -1054,4 +1048,4 @@ The framework constitution is intentionally written with synthetic and `<App>`-p
 
 ---
 
-**Version:** 4.0.1 | **Ratified:** 2026-08-08 | **Last Amended:** 2026-10-09
+**Version:** 5.0.0 | **Ratified:** 2026-08-08 | **Last Amended:** 2026-10-10

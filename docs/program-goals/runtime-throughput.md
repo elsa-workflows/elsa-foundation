@@ -1,6 +1,8 @@
 # Runtime Throughput
 
-- **Status:** Active. Owner-approved 9 October 2026.
+> **Merged into [Runtime Efficiency](runtime-efficiency.md)** by [ADR 0080 D0](../adr/0080-elsa-4-simplification-decisions.md#d0--focus). The constraint against a default cadence flip is lifted (ADR 0080 D2).
+
+- **Status:** Merged into [Runtime Efficiency](runtime-efficiency.md) (2026-10-10).
 - **Area:** Workflow runtime / concurrent execution correctness / bounded throughput evidence.
 - **Stewards:** Sipke plus the runtime throughput control room.
 - **Program:** [#2531](https://github.com/elsa-workflows/elsa-foundation/issues/2531).
@@ -24,7 +26,7 @@ On 9 October 2026 Sipke approved both tracks and a **scoped ADR 0073 D7 exceptio
 
 ## Boundaries
 
-- No durability weakening, default cadence flip, generic cache or inspection redesign (#1237 keeps inspection decoupling).
+- No durability weakening, default cadence flip (lifted by ADR 0080 D2), generic cache or inspection redesign (#1237 keeps inspection decoupling).
 - Rejected candidates #1239 and #2407 stay rejected unless new evidence addresses their failed guards.
 - Optimizations chosen from Track B evidence become separate, separately reviewed units.
 - Manual package publication, releases and deployment remain out of scope.

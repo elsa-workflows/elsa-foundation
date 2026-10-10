@@ -167,7 +167,7 @@ The validation compares `.claude/skills/elsa-*/SKILL.md` against this catalog an
 
 **Use when:** a new feature/module is added, ported, or split from existing code.
 
-**Workflow:** read framework gates for three-layer separation, naming, feature identity, provider decomposition, and unit tests; identify the owning domain and dependency envelope; choose `.Core`, helper, and implementation package shape; plan feature registration tests, implementation tests, docs, and extension-point catalog updates before coding. After the user approves the feature/module plan, treat required tests, catalog updates, and generated-map refreshes as normal completion work.
+**Workflow:** read framework gates for three-layer separation, naming, feature identity, provider decomposition, and unit tests; identify the owning domain and dependency envelope; choose `.Core`, helper, and implementation package shape; plan behaviour tests for logic-bearing implementations and a registration test only where the feature's wiring carries logic (framework §2.23.1's composition test covers plain registrations), docs, and extension-point catalog updates before coding. After the user approves the feature/module plan, treat required tests, catalog updates, and generated-map refreshes as normal completion work.
 
 **Output:** feature/module implementation plan or Speckit-ready scope, including package placement, dependency rules, tests, and docs/catalog updates.
 
@@ -223,19 +223,19 @@ The validation compares `.claude/skills/elsa-*/SKILL.md` against this catalog an
 
 ### Add Feature Registration Tests
 
-**Use when:** a feature class is created or its service registration changes.
+**Use when:** a feature's wiring carries logic (conditional registration, decoration, options validation), or a new feature must join the composition test.
 
-**Workflow:** read framework unit-test gates; instantiate the feature registration path in a focused test; verify owned services are registered through contracts, required options/collaborators are present, and replacement/contribution registrations have the expected shape.
+**Workflow:** read framework §2.23.1. Plain wiring is covered by the one composition test, which builds a shell from every feature and resolves its registrations; make sure the new feature is part of it. Write a dedicated registration test only for wiring that carries logic.
 
-**Output:** focused registration tests that protect the feature's DI surface.
+**Output:** the feature included in the composition test, plus a focused test only where the wiring has logic.
 
 ### Add Implementation Unit Tests
 
 **Use when:** a logic-bearing implementation is created or changed.
 
-**Workflow:** read framework unit-test gates; construct the class directly with stubbed dependencies; cover meaningful branches, failure paths, and infrastructure exception wrapping where applicable; do not rely on integration tests to satisfy unit-test obligations.
+**Workflow:** read framework §2.23.2. Test the behaviour that carries risk (decisions, failure paths, boundaries, concurrency and persistence semantics, infrastructure exception wrapping) at the cheapest level that proves it. Implementations are `internal sealed`; reach them through `InternalsVisibleTo` granted to the test assembly. Never assert on markdown, documentation or source text.
 
-**Output:** branch-focused unit tests for the implementation's behavior.
+**Output:** behaviour tests for the implementation's risky paths; no coverage quota.
 
 ## Maps And Composition Skills
 

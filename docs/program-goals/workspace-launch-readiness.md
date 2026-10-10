@@ -1,8 +1,10 @@
 <a id="workspace-launch-readiness"></a>
 
+> **Parked until 2026-11-21** by [ADR 0080 D0](../adr/0080-elsa-4-simplification-decisions.md#d0--focus). No new child work until it is reactivated.
+
 # Elsa 4 Contributor Experience
 
-Status: technical delivery accepted; operational handover tracked in [#2428](https://github.com/elsa-workflows/elsa-foundation/issues/2428#issuecomment-6042085990). Evolved from Workspace Launch Readiness on 6 October 2026.
+Status: Parked until 2026-11-21 (ADR 0080 D0). Before parking: technical delivery accepted; operational handover tracked in [#2428](https://github.com/elsa-workflows/elsa-foundation/issues/2428#issuecomment-6042085990). Evolved from Workspace Launch Readiness on 6 October 2026.
 
 Area: human contributor onboarding and review across `elsa-foundation` and `elsa-foundation-studio`.
 

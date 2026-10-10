@@ -1,6 +1,8 @@
 # First-party REST API Consolidation
 
-Status: active.
+> **Parked until 2026-11-21** by [ADR 0080 D0](../adr/0080-elsa-4-simplification-decisions.md#d0--focus). No new child work until it is reactivated.
+
+Status: Parked until 2026-11-21 (ADR 0080 D0).
 
 Area: first-party REST endpoint authoring, shared authorization, dynamic route publication, and
 FastEndpoints-to-Minimal-API migration.

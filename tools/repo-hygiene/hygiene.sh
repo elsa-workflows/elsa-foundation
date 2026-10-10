@@ -203,6 +203,9 @@ section() { # title count list
   echo "Policy: [repository hygiene](${GITHUB_SERVER_URL:-https://github.com}/$repo/blob/main/docs/contributing/repository-hygiene.md). Restore a swept branch with \`git push origin <archive-tag>:refs/heads/<branch>\`, using the tag listed above."
 } > "$report"
 
+# Simplification metrics (ADR 0080 D7). A metrics failure must not cost the hygiene report.
+{ echo; bash "$(dirname "$0")/../quality-metrics/quality-metrics.sh" || echo "_Simplification metrics failed to compute._"; } >> "$report"
+
 [[ -n "${GITHUB_STEP_SUMMARY:-}" ]] && cat "$report" >> "$GITHUB_STEP_SUMMARY"
 
 if [[ "${POST_REPORT:-}" == true ]]; then
