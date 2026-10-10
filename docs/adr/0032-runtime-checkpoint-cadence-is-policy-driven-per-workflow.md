@@ -1,6 +1,6 @@
 # Runtime Checkpoint Cadence Is Policy-Driven Per Workflow
 
-> **Amended by [ADR 0080 D2](0080-elsa-4-simplification-decisions.md#d2--persistence-modes-balanced-by-default)** (2026-10-10). Cadence becomes three persistence modes, Balanced by default. One exception to the terminal rule below: in `Ephemeral` with `RecordCompletion` off, a run that completes without ever being persisted writes no completion record.
+> **Amended by [ADR 0080 D2](0080-elsa-4-simplification-decisions.md#d2--persistence-modes-balanced-by-default)** (2026-10-10). Cadence becomes three persistence modes, Balanced by default. The mode names and defaults below (per-activity `Immediate` as the default, the `Immediate`/`Coalesced` host modes, and the `Immediate`/`Deferred`/`Skip` decision vocabulary) are historical; D2 governs which mode applies and when each checkpoint flushes. The semantic-boundary taxonomy still holds. One exception to the terminal rule below: in `Ephemeral` with `RecordCompletion` off, a run that completes without ever being persisted writes no completion record.
 
 Status: accepted (2026-07-20; ratified with orchestrator approval. Resolves all in-ADR open questions — R1 contract-level SideEffectProfile with fail-safe External default, R2 marker-conditional pre-activation flush (spec-095 FR-019 amendment ships with WU-marker), R3 cadence/inspection-granularity read-model projection, R4 ActivityCancelled confirmed mandatory, R5 per-workflow authored cadence over host default — see Ratification resolutions and the sequenced Follow-up.)
 
