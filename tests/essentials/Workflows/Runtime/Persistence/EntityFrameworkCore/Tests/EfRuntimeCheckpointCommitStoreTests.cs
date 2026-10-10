@@ -1,6 +1,7 @@
 using System.Data.Common;
 using System.Text.Json;
 using Elsa.Persistence.EntityFramework;
+using Elsa.Persistence.EntityFramework.Tests;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Extensions;
@@ -1489,31 +1490,6 @@ public sealed class EfRuntimeCheckpointCommitStoreTests
             if (FailFirstAttempt && LeaseIds.Count == 1)
                 throw new WorkflowExecutableRootWriteLeaseUnavailableException(artifactId, leaseId);
             return write(cancellationToken);
-        }
-    }
-
-    private sealed class CommandCaptureInterceptor : DbCommandInterceptor
-    {
-        public List<string> Commands { get; } = [];
-
-        public override ValueTask<InterceptionResult<int>> NonQueryExecutingAsync(
-            DbCommand command,
-            CommandEventData eventData,
-            InterceptionResult<int> result,
-            CancellationToken cancellationToken = default)
-        {
-            Commands.Add(command.CommandText);
-            return ValueTask.FromResult(result);
-        }
-
-        public override ValueTask<InterceptionResult<DbDataReader>> ReaderExecutingAsync(
-            DbCommand command,
-            CommandEventData eventData,
-            InterceptionResult<DbDataReader> result,
-            CancellationToken cancellationToken = default)
-        {
-            Commands.Add(command.CommandText);
-            return ValueTask.FromResult(result);
         }
     }
 

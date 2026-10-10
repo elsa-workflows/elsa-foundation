@@ -4,6 +4,7 @@ using System.Text;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Workflows.Runtime.Services.Executions;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 
@@ -50,7 +51,8 @@ namespace Elsa.Workflows.Runtime.Services.Recovery;
 /// executions already in a terminal status, <b>purges</b> the residual scheduler work instead of re-driving it:
 /// terminal status is monotonic and the drainer already refuses to run post-terminal work, so removing the residue
 /// is exactly the outcome the terminal guard intends. Genuinely-suspended (non-terminal) executions are re-driven
-/// unchanged, preserving redelivery for late deliveries.
+/// unchanged, preserving redelivery for late deliveries. A terminal execution whose ownership lease is still live is
+/// left alone for the sweep: the drain that committed its terminal status is still reconciling its own queue (#2601).
 /// </para>
 /// </remarks>
 public sealed class RuntimeResumptionService(
@@ -63,6 +65,7 @@ public sealed class RuntimeResumptionService(
     IWorkflowExecutionStateStore workflowExecutionStateStore,
     IWorkflowSchedulerPauseGate pauseGate,
     RuntimeResumptionDiscoveryStateStore discoveryStateStore,
+    IExecutionLivenessStateStore executionLivenessStateStore,
     IWorkflowExecutionPartitionAccessor? partitionAccessor = null,
     IRuntimeRecoverySweepCursorStore? recoveryCursorStore = null,
     IPersistenceAccessContextAccessor? persistenceAccessContextAccessor = null,
@@ -104,10 +107,15 @@ public sealed class RuntimeResumptionService(
             // Never re-drive a terminal execution: it can only accumulate stranded RunSchedulerWork items the drainer
             // refuses to dispatch. Purge its residue so backlog discovery stops resurfacing it and the perpetual
             // per-tick drain span ends. (spec 113)
-            if (await PurgeIfTerminalAsync(request, workflowExecutionId, cancellationToken) is { } purged)
+            var terminal = await PurgeIfTerminalAsync(request, workflowExecutionId, cancellationToken);
+            if (terminal.IsTerminal)
             {
-                purgedWorkItemCount += purged;
-                terminalExecutionsPurged++;
+                if (terminal.PurgedCount is { } purged)
+                {
+                    purgedWorkItemCount += purged;
+                    terminalExecutionsPurged++;
+                }
+
                 continue;
             }
 
@@ -119,7 +127,7 @@ public sealed class RuntimeResumptionService(
         foreach (var workflowExecutionId in discovery.Held)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            if (await PurgeIfTerminalAsync(request, workflowExecutionId, cancellationToken) is { } purged)
+            if ((await PurgeIfTerminalAsync(request, workflowExecutionId, cancellationToken)).PurgedCount is { } purged)
             {
                 purgedWorkItemCount += purged;
                 terminalExecutionsPurged++;
@@ -145,19 +153,37 @@ public sealed class RuntimeResumptionService(
         return result;
     }
 
-    // Purges and reaps the execution when it is terminal, returning how many residual items it removed; null when the
-    // execution is not terminal.
-    private async ValueTask<int?> PurgeIfTerminalAsync(
+    // Purges and reaps the execution when it is terminal, reporting how many residual items it removed. A terminal
+    // execution a live drain still owns is left for a later sweep (PurgedCount null).
+    private async ValueTask<TerminalPurge> PurgeIfTerminalAsync(
         RuntimeResumptionSweepRequest request,
         string workflowExecutionId,
         CancellationToken cancellationToken)
     {
         if (!await IsTerminalAsync(workflowExecutionId, cancellationToken))
-            return null;
+            return TerminalPurge.NotTerminal;
+
+        // The terminal checkpoint commits before the drain that wrote it ends: that drain still owns the execution and
+        // reconciles its own scheduler queue after the commit (#2601). Deleting its queued work under it breaks that
+        // reconciliation, and reaping would passivate the mailbox it runs in. The drain cleans up its own queue and
+        // releases the lease, so the next sweep purges whatever is left.
+        if (await IsOwnedByLiveDrainAsync(workflowExecutionId, cancellationToken))
+            return TerminalPurge.Owned;
 
         var purged = await PurgeResidualSchedulerWorkAsync(request, workflowExecutionId, cancellationToken);
         await ReapTerminalMailboxAsync(workflowExecutionId, cancellationToken);
-        return purged;
+        return new TerminalPurge(IsTerminal: true, PurgedCount: purged);
+    }
+
+    // A read, never an acquisition: acquiring ownership always issues a newer fencing token, which would fence the live
+    // drain out instead of waiting for it.
+    private async ValueTask<bool> IsOwnedByLiveDrainAsync(string workflowExecutionId, CancellationToken cancellationToken)
+    {
+        var ownership = await executionLivenessStateStore.FindAsync(
+            workflowExecutionId,
+            RuntimeExecutionOwnershipStateId.For(workflowExecutionId),
+            cancellationToken);
+        return ownership?.ExecutionLease is { } lease && !lease.IsExpired(timeProvider.GetUtcNow());
     }
 
     private async ValueTask<bool> IsTerminalAsync(string workflowExecutionId, CancellationToken cancellationToken)
@@ -619,6 +645,13 @@ public sealed class RuntimeResumptionService(
         IReadOnlyCollection<string> Held,
         bool RecoveryCandidateUnchecked,
         bool NextRecoveryTurn);
+
+    private readonly record struct TerminalPurge(bool IsTerminal, int? PurgedCount)
+    {
+        public static TerminalPurge NotTerminal => new(IsTerminal: false, PurgedCount: null);
+
+        public static TerminalPurge Owned => new(IsTerminal: true, PurgedCount: null);
+    }
 
     private sealed record SourcedCandidates(IRuntimeRecoveryCandidateSource Source, IReadOnlyCollection<string> WorkflowExecutionIds);
 }

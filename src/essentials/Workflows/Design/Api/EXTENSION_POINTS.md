@@ -116,7 +116,7 @@ Every event the Workflows.Design domain publishes is an `IEvent` (framework §2.
 
 **Sequential / contribution** — none in this domain's Core. The contribution event (`DraftValidating`, Sequential) lives in [`Elsa.Workflows.Design.Validations/EXTENSION_POINTS.md`](../Elsa.Workflows.Design.Validations/EXTENSION_POINTS.md).
 
-Heading convention: `### <EventClassName>`. The `CatalogParityTests` in `tests/Elsa.Workflows.Design.Tests` asserts bidirectional alignment between the `### On…` headings here and the assembly's published `IEvent` types (anchored on the `Elsa.Workflows.Design.Core` assembly).
+Heading convention: `### <EventClassName>`. Every published `IEvent` type of the `Elsa.Workflows.Design.Core` design namespace has a heading here, and every such heading names one; review keeps the two in step.
 
 **Background / notification** (§2.6.6) — published via `EventPublishingStrategy.Background`. Queued on `IEventChannel`; `BackgroundEventPublisher` drains asynchronously. Subscriber exceptions are caught + logged; one flaky subscriber cannot break the publish.
 

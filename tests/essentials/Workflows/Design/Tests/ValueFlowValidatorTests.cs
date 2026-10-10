@@ -4,8 +4,6 @@ using Elsa.Primitives.Models;
 using Elsa.Workflows.Design.Core.Contracts;
 using Elsa.Workflows.Design.Core.Models;
 using Elsa.Workflows.Design.Core.Services;
-using Elsa.Workflows.Design.Validations;
-using Elsa.Workflows.Design.Validations.Core.Contracts;
 using Elsa.Workflows.Design.Validations.Validators;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
@@ -14,18 +12,6 @@ namespace Elsa.Workflows.Design.Tests;
 
 public sealed class ValueFlowValidatorTests
 {
-    [Fact]
-    public void Validation_feature_registers_value_flow_validation_in_the_publication_gate()
-    {
-        var services = new ServiceCollection();
-
-        new WorkflowDesignValidationsFeature().ConfigureServices(services);
-
-        Assert.Contains(services, descriptor =>
-            descriptor.ServiceType == typeof(IDraftValidator) &&
-            descriptor.ImplementationType == typeof(ValueFlowValidator));
-    }
-
     [Fact]
     public async Task Concurrent_ordinary_writes_to_the_same_variable_are_rejected()
     {

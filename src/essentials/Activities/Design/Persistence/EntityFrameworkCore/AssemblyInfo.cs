@@ -21,8 +21,8 @@ using Elsa.Specifications.PackageManifest.Generator.Hints;
 [assembly: ManifestExtension("efModules", "Activities.Design")]
 
 // The schema family this module owns (spec 180, FR-001), at the version its skew check reads. A host's readability
-// report is derived from it alone (spec 183, FR-020); EfSchemaFamilyChainDeclarationGuardTests fails the build when a
-// family the stores check is not declared here, or is declared at another version.
+// report is derived from it alone (spec 183, FR-020); every family the stores check must be declared here, at the
+// version they read; that holds by review until #2606 restores a compiled check.
 [assembly: EfSchemaFamily(ActivitiesDesignEfModule.SchemaFamily, "Activities.Design", ActivitiesDesignEfModule.SchemaVersion)]
 
 // Content and integrity columns: see src/essentials/Persistence/EntityFramework/EXTENSION_POINTS.md, "Content and integrity columns" (spec 180, FR-008, FR-009

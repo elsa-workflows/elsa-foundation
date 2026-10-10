@@ -21,20 +21,6 @@ namespace Elsa.Foundation.Identity.Tests;
 public sealed class ReplacementContractRegistrationTests
 {
     [Fact]
-    public void Defaults_register_the_four_replacement_contracts()
-    {
-        var services = new ServiceCollection();
-
-        services.AddFoundationIdentityAbstractions();
-
-        using var provider = services.BuildServiceProvider();
-        Assert.IsType<ClaimsPermissionEvaluator>(provider.GetRequiredService<IPermissionEvaluator>());
-        Assert.IsType<PermissionAuthorizationService>(provider.GetRequiredService<IPermissionAuthorizationService>());
-        Assert.IsType<PermissionPolicyNameFormatter>(provider.GetRequiredService<IPermissionPolicyNameFormatter>());
-        Assert.IsType<CompositePermissionCatalog>(provider.GetRequiredService<IPermissionCatalog>());
-    }
-
-    [Fact]
     public void Authorization_service_replacement_is_symmetric_and_conflicts_are_rejected()
     {
         var before = new ServiceCollection();
@@ -63,6 +49,7 @@ public sealed class ReplacementContractRegistrationTests
         }, typeof(PermissionAuthorizationService), typeof(ReplacementAuthorizationService));
     }
 
+    // Kept beside the composition test (§2.23.1): replacement, explicit replacements win before and after the foundation registration.
     [Fact]
     public void Explicit_replacements_are_symmetric_before_and_after_foundation_registration()
     {
@@ -121,6 +108,7 @@ public sealed class ReplacementContractRegistrationTests
         }, typeof(CompositePermissionCatalog), typeof(ReplacementCatalog));
     }
 
+    // Kept beside the composition test (§2.23.1): replacement-contract rejection, remove-and-add is not a supported replacement.
     [Fact]
     public void Removing_the_foundation_registration_and_adding_directly_is_not_a_supported_replacement()
     {
@@ -223,6 +211,7 @@ public sealed class ReplacementContractRegistrationTests
             typeof(ReplacementCatalog), typeof(SecondCatalog));
     }
 
+    // Kept beside the composition test (§2.23.1): idempotence, repeated registration and repeated replacement.
     [Fact]
     public void Repeated_foundation_registration_and_repeated_same_replacement_are_idempotent()
     {
@@ -256,6 +245,7 @@ public sealed class ReplacementContractRegistrationTests
         Assert.IsType<ReplacementCatalog>(replacedProvider.GetRequiredService<IPermissionCatalog>());
     }
 
+    // Kept beside the composition test (§2.23.1): replacement, the default result handler applies only when the host has none.
     [Fact]
     public async Task Result_handler_registration_uses_default_when_the_host_has_no_prior_descriptor()
     {
@@ -320,6 +310,7 @@ public sealed class ReplacementContractRegistrationTests
         }, typeof(FirstResultHandler), typeof(SecondResultHandler));
     }
 
+    // Kept beside the composition test (§2.23.1): idempotence and replacement-contract rejection of the result handler.
     [Fact]
     public void Repeated_foundation_registration_installs_one_result_handler_and_host_after_is_a_startup_conflict()
     {
@@ -333,6 +324,7 @@ public sealed class ReplacementContractRegistrationTests
         AssertStartupValidationFails(services, typeof(FirstResultHandler), typeof(IAuthorizationMiddlewareResultHandler));
     }
 
+    // Kept beside the composition test (§2.23.1): idempotence and replacement-contract rejection of the policy provider.
     [Fact]
     public void Repeated_foundation_registration_installs_one_policy_provider_and_host_after_is_a_startup_conflict()
     {

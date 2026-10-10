@@ -79,7 +79,8 @@ public sealed class RuntimeResumptionServiceTests
             new FakeTimeProvider(Now),
             new InMemoryWorkflowExecutionStateStore(),
             OpenPauseGate(),
-            new RuntimeResumptionDiscoveryStateStore());
+            new RuntimeResumptionDiscoveryStateStore(),
+            new InMemoryExecutionLivenessStateStore());
 
         var result = await service.SweepAsync(new RuntimeResumptionSweepRequest());
 
@@ -287,7 +288,8 @@ public sealed class RuntimeResumptionServiceTests
             new FakeTimeProvider(Now),
             new InMemoryWorkflowExecutionStateStore(),
             OpenPauseGate(),
-            new RuntimeResumptionDiscoveryStateStore());
+            new RuntimeResumptionDiscoveryStateStore(),
+            new InMemoryExecutionLivenessStateStore());
 
         var result = await service.SweepAsync(new RuntimeResumptionSweepRequest(recoveryScanBatchSize: 1));
 
@@ -323,7 +325,8 @@ public sealed class RuntimeResumptionServiceTests
             new FakeTimeProvider(Now),
             new InMemoryWorkflowExecutionStateStore(),
             OpenPauseGate(),
-            new RuntimeResumptionDiscoveryStateStore());
+            new RuntimeResumptionDiscoveryStateStore(),
+            new InMemoryExecutionLivenessStateStore());
 
         var result = await service.SweepAsync(new RuntimeResumptionSweepRequest(recoveryScanBatchSize: 1));
 
@@ -633,7 +636,8 @@ public sealed class RuntimeResumptionServiceTests
             new FakeTimeProvider(later),
             runtime.GetRequiredService<IWorkflowExecutionStateStore>(),
             runtime.GetRequiredService<IWorkflowSchedulerPauseGate>(),
-            runtime.GetRequiredService<RuntimeResumptionDiscoveryStateStore>());
+            runtime.GetRequiredService<RuntimeResumptionDiscoveryStateStore>(),
+            liveness);
         var request = new RuntimeResumptionSweepRequest(leaseTimeout: leaseDuration, heartbeatTimeout: leaseDuration);
 
         for (var sweep = 0; sweep < 5; sweep++)
@@ -721,7 +725,8 @@ public sealed class RuntimeResumptionServiceTests
             new FakeTimeProvider(Now),
             runtime.GetRequiredService<IWorkflowExecutionStateStore>(),
             pauseGate,
-            new RuntimeResumptionDiscoveryStateStore());
+            new RuntimeResumptionDiscoveryStateStore(),
+            new InMemoryExecutionLivenessStateStore());
 
         var checkingSweeper = Sweeper(runtime.GetRequiredService<IWorkflowSchedulerPauseGate>());
         for (var sweep = 0; sweep < 10; sweep++)
@@ -769,7 +774,8 @@ public sealed class RuntimeResumptionServiceTests
             new FakeTimeProvider(Now + leaseDuration + TimeSpan.FromSeconds(1)),
             runtime.GetRequiredService<IWorkflowExecutionStateStore>(),
             pauseGate,
-            new RuntimeResumptionDiscoveryStateStore());
+            new RuntimeResumptionDiscoveryStateStore(),
+            liveness);
 
         var checkingSweeper = Sweeper(runtime.GetRequiredService<IWorkflowSchedulerPauseGate>());
         for (var sweep = 0; sweep < 10; sweep++)
@@ -943,7 +949,8 @@ public sealed class RuntimeResumptionServiceTests
             new FakeTimeProvider(afterLeaseExpiry),
             new InMemoryWorkflowExecutionStateStore(),
             OpenPauseGate(),
-            new RuntimeResumptionDiscoveryStateStore());
+            new RuntimeResumptionDiscoveryStateStore(),
+            new InMemoryExecutionLivenessStateStore());
 
         var result = await service.SweepAsync(new RuntimeResumptionSweepRequest(
             leaseTimeout: leaseDuration,
@@ -983,7 +990,8 @@ public sealed class RuntimeResumptionServiceTests
             new FakeTimeProvider(Now),
             stateStore,
             OpenPauseGate(),
-            new RuntimeResumptionDiscoveryStateStore());
+            new RuntimeResumptionDiscoveryStateStore(),
+            new InMemoryExecutionLivenessStateStore());
 
         var result = await service.SweepAsync(new RuntimeResumptionSweepRequest());
 
@@ -1018,7 +1026,8 @@ public sealed class RuntimeResumptionServiceTests
             new FakeTimeProvider(Now),
             stateStore,
             OpenPauseGate(),
-            new RuntimeResumptionDiscoveryStateStore());
+            new RuntimeResumptionDiscoveryStateStore(),
+            new InMemoryExecutionLivenessStateStore());
 
         var result = await service.SweepAsync(new RuntimeResumptionSweepRequest());
 
@@ -1052,7 +1061,8 @@ public sealed class RuntimeResumptionServiceTests
             new FakeTimeProvider(Now),
             stateStore,
             OpenPauseGate(),
-            new RuntimeResumptionDiscoveryStateStore());
+            new RuntimeResumptionDiscoveryStateStore(),
+            new InMemoryExecutionLivenessStateStore());
 
         var result = await service.SweepAsync(new RuntimeResumptionSweepRequest());
 
@@ -1063,6 +1073,65 @@ public sealed class RuntimeResumptionServiceTests
         Assert.Equal("wfexec-terminal", passivation.WorkflowExecutionId);
         Assert.Equal(WorkflowExecutionActorPassivationBoundary.ProviderSafeBoundary, passivation.Boundary);
         Assert.Equal(1, result.TerminalExecutionsPurged);
+    }
+
+    /// <summary>
+    /// #2601: a terminal checkpoint commits before the drain that wrote it finishes. That drain still owns the execution
+    /// and is reconciling its own scheduler queue, so a sweep that purged the "residue" then deleted work the drain's
+    /// coalescing reconciliation still tracked, and the drain poisoned its terminal checkpoint. While a live ownership
+    /// lease holds the execution the sweep neither purges, reaps nor re-drives it; once the lease is gone it does.
+    /// </summary>
+    [Fact]
+    public async Task SweepAsync_LeavesATerminalExecutionAloneWhileALiveDrainOwnsIt()
+    {
+        var queue = new InMemoryWorkflowSchedulerWorkQueue();
+        await queue.EnqueueAsync(NewResidualWorkItem("wfexec-draining", 1));
+        var harness = new Harness(workQueue: queue);
+        await harness.StateStore.SaveAsync(NewState("wfexec-draining", WorkflowExecutionStatus.Completed));
+        var ownership = new RuntimeExecutionOwnershipService(
+            harness.Liveness,
+            new FakeTimeProvider(Now),
+            new RuntimeExecutionOwnershipOptions { OwnerId = "owner-draining", LeaseDuration = TimeSpan.FromMinutes(1) });
+        var lease = await ownership.AcquireAsync("wfexec-draining");
+
+        var whileOwned = await harness.Service.SweepAsync(new RuntimeResumptionSweepRequest());
+
+        Assert.Empty(whileOwned.Dispatches);
+        Assert.Empty(harness.AgentProvider.Activations);
+        Assert.Empty(harness.AgentProvider.Passivations);
+        Assert.Equal((0, 0), (whileOwned.TerminalExecutionsPurged, whileOwned.PurgedWorkItemCount));
+        Assert.Equal("work-1", Assert.Single((await queue.ListAsync(new RuntimeSchedulerWorkQuery("wfexec-draining"))).Items).WorkItemId);
+
+        Assert.True((await ownership.ReleaseAsync(lease)).Succeeded);
+        var afterRelease = await harness.Service.SweepAsync(new RuntimeResumptionSweepRequest());
+
+        Assert.Equal((1, 1), (afterRelease.TerminalExecutionsPurged, afterRelease.PurgedWorkItemCount));
+        Assert.Equal("wfexec-draining", Assert.Single(harness.AgentProvider.Passivations).WorkflowExecutionId);
+        Assert.Empty(await queue.ListPendingWorkflowExecutionIdsAsync(10));
+    }
+
+    /// <summary>
+    /// #2601: a drain that died without releasing its lease must not keep its terminal execution's residue forever. An
+    /// expired lease owns nothing, so the sweep purges as usual.
+    /// </summary>
+    [Fact]
+    public async Task SweepAsync_PurgesATerminalExecutionWhoseOwnerLeaseExpired()
+    {
+        var queue = new InMemoryWorkflowSchedulerWorkQueue();
+        await queue.EnqueueAsync(NewResidualWorkItem("wfexec-crashed", 1));
+        var harness = new Harness(workQueue: queue);
+        await harness.StateStore.SaveAsync(NewState("wfexec-crashed", WorkflowExecutionStatus.Completed));
+        await new RuntimeExecutionOwnershipService(
+                harness.Liveness,
+                new FakeTimeProvider(Now - TimeSpan.FromMinutes(2)),
+                new RuntimeExecutionOwnershipOptions { OwnerId = "owner-crashed", LeaseDuration = TimeSpan.FromMinutes(1) })
+            .AcquireAsync("wfexec-crashed");
+
+        var result = await harness.Service.SweepAsync(new RuntimeResumptionSweepRequest());
+
+        Assert.Empty(result.Dispatches);
+        Assert.Equal((1, 1), (result.TerminalExecutionsPurged, result.PurgedWorkItemCount));
+        Assert.Empty(await queue.ListPendingWorkflowExecutionIdsAsync(10));
     }
 
     private static RuntimeSchedulerWorkItem NewResidualWorkItem(string workflowExecutionId, int index) =>
@@ -1175,12 +1244,14 @@ public sealed class RuntimeResumptionServiceTests
                 StateStore,
                 pauseGate ?? PauseGateOver(Holds),
                 DiscoveryStates,
+                Liveness,
                 recoveryCandidateSources: candidateSource is null ? null : [candidateSource],
                 logger: Logger);
         }
 
         public InMemoryWorkflowHoldStateStore Holds { get; } = new();
         public RuntimeResumptionDiscoveryStateStore DiscoveryStates { get; } = new();
+        public InMemoryExecutionLivenessStateStore Liveness { get; } = new();
         public RecordingLogger<RuntimeResumptionService> Logger { get; } = new();
         public FakeOutboxProcessor OutboxProcessor { get; } = new();
         public FakeWorkQueue WorkQueue { get; } = new();

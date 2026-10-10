@@ -64,6 +64,7 @@ public sealed class RuntimeEntityFrameworkCoreFeatureTests : IDisposable
         }
     }
 
+    // Kept beside the composition test (§2.23.1): the feature's settings flow into the registered options and migrator.
     [Fact]
     public void Feature_threads_its_settings_and_registers_the_runtime_migrator()
     {

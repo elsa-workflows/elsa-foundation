@@ -59,6 +59,7 @@ public sealed class OpenTelemetryFeatureTests
         Assert.False(options.AllowUnauthenticatedLoopback);
     }
 
+    // Kept beside the composition test (§2.23.1): idempotence, contributor registrations are additive and duplicate-safe.
     [Fact]
     public void ContributorRegistrationsAreAdditiveAndDuplicateSafe()
     {
@@ -79,6 +80,7 @@ public sealed class OpenTelemetryFeatureTests
             contributor => Assert.IsType<SecondContributor>(contributor));
     }
 
+    // Kept beside the composition test (§2.23.1): replacement, a host's authenticator wins over the default.
     [Fact]
     public void HostCanReplaceDefaultRequestAuthenticator()
     {

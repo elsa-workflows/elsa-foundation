@@ -65,6 +65,7 @@ public sealed class RegistrationTests
         Assert.Equal(ExecutionPlacementStoreBackend.InMemory, Backend(services));
     }
 
+    // Kept beside the composition test (§2.23.1): idempotence, repeating the same registration changes nothing.
     [Fact]
     public void Repeating_the_same_command_transport_registration_is_idempotent()
     {
@@ -81,6 +82,7 @@ public sealed class RegistrationTests
         Assert.Equal(before, services);
     }
 
+    // Kept beside the composition test (§2.23.1): rejection without partial mutation.
     [Fact]
     public void Conflicting_command_transport_reregistration_fails_without_partial_mutation()
     {
@@ -240,6 +242,7 @@ public sealed class RegistrationTests
             services.Single(descriptor => descriptor.ImplementationInstance is ExecutionPlacementStoreBackend).ImplementationInstance is ExecutionPlacementStoreBackend backend ? backend.Name : null);
     }
 
+    // Kept beside the composition test (§2.23.1): idempotence, repeating the same registration changes nothing.
     [Fact]
     public void Repeating_the_same_registration_is_idempotent()
     {
@@ -254,6 +257,7 @@ public sealed class RegistrationTests
         Assert.Equal(before, services.Count);
     }
 
+    // Kept beside the composition test (§2.23.1): rejection without partial mutation.
     [Fact]
     public void Conflicting_reregistration_fails_without_partial_mutation()
     {
@@ -320,6 +324,7 @@ public sealed class RegistrationTests
         provider.GetRequiredService<IStartupValidator>().Validate();
     }
 
+    // Kept beside the composition test (§2.23.1): replacement-contract rejection at startup validation.
     [Theory]
     [InlineData(ExecutionPlacementStoreBackend.InMemory)]
     [InlineData(ExecutionPlacementStoreBackend.EntityFramework)]
@@ -335,6 +340,7 @@ public sealed class RegistrationTests
         Assert.Contains("no longer exclusively owns", exception.Message, StringComparison.Ordinal);
     }
 
+    // Kept beside the composition test (§2.23.1): replacement-contract rejection at startup validation.
     [Theory]
     [InlineData(ExecutionPlacementStoreBackend.InMemory)]
     [InlineData(ExecutionPlacementStoreBackend.EntityFramework)]
@@ -350,6 +356,7 @@ public sealed class RegistrationTests
         Assert.Contains("ownership marker was removed", exception.Message, StringComparison.Ordinal);
     }
 
+    // Kept beside the composition test (§2.23.1): the registration snapshots its options.
     [Fact]
     public void EF_snapshots_mutable_registration_options()
     {
@@ -374,6 +381,7 @@ public sealed class RegistrationTests
         Assert.Equal("Original", configured.ConnectionName);
     }
 
+    // Kept beside the composition test (§2.23.1): conditional registration, the provider selects the one placement context.
     [Theory]
     [InlineData("Sqlite", typeof(ExecutionPlacementSqliteDbContext))]
     [InlineData("SqlServer", typeof(ExecutionPlacementSqlServerDbContext))]
@@ -544,6 +552,7 @@ public sealed class RegistrationTests
         }
     }
 
+    // Kept beside the composition test (§2.23.1): the feature's settings flow into the registered options and select the Sqlite context.
     [Fact]
     public async Task Feature_maps_public_settings_and_resolves_every_service_it_registers()
     {
@@ -580,6 +589,7 @@ public sealed class RegistrationTests
         }
     }
 
+    // Kept beside the composition test (§2.23.1): the registration entry point is overridable.
     [Fact]
     public void Feature_registration_entry_point_is_overridable()
     {

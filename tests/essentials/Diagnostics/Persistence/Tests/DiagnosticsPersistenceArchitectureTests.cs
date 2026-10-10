@@ -4,19 +4,12 @@ using Elsa.Diagnostics.Persistence.Observability;
 using Elsa.Diagnostics.StructuredLogs.Core.Contracts;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
-using System.Reflection;
-using System.Text.RegularExpressions;
-using System.Xml.Linq;
 using Xunit;
 
 namespace Elsa.Diagnostics.Persistence.Tests;
 
-public sealed partial class DiagnosticsPersistenceArchitectureTests
+public sealed class DiagnosticsPersistenceArchitectureTests
 {
-    private static string RepoRoot { get; } = FindRepoRoot();
-    private static readonly string DiagnosticsSourceRoot = Path.Combine(RepoRoot, "src", "essentials", "Diagnostics");
-    private static readonly string DiagnosticsTestRoot = Path.Combine(RepoRoot, "tests", "essentials", "Diagnostics");
-
     [Fact]
     public void Replacement_helper_leaves_exactly_one_store_and_one_shared_instance()
     {
@@ -298,125 +291,4 @@ public sealed partial class DiagnosticsPersistenceArchitectureTests
         public void RecordOperationFailure(DiagnosticsPersistenceOperation operation) { }
         public void RecordLoss(DiagnosticsPersistenceLossReason reason, long count) { }
     }
-
-    private static IEnumerable<string> FindDiagnosticsProjects() =>
-        Directory.EnumerateFiles(DiagnosticsSourceRoot, "*.csproj", SearchOption.AllDirectories)
-            .Concat(Directory.EnumerateFiles(DiagnosticsTestRoot, "*.csproj", SearchOption.AllDirectories));
-
-    private static IEnumerable<string> FindDiagnosticsSourceProjects() =>
-        Directory.EnumerateFiles(DiagnosticsSourceRoot, "*.csproj", SearchOption.AllDirectories);
-
-    private static IEnumerable<string> FindEfProjectViolations(string project)
-    {
-        var relativePath = RelativePath(project);
-        if (!IsApprovedEfAdapterPath(project) && ContainsEfCore(project))
-            yield return $"{relativePath}: EF Core project path";
-
-        var document = XDocument.Load(project);
-        foreach (var package in document.Descendants("PackageReference")
-                     .Select(element => element.Attribute("Include")?.Value)
-                     .OfType<string>()
-                     .Where(ContainsEfCore))
-        {
-            if (!IsApprovedEfAdapterPath(project))
-                yield return $"{relativePath}: PackageReference {package}";
-        }
-
-        foreach (var reference in document.Descendants("ProjectReference")
-                     .Select(element => element.Attribute("Include")?.Value)
-                     .OfType<string>()
-                     .Where(ContainsEfCore))
-        {
-            if (!IsApprovedEfAdapterPath(project))
-                yield return $"{relativePath}: ProjectReference {reference}";
-        }
-    }
-
-    private static IEnumerable<string> FindEfDirectoryViolations() =>
-        Directory.EnumerateDirectories(DiagnosticsSourceRoot, "*", SearchOption.AllDirectories)
-            .Concat(Directory.EnumerateDirectories(DiagnosticsTestRoot, "*", SearchOption.AllDirectories))
-            .Where(directory => ContainsEfCore(directory) && !IsApprovedEfAdapterPath(directory))
-            .Select(directory => $"{RelativePath(directory)}: EF Core directory");
-
-    private static IEnumerable<string> FindEfSourceViolations() =>
-        Directory.EnumerateFiles(DiagnosticsSourceRoot, "*.cs", SearchOption.AllDirectories)
-            .Concat(Directory.EnumerateFiles(DiagnosticsTestRoot, "*.cs", SearchOption.AllDirectories))
-            .Where(file => !string.Equals(file, SourceFilePath, StringComparison.Ordinal) && !IsApprovedEfAdapterPath(file))
-            .Select(file => (Path: RelativePath(file), Match: EfSourcePattern().Match(File.ReadAllText(file))))
-            .Where(hit => hit.Match.Success)
-            .Select(hit => $"{hit.Path}: {hit.Match.Value}");
-
-    private static IEnumerable<(Type Owner, string Member, Type Type)> PublicSurfaceTypes(Assembly assembly)
-    {
-        foreach (var type in assembly.GetExportedTypes())
-        {
-            yield return (type, "base type", type.BaseType ?? typeof(void));
-            foreach (var implemented in type.GetInterfaces())
-                yield return (type, "interface", implemented);
-            foreach (var field in type.GetFields(BindingFlags.Public | BindingFlags.Instance | BindingFlags.Static | BindingFlags.DeclaredOnly))
-                yield return (type, field.Name, field.FieldType);
-            foreach (var property in type.GetProperties(BindingFlags.Public | BindingFlags.Instance | BindingFlags.Static | BindingFlags.DeclaredOnly))
-                yield return (type, property.Name, property.PropertyType);
-            foreach (var @event in type.GetEvents(BindingFlags.Public | BindingFlags.Instance | BindingFlags.Static | BindingFlags.DeclaredOnly))
-                yield return (type, @event.Name, @event.EventHandlerType ?? typeof(void));
-            foreach (var method in type.GetMethods(BindingFlags.Public | BindingFlags.Instance | BindingFlags.Static | BindingFlags.DeclaredOnly)
-                         .Cast<MethodBase>()
-                         .Concat(type.GetConstructors(BindingFlags.Public | BindingFlags.Instance | BindingFlags.Static | BindingFlags.DeclaredOnly)))
-            {
-                if (method is MethodInfo methodInfo)
-                    yield return (type, method.Name, methodInfo.ReturnType);
-                foreach (var parameter in method.GetParameters())
-                    yield return (type, $"{method.Name}({parameter.Name})", parameter.ParameterType);
-            }
-        }
-    }
-
-    private static bool IsApprovedEfAdapterPath(string path)
-    {
-        var relativePath = RelativePath(path);
-        return IsWithin("src/essentials/Diagnostics/OpenTelemetry/Persistence/EntityFrameworkCore") ||
-               IsWithin("tests/essentials/Diagnostics/OpenTelemetry/Persistence/EntityFrameworkCore") ||
-               IsWithin("src/essentials/Diagnostics/StructuredLogs/Persistence/EntityFrameworkCore") ||
-               IsWithin("tests/essentials/Diagnostics/StructuredLogs/Persistence/EntityFrameworkCore");
-
-        bool IsWithin(string root) =>
-            string.Equals(relativePath, root, StringComparison.Ordinal) ||
-            relativePath.StartsWith(root + "/", StringComparison.Ordinal);
-    }
-
-    private static bool ContainsEfCore(string value) =>
-        value.Contains("EFCore", StringComparison.OrdinalIgnoreCase) ||
-        value.Contains("EntityFrameworkCore", StringComparison.OrdinalIgnoreCase);
-
-    private static string RelativePath(string path) =>
-        Path.GetRelativePath(RepoRoot, path).Replace(Path.DirectorySeparatorChar, '/');
-
-    private static string SourceFilePath { get; } = Path.GetFullPath(Path.Combine(
-        RepoRoot,
-        "tests",
-        "essentials",
-        "Diagnostics",
-        "Persistence",
-        "Tests",
-        "DiagnosticsPersistenceArchitectureTests.cs"));
-
-    private static string FindRepoRoot()
-    {
-        var directory = new DirectoryInfo(AppContext.BaseDirectory);
-        while (directory is not null)
-        {
-            if (File.Exists(Path.Combine(directory.FullName, "Elsa.Server.slnx")))
-                return directory.FullName;
-
-            directory = directory.Parent;
-        }
-
-        throw new DirectoryNotFoundException("Could not locate the repository root from the test output directory.");
-    }
-
-    [GeneratedRegex(@"\b(?:Microsoft\.EntityFrameworkCore|Persistence\.EFCore|IDbContextFactory|DbContext|IEntityTypeConfiguration|MigrationBuilder|MigrationAttribute|ModelBuilder|AddDbContext|UseSqlite|UseSqlServer|UseNpgsql|UseInMemoryDatabase)\b|:\s*Migration\b", RegexOptions.CultureInvariant)]
-    private static partial Regex EfSourcePattern();
-
-    [GeneratedRegex(@"`(?<class>[A-Za-z0-9_]+Tests)\.(?<method>[A-Za-z0-9_]+)`", RegexOptions.CultureInvariant)]
-    private static partial Regex LedgerEvidencePattern();
 }

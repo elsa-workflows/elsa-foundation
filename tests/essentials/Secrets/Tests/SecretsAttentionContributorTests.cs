@@ -140,17 +140,6 @@ public sealed class SecretsAttentionContributorTests
         Assert.Equal("30", threshold.DefaultValue);
     }
 
-    [Fact]
-    public void FeatureRegistersContributor()
-    {
-        var services = new ServiceCollection();
-        services.AddSingleton<ISecretRepository>(new StubRepository([]));
-        new SecretsAttentionFeature().ConfigureServices(services);
-        using var provider = services.BuildServiceProvider();
-
-        Assert.Contains(provider.GetServices<IAttentionContributor>(), contributor => contributor is SecretsAttentionContributor);
-    }
-
     private static AttentionContributorContext Context(int calls, IReadOnlyDictionary<string, string>? thresholds = null) => new(
         new(new ClaimsPrincipal(), "tenant-1"),
         new(calls),

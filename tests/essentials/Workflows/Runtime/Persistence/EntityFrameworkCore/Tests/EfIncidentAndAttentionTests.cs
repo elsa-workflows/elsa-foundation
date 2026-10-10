@@ -212,6 +212,7 @@ public sealed class EfIncidentAndAttentionTests
             5)).AsTask());
     }
 
+    // Kept beside the composition test (§2.23.1): ordering, operational registration is order independent.
     [Fact]
     public void Operational_registration_owns_incidents_and_attention_and_is_order_independent()
     {
@@ -235,6 +236,7 @@ public sealed class EfIncidentAndAttentionTests
         Assert.Contains(reversed, descriptor => descriptor.ServiceType == typeof(IWorkflowRuntimeAttentionQuery));
     }
 
+    // Kept beside the composition test (§2.23.1): replacement-contract rejection without mutation.
     [Fact]
     public void Operational_registration_refuses_unowned_attention_adapter()
     {

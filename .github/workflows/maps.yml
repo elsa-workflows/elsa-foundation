@@ -1,105 +1,158 @@
-name: Maps
-
-# Freshness gate for the committed maps under docs/maps/ and the generated findings
-# reports. It regenerates every map into a scratch directory and byte-compares the
-# result with what is committed. Generation itself stays manually initiated (AGENTS.md);
-# this workflow only reports. It exists because the committed maps once went three
-# projects stale and carried 25 corrupted rows with nothing objecting.
-#
-# The job lives here rather than in ci.yml because it needs two triggers and ci.yml is
-# the pull_request gate. "Generated maps fresh" is a required status check on main;
-# branch protection matches the context by JOB name, not by workflow file, so the job
-# name below is load-bearing and must not be renamed.
-#
-#   - pull_request: keeps a PR from landing stale maps. Unchanged behavior.
-#   - push to main: reports main going stale AGAINST MAIN. Until issue #1274 this ran on
-#     pull_request only, so nothing ever evaluated main. PR #1202 added a spec directory
-#     without regenerating, main went stale silently, and the next three unrelated PRs
-#     (#1243, #1247, #1248) went red on a check none of them had broken -- CI evaluates
-#     the PR merged into main, so a branch whose own tree is fine still fails while
-#     `-- check` passes locally on the exact commit CI fails on.
-#   - workflow_dispatch: re-run on demand after a fix without pushing an empty commit.
-#
-# Notify rather than auto-regenerate. Blocking is not available on push: the commit has
-# already landed. Of the two remaining options, a failing run on main is the one that
-# fits this repository. Auto-regenerating and opening a PR would contradict AGENTS.md
-# ("Generated maps are committed snapshots and are never refreshed automatically"), it
-# would skip the findings-report review that a refresh is supposed to trigger, and it
-# would need a third-party pull-request action -- which the org Actions allow-list gates
-# (see the POLICY DEPENDENCY note in docker.yml; a blocked entry fails the run at
-# startup with no logs). This workflow uses only actions/checkout and
-# actions/setup-dotnet, both already in use across this repository's workflows.
-#
-# A failed run on main notifies the pusher through the normal GitHub Actions failure
-# notification and is visible in the Actions tab. The failure step below writes the
-# refresh instructions into the run summary so the fix does not need this file.
-#
-# This job deliberately does NOT call main-red-alert.yml, which the other push-triggered gates
-# use to file a "main is red" issue. That is not an oversight: a stale map is a request to open
-# a refresh PR, not a broken main, and the actionable output here is the refresh command in the
-# run summary rather than a title and a link. Wire it up if stale maps start surviving on main
-# the way they did before issue #1274 -- the escalation is one `uses:` block away.
+name: Hosted stable restore and maps qualification
 
 on:
-  pull_request:
-    branches:
-      - main
-  push:
-    branches:
-      - main
   workflow_dispatch:
 
 permissions:
   contents: read
 
 jobs:
-  map-freshness:
-    name: Generated maps fresh
+  restore-and-maps:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+    timeout-minutes: 35
+    env:
+      EVIDENCE_DIR: ${{ runner.temp }}/foundation-qualification
+      NUGET_PACKAGES: ${{ runner.temp }}/foundation-stable-nuget-packages
 
-      - name: Setup .NET
+    steps:
+      - name: Prepare fresh runner-local directories
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$EVIDENCE_DIR"
+          if [ -e "$NUGET_PACKAGES" ]; then
+            echo "Expected a fresh runner-local NuGet package directory: $NUGET_PACKAGES" >&2
+            exit 1
+          fi
+          mkdir -p "$NUGET_PACKAGES"
+          printf 'runner=%s\nnugetPackages=%s\n' "$RUNNER_NAME" "$NUGET_PACKAGES" \
+            > "$EVIDENCE_DIR/runner.txt"
+
+      - name: Checkout exact dispatched commit
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+
+      - name: Set up .NET 10
         uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: 10.x
+          dotnet-version: 10.0.x
 
-      # No restore of the tree: the dependency map's pinned-transitive edges (spec 149 FR-012) are read from the NuGet lock
-      # files committed beside each project (#2122), so the check is a scan of the checkout alone. A lock file the tree
-      # has moved past is refused by name, and CI's locked restores fail on it too. The generator tool itself still
-      # restores implicitly to run, so that restore is locked (RestoreLockedMode=true) against its own lock file.
-      - name: Check generated maps against the tree
-        run: dotnet run --project tools/maps/Elsa.Maps.Generator -c Release -p:RestoreLockedMode=true -- check
-
-      - name: Exercise project facts contract
-        run: dotnet run --project tools/maps/Elsa.Maps.Generator -c Release --no-build -- project-facts-self-test
-
-      - name: Exercise feature facts contract
-        run: dotnet run --project tools/maps/Elsa.Maps.Generator -c Release --no-build -- feature-facts-self-test
-
-      - name: Explain how to refresh
-        if: failure()
+      - name: Capture checkout and input provenance
+        shell: bash
         run: |
-          cat >> "$GITHUB_STEP_SUMMARY" <<'EOF'
-          ## Generated maps are stale
+          set -euo pipefail
+          cd "$GITHUB_WORKSPACE"
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          git show -s --format='commit=%H%ntree=%T%nparents=%P%ncommitterDate=%cI' HEAD \
+            > "$EVIDENCE_DIR/checkout.txt"
+          printf 'githubSha=%s\nworkflowRef=%s\nworkflowSha=%s\n' \
+            "$GITHUB_SHA" "$GITHUB_REF" "$GITHUB_WORKFLOW_SHA" \
+            >> "$EVIDENCE_DIR/checkout.txt"
+          git ls-tree -r --full-tree HEAD > "$EVIDENCE_DIR/source-tree.txt"
+          git status --porcelain=v1 -z > "$EVIDENCE_DIR/status-before.nul"
+          if [ -s "$EVIDENCE_DIR/status-before.nul" ]; then
+            echo "Checkout is not clean before qualification." >&2
+            exit 1
+          fi
+          git ls-files -z -- \
+            ':(glob)**/packages.lock.json' \
+            ':(glob)**/*.csproj' \
+            Directory.Build.props Directory.Packages.props PackageVersioning.props \
+            VersionLines.props NuGet.config global.json Elsa.Server.slnx \
+            tools/maps/Elsa.Maps.Generator docs/maps docs/reports \
+            > "$EVIDENCE_DIR/input-files.nul"
+          while IFS= read -r -d '' file; do
+            sha256sum -- "$file"
+          done < "$EVIDENCE_DIR/input-files.nul" > "$EVIDENCE_DIR/input-sha256.txt"
+          dotnet --info 2>&1 | tee "$EVIDENCE_DIR/dotnet-info.log"
 
-          The committed maps no longer describe the tree. The failing step above lists
-          the files that would change. To fix it:
+      - name: Restore solution packages
+        shell: bash
+        run: |
+          set -euo pipefail
+          dotnet restore Elsa.Server.slnx --no-http-cache --disable-parallel -m:1 -p:WarningsNotAsErrors=NU1603 \
+            2>&1 | tee "$EVIDENCE_DIR/restore.log"
 
-          ```bash
-          dotnet run --project tools/maps/Elsa.Maps.Generator -- all
-          ```
+      - name: Build Maps generator
+        shell: bash
+        run: |
+          set -euo pipefail
+          dotnet build tools/maps/Elsa.Maps.Generator/Elsa.Maps.Generator.csproj \
+            -c Release --no-restore -m:1 \
+            2>&1 | tee "$EVIDENCE_DIR/maps-build.log"
 
-          If the generator refuses a lock file, the tree's dependencies changed without it: run
-          `dotnet restore Elsa.Server.slnx`, review and commit the changed `packages.lock.json`
-          files, then generate again.
+      - name: Regenerate all maps
+        shell: bash
+        run: |
+          set -euo pipefail
+          dotnet run --project tools/maps/Elsa.Maps.Generator/Elsa.Maps.Generator.csproj \
+            -c Release --no-build --no-restore -- all \
+            2>&1 | tee "$EVIDENCE_DIR/maps-all.log"
 
-          Then stage every changed map file by explicit path, `docs/maps/manifest.json`
-          included. The manifest carries no per-commit provenance, so it changes only when
-          the tree did, and this check compares it like any other generated file.
+      - name: Check generated maps
+        shell: bash
+        run: |
+          set -euo pipefail
+          dotnet run --project tools/maps/Elsa.Maps.Generator/Elsa.Maps.Generator.csproj \
+            -c Release --no-build --no-restore -- check \
+            2>&1 | tee "$EVIDENCE_DIR/maps-check.log"
 
-          If this run is on `main`, main is already stale: open a PR with the refreshed
-          maps. Review the generated findings reports before merging.
-          EOF
+      - name: Capture generated outputs and diff provenance
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$GITHUB_WORKSPACE"
+          if ! git rev-parse --show-toplevel >/dev/null 2>&1; then
+            printf 'Checkout unavailable; no repository output capture was possible.\n' \
+              > "$EVIDENCE_DIR/output-capture.txt"
+            exit 0
+          fi
+
+          printf 'head=%s\n' "$(git rev-parse HEAD)" > "$EVIDENCE_DIR/output-capture.txt"
+          git status --porcelain=v1 --untracked-files=all \
+            > "$EVIDENCE_DIR/status-after.txt"
+          git diff --binary HEAD -- \
+            ':(glob)**/packages.lock.json' docs/maps docs/reports \
+            > "$EVIDENCE_DIR/generated.diff"
+
+          {
+            git diff --name-only -z HEAD -- \
+              ':(glob)**/packages.lock.json' docs/maps docs/reports
+            git ls-files --others --exclude-standard -z -- \
+              ':(glob)**/packages.lock.json' docs/maps docs/reports
+          } > "$EVIDENCE_DIR/generated-files.nul"
+
+          : > "$EVIDENCE_DIR/generated-existing-files.nul"
+          while IFS= read -r -d '' file; do
+            if [ -f "$file" ]; then
+              printf '%s\0' "$file" >> "$EVIDENCE_DIR/generated-existing-files.nul"
+            fi
+          done < "$EVIDENCE_DIR/generated-files.nul"
+
+          if [ -s "$EVIDENCE_DIR/generated-files.nul" ]; then
+            if [ -s "$EVIDENCE_DIR/generated-existing-files.nul" ]; then
+              tar --create --gzip \
+                --file="$EVIDENCE_DIR/generated-files.tar.gz" \
+                --null --files-from="$EVIDENCE_DIR/generated-existing-files.nul"
+            fi
+            while IFS= read -r -d '' file; do
+              sha256sum -- "$file"
+            done < "$EVIDENCE_DIR/generated-existing-files.nul" \
+              > "$EVIDENCE_DIR/generated-sha256.txt"
+          else
+            printf 'No package lock, docs/maps, or docs/reports files changed.\n' \
+              > "$EVIDENCE_DIR/generated-sha256.txt"
+          fi
+
+      - name: Upload restore and maps evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: foundation-hosted-restore-maps-${{ github.run_id }}
+          path: ${{ runner.temp }}/foundation-qualification/
+          if-no-files-found: warn
+          retention-days: 14
+

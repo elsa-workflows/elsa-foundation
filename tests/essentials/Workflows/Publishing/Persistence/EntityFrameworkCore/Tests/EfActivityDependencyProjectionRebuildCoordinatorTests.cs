@@ -107,6 +107,7 @@ public sealed class EfActivityDependencyProjectionRebuildCoordinatorTests : IAsy
         Assert.Equal(1, (await ReadProjectionAsync()).Sequence);
     }
 
+    // Kept beside the composition test (§2.23.1): forwarding, one EF store behind the upgrade-bridge contracts, owned by the EF backend.
     [Fact]
     public void The_EF_publishing_registration_owns_the_upgrade_bridge_and_resolves_it()
     {
