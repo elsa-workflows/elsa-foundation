@@ -132,7 +132,7 @@ from a row's stamp to the current version, runs none at the current version (FR-
 skew before anything else, refuses a read whose columns are not exactly its table's declared content columns at every
 version, the current one included, and reports a failing upcaster, or one that returns another table or adds or drops
 a column, as corruption (FR-009): a row is either at its stamp or wholly upcast. A chain with a gap, a duplicate, a
-branch or a cycle, or one that does not end at the current version, fails the build and is refused when the module
+branch or a cycle, or one that does not end at the current version, is refused when the module
 registers (`AddEfModuleMigrations`), and a read never bridges a gap (FR-005). A family whose context EF materializes
 directly (`IEfSchemaVersionedContext`) declares no upcasters: its value converters deserialize the content before any
 upcaster could run, so `EfSchemaVersionMaterializationInterceptor` accepts its current version alone. Every upcaster
