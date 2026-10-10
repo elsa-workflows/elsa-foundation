@@ -1,7 +1,8 @@
 # Repository hygiene
 
 Branches and issues stay legible only if they have a lifecycle that ends. This page is the policy; two
-workflows enforce most of it and a weekly report shows the rest.
+workflows can enforce most of it and a weekly report shows the rest. Scheduled cleanup depends on
+the [enforcement setting](#enforcement); in report-only mode, the workflows report proposed actions.
 
 ## Branches
 
@@ -11,16 +12,21 @@ A branch lives as long as its pull request.
   pushes the branch. Exploratory work that is not ready for a PR stays local.
 - **Merged branches are deleted automatically.** The repository deletes the head branch on merge. Do not
   restore it: the work is in `main`, and the PR keeps its commits.
-- **The weekly sweep deletes a branch that has no open PR** when its work is already in `main` (directly,
+- **When enforcement is enabled, the weekly sweep deletes a branch that has no open PR** when its work is already in `main` (directly,
   by a squash merge, or as the merged tip of a PR), or when it has had no commit for 14 days.
-- **Nothing is lost.** Before deleting, the sweep tags the branch tip as `archive/<branch>`, or
-  `archive/<branch>-<sha12>` when that tag already holds an earlier tip of the same name. The weekly
-  report lists each swept tip. To resume work on a swept branch, find its tag and restore it, then open
-  its PR:
+- **Committed branch tips are retained.** Before deleting, the sweep tags the branch tip as
+  `archive/<branch>`, or `archive/<branch>-<sha12>` when that tag already holds an earlier tip of the same
+  name. The tag preserves committed files, not uncommitted, untracked, or ignored files in a local
+  checkout. The weekly report lists each swept tip.
+
+  If a maintainer asks to resume a swept branch, find its remote tag, fetch that exact tag, then restore
+  the branch and open its PR. Replace `BRANCH-NAME` and `ARCHIVE-TAG` below; `ARCHIVE-TAG` is the full tag
+  name returned by the first command, without the `refs/tags/` prefix:
 
   ```bash
-  git ls-remote origin 'refs/tags/archive/<branch>*'
-  git push origin <archive-tag>:refs/heads/<branch>
+  git ls-remote origin 'refs/tags/archive/BRANCH-NAME*'
+  git fetch origin 'refs/tags/ARCHIVE-TAG:refs/tags/ARCHIVE-TAG'
+  git push origin 'refs/tags/ARCHIVE-TAG:refs/heads/BRANCH-NAME'
   ```
 
   Branches deleted on merge are not restored; their work is in `main`.
