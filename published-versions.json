@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "last_publish_commit": "68948ee5cdc41b14fbacbcb19659788611d3265c",
+  "last_publish_commit": "a5119685d943431ca0fbfa9be68ad871476371c7",
   "packages": [
     {
       "package_id": "Elsa.Activities.Bpmn",
@@ -84,8 +84,8 @@
     },
     {
       "package_id": "Elsa.Activities.Primitives",
-      "version": "4.0.8-preview",
-      "commit": "57ff3c026c079409da2a749fd6ab12d439726c6f"
+      "version": "4.0.9-preview",
+      "commit": "a5119685d943431ca0fbfa9be68ad871476371c7"
     },
     {
       "package_id": "Elsa.Activities.Runtime",
