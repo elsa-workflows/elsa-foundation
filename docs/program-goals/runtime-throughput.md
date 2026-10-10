@@ -1,5 +1,7 @@
 # Runtime Throughput
 
+> **Merged into [Runtime Efficiency](runtime-efficiency.md)** by [ADR 0080 D0](../adr/0080-elsa-4-simplification-decisions.md#d0--focus). The constraint against a default cadence flip is lifted (ADR 0080 D2).
+
 - **Status:** Active. Owner-approved 9 October 2026.
 - **Area:** Workflow runtime / concurrent execution correctness / bounded throughput evidence.
 - **Stewards:** Sipke plus the runtime throughput control room.

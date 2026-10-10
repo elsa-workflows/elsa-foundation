@@ -1,5 +1,7 @@
 # Runtime Execution Evidence
 
+> **Parked until 2026-11-21** by [ADR 0080 D0](../adr/0080-elsa-4-simplification-decisions.md#d0--focus). No new child work until it is reactivated.
+
 Status: active.
 
 Area: deterministic QA verification / committed workflow-runtime evidence.

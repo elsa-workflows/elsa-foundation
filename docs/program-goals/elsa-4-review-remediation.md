@@ -1,5 +1,7 @@
 # Elsa 4 Architecture Review Remediation
 
+> **Folded into [Elsa 4 Simplification](elsa-4-simplification.md)** by [ADR 0080 D0](../adr/0080-elsa-4-simplification-decisions.md#d0--focus).
+
 Status: active.
 
 Area: cross-domain remediation of the 2026-07 architecture review findings (W1–W21).

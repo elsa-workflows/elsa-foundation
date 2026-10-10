@@ -1,5 +1,7 @@
 # Code Reality And Test Maturity
 
+> **Folded into [Elsa 4 Simplification](elsa-4-simplification.md)** by [ADR 0080 D0](../adr/0080-elsa-4-simplification-decisions.md#d0--focus). Registration-test coverage is no longer a goal (ADR 0080 D1).
+
 Status: active.
 
 Area: codebase verification / tests / weak implementations.

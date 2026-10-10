@@ -1,5 +1,7 @@
 # Modular Hosting Upstream Delivery
 
+> **Parked until 2026-11-21** by [ADR 0080 D0](../adr/0080-elsa-4-simplification-decisions.md#d0--focus). No new child work until it is reactivated.
+
 Area: reusable modular-host infrastructure across CShells, Nuplane, and Elsa Foundation. CShells ownership, catalog notifications and generation leases, plus Nuplane removal-completion, are merged and qualified from public preview packages. The full objective in [#2500](https://github.com/elsa-workflows/elsa-foundation/issues/2500) remains outstanding; no milestone is declared complete. Scheduling surface: [Project 58](https://github.com/orgs/elsa-workflows/projects/58).
 
 Stewards: Sipke and the program delivery lead. CShells [#144](https://github.com/valence-works/cshells/issues/144), [#146](https://github.com/valence-works/cshells/issues/146) and [#147](https://github.com/valence-works/cshells/issues/147) are Done/Passed for their upstream primitives. Ownership/catalog passed a public `0.0.30-preview.161` consumer; generation leases passed six public `0.0.30-preview.162` consumer groups on .NET 8/9/10 after [PR #152](https://github.com/valence-works/cshells/pull/152) merged as `0f25bba`. [Nuplane #109](https://github.com/valence-works/nuplane/issues/109) is Done/Passed with its separately qualified `0.0.11-preview.99`. Exact source, package and review evidence is in the [register](../plans/modular-hosting-upstream/evidence.md).

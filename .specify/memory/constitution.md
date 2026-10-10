@@ -3,6 +3,12 @@ Draft history moved to ../../docs/reports/archive/constitution-draft-history.md.
 This constitution file is the Elsa-specific quality-gate layer: gates, allowed exceptions,
 ratification state, and governance. Canonical term lookup lives in ../../docs/glossary/.
 
+Sync Impact Report (4.2.0 -> 4.2.1, 2026-10-10)
+- Bump rationale: PATCH. Propagates framework constitution 5.0.0 (ADR 0080): the restated §2.21.1
+  summary in the scope section now matches the framework rule. No Elsa-specific gate changes.
+- Ratification: Sipke Schoorstra, 2026-10-10 (ADR 0080).
+- Templates requiring updates: none beyond those listed in the framework 5.0.0 report.
+
 Sync Impact Report (4.1.0 -> 4.2.0, 2026-09-17)
 - Bump rationale: MINOR. R4 already gave `…Source` one meaning, pull/returns, and framework §2.6.1
   defines `I<X>Source` the same way, so reserving the suffix restates the rule. What is new is guidance
@@ -123,10 +129,10 @@ Ratification: RATIFIED 2026-08-08 by Sipke Schoorstra, on his authority alone; J
 -->
 # Elsa Workflow Engine Constitution
 
-**Version:** 4.2.0
+**Version:** 4.2.1
 **Status:** Ratified 2026-08-08 by Sipke Schoorstra. Governance > Amendment process calls for consensus among Joey Barten, Sipke Schoorstra, and Frans van Ek; this ratification was taken on Sipke Schoorstra's authority alone and is open to revision if the other architects dissent. Section-level gates still marked draft, provisional, or pending architecture-review ratification — whether via their own `Status:` line (§E5) or inline wording (§E2.8 Model X, §E2.9, §E2.9.7) — remain so and are **not** covered by this ratification.
 **Layer:** Elsa-specific specialization of the [Modular Software Design Framework Constitution](constitution-framework.md).
-**Derives from:** framework constitution **v4.0.1**.
+**Derives from:** framework constitution **v5.0.0**.
 
 **Knowledge boundary note:** treat this document as the Elsa-specific
 quality-gate layer. Canonical term lookup lives in `../../docs/glossary/`;
@@ -191,7 +197,7 @@ The historical `elsa-core` case study lives in
 The Elsa refactor replaces those failure modes with the rules in framework §2
 and the Elsa-specific decomposition in §E2.
 
-**Refactor work in this constitution's scope is governed by framework §2.21.1** — the golden rule of refactoring. Existing tests on the implementations being refactored MUST continue to succeed across the reorganization; the *subject under test* and *objective* are preserved even when test setup, dependencies, or location change. Removing a test requires explicit recorded approval from at least one architect (unanimity reserved for constitutional amendments).
+**Refactor work in this constitution's scope is governed by framework §2.21.1** — the golden rule of refactoring. Tests that still describe valid behaviour keep passing; a test whose code was removed, or whose behaviour is proven elsewhere, may be rewritten or deleted, with the PR naming which applies.
 
 ---
 
@@ -583,7 +589,7 @@ This constitution is amended together with the framework constitution where the 
 
 ### Sync rule with framework constitution
 
-This document declares the framework constitution version it derives from in the header (currently **v4.0.1**). When the framework constitution bumps:
+This document declares the framework constitution version it derives from in the header (currently **v5.0.0**). When the framework constitution bumps:
 
 - **PATCH** — re-pin the version; review for clarification impact; no Elsa SemVer bump unless wording downstream of an Elsa specialization is affected.
 - **MINOR** — re-pin the version; review every Elsa specialization for compatibility with new framework guidance.
@@ -605,4 +611,4 @@ Same rules as framework §4.2 applied to constitutional content:
 
 ---
 
-**Version:** 4.2.0 | **Ratified:** 2026-08-08 | **Last Amended:** 2026-09-17 | **Derives from framework constitution:** v4.0.1
+**Version:** 4.2.1 | **Ratified:** 2026-08-08 | **Last Amended:** 2026-10-10 | **Derives from framework constitution:** v5.0.0
