@@ -1,16 +1,13 @@
 using CShells;
 using Elsa.Activities.Design.Core.Reconciliation;
-using Elsa.Activities.Design.Reconciliation;
 using Elsa.Activities.Design.Reconciliation.Services;
 using Elsa.Locking.Core;
 using Elsa.Tasks.Core;
 using Elsa.Tasks.Services;
 using Elsa.Workflows.Design.Core.Reconciliation;
-using Elsa.Workflows.Design.Reconciliation;
 using Elsa.Workflows.Design.Reconciliation.Git.Contracts;
 using Elsa.Workflows.Design.Reconciliation.Git.Startup;
 using Elsa.Workflows.Design.Reconciliation.Services;
-using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
 
@@ -62,36 +59,6 @@ public sealed class NodeLocalReconcilerStartupTaskTests
         Assert.Equal(1, exporter.Passes);
         Assert.Equal(0, _locks.Attempts);
     }
-
-    [Fact]
-    public void The_activity_reconciliation_feature_refuses_the_retired_lock_timeout()
-    {
-        var feature = new ActivitiesDesignReconciliationFeature();
-#pragma warning disable CS0618 // Setting the retired value is the case under test.
-        feature.StartupTaskOptions.LockTimeoutMs = "10000";
-#pragma warning restore CS0618
-
-        var failure = Assert.Throws<InvalidOperationException>(() => feature.ConfigureServices(new ServiceCollection()));
-
-        Assert.Contains("'StartupTaskOptions:LockTimeoutMs'", failure.Message);
-        Assert.Contains("retired", failure.Message);
-    }
-
-    [Fact]
-    public void The_workflow_reconciliation_feature_refuses_the_retired_lock_timeout()
-    {
-        var feature = new MinimalWorkflowsDesignReconciliationFeature();
-#pragma warning disable CS0618 // Setting the retired value is the case under test.
-        feature.StartupTaskOptions.LockTimeoutMs = "10000";
-#pragma warning restore CS0618
-
-        var failure = Assert.Throws<InvalidOperationException>(() => feature.ConfigureServices(new ServiceCollection()));
-
-        Assert.Contains("'StartupTaskOptions:LockTimeoutMs'", failure.Message);
-        Assert.Contains("retired", failure.Message);
-    }
-
-    private sealed class MinimalWorkflowsDesignReconciliationFeature : WorkflowsDesignReconciliationFeature;
 
     private sealed class SpyReconciler : IActivityVersionReconciler, IWorkflowVersionReconciler, IGitWorkflowExporter
     {

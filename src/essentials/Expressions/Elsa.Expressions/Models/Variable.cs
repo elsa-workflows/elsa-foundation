@@ -69,13 +69,6 @@ public sealed class Variable<T> : Variable, IVariable<T>
     }
 
     /// <inheritdoc />
-    [Obsolete("Use the constructor that takes a name parameter instead.", true)]
-    public Variable(T value)
-    {
-        DefaultValue = value;
-    }
-
-    /// <inheritdoc />
     public Variable(string name, T value) : base(name, value)
     {
     }

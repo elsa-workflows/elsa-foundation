@@ -26,8 +26,6 @@ using NativeEndpoints;
 
 namespace Elsa.Activities.Design.Api;
 
-#pragma warning disable CS0618 // Feature composition must preserve the obsolete host registration.
-
 [ManifestRuntimeKind(ElsaRuntimeKinds.Server)]
 [ManifestFeatureCategory("Activities")]
 [ManifestFeatureCategory("Design")]
@@ -58,22 +56,8 @@ public class ActivitiesDesignApiFeature : IWebShellFeature
         services.AddHttpContextAccessor();
         services.AddDynamicEndpointApiExplorerRefresh();
         services.TryAddScoped<HttpContextActivityDesignAuthorizationContext>();
-        services.TryAddScoped<IActivityAuthoringContext>(sp => sp.GetRequiredService<HttpContextActivityDesignAuthorizationContext>());
-        var hasAsyncDependencyHost = services.Any(descriptor => descriptor.ServiceType == typeof(IActivityDependencyContextAsync));
-        if (!services.Any(descriptor => descriptor.ServiceType == typeof(IActivityDependencyAuthorizationContext)))
-            services.AddScoped<IActivityDependencyAuthorizationContext>(sp => sp.GetRequiredService<HttpContextActivityDesignAuthorizationContext>());
-        if (!services.Any(descriptor => descriptor.ServiceType == typeof(IActivityAuthoringContextAsync)))
-        {
-            services.AddScoped<IActivityAuthoringContextAsync>(sp =>
-                sp.GetRequiredService<IActivityAuthoringContext>() is IActivityAuthoringContextAsync asyncContext
-                    ? asyncContext
-                    : new LegacyActivityAuthoringContextAdapter(sp.GetRequiredService<IActivityAuthoringContext>()));
-        }
-        if (!hasAsyncDependencyHost)
-            services.AddScoped<IActivityDependencyContextAsync>(sp =>
-                sp.GetRequiredService<IActivityDependencyAuthorizationContext>() is IActivityDependencyContextAsync asyncContext
-                    ? asyncContext
-                    : new LegacyActivityDependencyContextAdapter(sp.GetRequiredService<IActivityDependencyAuthorizationContext>()));
+        services.TryAddScoped<IActivityAuthoringContextAsync>(sp => sp.GetRequiredService<HttpContextActivityDesignAuthorizationContext>());
+        services.TryAddScoped<IActivityDependencyContextAsync>(sp => sp.GetRequiredService<HttpContextActivityDesignAuthorizationContext>());
         services.EnsureReplacementContract<IActivityAuthoringContextAsync, HttpContextActivityDesignAuthorizationContext>();
         services.EnsureReplacementContract<IActivityDependencyContextAsync, HttpContextActivityDesignAuthorizationContext>();
         services.AddOptions<ActivityAvailabilityOptions>()
@@ -183,5 +167,3 @@ public class ActivitiesDesignApiFeature : IWebShellFeature
             target.Sets = source.Sets;
     }
 }
-
-#pragma warning restore CS0618

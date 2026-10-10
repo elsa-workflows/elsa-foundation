@@ -10,16 +10,11 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace Elsa.Workflows.Runtime.Api.Services;
 
-#pragma warning disable CS0618 // The implementation intentionally bridges the obsolete host contract.
-
 /// <summary>
 /// Fail-closed HTTP authorization adapter with independent structure and captured-value grants.
-/// Permission decisions use Foundation Identity's canonical asynchronous evaluator. Synchronous
-/// members remain only for source compatibility and fail closed during the advisory window.
+/// Permission decisions use Foundation Identity's canonical asynchronous evaluator.
 /// </summary>
-public sealed class HttpContextActivityExecutionInspectionAuthorizationContext :
-    IActivityExecutionInspectionAuthorizationContext,
-    IActivityInspectionContextAsync
+public sealed class HttpContextActivityExecutionInspectionAuthorizationContext : IActivityInspectionContextAsync
 {
     public const string StructurePermission = "workflows.activity-executions.inspect";
     public const string SensitiveValuesPermission = "workflows.activity-executions.inspect-values";
@@ -33,20 +28,6 @@ public sealed class HttpContextActivityExecutionInspectionAuthorizationContext :
     private readonly string _requestCorrelationId;
     private readonly CancellationToken _requestCancellationToken;
     private Lazy<Task<AuthorizationSnapshot>>? _snapshot;
-
-    [Obsolete("Use the Foundation Identity-enabled constructor selected by dependency injection.")]
-    public HttpContextActivityExecutionInspectionAuthorizationContext(IHttpContextAccessor httpContextAccessor)
-    {
-        ArgumentNullException.ThrowIfNull(httpContextAccessor);
-        _authorization = null!;
-        _principalValidator = null!;
-        _principal = new ClaimsPrincipal(new ClaimsIdentity());
-        _trusted = false;
-        _tenantId = null;
-        _auditSubject = string.Empty;
-        _requestCorrelationId = string.Empty;
-        _requestCancellationToken = CancellationToken.None;
-    }
 
     [ActivatorUtilitiesConstructor]
     public HttpContextActivityExecutionInspectionAuthorizationContext(
@@ -71,18 +52,6 @@ public sealed class HttpContextActivityExecutionInspectionAuthorizationContext :
     public string TenantScope => _tenantId is null ? "global" : $"tenant:{_tenantId}";
     public string AuditSubject => _auditSubject;
     public string RequestCorrelationId => _requestCorrelationId;
-
-    [Obsolete("Use IActivityInspectionContextAsync.GetAuthorizationProfileAsync.")]
-    public string AuthorizationProfile => throw SynchronousAccess();
-
-    [Obsolete("Use IActivityInspectionContextAsync.CanInspectStructureAsync.")]
-    public bool CanInspectStructure(WorkflowExecutionState workflowExecution) => throw SynchronousAccess();
-
-    [Obsolete("Use IActivityInspectionContextAsync.CanInspectSensitiveValuesAsync.")]
-    public bool CanInspectSensitiveValues(WorkflowExecutionState workflowExecution) => throw SynchronousAccess();
-
-    [Obsolete("Use IActivityInspectionContextAsync.CanResolveSensitiveValuePayloadsAsync.")]
-    public bool CanResolveSensitiveValuePayloads(WorkflowExecutionState workflowExecution) => throw SynchronousAccess();
 
     public async ValueTask<string> GetAuthorizationProfileAsync(CancellationToken cancellationToken = default)
     {
@@ -189,9 +158,6 @@ public sealed class HttpContextActivityExecutionInspectionAuthorizationContext :
         return string.IsNullOrWhiteSpace(subject) ? string.Empty : subject;
     }
 
-    private static InvalidOperationException SynchronousAccess() =>
-        new("Synchronous activity inspection authorization access is obsolete and intentionally unavailable. Use the asynchronous authorization context.");
-
     private sealed record AuthorizationSnapshot(
         bool CanInspectStructure,
         bool CanInspectSensitiveValues,
@@ -201,25 +167,3 @@ public sealed class HttpContextActivityExecutionInspectionAuthorizationContext :
     private static readonly AuthorizationSnapshot DeniedSnapshot =
         new(false, false, false, "untrusted");
 }
-
-public sealed class LegacyActivityInspectionContextAdapter : IActivityInspectionContextAsync
-{
-    private readonly IActivityExecutionInspectionAuthorizationContext _legacy;
-
-    public LegacyActivityInspectionContextAdapter(IActivityExecutionInspectionAuthorizationContext legacy) =>
-        _legacy = legacy ?? throw new ArgumentNullException(nameof(legacy));
-
-    public string TenantScope => _legacy.TenantScope;
-    public string AuditSubject => _legacy.AuditSubject;
-    public string RequestCorrelationId => _legacy.RequestCorrelationId;
-    public ValueTask<string> GetAuthorizationProfileAsync(CancellationToken cancellationToken = default) =>
-        cancellationToken.IsCancellationRequested ? ValueTask.FromCanceled<string>(cancellationToken) : ValueTask.FromResult(_legacy.AuthorizationProfile);
-    public ValueTask<bool> CanInspectStructureAsync(WorkflowExecutionState workflowExecution, CancellationToken cancellationToken = default) =>
-        cancellationToken.IsCancellationRequested ? ValueTask.FromCanceled<bool>(cancellationToken) : ValueTask.FromResult(_legacy.CanInspectStructure(workflowExecution));
-    public ValueTask<bool> CanInspectSensitiveValuesAsync(WorkflowExecutionState workflowExecution, CancellationToken cancellationToken = default) =>
-        cancellationToken.IsCancellationRequested ? ValueTask.FromCanceled<bool>(cancellationToken) : ValueTask.FromResult(_legacy.CanInspectSensitiveValues(workflowExecution));
-    public ValueTask<bool> CanResolveSensitiveValuePayloadsAsync(WorkflowExecutionState workflowExecution, CancellationToken cancellationToken = default) =>
-        cancellationToken.IsCancellationRequested ? ValueTask.FromCanceled<bool>(cancellationToken) : ValueTask.FromResult(_legacy.CanResolveSensitiveValuePayloads(workflowExecution));
-}
-
-#pragma warning restore CS0618

@@ -3,7 +3,6 @@ using Elsa.Tasks.Core;
 using Elsa.Workflows.Runtime.Extensions;
 using Elsa.Workflows.Runtime.Reconciliation.Contracts;
 using Elsa.Workflows.Runtime.Reconciliation.Core.Contracts;
-using Elsa.Workflows.Runtime.Reconciliation.Options;
 using Elsa.Workflows.Runtime.Reconciliation.Services;
 using Elsa.Workflows.Runtime.Reconciliation.Startup;
 using Microsoft.Extensions.DependencyInjection;
@@ -31,9 +30,6 @@ namespace Elsa.Workflows.Runtime.Reconciliation;
 /// </remarks>
 public abstract class WorkflowsArtifactReconciliationFeature : IShellFeature
 {
-    /// <summary>Retired settings only (#2192); a value set here refuses to start. See <see cref="WorkflowArtifactReconcilerStartupTaskOptions"/>.</summary>
-    public WorkflowArtifactReconcilerStartupTaskOptions StartupTaskOptions { get; set; } = new();
-
     /// <summary>
     /// Sources contributed directly by the host, in addition to whatever a concrete feature registers in DI. A
     /// fan-in surface: sources contribute, they never replace one another.
@@ -42,8 +38,6 @@ public abstract class WorkflowsArtifactReconciliationFeature : IShellFeature
 
     public virtual void ConfigureServices(IServiceCollection services)
     {
-        RefuseRetiredLockTimeout();
-
         // Idempotent per ADR 0029 — every registration inside is TryAdd — so composing this feature beside any
         // other runtime feature is safe, and a runtime-only engine gets the execution spine it needs to actually
         // run what this feature imports.
@@ -64,19 +58,5 @@ public abstract class WorkflowsArtifactReconciliationFeature : IShellFeature
         // includes taking the slot.
         services.TryAddScoped<IArtifactForeignOwnerPolicy, SkipArtifactForeignOwnerPolicy>();
         services.AddScoped<IStartupTask, WorkflowArtifactReconcilerStartupTask>();
-    }
-
-    private void RefuseRetiredLockTimeout()
-    {
-#pragma warning disable CS0618 // The refusal is the whole point of keeping the obsolete property.
-        if (StartupTaskOptions.LockTimeoutMs is not { } lockTimeoutMs)
-            return;
-
-        throw new InvalidOperationException(
-            $"'{nameof(StartupTaskOptions)}:{nameof(StartupTaskOptions.LockTimeoutMs)}' on '{GetType().Name}' is set to '{lockTimeoutMs}' and is retired. " +
-            "The artifact reconcile pass is a [SingleNodeTask], which waits for its lock for the lock provider's acquisition timeout " +
-            "and then runs, instead of giving up after this one (#2192). Remove this setting, and set the locking feature's " +
-            "LockAcquisitionTimeoutMinutes if the wait needs another bound.");
-#pragma warning restore CS0618
     }
 }

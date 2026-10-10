@@ -15,17 +15,6 @@ public sealed record ActivityProviderAuthorizationResource(string ProviderKey, s
 /// must change whenever permissions that affect structural results change, so cursors cannot cross
 /// authorization contexts.
 /// </summary>
-[Obsolete("Use IActivityDependencyContextAsync. This interface will be removed in the next major version.")]
-public interface IActivityDependencyAuthorizationContext
-{
-    string? TenantId { get; }
-
-    string AuthorizationProfile { get; }
-
-    bool CanRead(ActivityDefinitionReference reference);
-}
-
-/// <summary>Canonical short asynchronous replacement seam for request-scoped dependency authorization.</summary>
 [ReplacementContract]
 public interface IActivityDependencyContextAsync
 {

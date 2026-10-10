@@ -13,7 +13,7 @@ CI job on a native PostgreSQL, and the SQL Server and MySQL legs of the EF conta
 
 ## Shell feature
 
-- **`SecretsEntityFrameworkCoreFeature`**: host-selected provider (`Sqlite` / `SqlServer` / `PostgreSql` / `MySql`), connection string or named connection, schema and pooling. The host must reference the matching EF provider engine; this package does not. The migrate policy is **not** a setting here: it is the host-wide `Elsa:Persistence:EntityFramework:Migrate:Policy`. The obsolete `MigratePolicy` property remains for one release only so a still-configured value is refused rather than silently ignored — a shell that sets it fails to start (ADR 0076 D8, FR-058).
+- **`SecretsEntityFrameworkCoreFeature`**: host-selected provider (`Sqlite` / `SqlServer` / `PostgreSql` / `MySql`), connection string or named connection, schema and pooling. The host must reference the matching EF provider engine; this package does not. The migrate policy is **not** a setting here: it is the host-wide `Elsa:Persistence:EntityFramework:Migrate:Policy`. The former Secrets-only `MigratePolicy` setting is gone (ADR 0076 D8, ADR 0080 D4); a shell that still sets it has the value ignored.
 
 ## Lifecycle
 
