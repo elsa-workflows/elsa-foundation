@@ -19,7 +19,7 @@ Modified sections:
             §2.23.4 shortened to the hidden-coupling rule; defers to §2.21.1.
 Added sections: none. Removed sections: none (content of §2.23.1-.4 replaced).
 Templates requiring updates: .claude/skills/elsa-add-unit-tests, docs/skills/catalog.md testing entries,
-  .specify/memory/constitution.md (§2.21.1 reference).
+  .specify/memory/constitution.md (§2.21.1 reference; §E5 and §E6 R4 under ADR 0080 D4/D5).
 Approval: Sipke Schoorstra, 2026-10-10 (ADR 0080). Same consensus caveat as the 4.0.0 ratification below.
 
 SYNC IMPACT REPORT — 4.0.0 -> 4.0.1 (2026-10-09)

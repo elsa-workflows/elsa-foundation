@@ -68,10 +68,11 @@ Studio:
 |---|---|---|
 | `Durable` | After every activity | Resumes at the last completed activity |
 | `Balanced` (default) | On suspend, fault, completion, end of burst, and every N activities | Activities since the last commit run again (at-least-once) |
-| `Ephemeral` | Only on suspend or fault; an optional final record on completion | A run that never suspended leaves no trace |
+| `Ephemeral` | Only on suspend or fault, plus a completion record unless `RecordCompletion` is off | A run that never suspended leaves only its completion record, or no trace with `RecordCompletion` off |
 
-`Immediate`/`Coalesced` and `CommitStrategyType` are removed. Suspend, bookmark, fault and terminal checkpoints
-stay always-flushed in every mode (ADR 0032).
+`Immediate`/`Coalesced` and `CommitStrategyType` are removed. Suspend, bookmark and fault checkpoints are flushed
+in every mode (ADR 0032). The completion checkpoint is flushed in every mode except `Ephemeral` with
+`RecordCompletion` off, which is the one opt-in case that keeps no record of a finished run.
 
 ADR 0073 D7 is amended: **deterministic** budgets on EF command counts per reference workflow are correctness
 gates, not performance measurement, and run in CI. Wall-clock timing stays retired. The Runtime Throughput
@@ -92,7 +93,8 @@ constraint against a default cadence flip is lifted.
 ### D4 — Pre-GA cleanup
 
 - Delete every `[Obsolete]` member and v1-compatibility surface now.
-- One version line until GA; Line A (ADR 0067) and its MSBuild machinery are retired.
+- One version line until GA; Line A (ADR 0067) and its MSBuild machinery are retired. Elsa constitution §E5's
+  two-line gate is suspended until GA (Elsa constitution 5.0.0).
 - EF migrations are squashed to one initial migration per context, once, in an announced freeze window just
   before the release candidate. Preview databases are recreated at that point.
 - After GA the normal deprecation policy applies.
@@ -100,7 +102,8 @@ constraint against a default cadence flip is lifted.
 ### D5 — Plain language, renamed now
 
 Jargon in public and internal type names is renamed before GA, one term per batch in a freeze window, paired
-with each domain's D3 internalisation so no type is renamed twice. Old names are banned by an analyzer.
+with each domain's D3 internalisation so no type is renamed twice. Old names are banned by an analyzer. The suffix rules in framework §2.6.1 and Elsa §E6 R4 follow the rename:
+`…Extension` replaces `…Contributor`, domain by domain; both suffixes are accepted until the rename completes.
 
 | Today | Becomes |
 |---|---|
@@ -145,8 +148,9 @@ unit, ratification, phase-owned) does not appear in product docs or type names.
 
 ## Consequences
 
-- Framework constitution 4.0.1 → 5.0.0 (MAJOR: §2.5, §2.21.1 and §2.23 rules removed or redefined). The Elsa
-  constitution's §2.21.1 reference is updated in the same change.
+- Framework constitution 4.0.1 → 5.0.0 (MAJOR: §2.5, §2.21.1 and §2.23 rules removed or redefined). Elsa
+  constitution 4.2.0 → 5.0.0 (MAJOR: §E5's two-line gate suspended until GA, §E6 R4 suffix follows D5, §2.21.1
+  summary updated).
 - Breaking changes (renames, internalisation, migration squash, mode names) are accepted because nothing has
   shipped. They become far more expensive after GA, so they come first.
 - Existing tests that assert on documentation or source text are deleted, not migrated.

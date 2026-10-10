@@ -2,7 +2,7 @@
 
 > **Merged into [Runtime Efficiency](runtime-efficiency.md)** by [ADR 0080 D0](../adr/0080-elsa-4-simplification-decisions.md#d0--focus). This file stays as the evidence record.
 
-- **Status:** Final evidence assembled. M2/M3/M4 and integrated correctness are accepted; the [acceptance crosswalk](../reports/runtime-db-access/final-acceptance.md) records M1/M5 outcomes and residual limits. #2413 and Project 55 carry final publication/closure state.
+- **Status:** Merged into [Runtime Efficiency](runtime-efficiency.md) (2026-10-10). Before the merge: final evidence assembled. M2/M3/M4 and integrated correctness are accepted; the [acceptance crosswalk](../reports/runtime-db-access/final-acceptance.md) records M1/M5 outcomes and residual limits. #2413 and Project 55 carry final publication/closure state.
 - **Area:** Workflow runtime / EF persistence access / HTTP workload correctness.
 - **Stewards:** Sipke and the runtime database access program lead; root lead owns integration and QA.
 - **Program:** [#2382](https://github.com/elsa-workflows/elsa-foundation/issues/2382).

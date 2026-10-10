@@ -10,7 +10,10 @@ root="${1:-$(git rev-parse --show-toplevel)}"
 cd "$root"
 
 cs_files() { find "$@" -name '*.cs' -not -path '*/obj/*' -not -path '*/bin/*' -not -path '*/Migrations/*' 2>/dev/null; }
-count() { grep -hEc "$1" "${@:2}" 2>/dev/null | awk '{s+=$1} END {print s+0}'; }
+# grep exits 1 when nothing matches; zero is a valid (and the target) count, so only exit codes above 1 fail.
+grep_ok() { grep "$@" || [[ $? -eq 1 ]]; }
+# /dev/null keeps grep and cat off stdin when a file list is empty.
+count() { grep_ok -hEc "$1" /dev/null "${@:2}" | awk '{s+=$1} END {print s+0}'; }
 
 mapfile -t essentials < <(cs_files src/essentials)
 mapfile -t src_all < <(cs_files src)
@@ -24,14 +27,21 @@ all_types=$(count "$type_decl" "${essentials[@]}")
 pct=$(( all_types > 0 ? public_types * 100 / all_types : 0 ))
 
 prod_projects=$(find src -name '*.csproj' -not -path '*/tests/*' -not -name '*Tests.csproj' | wc -l)
-test_loc=$(cat "${tests_all[@]}" 2>/dev/null | wc -l)
+test_loc=$(cat /dev/null "${tests_all[@]}" | wc -l)
 test_methods=$(count '^\s*\[(Fact|Theory)' "${tests_all[@]}")
 obsolete=$(count '\[Obsolete' "${src_all[@]}")
-citations=$(grep -hEo 'spec [0-9]{3}|FR-[A-Z]?-?[0-9]{3}|ADR [0-9]{4}' "${src_all[@]}" "${tests_all[@]}" 2>/dev/null | wc -l)
-glossary=$(cat docs/glossary/*.md | grep -E '^\| ' | grep -vE '^\| (Term|---)' | wc -l)
+citations=$(grep_ok -hEo 'spec [0-9]{3}|FR-[A-Z]?-?[0-9]{3}|ADR [0-9]{4}' /dev/null "${src_all[@]}" "${tests_all[@]}" | wc -l)
+glossary=$(cat docs/glossary/*.md | grep_ok -E '^\| ' | grep_ok -vE '^\| (Term|---)' | wc -l)
 constitution=$(cat .specify/memory/constitution*.md | wc -l)
 agents=$(wc -l < AGENTS.md)
-kb() { du -sk "$@" 2>/dev/null | awk '{s+=$1} END {print s+0}'; }
+# Tracked files only, so local build output (bin/obj) never skews the share.
+kb() {
+  if git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+    git ls-files -z -- "$@" | xargs -0 -r cat | wc -c | awk '{print int($1/1024)}'
+  else
+    du -sk --exclude=bin --exclude=obj "$@" 2>/dev/null | awk '{s+=$1} END {print s+0}'
+  fi
+}
 meta_kb=$(kb docs specs); code_kb=$(kb src tests)
 meta_pct=$(( meta_kb * 100 / (meta_kb + code_kb) ))
 

@@ -3,9 +3,10 @@ Draft history moved to ../../docs/reports/archive/constitution-draft-history.md.
 This constitution file is the Elsa-specific quality-gate layer: gates, allowed exceptions,
 ratification state, and governance. Canonical term lookup lives in ../../docs/glossary/.
 
-Sync Impact Report (4.2.0 -> 4.2.1, 2026-10-10)
-- Bump rationale: PATCH. Propagates framework constitution 5.0.0 (ADR 0080): the restated §2.21.1
-  summary in the scope section now matches the framework rule. No Elsa-specific gate changes.
+Sync Impact Report (4.2.0 -> 5.0.0, 2026-10-10)
+- Bump rationale: MAJOR. Propagates framework constitution 5.0.0 (ADR 0080): the restated §2.21.1
+  summary matches the framework rule. §E5's two-line versioning gate is suspended until GA (ADR 0080 D4).
+  §E6 R4's `…Contributor` suffix becomes `…Extension` as ADR 0080 D5 renames each domain.
 - Ratification: Sipke Schoorstra, 2026-10-10 (ADR 0080).
 - Templates requiring updates: none beyond those listed in the framework 5.0.0 report.
 
@@ -129,7 +130,7 @@ Ratification: RATIFIED 2026-08-08 by Sipke Schoorstra, on his authority alone; J
 -->
 # Elsa Workflow Engine Constitution
 
-**Version:** 4.2.1
+**Version:** 5.0.0
 **Status:** Ratified 2026-08-08 by Sipke Schoorstra. Governance > Amendment process calls for consensus among Joey Barten, Sipke Schoorstra, and Frans van Ek; this ratification was taken on Sipke Schoorstra's authority alone and is open to revision if the other architects dissent. Section-level gates still marked draft, provisional, or pending architecture-review ratification — whether via their own `Status:` line (§E5) or inline wording (§E2.8 Model X, §E2.9, §E2.9.7) — remain so and are **not** covered by this ratification.
 **Layer:** Elsa-specific specialization of the [Modular Software Design Framework Constitution](constitution-framework.md).
 **Derives from:** framework constitution **v5.0.0**.
@@ -520,6 +521,8 @@ The Configuration & Settings classification (framework §2.12) is deferred to th
 
 **The workbench is not the product.** `src/apps/Elsa.Workbench` is a development and demo host used to build out modules. It is not the deliverable executable, and no product host has existed in any Elsa major version. A clean host is therefore a product specification rather than a refactor of the workbench, and the `Elsa.Server` name and the `elsaworkflows/elsa-server` image are reserved for it. The workbench publishes as `elsaworkflows/elsa-workbench`.
 
+> **Suspended until GA** by [ADR 0080 D4](../../docs/adr/0080-elsa-4-simplification-decisions.md#d4--pre-ga-cleanup): every package uses one version line until 4.0 GA, and the Line A rules below do not apply. They are retired by #2576 and revisited for post-GA versioning.
+
 **Two version lines.** Elsa uses neither whole-version sharing nor fully independent versioning, both of which framework §2.13 permits.
 
 - **Line A, the host baseline.** The cross-cutting contract packages a host pins share one version that moves only when the contract surface changes, governed by framework §4.2. Membership begins with `Elsa.Primitives`, `Elsa.Events.Core`, `Elsa.Tasks.Core`, `Elsa.Serialization.Core`, `Elsa.Mediator.Core`, `Elsa.Attention.Core` and `Elsa.Expressions.Core`. Membership is recorded in the dependency map and is not final; packages whose cross-domain reach and churn do not decide the question are settled by the clean host specification.
@@ -553,7 +556,7 @@ Rationale, rejected alternatives and the supporting measurements are recorded in
 - **R2 — Don't repeat the namespace in the type name.** Inside e.g. `Elsa.Workflows.Runtime.Core`, a type does not need both `Runtime` and `WorkflowExecution` prefixes. Leading `Workflow`/`Runtime`/`Activity` qualifiers are allowed only when they *disambiguate* from a sibling type without them.
 - **R3 — Banned vague words for Elsa-owned types:** `Manager`, `Helper`, `Util(s)`, `Info`, `Data`, `Object`, `Service` (when a more specific role fits), `Processor` (prefer a concrete verb). **Exception:** names that mirror an external framework contract (ASP.NET Core Identity `UserManager`, OpenIddict `IApplicationManager`, `IRoleManager`, `ILiquidTemplateManager`) keep the external name.
 - **R4 — One suffix, one meaning.** Codified role suffixes, pick exactly one per layer and never use two synonyms for adjacent steps:
-  - `…Source` = pull/returns; `…Contributor` = push/mutates context; `…PreProcessor`/`…PostProcessor` = phased contributor; `…Validator` = returns findings.
+  - `…Source` = pull/returns; `…Contributor` = push/mutates context (becoming `…Extension` per ADR 0080 D5, domain by domain; both accepted until the rename completes); `…PreProcessor`/`…PostProcessor` = phased contributor; `…Validator` = returns findings.
   - **The `…Source` suffix is reserved for that extension-point sense** *(4.2.0; pending maintainer consensus)*: a contract, or an implementation of one, that returns values on request, as framework §2.6.1's `I<X>Source` does. `IActivityReconciliationSource`, `IJsonConverterSource`, `IApiCapabilitySource` and the read-model query contracts `IWorkflowPortfolioDataSource` and `IWorkflowRunHealthDataSource` all use it this way. "Source" has other senses in the tree. Those keep their established names, and none of them makes a type an extension point:
     - *Provenance.* `Source` before another component means origin and gives the type no role. `WorkflowExecutableSourceReference` points back to the design document an executable was compiled from; it does not yield executables. The glossary term is **source reference** (`docs/glossary/elsa.md`). The source-identity fields `SourceKind`/`SourceId`/`SourceVersion` and names such as `WorkflowExecutableSourceKinds` belong to the same sense.
     - *OpenTelemetry.* `ActivitySource` is the external `System.Diagnostics` type. Names that mirror it, such as `ActivitySourceWorkflowEngineTracer` and the `ActivitySourceName` constants, are external names (see Scope and R3).
@@ -611,4 +614,4 @@ Same rules as framework §4.2 applied to constitutional content:
 
 ---
 
-**Version:** 4.2.1 | **Ratified:** 2026-08-08 | **Last Amended:** 2026-10-10 | **Derives from framework constitution:** v5.0.0
+**Version:** 5.0.0 | **Ratified:** 2026-08-08 | **Last Amended:** 2026-10-10 | **Derives from framework constitution:** v5.0.0

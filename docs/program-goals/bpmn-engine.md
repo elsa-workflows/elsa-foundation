@@ -4,7 +4,7 @@
 
 ## Status
 
-Active (Phase 3).
+Parked until 2026-11-21 (ADR 0080 D0).
 
 ## Area
 
