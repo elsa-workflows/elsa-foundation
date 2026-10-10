@@ -204,7 +204,7 @@ then the W16/W17/W19/W21 parallel wave ([#465](https://github.com/elsa-workflows
   `executionCommandTransport`, protected by a drift test). W16's `TryAdvanceAsync` recurring-pump
   cluster-safety seam was **not** touched (out of required scope; #2198 later replaced it with fenced
   occurrence claims). New leaf seams catalogued in
-  [`EXTENSION_POINTS.md`](../../src/essentials/Workflows/Runtime/EXTENSION_POINTS.md) and glossary.
+  [`EXTENSION_POINTS.md`](../../src/essentials/Workflows/Runtime/Elsa.Workflows.Runtime/EXTENSION_POINTS.md) and glossary.
 
 Phase 4 (W22–W32 + product track): **approved 2026-07-04** by Sipke per the
 [Phase 4 handoff](../reports/elsa-4-architecture-review-2026-07/phase-4-handoff.md) §3, with

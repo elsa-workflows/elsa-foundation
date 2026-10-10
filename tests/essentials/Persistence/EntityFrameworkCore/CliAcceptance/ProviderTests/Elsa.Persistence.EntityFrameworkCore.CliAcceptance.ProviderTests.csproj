@@ -32,7 +32,7 @@
       built host's output, the same pattern tests/essentials/Cli/Tests/DotnetElsa.cs uses, so nothing from either
       project is loaded into this test process.
     -->
-    <ProjectReference Include="..\..\..\..\..\..\src\essentials\Cli\Elsa.Cli.csproj" ReferenceOutputAssembly="false" />
+    <ProjectReference Include="..\..\..\..\..\..\src\essentials\Cli\Elsa.Cli\Elsa.Cli.csproj" ReferenceOutputAssembly="false" />
     <ProjectReference Include="..\..\..\..\Cli\Fixtures\Host\Elsa.Cli.Fixtures.Host.csproj" ReferenceOutputAssembly="false" />
   </ItemGroup>
 </Project>

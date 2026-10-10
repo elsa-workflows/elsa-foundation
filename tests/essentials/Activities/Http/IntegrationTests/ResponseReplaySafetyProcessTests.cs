@@ -42,11 +42,11 @@ public sealed class ResponseReplaySafetyProcessTests
     {
         var repositoryRoot = FindRepositoryRoot();
         var fixtureDirectory = Path.Combine(repositoryRoot,
-            "tests", "essentials", "Activities", "Http", "IntegrationTests", "Fixtures", "ResponseReplayHost", "Fixtures");
+            "tests", "essentials", "Activities", "Http", "Fixtures", "ResponseReplayHost", "Fixtures");
         var closurePath = Path.Combine(fixtureDirectory, ExternalClosureFileName);
         var manifestPath = Path.Combine(fixtureDirectory, ExternalManifestFileName);
         var childProjectDirectory = Path.Combine(repositoryRoot,
-            "tests", "essentials", "Activities", "Http", "IntegrationTests", "Fixtures", "ResponseReplayHost");
+            "tests", "essentials", "Activities", "Http", "Fixtures", "ResponseReplayHost");
 
         using var manifest = JsonDocument.Parse(await File.ReadAllTextAsync(manifestPath));
         var publication = manifest.RootElement.GetProperty("publication");
@@ -108,11 +108,11 @@ public sealed class ResponseReplaySafetyProcessTests
     {
         var repositoryRoot = FindRepositoryRoot();
         var fixtureDirectory = Path.Combine(repositoryRoot,
-            "tests", "essentials", "Activities", "Http", "IntegrationTests", "Fixtures", "ResponseReplayHost", "Fixtures");
+            "tests", "essentials", "Activities", "Http", "Fixtures", "ResponseReplayHost", "Fixtures");
         var closurePath = Path.Combine(fixtureDirectory, ExternalClosureFileName);
         var manifestPath = Path.Combine(fixtureDirectory, ExternalManifestFileName);
         var childProjectDirectory = Path.Combine(repositoryRoot,
-            "tests", "essentials", "Activities", "Http", "IntegrationTests", "Fixtures", "ResponseReplayHost");
+            "tests", "essentials", "Activities", "Http", "Fixtures", "ResponseReplayHost");
 
         using var manifest = JsonDocument.Parse(await File.ReadAllTextAsync(manifestPath));
         var publication = manifest.RootElement.GetProperty("publication");
@@ -215,11 +215,11 @@ public sealed class ResponseReplaySafetyProcessTests
     {
         var repositoryRoot = FindRepositoryRoot();
         var fixtureDirectory = Path.Combine(repositoryRoot,
-            "tests", "essentials", "Activities", "Http", "IntegrationTests", "Fixtures", "ResponseReplayHost", "Fixtures");
+            "tests", "essentials", "Activities", "Http", "Fixtures", "ResponseReplayHost", "Fixtures");
         var closurePath = Path.Combine(fixtureDirectory, ExternalClosureFileName);
         var manifestPath = Path.Combine(fixtureDirectory, ExternalManifestFileName);
         var childProjectDirectory = Path.Combine(repositoryRoot,
-            "tests", "essentials", "Activities", "Http", "IntegrationTests", "Fixtures", "ResponseReplayHost");
+            "tests", "essentials", "Activities", "Http", "Fixtures", "ResponseReplayHost");
 
         using var manifest = JsonDocument.Parse(await File.ReadAllTextAsync(manifestPath));
         var publicationManifest = manifest.RootElement.GetProperty("publication");
@@ -391,11 +391,11 @@ public sealed class ResponseReplaySafetyProcessTests
     {
         var repositoryRoot = FindRepositoryRoot();
         var fixtureDirectory = Path.Combine(repositoryRoot,
-            "tests", "essentials", "Activities", "Http", "IntegrationTests", "Fixtures", "ResponseReplayHost", "Fixtures");
+            "tests", "essentials", "Activities", "Http", "Fixtures", "ResponseReplayHost", "Fixtures");
         var closurePath = Path.Combine(fixtureDirectory, ExternalClosureFileName);
         var manifestPath = Path.Combine(fixtureDirectory, ExternalManifestFileName);
         var childProjectDirectory = Path.Combine(repositoryRoot,
-            "tests", "essentials", "Activities", "Http", "IntegrationTests", "Fixtures", "ResponseReplayHost");
+            "tests", "essentials", "Activities", "Http", "Fixtures", "ResponseReplayHost");
 
         using var manifest = JsonDocument.Parse(await File.ReadAllTextAsync(manifestPath));
         var baselinePublication = manifest.RootElement.GetProperty("publication");

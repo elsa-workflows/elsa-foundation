@@ -17,7 +17,7 @@ publish + compile engine) and `ApiCapabilities`, and registers only transport: t
 the API capability declarations, transport authorization (`IActivityPublishingAuthorizationContext` over
 `HttpContext`), and the activity-draft publish/test-run services. The compiler, publication authority stores,
 and the policy/preflight/activation/projection services are supplied by the engine feature via `DependsOn` —
-see [the engine README](../README.md). The engine's in-memory stores are useful for tests and single-process
+see [the engine README](../Elsa.Workflows.Publishing/README.md). The engine's in-memory stores are useful for tests and single-process
 development, but publication authority, policies, and records must be durable in a production host.
 
 For EF Core-backed authority state, reference
@@ -60,7 +60,7 @@ operation:
    through `IPublicationActivator.CompleteAsync` (#2223); a same-version republish after such a crash answers once its
    record is active. Unpublish turns off every activation that serves the slot, whatever its history. Observers
    refresh only from the final serving state. The engine's
-   [README](../README.md) and [extension points](../EXTENSION_POINTS.md) describe the flow in full.
+   [README](../Elsa.Workflows.Publishing/README.md) and [extension points](../Elsa.Workflows.Publishing/EXTENSION_POINTS.md) describe the flow in full.
 6. Retire or restore the publication source reference as provenance. Existing executions remain pinned to their
    immutable executable artifact; unpublishing does not delete that artifact.
 

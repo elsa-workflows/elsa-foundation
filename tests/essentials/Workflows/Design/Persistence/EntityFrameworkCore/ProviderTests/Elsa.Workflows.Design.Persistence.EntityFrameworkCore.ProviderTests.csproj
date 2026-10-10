@@ -19,7 +19,7 @@
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\..\..\..\..\..\..\src\essentials\Workflows\Design\Persistence\EntityFrameworkCore\Elsa.Workflows.Design.Persistence.EntityFrameworkCore.csproj" />
-    <ProjectReference Include="..\..\..\..\..\..\..\src\essentials\Workflows\Design\Reconciliation\Elsa.Workflows.Design.Reconciliation.csproj" />
+    <ProjectReference Include="..\..\..\..\..\..\..\src\essentials\Workflows\Design\Reconciliation\Elsa.Workflows.Design.Reconciliation\Elsa.Workflows.Design.Reconciliation.csproj" />
   </ItemGroup>
   <ItemGroup>
     <!-- Pauses a reconciliation pass between its read and its write, shared with the SQLite convergence tests. -->

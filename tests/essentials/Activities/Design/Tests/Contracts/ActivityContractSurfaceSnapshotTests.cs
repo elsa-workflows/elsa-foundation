@@ -35,7 +35,7 @@ namespace Elsa.Activities.Design.Tests.Contracts;
 /// <para>
 /// To accept an intended contract change, re-run this test with
 /// <c>ELSA_UPDATE_ACTIVITY_CONTRACT_BASELINE=1</c> and commit the rewritten baseline alongside the source
-/// change, mirroring the <c>ELSA_UPDATE_EF_CORE_BASELINE</c> ratchet in <c>tests/essentials/Architecture</c>.
+/// change, mirroring the <c>ELSA_UPDATE_EF_CORE_BASELINE</c> ratchet in <c>tests/essentials/Architecture/Tests</c>.
 /// </para>
 /// </remarks>
 public sealed class ActivityContractSurfaceSnapshotTests

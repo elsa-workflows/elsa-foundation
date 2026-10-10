@@ -149,7 +149,7 @@ and routing gates are complete. Later module waves receive separate issues rathe
 - [Spike report](../reports/endpoint-framework-authorization-spike-2026-08.md)
 - [Remaining migration waves](../reports/first-party-rest-api-migration-waves-2026-08.md)
 - [Foundation authorization contracts](../../src/essentials/Foundation/Identity/Core/Authorization/AuthorizationContracts.cs)
-- [Current endpoint security guard](../../tests/essentials/Architecture/EndpointSecurityTests.cs)
+- [Current endpoint security guard](../../tests/essentials/Architecture/Tests/EndpointSecurityTests.cs)
 - [Feature Composition Readiness](feature-composition-readiness.md)
 - [Diagnostics Observability Readiness](diagnostics-observability-readiness.md)
 - [EF Core Persistence](ef-core-persistence.md)

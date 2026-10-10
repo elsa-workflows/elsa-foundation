@@ -60,7 +60,7 @@ bash tools/ef/module-migrate.sh script MySql db/migrations
 **Layout: flat, ordered `<output-dir>/NN-<slug>.sql` files plus one `migration-plan.json`** (#1878) — the
 CLI's own artifact, not the `<output-dir>/<Module>/<Provider>.sql` tree this script wrote before it became a
 shim: a DBA pipeline applies files in the order they are named, and the manifest is what `script-check` reads
-back rather than a directory listing. See the CLI's own [README](../../src/essentials/Cli/README.md) for the exact
+back rather than a directory listing. See the CLI's own [README](../../src/essentials/Cli/Elsa.Cli/README.md) for the exact
 shape.
 
 Every file is generated idempotent, which means:

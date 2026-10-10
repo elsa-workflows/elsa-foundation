@@ -24,7 +24,7 @@
     <ProjectReference Include="..\..\..\..\src\essentials\Cluster\Core\Elsa.Cluster.Core.csproj" />
     <!-- The invariant tier's FR-057 and FR-059 run over the distributed runtime composed on the provider (spec 183;
          spec 184, FR-032): the runtime, and the registries its placement requirement check reads. -->
-    <ProjectReference Include="..\..\..\..\src\essentials\Workflows\Runtime\Distributed\Elsa.Workflows.Runtime.Distributed.csproj" />
+    <ProjectReference Include="..\..\..\..\src\essentials\Workflows\Runtime\Distributed\Elsa.Workflows.Runtime.Distributed\Elsa.Workflows.Runtime.Distributed.csproj" />
     <ProjectReference Include="..\..\..\..\src\essentials\Serialization\SystemText\Elsa.Serialization.SystemText.csproj" />
   </ItemGroup>
 

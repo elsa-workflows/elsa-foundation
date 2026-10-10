@@ -29,14 +29,14 @@
          come transitively via Elsa.Http.Core. -->
     <ProjectReference Include="..\..\..\..\..\src\essentials\Workflows\Runtime\Http\Elsa.Workflows.Runtime.Http.csproj" />
     <!-- The real HttpRequestBodyParser (spec 089 C, T005) so a JSON body's ParsedContent is exercised end to end. -->
-    <ProjectReference Include="..\..\..\..\..\src\essentials\Http\Elsa.Http.csproj" />
-    <ProjectReference Include="..\..\..\..\..\src\essentials\Activities\Runtime\Elsa.Activities.Runtime.csproj" />
+    <ProjectReference Include="..\..\..\..\..\src\essentials\Http\Elsa.Http\Elsa.Http.csproj" />
+    <ProjectReference Include="..\..\..\..\..\src\essentials\Activities\Runtime\Elsa.Activities.Runtime\Elsa.Activities.Runtime.csproj" />
     <ProjectReference Include="..\..\..\..\..\src\essentials\Activities\Runtime\Core\Elsa.Activities.Runtime.Core.csproj" />
     <ProjectReference Include="..\..\..\..\..\src\essentials\Activities\Primitives\Elsa.Activities.Primitives.csproj" />
     <!-- The Sequence composite so spec 089 D scenario 2 can sequence two HttpEndpoints in one workflow. -->
     <ProjectReference Include="..\..\..\..\..\src\essentials\Activities\Sequence\Elsa.Activities.Sequence.csproj" />
-    <ProjectReference Include="..\..\..\..\..\src\essentials\Events\Elsa.Events.csproj" />
-    <ProjectReference Include="..\..\..\..\..\src\essentials\Expressions\Elsa.Expressions.csproj" />
+    <ProjectReference Include="..\..\..\..\..\src\essentials\Events\Elsa.Events\Elsa.Events.csproj" />
+    <ProjectReference Include="..\..\..\..\..\src\essentials\Expressions\Elsa.Expressions\Elsa.Expressions.csproj" />
     <ProjectReference Include="..\..\..\..\..\src\essentials\Serialization\SystemText\Elsa.Serialization.SystemText.csproj" />
     <ProjectReference Include="..\..\..\..\..\src\essentials\Primitives\Primitives\Elsa.Primitives.csproj" />
     <ProjectReference Include="..\..\..\..\..\src\essentials\Workflows\Runtime\Api\Elsa.Workflows.Runtime.Api.csproj" />
@@ -49,14 +49,13 @@
   </ItemGroup>
 
   <ItemGroup>
-    <Compile Remove="Fixtures/ResponseReplayHost/**/*.cs" />
-    <Compile Include="Fixtures/ResponseReplayHost/ResponseReplayObservation.Core.cs" Link="ResponseReplayObservation.Core.cs" />
-    <None Update="Fixtures/ResponseReplayHost/Fixtures/current-format-external-closure.json" CopyToOutputDirectory="PreserveNewest" />
-    <None Update="Fixtures/ResponseReplayHost/Fixtures/current-format-external-manifest.json" CopyToOutputDirectory="PreserveNewest" />
+    <Compile Include="../Fixtures/ResponseReplayHost/ResponseReplayObservation.Core.cs" Link="ResponseReplayObservation.Core.cs" />
+    <None Include="../Fixtures/ResponseReplayHost/Fixtures/current-format-external-closure.json" Link="Fixtures/ResponseReplayHost/Fixtures/current-format-external-closure.json" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="../Fixtures/ResponseReplayHost/Fixtures/current-format-external-manifest.json" Link="Fixtures/ResponseReplayHost/Fixtures/current-format-external-manifest.json" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="Fixtures/ResponseReplayHost/ResponseReplayHost.csproj" ReferenceOutputAssembly="false" />
+    <ProjectReference Include="../Fixtures/ResponseReplayHost/ResponseReplayHost.csproj" ReferenceOutputAssembly="false" />
   </ItemGroup>
 
 </Project>

@@ -117,7 +117,7 @@ Secrets, distributed stores, Dashboard readers, private stores, and unknown/cust
 inherit a resource automatically. Resource names are references, not proof that two contexts share a
 physical database or transaction; required affinity is checked by the owning EF/runtime operation.
 
-The opt-in [`composition inspect`](../../Cli/README.md#inspecting-an-accepted-runtime-candidate)
+The opt-in [`composition inspect`](../../Cli/Elsa.Cli/README.md#inspecting-an-accepted-runtime-candidate)
 command previews an accepted, edited file candidate through the host's candidate-inspection capability.
 It uses the declared host defaults, actual CShells dependency closure and shared resource preparer with
 configured connection-value checks enabled. The Elsa-owned inspection path detects incompatible
@@ -567,7 +567,7 @@ guards replace that compile check:
 
 ### Why no typed registration helper
 
-ADR 0073's [EF dependency guard](../../../../tests/essentials/Architecture/EfCoreDependencyGuardTests.cs) admits engine
+ADR 0073's [EF dependency guard](../../../../tests/essentials/Architecture/Tests/EfCoreDependencyGuardTests.cs) admits engine
 packages in `Elsa.Workbench` only, and asserts each admitted module project's EF closure exactly. Adding a typed
 `UseSqlServer` call to a module project would therefore fail the guard as an unexpectedly resolved package, and
 splitting each module into four provider-specific projects would turn thirteen module projects into fifty-two and

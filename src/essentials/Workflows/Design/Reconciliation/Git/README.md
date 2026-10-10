@@ -24,7 +24,7 @@ runtime read path. v1 is **single-writer**.
   limits here: a version whose file is already committed is skipped before it is judged, so one exported before the
   rule existed (or before its activity was installed) stays in git history as written; and a node whose activity the
   catalog does not hold cannot be judged, so a literal on it is exported (publication refuses such a version). Inbound,
-  the reconciler applies the rule to each item the same way (see the [reconciliation README](../README.md)).
+  the reconciler applies the rule to each item the same way (see the [reconciliation README](../Elsa.Workflows.Design.Reconciliation/README.md)).
 
 ## On-disk layout
 

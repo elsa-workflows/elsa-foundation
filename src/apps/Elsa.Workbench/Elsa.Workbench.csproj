@@ -67,17 +67,17 @@
 		<ProjectReference Include="..\..\essentials\Activities\Design\Api\Elsa.Activities.Design.Api.csproj" />
 		<ProjectReference Include="..\..\essentials\Activities\Design\Core\Elsa.Activities.Design.Core.csproj" />
 		<ProjectReference Include="..\..\essentials\Activities\Design\Persistence\Core\Elsa.Activities.Design.Persistence.Core.csproj" />
-		<ProjectReference Include="..\..\essentials\Activities\Design\Reconciliation\Elsa.Activities.Design.Reconciliation.csproj" />
+		<ProjectReference Include="..\..\essentials\Activities\Design\Reconciliation\Elsa.Activities.Design.Reconciliation\Elsa.Activities.Design.Reconciliation.csproj" />
 		<ProjectReference Include="..\..\essentials\Activities\Design\Reconciliation\Clr\Elsa.Activities.Design.Reconciliation.Clr.csproj" />
 		<!--
 			Workflow-side reconciliation (spec 147, #1157): the universal workflow pass plus the JSON file
 			source, so a shells.json enabling JsonWorkflowReconciliation deploys mounted definition files at
 			startup instead of being silently skipped by the runtime feature catalog.
 		-->
-		<ProjectReference Include="..\..\essentials\Workflows\Design\Reconciliation\Elsa.Workflows.Design.Reconciliation.csproj" />
+		<ProjectReference Include="..\..\essentials\Workflows\Design\Reconciliation\Elsa.Workflows.Design.Reconciliation\Elsa.Workflows.Design.Reconciliation.csproj" />
 		<ProjectReference Include="..\..\essentials\Workflows\Design\Reconciliation\Json\Elsa.Workflows.Design.Reconciliation.Json.csproj" />
-		<ProjectReference Include="..\..\essentials\Activities\Runtime\Elsa.Activities.Runtime.csproj" />
-		<ProjectReference Include="..\..\essentials\Activities\Bpmn\Elsa.Activities.Bpmn.csproj" />
+		<ProjectReference Include="..\..\essentials\Activities\Runtime\Elsa.Activities.Runtime\Elsa.Activities.Runtime.csproj" />
+		<ProjectReference Include="..\..\essentials\Activities\Bpmn\Elsa.Activities.Bpmn\Elsa.Activities.Bpmn.csproj" />
 		<ProjectReference Include="..\..\essentials\Activities\Bpmn\Interchange\Elsa.Activities.Bpmn.Interchange.csproj" />
 		<ProjectReference Include="..\..\essentials\Activities\ControlFlow\Elsa.Activities.ControlFlow.csproj" />
 		<ProjectReference Include="..\..\essentials\Activities\DispatchWorkflow\Design\Elsa.Activities.DispatchWorkflow.Design.csproj" />
@@ -90,17 +90,17 @@
 		<ProjectReference Include="..\..\essentials\Activities\Sequence\Elsa.Activities.Sequence.csproj" />
 		<ProjectReference Include="..\..\essentials\Api\Capabilities\Elsa.Api.Capabilities.csproj" />
 		<ProjectReference Include="..\..\essentials\Cluster\Readability\Elsa.Cluster.Readability.csproj" />
-		<ProjectReference Include="..\..\essentials\Expressions\JavaScript\Elsa.Expressions.JavaScript.csproj" />
+		<ProjectReference Include="..\..\essentials\Expressions\JavaScript\Elsa.Expressions.JavaScript\Elsa.Expressions.JavaScript.csproj" />
 		<ProjectReference Include="..\..\essentials\Expressions\JavaScript\Jint\Elsa.Expressions.JavaScript.Jint.csproj" />
-		<ProjectReference Include="..\..\essentials\Expressions\JavaScript\Rendering\Elsa.Expressions.JavaScript.Rendering.csproj" />
+		<ProjectReference Include="..\..\essentials\Expressions\JavaScript\Rendering\Elsa.Expressions.JavaScript.Rendering\Elsa.Expressions.JavaScript.Rendering.csproj" />
 		<ProjectReference Include="..\..\essentials\Expressions\Api\Elsa.Expressions.Api.csproj" />
-		<ProjectReference Include="..\..\essentials\Http\Elsa.Http.csproj" />
+		<ProjectReference Include="..\..\essentials\Http\Elsa.Http\Elsa.Http.csproj" />
 		<ProjectReference Include="..\..\essentials\Http\JavaScript\Elsa.Http.JavaScript.csproj" />
-		<ProjectReference Include="..\..\essentials\Foundation\Identity\Elsa.Foundation.Identity.csproj" />
+		<ProjectReference Include="..\..\essentials\Foundation\Identity\Elsa.Foundation.Identity\Elsa.Foundation.Identity.csproj" />
 		<ProjectReference Include="..\..\essentials\Foundation\Identity\Api\Elsa.Foundation.Identity.Api.csproj" />
-		<ProjectReference Include="..\..\essentials\Foundation\Identity\AspNetCoreIdentity\Elsa.Foundation.Identity.AspNetCoreIdentity.csproj" />
+		<ProjectReference Include="..\..\essentials\Foundation\Identity\AspNetCoreIdentity\Elsa.Foundation.Identity.AspNetCoreIdentity\Elsa.Foundation.Identity.AspNetCoreIdentity.csproj" />
 		<ProjectReference Include="..\..\essentials\Foundation\Identity\Oidc\Elsa.Foundation.Identity.Oidc.csproj" />
-		<ProjectReference Include="..\..\essentials\Foundation\Identity\OpenIddict\Elsa.Foundation.Identity.OpenIddict.csproj" />
+		<ProjectReference Include="..\..\essentials\Foundation\Identity\OpenIddict\Elsa.Foundation.Identity.OpenIddict\Elsa.Foundation.Identity.OpenIddict.csproj" />
 		<ProjectReference Include="..\..\essentials\Secrets\Persistence\EntityFrameworkCore\Elsa.Secrets.Persistence.EntityFrameworkCore.csproj" />
 		<ProjectReference Include="..\..\essentials\Activities\Design\Persistence\EntityFrameworkCore\Elsa.Activities.Design.Persistence.EntityFrameworkCore.csproj" />
 		<ProjectReference Include="..\..\essentials\Diagnostics\OpenTelemetry\Persistence\EntityFrameworkCore\Elsa.Diagnostics.OpenTelemetry.Persistence.EntityFrameworkCore.csproj" />
@@ -113,13 +113,13 @@
 		<ProjectReference Include="..\..\essentials\Workflows\Publishing\Persistence\EntityFrameworkCore\Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore.csproj" />
 		<ProjectReference Include="..\..\essentials\Workflows\Runtime\Distributed\Persistence\EntityFrameworkCore\Elsa.Workflows.Runtime.Distributed.Persistence.EntityFrameworkCore.csproj" />
 		<ProjectReference Include="..\..\essentials\Workflows\Runtime\Persistence\EntityFrameworkCore\Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.csproj" />
-		<ProjectReference Include="..\..\essentials\Workflows\Dashboard\Elsa.Workflows.Dashboard.csproj" />
+		<ProjectReference Include="..\..\essentials\Workflows\Dashboard\Elsa.Workflows.Dashboard\Elsa.Workflows.Dashboard.csproj" />
 		<ProjectReference Include="..\..\essentials\Workflows\Design\JavaScript\Elsa.Workflows.Design.JavaScript.csproj" />
 		<!--
 			WorkflowsDashboard declares DependsOn WorkflowDesignValidations; the validations feature assembly must be in
 			the CShells catalog or shell activation fails with FeatureNotFoundException on any host enabling the dashboard.
 		-->
-		<ProjectReference Include="..\..\essentials\Workflows\Design\Validations\Elsa.Workflows.Design.Validations.csproj" />
+		<ProjectReference Include="..\..\essentials\Workflows\Design\Validations\Elsa.Workflows.Design.Validations\Elsa.Workflows.Design.Validations.csproj" />
 		<ProjectReference Include="..\..\essentials\Workflows\Publishing\Api\Elsa.Workflows.Publishing.Api.csproj" />
 		<ProjectReference Include="..\..\essentials\Workflows\Runtime\Api\Elsa.Workflows.Runtime.Api.csproj" />
 		<!--
@@ -128,21 +128,21 @@
 			spans on the Elsa.Workflows.Runtime source; the host-local OpenTelemetryEngineTracingBridge feature then forwards
 			those spans into the OTel ingestion store.
 		-->
-		<ProjectReference Include="..\..\essentials\Workflows\Runtime\Elsa.Workflows.Runtime.csproj" />
+		<ProjectReference Include="..\..\essentials\Workflows\Runtime\Elsa.Workflows.Runtime\Elsa.Workflows.Runtime.csproj" />
 		<ProjectReference Include="..\..\essentials\Caching\Core\Elsa.Caching.Core.csproj" />
 		<ProjectReference Include="..\..\essentials\Caching\Memory\Elsa.Caching.Memory.csproj" />
 		<ProjectReference Include="..\..\essentials\Diagnostics\ConsoleLogStreaming\Elsa.Diagnostics.ConsoleLogStreaming.csproj" />
-		<ProjectReference Include="..\..\essentials\Diagnostics\OpenTelemetry\Elsa.Diagnostics.OpenTelemetry.csproj" />
-		<ProjectReference Include="..\..\essentials\Diagnostics\StructuredLogs\Elsa.Diagnostics.StructuredLogs.csproj" />
-		<ProjectReference Include="..\..\essentials\Expressions\Elsa.Expressions.csproj" />
+		<ProjectReference Include="..\..\essentials\Diagnostics\OpenTelemetry\Elsa.Diagnostics.OpenTelemetry\Elsa.Diagnostics.OpenTelemetry.csproj" />
+		<ProjectReference Include="..\..\essentials\Diagnostics\StructuredLogs\Elsa.Diagnostics.StructuredLogs\Elsa.Diagnostics.StructuredLogs.csproj" />
+		<ProjectReference Include="..\..\essentials\Expressions\Elsa.Expressions\Elsa.Expressions.csproj" />
 		<!--
 			The default shell enables the Events feature, so its assembly has to be in the host's CShells
 			catalog. It used to arrive transitively through a deleted persistence project; reference it here.
 		-->
-		<ProjectReference Include="..\..\essentials\Events\Elsa.Events.csproj" />
+		<ProjectReference Include="..\..\essentials\Events\Elsa.Events\Elsa.Events.csproj" />
 		<ProjectReference Include="..\..\essentials\Locking\Database\Elsa.Locking.Database.csproj" />
 		<ProjectReference Include="..\..\essentials\Locking\FileSystem\Elsa.Locking.FileSystem.csproj" />
-		<ProjectReference Include="..\..\essentials\Mediator\Elsa.Mediator.csproj" />
+		<ProjectReference Include="..\..\essentials\Mediator\Elsa.Mediator\Elsa.Mediator.csproj" />
 		<ProjectReference Include="..\..\essentials\Modularity\Api\Elsa.Modularity.Api.csproj" />
 		<ProjectReference Include="..\..\essentials\Modularity\Core\Elsa.Modularity.Core.csproj" />
 		<ProjectReference Include="..\..\essentials\Modularity\EntityFramework\Elsa.Modularity.EntityFramework.csproj" />
@@ -155,15 +155,15 @@
 		<ProjectReference Include="..\..\essentials\Studio\Preferences\Api\Elsa.Studio.Preferences.Api.csproj" />
 		<ProjectReference Include="..\..\essentials\Secrets\Api\Elsa.Secrets.Api.csproj" />
 		<ProjectReference Include="..\..\essentials\Secrets\Core\Elsa.Secrets.Core.csproj" />
-		<ProjectReference Include="..\..\essentials\Secrets\Elsa.Secrets.csproj" />
+		<ProjectReference Include="..\..\essentials\Secrets\Elsa.Secrets\Elsa.Secrets.csproj" />
 		<ProjectReference Include="..\..\essentials\Secrets\Workflows\Elsa.Secrets.Workflows.csproj" />
 		<ProjectReference Include="..\..\essentials\Tasks\Core\Elsa.Tasks.Core.csproj" />
 		<ProjectReference Include="..\..\essentials\Tasks\Schedules\Elsa.Tasks.Schedules.csproj" />
-		<ProjectReference Include="..\..\essentials\Tasks\Elsa.Tasks.csproj" />
+		<ProjectReference Include="..\..\essentials\Tasks\Elsa.Tasks\Elsa.Tasks.csproj" />
 		<ProjectReference Include="..\..\essentials\Workflows\Design\Api\Elsa.Workflows.Design.Api.csproj" />
 		<ProjectReference Include="..\..\essentials\Workflows\Runtime\JavaScript\Elsa.Workflows.Runtime.JavaScript.csproj" />
 		<ProjectReference Include="..\..\essentials\Workflows\Runtime\Http\Elsa.Workflows.Runtime.Http.csproj" />
-		<ProjectReference Include="..\..\essentials\Workflows\Runtime\Distributed\Elsa.Workflows.Runtime.Distributed.csproj" />
+		<ProjectReference Include="..\..\essentials\Workflows\Runtime\Distributed\Elsa.Workflows.Runtime.Distributed\Elsa.Workflows.Runtime.Distributed.csproj" />
 		<!--
 			The EF Core persistence providers and durable lane features each declare
 			DependsOn "WorkflowsRuntimeResumption": a durable store keeps checkpoints/outbox/scheduler backlog,
@@ -183,7 +183,7 @@
 			a folder or ordered file list; keeping the assembly in Workbench's feature catalog makes that runtime-only
 			deployment shape testable without composing Design or Publishing into the target shell.
 		-->
-		<ProjectReference Include="..\..\essentials\Workflows\Runtime\Reconciliation\Elsa.Workflows.Runtime.Reconciliation.csproj" />
+		<ProjectReference Include="..\..\essentials\Workflows\Runtime\Reconciliation\Elsa.Workflows.Runtime.Reconciliation\Elsa.Workflows.Runtime.Reconciliation.csproj" />
 		<ProjectReference Include="..\..\essentials\Workflows\Runtime\Scheduling\Elsa.Workflows.Runtime.Scheduling.csproj" />
 		<!--
 			Test-host execution evidence. The Workbench is a development and QA host, so the collector's assembly is in

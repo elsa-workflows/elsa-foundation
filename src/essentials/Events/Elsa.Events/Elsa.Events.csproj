@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <PackageReference Include="CShells.Abstractions" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" />
+    <PackageReference Include="Elsa.Specifications.PackageManifest.Generator" PrivateAssets="all" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Core\Elsa.Events.Core.csproj" />
+    <ProjectReference Include="..\Strategies\Elsa.Events.Strategies.csproj" />
+    <ProjectReference Include="..\..\Pipelines\Core\Elsa.Pipelines.Core.csproj" />
+    <ProjectReference Include="..\..\Primitives\Primitives\Elsa.Primitives.csproj" />
+    <ProjectReference Include="..\..\Tasks\Core\Elsa.Tasks.Core.csproj" />
+  </ItemGroup>
+
+</Project>
