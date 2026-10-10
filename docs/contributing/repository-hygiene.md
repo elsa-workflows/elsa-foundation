@@ -33,9 +33,9 @@ A branch lives as long as its pull request.
 
 - **Never swept:** `main`, `publish-state`, `release/*`, `rc/*` and any protected branch. A branch that
   must live longer than its PR (a demo, an integration line) needs an open PR or one of those patterns.
-- Naming is unchanged and not enforced; the sweep reads PR state, not names. Note that
-  [Packages](../../.github/workflows/packages.yml) builds pushes to `feat/*`, `fix/*` and similar
-  prefixes.
+- Naming is unchanged and not enforced; the sweep reads PR state, not names.
+  [Packages](../../.github/workflows/packages.yml) runs on pushes to `main` only; a branch gets CI
+  through its PR.
 
 ## Issues
 

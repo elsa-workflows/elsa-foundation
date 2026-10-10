@@ -5,7 +5,7 @@ name: Packages
 # tools/versioning/Elsa.Versioning.Publisher (tools/versioning/README.md, Publishing); this workflow only runs it.
 # Every run starts with the publisher's plan, which takes one of four modes:
 #
-#   - branch     a push to any branch below but main, or a manual run from one: packs the affected set at
+#   - branch     a manual run from any branch but main: packs the affected set at
 #                branch-scoped versions for the run's artifact, and never pushes to a feed (spec 150 FR-008).
 #   - dry-run    a push to main, or a manual run from it, while publish-state does not exist: packs every package at
 #                the version the bootstrap would publish, uploads them, and publishes nothing. The job summary says the
@@ -40,18 +40,12 @@ on:
         description: 'Why the force_advance packages advance; recorded in the computation.'
         type: string
         default: ''
+  # Main only (#2622). Feature branches get CI through their pull requests; the branch pushes this list
+  # once also packed (feat/*, fix/*, release/* and the like) never pushed to a feed, and no workflow or tool in
+  # this repository reads their artifacts. A manual run from a branch still packs at branch-scoped versions.
   push:
     branches:
       - 'main'
-      - 'feat/*'
-      - 'fix/*'
-      - 'bug/*'
-      - 'enh/*'
-      - 'perf/*'
-      - 'patch/*'
-      - 'rc/*'
-      - 'release/*'
-      - 'develop/*'
   release:
     types: [prereleased, published]
 

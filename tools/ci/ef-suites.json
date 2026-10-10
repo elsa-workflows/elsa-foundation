@@ -78,12 +78,14 @@
     {
       "suite": "secrets-sqlserver",
       "project": "tests/essentials/Secrets/Persistence/EntityFrameworkCore/SqlServer/Tests/Elsa.Secrets.Persistence.EntityFrameworkCore.SqlServer.Tests.csproj",
-      "require": ""
+      "require": "",
+      "onlyEngine": "sqlserver"
     },
     {
       "suite": "secrets-mysql",
       "project": "tests/essentials/Secrets/Persistence/EntityFrameworkCore/MySql/Tests/Elsa.Secrets.Persistence.EntityFrameworkCore.MySql.Tests.csproj",
-      "require": ""
+      "require": "",
+      "onlyEngine": "mysql"
     },
     {
       "suite": "transaction-topology",
@@ -98,7 +100,8 @@
     {
       "suite": "mysql-feasibility",
       "project": "tests/essentials/Persistence/EntityFrameworkCore/MySql/FeasibilityTests/Elsa.Persistence.EntityFrameworkCore.MySql.FeasibilityTests.csproj",
-      "require": ""
+      "require": "",
+      "onlyEngine": "mysql"
     },
     {
       "suite": "cli-acceptance",
