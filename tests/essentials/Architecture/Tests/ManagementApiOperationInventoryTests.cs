@@ -1,11 +1,10 @@
-using System.Text.RegularExpressions;
 using Xunit;
 using YamlDotNet.RepresentationModel;
 using static Elsa.Architecture.Tests.RepoPaths;
 
 namespace Elsa.Architecture.Tests;
 
-public sealed partial class ManagementApiOperationInventoryTests
+public sealed class ManagementApiOperationInventoryTests
 {
     private static readonly FormerFacadeOperation[] Inventory =
     [
@@ -38,22 +37,6 @@ public sealed partial class ManagementApiOperationInventoryTests
         Canonical("GET", "/descriptors/variables", "Expressions", "listVariableTypeDescriptors"),
         Canonical("POST", "/design/scoped-variables/analyze", "Workflow Design", "analyzeScopedVariables")
     ];
-
-    [Fact]
-    public void Frozen_inventory_matches_every_operation_in_the_former_facade_source_when_present()
-    {
-        var facadeFileName = string.Concat("ElsaWorkflow", "ManagementApi.cs");
-        var facadePath = Path.Combine(RepoRoot, "src", "apps", "Elsa.Workbench", facadeFileName);
-        if (!File.Exists(facadePath))
-            return;
-
-        var sourceOperations = FacadeRouteRegistration()
-            .Matches(File.ReadAllText(facadePath))
-            .Select(match => $"{match.Groups[1].Value.ToUpperInvariant()} {match.Groups[2].Value}")
-            .Order(StringComparer.Ordinal);
-
-        Assert.Equal(sourceOperations, Inventory.Select(x => x.LegacyKey).Order(StringComparer.Ordinal));
-    }
 
     [Fact]
     public void Every_former_facade_operation_has_exactly_one_canonical_owner_or_removal_rationale()
@@ -100,9 +83,6 @@ public sealed partial class ManagementApiOperationInventoryTests
 
     private static FormerFacadeOperation Removed(string verb, string path, string rationale) =>
         new(verb, path, null, null, rationale);
-
-    [GeneratedRegex("group\\.Map(Get|Post|Put|Patch|Delete)\\(\"([^\"]+)\"")]
-    private static partial Regex FacadeRouteRegistration();
 
     private sealed record FormerFacadeOperation(
         string Verb,

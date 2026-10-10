@@ -27,7 +27,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <!-- The upcaster's fixture pair, frozen once committed (EfSchemaFamilyFixtureProofGuardTests). -->
+    <!-- The upcaster's fixture pair, frozen once committed (by review until #2606 restores a compiled check). -->
     <None Include="Fixtures\SchemaUpcasters\**\*" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 

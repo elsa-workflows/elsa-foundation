@@ -15,7 +15,9 @@
           "Expressions": {},
           "ExpressionsApi": {},
           "ApiCapabilities": {},
-          "Secrets": {},
+          "Secrets": {
+            "EncryptionKey": "development-demo-only-secrets-encryption-key"
+          },
           "SecretsApi": {},
           "SecretsWorkflows": {},
           "WorkflowsDesignApi": {},

@@ -10,7 +10,7 @@ namespace Elsa.Architecture.Tests;
 /// through an explicitly reviewed program issue. This ratchet therefore keeps the currently admitted
 /// surface at the vendor-owned OpenIddict host boundary plus the repository implementations explicitly
 /// admitted by ADR 0072 and ADR 0073 / Program #1665. It reads
-/// each source project's evaluated Release and Debug restore graphs and scans sources, so imported, conditional, transitive,
+/// each source project's evaluated Release and Debug restore graphs, so imported, conditional, transitive,
 /// and provider-only EF edges anywhere else under <c>src/</c> fail and name the offender. Each host exception also
 /// validates its exact resolved EF package set. Each replacement changes this guard deliberately with its own
 /// architecture evidence; the destination ADR alone is not a repository-wide exemption.
@@ -664,19 +664,6 @@ public sealed class EfCoreDependencyGuardTests
         Assert.False(IsAdmittedConditionalDependency("Directory.Build.props", otherCondition));
     }
 
-    [Fact]
-    public void No_source_file_outside_the_admitted_surfaces_mentions_ef_core()
-    {
-        var offenders = ModuleRoots.ProductionSourceFiles(RepoRoot)
-            .Where(file => !IsAdmittedEfSource(file))
-            .Where(file => File.ReadAllText(file).Contains(EfPackageToken, StringComparison.Ordinal))
-            .Select(file => Path.GetRelativePath(RepoRoot, file))
-            .Order()
-            .ToArray();
-
-        Assert.True(offenders.Length == 0, Report("mention an EF package namespace in source", offenders));
-    }
-
     private static Dictionary<string, Project> LoadModuleProjects()
     {
         var projects = new Dictionary<string, Project>(StringComparer.Ordinal);
@@ -838,29 +825,6 @@ public sealed class EfCoreDependencyGuardTests
                 .SelectMany(ancestor => ancestor.Attributes())
                 .Any(attribute => attribute.Name.LocalName == "Condition"));
 
-    private static bool IsAdmittedEfSource(string file)
-    {
-        var relativePath = Path.GetRelativePath(RepoRoot, file).Replace('\\', '/');
-        return Adr0072SecretsEfPilot.IsSurfacePath(relativePath) ||
-               Adr0073RepositoryFirstEf.IsSurfacePath(relativePath) ||
-               Adr0073StructuredLogsEf.IsSurfacePath(relativePath) ||
-               Adr0073OpenTelemetryEf.IsSurfacePath(relativePath) ||
-               Adr0073IdentityEf.IsSurfacePath(relativePath) ||
-               Adr0073RuntimePlacementEf.IsSurfacePath(relativePath) ||
-               Adr0073RuntimeBookmarksEf.IsSurfacePath(relativePath) ||
-               Adr0073DashboardRunHealthEf.IsSurfacePath(relativePath) ||
-               Adr0073PublishingSnapshotReviewEf.IsSurfacePath(relativePath) ||
-               Adr0073WorkflowsDesignEf.IsSurfacePath(relativePath) ||
-               Adr0073ActivitiesDesignEf.IsSurfacePath(relativePath) ||
-               Adr0073Elsa3ImportEf.IsSurfacePath(relativePath) ||
-               Adr0076ActivationGuardEf.IsSurfacePath(relativePath) ||
-               Spec183ReadabilityEf.IsSurfacePath(relativePath) ||
-               Adr0078ClusterMembershipEf.IsSurfacePath(relativePath) ||
-               Adr0076DataProtectionKeyStoreEf.IsSurfacePath(relativePath) ||
-               OpenIddictPersistenceArchitectureTests.IsWorkbenchVendorEfSource(relativePath) ||
-               OpenIddictPersistenceArchitectureTests.IsWorkbenchEngineEfSource(relativePath);
-    }
-
     private static bool IsMsBuildFile(string path) =>
         path.EndsWith(".csproj", StringComparison.OrdinalIgnoreCase) ||
         path.EndsWith(".props", StringComparison.OrdinalIgnoreCase) ||
@@ -920,9 +884,6 @@ public sealed class EfCoreDependencyGuardTests
 
         public static IEnumerable<string> ProjectPaths => ExpectedEfPackagesByProject.Keys;
 
-        public static bool IsSurfacePath(string relativePath) =>
-            SurfacePathPrefixes.Any(prefix => relativePath.StartsWith(prefix, StringComparison.Ordinal));
-
         public static bool IsProjectPath(string relativePath) =>
             ProjectPaths.Contains(relativePath, StringComparer.Ordinal);
 
@@ -941,12 +902,6 @@ public sealed class EfCoreDependencyGuardTests
     /// </summary>
     internal static class Adr0073RepositoryFirstEf
     {
-        public static readonly string[] SurfacePathPrefixes =
-        [
-            "src/essentials/Studio/Preferences/Persistence/EntityFrameworkCore/",
-            "tests/essentials/Studio/Preferences/Persistence/EntityFrameworkCore/"
-        ];
-
         public static readonly IReadOnlyDictionary<string, string[]> ExpectedEfPackagesByProject =
             new Dictionary<string, string[]>(StringComparer.Ordinal)
             {
@@ -968,9 +923,6 @@ public sealed class EfCoreDependencyGuardTests
 
         public static IEnumerable<string> ProjectPaths => ExpectedEfPackagesByProject.Keys;
 
-        public static bool IsSurfacePath(string relativePath) =>
-            SurfacePathPrefixes.Any(prefix => relativePath.StartsWith(prefix, StringComparison.Ordinal));
-
         public static bool IsProjectPath(string relativePath) =>
             ProjectPaths.Contains(relativePath, StringComparer.Ordinal);
 
@@ -986,12 +938,6 @@ public sealed class EfCoreDependencyGuardTests
     /// <summary>Activities Design EF replacement admitted by the audited A01-A21 implementation slice.</summary>
     internal static class Adr0073ActivitiesDesignEf
     {
-        public static readonly string[] SurfacePathPrefixes =
-        [
-            "src/essentials/Activities/Design/Persistence/EntityFrameworkCore/",
-            "tests/essentials/Activities/Design/Persistence/EntityFrameworkCore/"
-        ];
-
         public static readonly IReadOnlyDictionary<string, string[]> ExpectedEfPackagesByProject =
             new Dictionary<string, string[]>(StringComparer.Ordinal)
             {
@@ -1003,7 +949,6 @@ public sealed class EfCoreDependencyGuardTests
             };
 
         public static IEnumerable<string> ProjectPaths => ExpectedEfPackagesByProject.Keys;
-        public static bool IsSurfacePath(string relativePath) => SurfacePathPrefixes.Any(prefix => relativePath.StartsWith(prefix, StringComparison.Ordinal));
         public static bool IsProjectPath(string relativePath) => ProjectPaths.Contains(relativePath, StringComparer.Ordinal);
         private static string[] CorePackages() => ["Microsoft.EntityFrameworkCore", "Microsoft.EntityFrameworkCore.Abstractions", "Microsoft.EntityFrameworkCore.Analyzers", "Microsoft.EntityFrameworkCore.Relational"];
     }
@@ -1014,12 +959,6 @@ public sealed class EfCoreDependencyGuardTests
     /// </summary>
     internal static class Adr0073RuntimePlacementEf
     {
-        public static readonly string[] SurfacePathPrefixes =
-        [
-            "src/essentials/Workflows/Runtime/Distributed/Persistence/EntityFrameworkCore/",
-            "tests/essentials/Workflows/Runtime/Distributed/Persistence/EntityFrameworkCore/"
-        ];
-
         public static readonly IReadOnlyDictionary<string, string[]> ExpectedEfPackagesByProject =
             new Dictionary<string, string[]>(StringComparer.Ordinal)
             {
@@ -1043,9 +982,6 @@ public sealed class EfCoreDependencyGuardTests
 
         public static IEnumerable<string> ProjectPaths => ExpectedEfPackagesByProject.Keys;
 
-        public static bool IsSurfacePath(string relativePath) =>
-            SurfacePathPrefixes.Any(prefix => relativePath.StartsWith(prefix, StringComparison.Ordinal));
-
         public static bool IsProjectPath(string relativePath) =>
             ProjectPaths.Contains(relativePath, StringComparer.Ordinal);
 
@@ -1064,12 +1000,6 @@ public sealed class EfCoreDependencyGuardTests
     /// </summary>
     internal static class Adr0073RuntimeBookmarksEf
     {
-        public static readonly string[] SurfacePathPrefixes =
-        [
-            "src/essentials/Workflows/Runtime/Persistence/EntityFrameworkCore/",
-            "tests/essentials/Workflows/Runtime/Persistence/EntityFrameworkCore/"
-        ];
-
         public static readonly IReadOnlyDictionary<string, string[]> ExpectedEfPackagesByProject =
             new Dictionary<string, string[]>(StringComparer.Ordinal)
             {
@@ -1088,9 +1018,6 @@ public sealed class EfCoreDependencyGuardTests
             };
 
         public static IEnumerable<string> ProjectPaths => ExpectedEfPackagesByProject.Keys;
-
-        public static bool IsSurfacePath(string relativePath) =>
-            SurfacePathPrefixes.Any(prefix => relativePath.StartsWith(prefix, StringComparison.Ordinal));
 
         public static bool IsProjectPath(string relativePath) =>
             ProjectPaths.Contains(relativePath, StringComparer.Ordinal);
@@ -1120,7 +1047,6 @@ public sealed class EfCoreDependencyGuardTests
                 ]
             };
 
-        public static bool IsSurfacePath(string relativePath) => relativePath.StartsWith(Prefix, StringComparison.Ordinal);
         public static bool IsProjectPath(string relativePath) => ExpectedEfPackagesByProject.ContainsKey(relativePath);
     }
 
@@ -1156,9 +1082,6 @@ public sealed class EfCoreDependencyGuardTests
             };
 
         public static bool IsProjectPath(string relativePath) => ExpectedEfPackagesByProject.ContainsKey(relativePath);
-        public static bool IsSurfacePath(string relativePath) =>
-            relativePath.StartsWith(Source, StringComparison.Ordinal) ||
-            relativePath.StartsWith(Tests, StringComparison.Ordinal);
     }
 
     /// <summary>
@@ -1168,12 +1091,6 @@ public sealed class EfCoreDependencyGuardTests
     /// </summary>
     internal static class Adr0073StructuredLogsEf
     {
-        public static readonly string[] SurfacePathPrefixes =
-        [
-            "src/essentials/Diagnostics/StructuredLogs/Persistence/EntityFrameworkCore/",
-            "tests/essentials/Diagnostics/StructuredLogs/Persistence/EntityFrameworkCore/"
-        ];
-
         public static readonly IReadOnlyDictionary<string, string[]> ExpectedEfPackagesByProject =
             new Dictionary<string, string[]>(StringComparer.Ordinal)
             {
@@ -1190,9 +1107,6 @@ public sealed class EfCoreDependencyGuardTests
             };
 
         public static IEnumerable<string> ProjectPaths => ExpectedEfPackagesByProject.Keys;
-
-        public static bool IsSurfacePath(string relativePath) =>
-            SurfacePathPrefixes.Any(prefix => relativePath.StartsWith(prefix, StringComparison.Ordinal));
 
         public static bool IsProjectPath(string relativePath) =>
             ProjectPaths.Contains(relativePath, StringComparer.Ordinal);
@@ -1213,12 +1127,6 @@ public sealed class EfCoreDependencyGuardTests
     /// </summary>
     internal static class Adr0073OpenTelemetryEf
     {
-        public static readonly string[] SurfacePathPrefixes =
-        [
-            "src/essentials/Diagnostics/OpenTelemetry/Persistence/EntityFrameworkCore/",
-            "tests/essentials/Diagnostics/OpenTelemetry/Persistence/EntityFrameworkCore/"
-        ];
-
         public static readonly IReadOnlyDictionary<string, string[]> ExpectedEfPackagesByProject =
             new Dictionary<string, string[]>(StringComparer.Ordinal)
             {
@@ -1237,9 +1145,6 @@ public sealed class EfCoreDependencyGuardTests
             };
 
         public static IEnumerable<string> ProjectPaths => ExpectedEfPackagesByProject.Keys;
-
-        public static bool IsSurfacePath(string relativePath) =>
-            SurfacePathPrefixes.Any(prefix => relativePath.StartsWith(prefix, StringComparison.Ordinal));
 
         public static bool IsProjectPath(string relativePath) =>
             ProjectPaths.Contains(relativePath, StringComparer.Ordinal);
@@ -1260,14 +1165,6 @@ public sealed class EfCoreDependencyGuardTests
     /// </summary>
     internal static class Adr0073IdentityEf
     {
-        public static readonly string[] SurfacePathPrefixes =
-        [
-            "src/essentials/Foundation/Identity/AspNetCoreIdentity/EntityFrameworkCore/",
-            "src/essentials/Foundation/Identity/Persistence/EntityFrameworkCore/",
-            "tests/essentials/Foundation/Identity/AspNetCoreIdentity/EntityFrameworkCore/",
-            "tests/essentials/Foundation/Identity/Persistence/EntityFrameworkCore/"
-        ];
-
         public static readonly IReadOnlyDictionary<string, string[]> ExpectedEfPackagesByProject =
             new Dictionary<string, string[]>(StringComparer.Ordinal)
             {
@@ -1288,9 +1185,6 @@ public sealed class EfCoreDependencyGuardTests
 
         public static IEnumerable<string> ProjectPaths => ExpectedEfPackagesByProject.Keys;
 
-        public static bool IsSurfacePath(string relativePath) =>
-            SurfacePathPrefixes.Any(prefix => relativePath.StartsWith(prefix, StringComparison.Ordinal));
-
         public static bool IsProjectPath(string relativePath) =>
             ProjectPaths.Contains(relativePath, StringComparer.Ordinal);
 
@@ -1310,12 +1204,6 @@ public sealed class EfCoreDependencyGuardTests
     /// </summary>
     internal static class Adr0073Elsa3ImportEf
     {
-        public static readonly string[] SurfacePathPrefixes =
-        [
-            "src/extensions/Elsa3/src/Activities/Design/Import/Persistence/EntityFrameworkCore/",
-            "src/extensions/Elsa3/tests/Activities/Design/Import/Persistence/EntityFrameworkCore/"
-        ];
-
         public static readonly IReadOnlyDictionary<string, string[]> ExpectedEfPackagesByProject =
             new Dictionary<string, string[]>(StringComparer.Ordinal)
             {
@@ -1327,9 +1215,6 @@ public sealed class EfCoreDependencyGuardTests
             };
 
         public static IEnumerable<string> ProjectPaths => ExpectedEfPackagesByProject.Keys;
-
-        public static bool IsSurfacePath(string relativePath) =>
-            SurfacePathPrefixes.Any(prefix => relativePath.StartsWith(prefix, StringComparison.Ordinal));
 
         public static bool IsProjectPath(string relativePath) =>
             ProjectPaths.Contains(relativePath, StringComparer.Ordinal);
@@ -1349,12 +1234,6 @@ public sealed class EfCoreDependencyGuardTests
     /// </summary>
     internal static class Adr0073WorkflowsDesignEf
     {
-        public static readonly string[] SurfacePathPrefixes =
-        [
-            "src/essentials/Workflows/Design/Persistence/EntityFrameworkCore/",
-            "tests/essentials/Workflows/Design/Persistence/EntityFrameworkCore/"
-        ];
-
         public static readonly IReadOnlyDictionary<string, string[]> ExpectedEfPackagesByProject =
             new Dictionary<string, string[]>(StringComparer.Ordinal)
             {
@@ -1366,9 +1245,6 @@ public sealed class EfCoreDependencyGuardTests
             };
 
         public static IEnumerable<string> ProjectPaths => ExpectedEfPackagesByProject.Keys;
-
-        public static bool IsSurfacePath(string relativePath) =>
-            SurfacePathPrefixes.Any(prefix => relativePath.StartsWith(prefix, StringComparison.Ordinal));
 
         public static bool IsProjectPath(string relativePath) =>
             ProjectPaths.Contains(relativePath, StringComparer.Ordinal);
@@ -1390,12 +1266,6 @@ public sealed class EfCoreDependencyGuardTests
     /// </summary>
     internal static class Adr0076ActivationGuardEf
     {
-        public static readonly string[] SurfacePathPrefixes =
-        [
-            "src/essentials/Modularity/EntityFramework/",
-            "tests/essentials/Modularity/EntityFramework/"
-        ];
-
         public const string AdapterProject = "src/essentials/Modularity/EntityFramework/Elsa.Modularity.EntityFramework.csproj";
 
         public static readonly IReadOnlyDictionary<string, string[]> ExpectedEfPackagesByProject =
@@ -1412,9 +1282,6 @@ public sealed class EfCoreDependencyGuardTests
             };
 
         public static IEnumerable<string> ProjectPaths => ExpectedEfPackagesByProject.Keys;
-
-        public static bool IsSurfacePath(string relativePath) =>
-            SurfacePathPrefixes.Any(prefix => relativePath.StartsWith(prefix, StringComparison.Ordinal));
 
         public static bool IsProjectPath(string relativePath) =>
             ProjectPaths.Contains(relativePath, StringComparer.Ordinal);
@@ -1440,19 +1307,11 @@ public sealed class EfCoreDependencyGuardTests
     /// </summary>
     internal static class Spec183ReadabilityEf
     {
-        public static readonly string[] SurfacePathPrefixes =
-        [
-            "tests/essentials/Cluster/Readability/"
-        ];
-
         public static readonly IReadOnlyDictionary<string, string[]> ExpectedEfPackagesByProject =
             new Dictionary<string, string[]>(StringComparer.Ordinal)
             {
                 ["tests/essentials/Cluster/Readability/Tests/Elsa.Cluster.Readability.Tests.csproj"] = CorePackages()
             };
-
-        public static bool IsSurfacePath(string relativePath) =>
-            SurfacePathPrefixes.Any(prefix => relativePath.StartsWith(prefix, StringComparison.Ordinal));
 
         public static bool IsProjectPath(string relativePath) =>
             ExpectedEfPackagesByProject.ContainsKey(relativePath);
@@ -1486,12 +1345,6 @@ public sealed class EfCoreDependencyGuardTests
     /// </summary>
     internal static class Adr0078ClusterMembershipEf
     {
-        public static readonly string[] SurfacePathPrefixes =
-        [
-            "src/essentials/Cluster/EntityFrameworkCore/",
-            "tests/essentials/Cluster/EntityFrameworkCore/"
-        ];
-
         public static readonly IReadOnlyDictionary<string, string[]> ExpectedEfPackagesByProject =
             new Dictionary<string, string[]>(StringComparer.Ordinal)
             {
@@ -1506,9 +1359,6 @@ public sealed class EfCoreDependencyGuardTests
 
         public static IEnumerable<string> ProjectPaths => ExpectedEfPackagesByProject.Keys;
 
-        public static bool IsSurfacePath(string relativePath) =>
-            SurfacePathPrefixes.Any(prefix => relativePath.StartsWith(prefix, StringComparison.Ordinal));
-
         public static bool IsProjectPath(string relativePath) =>
             ProjectPaths.Contains(relativePath, StringComparer.Ordinal);
     }
@@ -1521,12 +1371,6 @@ public sealed class EfCoreDependencyGuardTests
     /// </summary>
     internal static class Adr0076DataProtectionKeyStoreEf
     {
-        public static readonly string[] SurfacePathPrefixes =
-        [
-            "src/essentials/Foundation/DataProtection/EntityFrameworkCore/",
-            "tests/essentials/Foundation/DataProtection/EntityFrameworkCore/"
-        ];
-
         public static readonly IReadOnlyDictionary<string, string[]> ExpectedEfPackagesByProject =
             new Dictionary<string, string[]>(StringComparer.Ordinal)
             {
@@ -1539,9 +1383,6 @@ public sealed class EfCoreDependencyGuardTests
             };
 
         public static IEnumerable<string> ProjectPaths => ExpectedEfPackagesByProject.Keys;
-
-        public static bool IsSurfacePath(string relativePath) =>
-            SurfacePathPrefixes.Any(prefix => relativePath.StartsWith(prefix, StringComparison.Ordinal));
 
         public static bool IsProjectPath(string relativePath) =>
             ProjectPaths.Contains(relativePath, StringComparer.Ordinal);

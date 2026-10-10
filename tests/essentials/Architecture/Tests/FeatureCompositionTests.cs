@@ -2,7 +2,6 @@ using System.Collections.Concurrent;
 using System.Reflection;
 using System.Reflection.Emit;
 using System.Text.RegularExpressions;
-using System.Xml.Linq;
 using CShells;
 using CShells.AspNetCore.Configuration;
 using CShells.AspNetCore.Extensions;
@@ -24,7 +23,6 @@ using Nuplane.Admin;
 using Nuplane.Operational;
 using Nuplane.Reconciliation;
 using Xunit;
-using static Elsa.Architecture.Tests.RepoPaths;
 
 namespace Elsa.Architecture.Tests;
 
@@ -80,7 +78,7 @@ public sealed class FeatureCompositionTests
     [Fact]
     public void Every_packable_runtime_library_is_loaded_so_its_features_are_composed()
     {
-        var missing = PackableRuntimeLibraries.Value
+        var missing = RuntimeLibraries.Packable
             .Where(library => library.Assembly is null)
             .Select(library => $"{library.Name} ({library.ProjectPath})")
             .ToArray();
@@ -94,7 +92,7 @@ public sealed class FeatureCompositionTests
     [Fact]
     public async Task Every_feature_composes_and_each_service_it_registers_resolves()
     {
-        var features = FeatureTypes.Value;
+        var features = RuntimeLibraries.FeatureTypes;
         // A sweep that finds nothing passes vacuously; this floor sits well below today's count.
         Assert.True(features.Count >= 100, $"Only {features.Count} features were discovered; discovery has stopped finding them.");
 
@@ -189,56 +187,6 @@ public sealed class FeatureCompositionTests
             new("every-alternative", Without(Alternatives.SelectMany(alternative => alternative.First)))
         ];
     }
-
-    private sealed record PackableRuntimeLibrary(string Name, string ProjectPath, Assembly? Assembly);
-
-    /// <summary>
-    /// Every project under <c>src/</c> that ships as a runtime library: packable, and neither an executable (a host or a
-    /// dotnet tool) nor a Roslyn component, none of which a shell loads.
-    /// </summary>
-    private static readonly Lazy<IReadOnlyList<PackableRuntimeLibrary>> PackableRuntimeLibraries = new(() =>
-        ModuleRoots.Resolve(RepoRoot, ModuleRoots.Production)
-            .SelectMany(root => Directory.EnumerateFiles(root, "*.csproj", SearchOption.AllDirectories))
-            .Where(path => ModuleRoots.IsNotTestFile(RepoRoot, path) && !IsBuildOutput(path))
-            .Select(path => (Path: path, Project: XDocument.Load(path)))
-            .Where(project => IsPackableRuntimeLibrary(project.Project))
-            .Select(project =>
-            {
-                var name = Property(project.Project, "AssemblyName") ?? Path.GetFileNameWithoutExtension(project.Path);
-                return new PackableRuntimeLibrary(name, Path.GetRelativePath(RepoRoot, project.Path).Replace('\\', '/'), TryLoad(name));
-            })
-            .OrderBy(library => library.Name, StringComparer.Ordinal)
-            .ToArray());
-
-    private static bool IsPackableRuntimeLibrary(XDocument project) =>
-        !string.Equals(Property(project, "IsPackable"), "false", StringComparison.OrdinalIgnoreCase) &&
-        !string.Equals(Property(project, "OutputType"), "Exe", StringComparison.OrdinalIgnoreCase) &&
-        !string.Equals(Property(project, "IsRoslynComponent"), "true", StringComparison.OrdinalIgnoreCase);
-
-    private static string? Property(XDocument project, string name) =>
-        project.Descendants(name).Select(element => element.Value.Trim()).LastOrDefault();
-
-    private static Assembly? TryLoad(string name)
-    {
-        try
-        {
-            return Assembly.Load(new AssemblyName(name));
-        }
-        catch (FileNotFoundException)
-        {
-            return null;
-        }
-    }
-
-    /// <summary>Every concrete feature type in the packable runtime libraries, public or not.</summary>
-    private static readonly Lazy<IReadOnlyList<Type>> FeatureTypes = new(() =>
-        PackableRuntimeLibraries.Value
-            .Select(library => library.Assembly)
-            .OfType<Assembly>()
-            .SelectMany(assembly => assembly.GetTypes())
-            .Where(type => type is { IsClass: true, IsAbstract: false } && typeof(IShellFeature).IsAssignableFrom(type))
-            .OrderBy(type => type.FullName, StringComparer.Ordinal)
-            .ToArray());
 
     /// <summary>A service type with its key, as one <see cref="ServiceDescriptor"/> registers it.</summary>
     private sealed record ServiceKey(Type Type, object? Key)
