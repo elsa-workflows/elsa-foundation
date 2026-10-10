@@ -94,6 +94,9 @@ namespace ElsaRuntimeConcurrency2532v2
                         {
                             while (true)
                             {
+                                // Each attempt reports only its own outcome: a timeout after a shed must not keep the 429.
+                                result.StatusCode = 0;
+                                result.Body = null;
                                 TimeSpan? retryAfter;
                                 using (var content = new StringContent(jsonBody, Encoding.UTF8, "application/json"))
                                 using (var response = await client.PostAsync(relativeUri, content).ConfigureAwait(false))
