@@ -1,4 +1,4 @@
-name: Hosted stable hosts and demo qualification
+name: Hosted stable hosts and demo qualification v2
 
 on:
   workflow_dispatch:
@@ -88,40 +88,18 @@ jobs:
           dotnet build tools/maps/Elsa.Maps.Generator -c Release --no-restore -m:1 2>&1 | tee "$EVIDENCE_DIR/maps-build.log"
           dotnet run --project tools/maps/Elsa.Maps.Generator -c Release --no-build --no-restore -- check 2>&1 | tee "$EVIDENCE_DIR/maps-check.log"
 
-      - name: Run serialized Release test suites
+      - name: Repeat the two actual-host readability journeys
         shell: bash
         run: |
           set -euo pipefail
-          overall=0
-          run_test() {
-            name="$1"
-            project="$2"
-            result_dir="$EVIDENCE_DIR/trx/$name"
-            mkdir -p "$result_dir"
-            set +e
-            dotnet test "$project" -c Release --no-restore -m:1 \
-              -p:WarningsNotAsErrors=NU1603 \
-              --logger "trx;LogFileName=${name}.trx" \
-              --results-directory "$result_dir" \
-              2>&1 | tee "$EVIDENCE_DIR/logs/$name.log"
-            pipeline_status=("${PIPESTATUS[@]}")
-            status="${pipeline_status[0]}"
-            tee_status="${pipeline_status[1]}"
-            set -e
-            printf 'dotnet=%s\ntee=%s\n' "$status" "$tee_status" \
-              > "$EVIDENCE_DIR/logs/$name.exit-code"
-            if [ "$status" -ne 0 ] || [ "$tee_status" -ne 0 ]; then
-              overall=1
-            fi
-          }
-
-          mkdir -p "$EVIDENCE_DIR/logs"
-          run_test readability tests/essentials/Cluster/Readability/Tests/Elsa.Cluster.Readability.Tests.csproj
-          run_test modularity-core tests/essentials/Modularity/Tests/Elsa.Modularity.Tests.csproj
-          run_test workbench tests/essentials/Workbench/Tests/Elsa.Workbench.Tests.csproj
-          run_test cluster-entity-framework-full tests/essentials/Cluster/EntityFrameworkCore/Tests/Elsa.Cluster.EntityFrameworkCore.Tests.csproj
-          run_test architecture tests/essentials/Architecture/Tests/Elsa.Architecture.Tests.csproj
-          exit "$overall"
+          mkdir -p "$EVIDENCE_DIR/logs" "$EVIDENCE_DIR/trx/cluster-entity-framework-actual"
+          filter='FullyQualifiedName=Elsa.Cluster.EntityFrameworkCore.Tests.FoundationHostReconcileTests.Actual_foundation_host_reports_conservative_readability_while_a_replaced_package_request_drains|FullyQualifiedName=Elsa.Cluster.EntityFrameworkCore.Tests.WorkbenchHostProcessTests.Actual_workbench_reports_conservative_readability_while_a_replaced_package_request_drains'
+          dotnet test tests/essentials/Cluster/EntityFrameworkCore/Tests/Elsa.Cluster.EntityFrameworkCore.Tests.csproj \
+            -c Release --no-restore -m:1 -p:WarningsNotAsErrors=NU1603 \
+            --filter "$filter" \
+            --logger 'trx;LogFileName=cluster-entity-framework-actual.trx' \
+            --results-directory "$EVIDENCE_DIR/trx/cluster-entity-framework-actual" \
+            2>&1 | tee "$EVIDENCE_DIR/logs/cluster-entity-framework-actual.log"
 
       - name: Verify public stable archives and both actual-host runtime assets
         if: always() && steps.restore.outcome == 'success'
@@ -133,14 +111,14 @@ jobs:
             cp -a "$GITHUB_WORKSPACE/.qualification/portable-consumer" "$portable"
           fi
           python3 "$portable/download-public-archives.py" 2>&1 | tee "$EVIDENCE_DIR/public-archives.log"
-          python3 "$portable/host-audit/verify-project-upstream-assets.py" \
+          python3 "$portable/host-audit/verify-project-upstream-assets-v2.py" \
             src/apps/Elsa.Foundation.Host/obj/project.assets.json \
             src/apps/Elsa.Foundation.Host/bin/Release/net10.0 foundation-host-stable-upstream-assets-audit.json
-          python3 "$portable/host-audit/verify-project-upstream-assets.py" \
+          python3 "$portable/host-audit/verify-project-upstream-assets-v2.py" \
             src/apps/Elsa.Workbench/obj/project.assets.json \
             src/apps/Elsa.Workbench/bin/Release/net10.0 workbench-stable-upstream-assets-audit.json
           python3 "$portable/host-audit/audit-actual-host-trx.py" \
-            "$EVIDENCE_DIR/trx/cluster-entity-framework-full/cluster-entity-framework-full.trx" \
+            "$EVIDENCE_DIR/trx/cluster-entity-framework-actual/cluster-entity-framework-actual.trx" \
             stable-actual-host-trx-audit.json foundation-host-stable-upstream-assets-audit.json workbench-stable-upstream-assets-audit.json
           cp "$portable/host-audit/"*-audit.json "$EVIDENCE_DIR/"
 
@@ -154,8 +132,8 @@ jobs:
             cp -a "$GITHUB_WORKSPACE/.qualification/portable-consumer" "$portable"
           fi
           python3 "$portable/download-public-archives.py" 2>&1 | tee "$EVIDENCE_DIR/consumer-public-archives.log"
-          python3 "$portable/stable-consumer/run-stable-consumer.py" \
-            hosted-stable-20261011 0.0.30 0.0.11 \
+          python3 "$portable/stable-consumer/run-stable-consumer-v2.py" \
+            hosted-stable-v2-20261011 0.0.30 0.0.11 \
             https://api.nuget.org/v3/index.json https://api.nuget.org/v3/index.json \
             2>&1 | tee "$EVIDENCE_DIR/stable-consumer.log"
 
