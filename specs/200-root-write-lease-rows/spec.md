@@ -4,7 +4,7 @@
 
 **Created**: 2026-10-09
 
-**Status**: Draft
+**Status**: Implemented — PR #2539
 
 **Input**: User description: "Root-write lease coordination without a hot row (#2538, Program #2531). Concurrent executions of one published workflow each take and release a root-write lease on the same workflow executable artifact for every checkpoint commit. Today all leases of an artifact live in one coordination row (serialized dictionary + deletion guard) updated by optimistic concurrency with 16 no-backoff attempts; at 16-32 concurrent executions holders exhaust retries and checkpoint commits fault. Goal: store one row per lease so a holder's acquire/renew/release touches only its own row, while preserving deletion-guard mutual exclusion with live leases (GC safety), incarnation fencing, same-lease-id shared-token semantics (#2274), expiry semantics, in-memory parity and four-provider support. Also decide whether a commit needs a lease only when it creates or changes an execution root, and stop a lease-release failure from reporting an already-durable checkpoint as failed."
 
@@ -115,6 +115,8 @@ When a checkpoint commit has durably succeeded, a later failure to release its l
 ### Measurable Outcomes
 
 - **SC-001**: The A1 concurrency matrix passes all 8 cases: SQLite and PostgreSQL runtime, Immediate and Coalesced cadence, 16 and 32 clients. Every response correct, every execution Completed, zero incidents. Today 1 of 8 passes.
+  - **Owner-approved exception (10 October 2026):** SC-001 is closed as diagnosed, not as passed, under the program's completion rule "A1 passes or is diagnosed" ([runtime-throughput.md](../../docs/program-goals/runtime-throughput.md#completion)). The 8-of-8 bar itself is unchanged.
+  - **Outcome:** 7 of 8 at `1bef1fe`, with zero lease errors and zero incidents. The remaining case, SQLite Immediate/32, fails on 60s client timeouts. It loses no acknowledged work and is not lease-related. The owner closed A1 as diagnosed, and the latency is tracked by #2553 for Track B. See [#2532](https://github.com/elsa-workflows/elsa-foundation/issues/2532#issuecomment-6092143824).
 - **SC-002**: Under sustained contention from other holders of the same artifact, 100% of lease operations succeed on their first store write. Today the deterministic regression tests exhaust all 16 attempts.
 - **SC-003**: 32 real parallel holders × 5 lease cycles on one artifact complete with zero failed cycles on PostgreSQL.
 - **SC-004**: Zero regressions in existing lease, guard, deletion and garbage-collection tests across in-memory, SQLite and the three container providers.
