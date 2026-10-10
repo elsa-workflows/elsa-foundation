@@ -18,7 +18,7 @@ namespace Elsa.Activities.Http.IntegrationTests;
 /// <summary>
 /// The executables the EF command budgets run, built by hand to mirror what publication compiles: each contract is
 /// scanned from the CLR activity type, so side-effect profiles match production, and un-authored inputs take their
-/// contract defaults.
+/// contract defaults. Other tests on the durable SQLite host build their executables with the same builders.
 /// </summary>
 internal static class ReferenceWorkflows
 {
@@ -93,7 +93,7 @@ internal static class ReferenceWorkflows
         return Executable("fork-join-resume", parallel, [], ResumeTarget(EventNodeId, Event.ResumeTargetId));
     }
 
-    private static WorkflowExecutable Executable(
+    internal static WorkflowExecutable Executable(
         string name,
         ExecutableNode root,
         IReadOnlyCollection<RuntimeVariableDeclaration>? variables = null,
@@ -111,7 +111,7 @@ internal static class ReferenceWorkflows
             IncidentStrategyBuiltIns.FaultReference,
             workflowVariables: variables);
 
-    private static ExecutableNode Sequence(string nodeId, params ExecutableNode[] children) =>
+    internal static ExecutableNode Sequence(string nodeId, params ExecutableNode[] children) =>
         Clr(
             nodeId,
             typeof(SequenceActivity),
@@ -119,7 +119,7 @@ internal static class ReferenceWorkflows
             childSlots: SequenceShape.ChildSlots(children),
             structure: SequenceShape.Structure(children));
 
-    private static ExecutableNode Clr(
+    internal static ExecutableNode Clr(
         string nodeId,
         Type activityType,
         (string Key, object Value)[] literals,
