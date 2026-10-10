@@ -1,6 +1,6 @@
 ---
 name: "elsa-quality-fix"
-description: "Run one pass of the recurring quality fixer: service open auto-fix PRs first, then claim one ready issue, fix it on a claude/auto-fix branch, open a ready PR with evidence, and auto-merge only small simplify/docs/tests changes outside runtime and persistence. Use when the fixer routine fires or a user asks for one fixer pass."
+description: "Run one pass of the recurring quality fixer: check for a reverted auto-merge, service open auto-fix PRs, then claim one ready issue, fix it on a claude/auto-fix branch, open a ready PR with evidence, and auto-merge only small simplify/docs/tests changes outside runtime and persistence. Use when the fixer routine fires or a user asks for one fixer pass."
 argument-hint: "Optional issue number to take instead of picking one"
 compatibility: "Requires elsa-foundation source, gh CLI, and the .NET SDK"
 metadata:
