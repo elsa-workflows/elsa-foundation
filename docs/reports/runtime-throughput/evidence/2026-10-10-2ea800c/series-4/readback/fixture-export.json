@@ -1,0 +1,1643 @@
+{
+  "artifacts": [
+    {
+      "checkpointCadence": {
+        "isCoalesced": true,
+        "mode": "Coalesced"
+      },
+      "compatibilityMetadata": {
+        "slice": "workflow-execution-vertical-slice"
+      },
+      "createdAt": "2026-10-10T02:49:33.425986+00:00",
+      "dependencies": [],
+      "identity": {
+        "artifactHash": "sha256:2f5dbc272b5ccd95330eaca2b5c8fea5851d0ae791a084c55e92418a80785800",
+        "artifactId": "artifact-2f5dbc272b5c",
+        "artifactVersion": "1.0.0",
+        "definitionId": "14EOM7L2XVZ",
+        "definitionVersionId": "14EOM7PDGWl"
+      },
+      "incidentStrategy": {
+        "alias": "Fault",
+        "version": "1"
+      },
+      "inputContract": {
+        "inputs": [],
+        "version": 1
+      },
+      "resumeTargets": {
+        "http-in:resume-target:http-endpoint": {
+          "executableNodeId": "http-in",
+          "handlerKey": "ResumeAsync",
+          "localResumeTargetId": "resume-target:http-endpoint",
+          "metadata": {},
+          "resumeTargetId": "http-in:resume-target:http-endpoint"
+        }
+      },
+      "rootActivity": {
+        "activityContract": {
+          "activation": {
+            "capability": "Elsa.Activities.Sequence.Activities.Sequence",
+            "descriptorKind": "Elsa.Primitives.Models.ClrActivityDescriptor"
+          },
+          "activityTypeKey": "Elsa.Activities.Sequence.Activities.Sequence",
+          "contractVersion": "1.0.0+2ea800cd5c17232cbfd50e0115344bab0ec79056",
+          "descriptorKind": "Elsa.Primitives.Models.ClrActivityDescriptor",
+          "descriptorPayload": {
+            "typeAlias": "Elsa.Activities.Sequence.Activities.Sequence"
+          },
+          "inputs": {},
+          "outcomes": [
+            "Done",
+            "Break"
+          ],
+          "result": {
+            "isRequired": true,
+            "policy": {
+              "isPersistable": true,
+              "isSensitive": false,
+              "lifecycle": "Result",
+              "requiresEncryption": false,
+              "storage": "Inline"
+            },
+            "projections": {},
+            "sourceRepresentation": "TypedValue",
+            "type": {
+              "alias": "Elsa.Activities.Runtime.Core.Models.ActivityUnit",
+              "collectionKind": "Single"
+            }
+          },
+          "schemaFingerprint": "sha256:d89f649bb513073c32d9c16bb2cfde20b8b3319b7b539d1cf0ecc6a3fce8c024",
+          "sideEffectProfile": "ReplaySafe"
+        },
+        "activityType": "Elsa.Activities.Sequence.Activities.Sequence",
+        "activityTypeVersion": "1.0.0+2ea800cd5c17232cbfd50e0115344bab0ec79056",
+        "authoredActivityId": "root",
+        "childSlots": [
+          {
+            "activities": [
+              {
+                "activityContract": {
+                  "activation": {
+                    "capability": "Elsa.Activities.Http.Activities.HttpEndpoint",
+                    "descriptorKind": "Elsa.Primitives.Models.ClrActivityDescriptor"
+                  },
+                  "activityTypeKey": "Elsa.HttpEndpoint",
+                  "contractVersion": "1.0.0+2ea800cd5c17232cbfd50e0115344bab0ec79056",
+                  "descriptorKind": "Elsa.Primitives.Models.ClrActivityDescriptor",
+                  "descriptorPayload": {
+                    "typeAlias": "Elsa.Activities.Http.Activities.HttpEndpoint"
+                  },
+                  "inputs": {
+                    "Authorize": {
+                      "editorMetadata": {},
+                      "hasDefault": false,
+                      "isNullable": false,
+                      "isRequired": false,
+                      "key": "Authorize",
+                      "name": "Authorize",
+                      "policy": {
+                        "isPersistable": true,
+                        "isSensitive": false,
+                        "lifecycle": "Instance",
+                        "requiresEncryption": false,
+                        "storage": "Inline"
+                      },
+                      "type": {
+                        "alias": "Boolean",
+                        "collectionKind": "Single"
+                      }
+                    },
+                    "CanStartWorkflow": {
+                      "editorMetadata": {},
+                      "hasDefault": false,
+                      "isNullable": false,
+                      "isRequired": false,
+                      "key": "CanStartWorkflow",
+                      "name": "CanStartWorkflow",
+                      "policy": {
+                        "isPersistable": true,
+                        "isSensitive": false,
+                        "lifecycle": "Instance",
+                        "requiresEncryption": false,
+                        "storage": "Inline"
+                      },
+                      "type": {
+                        "alias": "Boolean",
+                        "collectionKind": "Single"
+                      }
+                    },
+                    "Path": {
+                      "editorMetadata": {},
+                      "hasDefault": false,
+                      "isNullable": false,
+                      "isRequired": true,
+                      "key": "Path",
+                      "name": "Path",
+                      "policy": {
+                        "isPersistable": true,
+                        "isSensitive": false,
+                        "lifecycle": "Instance",
+                        "requiresEncryption": false,
+                        "storage": "Inline"
+                      },
+                      "type": {
+                        "alias": "String",
+                        "collectionKind": "Single"
+                      }
+                    },
+                    "Policy": {
+                      "editorMetadata": {},
+                      "hasDefault": false,
+                      "isNullable": true,
+                      "isRequired": false,
+                      "key": "Policy",
+                      "name": "Policy",
+                      "policy": {
+                        "isPersistable": true,
+                        "isSensitive": false,
+                        "lifecycle": "Instance",
+                        "requiresEncryption": false,
+                        "storage": "Inline"
+                      },
+                      "type": {
+                        "alias": "String",
+                        "collectionKind": "Single"
+                      }
+                    },
+                    "RequestSizeLimit": {
+                      "editorMetadata": {},
+                      "hasDefault": false,
+                      "isNullable": true,
+                      "isRequired": false,
+                      "key": "RequestSizeLimit",
+                      "name": "RequestSizeLimit",
+                      "policy": {
+                        "isPersistable": true,
+                        "isSensitive": false,
+                        "lifecycle": "Instance",
+                        "requiresEncryption": false,
+                        "storage": "Inline"
+                      },
+                      "type": {
+                        "alias": "Int64?",
+                        "collectionKind": "Single"
+                      }
+                    },
+                    "RequestTimeout": {
+                      "editorMetadata": {},
+                      "hasDefault": false,
+                      "isNullable": true,
+                      "isRequired": false,
+                      "key": "RequestTimeout",
+                      "name": "RequestTimeout",
+                      "policy": {
+                        "isPersistable": true,
+                        "isSensitive": false,
+                        "lifecycle": "Instance",
+                        "requiresEncryption": false,
+                        "storage": "Inline"
+                      },
+                      "type": {
+                        "alias": "TimeSpan?",
+                        "collectionKind": "Single"
+                      }
+                    },
+                    "ResponseMode": {
+                      "editorMetadata": {},
+                      "hasDefault": false,
+                      "isNullable": false,
+                      "isRequired": false,
+                      "key": "ResponseMode",
+                      "name": "ResponseMode",
+                      "policy": {
+                        "isPersistable": true,
+                        "isSensitive": false,
+                        "lifecycle": "Instance",
+                        "requiresEncryption": false,
+                        "storage": "Inline"
+                      },
+                      "type": {
+                        "alias": "Elsa.Http.Core.ResponseMode",
+                        "collectionKind": "Single"
+                      }
+                    },
+                    "SupportedMethods": {
+                      "editorMetadata": {},
+                      "hasDefault": false,
+                      "isNullable": true,
+                      "isRequired": false,
+                      "key": "SupportedMethods",
+                      "name": "SupportedMethods",
+                      "policy": {
+                        "isPersistable": true,
+                        "isSensitive": false,
+                        "lifecycle": "Instance",
+                        "requiresEncryption": false,
+                        "storage": "Inline"
+                      },
+                      "type": {
+                        "alias": "String",
+                        "collectionKind": "List"
+                      }
+                    }
+                  },
+                  "outcomes": [
+                    "Done"
+                  ],
+                  "result": {
+                    "isRequired": true,
+                    "policy": {
+                      "isPersistable": true,
+                      "isSensitive": false,
+                      "lifecycle": "Result",
+                      "requiresEncryption": false,
+                      "storage": "Inline"
+                    },
+                    "projections": {
+                      "ParsedContent": {
+                        "isRequired": false,
+                        "key": "ParsedContent",
+                        "path": "parsedContent",
+                        "policy": {
+                          "isPersistable": true,
+                          "isSensitive": false,
+                          "lifecycle": "Instance",
+                          "requiresEncryption": false,
+                          "storage": "Inline"
+                        },
+                        "sourceRepresentation": "TypedValue",
+                        "type": {
+                          "alias": "System.Text.Json.JsonElement?",
+                          "collectionKind": "Single"
+                        }
+                      },
+                      "Request": {
+                        "isRequired": true,
+                        "key": "Request",
+                        "path": "request",
+                        "policy": {
+                          "isPersistable": true,
+                          "isSensitive": false,
+                          "lifecycle": "Instance",
+                          "requiresEncryption": false,
+                          "storage": "Inline"
+                        },
+                        "sourceRepresentation": "TypedValue",
+                        "type": {
+                          "alias": "Elsa.Activities.Http.Models.HttpRequestModel",
+                          "collectionKind": "Single"
+                        }
+                      },
+                      "RouteData": {
+                        "isRequired": true,
+                        "key": "RouteData",
+                        "path": "routeData",
+                        "policy": {
+                          "isPersistable": true,
+                          "isSensitive": false,
+                          "lifecycle": "Instance",
+                          "requiresEncryption": false,
+                          "storage": "Inline"
+                        },
+                        "sourceRepresentation": "TextValue",
+                        "type": {
+                          "alias": "String",
+                          "collectionKind": "Dictionary"
+                        }
+                      }
+                    },
+                    "sourceRepresentation": "TypedValue",
+                    "type": {
+                      "alias": "Elsa.Activities.Http.Models.HttpEndpointResult",
+                      "collectionKind": "Single"
+                    }
+                  },
+                  "schemaFingerprint": "sha256:870d3938a8e66dea4025b2c8139adc346a8fa09c3ffd7db9ea86cfe6527f5f2d"
+                },
+                "activityType": "Elsa.HttpEndpoint",
+                "activityTypeVersion": "1.0.0+2ea800cd5c17232cbfd50e0115344bab0ec79056",
+                "authoredActivityId": "http-in",
+                "childSlots": [],
+                "descriptorPayload": {
+                  "typeAlias": "Elsa.Activities.Http.Activities.HttpEndpoint"
+                },
+                "descriptorSchemaVersion": "1",
+                "descriptorType": "elsa.clr-activity",
+                "executableNodeId": "http-in",
+                "inputBindings": {
+                  "Authorize": {
+                    "effectivePolicy": {
+                      "isSensitive": false,
+                      "lifecycle": "Instance",
+                      "metadata": {},
+                      "requiresEncryption": false,
+                      "storage": "Inline"
+                    },
+                    "inputKey": "Authorize",
+                    "inputName": "Authorize",
+                    "literal": {
+                      "inlineValue": false,
+                      "policy": {
+                        "isSensitive": false,
+                        "lifecycle": "Instance",
+                        "metadata": {},
+                        "requiresEncryption": false,
+                        "storage": "Inline"
+                      },
+                      "presence": "Present",
+                      "type": {
+                        "alias": "Boolean",
+                        "collectionKind": "Single"
+                      }
+                    },
+                    "literalValue": false,
+                    "metadata": {
+                      "referenceKey": "Authorize"
+                    },
+                    "source": "Literal",
+                    "targetType": {
+                      "alias": "Boolean",
+                      "collectionKind": "Single"
+                    }
+                  },
+                  "CanStartWorkflow": {
+                    "conversionPlan": {
+                      "fingerprint": "sha256:bcf301f404b6d094efdf56ee1b1820115a83df947c6c2c532000ebc4bf060821",
+                      "limits": {
+                        "maxCollectionItems": 10000,
+                        "maxDepth": 64,
+                        "maxPayloadBytes": 1048576
+                      },
+                      "mode": "Auto",
+                      "operation": "Identity",
+                      "options": {},
+                      "schemaVersion": 1,
+                      "sourceRepresentation": "TypedValue",
+                      "sourceType": {
+                        "alias": "Boolean",
+                        "collectionKind": "Single"
+                      },
+                      "targetType": {
+                        "alias": "Boolean",
+                        "collectionKind": "Single"
+                      }
+                    },
+                    "effectivePolicy": {
+                      "isSensitive": false,
+                      "lifecycle": "Instance",
+                      "metadata": {},
+                      "requiresEncryption": false,
+                      "storage": "Inline"
+                    },
+                    "inputKey": "CanStartWorkflow",
+                    "inputName": "CanStartWorkflow",
+                    "literal": {
+                      "inlineValue": true,
+                      "policy": {
+                        "isSensitive": false,
+                        "lifecycle": "Instance",
+                        "metadata": {},
+                        "requiresEncryption": false,
+                        "storage": "Inline"
+                      },
+                      "presence": "Present",
+                      "type": {
+                        "alias": "Boolean",
+                        "collectionKind": "Single"
+                      }
+                    },
+                    "literalValue": true,
+                    "metadata": {
+                      "referenceKey": "CanStartWorkflow"
+                    },
+                    "source": "Literal",
+                    "targetType": {
+                      "alias": "Boolean",
+                      "collectionKind": "Single"
+                    }
+                  },
+                  "Path": {
+                    "conversionPlan": {
+                      "fingerprint": "sha256:8a808515a2d6c2c5dbfec984a78d50793bf8b384e2599e28ab2dd92cb030c3cb",
+                      "limits": {
+                        "maxCollectionItems": 10000,
+                        "maxDepth": 64,
+                        "maxPayloadBytes": 1048576
+                      },
+                      "mode": "Auto",
+                      "operation": "Identity",
+                      "options": {},
+                      "schemaVersion": 1,
+                      "sourceRepresentation": "TextValue",
+                      "sourceType": {
+                        "alias": "String",
+                        "collectionKind": "Single"
+                      },
+                      "targetType": {
+                        "alias": "String",
+                        "collectionKind": "Single"
+                      }
+                    },
+                    "effectivePolicy": {
+                      "isSensitive": false,
+                      "lifecycle": "Instance",
+                      "metadata": {},
+                      "requiresEncryption": false,
+                      "storage": "Inline"
+                    },
+                    "inputKey": "Path",
+                    "inputName": "Path",
+                    "literal": {
+                      "inlineValue": "runtime-throughput-2534/http4-9c98c9e4f7/transform",
+                      "policy": {
+                        "isSensitive": false,
+                        "lifecycle": "Instance",
+                        "metadata": {},
+                        "requiresEncryption": false,
+                        "storage": "Inline"
+                      },
+                      "presence": "Present",
+                      "type": {
+                        "alias": "String",
+                        "collectionKind": "Single"
+                      }
+                    },
+                    "literalValue": "runtime-throughput-2534/http4-9c98c9e4f7/transform",
+                    "metadata": {
+                      "referenceKey": "Path"
+                    },
+                    "source": "Literal",
+                    "targetType": {
+                      "alias": "String",
+                      "collectionKind": "Single"
+                    }
+                  },
+                  "Policy": {
+                    "effectivePolicy": {
+                      "isSensitive": false,
+                      "lifecycle": "Instance",
+                      "metadata": {},
+                      "requiresEncryption": false,
+                      "storage": "Inline"
+                    },
+                    "inputKey": "Policy",
+                    "inputName": "Policy",
+                    "literal": {
+                      "policy": {
+                        "isSensitive": false,
+                        "lifecycle": "Instance",
+                        "metadata": {},
+                        "requiresEncryption": false,
+                        "storage": "Inline"
+                      },
+                      "presence": "Absent",
+                      "type": {
+                        "alias": "String",
+                        "collectionKind": "Single"
+                      }
+                    },
+                    "metadata": {
+                      "referenceKey": "Policy"
+                    },
+                    "source": "Literal",
+                    "targetType": {
+                      "alias": "String",
+                      "collectionKind": "Single"
+                    }
+                  },
+                  "RequestSizeLimit": {
+                    "effectivePolicy": {
+                      "isSensitive": false,
+                      "lifecycle": "Instance",
+                      "metadata": {},
+                      "requiresEncryption": false,
+                      "storage": "Inline"
+                    },
+                    "inputKey": "RequestSizeLimit",
+                    "inputName": "RequestSizeLimit",
+                    "literal": {
+                      "policy": {
+                        "isSensitive": false,
+                        "lifecycle": "Instance",
+                        "metadata": {},
+                        "requiresEncryption": false,
+                        "storage": "Inline"
+                      },
+                      "presence": "Absent",
+                      "type": {
+                        "alias": "Int64?",
+                        "collectionKind": "Single"
+                      }
+                    },
+                    "metadata": {
+                      "referenceKey": "RequestSizeLimit"
+                    },
+                    "source": "Literal",
+                    "targetType": {
+                      "alias": "Int64?",
+                      "collectionKind": "Single"
+                    }
+                  },
+                  "RequestTimeout": {
+                    "effectivePolicy": {
+                      "isSensitive": false,
+                      "lifecycle": "Instance",
+                      "metadata": {},
+                      "requiresEncryption": false,
+                      "storage": "Inline"
+                    },
+                    "inputKey": "RequestTimeout",
+                    "inputName": "RequestTimeout",
+                    "literal": {
+                      "policy": {
+                        "isSensitive": false,
+                        "lifecycle": "Instance",
+                        "metadata": {},
+                        "requiresEncryption": false,
+                        "storage": "Inline"
+                      },
+                      "presence": "Absent",
+                      "type": {
+                        "alias": "TimeSpan?",
+                        "collectionKind": "Single"
+                      }
+                    },
+                    "metadata": {
+                      "referenceKey": "RequestTimeout"
+                    },
+                    "source": "Literal",
+                    "targetType": {
+                      "alias": "TimeSpan?",
+                      "collectionKind": "Single"
+                    }
+                  },
+                  "ResponseMode": {
+                    "conversionPlan": {
+                      "fingerprint": "sha256:17a96d44547fab69a5b93c8fbfbd3232f3aaa9ee919bddfab76a41bcf0dd4d2f",
+                      "limits": {
+                        "maxCollectionItems": 10000,
+                        "maxDepth": 64,
+                        "maxPayloadBytes": 1048576
+                      },
+                      "mode": "Auto",
+                      "operation": "Identity",
+                      "options": {},
+                      "schemaVersion": 1,
+                      "sourceRepresentation": "TypedValue",
+                      "sourceType": {
+                        "alias": "Elsa.Http.Core.ResponseMode",
+                        "collectionKind": "Single"
+                      },
+                      "targetType": {
+                        "alias": "Elsa.Http.Core.ResponseMode",
+                        "collectionKind": "Single"
+                      }
+                    },
+                    "effectivePolicy": {
+                      "isSensitive": false,
+                      "lifecycle": "Instance",
+                      "metadata": {},
+                      "requiresEncryption": false,
+                      "storage": "Inline"
+                    },
+                    "inputKey": "ResponseMode",
+                    "inputName": "ResponseMode",
+                    "literal": {
+                      "inlineValue": 1,
+                      "policy": {
+                        "isSensitive": false,
+                        "lifecycle": "Instance",
+                        "metadata": {},
+                        "requiresEncryption": false,
+                        "storage": "Inline"
+                      },
+                      "presence": "Present",
+                      "type": {
+                        "alias": "Elsa.Http.Core.ResponseMode",
+                        "collectionKind": "Single"
+                      }
+                    },
+                    "literalValue": 1,
+                    "metadata": {
+                      "referenceKey": "ResponseMode"
+                    },
+                    "source": "Literal",
+                    "targetType": {
+                      "alias": "Elsa.Http.Core.ResponseMode",
+                      "collectionKind": "Single"
+                    }
+                  },
+                  "SupportedMethods": {
+                    "conversionPlan": {
+                      "fingerprint": "sha256:7dff44c28ab9cb8b6c35d37d823108b1540900cc64300e9546f5dd4456f3e1c5",
+                      "limits": {
+                        "maxCollectionItems": 10000,
+                        "maxDepth": 64,
+                        "maxPayloadBytes": 1048576
+                      },
+                      "mode": "Auto",
+                      "operation": "Identity",
+                      "options": {},
+                      "schemaVersion": 1,
+                      "sourceRepresentation": "TextValue",
+                      "sourceType": {
+                        "alias": "String",
+                        "collectionKind": "List"
+                      },
+                      "targetType": {
+                        "alias": "String",
+                        "collectionKind": "List"
+                      }
+                    },
+                    "effectivePolicy": {
+                      "isSensitive": false,
+                      "lifecycle": "Instance",
+                      "metadata": {},
+                      "requiresEncryption": false,
+                      "storage": "Inline"
+                    },
+                    "inputKey": "SupportedMethods",
+                    "inputName": "SupportedMethods",
+                    "literal": {
+                      "inlineValue": [
+                        "POST"
+                      ],
+                      "policy": {
+                        "isSensitive": false,
+                        "lifecycle": "Instance",
+                        "metadata": {},
+                        "requiresEncryption": false,
+                        "storage": "Inline"
+                      },
+                      "presence": "Present",
+                      "type": {
+                        "alias": "String",
+                        "collectionKind": "List"
+                      }
+                    },
+                    "literalValue": [
+                      "POST"
+                    ],
+                    "metadata": {
+                      "referenceKey": "SupportedMethods"
+                    },
+                    "source": "Literal",
+                    "targetType": {
+                      "alias": "String",
+                      "collectionKind": "List"
+                    }
+                  }
+                },
+                "metadata": {
+                  "authoredNodeId": "http-in",
+                  "executionType": "Trigger"
+                },
+                "outputCaptures": {
+                  "ParsedContent": {
+                    "captureOnSuccessfulCompletion": true,
+                    "lifecycle": "Instance",
+                    "metadata": {
+                      "referenceKey": "ParsedContent",
+                      "runtime.storageDriverKey": "elsa.json",
+                      "runtime.variableName": "content",
+                      "targetVariableReferenceKey": "content"
+                    },
+                    "outputName": "ParsedContent",
+                    "storage": "Custom",
+                    "storageDriverKey": "elsa.json",
+                    "type": {
+                      "id": "elsa.json",
+                      "kind": "Object",
+                      "schema": {
+                        "Alias": "Object",
+                        "CollectionKind": "Single"
+                      }
+                    },
+                    "valueId": "variable:content"
+                  },
+                  "Request": {
+                    "captureOnSuccessfulCompletion": true,
+                    "lifecycle": "Instance",
+                    "metadata": {
+                      "referenceKey": "Request",
+                      "runtime.storageDriverKey": "elsa.json",
+                      "runtime.variableName": "request",
+                      "targetVariableReferenceKey": "request"
+                    },
+                    "outputName": "Request",
+                    "storage": "Custom",
+                    "storageDriverKey": "elsa.json",
+                    "type": {
+                      "id": "elsa.json",
+                      "kind": "Object",
+                      "schema": {
+                        "Alias": "Object",
+                        "CollectionKind": "Single"
+                      }
+                    },
+                    "valueId": "variable:request"
+                  },
+                  "RouteData": {
+                    "captureOnSuccessfulCompletion": true,
+                    "lifecycle": "Instance",
+                    "metadata": {
+                      "referenceKey": "RouteData",
+                      "runtime.storageDriverKey": "elsa.json",
+                      "runtime.variableName": "route",
+                      "targetVariableReferenceKey": "route"
+                    },
+                    "outputName": "RouteData",
+                    "storage": "Custom",
+                    "storageDriverKey": "elsa.json",
+                    "type": {
+                      "id": "elsa.json",
+                      "kind": "Object",
+                      "schema": {
+                        "Alias": "Object",
+                        "CollectionKind": "Single"
+                      }
+                    },
+                    "valueId": "variable:route"
+                  }
+                }
+              },
+              {
+                "activityType": "elsa.intrinsic.set",
+                "activityTypeVersion": "1.0.0",
+                "authoredActivityId": "set-reference-text",
+                "childSlots": [],
+                "descriptorPayload": {
+                  "kind": "Set",
+                  "schemaVersion": "1.0.0"
+                },
+                "descriptorSchemaVersion": "1",
+                "descriptorType": "intrinsic",
+                "executableNodeId": "set-reference-text",
+                "inputBindings": {
+                  "value": {
+                    "effectivePolicy": {
+                      "isSensitive": false,
+                      "lifecycle": "Instance",
+                      "metadata": {},
+                      "requiresEncryption": false,
+                      "storage": "Inline"
+                    },
+                    "expression": {
+                      "capabilityProfile": "binding-pure-v1",
+                      "expression": "getVariable('content').firstName + ' ' + getVariable('content').lastName",
+                      "language": "JavaScript",
+                      "metadata": {},
+                      "options": {},
+                      "parameterConversionPlans": {},
+                      "parameters": {},
+                      "resultType": {
+                        "id": "String",
+                        "kind": "alias"
+                      }
+                    },
+                    "inputKey": "value",
+                    "inputName": "value",
+                    "metadata": {
+                      "referenceKey": "value"
+                    },
+                    "source": "Expression",
+                    "targetType": {
+                      "alias": "String",
+                      "collectionKind": "Single"
+                    }
+                  }
+                },
+                "intrinsicKind": "Set",
+                "intrinsicVariable": {
+                  "declaringScopeId": "workflow",
+                  "variableKey": "referenceText"
+                },
+                "metadata": {
+                  "authoredNodeId": "set-reference-text",
+                  "executionType": "Action"
+                },
+                "outputCaptures": {}
+              },
+              {
+                "activityContract": {
+                  "activation": {
+                    "capability": "Elsa.Activities.Http.Activities.WriteHttpResponse",
+                    "descriptorKind": "Elsa.Primitives.Models.ClrActivityDescriptor"
+                  },
+                  "activityTypeKey": "Elsa.Activities.Http.Activities.WriteHttpResponse",
+                  "contractVersion": "1.0.0+2ea800cd5c17232cbfd50e0115344bab0ec79056",
+                  "descriptorKind": "Elsa.Primitives.Models.ClrActivityDescriptor",
+                  "descriptorPayload": {
+                    "typeAlias": "Elsa.Activities.Http.Activities.WriteHttpResponse"
+                  },
+                  "inputs": {
+                    "Body": {
+                      "editorMetadata": {},
+                      "hasDefault": false,
+                      "isNullable": true,
+                      "isRequired": false,
+                      "key": "Body",
+                      "name": "Body",
+                      "policy": {
+                        "isPersistable": true,
+                        "isSensitive": false,
+                        "lifecycle": "Instance",
+                        "requiresEncryption": false,
+                        "storage": "Inline"
+                      },
+                      "type": {
+                        "alias": "String",
+                        "collectionKind": "Single"
+                      }
+                    },
+                    "ContentType": {
+                      "editorMetadata": {},
+                      "hasDefault": false,
+                      "isNullable": true,
+                      "isRequired": false,
+                      "key": "ContentType",
+                      "name": "ContentType",
+                      "policy": {
+                        "isPersistable": true,
+                        "isSensitive": false,
+                        "lifecycle": "Instance",
+                        "requiresEncryption": false,
+                        "storage": "Inline"
+                      },
+                      "type": {
+                        "alias": "String",
+                        "collectionKind": "Single"
+                      }
+                    },
+                    "Headers": {
+                      "editorMetadata": {},
+                      "hasDefault": false,
+                      "isNullable": true,
+                      "isRequired": false,
+                      "key": "Headers",
+                      "name": "Headers",
+                      "policy": {
+                        "isPersistable": true,
+                        "isSensitive": false,
+                        "lifecycle": "Instance",
+                        "requiresEncryption": false,
+                        "storage": "Inline"
+                      },
+                      "type": {
+                        "alias": "System.String[]",
+                        "collectionKind": "Dictionary"
+                      }
+                    },
+                    "StatusCode": {
+                      "defaultValue": 200,
+                      "editorMetadata": {},
+                      "hasDefault": true,
+                      "isNullable": false,
+                      "isRequired": false,
+                      "key": "StatusCode",
+                      "name": "StatusCode",
+                      "policy": {
+                        "isPersistable": true,
+                        "isSensitive": false,
+                        "lifecycle": "Instance",
+                        "requiresEncryption": false,
+                        "storage": "Inline"
+                      },
+                      "type": {
+                        "alias": "Int32",
+                        "collectionKind": "Single"
+                      }
+                    }
+                  },
+                  "outcomes": [
+                    "Done"
+                  ],
+                  "result": {
+                    "isRequired": true,
+                    "policy": {
+                      "isPersistable": true,
+                      "isSensitive": false,
+                      "lifecycle": "Result",
+                      "requiresEncryption": false,
+                      "storage": "Inline"
+                    },
+                    "projections": {
+                      "Body": {
+                        "isRequired": true,
+                        "key": "Body",
+                        "path": "body",
+                        "policy": {
+                          "isPersistable": true,
+                          "isSensitive": false,
+                          "lifecycle": "Instance",
+                          "requiresEncryption": false,
+                          "storage": "Inline"
+                        },
+                        "sourceRepresentation": "TextValue",
+                        "type": {
+                          "alias": "String",
+                          "collectionKind": "Single"
+                        }
+                      },
+                      "ContentType": {
+                        "isRequired": true,
+                        "key": "ContentType",
+                        "path": "contentType",
+                        "policy": {
+                          "isPersistable": true,
+                          "isSensitive": false,
+                          "lifecycle": "Instance",
+                          "requiresEncryption": false,
+                          "storage": "Inline"
+                        },
+                        "sourceRepresentation": "TextValue",
+                        "type": {
+                          "alias": "String",
+                          "collectionKind": "Single"
+                        }
+                      },
+                      "Headers": {
+                        "isRequired": true,
+                        "key": "Headers",
+                        "path": "headers",
+                        "policy": {
+                          "isPersistable": true,
+                          "isSensitive": false,
+                          "lifecycle": "Instance",
+                          "requiresEncryption": false,
+                          "storage": "Inline"
+                        },
+                        "sourceRepresentation": "StructuredValue",
+                        "type": {
+                          "alias": "System.String[]",
+                          "collectionKind": "Dictionary"
+                        }
+                      },
+                      "StatusCode": {
+                        "isRequired": true,
+                        "key": "StatusCode",
+                        "path": "statusCode",
+                        "policy": {
+                          "isPersistable": true,
+                          "isSensitive": false,
+                          "lifecycle": "Instance",
+                          "requiresEncryption": false,
+                          "storage": "Inline"
+                        },
+                        "sourceRepresentation": "TypedValue",
+                        "type": {
+                          "alias": "Int32",
+                          "collectionKind": "Single"
+                        }
+                      }
+                    },
+                    "sourceRepresentation": "TypedValue",
+                    "type": {
+                      "alias": "Elsa.Activities.Http.Models.HttpResponseInstruction",
+                      "collectionKind": "Single"
+                    }
+                  },
+                  "schemaFingerprint": "sha256:7f184755b46166b9992385019df418bba2b1e7835be5374be684f7c54472e478",
+                  "sideEffectProfile": "ReplaySafe"
+                },
+                "activityType": "Elsa.Activities.Http.Activities.WriteHttpResponse",
+                "activityTypeVersion": "1.0.0+2ea800cd5c17232cbfd50e0115344bab0ec79056",
+                "authoredActivityId": "write-response",
+                "childSlots": [],
+                "descriptorPayload": {
+                  "typeAlias": "Elsa.Activities.Http.Activities.WriteHttpResponse"
+                },
+                "descriptorSchemaVersion": "1",
+                "descriptorType": "elsa.clr-activity",
+                "executableNodeId": "write-response",
+                "inputBindings": {
+                  "Body": {
+                    "effectivePolicy": {
+                      "isSensitive": false,
+                      "lifecycle": "Instance",
+                      "metadata": {},
+                      "requiresEncryption": false,
+                      "storage": "Inline"
+                    },
+                    "expression": {
+                      "capabilityProfile": "binding-pure-v1",
+                      "expression": "getVariable('referenceText')",
+                      "language": "JavaScript",
+                      "metadata": {},
+                      "options": {},
+                      "parameterConversionPlans": {},
+                      "parameters": {},
+                      "resultType": {
+                        "id": "String",
+                        "kind": "alias"
+                      }
+                    },
+                    "inputKey": "Body",
+                    "inputName": "Body",
+                    "metadata": {
+                      "referenceKey": "Body"
+                    },
+                    "source": "Expression",
+                    "targetType": {
+                      "alias": "String",
+                      "collectionKind": "Single"
+                    }
+                  },
+                  "ContentType": {
+                    "conversionPlan": {
+                      "fingerprint": "sha256:8a808515a2d6c2c5dbfec984a78d50793bf8b384e2599e28ab2dd92cb030c3cb",
+                      "limits": {
+                        "maxCollectionItems": 10000,
+                        "maxDepth": 64,
+                        "maxPayloadBytes": 1048576
+                      },
+                      "mode": "Auto",
+                      "operation": "Identity",
+                      "options": {},
+                      "schemaVersion": 1,
+                      "sourceRepresentation": "TextValue",
+                      "sourceType": {
+                        "alias": "String",
+                        "collectionKind": "Single"
+                      },
+                      "targetType": {
+                        "alias": "String",
+                        "collectionKind": "Single"
+                      }
+                    },
+                    "effectivePolicy": {
+                      "isSensitive": false,
+                      "lifecycle": "Instance",
+                      "metadata": {},
+                      "requiresEncryption": false,
+                      "storage": "Inline"
+                    },
+                    "inputKey": "ContentType",
+                    "inputName": "ContentType",
+                    "literal": {
+                      "inlineValue": "text/plain",
+                      "policy": {
+                        "isSensitive": false,
+                        "lifecycle": "Instance",
+                        "metadata": {},
+                        "requiresEncryption": false,
+                        "storage": "Inline"
+                      },
+                      "presence": "Present",
+                      "type": {
+                        "alias": "String",
+                        "collectionKind": "Single"
+                      }
+                    },
+                    "literalValue": "text/plain",
+                    "metadata": {
+                      "referenceKey": "ContentType"
+                    },
+                    "source": "Literal",
+                    "targetType": {
+                      "alias": "String",
+                      "collectionKind": "Single"
+                    }
+                  },
+                  "Headers": {
+                    "effectivePolicy": {
+                      "isSensitive": false,
+                      "lifecycle": "Instance",
+                      "metadata": {},
+                      "requiresEncryption": false,
+                      "storage": "Inline"
+                    },
+                    "inputKey": "Headers",
+                    "inputName": "Headers",
+                    "literal": {
+                      "policy": {
+                        "isSensitive": false,
+                        "lifecycle": "Instance",
+                        "metadata": {},
+                        "requiresEncryption": false,
+                        "storage": "Inline"
+                      },
+                      "presence": "Absent",
+                      "type": {
+                        "alias": "System.String[]",
+                        "collectionKind": "Dictionary"
+                      }
+                    },
+                    "metadata": {
+                      "referenceKey": "Headers"
+                    },
+                    "source": "Literal",
+                    "targetType": {
+                      "alias": "System.String[]",
+                      "collectionKind": "Dictionary"
+                    }
+                  },
+                  "StatusCode": {
+                    "conversionPlan": {
+                      "fingerprint": "sha256:bf63e91df825316bbf8999aefc01537535b85559cd365c5dbe6845f587c3251a",
+                      "limits": {
+                        "maxCollectionItems": 10000,
+                        "maxDepth": 64,
+                        "maxPayloadBytes": 1048576
+                      },
+                      "mode": "Auto",
+                      "operation": "Identity",
+                      "options": {},
+                      "schemaVersion": 1,
+                      "sourceRepresentation": "TypedValue",
+                      "sourceType": {
+                        "alias": "Int32",
+                        "collectionKind": "Single"
+                      },
+                      "targetType": {
+                        "alias": "Int32",
+                        "collectionKind": "Single"
+                      }
+                    },
+                    "effectivePolicy": {
+                      "isSensitive": false,
+                      "lifecycle": "Instance",
+                      "metadata": {},
+                      "requiresEncryption": false,
+                      "storage": "Inline"
+                    },
+                    "inputKey": "StatusCode",
+                    "inputName": "StatusCode",
+                    "literal": {
+                      "inlineValue": 200,
+                      "policy": {
+                        "isSensitive": false,
+                        "lifecycle": "Instance",
+                        "metadata": {},
+                        "requiresEncryption": false,
+                        "storage": "Inline"
+                      },
+                      "presence": "Present",
+                      "type": {
+                        "alias": "Int32",
+                        "collectionKind": "Single"
+                      }
+                    },
+                    "literalValue": 200,
+                    "metadata": {
+                      "referenceKey": "StatusCode"
+                    },
+                    "source": "Literal",
+                    "targetType": {
+                      "alias": "Int32",
+                      "collectionKind": "Single"
+                    }
+                  }
+                },
+                "metadata": {
+                  "authoredNodeId": "write-response",
+                  "executionType": "Action"
+                },
+                "outputCaptures": {}
+              }
+            ],
+            "name": "Sequence.Activities",
+            "operatorSchedulingCapability": {
+              "configuration": {},
+              "policyKey": "elsa.sequence.operator-schedule",
+              "schemaVersion": 1
+            }
+          }
+        ],
+        "descriptorPayload": {
+          "typeAlias": "Elsa.Activities.Sequence.Activities.Sequence"
+        },
+        "descriptorSchemaVersion": "1",
+        "descriptorType": "elsa.clr-activity",
+        "executableNodeId": "root",
+        "inputBindings": {},
+        "metadata": {
+          "authoredNodeId": "root",
+          "executionType": "Action"
+        },
+        "outputCaptures": {},
+        "structure": {
+          "kind": "elsa.sequence.structure",
+          "payload": {
+            "activities": [
+              "http-in",
+              "set-reference-text",
+              "write-response"
+            ],
+            "variables": []
+          },
+          "schemaVersion": "1.0.0"
+        }
+      },
+      "runtimeRequirements": [
+        {
+          "consumerKey": "elsa.clr-activity",
+          "schemaVersion": "1"
+        },
+        {
+          "consumerKey": "intrinsic",
+          "schemaVersion": "1"
+        }
+      ],
+      "storageDriverRequirements": [
+        {
+          "driverKey": "elsa.json"
+        }
+      ],
+      "workflowVariables": [
+        {
+          "initialBinding": {
+            "conversionPlan": {
+              "fingerprint": "sha256:9dba3f0af3bf270f031619d4775a722ac4f4d592de48ecb9d7feaf0707467641",
+              "limits": {
+                "maxCollectionItems": 10000,
+                "maxDepth": 64,
+                "maxPayloadBytes": 1048576
+              },
+              "mode": "Auto",
+              "operation": "Identity",
+              "options": {},
+              "schemaVersion": 1,
+              "sourceRepresentation": "TypedValue",
+              "sourceType": {
+                "alias": "Object",
+                "collectionKind": "Single"
+              },
+              "targetType": {
+                "alias": "Object",
+                "collectionKind": "Single"
+              }
+            },
+            "effectivePolicy": {
+              "isSensitive": false,
+              "lifecycle": "Instance",
+              "metadata": {},
+              "requiresEncryption": false,
+              "storage": "Inline"
+            },
+            "inputKey": "content",
+            "inputName": "content",
+            "literal": {
+              "inlineValue": "",
+              "policy": {
+                "isSensitive": false,
+                "lifecycle": "Instance",
+                "metadata": {},
+                "requiresEncryption": false,
+                "storage": "Inline"
+              },
+              "presence": "Present",
+              "type": {
+                "alias": "Object",
+                "collectionKind": "Single"
+              }
+            },
+            "literalValue": "",
+            "metadata": {
+              "referenceKey": "content"
+            },
+            "source": "Literal",
+            "targetType": {
+              "alias": "Object",
+              "collectionKind": "Single"
+            }
+          },
+          "name": "content",
+          "policy": {
+            "isSensitive": false,
+            "lifecycle": "Instance",
+            "metadata": {},
+            "requiresEncryption": false,
+            "storage": "Inline"
+          },
+          "type": {
+            "alias": "Object",
+            "collectionKind": "Single"
+          },
+          "variableKey": "content"
+        },
+        {
+          "initialBinding": {
+            "conversionPlan": {
+              "fingerprint": "sha256:8a808515a2d6c2c5dbfec984a78d50793bf8b384e2599e28ab2dd92cb030c3cb",
+              "limits": {
+                "maxCollectionItems": 10000,
+                "maxDepth": 64,
+                "maxPayloadBytes": 1048576
+              },
+              "mode": "Auto",
+              "operation": "Identity",
+              "options": {},
+              "schemaVersion": 1,
+              "sourceRepresentation": "TextValue",
+              "sourceType": {
+                "alias": "String",
+                "collectionKind": "Single"
+              },
+              "targetType": {
+                "alias": "String",
+                "collectionKind": "Single"
+              }
+            },
+            "effectivePolicy": {
+              "isSensitive": false,
+              "lifecycle": "Instance",
+              "metadata": {},
+              "requiresEncryption": false,
+              "storage": "Inline"
+            },
+            "inputKey": "referenceText",
+            "inputName": "referenceText",
+            "literal": {
+              "inlineValue": "",
+              "policy": {
+                "isSensitive": false,
+                "lifecycle": "Instance",
+                "metadata": {},
+                "requiresEncryption": false,
+                "storage": "Inline"
+              },
+              "presence": "Present",
+              "type": {
+                "alias": "String",
+                "collectionKind": "Single"
+              }
+            },
+            "literalValue": "",
+            "metadata": {
+              "referenceKey": "referenceText"
+            },
+            "source": "Literal",
+            "targetType": {
+              "alias": "String",
+              "collectionKind": "Single"
+            }
+          },
+          "name": "referenceText",
+          "policy": {
+            "isSensitive": false,
+            "lifecycle": "Instance",
+            "metadata": {},
+            "requiresEncryption": false,
+            "storage": "Inline"
+          },
+          "type": {
+            "alias": "String",
+            "collectionKind": "Single"
+          },
+          "variableKey": "referenceText"
+        },
+        {
+          "initialBinding": {
+            "conversionPlan": {
+              "fingerprint": "sha256:9dba3f0af3bf270f031619d4775a722ac4f4d592de48ecb9d7feaf0707467641",
+              "limits": {
+                "maxCollectionItems": 10000,
+                "maxDepth": 64,
+                "maxPayloadBytes": 1048576
+              },
+              "mode": "Auto",
+              "operation": "Identity",
+              "options": {},
+              "schemaVersion": 1,
+              "sourceRepresentation": "TypedValue",
+              "sourceType": {
+                "alias": "Object",
+                "collectionKind": "Single"
+              },
+              "targetType": {
+                "alias": "Object",
+                "collectionKind": "Single"
+              }
+            },
+            "effectivePolicy": {
+              "isSensitive": false,
+              "lifecycle": "Instance",
+              "metadata": {},
+              "requiresEncryption": false,
+              "storage": "Inline"
+            },
+            "inputKey": "request",
+            "inputName": "request",
+            "literal": {
+              "inlineValue": "",
+              "policy": {
+                "isSensitive": false,
+                "lifecycle": "Instance",
+                "metadata": {},
+                "requiresEncryption": false,
+                "storage": "Inline"
+              },
+              "presence": "Present",
+              "type": {
+                "alias": "Object",
+                "collectionKind": "Single"
+              }
+            },
+            "literalValue": "",
+            "metadata": {
+              "referenceKey": "request"
+            },
+            "source": "Literal",
+            "targetType": {
+              "alias": "Object",
+              "collectionKind": "Single"
+            }
+          },
+          "name": "request",
+          "policy": {
+            "isSensitive": false,
+            "lifecycle": "Instance",
+            "metadata": {},
+            "requiresEncryption": false,
+            "storage": "Inline"
+          },
+          "type": {
+            "alias": "Object",
+            "collectionKind": "Single"
+          },
+          "variableKey": "request"
+        },
+        {
+          "initialBinding": {
+            "conversionPlan": {
+              "fingerprint": "sha256:9dba3f0af3bf270f031619d4775a722ac4f4d592de48ecb9d7feaf0707467641",
+              "limits": {
+                "maxCollectionItems": 10000,
+                "maxDepth": 64,
+                "maxPayloadBytes": 1048576
+              },
+              "mode": "Auto",
+              "operation": "Identity",
+              "options": {},
+              "schemaVersion": 1,
+              "sourceRepresentation": "TypedValue",
+              "sourceType": {
+                "alias": "Object",
+                "collectionKind": "Single"
+              },
+              "targetType": {
+                "alias": "Object",
+                "collectionKind": "Single"
+              }
+            },
+            "effectivePolicy": {
+              "isSensitive": false,
+              "lifecycle": "Instance",
+              "metadata": {},
+              "requiresEncryption": false,
+              "storage": "Inline"
+            },
+            "inputKey": "route",
+            "inputName": "route",
+            "literal": {
+              "inlineValue": "",
+              "policy": {
+                "isSensitive": false,
+                "lifecycle": "Instance",
+                "metadata": {},
+                "requiresEncryption": false,
+                "storage": "Inline"
+              },
+              "presence": "Present",
+              "type": {
+                "alias": "Object",
+                "collectionKind": "Single"
+              }
+            },
+            "literalValue": "",
+            "metadata": {
+              "referenceKey": "route"
+            },
+            "source": "Literal",
+            "targetType": {
+              "alias": "Object",
+              "collectionKind": "Single"
+            }
+          },
+          "name": "route",
+          "policy": {
+            "isSensitive": false,
+            "lifecycle": "Instance",
+            "metadata": {},
+            "requiresEncryption": false,
+            "storage": "Inline"
+          },
+          "type": {
+            "alias": "Object",
+            "collectionKind": "Single"
+          },
+          "variableKey": "route"
+        }
+      ]
+    }
+  ],
+  "formatVersion": 1,
+  "rootArtifactId": "artifact-2f5dbc272b5c",
+  "sourceReferences": [
+    {
+      "activationId": "publication-14EOM8mak3g",
+      "activityPresentation": [],
+      "artifactId": "artifact-2f5dbc272b5c",
+      "artifactVersion": "1.0.0",
+      "authoredInputs": [
+        {
+          "executableNodeId": "write-response",
+          "expressionType": "Literal",
+          "inputKey": "StatusCode",
+          "isSensitive": false,
+          "value": 200
+        },
+        {
+          "executableNodeId": "write-response",
+          "expressionType": "JavaScript",
+          "inputKey": "Body",
+          "isSensitive": false,
+          "value": "getVariable('referenceText')"
+        },
+        {
+          "executableNodeId": "write-response",
+          "expressionType": "Literal",
+          "inputKey": "ContentType",
+          "isSensitive": false,
+          "value": "text/plain"
+        },
+        {
+          "executableNodeId": "set-reference-text",
+          "expressionType": "JavaScript",
+          "inputKey": "value",
+          "isSensitive": false,
+          "value": "getVariable('content').firstName + ' ' + getVariable('content').lastName"
+        },
+        {
+          "executableNodeId": "http-in",
+          "expressionType": "Literal",
+          "inputKey": "Path",
+          "isSensitive": false,
+          "value": "runtime-throughput-2534/http4-9c98c9e4f7/transform"
+        },
+        {
+          "executableNodeId": "http-in",
+          "expressionType": "Literal",
+          "inputKey": "CanStartWorkflow",
+          "isSensitive": false,
+          "value": true
+        },
+        {
+          "executableNodeId": "http-in",
+          "expressionType": "Literal",
+          "inputKey": "SupportedMethods",
+          "isSensitive": false,
+          "value": [
+            "POST"
+          ]
+        },
+        {
+          "executableNodeId": "http-in",
+          "expressionType": "Literal",
+          "inputKey": "ResponseMode",
+          "isSensitive": false,
+          "value": "Sync"
+        }
+      ],
+      "createdAt": "2026-10-10T02:49:33.425986+00:00",
+      "definitionId": "14EOM7L2XVZ",
+      "definitionVersionId": "14EOM7PDGWl",
+      "layout": [],
+      "layoutSidecar": {
+        "boundarySegments": []
+      },
+      "publishedAt": "2026-10-10T02:49:33.425986+00:00",
+      "scope": "Published",
+      "slotId": "activation-slot:11:14EOM7L2XVZ:7:default",
+      "sourceId": "14EOM7PDGWl",
+      "sourceKind": "WorkflowDefinitionVersion",
+      "sourceReferenceId": "activation-ref:publication-14EOM8mak3g",
+      "sourceVersion": "1.0.0",
+      "tenantId": "default"
+    }
+  ],
+  "triggerBindings": [
+    {
+      "activationId": "publication-14EOM8mak3g",
+      "artifactHash": "sha256:2f5dbc272b5ccd95330eaca2b5c8fea5851d0ae791a084c55e92418a80785800",
+      "artifactId": "artifact-2f5dbc272b5c",
+      "artifactVersion": "1.0.0",
+      "cardinality": "Exclusive",
+      "createdAt": "2026-10-10T02:49:33.9259058+00:00",
+      "definitionId": "14EOM7L2XVZ",
+      "executableNodeId": "http-in",
+      "isActive": true,
+      "metadata": {
+        "http:method": "post",
+        "http:responseMode": "Sync",
+        "http:template": "runtime-throughput-2534/http4-9c98c9e4f7/transform"
+      },
+      "slotId": "activation-slot:11:14EOM7L2XVZ:7:default",
+      "stimulusHash": "sha256:7cb09fed7220d211bae5a0153507c398e28530a5fe68e1b81c10ae805bef1a75",
+      "stimulusType": "HttpEndpoint",
+      "triggerBindingId": "tb1-64477371E125051491C27C325CD9EF90D2A94DA59E8FE5AE49A4D1885EB93BB8"
+    }
+  ]
+}

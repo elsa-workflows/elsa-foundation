@@ -1,0 +1,149 @@
+{
+  "sourceShaVerified": true,
+  "sourceClean": true,
+  "sourcePinsVerified": true,
+  "originalReleaseBuildFilesUnchanged": true,
+  "originalReleaseBuildFileCount": 520,
+  "runtimeOutputAdditions": [
+    {
+      "path": ".nuplane/store-state.json",
+      "sha256": "cdd31b7671898783db2ff624acf6fc947489e27aabe6a5919d988df06f979ba9"
+    },
+    {
+      "path": ".nuplane/store-state.json.lock",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  ],
+  "onlyExpectedRuntimeOutputAdditions": true,
+  "seriesCount": 7,
+  "allHostsStopped": true,
+  "counterReceiptsComplete": true,
+  "counterReceiptsSuccessful": true,
+  "allCounterCollectorsStopped": true,
+  "counterCount": 28,
+  "readbacks": [
+    {
+      "series": 1,
+      "instances": 864,
+      "uniqueExecutionIds": 864,
+      "statuses": {
+        "Completed": 864
+      },
+      "incidentInstances": 0,
+      "cadenceMismatches": 0,
+      "summaryConsistent": true,
+      "fixtureHashVerified": true
+    },
+    {
+      "series": 2,
+      "instances": 1974,
+      "uniqueExecutionIds": 1974,
+      "statuses": {
+        "Completed": 1974
+      },
+      "incidentInstances": 0,
+      "cadenceMismatches": 0,
+      "summaryConsistent": true,
+      "fixtureHashVerified": true
+    },
+    {
+      "series": 3,
+      "instances": 1493,
+      "uniqueExecutionIds": 1493,
+      "statuses": {
+        "Completed": 1493
+      },
+      "incidentInstances": 0,
+      "cadenceMismatches": 0,
+      "summaryConsistent": true,
+      "fixtureHashVerified": true
+    },
+    {
+      "series": 4,
+      "instances": 9052,
+      "uniqueExecutionIds": 9052,
+      "statuses": {
+        "Completed": 9052
+      },
+      "incidentInstances": 0,
+      "cadenceMismatches": 0,
+      "summaryConsistent": true,
+      "fixtureHashVerified": true
+    },
+    {
+      "series": 5,
+      "instances": 645,
+      "uniqueExecutionIds": 645,
+      "statuses": {
+        "Completed": 643,
+        "Running": 2
+      },
+      "incidentInstances": 0,
+      "cadenceMismatches": 0,
+      "summaryConsistent": true,
+      "fixtureHashVerified": true
+    },
+    {
+      "series": 6,
+      "instances": 1706,
+      "uniqueExecutionIds": 1706,
+      "statuses": {
+        "Completed": 1705,
+        "Running": 1
+      },
+      "incidentInstances": 0,
+      "cadenceMismatches": 0,
+      "summaryConsistent": true,
+      "fixtureHashVerified": true
+    },
+    {
+      "series": 7,
+      "instances": 127,
+      "uniqueExecutionIds": 127,
+      "statuses": {
+        "Completed": 127
+      },
+      "incidentInstances": 0,
+      "cadenceMismatches": 0,
+      "summaryConsistent": true,
+      "fixtureHashVerified": true
+    }
+  ],
+  "readbackEvidenceConsistent": true,
+  "privacyFifoDirectoryEmpty": true,
+  "ownedContainers": [
+    {
+      "name": "track-b-2534-s1-045f44d414",
+      "running": false
+    },
+    {
+      "name": "track-b-2534-s2-ed33656466",
+      "running": false
+    },
+    {
+      "name": "track-b-2534-s3-77cfb653dd",
+      "running": false
+    },
+    {
+      "name": "track-b-2534-s4-c9cb902b31",
+      "running": false
+    },
+    {
+      "name": "track-b-2534-s5-7e6b1924b8",
+      "running": false
+    },
+    {
+      "name": "track-b-2534-s6-fdc112bd5b",
+      "running": false
+    }
+  ],
+  "allOwnedContainersStopped": true,
+  "preexistingContainerCount": 58,
+  "preexistingContainersRetained": true,
+  "preexistingContainerStatesUnchanged": true,
+  "contentRootsUnique": true,
+  "hostPidsUnique": true,
+  "databasesUnique": true,
+  "efLoggingWarningEverySeries": true,
+  "passed": true
+}
