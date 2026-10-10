@@ -8,7 +8,7 @@ backwards compatibility is not required, as confirmed by the owner on 8 October 
 
 **Created**: 2026-07-20
 
-**Status**: Draft
+**Status**: Implemented — all tasks checked in f5ef31c2f
 
 **Input**: WU-marker of the runtime engine-performance effort under the [Runtime Execution Seam](../../docs/program-goals/runtime-execution-seam.md) bucket. Implements [ADR 0032](../../docs/adr/0032-runtime-checkpoint-cadence-is-policy-driven-per-workflow.md) decisions R1 + R2 (ratified 2026-07-20). Adds an author-declared `SideEffectProfile` to the pinned activity contract and makes the pre-activation attempt-claim checkpoint's mandatory immediate flush conditional on that profile, so a hot loop of pure activities can drop below one durable commit per activity under a coalescing cadence.
 

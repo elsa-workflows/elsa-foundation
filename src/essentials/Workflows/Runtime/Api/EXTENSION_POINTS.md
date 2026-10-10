@@ -34,4 +34,4 @@ and job reads require `workflow-runtime.read`. Hosts add custom alteration imple
 API exposes no handler payload schema endpoint: descriptor-only discovery remains the trusted host's
 `IWorkflowAlterationRegistry` concern, avoiding handler construction and executable payload-type leakage.
 
-Canonical ownership and retention rules are defined in the [domain-owned API spec](../../../../../specs/092-domain-owned-apis/spec.md); terminology is defined in the [Elsa glossary](../../../../../docs/glossary/elsa.md).
+Canonical ownership and retention rules are defined in the [domain-owned API spec](../../../../../specs/220-domain-owned-apis/spec.md); terminology is defined in the [Elsa glossary](../../../../../docs/glossary/elsa.md).

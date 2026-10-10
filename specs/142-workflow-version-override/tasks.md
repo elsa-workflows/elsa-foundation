@@ -44,7 +44,7 @@
 - [x] T015 [US3] Add failing identical/mismatched replay tests in `tests/Elsa/Workflows/Design/Persistence/Groundwork/Tests/GroundworkWorkflowDefinitionCommandTests.cs`
 - [x] T016 [US3] Advertise templated `workflow-draft-promote-version-preflight` and `workflow-draft-promote-exact-version` relations in `src/Elsa/Workflows/Design/Api/Capabilities/WorkflowDesignApiCapabilities.cs`
 - [x] T017 [US3] Include assignment mode and normalized requested version in `PromoteDraftRequestMaterial` in `src/Elsa/Workflows/Design/Persistence/Groundwork/Services/GroundworkPromoteDraftToVersionCommand.cs`
-- [x] T018 [US3] Update the management OpenAPI promotion/preflight contract in `specs/092-domain-owned-apis/contracts/management-api.openapi.yaml`
+- [x] T018 [US3] Update the management OpenAPI promotion/preflight contract in `specs/220-domain-owned-apis/contracts/management-api.openapi.yaml`
 
 ## Phase 5: Verification and landing
 

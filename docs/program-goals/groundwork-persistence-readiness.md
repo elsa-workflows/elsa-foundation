@@ -39,15 +39,15 @@ This bucket keeps generic Groundwork framework work separate from Elsa-specific 
 
 ## Historical Completed Objectives
 
-1. Complete [Groundwork Persistence Foundation](../../specs/012-groundwork-persistence-foundation/plan.md) as the G0 product-definition slice.
-2. Complete [Groundwork Core Manifest And Planner Kernel](../../specs/013-groundwork-core-manifest-planner/plan.md) as the G1 implementation slice.
-3. Complete [Groundwork SQLite Document Store](../../specs/014-groundwork-sqlite-document-store/plan.md) as the G2 provider validation slice.
-4. Complete [Groundwork Elsa Bridge](../../specs/015-groundwork-elsa-bridge/plan.md) as the G3 opt-in Elsa validation slice.
-5. Complete [Groundwork SQL Server And PostgreSQL Providers](../../specs/016-groundwork-relational-providers/plan.md) as the G4 relational provider slice.
-6. Complete [Groundwork MongoDB Provider](../../specs/017-groundwork-mongodb-provider/plan.md) as the G5 document-provider slice.
-7. Complete [Groundwork Runtime-Defined Entities](../../specs/018-groundwork-runtime-entities/plan.md) as the G6 runtime-defined business data slice.
-8. Complete [Groundwork Physicalization And Performance](../../specs/019-groundwork-physicalization-performance/plan.md) as the G7 provider-optimization slice.
-9. Complete [Groundwork Runtime Evaluation And Hardening](../../specs/020-groundwork-runtime-evaluation-hardening/plan.md) as the final go/no-go slice.
+1. Complete [Groundwork Persistence Foundation](../../specs/203-groundwork-persistence-foundation/plan.md) as the G0 product-definition slice.
+2. Complete [Groundwork Core Manifest And Planner Kernel](../../specs/204-groundwork-core-manifest-planner/plan.md) as the G1 implementation slice.
+3. Complete [Groundwork SQLite Document Store](../../specs/205-groundwork-sqlite-document-store/plan.md) as the G2 provider validation slice.
+4. Complete [Groundwork Elsa Bridge](../../specs/206-groundwork-elsa-bridge/plan.md) as the G3 opt-in Elsa validation slice.
+5. Complete [Groundwork SQL Server And PostgreSQL Providers](../../specs/208-groundwork-relational-providers/plan.md) as the G4 relational provider slice.
+6. Complete [Groundwork MongoDB Provider](../../specs/209-groundwork-mongodb-provider/plan.md) as the G5 document-provider slice.
+7. Complete [Groundwork Runtime-Defined Entities](../../specs/210-groundwork-runtime-entities/plan.md) as the G6 runtime-defined business data slice.
+8. Complete [Groundwork Physicalization And Performance](../../specs/211-groundwork-physicalization-performance/plan.md) as the G7 provider-optimization slice.
+9. Complete [Groundwork Runtime Evaluation And Hardening](../../specs/212-groundwork-runtime-evaluation-hardening/plan.md) as the final go/no-go slice.
 10. Preserve the original Persistence vNext roadmap by mapping each slice to a Groundwork-first execution slice.
 11. Defer runtime hot-path migration until benchmark and concurrency evidence exists.
 
@@ -55,30 +55,30 @@ This bucket keeps generic Groundwork framework work separate from Elsa-specific 
 
 - [EF Core Persistence current replacement goal](ef-core-persistence.md)
 - [Zero-EF Persistence historical successor goal](zero-ef-persistence.md)
-- [Groundwork Persistence Foundation spec](../../specs/012-groundwork-persistence-foundation/spec.md)
-- [Groundwork Persistence Foundation plan](../../specs/012-groundwork-persistence-foundation/plan.md)
-- [Groundwork boundary contract](../../specs/012-groundwork-persistence-foundation/contracts/groundwork-boundary.md)
-- [Groundwork roadmap slices](../../specs/012-groundwork-persistence-foundation/contracts/roadmap-slices.md)
-- [Groundwork Core Manifest And Planner Kernel spec](../../specs/013-groundwork-core-manifest-planner/spec.md)
-- [Groundwork Core Manifest And Planner Kernel plan](../../specs/013-groundwork-core-manifest-planner/plan.md)
-- [Groundwork SQLite Document Store spec](../../specs/014-groundwork-sqlite-document-store/spec.md)
-- [Groundwork SQLite Document Store plan](../../specs/014-groundwork-sqlite-document-store/plan.md)
-- [Groundwork Elsa Bridge spec](../../specs/015-groundwork-elsa-bridge/spec.md)
-- [Groundwork Elsa Bridge plan](../../specs/015-groundwork-elsa-bridge/plan.md)
-- [Groundwork SQL Server And PostgreSQL Providers spec](../../specs/016-groundwork-relational-providers/spec.md)
-- [Groundwork SQL Server And PostgreSQL Providers plan](../../specs/016-groundwork-relational-providers/plan.md)
-- [Groundwork MongoDB Provider spec](../../specs/017-groundwork-mongodb-provider/spec.md)
-- [Groundwork MongoDB Provider plan](../../specs/017-groundwork-mongodb-provider/plan.md)
-- [Groundwork Runtime-Defined Entities spec](../../specs/018-groundwork-runtime-entities/spec.md)
-- [Groundwork Runtime-Defined Entities plan](../../specs/018-groundwork-runtime-entities/plan.md)
-- [Groundwork Physicalization And Performance spec](../../specs/019-groundwork-physicalization-performance/spec.md)
-- [Groundwork Physicalization And Performance plan](../../specs/019-groundwork-physicalization-performance/plan.md)
-- [Groundwork Runtime Evaluation And Hardening spec](../../specs/020-groundwork-runtime-evaluation-hardening/spec.md)
-- [Groundwork Runtime Evaluation And Hardening plan](../../specs/020-groundwork-runtime-evaluation-hardening/plan.md)
+- [Groundwork Persistence Foundation spec](../../specs/203-groundwork-persistence-foundation/spec.md)
+- [Groundwork Persistence Foundation plan](../../specs/203-groundwork-persistence-foundation/plan.md)
+- [Groundwork boundary contract](../../specs/203-groundwork-persistence-foundation/contracts/groundwork-boundary.md)
+- [Groundwork roadmap slices](../../specs/203-groundwork-persistence-foundation/contracts/roadmap-slices.md)
+- [Groundwork Core Manifest And Planner Kernel spec](../../specs/204-groundwork-core-manifest-planner/spec.md)
+- [Groundwork Core Manifest And Planner Kernel plan](../../specs/204-groundwork-core-manifest-planner/plan.md)
+- [Groundwork SQLite Document Store spec](../../specs/205-groundwork-sqlite-document-store/spec.md)
+- [Groundwork SQLite Document Store plan](../../specs/205-groundwork-sqlite-document-store/plan.md)
+- [Groundwork Elsa Bridge spec](../../specs/206-groundwork-elsa-bridge/spec.md)
+- [Groundwork Elsa Bridge plan](../../specs/206-groundwork-elsa-bridge/plan.md)
+- [Groundwork SQL Server And PostgreSQL Providers spec](../../specs/208-groundwork-relational-providers/spec.md)
+- [Groundwork SQL Server And PostgreSQL Providers plan](../../specs/208-groundwork-relational-providers/plan.md)
+- [Groundwork MongoDB Provider spec](../../specs/209-groundwork-mongodb-provider/spec.md)
+- [Groundwork MongoDB Provider plan](../../specs/209-groundwork-mongodb-provider/plan.md)
+- [Groundwork Runtime-Defined Entities spec](../../specs/210-groundwork-runtime-entities/spec.md)
+- [Groundwork Runtime-Defined Entities plan](../../specs/210-groundwork-runtime-entities/plan.md)
+- [Groundwork Physicalization And Performance spec](../../specs/211-groundwork-physicalization-performance/spec.md)
+- [Groundwork Physicalization And Performance plan](../../specs/211-groundwork-physicalization-performance/plan.md)
+- [Groundwork Runtime Evaluation And Hardening spec](../../specs/212-groundwork-runtime-evaluation-hardening/spec.md)
+- [Groundwork Runtime Evaluation And Hardening plan](../../specs/212-groundwork-runtime-evaluation-hardening/plan.md)
 - [Groundwork host-configurable persistence feasibility report](../reports/groundwork-host-configurable-persistence-feasibility.md)
 - [Groundwork closed-query capability spec](../reports/groundwork-closed-query-capability-spec.md)
-- [Groundwork host-configurable runtime store POC spec](../../specs/071-groundwork-host-configurable-runtime-store-poc/spec.md)
-- [Groundwork host-configurable runtime store POC plan](../../specs/071-groundwork-host-configurable-runtime-store-poc/plan.md)
+- [Groundwork host-configurable runtime store POC spec](../../specs/213-groundwork-host-configurable-runtime-store-poc/spec.md)
+- [Groundwork host-configurable runtime store POC plan](../../specs/213-groundwork-host-configurable-runtime-store-poc/plan.md)
 - [Runtime Execution Seam](runtime-execution-seam.md)
 - [Workspace Split Readiness](workspace-split-readiness.md)
 
