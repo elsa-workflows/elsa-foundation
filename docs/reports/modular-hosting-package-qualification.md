@@ -1,5 +1,9 @@
 # CShells Package Qualification
 
+## Main integration lock correction (2026-10-10)
+
+The merged main-integration candidate at `45fc664dce6fa101324181cf3e778c3a515ec283` failed current-head Build & test job [114212407963](https://github.com/elsa-workflows/elsa-foundation/actions/runs/38051850880/job/114212407963) during locked restore with `NU1004`, before compilation or tests. The failure identified three stale project lock graphs: Workflows Design API tests, Secrets Workflows tests and Elsa3 Mapping tests. Plain restores refreshed only those three `packages.lock.json` files to match existing project references and package pins (`CShells.AspNetCore` from `.159` to `.173` in the Secrets graph); no source or package pin changed. The full `Elsa.Server.slnx` locked restore then passed, and `dotnet run --project tools/maps/Elsa.Maps.Generator -- check` reported that generated maps still describe the tree. The original failed log and local restore/map logs are retained under `/Users/sipke/.codex-workspaces/artifacts/modular-hosting-2500/extraction-scope-recovery-v1/main-refresh-v1/`. Fresh CI on the corrected head remains required; this correction ran no application build or tests.
+
 ## Startup adoption preparation (2026-10-09)
 
 [Spec 202](../../specs/202-adopt-startup-runner/spec.md) and [task #2528](https://github.com/elsa-workflows/elsa-foundation/issues/2528) prepare all eight central CShells pins at `0.0.30-preview.173`, retaining Nuplane `0.0.11-preview.99`. This candidate requires the qualified additive `ReturnedGeneration` API from source `f5bfc0db5ef9440dd777c2dd0d97fbf817f22e2f`; it is not stable adoption.
