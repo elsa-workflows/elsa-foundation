@@ -136,6 +136,10 @@ process, while a recurring task belongs to a shell's Tasks feature, would run on
 host that does not. Each prune call runs under `Prune:Timeout`, so a call that hangs is cancelled and cannot hold the node's later
 prunes.
 
+The development and demo store (`IsDevelopmentOrDemo`) is EF Core's in-memory one, which cannot delete in bulk, so OpenIddict's
+prune cannot run on it. There the service logs one Information line at start and does not prune; the store is discarded when the
+host stops, so nothing builds up.
+
 Generate a signing key:
 
 ```bash
