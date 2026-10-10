@@ -18,8 +18,9 @@ namespace Elsa.Architecture.Tests;
 /// property that still matters is total absence.
 /// </para>
 /// <para>
-/// It reads project, package, feed, build and CI files, never C# source (framework §2.23.2): a source file that
-/// names a retired family cannot compile without one of the package or project references these files carry.
+/// It reads project, package, feed, build, container and CI files, never C# source (framework §2.23.2): a source
+/// file that uses a retired family needs a package or project reference, and every file kind that can carry one is
+/// scanned, including the repository-root build files and Dockerfiles.
 /// </para>
 /// <para>
 /// <b>Fail-closed.</b> The forbidden names are assembled at runtime from fragments so this file is not
@@ -40,10 +41,10 @@ public sealed class RetiredPersistenceFamilyGuardTests
     ];
 
     /// <summary>Roots that ship or build the product. History under docs/, specs/ and archives is out of scope.</summary>
-    private static readonly string[] ScannedRoots = ["src", "tests", "tools", "docker", "e2e-tests", ".github", ".config"];
+    private static readonly string[] ScannedRoots = ["src", "tests", "tools", "samples", "docker", "e2e-tests", ".github", ".config"];
 
-    /// <summary>Repository-level files that select packages and feeds.</summary>
-    private static readonly string[] ScannedFiles = ["Directory.Packages.props", "NuGet.config", "Elsa.Server.slnx"];
+    /// <summary>Scanned by name wherever they sit; repository-root files of a scanned extension are read too.</summary>
+    private static readonly string[] ScannedFiles = ["Directory.Packages.props", "NuGet.config", "Elsa.Server.slnx", "Dockerfile"];
 
     /// <summary>Project, package, feed, build and CI files. C# source and markdown are deliberately not read.</summary>
     private static readonly string[] ScannedExtensions =
@@ -60,6 +61,7 @@ public sealed class RetiredPersistenceFamilyGuardTests
         Assert.True(files.Length > 0, "The retired-family guard scanned no files; its roots or extensions are wrong.");
         Assert.Contains("Directory.Packages.props", files.Select(file => file.RelativePath));
         Assert.Contains("NuGet.config", files.Select(file => file.RelativePath));
+        Assert.Contains("Directory.Build.props", files.Select(file => file.RelativePath));
 
         var violations = Violations(files.Select(file => (file.RelativePath, File.ReadAllText(file.Path))));
         Assert.True(
@@ -153,7 +155,7 @@ public sealed class RetiredPersistenceFamilyGuardTests
         RetiredNames.Any(name => text.Contains(name, StringComparison.OrdinalIgnoreCase));
 
     private static bool IsScannedConfigurationFile(string relativePath) =>
-        ScannedFiles.Contains(relativePath, StringComparer.Ordinal) ||
+        ScannedFiles.Contains(Path.GetFileName(relativePath), StringComparer.Ordinal) ||
         ScannedExtensions.Contains(Path.GetExtension(relativePath), StringComparer.OrdinalIgnoreCase);
 
     private static List<string> Violations(IEnumerable<(string RelativePath, string Text)> files) =>
@@ -177,11 +179,11 @@ public sealed class RetiredPersistenceFamilyGuardTests
             }
         }
 
-        foreach (var file in ScannedFiles)
+        foreach (var path in Directory.EnumerateFiles(FullPath("."), "*", SearchOption.TopDirectoryOnly))
         {
-            var path = FullPath(file);
-            if (File.Exists(path))
-                yield return (path, RelativePath(path));
+            var relativePath = RelativePath(path);
+            if (IsScannedConfigurationFile(relativePath))
+                yield return (path, relativePath);
         }
     }
 
