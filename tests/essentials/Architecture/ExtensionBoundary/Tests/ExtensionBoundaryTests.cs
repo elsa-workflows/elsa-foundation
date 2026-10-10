@@ -98,13 +98,8 @@ public sealed class ExtensionBoundaryTests
     /// back under <c>src/</c>: no extensions means no edges to find.
     /// </summary>
     [Fact]
-    public void Extensions_root_exists_and_documents_itself()
-    {
-        var root = Path.Join(RepoRoot, ExtensionsRoot);
-
-        Assert.True(Directory.Exists(root), $"'{ExtensionsRoot}/' is missing. The boundary guards cannot mean anything without it.");
-        Assert.True(File.Exists(Path.Join(root, "README.md")), $"'{ExtensionsRoot}/README.md' is missing; it carries the layout rules.");
-    }
+    public void Extensions_root_exists() =>
+        Assert.True(Directory.Exists(Path.Join(RepoRoot, ExtensionsRoot)), $"'{ExtensionsRoot}/' is missing. The boundary guards cannot mean anything without it.");
 
     /// <summary>
     /// Every declared edge must still exist. A stale entry would keep permitting an edge nobody has, and

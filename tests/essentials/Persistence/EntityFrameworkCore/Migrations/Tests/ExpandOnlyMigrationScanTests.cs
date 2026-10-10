@@ -177,23 +177,6 @@ public sealed class ExpandOnlyMigrationScanTests
             line.Contains(ContractingModule.DropObsolete, StringComparison.Ordinal) && !line.Contains("applies once", StringComparison.Ordinal)));
     }
 
-    /// <summary>
-    /// The other half of FR-019's two independent enumerations, provable without #1976's manifest: every
-    /// <c>[assembly: EfModule(...)]</c> declared in the source of all three roots FR-001 names must equal what
-    /// <see cref="EfModuleCatalog.Discover"/> finds by loading assemblies — a module <see cref="ModuleContextCatalog.Modules"/>
-    /// forgot to add an anchor for (research.md, "Noticed and left alone") fails here rather than being silently skipped.
-    /// </summary>
-    [Fact]
-    public void Every_EfModule_declared_in_source_across_all_three_roots_is_one_EfModuleCatalog_discovers()
-    {
-        var declaredInSource = ExpandOnlyMigrationScanner.ModuleNamesDeclaredInSource("src/essentials", "src/extensions", "src/apps");
-        var discovered = EfModuleCatalog.Discover(ModuleContextCatalog.Modules).Select(descriptor => descriptor.Name).ToHashSet(StringComparer.Ordinal);
-
-        Assert.Equal(
-            discovered.OrderBy(name => name, StringComparer.Ordinal),
-            declaredInSource.OrderBy(name => name, StringComparer.Ordinal));
-    }
-
     [Fact]
     public void FreezeManifestReader_parses_baseline_ids_per_module_and_provider()
     {

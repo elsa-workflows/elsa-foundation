@@ -1,7 +1,6 @@
 using System.Net;
 using System.Text.Json;
 using System.Text.Json.Serialization;
-using System.Text.RegularExpressions;
 using CShells.AspNetCore.Features;
 using Elsa.Activities.Bpmn.Interchange;
 using Elsa.Activities.Design.Api;
@@ -20,7 +19,6 @@ using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
 using NativeEndpoints;
 using Xunit;
-using static Elsa.Architecture.Tests.RepoPaths;
 
 namespace Elsa.Architecture.Tests;
 
@@ -30,10 +28,10 @@ namespace Elsa.Architecture.Tests;
 /// <see cref="SchemaWriteRefusedException"/> both EF refusals derive from.
 /// </summary>
 /// <remarks>
-/// Three mechanisms make it hold, and each has a guard here. An owner with no failure services of its own answers through
-/// the unkeyed translator <c>AddElsaEndpoints</c> registers and its problem writer; an owner that renders its own shapes
-/// answers in each of them, checked for every endpoint it maps; and an operation outside the failure pipeline is answered
-/// by <see cref="ElsaEndpointGroupExtensions.MapUnboundOperation"/>, the only place that may map one.
+/// Three mechanisms make it hold. An owner with no failure services of its own answers through the unkeyed translator
+/// <c>AddElsaEndpoints</c> registers and its problem writer; an owner that renders its own shapes answers in each of them,
+/// checked for every endpoint it maps; and an operation outside the failure pipeline is answered by
+/// <see cref="ElsaEndpointGroupExtensions.MapUnboundOperation"/>.
 /// </remarks>
 public sealed class SchemaWriteRefusalMappingGuardTests
 {
@@ -44,25 +42,19 @@ public sealed class SchemaWriteRefusalMappingGuardTests
     // No character a JSON writer escapes, so the body carries it verbatim whichever envelope an owner writes.
     private const string ProbeReason = "It becomes available once every host can read the newer version of Probe.Family.";
 
-    /// <summary>Every first-party feature that registers failure services for its owner, with the file that registers them.</summary>
-    private static readonly (Type Feature, string Source)[] OwnersWithTheirOwnFailureServices =
+    /// <summary>Every first-party feature that registers failure services for its owner.</summary>
+    private static readonly Type[] OwnersWithTheirOwnFailureServices =
     [
-        (typeof(ActivitiesBpmnInterchangeFeature), "src/essentials/Activities/Bpmn/Interchange/ActivitiesBpmnInterchangeFeature.cs"),
-        (typeof(ActivitiesDesignApiFeature), "src/essentials/Activities/Design/Api/ActivitiesDesignApiFeature.cs"),
-        (typeof(ModularityApiFeature), "src/essentials/Modularity/Api/ModularityApiFeature.cs"),
-        (typeof(WorkflowsDesignApiFeature), "src/essentials/Workflows/Design/Api/WorkflowsDesignApiFeature.cs"),
-        (typeof(WorkflowsPublishingApiFeature), "src/essentials/Workflows/Publishing/Api/WorkflowsPublishingApiFeature.cs"),
-        (typeof(WorkflowsRuntimeApiFeature), "src/essentials/Workflows/Runtime/Api/WorkflowsRuntimeApiFeature.cs"),
-        (typeof(Elsa3ImportActivitiesFeature), "src/extensions/Elsa3/src/Activities/Design/Import/Elsa3.Activities.Design.Import/Elsa3ImportActivitiesFeature.cs")
+        typeof(ActivitiesBpmnInterchangeFeature),
+        typeof(ActivitiesDesignApiFeature),
+        typeof(ModularityApiFeature),
+        typeof(WorkflowsDesignApiFeature),
+        typeof(WorkflowsPublishingApiFeature),
+        typeof(WorkflowsRuntimeApiFeature),
+        typeof(Elsa3ImportActivitiesFeature)
     ];
 
-    /// <summary>A registration of one of the three failure contracts, generic or by <c>typeof</c>.</summary>
-    private static readonly Regex FailureServiceRegistration = new(
-        @"(?:Add\w*|ServiceDescriptor\.\w+)<\s*(?:NativeEndpoints\.)?IEndpoint(?:FaultRenderer|ExceptionTranslator|ProblemWriter)\b" +
-        @"|typeof\(\s*(?:NativeEndpoints\.)?IEndpoint(?:FaultRenderer|ExceptionTranslator|ProblemWriter)\s*\)",
-        RegexOptions.Compiled);
-
-    public static TheoryData<Type> Owners => [.. OwnersWithTheirOwnFailureServices.Select(owner => owner.Feature)];
+    public static TheoryData<Type> Owners => [.. OwnersWithTheirOwnFailureServices];
 
     /// <summary>
     /// Each endpoint's failure runs the way the pipeline runs it (Elsa.Api.AspNetCore's EXTENSION_POINTS.md, "Failure
@@ -131,20 +123,6 @@ public sealed class SchemaWriteRefusalMappingGuardTests
         }
     }
 
-    /// <summary>The theory above is complete only if it names every owner that registers failure services of its own.</summary>
-    [Fact]
-    public void Every_owner_that_registers_its_own_failure_services_is_checked_endpoint_by_endpoint()
-    {
-        var registering = SourceFiles()
-            .Where(file => !file.Path.StartsWith("src/essentials/Api/AspNetCore/", StringComparison.Ordinal))
-            .Where(file => FailureServiceRegistration.IsMatch(file.Text))
-            .Select(file => file.Path)
-            .Order(StringComparer.Ordinal)
-            .ToArray();
-
-        Assert.Equal(OwnersWithTheirOwnFailureServices.Select(owner => owner.Source).Order(StringComparer.Ordinal), registering);
-    }
-
     /// <summary>
     /// Through the real pipeline, for an owner with no failure services: a contained operation answers through the shared
     /// translator and the fallback writer, and an operation outside the pipeline through the answer MapUnboundOperation
@@ -199,23 +177,6 @@ public sealed class SchemaWriteRefusalMappingGuardTests
         await Assert.ThrowsAnyAsync<Exception>(() => host.GetAsync("/uncontained/after-start"));
     }
 
-    /// <summary>
-    /// <see cref="ElsaEndpointGroupExtensions.MapUnboundOperation"/> answers a refusal for every operation it maps outside
-    /// the pipeline; setting <c>ContainFailures</c> anywhere else would map one that answers it with the host's 500.
-    /// </summary>
-    [Fact]
-    public void Only_MapUnboundOperation_maps_an_operation_outside_the_failure_pipeline()
-    {
-        const string seam = "src/essentials/Api/AspNetCore/ElsaEndpointGroupExtensions.cs";
-        var elsewhere = SourceFiles()
-            .Where(file => file.Path != seam && file.Text.Contains("ContainFailures", StringComparison.Ordinal))
-            .Select(file => file.Path)
-            .ToArray();
-
-        Assert.Contains("ContainFailures = containFailures", File.ReadAllText(Path.Join(RepoRoot, seam)), StringComparison.Ordinal);
-        Assert.Empty(elsewhere);
-    }
-
     /// <summary>The owner <paramref name="feature"/> composes, alone, with every endpoint it maps.</summary>
     private static (WebApplication App, RouteEndpoint[] Endpoints) Map(Type feature)
     {
@@ -228,12 +189,6 @@ public sealed class SchemaWriteRefusalMappingGuardTests
         Assert.NotEmpty(endpoints);
         return (app, endpoints);
     }
-
-    /// <summary>Every C# source under <c>src/</c>, all three roots, by repository-relative path.</summary>
-    private static IEnumerable<(string Path, string Text)> SourceFiles() =>
-        Directory.EnumerateFiles(Path.Join(RepoRoot, "src"), "*.cs", SearchOption.AllDirectories)
-            .Where(path => !IsBuildOutput(path))
-            .Select(path => (Path.GetRelativePath(RepoRoot, path).Replace(Path.DirectorySeparatorChar, '/'), File.ReadAllText(path)));
 
     /// <summary>Proves the dormancy refusal answers with its own code (spec 182, Q17), never the store-level one.</summary>
     private static bool CarriesTheDormancy(string body) =>

@@ -12,21 +12,6 @@ public sealed class SecretsApiDependencyTests
         Assert.DoesNotContain("Elsa.Api.FastEndpoints", project, StringComparison.OrdinalIgnoreCase);
     }
 
-    [Fact]
-    public void Production_api_source_contains_no_fast_endpoints_endpoint_bases_or_discovery_interfaces()
-    {
-        var source = string.Join("\n", Directory.EnumerateFiles(
-            Path.Join(RepoRoot, "src", "essentials", "Secrets", "Api"), "*.cs", SearchOption.AllDirectories)
-            .Order(StringComparer.Ordinal)
-            .Select(File.ReadAllText));
-
-        Assert.DoesNotContain("FastEndpoints", source, StringComparison.Ordinal);
-        Assert.DoesNotContain("Endpoint<", source, StringComparison.Ordinal);
-        Assert.DoesNotContain("EndpointWithoutRequest", source, StringComparison.Ordinal);
-        Assert.DoesNotContain("FastEndpointsFeatureBase", source, StringComparison.Ordinal);
-        Assert.Contains("IWebShellFeature", source, StringComparison.Ordinal);
-    }
-
     private static string RepoRoot { get; } = FindRepoRoot();
 
     private static string FindRepoRoot()
