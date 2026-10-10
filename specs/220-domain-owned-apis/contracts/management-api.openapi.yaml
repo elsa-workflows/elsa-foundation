@@ -2346,16 +2346,14 @@ components:
       enum: [Published, TestRun]
     ExecutableSourceReference:
       type: object
-      required: [sourceReferenceId, artifactId, scope, sourceType, sourceId, createdAt]
+      required: [sourceReferenceId, artifactId, scope, createdAt]
       properties:
         sourceReferenceId: { type: string }
         artifactId: { type: string }
         scope:
           $ref: '#/components/schemas/SourceReferenceScope'
-        sourceType:
-          type: string
-          enum: [WorkflowDefinitionVersion, WorkflowDraftSnapshot]
-        sourceId: { type: string }
+        sourceKind: { type: [string, 'null'] }
+        sourceId: { type: [string, 'null'] }
         publicationId: { type: [string, 'null'] }
         slotName: { type: [string, 'null'] }
         createdAt: { type: string, format: date-time }

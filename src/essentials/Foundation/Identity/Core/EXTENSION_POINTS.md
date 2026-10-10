@@ -81,11 +81,8 @@ request cancellation token. These contexts delegate decisions to `IPermissionAut
 they do not inspect permission claims themselves. Provider-specific or resource-specific rules receive
 a stable resource object and remain in `IPermissionResourceHandler` implementations.
 
-The original synchronous context interfaces remain source-compatible during the advisory replacement
-window for external hosts, but the built-in HTTP adapters mark their permission members obsolete and
-fail closed rather than blocking on asynchronous work. First-party production callers are migrated to
-the async siblings. The synchronous members are candidates for removal in the next major release;
-hosts should migrate replacements before then.
+The original synchronous context interfaces and their legacy adapters were removed by #2566 (ADR 0080
+D4); the async contexts are the only authorization seams.
 
 ## Events
 

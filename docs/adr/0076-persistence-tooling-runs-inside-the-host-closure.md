@@ -6,6 +6,8 @@ decision_context: Design of issue #1861, owner decisions taken during the design
 amendment_context: 2026-09-29, decided by Sipke Schoorstra on #2093 and delivered by #2151 — Elsa.Foundation.Host may carry EF Core, the four provider engines and the EF cluster membership provider in its host closure, for cluster membership only; features still arrive from feeds. 2026-10-01, delivered by #2191 on the direction of its program, #2203, to keep the key store in the platform's shared EF persistence, and awaiting acceptance by Sipke Schoorstra on its pull request — Elsa.Foundation.Host may also carry the EF Data Protection key store in its host closure, composed on the host container like membership; features still arrive from feeds.
 ---
 
+> **Amended by [ADR 0080 D4](0080-elsa-4-simplification-decisions.md#d4--pre-ga-cleanup)** (2026-10-10). The obsolete `SecretsEntityFrameworkCore:MigratePolicy` property that D8 keeps for one release, refusing a configured value, is deleted by #2566 because nothing has shipped. A shell that still sets the key now has it ignored and falls back to the host-wide `Elsa:Persistence:EntityFramework:Migrate:Policy`.
+
 # Persistence tooling runs inside the host's closure
 
 Status: accepted (2026-09-21). Sipke Schoorstra accepted ADR 0076 after the design it records — the
