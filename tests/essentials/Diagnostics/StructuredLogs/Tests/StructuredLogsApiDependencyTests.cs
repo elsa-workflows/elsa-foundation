@@ -15,27 +15,6 @@ public sealed class StructuredLogsApiDependencyTests
         Assert.DoesNotContain("CShells.FastEndpoints", project, StringComparison.OrdinalIgnoreCase);
     }
 
-    [Fact]
-    public void Production_structured_logs_sources_contain_no_fast_endpoints_discovery_or_shared_sse_helper()
-    {
-        var source = string.Join(
-            "\n",
-            Directory.EnumerateFiles(
-                    Path.Join(RepoRoot, "src", "essentials", "Diagnostics", "StructuredLogs"),
-                    "*.cs",
-                    SearchOption.AllDirectories)
-                .Order(StringComparer.Ordinal)
-                .Select(File.ReadAllText));
-
-        Assert.DoesNotContain("FastEndpoints", source, StringComparison.Ordinal);
-        Assert.DoesNotContain("IFastEndpoints", source, StringComparison.Ordinal);
-        Assert.DoesNotContain("FastEndpointsFeatureBase", source, StringComparison.Ordinal);
-        Assert.DoesNotContain("SseStreamWriter", source, StringComparison.Ordinal);
-        Assert.DoesNotContain("ISseStreamFormatter", source, StringComparison.Ordinal);
-        Assert.DoesNotContain("Elsa.Api.FastEndpoints", source, StringComparison.Ordinal);
-        Assert.Contains("IWebShellFeature", source, StringComparison.Ordinal);
-    }
-
     private static string RepoRoot { get; } = FindRepoRoot();
 
     private static string FindRepoRoot()

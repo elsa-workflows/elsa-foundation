@@ -51,7 +51,7 @@ The draft-validation *behavior* is contributed (see below); the validation *outc
 
 Both events are `IEvent` (framework §2.6.1); they differ only in **delivery strategy** (§2.6.6). This domain is the canonical mixed-strategy example.
 
-`CatalogParityTests` scans every `IEvent` type in `Elsa.Workflows.Design.Validations.Core` and asserts bidirectional alignment with the `### On…` headings in this section.
+Every `IEvent` type in `Elsa.Workflows.Design.Validations.Core` has a `### <EventClassName>` heading in this section, and every such heading names one; review keeps the two in step.
 
 **Sequential / contribution** (§2.6.6) — `DraftValidating`. The gate. Features implement `IDraftValidator` and return their errors; the single `ExecuteValidations` handler aggregates them onto the event's `Errors` collection. The publishing command publishes it Sequential, awaits dispatch, and reads collected errors back.
 

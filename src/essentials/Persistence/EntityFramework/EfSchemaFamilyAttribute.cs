@@ -69,7 +69,7 @@ public sealed class EfSchemaFamilyAttribute : Attribute
     /// </summary>
     /// <remarks>
     /// A chain with a gap, a duplicate version, a branch or a cycle, or one that does not end at the current version,
-    /// fails the build (<c>EfSchemaFamilyChainDeclarationGuardTests</c>) and the family's registration at startup (FR-005).
+    /// fails the family's registration at startup (FR-005); a build-time check is pending #2606.
     /// A read never bridges a gap: a row stamped below one is skew.
     /// </remarks>
     public Type[] Upcasters { get; set; } = [];

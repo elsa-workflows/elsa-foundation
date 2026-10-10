@@ -212,6 +212,7 @@ Costs and risks:
 | 2026-09-17 | Recommendation | Defer with a named trigger, and do the unsupported-status documentation now. The deciding factor was the three items Elsa 3 cannot seed, not the migration file count. |
 | 2026-09-19 | ADR 0075 accepted | Sipke Schoorstra accepted the recommendation. D1 stays at four engines, the status and the Elsa 3 route are documented, and the trigger is recorded as a three-part condition. |
 | 2026-09-30 | Amendment | The Context's "almost no provider-specific SQL" claim gains two named sites, `EfInsertIfAbsent` (#2162) and `EfSchemaFinalizationCheck`, guarded by `RawSqlArchitectureTests`; the decision is unchanged. |
+| 2026-10-10 | Amendment | `RawSqlArchitectureTests` is deleted by #2573 (ADR 0080 D1: tests do not assert on source text). The two named sites still hold, kept by review. |
 
 ## Amendment — 2026-09-30, factual
 

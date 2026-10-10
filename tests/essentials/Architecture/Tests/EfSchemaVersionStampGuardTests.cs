@@ -1,4 +1,6 @@
+using System.Reflection;
 using System.Text.RegularExpressions;
+using Elsa.Persistence.EntityFramework;
 using Xunit;
 using static Elsa.Architecture.Tests.RepoPaths;
 
@@ -11,7 +13,7 @@ namespace Elsa.Architecture.Tests;
 /// <para>
 /// The guard reads each module's model snapshots, the per-provider record of the schema its migrations create,
 /// because that is what a database gets. Which snapshots it must read comes independently from the
-/// <c>[assembly: EfModule]</c> declarations under <c>src/</c>, so a provider context whose snapshot the scan cannot
+/// compiled <see cref="EfModuleAttribute"/> declarations of the runtime libraries, so a provider context whose snapshot the scan cannot
 /// find fails rather than passing unexamined. Contexts that are no EF module, such as the Workbench app's OpenIddict
 /// context, which maps OpenIddict's own entity types, are outside the rule.
 /// </para>
@@ -177,26 +179,6 @@ public sealed class EfSchemaVersionStampGuardTests
         Assert.True(FindUnindexedStamps(snapshot).Length == 0, $"The detector wrongly flagged the indexed fixture '{name}'.");
     }
 
-    [Fact]
-    public void Declaration_scan_reads_every_provider_of_every_module_in_a_file()
-    {
-        const string source = """
-            [assembly: EfModule(
-                "First",
-                typeof(FirstDbContext),
-                Sqlite = typeof(FirstSqliteDbContext),
-                SqlServer = typeof(FirstSqlServerDbContext),
-                PostgreSql = typeof(FirstPostgreSqlDbContext),
-                MySql = typeof(FirstMySqlDbContext))]
-
-            [assembly: EfModule("Second", typeof(SecondDbContext), Sqlite = typeof(SecondSqliteDbContext))]
-            """;
-
-        Assert.Equal(
-            ["FirstMySqlDbContext", "FirstPostgreSqlDbContext", "FirstSqlServerDbContext", "FirstSqliteDbContext", "SecondSqliteDbContext"],
-            FindDeclaredProviderContexts(source).Order(StringComparer.Ordinal));
-    }
-
     public static TheoryData<string, string, string> UnstampedFixtures() => new()
     {
         {
@@ -346,19 +328,19 @@ public sealed class EfSchemaVersionStampGuardTests
         string.Join('\n', body.Split('\n').Select(line => "                    " + line));
 
     /// <summary>
-    /// Every provider context the <c>[assembly: EfModule]</c> declarations under <c>src/</c> name, mapped to its one
-    /// model snapshot. Fails when a declared context has no snapshot or more than one.
+    /// Every provider context the <see cref="EfModuleAttribute"/> declarations on the compiled runtime libraries name, mapped to
+    /// its one model snapshot under <c>src/</c>. Fails when a declared context has no snapshot or more than one.
     /// </summary>
     private static Dictionary<string, string> DeclaredSnapshots()
     {
-        var sources = Directory.EnumerateFiles(Path.Join(RepoRoot, "src"), "*.cs", SearchOption.AllDirectories)
+        var snapshots = Directory.EnumerateFiles(Path.Join(RepoRoot, "src"), "*ModelSnapshot.cs", SearchOption.AllDirectories)
             .Where(file => !IsBuildOutput(file))
-            .ToArray();
-        var snapshots = sources
-            .Where(file => file.EndsWith("ModelSnapshot.cs", StringComparison.Ordinal))
             .ToLookup(file => Path.GetFileName(file)[..^"ModelSnapshot.cs".Length], StringComparer.Ordinal);
-        var contexts = sources
-            .SelectMany(file => FindDeclaredProviderContexts(File.ReadAllText(file)))
+        var contexts = RuntimeLibraries.Assemblies
+            .SelectMany(assembly => assembly.GetCustomAttributes<EfModuleAttribute>())
+            .SelectMany(module => new[] { module.Sqlite, module.SqlServer, module.PostgreSql, module.MySql })
+            .OfType<Type>()
+            .Select(context => context.Name)
             .Distinct(StringComparer.Ordinal)
             .ToArray();
 
@@ -377,15 +359,6 @@ public sealed class EfSchemaVersionStampGuardTests
                 .Select(table => $"{Path.GetRelativePath(RepoRoot, snapshot)}: {table}"))
             .Order(StringComparer.Ordinal)
             .ToArray();
-
-    private static readonly Regex ModuleDeclarationPattern = new(@"\[\s*assembly\s*:\s*EfModule\s*\(", RegexOptions.Compiled);
-
-    private static readonly Regex ProviderContextPattern = new(@"\b(?:Sqlite|SqlServer|PostgreSql|MySql)\s*=\s*typeof\(\s*(\w+)\s*\)", RegexOptions.Compiled);
-
-    private static IEnumerable<string> FindDeclaredProviderContexts(string source) =>
-        ModuleDeclarationPattern.Matches(source)
-            .Select(match => Block(source, match.Index + match.Length - 1, '(', ')'))
-            .SelectMany(declaration => ProviderContextPattern.Matches(declaration).Select(match => match.Groups[1].Value));
 
     private static readonly Regex EntityPattern = new(@"modelBuilder\.Entity\(""(?<name>[^""]+)"",\s*b\s*=>\s*\{", RegexOptions.Compiled);
 
