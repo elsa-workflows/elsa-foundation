@@ -4,10 +4,15 @@ This constitution file is the generic quality-gate layer: gates, allowed excepti
 ratification state, and governance. Canonical term lookup lives in ../../docs/glossary/.
 
 SYNC IMPACT REPORT — 5.0.0 -> 5.0.1 (2026-10-10)
-Amendment: §2.22.1 no longer cites CatalogParityTests, which #2573 deleted under §2.23.2 (tests MUST NOT
-  assert on markdown). Catalog drift is caught at code review. PATCH: corrects a statement of fact.
+Amendment: §2.22.1 no longer cites CatalogParityTests, which #2573 deleted under §2.23.2.
+  PATCH per Governance > Versioning: corrects a statement of fact; no rule changes.
+Modified sections:
+  §2.22.1 - maintenance obligation: catalog drift (event headings, contributor interfaces, known
+            implementations) is caught at code review; a test MUST NOT assert on catalog text (§2.23.2).
+            The sentence crediting the CatalogParityTests guard is removed.
+Added sections: none. Removed sections: none.
 Templates requiring updates: .specify/memory/constitution.md (re-pin to v5.0.1).
-Approval: Sipke Schoorstra, 2026-10-10 (ADR 0080 D1).
+Approval: Sipke Schoorstra, 2026-10-10 (ADR 0080 D1). Same consensus caveat as the 4.0.0 ratification below.
 
 SYNC IMPACT REPORT — 4.0.1 -> 5.0.0 (2026-10-10)
 Amendment: risk-based testing, internal-by-default visibility and the Extension suffix (ADR 0080 D1, D3, D5).

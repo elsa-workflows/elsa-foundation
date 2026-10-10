@@ -228,7 +228,6 @@ public sealed class SecretsEfPersistencePilotArchitectureTests
         "tests/essentials/Persistence/EntityFramework/Tests/BackfillScenario.cs",
         "tests/essentials/Persistence/EntityFramework/Tests/BackfillWithdrawalRace.cs",
         "tests/essentials/Persistence/EntityFramework/Tests/CommandCaptureInterceptor.cs",
-        "tests/essentials/Persistence/EntityFramework/Tests/CommittedCompositionConnectionTests.cs",
         "tests/essentials/Persistence/EntityFramework/Tests/ConfigurationServices.cs",
         "tests/essentials/Persistence/EntityFramework/Tests/ContractingModule.cs",
         "tests/essentials/Persistence/EntityFramework/Tests/ContractingPairModule.cs",

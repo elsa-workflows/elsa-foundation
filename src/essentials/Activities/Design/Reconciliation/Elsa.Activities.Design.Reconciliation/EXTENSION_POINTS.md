@@ -28,7 +28,7 @@ The per-domain catalog (framework §2.22.1). Anchored at `Elsa.Activities.Design
 
 ## Events
 
-`CatalogParityTests` scans the `Elsa.Activities.Design.Core.Reconciliation` namespace for `IEvent` types and asserts alignment with `### On…` headings here.
+Every `IEvent` type in the `Elsa.Activities.Design.Core.Reconciliation` namespace has a `### <EventClassName>` heading here, and every such heading names one; review keeps the two in step.
 
 ### ActivityVersionsReconciling
 `(ICollection<IActivityDefinitionVersion> Versions)`

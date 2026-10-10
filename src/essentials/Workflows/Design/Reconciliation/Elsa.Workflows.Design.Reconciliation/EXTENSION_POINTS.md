@@ -31,7 +31,7 @@ The per-domain catalog (framework §2.22.1). Anchored at `Elsa.Workflows.Design.
 
 ## Events
 
-`CatalogParityTests` scans the `Elsa.Workflows.Design.Core.Reconciliation` namespace for `IEvent` types and asserts alignment with `### On…` headings here.
+Every `IEvent` type in the `Elsa.Workflows.Design.Core.Reconciliation` namespace has a `### <EventClassName>` heading here, and every such heading names one; review keeps the two in step.
 
 ### WorkflowVersionsReconciling
 `(ICollection<IWorkflowDefinitionVersion> Versions, ICollection<WorkflowVersionSourceClaim> Claims)`

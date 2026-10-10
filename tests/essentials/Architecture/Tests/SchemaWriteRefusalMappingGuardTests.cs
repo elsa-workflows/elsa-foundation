@@ -2,6 +2,7 @@ using System.Net;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using CShells.AspNetCore.Features;
+using CShells.Features;
 using Elsa.Activities.Bpmn.Interchange;
 using Elsa.Activities.Design.Api;
 using Elsa.Api.AspNetCore;
@@ -121,6 +122,45 @@ public sealed class SchemaWriteRefusalMappingGuardTests
                     $"{endpoint.DisplayName} answered without the refusal's errorCode: {body}");
             }
         }
+    }
+
+    /// <summary>
+    /// The theory above is complete only if it names every owner that registers failure services of its own. Each
+    /// compiled feature is configured alone and its registrations read: an owner's failure services are the ones it
+    /// keys by its owner id, which the unkeyed defaults <c>AddElsaEndpoints</c> registers never are. A few features
+    /// refuse to configure without settings; that is allowed only for a feature that maps no endpoints, since an owner
+    /// of failure services is a web feature, so every web feature is always read.
+    /// </summary>
+    [Fact]
+    public void Every_owner_that_registers_its_own_failure_services_is_checked_endpoint_by_endpoint()
+    {
+        Type[] failureContracts = [typeof(IEndpointFaultRenderer), typeof(IEndpointExceptionTranslator), typeof(IEndpointProblemWriter)];
+        var features = RuntimeLibraries.FeatureTypes.Where(type => type.GetConstructor(Type.EmptyTypes) is not null).ToArray();
+        Assert.Empty(RuntimeLibraries.FeatureTypes.Where(type => typeof(IWebShellFeature).IsAssignableFrom(type)).Except(features));
+        var unconfigurable = new List<string>();
+        var registering = features
+            .Where(type =>
+            {
+                var services = new ServiceCollection();
+                try
+                {
+                    ((IShellFeature)Activator.CreateInstance(type)!).ConfigureServices(services);
+                }
+                catch (InvalidOperationException exception) when (!typeof(IWebShellFeature).IsAssignableFrom(type))
+                {
+                    unconfigurable.Add($"{type.FullName}: {exception.Message}");
+                }
+                return services.Any(registration => registration.IsKeyedService && failureContracts.Contains(registration.ServiceType));
+            })
+            .Select(type => type.FullName)
+            .Order(StringComparer.Ordinal)
+            .ToArray();
+
+        Assert.True(unconfigurable.Count <= 10, "More features than expected refuse to configure without settings, so this check reads fewer than it should:" +
+            Environment.NewLine + string.Join(Environment.NewLine, unconfigurable));
+
+        Assert.True(features.Length >= 100, $"Only {features.Length} features were configured; discovery has stopped finding them.");
+        Assert.Equal(OwnersWithTheirOwnFailureServices.Select(type => type.FullName).Order(StringComparer.Ordinal), registering);
     }
 
     /// <summary>

@@ -1,10 +1,13 @@
-using System.Text.RegularExpressions;
+using System.Reflection;
+using CShells.Configuration;
+using Elsa.Persistence.EntityFramework;
 using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.Configuration;
 using Xunit;
 using YamlDotNet.RepresentationModel;
+using static Elsa.Architecture.Tests.RepoPaths;
 
-namespace Elsa.Persistence.EntityFramework.Tests;
+namespace Elsa.Architecture.Tests;
 
 /// <summary>
 /// A committed composition names a provider per EF feature but almost never names a connection, so every
@@ -17,59 +20,67 @@ namespace Elsa.Persistence.EntityFramework.Tests;
 /// stacks, <c>shells.json</c> and <c>shells.baseline.json</c> — through the real resolver.
 /// </summary>
 /// <remarks>
-/// The catalog these guards resolve against is scanned out of source, so a feature it cannot see would be
-/// skipped in silence — which is the one way this class could report green over the very regression it
-/// exists for. <see cref="Every_entity_framework_feature_a_committed_composition_composes_is_in_the_catalog"/>
-/// is what makes that case loud, and it is derived from the compositions rather than from a list, so it
-/// fails when the scan misses something a stack actually composes.
+/// The catalog these guards resolve against is read from the compiled feature types and their
+/// <see cref="UsesEfModuleAttribute"/> / <see cref="EfModuleAttribute"/> declarations, so a renamed feature, a
+/// changed default provider or a changed <see cref="EfModuleAttribute.DefaultConnectionName"/> reaches the
+/// resolution checks as it would reach a host. A feature the catalog cannot see would be skipped in silence;
+/// <see cref="Every_entity_framework_feature_a_committed_composition_composes_is_in_the_catalog"/> makes that
+/// loud, and it is derived from the compositions rather than from a list.
 /// </remarks>
-public sealed partial class CommittedCompositionConnectionTests
+public sealed class CommittedCompositionConnectionTests
 {
-    // Declared first: the static scans below run in declaration order and every one of them reads it.
-    private static string RepoRoot { get; } = FindRepoRoot();
+    /// <summary>
+    /// Every EF feature that resolves a connection of its own, by feature name: the provider it selects when a
+    /// composition names none, and the connection name it falls back to when a composition names no connection.
+    /// </summary>
+    private static IReadOnlyDictionary<string, EfFeature> EfFeatures => Catalog.Value;
 
-    private static string FindRepoRoot()
+    private static readonly Lazy<IReadOnlyDictionary<string, EfFeature>> Catalog = new(BuildCatalog);
+
+    private sealed record EfFeature(Type Type, string Provider, string ConnectionName);
+
+    private static IReadOnlyDictionary<string, EfFeature> BuildCatalog()
     {
-        var directory = new DirectoryInfo(AppContext.BaseDirectory);
-        while (directory is not null && !File.Exists(Path.Join(directory.FullName, "Elsa.Server.slnx")))
-            directory = directory.Parent;
+        var modules = RuntimeLibraries.Assemblies
+            .SelectMany(assembly => assembly.GetCustomAttributes<EfModuleAttribute>())
+            .ToDictionary(module => module.Name, StringComparer.Ordinal);
 
-        return directory?.FullName ?? throw new InvalidOperationException("Could not locate the repository root.");
+        // A feature that carries both a provider and a connection name resolves its own connection; the rest either
+        // compose onto a context another feature bound, or pin one engine and take a connection string only.
+        return RuntimeLibraries.FeatureTypes
+            .Where(type => IsStringSetting(type, "Provider") && IsStringSetting(type, "ConnectionName"))
+            .Where(type => type.GetConstructor(Type.EmptyTypes) is not null)
+            .ToDictionary(
+                ShellBuilder.ResolveFeatureName,
+                type => new EfFeature(type, DefaultProvider(type), DefaultConnectionName(type, modules)),
+                StringComparer.Ordinal);
     }
 
-    /// <summary>Every first-party source file, read once, for the feature catalog below.</summary>
-    private static IReadOnlyList<SourceFile> Sources { get; } = new[] { "src" }
-        .Select(root => Path.Join(RepoRoot, root))
-        .SelectMany(root => Directory.EnumerateFiles(root, "*.cs", SearchOption.AllDirectories))
-        .Where(path => !path.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}", StringComparison.Ordinal)
-            && !path.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}", StringComparison.Ordinal))
-        .Select(path => new SourceFile(Path.GetRelativePath(RepoRoot, path).Replace(Path.DirectorySeparatorChar, '/'), File.ReadAllText(path)))
-        .ToArray();
+    private static bool IsStringSetting(Type type, string name) =>
+        type.GetProperty(name, BindingFlags.Public | BindingFlags.Instance) is { PropertyType: var propertyType, CanWrite: true } &&
+        propertyType == typeof(string);
 
-    /// <summary>Every EF feature that resolves a connection of its own, and the provider it selects when a composition names none.</summary>
-    private static IReadOnlyDictionary<string, string> EfFeatures { get; } = Sources
-        .Select(source => (Source: source, Name: ShellFeatureName().Match(source.Text), Provider: ProviderSetting().Match(source.Text)))
-        // A feature that carries both a provider and a connection name resolves its own connection; the rest
-        // either compose onto a context another feature bound, or pin one engine and take a connection string only.
-        .Where(candidate => candidate.Name.Success && candidate.Provider.Success && candidate.Source.Text.Contains("ConnectionName", StringComparison.Ordinal))
-        .Select(candidate => (Name: candidate.Name.Groups["name"].Value, Provider: ProviderDefault(candidate.Provider)))
-        .Where(candidate => candidate.Provider is not null)
-        .ToDictionary(candidate => candidate.Name, candidate => candidate.Provider!, StringComparer.Ordinal);
+    /// <summary>The provider a fresh feature carries, or <c>Sqlite</c>, which every feature reads an unset value as.</summary>
+    private static string DefaultProvider(Type feature) =>
+        feature.GetProperty("Provider")!.GetValue(Activator.CreateInstance(feature)) is string { Length: > 0 } provider ? provider : "Sqlite";
 
     /// <summary>
-    /// The provider a feature selects when a composition names none: its initialiser's literal, or <c>Sqlite</c>
-    /// when it declares none, which every such feature reads its unset value as. A computed initialiser gives
-    /// <c>null</c>: the scan cannot read it, and recording a guess would check that feature against the wrong
-    /// provider, so it leaves the catalog and
-    /// <see cref="Every_entity_framework_feature_a_committed_composition_composes_is_in_the_catalog"/> names it.
+    /// The connection name a feature falls back to: its EF module's <see cref="EfModuleAttribute.DefaultConnectionName"/>,
+    /// else a <c>DefaultConnectionName</c> constant of its own, else <see cref="EfConnectionDefaults.ConnectionName"/>.
+    /// A module name that matches no declaration, or two modules that disagree, fail the catalog rather than guess.
     /// </summary>
-    private static string? ProviderDefault(Match provider)
+    private static string DefaultConnectionName(Type feature, IReadOnlyDictionary<string, EfModuleAttribute> modules)
     {
-        if (!provider.Groups["initializer"].Success)
-            return "Sqlite";
+        var used = feature.GetCustomAttributes<UsesEfModuleAttribute>().Select(uses => uses.Module).ToArray();
+        var unknown = used.Where(module => !modules.ContainsKey(module)).ToArray();
+        Assert.True(unknown.Length == 0, $"{feature.FullName} uses EF module(s) no runtime library declares: {string.Join(", ", unknown)}.");
 
-        var initializer = provider.Groups["initializer"].Value.Trim();
-        return QuotedLiteral().IsMatch(initializer) && initializer.Length > 2 ? initializer[1..^1] : null;
+        var names = used.Select(module => modules[module].DefaultConnectionName).Distinct(StringComparer.Ordinal).ToArray();
+        Assert.True(names.Length <= 1, $"{feature.FullName} uses EF modules with different default connection names: {string.Join(", ", names)}.");
+
+        return names.SingleOrDefault()
+               ?? feature.GetField("DefaultConnectionName", BindingFlags.Public | BindingFlags.Static)?.GetRawConstantValue() as string
+               ?? EfConnectionDefaults.ConnectionName;
     }
 
     /// <summary>
@@ -80,19 +91,6 @@ public sealed partial class CommittedCompositionConnectionTests
     private static readonly HashSet<string> ContextSharingFeatures = new(StringComparer.Ordinal)
     {
         "WorkflowsDashboardEntityFrameworkCore"
-    };
-
-    /// <summary>
-    /// The modules that resolve an unsupplied connection under a name other than
-    /// <see cref="EfConnectionDefaults.ConnectionName"/>, keyed by the feature that composes them. Slice 2 of
-    /// spec 171 (#1872) puts a default-connection member on <c>EfModuleDescriptor</c>; this table is what it
-    /// replaces. Until then it is kept in step by hand with the <c>DefaultConnectionName</c> constants under
-    /// <c>src/</c> and <c>src/extensions/</c>; every other EF feature resolves under the shared name.
-    /// </summary>
-    private static readonly Dictionary<string, string> DeviatingFeatureConnectionNames = new(StringComparer.Ordinal)
-    {
-        ["DiagnosticsOpenTelemetryEntityFrameworkCore"] = "ElsaOpenTelemetry",
-        ["Elsa3ImportActivitiesEntityFrameworkCore"] = "ElsaElsa3Import"
     };
 
     // The compose stacks run in Production, where shells.Production.json sits above the composition the stack
@@ -129,7 +127,7 @@ public sealed partial class CommittedCompositionConnectionTests
         var configuration = WorkbenchConfiguration().AddJsonFile(Path.Join(RepoRoot, shellsJson)).Build();
         var failures = Features(configuration)
             .Where(entry => EfFeatures.ContainsKey(entry.Key))
-            .Select(entry => (entry.Key, Provider: string.IsNullOrWhiteSpace(entry["Provider"]) ? EfFeatures[entry.Key] : entry["Provider"]!))
+            .Select(entry => (entry.Key, Provider: string.IsNullOrWhiteSpace(entry["Provider"]) ? EfFeatures[entry.Key].Provider : entry["Provider"]!))
             .Where(entry => EfRelationalProviderBinding.Normalize(entry.Provider) != "sqlite")
             .Select(entry => $"  {entry.Key} selects {entry.Provider}.")
             .Order(StringComparer.Ordinal)
@@ -144,7 +142,7 @@ public sealed partial class CommittedCompositionConnectionTests
     }
 
     /// <summary>
-    /// Every guard here filters composition entries through <see cref="EfFeatures"/>, so a feature the scan
+    /// Every guard here filters composition entries through <see cref="EfFeatures"/>, so a feature the catalog
     /// cannot see is skipped rather than checked. This makes that silence loud: an EF-named entry must either
     /// resolve its own connection or be a known context-sharing feature.
     /// </summary>
@@ -163,9 +161,9 @@ public sealed partial class CommittedCompositionConnectionTests
 
         Assert.True(
             unknown.Length == 0,
-            "These composed EF features resolve no connection here, because the source scan did not find them. " +
-            "Either the feature declares Provider/ConnectionName in a shape ProviderSetting() does not match — widen it — " +
-            "or it composes onto another feature's context, in which case add it to ContextSharingFeatures:" +
+            "These composed EF features resolve no connection here, because the catalog did not find them. Either the " +
+            "feature lacks public string Provider/ConnectionName settings or a parameterless constructor, its library is not " +
+            "referenced by this project, or it composes onto another feature's context, in which case add it to ContextSharingFeatures:" +
             Environment.NewLine + string.Join(Environment.NewLine, unknown));
     }
 
@@ -215,7 +213,7 @@ public sealed partial class CommittedCompositionConnectionTests
 
     private static string? Failure(IServiceProvider services, IConfigurationSection entry)
     {
-        var provider = string.IsNullOrWhiteSpace(entry["Provider"]) ? EfFeatures[entry.Key] : entry["Provider"]!;
+        var provider = string.IsNullOrWhiteSpace(entry["Provider"]) ? EfFeatures[entry.Key].Provider : entry["Provider"]!;
         var source = string.IsNullOrWhiteSpace(entry["ConnectionString"])
             ? $"ConnectionStrings:{(string.IsNullOrWhiteSpace(entry["ConnectionName"]) ? ConnectionNameFor(entry.Key) : entry["ConnectionName"]!)}"
             : "its ConnectionString";
@@ -262,8 +260,7 @@ public sealed partial class CommittedCompositionConnectionTests
         }
     }
 
-    private static string ConnectionNameFor(string feature) =>
-        DeviatingFeatureConnectionNames.GetValueOrDefault(feature, EfConnectionDefaults.ConnectionName);
+    private static string ConnectionNameFor(string feature) => EfFeatures[feature].ConnectionName;
 
     private static Dictionary<string, string> ReadWorkbenchEnvironment(string composePath)
     {
@@ -277,21 +274,9 @@ public sealed partial class CommittedCompositionConnectionTests
             entry => Assert.IsType<YamlScalarNode>(entry.Value).Value!);
     }
 
-    private sealed record SourceFile(string Path, string Text);
-
-    // The name argument is positional on some features (JintFeature) and named on others.
-    [GeneratedRegex("""ShellFeature\(\s*(?:name:\s*)?"(?<name>[^"]+)""")]
-    private static partial Regex ShellFeatureName();
-
-    // The initialiser is optional: a feature may declare `public string? Provider { get; set; }` and read the
-    // unset value as Sqlite at its own call site.
-    // The initialiser is optional — a feature may declare `public string? Provider { get; set; }` and read the
-    // unset value as Sqlite at its own call site — and is captured whole rather than only when it is a literal,
-    // so a computed one is rejected here rather than sending the scan looking for another Provider property.
-    [GeneratedRegex("""public\s+string\??\s+Provider\s*\{\s*get;\s*set;\s*\}\s*(?:=\s*(?<initializer>[^;\r\n]+);)?""")]
-    private static partial Regex ProviderSetting();
-
-    [GeneratedRegex("""^"[^"]*"$""")]
-    private static partial Regex QuotedLiteral();
-
+    /// <summary>The only service <see cref="EfConnectionDefaults.ResolveConnectionString"/> asks for is <see cref="IConfiguration"/>.</summary>
+    private sealed class ConfigurationServices(IConfiguration configuration) : IServiceProvider
+    {
+        public object? GetService(Type serviceType) => serviceType == typeof(IConfiguration) ? configuration : null;
+    }
 }

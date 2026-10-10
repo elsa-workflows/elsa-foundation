@@ -23,8 +23,8 @@ namespace Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Tests;
 /// marker to every column they are given, by calling <see cref="EfIdentityStoreSupport.Upgrade(UserEntity, EfSchemaChain)"/>
 /// and its role overload directly (§2.23.3). Which columns count as content comes from the model the module
 /// maps, not from a list here, so a content column added to either entity without being added to the upgrade fails.
-/// EfSchemaFamilyContentReadGuardTests and EfSchemaFamilyRestampGuardTests hold the other half: every Identity IAM
-/// content read goes through the chain, and every in-place content write upgrades or stamps its row.
+/// The other half - every Identity IAM content read goes through the chain, and every in-place content write upgrades
+/// or stamps its row - holds by review until #2606 restores a compiled check.
 /// </remarks>
 public sealed class IdentityIamContentUpgradeTests : IAsyncDisposable
 {

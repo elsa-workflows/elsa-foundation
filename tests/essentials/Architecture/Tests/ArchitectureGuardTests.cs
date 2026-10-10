@@ -454,6 +454,22 @@ public sealed partial class ArchitectureGuardTests
         Assert.True(violations.Count == 0, string.Join(Environment.NewLine, violations));
     }
 
+    [Fact]
+    public void Legacy_activity_factory_and_constructor_registry_are_absent()
+    {
+        string[] removedPaths =
+        [
+            "src/essentials/Activities/Runtime/Elsa.Activities.Runtime/Services/ActivityFactory.cs",
+            "src/essentials/Activities/Runtime/Elsa.Activities.Runtime/Services/ActivityConstructorRegistry.cs",
+            "src/essentials/Activities/Runtime/Core/Contracts/IActivityFactory.cs",
+            "src/essentials/Activities/Runtime/Core/Contracts/IActivityConstructor.cs",
+            "src/essentials/Activities/Runtime/Core/Contracts/IActivityConstructorRegistry.cs"
+        ];
+        var violations = removedPaths.Where(relativePath =>
+            File.Exists(Path.Combine(RepoRoot, relativePath.Replace('/', Path.DirectorySeparatorChar))));
+        Assert.Empty(violations);
+    }
+
     private static bool IsDesignReference(ProjectInfo reference) =>
         reference.Name.StartsWith("Elsa.", StringComparison.Ordinal) &&
         reference.Name.Contains(".Design", StringComparison.Ordinal);
