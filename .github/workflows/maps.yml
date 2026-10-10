@@ -10,15 +10,15 @@ jobs:
   restore-and-maps:
     runs-on: ubuntu-latest
     timeout-minutes: 35
-    env:
-      EVIDENCE_DIR: ${{ runner.temp }}/foundation-qualification
-      NUGET_PACKAGES: ${{ runner.temp }}/foundation-stable-nuget-packages
 
     steps:
       - name: Prepare fresh runner-local directories
         shell: bash
         run: |
           set -euo pipefail
+          EVIDENCE_DIR="$RUNNER_TEMP/foundation-qualification"
+          NUGET_PACKAGES="$RUNNER_TEMP/foundation-stable-nuget-packages"
+          printf 'EVIDENCE_DIR=%s\nNUGET_PACKAGES=%s\n' "$EVIDENCE_DIR" "$NUGET_PACKAGES" >> "$GITHUB_ENV"
           mkdir -p "$EVIDENCE_DIR"
           if [ -e "$NUGET_PACKAGES" ]; then
             echo "Expected a fresh runner-local NuGet package directory: $NUGET_PACKAGES" >&2
@@ -152,7 +152,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: foundation-hosted-restore-maps-${{ github.run_id }}
-          path: ${{ runner.temp }}/foundation-qualification/
+          path: ${{ env.EVIDENCE_DIR }}/
           if-no-files-found: warn
           retention-days: 14
 
