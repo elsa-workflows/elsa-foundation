@@ -84,7 +84,7 @@ Follow [Repository hygiene](docs/contributing/repository-hygiene.md). In short:
 
 - Push a branch only when opening its PR (draft is fine) in the same session; otherwise keep the work local.
 - Never restore a branch deleted on merge; its work is in `main`. Restore a swept branch from its `archive/` tag only when a maintainer asks to resume that work, and open its PR in the same session.
-- File new issues as `needs-triage` only. Put checkpoints, receipts and evidence on the PR or the issue being worked, never in a new issue.
+- File new issues as `needs-triage` only. The one exception is the [UX QA routine](docs/skills/catalog.md#ux-qa-routine), which files reproduced defects as `ready-for-agent`. Put checkpoints, receipts and evidence on the PR or the issue being worked, never in a new issue.
 - Respect the caps: at most 2 open programs and 20 `ready-for-agent` issues. At the cap, extend the existing parent instead of filing more.
 - Before closing an issue as not planned, run `git log origin/main -E --grep '(^|[^[:alnum:]_./-])#<number>([^0-9]|$)'`. If its work landed, close it as completed and name the commit or PR.
 

@@ -1,0 +1,12 @@
+{
+  "name": "elsa-ux-qa",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "golden-path": "node golden-path.mjs"
+  },
+  "devDependencies": {
+    "axe-core": "4.12.1",
+    "playwright": "1.61.1"
+  }
+}

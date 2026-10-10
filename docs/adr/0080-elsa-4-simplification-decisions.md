@@ -146,6 +146,12 @@ unit, ratification, phase-owned) does not appear in product docs or type names.
 - Auto-merge applies from day one to `size:S` PRs of kind simplify, docs or tests, through the
   `elsa-auto-review-merge` gate on a fully green CI. Runtime and persistence code and public renames always get a
   human merge. One reverted auto-merge pauses auto-merge until a maintainer re-enables it.
+- A **UX QA** routine runs twice a week. It builds the Workbench and Studio from `main`, walks the golden path,
+  and explores one rotating area through one user lens in a real browser. It files at most three defects and two
+  proposals where the fix lives, labelled `auto-qa`. A defect that a second agent reproduced and whose fix needs no
+  design choice goes straight to `ready-for-agent`. Proposals to simplify, replace or remove UI stay
+  `needs-triage`. Every run appends what worked and what it filed to the `ux-qa-ledger` issue. A Studio fixer
+  routine takes `auto-qa` issues in elsa-foundation-studio, and every one of its PRs gets a human merge.
 - Program metrics (public types, projects, test LOC, EF commands per reference workflow, glossary size,
   `[Obsolete]` count, code citations) are reported weekly. If fewer than half of the filed issues are promoted
   after four weeks, or the metrics do not move, the routines are paused and their prompts revised.
