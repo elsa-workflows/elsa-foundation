@@ -1016,13 +1016,11 @@ public sealed class ActivityUpgradePlanTests
         }
     }
 
-    private sealed class AuthoringContext(string? tenantId, string? authorizationProfile = null) : IActivityAuthoringContext, IActivityAuthoringContextAsync
+    private sealed class AuthoringContext(string? tenantId, string? authorizationProfile = null) : IActivityAuthoringContextAsync
     {
         public string? TenantId { get; } = tenantId;
         public string ActorId => "actor-a";
         public string AuthorizationProfile => authorizationProfile ?? $"{TenantId ?? "global"}/manage";
-        public bool CanAuthorProvider(string providerKey) => true;
-        public bool CanReadProviderPayload(string providerKey) => true;
         public ValueTask<string> GetAuthorizationProfileAsync(CancellationToken cancellationToken = default) => ValueTask.FromResult(AuthorizationProfile);
         public ValueTask<bool> CanAuthorProviderAsync(string providerKey, CancellationToken cancellationToken = default) => ValueTask.FromResult(true);
         public ValueTask<bool> CanReadProviderPayloadAsync(string providerKey, CancellationToken cancellationToken = default) => ValueTask.FromResult(true);
@@ -1042,14 +1040,13 @@ public sealed class ActivityUpgradePlanTests
 
     private sealed class Authorization(
         string? tenantId = null,
-        Func<ActivityDefinitionReference, bool>? canRead = null) : IActivityDependencyAuthorizationContext, IActivityDependencyContextAsync
+        Func<ActivityDefinitionReference, bool>? canRead = null) : IActivityDependencyContextAsync
     {
         public string? TenantId => tenantId;
         public string AuthorizationProfile => "global/manage";
-        public bool CanRead(ActivityDefinitionReference reference) =>
-            canRead?.Invoke(reference) ?? StringComparer.Ordinal.Equals(reference.TenantId, tenantId);
         public ValueTask<string> GetAuthorizationProfileAsync(CancellationToken cancellationToken = default) => ValueTask.FromResult(AuthorizationProfile);
-        public ValueTask<bool> CanReadAsync(ActivityDefinitionReference reference, CancellationToken cancellationToken = default) => ValueTask.FromResult(CanRead(reference));
+        public ValueTask<bool> CanReadAsync(ActivityDefinitionReference reference, CancellationToken cancellationToken = default) =>
+            ValueTask.FromResult(canRead?.Invoke(reference) ?? StringComparer.Ordinal.Equals(reference.TenantId, tenantId));
     }
 
     private static ActivityUpgradeOperations Operations(

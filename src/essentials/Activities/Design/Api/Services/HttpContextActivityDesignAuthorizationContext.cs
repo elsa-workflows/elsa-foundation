@@ -12,17 +12,11 @@ using System.Text;
 
 namespace Elsa.Activities.Design.Api.Services;
 
-#pragma warning disable CS0618 // The implementation intentionally bridges the obsolete host contract.
-
 /// <summary>
 /// Default HTTP request adapter for reusable-activity authoring and dependency visibility.
-/// Permission decisions use the Foundation Identity authorization service. The synchronous
-/// interface implementations are retained only as an advisory compatibility window and fail
-/// closed; first-party callers use the asynchronous sibling seams.
+/// Permission decisions use the Foundation Identity authorization service.
 /// </summary>
 public sealed class HttpContextActivityDesignAuthorizationContext :
-    IActivityAuthoringContext,
-    IActivityDependencyAuthorizationContext,
     IActivityAuthoringContextAsync,
     IActivityDependencyContextAsync
 {
@@ -38,19 +32,6 @@ public sealed class HttpContextActivityDesignAuthorizationContext :
     private readonly string _actorId;
     private readonly CancellationToken _requestCancellationToken;
     private Lazy<Task<AuthorizationSnapshot>>? _snapshot;
-
-    [Obsolete("Use the Foundation Identity-enabled constructor selected by dependency injection.")]
-    public HttpContextActivityDesignAuthorizationContext(IHttpContextAccessor httpContextAccessor)
-    {
-        ArgumentNullException.ThrowIfNull(httpContextAccessor);
-        _authorization = null!;
-        _principalValidator = null!;
-        _principal = new ClaimsPrincipal(new ClaimsIdentity());
-        _trusted = false;
-        _tenantId = null;
-        _actorId = string.Empty;
-        _requestCancellationToken = CancellationToken.None;
-    }
 
     [ActivatorUtilitiesConstructor]
     public HttpContextActivityDesignAuthorizationContext(
@@ -73,23 +54,7 @@ public sealed class HttpContextActivityDesignAuthorizationContext :
 
     public string? TenantId => _tenantId;
 
-    [Obsolete("Use IActivityAuthoringContextAsync.GetAuthorizationProfileAsync.")]
-    public string AuthorizationProfile => throw SynchronousAccess();
-
-    [Obsolete("Use IActivityAuthoringContextAsync.ActorId.")]
     public string ActorId => _actorId;
-
-    [Obsolete("Use IActivityAuthoringContextAsync.CanAuthorProviderAsync.")]
-    public bool CanAuthorProvider(string providerKey) => throw SynchronousAccess();
-
-    [Obsolete("Use IActivityAuthoringContextAsync.CanReadProviderPayloadAsync.")]
-    public bool CanReadProviderPayload(string providerKey) => throw SynchronousAccess();
-
-    [Obsolete("Use IActivityAuthoringContextAsync.CanManageActivityDefinitionsAsync.")]
-    public bool CanManageActivityDefinitions => throw SynchronousAccess();
-
-    [Obsolete("Use IActivityDependencyContextAsync.CanReadAsync.")]
-    public bool CanRead(ActivityDefinitionReference reference) => throw SynchronousAccess();
 
     public async ValueTask<string> GetAuthorizationProfileAsync(CancellationToken cancellationToken = default)
     {
@@ -199,9 +164,6 @@ public sealed class HttpContextActivityDesignAuthorizationContext :
         ?? principal.Identity?.Name
         ?? string.Empty;
 
-    private static InvalidOperationException SynchronousAccess() =>
-        new("Synchronous activity authorization access is obsolete and intentionally unavailable. Use the asynchronous authorization context.");
-
     private sealed record AuthorizationSnapshot(
         bool CanAuthor,
         bool CanReadProviderPayload,
@@ -211,38 +173,3 @@ public sealed class HttpContextActivityDesignAuthorizationContext :
     private static readonly AuthorizationSnapshot DeniedSnapshot =
         new(false, false, false, "untrusted");
 }
-
-public sealed class LegacyActivityAuthoringContextAdapter : IActivityAuthoringContextAsync
-{
-    private readonly IActivityAuthoringContext _legacy;
-
-    public LegacyActivityAuthoringContextAdapter(IActivityAuthoringContext legacy) =>
-        _legacy = legacy ?? throw new ArgumentNullException(nameof(legacy));
-
-    public string? TenantId => _legacy.TenantId;
-    public string ActorId => _legacy.ActorId;
-    public ValueTask<string> GetAuthorizationProfileAsync(CancellationToken cancellationToken = default) =>
-        cancellationToken.IsCancellationRequested ? ValueTask.FromCanceled<string>(cancellationToken) : ValueTask.FromResult(_legacy.AuthorizationProfile);
-    public ValueTask<bool> CanAuthorProviderAsync(string providerKey, CancellationToken cancellationToken = default) =>
-        cancellationToken.IsCancellationRequested ? ValueTask.FromCanceled<bool>(cancellationToken) : ValueTask.FromResult(_legacy.CanAuthorProvider(providerKey));
-    public ValueTask<bool> CanReadProviderPayloadAsync(string providerKey, CancellationToken cancellationToken = default) =>
-        cancellationToken.IsCancellationRequested ? ValueTask.FromCanceled<bool>(cancellationToken) : ValueTask.FromResult(_legacy.CanReadProviderPayload(providerKey));
-    public ValueTask<bool> CanManageActivityDefinitionsAsync(CancellationToken cancellationToken = default) =>
-        cancellationToken.IsCancellationRequested ? ValueTask.FromCanceled<bool>(cancellationToken) : ValueTask.FromResult(_legacy.CanManageActivityDefinitions);
-}
-
-public sealed class LegacyActivityDependencyContextAdapter : IActivityDependencyContextAsync
-{
-    private readonly IActivityDependencyAuthorizationContext _legacy;
-
-    public LegacyActivityDependencyContextAdapter(IActivityDependencyAuthorizationContext legacy) =>
-        _legacy = legacy ?? throw new ArgumentNullException(nameof(legacy));
-
-    public string? TenantId => _legacy.TenantId;
-    public ValueTask<string> GetAuthorizationProfileAsync(CancellationToken cancellationToken = default) =>
-        cancellationToken.IsCancellationRequested ? ValueTask.FromCanceled<string>(cancellationToken) : ValueTask.FromResult(_legacy.AuthorizationProfile);
-    public ValueTask<bool> CanReadAsync(ActivityDefinitionReference reference, CancellationToken cancellationToken = default) =>
-        cancellationToken.IsCancellationRequested ? ValueTask.FromCanceled<bool>(cancellationToken) : ValueTask.FromResult(_legacy.CanRead(reference));
-}
-
-#pragma warning restore CS0618

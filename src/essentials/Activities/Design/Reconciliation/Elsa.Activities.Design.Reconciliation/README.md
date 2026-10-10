@@ -23,7 +23,6 @@ Reconciliation lifecycle for the activity catalog (Sipke item 6 — idempotent r
 ## Options
 
 - `ActivityVersionReconcilerOptions.DuplicateHandling` — `Skip` (default) or `Throw` when a contributed version already exists in the catalog.
-- `ActivityVersionReconcilerStartupTaskOptions.LockTimeoutMs` — retired (#2192): the task takes no lock, and a shell that still sets it refuses to start.
 
 ## Replaceable services (per §2.6.2)
 

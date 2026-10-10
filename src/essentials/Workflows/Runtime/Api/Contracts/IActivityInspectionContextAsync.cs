@@ -3,28 +3,14 @@ using Elsa.Workflows.Runtime.Core.Models;
 
 namespace Elsa.Workflows.Runtime.Api.Contracts;
 
-#pragma warning disable CS0618 // The public allow-all adapter intentionally implements the obsolete host contract.
-
-/// <summary>Request-scope inspection authorization; structure and captured-value grants are intentionally separate.</summary>
-[Obsolete("Use IActivityInspectionContextAsync. This interface will be removed in the next major version.")]
-public interface IActivityExecutionInspectionAuthorizationContext
-{
-    string TenantScope { get; }
-    string AuthorizationProfile { get; }
-    /// <summary>
-    /// Gets the stable subject identifier attributable to the request, or an empty value when the request
-    /// cannot be safely attributed. Raw payload resolution must fail closed for an empty value.
-    /// </summary>
-    string AuditSubject { get; }
-    string RequestCorrelationId { get; }
-    bool CanInspectStructure(WorkflowExecutionState workflowExecution);
-    bool CanInspectSensitiveValues(WorkflowExecutionState workflowExecution);
-    bool CanResolveSensitiveValuePayloads(WorkflowExecutionState workflowExecution);
-}
-
 /// <summary>
-/// Canonical short asynchronous replacement seam. Runtime readers use this contract for all permission decisions.
+/// Request-scope inspection authorization; structure and captured-value grants are intentionally separate.
+/// Runtime readers use this contract for all permission decisions.
 /// </summary>
+/// <remarks>
+/// <see cref="AuditSubject"/> is the stable subject identifier attributable to the request, or an empty value when
+/// the request cannot be safely attributed. Raw payload resolution must fail closed for an empty value.
+/// </remarks>
 [ReplacementContract]
 public interface IActivityInspectionContextAsync
 {
@@ -42,20 +28,14 @@ public interface IActivityInspectionContextAsync
 }
 
 /// <summary>Explicit test/development adapter. Production API composition uses a fail-closed request adapter.</summary>
-public sealed class AllowAllActivityExecutionInspectionAuthorizationContext :
-    IActivityExecutionInspectionAuthorizationContext,
-    IActivityInspectionContextAsync
+public sealed class AllowAllActivityExecutionInspectionAuthorizationContext : IActivityInspectionContextAsync
 {
     public string TenantScope => "all-tenants";
-    public string AuthorizationProfile => "structure+values";
     public string AuditSubject => "allow-all";
     public string RequestCorrelationId => string.Empty;
-    public bool CanInspectStructure(WorkflowExecutionState workflowExecution) => true;
-    public bool CanInspectSensitiveValues(WorkflowExecutionState workflowExecution) => true;
-    public bool CanResolveSensitiveValuePayloads(WorkflowExecutionState workflowExecution) => true;
 
     public ValueTask<string> GetAuthorizationProfileAsync(CancellationToken cancellationToken = default) =>
-        ValueTask.FromResult(AuthorizationProfile);
+        ValueTask.FromResult("structure+values");
 
     public ValueTask<bool> CanInspectStructureAsync(WorkflowExecutionState workflowExecution, CancellationToken cancellationToken = default) =>
         ValueTask.FromResult(true);
@@ -66,5 +46,3 @@ public sealed class AllowAllActivityExecutionInspectionAuthorizationContext :
     public ValueTask<bool> CanResolveSensitiveValuePayloadsAsync(WorkflowExecutionState workflowExecution, CancellationToken cancellationToken = default) =>
         ValueTask.FromResult(true);
 }
-
-#pragma warning restore CS0618

@@ -203,14 +203,11 @@ public sealed class ActivityDefinitionManagementProjectionServiceTests
         string? tenantId,
         string authorizationProfile,
         bool canManage,
-        bool canAuthorProvider = true) : IActivityAuthoringContext, IActivityAuthoringContextAsync
+        bool canAuthorProvider = true) : IActivityAuthoringContextAsync
     {
         public string? TenantId => tenantId;
         public string ActorId => "actor-a";
         public string AuthorizationProfile => authorizationProfile;
-        public bool CanManageActivityDefinitions => canManage;
-        public bool CanAuthorProvider(string providerKey) => canAuthorProvider;
-        public bool CanReadProviderPayload(string providerKey) => true;
         public ValueTask<string> GetAuthorizationProfileAsync(CancellationToken cancellationToken = default) => ValueTask.FromResult(authorizationProfile);
         public ValueTask<bool> CanAuthorProviderAsync(string providerKey, CancellationToken cancellationToken = default) => ValueTask.FromResult(canAuthorProvider);
         public ValueTask<bool> CanReadProviderPayloadAsync(string providerKey, CancellationToken cancellationToken = default) => ValueTask.FromResult(true);

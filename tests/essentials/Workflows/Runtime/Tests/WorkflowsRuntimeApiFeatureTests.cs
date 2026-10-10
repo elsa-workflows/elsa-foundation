@@ -24,55 +24,6 @@ namespace Elsa.Workflows.Runtime.Tests;
 public sealed class WorkflowsRuntimeApiFeatureTests
 {
     [Fact]
-    public async Task Adapts_a_legacy_host_inspection_context_when_async_replacement_is_omitted()
-    {
-        var services = new ServiceCollection();
-        services.AddScoped<IActivityExecutionInspectionAuthorizationContext, LegacyInspectionContext>();
-        new WorkflowsRuntimeApiFeature().ConfigureServices(services);
-
-        using var provider = services.BuildServiceProvider();
-        using var scope = provider.CreateScope();
-        var context = scope.ServiceProvider.GetRequiredService<IActivityInspectionContextAsync>();
-
-        Assert.IsType<LegacyActivityInspectionContextAdapter>(context);
-        Assert.Equal("tenant:legacy", context.TenantScope);
-        Assert.Equal("legacy-actor", context.AuditSubject);
-        Assert.Equal("legacy-request", context.RequestCorrelationId);
-        Assert.Equal("legacy-profile", await context.GetAuthorizationProfileAsync());
-        Assert.True(await context.CanInspectStructureAsync(InspectionState()));
-        Assert.False(await context.CanInspectSensitiveValuesAsync(InspectionState()));
-        Assert.False(await context.CanResolveSensitiveValuePayloadsAsync(InspectionState()));
-
-        using var canceled = new CancellationTokenSource();
-        canceled.Cancel();
-        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => context.GetAuthorizationProfileAsync(canceled.Token).AsTask());
-        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => context.CanInspectStructureAsync(InspectionState(), canceled.Token).AsTask());
-        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => context.CanInspectSensitiveValuesAsync(InspectionState(), canceled.Token).AsTask());
-        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => context.CanResolveSensitiveValuePayloadsAsync(InspectionState(), canceled.Token).AsTask());
-    }
-
-    [Fact]
-    public async Task Adapts_a_legacy_replacement_registered_after_feature_configuration()
-    {
-        var services = new ServiceCollection();
-        new WorkflowsRuntimeApiFeature().ConfigureServices(services);
-        services.Replace(ServiceDescriptor.Scoped<IActivityExecutionInspectionAuthorizationContext, LegacyInspectionContext>());
-
-        using var provider = services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
-        using var scope = provider.CreateScope();
-        var context = scope.ServiceProvider.GetRequiredService<IActivityInspectionContextAsync>();
-
-        Assert.IsType<LegacyActivityInspectionContextAdapter>(context);
-        Assert.Equal("tenant:legacy", context.TenantScope);
-        Assert.Equal("legacy-actor", context.AuditSubject);
-        Assert.Equal("legacy-request", context.RequestCorrelationId);
-        Assert.Equal("legacy-profile", await context.GetAuthorizationProfileAsync());
-        Assert.True(await context.CanInspectStructureAsync(InspectionState()));
-        Assert.False(await context.CanInspectSensitiveValuesAsync(InspectionState()));
-        Assert.False(await context.CanResolveSensitiveValuePayloadsAsync(InspectionState()));
-    }
-
-    [Fact]
     public void Inspection_replacement_contract_requires_marker_and_rejects_duplicate_descriptors()
     {
         var unmarked = new ServiceCollection();
@@ -109,6 +60,20 @@ public sealed class WorkflowsRuntimeApiFeatureTests
     }
 
     [Fact]
+    public async Task Default_inspection_context_fails_closed_without_a_trusted_request()
+    {
+        var services = new ServiceCollection();
+        services.AddFoundationIdentityAbstractions();
+        new WorkflowsRuntimeApiFeature().ConfigureServices(services);
+
+        using var provider = services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
+        using var scope = provider.CreateScope();
+        var context = scope.ServiceProvider.GetRequiredService<IActivityInspectionContextAsync>();
+
+        Assert.Equal("untrusted", await context.GetAuthorizationProfileAsync());
+    }
+
+    [Fact]
     public void Inspection_late_conflict_is_reported_by_startup_validation()
     {
         var services = new ServiceCollection();
@@ -135,32 +100,6 @@ public sealed class WorkflowsRuntimeApiFeatureTests
         using var scope = provider.CreateScope();
 
         scope.ServiceProvider.GetRequiredService<IRuntimeDiagnosticsSettingsService>();
-    }
-
-    private static WorkflowExecutionState InspectionState() =>
-        new(
-            "workflow",
-            new("artifact", "definition", "version", "1", "hash"),
-            WorkflowExecutionStatus.Running,
-            null,
-            DateTimeOffset.UnixEpoch,
-            null,
-            null,
-            null,
-            null,
-            null,
-            "tenant",
-            new Dictionary<string, string>());
-
-    private sealed class LegacyInspectionContext : IActivityExecutionInspectionAuthorizationContext
-    {
-        public string TenantScope => "tenant:legacy";
-        public string AuthorizationProfile => "legacy-profile";
-        public string AuditSubject => "legacy-actor";
-        public string RequestCorrelationId => "legacy-request";
-        public bool CanInspectStructure(WorkflowExecutionState workflowExecution) => true;
-        public bool CanInspectSensitiveValues(WorkflowExecutionState workflowExecution) => false;
-        public bool CanResolveSensitiveValuePayloads(WorkflowExecutionState workflowExecution) => false;
     }
 
     private class UnmarkedInspectionContract : IActivityInspectionContextAsync
@@ -269,7 +208,6 @@ public sealed class WorkflowsRuntimeApiFeatureTests
         using var scope = rootProvider.CreateScope();
         var provider = scope.ServiceProvider;
         provider.GetRequiredService<IActivityInspectionContextAsync>();
-        provider.GetRequiredService<IActivityExecutionInspectionAuthorizationContext>();
 
         // Every service the feature is expected to register must resolve (resolvability replaces implementation-type pins).
         provider.GetRequiredService<IWorkflowExecutionActorProvider>();
