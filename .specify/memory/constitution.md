@@ -6,7 +6,8 @@ ratification state, and governance. Canonical term lookup lives in ../../docs/gl
 Sync Impact Report (4.2.0 -> 5.0.0, 2026-10-10)
 - Bump rationale: MAJOR. Propagates framework constitution 5.0.0 (ADR 0080): the restated §2.21.1
   summary matches the framework rule. §E5's two-line versioning gate is suspended until GA (ADR 0080 D4).
-  §E6 R4's `…Contributor` suffix becomes `…Extension` as ADR 0080 D5 renames each domain.
+  §E6 R4's `…Contributor` suffix becomes `…Extension` as ADR 0080 D5 renames each domain. The §E5
+  Nuplane strategy paragraph now marks the host's Line A pins as suspended until GA.
 - Ratification: Sipke Schoorstra, 2026-10-10 (ADR 0080).
 - Templates requiring updates: none beyond those listed in the framework 5.0.0 report.
 

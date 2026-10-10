@@ -35,7 +35,7 @@ Elsa 4 is an unreleased preview. The review measured where its complexity budget
   §2.23.2 requires every branch covered. An estimated 12–18% of test LOC is low value, including about 98 files
   that assert on markdown or source text. §2.21.1 and §2.23.4 make every test deletion an architect decision,
   which freezes simplification.
-- **Process.** About 42% of tracked bytes in `docs`, `specs`, `src` and `tests` are meta (specs, docs, reports). About 4,000 spec/FR/ADR citations sit in
+- **Process.** About 42% of tracked bytes in `docs`, `specs`, `src` and `tests` are meta (specs, docs, reports). About 4,500 spec/FR/ADR citations sit in
   code comments. 15 program goals were active against a cap of 2.
 
 ## Decisions

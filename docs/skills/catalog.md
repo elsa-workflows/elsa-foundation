@@ -167,7 +167,7 @@ The validation compares `.claude/skills/elsa-*/SKILL.md` against this catalog an
 
 **Use when:** a new feature/module is added, ported, or split from existing code.
 
-**Workflow:** read framework gates for three-layer separation, naming, feature identity, provider decomposition, and unit tests; identify the owning domain and dependency envelope; choose `.Core`, helper, and implementation package shape; plan behaviour tests for logic-bearing implementations (the shared composition test covers registration), docs, and extension-point catalog updates before coding. After the user approves the feature/module plan, treat required tests, catalog updates, and generated-map refreshes as normal completion work.
+**Workflow:** read framework gates for three-layer separation, naming, feature identity, provider decomposition, and unit tests; identify the owning domain and dependency envelope; choose `.Core`, helper, and implementation package shape; plan behaviour tests for logic-bearing implementations and a registration test only where the feature's wiring carries logic (framework §2.23.1's composition test covers plain registrations), docs, and extension-point catalog updates before coding. After the user approves the feature/module plan, treat required tests, catalog updates, and generated-map refreshes as normal completion work.
 
 **Output:** feature/module implementation plan or Speckit-ready scope, including package placement, dependency rules, tests, and docs/catalog updates.
 
