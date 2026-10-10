@@ -122,7 +122,7 @@ that intrinsics fuse. Report commits and dispatches per run alongside wall time.
 
 ### P3. Reduce serialized store round-trips per run
 
-**Problem.** [Spec 225](../../specs/226-group-commit-fsync-sharing/research.md) shipped group commit, measured it,
+**Problem.** [Spec 226](../../specs/226-group-commit-fsync-sharing/research.md) shipped group commit, measured it,
 and set the default to off because the wall-clock win did not survive a quiet machine. Its own closing note names
 why: the checkpoint commit is only one of several per-run round-trips that serialize on the same connection gate.
 The marker pre-read and the root-write-lease acquire/release serialize there too. Folding the commits leaves the
