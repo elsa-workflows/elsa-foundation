@@ -56,6 +56,18 @@
           "Microsoft.CodeAnalysis.Common": "[5.0.0]"
         }
       },
+      "Microsoft.EntityFrameworkCore.Sqlite": {
+        "type": "Direct",
+        "requested": "[10.0.10, )",
+        "resolved": "10.0.10",
+        "contentHash": "kzg9MuQNJvZQxAU+piSkEzc7/1tpW6n1nVSGGMObu2GgxLK8Nf+6fvZundaznTZ+O2KhfPZ8HFNCzMH3PWDUmA==",
+        "dependencies": {
+          "Microsoft.EntityFrameworkCore.Sqlite.Core": "10.0.10",
+          "Microsoft.Extensions.DependencyModel": "10.0.10",
+          "SQLitePCLRaw.bundle_e_sqlite3": "2.1.11",
+          "SQLitePCLRaw.core": "2.1.11"
+        }
+      },
       "Microsoft.Extensions.DependencyInjection": {
         "type": "Direct",
         "requested": "[10.0.10, )",
@@ -83,6 +95,17 @@
           "Nuplane.Loading.Abstractions": "0.0.11-preview.99"
         }
       },
+      "OpenIddict.EntityFrameworkCore": {
+        "type": "Direct",
+        "requested": "[7.5.0, )",
+        "resolved": "7.5.0",
+        "contentHash": "3xamhrqh8y+l22wiyy+A9D/UvWPjsS6N8TGybpVlpJIFU5g2QGqk3JPamHuXn3gvwmP4OlwzgAZDzzLv8YWEeQ==",
+        "dependencies": {
+          "Microsoft.EntityFrameworkCore.Relational": "10.0.7",
+          "OpenIddict.Core": "7.5.0",
+          "OpenIddict.EntityFrameworkCore.Models": "7.5.0"
+        }
+      },
       "xunit": {
         "type": "Direct",
         "requested": "[2.9.3, )",
@@ -105,6 +128,42 @@
         "requested": "[16.3.0, )",
         "resolved": "16.3.0",
         "contentHash": "SgMOdxbz8X65z8hraIs6hOEdnkH6hESTAIUa7viEngHOYaH+6q5XJmwr1+yb9vJpNQ19hCQY69xbFsLtXpobQA=="
+      },
+      "ConsoleLogStreaming.Contracts": {
+        "type": "Transitive",
+        "resolved": "1.0.0",
+        "contentHash": "opKn6xVebqhv0Rz1A76atcHVIpIJfPU1g5sOTxJ13YVR96+jC0kS8SDFbr/YBixyhCS0PNP2dCx8ZJMBQ1uxPg==",
+        "dependencies": {
+          "ConsoleLogStreaming.Core": "1.0.0"
+        }
+      },
+      "ConsoleLogStreaming.Core": {
+        "type": "Transitive",
+        "resolved": "1.0.0",
+        "contentHash": "AAyzQaldHY5hM29Sl+4QszvicOgQ/SazR2uzTJXZNJ4jtzubOhYfdfjtESoZ8hN5D3vH0IyvZbVglTBSpjONYw=="
+      },
+      "ConsoleLogStreaming.Endpoints.MinimalApi": {
+        "type": "Transitive",
+        "resolved": "1.0.0",
+        "contentHash": "JnRDL6G8Zso4DG08Jx5dpX4sigvDsCPhXmJABGZPzeQS37/Il8qPKAbz/B5I4eo6u9aITHrjaBJHJSmsnryYlA==",
+        "dependencies": {
+          "ConsoleLogStreaming.Contracts": "1.0.0",
+          "ConsoleLogStreaming.Core": "1.0.0"
+        }
+      },
+      "ConsoleLogStreaming.SignalR": {
+        "type": "Transitive",
+        "resolved": "1.0.0",
+        "contentHash": "pXG/uyrsqM39Xt7LJwS2Kl9N2U/H3UyIiTtAEsOZbb+OHyrhGMcDroJINV+znLfYfiqlRMeor0zo3R86GyRRxA==",
+        "dependencies": {
+          "ConsoleLogStreaming.Contracts": "1.0.0",
+          "ConsoleLogStreaming.Core": "1.0.0"
+        }
+      },
+      "DistributedLock.Core": {
+        "type": "Transitive",
+        "resolved": "1.0.9",
+        "contentHash": "y72z/Ta4xX3qKc+bsAJDsAZ+LuXz4xbCiAYgJwvOP2Xup63tdonTXmlKXU45Ds3GfEuMEHGrnVinhxyBZjRc2Q=="
       },
       "FastEndpoints": {
         "type": "Transitive",
@@ -178,6 +237,11 @@
           "Json.More.Net": "3.0.1"
         }
       },
+      "Microsoft.Bcl.Cryptography": {
+        "type": "Transitive",
+        "resolved": "10.0.2",
+        "contentHash": "LG9Yll3B5aNpxv0+D47g6LiOiKBIlodhcHdQwcYzo8VeexFLGqx5ymetmA2aBRyo9cCcWsQWrFsdbsr8LvmWDw=="
+      },
       "Microsoft.CodeAnalysis.Analyzers": {
         "type": "Transitive",
         "resolved": "3.11.0",
@@ -196,39 +260,184 @@
         "resolved": "18.0.0",
         "contentHash": "DFPhMrsIofgJ1DDU3ModqqRArDm15/bNl4ecmcuBspZkZ4ONYnCC0R8U27WzK7cYv6r8l6Q/fRmvg7cb+I/dJA=="
       },
+      "Microsoft.Data.SqlClient.Extensions.Abstractions": {
+        "type": "Transitive",
+        "resolved": "7.0.2",
+        "contentHash": "Zx7z61fG2Nc6LdDn4jA7b5Aj1ABrljkOPRE31RvVUdjF6IgbG60leDUhMCafsnWFgaheiK3iqpLe+kbf5Z5L8Q==",
+        "dependencies": {
+          "Microsoft.Data.SqlClient.Internal.Logging": "[7.0.2, 8.0.0)"
+        }
+      },
+      "Microsoft.Data.SqlClient.Internal.Logging": {
+        "type": "Transitive",
+        "resolved": "7.0.2",
+        "contentHash": "iqgYBbGSVy/DIYWjzmQOa964Kn4rs4wW5vg2IamqVK0fQqfTiILVR5hMK27XWqoyONtAZs+VxH354cPJBtSnbg=="
+      },
+      "Microsoft.Data.SqlClient.SNI.runtime": {
+        "type": "Transitive",
+        "resolved": "6.0.2",
+        "contentHash": "f+pRODTWX7Y67jXO3T5S2dIPZ9qMJNySjlZT/TKmWVNWe19N8jcWmHaqHnnchaq3gxEKv1SWVY5EFzOD06l41w=="
+      },
+      "Microsoft.Data.Sqlite.Core": {
+        "type": "Transitive",
+        "resolved": "10.0.10",
+        "contentHash": "TPCs0ldm7AWqcKmp6f/Xr+14sat7hx4rHfRlS4RgCURBH2thEWbAKEyX7cCWr63zVJVOJIJZTg2cBiUXa8ys6g==",
+        "dependencies": {
+          "SQLitePCLRaw.core": "2.1.11"
+        }
+      },
+      "Microsoft.EntityFrameworkCore.Abstractions": {
+        "type": "Transitive",
+        "resolved": "10.0.10",
+        "contentHash": "bOzrFCl6uZCjaSh2bG1ToRQRdx+iXvxosCg9hFyG9OWeAzOFI4xev9OqKeWfKf/kAHyox2JnbcvLVf2ceA7sqA=="
+      },
+      "Microsoft.EntityFrameworkCore.Analyzers": {
+        "type": "Transitive",
+        "resolved": "10.0.10",
+        "contentHash": "2gLDordUCGf3aNOOuqtTbP5mxhiP9nk6TnvGiE3RnqT891O+Zf/qKu1PIREubs1M16A0SImr4vULBfU5BTDs1Q=="
+      },
+      "Microsoft.EntityFrameworkCore.Sqlite.Core": {
+        "type": "Transitive",
+        "resolved": "10.0.10",
+        "contentHash": "YbVWMIouzwTKBiLms8boa7xeRT88wI14R1msv3XExFk9n0/sa8nU7MwDa1CKtfLGMJs7O7QWuS9/xhcQ72AD2A==",
+        "dependencies": {
+          "Microsoft.Data.Sqlite.Core": "10.0.10",
+          "Microsoft.EntityFrameworkCore.Relational": "10.0.10",
+          "Microsoft.Extensions.DependencyModel": "10.0.10",
+          "SQLitePCLRaw.core": "2.1.11"
+        }
+      },
+      "Microsoft.Extensions.AmbientMetadata.Application": {
+        "type": "Transitive",
+        "resolved": "10.3.0",
+        "contentHash": "Oh/FQJrTZqiqZuFktqDCwLFgxIUnNATZx46AwUTf5A/+FmK/TzPf/iwSqMK85QlioLD9ehOxWe0NBfsCSkp5pw=="
+      },
       "Microsoft.Extensions.Compliance.Abstractions": {
         "type": "Transitive",
-        "resolved": "10.1.0",
-        "contentHash": "M3JWrgZMkVzyEybZzNkTiC/e8U1ipXTi8xm8bj+PHHp4AcEmhmIEqnxRS0VHVCKZjLkOPt2hY2CIisUFQ6gqLA=="
+        "resolved": "10.3.0",
+        "contentHash": "b3gmxtyX0n8bQFuZ679f8QiOWqjeZKFc6XXPUsYNFzMcWi0Q44Ej3pB41N/QQ0maX380kmOMF36bLSBHNThXAg=="
+      },
+      "Microsoft.Extensions.DependencyInjection.AutoActivation": {
+        "type": "Transitive",
+        "resolved": "10.3.0",
+        "contentHash": "g6/S5rhP1XNBqeDa9zKXri/uDKe6gjzSqGsocuySb1OdVm8fz/M9YcWTJsCw5RHF8xIb/B3NgsfBPQF9Emjk3Q=="
       },
       "Microsoft.Extensions.DependencyModel": {
         "type": "Transitive",
-        "resolved": "10.0.1",
-        "contentHash": "IiWPd4j8JLNjSkyXl5hvJwX2ZENDVQVPDHYgZmYdw8+YkY2xp9iQt0vjdnAQZLpo/ipeW1xgOqfSBEnivKWPYQ=="
+        "resolved": "10.0.10",
+        "contentHash": "rfZA1RjR021RPqSmIPovfz2aOd79TGqJ9BengbjnzIISOVwjLmuSDnhCMmiY/1c6iYvGolQ1iNGzkav0u11XEA=="
       },
       "Microsoft.Extensions.Diagnostics.ExceptionSummarization": {
         "type": "Transitive",
-        "resolved": "10.1.0",
-        "contentHash": "Q76peCoP6vXXf95RLFeMGzcaQs8l3lk+n/ZOTi2i+OLd3R0HzzB0Fswjua4NY1viIbA1s6l1mqRjQbxY7+Jylw=="
+        "resolved": "10.3.0",
+        "contentHash": "TZAZsAFThNQDqCnWaGxV/X7OPSA7b+kY7wNTPNvPvSWa0jcTbmGVyzIY/feF4OgyAUUdzSnnLW6ri2Q+4keM4A=="
+      },
+      "Microsoft.Extensions.Http.Diagnostics": {
+        "type": "Transitive",
+        "resolved": "10.3.0",
+        "contentHash": "/xuNWNxI4WLVatiTvaqfLd5ijFhQ/qvE14bOyWxeEWmXJkjh/g2G/5TdzMfoe0afq16OdWLGbrD9gWHo178hbg==",
+        "dependencies": {
+          "Microsoft.Extensions.Telemetry": "10.3.0"
+        }
+      },
+      "Microsoft.Extensions.Http.Polly": {
+        "type": "Transitive",
+        "resolved": "10.0.7",
+        "contentHash": "pcUsPoqMHvOp+QJsLA/Hlg/W+IBnAoUXKEBc7FqMcY0sUez15DOKXtbEo81TvHL9xwjWQcF3ZMayNpcvpI7Bqg==",
+        "dependencies": {
+          "Polly": "7.2.4",
+          "Polly.Extensions.Http": "3.0.0"
+        }
+      },
+      "Microsoft.Extensions.Http.Resilience": {
+        "type": "Transitive",
+        "resolved": "10.3.0",
+        "contentHash": "P4+s/eUH3dZdn1HnivSL2dh6/Jb0ndLt2l88oQPZ9BYdyb4tSRAsnz4QkJHGfPA9lS/XblI5QYsxEdfkurPvIg==",
+        "dependencies": {
+          "Microsoft.Extensions.Http.Diagnostics": "10.3.0",
+          "Microsoft.Extensions.Resilience": "10.3.0"
+        }
       },
       "Microsoft.Extensions.Resilience": {
         "type": "Transitive",
-        "resolved": "10.1.0",
-        "contentHash": "NzA+c4m2q92qZPjiZLFm+ToeQC3KFqzP+Dr/1pV5y9d7H/hDM2Yxno0kcw5DGpSvS0s6Pwsp+FWMdk/kXBPZ7g==",
+        "resolved": "10.3.0",
+        "contentHash": "xc0dZuPkBaVIdMlODDppmNY/dxE27wIQ46gTzStoFXO4/yVcOMKlPmtr9vTP4edyXBRizGxPtcAFmqxZ5gPTkQ==",
         "dependencies": {
-          "Microsoft.Extensions.Diagnostics.ExceptionSummarization": "10.1.0",
-          "Microsoft.Extensions.Telemetry.Abstractions": "10.1.0",
+          "Microsoft.Extensions.Diagnostics.ExceptionSummarization": "10.3.0",
+          "Microsoft.Extensions.Telemetry.Abstractions": "10.3.0",
           "Polly.Extensions": "8.4.2",
           "Polly.RateLimiting": "8.4.2"
         }
       },
+      "Microsoft.Extensions.Telemetry": {
+        "type": "Transitive",
+        "resolved": "10.3.0",
+        "contentHash": "M1esrIGmwU2JBY0JpwdlUTXTNBXSBFEs+41bYBd59+9/vCaXw+vGhtYcCL+JXeGmxTLUHmuXcKbX/uVCSFcuzA==",
+        "dependencies": {
+          "Microsoft.Extensions.AmbientMetadata.Application": "10.3.0",
+          "Microsoft.Extensions.DependencyInjection.AutoActivation": "10.3.0",
+          "Microsoft.Extensions.Telemetry.Abstractions": "10.3.0"
+        }
+      },
       "Microsoft.Extensions.Telemetry.Abstractions": {
         "type": "Transitive",
-        "resolved": "10.1.0",
-        "contentHash": "0jAF2b0YJ1LOtunmo3PzSoJOx/ThhcGH5Y5kaV0jeM0BUlyr9orjg+fH5YabqnPSmwcN/DSTj0iZ7UwDISn5ag==",
+        "resolved": "10.3.0",
+        "contentHash": "aKxH6ZsGAewGF8uSXyx1WkjqItwZA+hd1hhQ/4i7o5injCWSdr9vIZ3R3djJfy8OG3xaWK+LZY/+slVvlnwEHw==",
         "dependencies": {
-          "Microsoft.Extensions.Compliance.Abstractions": "10.1.0"
+          "Microsoft.Extensions.Compliance.Abstractions": "10.3.0"
         }
+      },
+      "Microsoft.IdentityModel.Abstractions": {
+        "type": "Transitive",
+        "resolved": "8.19.2",
+        "contentHash": "HJbo/lnSfNHUfphPRT910poQc4T2/9+8svFLvzuaYHGAOJ2Tu+oEDqpX0BVP3BJ4OuUM1kylEKyaiX2fCAK3Cw=="
+      },
+      "Microsoft.IdentityModel.JsonWebTokens": {
+        "type": "Transitive",
+        "resolved": "8.19.2",
+        "contentHash": "ui3fuBT4fs8kdKfBthI4NzLYIBIneEVS8UrL1JVBzAn80UiKmngBBi0BEByE7n/9c+EElcfFlCMFFTqpkBSLNA==",
+        "dependencies": {
+          "Microsoft.IdentityModel.Tokens": "8.19.2"
+        }
+      },
+      "Microsoft.IdentityModel.Logging": {
+        "type": "Transitive",
+        "resolved": "8.19.2",
+        "contentHash": "r5YLDIxGOnkVJHrqXv/iD1FM1CgGrQOdriXuvuWvTPmKbnGANhEysq9XKmN6IHjf2a+9bAGEpnoRBsAQlvJU5w==",
+        "dependencies": {
+          "Microsoft.IdentityModel.Abstractions": "8.19.2"
+        }
+      },
+      "Microsoft.IdentityModel.Protocols": {
+        "type": "Transitive",
+        "resolved": "8.19.2",
+        "contentHash": "sGxSsSrZXNmca6D+jHH2rVRyo2nNRd/g4H9CFbPmLLq0xgoH1U0orLWE5minfijw7+zq49tBs7txenbfAErRoQ==",
+        "dependencies": {
+          "Microsoft.IdentityModel.Tokens": "8.19.2"
+        }
+      },
+      "Microsoft.IdentityModel.Protocols.OpenIdConnect": {
+        "type": "Transitive",
+        "resolved": "8.19.2",
+        "contentHash": "1XOcyY36cVymzE3qKdzKaUEZ4Pzt7ZpSa14JZoPPK1NLFUkQDs85TCqpV6XDo0YjFXj6nVK00AfOHppjghjhtw==",
+        "dependencies": {
+          "Microsoft.IdentityModel.Protocols": "8.19.2",
+          "System.IdentityModel.Tokens.Jwt": "8.19.2"
+        }
+      },
+      "Microsoft.IdentityModel.Tokens": {
+        "type": "Transitive",
+        "resolved": "8.19.2",
+        "contentHash": "GtPC1S02uH1gOO4fQ+zRysIicKmEXaYFP8PIkdJYXqMyruYhopre4ozVHp0XiDSA0+GJvOZH9prxCPvgBMg4Ww==",
+        "dependencies": {
+          "Microsoft.Bcl.Cryptography": "10.0.2",
+          "Microsoft.IdentityModel.Logging": "8.19.2"
+        }
+      },
+      "Microsoft.SqlServer.Server": {
+        "type": "Transitive",
+        "resolved": "1.0.0",
+        "contentHash": "N4KeF3cpcm1PUHym1RmakkzfkEv3GRMyofVv40uXsQhCQeglr2OHNcUk2WOG51AKpGO8ynGpo9M/kFXSzghwug=="
       },
       "Microsoft.TestPlatform.ObjectModel": {
         "type": "Transitive",
@@ -243,6 +452,11 @@
           "Microsoft.TestPlatform.ObjectModel": "18.0.0",
           "Newtonsoft.Json": "13.0.3"
         }
+      },
+      "MySqlConnector": {
+        "type": "Transitive",
+        "resolved": "2.3.5",
+        "contentHash": "AmEfUPkFl+Ev6jJ8Dhns3CYHBfD12RHzGYWuLt6DfG6/af6YvOMyPz74ZPPjBYQGRJkumD2Z48Kqm8s5DJuhLA=="
       },
       "NuGet.Common": {
         "type": "Transitive",
@@ -303,10 +517,168 @@
         "resolved": "0.0.11-preview.99",
         "contentHash": "A06Sr32mGAQuyvLPgTZRfcCSwPhUg0Qao1dfz6e6bYuAbz9baC0XXbKG5DAY9SZ46xEV27yy8EONCU1HIgpq8A=="
       },
+      "OpenIddict": {
+        "type": "Transitive",
+        "resolved": "7.5.0",
+        "contentHash": "rZyPVHUXwUKEFQr4DO/iWKwmXnUE4IFMoHpYnyq5DgdgiKNFTkjZ4xc1P2ArnwvKNyuNsefGsj+JybGqXwIqsA==",
+        "dependencies": {
+          "OpenIddict.Abstractions": "7.5.0",
+          "OpenIddict.Client": "7.5.0",
+          "OpenIddict.Client.SystemIntegration": "7.5.0",
+          "OpenIddict.Client.SystemNetHttp": "7.5.0",
+          "OpenIddict.Client.WebIntegration": "7.5.0",
+          "OpenIddict.Core": "7.5.0",
+          "OpenIddict.Server": "7.5.0",
+          "OpenIddict.Validation": "7.5.0",
+          "OpenIddict.Validation.ServerIntegration": "7.5.0",
+          "OpenIddict.Validation.SystemNetHttp": "7.5.0"
+        }
+      },
+      "OpenIddict.Client": {
+        "type": "Transitive",
+        "resolved": "7.5.0",
+        "contentHash": "W22MGOGqWVOD2yVPCZmk4ZAH0ssZ/I+qfucBaeaCHpR65+I1vKVtL/tuuhUY1dbdvgARKS1bsZZvWDOroJ2kNQ==",
+        "dependencies": {
+          "Microsoft.IdentityModel.JsonWebTokens": "8.16.0",
+          "Microsoft.IdentityModel.Protocols": "8.16.0",
+          "OpenIddict.Abstractions": "7.5.0"
+        }
+      },
+      "OpenIddict.Client.AspNetCore": {
+        "type": "Transitive",
+        "resolved": "7.5.0",
+        "contentHash": "bVZEYVHdXbfJqTtzamvDjq4Klymjb6uhq3lEF/k27YwBJtBV1QQWnvjQRpjqmhR7UHQSIoKxo6xbPtPxWAlujA==",
+        "dependencies": {
+          "OpenIddict.Client": "7.5.0"
+        }
+      },
+      "OpenIddict.Client.DataProtection": {
+        "type": "Transitive",
+        "resolved": "7.5.0",
+        "contentHash": "zxiYrDLXy2V+TYGmKIJYi29hsZG1U9axMZgWv12FsGE4wJQpdtrKw2J5yplYOiVzMz5DxgXrpTOhQ1bfRLDO+Q==",
+        "dependencies": {
+          "OpenIddict.Client": "7.5.0"
+        }
+      },
+      "OpenIddict.Client.SystemIntegration": {
+        "type": "Transitive",
+        "resolved": "7.5.0",
+        "contentHash": "7Z4H1innZap7/ffNE6bsuC9WpwTn0wk+tjeRJD/6dJX4FSVJuVQ8N5yRMLCmXSS/aeVvyMwYpdylLXygI76I5g==",
+        "dependencies": {
+          "OpenIddict.Client": "7.5.0"
+        }
+      },
+      "OpenIddict.Client.SystemNetHttp": {
+        "type": "Transitive",
+        "resolved": "7.5.0",
+        "contentHash": "Os2tAOMwgkGuBykqDMwIHrcF2wJdhMyfG5uIZlDbIAamDZJriGc6AnVoRNxFiSWCuzhXBhDboZQviecBFc2mQw==",
+        "dependencies": {
+          "Microsoft.Extensions.Http.Polly": "10.0.7",
+          "Microsoft.Extensions.Http.Resilience": "10.3.0",
+          "OpenIddict.Client": "7.5.0"
+        }
+      },
+      "OpenIddict.Client.WebIntegration": {
+        "type": "Transitive",
+        "resolved": "7.5.0",
+        "contentHash": "0FNXGJdzdGIO523Dy07APoXmDJPjEIQt/e2SeAQYyrZ0bFC2eKDEdDsw2PLvIMnN5X9GC/n9DhQQWahrLIpXbA==",
+        "dependencies": {
+          "OpenIddict.Client": "7.5.0",
+          "OpenIddict.Client.SystemNetHttp": "7.5.0"
+        }
+      },
+      "OpenIddict.Core": {
+        "type": "Transitive",
+        "resolved": "7.5.0",
+        "contentHash": "8IicfYNZDg2TRzeDG+TOlWjWsneLTFIe1Ai5PMFXgsfti07JDLuvznBTOpCdv7w5DdrrjXxk9xMdRWS8aZ358w==",
+        "dependencies": {
+          "OpenIddict.Abstractions": "7.5.0"
+        }
+      },
+      "OpenIddict.EntityFrameworkCore.Models": {
+        "type": "Transitive",
+        "resolved": "7.5.0",
+        "contentHash": "n21lCWOkjvu0sA9EwnDrlZ61WdzAd2KuTUSBeJeF5QGe6Sw/nLvu7Yr1yZ1I8t5iQw+QlI7PQAVPLkLLlHE5Yw=="
+      },
+      "OpenIddict.Server": {
+        "type": "Transitive",
+        "resolved": "7.5.0",
+        "contentHash": "O8i4aNse1ilwdW/KX86WS6rtwpm+XccYOFKs+8bZeIA+DI3RFgc5nR2k2hEoBYf44ybLiGCWjDqJQdLKfXHhcw==",
+        "dependencies": {
+          "Microsoft.IdentityModel.JsonWebTokens": "8.16.0",
+          "OpenIddict.Abstractions": "7.5.0"
+        }
+      },
+      "OpenIddict.Server.AspNetCore": {
+        "type": "Transitive",
+        "resolved": "7.5.0",
+        "contentHash": "dPgoG/y7oJcngY+xILxrp+lgGjrOMIrlt/mQcGKMj/g+QlNW8Xod5ibAMbFIQUUWXGVKd+lZKPMa7wPfioLpTw==",
+        "dependencies": {
+          "OpenIddict.Server": "7.5.0"
+        }
+      },
+      "OpenIddict.Server.DataProtection": {
+        "type": "Transitive",
+        "resolved": "7.5.0",
+        "contentHash": "dn49+QwuiHZatgiP0auRG2//Fhnu0yYmtPu5ky89AqjZKSQTDrPwV0Jm1O0OCGM39W7AEWwOtLtvpr/cucxLUA==",
+        "dependencies": {
+          "OpenIddict.Server": "7.5.0"
+        }
+      },
+      "OpenIddict.Validation": {
+        "type": "Transitive",
+        "resolved": "7.5.0",
+        "contentHash": "PpAaSD2KfFJn6sODf0JadCcdx2e2hNo23ULYqbv3lGnOLVB3Y8bQoGJNMovxzSq5nKMSLlqi5rtV3sFXln3Kkw==",
+        "dependencies": {
+          "Microsoft.IdentityModel.JsonWebTokens": "8.16.0",
+          "Microsoft.IdentityModel.Protocols": "8.16.0",
+          "OpenIddict.Abstractions": "7.5.0"
+        }
+      },
+      "OpenIddict.Validation.AspNetCore": {
+        "type": "Transitive",
+        "resolved": "7.5.0",
+        "contentHash": "yTHifKNJLe0uH4fotBQcii8XpHYQOwmACXK2aEeAYadxYlysiO67glfxdETzeAfpJ/QM4cG7V2bjXUCZLCHEbg==",
+        "dependencies": {
+          "OpenIddict.Validation": "7.5.0"
+        }
+      },
+      "OpenIddict.Validation.DataProtection": {
+        "type": "Transitive",
+        "resolved": "7.5.0",
+        "contentHash": "YrjqQgj1c+nmwSjKHB0YUaNA1nNkSVsVuSj1f7eujWif/86IdII49NRfo7NXEn9GVbuoPk3R/hW10fJtp0Q4CA==",
+        "dependencies": {
+          "OpenIddict.Validation": "7.5.0"
+        }
+      },
+      "OpenIddict.Validation.ServerIntegration": {
+        "type": "Transitive",
+        "resolved": "7.5.0",
+        "contentHash": "dsAjY4MytgSdMQFjmy+7cTcKTJF0rKiLOu9VAvsxg/mjQU/mDH1gjyQafAHoU9BwDIrbaBZlBRxUNPl14O1GBA==",
+        "dependencies": {
+          "OpenIddict.Server": "7.5.0",
+          "OpenIddict.Validation": "7.5.0"
+        }
+      },
+      "OpenIddict.Validation.SystemNetHttp": {
+        "type": "Transitive",
+        "resolved": "7.5.0",
+        "contentHash": "nRj7Ry1se+hURVx4KADZlnHyYQkK095ybpSq4CC29A+akqDK6GPP04T/zSxIK8bpQSepNqP4w2aWzDZCvcvg9w==",
+        "dependencies": {
+          "Microsoft.Extensions.Http.Polly": "10.0.7",
+          "Microsoft.Extensions.Http.Resilience": "10.3.0",
+          "OpenIddict.Validation": "7.5.0"
+        }
+      },
       "Parlot": {
         "type": "Transitive",
         "resolved": "1.5.2",
         "contentHash": "idEOR6WU8WvnaDhFcj9PkWv8r/Actca8KfV9kw94//QEC0iQJVB9w/Z4ZLY8LxwSVMuNPuuLB649kCcVb+HrLw=="
+      },
+      "Polly": {
+        "type": "Transitive",
+        "resolved": "7.2.4",
+        "contentHash": "bw00Ck5sh6ekduDE3mnCo1ohzuad946uslCDEENu3091+6UKnBuKLo4e+yaNcCzXxOZCXWY2gV4a35+K1d4LDA=="
       },
       "Polly.Core": {
         "type": "Transitive",
@@ -321,6 +693,14 @@
           "Polly.Core": "8.6.5"
         }
       },
+      "Polly.Extensions.Http": {
+        "type": "Transitive",
+        "resolved": "3.0.0",
+        "contentHash": "drrG+hB3pYFY7w1c3BD+lSGYvH2oIclH8GRSehgfyP5kjnFnHKQuuBhuHLv+PWyFuaTDyk/vfRpnxOzd11+J8g==",
+        "dependencies": {
+          "Polly": "7.1.0"
+        }
+      },
       "Polly.RateLimiting": {
         "type": "Transitive",
         "resolved": "8.4.2",
@@ -329,15 +709,58 @@
           "Polly.Core": "8.4.2"
         }
       },
+      "SourceGear.sqlite3": {
+        "type": "Transitive",
+        "resolved": "3.50.4.5",
+        "contentHash": "UtnipXhJYZKQOQIfpws/msLK7IRhMplE1CZCaZLIQXRnGD474QVpO/J9nMlQQY8NZueGz1aidjoxDRnrC1NT3Q=="
+      },
+      "SQLitePCLRaw.config.e_sqlite3": {
+        "type": "Transitive",
+        "resolved": "3.0.3",
+        "contentHash": "caP/ap0X2fyVmstCXu5ueOmcr2XWAxA2XyKghV7H4bOAFmq3nWcsGl9q44iY1HYG+i8Qr4G9XEqdfti0rV6/ZQ==",
+        "dependencies": {
+          "SQLitePCLRaw.provider.e_sqlite3": "3.0.3"
+        }
+      },
+      "SQLitePCLRaw.core": {
+        "type": "Transitive",
+        "resolved": "3.0.3",
+        "contentHash": "bjm6FY4lZyP+t7GmiuvSM0QXpFihAvyE0Y9O2yibm3g95AAWJPNnHOKVNJGyPTGIKuK7Pr4Wh8Rd8/aOtAclQw=="
+      },
+      "SQLitePCLRaw.provider.e_sqlite3": {
+        "type": "Transitive",
+        "resolved": "3.0.3",
+        "contentHash": "wd+fGvZTrr3BJNe48opSczmC176Okd61ZgoZNQcdvZwkek6to978ccdpcFmNo5GHxCnk29KwT+f+lAZYgfLVZg==",
+        "dependencies": {
+          "SQLitePCLRaw.core": "3.0.3"
+        }
+      },
+      "System.Configuration.ConfigurationManager": {
+        "type": "Transitive",
+        "resolved": "9.0.13",
+        "contentHash": "GbBrJq9S/gYpHzm7Pxx6Y5tDyfSfyxW6tlP5oiKJV38uf19Wp+GIIAnWfyL1zmNiz1+EjwVapw2WkBFvvqKQzg==",
+        "dependencies": {
+          "System.Security.Cryptography.ProtectedData": "9.0.13"
+        }
+      },
+      "System.IdentityModel.Tokens.Jwt": {
+        "type": "Transitive",
+        "resolved": "8.19.2",
+        "contentHash": "gqhDC/icByKEutygpr+OFgAmjwTVowyzFjWB8K0q1ww8uFj5a1BQNL+QvijUl9uhq4p8OdDwcAIrjVC+eC9FVA==",
+        "dependencies": {
+          "Microsoft.IdentityModel.JsonWebTokens": "8.19.2",
+          "Microsoft.IdentityModel.Tokens": "8.19.2"
+        }
+      },
       "System.Security.Cryptography.Pkcs": {
         "type": "Transitive",
-        "resolved": "6.0.4",
-        "contentHash": "LGbXi1oUJ9QgCNGXRO9ndzBL/GZgANcsURpMhNR8uO+rca47SZmciS3RSQUvlQRwK3QHZSHNOXzoMUASKA+Anw=="
+        "resolved": "9.0.13",
+        "contentHash": "dxJhkuoaelvWy588wPXjShNks+ZMiSgXnN75/u+DPbER5PqKrLPDftE0BvGM7nDK/scQAVlD+gRXlCAAjWi58Q=="
       },
       "System.Security.Cryptography.ProtectedData": {
         "type": "Transitive",
-        "resolved": "4.4.0",
-        "contentHash": "cJV7ScGW7EhatRsjehfvvYVBvtiSMKgN8bOVI0bQhnF5bU7vnHVIsH49Kva7i7GWaWYvmEzkYVk1TC+gZYBEog=="
+        "resolved": "9.0.13",
+        "contentHash": "t8S9IDpjJKsLpLkeBdW8cWtcPyYqrGu93Dej1RO6WwuL/lkFSqWlan3rMJfortqz1mRIh+sys2AFsSA6jWJ3Jg=="
       },
       "TimeZoneConverter": {
         "type": "Transitive",
@@ -409,6 +832,16 @@
           "NativeEndpoints": "[1.0.0-preview.6, )"
         }
       },
+      "elsa.activities.controlflow": {
+        "type": "Project",
+        "dependencies": {
+          "CShells.Abstractions": "[0.0.30-preview.173, )",
+          "Elsa.Activities.Runtime.Core": "[4.0.0-dev, )",
+          "Elsa.Workflows.Design.Core": "[4.0.0-dev, )",
+          "Elsa.Workflows.Design.Validations.Core": "[4.0.0-dev, )",
+          "Elsa.Workflows.Runtime.Core": "[4.0.0-dev, )"
+        }
+      },
       "elsa.activities.design.api": {
         "type": "Project",
         "dependencies": {
@@ -441,6 +874,77 @@
           "Elsa.Workflows.Design.Persistence.Core": "[4.0.0-dev, )"
         }
       },
+      "elsa.activities.design.persistence.entityframeworkcore": {
+        "type": "Project",
+        "dependencies": {
+          "CShells.Abstractions": "[0.0.30-preview.173, )",
+          "Elsa.Activities.Design.Persistence.Core": "[4.0.0-dev, )",
+          "Elsa.Persistence.EntityFramework": "[4.0.0-dev, )",
+          "Elsa.Workflows.Runtime.Core": "[4.0.0-dev, )",
+          "Microsoft.EntityFrameworkCore": "[10.0.10, )",
+          "Microsoft.EntityFrameworkCore.Relational": "[10.0.10, )"
+        }
+      },
+      "elsa.activities.design.reconciliation": {
+        "type": "Project",
+        "dependencies": {
+          "CShells.Abstractions": "[0.0.30-preview.173, )",
+          "Elsa.Activities.Design.Core": "[4.0.0-dev, )",
+          "Elsa.Activities.Design.Persistence.Core": "[4.0.0-dev, )",
+          "Elsa.Events.Core": "[4.0.0-dev, )",
+          "Elsa.Locking.Core": "[4.0.0-dev, )",
+          "Elsa.Serialization.Core": "[4.0.0-dev, )",
+          "Elsa.Tasks.Core": "[4.0.0-dev, )",
+          "Elsa.Workflows.Design.Persistence.Core": "[4.0.0-dev, )",
+          "Elsa.Workflows.Runtime.Core": "[4.0.0-dev, )"
+        }
+      },
+      "elsa.activities.design.reconciliation.clr": {
+        "type": "Project",
+        "dependencies": {
+          "CShells.Abstractions": "[0.0.30-preview.173, )",
+          "Elsa.Activities.Design.Core": "[4.0.0-dev, )",
+          "Elsa.Activities.Runtime.Core": "[4.0.0-dev, )",
+          "System.Reflection.MetadataLoadContext": "[10.0.8, )"
+        }
+      },
+      "elsa.activities.design.reconciliation.json": {
+        "type": "Project",
+        "dependencies": {
+          "CShells.Abstractions": "[0.0.30-preview.173, )",
+          "Elsa.Activities.Design.Core": "[4.0.0-dev, )",
+          "Elsa.Serialization.Core": "[4.0.0-dev, )"
+        }
+      },
+      "elsa.activities.dispatchworkflow.design": {
+        "type": "Project",
+        "dependencies": {
+          "CShells.Abstractions": "[0.0.30-preview.173, )",
+          "Elsa.Activities.DispatchWorkflow.Runtime": "[4.0.0-dev, )",
+          "Elsa.Workflows.Design.Core": "[4.0.0-dev, )",
+          "Elsa.Workflows.Design.Persistence.Core": "[4.0.0-dev, )",
+          "Elsa.Workflows.Publishing.Core": "[4.0.0-dev, )",
+          "Elsa.Workflows.Runtime.Core": "[4.0.0-dev, )"
+        }
+      },
+      "elsa.activities.dispatchworkflow.runtime": {
+        "type": "Project",
+        "dependencies": {
+          "CShells.Abstractions": "[0.0.30-preview.173, )",
+          "Elsa.Activities.Runtime.Core": "[4.0.0-dev, )",
+          "Elsa.Workflows.Runtime.Core": "[4.0.0-dev, )"
+        }
+      },
+      "elsa.activities.flowchart": {
+        "type": "Project",
+        "dependencies": {
+          "CShells.Abstractions": "[0.0.30-preview.173, )",
+          "Elsa.Activities.Runtime.Core": "[4.0.0-dev, )",
+          "Elsa.Workflows.Design.Core": "[4.0.0-dev, )",
+          "Elsa.Workflows.Runtime": "[4.0.0-dev, )",
+          "Elsa.Workflows.Runtime.Core": "[4.0.0-dev, )"
+        }
+      },
       "elsa.activities.graph.design": {
         "type": "Project",
         "dependencies": {
@@ -452,12 +956,91 @@
           "Elsa.Workflows.Runtime.Core": "[4.0.0-dev, )"
         }
       },
+      "elsa.activities.graph.runtime": {
+        "type": "Project",
+        "dependencies": {
+          "CShells.Abstractions": "[0.0.30-preview.173, )",
+          "Elsa.Activities.Runtime.Core": "[4.0.0-dev, )",
+          "Elsa.Workflows.Runtime.Core": "[4.0.0-dev, )"
+        }
+      },
+      "elsa.activities.http": {
+        "type": "Project",
+        "dependencies": {
+          "CShells.Abstractions": "[0.0.30-preview.173, )",
+          "CShells.AspNetCore.Abstractions": "[0.0.30-preview.173, )",
+          "Elsa.Activities.Runtime.Core": "[4.0.0-dev, )",
+          "Elsa.Http.Core": "[4.0.0-dev, )",
+          "Elsa.Primitives": "[4.0.0-dev, )",
+          "Elsa.Serialization.Core": "[4.0.0-dev, )",
+          "Elsa.Workflows.Runtime.Core": "[4.0.0-dev, )"
+        }
+      },
+      "elsa.activities.primitives": {
+        "type": "Project",
+        "dependencies": {
+          "CShells.Abstractions": "[0.0.30-preview.173, )",
+          "Elsa.Activities.Runtime": "[4.0.0-dev, )",
+          "Elsa.Activities.Runtime.Core": "[4.0.0-dev, )",
+          "Elsa.Primitives": "[4.0.0-dev, )",
+          "Elsa.Serialization.Core": "[4.0.0-dev, )",
+          "Elsa.Workflows.Runtime.Core": "[4.0.0-dev, )"
+        }
+      },
+      "elsa.activities.runtime": {
+        "type": "Project",
+        "dependencies": {
+          "CShells.Abstractions": "[0.0.30-preview.173, )",
+          "Elsa.Activities.Runtime.Core": "[4.0.0-dev, )",
+          "Elsa.Events.Core": "[4.0.0-dev, )",
+          "Elsa.Primitives": "[4.0.0-dev, )",
+          "Elsa.Tasks.Core": "[4.0.0-dev, )",
+          "Elsa.Workflows.Runtime": "[4.0.0-dev, )",
+          "Elsa.Workflows.Runtime.Core": "[4.0.0-dev, )"
+        }
+      },
       "elsa.activities.runtime.core": {
         "type": "Project",
         "dependencies": {
           "Elsa.Events.Core": "[4.0.0-dev, )",
           "Elsa.Expressions.Core": "[4.0.0-dev, )",
           "Elsa.Primitives": "[4.0.0-dev, )"
+        }
+      },
+      "elsa.activities.scheduling": {
+        "type": "Project",
+        "dependencies": {
+          "CShells.Abstractions": "[0.0.30-preview.173, )",
+          "Elsa.Activities.Runtime.Core": "[4.0.0-dev, )",
+          "Elsa.Primitives": "[4.0.0-dev, )",
+          "Elsa.Workflows.Runtime.Core": "[4.0.0-dev, )"
+        }
+      },
+      "elsa.activities.scripting": {
+        "type": "Project",
+        "dependencies": {
+          "CShells.Abstractions": "[0.0.30-preview.173, )",
+          "Elsa.Activities.Runtime.Core": "[4.0.0-dev, )",
+          "Elsa.Expressions.JavaScript.Core": "[4.0.0-dev, )",
+          "Elsa.Primitives": "[4.0.0-dev, )"
+        }
+      },
+      "elsa.activities.sequence": {
+        "type": "Project",
+        "dependencies": {
+          "CShells.Abstractions": "[0.0.30-preview.173, )",
+          "Elsa.Activities.Runtime.Core": "[4.0.0-dev, )",
+          "Elsa.Workflows.Design.Core": "[4.0.0-dev, )",
+          "Elsa.Workflows.Runtime.Core": "[4.0.0-dev, )"
+        }
+      },
+      "elsa.agent.anthropic": {
+        "type": "Project",
+        "dependencies": {
+          "Anthropic": "[12.32.0, )",
+          "CShells.Abstractions": "[0.0.30-preview.173, )",
+          "Elsa.Agent.Core": "[4.0.0-dev, )",
+          "Microsoft.Extensions.AI.Abstractions": "[10.5.1, )"
         }
       },
       "elsa.agent.api": {
@@ -479,6 +1062,23 @@
           "CShells.Abstractions": "[0.0.30-preview.173, )",
           "Elsa.Primitives": "[4.0.0-dev, )",
           "Microsoft.Extensions.AI.Abstractions": "[10.5.1, )"
+        }
+      },
+      "elsa.agent.githubcopilot": {
+        "type": "Project",
+        "dependencies": {
+          "CShells.Abstractions": "[0.0.30-preview.173, )",
+          "Elsa.Agent.Core": "[4.0.0-dev, )",
+          "Elsa.Agent.Workflows": "[4.0.0-dev, )",
+          "GitHub.Copilot.SDK": "[1.0.4, )",
+          "Microsoft.Extensions.AI.Abstractions": "[10.5.1, )"
+        }
+      },
+      "elsa.agent.workflows": {
+        "type": "Project",
+        "dependencies": {
+          "CShells.Abstractions": "[0.0.30-preview.173, )",
+          "Elsa.Agent.Core": "[4.0.0-dev, )"
         }
       },
       "elsa.api.aspnetcore": {
@@ -529,10 +1129,48 @@
       "elsa.caching.core": {
         "type": "Project"
       },
+      "elsa.caching.memory": {
+        "type": "Project",
+        "dependencies": {
+          "CShells.Abstractions": "[0.0.30-preview.173, )",
+          "Elsa.Caching.Core": "[4.0.0-dev, )"
+        }
+      },
       "elsa.cluster.core": {
         "type": "Project",
         "dependencies": {
           "Elsa.Primitives": "[4.0.0-dev, )"
+        }
+      },
+      "elsa.cluster.entityframeworkcore": {
+        "type": "Project",
+        "dependencies": {
+          "Elsa.Cluster.Core": "[4.0.0-dev, )",
+          "Elsa.Persistence.EntityFramework": "[4.0.0-dev, )",
+          "Microsoft.EntityFrameworkCore": "[10.0.10, )",
+          "Microsoft.EntityFrameworkCore.Relational": "[10.0.10, )"
+        }
+      },
+      "elsa.cluster.inprocess": {
+        "type": "Project",
+        "dependencies": {
+          "Elsa.Cluster.Core": "[4.0.0-dev, )"
+        }
+      },
+      "elsa.cluster.readability": {
+        "type": "Project",
+        "dependencies": {
+          "CShells.Abstractions": "[0.0.30-preview.173, )",
+          "Elsa.Cluster.Core": "[4.0.0-dev, )",
+          "Elsa.Cluster.InProcess": "[4.0.0-dev, )",
+          "Elsa.Persistence.Schema": "[4.0.0-dev, )",
+          "Nuplane.Loading.Abstractions": "[0.0.11-preview.99, )"
+        }
+      },
+      "elsa.diagnostics.consolelogstreaming": {
+        "type": "Project",
+        "dependencies": {
+          "ConsoleLogStreaming.AspNetCore": "[1.0.0, )"
         }
       },
       "elsa.diagnostics.opentelemetry": {
@@ -551,6 +1189,26 @@
       "elsa.diagnostics.opentelemetry.core": {
         "type": "Project"
       },
+      "elsa.diagnostics.opentelemetry.persistence.entityframeworkcore": {
+        "type": "Project",
+        "dependencies": {
+          "CShells.Abstractions": "[0.0.30-preview.173, )",
+          "Elsa.Diagnostics.OpenTelemetry": "[4.0.0-dev, )",
+          "Elsa.Diagnostics.OpenTelemetry.Core": "[4.0.0-dev, )",
+          "Elsa.Diagnostics.Persistence": "[4.0.0-dev, )",
+          "Elsa.Persistence.EntityFramework": "[4.0.0-dev, )",
+          "Microsoft.EntityFrameworkCore": "[10.0.10, )",
+          "Microsoft.EntityFrameworkCore.Relational": "[10.0.10, )"
+        }
+      },
+      "elsa.diagnostics.persistence": {
+        "type": "Project",
+        "dependencies": {
+          "CShells.Abstractions": "[0.0.30-preview.173, )",
+          "Elsa.Diagnostics.OpenTelemetry.Core": "[4.0.0-dev, )",
+          "Elsa.Diagnostics.StructuredLogs.Core": "[4.0.0-dev, )"
+        }
+      },
       "elsa.diagnostics.structuredlogs": {
         "type": "Project",
         "dependencies": {
@@ -565,6 +1223,18 @@
       },
       "elsa.diagnostics.structuredlogs.core": {
         "type": "Project"
+      },
+      "elsa.diagnostics.structuredlogs.persistence.entityframeworkcore": {
+        "type": "Project",
+        "dependencies": {
+          "CShells.Abstractions": "[0.0.30-preview.173, )",
+          "Elsa.Diagnostics.Persistence": "[4.0.0-dev, )",
+          "Elsa.Diagnostics.StructuredLogs": "[4.0.0-dev, )",
+          "Elsa.Diagnostics.StructuredLogs.Core": "[4.0.0-dev, )",
+          "Elsa.Persistence.EntityFramework": "[4.0.0-dev, )",
+          "Microsoft.EntityFrameworkCore": "[10.0.10, )",
+          "Microsoft.EntityFrameworkCore.Relational": "[10.0.10, )"
+        }
       },
       "elsa.events": {
         "type": "Project",
@@ -618,10 +1288,28 @@
           "Elsa.Primitives": "[4.0.0-dev, )"
         }
       },
+      "elsa.expressions.javascript": {
+        "type": "Project",
+        "dependencies": {
+          "Acornima": "[1.6.1, )",
+          "CShells.Abstractions": "[0.0.30-preview.173, )",
+          "Elsa.Events.Core": "[4.0.0-dev, )",
+          "Elsa.Expressions.JavaScript.Core": "[4.0.0-dev, )",
+          "Elsa.Serialization.Core": "[4.0.0-dev, )"
+        }
+      },
       "elsa.expressions.javascript.core": {
         "type": "Project",
         "dependencies": {
           "Elsa.Expressions.Core": "[4.0.0-dev, )"
+        }
+      },
+      "elsa.expressions.javascript.jint": {
+        "type": "Project",
+        "dependencies": {
+          "CShells.Abstractions": "[0.0.30-preview.173, )",
+          "Elsa.Expressions.JavaScript.Core": "[4.0.0-dev, )",
+          "Jint": "[4.9.1, )"
         }
       },
       "elsa.expressions.javascript.rendering": {
@@ -642,6 +1330,38 @@
         "type": "Project",
         "dependencies": {
           "Elsa.Events.Core": "[4.0.0-dev, )"
+        }
+      },
+      "elsa.expressions.liquid": {
+        "type": "Project",
+        "dependencies": {
+          "CShells.Abstractions": "[0.0.30-preview.173, )",
+          "Elsa.Events.Core": "[4.0.0-dev, )",
+          "Elsa.Expressions.Core": "[4.0.0-dev, )",
+          "Elsa.Serialization.Core": "[4.0.0-dev, )",
+          "Fluid.Core": "[2.31.0, )"
+        }
+      },
+      "elsa.extensionbuilder.api": {
+        "type": "Project",
+        "dependencies": {
+          "Elsa.Api.AspNetCore": "[4.0.0-dev, )",
+          "Elsa.Cluster.Readability": "[4.0.0-dev, )",
+          "Elsa.Foundation.Identity": "[4.0.0-dev, )",
+          "Elsa.Foundation.Identity.Core": "[4.0.0-dev, )",
+          "Elsa.Git": "[4.0.0-dev, )",
+          "Elsa.Modularity.Core": "[4.0.0-dev, )",
+          "Nuplane.Admin": "[0.0.11-preview.99, )"
+        }
+      },
+      "elsa.foundation.dataprotection.entityframeworkcore": {
+        "type": "Project",
+        "dependencies": {
+          "Elsa.Cluster.Core": "[4.0.0-dev, )",
+          "Elsa.Cluster.Readability": "[4.0.0-dev, )",
+          "Elsa.Persistence.EntityFramework": "[4.0.0-dev, )",
+          "Microsoft.EntityFrameworkCore": "[10.0.10, )",
+          "Microsoft.EntityFrameworkCore.Relational": "[10.0.10, )"
         }
       },
       "elsa.foundation.identity": {
@@ -676,7 +1396,60 @@
           "NativeEndpoints": "[1.0.0-preview.6, )"
         }
       },
+      "elsa.foundation.identity.aspnetcoreidentity.entityframeworkcore": {
+        "type": "Project",
+        "dependencies": {
+          "CShells.Abstractions": "[0.0.30-preview.173, )",
+          "Elsa.Foundation.Identity.AspNetCoreIdentity": "[4.0.0-dev, )",
+          "Elsa.Foundation.Identity.Persistence.EntityFrameworkCore": "[4.0.0-dev, )",
+          "Microsoft.EntityFrameworkCore": "[10.0.10, )",
+          "Microsoft.EntityFrameworkCore.Relational": "[10.0.10, )"
+        }
+      },
       "elsa.foundation.identity.core": {
+        "type": "Project"
+      },
+      "elsa.foundation.identity.oidc": {
+        "type": "Project",
+        "dependencies": {
+          "CShells.Abstractions": "[0.0.30-preview.173, )",
+          "Elsa.Foundation.Identity": "[4.0.0-dev, )",
+          "Elsa.Foundation.Identity.Core": "[4.0.0-dev, )",
+          "Elsa.Workflows.Runtime.Core": "[4.0.0-dev, )",
+          "Microsoft.AspNetCore.Authentication.JwtBearer": "[10.0.10, )",
+          "Microsoft.AspNetCore.Authentication.OpenIdConnect": "[10.0.10, )"
+        }
+      },
+      "elsa.foundation.identity.openiddict": {
+        "type": "Project",
+        "dependencies": {
+          "CShells.Abstractions": "[0.0.30-preview.173, )",
+          "Elsa.Foundation.Identity.Core": "[4.0.0-dev, )",
+          "Elsa.Foundation.Identity.OpenIddict.Behavior": "[4.0.0-dev, )"
+        }
+      },
+      "elsa.foundation.identity.openiddict.behavior": {
+        "type": "Project",
+        "dependencies": {
+          "Elsa.Foundation.Identity": "[4.0.0-dev, )",
+          "Elsa.Foundation.Identity.Core": "[4.0.0-dev, )",
+          "OpenIddict.Abstractions": "[7.5.0, )",
+          "OpenIddict.AspNetCore": "[7.5.0, )"
+        }
+      },
+      "elsa.foundation.identity.persistence.entityframeworkcore": {
+        "type": "Project",
+        "dependencies": {
+          "CShells.Abstractions": "[0.0.30-preview.173, )",
+          "Elsa.Foundation.Identity": "[4.0.0-dev, )",
+          "Elsa.Foundation.Identity.Core": "[4.0.0-dev, )",
+          "Elsa.Persistence.EntityFramework": "[4.0.0-dev, )",
+          "Elsa.Workflows.Runtime.Core": "[4.0.0-dev, )",
+          "Microsoft.EntityFrameworkCore": "[10.0.10, )",
+          "Microsoft.EntityFrameworkCore.Relational": "[10.0.10, )"
+        }
+      },
+      "elsa.git": {
         "type": "Project"
       },
       "elsa.http": {
@@ -693,8 +1466,37 @@
       "elsa.http.core": {
         "type": "Project"
       },
+      "elsa.http.javascript": {
+        "type": "Project",
+        "dependencies": {
+          "CShells.Abstractions": "[0.0.30-preview.173, )",
+          "Elsa.Events.Core": "[4.0.0-dev, )",
+          "Elsa.Expressions.JavaScript.Core": "[4.0.0-dev, )",
+          "Elsa.Expressions.JavaScript.Rendering.Core": "[4.0.0-dev, )",
+          "Elsa.Http.Core": "[4.0.0-dev, )"
+        }
+      },
       "elsa.locking.core": {
         "type": "Project"
+      },
+      "elsa.locking.database": {
+        "type": "Project",
+        "dependencies": {
+          "CShells.Abstractions": "[0.0.30-preview.173, )",
+          "DistributedLock.MySql": "[1.0.2, )",
+          "DistributedLock.Postgres": "[1.3.1, )",
+          "DistributedLock.SqlServer": "[1.0.7, )",
+          "Elsa.Locking.Core": "[4.0.0-dev, )"
+        }
+      },
+      "elsa.locking.filesystem": {
+        "type": "Project",
+        "dependencies": {
+          "CShells.Abstractions": "[0.0.30-preview.173, )",
+          "DistributedLock.FileSystem": "[1.0.3, )",
+          "Elsa.Cluster.Core": "[4.0.0-dev, )",
+          "Elsa.Locking.Core": "[4.0.0-dev, )"
+        }
       },
       "elsa.maps.generator": {
         "type": "Project"
@@ -730,6 +1532,17 @@
       "elsa.modularity.core": {
         "type": "Project"
       },
+      "elsa.modularity.entityframework": {
+        "type": "Project",
+        "dependencies": {
+          "CShells": "[0.0.30-preview.173, )",
+          "CShells.Abstractions": "[0.0.30-preview.173, )",
+          "Elsa.Modularity.Core": "[4.0.0-dev, )",
+          "Elsa.Persistence.EntityFramework": "[4.0.0-dev, )",
+          "Microsoft.EntityFrameworkCore": "[10.0.10, )",
+          "Microsoft.EntityFrameworkCore.Relational": "[10.0.10, )"
+        }
+      },
       "elsa.modularity.nuplane": {
         "type": "Project",
         "dependencies": {
@@ -738,6 +1551,23 @@
           "Elsa.Specifications.PackageManifests": "[0.0.1-preview.8, )",
           "Nuplane.Admin": "[0.0.11-preview.99, )"
         }
+      },
+      "elsa.modularity.planning": {
+        "type": "Project"
+      },
+      "elsa.persistence.entityframework": {
+        "type": "Project",
+        "dependencies": {
+          "CShells": "[0.0.30-preview.173, )",
+          "CShells.Abstractions": "[0.0.30-preview.173, )",
+          "Elsa.Persistence.Schema": "[4.0.0-dev, )",
+          "Elsa.Primitives": "[4.0.0-dev, )",
+          "Microsoft.EntityFrameworkCore": "[10.0.10, )",
+          "Microsoft.EntityFrameworkCore.Relational": "[10.0.10, )"
+        }
+      },
+      "elsa.persistence.schema": {
+        "type": "Project"
       },
       "elsa.pipelines.core": {
         "type": "Project"
@@ -752,10 +1582,60 @@
           "Elsa.Primitives": "[4.0.0-dev, )"
         }
       },
+      "elsa.secrets": {
+        "type": "Project",
+        "dependencies": {
+          "CShells.Abstractions": "[0.0.30-preview.173, )",
+          "Elsa.Attention.Core": "[4.0.0-dev, )",
+          "Elsa.Expressions.Core": "[4.0.0-dev, )",
+          "Elsa.Secrets.Core": "[4.0.0-dev, )",
+          "Elsa.Serialization.Core": "[4.0.0-dev, )"
+        }
+      },
+      "elsa.secrets.api": {
+        "type": "Project",
+        "dependencies": {
+          "CShells.Abstractions": "[0.0.30-preview.173, )",
+          "CShells.AspNetCore.Abstractions": "[0.0.30-preview.173, )",
+          "Elsa.Api.AspNetCore": "[4.0.0-dev, )",
+          "Elsa.Foundation.Identity": "[4.0.0-dev, )",
+          "Elsa.Foundation.Identity.Core": "[4.0.0-dev, )",
+          "Elsa.Secrets": "[4.0.0-dev, )",
+          "Elsa.Secrets.Core": "[4.0.0-dev, )",
+          "Microsoft.AspNetCore.OpenApi": "[10.0.10, )",
+          "NativeEndpoints": "[1.0.0-preview.6, )"
+        }
+      },
       "elsa.secrets.core": {
         "type": "Project",
         "dependencies": {
           "Elsa.Primitives": "[4.0.0-dev, )"
+        }
+      },
+      "elsa.secrets.nuplane": {
+        "type": "Project",
+        "dependencies": {
+          "CShells.Abstractions": "[0.0.30-preview.173, )",
+          "Elsa.Secrets.Core": "[4.0.0-dev, )",
+          "Nuplane": "[0.0.11-preview.99, )"
+        }
+      },
+      "elsa.secrets.persistence.entityframeworkcore": {
+        "type": "Project",
+        "dependencies": {
+          "CShells.Abstractions": "[0.0.30-preview.173, )",
+          "Elsa.Persistence.EntityFramework": "[4.0.0-dev, )",
+          "Elsa.Secrets.Core": "[4.0.0-dev, )",
+          "Microsoft.EntityFrameworkCore": "[10.0.10, )",
+          "Microsoft.EntityFrameworkCore.Relational": "[10.0.10, )"
+        }
+      },
+      "elsa.secrets.workflows": {
+        "type": "Project",
+        "dependencies": {
+          "CShells.Abstractions": "[0.0.30-preview.173, )",
+          "Elsa.Secrets.Core": "[4.0.0-dev, )",
+          "Elsa.Workflows.Runtime.Core": "[4.0.0-dev, )"
         }
       },
       "elsa.serialization.core": {
@@ -773,6 +1653,17 @@
           "Newtonsoft.Json": "[13.0.4, )"
         }
       },
+      "elsa.serialization.systemtext": {
+        "type": "Project",
+        "dependencies": {
+          "CShells.Abstractions": "[0.0.30-preview.173, )",
+          "Elsa.Events.Core": "[4.0.0-dev, )",
+          "Elsa.Expressions.Core": "[4.0.0-dev, )",
+          "Elsa.Primitives": "[4.0.0-dev, )",
+          "Elsa.Serialization.Core": "[4.0.0-dev, )",
+          "Elsa.Tasks.Core": "[4.0.0-dev, )"
+        }
+      },
       "elsa.studio.preferences.api": {
         "type": "Project",
         "dependencies": {
@@ -788,6 +1679,16 @@
       },
       "elsa.studio.preferences.core": {
         "type": "Project"
+      },
+      "elsa.studio.preferences.persistence.entityframeworkcore": {
+        "type": "Project",
+        "dependencies": {
+          "CShells.Abstractions": "[0.0.30-preview.173, )",
+          "Elsa.Persistence.EntityFramework": "[4.0.0-dev, )",
+          "Elsa.Studio.Preferences.Core": "[4.0.0-dev, )",
+          "Microsoft.EntityFrameworkCore": "[10.0.10, )",
+          "Microsoft.EntityFrameworkCore.Relational": "[10.0.10, )"
+        }
       },
       "elsa.tasks": {
         "type": "Project",
@@ -826,6 +1727,17 @@
           "NativeEndpoints": "[1.0.0-preview.6, )"
         }
       },
+      "elsa.workflows.dashboard.persistence.entityframeworkcore": {
+        "type": "Project",
+        "dependencies": {
+          "CShells.Abstractions": "[0.0.30-preview.173, )",
+          "Elsa.Workflows.Dashboard": "[4.0.0-dev, )",
+          "Elsa.Workflows.Design.Persistence.EntityFrameworkCore": "[4.0.0-dev, )",
+          "Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore": "[4.0.0-dev, )",
+          "Microsoft.EntityFrameworkCore": "[10.0.10, )",
+          "Microsoft.EntityFrameworkCore.Relational": "[10.0.10, )"
+        }
+      },
       "elsa.workflows.design.api": {
         "type": "Project",
         "dependencies": {
@@ -858,6 +1770,15 @@
           "Elsa.Primitives": "[4.0.0-dev, )"
         }
       },
+      "elsa.workflows.design.javascript": {
+        "type": "Project",
+        "dependencies": {
+          "CShells.Abstractions": "[0.0.30-preview.173, )",
+          "Elsa.Events.Core": "[4.0.0-dev, )",
+          "Elsa.Expressions.JavaScript.Rendering.Core": "[4.0.0-dev, )",
+          "Elsa.Workflows.Design.Core": "[4.0.0-dev, )"
+        }
+      },
       "elsa.workflows.design.persistence.core": {
         "type": "Project",
         "dependencies": {
@@ -865,6 +1786,58 @@
           "Elsa.Tasks.Core": "[4.0.0-dev, )",
           "Elsa.Workflows.Design.Core": "[4.0.0-dev, )",
           "Elsa.Workflows.Design.Validations.Core": "[4.0.0-dev, )"
+        }
+      },
+      "elsa.workflows.design.persistence.entityframeworkcore": {
+        "type": "Project",
+        "dependencies": {
+          "CShells.Abstractions": "[0.0.30-preview.173, )",
+          "Elsa.Events.Core": "[4.0.0-dev, )",
+          "Elsa.Locking.Core": "[4.0.0-dev, )",
+          "Elsa.Persistence.EntityFramework": "[4.0.0-dev, )",
+          "Elsa.Primitives": "[4.0.0-dev, )",
+          "Elsa.Serialization.Core": "[4.0.0-dev, )",
+          "Elsa.Tasks.Core": "[4.0.0-dev, )",
+          "Elsa.Workflows.Design.Persistence.Core": "[4.0.0-dev, )",
+          "Elsa.Workflows.Design.Validations.Core": "[4.0.0-dev, )",
+          "Elsa.Workflows.Runtime.Core": "[4.0.0-dev, )",
+          "Microsoft.EntityFrameworkCore": "[10.0.10, )",
+          "Microsoft.EntityFrameworkCore.Relational": "[10.0.10, )"
+        }
+      },
+      "elsa.workflows.design.reconciliation": {
+        "type": "Project",
+        "dependencies": {
+          "CShells.Abstractions": "[0.0.30-preview.173, )",
+          "Elsa.Events.Core": "[4.0.0-dev, )",
+          "Elsa.Locking.Core": "[4.0.0-dev, )",
+          "Elsa.Serialization.Core": "[4.0.0-dev, )",
+          "Elsa.Tasks.Core": "[4.0.0-dev, )",
+          "Elsa.Workflows.Design.Core": "[4.0.0-dev, )",
+          "Elsa.Workflows.Design.Persistence.Core": "[4.0.0-dev, )",
+          "Elsa.Workflows.Design.Validations.Core": "[4.0.0-dev, )"
+        }
+      },
+      "elsa.workflows.design.reconciliation.git": {
+        "type": "Project",
+        "dependencies": {
+          "CShells.Abstractions": "[0.0.30-preview.173, )",
+          "Elsa.Git": "[4.0.0-dev, )",
+          "Elsa.Serialization.Core": "[4.0.0-dev, )",
+          "Elsa.Tasks.Core": "[4.0.0-dev, )",
+          "Elsa.Workflows.Design.Core": "[4.0.0-dev, )",
+          "Elsa.Workflows.Design.Persistence.Core": "[4.0.0-dev, )",
+          "Elsa.Workflows.Design.Reconciliation": "[4.0.0-dev, )",
+          "Elsa.Workflows.Design.Validations.Core": "[4.0.0-dev, )"
+        }
+      },
+      "elsa.workflows.design.reconciliation.json": {
+        "type": "Project",
+        "dependencies": {
+          "CShells.Abstractions": "[0.0.30-preview.173, )",
+          "Elsa.Serialization.Core": "[4.0.0-dev, )",
+          "Elsa.Workflows.Design.Core": "[4.0.0-dev, )",
+          "Elsa.Workflows.Design.Reconciliation": "[4.0.0-dev, )"
         }
       },
       "elsa.workflows.design.validations": {
@@ -948,6 +1921,21 @@
           "Elsa.Workflows.Runtime.Core": "[4.0.0-dev, )"
         }
       },
+      "elsa.workflows.publishing.persistence.entityframeworkcore": {
+        "type": "Project",
+        "dependencies": {
+          "CShells.Abstractions": "[0.0.30-preview.173, )",
+          "Elsa.Activities.Design.Persistence.Core": "[4.0.0-dev, )",
+          "Elsa.Activities.Design.Persistence.EntityFrameworkCore": "[4.0.0-dev, )",
+          "Elsa.Persistence.EntityFramework": "[4.0.0-dev, )",
+          "Elsa.Workflows.Design.Persistence.EntityFrameworkCore": "[4.0.0-dev, )",
+          "Elsa.Workflows.Publishing.Core": "[4.0.0-dev, )",
+          "Elsa.Workflows.Runtime.Core": "[4.0.0-dev, )",
+          "Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore": "[4.0.0-dev, )",
+          "Microsoft.EntityFrameworkCore": "[10.0.10, )",
+          "Microsoft.EntityFrameworkCore.Relational": "[10.0.10, )"
+        }
+      },
       "elsa.workflows.runtime": {
         "type": "Project",
         "dependencies": {
@@ -981,6 +1969,39 @@
           "Elsa.Serialization.Core": "[4.0.0-dev, )"
         }
       },
+      "elsa.workflows.runtime.distributed": {
+        "type": "Project",
+        "dependencies": {
+          "CShells.Abstractions": "[0.0.30-preview.173, )",
+          "Elsa.Cluster.Core": "[4.0.0-dev, )",
+          "Elsa.Cluster.InProcess": "[4.0.0-dev, )",
+          "Elsa.Tasks.Core": "[4.0.0-dev, )",
+          "Elsa.Tasks.Schedules": "[4.0.0-dev, )",
+          "Elsa.Workflows.Runtime": "[4.0.0-dev, )",
+          "Elsa.Workflows.Runtime.Core": "[4.0.0-dev, )"
+        }
+      },
+      "elsa.workflows.runtime.distributed.persistence.entityframeworkcore": {
+        "type": "Project",
+        "dependencies": {
+          "CShells.Abstractions": "[0.0.30-preview.173, )",
+          "Elsa.Persistence.EntityFramework": "[4.0.0-dev, )",
+          "Elsa.Workflows.Runtime.Distributed": "[4.0.0-dev, )",
+          "Microsoft.EntityFrameworkCore": "[10.0.10, )",
+          "Microsoft.EntityFrameworkCore.Relational": "[10.0.10, )"
+        }
+      },
+      "elsa.workflows.runtime.http": {
+        "type": "Project",
+        "dependencies": {
+          "CShells.Abstractions": "[0.0.30-preview.173, )",
+          "Elsa.Http.Core": "[4.0.0-dev, )",
+          "Elsa.Primitives": "[4.0.0-dev, )",
+          "Elsa.Tasks.Core": "[4.0.0-dev, )",
+          "Elsa.Tasks.Schedules": "[4.0.0-dev, )",
+          "Elsa.Workflows.Runtime.Core": "[4.0.0-dev, )"
+        }
+      },
       "elsa.workflows.runtime.javascript": {
         "type": "Project",
         "dependencies": {
@@ -997,11 +2018,67 @@
           "NativeEndpoints": "[1.0.0-preview.6, )"
         }
       },
+      "elsa.workflows.runtime.persistence.entityframeworkcore": {
+        "type": "Project",
+        "dependencies": {
+          "CShells.Abstractions": "[0.0.30-preview.173, )",
+          "Elsa.Persistence.EntityFramework": "[4.0.0-dev, )",
+          "Elsa.Tasks.Core": "[4.0.0-dev, )",
+          "Elsa.Workflows.Runtime": "[4.0.0-dev, )",
+          "Elsa.Workflows.Runtime.Core": "[4.0.0-dev, )",
+          "Microsoft.EntityFrameworkCore": "[10.0.10, )",
+          "Microsoft.EntityFrameworkCore.Relational": "[10.0.10, )"
+        }
+      },
+      "elsa.workflows.runtime.reconciliation": {
+        "type": "Project",
+        "dependencies": {
+          "CShells.Abstractions": "[0.0.30-preview.173, )",
+          "Elsa.Activities.Runtime": "[4.0.0-dev, )",
+          "Elsa.Locking.Core": "[4.0.0-dev, )",
+          "Elsa.Serialization.Core": "[4.0.0-dev, )",
+          "Elsa.Tasks.Core": "[4.0.0-dev, )",
+          "Elsa.Workflows.Runtime": "[4.0.0-dev, )",
+          "Elsa.Workflows.Runtime.Core": "[4.0.0-dev, )",
+          "Elsa.Workflows.Runtime.Reconciliation.Core": "[4.0.0-dev, )"
+        }
+      },
       "elsa.workflows.runtime.reconciliation.core": {
         "type": "Project",
         "dependencies": {
           "Elsa.Primitives": "[4.0.0-dev, )",
           "Elsa.Serialization.Core": "[4.0.0-dev, )",
+          "Elsa.Workflows.Runtime.Core": "[4.0.0-dev, )"
+        }
+      },
+      "elsa.workflows.runtime.referencegarbagecollection": {
+        "type": "Project",
+        "dependencies": {
+          "CShells.Abstractions": "[0.0.30-preview.173, )",
+          "Elsa.Tasks.Core": "[4.0.0-dev, )",
+          "Elsa.Tasks.Schedules": "[4.0.0-dev, )",
+          "Elsa.Workflows.Runtime": "[4.0.0-dev, )",
+          "Elsa.Workflows.Runtime.Core": "[4.0.0-dev, )"
+        }
+      },
+      "elsa.workflows.runtime.resumption": {
+        "type": "Project",
+        "dependencies": {
+          "CShells.Abstractions": "[0.0.30-preview.173, )",
+          "Elsa.Tasks.Core": "[4.0.0-dev, )",
+          "Elsa.Tasks.Schedules": "[4.0.0-dev, )",
+          "Elsa.Workflows.Runtime": "[4.0.0-dev, )",
+          "Elsa.Workflows.Runtime.Core": "[4.0.0-dev, )"
+        }
+      },
+      "elsa.workflows.runtime.scheduling": {
+        "type": "Project",
+        "dependencies": {
+          "CShells.Abstractions": "[0.0.30-preview.173, )",
+          "Cronos": "[0.13.0, )",
+          "Elsa.Tasks.Core": "[4.0.0-dev, )",
+          "Elsa.Tasks.Schedules": "[4.0.0-dev, )",
+          "Elsa.Workflows.Runtime": "[4.0.0-dev, )",
           "Elsa.Workflows.Runtime.Core": "[4.0.0-dev, )"
         }
       },
@@ -1023,6 +2100,20 @@
           "Elsa.Workflows.Runtime.Core": "[4.0.0-dev, )",
           "Elsa3.Models": "[4.0.0-dev, )",
           "NativeEndpoints": "[1.0.0-preview.6, )"
+        }
+      },
+      "elsa3.activities.design.import.persistence.entityframeworkcore": {
+        "type": "Project",
+        "dependencies": {
+          "CShells.Abstractions": "[0.0.30-preview.173, )",
+          "Elsa.Activities.Design.Persistence.EntityFrameworkCore": "[4.0.0-dev, )",
+          "Elsa.Persistence.EntityFramework": "[4.0.0-dev, )",
+          "Elsa.Serialization.Core": "[4.0.0-dev, )",
+          "Elsa.Workflows.Design.Persistence.EntityFrameworkCore": "[4.0.0-dev, )",
+          "Elsa.Workflows.Runtime.Core": "[4.0.0-dev, )",
+          "Elsa3.Activities.Design.Import": "[4.0.0-dev, )",
+          "Microsoft.EntityFrameworkCore": "[10.0.10, )",
+          "Microsoft.EntityFrameworkCore.Relational": "[10.0.10, )"
         }
       },
       "elsa3.mapping": {
@@ -1048,6 +2139,15 @@
         "resolved": "1.6.1",
         "contentHash": "EB2vFgpNar8DrC+KLJv8MG6YIU2xqNyrq8GpL69vectPCXoaq6XyZGb/VHbfPVYul7dscO1Mw30eblrxs05RHg=="
       },
+      "Anthropic": {
+        "type": "CentralTransitive",
+        "requested": "[12.32.0, )",
+        "resolved": "12.32.0",
+        "contentHash": "1fL0MPfy60WNrr76YbhiSGWKccb6ASdSDZJItvb0O+xqFYumP8qr40xPqTYOKU+nV3m9jugNNR9n+NSWmjujew==",
+        "dependencies": {
+          "Microsoft.Extensions.AI.Abstractions": "10.5.1"
+        }
+      },
       "Bpmn.Interchange": {
         "type": "CentralTransitive",
         "requested": "[0.1.1-preview.19, )",
@@ -1062,6 +2162,16 @@
         "requested": "[0.1.1-preview.19, )",
         "resolved": "0.1.1-preview.19",
         "contentHash": "ci5fWsH3V2vvFf9p/zTrKZ3dw1ZtSy0YT3hUnDULuP8q0vWe6NOCQj3y4GFgoQKktWbom4MUAGcWSfZXenT+5w=="
+      },
+      "ConsoleLogStreaming.AspNetCore": {
+        "type": "CentralTransitive",
+        "requested": "[1.0.0, )",
+        "resolved": "1.0.0",
+        "contentHash": "CRcExzprTyaVfQ0KLhWKfVkaZSD9S9vRgZZovf8Q+0gxe95uYnVjlAzNtBzWdkTC9q9TG34FrnqEnfZGixhwrw==",
+        "dependencies": {
+          "ConsoleLogStreaming.Endpoints.MinimalApi": "1.0.0",
+          "ConsoleLogStreaming.SignalR": "1.0.0"
+        }
       },
       "Cronos": {
         "type": "CentralTransitive",
@@ -1110,6 +2220,45 @@
           "JetBrains.Annotations": "2025.2.4"
         }
       },
+      "DistributedLock.FileSystem": {
+        "type": "CentralTransitive",
+        "requested": "[1.0.3, )",
+        "resolved": "1.0.3",
+        "contentHash": "Q88LTgHXzcQq9ATa6SZSqAE+VFyIapNGFs+XG7nHx+SpzUf1ACnZ8iyz6fAT/ojH+OLNnWwF3kCYh83s+vnCbA==",
+        "dependencies": {
+          "DistributedLock.Core": "[1.0.8, 1.1.0)"
+        }
+      },
+      "DistributedLock.MySql": {
+        "type": "CentralTransitive",
+        "requested": "[1.0.2, )",
+        "resolved": "1.0.2",
+        "contentHash": "1FIaBNM1/EmFeKc9qFNGf+8D/g3ZyBXoGYp0j+DQqKdfJJ500m45zYR4PWFsy1RYUL3E8VNnSvGpxUhB6OKrww==",
+        "dependencies": {
+          "DistributedLock.Core": "[1.0.6, 1.1.0)",
+          "MySqlConnector": "2.3.5"
+        }
+      },
+      "DistributedLock.Postgres": {
+        "type": "CentralTransitive",
+        "requested": "[1.3.1, )",
+        "resolved": "1.3.1",
+        "contentHash": "CKnxwDD67dfNhLq28neGEqYbAnSeinSDQtUfdgHNvtEgik+V8u+0m6L/TSOV6ds02hjVVH/5Qo8gsOm5TSVCuQ==",
+        "dependencies": {
+          "DistributedLock.Core": "[1.0.9, 1.1.0)",
+          "Npgsql": "8.0.6"
+        }
+      },
+      "DistributedLock.SqlServer": {
+        "type": "CentralTransitive",
+        "requested": "[1.0.7, )",
+        "resolved": "1.0.7",
+        "contentHash": "EyyEvNKzaSrx4iJbs33lwSLXRTI3TyeSdKBAN2Pld2CYnKg4AhGvghBUQFUUPuTRmT/ff9GGxNayEaKiyDbUUg==",
+        "dependencies": {
+          "DistributedLock.Core": "[1.0.9, 1.1.0)",
+          "Microsoft.Data.SqlClient": "6.1.4"
+        }
+      },
       "Elsa.Specifications.PackageManifests": {
         "type": "CentralTransitive",
         "requested": "[0.0.1-preview.8, )",
@@ -1129,6 +2278,24 @@
           "TimeZoneConverter": "7.2.0"
         }
       },
+      "GitHub.Copilot.SDK": {
+        "type": "CentralTransitive",
+        "requested": "[1.0.4, )",
+        "resolved": "1.0.4",
+        "contentHash": "tFtrvaLLN/zXVQKQfH72B929Y6ggBE7X4rfaqrRhWnh4ITFXnpuBL+Lsl39aH/wn49jAEkANJl0OTCreSEzBOw==",
+        "dependencies": {
+          "Microsoft.Extensions.AI.Abstractions": "10.2.0"
+        }
+      },
+      "Jint": {
+        "type": "CentralTransitive",
+        "requested": "[4.9.1, )",
+        "resolved": "4.9.1",
+        "contentHash": "y878epycKuwyksZZOhB9LkuQed4P/v4yDdYK3H6lYJObGzhya6Saa9smWOLFscRDhgB4CVaXIYKPQEpNscwbNg==",
+        "dependencies": {
+          "Acornima": "1.6.1"
+        }
+      },
       "JsonSchema.Net": {
         "type": "CentralTransitive",
         "requested": "[9.2.0, )",
@@ -1136,6 +2303,60 @@
         "contentHash": "pc1hr16zNQSxVsOSIYWliE3rtl5E4MwRXReflPf60l5tSvzMfl65eJV6M+iPXhZ2Ui5o078LJ2pS9O1o5ZT1zQ==",
         "dependencies": {
           "JsonPointer.Net": "7.0.1"
+        }
+      },
+      "Microsoft.AspNetCore.Authentication.JwtBearer": {
+        "type": "CentralTransitive",
+        "requested": "[10.0.10, )",
+        "resolved": "10.0.10",
+        "contentHash": "VAcqS42zb9WJd9DjPdkVTS5YrQENmNzPNJuRu8VAW7x3TEWUipc4d4hHzVJdFB0h/KLdr4XcXZzRHcUOKVanMQ==",
+        "dependencies": {
+          "Microsoft.IdentityModel.Protocols.OpenIdConnect": "8.19.2"
+        }
+      },
+      "Microsoft.AspNetCore.Authentication.OpenIdConnect": {
+        "type": "CentralTransitive",
+        "requested": "[10.0.10, )",
+        "resolved": "10.0.10",
+        "contentHash": "JSFSrOzl1N1iBbUIVGVdB+WaKeswxHR6qJAlE+PxImYZPhSM8KlrBRRSi3Oxytpx3DY25W8BJMKHvtMbHBxFZg==",
+        "dependencies": {
+          "Microsoft.IdentityModel.Protocols.OpenIdConnect": "8.19.2"
+        }
+      },
+      "Microsoft.Data.SqlClient": {
+        "type": "CentralTransitive",
+        "requested": "[7.0.2, )",
+        "resolved": "7.0.2",
+        "contentHash": "zwv76lANFQQI6Gmp6ntkzMWIWVqm8Wf4Mz00AeGCk1n8HCi5afi6bNynSe18uI0xeL0n6J+Myjk9AiIsL5oSqw==",
+        "dependencies": {
+          "Microsoft.Bcl.Cryptography": "9.0.13",
+          "Microsoft.Data.SqlClient.Extensions.Abstractions": "[7.0.2, 8.0.0)",
+          "Microsoft.Data.SqlClient.Internal.Logging": "[7.0.2, 8.0.0)",
+          "Microsoft.Data.SqlClient.SNI.runtime": "[6.0.2, 7.0.0)",
+          "Microsoft.IdentityModel.JsonWebTokens": "8.16.0",
+          "Microsoft.IdentityModel.Protocols.OpenIdConnect": "8.16.0",
+          "Microsoft.SqlServer.Server": "[1.0.0, 2.0.0)",
+          "System.Configuration.ConfigurationManager": "9.0.13",
+          "System.Security.Cryptography.Pkcs": "9.0.13"
+        }
+      },
+      "Microsoft.EntityFrameworkCore": {
+        "type": "CentralTransitive",
+        "requested": "[10.0.10, )",
+        "resolved": "10.0.10",
+        "contentHash": "a0V7zj/VbYP6dTdWpUgE/r2PuLKtUGe2aJ0lVKkn/wP9ZhaxUz2kQydVfvOjCv2SKxlrqdBfHhPD4Cvlf+4ffA==",
+        "dependencies": {
+          "Microsoft.EntityFrameworkCore.Abstractions": "10.0.10",
+          "Microsoft.EntityFrameworkCore.Analyzers": "10.0.10"
+        }
+      },
+      "Microsoft.EntityFrameworkCore.Relational": {
+        "type": "CentralTransitive",
+        "requested": "[10.0.10, )",
+        "resolved": "10.0.10",
+        "contentHash": "wNonj40aZxia+GtuBiiD6ZqVh4h6y5Nje1bGdmzZ8/ui0QRsAN+S0SIrLHFCEGbG9cDbeaE40sh+Lr7o9rRs6g==",
+        "dependencies": {
+          "Microsoft.EntityFrameworkCore": "10.0.10"
         }
       },
       "Microsoft.Extensions.AI.Abstractions": {
@@ -1161,6 +2382,12 @@
         "requested": "[13.0.4, )",
         "resolved": "13.0.4",
         "contentHash": "pdgNNMai3zv51W5aq268sujXUyx7SNdE2bj1wZcWjAQrKMFZV260lbqYop1d2GM67JI1huLRwxo9ZqnfF/lC6A=="
+      },
+      "Npgsql": {
+        "type": "CentralTransitive",
+        "requested": "[10.0.3, )",
+        "resolved": "10.0.3",
+        "contentHash": "7nb5YzXuvWWJxB0J8DiyL3we+X4FOctZrt0fIBnucOIaIevFEEwGQVZKtiu9olXdlNAK1eNgqSral6r/jlhI4w=="
       },
       "Nuplane": {
         "type": "CentralTransitive",
@@ -1194,6 +2421,46 @@
         "dependencies": {
           "Nuplane.Abstractions": "0.0.11-preview.99"
         }
+      },
+      "OpenIddict.Abstractions": {
+        "type": "CentralTransitive",
+        "requested": "[7.5.0, )",
+        "resolved": "7.5.0",
+        "contentHash": "4m3smhkdeWITo1UWc3zYyGketh0ELn6UZRuZEnzcyS6fuflvl1MNSHbg1wPTTGldlxcq6VwWvVvKWyaTW/25Ig==",
+        "dependencies": {
+          "Microsoft.IdentityModel.Tokens": "8.16.0"
+        }
+      },
+      "OpenIddict.AspNetCore": {
+        "type": "CentralTransitive",
+        "requested": "[7.5.0, )",
+        "resolved": "7.5.0",
+        "contentHash": "D8r7Tve0mTiu27tPWhjOpGnLsblJt/vJWbzSyO4nS5Ve2IIC07QS96uKlgImADU/WW4gLWHM7gVDalHs1c8oSg==",
+        "dependencies": {
+          "OpenIddict": "7.5.0",
+          "OpenIddict.Client.AspNetCore": "7.5.0",
+          "OpenIddict.Client.DataProtection": "7.5.0",
+          "OpenIddict.Server.AspNetCore": "7.5.0",
+          "OpenIddict.Server.DataProtection": "7.5.0",
+          "OpenIddict.Validation.AspNetCore": "7.5.0",
+          "OpenIddict.Validation.DataProtection": "7.5.0"
+        }
+      },
+      "SQLitePCLRaw.bundle_e_sqlite3": {
+        "type": "CentralTransitive",
+        "requested": "[3.0.3, )",
+        "resolved": "3.0.3",
+        "contentHash": "Zt8jmSL5zcDWGk8rmzhWBJ6IRyLWh1yWS04Pg72+GIvo3Ba4E/rG4Y/4l7AWlSEogEbzyKRTCXUAs1v/O7Pkkg==",
+        "dependencies": {
+          "SQLitePCLRaw.config.e_sqlite3": "3.0.3",
+          "SourceGear.sqlite3": "3.50.4.5"
+        }
+      },
+      "System.Reflection.MetadataLoadContext": {
+        "type": "CentralTransitive",
+        "requested": "[10.0.8, )",
+        "resolved": "10.0.8",
+        "contentHash": "w9sjhVDe4AKkyswUctVK3oCmZHaA7g+ZUG/xDmzgbsOGxmeRQA6lCQeAh6r75K0lcsLlfBzZXmsNblndyNJhxw=="
       }
     }
   }

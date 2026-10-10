@@ -14,7 +14,7 @@ public sealed class EfSchemaFamilyRestampGuardTests
 {
     [Fact]
     public void Every_in_place_content_rewrite_restamps_the_row() =>
-        AssertNone(Persistence.RestampViolations(), "A write that changes a declared content column writes it in the current format, so it " +
+        AssertNone(EfSchemaFamilyTestFixtures.Persistence.RestampViolations(), "A write that changes a declared content column writes it in the current format, so it " +
             "stamps the row with the current version in the same member; left at an older stamp, the next read would upcast " +
             "content that is already current (spec 180, FR-014):");
 
@@ -27,7 +27,7 @@ public sealed class EfSchemaFamilyRestampGuardTests
     /// </summary>
     [Fact]
     public void Every_full_row_rewrite_of_a_stamped_row_sets_the_stamp() =>
-        AssertNone(Persistence.FullRowRewriteViolations(), "A method that copies every mapped non-key column of a stamped row from another row of " +
+        AssertNone(EfSchemaFamilyTestFixtures.Persistence.FullRowRewriteViolations(), "A method that copies every mapped non-key column of a stamped row from another row of " +
             "the same type is a full rewrite, so it stamps the target row to the write version; a write that only bumps a " +
             "concurrency revision need not (spec 180, FR-014, 2026-09-28 note):");
 
@@ -39,7 +39,7 @@ public sealed class EfSchemaFamilyRestampGuardTests
     /// </summary>
     [Fact]
     public void Every_restamp_writes_every_declared_content_column_of_its_row() =>
-        AssertNone(Persistence.RestampCompletenessViolations(), "A member that stamps a row directly assigns every content column its row's " +
+        AssertNone(EfSchemaFamilyTestFixtures.Persistence.RestampCompletenessViolations(), "A member that stamps a row directly assigns every content column its row's " +
             "entity type declares, from upcast values, in the same member; a column left unwritten still holds its old format under " +
             "a stamp that now claims it is current (spec 180, FR-014; #2144):");
 

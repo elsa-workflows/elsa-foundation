@@ -12692,13 +12692,73 @@
         },
         {
           "type": "internal",
+          "id": "Elsa.Activities.ControlFlow",
+          "path": "src/essentials/Activities/ControlFlow/Elsa.Activities.ControlFlow.csproj"
+        },
+        {
+          "type": "internal",
           "id": "Elsa.Activities.Design.Api",
           "path": "src/essentials/Activities/Design/Api/Elsa.Activities.Design.Api.csproj"
         },
         {
           "type": "internal",
+          "id": "Elsa.Activities.Design.Reconciliation.Clr",
+          "path": "src/essentials/Activities/Design/Reconciliation/Clr/Elsa.Activities.Design.Reconciliation.Clr.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Activities.Design.Reconciliation",
+          "path": "src/essentials/Activities/Design/Reconciliation/Elsa.Activities.Design.Reconciliation/Elsa.Activities.Design.Reconciliation.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Activities.Design.Reconciliation.Json",
+          "path": "src/essentials/Activities/Design/Reconciliation/Json/Elsa.Activities.Design.Reconciliation.Json.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Activities.DispatchWorkflow.Design",
+          "path": "src/essentials/Activities/DispatchWorkflow/Design/Elsa.Activities.DispatchWorkflow.Design.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Activities.Flowchart",
+          "path": "src/essentials/Activities/Flowchart/Elsa.Activities.Flowchart.csproj"
+        },
+        {
+          "type": "internal",
           "id": "Elsa.Activities.Graph.Design",
           "path": "src/essentials/Activities/Graph/Design/Elsa.Activities.Graph.Design.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Activities.Graph.Runtime",
+          "path": "src/essentials/Activities/Graph/Runtime/Elsa.Activities.Graph.Runtime.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Activities.Http",
+          "path": "src/essentials/Activities/Http/Elsa.Activities.Http.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Activities.Primitives",
+          "path": "src/essentials/Activities/Primitives/Elsa.Activities.Primitives.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Activities.Scheduling",
+          "path": "src/essentials/Activities/Scheduling/Elsa.Activities.Scheduling.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Activities.Scripting",
+          "path": "src/essentials/Activities/Scripting/Elsa.Activities.Scripting.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Activities.Sequence",
+          "path": "src/essentials/Activities/Sequence/Elsa.Activities.Sequence.csproj"
         },
         {
           "type": "internal",
@@ -12717,13 +12777,33 @@
         },
         {
           "type": "internal",
+          "id": "Elsa.Caching.Memory",
+          "path": "src/essentials/Caching/Memory/Elsa.Caching.Memory.csproj"
+        },
+        {
+          "type": "internal",
           "id": "Elsa.Cluster.Core",
           "path": "src/essentials/Cluster/Core/Elsa.Cluster.Core.csproj"
         },
         {
           "type": "internal",
+          "id": "Elsa.Cluster.EntityFrameworkCore",
+          "path": "src/essentials/Cluster/EntityFrameworkCore/Elsa.Cluster.EntityFrameworkCore.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Diagnostics.ConsoleLogStreaming",
+          "path": "src/essentials/Diagnostics/ConsoleLogStreaming/Elsa.Diagnostics.ConsoleLogStreaming.csproj"
+        },
+        {
+          "type": "internal",
           "id": "Elsa.Diagnostics.OpenTelemetry",
           "path": "src/essentials/Diagnostics/OpenTelemetry/Elsa.Diagnostics.OpenTelemetry/Elsa.Diagnostics.OpenTelemetry.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Diagnostics.OpenTelemetry.Persistence.EntityFrameworkCore",
+          "path": "src/essentials/Diagnostics/OpenTelemetry/Persistence/EntityFrameworkCore/Elsa.Diagnostics.OpenTelemetry.Persistence.EntityFrameworkCore.csproj"
         },
         {
           "type": "internal",
@@ -12734,6 +12814,11 @@
           "type": "internal",
           "id": "Elsa.Diagnostics.StructuredLogs",
           "path": "src/essentials/Diagnostics/StructuredLogs/Elsa.Diagnostics.StructuredLogs/Elsa.Diagnostics.StructuredLogs.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Diagnostics.StructuredLogs.Persistence.EntityFrameworkCore",
+          "path": "src/essentials/Diagnostics/StructuredLogs/Persistence/EntityFrameworkCore/Elsa.Diagnostics.StructuredLogs.Persistence.EntityFrameworkCore.csproj"
         },
         {
           "type": "internal",
@@ -12752,6 +12837,16 @@
         },
         {
           "type": "internal",
+          "id": "Elsa.Expressions.JavaScript",
+          "path": "src/essentials/Expressions/JavaScript/Elsa.Expressions.JavaScript/Elsa.Expressions.JavaScript.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Expressions.JavaScript.Jint",
+          "path": "src/essentials/Expressions/JavaScript/Jint/Elsa.Expressions.JavaScript.Jint.csproj"
+        },
+        {
+          "type": "internal",
           "id": "Elsa.Expressions.JavaScript.Rendering.Core",
           "path": "src/essentials/Expressions/JavaScript/Rendering/Core/Elsa.Expressions.JavaScript.Rendering.Core.csproj"
         },
@@ -12759,6 +12854,16 @@
           "type": "internal",
           "id": "Elsa.Expressions.JavaScript.Rendering",
           "path": "src/essentials/Expressions/JavaScript/Rendering/Elsa.Expressions.JavaScript.Rendering/Elsa.Expressions.JavaScript.Rendering.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Expressions.Liquid",
+          "path": "src/essentials/Expressions/Liquid/Elsa.Expressions.Liquid.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Foundation.DataProtection.EntityFrameworkCore",
+          "path": "src/essentials/Foundation/DataProtection/EntityFrameworkCore/Elsa.Foundation.DataProtection.EntityFrameworkCore.csproj"
         },
         {
           "type": "internal",
@@ -12772,6 +12877,21 @@
         },
         {
           "type": "internal",
+          "id": "Elsa.Foundation.Identity.AspNetCoreIdentity.EntityFrameworkCore",
+          "path": "src/essentials/Foundation/Identity/AspNetCoreIdentity/EntityFrameworkCore/Elsa.Foundation.Identity.AspNetCoreIdentity.EntityFrameworkCore.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Foundation.Identity.Oidc",
+          "path": "src/essentials/Foundation/Identity/Oidc/Elsa.Foundation.Identity.Oidc.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Foundation.Identity.OpenIddict",
+          "path": "src/essentials/Foundation/Identity/OpenIddict/Elsa.Foundation.Identity.OpenIddict/Elsa.Foundation.Identity.OpenIddict.csproj"
+        },
+        {
+          "type": "internal",
           "id": "Elsa.Http.Core",
           "path": "src/essentials/Http/Core/Elsa.Http.Core.csproj"
         },
@@ -12779,6 +12899,21 @@
           "type": "internal",
           "id": "Elsa.Http",
           "path": "src/essentials/Http/Elsa.Http/Elsa.Http.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Http.JavaScript",
+          "path": "src/essentials/Http/JavaScript/Elsa.Http.JavaScript.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Locking.Database",
+          "path": "src/essentials/Locking/Database/Elsa.Locking.Database.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Locking.FileSystem",
+          "path": "src/essentials/Locking/FileSystem/Elsa.Locking.FileSystem.csproj"
         },
         {
           "type": "internal",
@@ -12797,8 +12932,23 @@
         },
         {
           "type": "internal",
+          "id": "Elsa.Modularity.EntityFramework",
+          "path": "src/essentials/Modularity/EntityFramework/Elsa.Modularity.EntityFramework.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Modularity.Planning",
+          "path": "src/essentials/Modularity/Planning/Elsa.Modularity.Planning.csproj"
+        },
+        {
+          "type": "internal",
           "id": "Elsa.Primitives.Hosting",
           "path": "src/essentials/Primitives/Hosting/Elsa.Primitives.Hosting.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Secrets.Api",
+          "path": "src/essentials/Secrets/Api/Elsa.Secrets.Api.csproj"
         },
         {
           "type": "internal",
@@ -12807,8 +12957,28 @@
         },
         {
           "type": "internal",
+          "id": "Elsa.Secrets.Nuplane",
+          "path": "src/essentials/Secrets/Nuplane/Elsa.Secrets.Nuplane.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Secrets.Persistence.EntityFrameworkCore",
+          "path": "src/essentials/Secrets/Persistence/EntityFrameworkCore/Elsa.Secrets.Persistence.EntityFrameworkCore.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Secrets.Workflows",
+          "path": "src/essentials/Secrets/Workflows/Elsa.Secrets.Workflows.csproj"
+        },
+        {
+          "type": "internal",
           "id": "Elsa.Serialization.Newtonsoft",
           "path": "src/essentials/Serialization/Newtonsoft/Elsa.Serialization.Newtonsoft.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Serialization.SystemText",
+          "path": "src/essentials/Serialization/SystemText/Elsa.Serialization.SystemText.csproj"
         },
         {
           "type": "internal",
@@ -12822,6 +12992,11 @@
         },
         {
           "type": "internal",
+          "id": "Elsa.Studio.Preferences.Persistence.EntityFrameworkCore",
+          "path": "src/essentials/Studio/Preferences/Persistence/EntityFrameworkCore/Elsa.Studio.Preferences.Persistence.EntityFrameworkCore.csproj"
+        },
+        {
+          "type": "internal",
           "id": "Elsa.Tasks",
           "path": "src/essentials/Tasks/Elsa.Tasks/Elsa.Tasks.csproj"
         },
@@ -12832,8 +13007,28 @@
         },
         {
           "type": "internal",
+          "id": "Elsa.Workflows.Dashboard.Persistence.EntityFrameworkCore",
+          "path": "src/essentials/Workflows/Dashboard/Persistence/EntityFrameworkCore/Elsa.Workflows.Dashboard.Persistence.EntityFrameworkCore.csproj"
+        },
+        {
+          "type": "internal",
           "id": "Elsa.Workflows.Design.Api",
           "path": "src/essentials/Workflows/Design/Api/Elsa.Workflows.Design.Api.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Workflows.Design.JavaScript",
+          "path": "src/essentials/Workflows/Design/JavaScript/Elsa.Workflows.Design.JavaScript.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Workflows.Design.Reconciliation.Git",
+          "path": "src/essentials/Workflows/Design/Reconciliation/Git/Elsa.Workflows.Design.Reconciliation.Git.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Workflows.Design.Reconciliation.Json",
+          "path": "src/essentials/Workflows/Design/Reconciliation/Json/Elsa.Workflows.Design.Reconciliation.Json.csproj"
         },
         {
           "type": "internal",
@@ -12852,6 +13047,11 @@
         },
         {
           "type": "internal",
+          "id": "Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore",
+          "path": "src/essentials/Workflows/Publishing/Persistence/EntityFrameworkCore/Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore.csproj"
+        },
+        {
+          "type": "internal",
           "id": "Elsa.Workflows.Runtime.Api",
           "path": "src/essentials/Workflows/Runtime/Api/Elsa.Workflows.Runtime.Api.csproj"
         },
@@ -12859,6 +13059,16 @@
           "type": "internal",
           "id": "Elsa.Workflows.Runtime.Core",
           "path": "src/essentials/Workflows/Runtime/Core/Elsa.Workflows.Runtime.Core.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Workflows.Runtime.Distributed.Persistence.EntityFrameworkCore",
+          "path": "src/essentials/Workflows/Runtime/Distributed/Persistence/EntityFrameworkCore/Elsa.Workflows.Runtime.Distributed.Persistence.EntityFrameworkCore.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Workflows.Runtime.Http",
+          "path": "src/essentials/Workflows/Runtime/Http/Elsa.Workflows.Runtime.Http.csproj"
         },
         {
           "type": "internal",
@@ -12872,6 +13082,31 @@
         },
         {
           "type": "internal",
+          "id": "Elsa.Workflows.Runtime.Reconciliation",
+          "path": "src/essentials/Workflows/Runtime/Reconciliation/Elsa.Workflows.Runtime.Reconciliation/Elsa.Workflows.Runtime.Reconciliation.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Workflows.Runtime.ReferenceGarbageCollection",
+          "path": "src/essentials/Workflows/Runtime/ReferenceGarbageCollection/Elsa.Workflows.Runtime.ReferenceGarbageCollection.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Workflows.Runtime.Resumption",
+          "path": "src/essentials/Workflows/Runtime/Resumption/Elsa.Workflows.Runtime.Resumption.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Workflows.Runtime.Scheduling",
+          "path": "src/essentials/Workflows/Runtime/Scheduling/Elsa.Workflows.Runtime.Scheduling.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Agent.Anthropic",
+          "path": "src/extensions/Agent/src/Anthropic/Elsa.Agent.Anthropic.csproj"
+        },
+        {
+          "type": "internal",
           "id": "Elsa.Agent.Api",
           "path": "src/extensions/Agent/src/Api/Elsa.Agent.Api.csproj"
         },
@@ -12882,8 +13117,18 @@
         },
         {
           "type": "internal",
+          "id": "Elsa.Agent.GitHubCopilot",
+          "path": "src/extensions/Agent/src/GitHubCopilot/Elsa.Agent.GitHubCopilot.csproj"
+        },
+        {
+          "type": "internal",
           "id": "Elsa3.Activities.Design.Import",
           "path": "src/extensions/Elsa3/src/Activities/Design/Import/Elsa3.Activities.Design.Import/Elsa3.Activities.Design.Import.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa3.Activities.Design.Import.Persistence.EntityFrameworkCore",
+          "path": "src/extensions/Elsa3/src/Activities/Design/Import/Persistence/EntityFrameworkCore/Elsa3.Activities.Design.Import.Persistence.EntityFrameworkCore.csproj"
         },
         {
           "type": "internal",
@@ -12894,6 +13139,11 @@
           "type": "internal",
           "id": "Elsa3.Models",
           "path": "src/extensions/Elsa3/src/Models/Elsa3.Models.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.ExtensionBuilder.Api",
+          "path": "src/extensions/ExtensionBuilder/src/Api/Elsa.ExtensionBuilder.Api.csproj"
         },
         {
           "type": "internal",
@@ -12932,6 +13182,11 @@
         },
         {
           "type": "external",
+          "id": "Microsoft.EntityFrameworkCore.Sqlite",
+          "version": "10.0.10"
+        },
+        {
+          "type": "external",
           "id": "Microsoft.Extensions.DependencyInjection",
           "version": "10.0.10"
         },
@@ -12944,6 +13199,11 @@
           "type": "external",
           "id": "Nuplane.Loading",
           "version": "0.0.11-preview.99"
+        },
+        {
+          "type": "external",
+          "id": "OpenIddict.EntityFrameworkCore",
+          "version": "7.5.0"
         },
         {
           "type": "external",

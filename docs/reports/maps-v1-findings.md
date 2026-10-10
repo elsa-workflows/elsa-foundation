@@ -18,7 +18,7 @@ No direct package ID has multiple direct versions.
 
 ## Test Visibility
 
-- Source projects without a direct test-project reference: 5
+- Source projects without a direct test-project reference: 4
 - This is only a visibility signal; tests may cover behavior indirectly through higher-level projects.
 
 ## Spec 006 State

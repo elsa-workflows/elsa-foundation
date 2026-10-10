@@ -24,7 +24,7 @@ public sealed class EfSchemaFamilyContentIntegrityGuardTests
     /// </summary>
     [Fact]
     public void Every_column_a_store_upcasts_is_declared_content_by_its_family_and_read_with_the_rest_of_its_row() =>
-        AssertNone(Persistence.UpcastDeclarationViolations(), "A column a store reads through a family's chain is that family's content, so the " +
+        AssertNone(EfSchemaFamilyTestFixtures.Persistence.UpcastDeclarationViolations(), "A column a store reads through a family's chain is that family's content, so the " +
             "family declares it with [EfSchemaContent] and the read and restamp rules hold every other read and write of it; and a " +
             "read upcasts every declared content column of a row together, each under its own name, as a row of its own table " +
             "(spec 180, FR-009 and FR-014; #2144):");
