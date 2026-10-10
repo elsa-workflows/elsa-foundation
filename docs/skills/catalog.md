@@ -141,6 +141,43 @@ The validation compares `.claude/skills/elsa-*/SKILL.md` against this catalog an
 
 **Output:** either the posted evidence comment followed by the merge, or a refusal that names the failing item, its cause, and what would clear it.
 
+## Quality Routine Skills
+
+Two scheduled routines carry [ADR 0080 D7](../adr/0080-elsa-4-simplification-decisions.md#d7--recurring-review-and-fix-routines) and epic [#2563](https://github.com/elsa-workflows/elsa-foundation/issues/2563). Each run starts in a fresh session on current `main`, does one bounded unit, and reports what it did in its final message. The rules below are the routine's whole contract; the scheduled prompt only invokes the skill.
+
+### Quality Review Routine
+
+**Use when:** the reviewer routine fires (Mondays and Thursdays), or a user asks for one review pass in the routine's format.
+
+**Workflow:**
+
+1. **Check the backlog first.** Count open issues labelled both `auto-review` and `needs-triage`: `gh issue list --label auto-review --label needs-triage --state open --limit 100 --json number`. If 15 or more are waiting, file nothing: report the count and stop.
+2. **Pick this run's lens and area by rotation.** Let `k = 2 × ISO week number + (1 if the weekday is Thursday or later, else 0)`. The lens is entry `k mod 7` of: performance, API, naming, simplification, tests, docs, structure. The area is entry `k mod N` of the sorted directory names under `src/essentials`, followed by `src/extensions` as the last entry (`N` is the length of that list). A manual run may name its own lens and area. Do not add a second lens or area to "use up" the run.
+3. **Review the area through the lens only.** Read code, not reports: findings come from `src/` and `tests/`, with `file:line` evidence. Prefer findings that remove code, types, projects, tests or concepts over findings that add them. Do not edit files, push branches or open pull requests.
+4. **Check for duplicates before filing.** Search open and closed issues for the file, type or symbol: `gh issue list --state all --search "<symbol> in:title,body"`. Drop a finding that an existing issue already covers, and note the issue number in the report instead.
+5. **File at most three issues.** Each carries exactly these labels: `needs-triage`, `auto-review`, one `kind:*` (performance → `kind:perf`, API → `kind:api`, naming → `kind:naming`, simplification → `kind:simplify`, tests → `kind:tests`, docs → `kind:docs`, structure → `kind:structure`) and one `size:S|M|L` (S: one PR touching a handful of files in one project; M: one PR across a few projects; L: needs splitting). The body states the evidence (`file:line`), the concrete change, how to verify it, and the lens and area of the run. Do not label an issue `ready-for-agent`; promotion is a human triage decision.
+6. **Report:** lens, area, the issues filed with links, and the findings dropped as duplicates or as too weak to file.
+
+**Output:** at most three new `needs-triage` + `auto-review` issues, or a skip report when the backlog is at 15 or more.
+
+### Quality Fix Routine
+
+**Use when:** the fixer routine fires (weekdays), or a user asks for one fixer pass.
+
+**Workflow:**
+
+1. **Service open auto-fix pull requests first.** List open PRs whose head branch starts with `claude/auto-fix-`. For each: fix a red check that the branch caused, answer review comments (fix, or reply with the reason when declining), and merge it when it meets the auto-merge rule in step 8. A check that is red for a reason outside the branch blocks the merge; report it rather than working around it. If a previously auto-merged PR was reverted on `main`, add `auto-merge-paused` to [#2559](https://github.com/elsa-workflows/elsa-foundation/issues/2559) with a comment naming the revert, and merge nothing automatically for the rest of the run.
+2. **Stop at three.** If three `claude/auto-fix-*` PRs are still open after servicing, report them and start nothing new.
+3. **Pick one issue.** Candidates are open issues labelled `ready-for-agent` and `auto-review`, or `simplification` and `status:todo`. Exclude any that is labelled `blocked`, `blocked-by-*`, `size:L`, `status:in-progress` or `status:in-review`; that has a claim comment from another session in the last seven days; that an open PR already references; or whose paths fall under an open freeze window. A freeze window is open from a comment on #2559 that starts with `Freeze window open` until a later comment on #2559 that starts with `Freeze window closed`; the opening comment names the paths it covers. Prefer `size:S`, then the oldest issue. If nothing qualifies, report that and stop.
+4. **Claim it** with one comment on the issue naming the session and the exact scope, and set `status:in-progress`, per [AGENTS.md](../../AGENTS.md#concurrent-work-claims). Re-read the issue's comments in the same step; if another claim appeared, release yours and pick again.
+5. **Branch** `claude/auto-fix-<issue number>-<short-slug>` from current `origin/main`.
+6. **Implement the issue as written, and nothing else.** Build the projects you touched, run their test projects whole, and run the architecture guard and `dotnet run --project tools/maps/Elsa.Maps.Generator -- check` when files or project references changed. Never skip, disable or quarantine a test to get green. If the issue proves wrong or larger than its size label, comment that on the issue, release the claim, and stop without a PR.
+7. **Open a ready (not draft) PR** with `Closes #<n>` in the body, then post the evidence as a PR comment: commands, results, executed test counts, and a bite-proof for any behaviour change. Set `status:in-review` on the issue and link the PR there.
+8. **Auto-merge only when every condition holds:** the issue is `size:S`; its kind is `kind:simplify`, `kind:docs` or `kind:tests`; #2559 is not labelled `auto-merge-paused`; no changed path lies under a `Workflows/Runtime` directory or under a directory or project whose name contains `Persistence`; and the diff removes or renames no public API (no removed line in any `PublicAPI.*.txt`, and no public type or member deleted or renamed). When all hold, take the PR through [Auto-Review Loop Then Merge](#auto-review-loop-then-merge) and its [Merge Gate](#merge-gate). Otherwise leave it open for a human merge and say which condition failed in a PR comment.
+9. **Report:** the PRs serviced and their state, the issue picked (or why none), the PR opened, and whether it auto-merged.
+
+**Output:** at most one new ready PR per run, serviced auto-fix PRs, and a run report.
+
 ## Speckit And Work-Unit Skills
 
 ### Speckit Flow Guide

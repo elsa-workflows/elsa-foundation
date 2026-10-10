@@ -20,6 +20,8 @@
     ".claude/skills/elsa-glossary-lookup/SKILL.md": "2493c036925ddca78c49fd6df7598c5eb7b2ef6ab54b8dec2d6fe1e45773e22e",
     ".claude/skills/elsa-initialize-agent-preferences/SKILL.md": "f9d13a961e3e044b0a5e926a4105c6ce5fa8351e7503a808f92d368f4c584616",
     ".claude/skills/elsa-program-goal-drift-review/SKILL.md": "9d68f7e2da95437e9d1c6b7081fc740190d915ca798ab54f563ba1d788e71ebb",
+    ".claude/skills/elsa-quality-fix/SKILL.md": "905025bf9fc6d97badc30ebce73034c7994eedc2ff31853201b06ade328183b6",
+    ".claude/skills/elsa-quality-review/SKILL.md": "8ff5993eb71557b239386e5a05c98415dc1750562b7af50c52f26d82f9542f5c",
     ".claude/skills/elsa-refresh-generated-maps/SKILL.md": "9a74145fd0e0cf0b9ffb6e65a6e924423590a4749ffaab93b4ec687f2f6741d6",
     ".claude/skills/elsa-source-of-truth-audit/SKILL.md": "bd646083acf56b888e88283cb16202e563f59a00a7fc3a12128868baa4501d82",
     ".claude/skills/elsa-verify-codebase/SKILL.md": "c8a5bc8eca7a909df950077134d5f1fb928edfe8c239a8aae1f51249efe15fca",
