@@ -513,7 +513,8 @@ internal static class WorkflowsDesignNativeProviderSmoke
                 new EfMaterializeWorkflowDefinitionCommand(context, access, writer),
                 new EfMaterializeWorkflowDefinitionVersionCommand(context, access, writer, serializer),
                 new EfSaveWorkflowDefinitionCommand(context, access, writer),
-                serializer).Reconcile(CancellationToken.None);
+                serializer,
+                NothingToJudgeValidator.Instance).Reconcile(CancellationToken.None);
         }
     }
 }

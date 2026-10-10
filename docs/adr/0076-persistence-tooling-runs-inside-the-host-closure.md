@@ -845,7 +845,7 @@ Costs and risks:
   scan from `LoadSrcProjects()` over `src/**/*.csproj` to `LoadModuleProjects()` over
   `ModuleRoots.Resolve(RepoRoot, ModuleRoots.Production)` — `src` and `extensions`
   (`EfCoreDependencyGuardTests.cs:518,521-523`; `ModuleRoots.Production` at
-  `tests/essentials/Architecture/Support/ModuleRoots.cs:19`) — but the proposed adapter lives under `src/`
+  `tests/essentials/Architecture/Tests/Support/ModuleRoots.cs:19`) — but the proposed adapter lives under `src/`
   regardless, so it was already inside the scan before that widening and stays inside it after.
 - U1–U4 shipped upstream on 2026-09-20 as `0.0.11-preview.83` (Nuplane `main` at `e93ad89`); Elsa's
   own pin bump to the same version merged 2026-09-20 as

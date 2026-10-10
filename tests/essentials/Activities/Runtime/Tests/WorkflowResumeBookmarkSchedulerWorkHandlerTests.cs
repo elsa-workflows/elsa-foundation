@@ -64,6 +64,7 @@ public sealed partial class WorkflowResumeBookmarkSchedulerWorkHandlerTests
     {
         var services = new ServiceCollection();
         services.AddSingleton<IActivityActivator>(activityActivator);
+        services.AddScoped<IRuntimeSecretMask, DefaultRuntimeSecretMask>();
         services.AddSingleton<IWorkflowExecutableStore>(_ => _executableStore);
         services.AddSingleton<IActivityExecutionStateStore>(_ => _activityStateStore);
         services.AddSingleton<IWorkflowExecutionStateStore>(_ =>

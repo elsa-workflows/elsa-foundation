@@ -26,9 +26,9 @@
   <ItemGroup>
     <ProjectReference Include="..\..\..\..\..\..\src\essentials\Activities\DispatchWorkflow\Runtime\Elsa.Activities.DispatchWorkflow.Runtime.csproj" />
     <ProjectReference Include="..\..\..\..\..\..\src\essentials\Workflows\Runtime\Api\Elsa.Workflows.Runtime.Api.csproj" />
-    <ProjectReference Include="..\..\..\..\..\..\src\essentials\Workflows\Runtime\Distributed\Elsa.Workflows.Runtime.Distributed.csproj" />
+    <ProjectReference Include="..\..\..\..\..\..\src\essentials\Workflows\Runtime\Distributed\Elsa.Workflows.Runtime.Distributed\Elsa.Workflows.Runtime.Distributed.csproj" />
     <ProjectReference Include="..\..\..\..\..\..\src\essentials\Workflows\Runtime\Core\Elsa.Workflows.Runtime.Core.csproj" />
-    <ProjectReference Include="..\..\..\..\..\..\src\essentials\Tasks\Elsa.Tasks.csproj" />
+    <ProjectReference Include="..\..\..\..\..\..\src\essentials\Tasks\Elsa.Tasks\Elsa.Tasks.csproj" />
     <!-- The distributed runtime composed on a membership provider, shared with the membership conformance kit (spec 184). -->
     <ProjectReference Include="..\..\..\..\Cluster\Testing\Elsa.Cluster.Testing.csproj" />
     <!-- AddShellStartupValidation, which both shipped hosts compose: a shell runs its ValidateOnStart checks as it activates (#2331). -->

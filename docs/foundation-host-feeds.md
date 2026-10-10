@@ -773,7 +773,7 @@ feature configuration, not a response to reconciliation.
 
 After an in-place upgrade, the previous release of a package-loaded activity stays loaded, and a reloaded shell registers
 the class of the release it composes under the activity's alias; see
-[Activity versions after an in-place upgrade](../src/essentials/Activities/Runtime/README.md#activity-versions-after-an-in-place-upgrade)
+[Activity versions after an in-place upgrade](../src/essentials/Activities/Runtime/Elsa.Activities.Runtime/README.md#activity-versions-after-an-in-place-upgrade)
 for what that means for a workflow pinned to an earlier version.
 
 ## Reconciling on demand
@@ -885,7 +885,7 @@ Elsa__Cluster__Membership__EntityFrameworkCore__ConnectionString="Host=db;Databa
   start once the durable provider is enabled, naming both ways out: the database lock, or a `LocksFolderPath` every host
   shares. SQLite has no database lock, so a SQLite composition keeps the file-system lock and is single-node by
   definition: several processes on that machine share one explicit `LocksFolderPath`. What a lock guarantees to a
-  `[SingleNodeTask]` is one at a time, at shell start, and no more; see `src/essentials/Tasks/EXTENSION_POINTS.md`.
+  `[SingleNodeTask]` is one at a time, at shell start, and no more; see `src/essentials/Tasks/Elsa.Tasks/EXTENSION_POINTS.md`.
   The git workflow export takes no lock at all: every Writer node exports, and the fast-forward-only push keeps one
   writer per branch (#2197; see the section "Several Writer nodes of one catalog" in
   `src/essentials/Workflows/Design/Reconciliation/Git/README.md`).

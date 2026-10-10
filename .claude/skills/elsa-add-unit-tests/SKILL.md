@@ -19,10 +19,10 @@ $ARGUMENTS
 ## Outline
 
 1. Read `docs/skills/catalog.md#add-feature-registration-tests` and `docs/skills/catalog.md#add-implementation-unit-tests`.
-2. Read framework unit-test gates for feature registration and logic-bearing implementations.
-3. Identify whether the change needs registration tests, implementation tests, or both.
+2. Read framework §2.23 (risk-based tests, ADR 0080 D1): one composition test covers plain feature wiring; behaviour tests cover risky logic.
+3. Identify whether the change needs the feature added to the composition test, a behaviour test, or a focused wiring test (only when the wiring carries logic).
 4. Inspect nearby tests and existing test project references before proposing new test structure.
-5. Plan focused tests with stubbed dependencies, meaningful branch coverage, and exception-boundary coverage where applicable.
+5. Plan focused tests for the paths that carry risk, including exception-boundary coverage where applicable. No coverage quota; never assert on markdown, documentation or source text.
 6. If implementation was already approved and tests are direct follow-through, add the tests; otherwise return the plan first.
 
 Do not use future integration tests as a substitute for required unit tests.

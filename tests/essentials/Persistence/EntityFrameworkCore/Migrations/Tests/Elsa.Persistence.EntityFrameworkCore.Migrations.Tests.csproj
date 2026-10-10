@@ -40,13 +40,13 @@
     <ProjectReference Include="..\..\..\..\..\..\src\essentials\Workflows\Runtime\Distributed\Persistence\EntityFrameworkCore\Elsa.Workflows.Runtime.Distributed.Persistence.EntityFrameworkCore.csproj" />
     <ProjectReference Include="..\..\..\..\..\..\src\essentials\Workflows\Runtime\Persistence\EntityFrameworkCore\Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.csproj" />
     <!-- Include the real dependency closure of Publishing EF's shell feature for tooling composition tests. -->
-    <ProjectReference Include="..\..\..\..\..\..\src\essentials\Workflows\Publishing\Elsa.Workflows.Publishing.csproj" />
+    <ProjectReference Include="..\..\..\..\..\..\src\essentials\Workflows\Publishing\Elsa.Workflows.Publishing\Elsa.Workflows.Publishing.csproj" />
     <ProjectReference Include="..\..\..\..\..\..\src\essentials\Workflows\Runtime\Api\Elsa.Workflows.Runtime.Api.csproj" />
     <ProjectReference Include="..\..\..\..\..\..\src\essentials\Workflows\Runtime\Resumption\Elsa.Workflows.Runtime.Resumption.csproj" />
-    <ProjectReference Include="..\..\..\..\..\..\src\essentials\Events\Elsa.Events.csproj" />
+    <ProjectReference Include="..\..\..\..\..\..\src\essentials\Events\Elsa.Events\Elsa.Events.csproj" />
     <ProjectReference Include="..\..\..\..\..\..\src\essentials\Api\Capabilities\Elsa.Api.Capabilities.csproj" />
-    <ProjectReference Include="..\..\..\..\..\..\src\essentials\Tasks\Elsa.Tasks.csproj" />
-    <ProjectReference Include="..\..\..\..\..\..\src\essentials\Cli\Elsa.Cli.csproj" />
+    <ProjectReference Include="..\..\..\..\..\..\src\essentials\Tasks\Elsa.Tasks\Elsa.Tasks.csproj" />
+    <ProjectReference Include="..\..\..\..\..\..\src\essentials\Cli\Elsa.Cli\Elsa.Cli.csproj" />
     <ProjectReference Include="..\..\..\..\..\..\src\essentials\Modularity\EntityFramework\Elsa.Modularity.EntityFramework.csproj" />
     <ProjectReference Include="..\..\..\..\..\..\src\essentials\Modularity\Planning\Elsa.Modularity.Planning.csproj" />
     <!-- Guards spec 171 FR-019: every design-time factory line corresponds to a declared provider context

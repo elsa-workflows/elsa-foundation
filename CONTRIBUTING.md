@@ -4,7 +4,7 @@ Elsa Foundation is the transitional Elsa 4 foundation workspace. Contributions a
 
 ## Choose a starting point
 
-- To run the backend from source on macOS, use the [backend source quickstart](docs/contributing/backend-source-quickstart.md). For a prebuilt Workbench and Studio stack, follow the [Docker quickstart](docs/docker-hub-quickstart.md).
+- To run the backend from source, use the [backend source quickstart](docs/contributing/backend-source-quickstart.md). For a prebuilt Workbench and Studio stack, follow the [Docker quickstart](docker/compose/README.md#quick-start--published-images-no-clone-or-build).
 - To report a suspected security vulnerability, use the [private security reporting guidance](SECURITY.md).
 - For conduct expectations and reporting, see the [Code of Conduct](CODE_OF_CONDUCT.md).
 - For a contributor question, use [Foundation Discussions Q&A](https://github.com/elsa-workflows/elsa-foundation/discussions/categories/q-a).
@@ -24,7 +24,7 @@ git switch -c contributing/my-fix origin/main
 
 If your fork remote has another name, use that name when pushing later. If you cloned your fork instead of following the quickstart, create your topic branch from an up-to-date copy of Elsa Foundation's `main` and push it to your fork's remote.
 
-Maintainers, including Sipke, always publish feature/work-unit branches in the organization repository and open PRs from those branches. Maintainer work never uses fork PRs. Contributors without organization write access use the fork workflow above. These defaults also apply when using agents; no local preference setup or workflow selection is required before publication. Follow [the repository's claim guidance](AGENTS.md#concurrent-work-claims) for issue-backed or split work.
+Maintainers, including Sipke, always publish feature/work-unit branches in the organization repository and open PRs from those branches. Maintainer work never uses fork PRs. Contributors without organization write access use the fork workflow above. Agents also follow the [agent entrypoint](AGENTS.md) and its local workflow instructions. Follow [the repository's claim guidance](AGENTS.md#concurrent-work-claims) for issue-backed or split work.
 
 ## Plan feature work
 
@@ -52,3 +52,5 @@ After making and validating the change, review your diff and commit the intended
 The repository is [MIT licensed](LICENSE). Pull requests may show the existing `license/cla` check from [Microsoft GitHub Policy Service](https://github.com/apps/microsoft-github-policy-service); follow the check's status and any instructions it provides. This guide does not add a separate signing process or infer an exemption.
 
 When the change is ready for review, mark the draft PR ready. Respond to review requests, update the branch, and rerun and report checks affected by the changes. Keep the PR in draft while it is still in progress. A maintainer can merge only after the required review and gates pass; do not merge past a red or missing required check.
+
+Keep a PR open for work you have pushed. The [repository hygiene policy](docs/contributing/repository-hygiene.md) describes branch retention, inactivity windows, exemptions, and the distinction between report-only and enforced cleanup.

@@ -7,6 +7,8 @@ using Elsa.Workflows.Design.Api.Models;
 using Elsa.Workflows.Design.Api.Projections;
 using Elsa.Workflows.Design.Persistence.Core.Contracts;
 using Elsa.Workflows.Design.Persistence.Core.Stores;
+using Elsa.Workflows.Design.Validations.Core;
+using Elsa.Workflows.Design.Validations.Core.Contracts;
 using NativeEndpoints;
 
 namespace Elsa.Workflows.Design.Api.Endpoints.Definitions.Submit;
@@ -15,7 +17,8 @@ namespace Elsa.Workflows.Design.Api.Endpoints.Definitions.Submit;
 [RequirePermission(WorkflowDesignPermissions.Manage)]
 public sealed class Endpoint(
     ISubmitWorkflowDefinitionCommand submitCommand,
-    IWorkflowDefinitionVersionStore versionStore) : ApiEndpoint<SubmitDefinition, SubmittedWorkflowDefinitionView>
+    IWorkflowDefinitionVersionStore versionStore,
+    ICredentialLiteralValidator credentialLiterals) : ApiEndpoint<SubmitDefinition, SubmittedWorkflowDefinitionView>
 {
     public override void Configure(ApiEndpointOptions options)
     {
@@ -27,11 +30,13 @@ public sealed class Endpoint(
     {
         ArgumentNullException.ThrowIfNull(command.State);
 
+        var state = command.State.ToState();
+        await credentialLiterals.AdmitAsync(state, cancellationToken);
         var submitted = await submitCommand.Execute(
             DesignOperationKey.CreateOrGenerate(command.OperationKey),
             command.Name,
             command.Description,
-            command.State.ToState(),
+            state,
             cancellationToken);
 
         var version = await versionStore.GetWithDefinitionAsync(submitted.VersionId, cancellationToken);

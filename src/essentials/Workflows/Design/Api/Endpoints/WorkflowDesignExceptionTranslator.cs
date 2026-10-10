@@ -1,6 +1,8 @@
 using Elsa.Api.AspNetCore;
 using Elsa.Primitives.Exceptions;
 using Elsa.Workflows.Design.Persistence.Core.Exceptions;
+using Elsa.Workflows.Design.Validations.Core.Exceptions;
+using Elsa.Workflows.Design.Validations.Core.Models;
 using Microsoft.AspNetCore.Http;
 using NativeEndpoints;
 
@@ -18,10 +20,16 @@ internal sealed class WorkflowDesignExceptionTranslator : IEndpointExceptionTran
 {
     public EndpointProblem? Translate(Exception exception) => exception switch
     {
-        DraftHasValidationErrorsException validation => Validation(validation),
+        DraftHasValidationErrorsException validation => new(
+            StatusCodes.Status409Conflict,
+            ErrorsByPath(validation.Errors, generalError: validation.Message)),
+        // The credential-literal refusal (spec 188, FR-008) is the caller's content, so it is a 400 with each finding
+        // keyed by its input's path. It derives from ArgumentException, so it must match before that arm.
+        CredentialLiteralRefusedException refusal => new(StatusCodes.Status400BadRequest, ErrorsByPath(refusal.Findings)),
         EntityNotFoundException => EndpointProblem.General(StatusCodes.Status404NotFound, exception.Message),
         WorkflowDefinitionVersionConflictException or
             WorkflowPromotionOperationConflictException or
+            WorkflowDraftChangedException or
             WorkflowDefinitionNotSoftDeletedException =>
             EndpointProblem.General(StatusCodes.Status409Conflict, exception.Message),
         PermanentDeletionUnavailableException => EndpointProblem.General(StatusCodes.Status501NotImplemented, exception.Message),
@@ -29,12 +37,13 @@ internal sealed class WorkflowDesignExceptionTranslator : IEndpointExceptionTran
         _ => null
     };
 
-    private static EndpointProblem Validation(DraftHasValidationErrorsException exception)
+    private static Dictionary<string, string[]> ErrorsByPath(IEnumerable<ValidationError> errors, string? generalError = null)
     {
-        var errors = exception.Errors
+        var byPath = errors
             .GroupBy(error => string.IsNullOrWhiteSpace(error.Path) ? "generalErrors" : error.Path, StringComparer.Ordinal)
             .ToDictionary(group => group.Key, group => group.Select(error => error.Message).ToArray(), StringComparer.Ordinal);
-        errors.TryAdd("generalErrors", [exception.Message]);
-        return new(StatusCodes.Status409Conflict, errors);
+        if (generalError is not null)
+            byPath.TryAdd("generalErrors", [generalError]);
+        return byPath;
     }
 }

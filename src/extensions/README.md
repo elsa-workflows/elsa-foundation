@@ -60,7 +60,7 @@ site already covers `src/extensions/`, and this is the complete list:
 | `.dockerignore` | what reaches the build context | extension tests bloat the context |
 | `tools/ef/generate-module-migrations.sh` | EF modules and model snapshots | finds no module, generates nothing |
 | `tools/maps/Elsa.Maps.Generator/RepoLayout.cs` | projects, sources and catalogs for every map | the module vanishes from every map |
-| `tools/solution-filters/profiles.json` | solution filter membership | the module drops out of its filter |
+| `tools/solution-filters/profiles.json` | the integration profile's `src/extensions/` prefix | the module's Testcontainers suites drop out of the nightly integration lane |
 
 Some sites name a specific project **by full path** rather than enumerating a directory. Those do not
 fail silently in the same way, but they do have to move with the module, and they are easy to miss:
@@ -68,12 +68,11 @@ fail silently in the same way, but they do have to move with the module, and the
 | Site | What it names |
 |---|---|
 | `.github/workflows/ci.yml`, the `ef-container-suites` matrix | one `.csproj` path per container suite |
-| `tests/essentials/Architecture/ArchitectureGuardTests.cs` | the name-to-path convention, which has a branch per root |
-| `tests/essentials/Architecture/EfCoreDependencyGuardTests.cs` | the admitted-EF-path allowlist |
-| `tests/essentials/Architecture/EndpointSecurityTests.cs` | the directory scanned per endpoint group |
-| `tests/essentials/Architecture/ReusableActivityArchitectureTests.cs` | project and directory paths, and a path-prefix assertion |
+| `tests/essentials/Architecture/Tests/ArchitectureGuardTests.cs` | the name-to-path convention, which has a branch per root |
+| `tests/essentials/Architecture/Tests/EfCoreDependencyGuardTests.cs` | the admitted-EF-path allowlist |
+| `tests/essentials/Architecture/Tests/EndpointSecurityTests.cs` | the directory scanned per endpoint group |
+| `tests/essentials/Architecture/Tests/ReusableActivityArchitectureTests.cs` | project and directory paths, and a path-prefix assertion |
 | `EXTENSION_POINTS.md` | the root index of extension-point catalogs |
-| `tools/solution-filters/profiles.json` | `requiredRootPaths` entries |
 
 This second list was **missing when stage 0 described the first one as complete**; it was found by
 auditing for hardcoded paths while moving the first module. Before moving a module, run a path audit
@@ -107,9 +106,9 @@ Adding a project root to the repository means auditing both lists again.
   `tests/essentials/Architecture/ExtensionBoundary/Tests`, which fails and names the offending edge.
 - **An extension may reference another extension only when the edge is declared** in that same guard's
   allowlist. Undeclared extension-to-extension edges fail the same way.
-- **Every project belongs to exactly one bucket.** A project nested inside another project's directory
-  belongs to the bucket that owns the parent, because the parent's `Compile Remove` globs already tie
-  them together.
+- **Every project belongs to exactly one bucket.** No project sits inside another project's directory
+  (#2577, guarded by `DependencyMapTests.No_project_directory_is_nested_inside_another`), so a project
+  belongs to the bucket its own path lies under.
 
 ## Adding an extension
 
@@ -120,8 +119,9 @@ stay green. Stage 2 pushed without it and CI caught a real boundary question the
 
 1. Move the projects, keeping each `.csproj` file name unchanged.
 2. Fix the `ProjectReference` paths that pointed at them, and their entries in `Elsa.Server.slnx`.
-3. Add a profile to `tools/solution-filters/profiles.json` so the extension gets a generated filter,
-   then refresh with `dotnet run --project tools/maps/Elsa.Maps.Generator -- solution-filters`.
+3. Extensions get no solution filter of their own (#2577). If the module brings Testcontainers suites, check
+   they reach the nightly lane: `dotnet run --project tools/maps/Elsa.Maps.Generator -- solution-filter-roots
+   Elsa.Server.Persistence.Integration.slnf` must list them.
 4. Refresh the maps with `dotnet run --project tools/maps/Elsa.Maps.Generator -- all` and stage every
    changed file under `docs/maps/`, `manifest.json` included.
 5. If the move introduces an extension-to-extension edge, declare it in the guard's allowlist with a

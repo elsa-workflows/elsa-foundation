@@ -43,7 +43,7 @@
   </PropertyGroup>
 
   <!--
-    ADR 0067 build-time check. VersionLineOwnershipGuardTests (tests/essentials/Architecture) is a static
+    ADR 0067 build-time check. VersionLineOwnershipGuardTests (tests/essentials/Architecture/Tests) is a static
     scan proving no file under src/ or tests/ sets ElsaVersionLine or ElsaVersionLineAMembers, and
     NoLiteralProjectVersionGuardTests proves no project under src/ sets ElsaVersion or ElsaContractsVersion,
     but a static scan has two blind spots: a global property passed on the command line
@@ -68,7 +68,7 @@
     defined in a .props file - keeping the check beside the computation it verifies is the point - and
     because a Directory.Build.targets would be skipped by any nested Directory.Build.targets that forgets to
     import it, whereas every project already imports this file.
-    tests/essentials/Architecture/VersionLineBuildCheckTests.cs proves it, including the /p: cases the
+    tests/essentials/Architecture/Tests/VersionLineBuildCheckTests.cs proves it, including the /p: cases the
     static scans cannot see.
   -->
   <Target Name="ElsaVerifyVersionLine" BeforeTargets="BeforeBuild;GenerateNuspec;_GetProjectVersion">

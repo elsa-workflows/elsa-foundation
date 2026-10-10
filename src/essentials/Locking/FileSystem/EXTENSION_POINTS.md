@@ -16,7 +16,7 @@ The per-domain catalog (framework §2.22.1). Anchored at `Elsa.Locking.FileSyste
 ## Providers, and which one a composition needs
 
 A lock excludes only the processes that reach the same lock store. Everything that relies on a lock across nodes —
-`[SingleNodeTask]` ([its guarantee](../../Tasks/EXTENSION_POINTS.md#singlenodetask-one-at-a-time-at-shell-start)), the
+`[SingleNodeTask]` ([its guarantee](../../Tasks/Elsa.Tasks/EXTENSION_POINTS.md#singlenodetask-one-at-a-time-at-shell-start)), the
 design-side draft locks, the activity publisher — therefore needs a store every node shares (#2192).
 
 ### `FileSystemDistributedLocking` *(`Elsa.Locking.FileSystem`)*

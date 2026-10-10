@@ -5,11 +5,11 @@ name: Integration (nightly)
 # fast, container-free unit tests.
 #
 # This workflow is the INVERSE of ci.yml's filter: it runs ONLY the test projects
-# that reach Testcontainers (Docker required). The committed integration solution filter
-# is generated from parsed PackageReference elements and the ProjectReference edges that
-# carry them, so new Testcontainers test projects -- including ones that inherit their
-# container fixtures from another test project -- are picked up when the solution-filter
-# freshness gate refreshes the profile.
+# that reach Testcontainers (Docker required). The integration solution filter is not
+# committed (#2577): this job generates it from the same profile ci.yml excludes, from
+# parsed PackageReference elements and the ProjectReference edges that carry them, so new
+# Testcontainers test projects -- including ones that inherit their container fixtures from
+# another test project -- are picked up on the next run with nothing to refresh.
 #
 # Why not on pull_request: containers are too slow/flaky to run on every PR -- that is
 # the explicit reason #544 excluded them from ci.yml. This runs nightly against main
@@ -69,7 +69,7 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-nuget-
 
-      - name: Validate committed integration filter
+      - name: Validate committed solution filters
         run: |
           dotnet run --project tools/maps/Elsa.Maps.Generator -c Release -p:RestoreLockedMode=true -- solution-filters-check
           dotnet run --project tools/maps/Elsa.Maps.Generator -c Release --no-build -- solution-filters-self-test
@@ -87,6 +87,12 @@ jobs:
 
       - name: Build (full solution, including test projects)
         run: dotnet build Elsa.Server.slnx -c Release --no-restore -p:WarningsNotAsErrors=NU1603
+
+      - name: Generate the integration solution filter
+        # Written after the freshness check on purpose: the check rejects any uncommitted Elsa.Server.*.slnf at the
+        # repository root, and this filter is never committed. It holds the Testcontainers roots plus their whole
+        # project-reference closure, so test projects those roots reference (Elsa.Workbench.Tests) still run here.
+        run: dotnet run --project tools/maps/Elsa.Maps.Generator -c Release --no-build -- solution-filter Elsa.Server.Persistence.Integration.slnf
 
       - name: Test (Testcontainers integration tests)
         run: dotnet test Elsa.Server.Persistence.Integration.slnf -c Release --no-build -p:WarningsNotAsErrors=NU1603

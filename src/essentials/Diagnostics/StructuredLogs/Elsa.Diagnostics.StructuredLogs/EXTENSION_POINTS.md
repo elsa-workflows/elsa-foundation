@@ -1,0 +1,88 @@
+# Extension points — Diagnostics: Structured Logs domain
+
+The per-domain catalog (framework §2.22.1). Anchored at `Elsa.Diagnostics.StructuredLogs` — the server feature that captures the log events of the shell that enables it, not the root host's loggers (see the [README's capture scope](README.md#capture-scope-the-shells-loggers-not-the-hosts)), into an in-memory store by default and exposes them over HTTP + Server-Sent Events. All seams are **overridable `.Core` contracts**; there are no contributor interfaces or published events in v1.
+
+The capture/serve pipeline is decomposed into three single-responsibility roles so a durable backend can replace just one of them:
+
+- **`IStructuredLogSink`** assigns display-only `Sequence` metadata, submits to the store, and publishes a local wake hint only after commitment.
+- **`IStructuredLogStore`** owns append commit, recent history, opaque-cursor bounded tail reads, and exact retention. Swap this to make logs durable.
+- **`IStructuredLogLiveFeed` / `IStructuredLogLivePublisher`** is an in-process wake channel for SSE durable tails. It stays in-process for every storage backend.
+
+---
+
+## Overridable contracts
+
+All contracts live in `Elsa.Diagnostics.StructuredLogs.Core`. The feature registers `InMemoryStructuredLogStore` (history), `InMemoryStructuredLogLiveFeed` (live fan-out, also the publisher), a `StructuredLogSink` (sequencing/dispatch), and a `LocalStructuredLogSourceProvider`. The store is registered with `TryAddSingleton` so a persistence feature can override it; the others use `AddSingleton`.
+
+### `IStructuredLogStore` *(Core — `Elsa.Diagnostics.StructuredLogs.Core`)*
+- **Signature:** `ValueTask<StructuredLogEntry> AppendAsync(...)`, `Task<IReadOnlyList<StructuredLogEntry>> GetRecentAsync(...)`, `Task<StructuredLogReplayCursor?> GetTailCursorAsync(...)`, `Task<StructuredLogReadPage> ReadAfterAsync(...)`, and `Task TrimAsync(int keepNewest, ...)`.
+- **Contract:** append returns the committed entry carrying the authoritative cursor. `ReadAfterAsync` validates an optional source/scope/stream-bound opaque anchor and returns one oldest-first bounded snapshot page strictly after it, plus the next scanned cursor and `HasMore`. Cursor codecs and decoded provider positions stay internal to each adapter. A store that assigns committed sequences from a lifetime high-water never rewinds it after retention or restart. `Sequence` is display metadata and is neither unique nor a replay identity.
+- **Default impl:** `InMemoryStructuredLogStore` — a bounded ring buffer with process-lifetime cursor state.
+- **Override:** register your own `IStructuredLogStore` to persist entries and serve recent/bounded tail reads. Durable adapters own a bounded nonblocking ingest queue and complete `AppendAsync` only after commit. `ReadAfterAsync` must scan in committed cursor order and advance its next cursor over filtered-out records. The default uses `TryAddSingleton`, so a persistence feature's `AddSingleton<IStructuredLogStore>` wins regardless of feature order.
+
+### `IStructuredLogLiveFeed` *(Core — `Elsa.Diagnostics.StructuredLogs.Core`)*
+- **Signature:** `IAsyncEnumerable<StructuredLogStreamItem> Subscribe(StructuredLogFilter filter, CancellationToken cancellationToken)`.
+- **Default impl:** `InMemoryStructuredLogLiveFeed` — each subscriber gets an independent bounded channel; a slow consumer never blocks the logging path, its overflowed entries are dropped and a `DroppedEntriesSignal` is delivered in-band.
+- **Override:** replace to tune local wake distribution. SSE correctness does not depend on this feed: it is
+  only a wake hint for the durable store tail, which also polls on a bound interval.
+
+### `IStructuredLogLivePublisher` *(Core — `Elsa.Diagnostics.StructuredLogs.Core`)*
+- **Signature:** `void Publish(StructuredLogEntry entry)`.
+- **Default impl:** `InMemoryStructuredLogLiveFeed` (same instance as the feed). This is the write side the sink uses for committed local wake hints.
+- **Override:** replace alongside `IStructuredLogLiveFeed` when changing wake distribution. Durable store reads remain authoritative.
+
+### `IStructuredLogSink` *(Core — `Elsa.Diagnostics.StructuredLogs.Core`)*
+- **Signature:** `void Emit(StructuredLogEntry entry)`.
+- **Default impl:** `StructuredLogSink` — assigns a process-local display `Sequence` without reading the store, starts `AppendAsync` without blocking the logging hot path, and publishes a wake hint only for the committed result. A store that owns a lifetime high-water assigns the committed sequence itself, as `EfStructuredLogStore` does. Append failures never publish, never escape into host logging, and never disable later captures.
+- **Override:** replace to tee captured entries elsewhere (e.g. forward to an external collector) while keeping the in-memory store for the UI.
+
+### `IStructuredLogSourceProvider` *(Core — `Elsa.Diagnostics.StructuredLogs.Core`)*
+- **Signature:** `LogSource GetLocalSource()`, `IReadOnlyList<LogSource> GetKnownSources()`.
+- **Default impl:** `LocalStructuredLogSourceProvider` — exposes the single local host as the only known source; stamps every captured entry with the local source id.
+- **Override:** replace to enumerate multiple remote sources in a multi-host deployment without changing the entry contract.
+
+---
+
+## Persistence
+
+### Durable diagnostic records
+
+`Elsa.Diagnostics.StructuredLogs.Persistence.EntityFrameworkCore` ships **`EfStructuredLogStore`**, the
+conformance adapter over its own diagnostic-record table. It uses provider-issued opaque
+cursors, idempotent batch operation ids, bounded declared predicates, snapshot continuation, exact trim, and
+provider inspection state for lifetime high-water. The Elsa Core contract has no persistence dependency; hosts
+construct and register the adapter with their selected relational provider and a
+`StructuredLogStoreBinding` (tenant, host storage scope, and logical stream). The aggregate
+`DiagnosticsStructuredLogsEntityFrameworkCore` and `DiagnosticsOpenTelemetryEntityFrameworkCore` feature is the current first-party durable and reference-host composition:
+it installs this concrete feature, replaces the in-memory store, and contributes its diagnostic-record stream
+to the combined diagnostics EF model.
+
+### EF Core Structured Logs (opt-in, issue #1695)
+
+`Elsa.Diagnostics.StructuredLogs.Persistence.EntityFrameworkCore` is the opt-in repository-first
+adapter for `IStructuredLogStore` delivered by #1695. Its production project is provider-neutral and
+depends only on EF Core, Relational, the shared Elsa persistence helpers, and Structured Logs/
+Diagnostics contracts. Hosts and tests supply provider packages: SQLite is used by the behavioral
+suite, while SQL Server, PostgreSQL, and MySQL are exercised by focused live-provider smoke tests.
+
+The adapter owns its structured-log records, scope/binding identity, opaque cursor encoding, lifetime
+high-water state, and append-operation ledger. It reuses `DiagnosticsDrain` and the shared
+`ReplaceDiagnosticsStore` registration semantics, so it does not introduce a second queue/retry
+pipeline or a competing store marker. Remaining migration,
+default-flip, and deletion gates supply the required evidence; migration
+artifacts and host-wide composition changes are explicitly deferred from #1695.
+
+---
+
+## Notes
+
+- The capture path (`StructuredLogCaptureProvider` → `StructuredLogCapturingLogger` → `StructuredLogEntryFactory`) is **not** an extension point: it is the internal bridge from `Microsoft.Extensions.Logging` into `IStructuredLogSink`. It ignores its own category to prevent feedback loops and swallows sink failures so capture never throws into host logging (FR-010).
+- The HTTP/SSE wire shape is owned by `StructuredLogEntrySerializer` and `StructuredLogSseFormatter`; see [`README.md`](README.md) for the contract.
+
+---
+
+## Cross-references
+
+- Repo-wide index: [`../../../../EXTENSION_POINTS.md`](../../../../../EXTENSION_POINTS.md).
+- Feature documentation: [`README.md`](README.md).
+- Constitutional basis: §2.6.2 + §2.22.1.

@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <PackageReference Include="CShells.Abstractions" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" />
+    <PackageReference Include="Elsa.Specifications.PackageManifest.Generator" PrivateAssets="all" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\Events\Core\Elsa.Events.Core.csproj" />
+    <ProjectReference Include="..\Core\Elsa.Activities.Runtime.Core.csproj" />
+    <ProjectReference Include="..\..\..\Primitives\Primitives\Elsa.Primitives.csproj" />
+    <ProjectReference Include="..\..\..\Tasks\Core\Elsa.Tasks.Core.csproj" />
+    <ProjectReference Include="..\..\..\Workflows\Runtime\Core\Elsa.Workflows.Runtime.Core.csproj" />
+    <ProjectReference Include="..\..\..\Workflows\Runtime\Elsa.Workflows.Runtime\Elsa.Workflows.Runtime.csproj" />
+  </ItemGroup>
+
+</Project>

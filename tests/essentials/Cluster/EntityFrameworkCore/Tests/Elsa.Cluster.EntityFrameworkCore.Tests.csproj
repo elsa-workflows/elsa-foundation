@@ -60,7 +60,7 @@
     module's names are linked in as source, so nothing of the module is loaded into this process.
   -->
   <ItemGroup>
-    <ProjectReference Include="..\..\..\..\..\src\essentials\Cli\Elsa.Cli.csproj" ReferenceOutputAssembly="false" />
+    <ProjectReference Include="..\..\..\..\..\src\essentials\Cli\Elsa.Cli\Elsa.Cli.csproj" ReferenceOutputAssembly="false" />
     <ProjectReference Include="..\..\Fixtures\MigratingModule\Elsa.Cluster.Fixtures.MigratingModule.csproj" ReferenceOutputAssembly="false" />
   </ItemGroup>
 

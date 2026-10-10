@@ -1,33 +1,45 @@
 # Developer Solution Filters
 
 `Elsa.Server.slnx` remains the only authoritative full solution. The committed `.slnf` profiles are
-smaller, task-oriented views for IDE navigation and inner-loop `dotnet build` / `dotnet test` work.
-They do not replace the full build, architecture, generated-map, E2E, or integration gates required
-by the affected work unit.
+smaller views for IDE navigation and inner-loop `dotnet build` / `dotnet test` work. They do not
+replace the full build, architecture, generated-map, E2E, or integration gates required by the
+affected work unit.
 
 ## Profiles
 
-| Filter | Use it for |
+There are three views (#2577):
+
+| View | Use it for |
 |---|---|
-| `Elsa.Server.Workflows.Publishing.slnf` | Publishing engine, API, persistence, and their normal tests. |
-| `Elsa.Server.Workflows.Runtime.slnf` | Workflow and activity runtime, scheduling, resumption, tracing, and their normal tests. |
-| `Elsa.Server.Workflows.Design.slnf` | Workflow and activity authoring/design and their normal tests. |
-| `Elsa.Server.Foundation.Identity.slnf` | Identity, authorization, authentication providers, and their normal tests. |
-| `Elsa.Server.Persistence.Integration.slnf` | All Testcontainers-backed tests, currently the EF Core provider integration surface. |
+| `Elsa.Server.Core.slnf` | The required core with no extensions and no apps, and its container-free tests. CI's core-only job builds and tests exactly this. |
+| `Elsa.Server.slnx` (Full) | Everything. It is the solution itself, so it has no `.slnf` file. |
 | `Elsa.Server.Workbench.slnf` | Debugging the reference host without loading unrelated tests or samples as roots. |
 
 The Workbench profile is intentionally broad: the reference host directly composes much of the
-product and therefore pulls a large source dependency closure. Use one of the domain profiles when
-the host is not the thing being debugged.
+product and therefore pulls a large source dependency closure. Open the full solution when you need
+a single module and its tests instead.
+
+`tools/solution-filters/profiles.json` also holds one profile that is never committed:
+`Elsa.Server.Persistence.Integration.slnf`, every Testcontainers-backed test project plus its
+project-reference closure. The fast CI lane reads its roots to leave those suites out, and the
+nightly integration lane writes the filter on demand and runs it. To run that lane locally:
+
+```bash
+dotnet run --project tools/maps/Elsa.Maps.Generator -- solution-filter Elsa.Server.Persistence.Integration.slnf
+dotnet test Elsa.Server.Persistence.Integration.slnf
+```
+
+Delete the generated file afterwards: the freshness check below rejects any uncommitted
+`Elsa.Server.*.slnf` at the repository root.
 
 ## Use a filter
 
 Open a `.slnf` file directly in an IDE that supports solution filters, or pass it to the .NET CLI:
 
 ```bash
-dotnet build Elsa.Server.Workflows.Runtime.slnf
-dotnet test Elsa.Server.Workflows.Runtime.slnf --no-build
-dotnet sln Elsa.Server.Workflows.Runtime.slnf list
+dotnet build Elsa.Server.Core.slnf
+dotnet test Elsa.Server.Core.slnf --no-build
+dotnet sln Elsa.Server.Core.slnf list
 ```
 
 The generated files contain the complete in-solution `ProjectReference` closure in ordinal path
@@ -42,9 +54,10 @@ behavior and filter UI are documented at
 
 ## Change or refresh profiles
 
-`tools/solution-filters/profiles.json` is the source of truth. Profiles normally select normalized
-project-path prefixes so new nested modules join the appropriate profile automatically. Required-root
-assertions make renamed or accidentally omitted anchors fail closed. Testcontainers profiles are
+`tools/solution-filters/profiles.json` is the source of truth. Profiles select projects by name, by
+normalized project-path prefix, or by package closure, and a profile marked `"committed": false` is
+generated only on demand. Required-root assertions make renamed or accidentally omitted anchors fail
+closed. Testcontainers profiles are
 selected from parsed `PackageReference` elements rather than raw text, and any project reference that
 leaves `Elsa.Server.slnx` must be explicitly allowlisted. Exclusions apply only to roots; required
 transitive dependencies are never removed.
@@ -69,7 +82,8 @@ PowerShell:
 tools/solution-filters/generate-solution-filters.ps1
 ```
 
-The freshness check regenerates into a temporary directory and byte-compares every committed filter:
+The freshness check regenerates into a temporary directory and byte-compares every committed filter,
+and fails on any `Elsa.Server.*.slnf` at the repository root that no committed profile owns:
 
 ```bash
 tools/solution-filters/generate-solution-filters.sh --check
@@ -82,8 +96,8 @@ tools/solution-filters/generate-solution-filters.ps1 -Check
 ```
 
 The generator's dependency-free contract suite covers mixed path separators, transitive closure,
-stable ordering and serialization, root exclusions, parsed package selectors, and missing versus
-allowlisted external project references:
+stable ordering and serialization, root exclusions, parsed package selectors, on-demand profiles, and
+missing versus allowlisted external project references:
 
 ```bash
 dotnet run --project tools/maps/Elsa.Maps.Generator -- solution-filters-self-test
@@ -93,7 +107,8 @@ CI runs the same check and asks `dotnet sln` to parse every committed filter. A 
 or changed dependency therefore makes the check fail until the generated profiles are refreshed.
 The fast CI lane also asks the generator for the integration profile's explicit roots, ensuring each
 test that reaches Testcontainers -- directly or through a `ProjectReference` -- belongs to the nightly
-lane while comment-only mentions remain in fast CI.
+lane while comment-only mentions remain in fast CI. The nightly lane writes the same profile with
+`solution-filter`, after the freshness check, so the two lanes stay complementary.
 
 ## Completion gate
 
@@ -102,6 +117,6 @@ the exact full gates named by its spec or quickstart. The repository-wide baseli
 
 ```bash
 dotnet build Elsa.Server.slnx
-dotnet test tests/essentials/Architecture/Elsa.Architecture.Tests.csproj
+dotnet test tests/essentials/Architecture/Tests/Elsa.Architecture.Tests.csproj
 dotnet run --project tools/maps/Elsa.Maps.Generator -- check
 ```

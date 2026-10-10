@@ -129,7 +129,7 @@ The validation compares `.claude/skills/elsa-*/SKILL.md` against this catalog an
 
 - **Build** the solution.
 - **Affected suites** pass, run as whole test projects.
-- **Architecture guard** passes: `dotnet test tests/essentials/Architecture/Elsa.Architecture.Tests.csproj`.
+- **Architecture guard** passes: `dotnet test tests/essentials/Architecture/Tests/Elsa.Architecture.Tests.csproj`.
 - **Generated-maps check** passes: `dotnet run --project tools/maps/Elsa.Maps.Generator -- check`.
 - **Diff review** is complete and its surviving findings are resolved.
 - **Bite-proof** wherever the change claims a behavioral difference: revert the fix, or mutate the code the new test covers, show the test going red, then restore and show it green. A test that passes both before and after the change proves nothing about the change.
@@ -140,6 +140,44 @@ The validation compares `.claude/skills/elsa-*/SKILL.md` against this catalog an
 - **A red gate is a stop even when its cause is outside this branch.** A regression already present on the base, an infrastructure failure, or an unrelated flake blocks the merge exactly like a defect in the change does. Report what is red, where it came from, and what would clear it. Do not merge past it and do not restamp it as unrelated.
 
 **Output:** either the posted evidence comment followed by the merge, or a refusal that names the failing item, its cause, and what would clear it.
+
+## Quality Routine Skills
+
+Two scheduled routines carry [ADR 0080 D7](../adr/0080-elsa-4-simplification-decisions.md#d7--recurring-review-and-fix-routines) and epic [#2563](https://github.com/elsa-workflows/elsa-foundation/issues/2563). Each run starts in a fresh session on current `main`, does one bounded unit, and reports what it did in its final message. The rules below are the routine's whole contract; the scheduled prompt only invokes the skill.
+
+### Quality Review Routine
+
+**Use when:** the reviewer routine fires (Mondays and Thursdays), or a user asks for one review pass in the routine's format.
+
+**Workflow:**
+
+1. **Check the backlog first.** Count open issues labelled both `auto-review` and `needs-triage`: `gh issue list --label auto-review --label needs-triage --state open --limit 100 --json number`. If 15 or more are waiting, file nothing: report the count and stop.
+2. **Pick this run's lens and area by rotation.** Let `w` be the number of whole weeks from Monday 2026-10-12 to the run's Monday, and `k = 2w + (1 if the run is on a Thursday or later in its week, else 0)`, so `k` counts reviewer slots and never resets; a run before 2026-10-12 uses `k = 0`. The lens is entry `k mod 7` of: performance, API, naming, simplification, tests, docs, structure. The area is entry `floor(k / 7) mod N` of the sorted directory names under `src/essentials`, followed by `src/extensions` as the last entry (`N` is the length of that list). Each area therefore gets all seven lenses in turn before the rotation moves on, and every lens/area pair comes up once every `7N` runs. A manual run may name its own lens and area. Do not add a second lens or area to "use up" the run.
+3. **Review the area through the lens only.** Read code, not reports: findings come from `src/` and `tests/`, with `file:line` evidence. Prefer findings that remove code, types, projects, tests or concepts over findings that add them. Do not edit files, push branches or open pull requests.
+4. **Check for duplicates before filing.** Search open and closed issues for the file, type or symbol: `gh issue list --state all --search "<symbol> in:title,body"`. Drop a finding that an existing issue already covers, and note the issue number in the report instead.
+5. **File at most three issues.** Each carries exactly these labels: `needs-triage`, `auto-review`, one `kind:*` (performance → `kind:perf`, API → `kind:api`, naming → `kind:naming`, simplification → `kind:simplify`, tests → `kind:tests`, docs → `kind:docs`, structure → `kind:structure`) and one `size:S|M|L` (S: one PR touching a handful of files in one project; M: one PR across a few projects; L: needs splitting). The body states the evidence (`file:line`), the concrete change, how to verify it, and the lens and area of the run. Do not label an issue `ready-for-agent`; promotion is a human triage decision.
+6. **Report:** lens, area, the issues filed with links, and the findings dropped as duplicates or as too weak to file.
+
+**Output:** at most three new `needs-triage` + `auto-review` issues, or a skip report when the backlog is at 15 or more.
+
+### Quality Fix Routine
+
+**Use when:** the fixer routine fires (weekdays), or a user asks for one fixer pass.
+
+**Workflow:**
+
+1. **Check for a reverted auto-merge.** List the commits on `main` since the last time `auto-merge-paused` was removed from [#2559](https://github.com/elsa-workflows/elsa-foundation/issues/2559) (its `unlabeled` event in `gh api repos/elsa-workflows/elsa-foundation/issues/2559/events`; with no such event, the last 30 days). If one of them reverts a PR whose head branch started with `claude/auto-fix-`, and no earlier comment on #2559 already names that revert, add `auto-merge-paused` to #2559 with a comment naming the revert commit and the PR. While the label is present, merge nothing automatically. Only a maintainer removes it.
+2. **Service open auto-fix pull requests.** List open PRs whose head branch starts with `claude/auto-fix-`. For each: fix a red check that the branch caused, answer review comments (fix, or reply with the reason when declining), and merge it when it meets the auto-merge rule in step 9. A check that is red for a reason outside the branch blocks the merge; report it rather than working around it.
+3. **Stop at three.** If three `claude/auto-fix-*` PRs are still open after servicing, report them and start nothing new.
+4. **Pick one issue.** Candidates are open issues labelled `ready-for-agent` and `auto-review`, or `simplification` and `status:todo`, that carry a `size:S` or `size:M` label. Exclude any that is labelled `type:epic`, `type:program`, `blocked`, `blocked-by-*`, `size:L`, `status:in-progress` or `status:in-review`; that carries a claim comment not followed by a release (a comment saying the work shipped or was abandoned), however old; that an open PR already references; or whose paths or kind of work fall under an open freeze window. A freeze window is open from a comment on #2559 that starts with `Freeze window open` until a later comment on #2559 that starts with `Freeze window closed`. The opening comment names the paths it covers and may also name kinds of work (for example adding, moving or renaming projects); an issue falls under the window when its expected paths match or its work is of a named kind. When the comment is ambiguous, treat the issue as frozen. Prefer `size:S`, then the oldest issue. If nothing qualifies, report that and stop. Report claims older than seven days with no release as possibly stale, for a human to clear; do not take them over.
+5. **Claim it.** Choose the branch name `claude/auto-fix-<issue number>-<short-slug>` first. Then post one comment on the issue naming the routine run, the worktree, that branch and the exact scope, and set `status:in-progress`, per [AGENTS.md](../../AGENTS.md#concurrent-work-claims). Re-read the issue's comments in the same step; if another claim appeared, release yours and pick again.
+6. **Branch** from current `origin/main`.
+7. **Implement the issue as written, and nothing else.** Build the projects you touched, run their test projects whole, and run `dotnet run --project tools/maps/Elsa.Maps.Generator -- check`. When files or project references changed, also run the architecture guard after `bash tools/architecture/restore-ci-project-graph.sh` (without it the EF dependency guard fails for want of restore assets). Never skip, disable or quarantine a test to get green. If the issue proves wrong or larger than its size label, comment that on the issue, release the claim, and stop without a PR. Before committing, check again: re-read the issue's comments and open PRs for a competing claim, and re-read #2559 for a freeze window opened since step 4 that covers the diff's paths or its kind of work (for example adding, moving or renaming projects). If either appears, stop, release the claim, and report.
+8. **Open a ready (not draft) PR** with `Closes #<n>` in the body, then post the evidence as a PR comment: commands, results, executed test counts, and a bite-proof for any behaviour change. Set `status:in-review` on the issue and link the PR there.
+9. **Auto-merge only when every condition holds:** the issue is `size:S`; its kind is `kind:simplify`, `kind:docs` or `kind:tests`; #2559 is not labelled `auto-merge-paused`; no changed path has a directory segment containing `Runtime`, `Persistence`, `EntityFramework`, `Migrations`, `Storage`, `Stores` or `Locking`, and no changed file name contains `Store`, `DbContext`, `Migration`, `Lock`, `Persist` or `Repository` (this is a coarse net for runtime and persistence code; when a change still looks like either, treat it as excluded); and the diff removes or renames no public API (no removed line in any `PublicAPI.*.txt`, and no public type or member deleted or renamed). When all hold, take the PR through [Auto-Review Loop Then Merge](#auto-review-loop-then-merge) and its [Merge Gate](#merge-gate). Otherwise leave it open for a human merge and say which condition failed in a PR comment.
+10. **Report:** whether auto-merge is paused, the PRs serviced and their state, the issue picked (or why none), the PR opened, and whether it auto-merged.
+
+**Output:** at most one new ready PR per run, serviced auto-fix PRs, and a run report.
 
 ## Speckit And Work-Unit Skills
 
@@ -167,7 +205,7 @@ The validation compares `.claude/skills/elsa-*/SKILL.md` against this catalog an
 
 **Use when:** a new feature/module is added, ported, or split from existing code.
 
-**Workflow:** read framework gates for three-layer separation, naming, feature identity, provider decomposition, and unit tests; identify the owning domain and dependency envelope; choose `.Core`, helper, and implementation package shape; plan feature registration tests, implementation tests, docs, and extension-point catalog updates before coding. After the user approves the feature/module plan, treat required tests, catalog updates, and generated-map refreshes as normal completion work.
+**Workflow:** read framework gates for three-layer separation, naming, feature identity, provider decomposition, and unit tests; identify the owning domain and dependency envelope; choose `.Core`, helper, and implementation package shape; plan behaviour tests for logic-bearing implementations and a registration test only where the feature's wiring carries logic (framework §2.23.1's composition test covers plain registrations), docs, and extension-point catalog updates before coding. After the user approves the feature/module plan, treat required tests, catalog updates, and generated-map refreshes as normal completion work.
 
 **Output:** feature/module implementation plan or Speckit-ready scope, including package placement, dependency rules, tests, and docs/catalog updates.
 
@@ -223,19 +261,19 @@ The validation compares `.claude/skills/elsa-*/SKILL.md` against this catalog an
 
 ### Add Feature Registration Tests
 
-**Use when:** a feature class is created or its service registration changes.
+**Use when:** a feature's wiring carries logic (conditional registration, decoration, options validation), or a new feature must join the composition test.
 
-**Workflow:** read framework unit-test gates; instantiate the feature registration path in a focused test; verify owned services are registered through contracts, required options/collaborators are present, and replacement/contribution registrations have the expected shape.
+**Workflow:** read framework §2.23.1. Plain wiring is covered by the one composition test, which builds a shell from every feature and resolves its registrations; make sure the new feature is part of it. Write a dedicated registration test only for wiring that carries logic.
 
-**Output:** focused registration tests that protect the feature's DI surface.
+**Output:** the feature included in the composition test, plus a focused test only where the wiring has logic.
 
 ### Add Implementation Unit Tests
 
 **Use when:** a logic-bearing implementation is created or changed.
 
-**Workflow:** read framework unit-test gates; construct the class directly with stubbed dependencies; cover meaningful branches, failure paths, and infrastructure exception wrapping where applicable; do not rely on integration tests to satisfy unit-test obligations.
+**Workflow:** read framework §2.23.2. Test the behaviour that carries risk (decisions, failure paths, boundaries, concurrency and persistence semantics, infrastructure exception wrapping) at the cheapest level that proves it. Implementations are `internal sealed`; reach them through `InternalsVisibleTo` granted to the test assembly. Never assert on markdown, documentation or source text.
 
-**Output:** branch-focused unit tests for the implementation's behavior.
+**Output:** behaviour tests for the implementation's risky paths; no coverage quota.
 
 ## Maps And Composition Skills
 

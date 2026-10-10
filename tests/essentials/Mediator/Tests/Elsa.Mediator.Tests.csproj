@@ -14,7 +14,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\..\..\src\essentials\Mediator\Elsa.Mediator.csproj" />
+    <ProjectReference Include="..\..\..\..\src\essentials\Mediator\Elsa.Mediator\Elsa.Mediator.csproj" />
   </ItemGroup>
 
 </Project>

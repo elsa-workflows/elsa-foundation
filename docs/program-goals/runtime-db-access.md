@@ -1,6 +1,8 @@
 # Runtime Database Access
 
-- **Status:** Final evidence assembled. M2/M3/M4 and integrated correctness are accepted; the [acceptance crosswalk](../reports/runtime-db-access/final-acceptance.md) records M1/M5 outcomes and residual limits. #2413 and Project 55 carry final publication/closure state.
+> **Merged into [Runtime Efficiency](runtime-efficiency.md)** by [ADR 0080 D0](../adr/0080-elsa-4-simplification-decisions.md#d0--focus). This file stays as the evidence record.
+
+- **Status:** Merged into [Runtime Efficiency](runtime-efficiency.md) (2026-10-10). Before the merge: final evidence assembled. M2/M3/M4 and integrated correctness are accepted; the [acceptance crosswalk](../reports/runtime-db-access/final-acceptance.md) records M1/M5 outcomes and residual limits. #2413 and Project 55 carry final publication/closure state.
 - **Area:** Workflow runtime / EF persistence access / HTTP workload correctness.
 - **Stewards:** Sipke and the runtime database access program lead; root lead owns integration and QA.
 - **Program:** [#2382](https://github.com/elsa-workflows/elsa-foundation/issues/2382).
@@ -8,7 +10,7 @@
 
 ## Purpose
 
-Explain and reduce avoidable database access for short durable HTTP workflows. Preserve response/output, committed state and inspection, atomic checkpoint proof, fencing, partition isolation and crash/replay behavior. Keep Immediate as host default; prove improvements on explicit Coalesced mode and report Immediate controls separately.
+Explain and reduce avoidable database access for short durable HTTP workflows. Preserve response/output, committed state and inspection, atomic checkpoint proof, fencing, partition isolation and crash/replay behavior. This program kept Immediate as the host default, proved improvements on explicit Coalesced mode, and reported Immediate controls separately. ADR 0080 D2 has since replaced Immediate/Coalesced with Durable/Balanced/Ephemeral, Balanced by default.
 
 The owner-approved primary scenario uses HttpEndpoint startup and a deterministic computation; original transform artifacts are not a prerequisite.
 

@@ -1,6 +1,7 @@
 using CShells.DependencyInjection;
 using CShells.Features;
 using CShells.Lifecycle;
+using Elsa.Activities.Runtime.Services;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
@@ -17,9 +18,6 @@ namespace Elsa.Activities.Runtime.Tests;
 public sealed class SecretResolverCompositionTests
 {
     private const string ShellName = "secret-resolvers";
-    // The composition record and the check are internal to the activities runtime, so they are matched by name.
-    private const string CompositionRecordTypeName = "RuntimeSecretResolverComposition";
-    private const string ValidatorTypeName = "RuntimeSecretResolverCompositionValidator";
     private readonly ServiceCollection _services = new();
 
     public SecretResolverCompositionTests() => new ActivitiesRuntimeFeature().ConfigureServices(_services);
@@ -58,9 +56,9 @@ public sealed class SecretResolverCompositionTests
     {
         new ActivitiesRuntimeFeature().ConfigureServices(_services);
 
-        Assert.Single(_services, descriptor => descriptor.ServiceType.Name == CompositionRecordTypeName);
+        Assert.Single(_services, descriptor => descriptor.ServiceType == typeof(RuntimeSecretResolverComposition));
         await using var provider = _services.BuildServiceProvider();
-        Assert.Single(provider.GetServices<IShellInitializer>(), initializer => initializer.GetType().Name == ValidatorTypeName);
+        Assert.Single(provider.GetServices<IShellInitializer>(), initializer => initializer is RuntimeSecretResolverCompositionValidator);
     }
 
     [Fact]

@@ -14,14 +14,15 @@ namespace Elsa.Events.Tests;
 /// </summary>
 public class BackgroundEventPublisherShutdownTests
 {
+    /// <summary>Verifies that stopping the worker drains queued events and closes the channel to new writes.</summary>
     [Fact]
     public async Task StopAsyncDrainsAllQueuedEventsThenExitsCleanly()
     {
         // Direct on the publisher: N queued, StopAsync completes the writer, the read loop drains all N
         // and returns normally (no cancellation exception).
-        var counting = new CountingInlineEventPublisher();
+        var counting = new CountingEventPublisher();
         var services = new ServiceCollection();
-        services.AddSingleton<IInlineEventPublisher>(counting);
+        services.AddSingleton<IEventPublisher>(counting);
         var provider = services.BuildServiceProvider();
         var channel = new EventChannel();
         var publisher = new BackgroundEventPublisher(channel, provider.GetRequiredService<IServiceScopeFactory>(), NullLogger<BackgroundEventPublisher>.Instance);
@@ -41,6 +42,7 @@ public class BackgroundEventPublisherShutdownTests
         Assert.False(channel.Writer.TryWrite(TestEvents.Background())); // writer completed
     }
 
+    /// <summary>Verifies that task-manager shutdown dispatches every queued event before cancelling execution.</summary>
     [Fact]
     public async Task HostShutdownDispatchesAllQueuedEventsAndExitsCleanly()
     {
@@ -49,7 +51,7 @@ public class BackgroundEventPublisherShutdownTests
         // which now signals StopAsync BEFORE cancelling the lifetime token. If StopAsync were a dead hook,
         // the writer would never complete and the queued events could be cut off by the token cancel — so
         // "all N dispatched, clean exit" is the wiring proof.
-        var counting = new CountingInlineEventPublisher();
+        var counting = new CountingEventPublisher();
         await using var provider = EventTestHosts.BuildProductionLikeProvider(counting);
 
         var channel = provider.GetRequiredService<IEventChannel>();

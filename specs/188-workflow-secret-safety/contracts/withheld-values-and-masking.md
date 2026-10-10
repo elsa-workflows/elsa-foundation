@@ -12,7 +12,25 @@ Proposed behavior for FR-010 to FR-012. Decisions are in [research R3, R8 and R9
   other present value whose effective policy requires encryption. Not recoverable. Activation refuses it with
   `VF-ACT-010`. This is a backstop: publish refuses literal and expression bindings on encryption-required inputs
   (`VF-ACT-011`), so only paths that skip publish (runtime artifact import, research R13) or future producers reach
-  it.
+  it. As built in slice 7: the rewriter withholds when the destination's effective policy or the value's own policy
+  requires encryption, before it decides between inline and external storage. The same rule
+  (`RuntimeEncryptionWithholding`) runs in `ActivityCompletionProjector` before it decides whether to externalize an
+  activity result, so the completion result and its projections carry the marker. These two are the only callers of
+  `IExternalPayloadStore.WriteAsync` in `src`, so neither writes such a value to an `IExternalPayloadStore`; a
+  replacement `IRuntimeActivityInputMaterializer` or any other host-supplied writer is outside this. The rule's
+  predicate, a present value whose own policy (or the destination's) requires encryption, is
+  `ValueEnvelope.HoldsValueRequiringEncryption` in `Elsa.Workflows.Runtime.Core`, and its marker is
+  `WithheldValue.PolicyRequiresEncryption()`; producer withholding, the output capture, the commit backstop and the
+  execution evidence enricher all use that one predicate. An output capture of a withheld result, or of a present
+  one whose policy requires encryption (only a projection built outside the completion projector carries one), never
+  reaches its storage driver. As built in review round 2: a capture into a workflow variable, the only target
+  `RuntimeOutputCaptureCompiler` emits, writes the withheld marker into the root variable frame, as `Set` does: the
+  projection's own withheld envelope, or a `PolicyRequiresEncryption` marker built by `RuntimeEncryptionWithholding`.
+  The activity completes, and a reader of the variable refuses the marker with `VF-ACT-010`. A capture into a durable
+  value row (any other value id, such as a workflow output `output:<name>`, which only a hand-built or imported
+  artifact declares) has no withheld form and is refused with `VF-ACT-010`. Of the intrinsics, `Set` keeps the marker
+  in its variable and `Return` as its completion result; `Control`, `SetCorrelationId`, `SetInstanceName` and
+  `SetOutput` refuse it with `VF-ACT-010`.
 
 ## Surfaces and what they show
 
@@ -20,9 +38,9 @@ Proposed behavior for FR-010 to FR-012. Decisions are in [research R3, R8 and R9
 |---|---|---|
 | Persisted activity execution state (`ContentJson`) | committed `ActivityExecutionState.InputSnapshot` | the withheld envelope |
 | Persisted workflow instance state | `WorkflowExecutionState`, durable values | no secret value; `SecretRead` cannot target variables, outputs or graph boundary values, because publish refuses `Secret` bindings on intrinsics, graph activities and checkpoint participants (`VF-ACT-012`, research R12) |
-| Execution evidence | `ExecutionEvidenceCheckpointEnricher` over commits | a withheld disposition with the reference name; `DescribeContent` never reads a value from a withheld envelope |
-| Run inspector: activity inputs | `ActivityExecutionInspection.BuildInputValueSnapshots` | `isSensitive: true`, value absent, a withheld marker with the reference name |
-| Run inspector: executable bindings | `WorkflowExecutableInspector` | the reference (name, type, scope) even though the binding is sensitive; references are not material |
+| Execution evidence | `ExecutionEvidenceCheckpointEnricher` over commits | a withheld disposition with the reference name; `DescribeContent` never reads a value from a withheld envelope. As built: disposition `withheld` and `secretReferenceName`, whatever `RedactSensitiveValues` says |
+| Run inspector: activity inputs | `ActivityExecutionInspection.BuildInputValueSnapshots` | `isSensitive: true`, value absent, a withheld marker with the reference name. As built: the activity-execution view carries `withheldKind` and `secretReferenceName` for every caller, reports the record sensitive with capture state and access state `unavailable`, and the value-payload read answers `unavailable` for it |
+| Run inspector: executable bindings | `WorkflowExecutableInspector` | the reference (name, type, scope) even though the binding is sensitive; references are not material. As built: in the input-sources view, as `secret` and as `summary`; the structural detail view shows no source detail for any binding |
 | Diagnostic snapshots | `DefaultDiagnosticSnapshotFactory` via `ActivityExecutionInspection` and `RuntimeContainerVariableEvidence` | nothing from the value: the payload capture policy captures nothing for sensitive payloads, and a withheld envelope has no value to capture |
 
 Each surface must tolerate `ValuePresence.Withheld` without throwing. A surface that throws on it would fault the
@@ -35,6 +53,46 @@ activity before activation, because `BuildInputValueSnapshots` runs on the invok
 `Policy.RequiresEncryption == true`. It scans activity execution states (input snapshot, completion), durable
 values and inspection projections. The message names the state id and value key, never the value.
 
+As built in slice 7: it scans every envelope a workflow or activity execution state carries (the root, container and
+iteration variable frames, the iteration frame request, the input snapshot, private state, completion result and
+trigger deliveries), and each written durable value whose metadata (`runtime.requiresEncryption`) marks it as
+requiring encryption and that carries an external reference or a non-null inline value. It does not scan an
+inspection projection: a projection holds captured payloads and an `IsSensitive` flag, with no envelope and no
+policy, so the rule has nothing to judge there. A projection's input value records are rendered from the activity
+state's committed input snapshot, which the rule scans. Its output value records are not: they are built from the
+completion projector's projections, which hold no value when the result policy requires encryption (the projector
+withholds them), and `ActivityExecutionInspection.BuildOutputValueSnapshots` flags such a record sensitive, so the
+default payload capture policy captures nothing for it.
+
+## Known gaps
+
+What slice 7 leaves unguarded, recorded as follow-ups in `tasks.md` T090:
+
+- Loop iteration values ride scheduler payloads in the post-commit outbox as JSON, which the backstop does not read as
+  envelopes. Only a third-party caller of `ScheduleChildActivity` can reach this: for the first-party producers the
+  iteration collection arrives withheld and fails activation first.
+- Bookmark payloads and outbox payloads are not scanned by the backstop.
+- `WorkflowScheduleActivitySchedulerWorkHandler` saves a new activity execution state directly, without the
+  committer and so without the backstop, when it is constructed without a `RuntimeCheckpointCommitter` or an
+  inspection accumulator. No shipped composition reaches that fallback: `AddWorkflowRuntime` registers the handler,
+  the committer and the accumulator unconditionally, and the handler's constructor gives neither parameter a default,
+  so the container always supplies both. Only direct construction with nulls, as some tests do, reaches it.
+- `DeterministicResultCollector` moves envelopes without reading their values, and has no production consumer.
+- An output capture into a workflow variable whose declaration requires encryption, of a result whose policy does
+  not: the storage driver encodes the value before the variable's declared policy is read, and the commit backstop
+  then refuses the commit. The capture path does not yet know the destination policy, so a custom
+  `IRuntimeDurableValueStorageDriver` must persist nothing outside the commit from `EncodeAsync`: the encoding it
+  returns is all that may be stored. The in-tree JSON driver writes nothing outside the commit.
+- `GraphActivityScope` (`Elsa.Activities.Graph.Runtime`) is a second in-tree caller of
+  `IRuntimeDurableValueStorageDriver.EncodeAsync`. It carries no protection policy and writes no
+  `runtime.requiresEncryption` metadata on the durable values it stores, so the commit backstop cannot judge them.
+  Nothing first-party reaches it with such a value: graph contracts declare `ActivityValuePolicy.Default` for their
+  inputs and results (the result with a `Result` lifecycle), which does not require encryption, and graph nodes refuse
+  `Secret` bindings (`VF-ACT-012`). A follow-up under T090.
+- Found by slice 9's review: an author's sensitivity on a Set Variable literal is dropped at compile time, because
+  `ExecutableNodeCompiler` builds the intrinsic's `InputDefinition` without `IsSensitive`, so the evidence enricher sees
+  a non-sensitive envelope and a sensitive non-credential literal reaches the evidence in clear (T090).
+
 ## Masking (FR-012)
 
 | Text source | Mechanism |
@@ -46,8 +104,75 @@ values and inspection projections. The message names the state id and value key,
 | Runtime log lines that include the exception | receive the masked exception object |
 | Runtime spans | carry the exception type only today (`WorkflowSchedulerDrainer`); a test pins that no exception message is added |
 
-The marker is `[secret:<reference name>]`. Values are matched ordinally in raw and JSON-escaped form. The mask lives
-in the work item's DI scope and is never persisted or logged.
+The marker is `[secret:<reference name>]`. Values are matched ordinally in three forms: raw (as written), as the
+default JSON encoder writes it, and as the relaxed JSON encoder (`UnsafeRelaxedJsonEscaping`) writes it. Other forms
+are not matched: URL-encoded, base64, trimmed, case-changed or substring forms of a value pass through. Where two
+registered values overlap only partly, the one-pass, longest-first replacement can leave a fragment of the shorter one
+next to the marker of the other. `Exception.Data` is not carried into the masked exception at all. The lower bound is
+one character: only an empty value is ignored, because an empty string cannot be told apart in text, while any
+minimum length above one would let a short value through unmasked. The mask lives in the work item's DI scope and is
+never persisted or logged by the default implementation.
+
+As built (slice 8), where the code settled what the table leaves open:
+
+- **Contract.** `IRuntimeSecretMask` is a replacement contract with a scoped default (`DefaultRuntimeSecretMask`); a
+  second registration fails shell activation (`MultipleRuntimeSecretMasksException`), as the secret resolver's does.
+  Besides `Register` and `Mask` it has `HasRegistrations` and `Release`, which the fault boundaries need: the first to
+  decide whether to replace an exception, the second to release the values. Both stay on the contract (review round
+  1). `HasRegistrations` cannot be derived from `Mask`, because an exception is replaced whenever a value is
+  registered, whether or not its text contains one. `Release` is kept because the reviewers accepted releasing once
+  the outcome is recorded rather than at scope disposal, and a replacement must see that call to honor it; releasing
+  only through `DefaultRuntimeSecretMask` would leave a replacement holding values until the scope ends. The contract
+  documents what a replacement owes: `HasRegistrations` answers `true` from the first non-empty registration until
+  `Release`, and a replacement that answers `false` while holding a value turns masking off for that execution
+  (fail-open); one that ignores `Release` holds values until the scope ends and masks no less.
+- **Registration.** The activator's resolution step (`ActivitySecretInputResolver`) registers each value under
+  `ActivityActivationRequest.ActivityExecutionId`, a member slice 8 adds, as soon as it resolves, so a later reference
+  failing in the same activation is masked (T094).
+- **When an exception is replaced.** Whenever any value is registered for the execution, whether or not its text
+  contains one, because an exception can carry a value where the mask cannot see it. Two exceptions: an exception the
+  activation-failure handler classifies (a missing storage driver, activity consumer or secret resolver) is handed on
+  as it is, because its text is built from deployment identifiers and replacing it would turn a deployment problem
+  that parks the activity into a fault; and the cancellation a cancellation arm rethrows is not replaced, so it stays a
+  cancellation. When the arm's disposal also failed it throws an aggregate instead, which is not a cancellation and
+  which the drainer records as a handler fault: the aggregate holds a masked copy of the cancellation (an
+  `OperationCanceledException` for the same token, with the masked message and inner chain) and the masked disposal
+  failures (review round 1; the arm still rethrows the original cancellation, unmasked, when no disposal failed).
+- **Codes are not masked.** `SecretMaskedException` copies the failure code as it is, and a returned fault's code,
+  category and fault type are kept as the activity set them (review round 1). Masking a short value that occurs in a
+  code (a value `e` in `StoreUnavailable`) would corrupt the persisted code. A secret resolution failure code is
+  validated as an ASCII code name (`RuntimeSecretResolution.Failure`); a code, category or fault type that other
+  activity code chooses is persisted as it chose it, like its outputs.
+- **Where.** In the invoke and resume handlers, every arm that records a thrown exception records through one method
+  per handler (`RecordFaultAsync`), which masks the exception. The returned-fault arm masks `ActivityFault.Message` once
+  before `ToNormalized` and records through the unmasked core (`RecordMaskedFaultAsync`), so the durable fault and the
+  incident carry the same text: masking the exception built from the masked fault again would mask a value occurring
+  inside the inserted marker (value `api` against reference `payments.api-key`). In the parent completion and parent
+  notification handlers, every arm that records a thrown exception records through `RecordParentFaultAsync`, which
+  masks it, and the returned-fault arm masks the fault once and builds its request from that masked fault directly.
+  When the parent completion handler has no checkpoint committer it rethrows the masked exception instead of recording.
+- **Lifetime.** Each handler releases the execution's values once it has recorded the outcome, not at lease disposal:
+  every fault arm disposes the lease before it records, and the activator disposes the lease of a failed activation
+  before the handler sees the failure (the T094 case), so values released at disposal would be gone exactly when needed.
+- **Short values.** Only an empty value is ignored. Every non-empty value is masked however short: a minimum length
+  would let a short secret through silently, while masking a one-character value only makes the text hard to read.
+- **Log lines.** No runtime log line on these paths includes the recorded exception today; T073 renders the exception
+  the boundary hands on through `RecordingLogger` to prove that one that did would show the marker. The canary
+  (slice 9) captures every log category in a full host.
+
+Known limits of slice 8, recorded and not fixed (review round 1):
+
+- The activation-failure pass-through is keyed on exception type: `ActivityActivationFailureHandler.Classify` matches
+  `ActivityResolutionException` among others, a public, unsealed type, so activity code that throws it (or a subclass)
+  carrying a value bypasses masking and is recorded as an activation failure with its text as written.
+- `SecretMaskedException` does not carry `IActivityFaultCausation`. Only the graph recovery exception implements it
+  today, and graph activities cannot bind secrets (`VF-ACT-012`), so no masked exception loses a causation it had.
+- The span test pins the activity fault path only (`FaultIncidentExecutionTests`); the drainer's handler-fault catch
+  is left to slice 9's injected scenario S9.
+- Codes are never masked. A third-party activity that puts a resolved value in `ActivityFault.Code`, `Category` or
+  `FaultType`, or in the `FailureCode` of its own `IRuntimeFaultClassification` exception, persists it unmasked in the
+  fault and incident. The built-in activities are safe (the `Fault` activity's inputs refuse secret bindings, IP22);
+  research R9 masks the message only.
 
 Not covered by masking in phase 0 (spec assumption): text an activity writes to the console or its own logger, values
 it returns as outputs, and values it places in private state or bookmark payloads. For the built-ins, publish refuses a

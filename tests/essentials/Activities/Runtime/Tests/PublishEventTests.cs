@@ -192,6 +192,28 @@ public sealed class PublishEventTests
     }
 
     /// <summary>
+    /// A start admission shed at capacity wrote nothing and left its key unconsumed, so the delivery must fail as
+    /// transient for the outbox to retry it; reporting it delivered would lose the start (#2548).
+    /// </summary>
+    [Fact]
+    public async Task Handler_FailsAsTransient_WhenAdmissionShedsAStart()
+    {
+        var router = new RecordingStimulusRouter(
+            StimulusStartOutcome.Started("binding-1", "artifact-1", "wfexec-started"),
+            StimulusStartOutcome.Shed("binding-2", "artifact-2", TimeSpan.FromSeconds(1)));
+        var buffer = new PublishStimulusStagingBuffer(new FakeTimeProvider(Now));
+        buffer.StagePublishStimulus(new PublishStimulusRequest(WorkflowExecutionId, ActivityExecutionId, "e"));
+        var intent = Assert.Single(buffer.TakePublishStimuli(WorkflowExecutionId, ActivityExecutionId));
+
+        var exception = await Assert.ThrowsAsync<RuntimePostCommitDeliveryException>(async () =>
+            await new PublishStimulusExecutor(router).HandleAsync(intent));
+
+        Assert.Equal(PostCommitFailureKind.Transient, exception.Kind);
+        Assert.Equal("publish-stimulus-start-shed", exception.Code);
+        Assert.Single(router.Requests);
+    }
+
+    /// <summary>
     /// A routed start or resume whose checkpoint breaks a checkpoint rule fails the same way on every attempt, so the
     /// delivery is permanent, including when the drain hands the violation back wrapped with its observers' failures.
     /// </summary>

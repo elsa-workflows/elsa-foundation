@@ -32,7 +32,7 @@ The per-domain catalog (framework §2.22.1) of everything you can implement or o
 ### Commands — `IUpdateDraftCommand` + 5 lifecycle *(Core — `Elsa.Workflows.Design.Persistence.Core`)*
 Full detail in the persistence catalog: [`Elsa.Workflows.Design.Persistence.EntityFrameworkCore/EXTENSION_POINTS.md`](../Elsa.Workflows.Design.Persistence.EntityFrameworkCore/EXTENSION_POINTS.md).
 
-Summary: `IUpdateDraftCommand`, `ICreateDraftCommand`, `ICloneDraftFromVersionCommand`, `IDiscardDraftCommand`, `IPromoteDraftToVersionCommand`, `IAddWorkflowDefinitionCommand` — each backed by an EF Core default; `services.Replace(...)` to swap individual commands while keeping the rest (the canonical *swap-commands-keep-queries* example per Joey's framing).
+Summary: `IUpdateDraftCommand`, `ICreateDraftCommand`, `ICloneDraftFromVersionCommand`, `IDiscardDraftCommand`, `IPromoteDraftToVersionCommand`, `IAddWorkflowDefinitionCommand` — each backed by an EF Core default; `services.Replace(...)` to swap individual commands while keeping the rest (the canonical *swap-commands-keep-queries* example per Joey's framing). A replacement `IPromoteDraftToVersionCommand` keeps its content precondition: it takes the `WorkflowDraftStateHash` of the draft the Drafts/Promote route admitted and refuses with `WorkflowDraftChangedException` (409) when the draft it promotes no longer has that content (spec 188, research R7).
 
 ### `IDraftStateDiffEngine` *(Contract — `Elsa.Workflows.Design.Persistence.Core`)*
 - **Signature:** `IReadOnlyList<IEvent> Evaluate(string draftId, WorkflowDefinitionState stored, IReadOnlyCollection<DesignMetadataRecord> storedLayout, WorkflowDefinitionState desired, IReadOnlyCollection<DesignMetadataRecord> desiredLayout)`

@@ -24,22 +24,22 @@ public sealed class ValueDurabilityPolicyTests
     private const string InputRole = "Input 'apiKey' on activity node 'node-1'";
 
     [Fact]
-    public async Task Snapshot_materialization_preserves_external_sensitive_encrypted_and_redacted_policy_without_argument_wrappers()
+    public async Task Snapshot_materialization_preserves_external_sensitive_and_redacted_policy_without_argument_wrappers()
     {
+        // A policy that also requires encryption is withheld instead (spec 188, RuntimeExternalEnvelopeStorageWithholdingTests).
         var policy = new ValueProtectionPolicy(
             DurableValueLifecycle.Instance,
             DurableValueStorage.External,
             isSensitive: true,
-            requiresEncryption: true,
             redactionMode: "Full");
         var externalReference = new DurableValueExternalReference(
-            "encrypted-payloads",
+            "external-payloads",
             "payloads/message-1",
             new Dictionary<string, string>());
         var node = NewTypedNode(
             ValueEnvelope.External(StringType, externalReference, policy),
             policy,
-            new ActivityValuePolicy(true, true, true, "Full"));
+            new ActivityValuePolicy(true, true, false, "Full"));
 
         var snapshot = await NewMaterializer().MaterializeSnapshotAsync(
             node,
@@ -53,7 +53,6 @@ public sealed class ValueDurabilityPolicyTests
         Assert.Equal("payloads/message-1", value.ExternalReference!.Locator);
         Assert.Equal(DurableValueStorage.External, value.Policy.Storage);
         Assert.True(value.Policy.IsSensitive);
-        Assert.True(value.Policy.RequiresEncryption);
         Assert.Equal("Full", value.Policy.RedactionMode);
     }
 
@@ -138,7 +137,7 @@ public sealed class ValueDurabilityPolicyTests
         var policy = SensitiveExternalPolicy();
         var source = ValueEnvelope.External(
             StringType,
-            new DurableValueExternalReference("encrypted", "requests/customer-7", new Dictionary<string, string>()),
+            new DurableValueExternalReference("external", "requests/customer-7", new Dictionary<string, string>()),
             policy);
         var binding = new RuntimeInputBinding(
             "message",
@@ -150,7 +149,7 @@ public sealed class ValueDurabilityPolicyTests
             workflowInputEnvelopes: new Dictionary<string, ValueEnvelope> { ["customer-id"] = source });
 
         var snapshot = await NewMaterializer().MaterializeSnapshotAsync(
-            NewTypedNode(binding, new ActivityValuePolicy(true, true, true, "Full")),
+            NewTypedNode(binding, new ActivityValuePolicy(true, true, false, "Full")),
             "invocation-1",
             context,
             Now);
@@ -205,11 +204,10 @@ public sealed class ValueDurabilityPolicyTests
             DurableValueLifecycle.Instance,
             DurableValueStorage.External,
             isSensitive: true,
-            requiresEncryption: true,
             redactionMode: "Full",
             retentionPolicy: "P30D");
         var sourceReference = new DurableValueExternalReference(
-            "encrypted",
+            "external",
             "requests/customer-7",
             new Dictionary<string, string>());
         var store = new RecordingExternalPayloadStore(new Dictionary<string, JsonElement>
@@ -217,8 +215,8 @@ public sealed class ValueDurabilityPolicyTests
             [sourceReference.Locator] = JsonSerializer.SerializeToElement(new { customer = new { id = "customer-7" } })
         });
         var contractPolicy = new ActivityValuePolicy(
-            true, true, true, "Full", ActivityValueLifecycle.Instance,
-            ActivityValueStorage.External, "encrypted", "P30D");
+            true, true, false, "Full", ActivityValueLifecycle.Instance,
+            ActivityValueStorage.External, "external", "P30D");
         var binding = new RuntimeInputBinding(
             "message",
             StringType,
@@ -245,11 +243,11 @@ public sealed class ValueDurabilityPolicyTests
         var contractPolicy = new ActivityValuePolicy(
             IsPersistable: true,
             IsSensitive: true,
-            RequiresEncryption: true,
+            RequiresEncryption: false,
             RedactionMode: "Full",
             Lifecycle: ActivityValueLifecycle.Instance,
             Storage: ActivityValueStorage.External,
-            StorageProfile: "encrypted-inputs");
+            StorageProfile: "external-inputs");
         var policy = ValuePolicyCombiner.ToProtectionPolicy(contractPolicy);
         var binding = new RuntimeInputBinding(
             "message",
@@ -269,14 +267,14 @@ public sealed class ValueDurabilityPolicyTests
         var value = snapshot.Values["message"];
         Assert.Null(value.InlineValue);
         Assert.Equal("payloads/activity:invocation-1:input:message", value.ExternalReference!.Locator);
-        Assert.Equal("encrypted-inputs", Assert.Single(store.Writes).StorageProfile);
+        Assert.Equal("external-inputs", Assert.Single(store.Writes).StorageProfile);
         Assert.Equal("secret", store.Writes.Single().Payload.GetString());
     }
 
     [Fact]
     public async Task Externalization_rejects_a_provider_response_with_a_different_storage_profile()
     {
-        var policy = ExternalPolicy("encrypted-inputs");
+        var policy = ExternalPolicy("external-inputs");
         var binding = new RuntimeInputBinding(
             "message",
             StringType,
@@ -290,7 +288,7 @@ public sealed class ValueDurabilityPolicyTests
         var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
             new RuntimeActivityInputMaterializer(new RuntimeInputBindingResolver(), store)
                 .MaterializeSnapshotAsync(
-                    NewTypedNode(binding, new ActivityValuePolicy(true, false, false, null, Storage: ActivityValueStorage.External, StorageProfile: "encrypted-inputs")),
+                    NewTypedNode(binding, new ActivityValuePolicy(true, false, false, null, Storage: ActivityValueStorage.External, StorageProfile: "external-inputs")),
                     "invocation-1",
                     NewResolutionContext(),
                     Now)
@@ -303,7 +301,7 @@ public sealed class ValueDurabilityPolicyTests
     [Fact]
     public async Task Externalization_rejects_a_provider_response_with_a_blank_locator()
     {
-        var policy = ExternalPolicy("encrypted-inputs");
+        var policy = ExternalPolicy("external-inputs");
         var binding = new RuntimeInputBinding(
             "message",
             StringType,
@@ -317,7 +315,7 @@ public sealed class ValueDurabilityPolicyTests
         var exception = await Assert.ThrowsAsync<ArgumentException>(() =>
             new RuntimeActivityInputMaterializer(new RuntimeInputBindingResolver(), store)
                 .MaterializeSnapshotAsync(
-                    NewTypedNode(binding, new ActivityValuePolicy(true, false, false, null, Storage: ActivityValueStorage.External, StorageProfile: "encrypted-inputs")),
+                    NewTypedNode(binding, new ActivityValuePolicy(true, false, false, null, Storage: ActivityValueStorage.External, StorageProfile: "external-inputs")),
                     "invocation-1",
                     NewResolutionContext(),
                     Now)
@@ -354,15 +352,14 @@ public sealed class ValueDurabilityPolicyTests
         var sourcePolicy = new ValueProtectionPolicy(
             DurableValueLifecycle.Instance,
             DurableValueStorage.External,
-            metadata: new Dictionary<string, string> { [ValuePolicyCombiner.StorageProfileMetadataKey] = "encrypted" });
+            metadata: new Dictionary<string, string> { [ValuePolicyCombiner.StorageProfileMetadataKey] = "external" });
         var destinationPolicy = new ValueProtectionPolicy(
             DurableValueLifecycle.Instance,
             DurableValueStorage.External,
             isSensitive: true,
-            requiresEncryption: true,
             redactionMode: "Full",
-            metadata: new Dictionary<string, string> { [ValuePolicyCombiner.StorageProfileMetadataKey] = "encrypted" });
-        var reference = new DurableValueExternalReference("encrypted", "payloads/source", new Dictionary<string, string>());
+            metadata: new Dictionary<string, string> { [ValuePolicyCombiner.StorageProfileMetadataKey] = "external" });
+        var reference = new DurableValueExternalReference("external", "payloads/source", new Dictionary<string, string>());
         var binding = new RuntimeInputBinding(
             "message",
             StringType,
@@ -380,7 +377,7 @@ public sealed class ValueDurabilityPolicyTests
 
         var snapshot = await new RuntimeActivityInputMaterializer(new RuntimeInputBindingResolver(), store)
             .MaterializeSnapshotAsync(
-                NewTypedNode(binding, new ActivityValuePolicy(true, true, true, "Full", Storage: ActivityValueStorage.External, StorageProfile: "encrypted")),
+                NewTypedNode(binding, new ActivityValuePolicy(true, true, false, "Full", Storage: ActivityValueStorage.External, StorageProfile: "external")),
                 "invocation-1",
                 context,
                 Now);
@@ -389,16 +386,15 @@ public sealed class ValueDurabilityPolicyTests
         Assert.NotEqual(reference.Locator, value.ExternalReference!.Locator);
         var write = Assert.Single(store.Writes);
         Assert.True(write.Policy.IsSensitive);
-        Assert.True(write.Policy.RequiresEncryption);
         Assert.Equal("Full", write.Policy.RedactionMode);
     }
 
     [Fact]
     public async Task Same_profile_external_source_is_rewritten_when_destination_adds_policy_metadata()
     {
-        var sourcePolicy = ExternalPolicy("encrypted");
-        var destinationPolicy = ExternalPolicy("encrypted", new KeyValuePair<string, string>("classification", "restricted"));
-        var reference = new DurableValueExternalReference("encrypted", "payloads/source", new Dictionary<string, string>());
+        var sourcePolicy = ExternalPolicy("external");
+        var destinationPolicy = ExternalPolicy("external", new KeyValuePair<string, string>("classification", "restricted"));
+        var reference = new DurableValueExternalReference("external", "payloads/source", new Dictionary<string, string>());
         var binding = new RuntimeInputBinding(
             "message",
             StringType,
@@ -412,7 +408,7 @@ public sealed class ValueDurabilityPolicyTests
 
         var snapshot = await new RuntimeActivityInputMaterializer(new RuntimeInputBindingResolver(), store)
             .MaterializeSnapshotAsync(
-                NewTypedNode(binding, new ActivityValuePolicy(true, false, false, null, Storage: ActivityValueStorage.External, StorageProfile: "encrypted")),
+                NewTypedNode(binding, new ActivityValuePolicy(true, false, false, null, Storage: ActivityValueStorage.External, StorageProfile: "external")),
                 "invocation-1",
                 NewResolutionContext(workflowInputEnvelopes: new Dictionary<string, ValueEnvelope>
                 {
@@ -431,13 +427,13 @@ public sealed class ValueDurabilityPolicyTests
         var contractPolicy = new ActivityValuePolicy(
             true,
             true,
-            true,
+            false,
             "Full",
             ActivityValueLifecycle.Instance,
             ActivityValueStorage.External,
-            "encrypted-inputs",
+            "external-inputs",
             "P30D");
-        var reference = new DurableValueExternalReference("encrypted-source", "payloads/source-json", new Dictionary<string, string>());
+        var reference = new DurableValueExternalReference("external-source", "payloads/source-json", new Dictionary<string, string>());
         var binding = new RuntimeInputBinding(
             "message",
             AnyType,
@@ -466,7 +462,7 @@ public sealed class ValueDurabilityPolicyTests
         Assert.Equal("payloads/activity:invocation-1:input:message", value.ExternalReference!.Locator);
         var write = Assert.Single(store.Writes);
         Assert.Equal(AnyType, write.Type);
-        Assert.Equal("encrypted-inputs", write.StorageProfile);
+        Assert.Equal("external-inputs", write.StorageProfile);
         Assert.Equal("P30D", write.Policy.RetentionPolicy);
         Assert.Equal("Ada", write.Payload.GetProperty("name").GetString());
         Assert.Equal("external", write.Payload.GetProperty("tags")[0].GetString());
@@ -475,7 +471,7 @@ public sealed class ValueDurabilityPolicyTests
     [Fact]
     public async Task External_xml_source_is_read_and_converted_to_registered_typed_alias()
     {
-        var reference = new DurableValueExternalReference("encrypted-source", "payloads/source-xml", new Dictionary<string, string>());
+        var reference = new DurableValueExternalReference("external-source", "payloads/source-xml", new Dictionary<string, string>());
         var binding = new RuntimeInputBinding(
             "message",
             CustomerType,
@@ -516,7 +512,7 @@ public sealed class ValueDurabilityPolicyTests
     [Fact]
     public async Task External_payload_read_failures_are_distinct_from_conversion_failures()
     {
-        var missingReference = new DurableValueExternalReference("encrypted-source", "payloads/missing", new Dictionary<string, string>());
+        var missingReference = new DurableValueExternalReference("external-source", "payloads/missing", new Dictionary<string, string>());
         var missingBinding = new RuntimeInputBinding(
             "message",
             AnyType,
@@ -538,7 +534,7 @@ public sealed class ValueDurabilityPolicyTests
         Assert.Contains("VF-ACT-005", missing.Message, StringComparison.Ordinal);
         Assert.Contains("could not be read", missing.Message, StringComparison.Ordinal);
 
-        var malformedReference = new DurableValueExternalReference("encrypted-source", "payloads/malformed", new Dictionary<string, string>());
+        var malformedReference = new DurableValueExternalReference("external-source", "payloads/malformed", new Dictionary<string, string>());
         var malformed = await Assert.ThrowsAsync<RuntimeValueConversionException>(() =>
             new RuntimeActivityInputMaterializer(new RuntimeInputBindingResolver(), new RecordingExternalPayloadStore(new Dictionary<string, JsonElement>
                 {
@@ -560,7 +556,7 @@ public sealed class ValueDurabilityPolicyTests
     [Fact]
     public async Task External_json_conversion_enforces_the_pinned_payload_limits_after_dereference()
     {
-        var reference = new DurableValueExternalReference("encrypted-source", "payloads/large", new Dictionary<string, string>());
+        var reference = new DurableValueExternalReference("external-source", "payloads/large", new Dictionary<string, string>());
         var binding = new RuntimeInputBinding(
             "message",
             AnyType,
@@ -596,10 +592,9 @@ public sealed class ValueDurabilityPolicyTests
             DurableValueLifecycle.Result,
             DurableValueStorage.External,
             isSensitive: true,
-            requiresEncryption: true,
             redactionMode: "Full",
-            metadata: new Dictionary<string, string> { [ValuePolicyCombiner.StorageProfileMetadataKey] = "encrypted" });
-        var reference = new DurableValueExternalReference("encrypted", "payloads/expression-source", new Dictionary<string, string>());
+            metadata: new Dictionary<string, string> { [ValuePolicyCombiner.StorageProfileMetadataKey] = "external" });
+        var reference = new DurableValueExternalReference("external", "payloads/expression-source", new Dictionary<string, string>());
         var store = new RecordingExternalPayloadStore(new Dictionary<string, JsonElement>
         {
             [reference.Locator] = JsonSerializer.SerializeToElement("secret")
@@ -629,7 +624,6 @@ public sealed class ValueDurabilityPolicyTests
         var value = snapshot.Values["message"];
         Assert.Equal(DurableValueLifecycle.Result, value.Policy.Lifecycle);
         Assert.True(value.Policy.IsSensitive);
-        Assert.True(value.Policy.RequiresEncryption);
         Assert.Equal("Full", value.Policy.RedactionMode);
         Assert.Equal("secret", Assert.Single(store.Writes).Payload.GetString());
     }
@@ -948,11 +942,12 @@ public sealed class ValueDurabilityPolicyTests
             activityContract: contract);
     }
 
+    // Sensitive, not encryption-requiring: an external value that requires encryption is withheld instead of being
+    // referenced or written again (spec 188, RuntimeExternalEnvelopeStorageWithholdingTests).
     private static ValueProtectionPolicy SensitiveExternalPolicy() => new(
         DurableValueLifecycle.Instance,
         DurableValueStorage.External,
         isSensitive: true,
-        requiresEncryption: true,
         redactionMode: "Full");
 
     private static ValueProtectionPolicy ExternalPolicy(

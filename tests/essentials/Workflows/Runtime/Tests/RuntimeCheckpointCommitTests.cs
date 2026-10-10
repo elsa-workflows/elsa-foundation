@@ -330,6 +330,25 @@ public sealed class RuntimeCheckpointCommitTests
     }
 
     [Fact]
+    public async Task InMemoryCheckpointCommitStore_AttemptsOfOneCommitHoldIndependentRootWriteLeases()
+    {
+        var workflowStateStore = new InMemoryWorkflowExecutionStateStore();
+        var manager = new FirstAttemptRefusingRootWriteLeaseManager();
+        var writer = new InMemoryRuntimeCheckpointCommitStore(workflowStateStore, rootWriteLeaseManager: manager);
+        var decision = new RuntimeCheckpointPersistenceDecision(RuntimeCheckpointPersistenceMode.Immediate);
+        var commit = NewCommit(RuntimeCheckpointNames.WorkflowStarted);
+
+        await Assert.ThrowsAsync<WorkflowExecutableRootWriteLeaseUnavailableException>(() => writer.CommitAsync(commit, decision).AsTask());
+        await writer.CommitAsync(commit, decision);
+
+        // A retry that overlaps a slow first attempt must not share its lease, or the first release unfences the retry (#2286).
+        Assert.Equal(2, manager.LeaseIds.Count);
+        Assert.All(manager.LeaseIds, leaseId => Assert.Matches($"^checkpoint:{commit.CommitId}:[0-9a-f]{{32}}$", leaseId));
+        Assert.NotEqual(manager.LeaseIds[0], manager.LeaseIds[1]);
+        Assert.Single(writer.ListCommits());
+    }
+
+    [Fact]
     public async Task InMemoryCheckpointCommitStore_ProjectsWorkflowExecutionStateChanges()
     {
         var workflowStateStore = new InMemoryWorkflowExecutionStateStore();
@@ -1500,5 +1519,22 @@ public sealed class RuntimeCheckpointCommitTests
 
         public ValueTask<IReadOnlyCollection<ExecutionLivenessState>> ListAllAsync(CancellationToken cancellationToken = default) =>
             ValueTask.FromResult<IReadOnlyCollection<ExecutionLivenessState>>([]);
+    }
+
+    private sealed class FirstAttemptRefusingRootWriteLeaseManager : IWorkflowExecutableRootWriteLeaseManager
+    {
+        public List<string> LeaseIds { get; } = [];
+
+        public ValueTask ExecuteAsync(
+            string artifactId,
+            string leaseId,
+            Func<CancellationToken, ValueTask> write,
+            CancellationToken cancellationToken = default)
+        {
+            LeaseIds.Add(leaseId);
+            return LeaseIds.Count == 1
+                ? throw new WorkflowExecutableRootWriteLeaseUnavailableException(artifactId, leaseId)
+                : write(cancellationToken);
+        }
     }
 }

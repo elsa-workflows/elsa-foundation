@@ -22,4 +22,4 @@ Compose `WorkflowsRuntimeReferenceGarbageCollection` alongside the Tasks feature
 
 Persistence providers replacing `IWorkflowExecutionStateStore` must implement distinct retained-root enumeration without loading every complete workflow-execution record, and must keep that projection consistent with execution save and deletion.
 
-See [ADR 0040](../../../../../docs/adr/0040-one-artifact-store-with-reference-derived-lifetime.md) and the Runtime [extension-point catalog](../EXTENSION_POINTS.md).
+See [ADR 0040](../../../../../docs/adr/0040-one-artifact-store-with-reference-derived-lifetime.md) and the Runtime [extension-point catalog](../Elsa.Workflows.Runtime/EXTENSION_POINTS.md).

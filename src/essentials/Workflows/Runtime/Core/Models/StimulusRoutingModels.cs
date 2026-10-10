@@ -199,20 +199,28 @@ public sealed class StimulusStartOutcome
         string triggerBindingId,
         string artifactId,
         StimulusStartStatus status,
-        string? workflowExecutionId)
+        string? workflowExecutionId,
+        TimeSpan? retryAfter = null)
     {
         TriggerBindingId = triggerBindingId;
         ArtifactId = artifactId;
         Status = status;
         WorkflowExecutionId = workflowExecutionId;
+        RetryAfter = retryAfter;
     }
 
     public string TriggerBindingId { get; }
     public string ArtifactId { get; }
     public StimulusStartStatus Status { get; }
 
-    /// <summary>The started instance's execution id; <c>null</c> when the start was skipped as a duplicate.</summary>
+    /// <summary>
+    /// The started instance's execution id; <c>null</c> when the start was skipped as a duplicate or shed, since neither
+    /// wrote an instance.
+    /// </summary>
     public string? WorkflowExecutionId { get; }
+
+    /// <summary>The admission Retry-After hint of a shed start; <c>null</c> otherwise.</summary>
+    public TimeSpan? RetryAfter { get; }
 
     public static StimulusStartOutcome Started(string triggerBindingId, string artifactId, string workflowExecutionId)
     {
@@ -228,12 +236,26 @@ public sealed class StimulusStartOutcome
         ArgumentException.ThrowIfNullOrWhiteSpace(artifactId);
         return new StimulusStartOutcome(triggerBindingId, artifactId, StimulusStartStatus.SkippedDuplicate, null);
     }
+
+    /// <summary>
+    /// A start runtime admission refused at capacity (#2548): nothing was written and its idempotency key was not
+    /// consumed, so the caller retries it. It must never be reported as started.
+    /// </summary>
+    public static StimulusStartOutcome Shed(string triggerBindingId, string artifactId, TimeSpan? retryAfter)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(triggerBindingId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(artifactId);
+        return new StimulusStartOutcome(triggerBindingId, artifactId, StimulusStartStatus.Shed, null, retryAfter);
+    }
 }
 
 public enum StimulusStartStatus
 {
     Started,
-    SkippedDuplicate
+    SkippedDuplicate,
+
+    /// <summary>Runtime admission refused the start at capacity; nothing was written, and the caller retries it.</summary>
+    Shed
 }
 
 /// <summary>The outcome of the router attempting to resume one waiting instance.</summary>
@@ -269,4 +291,11 @@ public sealed class StimulusRoutingResult
     public int StartedCount => Starts.Count(start => start.Status == StimulusStartStatus.Started);
     public int SkippedStartCount => Starts.Count(start => start.Status == StimulusStartStatus.SkippedDuplicate);
     public int ResumedCount => Resumes.Count(resume => resume.Status == BookmarkResumeDispatchStatus.Dispatched);
+    public int ShedStartCount => Starts.Count(start => start.Status == StimulusStartStatus.Shed);
+
+    /// <summary>The longest Retry-After hint among the shed starts, or <c>null</c> when none was shed or none gave one.</summary>
+    public TimeSpan? ShedRetryAfter => Starts
+        .Where(start => start.Status == StimulusStartStatus.Shed && start.RetryAfter is not null)
+        .Select(start => start.RetryAfter)
+        .Max();
 }

@@ -136,7 +136,7 @@ From 4.0 on, a change to what a family stores is a new version of that family ([
 4. Commit the upcaster's fixture pair under `Fixtures/SchemaUpcasters/<family>/<from>-to-<to>/` in the module's
    test project - one row per table, `<table>.source.json` and `<table>.expected.json`, each a JSON object of the row's
    content columns, the table named by its entity type - record it in
-   `tests/essentials/Architecture/Baselines/schema-upcaster-fixtures.sha256`, and prove the
+   `tests/essentials/Architecture/Tests/Baselines/schema-upcaster-fixtures.sha256`, and prove the
    upcast, the old-format round trip and the store's read of the source fixture (FR-022) with a test class deriving
    directly from `EfSchemaUpcasterProof<TUpcaster, TValue>(family, store)`, compiled in from
    `EfSchemaUpcasterFixtureSupport.cs`. The base class holds all three proofs; the module supplies only the store's
@@ -198,6 +198,13 @@ artifact, is answered `SkippedDuplicate` permanently, on every node and after an
 start sends a new key. And a recurring-trigger occurrence starts its workflow at most once however often that
 occurrence fires. The recurring-trigger pump relies on that: it fires each occurrence at least once, again after a
 crash or a failed start (#2198), and the repeats converge on the first start.
+
+A start that runtime admission sheds at capacity is the exception to "dispatched means started". It writes nothing
+and leaves its key unconsumed, so the router reports it `Shed`, never `Started`, and a retry under the same key is a
+fresh start (#2548). Each caller retries it instead of acknowledging it: the HTTP endpoint middleware and
+`POST runtime/workflows/stimuli` answer `429` with `Retry-After` when every matched start was shed and nothing
+resumed, the recurring-trigger pump releases the occurrence with backoff, and a `PublishEvent` delivery fails as
+transient so the outbox redelivers it.
 
 The keyed start identity is a frozen, persisted format with two versions, side by side. Its ids are
 `wfexec:start:{version}:{digest}`, `command:start:{version}:{digest}` and `envelope:start:{version}:{digest}`; the

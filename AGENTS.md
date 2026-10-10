@@ -8,6 +8,14 @@ This file is the AI-provider-neutral front door for AI agents and engineers work
 
 The repo still supports feature development, but the operating model is shaped so feature-workspace assets can later move to a dedicated `elsa-workspace` repository.
 
+## Current focus
+
+[ADR 0080](docs/adr/0080-elsa-4-simplification-decisions.md) sets the current direction: risk-based tests,
+internal-by-default types, Balanced persistence by default, pre-GA cleanup, plain-language renames and a smaller
+meta footprint. Only two programs are active (Elsa 4 Simplification and Runtime Efficiency); see
+[program goals](docs/program-goals/README.md). Work that contradicts an ADR 0080 decision needs the owner's
+explicit go-ahead.
+
 ## Source-of-truth layers
 
 Use the narrowest source that answers the task.
@@ -70,6 +78,16 @@ Re-check for competing work before committing, not only at session start. That c
 
 A claim is advisory. It narrows the window rather than closing it, and two sessions starting within the same minute still race. When a unit is split into slices, prefer giving one session the whole stack, or naming an owner per slice in the issue, over relying on claims alone.
 
+## Branch and issue hygiene
+
+Follow [Repository hygiene](docs/contributing/repository-hygiene.md). In short:
+
+- Push a branch only when opening its PR (draft is fine) in the same session; otherwise keep the work local.
+- Never restore a branch deleted on merge; its work is in `main`. Restore a swept branch from its `archive/` tag only when a maintainer asks to resume that work, and open its PR in the same session.
+- File new issues as `needs-triage` only. Put checkpoints, receipts and evidence on the PR or the issue being worked, never in a new issue.
+- Respect the caps: at most 2 open programs and 20 `ready-for-agent` issues. At the cap, extend the existing parent instead of filing more.
+- Before closing an issue as not planned, run `git log origin/main -E --grep '(^|[^[:alnum:]_./-])#<number>([^0-9]|$)'`. If its work landed, close it as completed and name the commit or PR.
+
 ## Builds on a shared machine
 
 Parallel sessions on one machine compete for the same CPU. Four concurrent solution builds on an 8-core machine have pushed the load average past 400, which makes every build slower and makes timeout-based tests fail when nothing is wrong.
@@ -90,7 +108,7 @@ When work belongs to a program, the GitHub issue is the public, legible record o
 
 ## Post-merge gates
 
-A green PR is not the end of the gate. `CI` runs on every push to `main` as well as on pull requests, because a required check can be bypassed and because a change that passes on a branch can still break main in combination with what landed beside it. `Maps` also runs on both. The former `HTTP workflow performance` gate was retired with all performance measurement by owner decision (#1668, ADR 0073); no performance workflow remains to run or to report as passed.
+A green PR is not the end of the gate. `CI` runs on every push to `main` as well as on pull requests, because a required check can be bypassed and because a change that passes on a branch can still break main in combination with what landed beside it. `Maps` also runs on both. The former `HTTP workflow performance` gate was retired with all performance measurement by owner decision (#1668, ADR 0073); no performance workflow remains to run or to report as passed. Deterministic EF command-count budgets per reference workflow are correctness gates, not performance measurement, and are allowed (ADR 0080 D2).
 
 When `CI` fails against `main`, and when `Integration (nightly)` fails on its schedule, it files or updates a GitHub issue titled `main is red: <gate>`. Those issues are machine-filed, deduplicated by title, and never auto-closed:
 
@@ -239,7 +257,7 @@ Read [docs/architecture-tour.md](docs/architecture-tour.md) for a concise orient
 
 ## Constitution boundary
 
-Both constitutions are ratified at the document level (v4.0.0, 2026-08-08), but individual sections
+Both constitutions are ratified at the document level (v4.0.0, 2026-08-08; both amended to v5.0.0 by ADR 0080), but individual sections
 that carry their own `Status:` line — framework §2.24, Elsa §E2.9 — remain draft/provisional and are
 explicitly excluded from that ratification. Warn users when a section's draft/provisional status
 matters to their task. If they want to focus on unratified material, route that through

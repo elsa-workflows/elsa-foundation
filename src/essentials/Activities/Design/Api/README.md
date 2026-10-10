@@ -36,4 +36,4 @@ Each catalog input carries `isSensitive` and `isCredential`, the activity's sens
 
 ## Extension points
 
-See [EXTENSION_POINTS.md](EXTENSION_POINTS.md) and the [reconciliation extension catalog](../Reconciliation/EXTENSION_POINTS.md).
+See [EXTENSION_POINTS.md](EXTENSION_POINTS.md) and the [reconciliation extension catalog](../Reconciliation/Elsa.Activities.Design.Reconciliation/EXTENSION_POINTS.md).

@@ -2,6 +2,7 @@ using Elsa.Api.AspNetCore;
 using Elsa.Api.Compatibility.Testing.Endpoints;
 using Elsa.Activities.Design.Persistence.Core.Entities;
 using Elsa.Activities.Design.Persistence.Core.Stores;
+using Elsa.Activities.Design.Core.Contracts;
 using Elsa.Activities.Design.Core.Models;
 using Elsa.Expressions.Core.Models;
 using Elsa.Foundation.Identity.Core.Authentication;
@@ -41,6 +42,7 @@ using Elsa.Workflows.Design.Api.Endpoints.Definitions.Restore;
 using Elsa.Workflows.Design.Api.Endpoints.Definitions.SoftDelete;
 using Elsa.Workflows.Design.Api.Endpoints.Definitions.UpdateMetadata;
 using Elsa.Workflows.Design.Api.Tests.Support;
+using Elsa.Workflows.Design.Tests.Infrastructure;
 using Elsa.Testing;
 
 namespace Elsa.Workflows.Design.Api.Tests;
@@ -640,6 +642,10 @@ public sealed class WorkflowsDesignApiContractTests
                         services.ReplacePermissionEvaluator<RecordingPermissionEvaluator>();
                         // No mediator senders: every Workflows Design route now owns its handling.
                         DefinitionDomainFakes.Register(services);
+                        // The credential-literal admission the state-writing routes take (spec 188), as the feature's
+                        // DependsOn composes it, judging against an activity catalog that declares a credential input.
+                        new Elsa.Workflows.Design.Validations.WorkflowDesignValidationsFeature().ConfigureServices(services);
+                        services.AddSingleton<IActivityDefinitionLookup>(CredentialLiteralTestSupport.Catalog());
                         services.AddFastEndpoints(options => options.Assemblies = [typeof(DesignRetainedFastEndpointsCanary).Assembly]);
                     });
                     webHost.Configure(app =>

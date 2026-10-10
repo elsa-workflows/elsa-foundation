@@ -8,6 +8,9 @@ namespace Elsa3.Mapping.Tests;
 
 public sealed class Elsa3MemoryReferenceImportTests
 {
+    /// <summary>The reference key the fixture catalog declares for the <c>Value</c> input; the import stores the binding under it.</summary>
+    private const string ValueInputKey = "key:value";
+
     [Theory]
     [InlineData("literal")]
     [InlineData("request")]
@@ -59,7 +62,7 @@ public sealed class Elsa3MemoryReferenceImportTests
 
         return Case(definition, [Consumer()], [memoryId], version =>
         {
-            var value = ReadValue(FindInput(version, "literal-node", "Value"));
+            var value = ReadValue(FindInput(version, "literal-node", ValueInputKey));
             Assert.Equal("Literal", value.ExpressionType);
             Assert.Equal("hello", value.Value.GetString());
         });
@@ -81,7 +84,7 @@ public sealed class Elsa3MemoryReferenceImportTests
 
         return Case(definition, [Consumer()], [memoryId], version =>
         {
-            var expression = ReadPortableExpression(ReadValue(FindInput(version, "request-node", "Value")));
+            var expression = ReadPortableExpression(ReadValue(FindInput(version, "request-node", ValueInputKey)));
             Assert.Equal("JavaScript", expression.Language);
             Assert.Equal("args.customerId", expression.Source);
             var parameter = Assert.IsType<WorkflowRequestExpressionParameterBinding>(expression.Parameters["customerId"]);
@@ -105,7 +108,7 @@ public sealed class Elsa3MemoryReferenceImportTests
 
         return Case(definition, [Consumer()], [memoryId], version =>
         {
-            var expression = ReadPortableExpression(ReadValue(FindInput(version, "variable-node", "Value")));
+            var expression = ReadPortableExpression(ReadValue(FindInput(version, "variable-node", ValueInputKey)));
             Assert.Equal("args.total", expression.Source);
             var parameter = Assert.IsType<VariableExpressionParameterBinding>(expression.Parameters["total"]);
             Assert.Equal("workflow", parameter.DeclaringScopeNodeId);
@@ -129,7 +132,7 @@ public sealed class Elsa3MemoryReferenceImportTests
 
         return Case(definition, [Container(), Producer(), Consumer()], [producerMemoryId, consumerMemoryId], version =>
         {
-            var expression = ReadPortableExpression(ReadValue(FindInput(version, "consumer", "Value")));
+            var expression = ReadPortableExpression(ReadValue(FindInput(version, "consumer", ValueInputKey)));
             Assert.Equal("args.receiptId", expression.Source);
             var parameter = Assert.IsType<ActivityResultExpressionParameterBinding>(expression.Parameters["receiptId"]);
             Assert.Equal("producer", parameter.ProducerNodeId);
@@ -152,7 +155,7 @@ public sealed class Elsa3MemoryReferenceImportTests
 
         return Case(definition, [ForEach(), Consumer()], [memoryId], version =>
         {
-            var value = ReadValue(FindInput(version, "loop-body", "Value"));
+            var value = ReadValue(FindInput(version, "loop-body", ValueInputKey));
             Assert.Equal("Variable", value.ExpressionType);
             Assert.Equal("loop", GetProperty(value.Value, "declaringScopeId").GetString());
             Assert.Equal("key:current-value", GetProperty(value.Value, "referenceKey").GetString());
@@ -168,7 +171,7 @@ public sealed class Elsa3MemoryReferenceImportTests
 
         return Case(definition, [Consumer()], [], version =>
         {
-            var expression = ReadPortableExpression(ReadValue(FindInput(version, "javascript-node", "Value")));
+            var expression = ReadPortableExpression(ReadValue(FindInput(version, "javascript-node", ValueInputKey)));
             Assert.Equal("JavaScript", expression.Language);
             Assert.Equal("40 + 2", expression.Source);
             Assert.Empty(expression.Parameters);
@@ -195,11 +198,11 @@ public sealed class Elsa3MemoryReferenceImportTests
             [memoryId],
             version =>
             {
-                var input = ReadValue(FindInput(version, "transform", "Value"));
+                var input = ReadValue(FindInput(version, "transform", ValueInputKey));
                 Assert.Equal("Literal", input.ExpressionType);
                 Assert.Equal("seed", input.Value.GetString());
 
-                var result = ReadValue(FindInput(version, "consumer", "Value"));
+                var result = ReadValue(FindInput(version, "consumer", ValueInputKey));
                 Assert.Equal("ActivityResult", result.ExpressionType);
                 Assert.Equal("transform", GetProperty(result.Value, "producerNodeId").GetString());
                 Assert.Equal("key:value", GetProperty(result.Value, "projectionKey").GetString());
@@ -222,7 +225,7 @@ public sealed class Elsa3MemoryReferenceImportTests
 
         return Case(definition, [Consumer()], [memoryId], version =>
         {
-            var expression = ReadPortableExpression(ReadValue(FindInput(version, "liquid-node", "Value")));
+            var expression = ReadPortableExpression(ReadValue(FindInput(version, "liquid-node", ValueInputKey)));
             Assert.Equal("Liquid", expression.Language);
             Assert.Equal("{{ customer.name }}", expression.Source);
             var parameter = Assert.IsType<VariableExpressionParameterBinding>(expression.Parameters["customer"]);

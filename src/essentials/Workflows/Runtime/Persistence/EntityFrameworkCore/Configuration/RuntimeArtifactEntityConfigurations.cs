@@ -41,6 +41,26 @@ public sealed class WorkflowExecutableCoordinationEntityConfiguration : IEntityT
         b.HasIndex(x => new { x.ScopeKeyHash, x.ArtifactIdHash, x.ArtifactId }).IsUnique();
     }
 }
+public sealed class WorkflowExecutableRootWriteLeaseEntityConfiguration : IEntityTypeConfiguration<WorkflowExecutableRootWriteLeaseEntity>
+{
+    public void Configure(EntityTypeBuilder<WorkflowExecutableRootWriteLeaseEntity> b)
+    {
+        b.ToTable(RuntimeArtifactEfModule.WorkflowExecutableRootWriteLeaseTableName);
+        b.HasKey(x => x.Id);
+        b.Property(x => x.Id).HasMaxLength(64).IsRequired();
+        b.Property(x => x.ScopeKey).IsRequired();
+        b.Property(x => x.ScopeKeyHash).HasMaxLength(64).IsRequired();
+        b.Property(x => x.ArtifactId).HasMaxLength(RuntimeArtifactEfModule.IdentityProjectionMaximumLength).IsRequired();
+        b.Property(x => x.ArtifactIdHash).HasMaxLength(64).IsRequired();
+        b.Property(x => x.LeaseId).IsRequired();
+        b.Property(x => x.Token).HasMaxLength(64).IsRequired();
+        b.Property(x => x.ExpiresAtUtcTicks).IsRequired();
+        b.Property(x => x.IncarnationId).HasMaxLength(64).IsRequired();
+        b.Property(x => x.Revision).IsConcurrencyToken().IsRequired();
+        b.Property(x => x.SchemaVersion).HasMaxLength(32).IsRequired();
+        b.HasIndex(x => new { x.ScopeKeyHash, x.ArtifactIdHash, x.ArtifactId, x.ExpiresAtUtcTicks });
+    }
+}
 public sealed class ExecutableActivityTemplateEntityConfiguration : IEntityTypeConfiguration<ExecutableActivityTemplateEntity>
 {
     public void Configure(EntityTypeBuilder<ExecutableActivityTemplateEntity> b)

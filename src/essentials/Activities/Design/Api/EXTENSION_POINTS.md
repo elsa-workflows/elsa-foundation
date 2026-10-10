@@ -37,7 +37,7 @@ documented in its [contributing-feature catalog](../../Graph/Design/EXTENSION_PO
 
 ## Sources and reconciliation
 
-Activity definitions are populated by Activity Design reconciliation sources, not by `Elsa.Workbench`. Provider modules contribute installed activity metadata through the reconciliation contracts described in [`Reconciliation/EXTENSION_POINTS.md`](../Reconciliation/EXTENSION_POINTS.md). Persistence-specific seams are documented in their own catalog:
+Activity definitions are populated by Activity Design reconciliation sources, not by `Elsa.Workbench`. Provider modules contribute installed activity metadata through the reconciliation contracts described in [`Reconciliation/EXTENSION_POINTS.md`](../Reconciliation/Elsa.Activities.Design.Reconciliation/EXTENSION_POINTS.md). Persistence-specific seams are documented in their own catalog:
 
 - [`Persistence/EntityFrameworkCore/EXTENSION_POINTS.md`](../Persistence/EntityFrameworkCore/EXTENSION_POINTS.md)
 

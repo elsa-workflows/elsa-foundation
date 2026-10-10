@@ -6,7 +6,20 @@ The ownership and lifecycle rules are specified in [`specs/092-domain-owned-apis
 
 ## Composition
 
-Add `WorkflowsDesignApiFeature` to the active shell and compose a Workflow Design persistence provider. The feature registers its Minimal API mapper, mediator handlers, scoped-variable authoring services, and contextual input-option resolver. Activity input options also read the Activity Design definition/version stores, so a host exposing that operation must compose Activity Design persistence.
+Add `WorkflowsDesignApiFeature` to the active shell and compose a Workflow Design persistence provider. The feature registers its Minimal API mapper, mediator handlers, scoped-variable authoring services, and contextual input-option resolver. Activity input options also read the Activity Design definition/version stores, so a host exposing that operation must compose Activity Design persistence. The feature depends on `WorkflowDesignValidations`, which registers the credential-literal rule its state-writing routes apply (below).
+
+## Credential literals (spec 188)
+
+Every route that writes workflow state (Definitions/Add, Drafts/Replace, Versions/Add, Definitions/Submit and
+Drafts/Promote, and the `UpdateDefinition` mediator command) admits the state it writes through the credential-literal
+rule before its command runs. A literal, an object, a value read or an expression on an input its activity declares a
+credential is refused with 400; `errors` holds one entry per refused binding, keyed `{nodeId}/inputs/{referenceKey}`,
+each message starting with the rule id `Inputs/CredentialLiteral` and never carrying the value, and nothing is stored.
+This blocks a draft save, the one deliberate exception to draft saves recording validation errors without blocking.
+Drafts/Promote admits the stored draft it reads and promotes exactly that content: when the draft changed before the
+promotion lock was taken, it answers 409. When the draft no longer exists there is nothing to admit, and the promotion
+command answers: a replay of a promotion that succeeded returns the original version, and a first promotion is 404.
+A node of an activity the catalog does not hold cannot be judged here and is stored; publication refuses it.
 
 This package does not reference or depend on `Elsa.Workbench`; the server application is only one possible reference composition.
 

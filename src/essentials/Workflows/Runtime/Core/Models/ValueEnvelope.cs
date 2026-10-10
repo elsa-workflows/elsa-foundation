@@ -88,6 +88,17 @@ public sealed record ValueEnvelope
         return new(type, ValuePresence.Withheld, null, null, policy, withheld);
     }
 
+    /// <summary>
+    /// The one predicate of spec 188, FR-010: true when this envelope holds a present value that phase 0 may not persist,
+    /// because its own policy, or <paramref name="destinationPolicy"/> when one is given, requires encryption. Phase 0 has
+    /// no encryption at rest, so the in-tree producers withhold such a value before storing it, a destination with no
+    /// withheld form refuses it, and the checkpoint-commit backstop refuses a commit that still carries one as an inline
+    /// or external payload.
+    /// </summary>
+    /// <remarks>A method, not a property, so it is never serialized or hashed with the envelope.</remarks>
+    public bool HoldsValueRequiringEncryption(ValueProtectionPolicy? destinationPolicy = null) =>
+        Presence == ValuePresence.Present && (Policy.RequiresEncryption || destinationPolicy?.RequiresEncryption == true);
+
     public ValueEnvelope Retype(ValueTypeDescriptor targetType) =>
         new(targetType, Presence, InlineValue, ExternalReference, Policy, TransientResource, WithheldValue);
 
@@ -160,6 +171,12 @@ public sealed record WithheldValue
     public static WithheldValue SecretReference(RuntimeSecretReference secret, ValueConversionPlan? conversionPlan) =>
         new(WithheldValueKind.SecretReference, secret, conversionPlan);
 
+    /// <summary>
+    /// The marker that stands in for a present value whose policy requires encryption (see
+    /// <see cref="ValueEnvelope.HoldsValueRequiringEncryption"/>). It carries nothing of the value.
+    /// </summary>
+    public static WithheldValue PolicyRequiresEncryption() => new(WithheldValueKind.PolicyRequiresEncryption);
+
     public WithheldValueKind Kind { get; }
 
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
@@ -213,6 +230,13 @@ public sealed record ValueProtectionPolicy
     public string? RedactionMode { get; }
     public string? RetentionPolicy { get; }
     public IReadOnlyDictionary<string, string> Metadata { get; }
+
+    /// <summary>
+    /// True when inspection must not show a value under this policy: it is sensitive or requires encryption (spec 188).
+    /// The declared policy type has the same rule as <c>ActivityValuePolicy.HidesValue</c>. Unlike
+    /// <see cref="ValueEnvelope.HoldsValueRequiringEncryption"/>, it judges a policy alone, with no value present.
+    /// </summary>
+    public bool HidesValue() => IsSensitive || RequiresEncryption;
 
     /// <summary>
     /// Returns true when this destination/effective policy preserves every protection required by <paramref name="minimum"/>.

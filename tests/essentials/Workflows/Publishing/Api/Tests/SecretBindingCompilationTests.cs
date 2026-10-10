@@ -68,9 +68,11 @@ public sealed class SecretBindingCompilationTests
     {
         var binding = _compiler.Compile("node-1", Input("String"), State(new { name = SecretName, typeName = "text", scope = "billing" }));
         var nameOnly = _compiler.Compile("node-1", Input("String"), State(new { name = SecretName }));
+        var padded = _compiler.Compile("node-1", Input("String"), State(new { name = $"  {SecretName}  " }));
 
         Assert.Equal(new RuntimeSecretReference(SecretName, "text", "billing"), binding.Secret);
         Assert.Equal(new RuntimeSecretReference(SecretName), nameOnly.Secret);
+        Assert.Equal(new RuntimeSecretReference($"  {SecretName}  "), padded.Secret);
     }
 
     [Theory]
@@ -89,6 +91,22 @@ public sealed class SecretBindingCompilationTests
         Assert.Contains("'node-1'", exception.Message, StringComparison.Ordinal);
         Assert.Contains($"'{InputKey}'", exception.Message, StringComparison.Ordinal);
         Assert.DoesNotContain("sk-live-literal-text", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData("{\"name\":\"payments.api-key\",\"note\":\"extra-member-sentinel\"}", "carries a member other than 'name', 'typeName' and 'scope'")]
+    [InlineData("{\"name\":\"payments.api-key\",\"name\":\"extra-member-sentinel\"}", "carries a member more than once")]
+    public void A_secret_payload_with_a_member_outside_the_reference_or_a_member_twice_is_refused_without_echoing_it(string payload, string defect)
+    {
+        // Publication reads every secret reference through SecretReferencePayload, the definition the credential-literal
+        // rule applies at save, so an extra member is refused here on any input, credential or not.
+        var exception = Assert.Throws<ArgumentException>(() => _compiler.Compile(
+            "node-1",
+            Input("String"),
+            new WorkflowArgumentState(InputKey, new ArgumentValue(JsonDocument.Parse(payload).RootElement.Clone(), "Secret"), null, null, null, null)));
+
+        Assert.EndsWith($"uses expression type 'Secret' but {defect}.", exception.Message, StringComparison.Ordinal);
+        Assert.DoesNotContain("extra-member-sentinel", exception.Message, StringComparison.Ordinal);
     }
 
     [Theory]

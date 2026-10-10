@@ -1,6 +1,7 @@
 using System.Text.Json;
 using Elsa.Activities.Runtime.Contracts;
 using Elsa.Activities.Runtime.Core.Abstractions;
+using Elsa.Activities.Runtime.Core.Attributes;
 using Elsa.Activities.Runtime.Core.Contracts;
 using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Activities.Runtime.Services;
@@ -30,6 +31,8 @@ public sealed partial class WorkflowInvokeActivitySchedulerWorkHandlerTests
     private readonly InMemoryDurableValueStateStore _durableValueStateStore = new();
     private readonly InMemoryIncidentStateStore _incidentStateStore = new();
     private readonly InMemoryActivityExecutionInspectionStore _inspectionStore = new();
+    private readonly DefaultRuntimeSecretMask _secretMask = new();
+    private readonly string _secretValue = $"canary{Guid.NewGuid():N}";
     private readonly InMemoryRuntimeCheckpointCommitStore _checkpointWriter;
 
     public WorkflowInvokeActivitySchedulerWorkHandlerTests()
@@ -263,11 +266,7 @@ public sealed partial class WorkflowInvokeActivitySchedulerWorkHandlerTests
         var activator = new ActivityActivator(
             [new FixedLeaseStrategy(new ActivityActivationLease(new CountingActivity(), scope))],
             new ActivityInputHydrator(),
-            new ActivitySecretInputResolver(
-                new CountingPartitionAccessor(WorkflowExecutionPartition.DefaultValue),
-                CanonicalWorkflowStateTestData.EnsureRunning(new InMemoryWorkflowExecutionStateStore()),
-                new RuntimeValueConversionExecutor(),
-                resolver));
+            SecretInputResolver(resolver));
         var executable = NewTypedExecutable();
         await _executableStore.SaveAsync(executable);
         await _activityStateStore.SaveAsync(NewRunningState(executable, new Dictionary<string, ValueEnvelope>
@@ -288,6 +287,117 @@ public sealed partial class WorkflowInvokeActivitySchedulerWorkHandlerTests
         Assert.Null(state.Fault);
         Assert.Empty(state.IncidentIds);
         Assert.Empty(await _incidentStateStore.ListAsync("wfexec-1"));
+    }
+
+    /// <summary>
+    /// T073 (spec 188, FR-012): the value resolved for the execution is masked in the fault the handler records, and the
+    /// handler releases it from the mask once the fault is recorded, so the scope's mask does not keep it any longer.
+    /// </summary>
+    [Fact]
+    public async Task HandleAsync_SecretValueInAnActivityFault_IsMaskedAndReleasedOnceTheFaultIsRecorded()
+    {
+        await using var provider = await NewSecretInvocationAsync(new SecretEchoingActivity());
+
+        await NewHandler(provider).HandleAsync(NewInvokeWorkItem(NewIdentity()));
+
+        var state = await _activityStateStore.FindAsync("wfexec-1", "actexec-1");
+        Assert.Equal(ActivityExecutionStatus.Faulted, state!.Status);
+        Assert.Equal("refused [secret:payments.api-key]", state.Fault!.Message);
+        Assert.Equal(typeof(InvalidOperationException).FullName, state.Fault.ExceptionType);
+        Assert.False(_secretMask.HasRegistrations("actexec-1"));
+    }
+
+    /// <summary>
+    /// A cancellation of the work after a secret resolved is still the cancellation: it leaves the handler unchanged and
+    /// records no fault, so masking can never turn it into a failure.
+    /// </summary>
+    [Fact]
+    public async Task HandleAsync_ExecutionCanceledAfterASecretResolved_StaysACancellationAndRecordsNoFault()
+    {
+        using var cancellation = new CancellationTokenSource();
+        await using var provider = await NewSecretInvocationAsync(new CancelingSecretActivity(cancellation, failDisposal: false));
+
+        var exception = await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            NewHandler(provider).HandleAsync(NewInvokeWorkItem(NewIdentity()), cancellation.Token).AsTask());
+
+        Assert.Equal(cancellation.Token, exception.CancellationToken);
+        await AssertNoFaultRecordedAsync();
+        Assert.False(_secretMask.HasRegistrations("actexec-1"));
+    }
+
+    /// <summary>
+    /// A cancellation whose lease disposal fails leaves the handler as the cancellation followed by the disposal
+    /// failure, as slice 3 shaped it, and the disposal failure's text is masked like a fault's.
+    /// </summary>
+    [Fact]
+    public async Task HandleAsync_ExecutionCanceledAfterASecretResolvedWhileDisposalFails_ReportsTheDisposalFailureMasked()
+    {
+        using var cancellation = new CancellationTokenSource();
+        await using var provider = await NewSecretInvocationAsync(new CancelingSecretActivity(cancellation, failDisposal: true));
+
+        var exception = await Assert.ThrowsAsync<AggregateException>(() =>
+            NewHandler(provider).HandleAsync(NewInvokeWorkItem(NewIdentity()), cancellation.Token).AsTask());
+
+        SecretResolutionTestSupport.AssertCanceledWithDisposalFailure(
+            exception, "Activity execution cancellation and disposal both failed.", cancellation.Token, "disposal saw [secret:payments.api-key]");
+        Assert.DoesNotContain(_secretValue, exception.ToString(), StringComparison.Ordinal);
+        await AssertNoFaultRecordedAsync();
+    }
+
+    /// <summary>
+    /// The aggregate a cancellation arm throws when disposal also failed is recorded by the drainer as a handler fault,
+    /// so the cancellation in it is masked too when activity code wrote the value into it; it stays a cancellation for
+    /// the same token. Without a disposal failure the original cancellation is rethrown as it is.
+    /// </summary>
+    [Fact]
+    public async Task HandleAsync_CancellationCarryingTheValueWhileDisposalFails_ReportsTheCancellationMasked()
+    {
+        using var cancellation = new CancellationTokenSource();
+        await using var provider = await NewSecretInvocationAsync(new CancelingSecretActivity(cancellation, failDisposal: true, echoInCancellation: true));
+
+        var exception = await Assert.ThrowsAsync<AggregateException>(() =>
+            NewHandler(provider).HandleAsync(NewInvokeWorkItem(NewIdentity()), cancellation.Token).AsTask());
+
+        SecretResolutionTestSupport.AssertCanceledWithDisposalFailure(
+            exception, "Activity execution cancellation and disposal both failed.", cancellation.Token, "disposal saw [secret:payments.api-key]");
+        Assert.Equal("canceled with [secret:payments.api-key]", exception.InnerExceptions[0].Message);
+        Assert.DoesNotContain(_secretValue, exception.ToString(), StringComparison.Ordinal);
+        await AssertNoFaultRecordedAsync();
+    }
+
+    [Fact]
+    public async Task HandleAsync_CancellationCarryingTheValueWithoutADisposalFailure_RethrowsTheOriginalCancellation()
+    {
+        using var cancellation = new CancellationTokenSource();
+        var activity = new CancelingSecretActivity(cancellation, failDisposal: false, echoInCancellation: true);
+        await using var provider = await NewSecretInvocationAsync(activity);
+
+        var exception = await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            NewHandler(provider).HandleAsync(NewInvokeWorkItem(NewIdentity()), cancellation.Token).AsTask());
+
+        Assert.Same(activity.Thrown, exception);
+        await AssertNoFaultRecordedAsync();
+    }
+
+    /// <summary>
+    /// The activation arm's counterpart: the activation is canceled after the secret resolved and was registered, before
+    /// the activity was hydrated, and the lease's disposal failure the activator carries out with the cancellation is
+    /// reported masked.
+    /// </summary>
+    [Fact]
+    public async Task HandleAsync_ActivationCanceledAfterASecretResolvedWhileDisposalFails_ReportsTheDisposalFailureMasked()
+    {
+        var conversions = new CancelingConversionExecutor { Cancellation = new CancellationTokenSource() };
+        using var cancellation = conversions.Cancellation;
+        await using var provider = await NewSecretInvocationAsync(new CountingActivity(), new ThrowingAsyncDisposable($"scope saw {_secretValue}"), conversions);
+
+        var exception = await Assert.ThrowsAsync<AggregateException>(() =>
+            NewHandler(provider).HandleAsync(NewInvokeWorkItem(NewIdentity()), cancellation.Token).AsTask());
+
+        SecretResolutionTestSupport.AssertCanceledWithDisposalFailure(
+            exception, "Activity activation cancellation and disposal both failed.", cancellation.Token, "scope saw [secret:payments.api-key]");
+        Assert.DoesNotContain(_secretValue, exception.ToString(), StringComparison.Ordinal);
+        await AssertNoFaultRecordedAsync();
     }
 
     [Fact]
@@ -697,6 +807,48 @@ public sealed partial class WorkflowInvokeActivitySchedulerWorkHandlerTests
     private WorkflowInvokeActivitySchedulerWorkHandler NewHandler(ServiceProvider provider) =>
         new(provider.GetRequiredService<IServiceScopeFactory>(), new FakeTimeProvider(_now));
 
+    /// <summary>A secret input collaborator that resolves through <paramref name="resolver"/> and registers with <see cref="_secretMask"/>.</summary>
+    private ActivitySecretInputResolver SecretInputResolver(IRuntimeSecretResolver resolver, IRuntimeValueConversionExecutor? conversions = null) =>
+        new(
+            new CountingPartitionAccessor(WorkflowExecutionPartition.DefaultValue),
+            CanonicalWorkflowStateTestData.EnsureRunning(new InMemoryWorkflowExecutionStateStore()),
+            conversions ?? new RuntimeValueConversionExecutor(),
+            _secretMask,
+            resolver);
+
+    /// <summary>
+    /// A typed invocation whose <c>text</c> input is bound to a secret that resolves to <see cref="_secretValue"/>, and a
+    /// provider whose activator hydrates <paramref name="activity"/> with it, through <paramref name="conversions"/> when
+    /// given, in a lease that owns <paramref name="scope"/> when given.
+    /// </summary>
+    private async Task<ServiceProvider> NewSecretInvocationAsync(
+        IActivity activity,
+        IAsyncDisposable? scope = null,
+        IRuntimeValueConversionExecutor? conversions = null)
+    {
+        var resolver = new FakeRuntimeSecretResolver { Respond = (_, _) => RuntimeSecretResolution.Success(_secretValue) };
+        var activator = new ActivityActivator(
+            [new FixedLeaseStrategy(new ActivityActivationLease(activity, scope))],
+            new ActivityInputHydrator(),
+            SecretInputResolver(resolver, conversions));
+        var executable = NewTypedExecutable();
+        await _executableStore.SaveAsync(executable);
+        await _activityStateStore.SaveAsync(NewRunningState(executable, new Dictionary<string, ValueEnvelope>
+        {
+            ["text"] = SecretResolutionTestSupport.Withheld()
+        }));
+        return NewProvider(activator);
+    }
+
+    private async Task AssertNoFaultRecordedAsync()
+    {
+        var state = await _activityStateStore.FindAsync("wfexec-1", "actexec-1");
+        Assert.Equal(ActivityExecutionStatus.Running, state!.Status);
+        Assert.Null(state.Fault);
+        Assert.Empty(state.IncidentIds);
+        Assert.Empty(await _incidentStateStore.ListAsync("wfexec-1"));
+    }
+
     private async Task<RuntimeCompleteActivityCommandPayload> AssertCompletionWorkAsync()
     {
         var intents = _checkpointWriter.ListCommits().SelectMany(write => write.Commit.PostCommitIntents).ToArray();
@@ -714,6 +866,7 @@ public sealed partial class WorkflowInvokeActivitySchedulerWorkHandlerTests
     {
         var services = new ServiceCollection();
         services.AddSingleton<IActivityActivator>(activityActivator);
+        services.AddSingleton<IRuntimeSecretMask>(_secretMask);
         services.AddSingleton<IWorkflowExecutionStateStore>(_ =>
             CanonicalWorkflowStateTestData.EnsureRunning(new InMemoryWorkflowExecutionStateStore()));
         services.AddSingleton<IWorkflowExecutableStore>(_ => _executableStore);
@@ -1030,6 +1183,44 @@ public sealed partial class WorkflowInvokeActivitySchedulerWorkHandlerTests
         }
     }
 
+    /// <summary>Throws with the value its secret-bound <c>text</c> input was hydrated with.</summary>
+    private sealed class SecretEchoingActivity : Activity<TypedResult>
+    {
+        [ActivityInput(Key = "text")]
+        public string Text { get; set; } = null!;
+
+        protected override ValueTask<ActivityTransition<TypedResult>> ExecuteAsync(ActivityExecutionContext context) =>
+            throw new InvalidOperationException($"refused {Text}");
+    }
+
+    /// <summary>
+    /// Cancels the work while it runs, after its secret-bound <c>text</c> input was hydrated, and with
+    /// <paramref name="failDisposal"/> fails its disposal with that value in the failure text. With
+    /// <paramref name="echoInCancellation"/> the cancellation it throws carries that value in its message.
+    /// </summary>
+    private sealed class CancelingSecretActivity(CancellationTokenSource cancellation, bool failDisposal, bool echoInCancellation = false) : Activity<TypedResult>, IDisposable
+    {
+        [ActivityInput(Key = "text")]
+        public string Text { get; set; } = null!;
+
+        public OperationCanceledException? Thrown { get; private set; }
+
+        protected override ValueTask<ActivityTransition<TypedResult>> ExecuteAsync(ActivityExecutionContext context)
+        {
+            cancellation.Cancel();
+            Thrown = echoInCancellation
+                ? new OperationCanceledException($"canceled with {Text}", context.CancellationToken)
+                : new OperationCanceledException(context.CancellationToken);
+            throw Thrown;
+        }
+
+        public void Dispose()
+        {
+            if (failDisposal)
+                throw new InvalidOperationException($"disposal saw {Text}");
+        }
+    }
+
     private sealed class CancellingTypedActivity(CancellationTokenSource cancellation) : Activity<TypedResult>
     {
         protected override ValueTask<ActivityTransition<TypedResult>> ExecuteAsync(ActivityExecutionContext context)
@@ -1167,14 +1358,14 @@ public sealed partial class WorkflowInvokeActivitySchedulerWorkHandlerTests
         }
     }
 
-    private sealed class ThrowingAsyncDisposable : IAsyncDisposable
+    private sealed class ThrowingAsyncDisposable(string message = "Scope disposal failed.") : IAsyncDisposable
     {
         public bool DisposeAttempted { get; private set; }
 
         public ValueTask DisposeAsync()
         {
             DisposeAttempted = true;
-            return ValueTask.FromException(new InvalidOperationException("Scope disposal failed."));
+            return ValueTask.FromException(new InvalidOperationException(message));
         }
     }
 

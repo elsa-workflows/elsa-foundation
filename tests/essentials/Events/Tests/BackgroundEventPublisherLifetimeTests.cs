@@ -19,10 +19,11 @@ namespace Elsa.Events.Tests;
 /// </summary>
 public class BackgroundEventPublisherLifetimeTests
 {
+    /// <summary>Verifies that disposing the initializer scope leaves the shared channel and worker usable.</summary>
     [Fact]
     public async Task ChannelSurvivesInitializerScopeDisposalAndKeepsDispatching()
     {
-        var counting = new CountingInlineEventPublisher();
+        var counting = new CountingEventPublisher();
         await using var root = EventTestHosts.BuildProductionLikeProvider(counting);
 
         // Simulate CShells RunInitializersAsync: resolve the (singleton) TaskManager inside a child

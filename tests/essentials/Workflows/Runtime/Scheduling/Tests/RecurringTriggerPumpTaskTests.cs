@@ -205,6 +205,29 @@ public sealed class RecurringTriggerPumpTaskTests
     }
 
     [Fact]
+    public async Task Sweep_KeepsOccurrence_WhenAdmissionShedsTheStart_AndRetriesItAfterBackoff()
+    {
+        var due = Now.AddMinutes(-1);
+        await SeedAsync(Schedule("s1", due, expression: "PT1M"));
+        var router = new FakeRouter { Shed = true };
+        var (pump, clock) = CreatePump(_store, router);
+
+        // A shed start wrote nothing, so settling the occurrence would lose it (#2548).
+        await pump.ExecuteAsync(CancellationToken.None);
+        Assert.Equal(due, (await _store.FindAsync("s1"))!.NextOccurrence);
+
+        await pump.ExecuteAsync(CancellationToken.None);
+        Assert.Single(router.Requests);
+
+        router.Shed = false;
+        clock.Advance(FirstBackoff);
+        await pump.ExecuteAsync(CancellationToken.None);
+
+        Assert.Equal([Key("s1", due), Key("s1", due)], router.Requests.Select(request => request.IdempotencyKey));
+        Assert.Equal(clock.GetUtcNow().AddMinutes(1), (await _store.FindAsync("s1"))!.NextOccurrence);
+    }
+
+    [Fact]
     public async Task Sweep_ThatDiesBeforeRouting_LeavesTheOccurrenceToAPeerOnceTheLeaseLapses()
     {
         var due = Now.AddMinutes(-1);
@@ -400,6 +423,7 @@ public sealed class RecurringTriggerPumpTaskTests
     {
         public List<StimulusDispatchRequest> Requests { get; } = new();
         public Exception? Throw { get; set; }
+        public bool Shed { get; set; }
         public bool DieBeforeRouting { get; init; }
         public Func<Task>? WhileRouting { get; init; }
 
@@ -412,7 +436,9 @@ public sealed class RecurringTriggerPumpTaskTests
                 await whileRouting();
             if (Throw is not null)
                 throw Throw;
-            return new StimulusRoutingResult([], []);
+            return Shed
+                ? new StimulusRoutingResult([StimulusStartOutcome.Shed("binding-1", "artifact-1", TimeSpan.FromSeconds(1))], [])
+                : new StimulusRoutingResult([], []);
         }
     }
 

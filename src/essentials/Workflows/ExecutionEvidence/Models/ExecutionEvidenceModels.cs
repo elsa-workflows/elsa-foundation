@@ -49,6 +49,12 @@ public sealed record ExecutionEvidenceRecord
     /// <summary>Why <see cref="Value"/> holds what it holds. Null for facts that carry no value at all.</summary>
     public ExecutionEvidenceValueDisposition? ValueDisposition { get; init; }
 
+    /// <summary>
+    /// The secret reference a <see cref="ExecutionEvidenceValueDisposition.Withheld"/> variable stands for, when its
+    /// marker is a secret reference. A reference name is not a value. Null for every other fact.
+    /// </summary>
+    public string? SecretReferenceName { get; init; }
+
     /// <summary>Incident message for <see cref="ExecutionEvidenceKinds.Incident"/>.</summary>
     public string? Message { get; init; }
 }
@@ -75,7 +81,14 @@ public enum ExecutionEvidenceValueDisposition
     Sensitive,
 
     /// <summary>The value exceeded <see cref="ExecutionEvidenceOptions.MaxInlineValueLength"/>.</summary>
-    Truncated
+    Truncated,
+
+    /// <summary>
+    /// The runtime holds a withheld marker instead of the value (spec 188): a secret reference, named in
+    /// <see cref="ExecutionEvidenceRecord.SecretReferenceName"/>, or a value whose policy requires encryption. There is no
+    /// value to capture, whatever <see cref="ExecutionEvidenceOptions.RedactSensitiveValues"/> says.
+    /// </summary>
+    Withheld
 }
 
 /// <summary>Fact kinds this module derives itself. Lifecycle kinds are reused verbatim from <c>RuntimeCheckpointNames</c>.</summary>
@@ -95,6 +108,9 @@ public sealed record ExecutionEvidenceVariableCapture
     public required ExecutionEvidenceValueDisposition Disposition { get; init; }
 
     public JsonElement? Value { get; init; }
+
+    /// <summary>The secret reference behind a withheld variable; see <see cref="ExecutionEvidenceRecord.SecretReferenceName"/>.</summary>
+    public string? SecretReferenceName { get; init; }
 
     /// <summary>
     /// Deterministic change-detection key. Two captures represent the same variable state exactly when their comparands

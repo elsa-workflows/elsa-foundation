@@ -13,7 +13,7 @@ Use the constitution files in `.specify/memory/` for gates, allowed exceptions, 
 - [Git operating models](git-operating-models.md) - maintainer organization-branch and contributor fork workflows; no publication-time model selection is required.
 - [Spec lifecycle](spec-lifecycle.md) - how specs under `specs/` are numbered, the closed status vocabulary, when a spec reaches a terminal status, and why specs are never moved or deleted.
 - [First-user prompt options](first-user-prompts.md) - simple prompts for new architects and engineers entering the workspace.
-- [Developer solution filters](developer-solution-filters.md) - generated, task-oriented `.slnf` profiles for faster inner-loop work without weakening the full solution gate.
+- [Developer solution filters](developer-solution-filters.md) - the generated Core and Workbench `.slnf` views, plus the on-demand integration filter, for faster inner-loop work without weakening the full solution gate.
 - [NuGet lock files](nuget-lock-files.md) - the committed `packages.lock.json` files, locked restores in CI, and how to update the lock files on a package bump.
 - [Identity generators](identity-generators.md) - swappable `IIdentityGenerator` strategies (UUIDv7, short 64-bit, Snowflake, GUID) for short/sortable entity ids.
 - [Activity Definition authoring composition](activity-definition-authoring-composition.md) - host opt-in/opt-out guidance for provider-neutral authoring, Activity Graph design, and Activity Graph runtime features.

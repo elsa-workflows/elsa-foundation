@@ -84,7 +84,7 @@ public sealed class SharedPersistenceHostFixture : IAsyncDisposable
         var hostDirectory = stageAuthoredConfig ? StageToolingHost(builtHostDirectory) : builtHostDirectory;
         var targetFramework = Path.GetFileName(builtHostDirectory);
         var configuration = Path.GetFileName(Path.GetDirectoryName(builtHostDirectory)!);
-        var cli = Path.Combine(WorkbenchBuild.RepositoryRoot, "src", "essentials", "Cli", "bin",
+        var cli = Path.Combine(WorkbenchBuild.RepositoryRoot, "src", "essentials", "Cli", "Elsa.Cli", "bin",
             configuration, targetFramework, "Elsa.Cli.dll");
         if (!File.Exists(cli))
             throw new FileNotFoundException("Build Elsa.Cli before running the shared persistence journey.", cli);

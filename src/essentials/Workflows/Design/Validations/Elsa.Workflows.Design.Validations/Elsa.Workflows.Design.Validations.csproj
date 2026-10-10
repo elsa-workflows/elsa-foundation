@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <PackageReference Include="CShells.Abstractions" />
+    <PackageReference Include="Microsoft.Extensions.Options" />
+    <PackageReference Include="Elsa.Specifications.PackageManifest.Generator" PrivateAssets="all" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Core\Elsa.Workflows.Design.Validations.Core.csproj" />
+    <ProjectReference Include="..\..\..\..\Events\Core\Elsa.Events.Core.csproj" />
+    <ProjectReference Include="..\..\..\..\Activities\Design\Core\Elsa.Activities.Design.Core.csproj" />
+    <ProjectReference Include="..\..\..\..\Expressions\Core\Elsa.Expressions.Core.csproj" />
+  </ItemGroup>
+
+</Project>

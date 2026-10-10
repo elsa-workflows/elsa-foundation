@@ -14,7 +14,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\Elsa3.Activities.Design.Import.csproj" />
+    <ProjectReference Include="..\..\Elsa3.Activities.Design.Import\Elsa3.Activities.Design.Import.csproj" />
     <ProjectReference Include="..\..\..\..\..\..\..\..\essentials\Activities\Design\Persistence\EntityFrameworkCore\Elsa.Activities.Design.Persistence.EntityFrameworkCore.csproj" />
     <ProjectReference Include="..\..\..\..\..\..\..\..\essentials\Persistence\EntityFramework\Elsa.Persistence.EntityFramework.csproj" />
     <ProjectReference Include="..\..\..\..\..\..\..\..\essentials\Serialization\Core\Elsa.Serialization.Core.csproj" />

@@ -21,7 +21,7 @@
   <ItemGroup>
     <ProjectReference Include="..\..\..\Api\Compatibility\Testing\Elsa.Api.Compatibility.Testing.csproj" />
     <ProjectReference Include="..\..\..\..\..\src\essentials\Diagnostics\OpenTelemetry\Core\Elsa.Diagnostics.OpenTelemetry.Core.csproj" />
-    <ProjectReference Include="..\..\..\..\..\src\essentials\Diagnostics\OpenTelemetry\Elsa.Diagnostics.OpenTelemetry.csproj" />
+    <ProjectReference Include="..\..\..\..\..\src\essentials\Diagnostics\OpenTelemetry\Elsa.Diagnostics.OpenTelemetry\Elsa.Diagnostics.OpenTelemetry.csproj" />
   </ItemGroup>
 
 </Project>

@@ -149,6 +149,8 @@ every timing-independent correctness obligation it carries is moved to an EF-neu
 suite. Concurrency, leases, fencing, idempotency, bounded queries, retention, atomicity, deadlock
 behavior, crash recovery, and failure handling are correctness requirements, not performance gates.
 
+**Amended by [ADR 0080 D2](0080-elsa-4-simplification-decisions.md#d2--persistence-modes-balanced-by-default) (2026-10-10):** deterministic EF command-count budgets per reference workflow are correctness gates and may run in CI. Wall-clock timing stays retired.
+
 ### D8 — Delivery proceeds through one program queue and coherent PRs to `main`
 
 Program #1665 and its GitHub Project are the authoritative execution queue. One leaf issue is the
