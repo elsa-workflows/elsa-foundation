@@ -1,0 +1,57 @@
+name: CodeQL
+
+# Advanced CodeQL setup (code scanning). The repository's default setup is not configured; the
+# "CodeQL - Code Quality" runs come from GitHub Code Quality, a separate repository setting this
+# workflow does not touch.
+#
+# Not on pull_request, on purpose (#2622): Actions was queueing, and a PR already runs the CI gate.
+# Scanning main after each push and once a week keeps alerts current without adding PR jobs.
+#
+# Every language runs with build-mode none, so nothing restores or builds the solution: CodeQL reads
+# the C# sources directly instead of tracing a .NET build. The org Actions allow-list admits
+# GitHub-owned actions, which covers github/codeql-action.
+
+on:
+  push:
+    branches:
+      - main
+  schedule:
+    # Mondays 04:23 UTC. Odd minute to avoid the top-of-hour scheduler surge.
+    - cron: '23 4 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: codeql-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  analyze:
+    name: Analyze (${{ matrix.language }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      security-events: write
+      contents: read
+      actions: read
+    strategy:
+      fail-fast: false
+      matrix:
+        language: [csharp, javascript-typescript, python, actions]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v3
+        with:
+          languages: ${{ matrix.language }}
+          build-mode: none
+          queries: security-and-quality
+
+      - name: Analyze
+        uses: github/codeql-action/analyze@v3
+        with:
+          category: /language:${{ matrix.language }}
