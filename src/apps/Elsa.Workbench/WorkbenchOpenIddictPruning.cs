@@ -1,3 +1,5 @@
+using Elsa.Workbench.OpenIddict;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -77,12 +79,32 @@ public sealed class WorkbenchOpenIddictPruningService(
 
         // Hand the host's start back first: the first prune can be a long one on a store that has never been pruned.
         await Task.Yield();
+        if (!CanPrune())
+            return;
+
         using var timer = new PeriodicTimer(settings.Interval, time);
         do
         {
             await PruneAsync(stoppingToken);
         }
         while (await timer.WaitForNextTickAsync(stoppingToken).ConfigureAwait(false));
+    }
+
+    /// <summary>
+    /// Whether the store can be pruned at all. OpenIddict's Entity Framework Core prune deletes in bulk, which only a relational
+    /// provider can do, so on the development and demo store, EF Core's in-memory one, it fails on every interval (#2612). That
+    /// store is discarded when the host stops, so nothing builds up there: it is said once and the prune is not run.
+    /// </summary>
+    private bool CanPrune()
+    {
+        using var scope = services.CreateScope();
+        if (scope.ServiceProvider.GetService<OpenIddictIdentityDbContext>() is not { } context || context.Database.IsRelational())
+            return true;
+
+        logger.LogInformation(
+            "The OpenIddict store runs on {Provider}, which cannot delete in bulk, so it is not pruned; it is discarded when the host stops.",
+            context.Database.ProviderName);
+        return false;
     }
 
     /// <summary>
