@@ -22,7 +22,18 @@ On 9 October 2026 Sipke approved both tracks and a **scoped ADR 0073 D7 exceptio
 | A1: concurrency correctness (**diagnosed**, closed 10 October 2026) | [#2532](https://github.com/elsa-workflows/elsa-foundation/issues/2532) | `RuntimeDbPaging2392Reference` at 16 and 32 clients returns HTTP 200 `Alice Smith` for every request. Every execution settles with zero incidents. No timers. A 429 is admission backpressure, not a failure: the client retries it per `Retry-After`, and the run is judged by lost work, never by shed count (owner decision, 9 October 2026; #2548). Result at `1bef1fe`: 7 of 8 pass. SQLite Immediate/32 loses no acknowledged work but exceeds the 60s client timeout. The owner closed A1 as diagnosed, and the latency goes to Track B as [#2553](https://github.com/elsa-workflows/elsa-foundation/issues/2553). |
 | A2: request-path telemetry writes | [#2533](https://github.com/elsa-workflows/elsa-foundation/issues/2533) | Explain the `elsa_otel_*` writes attributed to the request trace (48/134 Coalesced commands), then remove them from that path or document how to disable them. |
 | Lease contention fix (**done**) | [#2538](https://github.com/elsa-workflows/elsa-foundation/issues/2538), [spec 200](../../specs/200-root-write-lease-rows/spec.md) | Done in #2539: one record per lease, keeping GC safety. A1 lease errors fell from 204 to 0. The follow-up [#2548](https://github.com/elsa-workflows/elsa-foundation/issues/2548) (#2549) stopped admission-shed starts being reported as started. |
-| B: bounded throughput ramp (**unblocked**, 10 October 2026) | [#2534](https://github.com/elsa-workflows/elsa-foundation/issues/2534) | Release build, ramp of 1–64 clients, Immediate/Coalesced × persisted diagnostics on/off. Records the plateau and the saturating resource. One-off report. It covers SQLite Immediate at 32 clients ([#2553](https://github.com/elsa-workflows/elsa-foundation/issues/2553)). |
+| B: bounded throughput ramp (**done**, 10 October 2026) | [#2534](https://github.com/elsa-workflows/elsa-foundation/issues/2534) | Release build, ramp of 1–64 clients, Immediate/Coalesced × persisted diagnostics on/off. Records the plateau and the saturating resource. One-off report. It covers SQLite Immediate ([#2553](https://github.com/elsa-workflows/elsa-foundation/issues/2553)). Published as [baseline.md](../reports/runtime-throughput/baseline.md) (#2557). |
+
+## Follow-ups from Track B
+
+Each follow-up is a separate unit. None introduces a gate, budget or SLA.
+
+| Priority | Issue | Finding |
+|---|---|---|
+| 1 | [#2601](https://github.com/elsa-workflows/elsa-foundation/issues/2601) | **Correctness.** Http16 at 4 clients on PostgreSQL with Coalesced cadence returns HTTP 500 and leaves instances `Running` with no incident. It happens with persisted diagnostics on and off. |
+| 2 | Not filed yet | **Persisted diagnostics cost.** With diagnostics on, Coalesced throughput at 1 client is about half of what it is with diagnostics off (4.05 against 8.48 executions/s), and the plateau falls from 16 clients or more to 8. A2 found the OpenTelemetry writes off the critical path, but this gap appears with no concurrency at all. The structured-logs store is the untested suspect. |
+| 3 | [#2553](https://github.com/elsa-workflows/elsa-foundation/issues/2553) | **Immediate cadence cost per request.** At 1 client: PostgreSQL 1.3–1.9 executions/s against 8.5 with Coalesced; SQLite 0.88 executions/s, plateauing at 2 clients. Measure commits and fsyncs per run before choosing an optimization. |
+| 4 | Not filed yet | **Admission controller.** It sheds at 16 and 32 clients while CPU stays below 51% and the connection pool is no more than 26% used. Check whether its adaptive limit is tighter than the resources warrant. |
 
 ## Boundaries
 
