@@ -1,11 +1,14 @@
+using System.Diagnostics.Metrics;
 using System.Text.Json;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Contracts.Alterations;
 using Elsa.Workflows.Runtime.Core.Diagnostics;
 using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Workflows.Runtime.Diagnostics;
 using Elsa.Workflows.Runtime.Services.Executions;
 using Elsa.Workflows.Runtime.Services.Scheduler;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Time.Testing;
 using Xunit;
 
@@ -121,6 +124,52 @@ public sealed class RuntimeAdmissionControlTests
         Assert.Equal(50, controller.Limit);
         Assert.Equal(1, _diagnostics.LimitDecreases);
         Assert.Equal(0, _diagnostics.LimitIncreases);
+    }
+
+    /// <summary>
+    /// A cut is explained by the numbers that caused it (#2614): the completion, the baseline it was judged against, and
+    /// the load and limit it was admitted at, logged at Debug and reported on the admission meter.
+    /// </summary>
+    [Fact]
+    public void AdaptiveLimit_ReportsWhyItFell()
+    {
+        using var meter = new AdmissionMeasurements();
+        var logger = new RecordingLogger<RuntimeAdmissionController>();
+        var controller = new RuntimeAdmissionController(_signal, AdaptiveOptions(), _diagnostics, _clock, logger);
+        CompleteSaturatedSample(controller, TimeSpan.FromMilliseconds(10));
+
+        CompleteSaturatedSample(controller, TimeSpan.FromMilliseconds(500));
+
+        var cut = Assert.Single(logger.Entries, entry => entry.EventId.Id == 68202);
+        Assert.Equal(LogLevel.Debug, cut.Level);
+        Assert.Contains("from 100 to 50", cut.Message, StringComparison.Ordinal);
+        Assert.Contains("DurationMs=500 BaselineMs=10 LatencyTolerance=2 AdmittedAtLoad=50 AdmittedAtLimit=100 ChargedUnits=2", cut.Message, StringComparison.Ordinal);
+        Assert.Contains((RuntimeAdmissionTelemetry.SampleDurationInstrumentName, 500d, RuntimeAdmissionTelemetry.DecreasedSample), meter.Measurements);
+        Assert.Contains((RuntimeAdmissionTelemetry.SampleDurationInstrumentName, 10d, RuntimeAdmissionTelemetry.CalibrationSample), meter.Measurements);
+        Assert.Contains((RuntimeAdmissionTelemetry.LimitInstrumentName, 50d, null), meter.Measurements);
+    }
+
+    [Fact]
+    public void TryAdmit_ReportsWhyItShed()
+    {
+        using var meter = new AdmissionMeasurements();
+        var logger = new RecordingLogger<RuntimeAdmissionController>();
+        var controller = new RuntimeAdmissionController(
+            _signal,
+            new RuntimeAdmissionOptions { InitialLimit = 10, MinLimit = 10, MaxLimit = 10 },
+            _diagnostics,
+            _clock,
+            logger);
+        _signal.InFlightDispatches = 1234;
+
+        using var decision = controller.TryAdmit();
+
+        Assert.False(decision.IsAdmitted);
+        var shed = Assert.Single(logger.Entries, entry => entry.EventId.Id == 68201);
+        Assert.Equal(LogLevel.Debug, shed.Level);
+        Assert.Contains("InFlightDispatches=1234 Limit=10", shed.Message, StringComparison.Ordinal);
+        Assert.Contains((RuntimeAdmissionTelemetry.InFlightInstrumentName, 1234d, null), meter.Measurements);
+        Assert.Contains((RuntimeAdmissionTelemetry.DecisionCountInstrumentName, 1d, RuntimeAdmissionTelemetry.ShedOutcome), meter.Measurements);
     }
 
     [Fact]
@@ -786,6 +835,56 @@ public sealed class RuntimeAdmissionControlTests
             requestedAt: Now,
             requestedBy: "test",
             requiredCapabilities: WorkflowExecutionActorCapabilities.None);
+
+    private sealed class RecordingLogger<T> : ILogger<T>
+    {
+        public List<(LogLevel Level, EventId EventId, string Message)> Entries { get; } = [];
+
+        public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
+
+        public bool IsEnabled(LogLevel logLevel) => true;
+
+        public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter) =>
+            Entries.Add((logLevel, eventId, formatter(state, exception)));
+    }
+
+    // The admission meter is process-wide, so other tests' controllers report on it too: assertions look for the
+    // measurement this test caused, never for the absence of others.
+    private sealed class AdmissionMeasurements : IDisposable
+    {
+        private readonly MeterListener _listener = new();
+        private readonly List<(string Instrument, double Value, string? Tag)> _measurements = [];
+
+        public AdmissionMeasurements()
+        {
+            _listener.InstrumentPublished = (instrument, listener) =>
+            {
+                if (instrument.Meter.Name == RuntimeAdmissionTelemetry.MeterName)
+                    listener.EnableMeasurementEvents(instrument);
+            };
+            _listener.SetMeasurementEventCallback<double>((instrument, value, tags, _) => Add(instrument, value, tags));
+            _listener.SetMeasurementEventCallback<long>((instrument, value, tags, _) => Add(instrument, value, tags));
+            _listener.Start();
+        }
+
+        public IReadOnlyList<(string Instrument, double Value, string? Tag)> Measurements
+        {
+            get
+            {
+                lock (_measurements)
+                    return [.. _measurements];
+            }
+        }
+
+        public void Dispose() => _listener.Dispose();
+
+        private void Add(Instrument instrument, double value, ReadOnlySpan<KeyValuePair<string, object?>> tags)
+        {
+            var tag = tags.Length == 0 ? null : tags[0].Value as string;
+            lock (_measurements)
+                _measurements.Add((instrument.Name, value, tag));
+        }
+    }
 
     // Drives the in-flight reading from the test rather than from real work, but models the ONE thing the controller
     // reads back off a completion faithfully: a charge starts at the seed unit and grows one per dispatch. A stub

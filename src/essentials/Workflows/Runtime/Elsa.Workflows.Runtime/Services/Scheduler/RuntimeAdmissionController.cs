@@ -1,6 +1,9 @@
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Diagnostics;
 using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Workflows.Runtime.Diagnostics;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Elsa.Workflows.Runtime.Services.Scheduler;
 
@@ -26,6 +29,10 @@ namespace Elsa.Workflows.Runtime.Services.Scheduler;
 /// inside an already-admitted one — a child workflow started during its parent's drain — is never shed either: the
 /// parent still holds its charge, so refusing frees nothing and the retry can only bounce until the parent is done.
 /// The limiter's job is to refuse work at the door, not to interrupt work already inside.</para>
+///
+/// <para><b>Every decision is observable (#2614).</b> The limit, the in-flight load, the baseline and each sampled
+/// completion are reported on <see cref="RuntimeAdmissionTelemetry"/>; a shed and a limit cut are logged at Debug with
+/// the numbers that caused them, and a limit rise at Trace. None of it feeds back into a decision.</para>
 /// </summary>
 public sealed class RuntimeAdmissionController : IRuntimeAdmissionController
 {
@@ -33,6 +40,7 @@ public sealed class RuntimeAdmissionController : IRuntimeAdmissionController
     private readonly RuntimeAdmissionOptions _options;
     private readonly RuntimeAdmissionDiagnostics? _diagnostics;
     private readonly TimeProvider _timeProvider;
+    private readonly ILogger _logger;
     private readonly object _limitLock = new();
     private double _limit;
     private long _baselineTicks;
@@ -41,7 +49,8 @@ public sealed class RuntimeAdmissionController : IRuntimeAdmissionController
         IRuntimeAdmissionLoadSignal loadSignal,
         RuntimeAdmissionOptions? options = null,
         RuntimeAdmissionDiagnostics? diagnostics = null,
-        TimeProvider? timeProvider = null)
+        TimeProvider? timeProvider = null,
+        ILogger<RuntimeAdmissionController>? logger = null)
     {
         ArgumentNullException.ThrowIfNull(loadSignal);
 
@@ -49,6 +58,7 @@ public sealed class RuntimeAdmissionController : IRuntimeAdmissionController
         _options = options ?? new RuntimeAdmissionOptions();
         _diagnostics = diagnostics;
         _timeProvider = timeProvider ?? TimeProvider.System;
+        _logger = logger ?? (ILogger)NullLogger.Instance;
 
         if (_options.MinLimit <= 0)
             throw new ArgumentOutOfRangeException(nameof(options), "The minimum admission limit must be greater than zero.");
@@ -62,6 +72,17 @@ public sealed class RuntimeAdmissionController : IRuntimeAdmissionController
             throw new ArgumentOutOfRangeException(nameof(options), "The admission latency tolerance cannot be below one.");
 
         _limit = Clamp(_options.StaticLimit ?? _options.InitialLimit);
+        RuntimeAdmissionTelemetry.Limit.Record(_limit);
+    }
+
+    /// <summary>The completion latency saturated samples are judged against; zero until the first sample calibrates it.</summary>
+    public TimeSpan Baseline
+    {
+        get
+        {
+            lock (_limitLock)
+                return TimeSpan.FromTicks(_baselineTicks);
+        }
     }
 
     public double Limit
@@ -94,6 +115,15 @@ public sealed class RuntimeAdmissionController : IRuntimeAdmissionController
         if (charge is null)
         {
             _diagnostics?.RecordShed();
+            RuntimeAdmissionTelemetry.Decisions.Add(1, new KeyValuePair<string, object?>(RuntimeAdmissionTelemetry.OutcomeTag, RuntimeAdmissionTelemetry.ShedOutcome));
+            RuntimeAdmissionTelemetry.InFlight.Record(load);
+            if (_logger.IsEnabled(LogLevel.Debug))
+                _logger.LogDebug(
+                    new EventId(68201, "RuntimeAdmissionShed"),
+                    "Runtime admission shed a command. InFlightDispatches={InFlightDispatches} Limit={Limit} BaselineMs={BaselineMs}",
+                    load,
+                    limit,
+                    Baseline.TotalMilliseconds);
             return RuntimeAdmissionDecision.Shed(
                 $"Runtime dispatch admission is at capacity: {load} dispatch units in flight against a limit of {limit:F0}.",
                 _options.RetryAfter,
@@ -107,6 +137,8 @@ public sealed class RuntimeAdmissionController : IRuntimeAdmissionController
     private RuntimeAdmissionDecision Admit(IRuntimeAdmissionCharge charge, long load, double limit)
     {
         _diagnostics?.RecordAdmitted();
+        RuntimeAdmissionTelemetry.Decisions.Add(1, new KeyValuePair<string, object?>(RuntimeAdmissionTelemetry.OutcomeTag, RuntimeAdmissionTelemetry.AdmittedOutcome));
+        RuntimeAdmissionTelemetry.InFlight.Record(load);
         return RuntimeAdmissionDecision.Admitted(charge, OnCompleted, load, limit, _timeProvider.GetTimestamp());
     }
 
@@ -130,39 +162,111 @@ public sealed class RuntimeAdmissionController : IRuntimeAdmissionController
         if (completion.ChargedUnits <= 1)
             return;
 
+        string sample;
+        double previousLimit, newLimit;
+        long judgedAgainstTicks, newBaselineTicks;
         lock (_limitLock)
         {
+            previousLimit = _limit;
+            judgedAgainstTicks = _baselineTicks;
+
             // The first sample only calibrates: with no baseline there is nothing to call this completion fast or slow
             // against, so moving the limit on it would be moving it on noise.
             if (_baselineTicks == 0)
             {
                 _baselineTicks = duration.Ticks;
-                return;
+                sample = RuntimeAdmissionTelemetry.CalibrationSample;
             }
-
-            // An unsaturated sample carries no capacity information. Admitting at a quarter of the limit and taking
-            // 200 ms says the work is slow, not that the host is full. Written as a division of the double limit
-            // rather than a doubling of the long load: halving a double is exact in binary floating point, so the two
-            // forms compare identically, and this one is not an integer multiplication feeding a double comparison.
-            var saturated = completion.ObservedLoad >= completion.Limit / 2;
-            if (saturated)
+            else
             {
-                if (duration.Ticks <= _baselineTicks * _options.LatencyTolerance)
-                {
-                    _limit = Clamp(_limit + _options.IncreaseStep);
-                    _diagnostics?.RecordLimitIncrease();
-                }
-                else
-                {
-                    _limit = Clamp(_limit * _options.DecreaseFactor);
-                    _diagnostics?.RecordLimitDecrease();
-                }
+                sample = MoveLimit(completion, duration);
             }
 
-            // Let the baseline drift up toward the observed duration so a host that genuinely got slower recalibrates
-            // instead of cutting forever against a reading it can no longer reach. A faster sample still wins outright.
-            _baselineTicks = Math.Min(duration.Ticks, (long)(_baselineTicks * _options.BaselineDecay) + 1);
+            newLimit = _limit;
+            newBaselineTicks = _baselineTicks;
         }
+
+        // Reported outside the lock: a listener or a log provider must never sit inside the limit's critical section.
+
+        Report(completion, duration, sample, previousLimit, newLimit, judgedAgainstTicks, newBaselineTicks);
+    }
+
+    // Called under _limitLock with a calibrated baseline. Returns which kind of sample this completion was.
+    private string MoveLimit(RuntimeAdmissionCompletion completion, TimeSpan duration)
+    {
+        string sample;
+
+        // An unsaturated sample carries no capacity information. Admitting at a quarter of the limit and taking
+        // 200 ms says the work is slow, not that the host is full. Written as a division of the double limit
+        // rather than a doubling of the long load: halving a double is exact in binary floating point, so the two
+        // forms compare identically, and this one is not an integer multiplication feeding a double comparison.
+        var saturated = completion.ObservedLoad >= completion.Limit / 2;
+        if (saturated)
+        {
+            if (duration.Ticks <= _baselineTicks * _options.LatencyTolerance)
+            {
+                _limit = Clamp(_limit + _options.IncreaseStep);
+                _diagnostics?.RecordLimitIncrease();
+                sample = RuntimeAdmissionTelemetry.IncreasedSample;
+            }
+            else
+            {
+                _limit = Clamp(_limit * _options.DecreaseFactor);
+                _diagnostics?.RecordLimitDecrease();
+                sample = RuntimeAdmissionTelemetry.DecreasedSample;
+            }
+        }
+        else
+        {
+            sample = RuntimeAdmissionTelemetry.UnsaturatedSample;
+        }
+
+        // Let the baseline drift up toward the observed duration so a host that genuinely got slower recalibrates
+        // instead of cutting forever against a reading it can no longer reach. A faster sample still wins outright.
+        _baselineTicks = Math.Min(duration.Ticks, (long)(_baselineTicks * _options.BaselineDecay) + 1);
+
+        return sample;
+    }
+
+    private void Report(
+        RuntimeAdmissionCompletion completion,
+        TimeSpan duration,
+        string sample,
+        double previousLimit,
+        double newLimit,
+        long judgedAgainstTicks,
+        long newBaselineTicks)
+    {
+        RuntimeAdmissionTelemetry.SampleDuration.Record(
+            duration.TotalMilliseconds,
+            new KeyValuePair<string, object?>(RuntimeAdmissionTelemetry.SampleTag, sample));
+        RuntimeAdmissionTelemetry.Baseline.Record(TimeSpan.FromTicks(newBaselineTicks).TotalMilliseconds);
+        if (newLimit != previousLimit)
+            RuntimeAdmissionTelemetry.Limit.Record(newLimit);
+
+        var level = sample switch
+        {
+            RuntimeAdmissionTelemetry.DecreasedSample => LogLevel.Debug,
+            RuntimeAdmissionTelemetry.IncreasedSample => LogLevel.Trace,
+            _ => LogLevel.None
+        };
+        if (level == LogLevel.None || !_logger.IsEnabled(level))
+            return;
+
+        _logger.Log(
+            level,
+            sample == RuntimeAdmissionTelemetry.DecreasedSample
+                ? new EventId(68202, "RuntimeAdmissionLimitDecreased")
+                : new EventId(68203, "RuntimeAdmissionLimitIncreased"),
+            "Runtime admission limit moved from {PreviousLimit} to {Limit}. DurationMs={DurationMs} BaselineMs={BaselineMs} LatencyTolerance={LatencyTolerance} AdmittedAtLoad={AdmittedAtLoad} AdmittedAtLimit={AdmittedAtLimit} ChargedUnits={ChargedUnits}",
+            previousLimit,
+            newLimit,
+            duration.TotalMilliseconds,
+            TimeSpan.FromTicks(judgedAgainstTicks).TotalMilliseconds,
+            _options.LatencyTolerance,
+            completion.ObservedLoad,
+            completion.Limit,
+            completion.ChargedUnits);
     }
 
     private double Clamp(double limit)
