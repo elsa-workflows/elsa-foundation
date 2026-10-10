@@ -65,7 +65,7 @@ public sealed class EfSchemaFamilyContentReadGuardTests
     [Fact]
     public void Every_declared_content_column_is_read_through_its_chain()
     {
-        var (violations, unused, reads) = Persistence.ContentReads(IsPersistenceSource, ProjectVisibility.Sees, ContentReadExemptions);
+        var (violations, unused, reads) = EfSchemaFamilyTestFixtures.Persistence.ContentReads(IsPersistenceSource, ProjectVisibility.Sees, ContentReadExemptions);
 
         AssertNone(violations, "A declared content column is read through its family's chain, from the row's stamp, so an older row is " +
             "upcast before it is parsed or compared with anything this build serializes (spec 180, FR-009):");
@@ -73,7 +73,7 @@ public sealed class EfSchemaFamilyContentReadGuardTests
         // 195 when #2144 moved upcasting to rows: a store now reads a row's content columns once, in the one call that
         // upcasts them together, where it read each column at every use before, so the floor moved from 200.
         Assert.True(reads >= 190, $"Expected the EF stores to keep reading their content columns; found {reads} reads.");
-        Assert.True(Persistence.RowUpcasts().Count >= 45, $"Expected the EF stores to keep upcasting whole rows; found {Persistence.RowUpcasts().Count} row upcasts.");
+        Assert.True(EfSchemaFamilyTestFixtures.Persistence.RowUpcasts().Count >= 45, $"Expected the EF stores to keep upcasting whole rows; found {EfSchemaFamilyTestFixtures.Persistence.RowUpcasts().Count} row upcasts.");
     }
 
     /// <summary>

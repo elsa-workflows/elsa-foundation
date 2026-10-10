@@ -78,8 +78,8 @@ public sealed class EfSchemaFamilyChainDeclarationGuardTests
         Assert.True(Production.Handles.Count >= 28, $"Expected a chain handle for each of at least twenty-eight families; found {Production.Handles.Count}.");
         Assert.True(Production.Stamps.Count >= 60, $"Expected the EF stores to keep stamping their families' constants; found {Production.Stamps.Count} stamps.");
         Assert.True(Production.MaterializedFamilies.Count >= 2, $"Expected the two design contexts EF materializes directly; found {Production.MaterializedFamilies.Count}.");
-        Assert.True(Persistence.ContentRewrites.Count >= 60, $"Expected the EF stores' in-place content rewrites; found {Persistence.ContentRewrites.Count}.");
-        Assert.True(Persistence.BulkContentWrites().Count >= 1, $"Expected the bulk update of a workflow draft's state; found {Persistence.BulkContentWrites().Count}.");
+        Assert.True(EfSchemaFamilyTestFixtures.Persistence.ContentRewrites.Count >= 60, $"Expected the EF stores' in-place content rewrites; found {EfSchemaFamilyTestFixtures.Persistence.ContentRewrites.Count}.");
+        Assert.True(EfSchemaFamilyTestFixtures.Persistence.BulkContentWrites().Count >= 1, $"Expected the bulk update of a workflow draft's state; found {EfSchemaFamilyTestFixtures.Persistence.BulkContentWrites().Count}.");
         Assert.True(Production.DeclaredColumns().Count >= 100, $"Expected the families' content and integrity declarations; found {Production.DeclaredColumns().Count} columns.");
         Assert.Superset(
             new HashSet<string>
@@ -88,9 +88,9 @@ public sealed class EfSchemaFamilyChainDeclarationGuardTests
                 "ContentJson", "PayloadJson", "MetadataJson", "OutcomeJson", "PendingPostCommitWorkIdsJson", "ConsumedSchedulerWorkItemIdsJson",
                 "Content", "Payload", "ValueJson", "ReportJson"
             },
-            Persistence.ContentColumns.ToHashSet());
-        Assert.Superset(new HashSet<string> { "WorkflowsDesign", "ActivitiesDesign" }, Persistence.MaterializedFamilyNames.ToHashSet());
-        Assert.Contains(("Upgrade", 1, 0), Persistence.StampingMethods);
+            EfSchemaFamilyTestFixtures.Persistence.ContentColumns.ToHashSet());
+        Assert.Superset(new HashSet<string> { "WorkflowsDesign", "ActivitiesDesign" }, EfSchemaFamilyTestFixtures.Persistence.MaterializedFamilyNames.ToHashSet());
+        Assert.Contains(("Upgrade", 1, 0), EfSchemaFamilyTestFixtures.Persistence.StampingMethods);
     }
 
     [Theory]
