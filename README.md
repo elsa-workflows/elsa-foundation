@@ -47,7 +47,7 @@ For faster inner-loop work, open or build one of the committed
 [developer solution filters](docs/reference/developer-solution-filters.md). The full solution remains
 the completion gate.
 
-For a tested macOS backend run from source, including readiness and a completed sample workflow, follow the
+To build and run the backend from source, check readiness, and execute a sample workflow, follow the
 [backend source quickstart](docs/contributing/backend-source-quickstart.md).
 
 ## Supported management APIs
@@ -66,12 +66,8 @@ See the [domain-owned API specification](specs/092-domain-owned-apis/spec.md),
 
 ## Run with Docker
 
-Fastest way to try the stack — pull the published images and run them, no clone or build:
-
-```bash
-curl -O https://raw.githubusercontent.com/elsa-workflows/elsa-foundation/main/docker/compose/docker-compose.images.yml
-docker compose -f docker-compose.images.yml up
-```
+The fastest way to try the stack is to [run the published images with Docker Compose](docker/compose/README.md#with-docker-compose),
+without cloning or building the repositories. That guide includes macOS/Linux and Windows PowerShell commands.
 
 This starts **Elsa.Workbench** (`http://localhost:13000`) and **Elsa Studio**
 (`http://localhost:14000`) from the Docker Hub images `elsaworkflows/elsa-workbench` and

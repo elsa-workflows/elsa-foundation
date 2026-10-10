@@ -17,6 +17,16 @@ Demo credentials and API key throughout — do not expose this setup beyond your
 
 ## Quickstart
 
+The examples on this page use Bash syntax (macOS/Linux). For the Compose path with macOS/Linux and Windows PowerShell instructions, use the
+[Compose quick start](../docker/compose/README.md#quick-start--published-images-no-clone-or-build).
+
+Before starting, confirm ports `13000` and `14000` are free; if either is occupied, wait until it is
+free without stopping another process. Check `docker container ls --all`,
+`docker network ls`, and `docker volume ls`: the container names `elsa-workbench` and `elsa-studio`,
+network `elsa-demo`, and volumes `elsa-workbench-packages` and `elsa-data` must be unused. If any of those resources already
+exist, use a separate, uniquely named Compose project instead (the same ports must still be free); do not reuse or remove someone
+else's resources. The cleanup below assumes these resources were created by this walkthrough.
+
 ```bash
 docker network create elsa-demo
 
@@ -25,7 +35,7 @@ docker pull elsaworkflows/elsa-studio:latest
 
 docker run -d --name elsa-workbench \
   --network elsa-demo \
-  -p 13000:8080 \
+  -p 127.0.0.1:13000:8080 \
   -e ASPNETCORE_ENVIRONMENT=Development \
   -e Elsa__ModuleManagement__ApiKey=elsa-docker-demo-key \
   -e Cors__AllowedOrigins__0=http://localhost:14000 \
@@ -38,7 +48,7 @@ docker run -d --name elsa-workbench \
 
 docker run -d --name elsa-studio \
   --network elsa-demo \
-  -p 14000:8080 \
+  -p 127.0.0.1:14000:8080 \
   -e ASPNETCORE_ENVIRONMENT=Development \
   -e Studio__Auth__Enabled=true \
   -e Studio__BackendBaseUrl=http://localhost:13000 \
@@ -51,7 +61,7 @@ Open http://localhost:14000 and sign in as `admin` / `Password123!`.
 
 The non-obvious settings:
 
-- `Studio__BackendBaseUrl` is used by the Blazor WebAssembly client **in your browser**, so it must
+- `Studio__BackendBaseUrl` is used by the client **in your browser**, so it must
   be the host-published server URL (`http://localhost:13000`), never the container name.
 - `Studio__BackendServerBaseUrl` is used by Studio's server-side management bridge **inside the
   Docker network**, so it uses the container name (`http://elsa-workbench:8080`).
@@ -219,6 +229,9 @@ Note this is separate from module *package* management (upload/feeds, gated by t
 `Elsa__ModuleManagement__ApiKey`), which persists to `/app/appsettings.json` and `/app/packages`.
 
 ## Cleanup
+
+Run this only for the resources you created above. It removes the demo containers, their workflow data,
+and both named volumes, including any packages you added. Preserve anything you want to keep first.
 
 ```bash
 docker rm -f elsa-workbench elsa-studio

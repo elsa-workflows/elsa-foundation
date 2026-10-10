@@ -1,13 +1,11 @@
 # Docker quickstart
 
-Go from a fresh clone to a running Elsa stack — **PostgreSQL + Elsa.Workbench + Elsa Studio** —
-by following this one document, top to bottom.
+Choose one path below: run published Workbench and Studio images without a checkout, or build the
+PostgreSQL reference stack from source. You need Docker Engine with the Compose v2 plugin.
 
-Everything here runs from this directory:
-
-```bash
-cd docker/compose
-```
+The published-image path can run from a new empty directory. For the source-build paths, clone this
+repository first and run commands from its `docker/compose` directory. Multi-line shell examples on
+this page use Bash; the published-image download also includes a Windows PowerShell command.
 
 Three ways to run, fastest first:
 
@@ -54,33 +52,55 @@ For a pinned, isolated check that Studio can create and run a workflow against W
 
 ### With Docker Compose
 
-Download just the compose file and start it:
+From a new empty directory, download the Compose file. On macOS/Linux:
 
 ```bash
-curl -O https://raw.githubusercontent.com/elsa-workflows/elsa-foundation/main/docker/compose/docker-compose.images.yml
-docker compose -f docker-compose.images.yml up
+curl -fLO https://raw.githubusercontent.com/elsa-workflows/elsa-foundation/main/docker/compose/docker-compose.images.yml
 ```
+
+On Windows PowerShell:
+
+```powershell
+curl.exe -fLO https://raw.githubusercontent.com/elsa-workflows/elsa-foundation/main/docker/compose/docker-compose.images.yml
+```
+
+Use unused ports `13000` and `14000` and a unique Compose project name. For a local-only demo, change
+both port mappings in the downloaded file to `127.0.0.1:13000:8080` and `127.0.0.1:14000:8080`.
+Then, in either shell:
+
+```bash
+docker compose -p elsa-demo -f docker-compose.images.yml up
+```
+
+Replace `elsa-demo` if that project name is already in use. Keep the same project name and file for
+later commands. Stop this stack with Ctrl+C, then remove its containers with
+`docker compose -p elsa-demo -f docker-compose.images.yml down`. Add `--volumes` only when you intend
+to discard this demo's stored data as well.
 
 ### With the Docker CLI
 
-Same result without Compose — start the server, then Studio pointed at it:
+The following alternative uses Bash and OpenSSL. Before running it, check that the container names
+`elsa-workbench` and `elsa-studio`, volumes `elsa-workbench-packages` and `elsa-data`, and ports `13000`
+and `14000` are unused. Start the server, then Studio pointed at it:
 
 ```bash
 # Elsa.Workbench (SQLite default composition; elsa-workbench-packages is the Nuplane package feed, elsa-data
 # holds the Data Protection key ring).
 # DEMO ONLY: Migrate__Policy=AutoMigrate applies the migrations as the container starts, as the compose file does.
 # Real production keeps the image's default Validate policy and applies them first (see below the example).
-# The last three -e flags are the secrets Production requires: the recovery continuation signing key,
+# The last four -e flags supply the Production secrets: recovery and hierarchy cursor signing keys,
 # the seed admin password, and a freshly generated access-token signing key (needs openssl on your machine).
 docker run -d --name elsa-workbench \
-  -p 13000:8080 \
+  -p 127.0.0.1:13000:8080 \
   -e ASPNETCORE_ENVIRONMENT=Production \
   -e Elsa__Persistence__EntityFramework__Migrate__Policy=AutoMigrate \
   -e Elsa__ModuleManagement__ApiKey=elsa-docker-demo-key \
   -e Cors__AllowedOrigins__0=http://localhost:14000 \
+  -e CShells__Shells__default__Features__FoundationIdentityAspNetCoreIdentity__AllowedReturnUrlOrigins__0=http://localhost:14000 \
   -e Elsa__DataProtection__EntityFrameworkCore__Enabled=true \
   -e "Elsa__DataProtection__EntityFrameworkCore__ConnectionString=Data Source=/app/data/data-protection.db" \
   -e CShells__Shells__default__Features__WorkflowsRuntimeEntityFrameworkCore__RecoveryContinuationSigningKey=elsa-docker-demo-recovery-continuation-key \
+  -e CShells__Shells__default__Features__WorkflowsRuntimeEntityFrameworkCore__HierarchyCursorSigningKey=elsa-docker-demo-hierarchy-cursor-key \
   -e 'CShells__Shells__default__Features__FoundationIdentityAspNetCoreIdentityEntityFrameworkCore__SeedAdminPassword=Password123!' \
   -e "CShells__Shells__default__Features__FoundationIdentityOpenIddict__SigningKey=$(openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 | openssl pkcs8 -topk8 -nocrypt -outform DER | base64)" \
   -v elsa-workbench-packages:/app/packages \
@@ -89,7 +109,7 @@ docker run -d --name elsa-workbench \
 
 # Elsa Studio, pointed at the server backend
 docker run -d --name elsa-studio \
-  -p 14000:8080 \
+  -p 127.0.0.1:14000:8080 \
   -e ASPNETCORE_ENVIRONMENT=Production \
   -e Studio__BackendBaseUrl=http://localhost:13000 \
   -e Studio__BackendModuleManagementApiKey=elsa-docker-demo-key \
@@ -189,9 +209,8 @@ The Studio image is **not** built from this repository. Build it once from the s
 `elsa-foundation-studio`, whose Dockerfile also uses **its own repo root** as the build context.
 
 ```bash
-cd ../elsa-foundation-studio                 # sibling checkout, next to this repo
-git checkout main
-docker build -f src/Elsa.Studio.Web/Dockerfile -t elsa-studio-web:local .
+cd ../../../elsa-foundation-studio          # from Foundation docker/compose to the sibling checkout
+docker build -f src/apps/Elsa.Studio.Web/Dockerfile -t elsa-studio-web:local .
 ```
 
 Back in this directory, bring up the whole stack with the `studio` profile:
@@ -207,7 +226,7 @@ Then open **Elsa Studio** in a browser:
 http://localhost:14000
 ```
 
-Sign in with the demo credentials from step 4. Studio is a Blazor WebAssembly app: the browser
+Sign in with the demo credentials from step 4. Studio is a browser application: the browser
 downloads the client and calls the backend's workflow APIs directly at `http://localhost:13000`
 with the user's authorization. Host-control operations such as module management are the exception:
 those go through the server-side Studio management bridge, which holds the Elsa host management key
@@ -220,7 +239,7 @@ those go through the server-side Studio management bridge, which holds the Elsa 
 | Service      | Host URL / port          | What it is                                              |
 |--------------|--------------------------|--------------------------------------------------------|
 | Elsa.Workbench  | `http://localhost:13000` | Workflow server API. Root path returns `Healthy` JSON. |
-| Elsa Studio  | `http://localhost:14000` | Management UI (Blazor WebAssembly). `studio` profile.  |
+| Elsa Studio  | `http://localhost:14000` | Management UI. `studio` profile.  |
 | PostgreSQL   | `localhost:5432`         | Persistence. Exposed for inspection only.              |
 
 **Demo credentials & keys** (defined in `docker-compose.yml` / `elsa-workbench.shells.json`):

@@ -119,12 +119,12 @@ services:
   # Elsa Studio (management UI).
   #
   # The image is NOT built from this repository. Build it once from the sibling
-  # repo elsa-foundation-studio (main), whose
+  # repo elsa-foundation-studio, whose
   # Dockerfile also uses its repo root as build context:
   #
-  #   cd ../elsa-foundation-studio          # sibling checkout
-  #   git checkout main
-  #   docker build -f src/Elsa.Studio.Web/Dockerfile -t elsa-studio-web:local .
+  #   cd ../../../elsa-foundation-studio   # from Foundation docker/compose
+  #   docker build -f src/apps/Elsa.Studio.Web/Dockerfile -t elsa-studio-web:local .
+  #   cd -                               # back to Foundation docker/compose (Bash)
   #
   # Then start it with the 'studio' profile:
   #   docker compose --profile studio up
@@ -137,13 +137,13 @@ services:
     profiles: ["studio"]
     # build:
     #   context: ../../../elsa-foundation-studio
-    #   dockerfile: src/Elsa.Studio.Web/Dockerfile
+    #   dockerfile: src/apps/Elsa.Studio.Web/Dockerfile
     depends_on:
       elsa-workbench:
         condition: service_healthy
     environment:
       ASPNETCORE_ENVIRONMENT: Production
-      # BackendBaseUrl is consumed by the Blazor WebAssembly client IN THE BROWSER
+      # BackendBaseUrl is consumed by the client IN THE BROWSER
       # (surfaced via /studio-runtime.js), so it must be reachable from the host,
       # NOT the compose service name. Use the server's published host port.
       Studio__BackendBaseUrl: "http://localhost:13000"
