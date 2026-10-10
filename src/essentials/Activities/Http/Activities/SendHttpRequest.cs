@@ -24,7 +24,7 @@ namespace Elsa.Activities.Http.Activities;
 /// response always returns one complete <see cref="SendHttpRequestResult"/>, and the completion
 /// <em>outcome</em> encodes the branch so a workflow can react without faulting.
 /// A transport failure emits <see cref="HttpActivityOutcomes.Failed"/> and a timeout emits
-/// <see cref="HttpActivityOutcomes.Timeout"/>; only a genuine misconfiguration (missing URL) or an external
+/// <see cref="HttpActivityOutcomes.Timeout"/>; only a genuine misconfiguration (a missing URL, or an <see cref="Authorization"/> value holding a line break) or an external
 /// cancellation of the workflow faults the activity.
 /// </para>
 /// <para>
@@ -79,8 +79,10 @@ public sealed class SendHttpRequest(
     /// binds a stored secret to it and writes no literal, so the definition holds the secret reference and the value is
     /// resolved when the activity runs. A non-empty value is sent verbatim as the whole header value (for example
     /// <c>Bearer</c>, a space and a token), because the activity adds no scheme, and it replaces an
-    /// <c>Authorization</c> entry in <see cref="RequestHeaders"/> whatever that entry's letter case. When it is unbound or
-    /// empty, <see cref="RequestHeaders"/> applies unchanged. The activity's own result is built from the response
+    /// <c>Authorization</c> entry in <see cref="RequestHeaders"/> whatever that entry's letter case. When it is unbound,
+    /// empty or whitespace only, <see cref="RequestHeaders"/> applies unchanged. A value containing a carriage return or
+    /// a line feed faults the activity before any request is sent, with a message that names the input and not the
+    /// value, because a header value cannot hold a line break. The activity's own result is built from the response
     /// only, so this value is not part of it; a server that reflects the value in its response puts it into the
     /// result. The value goes to whatever <see cref="Url"/> resolves to. Phase 1's http Connection replaces this input.
     /// </summary>
@@ -94,8 +96,6 @@ public sealed class SendHttpRequest(
     /// <summary>Optional per-request timeout overriding <c>HttpActivityOptions.DefaultTimeout</c>.</summary>
     [ActivityInput(Key = nameof(Timeout))]
     public TimeSpan? Timeout { get; set; }
-
-    private const string AuthorizationHeaderName = "Authorization";
 
     protected override async ValueTask<ActivityTransition<SendHttpRequestResult>> ExecuteAsync(ActivityExecutionContext context)
     {
@@ -140,6 +140,8 @@ public sealed class SendHttpRequest(
         }
     }
 
+    private const string AuthorizationHeaderName = "Authorization";
+
     private void AddHeaders(HttpRequestMessage request)
     {
         if (RequestHeaders is not null)
@@ -149,9 +151,13 @@ public sealed class SendHttpRequest(
         }
 
         // Applied after RequestHeaders so the credential input wins. TryAddWithoutValidation never throws, so the
-        // value cannot reach exception text through header validation.
-        if (string.IsNullOrEmpty(Authorization))
+        // value cannot reach exception text through header validation; it also accepts a line break, which would put a
+        // second header on the wire, so a value holding one is refused here with a message that omits the value.
+        if (string.IsNullOrWhiteSpace(Authorization))
             return;
+
+        if (Authorization.AsSpan().IndexOfAny('\r', '\n') >= 0)
+            throw new InvalidOperationException("SendHttpRequest's Authorization input contains a carriage return or a line feed, which a header value cannot hold.");
 
         request.Headers.Remove(AuthorizationHeaderName);
         request.Headers.TryAddWithoutValidation(AuthorizationHeaderName, Authorization);

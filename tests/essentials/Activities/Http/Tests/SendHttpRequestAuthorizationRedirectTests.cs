@@ -16,7 +16,7 @@ public sealed class SendHttpRequestAuthorizationRedirectTests : IAsyncDisposable
     private const string StartPath = "/start";
     private const string LandingPath = "/landing";
 
-    private readonly string _authorizationValue = $"Bearer canary-{Guid.NewGuid():N}";
+    private readonly string _authorizationValue = NewHeaderValue();
     private readonly LoopbackHttpServer _origin;
     private readonly LoopbackHttpServer _otherOrigin = new(_ => (200, null));
     private readonly WorkflowExecutionHarness _harness = NewBuilder().Build(ActivityExecutionId);

@@ -1,4 +1,8 @@
+using System.Collections;
 using System.Globalization;
+using System.Net;
+using System.Text;
+using Elsa.Activities.Http.Constants;
 using Elsa.Activities.Testing;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -9,48 +13,70 @@ namespace Elsa.Activities.Http.Tests;
 
 /// <summary>
 /// Spec 188, T106 (research R17, FR-019): the outbound request goes through the named <see cref="IHttpClientFactory"/>
-/// client, whose logging handlers can write request headers at <see cref="LogLevel.Trace"/>. Captures every line the
-/// host's logging produces at that level while <c>SendHttpRequest</c> sends an <c>Authorization</c> value, and asserts
-/// none of them (message, structured fields, scope or exception text) contains it. Scope: the lines the factory's
-/// handlers and the runtime wrote during this one send, on the pinned <c>Microsoft.Extensions.Http</c>, with structured
-/// field values rendered the way the canary's log capture renders them. The factory's header log value redacts its
-/// message text, but its structured field holds an array of the raw header values, which that rendering prints as the
-/// array's type name; a sink that serializes field contents would print them (spec 188 tasks.md, T106 as built).
+/// client, whose default logging handlers carry raw header values as structured state at <see cref="LogLevel.Trace"/>.
+/// <see cref="ActivitiesHttpFeature"/> replaces them with one logger that writes no header. Captures every log call and
+/// scope the host's logging produces at <see cref="LogLevel.Trace"/> while <c>SendHttpRequest</c> sends an
+/// <c>Authorization</c> value, serializing each one's formatted message, its structured state (every pair, its value
+/// expanded through nested pairs and collections) and its exception, and asserts none of them contains the value.
+/// Scope: the lines and scopes written during one successful and one failed send, through the composition
+/// <see cref="ActivitiesHttpFeature"/> registers.
 /// </summary>
 public sealed class SendHttpRequestAuthorizationLoggingTests
 {
-    private const string HttpClientCategoryPrefix = "System.Net.Http.HttpClient";
+    // The category the named client's logger writes under (the default client handler's category, kept).
+    private const string ClientLoggerCategory = "System.Net.Http.HttpClient." + HttpActivityConstants.HttpClientName + ".ClientHandler";
 
-    private readonly string _authorizationValue = $"Bearer canary-{Guid.NewGuid():N}";
+    private readonly string _authorizationValue = NewHeaderValue();
     private readonly CapturingLoggerProvider _logs = new();
     private string[]? _sentAuthorization;
 
     [Fact]
-    public async Task TraceLogsFromTheNamedClient_NeverContainTheAuthorizationValue()
+    public async Task TraceLogMessagesStateAndScopes_OfASend_DoNotContainTheAuthorizationValue()
+    {
+        var run = await SendAsync(() => Respond(HttpStatusCode.OK, "hello"));
+
+        run.AssertOutcomes(NodeId, "Done");
+        AssertLogsDoNotContainTheValue();
+    }
+
+    [Fact]
+    public async Task TraceLogMessagesStateAndScopes_OfAFailedSend_DoNotContainTheAuthorizationValue()
+    {
+        // The exception's message carries the value, so a logger that wrote the message or the exception would hold it.
+        var run = await SendAsync(() => throw new HttpRequestException($"refused {_authorizationValue}"));
+
+        run.AssertOutcomes(NodeId, HttpActivityOutcomes.Failed);
+        AssertLogsDoNotContainTheValue();
+        Assert.Contains(_logs.Lines, line => line.Category == ClientLoggerCategory && line.Text.Contains(nameof(HttpRequestException), StringComparison.Ordinal));
+    }
+
+    private async Task<WorkflowExecutionRun> SendAsync(Func<HttpResponseMessage> respond)
     {
         await using var harness = NewBuilder()
             .WithFeature(services => services.AddLogging(logging => logging.SetMinimumLevel(LogLevel.Trace).AddProvider(_logs)))
             .WithFeature(StubTransport(request =>
             {
                 _sentAuthorization = request.Headers.GetValues("Authorization").ToArray();
-                return Respond(System.Net.HttpStatusCode.OK, "hello");
+                return respond();
             }))
             .Build(ActivityExecutionId);
 
-        var run = await harness.RunAsync(WorkflowExecutionHarness.NewExecutable(NewSendNode(authorization: _authorizationValue)));
+        return await harness.RunAsync(WorkflowExecutionHarness.NewExecutable(NewSendNode(authorization: _authorizationValue)));
+    }
 
-        run.AssertOutcomes(NodeId, "Done");
+    private void AssertLogsDoNotContainTheValue()
+    {
         var lines = _logs.Lines;
-        // Precondition: the value was on the request that passed through the factory's logging handlers.
+        // Precondition: the value was on the request that passed through the client's logging handler.
         Assert.Equal(_authorizationValue, Assert.Single(_sentAuthorization ?? []));
-        // Precondition: the factory's handlers logged this send, so the absence below is not an unwired provider.
-        Assert.Contains(lines, line => line.Category.StartsWith(HttpClientCategoryPrefix, StringComparison.Ordinal));
+        // Precondition: the client's logger wrote this send, so the absence below is not an unwired provider.
+        Assert.Contains(lines, line => line.Category == ClientLoggerCategory);
         Assert.All(lines, line => Assert.DoesNotContain(_authorizationValue, line.Text, StringComparison.Ordinal));
     }
 
     private sealed record CapturedLine(string Category, string Text);
 
-    /// <summary>Records every log call and scope with its formatted message, structured pairs and exception text.</summary>
+    /// <summary>Records every log call and scope with its formatted message, its serialized state and its exception text.</summary>
     private sealed class CapturingLoggerProvider : ILoggerProvider
     {
         private readonly List<CapturedLine> _lines = [];
@@ -76,23 +102,53 @@ public sealed class SendHttpRequestAuthorizationLoggingTests
                 _lines.Add(new CapturedLine(category, text));
         }
 
-        private static string Describe<TState>(TState state) =>
-            state is IEnumerable<KeyValuePair<string, object?>> pairs
-                ? string.Join(' ', pairs.Select(pair => $"{pair.Key}={Convert.ToString(pair.Value, CultureInfo.InvariantCulture)}"))
-                : Convert.ToString(state, CultureInfo.InvariantCulture) ?? string.Empty;
+        private static string Serialize(object? state)
+        {
+            var text = new StringBuilder();
+            Expand(state, text);
+            return text.ToString();
+        }
+
+        // Writes a value's contents rather than its text: every pair's key and value, every element of a collection,
+        // recursively, so an array of header values prints its strings, not its type name.
+        private static void Expand(object? value, StringBuilder into)
+        {
+            switch (value)
+            {
+                case null:
+                    return;
+                case string text:
+                    into.Append(text).Append(' ');
+                    return;
+                case IEnumerable items:
+                    foreach (var item in items)
+                        Expand(item, into);
+                    return;
+            }
+
+            var type = value.GetType();
+            if (type.IsGenericType && type.GetGenericTypeDefinition() == typeof(KeyValuePair<,>))
+            {
+                Expand(type.GetProperty(nameof(KeyValuePair<object, object>.Key))!.GetValue(value), into);
+                Expand(type.GetProperty(nameof(KeyValuePair<object, object>.Value))!.GetValue(value), into);
+                return;
+            }
+
+            into.Append(Convert.ToString(value, CultureInfo.InvariantCulture)).Append(' ');
+        }
 
         private sealed class CapturingLogger(string category, CapturingLoggerProvider owner) : ILogger
         {
             public IDisposable? BeginScope<TState>(TState state) where TState : notnull
             {
-                owner.Add(category, Describe(state));
+                owner.Add(category, $"{Convert.ToString(state, CultureInfo.InvariantCulture)} {Serialize(state)}");
                 return null;
             }
 
             public bool IsEnabled(LogLevel logLevel) => true;
 
             public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter) =>
-                owner.Add(category, $"{formatter(state, exception)} {Describe(state)} {exception}");
+                owner.Add(category, $"{formatter(state, exception)} {Serialize(state)} {exception}");
         }
     }
 }

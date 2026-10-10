@@ -1,17 +1,10 @@
 using System.Net;
-using System.Text.Json;
-using Elsa.Activities.Runtime.Core.Models;
-using Elsa.Activities.Http.Activities;
 using Elsa.Activities.Http.Constants;
 using Elsa.Activities.Primitives;
 using Elsa.Activities.Testing;
 using Elsa.Primitives.Models;
-using Elsa.Serialization.Core;
-using Elsa.Serialization.SystemText;
-using Elsa.Serialization.SystemText.Services;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Models;
-using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 using static Elsa.Activities.Http.Tests.SendHttpRequestTestSupport;
 
@@ -27,6 +20,12 @@ namespace Elsa.Activities.Http.Tests;
 /// </summary>
 public sealed class SendHttpRequestExecutionTests
 {
+    // Spec 188, T105 (research R17, FR-019). Values are built at run time from a Guid so no credential-shaped
+    // literal sits in source; the stub answers without repeating any request header.
+    private readonly string _authorizationValue = NewHeaderValue();
+    private readonly string _headersEntryValue = NewHeaderValue("Basic");
+    private readonly List<IReadOnlyDictionary<string, string[]>> _requests = [];
+
     [Fact]
     public async Task SuccessfulResponse_WithoutExpectedCodes_EmitsDoneOutcome()
     {
@@ -85,12 +84,6 @@ public sealed class SendHttpRequestExecutionTests
         run.AssertWorkflowCompleted();
     }
 
-    // Spec 188, T105 (research R17, FR-019). Values are built at run time from a Guid so no credential-shaped
-    // literal sits in source; the stub answers without repeating any request header.
-    private readonly string _authorizationValue = $"Bearer canary-{Guid.NewGuid():N}";
-    private readonly string _headersEntryValue = $"Basic canary-{Guid.NewGuid():N}";
-    private readonly List<IReadOnlyDictionary<string, string[]>> _requests = [];
-
     [Fact]
     public async Task AuthorizationInput_IsSentVerbatimAsTheRequestsSingleAuthorizationHeaderValue()
     {
@@ -120,7 +113,8 @@ public sealed class SendHttpRequestExecutionTests
     [Theory]
     [InlineData(null)]
     [InlineData("")]
-    public async Task UnboundOrEmptyAuthorization_LeavesTheRequestHeadersEntryUnchanged(string? authorization)
+    [InlineData(" \t ")]
+    public async Task UnboundEmptyOrWhitespaceAuthorization_LeavesTheRequestHeadersEntryUnchanged(string? authorization)
     {
         await using var harness = NewHarness(_ => Respond(HttpStatusCode.OK, "hello"));
 
@@ -130,6 +124,27 @@ public sealed class SendHttpRequestExecutionTests
 
         run.AssertOutcomes(NodeId, ActivityOutcomes.Done);
         Assert.Equal([_headersEntryValue], Assert.Single(AuthorizationHeaders(Assert.Single(_requests))));
+    }
+
+    // Over a loopback server, so a header the value smuggled in would arrive as its own header on the wire.
+    [Theory]
+    [InlineData("\r\n")]
+    [InlineData("\n")]
+    [InlineData("\r")]
+    public async Task AuthorizationHoldingALineBreak_FaultsTheActivityWithoutTheValue_AndSendsNothing(string lineBreak)
+    {
+        var value = $"{_authorizationValue}{lineBreak}X-Injected: 1";
+        await using var server = new LoopbackHttpServer(_ => (200, null));
+        await using var harness = NewBuilder().Build(ActivityExecutionId);
+
+        var run = await harness.RunAsync(WorkflowExecutionHarness.NewExecutable(NewSendNode(url: server.BaseAddress, authorization: value)));
+
+        Assert.DoesNotContain(server.Requests, request => request.Headers.ContainsKey("X-Injected"));
+        Assert.Empty(server.Requests);
+        var state = run.State(NodeId);
+        Assert.Equal(ActivityExecutionStatus.Faulted, state.Status);
+        Assert.Contains("Authorization", state.Fault!.Message, StringComparison.Ordinal);
+        Assert.DoesNotContain(_authorizationValue, state.Fault.Message, StringComparison.Ordinal);
     }
 
     [Fact]

@@ -1,3 +1,4 @@
+using System.Net;
 using CShells.Features;
 using Elsa.Activities.Http.Constants;
 using Microsoft.Extensions.DependencyInjection;
@@ -47,7 +48,7 @@ public sealed class CanaryHttpEndpoint
             accepted = _expected is not null && authorization.Length == 1 && authorization[0] == _expected;
         }
 
-        return new HttpResponseMessage(accepted ? System.Net.HttpStatusCode.OK : System.Net.HttpStatusCode.Unauthorized)
+        return new HttpResponseMessage(accepted ? HttpStatusCode.OK : HttpStatusCode.Unauthorized)
         {
             Content = new StringContent(accepted ? "accepted" : "refused")
         };

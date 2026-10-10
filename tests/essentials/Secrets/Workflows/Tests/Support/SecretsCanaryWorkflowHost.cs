@@ -55,6 +55,7 @@ using Elsa.Workflows.Runtime.Http;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore;
 using Elsa.Workflows.Runtime.Resumption;
 using Elsa.Workflows.Runtime.Scheduling;
+using Elsa.Workflows.Runtime.Services.Incidents;
 using Elsa.Workflows.Runtime.Tracing;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Builder;
@@ -492,6 +493,50 @@ public sealed class SecretsCanaryWorkflowHost : IAsyncDisposable
     {
         await using var scope = Shell.ServiceProvider.CreateAsyncScope();
         return await scope.ServiceProvider.GetRequiredService<IIncidentStateStore>().ListAsync(workflowExecutionId);
+    }
+
+    /// <summary>A run's committed state, as the settle predicates read it.</summary>
+    public sealed record RunState(IReadOnlyCollection<ActivityExecutionState> Activities, WorkflowExecutionState? Workflow)
+    {
+        public ActivityExecutionState? Node(string nodeId) => Activities.SingleOrDefault(activity => activity.Execution.ExecutableNodeId == nodeId);
+    }
+
+    public static bool Completed(RunState run) => run.Workflow?.Status == WorkflowExecutionStatus.Completed;
+
+    /// <summary>
+    /// Generous because the tests run on a shared machine whose parallel sessions compete for the CPU, which stretches
+    /// every timing (AGENTS.md, "Builds on a shared machine"). No scenario relies on reaching it: a fault fails the wait
+    /// at once.
+    /// </summary>
+    public static readonly TimeSpan SettleTimeout = TimeSpan.FromSeconds(60);
+
+    /// <summary>
+    /// Polls the run's committed state until <paramref name="settled"/> holds; the drain may outlive the request that
+    /// started it. A run that records an activity fault or an incident <paramref name="settled"/> does not accept fails
+    /// at once, naming that state, rather than waiting out the timeout: a handler fault (poisoned work) and an activity
+    /// fault both record one. The incidents are read before the run state, so an incident committed with an activity
+    /// fault is never seen without that fault. A checkpoint-rule incident does not fail the wait: it records a commit the
+    /// backstop refused, which the settle predicates of S5 and S6 judge through the refusal's log line, written after it.
+    /// </summary>
+    public async Task<RunState> WaitForAsync(string workflowExecutionId, Func<RunState, bool> settled)
+    {
+        var deadline = Stopwatch.StartNew();
+        while (true)
+        {
+            var incidents = await ReadIncidentsAsync(workflowExecutionId);
+            var (activities, workflow) = await ReadRunAsync(workflowExecutionId);
+            var state = new RunState(activities, workflow);
+            if (settled(state))
+                return state;
+            var describedState = $"workflow {workflow?.Status}, activities {string.Join(", ", activities.Select(activity => $"{activity.Execution.ExecutableNodeId}={activity.Status}{(activity.Fault is { } fault ? $" (fault {fault.Code})" : string.Empty)}"))}";
+            var faults = incidents.Where(incident => incident.FailureType != CheckpointRuleViolationWorkflowFaulter.IncidentFailureType)
+                .Select(incident => $"{incident.FailureType} on node {incident.ExecutableNodeId ?? "(none)"}")
+                .Concat(activities.Where(activity => activity.Fault is not null).Select(activity => $"activity fault on node {activity.Execution.ExecutableNodeId}"))
+                .ToArray();
+            Assert.True(faults.Length == 0, $"Run '{workflowExecutionId}' faulted before it settled: {string.Join("; ", faults)}; {describedState}.");
+            Assert.True(deadline.Elapsed < SettleTimeout, $"Run '{workflowExecutionId}' did not settle: {describedState}.");
+            await Task.Delay(100);
+        }
     }
 
     /// <summary>Saves the runtime diagnostics settings through the runtime API: <paramref name="level"/> by default and for every subject.</summary>

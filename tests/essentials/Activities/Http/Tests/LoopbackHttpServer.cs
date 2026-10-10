@@ -20,6 +20,7 @@ internal sealed class LoopbackHttpServer : IAsyncDisposable
     private readonly List<RecordedRequest> _requests = [];
     private readonly List<Task> _connections = [];
     private readonly Task _accepting;
+    private int _disposed;
 
     public LoopbackHttpServer(Func<RecordedRequest, (int Status, Uri? Location)> respond)
     {
@@ -43,6 +44,9 @@ internal sealed class LoopbackHttpServer : IAsyncDisposable
 
     public async ValueTask DisposeAsync()
     {
+        if (Interlocked.Exchange(ref _disposed, 1) == 1)
+            return;
+
         await _stop.CancelAsync();
         _listener.Stop();
         await _accepting;
@@ -90,8 +94,10 @@ internal sealed class LoopbackHttpServer : IAsyncDisposable
             var headers = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
             while (await reader.ReadLineAsync(_stop.Token) is { Length: > 0 } line)
             {
+                // A line without a colon is not a header; it is skipped rather than recorded.
                 var separator = line.IndexOf(':', StringComparison.Ordinal);
-                headers[line[..separator]] = line[(separator + 1)..].Trim();
+                if (separator > 0)
+                    headers[line[..separator]] = line[(separator + 1)..].Trim();
             }
 
             var request = new RecordedRequest(requestLine.Split(' ')[1], headers);

@@ -4,6 +4,8 @@ The per-domain catalog (framework §2.22.1). Anchored at `Elsa.Activities.Http` 
 
 Activities are transiently activated by the runtime. Synchronous delivery remains request-owned: `WriteHttpResponse` returns one typed result inside its isolated attempt scope, and the middleware delivers the committed result after the inline drain.
 
+Outbound logging (not an extension point): `ActivitiesHttpFeature` calls `RemoveAllLoggers()` on the named `Elsa.Activities.Http` client and adds one internal `IHttpClientLogger` (`HttpActivityClientLogger`) with `AddLogger`, because the factory's default logging handlers keep raw request and response header values in their `Trace` lines' structured state (spec 188 FR-019). It logs under the default client handler's category, `System.Net.Http.HttpClient.Elsa.Activities.Http.ClientHandler`, with that handler's event ids, at `Information`: `RequestStart` (method and URI; the URI is scheme, host, a non-default port and path, with a query replaced by `*`), `RequestEnd` (elapsed milliseconds and status code) and `RequestFailed` (elapsed milliseconds and the exception's type name). It logs no header, exception message or exception object. The default `System.Net.Http.HttpClient.Elsa.Activities.Http.LogicalHandler` category and its scope are no longer written for this client.
+
 ---
 
 ## Request-scoped response delivery

@@ -1,4 +1,3 @@
-using System.Diagnostics;
 using System.Net;
 using System.Text.Json.Nodes;
 using Elsa.Activities.Http.Activities;
@@ -132,8 +131,8 @@ public sealed class SendHttpRequestSecretEndToEndTests(DiscreteHttpCanaryHostFix
     {
         Host.HttpEndpoint.Expect(expected);
         var run = await Host.ExecuteAsync(publication);
-        var node = await WaitForCompletionAsync(run, scenario.NodeId);
-        Assert.Equal(["Done"], WorkflowExecutionRun.CompletionOutcomes(node));
+        var state = await Host.WaitForAsync(run, settled => Completed(settled) && settled.Node(scenario.NodeId) is not null);
+        Assert.Equal(["Done"], WorkflowExecutionRun.CompletionOutcomes(state.Node(scenario.NodeId)!));
         return run;
     }
 
@@ -150,30 +149,4 @@ public sealed class SendHttpRequestSecretEndToEndTests(DiscreteHttpCanaryHostFix
             scenario.ReferenceName,
             ActivityTypePrefix: typeof(SendHttpRequest).FullName!,
             CompanionInput: nameof(SendHttpRequest.Method));
-
-    /// <summary>
-    /// Polls the run's committed state until the workflow completes, and returns the activity's state. A run that
-    /// records an activity fault or an incident fails at once, naming it, rather than waiting out the timeout.
-    /// </summary>
-    private async Task<ActivityExecutionState> WaitForCompletionAsync(string workflowExecutionId, string nodeId)
-    {
-        var deadline = Stopwatch.StartNew();
-        while (true)
-        {
-            var incidents = await Host.ReadIncidentsAsync(workflowExecutionId);
-            var (activities, workflow) = await Host.ReadRunAsync(workflowExecutionId);
-            var node = activities.SingleOrDefault(activity => activity.Execution.ExecutableNodeId == nodeId);
-            if (workflow?.Status == WorkflowExecutionStatus.Completed && node is not null)
-                return node;
-            var faults = incidents.Select(incident => $"incident {incident.FailureType}")
-                .Concat(activities.Where(activity => activity.Fault is not null).Select(activity => $"fault {activity.Fault!.Code} on node {activity.Execution.ExecutableNodeId}"))
-                .ToArray();
-            Assert.True(faults.Length == 0, $"Run '{workflowExecutionId}' faulted before it completed: {string.Join("; ", faults)}.");
-            Assert.True(deadline.Elapsed < SettleTimeout, $"Run '{workflowExecutionId}' did not complete: workflow {workflow?.Status}.");
-            await Task.Delay(100);
-        }
-    }
-
-    /// <summary>Generous for a shared machine whose parallel sessions stretch every timing (AGENTS.md); a fault fails the wait at once.</summary>
-    private static readonly TimeSpan SettleTimeout = TimeSpan.FromSeconds(60);
 }

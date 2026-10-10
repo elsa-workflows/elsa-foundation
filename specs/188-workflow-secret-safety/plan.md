@@ -224,7 +224,7 @@ Existing projects changed (paths verified at `057adc44f`):
   `HttpEndpoint` and `HttpEndpointTriggerStimulusProvider`, `BpmnProcess` and `BpmnStartTriggerNodeInputs`, and
   `Inline`, `WriteHttpResponse`, `BpmnDecision` and `Fault`.
 - `src/essentials/Activities/Http/Activities/SendHttpRequest.cs` (credential input `Authorization`, research R17) and,
-  only if T106 finds the header value in logs, `src/essentials/Activities/Http/ActivitiesHttpFeature.cs` (as built, T106 found nothing in the rendered log text, so it is unchanged).
+  only if T106 finds the header value in logs, `src/essentials/Activities/Http/ActivitiesHttpFeature.cs` (as built, after slice 11's review it replaces the factory's default logging handlers on the named client with one logger that writes no header, because the default handlers keep raw header values in their structured state; it adds no `RedactLoggedHeaders`).
 - `src/essentials/Activities/Design/Core/Models/InputDefinition.cs`,
   `src/essentials/Activities/Design/Reconciliation/Clr/Services/ClrAssemblyScanner.cs` (flags; refuses an unbindable
   credential declaration), `src/essentials/Activities/Design/Api/Handlers/AddDefinitionCommandHandler.cs` and

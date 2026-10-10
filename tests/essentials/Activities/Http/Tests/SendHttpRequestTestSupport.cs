@@ -23,6 +23,12 @@ internal static class SendHttpRequestTestSupport
     public const string NodeId = "node-send-http";
     public const string ActivityExecutionId = "actexec-http";
 
+    /// <summary>
+    /// A header value built at run time from a Guid (a scheme, a space and a plain word), so no credential-shaped literal
+    /// sits in source and every call is distinct.
+    /// </summary>
+    public static string NewHeaderValue(string scheme = "Bearer") => $"{scheme} canary-{Guid.NewGuid():N}";
+
     public static HttpResponseMessage Respond(HttpStatusCode status, string body) =>
         new(status) { Content = new StringContent(body) };
 
