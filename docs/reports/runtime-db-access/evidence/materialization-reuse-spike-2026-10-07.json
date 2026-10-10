@@ -1,0 +1,172 @@
+{
+  "schemaVersion": 1,
+  "issue": 2395,
+  "date": "2026-10-07",
+  "sourceCommit": "add868046e74c1620f7329b063ec708920019d83",
+  "fixture": "ReplaySafeFusionGuardrailTests.StraightLineReplaySafeHotLoop_EnabledVersusDisabled_IsByteIdentical_AndFusionEngages",
+  "fixtureShape": "Flowchart with five ReplaySafe CLR probe activities; empty durable-value state; in-memory provider",
+  "probe": {
+    "path": "tests/essentials/Activities/Runtime/Tests/ReplaySafeFusionGuardrailTests.cs",
+    "baseBlob": "3096685e4c48f961e2039195107327940317bf8c",
+    "patchedBlob": "10f3b015af190126266b937028a3521ebe4be81c",
+    "patchFile": "materialization-probe-2026-10-07.patch",
+    "patchSha256": "2105729acd869ee7578de00d0a5c7a38a797ea725902148b05919b2c588e7e3c",
+    "observationBoundary": "Entry into IRuntimeActivityInputMaterializer.MaterializeSnapshotAsync after outer snapshot materializer reads; not completion",
+    "capturedDiffSha256": "5337f4f5d6ed1d9e6c0a8329bf092f5bb4f0a678294a50cafc908dc6be8abcb5",
+    "patchNormalization": "Five blank context-line prefixes omitted for whitespace-clean storage; git apply check and an isolated apply reproduce the identical patched source blob."
+  },
+  "rootVerification": {
+    "command": "dotnet test tests/essentials/Activities/Runtime/Tests/Elsa.Activities.Runtime.Tests.csproj --no-restore --filter FullyQualifiedName~StraightLineReplaySafeHotLoop_EnabledVersusDisabled_IsByteIdentical_AndFusionEngages --logger 'console;verbosity=detailed' --logger 'trx;LogFileName=t07-root-verified.trx' --results-directory <owned-evidence-directory>",
+    "exitCode": 0,
+    "tests": {
+      "total": 1,
+      "passed": 1,
+      "failed": 0
+    },
+    "consoleSha256": "6ee71911840788fb905778cb640521cc660d8d92af1273d1015e1bf0835f7b60",
+    "trxSha256": "421910284049f785888197e975a8eb582519f4f1291b480a73a609a3fa7cc79a",
+    "earlierWorkerRuns": "Reported normalized transcriptions only; not counted as retained raw evidence",
+    "independentReview": "Patch, raw console, TRX, original assertions and bounded interpretation independently checked; no blocker for this empty-state CLR signal"
+  },
+  "observations": {
+    "InnerPageReadCount": 13,
+    "InnerPageReadCallerChains": [
+      "<>c__DisplayClass6_0.<ListPageAsync>b__0 <- <ReadNextInnerAsync>d__1`1.MoveNext <- AsyncMethodBuilderCore.Start <- CoalescingRuntimeStorePageMerger.ReadNextInnerAsync <- <MergeAsync>d__0`1.MoveNext <- AsyncMethodBuilderCore.Start <- CoalescingRuntimeStorePageMerger.MergeAsync <- <ListPageAsync>d__6.MoveNext <- AsyncMethodBuilderCore.Start <- CoalescingDurableValueStateStore.ListPageAsync <- <ListAllDurableValueStatesAsync>d__1.MoveNext <- AsyncMethodBuilderCore.Start <- RuntimeStateStorePagingExtensions.ListAllDurableValueStatesAsync <- <MaterializeAsync>d__4.MoveNext <- AsyncMethodBuilderCore.Start <- RuntimeActivityInputSnapshotMaterializer.MaterializeAsync <- WorkflowStartActivitySchedulerWorkHandler.MaterializeInputSnapshotAsync <- <ProduceRunningStateAsync>d__22.MoveNext <- AsyncMethodBuilderCore.Start <- WorkflowStartActivitySchedulerWorkHandler.ProduceRunningStateAsync",
+      "<>c__DisplayClass6_0.<ListPageAsync>b__0 <- <ReadNextInnerAsync>d__1`1.MoveNext <- AsyncMethodBuilderCore.Start <- CoalescingRuntimeStorePageMerger.ReadNextInnerAsync <- <MergeAsync>d__0`1.MoveNext <- AsyncMethodBuilderCore.Start <- CoalescingRuntimeStorePageMerger.MergeAsync <- <ListPageAsync>d__6.MoveNext <- AsyncMethodBuilderCore.Start <- CoalescingDurableValueStateStore.ListPageAsync <- <ListAllDurableValueStatesAsync>d__1.MoveNext <- AsyncMethodBuilderCore.Start <- RuntimeStateStorePagingExtensions.ListAllDurableValueStatesAsync <- <InvokeActivityAsync>d__9.MoveNext <- AsyncMethodBuilderCore.Start <- WorkflowInvokeActivitySchedulerWorkHandler.InvokeActivityAsync <- <HandleWithServicesAsync>d__8.MoveNext <- AsyncMethodBuilderCore.Start <- WorkflowInvokeActivitySchedulerWorkHandler.HandleWithServicesAsync <- <ExecuteAsync>d__12.MoveNext",
+      "<ListPageAsync>d__6.MoveNext <- AsyncMethodBuilderCore.Start <- CoalescingDurableValueStateStore.ListPageAsync <- <ListAllDurableValueStatesAsync>d__1.MoveNext <- AsyncMethodBuilderCore.Start <- RuntimeStateStorePagingExtensions.ListAllDurableValueStatesAsync <- <ProjectWorkflowOutputsAsync>d__27.MoveNext <- AsyncMethodBuilderCore.Start <- ReplaySafeFusionGuardrailTests.ProjectWorkflowOutputsAsync <- <DriveWithMaterializationProbeAsync>d__19.MoveNext <- AsyncStateMachineBox`1.ExecutionContextCallback <- ExecutionContext.RunInternal <- AsyncStateMachineBox`1.MoveNext <- AsyncStateMachineBox`1.MoveNext <- <>c__DisplayClass7_0.<Post>b__0 <- <>c.<QueueUserWorkItem>b__5_0 <- ExecutionContext.RunInternal <- Task.ExecuteWithThreadLocal <- Thread.StartCallback"
+    ],
+    "DirectDurableWriteCount": 0,
+    "LogicalDurableChangeItemCount": 0,
+    "materializations": [
+      {
+        "InvocationId": "actexec-0",
+        "SessionId": 1,
+        "SessionActive": true,
+        "HopCount": 2,
+        "InnerCommitCount": 0,
+        "StagedDurableUpserts": 0,
+        "StagedDurableDeletes": 0,
+        "PageReadsSincePriorMaterialization": 1,
+        "PageReadSessionIds": [
+          1
+        ],
+        "LogicalDurableChangesSincePriorMaterialization": 0,
+        "DirectDurableWritesSincePriorMaterialization": 0
+      },
+      {
+        "InvocationId": "actexec-1",
+        "SessionId": 1,
+        "SessionActive": true,
+        "HopCount": 6,
+        "InnerCommitCount": 0,
+        "StagedDurableUpserts": 0,
+        "StagedDurableDeletes": 0,
+        "PageReadsSincePriorMaterialization": 2,
+        "PageReadSessionIds": [
+          1,
+          1
+        ],
+        "LogicalDurableChangesSincePriorMaterialization": 0,
+        "DirectDurableWritesSincePriorMaterialization": 0
+      },
+      {
+        "InvocationId": "actexec-2",
+        "SessionId": 1,
+        "SessionActive": true,
+        "HopCount": 12,
+        "InnerCommitCount": 0,
+        "StagedDurableUpserts": 0,
+        "StagedDurableDeletes": 0,
+        "PageReadsSincePriorMaterialization": 2,
+        "PageReadSessionIds": [
+          1,
+          1
+        ],
+        "LogicalDurableChangesSincePriorMaterialization": 0,
+        "DirectDurableWritesSincePriorMaterialization": 0
+      },
+      {
+        "InvocationId": "actexec-3",
+        "SessionId": 1,
+        "SessionActive": true,
+        "HopCount": 18,
+        "InnerCommitCount": 0,
+        "StagedDurableUpserts": 0,
+        "StagedDurableDeletes": 0,
+        "PageReadsSincePriorMaterialization": 2,
+        "PageReadSessionIds": [
+          1,
+          1
+        ],
+        "LogicalDurableChangesSincePriorMaterialization": 0,
+        "DirectDurableWritesSincePriorMaterialization": 0
+      },
+      {
+        "InvocationId": "actexec-4",
+        "SessionId": 1,
+        "SessionActive": true,
+        "HopCount": 24,
+        "InnerCommitCount": 0,
+        "StagedDurableUpserts": 0,
+        "StagedDurableDeletes": 0,
+        "PageReadsSincePriorMaterialization": 2,
+        "PageReadSessionIds": [
+          1,
+          1
+        ],
+        "LogicalDurableChangesSincePriorMaterialization": 0,
+        "DirectDurableWritesSincePriorMaterialization": 0
+      },
+      {
+        "InvocationId": "actexec-5",
+        "SessionId": 1,
+        "SessionActive": true,
+        "HopCount": 30,
+        "InnerCommitCount": 0,
+        "StagedDurableUpserts": 0,
+        "StagedDurableDeletes": 0,
+        "PageReadsSincePriorMaterialization": 2,
+        "PageReadSessionIds": [
+          1,
+          1
+        ],
+        "LogicalDurableChangesSincePriorMaterialization": 0,
+        "DirectDurableWritesSincePriorMaterialization": 0
+      }
+    ]
+  },
+  "interpretation": {
+    "adjacentEntryIntervals": 5,
+    "innerPageCallsPerAdjacentInterval": 2,
+    "sameSessionId": 1,
+    "innerCommitCountAtEntries": 0,
+    "directDurableWrites": 0,
+    "logicalDurableChangeItems": 0,
+    "intervalMeaning": "Each spans previous invoke plus next start-snapshot; not two calls assigned to one snapshot",
+    "totalIncludesPostRunOutputProjection": true
+  },
+  "limits": [
+    "Empty-state CLR fixture, not primary HttpEndpoint/SetVariable workload",
+    "Provider calls are not measured SQL statements or round trips",
+    "Only observed fixture mutations and commits are counted; this is not a general ownership/freshness proof",
+    "No cache implemented, no before/after optimization comparison, and no latency or primary-workload savings claim",
+    "Find misses, ancestor/frame reads and activation/serialization costs were not counted by this probe"
+  ],
+  "nextGate": "T08 reviewed specification for bounded per-session raw-page reuse; #1306 implementation and primary HTTP/REST measurements remain required",
+  "sourcePins": {
+    "src/essentials/Activities/Runtime/Services/WorkflowInvokeActivitySchedulerWorkHandler.cs": "ee216fd37910650c6298264213f69ce3ca1addfe",
+    "src/essentials/Workflows/Runtime/Core/Contracts/RuntimeStateStorePagingExtensions.cs": "94fd7284c59aa1c217a0fc8fea61523e8a67ebf6",
+    "src/essentials/Workflows/Runtime/Core/Models/DurableValueState.cs": "3ce5af0834b22fbcbc888d7e1838f8c9513fe71c",
+    "src/essentials/Workflows/Runtime/Core/Models/PersistenceAccessContext.cs": "2940ba21677a81fa3345c6f39ab5e5436bd5f809",
+    "src/essentials/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/EfDurableValueStateStore.cs": "979591e8f59d5f47baee4837d7c42d3f5b02f5f4",
+    "src/essentials/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/EfRuntimeCheckpointParticipantStaging.cs": "534ddc5d457fae8e6318a97622666c7ac2d7e9ed",
+    "src/essentials/Workflows/Runtime/Services/Checkpoints/RuntimeCheckpointCommitter.cs": "905f9ef9cc7627c44a4a2fab16919f89cf0c9637",
+    "src/essentials/Workflows/Runtime/Services/Coalescing/AsyncLocalRuntimeCoalescingSessionAccessor.cs": "8f9562dcc6ad7ae7fc1ab37eecabc5c072417bc2",
+    "src/essentials/Workflows/Runtime/Services/Coalescing/CoalescingRuntimeCheckpointCommitStore.cs": "37eb0f0163821e5d424598389d1d22a40a83788c",
+    "src/essentials/Workflows/Runtime/Services/Coalescing/CoalescingRuntimeCheckpointPersistencePolicy.cs": "f94a72b155fd7debed975ab533bd11ed54f7c79d",
+    "src/essentials/Workflows/Runtime/Services/Coalescing/CoalescingRuntimeStateStores.cs": "5842456453f3ef2fab27edb29ada5195739ffe33",
+    "src/essentials/Workflows/Runtime/Services/Scheduler/WorkflowDrainOrchestrator.cs": "cfdc9c054a5702a6faca85469c288e7b42e3613d",
+    "src/essentials/Workflows/Runtime/Services/Values/RuntimeActivityInputSnapshotMaterializer.cs": "766b7e5129f9f6dde303cf6dadcef62d84fa3c87",
+    "src/essentials/Workflows/Runtime/Services/WorkHandlers/WorkflowStartActivitySchedulerWorkHandler.cs": "ea3b00015f284179b69891f2cbadb042a7a7a6a5"
+  }
+}

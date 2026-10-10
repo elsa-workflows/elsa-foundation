@@ -80,6 +80,153 @@ public sealed class SupersededPackageGenerationTests : IAsyncDisposable
         Assert.Equal(PreviousOnly, await ReadableAsync());
     }
 
+    [Fact]
+    public async Task Removing_the_latest_package_keeps_the_proven_replacement_and_does_not_retire_the_previous_generation()
+    {
+        SelectActivePackage(_package.Previous);
+        Shell(FeatureOf(_package.Previous));
+
+        Assert.DoesNotContain(_package.Previous, await Generations.GetReplacedAsync());
+        SelectActivePackage(_package.Current);
+        Assert.Contains(_package.Previous, await Generations.GetReplacedAsync());
+
+        _package.Catalog.Active = [];
+
+        var replaced = await Generations.GetReplacedAsync();
+        Assert.Contains(_package.Previous, replaced);
+        Assert.DoesNotContain(_package.Current, replaced);
+        Assert.Empty(await Generations.GetRetiredAsync());
+        Assert.Equal(PreviousOnly, await ReadableAsync());
+    }
+
+    [Fact]
+    public async Task A_pinned_replacement_observed_by_readability_remains_activation_evidence_after_removal()
+    {
+        Shell(FeatureOf(_package.Previous));
+        Assert.DoesNotContain(_package.Previous, await Generations.GetRetiredAsync());
+
+        _package.Catalog.Active = [];
+
+        var replaced = await Generations.GetReplacedAsync();
+        Assert.Contains(_package.Previous, replaced);
+        Assert.DoesNotContain(_package.Current, replaced);
+        Assert.Empty(await Generations.GetRetiredAsync());
+        Assert.Equal(PreviousOnly, await ReadableAsync());
+    }
+
+    [Fact]
+    public async Task An_initially_empty_catalog_does_not_prove_that_either_generation_was_replaced()
+    {
+        _package.Catalog.Active = [];
+
+        Assert.Empty(await Generations.GetReplacedAsync());
+        Assert.Empty(await Generations.GetRetiredAsync());
+        Assert.Equal(PreviousOnly, await ReadableAsync());
+    }
+
+    [Fact]
+    public async Task Reselecting_a_historically_replaced_generation_makes_it_eligible_after_removal()
+    {
+        SelectActivePackage(_package.Previous);
+        Shell(FeatureOf(_package.Previous));
+        SelectActivePackage(_package.Current);
+        Assert.Contains(_package.Previous, await Generations.GetReplacedAsync());
+
+        SelectActivePackage(_package.Previous);
+
+        var reselected = await Generations.GetReplacedAsync();
+        Assert.DoesNotContain(_package.Previous, reselected);
+        Assert.Contains(_package.Current, reselected);
+
+        _package.Catalog.Active = [];
+
+        var removed = await Generations.GetReplacedAsync();
+        Assert.DoesNotContain(_package.Previous, removed);
+        Assert.Contains(_package.Current, removed);
+        Assert.Empty(await Generations.GetRetiredAsync());
+        Assert.Equal(PreviousOnly, await ReadableAsync());
+    }
+
+    [Fact]
+    public async Task A_catalog_read_failure_is_conservative_and_a_later_success_recovers_replacement_history()
+    {
+        Assert.Contains(_package.Previous, await Generations.GetReplacedAsync());
+
+        _package.Catalog.ReadError = new IOException("The package catalog is temporarily unavailable.");
+        Assert.Empty(await Generations.GetReplacedAsync());
+        Assert.Empty(await Generations.GetRetiredAsync());
+
+        _package.Catalog.ReadError = null;
+        Assert.Contains(_package.Previous, await Generations.GetReplacedAsync());
+        _package.Catalog.Active = [];
+        Assert.Contains(_package.Previous, await Generations.GetReplacedAsync());
+        Assert.DoesNotContain(_package.Current, await Generations.GetReplacedAsync());
+        Assert.Empty(await Generations.GetRetiredAsync());
+        Assert.Equal(PreviousOnly, await ReadableAsync());
+    }
+
+    [Fact]
+    public async Task A_queued_catalog_read_cannot_overtake_or_cancel_the_in_flight_snapshot()
+    {
+        var catalog = _package.Catalog;
+        var gate = catalog.BlockNextRead();
+        using var cancellation = new CancellationTokenSource();
+        Task<IReadOnlySet<Assembly>>? firstRead = null;
+        Task<IReadOnlySet<Assembly>>? queuedRead = null;
+
+        try
+        {
+            firstRead = Generations.GetReplacedAsync().AsTask();
+            await gate.Captured.Task.WaitAsync(Patience);
+            Assert.Equal(1, catalog.ReadCount);
+
+            SelectActivePackage(_package.Previous);
+            var queued = Generations.GetReplacedAsync(cancellation.Token).AsTask();
+            queuedRead = queued;
+            Assert.Equal(1, catalog.ReadCount);
+            Assert.False(firstRead.IsCompleted);
+
+            cancellation.Cancel();
+            await Assert.ThrowsAnyAsync<OperationCanceledException>(async () => await queued.WaitAsync(Patience));
+            Assert.Equal(1, catalog.ReadCount);
+            Assert.False(firstRead.IsCompleted);
+
+            gate.Open();
+            Assert.Contains(_package.Previous, await firstRead.WaitAsync(Patience));
+
+            var reselected = await Generations.GetReplacedAsync();
+            Assert.DoesNotContain(_package.Previous, reselected);
+            Assert.Contains(_package.Current, reselected);
+
+            catalog.Active = [];
+            var removed = await Generations.GetReplacedAsync();
+            Assert.DoesNotContain(_package.Previous, removed);
+            Assert.Contains(_package.Current, removed);
+        }
+        finally
+        {
+            gate.Open();
+            try
+            {
+                if (firstRead is not null)
+                    await firstRead.WaitAsync(Patience);
+            }
+            finally
+            {
+                if (queuedRead is not null)
+                {
+                    try
+                    {
+                        await queuedRead.WaitAsync(Patience);
+                    }
+                    catch (OperationCanceledException) when (cancellation.IsCancellationRequested)
+                    {
+                    }
+                }
+            }
+        }
+    }
+
     /// <summary>
     /// A shell generation is counted from before its first initializer runs - a module's migrator or finalization gate
     /// reads rows there - with no lifecycle notification yet, and until its container has finished disposing, whose end
@@ -520,6 +667,12 @@ public sealed class SupersededPackageGenerationTests : IAsyncDisposable
     private async Task PublishAsync() => await _host.GetRequiredService<IClusterMembership>().PublishReportAsync();
 
     private Task<IReadOnlyList<string>> ReadableAsync() => _package.ReadableAsync(_host);
+
+    private void SelectActivePackage(Assembly generation)
+    {
+        _package.Catalog.Active = [generation];
+        _features.Names(FeatureOf(generation));
+    }
 
     private Task<IReadOnlyList<string>> PublishedAsync() => _package.PublishedAsync(_host);
 

@@ -4,7 +4,7 @@
 > **Purpose:** trace one request from the process entry point to a durable checkpoint, naming the file that
 > does each step. Every path below is relative to the repository root.
 > **Knowledge role:** orientation. Definitions live in [`docs/glossary/elsa.md`](glossary/elsa.md); the
-> runtime extension points live in [`src/essentials/Workflows/Runtime/EXTENSION_POINTS.md`](../src/essentials/Workflows/Runtime/EXTENSION_POINTS.md).
+> runtime extension points live in [`src/essentials/Workflows/Runtime/Elsa.Workflows.Runtime/EXTENSION_POINTS.md`](../src/essentials/Workflows/Runtime/Elsa.Workflows.Runtime/EXTENSION_POINTS.md).
 
 ## The process entry point
 
@@ -25,7 +25,7 @@ marked `[ShellFeature(name: "...")]` that implements `IShellFeature` (from the `
 registers services in `ConfigureServices(IServiceCollection)`. A feature that is not in `shells.json` registers
 nothing. The three features on the execution path are `WorkflowsRuntimeApi`
 (`src/essentials/Workflows/Runtime/Api/WorkflowsRuntimeApiFeature.cs`), `ActivitiesRuntime`
-(`src/essentials/Activities/Runtime/ActivitiesRuntimeFeature.cs`) and `WorkflowsRuntimeEntityFrameworkCore`
+(`src/essentials/Activities/Runtime/Elsa.Activities.Runtime/ActivitiesRuntimeFeature.cs`) and `WorkflowsRuntimeEntityFrameworkCore`
 (`src/essentials/Workflows/Runtime/Persistence/EntityFrameworkCore/RuntimeEntityFrameworkCoreFeature.cs`).
 
 ## The path we trace
@@ -48,7 +48,7 @@ There is a second way in. The `HttpEndpoint` activity is served by
 `src/essentials/Activities/Http/Middleware/HttpEndpointMiddleware.cs`, mounted by `ActivitiesHttpFeature.UseMiddleware`
 under the base path `/workflows/http`. It matches the request against the shell's `IRouteTable`, builds a
 `StimulusDispatchRequest`, and hands it to `IStimulusRouter`
-(`src/essentials/Workflows/Runtime/Services/Triggers/StimulusRouter.cs`). The router starts every published workflow whose
+(`src/essentials/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Triggers/StimulusRouter.cs`). The router starts every published workflow whose
 trigger index matches and resumes every waiting bookmark that matches. Both branches end in the same two
 dispatchers the API path uses, so the rest of this document applies to it too.
 
@@ -66,16 +66,16 @@ guarantee" in `src/essentials/Workflows/Runtime/Http/EXTENSION_POINTS.md`.
 Runtime never executes a workflow definition. It executes a `WorkflowExecutable`
 (`src/essentials/Workflows/Runtime/Core/Models/WorkflowExecutable.cs`): an immutable, content-addressed artifact holding
 the root `ExecutableNode`, the resume targets and the incident strategy. Publishing produces it:
-`src/essentials/Workflows/Publishing/Handlers/PublishWorkflowRequestHandler.cs` compiles a definition version and calls
+`src/essentials/Workflows/Publishing/Elsa.Workflows.Publishing/Handlers/PublishWorkflowRequestHandler.cs` compiles a definition version and calls
 `IWorkflowExecutableStore.SaveAsync`.
 
 `IWorkflowExecutableStore` (`src/essentials/Workflows/Runtime/Core/Contracts/IWorkflowExecutableStore.cs`) is the store
 Runtime reads from. The default is `InMemoryWorkflowExecutableStore`. With `WorkflowsRuntimeEntityFrameworkCore` enabled,
 `RuntimeArtifactsEntityFrameworkCoreRegistration` replaces it with `CachingWorkflowExecutableStore`
-(`src/essentials/Workflows/Runtime/Services/Executables`) over `EfWorkflowExecutableStore`
+(`src/essentials/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Executables`) over `EfWorkflowExecutableStore`
 (`src/essentials/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores`).
 
-`src/essentials/Workflows/Runtime/Services/Executions/WorkflowStartDispatcher.cs` does the resolution. It finds the artifact,
+`src/essentials/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Executions/WorkflowStartDispatcher.cs` does the resolution. It finds the artifact,
 checks that a live `Published` source reference points at it (`IWorkflowExecutableSourceReferenceStore`,
 ADR 0040), runs `IWorkflowExecutableStartPolicy`, and builds a `WorkflowExecutionCommandEnvelope` whose command
 kind is `WorkflowExecutionCommandKind.Start`.
@@ -84,7 +84,7 @@ kind is `WorkflowExecutionCommandKind.Start`.
 
 The dispatcher does not run anything. It calls `IWorkflowExecutionActorProvider.GetAgentAsync` and then
 `IWorkflowExecutionActor.EnqueueAsync(envelope)`. The provider is
-`src/essentials/Workflows/Runtime/Services/Executions/InProcessWorkflowExecutionActorProvider.cs`. It keeps one mailbox per
+`src/essentials/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Executions/InProcessWorkflowExecutionActorProvider.cs`. It keeps one mailbox per
 workflow execution id, and the mailbox admits one command at a time. That is the single-writer rule (ADR 0031):
 every command for an execution goes through its mailbox, so at most one drain runs per execution.
 
@@ -94,7 +94,7 @@ resolves `WorkflowSchedulerCommandRouter` from it.
 
 ### 4. Enqueue, then drain
 
-`src/essentials/Workflows/Runtime/Services/Scheduler/WorkflowSchedulerCommandRouter.cs` turns the command into a
+`src/essentials/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Scheduler/WorkflowSchedulerCommandRouter.cs` turns the command into a
 `RuntimeSchedulerWorkItem` and calls `IWorkflowSchedulerWorkQueue.EnqueueAsync`. The queue contract is
 `src/essentials/Workflows/Runtime/Core/Contracts/IWorkflowSchedulerWorkQueue.cs`; enqueue is idempotent by
 `(WorkflowExecutionId, WorkItemId)`. The default queue is `InMemoryWorkflowSchedulerWorkQueue`; the EF Core module
@@ -104,12 +104,12 @@ The router then asks `IWorkflowSchedulerDrainPolicy` for a drain request (the de
 `ImmediateWorkflowSchedulerDrainPolicy`, always drains now), pushes a `WorkflowBurstScope` for the drain, and
 calls `IWorkflowDrainOrchestrator.DrainAsync`.
 
-`src/essentials/Workflows/Runtime/Services/Scheduler/WorkflowDrainOrchestrator.cs` acquires the execution ownership lease
+`src/essentials/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Scheduler/WorkflowDrainOrchestrator.cs` acquires the execution ownership lease
 (`IRuntimeExecutionOwnershipService.AcquireAsync`), runs the drainer, processes the post-commit outbox, and
 notifies every `IWorkflowSchedulerDrainObserver`. The observers are where fault outcomes are decided; see
 [runtime fault behavior](runtime-fault-behavior.md).
 
-`src/essentials/Workflows/Runtime/Services/Scheduler/WorkflowSchedulerDrainer.cs` is the loop. Each iteration claims the head
+`src/essentials/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Scheduler/WorkflowSchedulerDrainer.cs` is the loop. Each iteration claims the head
 work item for this execution, checks the pause gate, picks the one `IWorkflowSchedulerWorkHandler` whose
 `CanHandle` accepts the item's `CommandKind`, runs it, and completes the claim. The loop stops when the queue is
 empty, a handler faults, the pause gate blocks, or the execution reaches a terminal status.
@@ -119,7 +119,7 @@ empty, a handler faults, the pause gate blocks, or the execution reaches a termi
 Handlers are small classes named `*SchedulerWorkHandler`. Each consumes one command kind and enqueues the next.
 For our request the chain is:
 
-1. `Start` → `WorkflowStartSchedulerWorkHandler` (`src/essentials/Workflows/Runtime/Services/WorkHandlers`). It re-reads the
+1. `Start` → `WorkflowStartSchedulerWorkHandler` (`src/essentials/Workflows/Runtime/Elsa.Workflows.Runtime/Services/WorkHandlers`). It re-reads the
    executable and enqueues a `Checkpoint` work item that records "workflow started" and carries one post-commit
    intent: enqueue `StartActivity` for the root node.
 2. `Checkpoint` → `WorkflowCheckpointSchedulerWorkHandler`. It builds a `RuntimeCheckpointCommit` and commits it
@@ -127,11 +127,11 @@ For our request the chain is:
    `StartActivity` item.
 3. `StartActivity` → `WorkflowStartActivitySchedulerWorkHandler`. If the node is an engine intrinsic
    (`ExecutableNode.IntrinsicKind` is set: `Set`, `Merge`, `Reduce`, `Return`, `Control`, `SetOutput`, `Finish`, ...)
-   it runs `WorkflowIntrinsicExecutor.ExecuteAsync` (`src/essentials/Workflows/Runtime/Services/Values/WorkflowIntrinsicExecutor.cs`),
+   it runs `WorkflowIntrinsicExecutor.ExecuteAsync` (`src/essentials/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Values/WorkflowIntrinsicExecutor.cs`),
    which reads and writes variable state without activating a CLR type and returns a commit. Otherwise it
    commits "activity started" with an `InvokeActivity` continuation.
 4. `InvokeActivity` → `WorkflowInvokeActivitySchedulerWorkHandler`
-   (`src/essentials/Activities/Runtime/Services/WorkflowInvokeActivitySchedulerWorkHandler.cs`). This is where user
+   (`src/essentials/Activities/Runtime/Elsa.Activities.Runtime/Services/WorkflowInvokeActivitySchedulerWorkHandler.cs`). This is where user
    code runs. It materializes inputs, calls `IActivityActivator.ActivateAsync` (`ActivityActivator` picks an
    `IActivityActivationStrategy` by descriptor kind), and calls `activity.ExecuteAsync(context)`. Three outcomes:
    - completion: it commits "activity completed" with a `CompleteActivity` continuation;
@@ -139,7 +139,7 @@ For our request the chain is:
    - exception: `ActivityFaultIncidentRecorder` commits an incident and the drain reports the item as completed.
 5. `CompleteActivity` → `WorkflowCompleteActivitySchedulerWorkHandler` enqueues the completion checkpoint and a
    second `CompleteActivity` item whose payload kind is `ParentCompletionEvaluation`. Only
-   `WorkflowParentActivityCompletionSchedulerWorkHandler` (`src/essentials/Activities/Runtime/Services`) accepts that
+   `WorkflowParentActivityCompletionSchedulerWorkHandler` (`src/essentials/Activities/Runtime/Elsa.Activities.Runtime/Services`) accepts that
    kind; it lets the container activity (for example `src/essentials/Activities/Sequence/Activities/Sequence.cs`) pick
    the successor and enqueues `ScheduleActivity` for it. `WorkflowScheduleActivitySchedulerWorkHandler` then
    enqueues `StartActivity`, and the chain repeats from step 3.
@@ -154,7 +154,7 @@ Every handler that changes state produces a `RuntimeCheckpointCommit`
 `RuntimeCheckpointStateChangeSet` (workflow execution, activity executions, bookmarks, durable values, incidents,
 liveness) and a list of `RuntimePostCommitIntent` continuations. Nothing is written by handlers directly.
 
-`src/essentials/Workflows/Runtime/Services/Checkpoints/RuntimeCheckpointCommitter.cs` commits it. In order: run the
+`src/essentials/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Checkpoints/RuntimeCheckpointCommitter.cs` commits it. In order: run the
 `IRuntimeCheckpointCommitEnricher` set, stamp the ownership lease as `ExpectedFence`, ask
 `IRuntimeCheckpointPersistencePolicy` whether to persist now (`ImmediateRuntimeCheckpointPersistencePolicy` by
 default; the `WorkflowsRuntimeCheckpointPersistence` feature in `shells.json` switches to `Coalesced`), fold the
@@ -164,7 +164,7 @@ post-commit intents into an outbox and the claimed work item's deletion into the
 `IRuntimeCheckpointCommitStore` (`src/essentials/Workflows/Runtime/Core/Contracts/IRuntimeCheckpointCommitStore.cs`)
 has two implementations in this repository:
 
-- `InMemoryRuntimeCheckpointCommitStore` (`src/essentials/Workflows/Runtime/Services/Checkpoints`): the default from
+- `InMemoryRuntimeCheckpointCommitStore` (`src/essentials/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Checkpoints`): the default from
   `AddWorkflowRuntime`. It applies the change set to the in-memory state stores. Nothing survives a restart.
 - `EfRuntimeCheckpointCommitStore` (`src/essentials/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores`): registered by
   `RuntimeEntityFrameworkCoreFeature` through `AddRuntimeEntityFrameworkCore`. It
@@ -177,17 +177,17 @@ In the Workbench the provider is SQLite (each EF module's `Provider` in `shells.
 ### 7. Suspending on a bookmark and resuming
 
 When an activity returns a suspend transition, the invoke handler enqueues `CreateBookmark`.
-`WorkflowCreateBookmarkSchedulerWorkHandler` (`src/essentials/Workflows/Runtime/Services/WorkHandlers`) commits a `BookmarkState`
+`WorkflowCreateBookmarkSchedulerWorkHandler` (`src/essentials/Workflows/Runtime/Elsa.Workflows.Runtime/Services/WorkHandlers`) commits a `BookmarkState`
 (`src/essentials/Workflows/Runtime/Core/Models/BookmarkState.cs`) keyed by `(StimulusType, StimulusHash)` and marks the
 activity execution `BookmarkWaiting`. It also notifies `BookmarkLifecycleNotifier`, which is how the HTTP route
 table learns about a mid-flow `HttpEndpoint`. The drain then quiesces and the mailbox is idle.
 
 Resumption starts with a stimulus: the HTTP middleware above, or `POST runtime/workflows/stimuli`
 (`src/essentials/Workflows/Runtime/Api/Endpoints/Stimuli/Dispatch/Endpoint.cs`). `IBookmarkResumeDispatcher`
-(`src/essentials/Workflows/Runtime/Services/Bookmarks/BookmarkResumeDispatcher.cs`) looks up matching bookmarks through
+(`src/essentials/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Bookmarks/BookmarkResumeDispatcher.cs`) looks up matching bookmarks through
 `IBookmarkStimulusLookup`, builds a `ResumeBookmark` envelope and sends it to the execution's mailbox. The drain
 runs `WorkflowResumeBookmarkSchedulerWorkHandler`
-(`src/essentials/Activities/Runtime/Services/WorkflowResumeBookmarkSchedulerWorkHandler.cs`), which re-reads the
+(`src/essentials/Activities/Runtime/Elsa.Activities.Runtime/Services/WorkflowResumeBookmarkSchedulerWorkHandler.cs`), which re-reads the
 executable, the activity execution and the bookmark, consumes the bookmark, and resumes the activity with the
 stimulus payload as input. From there the chain continues as in section 5.
 
@@ -199,7 +199,7 @@ registers `RuntimeResumptionPumpTask` as an `IRecurringTask` (it depends on the 
 `WorkflowsRuntimeEntityFrameworkCore` shell depends on it, so a durable store is never composed without the pump.
 
 Each tick calls `IRuntimeResumptionService.SweepAsync`, implemented by
-`src/essentials/Workflows/Runtime/Services/Recovery/RuntimeResumptionService.cs`. One sweep does three things: deliver pending
+`src/essentials/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Recovery/RuntimeResumptionService.cs`. One sweep does three things: deliver pending
 post-commit outbox items, list executions that still have queued work
 (`IWorkflowSchedulerWorkQueue.ListClaimableWorkflowExecutionIdsAsync`, which lists only work a claim could take now)
 plus candidates from `IRuntimeRecoveryScanner.ScanPageAsync`, and re-drive each execution whose next item the pause
@@ -213,7 +213,7 @@ so the single-writer rule holds during recovery too.
 
 ## Where the defaults are registered
 
-`src/essentials/Workflows/Runtime/Extensions/RuntimeCoreServiceCollectionExtensions.cs` holds `AddWorkflowRuntime()`.
+`src/essentials/Workflows/Runtime/Elsa.Workflows.Runtime/Extensions/RuntimeCoreServiceCollectionExtensions.cs` holds `AddWorkflowRuntime()`.
 Every registration in it uses `TryAdd`, so a persistence feature that registers first, or removes and re-adds,
 wins. Reading that one method tells you the default implementation of every runtime contract: the `InMemory*`
 stores, the `IWorkflowSchedulerWorkHandler` set (`TryAddEnumerable`), the drainer, the committer, the policies

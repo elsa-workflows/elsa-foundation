@@ -125,23 +125,8 @@ public sealed class ActivityCompletionContractTests
     public async Task External_result_is_stored_and_projection_views_preserve_policy_without_downgrade()
     {
         var store = new RecordingExternalPayloadStore();
-        var policy = new ActivityValuePolicy(
-            true,
-            true,
-            true,
-            "Full",
-            ActivityValueLifecycle.Result,
-            ActivityValueStorage.External,
-            "encrypted-payloads",
-            "P30D");
 
-        var projected = await new ActivityCompletionProjector(store).ProjectAsync(
-            "workflow-1",
-            "invocation-1",
-            Attempt(),
-            Contract(resultPolicy: policy),
-            ActivityTransition.Complete(new ChargeResult("receipt-1", true), "Charged"),
-            DateTimeOffset.UtcNow);
+        var projected = await ProjectAsync(store, Contract(resultPolicy: ExternalResultPolicy(requiresEncryption: false)));
 
         Assert.Null(projected.Completion.Result.InlineValue);
         Assert.Equal(DurableValueStorage.External, projected.Completion.Result.Policy.Storage);
@@ -151,11 +136,58 @@ public sealed class ActivityCompletionContractTests
             Assert.Null(envelope.ExternalReference);
             Assert.Equal("P30D", envelope.Policy.RetentionPolicy);
             Assert.True(envelope.Policy.IsSensitive);
-            Assert.True(envelope.Policy.RequiresEncryption);
             Assert.Equal("Full", envelope.Policy.RedactionMode);
         });
         Assert.Single(store.Writes);
-        Assert.All(store.Writes, write => Assert.Equal("encrypted-payloads", write.StorageProfile));
+        Assert.All(store.Writes, write => Assert.Equal("result-payloads", write.StorageProfile));
+    }
+
+    /// <summary>
+    /// Producer withholding on the completion path (spec 188, FR-010): a hand-built or imported contract can declare a
+    /// result policy that requires encryption (research R13). The result is withheld before the inline or external
+    /// decision, so nothing reaches external payload storage, and the completion and its projections carry the marker.
+    /// </summary>
+    [Fact]
+    public async Task An_external_result_whose_policy_requires_encryption_is_withheld_and_never_written()
+    {
+        var store = new RecordingExternalPayloadStore();
+
+        var projected = await ProjectAsync(store, Contract(resultPolicy: ExternalResultPolicy(requiresEncryption: true)));
+
+        Assert.Empty(store.Writes);
+        AssertWithheldForEncryption(projected.Completion.Result);
+        Assert.All(projected.Projections.Values, AssertWithheldForEncryption);
+    }
+
+    [Fact]
+    public async Task A_projection_that_requires_encryption_withholds_the_folded_result_before_any_external_write()
+    {
+        var store = new RecordingExternalPayloadStore();
+        var contract = Contract(
+            resultPolicy: ExternalResultPolicy(requiresEncryption: false),
+            projectionPolicy: ExternalResultPolicy(requiresEncryption: true));
+
+        var projected = await ProjectAsync(store, contract);
+
+        Assert.Empty(store.Writes);
+        AssertWithheldForEncryption(projected.Completion.Result);
+        AssertWithheldForEncryption(projected.Projections["receipt-id"]);
+    }
+
+    [Fact]
+    public void An_inline_result_whose_policy_requires_encryption_is_withheld()
+    {
+        var policy = ActivityValuePolicy.Default with { IsSensitive = true, RequiresEncryption = true };
+
+        var projected = new ActivityCompletionProjector().Project(
+            "invocation-1",
+            Attempt(),
+            Contract(resultPolicy: policy),
+            ActivityTransition.Complete(new ChargeResult("receipt-1", true), "Charged"),
+            DateTimeOffset.UtcNow);
+
+        AssertWithheldForEncryption(projected.Completion.Result);
+        Assert.All(projected.Projections.Values, AssertWithheldForEncryption);
     }
 
     [Fact]
@@ -185,7 +217,7 @@ public sealed class ActivityCompletionContractTests
         var projectionPolicy = new ActivityValuePolicy(
             IsPersistable: true,
             IsSensitive: true,
-            RequiresEncryption: true,
+            RequiresEncryption: false,
             RedactionMode: "Full",
             Lifecycle: ActivityValueLifecycle.Audit,
             Storage: ActivityValueStorage.External,
@@ -203,7 +235,6 @@ public sealed class ActivityCompletionContractTests
         Assert.Equal(DurableValueLifecycle.Audit, projected.Completion.Result.Policy.Lifecycle);
         Assert.Equal(DurableValueStorage.External, projected.Completion.Result.Policy.Storage);
         Assert.True(projected.Completion.Result.Policy.IsSensitive);
-        Assert.True(projected.Completion.Result.Policy.RequiresEncryption);
         Assert.Equal("Full", projected.Completion.Result.Policy.RedactionMode);
         Assert.Equal("P30D", projected.Completion.Result.Policy.RetentionPolicy);
         Assert.Equal("audit-payloads", Assert.Single(store.Writes).StorageProfile);
@@ -229,6 +260,35 @@ public sealed class ActivityCompletionContractTests
                 ]),
             ["Charged", "Declined"],
             new ActivityActivationRequirement("clr", "Payments.Charge"));
+
+    private static ValueTask<ActivityCompletionProjection> ProjectAsync(RecordingExternalPayloadStore store, ActivityContract contract) =>
+        new ActivityCompletionProjector(store).ProjectAsync(
+            "workflow-1",
+            "invocation-1",
+            Attempt(),
+            contract,
+            ActivityTransition.Complete(new ChargeResult("receipt-1", true), "Charged"),
+            DateTimeOffset.UtcNow);
+
+    private static ActivityValuePolicy ExternalResultPolicy(bool requiresEncryption) =>
+        new(
+            IsPersistable: true,
+            IsSensitive: true,
+            RequiresEncryption: requiresEncryption,
+            RedactionMode: "Full",
+            Lifecycle: ActivityValueLifecycle.Result,
+            Storage: ActivityValueStorage.External,
+            StorageProfile: "result-payloads",
+            RetentionPolicy: "P30D");
+
+    private static void AssertWithheldForEncryption(ValueEnvelope envelope)
+    {
+        Assert.Equal(ValuePresence.Withheld, envelope.Presence);
+        Assert.Equal(WithheldValueKind.PolicyRequiresEncryption, envelope.WithheldValue!.Kind);
+        Assert.Null(envelope.InlineValue);
+        Assert.Null(envelope.ExternalReference);
+        Assert.True(envelope.Policy.RequiresEncryption);
+    }
 
     private static ActivityAttempt Attempt() =>
         new("attempt-1", "invocation-1", 1, ActivityAttemptReason.Initial, DateTimeOffset.UtcNow);

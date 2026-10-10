@@ -337,6 +337,30 @@ public sealed class DiagnosticsDrain<TItem, TResult> : IDisposable, IAsyncDispos
         }
     }
 
+    /// <summary>
+    /// Like <see cref="ApplyPendingRetentionAsync"/>, but skips the pass when no unit has been committed since
+    /// the last successful retention. A writer that has awaited its acknowledgement uses this to see its own
+    /// overflow trimmed: the loop holds the target lock across a commit and its periodic pass, so once the
+    /// barrier acquires the lock, a zero unit count means retention already covers that commit and a second
+    /// pass would only repeat the same reads.
+    /// </summary>
+    public async Task ApplyRetentionIfPendingAsync(CancellationToken cancellationToken = default)
+    {
+        if (State != DiagnosticsDrainState.Running)
+            return;
+        await _targetLock.WaitAsync(cancellationToken);
+        try
+        {
+            if (State != DiagnosticsDrainState.Running || Interlocked.Read(ref _retentionUnits) == 0)
+                return;
+            await ApplyRetentionWithRetryAsync(cancellationToken);
+        }
+        finally
+        {
+            _targetLock.Release();
+        }
+    }
+
     /// <summary>Callers hold <see cref="_targetLock"/>; the loop and the barrier never overlap on the target.</summary>
     private async Task ApplyRetentionWithRetryAsync(CancellationToken cancellationToken)
     {

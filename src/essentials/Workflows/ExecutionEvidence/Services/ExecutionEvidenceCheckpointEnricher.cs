@@ -129,6 +129,18 @@ public sealed class ExecutionEvidenceCheckpointEnricher(
     /// </summary>
     private ExecutionEvidenceVariableCapture Capture(ValueEnvelope envelope)
     {
+        // A withheld envelope holds no value to capture, redact or digest, so it is described by its marker alone, before
+        // any rule that reads content.
+        if (envelope.WithheldValue is { } withheld)
+            return CaptureWithheld(withheld);
+
+        // A present value whose policy requires encryption is never capturable (spec 188, FR-010), whatever
+        // RedactSensitiveValues says, so it is recorded as a value withheld for encryption. Producer withholding keeps one
+        // out of runtime state and the commit backstop refuses a commit that carries one, but enrichers run before that
+        // backstop.
+        if (envelope.HoldsValueRequiringEncryption())
+            return CaptureWithheld(WithheldValue.PolicyRequiresEncryption());
+
         // Content identity is derived once, up front, from whatever the envelope actually holds — never from a prefix,
         // a length, or a field that only some dispositions populate. Every silent-lost-write defect in this module has
         // been a comparand that failed to distinguish two genuinely different values, so this is the one invariant:
@@ -167,6 +179,18 @@ public sealed class ExecutionEvidenceCheckpointEnricher(
                 Comparand = $"Captured:{content}"
             };
     }
+
+    /// <summary>
+    /// The marker stands in for the value, so it is the comparand too: a variable that moves to another secret reference,
+    /// or from one kind of marker to the other, registers as a write. A reference name is not a value.
+    /// </summary>
+    private static ExecutionEvidenceVariableCapture CaptureWithheld(WithheldValue withheld) =>
+        new()
+        {
+            Disposition = ExecutionEvidenceValueDisposition.Withheld,
+            SecretReferenceName = withheld.Secret?.Name,
+            Comparand = $"{ExecutionEvidenceValueDisposition.Withheld}:{withheld.Kind}:{withheld.Secret?.Name}"
+        };
 
     /// <summary>
     /// The whole of what the envelope holds, as one string: the external locator when the value lives elsewhere, the raw

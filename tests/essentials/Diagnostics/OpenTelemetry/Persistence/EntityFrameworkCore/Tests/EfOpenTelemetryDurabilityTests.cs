@@ -425,6 +425,34 @@ public sealed class EfOpenTelemetryDurabilityTests
     }
 
     /// <summary>
+    /// A drained write costs one commit transaction and one retention transaction. The writer's post-acknowledgement
+    /// barrier used to run a second, identical retention pass on every write (#2533).
+    /// </summary>
+    [Fact]
+    public async Task Drained_write_runs_one_retention_pass()
+    {
+        await using var temp = new TempDatabaseDirectory("elsa-otel-single-retention-");
+        var interceptor = new TransientTransactionStartInterceptor();
+        await using var provider = OpenTelemetryEntityFrameworkCoreFixture.BuildInterceptingProvider(temp.DatabasePath, interceptor);
+        await OpenTelemetryEntityFrameworkCoreFixture.EnsureCreatedAsync(provider);
+        var store = provider.GetRequiredService<EfOpenTelemetryStore>();
+        store.Start();
+        try
+        {
+            var beginAttemptsBeforeWrite = interceptor.BeginAttempts;
+
+            await store.WriteAsync(TelemetryTestData.Batch("single-retention"));
+
+            Assert.Equal(beginAttemptsBeforeWrite + 2, interceptor.BeginAttempts);
+            Assert.NotNull(await store.GetTraceAsync("single-retention"));
+        }
+        finally
+        {
+            await store.StopAsync();
+        }
+    }
+
+    /// <summary>
     /// A schema write refusal raised while a capture commits must reach the caller as itself, the same way a schema
     /// version skew already does, never wrapped in <see cref="OpenTelemetryPersistenceException"/> (#2101).
     /// </summary>

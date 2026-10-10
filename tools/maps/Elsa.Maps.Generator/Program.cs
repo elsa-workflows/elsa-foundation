@@ -6,7 +6,7 @@ using Elsa.Maps.Generator;
 // Usage: dotnet run --project tools/maps/Elsa.Maps.Generator -- <layer> [<layer> ...]
 //   dependency-map | maps | domain | extension-points | architecture-reference | feature-dependency | all | check
 //   solution-filters | solution-filters-check | solution-filters-self-test
-//   solution-filter-roots <filter-path>
+//   solution-filter-roots <filter-path> | solution-filter <filter-path>
 //   ef-suites-select <event> [<base-sha> <head-sha>] | ef-suites-self-test
 //   project-facts-self-test | feature-facts-self-test
 
@@ -41,6 +41,12 @@ try
     {
         foreach (var path in SolutionFilterGenerator.GetRoots(repo, layers[1]))
             Console.WriteLine(path);
+        return 0;
+    }
+
+    if (layers.Length == 2 && string.Equals(layers[0], "solution-filter", StringComparison.Ordinal))
+    {
+        Console.WriteLine($"Generated solution filter: {SolutionFilterGenerator.Write(repo, layers[1])}");
         return 0;
     }
 
@@ -85,7 +91,7 @@ try
     // writing part of the maps and then throwing.
     var requested = layers.Contains("all", StringComparer.Ordinal) ? knownLayers : layers;
     if (requested.FirstOrDefault(layer => !knownLayers.Contains(layer, StringComparer.Ordinal)) is { } unknown)
-        throw new ArgumentException($"Unknown generator command '{unknown}'. Known map layers: {string.Join(", ", knownLayers)}, all, check, solution-filters, solution-filters-check, solution-filters-self-test, solution-filter-roots <filter-path>, ef-suites-select <event> [<base-sha> <head-sha>], ef-suites-self-test, project-facts-self-test, feature-facts-self-test.");
+        throw new ArgumentException($"Unknown generator command '{unknown}'. Known map layers: {string.Join(", ", knownLayers)}, all, check, solution-filters, solution-filters-check, solution-filters-self-test, solution-filter-roots <filter-path>, solution-filter <filter-path>, ef-suites-select <event> [<base-sha> <head-sha>], ef-suites-self-test, project-facts-self-test, feature-facts-self-test.");
 
     var projects = ProjectGraph.Read(repo);
     var written = new List<string>();

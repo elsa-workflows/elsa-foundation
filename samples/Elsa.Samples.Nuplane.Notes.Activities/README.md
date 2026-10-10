@@ -29,7 +29,7 @@ pending migration and the `dotnet elsa persistence apply` command that applies i
 
 A node pinned to version `1.0.0` keeps running after the upgrade, but on release 1.1.0's class: the activity's alias is its
 CLR type name, and one type is registered per alias (see
-[Elsa.Activities.Runtime](../../src/essentials/Activities/Runtime/README.md#activity-versions-after-an-in-place-upgrade)).
+[Elsa.Activities.Runtime](../../src/essentials/Activities/Runtime/Elsa.Activities.Runtime/README.md#activity-versions-after-an-in-place-upgrade)).
 That is why release 1.1.0 keeps `Text` as it was and adds `Tags` as optional. A release that renamed or removed an input would
 break every workflow pinned to an earlier version, and nothing warns of that yet.
 

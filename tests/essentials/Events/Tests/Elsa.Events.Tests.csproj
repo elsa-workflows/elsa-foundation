@@ -15,10 +15,10 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\..\..\src\essentials\Events\Elsa.Events.csproj" />
+    <ProjectReference Include="..\..\..\..\src\essentials\Events\Elsa.Events\Elsa.Events.csproj" />
     <ProjectReference Include="..\..\..\..\src\essentials\Events\Strategies\Elsa.Events.Strategies.csproj" />
     <ProjectReference Include="..\..\..\..\src\essentials\Events\Core\Elsa.Events.Core.csproj" />
-    <ProjectReference Include="..\..\..\..\src\essentials\Tasks\Elsa.Tasks.csproj" />
+    <ProjectReference Include="..\..\..\..\src\essentials\Tasks\Elsa.Tasks\Elsa.Tasks.csproj" />
     <ProjectReference Include="..\..\..\..\src\essentials\Tasks\Core\Elsa.Tasks.Core.csproj" />
     <ProjectReference Include="..\..\..\..\src\essentials\Locking\Core\Elsa.Locking.Core.csproj" />
   </ItemGroup>

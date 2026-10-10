@@ -586,6 +586,18 @@
       "executionType": "Action",
       "inputs": [
         {
+          "key": "Authorization",
+          "name": "Authorization",
+          "type": "String",
+          "collectionKind": "Single",
+          "isRequired": false,
+          "isNullable": true,
+          "uiHint": null,
+          "defaultValue": null,
+          "defaultSyntax": null,
+          "uiSpecifications": null
+        },
+        {
           "key": "Content",
           "name": "Content",
           "type": "String",

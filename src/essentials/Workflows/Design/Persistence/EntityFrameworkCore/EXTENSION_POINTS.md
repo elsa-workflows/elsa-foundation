@@ -31,6 +31,14 @@ The atomic writer persists the operation marker in the same transaction as stage
 version, draft, and layout changes. Replays and marker-race losers do not publish duplicate
 post-commit lifecycle events.
 
+Promotion takes the `WorkflowDraftStateHash` of the draft its caller read and admitted (spec 188, research R7). Under
+the promotion lock, before any row is added, `EfPromoteDraftToVersionCommand` compares it with the hash of the draft it
+reads there and throws `WorkflowDraftChangedException` when they differ, so a promotion writes exactly the content its
+caller saw. The draft row has no concurrency token, so its content is the compare-and-set operand; the comparison knows
+nothing of what the caller checked. A null or blank hash is refused before anything is read. The hash is not part of
+the promotion's request fingerprint: a replay of a succeeded promotion returns the original version id and writes
+nothing, whatever hash it carries.
+
 A save that loses an optimistic-concurrency race, because a row changed after it was read, surfaces
 as a `DesignPersistenceException` with `FailureKind` `Concurrency`. Nothing was committed, so reading
 again and writing afresh can succeed. Every other provider failure has `FailureKind` `Provider`.

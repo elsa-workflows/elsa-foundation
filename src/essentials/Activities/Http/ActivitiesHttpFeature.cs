@@ -64,7 +64,13 @@ public sealed class ActivitiesHttpFeature : IShellFeature, IMiddlewareShellFeatu
             })
             // The activity enforces its own timeout with a linked CancellationTokenSource so it composes with
             // the workflow's cancellation token; the ambient client timeout is disabled to avoid double-timeout.
-            .ConfigureHttpClient(client => client.Timeout = System.Threading.Timeout.InfiniteTimeSpan);
+            .ConfigureHttpClient(client => client.Timeout = System.Threading.Timeout.InfiniteTimeSpan)
+            // The factory's default logging handlers carry raw request and response header values as structured state
+            // at Trace, where a state-serializing sink would print an Authorization value (spec 188 FR-019). They are
+            // replaced by one logger that writes the same request lines without any header.
+            .RemoveAllLoggers()
+            .AddLogger<HttpActivityClientLogger>();
+        services.TryAddSingleton<HttpActivityClientLogger>();
 
         // Contribute the HttpEndpoint start-trigger's stimulus provider so the publish-time trigger
         // extractor can recognize published HttpEndpoint nodes and index them. Enumerable so other activity

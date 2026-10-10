@@ -1,4 +1,5 @@
 using Elsa.Workflows.Runtime.Api.Contracts;
+using Elsa.Workflows.Runtime.Api.Models;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 
@@ -58,7 +59,9 @@ public sealed class ActivityExecutionValuePayloadReader(
             await AuditAsync("denied", workflowExecutionId, activityExecutionId, evidenceId, authorizationSnapshot, cancellationToken);
             return ActivityExecutionValuePayloadReadResult.Denied();
         }
-        if (snapshot.Payload is null ||
+        // A withheld record (spec 188) has no value to release, whatever it carries beside its marker.
+        if (ActivityExecutionInspectionDisclosure.WithheldKind(snapshot) is not null ||
+            snapshot.Payload is null ||
             snapshot.CaptureMode is not (RuntimePayloadCaptureMode.DiagnosticSnapshot or RuntimePayloadCaptureMode.Payload))
         {
             await AuditAsync("unavailable", workflowExecutionId, activityExecutionId, evidenceId, authorizationSnapshot, cancellationToken);

@@ -10,10 +10,11 @@ using Elsa.Workflows.Design.Persistence.Core.Services;
 using Elsa.Workflows.Design.Persistence.Core.Stores;
 using Elsa.Workflows.Design.Reconciliation;
 using Elsa.Workflows.Design.Reconciliation.Contracts;
-using Elsa.Workflows.Design.Core.Reconciliation;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
+using Elsa.Workflows.Design.Tests.Infrastructure;
+using Elsa.Workflows.Design.Validations.Core.Contracts;
 using Xunit;
 
 namespace Elsa.Workflows.Design.Tests.Unit.Reconciliation;
@@ -25,20 +26,7 @@ namespace Elsa.Workflows.Design.Tests.Unit.Reconciliation;
 /// </summary>
 public sealed class WorkflowsDesignReconciliationFeatureRegistrationTests
 {
-    [Fact]
-    public void Feature_registers_reconciler_and_handler()
-    {
-        var services = MinimalServices();
-        new TestWorkflowsDesignReconciliationFeature().ConfigureServices(services);
-        using var provider = services.BuildServiceProvider();
-
-        using var scope = provider.CreateScope();
-        Assert.NotNull(scope.ServiceProvider.GetService<IWorkflowVersionReconciler>());
-
-        var handlers = scope.ServiceProvider.GetServices<IEventHandler>().ToList();
-        Assert.Contains(handlers, h => h is IEventHandler<WorkflowVersionsReconciling>);
-    }
-
+    // Kept beside the composition test (§2.23.1): the feature's configured sources register as the same instances.
     [Fact]
     public void Sources_set_on_feature_register_as_singletons()
     {
@@ -73,6 +61,8 @@ public sealed class WorkflowsDesignReconciliationFeatureRegistrationTests
         // reconciling handler depends on them, so the smoke test supplies the real implementations.
         services.AddSingleton<IWorkflowDefinitionFactory, WorkflowDefinitionFactory>();
         services.AddSingleton<IWorkflowDefinitionVersionFactory, WorkflowDefinitionVersionFactory>();
+        // WorkflowDesignValidations, which the concrete reconciliation features depend on, registers the rule in a host.
+        services.AddSingleton<ICredentialLiteralValidator>(CredentialLiteralTestSupport.Validator(CredentialLiteralTestSupport.Catalog()));
         return services;
     }
 

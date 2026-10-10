@@ -4,7 +4,7 @@
 
 **Created**: 2026-06-24
 
-**Status**: Draft
+**Status**: Implemented — all tasks checked in d4f1a5dc4 (PR #101)
 
 **Input**: User description: "Create a specification and implementation for running a workflow definition from the designer for testing without promoting it into a durable workflow executable artifact. The designer should be able to run the workflow under development without polluting the system with workflow executable artifacts; the runtime boundary should remain artifact-only by compiling an ephemeral/transient executable for the test run."
 

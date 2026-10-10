@@ -21,7 +21,7 @@ internal static class DotnetElsaTool
     private static readonly string RepoRoot = FindRepoRoot();
 
     /// <summary>The tool's own build output, which is also where its worker sits -- the shipped layout.</summary>
-    private static readonly string ToolAssembly = Path.Join(RepoRoot, "src", "essentials", "Cli", "bin", Configuration, "net10.0", "Elsa.Cli.dll");
+    private static readonly string ToolAssembly = Path.Join(RepoRoot, "src", "essentials", "Cli", "Elsa.Cli", "bin", Configuration, "net10.0", "Elsa.Cli.dll");
 
     /// <summary>
     /// The fixture host that ships every first-party EF module plus a third-party one and all four provider

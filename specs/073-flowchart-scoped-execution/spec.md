@@ -4,7 +4,7 @@
 
 **Created**: 2026-06-17
 
-**Status**: Draft
+**Status**: Implemented — all tasks checked in 7b203a09a
 
 **Input**: User description: "Implement a clean-slate Elsa Flowchart activity execution model using a policy-driven scoped execution tree with generic execution paths/scopes, implicit activation-aware joins, public gateway policy extension points, loop-safe semantics, runtime-owned Flowchart state, and diagnostics based on the brainstorm canvas decisions."
 

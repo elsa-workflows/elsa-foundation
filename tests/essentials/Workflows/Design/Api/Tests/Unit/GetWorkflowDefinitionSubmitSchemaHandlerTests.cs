@@ -75,17 +75,52 @@ public sealed class GetWorkflowDefinitionSubmitSchemaHandlerTests
     [Fact]
     public async Task Enums_appear_as_camel_case_string_enums()
     {
-        var argumentState = await GetInputArgumentStateSchemaAsync();
+        var view = await HandleAsync();
+        var rootActivity = GetRootActivitySchema(view.Schema);
 
-        var modes = argumentState
+        var modes = rootActivity
+            .GetProperty("properties").GetProperty("inputs").GetProperty("items")
             .GetProperty("properties").GetProperty("conversion")
             .GetProperty("properties").GetProperty("mode")
             .GetProperty("enum")
             .EnumerateArray()
-            .Select(value => value.GetString())
+            .Select(value => value.GetString()!)
             .ToArray();
 
         Assert.Equal(["auto", "none", "json", "xml", "profile"], modes);
+
+        var intrinsicKinds = rootActivity
+            .GetProperty("properties").GetProperty("intrinsic")
+            .GetProperty("properties").GetProperty("kind")
+            .GetProperty("enum")
+            .EnumerateArray()
+            .Select(value => value.GetString()!)
+            .ToArray();
+
+        Assert.Equal(["set", "merge", "reduce", "return", "control", "setCorrelationId", "setInstanceName", "setOutput", "finish"], intrinsicKinds);
+
+        // The submit schema documents all enum-bearing paths with the same camel-case names used by
+        // AuthoringSchemaExporter.
+        var collectionKinds = rootActivity
+            .GetProperty("properties").GetProperty("intrinsic")
+            .GetProperty("properties").GetProperty("valueType")
+            .GetProperty("properties").GetProperty("collectionKind")
+            .GetProperty("enum")
+            .EnumerateArray()
+            .Select(value => value.GetString()!)
+            .ToArray();
+
+        Assert.Equal(["single", "array", "list", "hashSet", "dictionary"], collectionKinds);
+
+        var sourceRepresentations = view.Schema
+            .GetProperty("properties").GetProperty("state").GetProperty("properties").GetProperty("outputs").GetProperty("items")
+            .GetProperty("properties").GetProperty("sourceRepresentation")
+            .GetProperty("enum")
+            .EnumerateArray()
+            .Select(value => value.ValueKind == JsonValueKind.Null ? "<null>" : value.GetString()!)
+            .ToArray();
+
+        Assert.Equal(["typedValue", "structuredValue", "textValue", "formattedContent", "binaryContent", "durableReference", "transientResource", "<null>"], sourceRepresentations);
     }
 
     [Fact]

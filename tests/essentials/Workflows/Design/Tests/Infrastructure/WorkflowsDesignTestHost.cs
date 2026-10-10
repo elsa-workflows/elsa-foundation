@@ -1,4 +1,5 @@
 using CShells.Lifecycle;
+using Elsa.Activities.Design.Core.Contracts;
 using Elsa.Activities.Design.Reconciliation;
 using Elsa.Events;
 using Elsa.Events.Core.Contracts;
@@ -63,13 +64,38 @@ internal sealed class WorkflowsDesignTestHost : IDisposable
 
     public static async Task<WorkflowsDesignTestHost> CreateAsync(CancellationToken cancellationToken = default)
     {
-        var directory = Path.Join(Path.GetTempPath(), $"elsa-workflows-design-ef-{Guid.NewGuid():N}");
-        Directory.CreateDirectory(directory);
-        var connectionString = $"Data Source={Path.Join(directory, "design.db")};Pooling=False";
-
+        var directory = NewDirectory();
         var lockProvider = new InMemoryDistributedLockProvider();
         var eventPublisher = new CapturingEventPublisher();
+        var services = DesignStoreServices(directory);
 
+        // Lock + event publisher + real structure service — registered AFTER the lane
+        // composition so the capturing publisher wins as the single IInlineEventPublisher/
+        // IDeferredEventPublisher the commands resolve, and the real flattening structure service is used.
+        services.AddSingleton<IDistributedLockProvider>(lockProvider);
+        services.AddSingleton<IInlineEventPublisher>(eventPublisher);
+        services.AddSingleton<IDeferredEventPublisher>(eventPublisher);
+        services.AddScoped<IActivityStructureService, DefaultActivityStructureService>();
+
+        return new WorkflowsDesignTestHost(directory, await BuildAsync(services, cancellationToken), eventPublisher, lockProvider);
+    }
+
+    /// <summary>A uniquely named temp directory for one host's database file, removed by <see cref="DeleteDirectory"/>.</summary>
+    internal static string NewDirectory()
+    {
+        var directory = Path.Join(Path.GetTempPath(), $"elsa-workflows-design-ef-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(directory);
+        return directory;
+    }
+
+    /// <summary>
+    /// The services every design host here starts from: the workflows-design EF lane on a SQLite file in
+    /// <paramref name="directory"/>, the real events and validations features, and the activity catalog of
+    /// <see cref="CredentialLiteralTestSupport"/>, which the validators, and the credential-literal admission they back,
+    /// read (spec 188). A host adds its lock provider, event publishers and structure service.
+    /// </summary>
+    internal static ServiceCollection DesignStoreServices(string directory)
+    {
         var services = new ServiceCollection();
         services.AddSingleton(typeof(ILogger<>), typeof(NullLogger<>));
         services.AddSingleton<ISystemClock, SystemClock>();
@@ -89,25 +115,34 @@ internal sealed class WorkflowsDesignTestHost : IDisposable
         // Host-owned composition: register the provider connection and workflows-design lane explicitly.
         // The storage session source applies the pending schema in-process during IShellInitializer, so
         // no external CLI is needed.
-        services.AddWorkflowsDesignEntityFrameworkCore(new() { Provider = "Sqlite", ConnectionString = connectionString });
+        services.AddWorkflowsDesignEntityFrameworkCore(new() { Provider = "Sqlite", ConnectionString = $"Data Source={Path.Join(directory, "design.db")};Pooling=False" });
         services.AddEfModuleMigrations<WorkflowsDesignDbContext>("Sqlite");
         new WorkflowDesignValidationsFeature().ConfigureServices(services);
         new ActivitiesDesignReconciliationFeature().ConfigureServices(services);
+        services.AddSingleton<IActivityDefinitionLookup>(CredentialLiteralTestSupport.Catalog());
+        return services;
+    }
 
-        // Lock + event publisher + real structure service — registered AFTER the lane
-        // composition so the capturing publisher wins as the single IInlineEventPublisher/
-        // IDeferredEventPublisher the commands resolve, and the real flattening structure service is used.
-        services.AddSingleton<IDistributedLockProvider>(lockProvider);
-        services.AddSingleton<IInlineEventPublisher>(eventPublisher);
-        services.AddSingleton<IDeferredEventPublisher>(eventPublisher);
-        services.AddScoped<IActivityStructureService, DefaultActivityStructureService>();
-
+    /// <summary>Builds the provider and runs its shell initializers, which apply the schema.</summary>
+    internal static async Task<ServiceProvider> BuildAsync(IServiceCollection services, CancellationToken cancellationToken = default)
+    {
         var provider = services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
-
         foreach (var initializer in provider.GetServices<IShellInitializer>())
             await initializer.InitializeAsync(cancellationToken);
 
-        return new WorkflowsDesignTestHost(directory, provider, eventPublisher, lockProvider);
+        return provider;
+    }
+
+    internal static void DeleteDirectory(string directory)
+    {
+        try
+        {
+            Directory.Delete(directory, recursive: true);
+        }
+        catch (IOException)
+        {
+            // A uniquely named temp directory is harmless if SQLite releases a sidecar late.
+        }
     }
 
     /// <summary>
@@ -148,14 +183,7 @@ internal sealed class WorkflowsDesignTestHost : IDisposable
         // The provider holds async-disposable resources, so drain it through
         // the async path (tests keep a synchronous `using var host`).
         _services.DisposeAsync().AsTask().GetAwaiter().GetResult();
-        try
-        {
-            Directory.Delete(_directory, recursive: true);
-        }
-        catch (IOException)
-        {
-            // A uniquely named temp directory is harmless if SQLite releases a sidecar late.
-        }
+        DeleteDirectory(_directory);
     }
 
     private sealed class GuidIdentityGenerator : IIdentityGenerator

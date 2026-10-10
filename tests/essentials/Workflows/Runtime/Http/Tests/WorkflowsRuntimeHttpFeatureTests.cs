@@ -1,12 +1,9 @@
 using CShells.Features;
-using Elsa.Http.Core.Contracts;
 using Elsa.Tasks.Core;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Http.Contracts;
 using Elsa.Workflows.Runtime.Http.Options;
 using Elsa.Workflows.Runtime.Http.Tasks;
-using Elsa.Workflows.Runtime.Services.Bookmarks;
-using Elsa.Workflows.Runtime.Services.Triggers;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
@@ -25,32 +22,7 @@ namespace Elsa.Workflows.Runtime.Http.Tests;
 /// </summary>
 public sealed class WorkflowsRuntimeHttpFeatureTests
 {
-    [Fact]
-    public void ConfigureServices_WithDefaultSettings_ComposesAllReflectiveHandlers()
-    {
-        var services = new ServiceCollection();
-
-        // DEFAULT settings — no type-name overrides. This is the path that used to throw.
-        new WorkflowsRuntimeHttpFeature().ConfigureServices(services);
-
-        // Minimal dependencies the reflectively-registered handlers need at resolve time. The route resolver also
-        // needs the cross-execution bookmark lookup (spec 089 D union) — normally contributed by the
-        // WorkflowsRuntimeTriggers dependency; here it is added explicitly since the feature is composed in isolation.
-        services.AddSingleton<IWorkflowTriggerBindingStore, InMemoryWorkflowTriggerBindingStore>();
-        services.AddSingleton<IBookmarkStimulusIndex, InMemoryBookmarkStateStore>();
-        services.AddSingleton<IGlobalBookmarkStimulusLookup, GlobalBookmarkStimulusLookup>();
-        services.AddLogging();
-        services.AddAuthorizationCore();
-
-        using var provider = services.BuildServiceProvider();
-        using var scope = provider.CreateScope();
-        var sp = scope.ServiceProvider;
-
-        Assert.NotNull(sp.GetRequiredService<IHttpEndpointFaultHandler>());
-        Assert.NotNull(sp.GetRequiredService<IHttpEndpointAuthorizationHandler>());
-        Assert.NotNull(sp.GetRequiredService<IHttpEndpointRoutesResolver>());
-    }
-
+    // Kept beside the composition test (§2.23.1): lifetime, the route-table synchronizer is one singleton and the index validator scoped.
     [Fact]
     public void ConfigureServices_RegistersTheRouteTablePopulators()
     {
@@ -75,6 +47,7 @@ public sealed class WorkflowsRuntimeHttpFeatureTests
         Assert.Equal(ServiceLifetime.Singleton, synchronizer.Lifetime);
     }
 
+    // Kept beside the composition test (§2.23.1): the configured convergence bound flows into the registered pump's options.
     [Fact]
     public void ConfigureServices_RegistersTheConvergencePump_WithTheConfiguredBound()
     {

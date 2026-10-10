@@ -2,7 +2,7 @@
 
 **Feature Branch**: `004-activity-semantic-versioning` *(spec authored on `main`; no feature branch cut — consistent with units 001–003)*
 **Created**: 2026-06-03
-**Status**: Draft
+**Status**: Implemented — all tasks checked in b5adc5c30
 **Input**: Unit 3 of the Elsa entity-design refactor. Replace the `int` activity version with an author-controlled **string semantic version** across the activity-definition-version model (Unit B catalog). CLR activities in assemblies carry a `Version` attribute that an assembly-reading reconciliation source reads when seeding the catalog. Prerequisite for Unit 4 (workflow-as-activity). Works against constitution v3.0.0 (draft).
 
 ## Clarifications

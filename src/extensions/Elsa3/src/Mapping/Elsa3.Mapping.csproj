@@ -12,7 +12,7 @@
 	  <ProjectReference Include="..\..\..\..\essentials\Serialization\Core\Elsa.Serialization.Core.csproj" />
 	  <ProjectReference Include="..\..\..\..\essentials\Workflows\Design\Core\Elsa.Workflows.Design.Core.csproj" />
 	  <ProjectReference Include="..\..\..\..\essentials\Workflows\Design\Persistence\Core\Elsa.Workflows.Design.Persistence.Core.csproj" />
-	  <ProjectReference Include="..\Activities\Design\Import\Elsa3.Activities.Design.Import.csproj" />
+	  <ProjectReference Include="..\Activities\Design\Import\Elsa3.Activities.Design.Import\Elsa3.Activities.Design.Import.csproj" />
 	  <ProjectReference Include="..\Models\Elsa3.Models.csproj" />
 	</ItemGroup>
 

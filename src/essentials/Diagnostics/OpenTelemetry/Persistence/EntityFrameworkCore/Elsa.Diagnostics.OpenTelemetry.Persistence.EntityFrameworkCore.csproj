@@ -12,7 +12,7 @@
   <ItemGroup>
     <ProjectReference Include="..\..\..\..\Persistence\EntityFramework\Elsa.Persistence.EntityFramework.csproj" />
     <ProjectReference Include="..\..\..\Persistence\Elsa.Diagnostics.Persistence.csproj" />
-    <ProjectReference Include="..\..\Elsa.Diagnostics.OpenTelemetry.csproj" />
+    <ProjectReference Include="..\..\Elsa.Diagnostics.OpenTelemetry\Elsa.Diagnostics.OpenTelemetry.csproj" />
     <ProjectReference Include="..\..\Core\Elsa.Diagnostics.OpenTelemetry.Core.csproj" />
   </ItemGroup>
   <ItemGroup>

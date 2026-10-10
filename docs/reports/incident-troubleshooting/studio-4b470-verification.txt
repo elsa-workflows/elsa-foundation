@@ -1,0 +1,49 @@
+Studio candidate: 4b470f61781363b81c3b556941ba3a69fe63b276
+Backend product: 25327dd148bd1ef92898cc01ba84c618fc60fe89
+Final browser observations: studio-4b470-browser-checkpoint.json
+
+Full Workflows suite
+
+ Test Files  120 passed (120)
+      Tests  1529 passed (1529)
+   Start at  14:36:59
+   Duration  22.86s (transform 3.73s, setup 807ms, collect 16.17s, tests 44.99s, environment 33.91s, prepare 6.12s)
+
+
+Module and unchanged bundle budgets
+../wwwroot/studio/modules/workflows/ActivityDefinitionWorkbench-DhM6igy0.js                49.97 kB │ gzip: 10.69 kB
+../wwwroot/studio/modules/workflows/WorkflowDefinitions-BUktQ5YU.js                        54.72 kB │ gzip: 13.17 kB
+../wwwroot/studio/modules/workflows/WorkflowInstances-Bdji8j_F.js                         115.48 kB │ gzip: 27.39 kB
+../wwwroot/studio/modules/workflows/InspectorPanel-D0vNsNPd.js                            116.72 kB │ gzip: 29.02 kB
+../wwwroot/studio/modules/workflows/module-DqX4gQKL.js                                    126.01 kB │ gzip: 33.59 kB
+../wwwroot/studio/modules/workflows/ActivityDefinitionDraftEditor-CmcAl1-j.js             127.88 kB │ gzip: 28.84 kB
+../wwwroot/studio/modules/workflows/WorkflowEditor-CPDR-hyT.js                            132.93 kB │ gzip: 34.34 kB
+../wwwroot/studio/modules/workflows/maskedInput-diUioRYG.js                               265.81 kB │ gzip: 74.84 kB
+✓ built in 1.23s
+$ node scripts/check-bundle-size.mjs
+Workflows bundle budget
+  Primary JavaScript entry:          126.21 kB raw / 33.76 kB gzip (budget 127.50 kB)
+  Workflows stylesheet:              149.12 kB raw / 21.73 kB gzip (budget 185.00 kB)
+  Definitions JavaScript closure:    227.16 kB raw / 60.01 kB gzip
+  Authenticated Definitions total:   381.75 kB raw / 83.09 kB gzip (budget 384.50 kB)
+  Activity upgrades total:           372.68 kB raw / 74.00 kB gzip (budget 375.50 kB)
+  Largest JavaScript chunk:          265.81 kB (maskedInput-diUioRYG.js; limit 500.00 kB)
+  Deferred heavy surfaces:           8
+
+Normal Release Studio host build
+  Elsa.Studio.ExtensionBuilder -> /Users/sipke/.codex-workspaces/incident-troubleshooting/studio/src/extensions/Elsa.Studio.ExtensionBuilder/bin/Release/net10.0/Elsa.Studio.ExtensionBuilder.dll
+  Elsa.Studio.Web -> /Users/sipke/.codex-workspaces/incident-troubleshooting/studio/src/apps/Elsa.Studio.Web/bin/Release/net10.0/Elsa.Studio.Web.dll
+
+Build succeeded.
+    0 Warning(s)
+    0 Error(s)
+
+Time Elapsed 00:00:04.42
+
+Typecheck: exit0 (/tmp/incident-studio-final-delivery-typecheck.log)
+Scoped ESLint: exit0 (/tmp/incident-studio-final-delivery-eslint.log)
+Web assets: exit0 (/tmp/incident-studio-final-delivery-web-build.log)
+Actual ReactFlow RED: exactcf8409 rerender visibility fails (/tmp/incident-studio-cf8409-bpmn-measurement-red.log); restored focused Workbench19/19.
+Cursor RED: forward-only pageformat leaves Previous disabled; integrated helper/component10/10 (/tmp/incident-studio-paging-integrated-green.log).
+Missing-capture RED: exact1a25 completed activity asserts Not evaluated; restored input69/69 (/tmp/incident-studio-no-evidence-green.log).
+Independent final source/log audit: no remaining material finding; no separate reviewer browser run claimed.

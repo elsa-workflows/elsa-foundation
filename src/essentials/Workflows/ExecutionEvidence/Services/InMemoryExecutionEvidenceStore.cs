@@ -144,7 +144,8 @@ public sealed class InMemoryExecutionEvidenceStore(ExecutionEvidenceOptions? opt
                 CorrelationId = batch.CorrelationId,
                 Name = name,
                 Value = capture.Value,
-                ValueDisposition = capture.Disposition
+                ValueDisposition = capture.Disposition,
+                SecretReferenceName = capture.SecretReferenceName
             });
         }
 

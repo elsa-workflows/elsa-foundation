@@ -32,7 +32,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\..\..\..\..\src\essentials\Workflows\Publishing\Elsa.Workflows.Publishing.csproj" />
+    <ProjectReference Include="..\..\..\..\..\..\src\essentials\Workflows\Publishing\Elsa.Workflows.Publishing\Elsa.Workflows.Publishing.csproj" />
     <ProjectReference Include="..\..\..\..\..\..\src\essentials\Workflows\Publishing\Api\Elsa.Workflows.Publishing.Api.csproj" />
     <!-- Retained only for the historical FastEndpoints oracle and coexistence canary. Production Publishing API no longer references it. -->
     <ProjectReference Include="..\..\..\..\..\..\src\essentials\Serialization\SystemText\Elsa.Serialization.SystemText.csproj" />
@@ -40,7 +40,7 @@
     <ProjectReference Include="..\..\..\..\..\..\src\essentials\Activities\Design\Api\Elsa.Activities.Design.Api.csproj" />
     <ProjectReference Include="..\..\..\..\..\..\src\essentials\Activities\Design\Persistence\Core\Elsa.Activities.Design.Persistence.Core.csproj" />
     <ProjectReference Include="..\..\..\..\..\..\src\essentials\Activities\Runtime\Core\Elsa.Activities.Runtime.Core.csproj" />
-    <ProjectReference Include="..\..\..\..\..\..\src\essentials\Activities\Runtime\Elsa.Activities.Runtime.csproj" />
+    <ProjectReference Include="..\..\..\..\..\..\src\essentials\Activities\Runtime\Elsa.Activities.Runtime\Elsa.Activities.Runtime.csproj" />
     <ProjectReference Include="..\..\..\..\..\..\src\essentials\Activities\Graph\Runtime\Elsa.Activities.Graph.Runtime.csproj" />
     <ProjectReference Include="..\..\..\..\..\..\src\essentials\Activities\Primitives\Elsa.Activities.Primitives.csproj" />
     <ProjectReference Include="..\..\..\..\..\..\src\essentials\Activities\Scheduling\Elsa.Activities.Scheduling.csproj" />

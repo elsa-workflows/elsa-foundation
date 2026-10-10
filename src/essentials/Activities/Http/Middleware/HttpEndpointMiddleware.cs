@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text;
 using System.Text.Json;
 using Elsa.Activities.Http.Activities;
@@ -271,6 +272,17 @@ public sealed class HttpEndpointMiddleware(
             // InvokeAsync): map it to a status. A per-endpoint timeout trip is an OperationCanceledException on
             // the linked token while RequestAborted stays live, so it lands here (mapped to 408), not the guard.
             await HandleDispatchFaultAsync(context, exception, timedOut: timeoutSource?.IsCancellationRequested == true);
+            return;
+        }
+
+        // Admission shed every start and nothing was resumed (#2548): nothing was written, so this is backpressure, not
+        // acceptance. 429 with Retry-After tells the caller to retry, as the Execute endpoint does for a shed start; a 202
+        // here would hand the caller a started execution id that never exists, and a 404 would claim the route is dead.
+        if (result.StartedCount == 0 && result.ResumedCount == 0 && result.ShedStartCount > 0)
+        {
+            context.Response.StatusCode = StatusCodes.Status429TooManyRequests;
+            context.Response.Headers.RetryAfter = Math.Max(1, (int)Math.Ceiling((result.ShedRetryAfter ?? TimeSpan.FromSeconds(1)).TotalSeconds))
+                .ToString(CultureInfo.InvariantCulture);
             return;
         }
 

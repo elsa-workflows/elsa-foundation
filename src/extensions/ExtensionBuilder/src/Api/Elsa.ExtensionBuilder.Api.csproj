@@ -19,7 +19,7 @@
     <!-- ShareWithShells: the build queue and storage the root build worker drains must be the instances a shell-resolved request reaches. -->
     <ProjectReference Include="..\..\..\..\essentials\Cluster\Readability\Elsa.Cluster.Readability.csproj" />
     <ProjectReference Include="..\..\..\..\essentials\Foundation\Identity\Core\Elsa.Foundation.Identity.Core.csproj" />
-    <ProjectReference Include="..\..\..\..\essentials\Foundation\Identity\Elsa.Foundation.Identity.csproj" />
+    <ProjectReference Include="..\..\..\..\essentials\Foundation\Identity\Elsa.Foundation.Identity\Elsa.Foundation.Identity.csproj" />
     <ProjectReference Include="..\..\..\..\essentials\Git\Elsa.Git.csproj" />
     <ProjectReference Include="..\..\..\..\essentials\Modularity\Core\Elsa.Modularity.Core.csproj" />
   </ItemGroup>

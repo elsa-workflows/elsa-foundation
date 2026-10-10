@@ -22,6 +22,7 @@ namespace Elsa.Workflows.Runtime.Distributed.Tests;
 
 public sealed class WorkflowsRuntimeDistributedFeatureTests
 {
+    // Kept beside the composition test (§2.23.1): replacement, the distributed actor provider replaces the in-process one.
     [Fact]
     public void RegistersPlacementTransportPumpAndReplacesActorProvider()
     {
@@ -49,23 +50,6 @@ public sealed class WorkflowsRuntimeDistributedFeatureTests
             provider.GetServices<IWorkflowDispatchDurabilityEvidence>(),
             evidence => evidence.Component == WorkflowDispatchDurabilityComponents.Distribution);
         Assert.Equal(WorkflowDispatchDurabilityLevel.ProcessLocal, distributionEvidence.Level);
-    }
-
-    [Fact]
-    public void ResolvesEveryRegisteredService()
-    {
-        var services = BuildBaselineServices();
-        new WorkflowsRuntimeDistributedFeature().ConfigureServices(services);
-
-        using var provider = services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
-        using var scope = provider.CreateScope();
-
-        // TS-1 (§2.23.1): every service the feature registers must resolve.
-        Assert.NotNull(provider.GetRequiredService<IWorkflowExecutionActorProvider>());
-        Assert.NotNull(scope.ServiceProvider.GetRequiredService<IExecutionPlacementStore>());
-        Assert.NotNull(scope.ServiceProvider.GetRequiredService<IExecutionPlacementService>());
-        Assert.NotNull(scope.ServiceProvider.GetRequiredService<IExecutionCommandTransport>());
-        Assert.NotNull(provider.GetServices<IRecurringTask>().OfType<ExecutionPlacementPumpTask>().Single());
     }
 
     [Theory]

@@ -23,6 +23,7 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests;
 /// </summary>
 internal sealed class WorkerOidcHostFixture : IAsyncDisposable
 {
+    public const string RequestOperationIdHeader = "X-Worker-Oidc-Fixture-Operation";
     public const string TenantId = "worker-tenant-acme";
     public const string ProviderId = "worker-issuer";
     public const string Audience = "worker-api";
@@ -316,6 +317,15 @@ internal sealed class WorkerOidcHostProcess : IAsyncDisposable
 
     public async Task<JsonElement> ControlAsync(string command, object? payload = null)
     {
+        var receipt = await ControlWithReceiptAsync(command, payload);
+        return receipt.Data;
+    }
+
+    public async Task<WorkerOidcControlReceipt> ControlWithReceiptAsync(
+        string command,
+        object? payload = null,
+        bool resetEpochAfterOperationEntry = false)
+    {
         ObjectDisposedException.ThrowIf(_disposed, this);
         await _controlGate.WaitAsync();
         try
@@ -323,14 +333,20 @@ internal sealed class WorkerOidcHostProcess : IAsyncDisposable
             await _process.StandardInput.WriteLineAsync(JsonSerializer.Serialize(new
             {
                 command,
-                payload = payload ?? new { }
+                payload = payload ?? new { },
+                resetEpochAfterOperationEntry
             }, _jsonOptions));
             await _process.StandardInput.FlushAsync();
             var line = await _process.StandardOutput.ReadLineAsync().WaitAsync(ControlTimeout);
             var reply = line is null ? null : JsonSerializer.Deserialize<WorkerOidcHostReply>(line, _jsonOptions);
             if (reply?.Status != "ok")
                 throw new InvalidOperationException($"The Worker OIDC fixture control failed ({reply?.Code ?? "no-receipt"}).");
-            return reply.Data.Clone();
+            return new WorkerOidcControlReceipt(
+                reply.OperationId ?? throw new InvalidOperationException("The Worker OIDC fixture control omitted its operation ID."),
+                reply.OperationKind ?? throw new InvalidOperationException("The Worker OIDC fixture control omitted its operation kind."),
+                reply.OperationCategory ?? throw new InvalidOperationException("The Worker OIDC fixture control omitted its operation category."),
+                reply.OperationEpoch ?? throw new InvalidOperationException("The Worker OIDC fixture control omitted its operation epoch."),
+                reply.Data.Clone());
         }
         finally
         {
@@ -405,7 +421,18 @@ internal sealed record WorkerOidcHostReply(
     JsonElement Data,
     string? ArtifactSha256,
     string? Stage,
-    string? ExceptionType);
+    string? ExceptionType,
+    string? OperationId = null,
+    string? OperationKind = null,
+    string? OperationCategory = null,
+    long? OperationEpoch = null);
+
+internal sealed record WorkerOidcControlReceipt(
+    string OperationId,
+    string OperationKind,
+    string OperationCategory,
+    long OperationEpoch,
+    JsonElement Data);
 
 internal sealed class WorkerOidcIssuer : IAsyncDisposable
 {

@@ -21,7 +21,12 @@ public static class SolutionFilterGenerator
         WriteIndented = true
     };
 
-    /// <summary>Generates every configured filter and returns its repository-relative path.</summary>
+    /// <summary>Generates every committed filter and returns its repository-relative path.</summary>
+    /// <remarks>
+    /// A profile marked <c>"committed": false</c> is skipped here and in <see cref="Check"/>: it exists only to be
+    /// written on demand by <see cref="Write"/> (the nightly integration lane does this) or read through
+    /// <see cref="GetRoots"/>.
+    /// </remarks>
     public static IReadOnlyList<string> Generate(RepoContext repo, string? destinationRoot = null)
     {
         var manifest = ReadManifest(repo);
@@ -32,47 +37,70 @@ public static class SolutionFilterGenerator
         foreach (var profile in manifest.Profiles)
         {
             ValidateProfile(profile);
-            var roots = SelectRoots(manifest, solution, profile);
-
-            var projects = ExpandDependencies(solution.Projects, roots);
-            var document = new
-            {
-                solution = new
-                {
-                    path = Normalize(manifest.SolutionPath),
-                    projects
-                }
-            };
-
-            var outputPath = Normalize(profile.OutputPath);
-            var absoluteOutputPath = Path.Join(outputRoot, outputPath.Replace('/', Path.DirectorySeparatorChar));
-            Directory.CreateDirectory(Path.GetDirectoryName(absoluteOutputPath)!);
-            File.WriteAllText(absoluteOutputPath, JsonSerializer.Serialize(document, FilterJsonOptions) + "\n");
-            written.Add(outputPath);
+            if (profile.Committed)
+                written.Add(WriteProfile(manifest, solution, profile, outputRoot));
         }
 
         return written;
+    }
+
+    /// <summary>
+    /// Writes the one filter <paramref name="outputPath"/> names, committed or not, at the repository root and returns
+    /// its repository-relative path. The bytes are exactly what <see cref="Generate"/> would write for that profile.
+    /// </summary>
+    public static string Write(RepoContext repo, string outputPath)
+    {
+        var manifest = ReadManifest(repo);
+        var profile = FindProfile(manifest, outputPath);
+        ValidateProfile(profile);
+        return WriteProfile(manifest, ReadSolution(repo, manifest), profile, repo.Root);
+    }
+
+    private static string WriteProfile(SolutionFilterManifest manifest, SolutionGraph solution, SolutionFilterProfile profile, string outputRoot)
+    {
+        var roots = SelectRoots(manifest, solution, profile);
+
+        var projects = ExpandDependencies(solution.Projects, roots);
+        var document = new
+        {
+            solution = new
+            {
+                path = Normalize(manifest.SolutionPath),
+                projects
+            }
+        };
+
+        var outputPath = Normalize(profile.OutputPath);
+        var absoluteOutputPath = Path.Join(outputRoot, outputPath.Replace('/', Path.DirectorySeparatorChar));
+        Directory.CreateDirectory(Path.GetDirectoryName(absoluteOutputPath)!);
+        File.WriteAllText(absoluteOutputPath, JsonSerializer.Serialize(document, FilterJsonOptions) + "\n");
+        return outputPath;
     }
 
     /// <summary>Returns the explicitly selected roots for one configured profile.</summary>
     public static IReadOnlyList<string> GetRoots(RepoContext repo, string outputPath)
     {
         var manifest = ReadManifest(repo);
-        var normalizedOutputPath = Normalize(outputPath);
-        var profile = manifest.Profiles.SingleOrDefault(candidate =>
-            string.Equals(Normalize(candidate.OutputPath), normalizedOutputPath, StringComparison.OrdinalIgnoreCase))
-            ?? throw new InvalidOperationException($"Unknown solution filter profile: {outputPath}");
+        var profile = FindProfile(manifest, outputPath);
         ValidateProfile(profile);
         return SelectRoots(manifest, ReadSolution(repo, manifest), profile);
     }
 
-    /// <summary>Returns the validated, manifest-owned generated filter paths.</summary>
+    /// <summary>Returns the validated, manifest-owned filter paths that are committed to the repository.</summary>
     public static IReadOnlyList<string> GetOutputPaths(RepoContext repo)
     {
         var profiles = ReadManifest(repo).Profiles;
         foreach (var profile in profiles)
             ValidateProfile(profile);
-        return profiles.Select(profile => Normalize(profile.OutputPath)).ToArray();
+        return profiles.Where(profile => profile.Committed).Select(profile => Normalize(profile.OutputPath)).ToArray();
+    }
+
+    private static SolutionFilterProfile FindProfile(SolutionFilterManifest manifest, string outputPath)
+    {
+        var normalizedOutputPath = Normalize(outputPath);
+        return manifest.Profiles.SingleOrDefault(candidate =>
+                   string.Equals(Normalize(candidate.OutputPath), normalizedOutputPath, StringComparison.OrdinalIgnoreCase))
+               ?? throw new InvalidOperationException($"Unknown solution filter profile: {outputPath}");
     }
 
     /// <summary>Returns the validated solution graph for impact checks that need reverse consumers.</summary>
@@ -406,6 +434,12 @@ public sealed class SolutionFilterManifest
 public sealed class SolutionFilterProfile
 {
     public string OutputPath { get; init; } = string.Empty;
+
+    /// <summary>
+    /// False for a profile that is never committed: <c>solution-filters</c> and its check skip it, and an uncommitted
+    /// copy left at the repository root still fails the check as an unlisted filter.
+    /// </summary>
+    public bool Committed { get; init; } = true;
     public IReadOnlyList<string> IncludeProjectNames { get; init; } = [];
     public IReadOnlyList<string> IncludeProjectNamePrefixes { get; init; } = [];
     public IReadOnlyList<string> IncludeProjectNameContains { get; init; } = [];

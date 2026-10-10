@@ -16,7 +16,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\Elsa.Foundation.Identity.AspNetCoreIdentity.csproj" />
+    <ProjectReference Include="..\Elsa.Foundation.Identity.AspNetCoreIdentity\Elsa.Foundation.Identity.AspNetCoreIdentity.csproj" />
     <ProjectReference Include="..\..\Persistence\EntityFrameworkCore\Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.csproj" />
   </ItemGroup>
 

@@ -6,6 +6,8 @@ using Elsa.Workflows.Design.Api.Models;
 using Elsa.Workflows.Design.Api.Projections;
 using Elsa.Workflows.Design.Persistence.Core.Contracts;
 using Elsa.Workflows.Design.Persistence.Core.Stores;
+using Elsa.Workflows.Design.Validations.Core;
+using Elsa.Workflows.Design.Validations.Core.Contracts;
 using NativeEndpoints;
 
 namespace Elsa.Workflows.Design.Api.Endpoints.Versions.Add;
@@ -14,7 +16,8 @@ namespace Elsa.Workflows.Design.Api.Endpoints.Versions.Add;
 [RequirePermission(WorkflowDesignPermissions.Manage)]
 public sealed class Endpoint(
     IAddWorkflowDefinitionVersionCommand addCommand,
-    IWorkflowDefinitionVersionStore versionStore) : ApiEndpoint<AddVersion, WorkflowDefinitionVersionDetailsView>
+    IWorkflowDefinitionVersionStore versionStore,
+    ICredentialLiteralValidator credentialLiterals) : ApiEndpoint<AddVersion, WorkflowDefinitionVersionDetailsView>
 {
     public override void Configure(ApiEndpointOptions options)
     {
@@ -24,11 +27,13 @@ public sealed class Endpoint(
 
     public override async Task<WorkflowDefinitionVersionDetailsView> HandleAsync(AddVersion command, CancellationToken cancellationToken)
     {
+        var state = command.State.ToState();
+        await credentialLiterals.AdmitAsync(state, cancellationToken);
         var operationKey = DesignOperationKey.CreateOrGenerate(command.OperationKey);
         var result = await addCommand.Execute(
             operationKey,
             command.DefinitionId,
-            command.State.ToState(),
+            state,
             cancellationToken);
         var addedVersion = await versionStore.GetWithDefinitionAsync(result.VersionId, cancellationToken);
         return addedVersion.ToDetailsView();

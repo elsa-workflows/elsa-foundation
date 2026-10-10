@@ -4,14 +4,11 @@ using Elsa.Activities.Http.Activities;
 using Elsa.Activities.Http.Constants;
 using Elsa.Activities.Http.Middleware;
 using Elsa.Activities.Testing;
-using Elsa.Http;
 using Elsa.Http.Core.Contracts;
 using Elsa.Http.Core.Options;
 using Elsa.Activities.Http.Options;
-using Elsa.Tasks.Core;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
-using Elsa.Workflows.Runtime.Http;
 using Elsa.Workflows.Runtime.Http.Contracts;
 using Elsa.Workflows.Runtime.Http.Tasks;
 using Microsoft.AspNetCore.Builder;
@@ -43,17 +40,6 @@ public sealed class ActivitiesHttpFeatureTests
     }
 
     [Fact]
-    public void ConfigureServices_RegistersHttpClientFactory()
-    {
-        var services = new ServiceCollection();
-
-        new ActivitiesHttpFeature().ConfigureServices(services);
-
-        using var provider = services.BuildServiceProvider();
-        Assert.NotNull(provider.GetService<IHttpClientFactory>());
-    }
-
-    [Fact]
     public void ConfiguredClient_UsesTheWellKnownClientName()
     {
         var services = new ServiceCollection();
@@ -64,27 +50,6 @@ public sealed class ActivitiesHttpFeatureTests
 
         // The activity disables the ambient client timeout and enforces its own via a linked token source.
         Assert.Equal(System.Threading.Timeout.InfiniteTimeSpan, client.Timeout);
-    }
-
-    [Fact]
-    public void ContributesHttpEndpointTriggerStimulusProvider_OnTheW7Seam()
-    {
-        var services = new ServiceCollection();
-        new ActivitiesHttpFeature().ConfigureServices(services);
-
-        using var provider = services.BuildServiceProvider();
-        var providers = provider.GetServices<IActivityTriggerStimulusProvider>();
-
-        Assert.Contains(providers, p => p is HttpEndpointTriggerStimulusProvider);
-    }
-
-    [Fact]
-    public void RegistersTheInboundRequestMiddleware()
-    {
-        var services = new ServiceCollection();
-        new ActivitiesHttpFeature().ConfigureServices(services);
-
-        Assert.Contains(services, d => d.ServiceType == typeof(HttpEndpointMiddleware));
     }
 
     [Fact]
@@ -158,39 +123,5 @@ public sealed class ActivitiesHttpFeatureTests
                 .Cast<ShellFeatureAttribute>());
 
         Assert.Contains("WorkflowsRuntimeHttp", attribute.DependsOn.Cast<object>().Select(d => d.ToString()));
-    }
-
-    [Fact]
-    public void DependsOnClosure_ComposesTheRouteTableAndItsPopulators()
-    {
-        // B2 wiring proof: run the real ConfigureServices of ActivitiesHttp and its DependsOn closure
-        // (WorkflowsRuntimeHttp -> Http) plus the minimal runtime registrations those features expect from the
-        // rest of the platform, then build the provider and resolve the route table together with the populators
-        // that fill it. Before the fix, WorkflowsRuntimeHttp.ConfigureServices threw (C1) and ActivitiesHttp did
-        // not depend on it, so this composition — the one a host actually gets — was never exercised.
-        var services = new ServiceCollection();
-
-        new ActivitiesHttpFeature().ConfigureServices(services);
-        new WorkflowsRuntimeHttpFeature().ConfigureServices(services); // default settings: the C1 path
-        new HttpFeature(new ShellFeatureContext(new ShellSettings { Id = new ShellId("test-shell") }, [])).ConfigureServices(services);
-
-        // Platform-provided dependencies the closure reads at resolve time.
-        services.AddSingleton<IWorkflowTriggerBindingStore, Elsa.Workflows.Runtime.Services.Triggers.InMemoryWorkflowTriggerBindingStore>();
-        // The route resolver now unions waiting-bookmark templates (spec 089 D) via the cross-execution lookup —
-        // contributed in production by WorkflowsRuntimeTriggers; supplied here as the platform stand-in.
-        services.AddSingleton<IBookmarkStimulusIndex, Elsa.Workflows.Runtime.Services.Bookmarks.InMemoryBookmarkStateStore>();
-        services.AddSingleton<IGlobalBookmarkStimulusLookup, Elsa.Workflows.Runtime.Services.Bookmarks.GlobalBookmarkStimulusLookup>();
-        services.AddMemoryCache();
-        services.AddLogging();
-        services.AddAuthorizationCore();
-
-        using var provider = services.BuildServiceProvider();
-        using var scope = provider.CreateScope();
-        var sp = scope.ServiceProvider;
-
-        Assert.NotNull(sp.GetRequiredService<IRouteTable>());
-        Assert.NotNull(sp.GetRequiredService<IRouteMatcher>());
-        Assert.NotNull(sp.GetRequiredService<IHttpEndpointRoutesResolver>());
-        Assert.Contains(sp.GetServices<IStartupTask>(), t => t is UpdateRouteTableStartupTask);
     }
 }

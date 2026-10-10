@@ -29,7 +29,7 @@ internal static class DotnetElsa
     private static readonly string RepoRoot = FindRepoRoot();
 
     /// <summary>The tool's own build output, which is also where its worker sits — the shipped layout.</summary>
-    public static string ToolAssembly { get; } = Path.Join(RepoRoot, "src", "essentials", "Cli", "bin", Configuration, "net10.0", "Elsa.Cli.dll");
+    public static string ToolAssembly { get; } = Path.Join(RepoRoot, "src", "essentials", "Cli", "Elsa.Cli", "bin", Configuration, "net10.0", "Elsa.Cli.dll");
 
     /// <summary>A fixture host's build output directory.</summary>
     public static string Host(string fixture) =>

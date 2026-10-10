@@ -1,0 +1,311 @@
+diff --git a/tests/essentials/Activities/Runtime/Tests/ReplaySafeFusionGuardrailTests.cs b/tests/essentials/Activities/Runtime/Tests/ReplaySafeFusionGuardrailTests.cs
+index 3096685e4..10f3b015a 100644
+--- a/tests/essentials/Activities/Runtime/Tests/ReplaySafeFusionGuardrailTests.cs
++++ b/tests/essentials/Activities/Runtime/Tests/ReplaySafeFusionGuardrailTests.cs
+@@ -7,12 +7,15 @@ using Elsa.Primitives.Models;
+ using Elsa.Workflows.Runtime.Core.Contracts;
+ using Elsa.Workflows.Runtime.Core.Diagnostics;
+ using Elsa.Workflows.Runtime.Core.Models;
++using Elsa.Workflows.Runtime.Contracts;
+ using Elsa.Workflows.Runtime.Services.Checkpoints;
++using Elsa.Workflows.Runtime.Services.Coalescing;
+ using Elsa.Workflows.Runtime.Services.Values;
+ using Microsoft.Extensions.DependencyInjection;
+ using Microsoft.Extensions.DependencyInjection.Extensions;
+ using Microsoft.Extensions.Time.Testing;
+ using Xunit;
++using Xunit.Abstractions;
+ using FlowchartActivity = Elsa.Activities.Flowchart.Activities.Flowchart;
+
+ namespace Elsa.Activities.Runtime.Tests;
+@@ -33,13 +36,16 @@ public sealed class ReplaySafeFusionGuardrailTests
+     private static readonly DateTimeOffset FixedNow = new(2026, 7, 22, 12, 0, 0, TimeSpan.Zero);
+     private static readonly string[] ActivityExecutionIds =
+         Enumerable.Range(0, 24).Select(index => $"actexec-{index}").ToArray();
++    private readonly ITestOutputHelper _output;
++
++    public ReplaySafeFusionGuardrailTests(ITestOutputHelper output) => _output = output;
+
+     // Shape (a): a straight-line hot loop of ReplaySafe leaves. Fusion must engage on every leaf and commit
+     // byte-identical durable state.
+     [Fact]
+     public async Task StraightLineReplaySafeHotLoop_EnabledVersusDisabled_IsByteIdentical_AndFusionEngages()
+     {
+-        var enabled = await DriveAsync(BuildReplaySafeHotLoop, fusionEnabled: true);
++        var (enabled, probe) = await DriveWithMaterializationProbeAsync(BuildReplaySafeHotLoop);
+         var disabled = await DriveAsync(BuildReplaySafeHotLoop, fusionEnabled: false);
+
+         Assert.True(enabled.Completed);
+@@ -60,6 +66,30 @@ public sealed class ReplaySafeFusionGuardrailTests
+         Assert.True(enabled.InlineCascadeDispatches > 0,
+             $"Expected the D2 pump to dispatch cascade items inline in the ON run, saw {enabled.InlineCascadeDispatches}.");
+         Assert.Equal(0, disabled.InlineCascadeDispatches);
++
++        var observations = probe.Materializations;
++        var repeatedWithinUnchangedSegment = observations
++            .Zip(observations.Skip(1))
++            .Any(pair => pair.Second.SessionId is not null &&
++                         pair.First.SessionId == pair.Second.SessionId &&
++                         pair.First.SessionActive && pair.Second.SessionActive &&
++                         pair.First.InnerCommitCount == pair.Second.InnerCommitCount &&
++                         pair.Second.PageReadsSincePriorMaterialization > 0 &&
++                         pair.Second.PageReadSessionIds.All(id => id == pair.Second.SessionId) &&
++                         pair.Second.LogicalDurableChangesSincePriorMaterialization == 0 &&
++                         pair.Second.DirectDurableWritesSincePriorMaterialization == 0);
++
++        _output.WriteLine(JsonSerializer.Serialize(new
++        {
++            probe.InnerPageReadCount,
++            probe.InnerPageReadCallerChains,
++            probe.DirectDurableWriteCount,
++            probe.LogicalDurableChangeItemCount,
++            materializations = observations
++        }));
++        Assert.True(repeatedWithinUnchangedSegment,
++            "Expected two adjacent CLR input materializations to read durable pages in the same active coalescing session, " +
++            "without an inner checkpoint flush or durable-value mutation between them.");
+     }
+
+     // D1-only variant: the completion-cascade dial OFF (D1 fused schedule→start→invoke, discrete cascade) must also be
+@@ -322,6 +352,241 @@ public sealed class ReplaySafeFusionGuardrailTests
+             WorkflowOutputs: await ProjectWorkflowOutputsAsync(harness.Services));
+     }
+
++    private static async Task<(RunFingerprint Fingerprint, MaterializationProbe Probe)> DriveWithMaterializationProbeAsync(
++        Func<WorkflowExecutable> buildExecutable)
++    {
++        var probe = new MaterializationProbe();
++        var fusionOptions = new RuntimeReplaySafeFusionOptions { Enabled = true };
++        await using var harness = WorkflowExecutionHarness.Create()
++            .WithFeature(services => new ActivitiesFlowchartFeature().ConfigureServices(services))
++            .ConfigureServices(services =>
++            {
++                services.AddSingleton(probe);
++                DecorateService<IDurableValueStateStore>(services, (provider, inner) =>
++                    new CountingDurableValueStateStore(
++                        inner,
++                        probe,
++                        provider.GetRequiredService<IRuntimeCoalescingSessionAccessor>()));
++            })
++            .WithCoalescing()
++            .ConfigureServices(services =>
++            {
++                services.AddSingleton(fusionOptions);
++                services.Replace(ServiceDescriptor.Singleton<TimeProvider>(new FakeTimeProvider(FixedNow)));
++                DecorateService<IRuntimeActivityInputMaterializer>(services, (provider, inner) =>
++                    new ProbedRuntimeActivityInputMaterializer(
++                        inner,
++                        probe,
++                        provider.GetRequiredService<IRuntimeCoalescingSessionAccessor>(),
++                        provider.GetRequiredService<InMemoryRuntimeCheckpointCommitStore>()));
++                DecorateService<IRuntimeCheckpointCommitStore>(services, (provider, inner) =>
++                    new ProbedRuntimeCheckpointCommitStore(
++                        inner,
++                        probe,
++                        provider.GetRequiredService<IRuntimeCoalescingSessionAccessor>()));
++            })
++            .Build(ActivityExecutionIds);
++
++        var run = await harness.RunAsync(buildExecutable());
++        var commitStore = harness.Services.GetRequiredService<InMemoryRuntimeCheckpointCommitStore>();
++        var diagnostics = harness.Services.GetRequiredService<RuntimeSchedulerDispatchDiagnostics>();
++        var fingerprint = new RunFingerprint(
++            Completed: run.WorkflowState?.Status == WorkflowExecutionStatus.Completed,
++            CommitFingerprint: FingerprintCommits(commitStore.ListCommits()),
++            StateFingerprint: FingerprintStates(run),
++            FusedSpans: diagnostics.FusedSpans,
++            Dispatches: diagnostics.Dispatches,
++            InlineCascadeDispatches: diagnostics.InlineCascadeDispatches,
++            CascadeJoinFallbacks: diagnostics.CascadeJoinFallbacks,
++            WorkflowOutputs: await ProjectWorkflowOutputsAsync(harness.Services));
++
++        return (fingerprint, probe);
++    }
++
++    private static void DecorateService<TService>(
++        IServiceCollection services,
++        Func<IServiceProvider, TService, TService> decorate)
++        where TService : class
++    {
++        var descriptor = services.Last(item => item.ServiceType == typeof(TService));
++        services.Remove(descriptor);
++        services.Add(ServiceDescriptor.Describe(
++            typeof(TService),
++            provider => decorate(provider, (TService)CreateDescriptorInstance(descriptor, provider)),
++            descriptor.Lifetime));
++    }
++
++    private static object CreateDescriptorInstance(ServiceDescriptor descriptor, IServiceProvider provider)
++    {
++        if (descriptor.ImplementationInstance is { } instance)
++            return instance;
++        if (descriptor.ImplementationFactory is { } factory)
++            return factory(provider);
++        return ActivatorUtilities.CreateInstance(provider, descriptor.ImplementationType!);
++    }
++
++    private sealed class CountingDurableValueStateStore(
++        IDurableValueStateStore inner,
++        MaterializationProbe probe,
++        IRuntimeCoalescingSessionAccessor sessionAccessor) : IDurableValueStateStore
++    {
++        public ValueTask<DurableValueState> SaveAsync(DurableValueState state, CancellationToken cancellationToken = default)
++        {
++            probe.RecordDirectDurableWrite();
++            return inner.SaveAsync(state, cancellationToken);
++        }
++
++        public ValueTask<bool> DeleteAsync(string workflowExecutionId, string durableValueId, CancellationToken cancellationToken = default)
++        {
++            probe.RecordDirectDurableWrite();
++            return inner.DeleteAsync(workflowExecutionId, durableValueId, cancellationToken);
++        }
++
++        public ValueTask<DurableValueState?> FindAsync(string workflowExecutionId, string durableValueId, CancellationToken cancellationToken = default) =>
++            inner.FindAsync(workflowExecutionId, durableValueId, cancellationToken);
++
++        public ValueTask<RuntimeStorePage<DurableValueState>> ListPageAsync(
++            DurableValueStatePageQuery query,
++            CancellationToken cancellationToken = default)
++        {
++            var callers = string.Join(" <- ", new System.Diagnostics.StackTrace(1, false)
++                .GetFrames()?
++                .Select(frame => frame.GetMethod() is { } method
++                    ? $"{method.DeclaringType?.Name}.{method.Name}"
++                    : "<unknown>")
++                .Take(20) ?? []);
++            probe.RecordInnerPageRead(sessionAccessor.Current, callers);
++            return inner.ListPageAsync(query, cancellationToken);
++        }
++    }
++
++    private sealed class ProbedRuntimeActivityInputMaterializer(
++        IRuntimeActivityInputMaterializer inner,
++        MaterializationProbe probe,
++        IRuntimeCoalescingSessionAccessor sessionAccessor,
++        InMemoryRuntimeCheckpointCommitStore commitStore) : IRuntimeActivityInputMaterializer
++    {
++        public ValueTask<ActivityInputSnapshot> MaterializeSnapshotAsync(
++            ExecutableNode node,
++            string invocationId,
++            RuntimeInputBindingResolutionContext resolutionContext,
++            DateTimeOffset materializedAt,
++            CancellationToken cancellationToken = default)
++        {
++            probe.RecordMaterialization(invocationId, sessionAccessor.Current, commitStore.ListCommits().Count);
++            return inner.MaterializeSnapshotAsync(node, invocationId, resolutionContext, materializedAt, cancellationToken);
++        }
++    }
++
++    private sealed class ProbedRuntimeCheckpointCommitStore(
++        IRuntimeCheckpointCommitStore inner,
++        MaterializationProbe probe,
++        IRuntimeCoalescingSessionAccessor sessionAccessor) : IRuntimeCheckpointCommitStore
++    {
++        public ValueTask<RuntimeCheckpointCommitStoreResult> CommitAsync(
++            RuntimeCheckpointCommit commit,
++            RuntimeCheckpointPersistenceDecision decision,
++            CancellationToken cancellationToken = default)
++        {
++            probe.RecordLogicalCommit(commit.StateChanges.DurableValues.Count, sessionAccessor.Current);
++            return inner.CommitAsync(commit, decision, cancellationToken);
++        }
++    }
++
++    private sealed class MaterializationProbe
++    {
++        private readonly object _sync = new();
++        private readonly Dictionary<RuntimeCoalescingSession, int> _sessionIds = new(ReferenceEqualityComparer.Instance);
++        private readonly List<PageRead> _pageReads = [];
++        private readonly List<MaterializationObservation> _materializations = [];
++        private int _nextSessionId;
++        private int _lastPageReadCount;
++        private int _lastDirectDurableWriteCount;
++        private int _lastLogicalDurableChangeItemCount;
++
++        public int InnerPageReadCount { get { lock (_sync) return _pageReads.Count; } }
++        public IReadOnlyList<string> InnerPageReadCallerChains
++        {
++            get { lock (_sync) return _pageReads.Select(read => read.Callers).Distinct().ToArray(); }
++        }
++        public int DirectDurableWriteCount { get; private set; }
++        public int LogicalDurableChangeItemCount { get; private set; }
++        public IReadOnlyList<MaterializationObservation> Materializations
++        {
++            get { lock (_sync) return _materializations.ToArray(); }
++        }
++
++        public void RecordInnerPageRead(RuntimeCoalescingSession? session, string callers)
++        {
++            lock (_sync)
++                _pageReads.Add(new PageRead(GetSessionId(session), callers));
++        }
++
++        public void RecordDirectDurableWrite()
++        {
++            lock (_sync)
++                DirectDurableWriteCount++;
++        }
++
++        public void RecordLogicalCommit(int durableChangeCount, RuntimeCoalescingSession? session)
++        {
++            if (durableChangeCount == 0)
++                return;
++            lock (_sync)
++                LogicalDurableChangeItemCount += durableChangeCount;
++        }
++
++        public void RecordMaterialization(string invocationId, RuntimeCoalescingSession? session, int innerCommitCount)
++        {
++            lock (_sync)
++            {
++                var pageWindow = _pageReads.Skip(_lastPageReadCount).ToArray();
++                var sessionId = GetSessionId(session);
++                _materializations.Add(new MaterializationObservation(
++                    invocationId,
++                    sessionId,
++                    SessionActive: session?.IsActive == true,
++                    HopCount: session?.HopCount ?? -1,
++                    InnerCommitCount: innerCommitCount,
++                    StagedDurableUpserts: session?.GetDurableValueUpserts().Count ?? 0,
++                    StagedDurableDeletes: session?.GetDurableValueTombstones().Count ?? 0,
++                    PageReadsSincePriorMaterialization: pageWindow.Length,
++                    PageReadSessionIds: pageWindow.Select(read => read.SessionId).ToArray(),
++                    LogicalDurableChangesSincePriorMaterialization: LogicalDurableChangeItemCount - _lastLogicalDurableChangeItemCount,
++                    DirectDurableWritesSincePriorMaterialization: DirectDurableWriteCount - _lastDirectDurableWriteCount));
++                _lastPageReadCount = _pageReads.Count;
++                _lastLogicalDurableChangeItemCount = LogicalDurableChangeItemCount;
++                _lastDirectDurableWriteCount = DirectDurableWriteCount;
++            }
++        }
++
++        private int? GetSessionId(RuntimeCoalescingSession? session)
++        {
++            if (session is null)
++                return null;
++            if (_sessionIds.TryGetValue(session, out var id))
++                return id;
++            id = ++_nextSessionId;
++            _sessionIds.Add(session, id);
++            return id;
++        }
++
++        private sealed record PageRead(int? SessionId, string Callers);
++    }
++
++    private sealed record MaterializationObservation(
++        string InvocationId,
++        int? SessionId,
++        bool SessionActive,
++        int HopCount,
++        int InnerCommitCount,
++        int StagedDurableUpserts,
++        int StagedDurableDeletes,
++        int PageReadsSincePriorMaterialization,
++        IReadOnlyList<int?> PageReadSessionIds,
++        int LogicalDurableChangesSincePriorMaterialization,
++        int DirectDurableWritesSincePriorMaterialization);
++
+     // The named workflow outputs as the instance read API would surface them. Read through the production projection
+     // (RuntimeWorkflowOutputStateProjection) rather than raw durable values, so a fused SetOutput is asserted on the
+     // surface a caller actually observes. Under the harness's default capture policy an output projects as a bounded

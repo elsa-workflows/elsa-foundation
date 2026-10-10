@@ -34,7 +34,7 @@ Use this table as the current setup registry. Add new rows here when a new local
 
 | Preference | Local file | Ask when missing | Committed catalog/template |
 |---|---|---|---|
-| Git operating model | `.agent-prefs/git-operating-model.md` | Before pushing, opening pull requests, changing remotes, or choosing a branch strategy. | [git-operating-models.md](git-operating-models.md) |
+| Local Git details (optional) | `.agent-prefs/git-operating-model.md` | Do not ask for a model selection. Maintainer work uses organization branches; contributors without write access use forks. Missing local details do not gate publication. | [git-operating-models.md](git-operating-models.md) |
 | Session execution model | `.agent-prefs/session-execution-model.md` | Before substantial planning, substantial implementation, or multi-session/fresh-agent workflows. | This file |
 | Map script shell model | `.agent-prefs/map-script-shell.md` | Before refreshing generated maps when both PowerShell and Bash scripts are available. | This file |
 
@@ -42,7 +42,7 @@ Use this table as the current setup registry. Add new rows here when a new local
 
 If `.agent-prefs/` contains no preference files other than `.gitkeep`, run a short setup before substantial planning or multi-session work.
 
-Use [Expected Preference Files](#expected-preference-files) to decide which preferences exist. Ask only for preferences needed by the current workflow.
+Use [Expected Preference Files](#expected-preference-files) to decide which preferences exist. Ask only for personal preferences needed by the current workflow. Git publication follows the role-based paths in [Git operating models](git-operating-models.md); missing preferences do not gate publication.
 
 Write only the files the user selects. It is valid for a user to skip a preference and decide per session.
 

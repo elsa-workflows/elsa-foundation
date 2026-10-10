@@ -76,11 +76,9 @@ It applies when the feature is enabled **and** when CShells reloads the shell
 (`IShellInitializer`); a plain host uses the same instance as `IHostedService`. A shell that needs a
 different policy from its neighbours sets that key under its own `Configuration` node.
 
-> **Behaviour change (#1877).** The Secrets-only `SecretsEntityFrameworkCore:MigratePolicy` setting
-> is retired. A shell that still sets it to a non-null value **fails to start**, with a message
-> naming the host-wide key; move the value there. The property is kept for one release purely so
-> that refusal is possible — CShells' binder never reads a configuration key that has no matching
-> property, so deleting it would make a still-configured value silently invisible.
+> **Behaviour change (#1877, #2566).** The Secrets-only `SecretsEntityFrameworkCore:MigratePolicy`
+> setting is gone. CShells' binder never reads a configuration key that has no matching property, so a
+> shell that still sets it is not refused: the value is ignored. Set the host-wide key instead.
 
 ## Schema
 

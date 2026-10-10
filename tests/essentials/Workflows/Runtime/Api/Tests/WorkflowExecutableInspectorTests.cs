@@ -46,200 +46,15 @@ public sealed class WorkflowExecutableInspectorTests
     }
 
     [Fact]
-    public void Source_kind_is_canonical_and_source_type_is_a_version_one_compatibility_alias()
+    public void Source_kind_is_the_only_source_discriminator_on_the_wire()
     {
-        var responseType = typeof(Models.ExecutableSourceReferenceView);
-        var canonical = responseType.GetProperty(nameof(Models.ExecutableSourceReferenceView.SourceKind));
-        var compatibilityAlias = responseType.GetProperty("SourceType");
-
-        Assert.NotNull(canonical);
-        Assert.NotNull(compatibilityAlias);
-        var versionOneConstructor = Assert.Single(
-            responseType.GetConstructors(),
-            constructor => constructor.GetParameters().Any(parameter => parameter.Name == "SourceType"));
-        var versionOneParameters = versionOneConstructor.GetParameters();
-        Assert.Equal(
-            [
-                "SourceReferenceId", "ArtifactId", "Scope", "SourceType", "SourceKind", "SourceId", "SourceVersion",
-                "DefinitionId", "DefinitionVersionId", "ArtifactVersion", "PublicationId", "SlotId", "CreatedAt",
-                "PublishedAt", "ExpiresAt", "DeletedAt", "DeletedReason", "Live"
-            ],
-            versionOneParameters.Select(parameter => parameter.Name));
-        Assert.Equal(
-            [
-                typeof(string), typeof(string), typeof(string), typeof(string), typeof(string), typeof(string), typeof(string),
-                typeof(string), typeof(string), typeof(string), typeof(string), typeof(string), typeof(DateTimeOffset),
-                typeof(DateTimeOffset?), typeof(DateTimeOffset?), typeof(DateTimeOffset?), typeof(string), typeof(bool)
-            ],
-            versionOneParameters.Select(parameter => parameter.ParameterType));
-        Assert.NotNull(compatibilityAlias!.SetMethod);
-        Assert.True(compatibilityAlias.SetMethod!.ReturnParameter.GetRequiredCustomModifiers().Contains(typeof(System.Runtime.CompilerServices.IsExternalInit)));
-        var obsolete = Assert.Single(compatibilityAlias!.GetCustomAttributes<ObsoleteAttribute>());
-        Assert.False(obsolete.IsError);
-        Assert.Contains("Runtime API v2", obsolete.Message, StringComparison.Ordinal);
-
         var view = Models.ExecutableSourceReferenceView.From(
             Reference("reference-contract", WorkflowExecutableReferenceScope.Published, _now, "1.0.0"),
             _now);
         var json = JsonSerializer.SerializeToElement(view, new JsonSerializerOptions(JsonSerializerDefaults.Web));
 
         Assert.Equal("WorkflowDefinitionVersion", json.GetProperty("sourceKind").GetString());
-        Assert.Equal(json.GetProperty("sourceKind").GetString(), json.GetProperty("sourceType").GetString());
-    }
-
-    [Fact]
-    public void Version_one_constructor_promotes_source_type_when_source_kind_is_absent()
-    {
-        var view = CreateVersionOneView("WorkflowDefinitionVersion", null);
-
-        Assert.Equal("WorkflowDefinitionVersion", view.SourceKind);
-#pragma warning disable CS0618 // The obsolete property is the compatibility contract under test.
-        Assert.Equal(view.SourceKind, view.SourceType);
-#pragma warning restore CS0618
-        var json = JsonSerializer.SerializeToElement(view, new JsonSerializerOptions(JsonSerializerDefaults.Web));
-        Assert.Equal(json.GetProperty("sourceKind").GetString(), json.GetProperty("sourceType").GetString());
-    }
-
-    [Fact]
-    public void Version_one_source_type_initializer_promotes_the_canonical_source_kind()
-    {
-#pragma warning disable CS0618 // The obsolete init accessor is the compatibility contract under test.
-        var view = new Models.ExecutableSourceReferenceView(
-            SourceReferenceId: "reference-init",
-            ArtifactId: "artifact-init",
-            Scope: "Published",
-            SourceKind: null,
-            SourceId: "definition-version-init",
-            SourceVersion: "1.0.0",
-            DefinitionId: "definition-init",
-            DefinitionVersionId: "definition-version-init",
-            ArtifactVersion: "1.0.0",
-            PublicationId: null,
-            SlotId: null,
-            CreatedAt: _now,
-            PublishedAt: _now,
-            ExpiresAt: null,
-            DeletedAt: null,
-            DeletedReason: null,
-            Live: true)
-        {
-            SourceType = "WorkflowDefinitionVersion"
-        };
-#pragma warning restore CS0618
-
-        Assert.Equal("WorkflowDefinitionVersion", view.SourceKind);
-        var json = JsonSerializer.SerializeToElement(view, new JsonSerializerOptions(JsonSerializerDefaults.Web));
-        Assert.Equal(json.GetProperty("sourceKind").GetString(), json.GetProperty("sourceType").GetString());
-    }
-
-    [Fact]
-    public void Version_one_alias_rejects_values_that_diverge_from_source_kind()
-    {
-        Assert.Throws<ArgumentException>(() => CreateVersionOneView("LegacySource", "CanonicalSource"));
-        var canonical = Models.ExecutableSourceReferenceView.From(
-            Reference("reference-divergent", WorkflowExecutableReferenceScope.Published, _now, "1.0.0"),
-            _now);
-
-#pragma warning disable CS0618 // The obsolete init accessor is the compatibility contract under test.
-        Assert.Throws<ArgumentException>(() => canonical with { SourceType = "LegacySource" });
-#pragma warning restore CS0618
-    }
-
-    [Fact]
-    public void Version_one_json_promotes_source_type_when_source_kind_is_absent()
-    {
-        const string payload = """
-                               {
-                                 "sourceReferenceId": "reference-json-v1",
-                                 "artifactId": "artifact-json-v1",
-                                 "scope": "Published",
-                                 "sourceType": "WorkflowDefinitionVersion",
-                                 "definitionId": "definition-json-v1",
-                                 "definitionVersionId": "definition-version-json-v1",
-                                 "artifactVersion": "1.0.0",
-                                 "createdAt": "2026-07-13T12:00:00+00:00",
-                                 "live": true
-                               }
-                               """;
-
-        var view = JsonSerializer.Deserialize<Models.ExecutableSourceReferenceView>(
-            payload,
-            new JsonSerializerOptions(JsonSerializerDefaults.Web));
-
-        Assert.NotNull(view);
-        Assert.Equal("WorkflowDefinitionVersion", view.SourceKind);
-        var json = JsonSerializer.SerializeToElement(view, new JsonSerializerOptions(JsonSerializerDefaults.Web));
-        Assert.Equal(json.GetProperty("sourceKind").GetString(), json.GetProperty("sourceType").GetString());
-    }
-
-    [Fact]
-    public void Version_one_deconstruction_preserves_the_exact_contract_and_equal_aliases()
-    {
-        var responseType = typeof(Models.ExecutableSourceReferenceView);
-        var deconstruct = Assert.Single(
-            responseType.GetMethods(BindingFlags.Public | BindingFlags.Instance),
-            method => method.Name == "Deconstruct" && method.GetParameters().Length == 18);
-        var parameters = deconstruct.GetParameters();
-        Assert.Equal(
-            [
-                "SourceReferenceId", "ArtifactId", "Scope", "SourceType", "SourceKind", "SourceId", "SourceVersion",
-                "DefinitionId", "DefinitionVersionId", "ArtifactVersion", "PublicationId", "SlotId", "CreatedAt",
-                "PublishedAt", "ExpiresAt", "DeletedAt", "DeletedReason", "Live"
-            ],
-            parameters.Select(parameter => parameter.Name));
-        Assert.Equal(
-            [
-                typeof(string), typeof(string), typeof(string), typeof(string), typeof(string), typeof(string), typeof(string),
-                typeof(string), typeof(string), typeof(string), typeof(string), typeof(string), typeof(DateTimeOffset),
-                typeof(DateTimeOffset?), typeof(DateTimeOffset?), typeof(DateTimeOffset?), typeof(string), typeof(bool)
-            ],
-            parameters.Select(parameter => parameter.ParameterType.GetElementType()));
-        Assert.All(parameters, parameter => Assert.True(parameter.IsOut));
-        var obsolete = Assert.Single(deconstruct.GetCustomAttributes<ObsoleteAttribute>());
-        Assert.False(obsolete.IsError);
-        Assert.Contains("Runtime API v2", obsolete.Message, StringComparison.Ordinal);
-
-        var view = CreateVersionOneView("WorkflowDefinitionVersion", null);
-#pragma warning disable CS0618 // The obsolete v1 deconstructor is the source compatibility contract under test.
-        var (
-            sourceReferenceId,
-            artifactId,
-            scope,
-            sourceType,
-            sourceKind,
-            sourceId,
-            sourceVersion,
-            definitionId,
-            definitionVersionId,
-            artifactVersion,
-            activationId,
-            slotId,
-            createdAt,
-            publishedAt,
-            expiresAt,
-            deletedAt,
-            deletedReason,
-            live) = view;
-#pragma warning restore CS0618
-
-        Assert.Equal("reference-v1", sourceReferenceId);
-        Assert.Equal("artifact-v1", artifactId);
-        Assert.Equal("Published", scope);
-        Assert.Equal("WorkflowDefinitionVersion", sourceType);
-        Assert.Equal(sourceKind, sourceType);
-        Assert.Equal("definition-version-v1", sourceId);
-        Assert.Equal("1.0.0", sourceVersion);
-        Assert.Equal("definition-v1", definitionId);
-        Assert.Equal("definition-version-v1", definitionVersionId);
-        Assert.Equal("1.0.0", artifactVersion);
-        Assert.Null(activationId);
-        Assert.Null(slotId);
-        Assert.Equal(_now, createdAt);
-        Assert.Equal(_now, publishedAt);
-        Assert.Null(expiresAt);
-        Assert.Null(deletedAt);
-        Assert.Null(deletedReason);
-        Assert.True(live);
+        Assert.False(json.TryGetProperty("sourceType", out _));
     }
 
     [Theory]
@@ -480,7 +295,7 @@ public sealed class WorkflowExecutableInspectorTests
             AuthoredInputs =
             [
                 new WorkflowExecutableAuthoredInputRecord(
-                    "executable-root",
+                    "root",
                     "text-input-key",
                     "JavaScript",
                     JsonSerializer.SerializeToElement("return variables.orderId;"))
@@ -534,6 +349,136 @@ public sealed class WorkflowExecutableInspectorTests
         Assert.Equal("redacted", Assert.Single(sources.CompiledInputs).AccessState);
         Assert.Null(Assert.Single(sources.CompiledInputs).Binding.LiteralValue);
         Assert.DoesNotContain("must-not-leak", json, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// A secret reference is not a value (spec 188, T067), so the input-sources view shows a secret read's reference as its
+    /// summary and in <c>secret</c>, although its policy keeps every other source detail out. The structural detail view
+    /// keeps every source detail out, the reference included.
+    /// </summary>
+    [Fact]
+    public async Task InputSourcesShowASecretReadByItsReferenceAndNeverAValue()
+    {
+        var reference = new RuntimeSecretReference("payments.api-key", "text", "billing");
+        var binding = new RuntimeInputBinding(
+            "api-key",
+            StringType,
+            new ValueProtectionPolicy(DurableValueLifecycle.Instance, DurableValueStorage.Inline, isSensitive: true, requiresEncryption: true),
+            RuntimeInputBindingSource.SecretRead,
+            conversionPlan: ValueConversionPlan.Identity(StringType, ValueRepresentation.TextValue),
+            secret: reference);
+        await _executableStore.SaveAsync(Executable(_now, inputBindings: new Dictionary<string, RuntimeInputBinding> { ["api-key"] = binding }));
+        await _referenceStore.SaveAsync(Reference("source-secret", WorkflowExecutableReferenceScope.Published, _now, "1.0.0"));
+
+        var compiled = Assert.Single((await _inspector.GetInputSourcesAsync("artifact-1", "source-secret"))!.CompiledInputs);
+        var structural = Assert.Single((await _inspector.GetAsync("artifact-1"))!.RootActivity.InputBindings);
+
+        Assert.Equal("redacted", compiled.AccessState);
+        Assert.Equal(nameof(RuntimeInputBindingSource.SecretRead), compiled.Binding.Source);
+        Assert.Equal("payments.api-key", compiled.Binding.Summary);
+        Assert.Equal(reference, compiled.Binding.Secret);
+        Assert.True(compiled.Binding.IsSensitive);
+        Assert.Null(compiled.Binding.LiteralValue);
+        Assert.Null(compiled.Binding.ConversionPlan);
+        Assert.Null(structural.Summary);
+        Assert.Null(structural.Secret);
+    }
+
+    [Fact]
+    public async Task InputSourcesSummarizeASecretReadWhosePolicyIsNotSensitiveByItsReference()
+    {
+        // Publication always compiles a secret read as sensitive; a hand-built or imported artifact can carry a lower
+        // policy (research R13). Its source details are then shown, and its summary is still the reference.
+        var reference = new RuntimeSecretReference("payments.api-key");
+        var binding = new RuntimeInputBinding(
+            "api-key",
+            StringType,
+            ValueProtectionPolicy.InstanceInline,
+            RuntimeInputBindingSource.SecretRead,
+            secret: reference);
+        await _executableStore.SaveAsync(Executable(_now, inputBindings: new Dictionary<string, RuntimeInputBinding> { ["api-key"] = binding }));
+        await _referenceStore.SaveAsync(Reference("source-lowered-secret", WorkflowExecutableReferenceScope.Published, _now, "1.0.0"));
+
+        var compiled = Assert.Single((await _inspector.GetInputSourcesAsync("artifact-1", "source-lowered-secret"))!.CompiledInputs);
+
+        Assert.Equal("allowed", compiled.AccessState);
+        Assert.Equal("payments.api-key", compiled.Binding.Summary);
+        Assert.Equal(reference, compiled.Binding.Secret);
+    }
+
+    /// <summary>
+    /// Studio prints a compiled binding's summary verbatim, so a binding whose policy marks its value sensitive or as
+    /// requiring encryption carries no value in it, nor anywhere else on the wire (spec 188, T070).
+    /// </summary>
+    [Theory]
+    [InlineData(true, false)]
+    [InlineData(false, true)]
+    [InlineData(true, true)]
+    public async Task InputSourcesKeepTheValueOutOfABindingWhosePolicyIsSensitiveOrRequiresEncryption(bool isSensitive, bool requiresEncryption)
+    {
+        var sentinel = $"plain{Guid.NewGuid():N}";
+        var policy = new ValueProtectionPolicy(DurableValueLifecycle.Instance, DurableValueStorage.Inline, isSensitive, requiresEncryption);
+        var binding = new RuntimeInputBinding(
+            "token",
+            StringType,
+            policy,
+            RuntimeInputBindingSource.Literal,
+            literal: ValueEnvelope.Inline(StringType, JsonSerializer.SerializeToElement(sentinel), policy));
+        await _executableStore.SaveAsync(Executable(_now, inputBindings: new Dictionary<string, RuntimeInputBinding> { ["token"] = binding }));
+        await _referenceStore.SaveAsync(Reference("source-protected", WorkflowExecutableReferenceScope.Published, _now, "1.0.0"));
+
+        var sources = await _inspector.GetInputSourcesAsync("artifact-1", "source-protected");
+        var compiled = Assert.Single(sources!.CompiledInputs);
+
+        Assert.Equal("redacted", compiled.AccessState);
+        Assert.True(compiled.Binding.IsSensitive);
+        Assert.Null(compiled.Binding.Summary);
+        Assert.Null(compiled.Binding.LiteralValue);
+        Assert.DoesNotContain(sentinel, JsonSerializer.Serialize(sources, WebJson), StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// The authored record carries only the author's own sensitivity flag; an activity's declaration reaches the compiled
+    /// binding and the pinned contract (spec 188, found in slice 5). The authored-inputs view redacts by those too, and
+    /// redacts an input the executable holds neither for.
+    /// </summary>
+    [Theory]
+    [InlineData("declared on the compiled binding")]
+    [InlineData("declared on the pinned contract, not on the binding")]
+    [InlineData("no compiled input")]
+    public async Task InputSourcesRedactAnAuthoredValueByTheEffectivePolicyNotOnlyItsAuthoredFlag(string row)
+    {
+        var sentinel = $"plain{Guid.NewGuid():N}";
+        await _executableStore.SaveAsync(Executable(_now, AuthoredRedactionRoots[row]()));
+        await _referenceStore.SaveAsync(Reference("source-authored", WorkflowExecutableReferenceScope.Published, _now, "1.0.0") with
+        {
+            AuthoredInputs = [new WorkflowExecutableAuthoredInputRecord("root", "token", "Literal", JsonSerializer.SerializeToElement(sentinel))]
+        });
+
+        var sources = await _inspector.GetInputSourcesAsync("artifact-1", "source-authored");
+        var authored = Assert.Single(sources!.AuthoredInputs);
+
+        Assert.Equal("redacted", authored.AccessState);
+        Assert.True(authored.IsSensitive);
+        Assert.Null(authored.Value);
+        Assert.DoesNotContain(sentinel, JsonSerializer.Serialize(sources, WebJson), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task InputSourcesShowAnAuthoredValueOfAReusableActivityPlacedAsTheRootByItsAuthoredNodeId()
+    {
+        // A reusable activity placed as the workflow root keeps a generated executable id; its authored id still matches.
+        var root = Node("placed-1", "root", new Dictionary<string, RuntimeInputBinding> { ["token"] = Literal("token", "visible", ValueProtectionPolicy.InstanceInline) });
+        await _executableStore.SaveAsync(Executable(_now, root));
+        await _referenceStore.SaveAsync(Reference("source-placed", WorkflowExecutableReferenceScope.Published, _now, "1.0.0") with
+        {
+            AuthoredInputs = [new WorkflowExecutableAuthoredInputRecord("root", "token", "Literal", JsonSerializer.SerializeToElement("visible"))]
+        });
+
+        var authored = Assert.Single((await _inspector.GetInputSourcesAsync("artifact-1", "source-placed"))!.AuthoredInputs);
+
+        Assert.Equal("allowed", authored.AccessState);
+        Assert.Equal("visible", authored.Value!.Value.GetString());
     }
 
     [Fact]
@@ -658,6 +603,144 @@ public sealed class WorkflowExecutableInspectorTests
         Assert.Equal("Approved", connection.Source.Port);
         Assert.Equal("send-email", connection.Target.NodeId);
         Assert.Equal("In", connection.Target.Port);
+        Assert.Null(detail.RootActivity.BpmnStructure);
+        var json = JsonSerializer.SerializeToElement(detail, new JsonSerializerOptions(JsonSerializerDefaults.Web));
+        Assert.Equal(JsonValueKind.Null, json.GetProperty("rootActivity").GetProperty("bpmnStructure").ValueKind);
+    }
+
+    [Fact]
+    public async Task Detail_projects_only_compact_bpmn_elements_and_sequence_flows()
+    {
+        var structure = new ExecutableActivityStructure(
+            "elsa.bpmn.structure",
+            "1.0.0",
+            JsonSerializer.SerializeToElement(new
+            {
+                elements = new object[]
+                {
+                    new { elementId = "start", elementType = "startEvent", name = "Begin", secret = "element-secret" },
+                    new { elementId = "task", elementType = "task", childNodeId = "writer", name = "Write order", properties = new { expression = "element-payload-secret" } },
+                    new { elementId = "end", elementType = "endEvent", eventDefinitions = new[] { "event-secret" } }
+                },
+                sequenceFlows = new object[]
+                {
+                    new { flowId = "start-to-task", sourceRef = "start", targetRef = "task", name = "continue", conditionOutcome = "Continue", isDefault = false, conditionExpression = "flow-secret" },
+                    new { flowId = "task-to-end", sourceRef = "task", targetRef = "end", isDefault = true }
+                },
+                variables = new[] { new { name = "secret-variable" } },
+                diagram = new { bounds = "diagram-secret" },
+                rawXml = "raw-xml-secret"
+            }));
+        var writer = new ExecutableNode(
+            "writer",
+            "authored-writer",
+            "Elsa.Activities.Primitives.Activities.WriteLine",
+            "1.0.0",
+            new RuntimeActivityDescriptor("Test", RuntimeActivityDescriptor.InitialSchemaVersion, JsonSerializer.SerializeToElement(new { })),
+            new Dictionary<string, RuntimeInputBinding>(),
+            new Dictionary<string, string>());
+        await _executableStore.SaveAsync(Executable(
+            _now,
+            structure: structure,
+            childSlots: [new ExecutableChildSlot("Bpmn.Activities", [writer])],
+            activityType: "Elsa.Activities.Bpmn.Activities.BpmnProcess"));
+
+        var detail = await _inspector.GetAsync("artifact-1");
+        var json = JsonSerializer.SerializeToElement(detail, new JsonSerializerOptions(JsonSerializerDefaults.Web));
+        Assert.IsType<Models.WorkflowExecutableBpmnStructureView>(detail!.RootActivity.BpmnStructure);
+        var bpmnJson = json.GetProperty("rootActivity").GetProperty("bpmnStructure");
+        var elements = bpmnJson.GetProperty("elements").EnumerateArray().ToArray();
+        var sequenceFlows = bpmnJson.GetProperty("sequenceFlows").EnumerateArray().ToArray();
+
+        Assert.Equal(3, elements.Length);
+        Assert.Equal("start", elements[0].GetProperty("elementId").GetString());
+        Assert.Equal("startEvent", elements[0].GetProperty("elementType").GetString());
+        Assert.Equal("Begin", elements[0].GetProperty("name").GetString());
+        Assert.False(elements[0].TryGetProperty("childNodeId", out _));
+        Assert.Equal("writer", elements[1].GetProperty("childNodeId").GetString());
+        Assert.Equal("Write order", elements[1].GetProperty("name").GetString());
+        Assert.Equal(4, elements[1].EnumerateObject().Count());
+        Assert.False(elements[2].TryGetProperty("eventDefinitions", out _));
+        Assert.Equal(2, sequenceFlows.Length);
+        Assert.Equal("start-to-task", sequenceFlows[0].GetProperty("flowId").GetString());
+        Assert.Equal("start", sequenceFlows[0].GetProperty("sourceRef").GetString());
+        Assert.Equal("task", sequenceFlows[0].GetProperty("targetRef").GetString());
+        Assert.Equal("continue", sequenceFlows[0].GetProperty("name").GetString());
+        Assert.Equal("Continue", sequenceFlows[0].GetProperty("conditionOutcome").GetString());
+        Assert.False(sequenceFlows[0].GetProperty("isDefault").GetBoolean());
+        Assert.True(sequenceFlows[1].GetProperty("isDefault").GetBoolean());
+        Assert.Equal(6, sequenceFlows[0].EnumerateObject().Count());
+        Assert.DoesNotContain("element-secret", json.ToString(), StringComparison.Ordinal);
+        Assert.DoesNotContain("element-payload-secret", json.ToString(), StringComparison.Ordinal);
+        Assert.DoesNotContain("event-secret", json.ToString(), StringComparison.Ordinal);
+        Assert.DoesNotContain("flow-secret", json.ToString(), StringComparison.Ordinal);
+        Assert.DoesNotContain("secret-variable", json.ToString(), StringComparison.Ordinal);
+        Assert.DoesNotContain("diagram-secret", json.ToString(), StringComparison.Ordinal);
+        Assert.DoesNotContain("raw-xml-secret", json.ToString(), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Detail_preserves_bpmn_events_without_activity_child_slots_and_skips_malformed_entries()
+    {
+        await _executableStore.SaveAsync(Executable(
+            _now,
+            structure: new ExecutableActivityStructure(
+                "elsa.bpmn.structure",
+                "1.0.0",
+                JsonSerializer.SerializeToElement(new
+                {
+                    elements = new object[]
+                    {
+                        new { elementId = "start", elementType = "startEvent" },
+                        new { elementId = "task", elementType = "task", childNodeId = 42, name = true },
+                        new { elementId = "end", elementType = "endEvent" },
+                        new { elementId = "malformed-element" },
+                        "not-an-element"
+                    },
+                    sequenceFlows = new object[]
+                    {
+                        new { flowId = "start-to-end", sourceRef = "start", targetRef = "end", name = 42, isDefault = "false" },
+                        new { flowId = "malformed-flow", sourceRef = "start" },
+                        7
+                    }
+                })),
+            activityType: "Elsa.Activities.Bpmn.Activities.BpmnProcess"));
+
+        var detail = await _inspector.GetAsync("artifact-1");
+
+        Assert.Empty(detail!.RootActivity.ChildSlots);
+        var bpmn = Assert.IsType<Models.WorkflowExecutableBpmnStructureView>(detail.RootActivity.BpmnStructure);
+        var bpmnJson = JsonSerializer.SerializeToElement(bpmn, new JsonSerializerOptions(JsonSerializerDefaults.Web));
+        var elements = bpmnJson.GetProperty("elements").EnumerateArray().ToArray();
+        Assert.Equal(["start", "task", "end"], elements
+            .Select(element => element.GetProperty("elementId").GetString()));
+        Assert.False(elements[1].TryGetProperty("childNodeId", out _));
+        Assert.False(elements[1].TryGetProperty("name", out _));
+        var flows = bpmnJson.GetProperty("sequenceFlows").EnumerateArray().ToArray();
+        Assert.Equal(["start-to-end"], flows
+            .Select(flow => flow.GetProperty("flowId").GetString()));
+        Assert.False(flows[0].TryGetProperty("name", out _));
+        Assert.False(flows[0].TryGetProperty("isDefault", out _));
+    }
+
+    [Fact]
+    public async Task Detail_omits_bpmn_projection_for_unsupported_schema()
+    {
+        await _executableStore.SaveAsync(Executable(
+            _now,
+            structure: new ExecutableActivityStructure(
+                "elsa.bpmn.structure",
+                "2.0.0",
+                JsonSerializer.SerializeToElement(new
+                {
+                    elements = new[] { new { elementId = "task", elementType = "task" } },
+                    sequenceFlows = Array.Empty<object>()
+                })),
+            activityType: "Elsa.Activities.Bpmn.Activities.BpmnProcess"));
+
+        var detail = await _inspector.GetAsync("artifact-1");
+
+        Assert.Null(detail!.RootActivity.BpmnStructure);
     }
 
     [Fact]
@@ -706,19 +789,75 @@ public sealed class WorkflowExecutableInspectorTests
                         property.Name.Contains("Publication", StringComparison.Ordinal));
     }
 
-    [Fact]
-    public void Runtime_api_registers_the_inspector()
-    {
-        var services = new ServiceCollection();
-        new WorkflowsRuntimeApiFeature().ConfigureServices(services);
+    private static readonly ValueTypeDescriptor StringType = new("String");
+    private static readonly JsonSerializerOptions WebJson = new(JsonSerializerDefaults.Web);
+    private static readonly ValueProtectionPolicy SensitivePolicy = new(DurableValueLifecycle.Instance, DurableValueStorage.Inline, isSensitive: true);
 
-        Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(WorkflowExecutableInspector));
+    private static readonly IReadOnlyDictionary<string, Func<ExecutableNode>> AuthoredRedactionRoots = new Dictionary<string, Func<ExecutableNode>>
+    {
+        ["declared on the compiled binding"] = () => Node("root", "root", new Dictionary<string, RuntimeInputBinding>
+        {
+            ["token"] = Literal("token", "compiled", SensitivePolicy)
+        }),
+        // A binding whose policy lost the declaration, as a hand-built or imported artifact can carry one.
+        ["declared on the pinned contract, not on the binding"] = () => Node(
+            "root",
+            "root",
+            new Dictionary<string, RuntimeInputBinding> { ["token"] = Literal("token", "compiled", ValueProtectionPolicy.InstanceInline) },
+            new ActivityInputContract("token", "Token", StringType, false, true, false, null, ActivityValuePolicy.Default with { IsSensitive = true })),
+        ["no compiled input"] = () => Node("other", "other", new Dictionary<string, RuntimeInputBinding>())
+    };
+
+    private static RuntimeInputBinding Literal(string inputKey, string value, ValueProtectionPolicy policy) =>
+        new(inputKey, StringType, policy, RuntimeInputBindingSource.Literal,
+            literal: ValueEnvelope.Inline(StringType, JsonSerializer.SerializeToElement(value), policy));
+
+    private static ExecutableNode Node(
+        string executableNodeId,
+        string authoredActivityId,
+        IReadOnlyDictionary<string, RuntimeInputBinding> inputBindings,
+        ActivityInputContract? input = null)
+    {
+        var descriptor = JsonSerializer.SerializeToElement(new { });
+        return new ExecutableNode(
+            executableNodeId,
+            authoredActivityId,
+            "Test.Root",
+            "1.0.0",
+            new RuntimeActivityDescriptor("Test", RuntimeActivityDescriptor.InitialSchemaVersion, descriptor),
+            inputBindings,
+            new Dictionary<string, RuntimeOutputCapture>(),
+            new Dictionary<string, string>(),
+            activityContract: input is null
+                ? null
+                : new ActivityContract(
+                    "Test.Root",
+                    "1.0.0",
+                    "test",
+                    descriptor,
+                    [input],
+                    new ActivityResultContract(new ValueTypeDescriptor("Elsa.Unit"), true, ActivityValuePolicy.Default, []),
+                    ["Done"],
+                    new ActivityActivationRequirement("test", "Test.Root")));
     }
+
+    private static WorkflowExecutable Executable(DateTimeOffset now, ExecutableNode root) =>
+        new(
+            new WorkflowExecutableIdentity("artifact-1", "definition-1", "version-1", "1.0.0", "sha256:test"),
+            root,
+            new Dictionary<string, WorkflowExecutableResumeTarget>(),
+            now,
+            new Dictionary<string, string>(),
+            inputContract: null,
+            dependencies: null,
+            IncidentStrategyBuiltIns.FaultReference);
 
     private static WorkflowExecutable Executable(
         DateTimeOffset now,
         JsonElement? descriptor = null,
         ExecutableActivityStructure? structure = null,
+        IReadOnlyCollection<ExecutableChildSlot>? childSlots = null,
+        string activityType = "Test.Root",
         IReadOnlyDictionary<string, RuntimeInputBinding>? inputBindings = null,
         IReadOnlyDictionary<string, RuntimeOutputCapture>? outputCaptures = null,
         WorkflowExecutableInputContract? inputContract = null,
@@ -726,7 +865,7 @@ public sealed class WorkflowExecutableInspectorTests
         new(
             new WorkflowExecutableIdentity("artifact-1", "definition-1", "version-1", "1.0.0", "sha256:test"),
             new ExecutableNode(
-                "root", "root", "Test.Root", "1.0.0",
+                "root", "root", activityType, "1.0.0",
                 new RuntimeActivityDescriptor(
                     "Test",
                     RuntimeActivityDescriptor.InitialSchemaVersion,
@@ -734,6 +873,7 @@ public sealed class WorkflowExecutableInspectorTests
                 inputBindings ?? new Dictionary<string, RuntimeInputBinding>(),
                 outputCaptures ?? new Dictionary<string, RuntimeOutputCapture>(),
                 new Dictionary<string, string>(),
+                childSlots,
                 structure: structure),
             new Dictionary<string, WorkflowExecutableResumeTarget>(),
             now,
@@ -741,31 +881,6 @@ public sealed class WorkflowExecutableInspectorTests
             inputContract,
             dependencies,
             IncidentStrategyBuiltIns.FaultReference);
-
-    private Models.ExecutableSourceReferenceView CreateVersionOneView(string? sourceType, string? sourceKind)
-    {
-#pragma warning disable CS0618 // The obsolete v1 constructor is the compatibility contract under test.
-        return new Models.ExecutableSourceReferenceView(
-            SourceReferenceId: "reference-v1",
-            ArtifactId: "artifact-v1",
-            Scope: "Published",
-            SourceType: sourceType,
-            SourceKind: sourceKind,
-            SourceId: "definition-version-v1",
-            SourceVersion: "1.0.0",
-            DefinitionId: "definition-v1",
-            DefinitionVersionId: "definition-version-v1",
-            ArtifactVersion: "1.0.0",
-            PublicationId: null,
-            SlotId: null,
-            CreatedAt: _now,
-            PublishedAt: _now,
-            ExpiresAt: null,
-            DeletedAt: null,
-            DeletedReason: null,
-            Live: true);
-#pragma warning restore CS0618
-    }
 
     private Task<WorkflowExecutable> ActivateAsync(params WorkflowExecutableSourceReference[] references) =>
         ActivateAsync(null, references);

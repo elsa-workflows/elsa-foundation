@@ -21,7 +21,7 @@ $ARGUMENTS
 1. Read `docs/skills/catalog.md#create-feature-or-module`.
 2. Read the relevant framework gates for three-layer separation, naming, feature identity, provider decomposition, and unit tests.
 3. Identify owning domain, dependency envelope, `.Core`/helper/implementation shape, and whether Speckit planning is required first.
-4. Plan feature registration tests, implementation tests, docs, and `EXTENSION_POINTS.md` updates before coding.
+4. Plan behaviour tests for logic-bearing implementations and a registration test only where the feature's wiring carries logic (framework §2.23.1 composition test covers the rest), docs, and `EXTENSION_POINTS.md` updates before coding.
 5. Preserve official Speckit flow for feature/work-unit development unless the user explicitly chooses a different path.
 
 If the user has not explicitly approved implementation, stop with a plan and exact file list. After the user approves the feature/module plan, complete required tests, extension-point catalog updates, generated-map refreshes, and small docs follow-through as part of the approved work.

@@ -240,17 +240,6 @@ public sealed class EfRecurringTriggerScheduleStoreTests
     }
 
     [Fact]
-    public void Registration_requires_shared_EF_operational_context_and_resolves_the_opt_in_store()
-    {
-        var services = OperationalComposition();
-        services.AddRuntimeRecurringTriggerScheduleEntityFrameworkCore();
-        using var provider = services.BuildServiceProvider(validateScopes: true);
-        using var scope = provider.CreateScope();
-        Assert.IsType<EfRecurringTriggerScheduleStore>(scope.ServiceProvider.GetRequiredService<IRecurringTriggerScheduleStore>());
-        Assert.IsType<RuntimeSqliteDbContext>(scope.ServiceProvider.GetRequiredService<RuntimeDbContext>());
-    }
-
-    [Fact]
     public async Task Claiming_loses_the_claim_on_a_transient_conflict_the_provider_execution_strategy_wrapped()
     {
         await using var schedules = await SeededSchedules.CreateAsync(FailingSaveInterceptor.WrappedDeadlock());
@@ -276,6 +265,7 @@ public sealed class EfRecurringTriggerScheduleStoreTests
     /// The recurring-triggers feature, not the runtime root, registers the in-memory schedule store, so only this
     /// composition proves the EF registration still recognizes it as the replaceable default.
     /// </summary>
+    // Kept beside the composition test (§2.23.1): replacement, the EF store replaces the in-memory default.
     [Fact]
     public void Registration_replaces_the_in_memory_default_the_recurring_triggers_feature_registers()
     {
@@ -288,6 +278,7 @@ public sealed class EfRecurringTriggerScheduleStoreTests
         Assert.True(RecurringTriggerScheduleStoreBackend.Find(services)?.Owns(contract));
     }
 
+    // Kept beside the composition test (§2.23.1): replacement-contract rejection without mutation.
     [Fact]
     public void Registration_refuses_a_host_recurring_schedule_store_and_leaves_the_collection_unchanged()
     {

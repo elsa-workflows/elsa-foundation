@@ -26,6 +26,22 @@ using Elsa.Workflows.Design.Api.Endpoints.Definitions.UpdateMetadata;
 
 namespace Elsa.Workflows.Design.Api;
 
+internal static class WorkflowsDesignJsonOptions
+{
+    /// <summary>The owner context bound to the effective Workflows Design wire options.</summary>
+    internal static WorkflowsDesignJsonContext WireContext { get; } = new(Create());
+
+    private static JsonSerializerOptions Create()
+    {
+        var options = new JsonSerializerOptions(JsonSerializerDefaults.Web);
+        // The schema emits these authored enums as camel-case strings. Shared type-attributed
+        // enums keep their own existing converters and response casing for current Studio clients.
+        options.Converters.Add(new JsonStringEnumConverter<AuthoredWorkflowIntrinsicKind>(JsonNamingPolicy.CamelCase));
+        options.Converters.Add(new JsonStringEnumConverter<AuthoredValueConversionMode>(JsonNamingPolicy.CamelCase));
+        return options;
+    }
+}
+
 [JsonSourceGenerationOptions(JsonSerializerDefaults.Web, GenerationMode = JsonSourceGenerationMode.Metadata)]
 [JsonSerializable(typeof(AddDefinition))]
 [JsonSerializable(typeof(AddVersion))]

@@ -226,7 +226,7 @@ public sealed class ActivityFaultIncidentRecorderTests
                     sensitivePolicy)
             });
 
-        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => materializer
+        var exception = await Assert.ThrowsAsync<ExpressionInputFailureException>(() => materializer
             .MaterializeSnapshotAsync(NewExpressionNode(binding), "actexec-1", context, Now)
             .AsTask());
         var recorder = new ActivityFaultIncidentRecorder(TimeProvider.System);
@@ -284,7 +284,7 @@ public sealed class ActivityFaultIncidentRecorderTests
                 ["secret"] = ValueEnvelope.External(new ValueTypeDescriptor("String"), reference, sensitivePolicy)
             });
 
-        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => materializer
+        var exception = await Assert.ThrowsAsync<ExpressionInputFailureException>(() => materializer
             .MaterializeSnapshotAsync(NewExpressionNode(binding), "actexec-1", context, Now)
             .AsTask());
         var recorder = new ActivityFaultIncidentRecorder(TimeProvider.System);

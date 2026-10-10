@@ -2,7 +2,7 @@
 
 **Feature Branch**: `codex/runtime-scheduler-work-queue`
 **Created**: 2026-06-11
-**Status**: Draft
+**Status**: Implemented — all tasks checked in b5d1c9a5c
 **Input**: Runtime Execution Seam next slice after in-process execution agent provider.
 
 ## Scenarios & Tests

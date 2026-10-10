@@ -22,7 +22,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\..\..\..\src\essentials\Locking\Database\Elsa.Locking.Database.csproj" />
-    <ProjectReference Include="..\..\..\..\..\src\essentials\Tasks\Elsa.Tasks.csproj" />
+    <ProjectReference Include="..\..\..\..\..\src\essentials\Tasks\Elsa.Tasks\Elsa.Tasks.csproj" />
   </ItemGroup>
 
   <ItemGroup>

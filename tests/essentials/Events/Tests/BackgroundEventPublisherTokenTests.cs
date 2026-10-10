@@ -14,11 +14,12 @@ namespace Elsa.Events.Tests;
 /// </summary>
 public class BackgroundEventPublisherTokenTests
 {
-    private static (BackgroundEventPublisher publisher, EventChannel channel, CountingInlineEventPublisher counting) Build()
+    /// <summary>Creates a worker and channel with a publisher that records dispatch counts and tokens.</summary>
+    private static (BackgroundEventPublisher publisher, EventChannel channel, CountingEventPublisher counting) Build()
     {
-        var counting = new CountingInlineEventPublisher();
+        var counting = new CountingEventPublisher();
         var services = new ServiceCollection();
-        services.AddSingleton<IInlineEventPublisher>(counting);
+        services.AddSingleton<IEventPublisher>(counting);
         var provider = services.BuildServiceProvider();
         var scopeFactory = provider.GetRequiredService<IServiceScopeFactory>();
         var channel = new EventChannel();
@@ -26,6 +27,7 @@ public class BackgroundEventPublisherTokenTests
         return (publisher, channel, counting);
     }
 
+    /// <summary>Verifies that a cancelled enqueue token does not prevent background dispatch.</summary>
     [Fact]
     public async Task AlreadyCancelledEnqueueTokenDoesNotBlockDispatch()
     {
@@ -47,6 +49,7 @@ public class BackgroundEventPublisherTokenTests
         Assert.False(counting.LastToken.IsCancellationRequested); // dispatched under the (live) host token
     }
 
+    /// <summary>Verifies that dispatch receives the host token instead of the queued event's caller token.</summary>
     [Fact]
     public async Task DispatchUsesHostTokenNotEnqueueToken()
     {

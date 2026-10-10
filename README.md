@@ -1,10 +1,16 @@
-![Elsa Foundation architectural blueprint header](docs/assets/elsa-foundation-header.png)
+![Elsa 4, a modern .NET workflow engine, illustrated with branching activity paths, a modular runtime and layered checkpoints](docs/assets/elsa-foundation-header.png)
 
 # Elsa Foundation
 
 `elsa-foundation` is the transitional Elsa 4 foundation workspace.
 
 It contains the main Elsa domain core libraries, default foundation implementations, the Speckit specification flow, and the architecture knowledge needed to navigate and verify the refactor from `elsa-core`.
+
+These repositories develop the Elsa 4 preview. Elsa 3 uses the separate [elsa-core](https://github.com/elsa-workflows/elsa-core) and [elsa-studio](https://github.com/elsa-workflows/elsa-studio) repositories.
+
+- **Try Elsa 4:** [run Workbench and Studio from published Docker images](docker/compose/README.md#quick-start--published-images-no-clone-or-build).
+- **Contribute to the server:** follow the [Elsa Foundation contribution guide](CONTRIBUTING.md).
+- **Contribute to Studio:** follow the [Elsa Foundation Studio contribution guide](https://github.com/elsa-workflows/elsa-foundation-studio/blob/main/CONTRIBUTING.md).
 
 ## Philosophy
 
@@ -41,6 +47,9 @@ For faster inner-loop work, open or build one of the committed
 [developer solution filters](docs/reference/developer-solution-filters.md). The full solution remains
 the completion gate.
 
+To build and run the backend from source, check readiness, and execute a sample workflow, follow the
+[backend source quickstart](docs/contributing/backend-source-quickstart.md).
+
 ## Supported management APIs
 
 Management-client APIs are owned by their Elsa domains and can be composed directly by custom applications.
@@ -51,18 +60,14 @@ The canonical areas are Workflow Design, Activity Design, Expressions, Publishin
 `GET /capabilities` document, then follows the advertised domain links. Omitted domain features advertise no
 capability and expose no routes; endpoint-level action permissions remain authoritative.
 
-See the [domain-owned API specification](specs/092-domain-owned-apis/spec.md),
-[OpenAPI contract](specs/092-domain-owned-apis/contracts/management-api.openapi.yaml), and
-[validation quickstart](specs/092-domain-owned-apis/quickstart.md) for composition and compatibility details.
+See the [domain-owned API specification](specs/220-domain-owned-apis/spec.md),
+[OpenAPI contract](specs/220-domain-owned-apis/contracts/management-api.openapi.yaml), and
+[validation quickstart](specs/220-domain-owned-apis/quickstart.md) for composition and compatibility details.
 
 ## Run with Docker
 
-Fastest way to try the stack — pull the published images and run them, no clone or build:
-
-```bash
-curl -O https://raw.githubusercontent.com/elsa-workflows/elsa-foundation/main/docker/compose/docker-compose.images.yml
-docker compose -f docker-compose.images.yml up
-```
+The fastest way to try the stack is to [run the published images with Docker Compose](docker/compose/README.md#with-docker-compose),
+without cloning or building the repositories. That guide includes macOS/Linux and Windows PowerShell commands.
 
 This starts **Elsa.Workbench** (`http://localhost:13000`) and **Elsa Studio**
 (`http://localhost:14000`) from the Docker Hub images `elsaworkflows/elsa-workbench` and

@@ -108,6 +108,6 @@ hold neither payloads nor scoped dependencies.
 ## Cross-references
 
 - Repo-wide index: [`../../../../EXTENSION_POINTS.md`](../../../../EXTENSION_POINTS.md).
-- Structured Logs owner catalog: [`../StructuredLogs/EXTENSION_POINTS.md`](../StructuredLogs/EXTENSION_POINTS.md).
-- OpenTelemetry owner catalog: [`../OpenTelemetry/EXTENSION_POINTS.md`](../OpenTelemetry/EXTENSION_POINTS.md).
+- Structured Logs owner catalog: [`../StructuredLogs/EXTENSION_POINTS.md`](../StructuredLogs/Elsa.Diagnostics.StructuredLogs/EXTENSION_POINTS.md).
+- OpenTelemetry owner catalog: [`../OpenTelemetry/EXTENSION_POINTS.md`](../OpenTelemetry/Elsa.Diagnostics.OpenTelemetry/EXTENSION_POINTS.md).
 - Constitutional basis: §2.6.2, §2.7, §2.22.1, and §2.23.2.

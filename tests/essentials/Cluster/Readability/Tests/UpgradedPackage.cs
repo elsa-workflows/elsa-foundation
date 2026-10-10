@@ -92,12 +92,50 @@ internal sealed class UpgradedPackage : IDisposable
     /// <summary>What Nuplane's catalog lists for the active package set: the assemblies of the one package these tests upgrade.</summary>
     internal sealed class PackageCatalog : IPackageAssemblyCatalog
     {
+        private ReadGate? _nextReadGate;
+        private int _readCount;
+
         public IReadOnlyList<Assembly> Active { get; set; } = [];
 
-        public Task<IReadOnlyList<PackageAssemblies>> GetPackagedAssembliesAsync(CancellationToken cancellationToken) =>
-            Task.FromResult<IReadOnlyList<PackageAssemblies>>(Active.Count == 0 ? [] : [new PackageAssemblies("Upgraded.Module", "0.0.0", Active, [])]);
+        public Exception? ReadError { get; set; }
+
+        public int ReadCount => Volatile.Read(ref _readCount);
+
+        public ReadGate BlockNextRead()
+        {
+            var gate = new ReadGate();
+            _nextReadGate = gate;
+            return gate;
+        }
+
+        public Task<IReadOnlyList<PackageAssemblies>> GetPackagedAssembliesAsync(CancellationToken cancellationToken)
+        {
+            Interlocked.Increment(ref _readCount);
+            if (ReadError is { } exception)
+                return Task.FromException<IReadOnlyList<PackageAssemblies>>(exception);
+
+            IReadOnlyList<PackageAssemblies> snapshot = Active.Count == 0 ? [] : [new PackageAssemblies("Upgraded.Module", "0.0.0", Active, [])];
+            var gate = Interlocked.Exchange(ref _nextReadGate, null);
+            return gate is null ? Task.FromResult(snapshot) : gate.ReturnAsync(snapshot);
+        }
 
         public Task<PackageAssemblies?> GetPackagedAssembliesAsync(string packageId, CancellationToken cancellationToken) =>
             throw new NotSupportedException();
+
+        public sealed class ReadGate
+        {
+            private readonly TaskCompletionSource _release = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+            public TaskCompletionSource Captured { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+            public async Task<IReadOnlyList<PackageAssemblies>> ReturnAsync(IReadOnlyList<PackageAssemblies> snapshot)
+            {
+                Captured.TrySetResult();
+                await _release.Task;
+                return snapshot;
+            }
+
+            public void Open() => _release.TrySetResult();
+        }
     }
 }

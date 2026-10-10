@@ -7,7 +7,7 @@
   <ItemGroup>
     <PackageReference Include="Microsoft.NET.Test.Sdk" />
     <!-- ExecutionEvidenceEndpointTests boots an in-process WebApplication with UseTestServer()/GetTestClient(),
-         the same host pattern as tests/essentials/Architecture/DomainManagementApiCompositionTests.cs. -->
+         the same host pattern as tests/essentials/Architecture/Tests/DomainManagementApiCompositionTests.cs. -->
     <PackageReference Include="Microsoft.AspNetCore.TestHost" />
     <PackageReference Include="xunit" />
     <PackageReference Include="xunit.runner.visualstudio" PrivateAssets="all" />

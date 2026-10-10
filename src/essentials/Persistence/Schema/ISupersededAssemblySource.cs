@@ -25,14 +25,15 @@ namespace Elsa.Persistence.Schema;
 public interface ISupersededAssemblySource
 {
     /// <summary>
-    /// Every loaded assembly a newer generation of the same assembly has replaced in the host's active package set: what
-    /// the next shell generation the host builds from its active package set will not compose. A generation still
-    /// running, or one built from a feature catalog not yet refreshed, may still execute one.
+    /// Loaded assemblies positively observed as replaced in the host's active package set: what the next shell
+    /// generation should exclude from activation discovery. Successful reads may retain proven replacement identities
+    /// after package removal; selecting an identity again makes it eligible. Absence alone is not replacement evidence.
+    /// A generation still running, or one built from a feature catalog not yet refreshed, may still execute one.
     /// </summary>
     ValueTask<IReadOnlySet<Assembly>> GetReplacedAsync(CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// The replaced assemblies nothing in the host can execute any more: no shell generation whose container has not
+    /// The assemblies currently proven replaced that nothing in the host can execute any more: no shell generation whose container has not
     /// finished disposing composes a feature from their load context, and the feature catalog the next shell generation
     /// is built from names neither them nor a feature in their load context. While two generations are both live, both
     /// still count.

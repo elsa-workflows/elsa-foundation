@@ -9,6 +9,8 @@ using Elsa.Workflows.Design.Core.Contracts;
 using Elsa.Workflows.Design.Core.Models;
 using Elsa.Workflows.Design.Persistence.Core.Contracts;
 using Elsa.Workflows.Design.Persistence.Core.Entities;
+using Elsa.Workflows.Design.Validations.Core;
+using Elsa.Workflows.Design.Validations.Core.Contracts;
 using NativeEndpoints;
 using System.Threading;
 using System.Threading.Tasks;
@@ -20,7 +22,8 @@ namespace Elsa.Workflows.Design.Api.Endpoints.Definitions.Add;
 public sealed class Endpoint(
     IWorkflowDefinitionFactory definitionFactory,
     IWorkflowDefinitionDraftFactory draftFactory,
-    IAddWorkflowDefinitionCommand addCommand) : ApiEndpoint<AddDefinition, WorkflowDefinitionDetailsView>
+    IAddWorkflowDefinitionCommand addCommand,
+    ICredentialLiteralValidator credentialLiterals) : ApiEndpoint<AddDefinition, WorkflowDefinitionDetailsView>
 {
     public override void Configure(ApiEndpointOptions options)
     {
@@ -30,8 +33,10 @@ public sealed class Endpoint(
 
     public override async Task<WorkflowDefinitionDetailsView> HandleAsync(AddDefinition command, CancellationToken cancellationToken)
     {
+        var state = (command.InitialState ?? new WorkflowDefinitionStateView()).ToState();
+        await credentialLiterals.AdmitAsync(state, cancellationToken);
         var definition = definitionFactory.Create(command.Name, command.Description);
-        var draft = draftFactory.Create(definition.Id, (command.InitialState ?? new WorkflowDefinitionStateView()).ToState());
+        var draft = draftFactory.Create(definition.Id, state);
         var draftEntity = WorkflowDefinitionDraft.From(draft);
         var layout = (command.Layout ?? [])
             .Select(record => new DesignMetadataRecord(

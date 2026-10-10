@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Runtime.InteropServices;
 using Xunit;
 
@@ -172,7 +173,149 @@ public sealed class CandidateUnixProcessGroupTests
         Assert.Throws<InvalidDataException>(() => CandidateUnixProcessGroup.ParseLinuxMember(321, Stat(state, group, session, start)));
     }
 
-    private static string Stat(string state, string group = "42", string session = "42", string start = "987654")
+    [Fact]
+    public void Linux_reader_skips_a_vanished_entry_and_retains_a_later_live_group_member()
+    {
+        var reader = new CandidateLinuxProcessGroupReader(
+            enumerateProcDirectories: () => ["/proc/101", "/proc/102"],
+            readStatFile: path => path switch
+            {
+                var value when value == Path.Combine("/proc/101", "stat") => throw new IOException("No such process", 3),
+                var value when value == Path.Combine("/proc/102", "stat") => Stat(102, "R", "42", "42", "987654"),
+                _ => throw new InvalidOperationException($"Unexpected stat path: {path}")
+            });
+
+        var members = reader.ReadMembers(42).ToArray();
+
+        Assert.Equal([new CandidateUnixProcessGroupMember(102, 42, true)], members);
+    }
+
+    [Theory]
+    [InlineData(5)]
+    [InlineData(unchecked((int)0x80070003))]
+    public void Linux_reader_propagates_non_esrch_io_errors(int hresult)
+    {
+        var expected = new IOException("A different I/O failure", hresult);
+        var reader = new CandidateLinuxProcessGroupReader(
+            enumerateProcDirectories: () => ["/proc/101"],
+            readStatFile: _ => throw expected);
+
+        var actual = Assert.Throws<IOException>(() => reader.ReadMembers(42).ToArray());
+
+        Assert.Same(expected, actual);
+        Assert.Equal(hresult, actual.HResult);
+    }
+
+    [Fact]
+    public void Linux_reader_does_not_hide_malformed_records()
+    {
+        var reader = new CandidateLinuxProcessGroupReader(
+            enumerateProcDirectories: () => ["/proc/101"],
+            readStatFile: _ => "malformed stat record");
+
+        Assert.Throws<InvalidDataException>(() => reader.ReadMembers(42).ToArray());
+    }
+
+    [Fact]
+    public void Linux_reader_does_not_hide_cancellation_or_directory_enumeration_errors()
+    {
+        using var cancellation = new CancellationTokenSource();
+        var cancellingReader = new CandidateLinuxProcessGroupReader(
+            enumerateProcDirectories: () => ["/proc/101", "/proc/102"],
+            readStatFile: _ =>
+            {
+                cancellation.Cancel();
+                return Stat(101, "R", "42", "42", "987654");
+            });
+
+        Assert.ThrowsAny<OperationCanceledException>(() => cancellingReader.ReadMembers(42, cancellation.Token).ToArray());
+
+        var expected = new IOException("Enumeration failed", 3);
+        var enumerationReader = new CandidateLinuxProcessGroupReader(
+            enumerateProcDirectories: () => throw expected,
+            readStatFile: _ => throw new InvalidOperationException("The stat reader should not run."));
+
+        var actual = Assert.Throws<IOException>(() => enumerationReader.ReadMembers(42).ToArray());
+        Assert.Same(expected, actual);
+    }
+
+    [Fact]
+    public void Linux_reader_still_skips_missing_stat_files_and_directories()
+    {
+        var reader = new CandidateLinuxProcessGroupReader(
+            enumerateProcDirectories: () => ["/proc/101", "/proc/102", "/proc/103"],
+            readStatFile: path => path switch
+            {
+                var value when value == Path.Combine("/proc/101", "stat") => throw new FileNotFoundException(),
+                var value when value == Path.Combine("/proc/102", "stat") => throw new DirectoryNotFoundException(),
+                var value when value == Path.Combine("/proc/103", "stat") => Stat(103, "S", "42", "42", "987654"),
+                _ => throw new InvalidOperationException($"Unexpected stat path: {path}")
+            });
+
+        var members = reader.ReadMembers(42).ToArray();
+
+        Assert.Equal([new CandidateUnixProcessGroupMember(103, 42, true)], members);
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(-1)]
+    public void Linux_reader_rejects_invalid_group_before_reading_procfs(int group)
+    {
+        var reader = new CandidateLinuxProcessGroupReader(
+            () => throw new InvalidOperationException("Enumeration must not run."));
+
+        Assert.Throws<ArgumentOutOfRangeException>(() => reader.ReadMembers(group));
+    }
+
+    [Fact]
+    public void Linux_reader_ignores_non_pid_entries_and_other_groups()
+    {
+        var readPaths = new List<string>();
+        var reader = new CandidateLinuxProcessGroupReader(
+            () => ["/proc/self", "/proc/0", "/proc/-1", "/proc/321"],
+            path =>
+            {
+                readPaths.Add(path);
+                return Stat("R", group: "43");
+            });
+
+        Assert.Empty(reader.ReadMembers(42));
+        Assert.Equal([Path.Combine("/proc/321", "stat")], readPaths);
+    }
+
+    [Fact]
+    public async Task Linux_proc_stat_descriptor_reports_esrch_after_its_owned_child_is_reaped()
+    {
+        if (!OperatingSystem.IsLinux())
+            return;
+
+        using var child = Process.Start(new ProcessStartInfo("sleep", "30") { UseShellExecute = false });
+        Assert.NotNull(child);
+
+        try
+        {
+            using var stat = File.OpenRead($"/proc/{child.Id}/stat");
+            child.Kill();
+            await child.WaitForExitAsync().WaitAsync(TimeSpan.FromSeconds(5));
+
+            var exception = Assert.Throws<IOException>(() => stat.ReadByte());
+            Assert.Equal(3, exception.HResult);
+        }
+        finally
+        {
+            if (!child.HasExited)
+            {
+                child.Kill();
+                await child.WaitForExitAsync().WaitAsync(TimeSpan.FromSeconds(5));
+            }
+        }
+    }
+
+    private static string Stat(string state, string group = "42", string session = "42", string start = "987654") =>
+        Stat(321, state, group, session, start);
+
+    private static string Stat(int processId, string state, string group, string session, string start)
     {
         var fields = new string[20];
         Array.Fill(fields, "0");
@@ -180,7 +323,7 @@ public sealed class CandidateUnixProcessGroupTests
         fields[2] = group;
         fields[3] = session;
         fields[19] = start;
-        return $"321 (composer with spaces and ) parentheses) {string.Join(' ', fields)}";
+        return $"{processId} (composer with spaces and ) parentheses) {string.Join(' ', fields)}";
     }
 
     private static class Native

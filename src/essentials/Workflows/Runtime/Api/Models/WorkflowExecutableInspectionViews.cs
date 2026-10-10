@@ -13,12 +13,7 @@ public enum WorkflowExecutableListScope
 }
 
 /// <summary>Describes one source reference that keeps a workflow executable reachable.</summary>
-/// <remarks>
-/// <see cref="SourceKind"/> is the canonical source discriminator. <see cref="SourceType"/> is emitted only as
-/// a Runtime API v1 compatibility alias and always contains the same value; new clients must use
-/// <see cref="SourceKind"/>. The alias is scheduled for removal with Runtime API v2.
-/// </remarks>
-[method: JsonConstructor]
+/// <remarks><see cref="SourceKind"/> is the canonical source discriminator.</remarks>
 public sealed record ExecutableSourceReferenceView(
     string SourceReferenceId,
     string ArtifactId,
@@ -38,99 +33,6 @@ public sealed record ExecutableSourceReferenceView(
     string? DeletedReason,
     bool Live)
 {
-    /// <summary>Runtime API v1 compatibility alias for <see cref="SourceKind"/>.</summary>
-    [Obsolete("sourceType is a compatibility alias for sourceKind in Runtime API v1 and will be removed in Runtime API v2. Use sourceKind.")]
-    [JsonPropertyName("sourceType")]
-    public string? SourceType
-    {
-        get => SourceKind;
-        init => SourceKind = ResolveSourceKind(value, SourceKind);
-    }
-
-    /// <summary>Runtime API v1 constructor retained for source and binary compatibility.</summary>
-    [Obsolete("The sourceType constructor parameter is retained for Runtime API v1 compatibility and will be removed in Runtime API v2. Use the sourceKind constructor overload.")]
-    public ExecutableSourceReferenceView(
-        string SourceReferenceId,
-        string ArtifactId,
-        string Scope,
-        string? SourceType,
-        string? SourceKind,
-        string? SourceId,
-        string? SourceVersion,
-        string DefinitionId,
-        string DefinitionVersionId,
-        string ArtifactVersion,
-        string? PublicationId,
-        string? SlotId,
-        DateTimeOffset CreatedAt,
-        DateTimeOffset? PublishedAt,
-        DateTimeOffset? ExpiresAt,
-        DateTimeOffset? DeletedAt,
-        string? DeletedReason,
-        bool Live)
-        : this(
-            SourceReferenceId,
-            ArtifactId,
-            Scope,
-            ResolveSourceKind(SourceType, SourceKind),
-            SourceId,
-            SourceVersion,
-            DefinitionId,
-            DefinitionVersionId,
-            ArtifactVersion,
-            PublicationId,
-            SlotId,
-            CreatedAt,
-            PublishedAt,
-            ExpiresAt,
-            DeletedAt,
-            DeletedReason,
-            Live)
-    {
-    }
-
-    /// <summary>Runtime API v1 deconstructor retained for source and binary compatibility.</summary>
-    [Obsolete("The sourceType deconstruction output is retained for Runtime API v1 compatibility and will be removed in Runtime API v2. Use the sourceKind deconstruction overload.")]
-    public void Deconstruct(
-        out string SourceReferenceId,
-        out string ArtifactId,
-        out string Scope,
-        out string? SourceType,
-        out string? SourceKind,
-        out string? SourceId,
-        out string? SourceVersion,
-        out string DefinitionId,
-        out string DefinitionVersionId,
-        out string ArtifactVersion,
-        out string? PublicationId,
-        out string? SlotId,
-        out DateTimeOffset CreatedAt,
-        out DateTimeOffset? PublishedAt,
-        out DateTimeOffset? ExpiresAt,
-        out DateTimeOffset? DeletedAt,
-        out string? DeletedReason,
-        out bool Live)
-    {
-        SourceReferenceId = this.SourceReferenceId;
-        ArtifactId = this.ArtifactId;
-        Scope = this.Scope;
-        SourceType = this.SourceKind;
-        SourceKind = this.SourceKind;
-        SourceId = this.SourceId;
-        SourceVersion = this.SourceVersion;
-        DefinitionId = this.DefinitionId;
-        DefinitionVersionId = this.DefinitionVersionId;
-        ArtifactVersion = this.ArtifactVersion;
-        PublicationId = this.PublicationId;
-        SlotId = this.SlotId;
-        CreatedAt = this.CreatedAt;
-        PublishedAt = this.PublishedAt;
-        ExpiresAt = this.ExpiresAt;
-        DeletedAt = this.DeletedAt;
-        DeletedReason = this.DeletedReason;
-        Live = this.Live;
-    }
-
     public static ExecutableSourceReferenceView From(WorkflowExecutableSourceReference reference, DateTimeOffset now) =>
         new(
             reference.SourceReferenceId,
@@ -150,14 +52,6 @@ public sealed record ExecutableSourceReferenceView(
             reference.DeletedAt,
             reference.DeletedReason,
             reference.IsLive(now));
-
-    private static string? ResolveSourceKind(string? sourceType, string? sourceKind)
-    {
-        if (sourceType is not null && sourceKind is not null && !string.Equals(sourceType, sourceKind, StringComparison.Ordinal))
-            throw new ArgumentException("sourceType and sourceKind must contain the same value.", nameof(sourceType));
-
-        return sourceKind ?? sourceType;
-    }
 }
 
 public sealed record WorkflowExecutableSummaryView(
@@ -191,7 +85,27 @@ public sealed record WorkflowExecutableNodeView(
     IReadOnlyCollection<WorkflowExecutableInputBindingView> InputBindings,
     IReadOnlyCollection<WorkflowExecutableChildSlotView> ChildSlots,
     IReadOnlyCollection<WorkflowExecutableConnectionView> Connections,
-    IReadOnlyCollection<WorkflowExecutableOutputCaptureView>? OutputCaptures = null);
+    IReadOnlyCollection<WorkflowExecutableOutputCaptureView>? OutputCaptures = null,
+    WorkflowExecutableBpmnStructureView? BpmnStructure = null);
+
+/// <summary>Allowlisted semantic projection for supported persisted BPMN executable structures.</summary>
+public sealed record WorkflowExecutableBpmnStructureView(
+    IReadOnlyCollection<WorkflowExecutableBpmnElementView> Elements,
+    IReadOnlyCollection<WorkflowExecutableBpmnSequenceFlowView> SequenceFlows);
+
+public sealed record WorkflowExecutableBpmnElementView(
+    string ElementId,
+    string ElementType,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? ChildNodeId = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Name = null);
+
+public sealed record WorkflowExecutableBpmnSequenceFlowView(
+    string FlowId,
+    string SourceRef,
+    string TargetRef,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Name = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? ConditionOutcome = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] bool? IsDefault = null);
 
 public sealed record WorkflowExecutableConnectionEndpointView(string NodeId, string? Port);
 
@@ -199,6 +113,13 @@ public sealed record WorkflowExecutableConnectionView(
     WorkflowExecutableConnectionEndpointView Source,
     WorkflowExecutableConnectionEndpointView Target);
 
+/// <summary>One compiled input binding of an executable node.</summary>
+/// <remarks>
+/// <see cref="IsSensitive"/> is true when the binding's effective policy marks its value sensitive or as requiring
+/// encryption; the inspector then leaves <see cref="Summary"/> and every source detail out. <see cref="Secret"/> carries
+/// a secret read's reference (name, type and scope), which is not a value; for a secret read the inspector also uses the
+/// reference name as <see cref="Summary"/>.
+/// </remarks>
 public sealed record WorkflowExecutableInputBindingView(
     string InputName,
     string Source,
@@ -211,7 +132,8 @@ public sealed record WorkflowExecutableInputBindingView(
     RuntimeVariableReference? Variable = null,
     RuntimeActivityResultReference? ActivityResult = null,
     ValueConversionPlan? ConversionPlan = null,
-    IReadOnlyDictionary<string, string>? Metadata = null);
+    IReadOnlyDictionary<string, string>? Metadata = null,
+    RuntimeSecretReference? Secret = null);
 
 public sealed record WorkflowExecutableOutputCaptureView(
     string OutputName,

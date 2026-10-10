@@ -308,7 +308,8 @@ internal static class WorkflowReconciliationPass
             new EfMaterializeWorkflowDefinitionCommand(context, access, writer),
             new EfMaterializeWorkflowDefinitionVersionCommand(context, access, writer, Serializer),
             new EfSaveWorkflowDefinitionCommand(context, access, writer),
-            Serializer).Reconcile(CancellationToken.None);
+            Serializer,
+            NothingToJudgeValidator.Instance).Reconcile(CancellationToken.None);
     }
 
     public static async Task<WorkflowDefinition?> FindDefinitionAsync(PublishingNativeProvider provider, string database, IPersistenceAccessContextAccessor access)

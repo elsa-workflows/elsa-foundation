@@ -50,6 +50,7 @@ internal static class TestWellKnownTypeRegistry
         registry.RegisterType(typeof(Guid), "Guid");
         registry.RegisterType(typeof(TestWriteLineActivity), TypeAliasConvention.CanonicalAlias(typeof(TestWriteLineActivity)));
         registry.RegisterType(typeof(TestWriteLinesActivity), TypeAliasConvention.CanonicalAlias(typeof(TestWriteLinesActivity)));
+        registry.RegisterType(typeof(DeclaredInputsActivity), TypeAliasConvention.CanonicalAlias(typeof(DeclaredInputsActivity)));
         registry.RegisterType(
             typeof(Elsa.Activities.Sequence.Activities.Sequence),
             TypeAliasConvention.CanonicalAlias(typeof(Elsa.Activities.Sequence.Activities.Sequence)));

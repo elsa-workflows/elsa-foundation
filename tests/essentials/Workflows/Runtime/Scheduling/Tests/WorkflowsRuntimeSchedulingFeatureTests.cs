@@ -18,7 +18,7 @@ public sealed class WorkflowsRuntimeSchedulingFeatureTests
         new WorkflowsRuntimeSchedulingFeature().ConfigureServices(services);
 
         // TS-1 (§2.23.1): single-implementation services asserted by registration presence, not implementation-type
-        // or lifetime pinning (resolvability is proven by ResolvesStoreAndScheduler). The pump task is a named
+        // or lifetime pinning (resolvability is proven by the composition test). The pump task is a named
         // participant in the multi-implementation IRecurringTask collection, preserved as a composition contract.
         Assert.Contains(services, d => d.ServiceType == typeof(IDurableTimerStore));
 
@@ -53,19 +53,6 @@ public sealed class WorkflowsRuntimeSchedulingFeatureTests
         Assert.Equal(TimeSpan.FromMinutes(2), options.MaxBackoffInterval);
         Assert.Equal(42, options.MaxTimersPerTick);
         Assert.Equal(TimeSpan.FromSeconds(15), options.NotFoundGrace);
-    }
-
-    [Fact]
-    public void ResolvesStoreAndScheduler()
-    {
-        var services = new ServiceCollection();
-        new WorkflowsRuntimeSchedulingFeature().ConfigureServices(services);
-
-        var provider = services.BuildServiceProvider();
-
-        // TS-1 (§2.23.1): resolvability, not resolved-implementation-type pinning.
-        provider.GetRequiredService<IDurableTimerStore>();
-        provider.GetRequiredService<IDurableTimerScheduler>();
     }
 
     [Fact]

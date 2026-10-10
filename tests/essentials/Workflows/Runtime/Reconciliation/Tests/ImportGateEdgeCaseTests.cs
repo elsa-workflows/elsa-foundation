@@ -1,5 +1,6 @@
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Reconciliation.Core.Contracts;
 using Elsa.Workflows.Runtime.Reconciliation.Core.Models;
 using Elsa.Workflows.Runtime.Services.Executables;
@@ -150,6 +151,46 @@ public sealed class ImportGateEdgeCaseTests : IDisposable
         Assert.Contains(honest.Identity.ArtifactId, entry.Diagnostic);
         Assert.False(await ArtifactImportHarness.IsInStoreAsync(harness, honest.Identity.ArtifactId));
         Assert.Null(await ArtifactImportHarness.FindSlotAsync(harness, "definition-corrupt"));
+    }
+
+    [Fact]
+    public async Task A_current_profile_contract_closure_is_hash_verified_and_imported()
+    {
+        await using var harness = ArtifactImportHarness.Build(_mount);
+        var executable = ArtifactClosureFixture.Executable(
+            WithSideEffectProfile(ArtifactClosureFixture.ProbeNode("node-profile"), SideEffectProfile.ReplaySafe),
+            "definition-profile-import");
+        ArtifactClosureFixture.Mount(harness.Services, _mount, "profile.json", ArtifactClosureFixture.Closure(executable));
+
+        var entry = Assert.Single((await ArtifactImportHarness.ReconcileAsync(harness)).Entries);
+        var persisted = await harness.Services.GetRequiredService<IWorkflowExecutableStore>()
+            .FindAsync(executable.Identity.ArtifactId);
+
+        Assert.Equal(WorkflowArtifactImportOutcome.Imported, entry.Outcome);
+        Assert.Equal(executable.Identity.ArtifactHash, persisted?.Identity.ArtifactHash);
+        Assert.Equal(SideEffectProfile.ReplaySafe, persisted?.RootActivity.ActivityContract?.SideEffectProfile);
+    }
+
+    [Fact]
+    public async Task A_profile_tamper_with_a_recomputed_contract_fingerprint_is_rejected_before_persistence()
+    {
+        await using var harness = ArtifactImportHarness.Build(_mount);
+        var honest = ArtifactClosureFixture.Executable(
+            WithSideEffectProfile(ArtifactClosureFixture.ProbeNode("node-profile-tamper"), SideEffectProfile.External),
+            "definition-profile-tamper");
+        var tamperedRoot = WithSideEffectProfile(honest.RootActivity, SideEffectProfile.ReplaySafe);
+        var tampered = ArtifactClosureFixture.TamperedCopy(honest, tamperedRoot);
+        Assert.NotEqual(honest.RootActivity.ActivityContract!.SchemaFingerprint, tamperedRoot.ActivityContract!.SchemaFingerprint);
+        Assert.Equal(honest.Identity.ArtifactId, tampered.Identity.ArtifactId);
+        Assert.Equal(honest.Identity.ArtifactHash, tampered.Identity.ArtifactHash);
+        ArtifactClosureFixture.Mount(harness.Services, _mount, "profile-tamper.json", ArtifactClosureFixture.Closure(tampered));
+
+        var entry = Assert.Single((await ArtifactImportHarness.ReconcileAsync(harness)).Entries);
+
+        Assert.Equal(WorkflowArtifactImportOutcome.Rejected, entry.Outcome);
+        Assert.Equal(WorkflowArtifactRejectionKind.ContentHashMismatch, entry.RejectionKind);
+        Assert.False(await ArtifactImportHarness.IsInStoreAsync(harness, honest.Identity.ArtifactId));
+        Assert.Null(await ArtifactImportHarness.FindSlotAsync(harness, honest.Identity.DefinitionId));
     }
 
     [Fact]
@@ -457,4 +498,33 @@ public sealed class ImportGateEdgeCaseTests : IDisposable
             incidentStrategy: executable.IncidentStrategy,
             checkpointCadence: executable.CheckpointCadence,
             workflowVariables: executable.WorkflowVariables);
+
+    private static ExecutableNode WithSideEffectProfile(ExecutableNode node, SideEffectProfile profile)
+    {
+        var contract = node.ActivityContract ?? throw new InvalidOperationException("The test node must have a pinned contract.");
+        var replacement = new ActivityContract(
+            contract.ActivityTypeKey,
+            contract.ContractVersion,
+            contract.DescriptorKind,
+            contract.DescriptorPayload,
+            contract.Inputs.Values,
+            contract.Result,
+            contract.Outcomes,
+            contract.Activation,
+            profile);
+        return new ExecutableNode(
+            node.ExecutableNodeId,
+            node.AuthoredActivityId,
+            node.ActivityType,
+            node.ActivityTypeVersion,
+            node.Descriptor,
+            node.InputBindings,
+            node.OutputCaptures,
+            node.Metadata,
+            node.ChildSlots,
+            node.Structure,
+            replacement,
+            node.IntrinsicKind,
+            node.IntrinsicVariable);
+    }
 }

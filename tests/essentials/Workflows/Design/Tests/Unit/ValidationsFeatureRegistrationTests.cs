@@ -1,13 +1,17 @@
+using CShells.Lifecycle;
 using Elsa.Activities.Design.Core.Contracts;
 using Elsa.Activities.Design.Core.Models;
 using Elsa.Events.Core.Contracts;
-using Elsa.Workflows.Design.Core.Services;
+using Elsa.Workflows.Design.Core.Models;
 using Elsa.Workflows.Design.Validations;
 using Elsa.Workflows.Design.Validations.Core.Contracts;
+using Elsa.Workflows.Design.Validations.Core.Exceptions;
+using Elsa.Workflows.Design.Validations.Core.Models;
 using Elsa.Workflows.Design.Validations.Core.Events;
 using Elsa.Workflows.Design.Validations.Handlers;
 using Elsa.Workflows.Design.Validations.Validators;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Options;
 using Xunit;
 
@@ -22,6 +26,7 @@ namespace Elsa.Workflows.Design.Tests.Unit;
 /// </summary>
 public sealed class ValidationsFeatureRegistrationTests
 {
+    // Kept beside the composition test (§2.23.1): asserts the retired orphan validator stays unregistered.
     [Fact]
     public void Feature_registers_all_five_baseline_validators()
     {
@@ -37,17 +42,7 @@ public sealed class ValidationsFeatureRegistrationTests
         Assert.DoesNotContain(validatorTypes, type => type.Name.Contains("Orphan", StringComparison.OrdinalIgnoreCase));
     }
 
-    [Fact]
-    public void Feature_registers_the_scoped_variable_services()
-    {
-        using var provider = BuildProvider(_ => { });
-
-        Assert.NotNull(provider.GetRequiredService<ScopedVariableResolver>());
-        Assert.NotNull(provider.GetRequiredService<ScopedVariablePicker>());
-        Assert.NotNull(provider.GetRequiredService<ScopedVariableReferenceRemapper>());
-        Assert.NotNull(provider.GetRequiredService<ScopedVariableAuthoringContract>());
-    }
-
+    // Kept beside the composition test (§2.23.1): uniqueness, exactly one DraftValidating handler.
     [Fact]
     public void Feature_registers_exactly_one_DraftValidating_handler()
     {
@@ -78,7 +73,67 @@ public sealed class ValidationsFeatureRegistrationTests
         Assert.Equal(7, options.MaxRecursionDepth);
     }
 
-    private static ServiceProvider BuildProvider(Action<WorkflowDesignValidationsFeature> configureFeature)
+    // Kept beside the composition test (§2.23.1): forwarding, one credential literal validator instance behind both contracts.
+    [Fact]
+    public void Feature_registers_the_credential_literal_validator_once_as_its_contract_and_as_a_draft_validator()
+    {
+        using var provider = BuildProvider(_ => { });
+        using var scope = provider.CreateScope();
+
+        var contract = Assert.Single(scope.ServiceProvider.GetServices<ICredentialLiteralValidator>());
+        Assert.IsType<CredentialLiteralValidator>(contract);
+        Assert.Same(contract, Assert.Single(scope.ServiceProvider.GetServices<IDraftValidator>().OfType<CredentialLiteralValidator>()));
+    }
+
+    [Fact]
+    public void The_credential_literal_validator_is_declared_a_replacement_contract() =>
+        Assert.True(typeof(ICredentialLiteralValidator).IsDefined(typeof(CredentialLiteralValidatorReplacementContractAttribute), inherit: false));
+
+    [Fact]
+    public async Task A_host_composing_one_credential_literal_validator_starts()
+    {
+        using var provider = BuildProvider(_ => { });
+
+        Assert.Null(await Record.ExceptionAsync(() => InitializeShellAsync(provider)));
+    }
+
+    // Kept beside the composition test (§2.23.1): ordering, a second validator fails activation in either registration order.
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task A_second_credential_literal_validator_fails_shell_activation_whatever_the_registration_order(bool registeredBefore)
+    {
+        using var provider = BuildProvider(_ => { }, services => services.AddScoped<ICredentialLiteralValidator, SecondValidator>(), registeredBefore);
+
+        var failure = await Assert.ThrowsAsync<MultipleCredentialLiteralValidatorsException>(() => InitializeShellAsync(provider));
+
+        Assert.Contains(nameof(ICredentialLiteralValidator), failure.Message, StringComparison.Ordinal);
+        Assert.Contains($"'{typeof(SecondValidator).FullName}'", failure.Implementations);
+        Assert.Contains("a factory registration", failure.Implementations);
+    }
+
+    // Kept beside the composition test (§2.23.1): replacement, a host replacing the default after the feature registers.
+    [Fact]
+    public async Task A_host_that_replaces_the_default_after_the_feature_registers_starts_and_resolves_its_replacement()
+    {
+        using var provider = BuildProvider(_ => { }, services => services.Replace(ServiceDescriptor.Scoped<ICredentialLiteralValidator, SecondValidator>()));
+
+        Assert.Null(await Record.ExceptionAsync(() => InitializeShellAsync(provider)));
+        using var scope = provider.CreateScope();
+        Assert.IsType<SecondValidator>(Assert.Single(scope.ServiceProvider.GetServices<ICredentialLiteralValidator>()));
+        Assert.Single(scope.ServiceProvider.GetServices<IDraftValidator>().OfType<CredentialLiteralValidator>());
+    }
+
+    private static async Task InitializeShellAsync(IServiceProvider provider)
+    {
+        foreach (var initializer in provider.GetServices<IShellInitializer>())
+            await initializer.InitializeAsync();
+    }
+
+    private static ServiceProvider BuildProvider(
+        Action<WorkflowDesignValidationsFeature> configureFeature,
+        Action<IServiceCollection>? hostRegistrations = null,
+        bool hostRegistersFirst = false)
     {
         var feature = new WorkflowDesignValidationsFeature();
         configureFeature(feature);
@@ -86,8 +141,18 @@ public sealed class ValidationsFeatureRegistrationTests
         var services = new ServiceCollection();
         services.AddOptions();
         services.AddSingleton<IActivityDefinitionLookup>(new BaselineValidatorTests.StubActivityCatalog());
+        if (hostRegistersFirst)
+            hostRegistrations?.Invoke(services);
         feature.ConfigureServices(services);
+        if (!hostRegistersFirst)
+            hostRegistrations?.Invoke(services);
 
         return services.BuildServiceProvider();
+    }
+
+    private sealed class SecondValidator : ICredentialLiteralValidator
+    {
+        public ValueTask<IReadOnlyList<ValidationError>> Validate(WorkflowDefinitionState state, CancellationToken cancellationToken) =>
+            ValueTask.FromResult<IReadOnlyList<ValidationError>>([]);
     }
 }

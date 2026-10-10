@@ -18,7 +18,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\..\..\..\src\essentials\Cluster\EntityFrameworkCore\Elsa.Cluster.EntityFrameworkCore.csproj" />
-    <ProjectReference Include="..\..\..\..\..\tests\essentials\Cluster\Fixtures\FeedModule\Elsa.Cluster.Fixtures.FeedModule.csproj" />
+    <ProjectReference Include="..\..\..\Cluster\Fixtures\FeedModule\Elsa.Cluster.Fixtures.FeedModule.csproj" />
   </ItemGroup>
 
 </Project>

@@ -1,0 +1,156 @@
+{
+  "schemaVersion": 1,
+  "classification": "retained startup/background evidence; no new host run or performance result",
+  "sourcePacket": {
+    "path": "t02-baseline-timing-seven-cases-2026-10-06.json",
+    "sha256": "4a650da3297885ae3403b5984dde71f3c60e60339c8cd049db68426d537770b8",
+    "bytes": 521727
+  },
+  "reviewedBeforeTimingReportSha256": "637082b0ef6da58fb72b3cf8d74a0554540be307a7cf30015cfe7e416d055343",
+  "privateCandidateSha256": "d4a988f2a51c5e7a0fb7242ce077d9c60ec8934c0db6d96a267bd4dd40f808fa",
+  "privatePinsSha256": "37235636c7b86d3aa34d0902f8192cdab1af7b89093922d1e932b360a42b6698",
+  "independentReviewSha256": "1525467ec2d16dcb264179d992b00a01f61796d1b2855a3056c7a101a8f193b1",
+  "sourceAudit": {
+    "hostHead": "b3f55bef32576011d39b93d664949a0cb705fb3b",
+    "runtimeEquivalentBaseline": "e6faa5689814c33353009b13f5b9e44d0e9982a4",
+    "sources": [
+      {
+        "path": "src/apps/Elsa.Workbench/WorkbenchOpenIddictVendorRegistration.cs",
+        "sha256": "46457f7810f5b58ac5237aeb5b6a7683800fce9b3ed6459767e3c3ff9f3787ed"
+      },
+      {
+        "path": "src/apps/Elsa.Workbench/WorkbenchOpenIddictPruning.cs",
+        "sha256": "97e15e8765ca0d80303caeb73a94d45898197a8c36eab988a7df2b11516b2abc"
+      }
+    ]
+  },
+  "cases": [
+    {
+      "case": "HTTP 4 sequential Coalesced",
+      "directory": "timing-2386-before-http4sequential-coalesced-69b5f65d4c10",
+      "log": {
+        "path": "timing-2386-before-http4sequential-coalesced-69b5f65d4c10/server-1.out.log",
+        "sha256": "f0a90d01d80579c731fa3d408e03d281717edfd9739574ff476ed6e402f00f04",
+        "bytes": 6929813
+      },
+      "metadata": {
+        "path": "timing-2386-before-http4sequential-coalesced-69b5f65d4c10/metadata.json",
+        "sha256": "138a9edae4221edb0f38702fda7efca8feb3f5c9c170fb326c4e52adf650f81d"
+      }
+    },
+    {
+      "case": "HTTP 4 sequential Immediate",
+      "directory": "timing-2386-before-http4sequential-immediate-080f74162ea6",
+      "log": {
+        "path": "timing-2386-before-http4sequential-immediate-080f74162ea6/server-1.out.log",
+        "sha256": "d1c62a4d22b267511452548b2240c90d7257c74522f634302f4cb65f6fc131b7",
+        "bytes": 7321455
+      },
+      "metadata": {
+        "path": "timing-2386-before-http4sequential-immediate-080f74162ea6/metadata.json",
+        "sha256": "b64bd67879889061ccccca6b7f0d15358f959f6418bcd0ed866c6d505354e525"
+      }
+    },
+    {
+      "case": "HTTP 16 sequential Coalesced",
+      "directory": "timing-2386-before-http16sequential-coalesced-b7daf0d0189d",
+      "log": {
+        "path": "timing-2386-before-http16sequential-coalesced-b7daf0d0189d/server-1.out.log",
+        "sha256": "d9218e3529b79f645aff00b0cb42341e3ee597cc734188c42d3e74bf7c6d8917",
+        "bytes": 10300810
+      },
+      "metadata": {
+        "path": "timing-2386-before-http16sequential-coalesced-b7daf0d0189d/metadata.json",
+        "sha256": "860586e7eed793b100455cdc5518a90a389835918a0e0c03f86978475fce3b75"
+      }
+    },
+    {
+      "case": "HTTP 16 sequential Immediate",
+      "directory": "timing-2386-before-http16sequential-immediate-10ad73320f15",
+      "log": {
+        "path": "timing-2386-before-http16sequential-immediate-10ad73320f15/server-1.out.log",
+        "sha256": "15d75e6d93468fb5ac13c620fa1aa3efa6e67ce947189e5df8bf6fc6bc288a64",
+        "bytes": 12401056
+      },
+      "metadata": {
+        "path": "timing-2386-before-http16sequential-immediate-10ad73320f15/metadata.json",
+        "sha256": "ade2d1b3154130832aa9280c8eab0bf759f884822c2215d2696d6eda44f65fd4"
+      }
+    },
+    {
+      "case": "HTTP 4 concurrency 4 Coalesced",
+      "directory": "timing-2386-before-http4concurrency4-coalesced-4b48d4cb3726",
+      "log": {
+        "path": "timing-2386-before-http4concurrency4-coalesced-4b48d4cb3726/server-1.out.log",
+        "sha256": "085ae77ba67f1c7347fbba0f2e957f98328e909f6e94d29f93564f8b79d50d8e",
+        "bytes": 6743665
+      },
+      "metadata": {
+        "path": "timing-2386-before-http4concurrency4-coalesced-4b48d4cb3726/metadata.json",
+        "sha256": "e7d2767fc9327643e721336c9118ba3f76ab491893cf6c4cccadf1271b662a2b"
+      }
+    },
+    {
+      "case": "HTTP 4 concurrency 4 Immediate",
+      "directory": "timing-2386-before-http4concurrency4-immediate-14aac720bda4",
+      "log": {
+        "path": "timing-2386-before-http4concurrency4-immediate-14aac720bda4/server-1.out.log",
+        "sha256": "9533082c7b722be1b75f16a0324a4637c222f3ca7e4be90fd4161d6b2d8cd5af",
+        "bytes": 7321243
+      },
+      "metadata": {
+        "path": "timing-2386-before-http4concurrency4-immediate-14aac720bda4/metadata.json",
+        "sha256": "3a0dacf39cdecd2d7044c3982e4743bdcad9077f4b5693ece0ed2f900de45967"
+      }
+    },
+    {
+      "case": "REST companion Coalesced",
+      "directory": "timing-2386-before-restcompanioncoalesced-coalesced-5ede91b06c33",
+      "log": {
+        "path": "timing-2386-before-restcompanioncoalesced-coalesced-5ede91b06c33/server-1.out.log",
+        "sha256": "a568c81189935840194879c816244fbcf9fa92ad21ceb91ccee92509df3282ec",
+        "bytes": 6415701
+      },
+      "metadata": {
+        "path": "timing-2386-before-restcompanioncoalesced-coalesced-5ede91b06c33/metadata.json",
+        "sha256": "f3c55dc5cf207b3d8210929bf40a357a4eff310d51b4ac2989333b62d82c7b9d"
+      }
+    }
+  ],
+  "perWindowBeforeMeasuredBatch": {
+    "pruningWarningCount": 2,
+    "pruningCategory": "Elsa.Workbench.WorkbenchOpenIddictPruningService",
+    "pruningEventId": 0,
+    "pruningSafeTokens": [
+      "ExecuteDelete",
+      "ExecuteDeleteAsync",
+      "not supported",
+      "current database provider",
+      "InvalidOperationException",
+      "InMemory"
+    ],
+    "migrationWarningCount": 1,
+    "migrationCategory": "Microsoft.EntityFrameworkCore.Migrations",
+    "migrationEventId": 20410,
+    "commandErrorCount": 4,
+    "commandCategory": "Microsoft.EntityFrameworkCore.Database.Command",
+    "commandEventId": 20102,
+    "commandOperatorClass": "SELECT",
+    "commandIdentifierToken": "__EFMigrationsHistory",
+    "requestTraceSpanScopesPresent": false,
+    "commandExceptionTypeOrProviderCodeEstablished": false
+  },
+  "measuredC4Coalesced": {
+    "queryErrorCount": 23,
+    "category": "Microsoft.EntityFrameworkCore.Query",
+    "eventId": 10100,
+    "exceptionTypeToken": "InvalidOperationException"
+  },
+  "limitations": [
+    "Pre-measurement timestamps do not establish a finer startup subphase.",
+    "InMemory token and source branch do not establish effective provider options for these runs.",
+    "Migration-history SELECT errors have unresolved cause and no request/span attribution.",
+    "The measured concurrency errors remain separate and are not proven repaired.",
+    "No retained database copies were read; no new host/workload or timing ran."
+  ]
+}

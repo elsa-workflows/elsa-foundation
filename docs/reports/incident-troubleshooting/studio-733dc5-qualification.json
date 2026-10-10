@@ -1,0 +1,70 @@
+{
+  "sourceHead": "733dc511230480137f6da06a32e02a67d1b1b499",
+  "pullRequest": "https://github.com/elsa-workflows/elsa-foundation-studio/pull/556",
+  "checks": [
+    {
+      "name": "license/cla",
+      "headSha": "733dc511230480137f6da06a32e02a67d1b1b499",
+      "status": "completed",
+      "conclusion": "success",
+      "detailsUrl": "https://github.com/apps/microsoft-github-policy-service"
+    },
+    {
+      "name": "copilot-pull-request-reviewer",
+      "headSha": "733dc511230480137f6da06a32e02a67d1b1b499",
+      "status": "completed",
+      "conclusion": "success",
+      "detailsUrl": "https://github.com/elsa-workflows/elsa-foundation-studio/actions/runs/37127925590/job/111216967582"
+    },
+    {
+      "name": "Browser tests (Chromium)",
+      "headSha": "733dc511230480137f6da06a32e02a67d1b1b499",
+      "status": "completed",
+      "conclusion": "success",
+      "detailsUrl": "https://github.com/elsa-workflows/elsa-foundation-studio/actions/runs/37127896265/job/111216873475"
+    },
+    {
+      "name": "Lint (ESLint) + Typecheck",
+      "headSha": "733dc511230480137f6da06a32e02a67d1b1b499",
+      "status": "completed",
+      "conclusion": "success",
+      "detailsUrl": "https://github.com/elsa-workflows/elsa-foundation-studio/actions/runs/37127896265/job/111216873364"
+    },
+    {
+      "name": "Build & push elsa-studio",
+      "headSha": "733dc511230480137f6da06a32e02a67d1b1b499",
+      "status": "completed",
+      "conclusion": "success",
+      "detailsUrl": "https://github.com/elsa-workflows/elsa-foundation-studio/actions/runs/37127896284/job/111216873048"
+    },
+    {
+      "name": "Analyze (javascript-typescript)",
+      "headSha": "733dc511230480137f6da06a32e02a67d1b1b499",
+      "status": "completed",
+      "conclusion": "success",
+      "detailsUrl": "https://github.com/elsa-workflows/elsa-foundation-studio/actions/runs/37127894049/job/111216869404"
+    },
+    {
+      "name": "Analyze (csharp)",
+      "headSha": "733dc511230480137f6da06a32e02a67d1b1b499",
+      "status": "completed",
+      "conclusion": "success",
+      "detailsUrl": "https://github.com/elsa-workflows/elsa-foundation-studio/actions/runs/37127894049/job/111216869215"
+    },
+    {
+      "name": "GitGuardian Security Checks",
+      "headSha": "733dc511230480137f6da06a32e02a67d1b1b499",
+      "status": "completed",
+      "conclusion": "success",
+      "detailsUrl": "https://dashboard.gitguardian.com"
+    }
+  ],
+  "review": {
+    "body": "<!-- ccr-overview-v2 -->\n\n## Copilot review overview\n\n### \ud83d\udd35 Needs a closer look\n\nThe broad cross-repository runtime-navigation change still has final manual browser acceptance and resulting-main qualification outstanding.\n\n**Review effort:** Balanced  \n**Findings:** None",
+    "commit_id": "733dc511230480137f6da06a32e02a67d1b1b499",
+    "id": 5401161344,
+    "submitted_at": "2026-10-03T14:09:37Z"
+  },
+  "manualBrowserAcceptance": "pending required user Chrome extension dismissal and continue reply",
+  "merged": false
+}

@@ -59,7 +59,8 @@ internal static class SecretResolutionTestSupport
         new(
             partitionAccessor ?? new CountingPartitionAccessor(WorkflowExecutionPartition.DefaultValue),
             workflowExecutionStateStore ?? new SingleInstanceStateStore(null),
-            valueConversionExecutor ?? new RuntimeValueConversionExecutor());
+            valueConversionExecutor ?? new RuntimeValueConversionExecutor(),
+            new DefaultRuntimeSecretMask());
 
     /// <summary>
     /// Arms <paramref name="resolver"/> so that its next resolution cancels the returned source and observes the
@@ -132,13 +133,17 @@ internal static class SecretResolutionTestSupport
     public static string WaitResumeTargetId(string nodeId) =>
         WorkflowExecutableResumeTarget.ComposeScopedId(nodeId, SecretWaitingActivity.ResumeTargetKey);
 
-    /// <summary>A workflow whose root is a <see cref="SecretWaitingActivity"/> on <paramref name="nodeId"/>, with its resume target.</summary>
-    public static WorkflowExecutable NewWaitingExecutable(string nodeId)
+    /// <summary>
+    /// A workflow whose root is a <see cref="SecretWaitingActivity"/>, or another activity of
+    /// <paramref name="activityType"/> that suspends on its resume target, on <paramref name="nodeId"/>, with that resume
+    /// target.
+    /// </summary>
+    public static WorkflowExecutable NewWaitingExecutable(string nodeId, Type? activityType = null)
     {
         var resumeTargetId = WaitResumeTargetId(nodeId);
         return new WorkflowExecutable(
             identity: WorkflowExecutionHarness.Identity,
-            rootActivity: NewSecretNode(nodeId, typeof(SecretWaitingActivity)),
+            rootActivity: NewSecretNode(nodeId, activityType ?? typeof(SecretWaitingActivity)),
             resumeTargets: new Dictionary<string, WorkflowExecutableResumeTarget>(StringComparer.Ordinal)
             {
                 [resumeTargetId] = new(resumeTargetId, nodeId, "ResumeAsync", new Dictionary<string, string>(), SecretWaitingActivity.ResumeTargetKey)

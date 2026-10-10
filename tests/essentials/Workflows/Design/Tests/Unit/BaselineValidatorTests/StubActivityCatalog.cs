@@ -9,15 +9,22 @@ namespace Elsa.Workflows.Design.Tests.Unit.BaselineValidatorTests;
 /// validators. <see cref="GetVersion"/> resolves only ids registered via <see cref="Add"/>;
 /// everything else throws <see cref="EntityNotFoundException"/>, matching the production
 /// version-store Get contract (the store throws on a missing id —
-/// they never return null). <see cref="ValidatorTestHelpers.RootActivityVersionId"/> is
+/// they never return null). <see cref="RootActivityVersionId"/> is
 /// pre-seeded (as an empty version) so tests exercise their real nodes, not the synthetic
 /// root the test helpers fabricate for multi-activity graphs.
 /// </summary>
+/// <remarks>
+/// Self-contained, so the Design API test project compiles it too (as the catalog of
+/// <c>CredentialLiteralTestSupport</c>).
+/// </remarks>
 internal sealed class StubActivityCatalog : IActivityDefinitionLookup
 {
+    /// <summary>The synthetic root's version id, which <c>ValidatorTestHelpers</c> wraps test activities under.</summary>
+    public const string RootActivityVersionId = "$workflow-root";
+
     private readonly Dictionary<string, IActivityDefinitionVersion> _versions = new();
 
-    public StubActivityCatalog() => Add(ValidatorTestHelpers.RootActivityVersionId);
+    public StubActivityCatalog() => Add(RootActivityVersionId);
 
     public StubActivityCatalog Add(string versionId, IEnumerable<InputDefinition>? inputs = null, IEnumerable<OutputDefinition>? outputs = null, IEnumerable<ActivityDesignFacet>? designFacets = null)
     {

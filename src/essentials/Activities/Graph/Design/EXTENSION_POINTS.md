@@ -1,6 +1,6 @@
 # Extension points — activity graph Design provider
 
-This project owns the Design-time provider for reusable activity graphs. The canonical behavior and boundary are specified by [spec 092](../../../../../specs/092-reusable-activity-definitions/spec.md) and its [provider/runtime contract](../../../../../specs/092-reusable-activity-definitions/contracts/provider-runtime-seams.md).
+This project owns the Design-time provider for reusable activity graphs. The canonical behavior and boundary are specified by [spec 221](../../../../../specs/221-reusable-activity-definitions/spec.md) and its [provider/runtime contract](../../../../../specs/221-reusable-activity-definitions/contracts/provider-runtime-seams.md).
 
 ## Registration inventory
 

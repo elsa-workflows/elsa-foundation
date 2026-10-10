@@ -20,7 +20,7 @@
     ';' make every member match a whole name rather than a substring of a longer one.
 
     Closure under ProjectReference is enforced by
-    tests/essentials/Architecture/LineAClosureGuardTests.cs, not by anything here.
+    tests/essentials/Architecture/Tests/LineAClosureGuardTests.cs, not by anything here.
   -->
   <PropertyGroup>
     <ElsaVersionLineAMembers>;Elsa.Primitives;Elsa.Events.Core;Elsa.Tasks.Core;Elsa.Serialization.Core;Elsa.Mediator.Core;Elsa.Attention.Core;Elsa.Expressions.Core;Elsa.Pipelines.Core;Elsa.Locking.Core;Elsa.Caching.Core;</ElsaVersionLineAMembers>

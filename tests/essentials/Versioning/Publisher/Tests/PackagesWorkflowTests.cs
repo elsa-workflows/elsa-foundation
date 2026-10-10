@@ -89,15 +89,24 @@ public sealed class PackagesWorkflowTests
         Assert.Equal(("boolean", "false"), (bootstrap["type"], bootstrap["default"]));
     }
 
-    /// <summary>A GitHub Release publishes nothing before #2085, and fails saying so rather than passing quietly.</summary>
+    /// <summary>Release events run the checkpoint guard; other releases fail there, while package build and publish remain excluded.</summary>
     [Fact]
-    public void A_release_publishes_nothing_and_fails_pointing_at_the_release_cut()
+    public void Release_events_are_guarded_without_entering_package_build_or_publish()
     {
         Assert.Equal("${{ github.event_name == 'release' }}", Jobs["release"]["if"]);
         Assert.Equal("${{ github.event_name != 'release' }}", Jobs["pack"]["if"]);
-        var script = Scripts.Single(script => script.Job == "release").Script;
-        Assert.Contains("#2085", script, StringComparison.Ordinal);
-        Assert.Contains("exit 1", script, StringComparison.Ordinal);
+        Assert.Equal("pack", Jobs["publish"]["needs"]);
+        Assert.Contains("github.event_name == 'push' || github.event_name == 'workflow_dispatch'",
+            (string)Jobs["publish"]["if"], StringComparison.Ordinal);
+
+        var steps = ((List<object>)Jobs["release"]["steps"]).Cast<Dictionary<object, object>>().ToList();
+        var guardStep = steps.Single(step => step.TryGetValue("name", out var name) &&
+            (string)name == "Allow only metadata-only contributor checkpoints");
+        Assert.Equal("python3 tools/contributor-checkpoints/workflow_guards.py release", (string)guardStep["run"]);
+        var environment = Map(guardStep, "env");
+        Assert.Equal("${{ github.event.action }}", (string)environment["RELEASE_ACTION"]);
+        Assert.Equal("${{ github.event.release.prerelease }}", (string)environment["RELEASE_PRERELEASE"]);
+        Assert.Equal("${{ github.event.release.tag_name }}", (string)environment["RELEASE_TAG_NAME"]);
     }
 
     private static Dictionary<object, object> Map(Dictionary<object, object> parent, string key) => (Dictionary<object, object>)parent[key];

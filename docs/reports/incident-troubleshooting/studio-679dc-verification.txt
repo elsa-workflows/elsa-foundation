@@ -1,0 +1,156 @@
+Studio source: 679dc5adf1a3a522b18fe6a0d75d97520cf8de87
+Root final command exits: full Workflows tests0, typecheck0, module build/bundle guard0, normal Release Web build0.
+Worker scoped ESLint exit0; exact-head CI lint/typecheck success independently verifies it.
+Predecessor revert regression exit1 at4b470f6; restored regression exit0.
+
+Evidence excerpt: /tmp/incident-studio-final-679dc-all.log
+ ✓ src/__tests__/activityDescriptorResolution.test.ts (2 tests) 2ms
+ ✓ src/__tests__/workflowFormatting.test.ts (7 tests) 20ms
+ ✓ src/__tests__/validationDiagnostics.test.ts (8 tests) 6ms
+ ✓ src/__tests__/moduleCssContract.test.ts (14 tests) 7ms
+ ✓ src/__tests__/workflowInstanceTimeline.test.tsx (1 test) 5ms
+ ✓ src/__tests__/workflowInputPersistence.test.ts (1 test) 4ms
+ ✓ src/__tests__/workflowHistory.test.ts (6 tests) 3ms
+ ✓ src/__tests__/activityGraphHistory.test.ts (3 tests) 3ms
+ ✓ src/__tests__/activityExpressionDocument.test.ts (2 tests) 4ms
+ ✓ src/__tests__/activityUpgradeModel.test.ts (2 tests) 10ms
+ ✓ src/__tests__/expressionDescriptors.test.ts (4 tests) 6ms
+ ✓ src/__tests__/graphAuthoringContributions.test.ts (2 tests) 2ms
+ ✓ src/__tests__/graphAuthoringWorkspace.test.tsx (1 test) 14ms
+ ✓ src/__tests__/themeSurfaceContracts.test.ts (4 tests) 20ms
+ ✓ src/__tests__/runWorkbenchResponsiveLayout.test.ts (1 test) 2ms
+ ✓ src/__tests__/reusableActivityObservability.test.ts (1 test) 3ms
+ ✓ src/__tests__/workflowRunSourceReference.test.ts (2 tests) 13ms
+ ✓ src/__tests__/lazyRouteAnnouncement.test.tsx (1 test) 343ms
+   ✓ workflows module > announces while the workflow definitions route loads on demand 343ms
+ ✓ src/__tests__/activityDefinitionAuthoring.test.tsx (48 tests) 21445ms
+   ✓ Activity Definition authoring > creates with the sole authorable provider and enters the exact initial draft 767ms
+   ✓ Activity Definition authoring > serializes trailing autosaves against each exact returned revision 940ms
+   ✓ Activity Definition authoring > authors capability-backed members and preserves exact default presence plus unknown wire fields 5102ms
+   ✓ Activity Definition authoring > keeps unavailable historical aliases inspectable on an exact immutable version 361ms
+   ✓ Activity Definition authoring > reviews destructive published-baseline edits before changing only the exact draft 892ms
+   ✓ Activity Definition authoring > autosaves presentation-only copy without impact review but stages a breaking technical name change 1737ms
+   ✓ Activity Definition authoring > preserves stale local work and creates an explicit parallel recovery draft 956ms
+   ✓ Activity Definition authoring > previews scoped local recovery before applying it and clears it after save 1791ms
+   ✓ Activity Definition authoring > reports a failed save and keeps revision-sensitive actions paused 903ms
+   ✓ Activity Definition authoring > keeps background contract proposals outside autosave and adopts only an explicitly applied exact revision 1006ms
+   ✓ Activity Definition authoring > maps typed contract JSON pointers to exact accessible controls before using member fallback 384ms
+   ✓ Activity Definition authoring > ignores a late validation response after the author advances the draft 937ms
+   ✓ Activity Definition authoring > blocks editor navigation while an unsaved failure is present 893ms
+   ✓ Activity Definition authoring > keeps offline local work mounted across focus and reconnect events 917ms
+
+ Test Files  120 passed (120)
+      Tests  1529 passed (1529)
+   Start at  15:11:21
+   Duration  22.88s (transform 3.61s, setup 859ms, collect 16.58s, tests 45.24s, environment 33.41s, prepare 5.93s)
+
+
+Evidence excerpt: /tmp/incident-studio-final-679dc-typecheck.log
+$ tsc --noEmit -p tsconfig.json
+
+Evidence excerpt: /tmp/incident-studio-final-679dc-module-build.log
+../wwwroot/studio/modules/workflows/bpmnAdapter-DuFRzTNF.js                                 6.30 kB │ gzip:  1.94 kB
+../wwwroot/studio/modules/workflows/conversionSettings-De6KKkgv.js                          6.39 kB │ gzip:  2.28 kB
+../wwwroot/studio/modules/workflows/executableGraph-BWC3VJgq.js                             6.39 kB │ gzip:  2.10 kB
+../wwwroot/studio/modules/workflows/WorkflowRunInputDialog-TkUUosgo.js                      6.49 kB │ gzip:  2.28 kB
+../wwwroot/studio/modules/workflows/workflowDesign-GYqCNuiV.js                              8.82 kB │ gzip:  2.41 kB
+../wwwroot/studio/modules/workflows/RuntimeDiagnosticsSettingsPage-CMqgZRBM.js             10.55 kB │ gzip:  2.80 kB
+../wwwroot/studio/modules/workflows/ActivityVersionChangeDialog-BLvrdBXS.js                12.75 kB │ gzip:  3.19 kB
+../wwwroot/studio/modules/workflows/ActivityDefinitionCreateDialog-BsPbOxLD.js             12.79 kB │ gzip:  4.01 kB
+../wwwroot/studio/modules/workflows/runtime-Dg9PqyYe.js                                    15.04 kB │ gzip:  4.69 kB
+../wwwroot/studio/modules/workflows/expressionToolingClient-ozB8qsDi.js                    16.44 kB │ gzip:  4.40 kB
+../wwwroot/studio/modules/workflows/ActivityDefinitionDependencyExplorer-BQilwRpW.js       17.08 kB │ gzip:  4.19 kB
+../wwwroot/studio/modules/workflows/ActivityDefinitionVersionLifecycleDialog-C2ZXLNsv.js   17.48 kB │ gzip:  4.24 kB
+../wwwroot/studio/modules/workflows/ActivityAvailabilityPage-CmrbSKZd.js                   17.72 kB │ gzip:  4.36 kB
+../wwwroot/studio/modules/workflows/ActivityDefinitionsPage-CxWqPedd.js                    18.22 kB │ gzip:  4.89 kB
+../wwwroot/studio/modules/workflows/activityDesign-Cm5YMgEZ.js                             20.73 kB │ gzip:  5.29 kB
+../wwwroot/studio/modules/workflows/WorkflowExecutableInspector-5H62FXoE.js                23.44 kB │ gzip:  5.93 kB
+../wwwroot/studio/modules/workflows/ActivityDefinitionTestRunDialog-tlbjnauJ.js            25.99 kB │ gzip:  6.62 kB
+../wwwroot/studio/modules/workflows/WorkflowExecutables-BZSeya38.js                        32.00 kB │ gzip:  7.99 kB
+../wwwroot/studio/modules/workflows/ReusableBoundaryInspector-Ctws97KE.js                  40.57 kB │ gzip:  9.31 kB
+../wwwroot/studio/modules/workflows/ActivityUpgradeWorkbenchPage-CftkPfYn.js               42.74 kB │ gzip:  9.56 kB
+../wwwroot/studio/modules/workflows/ActivityGraphImplementationEditor-BEX9jx4x.js          45.84 kB │ gzip: 12.49 kB
+../wwwroot/studio/modules/workflows/Elsa3ReusableImportPage-6LI4E8qk.js                    46.44 kB │ gzip:  9.54 kB
+../wwwroot/studio/modules/workflows/ActivityDefinitionWorkbench-Da-E1pEx.js                49.97 kB │ gzip: 10.69 kB
+../wwwroot/studio/modules/workflows/WorkflowDefinitions-CLUDT6Bo.js                        54.72 kB │ gzip: 13.17 kB
+../wwwroot/studio/modules/workflows/WorkflowInstances-bUx0IN2_.js                         115.57 kB │ gzip: 27.40 kB
+../wwwroot/studio/modules/workflows/InspectorPanel-OFcj_ioj.js                            116.72 kB │ gzip: 29.02 kB
+../wwwroot/studio/modules/workflows/module-T1EVY3sb.js                                    126.01 kB │ gzip: 33.59 kB
+../wwwroot/studio/modules/workflows/ActivityDefinitionDraftEditor-BjCD8Qzy.js             127.88 kB │ gzip: 28.84 kB
+../wwwroot/studio/modules/workflows/WorkflowEditor-YQHRQeOp.js                            132.93 kB │ gzip: 34.34 kB
+../wwwroot/studio/modules/workflows/maskedInput-CZEjKwcD.js                               265.81 kB │ gzip: 74.84 kB
+✓ built in 1.27s
+$ node scripts/check-bundle-size.mjs
+Workflows bundle budget
+  Primary JavaScript entry:          126.21 kB raw / 33.76 kB gzip (budget 127.50 kB)
+  Workflows stylesheet:              149.12 kB raw / 21.73 kB gzip (budget 185.00 kB)
+  Definitions JavaScript closure:    227.16 kB raw / 60.01 kB gzip
+  Authenticated Definitions total:   381.75 kB raw / 83.09 kB gzip (budget 384.50 kB)
+  Activity upgrades total:           372.68 kB raw / 74.00 kB gzip (budget 375.50 kB)
+  Largest JavaScript chunk:          265.81 kB (maskedInput-CZEjKwcD.js; limit 500.00 kB)
+  Deferred heavy surfaces:           8
+
+Evidence excerpt: /tmp/incident-studio-final-679dc-host-build.log
+  Elsa.Studio.Secrets -> /Users/sipke/.codex-workspaces/incident-troubleshooting/studio/src/extensions/Elsa.Studio.Secrets/bin/Release/net10.0/Elsa.Studio.Secrets.dll
+  Elsa.Studio.ExpressionEditors.JavaScript -> /Users/sipke/.codex-workspaces/incident-troubleshooting/studio/src/extensions/Elsa.Studio.ExpressionEditors.JavaScript/bin/Release/net10.0/Elsa.Studio.ExpressionEditors.JavaScript.dll
+  Elsa.Studio.Weaver.Workflows -> /Users/sipke/.codex-workspaces/incident-troubleshooting/studio/src/extensions/Elsa.Studio.Weaver.Workflows/bin/Release/net10.0/Elsa.Studio.Weaver.Workflows.dll
+  Elsa.Studio.Dashboard -> /Users/sipke/.codex-workspaces/incident-troubleshooting/studio/src/essentials/Elsa.Studio.Dashboard/bin/Release/net10.0/Elsa.Studio.Dashboard.dll
+  Elsa.Studio.Diagnostics.StructuredLogs -> /Users/sipke/.codex-workspaces/incident-troubleshooting/studio/src/extensions/Elsa.Studio.Diagnostics.StructuredLogs/bin/Release/net10.0/Elsa.Studio.Diagnostics.StructuredLogs.dll
+  Elsa.Studio.Api -> /Users/sipke/.codex-workspaces/incident-troubleshooting/studio/src/essentials/Elsa.Studio.Api/bin/Release/net10.0/Elsa.Studio.Api.dll
+  Elsa.Studio.Diagnostics.OpenTelemetry -> /Users/sipke/.codex-workspaces/incident-troubleshooting/studio/src/extensions/Elsa.Studio.Diagnostics.OpenTelemetry/bin/Release/net10.0/Elsa.Studio.Diagnostics.OpenTelemetry.dll
+  Elsa.Studio.ExtensionBuilder -> /Users/sipke/.codex-workspaces/incident-troubleshooting/studio/src/extensions/Elsa.Studio.ExtensionBuilder/bin/Release/net10.0/Elsa.Studio.ExtensionBuilder.dll
+  Elsa.Studio.Web -> /Users/sipke/.codex-workspaces/incident-troubleshooting/studio/src/apps/Elsa.Studio.Web/bin/Release/net10.0/Elsa.Studio.Web.dll
+
+Build succeeded.
+    0 Warning(s)
+    0 Error(s)
+
+Time Elapsed 00:00:05.06
+
+Evidence excerpt: /tmp/incident-studio-unsupported-health-final-red.log
+ RUN  v2.1.9 /Users/sipke/.codex-workspaces/incident-troubleshooting/studio/src/essentials/Elsa.Studio.Workflows/Client
+
+ ❯ src/__tests__/workflowRunHistory.test.tsx (5 tests | 1 failed) 105ms
+   × workflow run history > lets a legacy health deep link clear only that filter before searching older servers 14ms
+     → expected true to be false // Object.is equality
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/__tests__/workflowRunHistory.test.tsx > workflow run history > lets a legacy health deep link clear only that filter before searching older servers
+AssertionError: expected true to be false // Object.is equality
+
+- Expected
++ Received
+
+- false
++ true
+
+ ❯ src/__tests__/workflowRunHistory.test.tsx:181:35
+    179|     expect(container.textContent).not.toContain("No workflow runs matc…
+    180|     const healthFilter = container.querySelector<HTMLSelectElement>("s…
+    181|     expect(healthFilter.disabled).toBe(false);
+       |                                   ^
+    182|     expect(healthFilter.querySelector<HTMLOptionElement>("option[value…
+    183|     expect(container.querySelector<HTMLSelectElement>("select[aria-lab…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 4 passed (5)
+   Start at  15:08:47
+   Duration  1.27s (transform 313ms, setup 16ms, collect 512ms, tests 105ms, environment 301ms, prepare 88ms)
+
+undefined
+/Users/sipke/.codex-workspaces/incident-troubleshooting/studio/src/essentials/Elsa.Studio.Workflows/Client:
+[ERR_PNPM_RECURSIVE_EXEC_FIRST_FAIL] Command failed with exit code 1: vitest run src/__tests__/workflowRunHistory.test.tsx
+
+Evidence excerpt: /tmp/incident-studio-unsupported-health-green.log
+
+ RUN  v2.1.9 /Users/sipke/.codex-workspaces/incident-troubleshooting/studio/src/essentials/Elsa.Studio.Workflows/Client
+
+ ✓ src/__tests__/workflowRunHistory.test.tsx (5 tests) 103ms
+
+ Test Files  1 passed (1)
+      Tests  5 passed (5)
+   Start at  15:09:58
+   Duration  1.55s (transform 359ms, setup 16ms, collect 574ms, tests 103ms, environment 405ms, prepare 85ms)

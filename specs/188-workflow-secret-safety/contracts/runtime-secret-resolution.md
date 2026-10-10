@@ -1,7 +1,7 @@
 # Contract: runtime secret resolution
 
 Shapes for FR-001 to FR-005, as shipped in slice 3 (the bridge mapping and feature below are slice 4's, and the parts
-marked slice 8 arrive with masking). Decisions and
+marked slice 8 shipped with masking). Decisions and
 alternatives are in [research R1 to R4](../research.md).
 
 ## Runtime-owned contract (`Elsa.Workflows.Runtime.Core`)
@@ -129,8 +129,8 @@ store-private detail in it.
 | Global or across-scope context | The partition accessor throws; resolver never called. |
 | Instance `TenantId` set and different from the partition | Throw `RuntimeSecretResolutionException(name, "TenantMismatch", false)`; resolver never called. |
 | Instance not found in the partition | Throw `InvalidOperationException`; resolver never called. |
-| Resolver composed, resolution succeeds | Convert with the envelope's plan; hydrate; nothing written back. Slice 8 (masking) adds: register the value with `IRuntimeSecretMask`. |
-| Resolution fails | Throw `RuntimeSecretResolutionException`; the handler's existing fault boundary records a fault whose `IsRetryable` and code come from `IRuntimeFaultClassification`, and, from slice 8 (masking), also when the exception is masked (the masking wrapper copies both). |
+| Resolver composed, resolution succeeds | Register the value with `IRuntimeSecretMask` under the request's `ActivityExecutionId` (slice 8), before the next reference is resolved; convert with the envelope's plan; hydrate; nothing written back. |
+| Resolution fails | Throw `RuntimeSecretResolutionException`; the handler's existing fault boundary records a fault whose `IsRetryable` and code come from `IRuntimeFaultClassification`, also when an earlier reference of the same activation resolved and the exception is therefore masked (slice 8: `SecretMaskedException` copies both, and the fault keeps the type name `RuntimeSecretResolutionException`). |
 | Conversion fails while the activation's token is live (a cancellation-typed exception included), or the envelope carries no plan | Throw `RuntimeSecretResolutionException(name, "ConversionFailed", false)`, without the conversion's exception (its message may describe the value). `TypeMismatch` is never used for this case; it means only that the stored secret's type differs from the reference's. A backstop: publish compiles only plans from text that cannot fail on a string (research R11), so this is reached only by an artifact that skipped publish. |
 | No `IRuntimeSecretResolver` composed | Throw `RuntimeSecretResolverNotFoundException`, which `ActivityActivationFailureHandler` classifies as kind `MissingSecretResolver`, capability `SecretResolver` (key `IRuntimeSecretResolver`), recovery `CorrectDeploymentAndResume`, so composing `SecretsWorkflows` repairs it; the activity waits with an `ArtifactActivationFailed` incident and is not faulted (§E2.6.1). A `VF-ACT-010` refusal of another input in the same snapshot is reported first, because composing a resolver would not repair it. |
 | Activation canceled | The resolver gets the activation's token; whatever it throws, and a failure it reports, once that token is canceled is treated as the cancellation, never as a resolution failure. |

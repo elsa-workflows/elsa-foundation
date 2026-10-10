@@ -67,6 +67,7 @@ public sealed class IncidentState
     public DateTimeOffset CreatedAt { get; }
     public DateTimeOffset? ResolvedAt { get; }
     public IReadOnlyDictionary<string, string> Metadata { get; }
+    public bool IsActive => !IsTerminal(Status);
     public bool IsBlocking => Status == IncidentStatus.Blocking;
 
     private static bool IsTerminal(IncidentStatus status) =>

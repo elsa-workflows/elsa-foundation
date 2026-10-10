@@ -32,8 +32,8 @@ public sealed class ModuleMigrateScriptToolTests : IDisposable
         File.WriteAllText(
             Path.Join(repository, "tools", "ef", "Elsa.EntityFrameworkCore.Tooling", "Elsa.EntityFrameworkCore.Tooling.csproj"),
             "<Project />");
-        Directory.CreateDirectory(Path.Join(repository, "src", "essentials", "Cli"));
-        File.WriteAllText(Path.Join(repository, "src", "essentials", "Cli", "Elsa.Cli.csproj"), "<Project />");
+        Directory.CreateDirectory(Path.Join(repository, "src", "essentials", "Cli", "Elsa.Cli"));
+        File.WriteAllText(Path.Join(repository, "src", "essentials", "Cli", "Elsa.Cli", "Elsa.Cli.csproj"), "<Project />");
 
         WriteShim("dotnet", """
             #!/usr/bin/env bash

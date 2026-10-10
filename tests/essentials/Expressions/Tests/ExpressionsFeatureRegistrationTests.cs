@@ -7,6 +7,7 @@ namespace Elsa.Expressions.Tests;
 
 public sealed class ExpressionsFeatureRegistrationTests
 {
+    // Kept beside the composition test (§2.23.1): asserts what the feature must not register (no template manager or legacy handler).
     [Fact]
     public void Liquid_feature_registers_only_the_portable_expression_path()
     {

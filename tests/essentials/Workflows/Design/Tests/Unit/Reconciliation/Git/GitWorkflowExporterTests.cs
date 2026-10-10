@@ -1,7 +1,13 @@
+using CShells;
+using Elsa.Tasks.Services;
 using Elsa.Workflows.Design.Reconciliation.Git.Options;
 using Elsa.Workflows.Design.Reconciliation.Git.Services;
+using Elsa.Workflows.Design.Reconciliation.Git.Startup;
+using Elsa.Workflows.Design.Tests.Infrastructure;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
+using static Elsa.Workflows.Design.Tests.Infrastructure.CredentialLiteralTestSupport;
 
 namespace Elsa.Workflows.Design.Tests.Unit.Reconciliation.Git;
 
@@ -40,6 +46,55 @@ public sealed class GitWorkflowExporterTests : GitExportTest
         var commitCountAfterFirst = Subjects(cache).Count;
         await node.Exporter.ExportAsync(CancellationToken.None); // second run: everything present
         Assert.Equal(commitCountAfterFirst, Subjects(cache).Count);
+    }
+
+    [Fact]
+    public async Task A_version_the_credential_literal_rule_refuses_is_left_out_while_everything_else_is_exported()
+    {
+        // Spec 188, FR-008: wf-refused's only version, and wf-mixed's 1.0.0, bind a literal to a credential input.
+        Publish("wf-refused", "Refused");
+        AddVersion("wf-refused", "1.0.0", CredentialBoundAs("Literal"));
+        Publish("wf-mixed", "Mixed");
+        AddVersion("wf-mixed", "1.0.0", CredentialBoundAs("Literal"));
+        AddVersion("wf-mixed", "2.0.0", CredentialBoundAs("Secret"));
+        var node = Writer(GitPushMode.Immediate);
+
+        Assert.Null(await Record.ExceptionAsync(() => node.Exporter.ExportAsync(CancellationToken.None)));
+
+        var cache = node.CachePath;
+        Assert.False(Directory.Exists(Path.Join(cache, "workflows", "wf-refused", "versions")));
+        Assert.False(File.Exists(Path.Join(cache, "workflows", "wf-mixed", "versions", "1.0.0.json")));
+        Assert.True(IsCommitted(cache, "workflows/wf-mixed/versions/2.0.0.json"));
+        Assert.True(IsCommitted(cache, "workflows/wf-refused/definition.json"));
+        var subjects = Subjects(cache);
+        Assert.DoesNotContain("Publish Refused v1.0.0 (wf-refused)", subjects);
+        Assert.DoesNotContain("Publish Mixed v1.0.0 (wf-mixed)", subjects);
+        Assert.Equal(["wf/wf-mixed/v2.0.0"], _git.RunOrDefault(cache, "tag", "--list", "wf/*").Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries));
+        Assert.Contains("Publish Mixed v2.0.0 (wf-mixed)", RemoteSubjects());
+        var warnings = node.ExportLog.Warnings.ToArray();
+        Assert.Equal(2, warnings.Length);
+        Assert.All(warnings, warning =>
+        {
+            Assert.Contains("Inputs/CredentialLiteral", warning.Message, StringComparison.Ordinal);
+            Assert.Contains($"'{NodeId}'", warning.Message, StringComparison.Ordinal);
+            Assert.Contains($"'{CredentialName}'", warning.Message, StringComparison.Ordinal);
+            Assert.DoesNotContain(Literal, warning.Message, StringComparison.Ordinal);
+        });
+        Assert.Contains(warnings, warning => warning.Message.Contains("'wf-refused' v1.0.0", StringComparison.Ordinal));
+        Assert.Contains(warnings, warning => warning.Message.Contains("'wf-mixed' v1.0.0", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task The_export_startup_task_completes_when_a_version_is_refused()
+    {
+        Publish("wf-refused", "Refused");
+        AddVersion("wf-refused", "1.0.0", CredentialBoundAs("Literal"));
+        var node = Writer();
+        var executor = new TaskExecutor(new InMemoryDistributedLockProvider(), NullLogger<TaskExecutor>.Instance, new ShellSettings("default"));
+
+        Assert.Null(await Record.ExceptionAsync(() =>
+            executor.ExecuteTaskAsync(new GitWorkflowExportStartupTask(node.Exporter), CancellationToken.None)));
+        Assert.Single(node.ExportLog.Warnings);
     }
 
     [Fact]

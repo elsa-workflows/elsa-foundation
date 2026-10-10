@@ -33,7 +33,7 @@ Post-commit intent kinds can contribute their own retry policy. Parent-resume de
 
 ## Cross-references
 
-- Swept contracts: `IRuntimeResumptionService`, `IWorkflowSchedulerWorkQueue.ListClaimableWorkflowExecutionIdsAsync`, `IRuntimeRecoveryScanner`, `IRuntimePostCommitOutboxProcessor`, `IPostCommitOutboxLookupStore`, and `IWorkflowOutputSource` — see [`../EXTENSION_POINTS.md`](../EXTENSION_POINTS.md).
+- Swept contracts: `IRuntimeResumptionService`, `IWorkflowSchedulerWorkQueue.ListClaimableWorkflowExecutionIdsAsync`, `IRuntimeRecoveryScanner`, `IRuntimePostCommitOutboxProcessor`, `IPostCommitOutboxLookupStore`, and `IWorkflowOutputSource` — see [`../EXTENSION_POINTS.md`](../Elsa.Workflows.Runtime/EXTENSION_POINTS.md).
 - Durable queue bridge: `EfSchedulerWorkQueueStore` (`Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore`).
 - Worked reference: [docs/runtime-durable-resumption.md](../../../../../docs/runtime-durable-resumption.md).
 - Repo-wide index: [`../../../EXTENSION_POINTS.md`](../../../EXTENSION_POINTS.md).

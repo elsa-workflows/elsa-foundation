@@ -2,7 +2,6 @@
 
   <PropertyGroup>
     <IsPackable>false</IsPackable>
-    <DefaultItemExcludes>$(DefaultItemExcludes);Tests/**</DefaultItemExcludes>
   </PropertyGroup>
 
   <ItemGroup>
@@ -18,7 +17,7 @@
   <ItemGroup>
     <ProjectReference Include="..\..\..\..\..\src\essentials\Api\AspNetCore\Elsa.Api.AspNetCore.csproj" />
     <ProjectReference Include="..\..\..\..\..\src\essentials\Foundation\Identity\Core\Elsa.Foundation.Identity.Core.csproj" />
-    <ProjectReference Include="..\..\..\..\..\src\essentials\Foundation\Identity\Elsa.Foundation.Identity.csproj" />
+    <ProjectReference Include="..\..\..\..\..\src\essentials\Foundation\Identity\Elsa.Foundation.Identity\Elsa.Foundation.Identity.csproj" />
   </ItemGroup>
 
 </Project>

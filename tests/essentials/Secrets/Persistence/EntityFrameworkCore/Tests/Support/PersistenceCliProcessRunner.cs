@@ -61,7 +61,7 @@ internal static class PersistenceCliProcessRunner
 
     /// <summary>The tool's own build output, which is also where its worker sits — the shipped layout.</summary>
     private static readonly string ToolAssembly =
-        Path.Join(RepositoryRoot, "src", "essentials", "Cli", "bin", Configuration, "net10.0", "Elsa.Cli.dll");
+        Path.Join(RepositoryRoot, "src", "essentials", "Cli", "Elsa.Cli", "bin", Configuration, "net10.0", "Elsa.Cli.dll");
 
     /// <summary>
     /// The fixture host that ships every first-party EF module — Secrets among them — and all four provider

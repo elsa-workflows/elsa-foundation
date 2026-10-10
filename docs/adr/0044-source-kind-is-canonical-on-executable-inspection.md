@@ -3,6 +3,11 @@
 - Status: Accepted
 - Date: 2026-07-13
 
+> **Amended 2026-10-10 by [ADR 0080](0080-elsa-4-simplification-decisions.md) D4 (#2566).** Nothing had shipped,
+> so the `sourceType` alias was removed without a Runtime API capability-version change. `sourceKind` is the only
+> source discriminator on executable-inspection responses. The v1/v2 table and the removal conditions below are
+> kept for provenance only.
+
 ## Context
 
 Runtime API v1 executable-inspection responses expose both `sourceType` and `sourceKind`. They are populated

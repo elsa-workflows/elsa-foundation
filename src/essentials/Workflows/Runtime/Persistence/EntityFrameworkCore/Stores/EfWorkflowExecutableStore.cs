@@ -4,6 +4,7 @@ using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Entities;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Exceptions;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Storage;
 using System.Data.Common;
 using System.Text.Json;
@@ -15,6 +16,8 @@ public sealed class EfWorkflowExecutableStore(
     IPersistenceAccessContextAccessor accessContextAccessor) : IWorkflowExecutableStore
 {
     private static readonly EfWriteRetry Coordination = new(EfWriteRetry.DefaultMaxAttempts, EfWriteConflict.Concurrency);
+    // A lease row conflicts only with an acquirer of the same lease id: a concurrent first insert or expired-row overwrite.
+    private static readonly EfWriteRetry LeaseWrite = new(EfWriteRetry.DefaultMaxAttempts, EfWriteConflict.Concurrency | EfWriteConflict.UniqueKey);
 
     public ValueTask SaveAsync(
         WorkflowExecutable executable,
@@ -211,6 +214,11 @@ public sealed class EfWorkflowExecutableStore(
             pair.Value.Artifact.IncarnationId,
             cancellationToken);
     }
+    // Root-write leases (spec 200). Each lease is a row of its own, so a holder's acquire, renewal and release touch only
+    // that row and never contend with other holders of the artifact (FR-001, FR-002). The deletion guard stays on the
+    // coordination row. The two sides exclude each other by write-then-check (research R2): each commits its own record
+    // and then reads the other side's in a fresh statement, so they cannot both succeed. Every lease operation runs on a
+    // context of its own (CreateLeaseContext), so it never saves or discards what a caller staged on the shared one.
     public async ValueTask<WorkflowExecutableRootWriteLease?> TryAcquireRootWriteLeaseAsync(
         string artifactId,
         string leaseId,
@@ -221,24 +229,71 @@ public sealed class EfWorkflowExecutableStore(
         ValidateTransition(artifactId, leaseId, expiresAt, now);
         cancellationToken.ThrowIfCancellationRequested();
         var scope = RequireScope();
-        return await Coordination.RunAsync<WorkflowExecutableRootWriteLease?>(context, async () =>
+        var id = CreateLeaseId(scope, artifactId, leaseId);
+        await using var leaseContext = CreateLeaseContext();
+        try
         {
-            context.ChangeTracker.Clear();
-            var pair = await LoadPairAsync(scope, artifactId, cancellationToken);
-            if (pair is null)
+            var grant = await LeaseWrite.RunAsync<LeaseGrant?>(leaseContext, async () =>
+            {
+                leaseContext.ChangeTracker.Clear();
+                var pair = await ReadPairAsync(leaseContext, scope, artifactId, cancellationToken);
+                if (pair is not { } current || GuardIsLive(current.State, now))
+                    return null;
+                // A guard still on the row may belong to a delete whose transaction outlived it: clear it first, by the
+                // row's revision, so that delete fails its own revision check instead of deleting under this lease. A lost
+                // race throws a concurrency conflict and the attempt starts over.
+                if (current.State.Guard is not null &&
+                    !await ClearExpiredGuardAsync(leaseContext, scope, artifactId, current.IncarnationId, now, cancellationToken))
+                    return null;
+                var row = await FindLeaseAsync(leaseContext, scope, artifactId, leaseId, id, cancellationToken);
+                if (row is not null && row.IncarnationId == current.IncarnationId && row.ExpiresAtUtcTicks > now.UtcTicks)
+                    return new LeaseGrant(row.Token, current.IncarnationId, Created: false);
+
+                var token = Token();
+                if (row is null)
+                {
+                    leaseContext.WorkflowExecutableRootWriteLeases.Add(ToLeaseEntity(scope, artifactId, leaseId, id, token, expiresAt, current.IncarnationId));
+                }
+                else
+                {
+                    // An expired row, or one left by an earlier incarnation, is overwritten under its revision.
+                    row.Token = token;
+                    row.ExpiresAtUtcTicks = expiresAt.UtcTicks;
+                    row.IncarnationId = current.IncarnationId;
+                    row.SchemaVersion = RuntimeArtifactEfModule.SchemaVersion;
+                    row.Revision++;
+                }
+
+                await leaseContext.SaveChangesAsync(cancellationToken);
+                return new LeaseGrant(token, current.IncarnationId, Created: true);
+            }, _ => throw CoordinationDidNotSettle(artifactId), cancellationToken);
+
+            if (grant is null)
                 return null;
-            var row = pair.Value.Coordination;
-            var state = ReadCoordination(row, scope, artifactId, CreateId(scope, artifactId));
-            var leases = LiveLeases(state, now);
-            if (state.Guard is { } guard && guard.ExpiresAt > now)
+
+            // Write-then-check: the lease is committed, so a guard that commits from here on sees it and stands down. A
+            // guard, delete or recreate that this fresh read observes means this lease came too late: withdraw it.
+            if (!await LeaseWrite.RunAsync(
+                    leaseContext,
+                    () => new ValueTask<bool>(StillAdmitsAsync(leaseContext, scope, artifactId, grant.IncarnationId, now, cancellationToken)),
+                    _ => ValueTask.FromResult(false),
+                    cancellationToken))
+            {
+                if (grant.Created)
+                    await DeleteLeaseAsync(leaseContext, id, grant.Token, cancellationToken);
                 return null;
-            if (leases.TryGetValue(leaseId, out var existing))
-                return new WorkflowExecutableRootWriteLease(artifactId, leaseId, existing.Token);
-            var created = new Lease(leaseId, Token(), expiresAt);
-            leases[leaseId] = created;
-            await UpdateCoordination(row, new CoordinationState(leases, null), cancellationToken);
-            return new WorkflowExecutableRootWriteLease(artifactId, leaseId, created.Token);
-        }, _ => throw new InvalidOperationException("Runtime coordination changed concurrently."), cancellationToken);
+            }
+
+            return new WorkflowExecutableRootWriteLease(artifactId, leaseId, grant.Token);
+        }
+        // Already normalized by an inner call: rethrow rather than let the clause below wrap it a second time,
+        // which it would, because this store's exception derives from InvalidOperationException and carries the
+        // provider failure as its inner.
+        catch (RuntimeArtifactEntityFrameworkPersistenceException) { throw; }
+        catch (Exception exception) when (EfRelationalExceptionClassifier.IsProviderFailure(exception))
+        {
+            throw NormalizeProviderFailure("leasing", artifactId, exception);
+        }
     }
 
     public async ValueTask<bool> RenewRootWriteLeaseAsync(
@@ -251,26 +306,26 @@ public sealed class EfWorkflowExecutableStore(
         ValidateTransition(lease.ArtifactId, lease.LeaseId, expiresAt, now);
         cancellationToken.ThrowIfCancellationRequested();
         var scope = RequireScope();
-        return await Coordination.RunAsync(context, async () =>
+        var id = CreateLeaseId(scope, lease.ArtifactId, lease.LeaseId);
+        var token = lease.ConcurrencyToken;
+        var nowTicks = now.UtcTicks;
+        var expiresAtTicks = expiresAt.UtcTicks;
+        await using var leaseContext = CreateLeaseContext();
+        try
         {
-            var pair = await LoadPairAsync(scope, lease.ArtifactId, cancellationToken);
-            if (pair is null)
-                return false;
-            var row = pair.Value.Coordination;
-            var state = ReadCoordination(row, scope, lease.ArtifactId, CreateId(scope, lease.ArtifactId));
-            if (state.Guard is { } guard && guard.ExpiresAt > now ||
-                !state.Leases.TryGetValue(lease.LeaseId, out var current) ||
-                current.Token != lease.ConcurrencyToken || current.ExpiresAt <= now)
-            {
-                return false;
-            }
-
-            var leases = state.Leases.ToDictionary(x => x.Key, x => x.Value, StringComparer.Ordinal);
-            leases[lease.LeaseId] = current with { ExpiresAt = expiresAt };
-            await UpdateCoordination(row, new CoordinationState(leases, state.Guard), cancellationToken);
-            context.ChangeTracker.Clear();
-            return true;
-        }, _ => throw CoordinationDidNotSettle(lease.ArtifactId), cancellationToken);
+            // One statement on this lease's own row. The revision moves too, so a holder whose clock already counts the
+            // row expired cannot overwrite it on the strength of what it read before this renewal.
+            var renewed = await leaseContext.WorkflowExecutableRootWriteLeases
+                .Where(x => x.Id == id && x.Token == token && x.ExpiresAtUtcTicks > nowTicks)
+                .ExecuteUpdateAsync(updates => updates
+                    .SetProperty(x => x.ExpiresAtUtcTicks, expiresAtTicks)
+                    .SetProperty(x => x.Revision, x => x.Revision + 1), cancellationToken);
+            return renewed == 1;
+        }
+        catch (Exception exception) when (EfRelationalExceptionClassifier.IsProviderFailure(exception))
+        {
+            throw NormalizeProviderFailure("renewing", lease.ArtifactId, exception);
+        }
     }
 
     public async ValueTask ReleaseRootWriteLeaseAsync(
@@ -282,30 +337,14 @@ public sealed class EfWorkflowExecutableStore(
         ArgumentException.ThrowIfNullOrWhiteSpace(lease.LeaseId);
         cancellationToken.ThrowIfCancellationRequested();
         var scope = RequireScope();
+        var id = CreateLeaseId(scope, lease.ArtifactId, lease.LeaseId);
+        await using var leaseContext = CreateLeaseContext();
         try
         {
-            await Coordination.RunAsync(context, async () =>
-            {
-                var pair = await LoadPairAsync(scope, lease.ArtifactId, cancellationToken);
-                if (pair is null)
-                    return;
-                var row = pair.Value.Coordination;
-                var state = ReadCoordination(row, scope, lease.ArtifactId, CreateId(scope, lease.ArtifactId));
-                if (!state.Leases.TryGetValue(lease.LeaseId, out var current) || current.Token != lease.ConcurrencyToken)
-                    return;
-                var leases = state.Leases.ToDictionary(x => x.Key, x => x.Value, StringComparer.Ordinal);
-                leases.Remove(lease.LeaseId);
-                await UpdateCoordination(row, new CoordinationState(leases, state.Guard), cancellationToken);
-                context.ChangeTracker.Clear();
-            }, _ => throw CoordinationDidNotSettle(lease.ArtifactId), cancellationToken);
+            await DeleteLeaseAsync(leaseContext, id, lease.ConcurrencyToken, cancellationToken);
         }
-        // Already normalized by an inner call: rethrow rather than let the clause below wrap it a second time,
-        // which it would, because this store's exception derives from InvalidOperationException and carries the
-        // provider failure as its inner.
-        catch (RuntimeArtifactEntityFrameworkPersistenceException) { throw; }
         catch (Exception exception) when (EfRelationalExceptionClassifier.IsProviderFailure(exception))
         {
-            context.ChangeTracker.Clear();
             throw NormalizeProviderFailure("releasing", lease.ArtifactId, exception);
         }
     }
@@ -320,7 +359,7 @@ public sealed class EfWorkflowExecutableStore(
         ValidateTransition(artifactId, operationId, expiresAt, now);
         cancellationToken.ThrowIfCancellationRequested();
         var scope = RequireScope();
-        return await Coordination.RunAsync<WorkflowExecutableDeletionGuard?>(context, async () =>
+        var begun = await Coordination.RunAsync<BegunDeletion?>(context, async () =>
         {
             context.ChangeTracker.Clear();
             var pair = await LoadPairAsync(scope, artifactId, cancellationToken);
@@ -328,17 +367,42 @@ public sealed class EfWorkflowExecutableStore(
                 return null;
             var row = pair.Value.Coordination;
             var state = ReadCoordination(row, scope, artifactId, CreateId(scope, artifactId));
+            // Leases still in the shared record from before spec 200 hold the artifact until they expire (owner decision 1).
             var leases = LiveLeases(state, now);
             if (leases.Count != 0)
                 return null;
             if (state.Guard is { } existing && existing.ExpiresAt > now)
                 return existing.OperationId == operationId
-                    ? new WorkflowExecutableDeletionGuard(artifactId, operationId, existing.Token)
+                    ? new BegunDeletion(new WorkflowExecutableDeletionGuard(artifactId, operationId, existing.Token), row.IncarnationId, Created: false)
                     : null;
             var created = new Guard(operationId, Token(), expiresAt);
             await UpdateCoordination(row, new CoordinationState(leases, created), cancellationToken);
-            return new WorkflowExecutableDeletionGuard(artifactId, operationId, created.Token);
+            context.ChangeTracker.Clear();
+            return new BegunDeletion(new WorkflowExecutableDeletionGuard(artifactId, operationId, created.Token), row.IncarnationId, Created: true);
         }, _ => throw new InvalidOperationException("Runtime coordination changed concurrently."), cancellationToken);
+
+        if (begun is null)
+            return null;
+        if (!begun.Created)
+            return begun.Guard;
+
+        // Write-then-check: the guard is committed, so an acquirer that commits from here on sees it and withdraws. A live
+        // lease this fresh read observes was committed first: stand down.
+        try
+        {
+            if (await HasLiveLeasesAsync(context, scope, artifactId, begun.IncarnationId, now, cancellationToken))
+            {
+                await CancelDeletionAsync(begun.Guard, cancellationToken);
+                return null;
+            }
+
+            await PurgeDeadLeasesAsync(scope, artifactId, begun.IncarnationId, now, cancellationToken);
+            return begun.Guard;
+        }
+        catch (Exception exception) when (EfRelationalExceptionClassifier.IsProviderFailure(exception))
+        {
+            throw NormalizeProviderFailure("guarding", artifactId, exception);
+        }
     }
 
     public async ValueTask<bool> CancelDeletionAsync(
@@ -426,13 +490,26 @@ public sealed class EfWorkflowExecutableStore(
                 _ = Read(artifact, scope, artifactId, id);
                 var state = ReadCoordination(coordination, scope, artifactId, id);
 
-                if (guard is not null && !CanDelete(state, guard, now))
+                if (guard is not null &&
+                    (!CanDelete(state, guard, now) ||
+                     await RuntimeArtifactEfPersistenceBoundary.QueryAsync(
+                         context, "deleting", artifactId,
+                         () => HasLiveLeasesAsync(context, scope, artifactId, expectedIncarnationId, now, cancellationToken))))
                 {
                     await RuntimeArtifactEfPersistenceBoundary.ExecuteAsync(
                         context, "deleting", artifactId, () => transaction.CommitAsync(cancellationToken));
                     return false;
                 }
 
+                var scopeHash = Hash(scope);
+                var encodedScope = Encode(scope);
+                var artifactIdHash = Hash(artifactId);
+                var encodedArtifactId = Encode(artifactId);
+                await RuntimeArtifactEfPersistenceBoundary.ExecuteAsync(
+                    context, "deleting", artifactId, () => context.WorkflowExecutableRootWriteLeases
+                        .Where(x => x.ScopeKeyHash == scopeHash && x.ScopeKey == encodedScope &&
+                                    x.ArtifactIdHash == artifactIdHash && x.ArtifactId == encodedArtifactId)
+                        .ExecuteDeleteAsync(cancellationToken));
                 context.RemoveRange(artifact, coordination);
                 await RuntimeArtifactEfPersistenceBoundary.ExecuteAsync(
                     context, "deleting", artifactId, () => context.SaveChangesAsync(cancellationToken));
@@ -577,6 +654,244 @@ public sealed class EfWorkflowExecutableStore(
             throw;
         }
     }
+
+    // A sibling of the injected context, built from its options: the same provider, interceptors and schema write gate,
+    // but its own change tracker and, in a host (which configures a connection string), its own pooled connection. A
+    // lease write therefore never saves or discards what a caller staged on the shared context, and a renewal that fires
+    // while a checkpoint write is using the shared context does not touch it (spec 200, research R4).
+    private RuntimeDbContext CreateLeaseContext()
+    {
+        var options = context.GetService<IDbContextOptions>();
+        try
+        {
+            return (RuntimeDbContext)Activator.CreateInstance(context.GetType(), options)!;
+        }
+        catch (MissingMethodException exception)
+        {
+            throw new InvalidOperationException(
+                $"Runtime root-write leases run on a context of their own, so '{context.GetType().Name}' needs a public constructor that takes only its options.",
+                exception);
+        }
+    }
+
+    /// <summary>
+    /// Reads and validates the executable pair without tracking: its incarnation and coordination state, or null when absent.
+    /// </summary>
+    private static async Task<(string IncarnationId, CoordinationState State)?> ReadPairAsync(
+        RuntimeDbContext db,
+        string scope,
+        string artifactId,
+        CancellationToken cancellationToken)
+    {
+        var id = CreateId(scope, artifactId);
+        var scopeHash = Hash(scope);
+        var encodedScope = Encode(scope);
+        var artifactIdHash = Hash(artifactId);
+        var encodedArtifactId = Encode(artifactId);
+        for (var attempt = 0; ; attempt++)
+        {
+            var executable = await RuntimeArtifactEfPersistenceBoundary.QueryAsync(
+                db, "reading", artifactId, () => db.WorkflowExecutables
+                    .AsNoTracking()
+                    .SingleOrDefaultAsync(
+                        x => x.Id == id && x.ScopeKeyHash == scopeHash && x.ScopeKey == encodedScope &&
+                             x.ArtifactIdHash == artifactIdHash && x.ArtifactId == encodedArtifactId,
+                        cancellationToken));
+            if (executable is not null)
+                _ = Read(executable, scope, artifactId, id);
+            var artifact = executable?.IncarnationId;
+            var coordination = await RuntimeArtifactEfPersistenceBoundary.QueryAsync(
+                db, "reading", artifactId, () => db.WorkflowExecutableCoordinations
+                    .AsNoTracking()
+                    .SingleOrDefaultAsync(
+                        x => x.Id == id && x.ScopeKeyHash == scopeHash && x.ScopeKey == encodedScope &&
+                             x.ArtifactIdHash == artifactIdHash && x.ArtifactId == encodedArtifactId,
+                        cancellationToken));
+            if (artifact is null && coordination is null)
+                return null;
+            var state = coordination is null ? null : ReadCoordination(coordination, scope, artifactId, id);
+            if (artifact is not null && state is not null && StringComparer.Ordinal.Equals(artifact, coordination!.IncarnationId))
+                return (artifact, state);
+            // A delete or create committed between the two reads; observe the pair once more before calling it corrupt.
+            if (attempt > 0)
+                throw new InvalidDataException($"Workflow executable '{id}' has incomplete persisted state.");
+        }
+    }
+
+    // The check after a lease commit. The executable and its coordination row are created and deleted in one transaction,
+    // so the coordination row alone answers it: present, of the lease's incarnation, and without a live guard. An expired
+    // guard still on the row is cleared by revision first (see ClearExpiredGuardAsync); losing that race throws a
+    // concurrency conflict, and the caller checks again.
+    private static async Task<bool> StillAdmitsAsync(
+        RuntimeDbContext db,
+        string scope,
+        string artifactId,
+        string incarnationId,
+        DateTimeOffset now,
+        CancellationToken cancellationToken)
+    {
+        db.ChangeTracker.Clear();
+        var coordination = await FindCoordinationAsync(db, scope, artifactId, tracking: false, cancellationToken);
+        if (coordination is null)
+            return false;
+        var state = ReadCoordination(coordination, scope, artifactId, CreateId(scope, artifactId));
+        if (!StringComparer.Ordinal.Equals(coordination.IncarnationId, incarnationId))
+            return false;
+        return state.Guard is null || await ClearExpiredGuardAsync(db, scope, artifactId, incarnationId, now, cancellationToken);
+    }
+
+    /// <summary>
+    /// Removes an expired deletion guard from the coordination row by compare-and-swap on its revision, and returns false
+    /// when the guard is live, or the pair is gone or recreated. A guarded delete deletes the coordination row under the
+    /// revision it read, so whichever of the two commits first makes the other fail: a delete whose transaction outlived its
+    /// guard can no longer commit under a lease granted meanwhile (the per-lease rows alone would not stop it). Only
+    /// acquirers that meet a guard write the row, so it does not become a hot row again.
+    /// </summary>
+    /// <exception cref="DbUpdateConcurrencyException">The row changed since it was read.</exception>
+    private static async Task<bool> ClearExpiredGuardAsync(
+        RuntimeDbContext db,
+        string scope,
+        string artifactId,
+        string incarnationId,
+        DateTimeOffset now,
+        CancellationToken cancellationToken)
+    {
+        db.ChangeTracker.Clear();
+        try
+        {
+            var row = await FindCoordinationAsync(db, scope, artifactId, tracking: true, cancellationToken);
+            if (row is null)
+                return false;
+            var state = ReadCoordination(row, scope, artifactId, CreateId(scope, artifactId));
+            if (!StringComparer.Ordinal.Equals(row.IncarnationId, incarnationId))
+                return false;
+            if (state.Guard is null)
+                return true;
+            if (GuardIsLive(state, now))
+                return false;
+            row.ContentJson = RuntimeArtifactJson.Serialize(new CoordinationState(LiveLeases(state, now), null));
+            row.SchemaVersion = RuntimeArtifactEfModule.SchemaVersion;
+            row.Revision++;
+            await db.SaveChangesAsync(cancellationToken);
+            return true;
+        }
+        finally
+        {
+            db.ChangeTracker.Clear();
+        }
+    }
+
+    private static Task<WorkflowExecutableCoordinationEntity?> FindCoordinationAsync(
+        RuntimeDbContext db,
+        string scope,
+        string artifactId,
+        bool tracking,
+        CancellationToken cancellationToken)
+    {
+        var id = CreateId(scope, artifactId);
+        var scopeHash = Hash(scope);
+        var encodedScope = Encode(scope);
+        var artifactIdHash = Hash(artifactId);
+        var encodedArtifactId = Encode(artifactId);
+        var rows = tracking ? db.WorkflowExecutableCoordinations : db.WorkflowExecutableCoordinations.AsNoTracking();
+        return RuntimeArtifactEfPersistenceBoundary.QueryAsync(
+            db, "reading", artifactId, () => rows.SingleOrDefaultAsync(
+                x => x.Id == id && x.ScopeKeyHash == scopeHash && x.ScopeKey == encodedScope &&
+                     x.ArtifactIdHash == artifactIdHash && x.ArtifactId == encodedArtifactId,
+                cancellationToken));
+    }
+
+    private static async Task<WorkflowExecutableRootWriteLeaseEntity?> FindLeaseAsync(
+        RuntimeDbContext db,
+        string scope,
+        string artifactId,
+        string leaseId,
+        string id,
+        CancellationToken cancellationToken)
+    {
+        var row = await RuntimeArtifactEfPersistenceBoundary.QueryAsync(
+            db, "reading", artifactId, () => db.WorkflowExecutableRootWriteLeases.SingleOrDefaultAsync(x => x.Id == id, cancellationToken));
+        if (row is null)
+            return null;
+        if (EfSchemaVersion.NotReadable(RuntimeArtifactEfModule.Chain, row.SchemaVersion) ||
+            row.ScopeKey != Encode(scope) || row.ScopeKeyHash != Hash(scope) ||
+            row.ArtifactId != Encode(artifactId) || row.ArtifactIdHash != Hash(artifactId) ||
+            row.LeaseId != Encode(leaseId) || string.IsNullOrWhiteSpace(row.Token) ||
+            string.IsNullOrWhiteSpace(row.IncarnationId) || row.Revision <= 0)
+            throw new InvalidDataException("The persisted workflow executable root-write lease row is corrupt.");
+        return row;
+    }
+
+    private static Task<int> DeleteLeaseAsync(RuntimeDbContext db, string id, string token, CancellationToken cancellationToken) =>
+        db.WorkflowExecutableRootWriteLeases
+            .Where(x => x.Id == id && x.Token == token)
+            .ExecuteDeleteAsync(cancellationToken);
+
+    private static Task<bool> HasLiveLeasesAsync(
+        RuntimeDbContext db,
+        string scope,
+        string artifactId,
+        string incarnationId,
+        DateTimeOffset now,
+        CancellationToken cancellationToken)
+    {
+        var scopeHash = Hash(scope);
+        var encodedScope = Encode(scope);
+        var artifactIdHash = Hash(artifactId);
+        var encodedArtifactId = Encode(artifactId);
+        var nowTicks = now.UtcTicks;
+        return db.WorkflowExecutableRootWriteLeases
+            .AsNoTracking()
+            .AnyAsync(x => x.ScopeKeyHash == scopeHash && x.ScopeKey == encodedScope &&
+                           x.ArtifactIdHash == artifactIdHash && x.ArtifactId == encodedArtifactId &&
+                           x.IncarnationId == incarnationId && x.ExpiresAtUtcTicks > nowTicks,
+                cancellationToken);
+    }
+
+    /// <summary>Removes the artifact's expired lease rows and rows of earlier incarnations, which nothing honours.</summary>
+    private Task<int> PurgeDeadLeasesAsync(
+        string scope,
+        string artifactId,
+        string incarnationId,
+        DateTimeOffset now,
+        CancellationToken cancellationToken)
+    {
+        var scopeHash = Hash(scope);
+        var encodedScope = Encode(scope);
+        var artifactIdHash = Hash(artifactId);
+        var encodedArtifactId = Encode(artifactId);
+        var nowTicks = now.UtcTicks;
+        return context.WorkflowExecutableRootWriteLeases
+            .Where(x => x.ScopeKeyHash == scopeHash && x.ScopeKey == encodedScope &&
+                        x.ArtifactIdHash == artifactIdHash && x.ArtifactId == encodedArtifactId &&
+                        (x.ExpiresAtUtcTicks <= nowTicks || x.IncarnationId != incarnationId))
+            .ExecuteDeleteAsync(cancellationToken);
+    }
+
+    private static bool GuardIsLive(CoordinationState state, DateTimeOffset now) =>
+        state.Guard is { } guard && guard.ExpiresAt > now;
+
+    private static WorkflowExecutableRootWriteLeaseEntity ToLeaseEntity(
+        string scope,
+        string artifactId,
+        string leaseId,
+        string id,
+        string token,
+        DateTimeOffset expiresAt,
+        string incarnationId) => new()
+        {
+            Id = id,
+            ScopeKey = Encode(scope),
+            ScopeKeyHash = Hash(scope),
+            ArtifactId = Encode(artifactId),
+            ArtifactIdHash = Hash(artifactId),
+            LeaseId = Encode(leaseId),
+            Token = token,
+            ExpiresAtUtcTicks = expiresAt.UtcTicks,
+            IncarnationId = incarnationId,
+            Revision = 1,
+            SchemaVersion = RuntimeArtifactEfModule.SchemaVersion
+        };
 
     private static WorkflowExecutableEntity ToEntity(
         WorkflowExecutable executable,
@@ -754,6 +1069,9 @@ public sealed class EfWorkflowExecutableStore(
     private static string CreateId(string scope, string artifactId) =>
         Hash($"{scope.Length}:{scope}{artifactId.Length}:{artifactId}");
 
+    private static string CreateLeaseId(string scope, string artifactId, string leaseId) =>
+        Hash($"{scope.Length}:{scope}{artifactId.Length}:{artifactId}{leaseId.Length}:{leaseId}");
+
     private static string NewIncarnationId() => Guid.NewGuid().ToString("N");
 
     private static string Hash(string x) => EfRelationalIdentity.Hash(x);
@@ -801,6 +1119,10 @@ public sealed class EfWorkflowExecutableStore(
             throw new ArgumentException("The workflow executable continuation token is invalid.", nameof(x), exception);
         }
     }
+
+    private sealed record LeaseGrant(string Token, string IncarnationId, bool Created);
+
+    private sealed record BegunDeletion(WorkflowExecutableDeletionGuard Guard, string IncarnationId, bool Created);
 
     private sealed record Lease(string Id, string Token, DateTimeOffset ExpiresAt);
 

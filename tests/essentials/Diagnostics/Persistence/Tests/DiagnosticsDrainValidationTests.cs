@@ -106,6 +106,47 @@ public sealed class DiagnosticsDrainValidationTests : DiagnosticsDrainTestBase
         Assert.Equal(2, target.RetentionCalls); // stopped: nothing to apply
     }
 
+    [Fact]
+    public async Task Retention_if_pending_skips_the_pass_the_loop_already_applied()
+    {
+        // #2533: the OpenTelemetry writer awaited its acknowledgement and then ran a second, identical retention
+        // pass. With a periodic interval of one, the loop's pass already covers the commit.
+        var target = new ScriptedTarget();
+        var drain = Fixture.Create(target, retentionInterval: 1, batchSize: 1);
+        drain.Start();
+
+        await drain.EnqueueAsync(1);
+        await drain.ApplyRetentionIfPendingAsync();
+
+        Assert.Equal(1, target.RetentionCalls); // the loop's periodic pass only
+        await drain.ApplyPendingRetentionAsync();
+        Assert.Equal(2, target.RetentionCalls); // the unconditional barrier keeps its contract
+    }
+
+    [Fact]
+    public async Task Retention_if_pending_applies_committed_units_below_the_periodic_interval()
+    {
+        var target = new ScriptedTarget();
+        var drain = Fixture.Create(target, retentionInterval: 1_000, batchSize: 2);
+        await drain.ApplyRetentionIfPendingAsync();
+        Assert.Equal(0, target.RetentionCalls); // not started: nothing to apply
+
+        drain.Start();
+        await drain.ApplyRetentionIfPendingAsync();
+        Assert.Equal(0, target.RetentionCalls); // running, nothing committed since start
+
+        await Task.WhenAll(Enumerable.Range(0, 5).Select(item => drain.EnqueueAsync(item).AsTask()));
+        await drain.ApplyRetentionIfPendingAsync();
+        Assert.Equal(1, target.RetentionCalls); // five pending units: applied now
+        await drain.ApplyRetentionIfPendingAsync();
+        Assert.Equal(1, target.RetentionCalls); // already covered: skipped
+
+        await drain.StopAsync();
+        var afterStop = target.RetentionCalls;
+        await drain.ApplyRetentionIfPendingAsync();
+        Assert.Equal(afterStop, target.RetentionCalls); // stopped: nothing to apply
+    }
+
     private sealed class ScriptedTarget : IDiagnosticsDrainTarget<int, int>
     {
         private int _commitCalls;

@@ -1,6 +1,8 @@
 ﻿using Elsa.Activities.Design.Core.Contracts;
+using Elsa.Activities.Design.Core.Models;
 using Elsa.Expressions.Core.Models;
 using Elsa.Workflows.Design.Core.Models;
+using Elsa3.Activities.Design.Import.Models;
 using Elsa3.Models;
 using System.Text.Json;
 using ArgumentState = Elsa.Workflows.Design.Core.Models.ArgumentState;
@@ -11,9 +13,6 @@ namespace Elsa3.Mapping.Mappings;
 /// <summary>Converts an Elsa-3 activity to an Elsa-4 <see cref="ActivityNode"/>.</summary>
 public sealed class Elsa3ActivityToState(IActivityDefinitionLookup activityLookup)
 {
-    private const string ImportedStructureKind = "elsa3.imported-activity.structure";
-    private const string ImportedStructureSchemaVersion = "1.0.0";
-
     public ValueTask<ActivityNode> Map(Elsa3Activity source, CancellationToken cancellationToken) =>
         Map(source, new Dictionary<string, Elsa3ActivityExactReplacement>(StringComparer.Ordinal), cancellationToken);
 
@@ -25,17 +24,20 @@ public sealed class Elsa3ActivityToState(IActivityDefinitionLookup activityLooku
         ArgumentNullException.ThrowIfNull(source);
         ArgumentNullException.ThrowIfNull(replacements);
         var mapped = new Dictionary<Elsa3Activity, ActivityNode>(ReferenceEqualityComparer.Instance);
-        var stack = new Stack<(Elsa3Activity Activity, bool ChildrenVisited)>();
-        stack.Push((source, false));
+        var stack = new Stack<(Elsa3Activity Activity, int Depth, bool ChildrenVisited)>();
+        stack.Push((source, 0, false));
         while (stack.TryPop(out var frame))
         {
             cancellationToken.ThrowIfCancellationRequested();
             if (!frame.ChildrenVisited)
             {
-                stack.Push((frame.Activity, true));
+                stack.Push((frame.Activity, frame.Depth, true));
                 var children = frame.Activity.Activities ?? [];
+                if (children.Count > 0 && frame.Depth >= Elsa3ImportedActivityStructure.MaxNestingDepth)
+                    throw new ArgumentException(
+                        $"Elsa 3 activity '{frame.Activity.NodeId}' nests activities more than {Elsa3ImportedActivityStructure.MaxNestingDepth} containers below the workflow root, the deepest the import supports.");
                 for (var index = children.Count - 1; index >= 0; index--)
-                    stack.Push((children[index], false));
+                    stack.Push((children[index], frame.Depth + 1, false));
                 continue;
             }
 
@@ -43,32 +45,27 @@ public sealed class Elsa3ActivityToState(IActivityDefinitionLookup activityLooku
                 throw new NotSupportedException("Elsa 3 activity graph connections require a Flowchart-owned importer module.");
 
             string activityVersionId;
-            IReadOnlySet<string> inputNames;
+            IReadOnlyCollection<InputDefinition> declaredInputs;
             IReadOnlySet<string> outputNames;
             if (replacements.TryGetValue(frame.Activity.NodeId, out var replacement))
             {
                 activityVersionId = replacement.ActivityVersionId;
-                inputNames = replacement.InputNames;
+                declaredInputs = replacement.Inputs;
                 outputNames = replacement.OutputNames;
             }
             else
             {
                 var version = await GetVersion(frame.Activity, cancellationToken);
                 activityVersionId = version.Id;
-                inputNames = version.Inputs.Select(x => x.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
+                declaredInputs = version.Inputs.ToArray();
                 outputNames = version.Outputs.Select(x => x.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
             }
 
             var inputs = new List<ArgumentState>();
             var outputs = new List<ArgumentState>();
-            ExtractInputsAndOutputs(inputs, outputs, inputNames, outputNames, frame.Activity.AdditionalProperties);
+            ExtractInputsAndOutputs(frame.Activity.NodeId, inputs, outputs, declaredInputs, outputNames, frame.Activity.AdditionalProperties);
             var childActivities = (frame.Activity.Activities ?? []).Select(x => mapped[x]).ToArray();
-            var structure = childActivities.Length == 0
-                ? null
-                : new ActivityNodeStructure(
-                    ImportedStructureKind,
-                    ImportedStructureSchemaVersion,
-                    JsonSerializer.SerializeToElement(new { activities = childActivities }));
+            var structure = Elsa3ImportedActivityStructure.Create(childActivities);
             mapped.Add(frame.Activity, new ActivityNode(
                 frame.Activity.NodeId,
                 activityVersionId,
@@ -85,14 +82,23 @@ public sealed class Elsa3ActivityToState(IActivityDefinitionLookup activityLooku
         // separate task — flagged in the Unit C follow-up as Elsa3-import layout-carryover.
     }
 
+    /// <summary>
+    /// Keeps each property that names a declared input or output. An input binding is stored under the declared input's
+    /// reference key, the key design validation and publication match it by (ordinally), whatever casing the Elsa 3
+    /// property name has; an output keeps the Elsa 3 property name.
+    /// </summary>
+    /// <exception cref="ArgumentException">Two properties bind the same declared input, or one property matches more than
+    /// one declared input; the mapping refuses rather than keep one binding and drop the other.</exception>
     private static void ExtractInputsAndOutputs(
+        string nodeId,
         List<ArgumentState> inputs,
         List<ArgumentState> outputs,
-        IReadOnlySet<string> inputNames,
+        IReadOnlyCollection<InputDefinition> declaredInputs,
         IReadOnlySet<string> outputNames,
         IDictionary<string, JsonElement> properties
     )
     {
+        var boundInputs = new Dictionary<string, string>(StringComparer.Ordinal);
         foreach (var (propertyName, value) in properties)
         {
             var parsed = TryGetArgument(propertyName, value, out var argument);
@@ -106,19 +112,42 @@ public sealed class Elsa3ActivityToState(IActivityDefinitionLookup activityLooku
                 continue;
             }
 
-            var isInput = inputNames.Contains(propertyName);
+            var inputKey = DeclaredInputKey(nodeId, declaredInputs, propertyName);
             var isOutput = outputNames.Contains(propertyName);
 
-            if (isInput && value.ValueKind != JsonValueKind.Null)
-                inputs.Add(argument);
-            else if (isInput)
-                inputs.Add(ArgumentState.Null(propertyName));
+            if (inputKey is not null && !boundInputs.TryAdd(inputKey, propertyName))
+                throw new ArgumentException(
+                    $"Elsa 3 activity '{nodeId}' has properties '{boundInputs[inputKey]}' and '{propertyName}', which both bind its input '{inputKey}'.");
+
+            if (inputKey is not null && value.ValueKind != JsonValueKind.Null)
+                inputs.Add(argument with { ReferenceKey = inputKey });
+            else if (inputKey is not null)
+                inputs.Add(ArgumentState.Null(inputKey));
 
             else if (isOutput && value.ValueKind != JsonValueKind.Null)
                 outputs.Add(argument);
             else if (isOutput)
                 outputs.Add(ArgumentState.Null(propertyName));
         }
+    }
+
+    /// <summary>
+    /// The reference key of the declared input <paramref name="propertyName"/> names: the input whose name equals it, else
+    /// the only one whose name equals it ignoring case, or null when none does.
+    /// </summary>
+    private static string? DeclaredInputKey(string nodeId, IReadOnlyCollection<InputDefinition> declaredInputs, string propertyName)
+    {
+        var exact = declaredInputs.Where(input => StringComparer.Ordinal.Equals(input.Name, propertyName)).ToArray();
+        var candidates = exact.Length > 0
+            ? exact
+            : declaredInputs.Where(input => StringComparer.OrdinalIgnoreCase.Equals(input.Name, propertyName)).ToArray();
+        return candidates.Length switch
+        {
+            0 => null,
+            1 => candidates[0].ReferenceKey,
+            _ => throw new ArgumentException(
+                $"Elsa 3 activity '{nodeId}' property '{propertyName}' matches more than one declared input: {string.Join(", ", candidates.Select(input => $"'{input.Name}'"))}.")
+        };
     }
 
     private async Task<IActivityDefinitionVersion> GetVersion(Elsa3Activity source, CancellationToken cancellationToken)
@@ -166,7 +195,11 @@ public sealed class Elsa3ActivityToState(IActivityDefinitionLookup activityLooku
     }
 }
 
+/// <summary>
+/// The exact reusable activity version a reference node is rewritten to, with the inputs that version declares (their
+/// reference keys are what the node's bindings are stored under) and its output names.
+/// </summary>
 public sealed record Elsa3ActivityExactReplacement(
     string ActivityVersionId,
-    IReadOnlySet<string> InputNames,
+    IReadOnlyCollection<InputDefinition> Inputs,
     IReadOnlySet<string> OutputNames);

@@ -42,7 +42,7 @@ Keep the program's project board Status and any labels in sync in the same pass.
 
 ## Pull requests as a triage surface
 
-**PRs as a request surface: no.** _(Set to `yes` if this repo treats external PRs as feature requests; `/triage` reads this flag.)_
+**PRs as a request surface: no.** This flag tells `/triage` whether to treat an external PR itself as a feature request and apply issue-triage conventions to it; set it to `yes` to do that. It does not mean fixes are unwelcome as PRs: small fixes may come directly by PR, while substantial feature requests should start in Issues for scope alignment. See [CONTRIBUTING.md](../../CONTRIBUTING.md).
 
 When set to `yes`, PRs run through the same labels and states as issues, using the `gh pr` equivalents:
 

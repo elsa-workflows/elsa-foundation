@@ -74,13 +74,13 @@ or commit is refused. `PublishedVersions.Serialize()` is the one serialization.
   "packages": [
     {
       "package_id": "Elsa.Tasks",
-      "path": "src/essentials/Tasks/Elsa.Tasks.csproj",
+      "path": "src/essentials/Tasks/Elsa.Tasks/Elsa.Tasks.csproj",
       "line": "B",
       "version": "4.0.8",
       "affected": true,
       "last_published": { "version": "4.0.7-preview", "commit": "<sha>" },
       "fingerprint": "sha256:<hex>",
-      "reasons": ["src/essentials/Tasks/Scheduler.cs (changed)"]
+      "reasons": ["src/essentials/Tasks/Elsa.Tasks/Scheduler.cs (changed)"]
     }
   ]
 }
@@ -241,7 +241,9 @@ it pushed, so `publish-state` exists and the next push to `main` publishes the r
 
 The workflow serializes every run from `main`, from its plan to its write-back, on the concurrency group
 `publish-state`, and never cancels one in progress (FR-020); anything else that writes `publish-state` joins that
-group. A GitHub Release publishes nothing until the 4.0 release cut (#2085): its job fails and says so.
+group. Except for the exact metadata-only contributor checkpoint accepted in #2426 and guarded in #2478, every
+GitHub Release fails until the 4.0 release cut (#2085). The checkpoint uses a reserved prerelease tag and creates no
+package artifact or feed write; the release path does not pack or publish it.
 
 To rehearse against a scratch feed, run `plan`, pack as the workflow does, and `publish` with `--feed` at the scratch
 feed and `--remote` at a scratch repository, which then holds the record.
@@ -287,7 +289,7 @@ reason and `--actor` (`github.actor`). It joins the `publish-state` concurrency 
 `tests/essentials/Versioning/Calculator/Tests` builds synthetic histories in throwaway repositories — moves, renames,
 deletions, re-adds, reverts, a rewritten `main`, partial publishes, pins reached only transitively, force-advances —
 and runs in CI's fast test job, as do the label and pack-properties tests beside them.
-`tests/essentials/Architecture/PackageVersionBuildCheckTests.cs` and `PackageVersioningPackTests.cs` prove the MSBuild
+`tests/essentials/Architecture/Tests/PackageVersionBuildCheckTests.cs` and `PackageVersioningPackTests.cs` prove the MSBuild
 side against real builds and packs, and `PinnedTransitivePackTests.cs` that pack writes exactly the pinned-transitive
 packages restore lists; `NuGetLockFileTests.cs` beside them holds the dependency map, which reads them from the committed
 lock files, to that list.

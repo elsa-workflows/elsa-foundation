@@ -221,6 +221,7 @@ public sealed class HostOwnedServicesAreSharedWithShellsTests
     /// feature), and has run the validator of its own container, the host's checks copied into it included, by the time it
     /// is active.
     /// </summary>
+    // Kept beside the composition test (§2.23.1): ordering, startup validation runs ahead of every host initializer.
     [Theory]
     [InlineData("Elsa.Foundation.Host")]
     [InlineData("Elsa.Workbench")]
@@ -246,6 +247,7 @@ public sealed class HostOwnedServicesAreSharedWithShellsTests
     /// ahead of the vendor registration, is caught here and nowhere else: the policy's hosted service must be registered, and after
     /// the vendor initializer, which turns its own migration off for it and creates the demo store (#2196).
     /// </summary>
+    // Kept beside the composition test (§2.23.1): ordering, the migration policy registers after the vendor initializer.
     [Fact]
     public void Workbench_registers_the_openiddict_migration_policy_after_the_vendor_initializer()
     {
@@ -266,6 +268,7 @@ public sealed class HostOwnedServicesAreSharedWithShellsTests
     /// auto-loader loaded in the same reconcile, so Workbench's own entry point registers the refresh after the auto-loader.
     /// Registered before it, the refresh would run ahead of the load and rebuild the catalog without the package that arrived.
     /// </summary>
+    // Kept beside the composition test (§2.23.1): ordering, the catalog refresh registers after the package auto-loader.
     [Fact]
     public void Workbench_registers_its_catalog_refresh_after_the_package_auto_loader()
     {

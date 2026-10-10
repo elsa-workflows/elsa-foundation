@@ -1,0 +1,14 @@
+diff --git a/src/essentials/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/EfSchedulerWorkQueueStore.cs b/src/essentials/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/EfSchedulerWorkQueueStore.cs
+--- a/src/essentials/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/EfSchedulerWorkQueueStore.cs
++++ b/src/essentials/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/EfSchedulerWorkQueueStore.cs
+@@ -44,10 +44,6 @@
+         cancellationToken.ThrowIfCancellationRequested();
+         var scope = EfRuntimeOperationalStoreSupport.RequireScope(accessContextAccessor);
+         var id = EfRuntimeOperationalStoreSupport.CompositeId(scope, workItem.WorkflowExecutionId, workItem.WorkItemId);
+-        var existing = await context.SchedulerWorkItems.AsNoTracking().SingleOrDefaultAsync(row => row.Id == id, cancellationToken);
+-        if (existing is not null)
+-            return ReadChecked(existing, scope, workItem.WorkflowExecutionId, workItem.WorkItemId);
+-
+         var entity = ToEntity(workItem, scope, id, 1);
+         context.SchedulerWorkItems.Add(entity);
+         try

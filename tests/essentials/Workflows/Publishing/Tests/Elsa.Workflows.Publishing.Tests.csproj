@@ -21,11 +21,11 @@
       Elsa.Api.FastEndpoints — so the absence of transport/authorization is proven by construction,
       not just by assertion.
     -->
-    <ProjectReference Include="..\..\..\..\..\src\essentials\Workflows\Publishing\Elsa.Workflows.Publishing.csproj" />
+    <ProjectReference Include="..\..\..\..\..\src\essentials\Workflows\Publishing\Elsa.Workflows.Publishing\Elsa.Workflows.Publishing.csproj" />
     <ProjectReference Include="..\..\..\..\..\src\essentials\Workflows\Publishing\Core\Elsa.Workflows.Publishing.Core.csproj" />
     <ProjectReference Include="..\..\..\..\..\src\essentials\Workflows\Runtime\Core\Elsa.Workflows.Runtime.Core.csproj" />
     <!-- The SC-B-003 acceptance proof crosses the real export target/codec into a fresh runtime-only importer. -->
-    <ProjectReference Include="..\..\..\..\..\src\essentials\Workflows\Runtime\Reconciliation\Elsa.Workflows.Runtime.Reconciliation.csproj" />
+    <ProjectReference Include="..\..\..\..\..\src\essentials\Workflows\Runtime\Reconciliation\Elsa.Workflows.Runtime.Reconciliation\Elsa.Workflows.Runtime.Reconciliation.csproj" />
     <ProjectReference Include="..\..\..\..\..\src\essentials\Workflows\Runtime\Reconciliation\Core\Elsa.Workflows.Runtime.Reconciliation.Core.csproj" />
     <ProjectReference Include="..\..\..\..\..\src\essentials\Workflows\Runtime\Api\Elsa.Workflows.Runtime.Api.csproj" />
     <ProjectReference Include="..\..\..\..\..\src\essentials\Workflows\Runtime\Resumption\Elsa.Workflows.Runtime.Resumption.csproj" />

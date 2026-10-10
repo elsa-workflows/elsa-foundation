@@ -9,7 +9,7 @@
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\..\..\..\..\..\..\src\essentials\Workflows\Design\Persistence\EntityFrameworkCore\Elsa.Workflows.Design.Persistence.EntityFrameworkCore.csproj" />
-    <ProjectReference Include="..\..\..\..\..\..\..\src\essentials\Workflows\Publishing\Elsa.Workflows.Publishing.csproj" />
+    <ProjectReference Include="..\..\..\..\..\..\..\src\essentials\Workflows\Publishing\Elsa.Workflows.Publishing\Elsa.Workflows.Publishing.csproj" />
     <ProjectReference Include="..\..\..\..\..\..\..\src\essentials\Tasks\Core\Elsa.Tasks.Core.csproj" />
     <ProjectReference Include="..\..\..\..\..\..\..\src\essentials\Modularity\EntityFramework\Elsa.Modularity.EntityFramework.csproj" />
   </ItemGroup>

@@ -25,9 +25,11 @@ name: Docker Images
 # one of them was about to change. Joining Packages' `publish-state` concurrency group does not fix
 # this - GitHub keeps only one PENDING run per group and cancels the older pending one, so a queued
 # image build could silently drop a queued publish run. Instead, a main build is triggered by
-# `workflow_run` once Packages completes, and only when it concluded `success`; the versions job
-# then downloads that exact run's `elsa-foundation-nuget-packages` artifact (uploaded by the pack
-# job in packages.yml) for `package-versions.props`, rather than planning again. Its Elsa package
+# `workflow_run` once Packages completes. An admission job accepts only successful runs sourced
+# from push or workflow_dispatch; release completions stop before version resolution, and their
+# isolated concurrency group cannot cancel an admitted image build. The versions job then downloads
+# the exact run's `elsa-foundation-nuget-packages` artifact (uploaded by the pack job in packages.yml)
+# for `package-versions.props`, rather than planning again. Its Elsa package
 # versions are then exactly what Packages just computed (and, on a publish, exactly what it wrote to
 # the feed) for that commit - never a plan raced against the write-back.
 #
@@ -66,6 +68,7 @@ on:
     paths:
       - .dockerignore
       - .github/workflows/docker.yml
+      - tools/contributor-checkpoints/**
       - '*.props'
       - '*.targets'
       - Elsa.Server.slnx
@@ -75,7 +78,7 @@ on:
     inputs:
       commit:
         description: >-
-          Commit SHA on main to build. Uses the latest successful Packages workflow run for that
+          Commit SHA on main to build. Uses the latest successful push or manual Packages run for that
           commit and refuses if there is none. Also refuses if main has since moved past that
           commit, because the builder can only build the branch's current tip (see the header
           comment above).
@@ -87,12 +90,30 @@ permissions:
   actions: read
 
 concurrency:
-  group: docker-image-${{ github.ref }}
+  # A noneligible completed workflow must not cancel an admitted build on the same branch.
+  group: docker-image-${{ github.event_name == 'workflow_run' && (github.event.workflow_run.conclusion != 'success' || (github.event.workflow_run.event != 'push' && github.event.workflow_run.event != 'workflow_dispatch')) && format('ineligible-{0}', github.run_id) || github.ref }}
   cancel-in-progress: true
 
 jobs:
+  admission:
+    name: Admit source event
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      allowed: ${{ steps.admit.outputs.allowed }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+      - id: admit
+        env:
+          WORKFLOW_RUN_EVENT: ${{ github.event.workflow_run.event }}
+          WORKFLOW_RUN_CONCLUSION: ${{ github.event.workflow_run.conclusion }}
+        run: python3 tools/contributor-checkpoints/workflow_guards.py docker-admission
+
   versions:
     name: Compute package versions
+    needs: admission
     # Both images are built with computed package versions (ADR 0067, spec 150, #2084, #2126), so each deps.json
     # records every Elsa package at the version the feed carries, and each production configuration declares its
     # Elsa shares host-provided: Nuplane then refuses a feed package that needs a newer one than the image carries.
@@ -103,36 +124,54 @@ jobs:
     # publish-state (see the header comment: spec 150 FR-020, #2084). Either way the versions reach each image build
     # as one build arg, the pack-properties file gzipped and base64-encoded, because the builder takes build args
     # one per line and checks out the commit itself.
-    if: >-
-      github.event_name == 'pull_request' ||
-      github.event_name == 'workflow_dispatch' ||
-      (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success')
+    if: needs.admission.outputs.allowed == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     outputs:
       package-versions: ${{ steps.encode.outputs.package-versions }}
     steps:
+      - name: Checkout workflow guards for manual run selection
+        if: github.event_name == 'workflow_dispatch'
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+
       # main (workflow_run, workflow_dispatch): find the Packages run to take the computation from, rather than
-      # planning again - the run that triggered this one, or for a manual dispatch, the latest successful Packages
-      # run for the requested commit.
+      # planning again - the run that triggered this one, or for a manual dispatch, the newest successful push/manual
+      # Packages run for the requested commit. Metadata-only release runs do not carry a computation artifact.
       - name: Resolve the Packages run to build from
         id: resolve
         if: github.event_name != 'pull_request'
         env:
           GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          PACKAGES_RUN_ID: ${{ github.event.workflow_run.id }}
+          PACKAGES_HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+          REQUESTED_COMMIT: ${{ inputs.commit }}
         run: |
           set -euo pipefail
-          if [ "${{ github.event_name }}" = "workflow_run" ]; then
-            run_id="${{ github.event.workflow_run.id }}"
-            commit="${{ github.event.workflow_run.head_sha }}"
+          if [ "$GITHUB_EVENT_NAME" = "workflow_run" ]; then
+            run_id="$PACKAGES_RUN_ID"
+            commit="$PACKAGES_HEAD_SHA"
           else
-            commit="${{ inputs.commit }}"
-            run_id=$(gh api "repos/${{ github.repository }}/actions/workflows/packages.yml/runs?branch=main&status=success&head_sha=$commit" \
-              --jq '.workflow_runs | sort_by(.run_started_at) | last | .id // empty')
-            if [ -z "$run_id" ]; then
+            commit="$REQUESTED_COMMIT"
+            if [[ ! "$commit" =~ ^[0-9a-f]{40}$ ]]; then
+              echo "::error title=Invalid commit SHA::Dispatch requires a full lowercase commit SHA on main."
+              exit 1
+            fi
+            push_runs=$(gh api "repos/$REPOSITORY/actions/workflows/packages.yml/runs?branch=main&status=success&event=push&head_sha=$commit&per_page=100" \
+              --jq '.workflow_runs')
+            manual_runs=$(gh api "repos/$REPOSITORY/actions/workflows/packages.yml/runs?branch=main&status=success&event=workflow_dispatch&head_sha=$commit&per_page=100" \
+              --jq '.workflow_runs')
+            runs=$(jq -cn --argjson push "$push_runs" --argjson manual "$manual_runs" '$push + $manual')
+            if ! run_id=$(REQUESTED_COMMIT="$commit" python3 tools/contributor-checkpoints/workflow_guards.py resolve-packages-run <<< "$runs"); then
               echo "::error title=No successful Packages run::No successful Packages workflow run found on main for commit $commit. Push it and wait for Packages to succeed before dispatching an image build for it."
               exit 1
             fi
+          fi
+          if [[ ! "$commit" =~ ^[0-9a-f]{40}$ || ! "$run_id" =~ ^[0-9]+$ ]]; then
+            echo "::error title=Invalid Packages run::The selected Packages run did not identify a full commit SHA and run id."
+            exit 1
           fi
           echo "run-id=$run_id" >> "$GITHUB_OUTPUT"
           echo "commit=$commit" >> "$GITHUB_OUTPUT"

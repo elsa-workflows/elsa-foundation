@@ -8,6 +8,14 @@ This file is the AI-provider-neutral front door for AI agents and engineers work
 
 The repo still supports feature development, but the operating model is shaped so feature-workspace assets can later move to a dedicated `elsa-workspace` repository.
 
+## Current focus
+
+[ADR 0080](docs/adr/0080-elsa-4-simplification-decisions.md) sets the current direction: risk-based tests,
+internal-by-default types, Balanced persistence by default, pre-GA cleanup, plain-language renames and a smaller
+meta footprint. Only two programs are active (Elsa 4 Simplification and Runtime Efficiency); see
+[program goals](docs/program-goals/README.md). Work that contradicts an ADR 0080 decision needs the owner's
+explicit go-ahead.
+
 ## Source-of-truth layers
 
 Use the narrowest source that answers the task.
@@ -70,6 +78,16 @@ Re-check for competing work before committing, not only at session start. That c
 
 A claim is advisory. It narrows the window rather than closing it, and two sessions starting within the same minute still race. When a unit is split into slices, prefer giving one session the whole stack, or naming an owner per slice in the issue, over relying on claims alone.
 
+## Branch and issue hygiene
+
+Follow [Repository hygiene](docs/contributing/repository-hygiene.md). In short:
+
+- Push a branch only when opening its PR (draft is fine) in the same session; otherwise keep the work local.
+- Never restore a branch deleted on merge; its work is in `main`. Restore a swept branch from its `archive/` tag only when a maintainer asks to resume that work, and open its PR in the same session.
+- File new issues as `needs-triage` only. Put checkpoints, receipts and evidence on the PR or the issue being worked, never in a new issue.
+- Respect the caps: at most 2 open programs and 20 `ready-for-agent` issues. At the cap, extend the existing parent instead of filing more.
+- Before closing an issue as not planned, run `git log origin/main -E --grep '(^|[^[:alnum:]_./-])#<number>([^0-9]|$)'`. If its work landed, close it as completed and name the commit or PR.
+
 ## Builds on a shared machine
 
 Parallel sessions on one machine compete for the same CPU. Four concurrent solution builds on an 8-core machine have pushed the load average past 400, which makes every build slower and makes timeout-based tests fail when nothing is wrong.
@@ -90,7 +108,7 @@ When work belongs to a program, the GitHub issue is the public, legible record o
 
 ## Post-merge gates
 
-A green PR is not the end of the gate. `CI` runs on every push to `main` as well as on pull requests, because a required check can be bypassed and because a change that passes on a branch can still break main in combination with what landed beside it. `Maps` also runs on both. The former `HTTP workflow performance` gate was retired with all performance measurement by owner decision (#1668, ADR 0073); no performance workflow remains to run or to report as passed.
+A green PR is not the end of the gate. `CI` runs on every push to `main` as well as on pull requests, because a required check can be bypassed and because a change that passes on a branch can still break main in combination with what landed beside it. `Maps` also runs on both. The former `HTTP workflow performance` gate was retired with all performance measurement by owner decision (#1668, ADR 0073); no performance workflow remains to run or to report as passed. Deterministic EF command-count budgets per reference workflow are correctness gates, not performance measurement, and are allowed (ADR 0080 D2).
 
 When `CI` fails against `main`, and when `Integration (nightly)` fails on its schedule, it files or updates a GitHub issue titled `main is red: <gate>`. Those issues are machine-filed, deduplicated by title, and never auto-closed:
 
@@ -169,13 +187,12 @@ scripts are split so the user can refresh only the layer they need.
 Personal workflow choices are local implementation details, not shared repo facts.
 
 - Keep committed preference catalogs/templates in `docs/reference/`.
-- Keep committed operating-model options in [docs/reference/git-operating-models.md](docs/reference/git-operating-models.md).
+- Use [Git operating models](docs/reference/git-operating-models.md) for publication: maintainer work (including Sipke’s sessions) always uses feature/work-unit branches in the organization repository, never fork PRs. Contributors without organization write access use fork PRs. Determine the applicable path from the session context and repository access; do not require a workflow selection before pushing or opening PRs.
 - Keep per-user selections in `.agent-prefs/`; only `.agent-prefs/.gitkeep` is committed.
-- If `.agent-prefs/` has no preference files other than `.gitkeep`, use [Initialize Agent Preferences](docs/skills/catalog.md#initialize-agent-preferences) to run a quick setup before substantial planning, pushing, opening PRs, changing remotes, or starting a multi-session workflow.
-- If `.agent-prefs/git-operating-model.md` exists, follow it for Git workflow.
+- If `.agent-prefs/` has no preference files other than `.gitkeep`, use [Initialize Agent Preferences](docs/skills/catalog.md#initialize-agent-preferences) only for personal choices needed by the current task. Missing preference files do not gate publication.
+- An optional `.agent-prefs/git-operating-model.md` may record remote names and other local Git details; it must respect the maintainer/contributor publication paths above.
 - If `.agent-prefs/session-execution-model.md` exists, follow it for control-room vs fresh-agent/thread workflow.
 - If a user states a stable personal workflow preference, use [Create Agent Preference](docs/skills/catalog.md#create-agent-preference) to decide whether to record it locally under `.agent-prefs/` or propose a committed preference catalog/template.
-- If no personal Git preference exists, read the committed Git operating-model catalog and ask the user which model they prefer before pushing, opening PRs, or changing remotes.
 - After completing an approved work unit that changes files, make a local commit with a useful message describing the work unless the user explicitly asks to leave the changes uncommitted or the work is intentionally paused for review.
 - Treat the current session as a lightweight control room when the user prefers fresh-agent execution: before substantial planning, ask whether to plan/execute here or prepare a reviewed handoff prompt and start a fresh agent/thread; after worker execution, summarize the result, ensure completed file-changing work is committed locally, and ask whether to continue here or prepare the next handoff.
 - Do not commit personal preference files from `.agent-prefs/`.
@@ -186,7 +203,7 @@ Personal workflow choices are local implementation details, not shared repo fact
 
 1. Read the relevant spec under `specs/`, if one exists.
 2. Read [docs/skills/catalog.md](docs/skills/catalog.md#speckit-flow-guide) for the Speckit flow.
-3. Use the official sequence: `speckit-specify` -> `speckit-plan` -> `speckit-tasks` -> `speckit-implement`.
+3. Follow specification -> plan -> tasks -> implementation, reviewing each artifact before the next step. When using an AI integration, use `speckit-specify` -> `speckit-plan` -> `speckit-tasks` -> `speckit-implement`. Otherwise, create and review the same artifacts manually using [the contributor guide](CONTRIBUTING.md#plan-feature-work). The specification, constitution, testing, and review gates apply to both paths.
 4. Keep work on a feature/work-unit branch unless the user explicitly asks otherwise.
 5. Use the constitution as a gate during planning; use glossary/docs for learning context.
 
@@ -240,7 +257,7 @@ Read [docs/architecture-tour.md](docs/architecture-tour.md) for a concise orient
 
 ## Constitution boundary
 
-Both constitutions are ratified at the document level (v4.0.0, 2026-08-08), but individual sections
+Both constitutions are ratified at the document level (v4.0.0, 2026-08-08; both amended to v5.0.0 by ADR 0080), but individual sections
 that carry their own `Status:` line — framework §2.24, Elsa §E2.9 — remain draft/provisional and are
 explicitly excluded from that ratification. Warn users when a section's draft/provisional status
 matters to their task. If they want to focus on unratified material, route that through
@@ -262,5 +279,5 @@ New work should move toward this rule:
 <!-- SPECKIT START -->
 For additional context about technologies, project structure, shell commands, contracts, and
 validation scenarios for the active work unit, read
-`specs/191-worker-http-profile/plan.md`.
+`specs/199-shared-nuplane-adoption/plan.md`.
 <!-- SPECKIT END -->

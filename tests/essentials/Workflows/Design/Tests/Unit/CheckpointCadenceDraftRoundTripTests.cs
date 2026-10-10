@@ -1,5 +1,6 @@
 using Elsa.Workflows.Design.Core.Models;
 using Elsa.Workflows.Design.Persistence.Core.Contracts;
+using Elsa.Workflows.Design.Persistence.Core.Models;
 using Elsa.Workflows.Design.Tests.Infrastructure;
 using Elsa.Primitives.Models;
 using Microsoft.Extensions.DependencyInjection;
@@ -44,9 +45,11 @@ public sealed class CheckpointCadenceDraftRoundTripTests
         var draftId = await SeedEmptyDraft(host);
         await Update(host, draftId, StateWithCadence(new WorkflowCheckpointCadenceOptions { Mode = "Immediate" }));
 
+        var stateHash = WorkflowDraftStateHash.Compute((await host.GetDraftAsync(draftId))!.StateSource);
         string versionId;
         using (var scope = host.Services.CreateScope())
-            versionId = await scope.ServiceProvider.GetRequiredService<IPromoteDraftToVersionCommand>().Execute(WorkflowsDesignTestHost.TestOperationKey, draftId);
+            versionId = await scope.ServiceProvider.GetRequiredService<IPromoteDraftToVersionCommand>()
+                .Execute(WorkflowsDesignTestHost.TestOperationKey, draftId, requestedVersion: null, stateHash);
 
         var version = await host.GetVersionAsync(versionId);
         Assert.NotNull(version);

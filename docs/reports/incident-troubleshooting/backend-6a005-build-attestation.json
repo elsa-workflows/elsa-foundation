@@ -1,0 +1,13 @@
+{
+  "sourceHead": "6a00584e865c868b228dd766c582d5ca554da6ec",
+  "hostPid": 83064,
+  "database": "/tmp/incident-troubleshooting-acceptance-20261003/backend-v3/elsa.db",
+  "retainedPersistedControls": true,
+  "buildLog": "/tmp/incident-final-6a005-workbench-build.log",
+  "unshippedInitializerPresent": false,
+  "dllSha256": {
+    "src/apps/Elsa.Workbench/bin/Release/net10.0/Elsa.Workbench.dll": "10cbaac2f42bd1b0ed0a7e9aac9fdb0017c1ef5afcf1b16e126d721188987eea",
+    "src/apps/Elsa.Workbench/bin/Release/net10.0/Elsa.Workflows.Runtime.Api.dll": "0a94182bc9e5d501ed526e068d5e421ea7f141b0d85c30e8f3c40f24d0a3ce02",
+    "src/apps/Elsa.Workbench/bin/Release/net10.0/Elsa.Workflows.Runtime.dll": "8a0f4d07eabafaefc1fde6b3289a28743e93895c8efdc0d1a1270edc9aa04bb0"
+  }
+}

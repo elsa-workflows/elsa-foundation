@@ -1,0 +1,826 @@
+{
+  "schemaVersion": 1,
+  "captureDate": "2026-10-06",
+  "scope": "Sanitized accounting of one Immediate HTTP reference request plus one failed direct REST start and one successful ordinary REST companion. Exact TraceId/EventId filtering over the owned server log; no SQL text, parameters, request payloads, or credentials retained.",
+  "sourceAndHost": {
+    "candidateSourceSha": "5d28bd0cd3d76004988a01b0f0abd7af3af313d6",
+    "referenceMainSha": "e6faa5689814c33353009b13f5b9e44d0e9982a4",
+    "runtimeEquivalenceToReferenceMain": "Established separately by the root agent through tracked runtime-input comparison against the full reference main SHA and independent Workbench DLL SHA check; the build record itself confirms only the candidate source SHA before and after build.",
+    "workbenchDllSha256": "05c8eb6ac3aac744cb4878678d90dfd27dce9b37d139422ec1dba0f0a38bb08d",
+    "postgresVersion": "16.15",
+    "postgresImageId": "sha256:ef738a34a8651d11b2bace81c55c7e2187f786b484add6c83070884340074368",
+    "primaryProvider": "PostgreSQL 16 for the primary runtime store; exact per-feature provider composition is not proven by this log census.",
+    "diagnosticsStore": "SQLite in the owned temporary content root.",
+    "rawLogSha256": "414eee4df4ba72ca5153e61a61e15780410b20062c7c79615cf95e19eef8574c",
+    "rawLogBytes": 160713290,
+    "rawLogPersistedHere": false,
+    "sourceStableBeforeAndAfterBuild": true,
+    "httpCaptureScriptHead": "c5ceda1e94dd16497ce426ddbe47ea79e19e43ea",
+    "httpCaptureScriptSha256": "194a63d2c616855df0ff57a026441c36cf01454c450fa826689a3bece58ecb55",
+    "restCaptureScriptHead": "c5ceda1e94dd16497ce426ddbe47ea79e19e43ea",
+    "restCaptureScriptSha256": "d418021d127d05755501257d64aa2d30010aaba2640c11423e96bba5f8e915d5",
+    "captureExitCode": 0,
+    "ownedHostAndContainerRemoved": true,
+    "existingDatabasePreserved": true,
+    "buildRecordSourceBefore": "5d28bd0cd3d76004988a01b0f0abd7af3af313d6",
+    "buildRecordSourceAfter": "5d28bd0cd3d76004988a01b0f0abd7af3af313d6",
+    "rawLogRetention": "Retained only in the private capture journal outside the repository; this sanitized evidence packet contains aggregates and does not persist the raw log.",
+    "pullRequest2436MergedUtc": "2026-10-06T02:18:36Z",
+    "immediateCaptureWindowUtc": "2026-10-06 02:23\u201302:24 UTC",
+    "postMergeMapsRun": {
+      "runId": "37403499450",
+      "result": "success"
+    },
+    "postMergeCiAttempt1": {
+      "runId": "37403499846",
+      "result": "failed",
+      "reason": "Workbench code-missing attestation assertion; not SQLite"
+    },
+    "postMergeCiAttempt2": {
+      "runId": "37403499846",
+      "attempt": 2,
+      "conclusion": "success",
+      "sourceUnchanged": true,
+      "interpretation": "Passed gate evidence only; attempt 1 retained on #2293 with cause unresolved, no causal repair."
+    }
+  },
+  "httpReference": {
+    "requestTraceId": "2aaf674ba0f6b4ed324b468edc8bd1fe",
+    "requestSpanId": "e9fa04d6842fd21c",
+    "incomingTraceParentSpanId": "2e1d7aac2fc01532",
+    "workflowExecutionId": "147iuEAYGQN",
+    "artifactId": "artifact-bc9dfcd40653",
+    "publishedVersionId": "147iu423TZD",
+    "httpStatus": 200,
+    "response": "Alice Smith",
+    "instanceStatus": "Completed",
+    "checkpointCadence": "Immediate",
+    "maxSegmentCheckpoints": null,
+    "inspectionGranularity": "activity-level",
+    "sourceReferenceId": "activation-ref:publication-147iu4zqVLp",
+    "commandUnit": "Microsoft.EntityFrameworkCore.Database.Command event 20101 executions; not SQL statements or provider round trips.",
+    "efCommandExecutions": {
+      "postRequestDescendants": 635,
+      "beforeResponseOther": 507,
+      "beforeResponseDiagnostics": 104,
+      "afterResponseOther": 0,
+      "afterResponseDiagnostics": 24,
+      "unresolvedParentage": 0,
+      "inspectionRequestsOnWorkloadTrace": 0,
+      "byResponseAndTable": {
+        "beforeResponse": {
+          "elsaOtelDiagnostics": 104,
+          "other": 507
+        },
+        "afterResponse": {
+          "elsaOtelDiagnostics": 24,
+          "other": 0
+        }
+      }
+    },
+    "parentClosure": {
+      "method": "Merge structured logging scope SpanId-to-ParentId edges with exported engine-span parent edges for this exact TraceId; walk every EF event 20101 span to the ASP.NET Request starting root.",
+      "requestStartingSpanId": "e9fa04d6842fd21c",
+      "requestFinishedUtc": "2026-10-06T02:23:55.272Z",
+      "requestFinishedStatus": 200,
+      "commandsReachingMatchingRequestRoot": 635,
+      "commandsUnresolved": 0,
+      "scopeParentConflictSpanCount": 0
+    },
+    "nearestEnginePhaseCommands": [
+      {
+        "phase": "requestRootWithoutEngineSpan",
+        "commands": 95,
+        "beforeResponse": 95,
+        "afterResponse": 0,
+        "tableTokenTouches": {
+          "elsa_distributed_execution_placement": 2,
+          "elsa_runtime_activity_execution_state": 1,
+          "elsa_runtime_bookmark_state": 1,
+          "elsa_runtime_execution_liveness_state": 6,
+          "elsa_runtime_incident_state": 1,
+          "elsa_runtime_post_commit_outbox": 47,
+          "elsa_runtime_scheduler_work_item": 32,
+          "elsa_runtime_workflow_executable_source_reference": 1,
+          "elsa_runtime_workflow_execution_state": 2,
+          "elsa_runtime_workflow_trigger_binding": 2
+        },
+        "tableClassCommands": {
+          "beforeResponse": {
+            "elsaOtelDiagnostics": 0,
+            "other": 95
+          },
+          "afterResponse": {
+            "elsaOtelDiagnostics": 0,
+            "other": 0
+          }
+        }
+      },
+      {
+        "phase": "elsa.runtime.drain",
+        "commands": 232,
+        "beforeResponse": 208,
+        "afterResponse": 24,
+        "tableTokenTouches": {
+          "elsa_otel_capture_ledger": 16,
+          "elsa_otel_instruments": 16,
+          "elsa_otel_logs": 16,
+          "elsa_otel_metric_points": 16,
+          "elsa_otel_resources": 16,
+          "elsa_otel_spans": 16,
+          "elsa_otel_traces": 32,
+          "elsa_runtime_scheduler_work_item": 59,
+          "elsa_runtime_workflow_execution_state": 38,
+          "elsa_runtime_workflow_hold_state": 7
+        },
+        "tableClassCommands": {
+          "beforeResponse": {
+            "elsaOtelDiagnostics": 104,
+            "other": 104
+          },
+          "afterResponse": {
+            "elsaOtelDiagnostics": 24,
+            "other": 0
+          }
+        }
+      },
+      {
+        "phase": "elsa.runtime.dispatch",
+        "commands": 45,
+        "beforeResponse": 45,
+        "afterResponse": 0,
+        "tableTokenTouches": {
+          "elsa_runtime_activity_execution_inspection": 1,
+          "elsa_runtime_activity_execution_state": 4,
+          "elsa_runtime_scheduler_work_item": 36,
+          "elsa_runtime_workflow_dispatch": 1,
+          "elsa_runtime_workflow_execution_state": 3
+        },
+        "tableClassCommands": {
+          "beforeResponse": {
+            "elsaOtelDiagnostics": 0,
+            "other": 45
+          },
+          "afterResponse": {
+            "elsaOtelDiagnostics": 0,
+            "other": 0
+          }
+        }
+      },
+      {
+        "phase": "elsa.runtime.activity.execute",
+        "commands": 52,
+        "beforeResponse": 52,
+        "afterResponse": 0,
+        "tableTokenTouches": {
+          "elsa_runtime_activity_execution_inspection": 14,
+          "elsa_runtime_activity_execution_state": 26,
+          "elsa_runtime_durable_value_state": 7,
+          "elsa_runtime_workflow_execution_state": 5
+        },
+        "tableClassCommands": {
+          "beforeResponse": {
+            "elsaOtelDiagnostics": 0,
+            "other": 52
+          },
+          "afterResponse": {
+            "elsaOtelDiagnostics": 0,
+            "other": 0
+          }
+        }
+      },
+      {
+        "phase": "elsa.runtime.checkpoint.commit",
+        "commands": 211,
+        "beforeResponse": 211,
+        "afterResponse": 0,
+        "tableTokenTouches": {
+          "elsa_runtime_activity_execution_hierarchy": 15,
+          "elsa_runtime_activity_execution_inspection": 30,
+          "elsa_runtime_activity_execution_state": 42,
+          "elsa_runtime_checkpoint_commit": 44,
+          "elsa_runtime_durable_value_state": 2,
+          "elsa_runtime_execution_liveness_state": 44,
+          "elsa_runtime_post_commit_outbox": 30,
+          "elsa_runtime_scheduler_work_item": 20,
+          "elsa_runtime_workflow_executable": 12,
+          "elsa_runtime_workflow_executable_coordination": 16,
+          "elsa_runtime_workflow_execution_state": 8,
+          "elsa_runtime_workflow_run_health_state": 8
+        },
+        "tableClassCommands": {
+          "beforeResponse": {
+            "elsaOtelDiagnostics": 0,
+            "other": 211
+          },
+          "afterResponse": {
+            "elsaOtelDiagnostics": 0,
+            "other": 0
+          }
+        }
+      }
+    ],
+    "engineSpans": {
+      "total": 74,
+      "byName": {
+        "elsa.runtime.activity.execute": 14,
+        "elsa.runtime.checkpoint.commit": 22,
+        "elsa.runtime.dispatch": 22,
+        "elsa.runtime.drain": 16
+      },
+      "checkpointCommitPersistenceMode": {
+        "Immediate": 22
+      }
+    },
+    "oneLeadingSqlVerbPerEfCommand": {
+      "DELETE": 38,
+      "INSERT": 51,
+      "SELECT": 483,
+      "UPDATE": 63
+    },
+    "unclassifiedLeadingVerb": 0,
+    "tableTokenTouches": {
+      "elsa_distributed_execution_placement": 2,
+      "elsa_otel_capture_ledger": 16,
+      "elsa_otel_instruments": 16,
+      "elsa_otel_logs": 16,
+      "elsa_otel_metric_points": 16,
+      "elsa_otel_resources": 16,
+      "elsa_otel_spans": 16,
+      "elsa_otel_traces": 32,
+      "elsa_runtime_activity_execution_hierarchy": 15,
+      "elsa_runtime_activity_execution_inspection": 45,
+      "elsa_runtime_activity_execution_state": 73,
+      "elsa_runtime_bookmark_state": 1,
+      "elsa_runtime_checkpoint_commit": 44,
+      "elsa_runtime_durable_value_state": 9,
+      "elsa_runtime_execution_liveness_state": 50,
+      "elsa_runtime_incident_state": 1,
+      "elsa_runtime_post_commit_outbox": 77,
+      "elsa_runtime_scheduler_work_item": 147,
+      "elsa_runtime_workflow_dispatch": 1,
+      "elsa_runtime_workflow_executable": 12,
+      "elsa_runtime_workflow_executable_coordination": 16,
+      "elsa_runtime_workflow_executable_source_reference": 1,
+      "elsa_runtime_workflow_execution_state": 56,
+      "elsa_runtime_workflow_hold_state": 7,
+      "elsa_runtime_workflow_run_health_state": 8,
+      "elsa_runtime_workflow_trigger_binding": 2
+    },
+    "checkpointMarkerInsertCommands": 22,
+    "durableValueSelectCommands": 8,
+    "transactionEventObservations": {
+      "transactionLifecycleGroups": 38,
+      "perEventIdCounts": {
+        "20209": 38,
+        "20200": 38,
+        "20210": 38,
+        "20202": 38,
+        "20204": 38
+      },
+      "savepointEventGroups": 44,
+      "savepointPerEventIdCounts": {
+        "20212": 44,
+        "20213": 44,
+        "20216": 44,
+        "20217": 44
+      },
+      "interpretation": "Structured EF logger event groups only; these counts do not prove SaveChanges mappings, statements, provider round trips, transaction atomicity, or a one-to-one relation with checkpoint spans or marker commands."
+    },
+    "checkpointMarkerObserverSnapshot": {
+      "rows": "Unavailable for this Immediate capture; no PostgreSQL observer rows were captured.",
+      "interpretation": "Do not infer durable marker row count from SQL-command or checkpoint-span counts."
+    },
+    "sqlStatementCount": "Pending; one leading verb was retained per EF command only.",
+    "providerRoundTripCount": "Pending; no provider-level evidence.",
+    "latencyInterpretation": "Not accepted; this diagnostic capture is accounting evidence, not timing evidence.",
+    "commandTextPresence": "635/635; nonblank State.commandText required",
+    "pinnedArtifactProfileInterpretation": "The same artifact was used by the Coalesced and Immediate captures. Its retained export showed root Sequence sideEffectProfile ReplaySafe; Set with intrinsicKind Set and no ActivityContract; and HttpEndpoint/WriteHttpResponse ActivityContracts whose wire shape omitted sideEffectProfile. In unchanged source ActivityContract.cs at candidate 5d28bd0cd3d76004988a01b0f0abd7af3af313d6 and reference main e6faa5689814c33353009b13f5b9e44d0e9982a4, the [JsonConstructor] parameter defaults to SideEffectProfile.External and the property is ignored when writing the default. The omission is not a literal null and does not mean External was recorded on the wire.",
+    "pinnedArtifactProfileSource": {
+      "path": "src/essentials/Activities/Runtime/Core/Models/ActivityContract.cs",
+      "jsonConstructorLines": "15-27",
+      "defaultSerializationLines": "85-94",
+      "sourceCandidateSha": "5d28bd0cd3d76004988a01b0f0abd7af3af313d6",
+      "referenceMainSha": "e6faa5689814c33353009b13f5b9e44d0e9982a4"
+    }
+  },
+  "restStarts": {
+    "requestEndpoint": "POST /runtime/workflows/executables/{artifactId}/execute",
+    "censusMethod": "Exact TraceId filtering for EventId 20101 from the structured server log; nonblank State.commandText required; scope and exported engine-span parent edges closed to each matching ASP.NET Request starting root.",
+    "parentClosure": {
+      "method": "Per-trace scope and exported-span parent graph walk to matching Request starting root.",
+      "scopeParentConflictSpanCounts": {
+        "direct": 0,
+        "companion": 0
+      },
+      "directCommandsReachingMatchingRequestRoot": 382,
+      "companionCommandsReachingMatchingRequestRoot": 557,
+      "meaning": "Request ancestry establishes causal membership in each POST trace, not exact repository-method/provider-call attribution or settled work."
+    },
+    "directHttpDefinitionAttempt": {
+      "traceId": "7c17b73de80a4be398513decc62cd84d",
+      "requestSpanId": "5acda60e7ffc27f8",
+      "executionId": "147iuS6Na4Z",
+      "artifactId": "artifact-bc9dfcd40653",
+      "sourceReferenceId": "activation-ref:publication-147iu4zqVLp",
+      "httpStatus": 200,
+      "instanceStatus": "Running",
+      "boundedReadbackStates": [
+        "Running",
+        "Running"
+      ],
+      "outputs": {},
+      "checkpointCadence": "Immediate",
+      "maxSegmentCheckpoints": null,
+      "inspectionGranularity": "activity-level",
+      "projectedIncident": "SchedulerWorkPoisoned",
+      "activityStates": "Root Sequence Running; intrinsic Set scheduled; HttpEndpoint completed.",
+      "validRestControl": false,
+      "interpretation": "Accepted start only. The null firstName mapping failure left the instance Running with a blocking scheduler-poison incident; it is not a successful terminal control.",
+      "requestFinishedUtc": "2026-10-06T02:23:56.887Z",
+      "httpResponseStatus": 200,
+      "efCommandExecutions": 382,
+      "commandsBeforeRequestFinished": 382,
+      "commandsAfterRequestFinished": 0,
+      "commandTextPresence": "382/382",
+      "parentClosure": {
+        "method": "Merge structured logging scope SpanId-to-ParentId edges with exported engine-span parent edges for this exact TraceId; walk every EF event 20101 span to the ASP.NET Request starting root.",
+        "requestStartingSpanId": "5acda60e7ffc27f8",
+        "requestFinishedUtc": "2026-10-06T02:23:56.887Z",
+        "requestFinishedStatus": 200,
+        "commandsReachingMatchingRequestRoot": 382,
+        "commandsUnresolved": 0,
+        "scopeParentConflictSpanCount": 0
+      },
+      "engineSpans": {
+        "total": 43,
+        "byName": {
+          "elsa.runtime.activity.execute": 9,
+          "elsa.runtime.checkpoint.commit": 12,
+          "elsa.runtime.dispatch": 12,
+          "elsa.runtime.drain": 10
+        },
+        "checkpointCommitPersistenceMode": {
+          "Immediate": 12
+        }
+      },
+      "nearestEnginePhaseCommands": [
+        {
+          "phase": "requestRootWithoutEngineSpan",
+          "commands": 74,
+          "beforeResponse": 74,
+          "afterResponse": 0,
+          "tableTokenTouches": {
+            "elsa_distributed_execution_placement": 2,
+            "elsa_runtime_activity_execution_hierarchy": 1,
+            "elsa_runtime_activity_execution_inspection": 3,
+            "elsa_runtime_activity_execution_state": 3,
+            "elsa_runtime_checkpoint_commit": 2,
+            "elsa_runtime_execution_liveness_state": 8,
+            "elsa_runtime_incident_state": 4,
+            "elsa_runtime_post_commit_outbox": 27,
+            "elsa_runtime_scheduler_poison": 1,
+            "elsa_runtime_scheduler_work_item": 20,
+            "elsa_runtime_workflow_executable_source_reference": 1,
+            "elsa_runtime_workflow_execution_state": 3,
+            "elsa_runtime_workflow_run_health_state": 2,
+            "identity_users": 1
+          },
+          "tableClassCommands": {
+            "beforeResponse": {
+              "elsaOtelDiagnostics": 0,
+              "other": 74
+            },
+            "afterResponse": {
+              "elsaOtelDiagnostics": 0,
+              "other": 0
+            }
+          }
+        },
+        {
+          "phase": "elsa.runtime.drain",
+          "commands": 139,
+          "beforeResponse": 139,
+          "afterResponse": 0,
+          "tableTokenTouches": {
+            "elsa_otel_capture_ledger": 10,
+            "elsa_otel_instruments": 10,
+            "elsa_otel_logs": 10,
+            "elsa_otel_metric_points": 10,
+            "elsa_otel_resources": 10,
+            "elsa_otel_spans": 10,
+            "elsa_otel_traces": 20,
+            "elsa_runtime_scheduler_work_item": 33,
+            "elsa_runtime_workflow_execution_state": 21,
+            "elsa_runtime_workflow_hold_state": 5
+          },
+          "tableClassCommands": {
+            "beforeResponse": {
+              "elsaOtelDiagnostics": 80,
+              "other": 59
+            },
+            "afterResponse": {
+              "elsaOtelDiagnostics": 0,
+              "other": 0
+            }
+          }
+        },
+        {
+          "phase": "elsa.runtime.dispatch",
+          "commands": 22,
+          "beforeResponse": 22,
+          "afterResponse": 0,
+          "tableTokenTouches": {
+            "elsa_runtime_activity_execution_state": 1,
+            "elsa_runtime_scheduler_poison": 3,
+            "elsa_runtime_scheduler_work_item": 16,
+            "elsa_runtime_workflow_execution_state": 2
+          },
+          "tableClassCommands": {
+            "beforeResponse": {
+              "elsaOtelDiagnostics": 0,
+              "other": 22
+            },
+            "afterResponse": {
+              "elsaOtelDiagnostics": 0,
+              "other": 0
+            }
+          }
+        },
+        {
+          "phase": "elsa.runtime.activity.execute",
+          "commands": 32,
+          "beforeResponse": 32,
+          "afterResponse": 0,
+          "tableTokenTouches": {
+            "elsa_runtime_activity_execution_inspection": 8,
+            "elsa_runtime_activity_execution_state": 15,
+            "elsa_runtime_durable_value_state": 5,
+            "elsa_runtime_workflow_execution_state": 4
+          },
+          "tableClassCommands": {
+            "beforeResponse": {
+              "elsaOtelDiagnostics": 0,
+              "other": 32
+            },
+            "afterResponse": {
+              "elsaOtelDiagnostics": 0,
+              "other": 0
+            }
+          }
+        },
+        {
+          "phase": "elsa.runtime.checkpoint.commit",
+          "commands": 115,
+          "beforeResponse": 115,
+          "afterResponse": 0,
+          "tableTokenTouches": {
+            "elsa_runtime_activity_execution_hierarchy": 8,
+            "elsa_runtime_activity_execution_inspection": 16,
+            "elsa_runtime_activity_execution_state": 22,
+            "elsa_runtime_checkpoint_commit": 24,
+            "elsa_runtime_durable_value_state": 2,
+            "elsa_runtime_execution_liveness_state": 24,
+            "elsa_runtime_post_commit_outbox": 18,
+            "elsa_runtime_scheduler_work_item": 12,
+            "elsa_runtime_workflow_executable": 6,
+            "elsa_runtime_workflow_executable_coordination": 8,
+            "elsa_runtime_workflow_execution_state": 4,
+            "elsa_runtime_workflow_run_health_state": 4
+          },
+          "tableClassCommands": {
+            "beforeResponse": {
+              "elsaOtelDiagnostics": 0,
+              "other": 115
+            },
+            "afterResponse": {
+              "elsaOtelDiagnostics": 0,
+              "other": 0
+            }
+          }
+        }
+      ],
+      "oneLeadingSqlVerbPerEfCommand": {
+        "DELETE": 22,
+        "INSERT": 32,
+        "SELECT": 293,
+        "UPDATE": 35
+      },
+      "unclassifiedLeadingVerb": 0,
+      "tableTokenTouches": {
+        "elsa_distributed_execution_placement": 2,
+        "elsa_otel_capture_ledger": 10,
+        "elsa_otel_instruments": 10,
+        "elsa_otel_logs": 10,
+        "elsa_otel_metric_points": 10,
+        "elsa_otel_resources": 10,
+        "elsa_otel_spans": 10,
+        "elsa_otel_traces": 20,
+        "elsa_runtime_activity_execution_hierarchy": 9,
+        "elsa_runtime_activity_execution_inspection": 27,
+        "elsa_runtime_activity_execution_state": 41,
+        "elsa_runtime_checkpoint_commit": 26,
+        "elsa_runtime_durable_value_state": 7,
+        "elsa_runtime_execution_liveness_state": 32,
+        "elsa_runtime_incident_state": 4,
+        "elsa_runtime_post_commit_outbox": 45,
+        "elsa_runtime_scheduler_poison": 4,
+        "elsa_runtime_scheduler_work_item": 81,
+        "elsa_runtime_workflow_executable": 6,
+        "elsa_runtime_workflow_executable_coordination": 8,
+        "elsa_runtime_workflow_executable_source_reference": 1,
+        "elsa_runtime_workflow_execution_state": 34,
+        "elsa_runtime_workflow_hold_state": 5,
+        "elsa_runtime_workflow_run_health_state": 6,
+        "identity_users": 1
+      },
+      "transactionEventObservations": {
+        "transactionLifecycleGroups": 23,
+        "perEventIdCounts": {
+          "20209": 23,
+          "20200": 23,
+          "20210": 23,
+          "20202": 23,
+          "20204": 23
+        },
+        "savepointEventGroups": 26,
+        "savepointPerEventIdCounts": {
+          "20212": 26,
+          "20213": 26,
+          "20216": 26,
+          "20217": 26
+        },
+        "interpretation": "Structured EF logger event groups only; these counts do not prove SaveChanges mappings, statements, provider round trips, transaction atomicity, or a one-to-one relation with checkpoint spans or marker commands."
+      },
+      "markerCommandCheckpointSpanQualification": "This trace has 13 checkpoint-marker INSERT commands and 12 checkpoint-commit spans. Their relationship remains unresolved; no one-to-one mapping is inferred.",
+      "checkpointMarkerInsertCommands": 13,
+      "durableValueSelectCommands": 6
+    },
+    "ordinaryRestCompanion": {
+      "traceId": "7d96b86ec4344a4db42d37730e8a9ef1",
+      "requestSpanId": "f2eccc12837d7bab",
+      "executionId": "147ivGVfmum",
+      "artifactId": "artifact-0cdb3feb0bec",
+      "sourceReferenceId": "activation-ref:publication-147ivFZ90ze",
+      "httpStatus": 200,
+      "instanceStatus": "Completed",
+      "output": "Alice Smith",
+      "checkpointCadence": "Immediate",
+      "maxSegmentCheckpoints": null,
+      "inspectionGranularity": "activity-level",
+      "validRestControl": true,
+      "workflowInputProjection": "Workflow request content projected through Set; successful result returned by SetOutput.",
+      "comparisonBoundary": "Valid REST computation control only; omits HTTP trigger admission and WriteHttpResponse transport and adds input/output intrinsics.",
+      "requestFinishedUtc": "2026-10-06T02:24:08.026Z",
+      "efCommandExecutions": 557,
+      "commandsBeforeRequestFinished": 485,
+      "commandsAfterRequestFinished": 72,
+      "commandTextPresence": "557/557",
+      "parentClosure": {
+        "method": "Merge structured logging scope SpanId-to-ParentId edges with exported engine-span parent edges for this exact TraceId; walk every EF event 20101 span to the ASP.NET Request starting root.",
+        "requestStartingSpanId": "f2eccc12837d7bab",
+        "requestFinishedUtc": "2026-10-06T02:24:08.026Z",
+        "requestFinishedStatus": 200,
+        "commandsReachingMatchingRequestRoot": 557,
+        "commandsUnresolved": 0,
+        "scopeParentConflictSpanCount": 0
+      },
+      "engineSpans": {
+        "total": 64,
+        "byName": {
+          "elsa.runtime.activity.execute": 12,
+          "elsa.runtime.checkpoint.commit": 18,
+          "elsa.runtime.dispatch": 20,
+          "elsa.runtime.drain": 14
+        },
+        "checkpointCommitPersistenceMode": {
+          "Immediate": 18
+        }
+      },
+      "nearestEnginePhaseCommands": [
+        {
+          "phase": "requestRootWithoutEngineSpan",
+          "commands": 83,
+          "beforeResponse": 83,
+          "afterResponse": 0,
+          "tableTokenTouches": {
+            "elsa_distributed_execution_placement": 2,
+            "elsa_runtime_execution_liveness_state": 6,
+            "elsa_runtime_incident_state": 1,
+            "elsa_runtime_post_commit_outbox": 41,
+            "elsa_runtime_scheduler_work_item": 28,
+            "elsa_runtime_workflow_executable": 1,
+            "elsa_runtime_workflow_executable_source_reference": 1,
+            "elsa_runtime_workflow_execution_state": 2,
+            "identity_users": 1
+          },
+          "tableClassCommands": {
+            "beforeResponse": {
+              "elsaOtelDiagnostics": 0,
+              "other": 83
+            },
+            "afterResponse": {
+              "elsaOtelDiagnostics": 0,
+              "other": 0
+            }
+          }
+        },
+        {
+          "phase": "elsa.runtime.drain",
+          "commands": 204,
+          "beforeResponse": 132,
+          "afterResponse": 72,
+          "tableTokenTouches": {
+            "elsa_otel_capture_ledger": 14,
+            "elsa_otel_instruments": 14,
+            "elsa_otel_logs": 14,
+            "elsa_otel_metric_points": 14,
+            "elsa_otel_resources": 14,
+            "elsa_otel_spans": 14,
+            "elsa_otel_traces": 28,
+            "elsa_runtime_scheduler_work_item": 53,
+            "elsa_runtime_workflow_execution_state": 34,
+            "elsa_runtime_workflow_hold_state": 5
+          },
+          "tableClassCommands": {
+            "beforeResponse": {
+              "elsaOtelDiagnostics": 40,
+              "other": 92
+            },
+            "afterResponse": {
+              "elsaOtelDiagnostics": 72,
+              "other": 0
+            }
+          }
+        },
+        {
+          "phase": "elsa.runtime.dispatch",
+          "commands": 41,
+          "beforeResponse": 41,
+          "afterResponse": 0,
+          "tableTokenTouches": {
+            "elsa_runtime_activity_execution_inspection": 1,
+            "elsa_runtime_activity_execution_state": 4,
+            "elsa_runtime_scheduler_work_item": 32,
+            "elsa_runtime_workflow_dispatch": 1,
+            "elsa_runtime_workflow_execution_state": 3
+          },
+          "tableClassCommands": {
+            "beforeResponse": {
+              "elsaOtelDiagnostics": 0,
+              "other": 41
+            },
+            "afterResponse": {
+              "elsaOtelDiagnostics": 0,
+              "other": 0
+            }
+          }
+        },
+        {
+          "phase": "elsa.runtime.activity.execute",
+          "commands": 43,
+          "beforeResponse": 43,
+          "afterResponse": 0,
+          "tableTokenTouches": {
+            "elsa_runtime_activity_execution_inspection": 12,
+            "elsa_runtime_activity_execution_state": 22,
+            "elsa_runtime_durable_value_state": 5,
+            "elsa_runtime_workflow_execution_state": 4
+          },
+          "tableClassCommands": {
+            "beforeResponse": {
+              "elsaOtelDiagnostics": 0,
+              "other": 43
+            },
+            "afterResponse": {
+              "elsaOtelDiagnostics": 0,
+              "other": 0
+            }
+          }
+        },
+        {
+          "phase": "elsa.runtime.checkpoint.commit",
+          "commands": 186,
+          "beforeResponse": 186,
+          "afterResponse": 0,
+          "tableTokenTouches": {
+            "elsa_runtime_activity_execution_hierarchy": 13,
+            "elsa_runtime_activity_execution_inspection": 26,
+            "elsa_runtime_activity_execution_state": 34,
+            "elsa_runtime_checkpoint_commit": 36,
+            "elsa_runtime_durable_value_state": 4,
+            "elsa_runtime_execution_liveness_state": 36,
+            "elsa_runtime_post_commit_outbox": 26,
+            "elsa_runtime_scheduler_work_item": 20,
+            "elsa_runtime_workflow_executable": 12,
+            "elsa_runtime_workflow_executable_coordination": 16,
+            "elsa_runtime_workflow_execution_state": 8,
+            "elsa_runtime_workflow_run_health_state": 8
+          },
+          "tableClassCommands": {
+            "beforeResponse": {
+              "elsaOtelDiagnostics": 0,
+              "other": 186
+            },
+            "afterResponse": {
+              "elsaOtelDiagnostics": 0,
+              "other": 0
+            }
+          }
+        }
+      ],
+      "oneLeadingSqlVerbPerEfCommand": {
+        "DELETE": 34,
+        "INSERT": 45,
+        "SELECT": 423,
+        "UPDATE": 55
+      },
+      "unclassifiedLeadingVerb": 0,
+      "tableTokenTouches": {
+        "elsa_distributed_execution_placement": 2,
+        "elsa_otel_capture_ledger": 14,
+        "elsa_otel_instruments": 14,
+        "elsa_otel_logs": 14,
+        "elsa_otel_metric_points": 14,
+        "elsa_otel_resources": 14,
+        "elsa_otel_spans": 14,
+        "elsa_otel_traces": 28,
+        "elsa_runtime_activity_execution_hierarchy": 13,
+        "elsa_runtime_activity_execution_inspection": 39,
+        "elsa_runtime_activity_execution_state": 60,
+        "elsa_runtime_checkpoint_commit": 36,
+        "elsa_runtime_durable_value_state": 9,
+        "elsa_runtime_execution_liveness_state": 42,
+        "elsa_runtime_incident_state": 1,
+        "elsa_runtime_post_commit_outbox": 67,
+        "elsa_runtime_scheduler_work_item": 133,
+        "elsa_runtime_workflow_dispatch": 1,
+        "elsa_runtime_workflow_executable": 13,
+        "elsa_runtime_workflow_executable_coordination": 16,
+        "elsa_runtime_workflow_executable_source_reference": 1,
+        "elsa_runtime_workflow_execution_state": 51,
+        "elsa_runtime_workflow_hold_state": 5,
+        "elsa_runtime_workflow_run_health_state": 8,
+        "identity_users": 1
+      },
+      "transactionEventObservations": {
+        "transactionLifecycleGroups": 32,
+        "perEventIdCounts": {
+          "20209": 32,
+          "20200": 32,
+          "20210": 32,
+          "20202": 32,
+          "20204": 32
+        },
+        "savepointEventGroups": 36,
+        "savepointPerEventIdCounts": {
+          "20212": 36,
+          "20213": 36,
+          "20216": 36,
+          "20217": 36
+        },
+        "interpretation": "Structured EF logger event groups only; these counts do not prove SaveChanges mappings, statements, provider round trips, transaction atomicity, or a one-to-one relation with checkpoint spans or marker commands."
+      },
+      "checkpointMarkerInsertCommands": 18,
+      "durableValueSelectCommands": 7
+    },
+    "diagnosticTableClassification": {
+      "rule": "Case-insensitive presence of an elsa_otel_* table token parsed from the exact raw field State.commandText marks a diagnostics-table command. This is token classification, not statement/provider-call parsing.",
+      "direct": {
+        "beforeResponse": {
+          "elsaOtelDiagnostics": 80,
+          "other": 302
+        },
+        "afterResponse": {
+          "elsaOtelDiagnostics": 0,
+          "other": 0
+        }
+      },
+      "companion": {
+        "beforeResponse": {
+          "elsaOtelDiagnostics": 40,
+          "other": 445
+        },
+        "afterResponse": {
+          "elsaOtelDiagnostics": 72,
+          "other": 0
+        }
+      },
+      "interpretation": "Counts are command executions; table tokens may overlap within one command and do not prove table rows, source-call ownership, or settled/background totals.",
+      "commandTextPresence": {
+        "direct": "382/382",
+        "companion": "557/557",
+        "field": "State.commandText"
+      }
+    }
+  },
+  "accountingLimits": [
+    "EF event 20101 totals are command executions, not SQL statements or provider network round trips; only a leading command verb and normalized table-token touches were retained.",
+    "Checkpoint-commit engine spans, checkpoint-marker INSERT command executions, and PostgreSQL observer rows are separate units. No PostgreSQL observer rows were captured for Immediate.",
+    "EF transaction/savepoint lifecycle event groups do not map one-to-one to SaveChanges, checkpoints, statements, transactions, or round trips.",
+    "Span-parent closure proves trace ancestry to each request root, not exact source method/provider attribution or settled outbox work.",
+    "Commands after RequestFinished are reported separately; they are not accepted as settled-instance work or latency evidence.",
+    "The direct REST start was nonterminal with a scheduler-poison incident; the successful companion is a distinct comparison path.",
+    "This high-logging capture is diagnostic only. Low-logging timing, provider-exact attribution, and settled T04 work remain pending; no latency claim is made."
+  ]
+}

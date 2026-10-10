@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Elsa.Testing;
 using Elsa.Workflows.ExecutionEvidence.Contracts;
 using Elsa.Workflows.ExecutionEvidence.Models;
@@ -167,6 +168,86 @@ public sealed class ExecutionEvidenceCheckpointEnricherTests
         var record = Assert.Single(Records(ExecutionEvidenceKinds.VariableSet));
         Assert.Equal(ExecutionEvidenceValueDisposition.Captured, record.ValueDisposition);
         Assert.Equal("s3cret", record.Value?.GetString());
+    }
+
+    /// <summary>
+    /// A withheld envelope holds no value to capture or redact (spec 188, T067), so it is recorded by its marker whether or
+    /// not sensitive values are redacted, and never as absent.
+    /// </summary>
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task A_withheld_secret_reference_is_recorded_as_withheld_with_its_reference_name(bool redactSensitiveValues)
+    {
+        await NewEnricher(options => options.RedactSensitiveValues = redactSensitiveValues).EnrichAsync(EvidenceFactory.Commit(
+            variables: EvidenceFactory.Variables(("apiKey", EvidenceFactory.WithheldSecret("payments.api-key")))));
+
+        AssertWithheld("apiKey", ExecutionEvidenceValueDisposition.Withheld);
+        Assert.Equal("payments.api-key", Assert.Single(Records(ExecutionEvidenceKinds.VariableSet)).SecretReferenceName);
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task A_value_withheld_for_encryption_is_recorded_as_withheld_without_a_reference(bool redactSensitiveValues)
+    {
+        await NewEnricher(options => options.RedactSensitiveValues = redactSensitiveValues).EnrichAsync(EvidenceFactory.Commit(
+            variables: EvidenceFactory.Variables(("token", EvidenceFactory.WithheldForEncryption()))));
+
+        AssertWithheld("token", ExecutionEvidenceValueDisposition.Withheld);
+        Assert.Null(Assert.Single(Records(ExecutionEvidenceKinds.VariableSet)).SecretReferenceName);
+    }
+
+    /// <summary>
+    /// A present value whose policy requires encryption is never capturable (spec 188, FR-010). Enrichers run before the
+    /// commit backstop, so the enricher withholds it itself, whatever <c>RedactSensitiveValues</c> says and whether or not
+    /// the policy is also sensitive.
+    /// </summary>
+    [Theory]
+    [InlineData(true, true)]
+    [InlineData(true, false)]
+    [InlineData(false, true)]
+    [InlineData(false, false)]
+    public async Task A_present_value_that_requires_encryption_is_recorded_as_withheld_for_encryption(bool redactSensitiveValues, bool isSensitive)
+    {
+        var sentinel = $"plain{Guid.NewGuid():N}";
+
+        await NewEnricher(options => options.RedactSensitiveValues = redactSensitiveValues).EnrichAsync(EvidenceFactory.Commit(
+            variables: EvidenceFactory.Variables(("token", EvidenceFactory.PresentRequiringEncryption(sentinel, isSensitive)))));
+
+        AssertWithheld("token", ExecutionEvidenceValueDisposition.Withheld);
+        Assert.Null(Assert.Single(Records(ExecutionEvidenceKinds.VariableSet)).SecretReferenceName);
+        Assert.DoesNotContain(sentinel, JsonSerializer.Serialize(Records()), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task A_variable_moving_from_a_secret_reference_to_a_value_withheld_for_encryption_registers_as_a_write()
+    {
+        await EnrichAsync(EvidenceFactory.Commit(
+            checkpointId: "cp-1",
+            variables: EvidenceFactory.Variables(("apiKey", EvidenceFactory.WithheldSecret("payments.api-key")))));
+        await EnrichAsync(EvidenceFactory.Commit(
+            checkpointId: "cp-2",
+            variables: EvidenceFactory.Variables(("apiKey", EvidenceFactory.WithheldForEncryption()))));
+
+        Assert.Equal(
+            ["payments.api-key", null],
+            Records(ExecutionEvidenceKinds.VariableSet).Select(record => record.SecretReferenceName));
+    }
+
+    [Fact]
+    public async Task A_variable_moving_to_another_secret_reference_registers_as_a_write()
+    {
+        await EnrichAsync(EvidenceFactory.Commit(
+            checkpointId: "cp-1",
+            variables: EvidenceFactory.Variables(("apiKey", EvidenceFactory.WithheldSecret("payments.api-key")))));
+        await EnrichAsync(EvidenceFactory.Commit(
+            checkpointId: "cp-2",
+            variables: EvidenceFactory.Variables(("apiKey", EvidenceFactory.WithheldSecret("billing.api-key")))));
+
+        Assert.Equal(
+            ["payments.api-key", "billing.api-key"],
+            Records(ExecutionEvidenceKinds.VariableSet).Select(record => record.SecretReferenceName));
     }
 
     [Fact]

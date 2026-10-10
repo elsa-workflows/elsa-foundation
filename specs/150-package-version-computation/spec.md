@@ -494,6 +494,10 @@ Recorded when #2081 and #2082 made `packages.yml` publish through `tools/version
   it replaces stamped a global `/p:Version` and pushed with `--skip-duplicate` to feedz.io and nuget.org, which FR-005
   and FR-011 forbid, and a stable `4.0.0` on either feed would sort above every computed `4.0.N-preview`. Failing is the
   loud choice: a release that quietly published nothing, or published the old way, would each look like success.
+- **Amendment, 2026-10-07 (#2426/#2478):** the owner accepted one metadata-only contributor checkpoint exception: only
+  a `prereleased` or `published` action with `prerelease: true` and a valid `contributor-preview-YYYY-MM-DD.N` tag may
+  succeed. It creates no package artifact or feed write, and is excluded from the Docker image path. Ordinary and
+  stable releases retain the refusal above.
 
 Recorded 2026-09-28, when #2083 gave the repair workflow its `last_publish_commit` reset mode
 ([README, Repair](../../tools/versioning/README.md#repair)).

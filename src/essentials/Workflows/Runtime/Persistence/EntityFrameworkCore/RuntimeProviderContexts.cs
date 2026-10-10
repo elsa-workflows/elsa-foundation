@@ -93,6 +93,8 @@ file static class RuntimeProviderModel
             if (entity == typeof(WorkflowExecutableSourceReferenceEntity))
                 modelBuilder.Entity(entity).Property("ScopeKeyOrderKey").HasColumnType(type);
         }
+        modelBuilder.Entity<WorkflowExecutableRootWriteLeaseEntity>().Property(row => row.ScopeKey).HasColumnType(type);
+        modelBuilder.Entity<WorkflowExecutableRootWriteLeaseEntity>().Property(row => row.LeaseId).HasColumnType(type);
         modelBuilder.Entity<WorkflowExecutionStateEntity>().Property("ContentJson").HasColumnType(type);
         foreach (var entity in new[] { typeof(WorkflowAlterationPlanEntity), typeof(WorkflowAlterationJobEntity), typeof(WorkflowTestScopeEntity) })
             modelBuilder.Entity(entity).Property("ContentJson").HasColumnType(type);

@@ -26,6 +26,14 @@ public sealed class HttpEndpointCheckpointPolicyEquivalenceTests
         ResponseBody,
         ContentType);
 
+    [Fact]
+    public void Immediate_remains_the_default_checkpoint_persistence_mode()
+    {
+        Assert.Equal(
+            CheckpointPersistenceMode.Immediate,
+            new WorkflowsRuntimeCheckpointPersistenceFeature().Mode);
+    }
+
     [Theory]
     [InlineData(CheckpointPersistenceMode.Immediate)]
     [InlineData(CheckpointPersistenceMode.Coalesced)]

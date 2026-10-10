@@ -201,31 +201,11 @@ public sealed class HttpContextActivityExecutionInspectionAuthorizationContextTe
 
         Assert.True(await context.CanInspectStructureAsync(Execution("tenant-a")));
         Assert.True(service.Calls > 0);
-
-        Assert.Throws<InvalidOperationException>(() => context.AuthorizationProfile);
-        Assert.Throws<InvalidOperationException>(() => context.CanInspectStructure(Execution("tenant-a")));
-        Assert.Throws<InvalidOperationException>(() => context.CanInspectSensitiveValues(Execution("tenant-a")));
-        Assert.Throws<InvalidOperationException>(() => context.CanResolveSensitiveValuePayloads(Execution("tenant-a")));
     }
 
     [Fact]
-    public async Task Origin_constructor_fails_closed_without_permission_matching()
+    public void Constructor_guards_null_dependencies()
     {
-        var accessor = new HttpContextAccessor { HttpContext = new DefaultHttpContext { User = Principal("tenant-a", "*") } };
-        var context = new HttpContextActivityExecutionInspectionAuthorizationContext(accessor);
-
-        Assert.False(await context.CanInspectStructureAsync(Execution("tenant-a")));
-        Assert.False(await context.CanInspectSensitiveValuesAsync(Execution("tenant-a")));
-        Assert.False(await context.CanResolveSensitiveValuePayloadsAsync(Execution("tenant-a")));
-        Assert.Equal("untrusted", await context.GetAuthorizationProfileAsync());
-    }
-
-    [Fact]
-    public void Constructors_guard_null_dependencies_and_public_adapter()
-    {
-        Assert.Throws<ArgumentNullException>(() => new HttpContextActivityExecutionInspectionAuthorizationContext(null!));
-        Assert.Throws<ArgumentNullException>(() => new LegacyActivityInspectionContextAdapter(null!));
-
         using var provider = new ServiceCollection()
             .AddFoundationIdentityAbstractions(options =>
                 options.NormalizedAuthenticationTypes = new HashSet<string>(["test"], StringComparer.Ordinal))

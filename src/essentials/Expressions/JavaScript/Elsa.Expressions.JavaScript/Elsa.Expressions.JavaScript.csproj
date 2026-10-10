@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" />
+    <PackageReference Include="Acornima" />
+	  <PackageReference Include="CShells.Abstractions" />
+    <PackageReference Include="Elsa.Specifications.PackageManifest.Generator" PrivateAssets="all" />
+  </ItemGroup>
+
+	<ItemGroup>
+		<ProjectReference Include="..\Core\Elsa.Expressions.JavaScript.Core.csproj" />
+		<ProjectReference Include="..\..\..\Events\Core\Elsa.Events.Core.csproj" />
+		<ProjectReference Include="..\..\..\Serialization\Core\Elsa.Serialization.Core.csproj" />
+	</ItemGroup>
+
+</Project>

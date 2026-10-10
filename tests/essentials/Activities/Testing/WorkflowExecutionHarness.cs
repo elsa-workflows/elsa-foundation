@@ -123,6 +123,8 @@ public sealed class WorkflowExecutionHarness : IAsyncDisposable
 
     /// <summary>
     /// Saves the executable, starts the in-process agent, and drains the scheduler.
+    /// Set <paramref name="allowAcceptedButFaulted"/> only when the test is asserting a persisted failure after an
+    /// accepted start whose scheduler drain faulted.
     /// </summary>
     /// <param name="allowPendingWorkOnTerminalCompletion">
     /// When <c>false</c> (the default) the run requires the scheduler to drain to an empty queue. When
@@ -130,13 +132,19 @@ public sealed class WorkflowExecutionHarness : IAsyncDisposable
     /// status — the #293 contract: a <c>Finish</c> inside a parallel fork terminates the run and the drainer
     /// intentionally abandons the already-queued sibling work rather than dispatching post-completion state.
     /// </param>
+    /// <param name="allowAcceptedButFaulted">
+    /// When <c>true</c>, a start dispatch that was accepted but whose scheduler drain faulted is returned for
+    /// assertions about the persisted failure state. The default remains strict: only a fully accepted dispatch
+    /// is considered a successful harness run.
+    /// </param>
     public async Task<WorkflowExecutionRun> RunAsync(
         WorkflowExecutable executable,
         bool allowPendingWorkOnTerminalCompletion,
         IReadOnlyDictionary<string, JsonElement>? inputs = null,
         JsonElement? stimulusInput = null,
         string? triggerNodeId = null,
-        IReadOnlyDictionary<string, string>? triggerMetadata = null)
+        IReadOnlyDictionary<string, string>? triggerMetadata = null,
+        bool allowAcceptedButFaulted = false)
     {
         // Register the loaded activity CLR types into the well-known type registry now, not at Build() time.
         // The CLR construction descriptor resolves an activity's stable alias back to its type through this
@@ -156,7 +164,8 @@ public sealed class WorkflowExecutionHarness : IAsyncDisposable
             .GetAgentAsync(NewActivationRequest());
 
         var dispatch = await agent.EnqueueAsync(NewStartEnvelope(executable.Identity, inputs, stimulusInput, triggerNodeId, triggerMetadata));
-        if (dispatch.Status != WorkflowExecutionCommandDispatchStatus.Accepted)
+        if (dispatch.Status != WorkflowExecutionCommandDispatchStatus.Accepted &&
+            !(allowAcceptedButFaulted && dispatch.Status == WorkflowExecutionCommandDispatchStatus.AcceptedButFaulted))
             throw new InvalidOperationException($"Start command was not accepted (status: {dispatch.Status}). Reason: {dispatch.Reason}");
 
         var states = await _provider.GetRequiredService<IActivityExecutionStateStore>().ListAllAsync(_workflowExecutionId);

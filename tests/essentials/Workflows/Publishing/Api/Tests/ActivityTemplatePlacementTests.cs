@@ -651,15 +651,12 @@ public sealed class ActivityTemplatePlacementTests
             ValueTask.CompletedTask;
     }
 
-    private sealed class AllowStructureAuthorization : IActivityExecutionInspectionAuthorizationContext, IActivityInspectionContextAsync
+    private sealed class AllowStructureAuthorization : IActivityInspectionContextAsync
     {
         public string TenantScope => "tenant:a";
         public string AuthorizationProfile => "structure:true";
         public string AuditSubject => "test";
         public string RequestCorrelationId => "test-request";
-        public bool CanInspectStructure(WorkflowExecutionState workflowExecution) => true;
-        public bool CanInspectSensitiveValues(WorkflowExecutionState workflowExecution) => false;
-        public bool CanResolveSensitiveValuePayloads(WorkflowExecutionState workflowExecution) => false;
         public ValueTask<string> GetAuthorizationProfileAsync(CancellationToken cancellationToken = default) => ValueTask.FromResult(AuthorizationProfile);
         public ValueTask<bool> CanInspectStructureAsync(WorkflowExecutionState workflowExecution, CancellationToken cancellationToken = default) => ValueTask.FromResult(true);
         public ValueTask<bool> CanInspectSensitiveValuesAsync(WorkflowExecutionState workflowExecution, CancellationToken cancellationToken = default) => ValueTask.FromResult(false);

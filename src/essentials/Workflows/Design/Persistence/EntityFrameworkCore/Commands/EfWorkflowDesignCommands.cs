@@ -395,9 +395,9 @@ public sealed class EfDeleteWorkflowDefinitionPermanentlyCommand(WorkflowsDesign
 
 public sealed class EfPromoteDraftToVersionCommand(WorkflowsDesignDbContext db, IPersistenceAccessContextAccessor access, IDesignAtomicWriter atomic, IPayloadSerializer serializer, IIdentityGenerator identities, IWorkflowDefinitionVersionStore versionStore, IDistributedLockProvider? lockProvider = null, IInlineEventPublisher? inlineEvents = null) : EfDesignCommand(db, access, atomic), IPromoteDraftToVersionCommand
 {
-    public Task<string> Execute(DesignOperationKey key, string draftId, CancellationToken ct = default) => Execute(key, draftId, null, ct);
-    public async Task<string> Execute(DesignOperationKey key, string draftId, string? requestedVersion, CancellationToken ct = default)
+    public async Task<string> Execute(DesignOperationKey key, string draftId, string? requestedVersion, string expectedStateHash, CancellationToken ct = default)
     {
+        ArgumentException.ThrowIfNullOrWhiteSpace(expectedStateHash);
         Serializer = serializer;
         if (lockProvider is null)
             throw new InvalidOperationException("Workflow draft promotion requires a distributed lock provider.");
@@ -421,6 +421,10 @@ public sealed class EfPromoteDraftToVersionCommand(WorkflowsDesignDbContext db, 
                         .SingleOrDefaultAsync(x => x.IdLookupHash == EfDesignSupport.LookupHash(draftId), token)
                         ?? throw EntityNotFoundException.ForEntity(typeof(WorkflowDefinitionDraft), draftId);
                     EfDesignSupport.EnsureExactIdentity(draftId, draft.Id, "workflow draft promotion lookup");
+                    // Storage integrity, not a rule: promote only the content the caller read. The draft row has no
+                    // concurrency token, so its content hash is the compare-and-set operand (spec 188, research R7).
+                    if (!StringComparer.Ordinal.Equals(WorkflowDraftStateHash.Compute(draft.StateSource), expectedStateHash))
+                        throw new WorkflowDraftChangedException(draftId);
                     draft = EfDesignSupport.MapDraft(serializer, draft);
                     if (inlineEvents is not null)
                     {

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# `dotnet elsa`, built from this checkout: builds src/essentials/Cli and runs it with the arguments given.
+# `dotnet elsa`, built from this checkout: builds src/essentials/Cli/Elsa.Cli and runs it with the arguments given.
 set -euo pipefail
 source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 
@@ -18,16 +18,16 @@ tab for another act would point the tool at a database that host does not use, s
 
 The tool runs inside the host's own dependency closure and reads the packages that host installed, so run it against a host
 directory tools/demo/run-host.sh made, after that host has reconciled its feed at least once, or with --restore.
-The tool is built once; delete src/essentials/Cli/bin, or set ELSA_DEMO_REBUILD=1, after changing it.
+The tool is built once; delete src/essentials/Cli/Elsa.Cli/bin, or set ELSA_DEMO_REBUILD=1, after changing it.
 USAGE
 }
 
 [[ $# -gt 0 ]] || demo_fail "Give the dotnet elsa arguments to run, e.g. persistence status (see --help)."
 [[ "$1" != -h && "$1" != --help ]] || { usage; exit 0; }
 
-cli="$demo_root/src/essentials/Cli/bin/Release/net10.0/Elsa.Cli.dll"
+cli="$demo_root/src/essentials/Cli/Elsa.Cli/bin/Release/net10.0/Elsa.Cli.dll"
 if [[ ! -f "$cli" || -n "${ELSA_DEMO_REBUILD:-}" ]]; then
-  demo_quiet "Building the elsa tool" dotnet build "$demo_root/src/essentials/Cli/Elsa.Cli.csproj" -c Release -nologo -v q
+  demo_quiet "Building the elsa tool" dotnet build "$demo_root/src/essentials/Cli/Elsa.Cli/Elsa.Cli.csproj" -c Release -nologo -v q
 fi
 host_dir=""
 previous=""

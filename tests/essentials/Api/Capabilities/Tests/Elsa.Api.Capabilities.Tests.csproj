@@ -20,7 +20,7 @@
   <ItemGroup>
     <ProjectReference Include="..\..\..\..\..\src\essentials\Api\Capabilities\Elsa.Api.Capabilities.csproj" />
     <ProjectReference Include="..\..\..\..\..\src\essentials\Foundation\Identity\Core\Elsa.Foundation.Identity.Core.csproj" />
-    <ProjectReference Include="..\..\..\..\..\src\essentials\Foundation\Identity\Elsa.Foundation.Identity.csproj" />
+    <ProjectReference Include="..\..\..\..\..\src\essentials\Foundation\Identity\Elsa.Foundation.Identity\Elsa.Foundation.Identity.csproj" />
     <ProjectReference Include="..\..\..\..\..\src\essentials\Foundation\Identity\Oidc\Elsa.Foundation.Identity.Oidc.csproj" />
     <ProjectReference Include="..\..\..\Testing\Elsa.Testing.csproj" />
   </ItemGroup>

@@ -93,8 +93,8 @@
         "Elsa.Workflows.Runtime.Tests"
       ],
       "requiredRootPaths": [
-        "src/essentials/Workflows/Runtime/Elsa.Workflows.Runtime.csproj",
-        "src/essentials/Workflows/Publishing/Elsa.Workflows.Publishing.csproj",
+        "src/essentials/Workflows/Runtime/Elsa.Workflows.Runtime/Elsa.Workflows.Runtime.csproj",
+        "src/essentials/Workflows/Publishing/Elsa.Workflows.Publishing/Elsa.Workflows.Publishing.csproj",
         "src/essentials/Workflows/Design/Core/Elsa.Workflows.Design.Core.csproj",
         "src/essentials/Persistence/EntityFramework/Elsa.Persistence.EntityFramework.csproj",
         "tests/essentials/Architecture/ExtensionBoundary/Tests/Elsa.Architecture.ExtensionBoundary.Tests.csproj",
@@ -108,84 +108,8 @@
       ]
     },
     {
-      "outputPath": "Elsa.Server.Workflows.Publishing.slnf",
-      "includeProjectPathPrefixes": [
-        "src/essentials/Workflows/Publishing/",
-        "tests/essentials/Workflows/Publishing/"
-      ],
-      "requiredRootPaths": [
-        "src/essentials/Workflows/Publishing/Elsa.Workflows.Publishing.csproj",
-        "tests/essentials/Workflows/Publishing/Tests/Elsa.Workflows.Publishing.Tests.csproj"
-      ],
-      "excludeWhenPackageReferencePrefixes": [
-        "Testcontainers."
-      ]
-    },
-    {
-      "outputPath": "Elsa.Server.Workflows.Runtime.slnf",
-      "includeProjectPathPrefixes": [
-        "src/essentials/Activities/Runtime/",
-        "src/essentials/Activities/DispatchWorkflow/Runtime/",
-        "src/essentials/Activities/Graph/Runtime/",
-        "src/essentials/Workflows/Runtime/",
-        "tests/essentials/Activities/Runtime/",
-        "tests/essentials/Activities/DispatchWorkflow/",
-        "tests/essentials/Activities/Graph/",
-        "tests/essentials/Workflows/Runtime/"
-      ],
-      "requiredRootPaths": [
-        "src/essentials/Activities/DispatchWorkflow/Runtime/Elsa.Activities.DispatchWorkflow.Runtime.csproj",
-        "src/essentials/Activities/Graph/Runtime/Elsa.Activities.Graph.Runtime.csproj",
-        "src/essentials/Workflows/Runtime/Elsa.Workflows.Runtime.csproj",
-        "tests/essentials/Activities/DispatchWorkflow/Tests/Elsa.Activities.DispatchWorkflow.Tests.csproj",
-        "tests/essentials/Activities/Graph/Tests/Elsa.Activities.Graph.Tests.csproj",
-        "tests/essentials/Workflows/Runtime/Tests/Elsa.Workflows.Runtime.Tests.csproj"
-      ],
-      "excludeWhenPackageReferencePrefixes": [
-        "Testcontainers."
-      ]
-    },
-    {
-      "outputPath": "Elsa.Server.Workflows.Design.slnf",
-      "includeProjectPathPrefixes": [
-        "src/essentials/Activities/Design/",
-        "src/essentials/Activities/DispatchWorkflow/Design/",
-        "src/essentials/Activities/Graph/Design/",
-        "src/essentials/Workflows/Design/",
-        "tests/essentials/Activities/Design/",
-        "tests/essentials/Activities/DispatchWorkflow/",
-        "tests/essentials/Activities/Graph/",
-        "tests/essentials/Workflows/Design/"
-      ],
-      "requiredRootPaths": [
-        "src/essentials/Activities/DispatchWorkflow/Design/Elsa.Activities.DispatchWorkflow.Design.csproj",
-        "src/essentials/Activities/Graph/Design/Elsa.Activities.Graph.Design.csproj",
-        "src/essentials/Workflows/Design/Core/Elsa.Workflows.Design.Core.csproj",
-        "tests/essentials/Activities/DispatchWorkflow/Tests/Elsa.Activities.DispatchWorkflow.Tests.csproj",
-        "tests/essentials/Activities/Graph/Tests/Elsa.Activities.Graph.Tests.csproj",
-        "tests/essentials/Workflows/Design/Tests/Elsa.Workflows.Design.Tests.csproj"
-      ],
-      "excludeWhenPackageReferencePrefixes": [
-        "Testcontainers."
-      ]
-    },
-    {
-      "outputPath": "Elsa.Server.Foundation.Identity.slnf",
-      "includeProjectPathPrefixes": [
-        "src/essentials/Foundation/Identity/",
-        "tests/essentials/Foundation/Identity/"
-      ],
-      "requiredRootPaths": [
-        "src/essentials/Foundation/Identity/Core/Elsa.Foundation.Identity.Core.csproj",
-        "src/essentials/Foundation/Identity/Elsa.Foundation.Identity.csproj",
-        "tests/essentials/Foundation/Identity/Tests/Elsa.Foundation.Identity.Tests.csproj"
-      ],
-      "excludeWhenPackageReferencePrefixes": [
-        "Testcontainers."
-      ]
-    },
-    {
       "outputPath": "Elsa.Server.Persistence.Integration.slnf",
+      "committed": false,
       "includeProjectPathPrefixes": [
         "tests/",
         "src/extensions/"
@@ -210,46 +134,6 @@
       "requiredRootPaths": [
         "src/apps/Elsa.Workbench/Elsa.Workbench.csproj",
         "tests/essentials/Workbench/Tests/Elsa.Workbench.Tests.csproj"
-      ]
-    },
-    {
-      "outputPath": "Elsa.Server.Extensions.Elsa3.slnf",
-      "includeProjectPathPrefixes": [
-        "src/extensions/Elsa3/"
-      ],
-      "requiredRootPaths": [
-        "src/extensions/Elsa3/src/Activities/Design/Import/Elsa3.Activities.Design.Import.csproj",
-        "src/extensions/Elsa3/src/Mapping/Elsa3.Mapping.csproj",
-        "src/extensions/Elsa3/tests/Mapping/Tests/Elsa3.Mapping.Tests.csproj"
-      ],
-      "excludeWhenPackageReferencePrefixes": [
-        "Testcontainers."
-      ]
-    },
-    {
-      "outputPath": "Elsa.Server.Extensions.Agent.slnf",
-      "includeProjectPathPrefixes": [
-        "src/extensions/Agent/"
-      ],
-      "requiredRootPaths": [
-        "src/extensions/Agent/src/Core/Elsa.Agent.Core.csproj",
-        "src/extensions/Agent/tests/Tests/Elsa.Agent.Tests.csproj"
-      ],
-      "excludeWhenPackageReferencePrefixes": [
-        "Testcontainers."
-      ]
-    },
-    {
-      "outputPath": "Elsa.Server.Extensions.ExtensionBuilder.slnf",
-      "includeProjectPathPrefixes": [
-        "src/extensions/ExtensionBuilder/"
-      ],
-      "requiredRootPaths": [
-        "src/extensions/ExtensionBuilder/src/Api/Elsa.ExtensionBuilder.Api.csproj",
-        "src/extensions/ExtensionBuilder/tests/Api/Tests/Elsa.ExtensionBuilder.Api.Tests.csproj"
-      ],
-      "excludeWhenPackageReferencePrefixes": [
-        "Testcontainers."
       ]
     }
   ]

@@ -95,6 +95,7 @@ You **MUST** consider the user input before proceeding (if not empty).
    - **IF EXISTS**: Read data-model.md for entities and relationships
    - **IF EXISTS**: Read contracts/ for API specifications and test requirements
    - **IF EXISTS**: Read research.md for technical decisions and constraints
+   - **IF EXISTS**: Read `.specify/memory/constitution.md` from the repository root for governance constraints
    - **IF EXISTS**: Read quickstart.md for integration scenarios
 
 4. **Project Setup Verification**:
@@ -150,13 +151,13 @@ You **MUST** consider the user input before proceeding (if not empty).
 6. Execute implementation following the task plan:
    - **Phase-by-phase execution**: Complete each phase before moving to the next
    - **Respect dependencies**: Run sequential tasks in order, parallel tasks [P] can run together  
-   - **Follow TDD approach**: Execute test tasks before their corresponding implementation tasks
+   - **Follow the declared test cadence**: For greenfield tasks, use the application-level choice in [framework §2.21.2](../../../.specify/memory/constitution-framework.md#2212-greenfield-test-discipline). Use test-first execution only when the application's derived constitution declares TDD. For greenfield work without a declared cadence, record the gap in the plan and tasks for the application owner to resolve; do not infer a test-first requirement or omit applicable required tests.
    - **File-based coordination**: Tasks affecting the same files must run sequentially
    - **Validation checkpoints**: Verify each phase completion before proceeding
 
 7. Implementation execution rules:
    - **Setup first**: Initialize project structure, dependencies, configuration
-   - **Tests before code**: If you need to write tests for contracts, entities, and integration scenarios
+   - **Tests and code**: Execute applicable test tasks from the plan, preserving required tests and ordering them according to the declared cadence. Test existence alone does not select TDD.
    - **Core development**: Implement models, services, CLI commands, endpoints
    - **Integration work**: Database connections, middleware, logging, external services
    - **Polish and validation**: Unit tests, performance optimization, documentation

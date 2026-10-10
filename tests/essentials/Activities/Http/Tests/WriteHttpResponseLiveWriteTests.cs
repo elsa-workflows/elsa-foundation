@@ -1,7 +1,10 @@
 using System.Text;
 using System.Text.Json;
+using Elsa.Activities.Http.Activities;
 using Elsa.Activities.Http.Models;
 using Elsa.Activities.Http.Services;
+using Elsa.Activities.Runtime.Core.Models;
+using Elsa.Activities.Runtime.Services;
 using Elsa.Http.Core.Contracts;
 using Elsa.Http.Core.Models;
 using Elsa.Primitives.Models;
@@ -49,6 +52,55 @@ public sealed class WriteHttpResponseLiveWriteTests
         Assert.Equal("v1", httpContext.Response.Headers["X-Custom"]);
         Assert.StartsWith("application/json", httpContext.Response.ContentType);
         Assert.Equal("""{"id":42}""", await ReadBody(httpContext));
+    }
+
+    [Fact]
+    public async Task ProjectedCompletionSnapshotsMutableHeaderDictionaryAndArrays()
+    {
+        var headers = new Dictionary<string, string[]>(StringComparer.Ordinal)
+        {
+            ["X-Custom"] = ["first", "second"]
+        };
+        var instruction = new HttpResponseInstruction(202, headers, "accepted", "text/plain");
+        var now = DateTimeOffset.UnixEpoch.AddSeconds(1);
+        var activityType = TypeAliasConvention.CanonicalAlias(typeof(WriteHttpResponse));
+        var contract = new ActivityContract(
+            activityType,
+            "1.0.0",
+            "clr",
+            JsonSerializer.SerializeToElement(new { typeAlias = activityType }),
+            [],
+            new ActivityResultContract(
+                new ValueTypeDescriptor(TypeAliasConvention.CanonicalAlias(typeof(HttpResponseInstruction))),
+                isRequired: true,
+                ActivityValuePolicy.Default,
+                []),
+            ["Done"],
+            new ActivityActivationRequirement("clr", activityType));
+        var projected = new ActivityCompletionProjector().Project(
+            "activity-write-response",
+            new ActivityAttempt("attempt-1", "activity-write-response", 1, ActivityAttemptReason.Initial, now),
+            contract,
+            ActivityTransition.Complete(instruction),
+            now);
+
+        var committed = Assert.IsType<JsonElement>(projected.Completion.Result.InlineValue);
+        headers["X-Custom"][0] = "mutated";
+        headers["X-Custom"] = ["replaced"];
+        headers["X-Later"] = ["added"];
+        Assert.Equal(
+            ["first", "second"],
+            committed.GetProperty("headers").GetProperty("X-Custom").EnumerateArray().Select(value => value.GetString()));
+        Assert.False(committed.GetProperty("headers").TryGetProperty("X-Later", out _));
+
+        var store = await StoreWithCompletion(projected.Completion);
+        var delivery = new HttpResponseInstructionDelivery(store, []);
+        var httpContext = NewHttpContext();
+
+        Assert.True(await delivery.TryDeliverAsync(httpContext.Response, ["wf-1"]));
+        Assert.Equal("first", httpContext.Response.Headers["X-Custom"][0]);
+        Assert.Equal("second", httpContext.Response.Headers["X-Custom"][1]);
+        Assert.False(httpContext.Response.Headers.ContainsKey("X-Later"));
     }
 
     [Fact]
@@ -105,6 +157,13 @@ public sealed class WriteHttpResponseLiveWriteTests
             JsonSerializer.SerializeToElement(instruction, new JsonSerializerOptions(JsonSerializerDefaults.Web)),
             ValueProtectionPolicy.InstanceInline);
         var completion = new ActivityCompletion(invocationId, "attempt-1", result, "Done", now, "sha256:test");
+        return await StoreWithCompletion(completion);
+    }
+
+    private static async Task<InMemoryActivityExecutionStateStore> StoreWithCompletion(ActivityCompletion completion)
+    {
+        var now = completion.CompletedAt;
+        var invocationId = completion.InvocationId;
         var execution = new ActivityExecution(invocationId, "wf-1", "node-write-response", "authored-write-response", "Elsa.WriteHttpResponse", "1.0.0");
         var state = new ActivityExecutionState(
             execution,

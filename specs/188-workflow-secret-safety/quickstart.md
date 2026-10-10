@@ -109,11 +109,13 @@ dotnet test tests/essentials/Workflows/Runtime/Tests/Elsa.Workflows.Runtime.Test
 dotnet test tests/essentials/Workflows/Publishing/Api/Tests/Elsa.Workflows.Publishing.Api.Tests.csproj
 ```
 
-### Slice 6: credential-literal rule at seven entry points
+### Slice 6: credential-literal rule at seven entry points (eight as built)
 
 Journey: push one definition with a literal on a credential input through every Design API entry point, promote
 included (400 from admission, 409 when the draft changed after admission), through file reconciliation and git export
-(that item refused, the pass completes), and through publish, also for an activity the catalog does not hold yet;
+(that item refused, the pass completes), and through publish, also for an activity the catalog does not hold yet; as
+built in the slice's review, also through the Elsa 3 collection import, with the credential activity at the root and
+nested under containers (the whole apply refused with 400, nothing committed);
 confirm `git diff` for the slice touches under `src/essentials/Workflows/Design/Persistence/` only the promote
 precondition (`IPromoteDraftToVersionCommand.cs`, `WorkflowDraftChangedException.cs`, `WorkflowDraftStateHash.cs`,
 `EfWorkflowDesignCommands.cs`)
@@ -125,6 +127,7 @@ dotnet test tests/essentials/Workflows/Design/Api/Tests/Elsa.Workflows.Design.Ap
 dotnet test tests/essentials/Workflows/Design/Persistence/EntityFrameworkCore/Tests/Elsa.Workflows.Design.Persistence.EntityFrameworkCore.Tests.csproj
 dotnet test tests/essentials/Workflows/Publishing/Api/Tests/Elsa.Workflows.Publishing.Api.Tests.csproj
 dotnet test tests/essentials/Architecture/Elsa.Architecture.Tests.csproj
+dotnet test src/extensions/Elsa3/tests/Mapping/Tests/Elsa3.Mapping.Tests.csproj
 ```
 
 ### Slice 7: withholding backstop and leak surfaces

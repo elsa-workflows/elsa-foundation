@@ -34,6 +34,13 @@ public sealed class WorkflowsRuntimeCheckpointPersistenceFeature : IShellFeature
         DefaultValue = "50")]
     public int MaxSegmentCheckpoints { get; set; } = 50;
 
+    [ManifestSetting(
+        DisplayName = "Coalesce durable-value reads",
+        Description = "Reuse equivalent durable-value pages within an eligible Coalesced session. Disable to issue each logical page read to the durable store.",
+        Category = "Runtime",
+        DefaultValue = "true")]
+    public bool CoalesceDurableValueReads { get; set; } = true;
+
     public void ConfigureServices(IServiceCollection services)
     {
         ArgumentNullException.ThrowIfNull(services);
@@ -59,6 +66,9 @@ public sealed class WorkflowsRuntimeCheckpointPersistenceFeature : IShellFeature
         }
 
         services.AddCoalescingRuntimeCheckpointPersistence(options =>
-            options.MaxSegmentCheckpoints = MaxSegmentCheckpoints);
+        {
+            options.MaxSegmentCheckpoints = MaxSegmentCheckpoints;
+            options.CoalesceDurableValueReads = CoalesceDurableValueReads;
+        });
     }
 }

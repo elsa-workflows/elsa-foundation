@@ -79,9 +79,11 @@ public sealed class EfRuntimeCheckpointCommitStore(
             async ValueTask ExecuteCheckpointAsync(CancellationToken leaseCancellationToken) =>
                 result = await CommitNewAsync(leaseCancellationToken);
 
+            // The lease is this attempt's alone (#2286). Two attempts of one commit (a retry that overlaps a slow first
+            // attempt) would otherwise share one lease, and the first to release it would leave the other's closure unfenced.
             await rootWriteLeaseManager.ExecuteAsync(
                 executionChange.State.PinnedExecutable,
-                $"checkpoint:{commit.CommitId}",
+                $"checkpoint:{commit.CommitId}:{Guid.NewGuid():N}",
                 ExecuteCheckpointAsync,
                 cancellationToken);
             var completed = result ?? throw new InvalidOperationException("The checkpoint lease callback did not produce a result.");

@@ -1,0 +1,2057 @@
+[
+  {
+    "series": 1,
+    "scannedFiles": [
+      "series/series-1/content/server-1.out.log",
+      "series/series-1/content/server-1.err.log"
+    ],
+    "matchingLineCounts": {
+      "timeout": 4,
+      "admissionOrShed": 3203
+    },
+    "excerpts": [
+      {
+        "file": "server-1.out.log",
+        "line": 17023,
+        "matches": [
+          "timeout"
+        ],
+        "text": "      Failed executing DbCommand (18ms) [Parameters=[], CommandType='Text', CommandTimeout='30']",
+        "lineTruncated": false
+      },
+      {
+        "file": "server-1.out.log",
+        "line": 34036,
+        "matches": [
+          "timeout"
+        ],
+        "text": "      Failed executing DbCommand (1ms) [Parameters=[], CommandType='Text', CommandTimeout='30']",
+        "lineTruncated": false
+      },
+      {
+        "file": "server-1.out.log",
+        "line": 34041,
+        "matches": [
+          "timeout"
+        ],
+        "text": "      Failed executing DbCommand (1ms) [Parameters=[], CommandType='Text', CommandTimeout='30']",
+        "lineTruncated": false
+      },
+      {
+        "file": "server-1.out.log",
+        "line": 34046,
+        "matches": [
+          "timeout"
+        ],
+        "text": "      Failed executing DbCommand (0ms) [Parameters=[], CommandType='Text', CommandTimeout='30']",
+        "lineTruncated": false
+      },
+      {
+        "file": "server-1.out.log",
+        "line": 53206,
+        "matches": [
+          "admissionOrShed"
+        ],
+        "text": "      Elsa.Diagnostics.Persistence.Draining.DiagnosticsDrainException: The diagnostics capture was shed before commit because the queue was full.",
+        "lineTruncated": false
+      },
+      {
+        "file": "server-1.out.log",
+        "line": 53215,
+        "matches": [
+          "admissionOrShed"
+        ],
+        "text": "      Elsa.Diagnostics.Persistence.Draining.DiagnosticsDrainException: The diagnostics capture was shed before commit because the queue was full.",
+        "lineTruncated": false
+      },
+      {
+        "file": "server-1.out.log",
+        "line": 53222,
+        "matches": [
+          "admissionOrShed"
+        ],
+        "text": "      Elsa.Diagnostics.Persistence.Draining.DiagnosticsDrainException: The diagnostics capture was shed before commit because the queue was full.",
+        "lineTruncated": false
+      },
+      {
+        "file": "server-1.out.log",
+        "line": 53237,
+        "matches": [
+          "admissionOrShed"
+        ],
+        "text": "      Elsa.Diagnostics.Persistence.Draining.DiagnosticsDrainException: The diagnostics capture was shed before commit because the queue was full.",
+        "lineTruncated": false
+      },
+      {
+        "file": "server-1.out.log",
+        "line": 53244,
+        "matches": [
+          "admissionOrShed"
+        ],
+        "text": "      Elsa.Diagnostics.Persistence.Draining.DiagnosticsDrainException: The diagnostics capture was shed before commit because the queue was full.",
+        "lineTruncated": false
+      },
+      {
+        "file": "server-1.out.log",
+        "line": 53257,
+        "matches": [
+          "admissionOrShed"
+        ],
+        "text": "      Elsa.Diagnostics.Persistence.Draining.DiagnosticsDrainException: The diagnostics capture was shed before commit because the queue was full.",
+        "lineTruncated": false
+      },
+      {
+        "file": "server-1.out.log",
+        "line": 53264,
+        "matches": [
+          "admissionOrShed"
+        ],
+        "text": "      Elsa.Diagnostics.Persistence.Draining.DiagnosticsDrainException: The diagnostics capture was shed before commit because the queue was full.",
+        "lineTruncated": false
+      },
+      {
+        "file": "server-1.out.log",
+        "line": 53271,
+        "matches": [
+          "admissionOrShed"
+        ],
+        "text": "      Elsa.Diagnostics.Persistence.Draining.DiagnosticsDrainException: The diagnostics capture was shed before commit because the queue was full.",
+        "lineTruncated": false
+      },
+      {
+        "file": "server-1.out.log",
+        "line": 53284,
+        "matches": [
+          "admissionOrShed"
+        ],
+        "text": "      Elsa.Diagnostics.Persistence.Draining.DiagnosticsDrainException: The diagnostics capture was shed before commit because the queue was full.",
+        "lineTruncated": false
+      },
+      {
+        "file": "server-1.out.log",
+        "line": 53297,
+        "matches": [
+          "admissionOrShed"
+        ],
+        "text": "      Elsa.Diagnostics.Persistence.Draining.DiagnosticsDrainException: The diagnostics capture was shed before commit because the queue was full.",
+        "lineTruncated": false
+      },
+      {
+        "file": "server-1.out.log",
+        "line": 53304,
+        "matches": [
+          "admissionOrShed"
+        ],
+        "text": "      Elsa.Diagnostics.Persistence.Draining.DiagnosticsDrainException: The diagnostics capture was shed before commit because the queue was full.",
+        "lineTruncated": false
+      },
+      {
+        "file": "server-1.out.log",
+        "line": 53313,
+        "matches": [
+          "admissionOrShed"
+        ],
+        "text": "      Elsa.Diagnostics.Persistence.Draining.DiagnosticsDrainException: The diagnostics capture was shed before commit because the queue was full.",
+        "lineTruncated": false
+      },
+      {
+        "file": "server-1.out.log",
+        "line": 53324,
+        "matches": [
+          "admissionOrShed"
+        ],
+        "text": "      Elsa.Diagnostics.Persistence.Draining.DiagnosticsDrainException: The diagnostics capture was shed before commit because the queue was full.",
+        "lineTruncated": false
+      },
+      {
+        "file": "server-1.out.log",
+        "line": 53337,
+        "matches": [
+          "admissionOrShed"
+        ],
+        "text": "      Elsa.Diagnostics.Persistence.Draining.DiagnosticsDrainException: The diagnostics capture was shed before commit because the queue was full.",
+        "lineTruncated": false
+      },
+      {
+        "file": "server-1.out.log",
+        "line": 53346,
+        "matches": [
+          "admissionOrShed"
+        ],
+        "text": "      Elsa.Diagnostics.Persistence.Draining.DiagnosticsDrainException: The diagnostics capture was shed before commit because the queue was full.",
+        "lineTruncated": false
+      },
+      {
+        "file": "server-1.out.log",
+        "line": 53357,
+        "matches": [
+          "admissionOrShed"
+        ],
+        "text": "      Elsa.Diagnostics.Persistence.Draining.DiagnosticsDrainException: The diagnostics capture was shed before commit because the queue was full.",
+        "lineTruncated": false
+      },
+      {
+        "file": "server-1.out.log",
+        "line": 53366,
+        "matches": [
+          "admissionOrShed"
+        ],
+        "text": "      Elsa.Diagnostics.Persistence.Draining.DiagnosticsDrainException: The diagnostics capture was shed before commit because the queue was full.",
+        "lineTruncated": false
+      },
+      {
+        "file": "server-1.out.log",
+        "line": 53373,
+        "matches": [
+          "admissionOrShed"
+        ],
+        "text": "      Elsa.Diagnostics.Persistence.Draining.DiagnosticsDrainException: The diagnostics capture was shed before commit because the queue was full.",
+        "lineTruncated": false
+      },
+      {
+        "file": "server-1.out.log",
+        "line": 53444,
+        "matches": [
+          "admissionOrShed"
+        ],
+        "text": "      Elsa.Diagnostics.Persistence.Draining.DiagnosticsDrainException: The diagnostics capture was shed before commit because the queue was full.",
+        "lineTruncated": false
+      },
+      {
+        "file": "server-1.out.log",
+        "line": 53475,
+        "matches": [
+          "admissionOrShed"
+        ],
+        "text": "      Elsa.Diagnostics.Persistence.Draining.DiagnosticsDrainException: The diagnostics capture was shed before commit because the queue was full.",
+        "lineTruncated": false
+      },
+      {
+        "file": "server-1.out.log",
+        "line": 53482,
+        "matches": [
+          "admissionOrShed"
+        ],
+        "text": "      Elsa.Diagnostics.Persistence.Draining.DiagnosticsDrainException: The diagnostics capture was shed before commit because the queue was full.",
+        "lineTruncated": false
+      },
+      {
+        "file": "server-1.out.log",
+        "line": 53489,
+        "matches": [
+          "admissionOrShed"
+        ],
+        "text": "      Elsa.Diagnostics.Persistence.Draining.DiagnosticsDrainException: The diagnostics capture was shed before commit because the queue was full.",
+        "lineTruncated": false
+      },
+      {
+        "file": "server-1.out.log",
+        "line": 53496,
+        "matches": [
+          "admissionOrShed"
+        ],
+        "text": "      Elsa.Diagnostics.Persistence.Draining.DiagnosticsDrainException: The diagnostics capture was shed before commit because the queue was full.",
+        "lineTruncated": false
+      },
+      {
+        "file": "server-1.out.log",
+        "line": 53503,
+        "matches": [
+          "admissionOrShed"
+        ],
+        "text": "      Elsa.Diagnostics.Persistence.Draining.DiagnosticsDrainException: The diagnostics capture was shed before commit because the queue was full.",
+        "lineTruncated": false
+      },
+      {
+        "file": "server-1.out.log",
+        "line": 53510,
+        "matches": [
+          "admissionOrShed"
+        ],
+        "text": "      Elsa.Diagnostics.Persistence.Draining.DiagnosticsDrainException: The diagnostics capture was shed before commit because the queue was full.",
+        "lineTruncated": false
+      },
+      {
+        "file": "server-1.out.log",
+        "line": 53517,
+        "matches": [
+          "admissionOrShed"
+        ],
+        "text": "      Elsa.Diagnostics.Persistence.Draining.DiagnosticsDrainException: The diagnostics capture was shed before commit because the queue was full.",
+        "lineTruncated": false
+      },
+      {
+        "file": "server-1.out.log",
+        "line": 53524,
+        "matches": [
+          "admissionOrShed"
+        ],
+        "text": "      Elsa.Diagnostics.Persistence.Draining.DiagnosticsDrainException: The diagnostics capture was shed before commit because the queue was full.",
+        "lineTruncated": false
+      },
+      {
+        "file": "server-1.out.log",
+        "line": 53531,
+        "matches": [
+          "admissionOrShed"
+        ],
+        "text": "      Elsa.Diagnostics.Persistence.Draining.DiagnosticsDrainException: The diagnostics capture was shed before commit because the queue was full.",
+        "lineTruncated": false
+      },
+      {
+        "file": "server-1.out.log",
+        "line": 53538,
+        "matches": [
+          "admissionOrShed"
+        ],
+        "text": "      Elsa.Diagnostics.Persistence.Draining.DiagnosticsDrainException: The diagnostics capture was shed before commit because the queue was full.",
+        "lineTruncated": false
+      },
+      {
+        "file": "server-1.out.log",
+        "line": 53553,
+        "matches": [
+          "admissionOrShed"
+        ],
+        "text": "      Elsa.Diagnostics.Persistence.Draining.DiagnosticsDrainException: The diagnostics capture was shed before commit because the queue was full.",
+        "lineTruncated": false
+      },
+      {
+        "file": "server-1.out.log",
+        "line": 53578,
+        "matches": [
+          "admissionOrShed"
+        ],
+        "text": "      Elsa.Diagnostics.Persistence.Draining.DiagnosticsDrainException: The diagnostics capture was shed before commit because the queue was full.",
+        "lineTruncated": false
+      },
+      {
+        "file": "server-1.out.log",
+        "line": 53585,
+        "matches": [
+          "admissionOrShed"
+        ],
+        "text": "      Elsa.Diagnostics.Persistence.Draining.DiagnosticsDrainException: The diagnostics capture was shed before commit because the queue was full.",
+        "lineTruncated": false
+      },
+      {
+        "file": "server-1.out.log",
+        "line": 53592,
+        "matches": [
+          "admissionOrShed"
+        ],
+        "text": "      Elsa.Diagnostics.Persistence.Draining.DiagnosticsDrainException: The diagnostics capture was shed before commit because the queue was full.",
+        "lineTruncated": false
+      },
+      {
+        "file": "server-1.out.log",
+        "line": 53599,
+        "matches": [
+          "admissionOrShed"
+        ],
+        "text": "      Elsa.Diagnostics.Persistence.Draining.DiagnosticsDrainException: The diagnostics capture was shed before commit because the queue was full.",
+        "lineTruncated": false
+      },
+      {
+        "file": "server-1.out.log",
+        "line": 53606,
+        "matches": [
+          "admissionOrShed"
+        ],
+        "text": "      Elsa.Diagnostics.Persistence.Draining.DiagnosticsDrainException: The diagnostics capture was shed before commit because the queue was full.",
+        "lineTruncated": false
+      },
+      {
+        "file": "server-1.out.log",
+        "line": 53613,
+        "matches": [
+          "admissionOrShed"
+        ],
+        "text": "      Elsa.Diagnostics.Persistence.Draining.DiagnosticsDrainException: The diagnostics capture was shed before commit because the queue was full.",
+        "lineTruncated": false
+      },
+      {
+        "file": "server-1.out.log",
+        "line": 53620,
+        "matches": [
+          "admissionOrShed"
+        ],
+        "text": "      Elsa.Diagnostics.Persistence.Draining.DiagnosticsDrainException: The diagnostics capture was shed before commit because the queue was full.",
+        "lineTruncated": false
+      },
+      {
+        "file": "server-1.out.log",
+        "line": 53627,
+        "matches": [
+          "admissionOrShed"
+        ],
+        "text": "      Elsa.Diagnostics.Persistence.Draining.DiagnosticsDrainException: The diagnostics capture was shed before commit because the queue was full.",
+        "lineTruncated": false
+      },
+      {
+        "file": "server-1.out.log",
+        "line": 53634,
+        "matches": [
+          "admissionOrShed"
+        ],
+        "text": "      Elsa.Diagnostics.Persistence.Draining.DiagnosticsDrainException: The diagnostics capture was shed before commit because the queue was full.",
+        "lineTruncated": false
+      },
+      {
+        "file": "server-1.out.log",
+        "line": 53661,
+        "matches": [
+          "admissionOrShed"
+        ],
+        "text": "      Elsa.Diagnostics.Persistence.Draining.DiagnosticsDrainException: The diagnostics capture was shed before commit because the queue was full.",
+        "lineTruncated": false
+      },
+      {
+        "file": "server-1.out.log",
+        "line": 53668,
+        "matches": [
+          "admissionOrShed"
+        ],
+        "text": "      Elsa.Diagnostics.Persistence.Draining.DiagnosticsDrainException: The diagnostics capture was shed before commit because the queue was full.",
+        "lineTruncated": false
+      },
+      {
+        "file": "server-1.out.log",
+        "line": 53683,
+        "matches": [
+          "admissionOrShed"
+        ],
+        "text": "      Elsa.Diagnostics.Persistence.Draining.DiagnosticsDrainException: The diagnostics capture was shed before commit because the queue was full.",
+        "lineTruncated": false
+      },
+      {
+        "file": "server-1.out.log",
+        "line": 53690,
+        "matches": [
+          "admissionOrShed"
+        ],
+        "text": "      Elsa.Diagnostics.Persistence.Draining.DiagnosticsDrainException: The diagnostics capture was shed before commit because the queue was full.",
+        "lineTruncated": false
+      },
+      {
+        "file": "server-1.out.log",
+        "line": 53697,
+        "matches": [
+          "admissionOrShed"
+        ],
+        "text": "      Elsa.Diagnostics.Persistence.Draining.DiagnosticsDrainException: The diagnostics capture was shed before commit because the queue was full.",
+        "lineTruncated": false
+      },
+      {
+        "file": "server-1.out.log",
+        "line": 53706,
+        "matches": [
+          "admissionOrShed"
+        ],
+        "text": "      Elsa.Diagnostics.Persistence.Draining.DiagnosticsDrainException: The diagnostics capture was shed before commit because the queue was full.",
+        "lineTruncated": false
+      },
+      {
+        "file": "server-1.out.log",
+        "line": 53713,
+        "matches": [
+          "admissionOrShed"
+        ],
+        "text": "      Elsa.Diagnostics.Persistence.Draining.DiagnosticsDrainException: The diagnostics capture was shed before commit because the queue was full.",
+        "lineTruncated": false
+      },
+      {
+        "file": "server-1.out.log",
+        "line": 53720,
+        "matches": [
+          "admissionOrShed"
+        ],
+        "text": "      Elsa.Diagnostics.Persistence.Draining.DiagnosticsDrainException: The diagnostics capture was shed before commit because the queue was full.",
+        "lineTruncated": false
+      },
+      {
+        "file": "server-1.out.log",
+        "line": 53727,
+        "matches": [
+          "admissionOrShed"
+        ],
+        "text": "      Elsa.Diagnostics.Persistence.Draining.DiagnosticsDrainException: The diagnostics capture was shed before commit because the queue was full.",
+        "lineTruncated": false
+      },
+      {
+        "file": "server-1.out.log",
+        "line": 53734,
+        "matches": [
+          "admissionOrShed"
+        ],
+        "text": "      Elsa.Diagnostics.Persistence.Draining.DiagnosticsDrainException: The diagnostics capture was shed before commit because the queue was full.",
+        "lineTruncated": false
+      },
+      {
+        "file": "server-1.out.log",
+        "line": 53741,
+        "matches": [
+          "admissionOrShed"
+        ],
+        "text": "      Elsa.Diagnostics.Persistence.Draining.DiagnosticsDrainException: The diagnostics capture was shed before commit because the queue was full.",
+        "lineTruncated": false
+      },
+      {
+        "file": "server-1.out.log",
+        "line": 53748,
+        "matches": [
+          "admissionOrShed"
+        ],
+        "text": "      Elsa.Diagnostics.Persistence.Draining.DiagnosticsDrainException: The diagnostics capture was shed before commit because the queue was full.",
+        "lineTruncated": false
+      },
+      {
+        "file": "server-1.out.log",
+        "line": 53755,
+        "matches": [
+          "admissionOrShed"
+        ],
+        "text": "      Elsa.Diagnostics.Persistence.Draining.DiagnosticsDrainException: The diagnostics capture was shed before commit because the queue was full.",
+        "lineTruncated": false
+      },
+      {
+        "file": "server-1.out.log",
+        "line": 53764,
+        "matches": [
+          "admissionOrShed"
+        ],
+        "text": "      Elsa.Diagnostics.Persistence.Draining.DiagnosticsDrainException: The diagnostics capture was shed before commit because the queue was full.",
+        "lineTruncated": false
+      },
+      {
+        "file": "server-1.out.log",
+        "line": 53771,
+        "matches": [
+          "admissionOrShed"
+        ],
+        "text": "      Elsa.Diagnostics.Persistence.Draining.DiagnosticsDrainException: The diagnostics capture was shed before commit because the queue was full.",
+        "lineTruncated": false
+      },
+      {
+        "file": "server-1.out.log",
+        "line": 53804,
+        "matches": [
+          "admissionOrShed"
+        ],
+        "text": "      Elsa.Diagnostics.Persistence.Draining.DiagnosticsDrainException: The diagnostics capture was shed before commit because the queue was full.",
+        "lineTruncated": false
+      },
+      {
+        "file": "server-1.out.log",
+        "line": 53811,
+        "matches": [
+          "admissionOrShed"
+        ],
+        "text": "      Elsa.Diagnostics.Persistence.Draining.DiagnosticsDrainException: The diagnostics capture was shed before commit because the queue was full.",
+        "lineTruncated": false
+      },
+      {
+        "file": "server-1.out.log",
+        "line": 53818,
+        "matches": [
+          "admissionOrShed"
+        ],
+        "text": "      Elsa.Diagnostics.Persistence.Draining.DiagnosticsDrainException: The diagnostics capture was shed before commit because the queue was full.",
+        "lineTruncated": false
+      },
+      {
+        "file": "server-1.out.log",
+        "line": 53825,
+        "matches": [
+          "admissionOrShed"
+        ],
+        "text": "      Elsa.Diagnostics.Persistence.Draining.DiagnosticsDrainException: The diagnostics capture was shed before commit because the queue was full.",
+        "lineTruncated": false
+      },
+      {
+        "file": "server-1.out.log",
+        "line": 53842,
+        "matches": [
+          "admissionOrShed"
+        ],
+        "text": "      Elsa.Diagnostics.Persistence.Draining.DiagnosticsDrainException: The diagnostics capture was shed before commit because the queue was full.",
+        "lineTruncated": false
+      },
+      {
+        "file": "server-1.out.log",
+        "line": 53849,
+        "matches": [
+          "admissionOrShed"
+        ],
+        "text": "      Elsa.Diagnostics.Persistence.Draining.DiagnosticsDrainException: The diagnostics capture was shed before commit because the queue was full.",
+        "lineTruncated": false
+      },
+      {
+        "file": "server-1.out.log",
+        "line": 53856,
+        "matches": [
+          "admissionOrShed"
+        ],
+        "text": "      Elsa.Diagnostics.Persistence.Draining.DiagnosticsDrainException: The diagnostics capture was shed before commit because the queue was full.",
+        "lineTruncated": false
+      },
+      {
+        "file": "server-1.out.log",
+        "line": 53863,
+        "matches": [
+          "admissionOrShed"
+        ],
+        "text": "      Elsa.Diagnostics.Persistence.Draining.DiagnosticsDrainException: The diagnostics capture was shed before commit because the queue was full.",
+        "lineTruncated": false
+      },
+      {
+        "file": "server-1.out.log",
+        "line": 53872,
+        "matches": [
+          "admissionOrShed"
+        ],
+        "text": "      Elsa.Diagnostics.Persistence.Draining.DiagnosticsDrainException: The diagnostics capture was shed before commit because the queue was full.",
+        "lineTruncated": false
+      },
+      {
+        "file": "server-1.out.log",
+        "line": 53879,
+        "matches": [
+          "admissionOrShed"
+        ],
+        "text": "      Elsa.Diagnostics.Persistence.Draining.DiagnosticsDrainException: The diagnostics capture was shed before commit because the queue was full.",
+        "lineTruncated": false
+      },
+      {
+        "file": "server-1.out.log",
+        "line": 53886,
+        "matches": [
+          "admissionOrShed"
+        ],
+        "text": "      Elsa.Diagnostics.Persistence.Draining.DiagnosticsDrainException: The diagnostics capture was shed before commit because the queue was full.",
+        "lineTruncated": false
+      },
+      {
+        "file": "server-1.out.log",
+        "line": 53893,
+        "matches": [
+          "admissionOrShed"
+        ],
+        "text": "      Elsa.Diagnostics.Persistence.Draining.DiagnosticsDrainException: The diagnostics capture was shed before commit because the queue was full.",
+        "lineTruncated": false
+      },
+      {
+        "file": "server-1.out.log",
+        "line": 53900,
+        "matches": [
+          "admissionOrShed"
+        ],
+        "text": "      Elsa.Diagnostics.Persistence.Draining.DiagnosticsDrainException: The diagnostics capture was shed before commit because the queue was full.",
+        "lineTruncated": false
+      },
+      {
+        "file": "server-1.out.log",
+        "line": 53907,
+        "matches": [
+          "admissionOrShed"
+        ],
+        "text": "      Elsa.Diagnostics.Persistence.Draining.DiagnosticsDrainException: The diagnostics capture was shed before commit because the queue was full.",
+        "lineTruncated": false
+      },
+      {
+        "file": "server-1.out.log",
+        "line": 53914,
+        "matches": [
+          "admissionOrShed"
+        ],
+        "text": "      Elsa.Diagnostics.Persistence.Draining.DiagnosticsDrainException: The diagnostics capture was shed before commit because the queue was full.",
+        "lineTruncated": false
+      },
+      {
+        "file": "server-1.out.log",
+        "line": 53921,
+        "matches": [
+          "admissionOrShed"
+        ],
+        "text": "      Elsa.Diagnostics.Persistence.Draining.DiagnosticsDrainException: The diagnostics capture was shed before commit because the queue was full.",
+        "lineTruncated": false
+      },
+      {
+        "file": "server-1.out.log",
+        "line": 53928,
+        "matches": [
+          "admissionOrShed"
+        ],
+        "text": "      Elsa.Diagnostics.Persistence.Draining.DiagnosticsDrainException: The diagnostics capture was shed before commit because the queue was full.",
+        "lineTruncated": false
+      },
+      {
+        "file": "server-1.out.log",
+        "line": 53941,
+        "matches": [
+          "admissionOrShed"
+        ],
+        "text": "      Elsa.Diagnostics.Persistence.Draining.DiagnosticsDrainException: The diagnostics capture was shed before commit because the queue was full.",
+        "lineTruncated": false
+      },
+      {
+        "file": "server-1.out.log",
+        "line": 53968,
+        "matches": [
+          "admissionOrShed"
+        ],
+        "text": "      Elsa.Diagnostics.Persistence.Draining.DiagnosticsDrainException: The diagnostics capture was shed before commit because the queue was full.",
+        "lineTruncated": false
+      },
+      {
+        "file": "server-1.out.log",
+        "line": 53975,
+        "matches": [
+          "admissionOrShed"
+        ],
+        "text": "      Elsa.Diagnostics.Persistence.Draining.DiagnosticsDrainException: The diagnostics capture was shed before commit because the queue was full.",
+        "lineTruncated": false
+      },
+      {
+        "file": "server-1.out.log",
+        "line": 53982,
+        "matches": [
+          "admissionOrShed"
+        ],
+        "text": "      Elsa.Diagnostics.Persistence.Draining.DiagnosticsDrainException: The diagnostics capture was shed before commit because the queue was full.",
+        "lineTruncated": false
+      },
+      {
+        "file": "server-1.out.log",
+        "line": 53989,
+        "matches": [
+          "admissionOrShed"
+        ],
+        "text": "      Elsa.Diagnostics.Persistence.Draining.DiagnosticsDrainException: The diagnostics capture was shed before commit because the queue was full.",
+        "lineTruncated": false
+      },
+      {
+        "file": "server-1.out.log",
+        "line": 54000,
+        "matches": [
+          "admissionOrShed"
+        ],
+        "text": "      Elsa.Diagnostics.Persistence.Draining.DiagnosticsDrainException: The diagnostics capture was shed before commit because the queue was full.",
+        "lineTruncated": false
+      },
+      {
+        "file": "server-1.out.log",
+        "line": 54007,
+        "matches": [
+          "admissionOrShed"
+        ],
+        "text": "      Elsa.Diagnostics.Persistence.Draining.DiagnosticsDrainException: The diagnostics capture was shed before commit because the queue was full.",
+        "lineTruncated": false
+      },
+      {
+        "file": "server-1.out.log",
+        "line": 54014,
+        "matches": [
+          "admissionOrShed"
+        ],
+        "text": "      Elsa.Diagnostics.Persistence.Draining.DiagnosticsDrainException: The diagnostics capture was shed before commit because the queue was full.",
+        "lineTruncated": false
+      },
+      {
+        "file": "server-1.out.log",
+        "line": 54021,
+        "matches": [
+          "admissionOrShed"
+        ],
+        "text": "      Elsa.Diagnostics.Persistence.Draining.DiagnosticsDrainException: The diagnostics capture was shed before commit because the queue was full.",
+        "lineTruncated": false
+      },
+      {
+        "file": "server-1.out.log",
+        "line": 54028,
+        "matches": [
+          "admissionOrShed"
+        ],
+        "text": "      Elsa.Diagnostics.Persistence.Draining.DiagnosticsDrainException: The diagnostics capture was shed before commit because the queue was full.",
+        "lineTruncated": false
+      },
+      {
+        "file": "server-1.out.log",
+        "line": 54037,
+        "matches": [
+          "admissionOrShed"
+        ],
+        "text": "      Elsa.Diagnostics.Persistence.Draining.DiagnosticsDrainException: The diagnostics capture was shed before commit because the queue was full.",
+        "lineTruncated": false
+      },
+      {
+        "file": "server-1.out.log",
+        "line": 54044,
+        "matches": [
+          "admissionOrShed"
+        ],
+        "text": "      Elsa.Diagnostics.Persistence.Draining.DiagnosticsDrainException: The diagnostics capture was shed before commit because the queue was full.",
+        "lineTruncated": false
+      },
+      {
+        "file": "server-1.out.log",
+        "line": 54051,
+        "matches": [
+          "admissionOrShed"
+        ],
+        "text": "      Elsa.Diagnostics.Persistence.Draining.DiagnosticsDrainException: The diagnostics capture was shed before commit because the queue was full.",
+        "lineTruncated": false
+      },
+      {
+        "file": "server-1.out.log",
+        "line": 54058,
+        "matches": [
+          "admissionOrShed"
+        ],
+        "text": "      Elsa.Diagnostics.Persistence.Draining.DiagnosticsDrainException: The diagnostics capture was shed before commit because the queue was full.",
+        "lineTruncated": false
+      },
+      {
+        "file": "server-1.out.log",
+        "line": 54065,
+        "matches": [
+          "admissionOrShed"
+        ],
+        "text": "      Elsa.Diagnostics.Persistence.Draining.DiagnosticsDrainException: The diagnostics capture was shed before commit because the queue was full.",
+        "lineTruncated": false
+      },
+      {
+        "file": "server-1.out.log",
+        "line": 54072,
+        "matches": [
+          "admissionOrShed"
+        ],
+        "text": "      Elsa.Diagnostics.Persistence.Draining.DiagnosticsDrainException: The diagnostics capture was shed before commit because the queue was full.",
+        "lineTruncated": false
+      },
+      {
+        "file": "server-1.out.log",
+        "line": 54081,
+        "matches": [
+          "admissionOrShed"
+        ],
+        "text": "      Elsa.Diagnostics.Persistence.Draining.DiagnosticsDrainException: The diagnostics capture was shed before commit because the queue was full.",
+        "lineTruncated": false
+      },
+      {
+        "file": "server-1.out.log",
+        "line": 54112,
+        "matches": [
+          "admissionOrShed"
+        ],
+        "text": "      Elsa.Diagnostics.Persistence.Draining.DiagnosticsDrainException: The diagnostics capture was shed before commit because the queue was full.",
+        "lineTruncated": false
+      },
+      {
+        "file": "server-1.out.log",
+        "line": 54119,
+        "matches": [
+          "admissionOrShed"
+        ],
+        "text": "      Elsa.Diagnostics.Persistence.Draining.DiagnosticsDrainException: The diagnostics capture was shed before commit because the queue was full.",
+        "lineTruncated": false
+      },
+      {
+        "file": "server-1.out.log",
+        "line": 54126,
+        "matches": [
+          "admissionOrShed"
+        ],
+        "text": "      Elsa.Diagnostics.Persistence.Draining.DiagnosticsDrainException: The diagnostics capture was shed before commit because the queue was full.",
+        "lineTruncated": false
+      },
+      {
+        "file": "server-1.out.log",
+        "line": 54139,
+        "matches": [
+          "admissionOrShed"
+        ],
+        "text": "      Elsa.Diagnostics.Persistence.Draining.DiagnosticsDrainException: The diagnostics capture was shed before commit because the queue was full.",
+        "lineTruncated": false
+      },
+      {
+        "file": "server-1.out.log",
+        "line": 54146,
+        "matches": [
+          "admissionOrShed"
+        ],
+        "text": "      Elsa.Diagnostics.Persistence.Draining.DiagnosticsDrainException: The diagnostics capture was shed before commit because the queue was full.",
+        "lineTruncated": false
+      },
+      {
+        "file": "server-1.out.log",
+        "line": 54153,
+        "matches": [
+          "admissionOrShed"
+        ],
+        "text": "      Elsa.Diagnostics.Persistence.Draining.DiagnosticsDrainException: The diagnostics capture was shed before commit because the queue was full.",
+        "lineTruncated": false
+      },
+      {
+        "file": "server-1.out.log",
+        "line": 54160,
+        "matches": [
+          "admissionOrShed"
+        ],
+        "text": "      Elsa.Diagnostics.Persistence.Draining.DiagnosticsDrainException: The diagnostics capture was shed before commit because the queue was full.",
+        "lineTruncated": false
+      },
+      {
+        "file": "server-1.out.log",
+        "line": 54167,
+        "matches": [
+          "admissionOrShed"
+        ],
+        "text": "      Elsa.Diagnostics.Persistence.Draining.DiagnosticsDrainException: The diagnostics capture was shed before commit because the queue was full.",
+        "lineTruncated": false
+      }
+    ],
+    "excerptLimit": 100
+  },
+  {
+    "series": 2,
+    "scannedFiles": [
+      "series/series-2/content/server-1.out.log",
+      "series/series-2/content/server-1.err.log"
+    ],
+    "matchingLineCounts": {
+      "timeout": 4,
+      "admissionOrShed": 2678
+    },
+    "excerpts": [
+      {
+        "file": "server-1.out.log",
+        "line": 17023,
+        "matches": [
+          "timeout"
+        ],
+        "text": "      Failed executing DbCommand (18ms) [Parameters=[], CommandType='Text', CommandTimeout='30']",
+        "lineTruncated": false
+      },
+      {
+        "file": "server-1.out.log",
+        "line": 34036,
+        "matches": [
+          "timeout"
+        ],
+        "text": "      Failed executing DbCommand (1ms) [Parameters=[], CommandType='Text', CommandTimeout='30']",
+        "lineTruncated": false
+      },
+      {
+        "file": "server-1.out.log",
+        "line": 34041,
+        "matches": [
+          "timeout"
+        ],
+        "text": "      Failed executing DbCommand (1ms) [Parameters=[], CommandType='Text', CommandTimeout='30']",
+        "lineTruncated": false
+      },
+      {
+        "file": "server-1.out.log",
+        "line": 34046,
+        "matches": [
+          "timeout"
+        ],
+        "text": "      Failed executing DbCommand (1ms) [Parameters=[], CommandType='Text', CommandTimeout='30']",
+        "lineTruncated": false
+      },
+      {
+        "file": "server-1.out.log",
+        "line": 63494,
+        "matches": [
+          "admissionOrShed"
+        ],
+        "text": "      Elsa.Diagnostics.Persistence.Draining.DiagnosticsDrainException: The diagnostics capture was shed before commit because the queue was full.",
+        "lineTruncated": false
+      },
+      {
+        "file": "server-1.out.log",
+        "line": 63503,
+        "matches": [
+          "admissionOrShed"
+        ],
+        "text": "      Elsa.Diagnostics.Persistence.Draining.DiagnosticsDrainException: The diagnostics capture was shed before commit because the queue was full.",
+        "lineTruncated": false
+      },
+      {
+        "file": "server-1.out.log",
+        "line": 63514,
+        "matches": [
+          "admissionOrShed"
+        ],
+        "text": "      Elsa.Diagnostics.Persistence.Draining.DiagnosticsDrainException: The diagnostics capture was shed before commit because the queue was full.",
+        "lineTruncated": false
+      },
+      {
+        "file": "server-1.out.log",
+        "line": 63523,
+        "matches": [
+          "admissionOrShed"
+        ],
+        "text": "      Elsa.Diagnostics.Persistence.Draining.DiagnosticsDrainException: The diagnostics capture was shed before commit because the queue was full.",
+        "lineTruncated": false
+      },
+      {
+        "file": "server-1.out.log",
+        "line": 63534,
+        "matches": [
+          "admissionOrShed"
+        ],
+        "text": "      Elsa.Diagnostics.Persistence.Draining.DiagnosticsDrainException: The diagnostics capture was shed before commit because the queue was full.",
+        "lineTruncated": false
+      },
+      {
+        "file": "server-1.out.log",
+        "line": 63541,
+        "matches": [
+          "admissionOrShed"
+        ],
+        "text": "      Elsa.Diagnostics.Persistence.Draining.DiagnosticsDrainException: The diagnostics capture was shed before commit because the queue was full.",
+        "lineTruncated": false
+      },
+      {
+        "file": "server-1.out.log",
+        "line": 63550,
+        "matches": [
+          "admissionOrShed"
+        ],
+        "text": "      Elsa.Diagnostics.Persistence.Draining.DiagnosticsDrainException: The diagnostics capture was shed before commit because the queue was full.",
+        "lineTruncated": false
+      },
+      {
+        "file": "server-1.out.log",
+        "line": 63559,
+        "matches": [
+          "admissionOrShed"
+        ],
+        "text": "      Elsa.Diagnostics.Persistence.Draining.DiagnosticsDrainException: The diagnostics capture was shed before commit because the queue was full.",
+        "lineTruncated": false
+      },
+      {
+        "file": "server-1.out.log",
+        "line": 63568,
+        "matches": [
+          "admissionOrShed"
+        ],
+        "text": "      Elsa.Diagnostics.Persistence.Draining.DiagnosticsDrainException: The diagnostics capture was shed before commit because the queue was full.",
+        "lineTruncated": false
+      },
+      {
+        "file": "server-1.out.log",
+        "line": 63599,
+        "matches": [
+          "admissionOrShed"
+        ],
+        "text": "      Elsa.Diagnostics.Persistence.Draining.DiagnosticsDrainException: The diagnostics capture was shed before commit because the queue was full.",
+        "lineTruncated": false
+      },
+      {
+        "file": "server-1.out.log",
+        "line": 63610,
+        "matches": [
+          "admissionOrShed"
+        ],
+        "text": "      Elsa.Diagnostics.Persistence.Draining.DiagnosticsDrainException: The diagnostics capture was shed before commit because the queue was full.",
+        "lineTruncated": false
+      },
+      {
+        "file": "server-1.out.log",
+        "line": 63617,
+        "matches": [
+          "admissionOrShed"
+        ],
+        "text": "      Elsa.Diagnostics.Persistence.Draining.DiagnosticsDrainException: The diagnostics capture was shed before commit because the queue was full.",
+        "lineTruncated": false
+      },
+      {
+        "file": "server-1.out.log",
+        "line": 63634,
+        "matches": [
+          "admissionOrShed"
+        ],
+        "text": "      Elsa.Diagnostics.Persistence.Draining.DiagnosticsDrainException: The diagnostics capture was shed before commit because the queue was full.",
+        "lineTruncated": false
+      },
+      {
+        "file": "server-1.out.log",
+        "line": 63645,
+        "matches": [
+          "admissionOrShed"
+        ],
+        "text": "      Elsa.Diagnostics.Persistence.Draining.DiagnosticsDrainException: The diagnostics capture was shed before commit because the queue was full.",
+        "lineTruncated": false
+      },
+      {
+        "file": "server-1.out.log",
+        "line": 63654,
+        "matches": [
+          "admissionOrShed"
+        ],
+        "text": "      Elsa.Diagnostics.Persistence.Draining.DiagnosticsDrainException: The diagnostics capture was shed before commit because the queue was full.",
+        "lineTruncated": false
+      },
+      {
+        "file": "server-1.out.log",
+        "line": 63663,
+        "matches": [
+          "admissionOrShed"
+        ],
+        "text": "      Elsa.Diagnostics.Persistence.Draining.DiagnosticsDrainException: The diagnostics capture was shed before commit because the queue was full.",
+        "lineTruncated": false
+      },
+      {
+        "file": "server-1.out.log",
+        "line": 63672,
+        "matches": [
+          "admissionOrShed"
+        ],
+        "text": "      Elsa.Diagnostics.Persistence.Draining.DiagnosticsDrainException: The diagnostics capture was shed before commit because the queue was full.",
+        "lineTruncated": false
+      },
+      {
+        "file": "server-1.out.log",
+        "line": 63689,
+        "matches": [
+          "admissionOrShed"
+        ],
+        "text": "      Elsa.Diagnostics.Persistence.Draining.DiagnosticsDrainException: The diagnostics capture was shed before commit because the queue was full.",
+        "lineTruncated": false
+      },
+      {
+        "file": "server-1.out.log",
+        "line": 63700,
+        "matches": [
+          "admissionOrShed"
+        ],
+        "text": "      Elsa.Diagnostics.Persistence.Draining.DiagnosticsDrainException: The diagnostics capture was shed before commit because the queue was full.",
+        "lineTruncated": false
+      },
+      {
+        "file": "server-1.out.log",
+        "line": 63709,
+        "matches": [
+          "admissionOrShed"
+        ],
+        "text": "      Elsa.Diagnostics.Persistence.Draining.DiagnosticsDrainException: The diagnostics capture was shed before commit because the queue was full.",
+        "lineTruncated": false
+      },
+      {
+        "file": "server-1.out.log",
+        "line": 63718,
+        "matches": [
+          "admissionOrShed"
+        ],
+        "text": "      Elsa.Diagnostics.Persistence.Draining.DiagnosticsDrainException: The diagnostics capture was shed before commit because the queue was full.",
+        "lineTruncated": false
+      },
+      {
+        "file": "server-1.out.log",
+        "line": 63727,
+        "matches": [
+          "admissionOrShed"
+        ],
+        "text": "      Elsa.Diagnostics.Persistence.Draining.DiagnosticsDrainException: The diagnostics capture was shed before commit because the queue was full.",
+        "lineTruncated": false
+      },
+      {
+        "file": "server-1.out.log",
+        "line": 63742,
+        "matches": [
+          "admissionOrShed"
+        ],
+        "text": "      Elsa.Diagnostics.Persistence.Draining.DiagnosticsDrainException: The diagnostics capture was shed before commit because the queue was full.",
+        "lineTruncated": false
+      },
+      {
+        "file": "server-1.out.log",
+        "line": 63751,
+        "matches": [
+          "admissionOrShed"
+        ],
+        "text": "      Elsa.Diagnostics.Persistence.Draining.DiagnosticsDrainException: The diagnostics capture was shed before commit because the queue was full.",
+        "lineTruncated": false
+      },
+      {
+        "file": "server-1.out.log",
+        "line": 63768,
+        "matches": [
+          "admissionOrShed"
+        ],
+        "text": "      Elsa.Diagnostics.Persistence.Draining.DiagnosticsDrainException: The diagnostics capture was shed before commit because the queue was full.",
+        "lineTruncated": false
+      },
+      {
+        "file": "server-1.out.log",
+        "line": 63775,
+        "matches": [
+          "admissionOrShed"
+        ],
+        "text": "      Elsa.Diagnostics.Persistence.Draining.DiagnosticsDrainException: The diagnostics capture was shed before commit because the queue was full.",
+        "lineTruncated": false
+      },
+      {
+        "file": "server-1.out.log",
+        "line": 63782,
+        "matches": [
+          "admissionOrShed"
+        ],
+        "text": "      Elsa.Diagnostics.Persistence.Draining.DiagnosticsDrainException: The diagnostics capture was shed before commit because the queue was full.",
+        "lineTruncated": false
+      },
+      {
+        "file": "server-1.out.log",
+        "line": 63793,
+        "matches": [
+          "admissionOrShed"
+        ],
+        "text": "      Elsa.Diagnostics.Persistence.Draining.DiagnosticsDrainException: The diagnostics capture was shed before commit because the queue was full.",
+        "lineTruncated": false
+      },
+      {
+        "file": "server-1.out.log",
+        "line": 63806,
+        "matches": [
+          "admissionOrShed"
+        ],
+        "text": "      Elsa.Diagnostics.Persistence.Draining.DiagnosticsDrainException: The diagnostics capture was shed before commit because the queue was full.",
+        "lineTruncated": false
+      },
+      {
+        "file": "server-1.out.log",
+        "line": 63815,
+        "matches": [
+          "admissionOrShed"
+        ],
+        "text": "      Elsa.Diagnostics.Persistence.Draining.DiagnosticsDrainException: The diagnostics capture was shed before commit because the queue was full.",
+        "lineTruncated": false
+      },
+      {
+        "file": "server-1.out.log",
+        "line": 63830,
+        "matches": [
+          "admissionOrShed"
+        ],
+        "text": "      Elsa.Diagnostics.Persistence.Draining.DiagnosticsDrainException: The diagnostics capture was shed before commit because the queue was full.",
+        "lineTruncated": false
+      },
+      {
+        "file": "server-1.out.log",
+        "line": 63839,
+        "matches": [
+          "admissionOrShed"
+        ],
+        "text": "      Elsa.Diagnostics.Persistence.Draining.DiagnosticsDrainException: The diagnostics capture was shed before commit because the queue was full.",
+        "lineTruncated": false
+      },
+      {
+        "file": "server-1.out.log",
+        "line": 63850,
+        "matches": [
+          "admissionOrShed"
+        ],
+        "text": "      Elsa.Diagnostics.Persistence.Draining.DiagnosticsDrainException: The diagnostics capture was shed before commit because the queue was full.",
+        "lineTruncated": false
+      },
+      {
+        "file": "server-1.out.log",
+        "line": 63859,
+        "matches": [
+          "admissionOrShed"
+        ],
+        "text": "      Elsa.Diagnostics.Persistence.Draining.DiagnosticsDrainException: The diagnostics capture was shed before commit because the queue was full.",
+        "lineTruncated": false
+      },
+      {
+        "file": "server-1.out.log",
+        "line": 63880,
+        "matches": [
+          "admissionOrShed"
+        ],
+        "text": "      Elsa.Diagnostics.Persistence.Draining.DiagnosticsDrainException: The diagnostics capture was shed before commit because the queue was full.",
+        "lineTruncated": false
+      },
+      {
+        "file": "server-1.out.log",
+        "line": 63889,
+        "matches": [
+          "admissionOrShed"
+        ],
+        "text": "      Elsa.Diagnostics.Persistence.Draining.DiagnosticsDrainException: The diagnostics capture was shed before commit because the queue was full.",
+        "lineTruncated": false
+      },
+      {
+        "file": "server-1.out.log",
+        "line": 63896,
+        "matches": [
+          "admissionOrShed"
+        ],
+        "text": "      Elsa.Diagnostics.Persistence.Draining.DiagnosticsDrainException: The diagnostics capture was shed before commit because the queue was full.",
+        "lineTruncated": false
+      },
+      {
+        "file": "server-1.out.log",
+        "line": 63905,
+        "matches": [
+          "admissionOrShed"
+        ],
+        "text": "      Elsa.Diagnostics.Persistence.Draining.DiagnosticsDrainException: The diagnostics capture was shed before commit because the queue was full.",
+        "lineTruncated": false
+      },
+      {
+        "file": "server-1.out.log",
+        "line": 63914,
+        "matches": [
+          "admissionOrShed"
+        ],
+        "text": "      Elsa.Diagnostics.Persistence.Draining.DiagnosticsDrainException: The diagnostics capture was shed before commit because the queue was full.",
+        "lineTruncated": false
+      },
+      {
+        "file": "server-1.out.log",
+        "line": 63923,
+        "matches": [
+          "admissionOrShed"
+        ],
+        "text": "      Elsa.Diagnostics.Persistence.Draining.DiagnosticsDrainException: The diagnostics capture was shed before commit because the queue was full.",
+        "lineTruncated": false
+      },
+      {
+        "file": "server-1.out.log",
+        "line": 63932,
+        "matches": [
+          "admissionOrShed"
+        ],
+        "text": "      Elsa.Diagnostics.Persistence.Draining.DiagnosticsDrainException: The diagnostics capture was shed before commit because the queue was full.",
+        "lineTruncated": false
+      },
+      {
+        "file": "server-1.out.log",
+        "line": 63943,
+        "matches": [
+          "admissionOrShed"
+        ],
+        "text": "      Elsa.Diagnostics.Persistence.Draining.DiagnosticsDrainException: The diagnostics capture was shed before commit because the queue was full.",
+        "lineTruncated": false
+      },
+      {
+        "file": "server-1.out.log",
+        "line": 63960,
+        "matches": [
+          "admissionOrShed"
+        ],
+        "text": "      Elsa.Diagnostics.Persistence.Draining.DiagnosticsDrainException: The diagnostics capture was shed before commit because the queue was full.",
+        "lineTruncated": false
+      },
+      {
+        "file": "server-1.out.log",
+        "line": 63979,
+        "matches": [
+          "admissionOrShed"
+        ],
+        "text": "      Elsa.Diagnostics.Persistence.Draining.DiagnosticsDrainException: The diagnostics capture was shed before commit because the queue was full.",
+        "lineTruncated": false
+      },
+      {
+        "file": "server-1.out.log",
+        "line": 63986,
+        "matches": [
+          "admissionOrShed"
+        ],
+        "text": "      Elsa.Diagnostics.Persistence.Draining.DiagnosticsDrainException: The diagnostics capture was shed before commit because the queue was full.",
+        "lineTruncated": false
+      },
+      {
+        "file": "server-1.out.log",
+        "line": 63995,
+        "matches": [
+          "admissionOrShed"
+        ],
+        "text": "      Elsa.Diagnostics.Persistence.Draining.DiagnosticsDrainException: The diagnostics capture was shed before commit because the queue was full.",
+        "lineTruncated": false
+      },
+      {
+        "file": "server-1.out.log",
+        "line": 64004,
+        "matches": [
+          "admissionOrShed"
+        ],
+        "text": "      Elsa.Diagnostics.Persistence.Draining.DiagnosticsDrainException: The diagnostics capture was shed before commit because the queue was full.",
+        "lineTruncated": false
+      },
+      {
+        "file": "server-1.out.log",
+        "line": 64013,
+        "matches": [
+          "admissionOrShed"
+        ],
+        "text": "      Elsa.Diagnostics.Persistence.Draining.DiagnosticsDrainException: The diagnostics capture was shed before commit because the queue was full.",
+        "lineTruncated": false
+      },
+      {
+        "file": "server-1.out.log",
+        "line": 64022,
+        "matches": [
+          "admissionOrShed"
+        ],
+        "text": "      Elsa.Diagnostics.Persistence.Draining.DiagnosticsDrainException: The diagnostics capture was shed before commit because the queue was full.",
+        "lineTruncated": false
+      },
+      {
+        "file": "server-1.out.log",
+        "line": 64031,
+        "matches": [
+          "admissionOrShed"
+        ],
+        "text": "      Elsa.Diagnostics.Persistence.Draining.DiagnosticsDrainException: The diagnostics capture was shed before commit because the queue was full.",
+        "lineTruncated": false
+      },
+      {
+        "file": "server-1.out.log",
+        "line": 64040,
+        "matches": [
+          "admissionOrShed"
+        ],
+        "text": "      Elsa.Diagnostics.Persistence.Draining.DiagnosticsDrainException: The diagnostics capture was shed before commit because the queue was full.",
+        "lineTruncated": false
+      },
+      {
+        "file": "server-1.out.log",
+        "line": 64049,
+        "matches": [
+          "admissionOrShed"
+        ],
+        "text": "      Elsa.Diagnostics.Persistence.Draining.DiagnosticsDrainException: The diagnostics capture was shed before commit because the queue was full.",
+        "lineTruncated": false
+      },
+      {
+        "file": "server-1.out.log",
+        "line": 64066,
+        "matches": [
+          "admissionOrShed"
+        ],
+        "text": "      Elsa.Diagnostics.Persistence.Draining.DiagnosticsDrainException: The diagnostics capture was shed before commit because the queue was full.",
+        "lineTruncated": false
+      },
+      {
+        "file": "server-1.out.log",
+        "line": 64087,
+        "matches": [
+          "admissionOrShed"
+        ],
+        "text": "      Elsa.Diagnostics.Persistence.Draining.DiagnosticsDrainException: The diagnostics capture was shed before commit because the queue was full.",
+        "lineTruncated": false
+      },
+      {
+        "file": "server-1.out.log",
+        "line": 64098,
+        "matches": [
+          "admissionOrShed"
+        ],
+        "text": "      Elsa.Diagnostics.Persistence.Draining.DiagnosticsDrainException: The diagnostics capture was shed before commit because the queue was full.",
+        "lineTruncated": false
+      },
+      {
+        "file": "server-1.out.log",
+        "line": 64107,
+        "matches": [
+          "admissionOrShed"
+        ],
+        "text": "      Elsa.Diagnostics.Persistence.Draining.DiagnosticsDrainException: The diagnostics capture was shed before commit because the queue was full.",
+        "lineTruncated": false
+      },
+      {
+        "file": "server-1.out.log",
+        "line": 64116,
+        "matches": [
+          "admissionOrShed"
+        ],
+        "text": "      Elsa.Diagnostics.Persistence.Draining.DiagnosticsDrainException: The diagnostics capture was shed before commit because the queue was full.",
+        "lineTruncated": false
+      },
+      {
+        "file": "server-1.out.log",
+        "line": 64127,
+        "matches": [
+          "admissionOrShed"
+        ],
+        "text": "      Elsa.Diagnostics.Persistence.Draining.DiagnosticsDrainException: The diagnostics capture was shed before commit because the queue was full.",
+        "lineTruncated": false
+      },
+      {
+        "file": "server-1.out.log",
+        "line": 64136,
+        "matches": [
+          "admissionOrShed"
+        ],
+        "text": "      Elsa.Diagnostics.Persistence.Draining.DiagnosticsDrainException: The diagnostics capture was shed before commit because the queue was full.",
+        "lineTruncated": false
+      },
+      {
+        "file": "server-1.out.log",
+        "line": 64147,
+        "matches": [
+          "admissionOrShed"
+        ],
+        "text": "      Elsa.Diagnostics.Persistence.Draining.DiagnosticsDrainException: The diagnostics capture was shed before commit because the queue was full.",
+        "lineTruncated": false
+      },
+      {
+        "file": "server-1.out.log",
+        "line": 64156,
+        "matches": [
+          "admissionOrShed"
+        ],
+        "text": "      Elsa.Diagnostics.Persistence.Draining.DiagnosticsDrainException: The diagnostics capture was shed before commit because the queue was full.",
+        "lineTruncated": false
+      },
+      {
+        "file": "server-1.out.log",
+        "line": 64163,
+        "matches": [
+          "admissionOrShed"
+        ],
+        "text": "      Elsa.Diagnostics.Persistence.Draining.DiagnosticsDrainException: The diagnostics capture was shed before commit because the queue was full.",
+        "lineTruncated": false
+      },
+      {
+        "file": "server-1.out.log",
+        "line": 64172,
+        "matches": [
+          "admissionOrShed"
+        ],
+        "text": "      Elsa.Diagnostics.Persistence.Draining.DiagnosticsDrainException: The diagnostics capture was shed before commit because the queue was full.",
+        "lineTruncated": false
+      },
+      {
+        "file": "server-1.out.log",
+        "line": 64187,
+        "matches": [
+          "admissionOrShed"
+        ],
+        "text": "      Elsa.Diagnostics.Persistence.Draining.DiagnosticsDrainException: The diagnostics capture was shed before commit because the queue was full.",
+        "lineTruncated": false
+      },
+      {
+        "file": "server-1.out.log",
+        "line": 64198,
+        "matches": [
+          "admissionOrShed"
+        ],
+        "text": "      Elsa.Diagnostics.Persistence.Draining.DiagnosticsDrainException: The diagnostics capture was shed before commit because the queue was full.",
+        "lineTruncated": false
+      },
+      {
+        "file": "server-1.out.log",
+        "line": 64207,
+        "matches": [
+          "admissionOrShed"
+        ],
+        "text": "      Elsa.Diagnostics.Persistence.Draining.DiagnosticsDrainException: The diagnostics capture was shed before commit because the queue was full.",
+        "lineTruncated": false
+      },
+      {
+        "file": "server-1.out.log",
+        "line": 64220,
+        "matches": [
+          "admissionOrShed"
+        ],
+        "text": "      Elsa.Diagnostics.Persistence.Draining.DiagnosticsDrainException: The diagnostics capture was shed before commit because the queue was full.",
+        "lineTruncated": false
+      },
+      {
+        "file": "server-1.out.log",
+        "line": 64227,
+        "matches": [
+          "admissionOrShed"
+        ],
+        "text": "      Elsa.Diagnostics.Persistence.Draining.DiagnosticsDrainException: The diagnostics capture was shed before commit because the queue was full.",
+        "lineTruncated": false
+      },
+      {
+        "file": "server-1.out.log",
+        "line": 64236,
+        "matches": [
+          "admissionOrShed"
+        ],
+        "text": "      Elsa.Diagnostics.Persistence.Draining.DiagnosticsDrainException: The diagnostics capture was shed before commit because the queue was full.",
+        "lineTruncated": false
+      },
+      {
+        "file": "server-1.out.log",
+        "line": 64245,
+        "matches": [
+          "admissionOrShed"
+        ],
+        "text": "      Elsa.Diagnostics.Persistence.Draining.DiagnosticsDrainException: The diagnostics capture was shed before commit because the queue was full.",
+        "lineTruncated": false
+      },
+      {
+        "file": "server-1.out.log",
+        "line": 64254,
+        "matches": [
+          "admissionOrShed"
+        ],
+        "text": "      Elsa.Diagnostics.Persistence.Draining.DiagnosticsDrainException: The diagnostics capture was shed before commit because the queue was full.",
+        "lineTruncated": false
+      },
+      {
+        "file": "server-1.out.log",
+        "line": 64263,
+        "matches": [
+          "admissionOrShed"
+        ],
+        "text": "      Elsa.Diagnostics.Persistence.Draining.DiagnosticsDrainException: The diagnostics capture was shed before commit because the queue was full.",
+        "lineTruncated": false
+      },
+      {
+        "file": "server-1.out.log",
+        "line": 64274,
+        "matches": [
+          "admissionOrShed"
+        ],
+        "text": "      Elsa.Diagnostics.Persistence.Draining.DiagnosticsDrainException: The diagnostics capture was shed before commit because the queue was full.",
+        "lineTruncated": false
+      },
+      {
+        "file": "server-1.out.log",
+        "line": 64305,
+        "matches": [
+          "admissionOrShed"
+        ],
+        "text": "      Elsa.Diagnostics.Persistence.Draining.DiagnosticsDrainException: The diagnostics capture was shed before commit because the queue was full.",
+        "lineTruncated": false
+      },
+      {
+        "file": "server-1.out.log",
+        "line": 64314,
+        "matches": [
+          "admissionOrShed"
+        ],
+        "text": "      Elsa.Diagnostics.Persistence.Draining.DiagnosticsDrainException: The diagnostics capture was shed before commit because the queue was full.",
+        "lineTruncated": false
+      },
+      {
+        "file": "server-1.out.log",
+        "line": 64325,
+        "matches": [
+          "admissionOrShed"
+        ],
+        "text": "      Elsa.Diagnostics.Persistence.Draining.DiagnosticsDrainException: The diagnostics capture was shed before commit because the queue was full.",
+        "lineTruncated": false
+      },
+      {
+        "file": "server-1.out.log",
+        "line": 64332,
+        "matches": [
+          "admissionOrShed"
+        ],
+        "text": "      Elsa.Diagnostics.Persistence.Draining.DiagnosticsDrainException: The diagnostics capture was shed before commit because the queue was full.",
+        "lineTruncated": false
+      },
+      {
+        "file": "server-1.out.log",
+        "line": 64343,
+        "matches": [
+          "admissionOrShed"
+        ],
+        "text": "      Elsa.Diagnostics.Persistence.Draining.DiagnosticsDrainException: The diagnostics capture was shed before commit because the queue was full.",
+        "lineTruncated": false
+      },
+      {
+        "file": "server-1.out.log",
+        "line": 64362,
+        "matches": [
+          "admissionOrShed"
+        ],
+        "text": "      Elsa.Diagnostics.Persistence.Draining.DiagnosticsDrainException: The diagnostics capture was shed before commit because the queue was full.",
+        "lineTruncated": false
+      },
+      {
+        "file": "server-1.out.log",
+        "line": 64369,
+        "matches": [
+          "admissionOrShed"
+        ],
+        "text": "      Elsa.Diagnostics.Persistence.Draining.DiagnosticsDrainException: The diagnostics capture was shed before commit because the queue was full.",
+        "lineTruncated": false
+      },
+      {
+        "file": "server-1.out.log",
+        "line": 64376,
+        "matches": [
+          "admissionOrShed"
+        ],
+        "text": "      Elsa.Diagnostics.Persistence.Draining.DiagnosticsDrainException: The diagnostics capture was shed before commit because the queue was full.",
+        "lineTruncated": false
+      },
+      {
+        "file": "server-1.out.log",
+        "line": 64383,
+        "matches": [
+          "admissionOrShed"
+        ],
+        "text": "      Elsa.Diagnostics.Persistence.Draining.DiagnosticsDrainException: The diagnostics capture was shed before commit because the queue was full.",
+        "lineTruncated": false
+      },
+      {
+        "file": "server-1.out.log",
+        "line": 64392,
+        "matches": [
+          "admissionOrShed"
+        ],
+        "text": "      Elsa.Diagnostics.Persistence.Draining.DiagnosticsDrainException: The diagnostics capture was shed before commit because the queue was full.",
+        "lineTruncated": false
+      },
+      {
+        "file": "server-1.out.log",
+        "line": 64415,
+        "matches": [
+          "admissionOrShed"
+        ],
+        "text": "      Elsa.Diagnostics.Persistence.Draining.DiagnosticsDrainException: The diagnostics capture was shed before commit because the queue was full.",
+        "lineTruncated": false
+      },
+      {
+        "file": "server-1.out.log",
+        "line": 64422,
+        "matches": [
+          "admissionOrShed"
+        ],
+        "text": "      Elsa.Diagnostics.Persistence.Draining.DiagnosticsDrainException: The diagnostics capture was shed before commit because the queue was full.",
+        "lineTruncated": false
+      },
+      {
+        "file": "server-1.out.log",
+        "line": 64429,
+        "matches": [
+          "admissionOrShed"
+        ],
+        "text": "      Elsa.Diagnostics.Persistence.Draining.DiagnosticsDrainException: The diagnostics capture was shed before commit because the queue was full.",
+        "lineTruncated": false
+      },
+      {
+        "file": "server-1.out.log",
+        "line": 64438,
+        "matches": [
+          "admissionOrShed"
+        ],
+        "text": "      Elsa.Diagnostics.Persistence.Draining.DiagnosticsDrainException: The diagnostics capture was shed before commit because the queue was full.",
+        "lineTruncated": false
+      },
+      {
+        "file": "server-1.out.log",
+        "line": 64447,
+        "matches": [
+          "admissionOrShed"
+        ],
+        "text": "      Elsa.Diagnostics.Persistence.Draining.DiagnosticsDrainException: The diagnostics capture was shed before commit because the queue was full.",
+        "lineTruncated": false
+      },
+      {
+        "file": "server-1.out.log",
+        "line": 64456,
+        "matches": [
+          "admissionOrShed"
+        ],
+        "text": "      Elsa.Diagnostics.Persistence.Draining.DiagnosticsDrainException: The diagnostics capture was shed before commit because the queue was full.",
+        "lineTruncated": false
+      },
+      {
+        "file": "server-1.out.log",
+        "line": 64473,
+        "matches": [
+          "admissionOrShed"
+        ],
+        "text": "      Elsa.Diagnostics.Persistence.Draining.DiagnosticsDrainException: The diagnostics capture was shed before commit because the queue was full.",
+        "lineTruncated": false
+      },
+      {
+        "file": "server-1.out.log",
+        "line": 64488,
+        "matches": [
+          "admissionOrShed"
+        ],
+        "text": "      Elsa.Diagnostics.Persistence.Draining.DiagnosticsDrainException: The diagnostics capture was shed before commit because the queue was full.",
+        "lineTruncated": false
+      },
+      {
+        "file": "server-1.out.log",
+        "line": 64497,
+        "matches": [
+          "admissionOrShed"
+        ],
+        "text": "      Elsa.Diagnostics.Persistence.Draining.DiagnosticsDrainException: The diagnostics capture was shed before commit because the queue was full.",
+        "lineTruncated": false
+      },
+      {
+        "file": "server-1.out.log",
+        "line": 64506,
+        "matches": [
+          "admissionOrShed"
+        ],
+        "text": "      Elsa.Diagnostics.Persistence.Draining.DiagnosticsDrainException: The diagnostics capture was shed before commit because the queue was full.",
+        "lineTruncated": false
+      },
+      {
+        "file": "server-1.out.log",
+        "line": 64525,
+        "matches": [
+          "admissionOrShed"
+        ],
+        "text": "      Elsa.Diagnostics.Persistence.Draining.DiagnosticsDrainException: The diagnostics capture was shed before commit because the queue was full.",
+        "lineTruncated": false
+      },
+      {
+        "file": "server-1.out.log",
+        "line": 64534,
+        "matches": [
+          "admissionOrShed"
+        ],
+        "text": "      Elsa.Diagnostics.Persistence.Draining.DiagnosticsDrainException: The diagnostics capture was shed before commit because the queue was full.",
+        "lineTruncated": false
+      },
+      {
+        "file": "server-1.out.log",
+        "line": 64543,
+        "matches": [
+          "admissionOrShed"
+        ],
+        "text": "      Elsa.Diagnostics.Persistence.Draining.DiagnosticsDrainException: The diagnostics capture was shed before commit because the queue was full.",
+        "lineTruncated": false
+      }
+    ],
+    "excerptLimit": 100
+  },
+  {
+    "series": 3,
+    "scannedFiles": [
+      "series/series-3/content/server-1.out.log",
+      "series/series-3/content/server-1.err.log"
+    ],
+    "matchingLineCounts": {
+      "timeout": 4
+    },
+    "excerpts": [
+      {
+        "file": "server-1.out.log",
+        "line": 17023,
+        "matches": [
+          "timeout"
+        ],
+        "text": "      Failed executing DbCommand (18ms) [Parameters=[], CommandType='Text', CommandTimeout='30']",
+        "lineTruncated": false
+      },
+      {
+        "file": "server-1.out.log",
+        "line": 34036,
+        "matches": [
+          "timeout"
+        ],
+        "text": "      Failed executing DbCommand (1ms) [Parameters=[], CommandType='Text', CommandTimeout='30']",
+        "lineTruncated": false
+      },
+      {
+        "file": "server-1.out.log",
+        "line": 34041,
+        "matches": [
+          "timeout"
+        ],
+        "text": "      Failed executing DbCommand (1ms) [Parameters=[], CommandType='Text', CommandTimeout='30']",
+        "lineTruncated": false
+      },
+      {
+        "file": "server-1.out.log",
+        "line": 34046,
+        "matches": [
+          "timeout"
+        ],
+        "text": "      Failed executing DbCommand (0ms) [Parameters=[], CommandType='Text', CommandTimeout='30']",
+        "lineTruncated": false
+      }
+    ],
+    "excerptLimit": 100
+  },
+  {
+    "series": 4,
+    "scannedFiles": [
+      "series/series-4/content/server-1.out.log",
+      "series/series-4/content/server-1.err.log"
+    ],
+    "matchingLineCounts": {
+      "timeout": 4
+    },
+    "excerpts": [
+      {
+        "file": "server-1.out.log",
+        "line": 17023,
+        "matches": [
+          "timeout"
+        ],
+        "text": "      Failed executing DbCommand (19ms) [Parameters=[], CommandType='Text', CommandTimeout='30']",
+        "lineTruncated": false
+      },
+      {
+        "file": "server-1.out.log",
+        "line": 34036,
+        "matches": [
+          "timeout"
+        ],
+        "text": "      Failed executing DbCommand (1ms) [Parameters=[], CommandType='Text', CommandTimeout='30']",
+        "lineTruncated": false
+      },
+      {
+        "file": "server-1.out.log",
+        "line": 34041,
+        "matches": [
+          "timeout"
+        ],
+        "text": "      Failed executing DbCommand (1ms) [Parameters=[], CommandType='Text', CommandTimeout='30']",
+        "lineTruncated": false
+      },
+      {
+        "file": "server-1.out.log",
+        "line": 34046,
+        "matches": [
+          "timeout"
+        ],
+        "text": "      Failed executing DbCommand (1ms) [Parameters=[], CommandType='Text', CommandTimeout='30']",
+        "lineTruncated": false
+      }
+    ],
+    "excerptLimit": 100
+  },
+  {
+    "series": 5,
+    "scannedFiles": [
+      "series/series-5/content/server-1.out.log",
+      "series/series-5/content/server-1.err.log"
+    ],
+    "matchingLineCounts": {
+      "timeout": 4
+    },
+    "excerpts": [
+      {
+        "file": "server-1.out.log",
+        "line": 17023,
+        "matches": [
+          "timeout"
+        ],
+        "text": "      Failed executing DbCommand (19ms) [Parameters=[], CommandType='Text', CommandTimeout='30']",
+        "lineTruncated": false
+      },
+      {
+        "file": "server-1.out.log",
+        "line": 34036,
+        "matches": [
+          "timeout"
+        ],
+        "text": "      Failed executing DbCommand (1ms) [Parameters=[], CommandType='Text', CommandTimeout='30']",
+        "lineTruncated": false
+      },
+      {
+        "file": "server-1.out.log",
+        "line": 34041,
+        "matches": [
+          "timeout"
+        ],
+        "text": "      Failed executing DbCommand (1ms) [Parameters=[], CommandType='Text', CommandTimeout='30']",
+        "lineTruncated": false
+      },
+      {
+        "file": "server-1.out.log",
+        "line": 34046,
+        "matches": [
+          "timeout"
+        ],
+        "text": "      Failed executing DbCommand (1ms) [Parameters=[], CommandType='Text', CommandTimeout='30']",
+        "lineTruncated": false
+      }
+    ],
+    "excerptLimit": 100
+  },
+  {
+    "series": 6,
+    "scannedFiles": [
+      "series/series-6/content/server-1.out.log",
+      "series/series-6/content/server-1.err.log"
+    ],
+    "matchingLineCounts": {
+      "timeout": 4
+    },
+    "excerpts": [
+      {
+        "file": "server-1.out.log",
+        "line": 17023,
+        "matches": [
+          "timeout"
+        ],
+        "text": "      Failed executing DbCommand (18ms) [Parameters=[], CommandType='Text', CommandTimeout='30']",
+        "lineTruncated": false
+      },
+      {
+        "file": "server-1.out.log",
+        "line": 34036,
+        "matches": [
+          "timeout"
+        ],
+        "text": "      Failed executing DbCommand (1ms) [Parameters=[], CommandType='Text', CommandTimeout='30']",
+        "lineTruncated": false
+      },
+      {
+        "file": "server-1.out.log",
+        "line": 34041,
+        "matches": [
+          "timeout"
+        ],
+        "text": "      Failed executing DbCommand (1ms) [Parameters=[], CommandType='Text', CommandTimeout='30']",
+        "lineTruncated": false
+      },
+      {
+        "file": "server-1.out.log",
+        "line": 34046,
+        "matches": [
+          "timeout"
+        ],
+        "text": "      Failed executing DbCommand (1ms) [Parameters=[], CommandType='Text', CommandTimeout='30']",
+        "lineTruncated": false
+      }
+    ],
+    "excerptLimit": 100
+  },
+  {
+    "series": 7,
+    "scannedFiles": [
+      "series/series-7/content/server-1.out.log",
+      "series/series-7/content/server-1.err.log"
+    ],
+    "matchingLineCounts": {
+      "timeout": 2
+    },
+    "excerpts": [
+      {
+        "file": "server-1.out.log",
+        "line": 36733,
+        "matches": [
+          "timeout"
+        ],
+        "text": "      Failed executing DbCommand (644ms) [Parameters=[@p0='?' (Size = 64), @p1='?', @p2='?' (DbType = Int64), @p3='?' (DbType = Int32), @p4='?' (DbType = Int64), @p5='?' (Size = 3327), @p6='?' (DbType = Int32), @p7='?' (DbType = Int64), @p8='?' (DbType = Int32), @p9='?' (DbType = Int64), @p10='?' (DbType = Int64), @p11='?' (Size = 5), @p12='?' (Size = 20), @p13='?' (Size = 64), @p14='?' (DbType = Int32), @p15='?' (DbType = Int64), @p16='?' (Size = 92), @p17='?' (Size = 64), @p18='?' (Size = 170), @p19='?' (Size = 32), @p20='?' (Size = 64), @p21='?' (Size = 516)], CommandType='Text', CommandTimeout='30']",
+        "lineTruncated": false
+      },
+      {
+        "file": "server-1.out.log",
+        "line": 37415,
+        "matches": [
+          "timeout"
+        ],
+        "text": "      Failed executing DbCommand (150ms) [Parameters=[@p0='?' (Size = 64), @p1='?', @p2='?' (DbType = Int64), @p3='?' (DbType = Int32), @p4='?' (DbType = Int64), @p5='?' (Size = 3997), @p6='?' (DbType = Int32), @p7='?' (DbType = Int64), @p8='?' (DbType = Int32), @p9='?' (DbType = Int64), @p10='?' (DbType = Int64), @p11='?' (Size = 5), @p12='?' (Size = 20), @p13='?' (Size = 64), @p14='?' (DbType = Int32), @p15='?' (DbType = Int64), @p16='?' (Size = 148), @p17='?' (Size = 64), @p18='?' (Size = 170), @p19='?' (Size = 32), @p20='?' (Size = 64), @p21='?' (Size = 516)], CommandType='Text', CommandTimeout='30']",
+        "lineTruncated": false
+      }
+    ],
+    "excerptLimit": 100
+  }
+]

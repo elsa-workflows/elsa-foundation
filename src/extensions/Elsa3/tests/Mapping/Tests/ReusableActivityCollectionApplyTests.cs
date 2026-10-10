@@ -1,5 +1,3 @@
-using Elsa.Serialization.Core;
-using Elsa.Serialization.SystemText.Services;
 using Elsa.Workflows.Design.Core.Models;
 using Elsa3.Activities.Design.Import.Contracts;
 using Elsa3.Activities.Design.Import.Models;
@@ -16,8 +14,8 @@ public sealed class ReusableActivityCollectionApplyTests
         var collection = ValidCollection();
         var analyzer = new ReusableActivityCollectionAnalyzer();
         var plan = await analyzer.AnalyzeAsync(collection);
-        var command = new CapturingCommand();
-        var importer = new ReusableActivityCollectionImporter(analyzer, ReusableActivityImportFixtures.Materializer(), command);
+        var command = new ReusableActivityImportFixtures.CapturingCommand();
+        var importer = new ReusableActivityCollectionImporter(analyzer, ReusableActivityImportFixtures.Materializer(), command, ReusableActivityImportFixtures.Validator());
 
         var result = await importer.ApplyAsync(new(plan.PlanId, collection, ["a-v1", "b-v1", "consumer-v1"]));
 
@@ -45,8 +43,8 @@ public sealed class ReusableActivityCollectionApplyTests
         var analyzer = new ReusableActivityCollectionAnalyzer();
         var plan = await analyzer.AnalyzeAsync(collection);
         var materializer = new CapturingMaterializer();
-        var command = new CapturingCommand();
-        var importer = new ReusableActivityCollectionImporter(analyzer, materializer, command);
+        var command = new ReusableActivityImportFixtures.CapturingCommand();
+        var importer = new ReusableActivityCollectionImporter(analyzer, materializer, command, ReusableActivityImportFixtures.Validator());
 
         var exception = await Assert.ThrowsAsync<ReusableActivityImportValidationException>(async () =>
             await importer.ApplyAsync(new(plan.PlanId, collection, ["b-v1"])));
@@ -63,8 +61,8 @@ public sealed class ReusableActivityCollectionApplyTests
         var analyzer = new ReusableActivityCollectionAnalyzer();
         var plan = await analyzer.AnalyzeAsync(collection);
         var materializer = new CapturingMaterializer();
-        var command = new CapturingCommand();
-        var importer = new ReusableActivityCollectionImporter(analyzer, materializer, command);
+        var command = new ReusableActivityImportFixtures.CapturingCommand();
+        var importer = new ReusableActivityCollectionImporter(analyzer, materializer, command, ReusableActivityImportFixtures.Validator());
 
         var exception = await Assert.ThrowsAsync<ReusableActivityImportValidationException>(async () =>
             await importer.ApplyAsync(new(plan.PlanId, collection, [])));
@@ -83,8 +81,8 @@ public sealed class ReusableActivityCollectionApplyTests
         var collection = ReusableActivityImportFixtures.Collection(valid, duplicateOne, duplicateTwo);
         var analyzer = new ReusableActivityCollectionAnalyzer();
         var plan = await analyzer.AnalyzeAsync(collection);
-        var command = new CapturingCommand();
-        var importer = new ReusableActivityCollectionImporter(analyzer, ReusableActivityImportFixtures.Materializer(), command);
+        var command = new ReusableActivityImportFixtures.CapturingCommand();
+        var importer = new ReusableActivityCollectionImporter(analyzer, ReusableActivityImportFixtures.Materializer(), command, ReusableActivityImportFixtures.Validator());
 
         var result = await importer.ApplyAsync(new(plan.PlanId, collection, ["valid-v1"]));
 
@@ -100,7 +98,7 @@ public sealed class ReusableActivityCollectionApplyTests
         var analyzer = new ReusableActivityCollectionAnalyzer();
         var plan = await analyzer.AnalyzeAsync(collection);
         var command = new FailingCommand();
-        var importer = new ReusableActivityCollectionImporter(analyzer, ReusableActivityImportFixtures.Materializer(), command);
+        var importer = new ReusableActivityCollectionImporter(analyzer, ReusableActivityImportFixtures.Materializer(), command, ReusableActivityImportFixtures.Validator());
 
         await Assert.ThrowsAsync<InvalidOperationException>(async () =>
             await importer.ApplyAsync(new(plan.PlanId, collection, ["a-v1", "b-v1"])));
@@ -116,7 +114,7 @@ public sealed class ReusableActivityCollectionApplyTests
         var analyzer = new ReusableActivityCollectionAnalyzer();
         var plan = await analyzer.AnalyzeAsync(collection);
         collection.Definitions[0].Name = "changed after review";
-        var importer = new ReusableActivityCollectionImporter(analyzer, new CapturingMaterializer(), new CapturingCommand());
+        var importer = new ReusableActivityCollectionImporter(analyzer, new CapturingMaterializer(), new ReusableActivityImportFixtures.CapturingCommand(), ReusableActivityImportFixtures.Validator());
 
         var exception = await Assert.ThrowsAsync<ReusableActivityImportValidationException>(async () =>
             await importer.ApplyAsync(new(plan.PlanId, collection, ["a-v1"])));
@@ -131,18 +129,6 @@ public sealed class ReusableActivityCollectionApplyTests
         var b = ReusableActivityImportFixtures.Workflow("b", "b-v1", 1, true, ReusableActivityImportFixtures.Reference("b-to-a", targetVersionId: "a-v1"));
         var consumer = ReusableActivityImportFixtures.Workflow("consumer", "consumer-v1", 1, false, ReusableActivityImportFixtures.Reference("consumer-to-b", targetVersionId: "b-v1"));
         return ReusableActivityImportFixtures.Collection(a, b, consumer);
-    }
-
-    private static IPayloadSerializer Serializer() => new JsonPayloadSerializer(new JsonPayloadConverterRegistry());
-
-    private sealed class CapturingCommand : IReusableActivityImportCommand
-    {
-        public ReusableActivityImportMutation? Mutation { get; private set; }
-        public ValueTask<ReusableActivityImportCommitResult> CommitAsync(ReusableActivityImportMutation mutation, CancellationToken cancellationToken = default)
-        {
-            Mutation = mutation;
-            return ValueTask.FromResult(new ReusableActivityImportCommitResult(false));
-        }
     }
 
     private sealed class FailingCommand : IReusableActivityImportCommand

@@ -125,6 +125,7 @@
           "Elsa.Tasks.Core": "[4.0.0-dev, )",
           "Elsa.Workflows.Design.Core": "[4.0.0-dev, )",
           "Elsa.Workflows.Design.Persistence.Core": "[4.0.0-dev, )",
+          "Elsa.Workflows.Design.Validations.Core": "[4.0.0-dev, )",
           "Microsoft.Extensions.Logging.Abstractions": "[10.0.10, )"
         }
       },

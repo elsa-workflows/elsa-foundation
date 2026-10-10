@@ -350,15 +350,12 @@ internal sealed class SequentialIdentities(string prefix = "generated") : IIdent
 }
 
 /// <summary>Every upgrade owner is readable; the planner's own tenant rule still applies.</summary>
-internal sealed class AllowAllAuthorization(string? tenantId = ActivityUpgradeFixtures.Tenant) :
-    IActivityDependencyAuthorizationContext,
-    IActivityDependencyContextAsync
+internal sealed class AllowAllAuthorization(string? tenantId = ActivityUpgradeFixtures.Tenant) : IActivityDependencyContextAsync
 {
     public string? TenantId => tenantId;
     public string AuthorizationProfile => "access";
-    public bool CanRead(ActivityDefinitionReference reference) => reference.TenantId is null || reference.TenantId == tenantId;
     public ValueTask<string> GetAuthorizationProfileAsync(CancellationToken cancellationToken = default) => ValueTask.FromResult(AuthorizationProfile);
-    public ValueTask<bool> CanReadAsync(ActivityDefinitionReference reference, CancellationToken cancellationToken = default) => ValueTask.FromResult(CanRead(reference));
+    public ValueTask<bool> CanReadAsync(ActivityDefinitionReference reference, CancellationToken cancellationToken = default) => ValueTask.FromResult(reference.TenantId is null || reference.TenantId == tenantId);
 }
 
 /// <summary>Compatible for activity owners; workflow owners carry no activity diff, as in production.</summary>

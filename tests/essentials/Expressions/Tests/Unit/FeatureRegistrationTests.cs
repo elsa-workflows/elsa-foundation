@@ -1,10 +1,6 @@
 using Elsa.Expressions;
 using Elsa.Expressions.Core.Contracts;
-using Elsa.Expressions.Services;
 using Elsa.Serialization.Core;
-using Elsa.Serialization.SystemText;
-using Elsa.Serialization.SystemText.Startup;
-using Elsa.Tasks.Core;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -26,19 +22,6 @@ public sealed class FeatureRegistrationTests
     }
 
     [Fact]
-    public void ExpressionsFeature_RegistersDefaultVariableTypeDescriptorProvider()
-    {
-        var services = MinimalServices();
-
-        new ExpressionsFeature().ConfigureServices(services);
-
-        using var provider = services.BuildServiceProvider();
-        var providers = provider.GetServices<IVariableTypeDescriptorProvider>().ToList();
-
-        Assert.Contains(providers, p => p is DefaultVariableTypeDescriptorProvider);
-    }
-
-    [Fact]
     public void ExpressionsFeature_RegistersVariableTypeDescriptorCatalog()
     {
         var services = MinimalServices();
@@ -50,17 +33,6 @@ public sealed class FeatureRegistrationTests
 
         // TS-1 (§2.23.1): resolvability + behaviour, not concrete-type pinning of the catalog implementation.
         Assert.Contains(catalog.GetDescriptors(), d => d.Alias == "String");
-    }
-
-    [Fact]
-    public void SerializationFeature_RegistersSeedWellKnownTypesStartupTask()
-    {
-        var services = MinimalServices();
-
-        new SerializationFeature().ConfigureServices(services);
-
-        Assert.Contains(services, d => d.ServiceType == typeof(IStartupTask)
-            && d.ImplementationType == typeof(SeedWellKnownTypesStartupTask));
     }
 
     [Fact]

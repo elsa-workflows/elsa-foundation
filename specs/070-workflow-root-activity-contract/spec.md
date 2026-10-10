@@ -2,7 +2,7 @@
 
 **Feature Branch**: `codex/workflow-root-activity-contract`
 **Created**: 2026-06-11
-**Status**: Draft
+**Status**: Implemented — all tasks checked in 8df504191 (PR #72)
 **Input**: Correct the workflow design/runtime boundary so a workflow carries one root activity, taking strong cues from elsa-core.
 
 ## Context

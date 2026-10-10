@@ -1,11 +1,13 @@
+using System.Reflection;
+using CShells.Features;
 using Elsa.Serialization.Core;
 using Elsa.Serialization.SystemText.Services;
 using Elsa.Tasks.Core;
+using Elsa.Workflows.Design.Validations;
 using Elsa3.Activities.Design.Import;
 using Elsa3.Activities.Design.Import.Contracts;
 using Elsa3.Activities.Design.Import.Models;
 using Elsa3.Activities.Design.Import.Services;
-using Elsa3.Mapping;
 using Elsa3.Mapping.Mappings;
 using Elsa3.Mapping.Services;
 using Elsa3.Models;
@@ -17,19 +19,6 @@ namespace Elsa3.Mapping.Tests;
 public sealed class ReusableActivityImportRegistrationTests
 {
     [Fact]
-    public void Features_register_analysis_mapping_orchestration_and_atomic_adapter()
-    {
-        var services = new ServiceCollection();
-
-        new Elsa3ImportActivitiesFeature().ConfigureServices(services);
-        new Elsa3MappingFeature().ConfigureServices(services);
-
-        Assert.Contains(services, x => x.ServiceType == typeof(IReusableActivityCollectionAnalyzer) && x.ImplementationType == typeof(ReusableActivityCollectionAnalyzer));
-        Assert.Contains(services, x => x.ServiceType == typeof(IReusableActivityCollectionImporter) && x.ImplementationType == typeof(ReusableActivityCollectionImporter));
-        Assert.Contains(services, x => x.ServiceType == typeof(IReusableActivityImportMaterializer) && x.ImplementationType == typeof(Elsa3ReusableActivityImportMaterializer));
-    }
-
-    [Fact]
     public void Import_feature_builds_and_resolves_every_owned_service()
     {
         var services = new ServiceCollection();
@@ -40,6 +29,8 @@ public sealed class ReusableActivityImportRegistrationTests
         services.AddScoped<IReusableActivityImportMaterializer, StubMaterializer>();
         services.AddScoped<IReusableActivityImportCommand, StubCommand>();
         services.AddScoped<IReusableActivityImportOperationStore, StubOperationStore>();
+        // Registered by WorkflowDesignValidations, on which the feature depends (spec 188, FR-008).
+        services.AddScoped(_ => ReusableActivityImportFixtures.Validator());
 
         new Elsa3ImportActivitiesFeature().ConfigureServices(services);
 
@@ -56,6 +47,15 @@ public sealed class ReusableActivityImportRegistrationTests
         // The sweep that deletes expired uploads is a recurring task, run by the Tasks feature the import depends on.
         Assert.Single(provider.GetServices<IRecurringTask>().OfType<ExpiredImportCollectionSweepTask>());
         Assert.Contains("Tasks", ImportFeatureDependencies());
+    }
+
+    [Fact]
+    public void Import_feature_depends_on_the_feature_that_registers_the_credential_literal_rule()
+    {
+        var validations = typeof(WorkflowDesignValidationsFeature).GetCustomAttribute<ShellFeatureAttribute>()!.Name;
+        var dependsOn = typeof(Elsa3ImportActivitiesFeature).GetCustomAttribute<ShellFeatureAttribute>()!.DependsOn.Select(dependency => dependency.ToString());
+
+        Assert.Contains(validations, dependsOn);
     }
 
     [Fact]

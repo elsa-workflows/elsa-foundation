@@ -177,6 +177,16 @@
           "xunit.extensibility.core": "[2.9.3]"
         }
       },
+      "elsa.activities.controlflow": {
+        "type": "Project",
+        "dependencies": {
+          "CShells.Abstractions": "[0.0.30-preview.159, )",
+          "Elsa.Activities.Runtime.Core": "[4.0.0-dev, )",
+          "Elsa.Workflows.Design.Core": "[4.0.0-dev, )",
+          "Elsa.Workflows.Design.Validations.Core": "[4.0.0-dev, )",
+          "Elsa.Workflows.Runtime.Core": "[4.0.0-dev, )"
+        }
+      },
       "elsa.activities.design.core": {
         "type": "Project",
         "dependencies": {
@@ -315,6 +325,30 @@
           "Elsa.Primitives": "[4.0.0-dev, )"
         }
       },
+      "elsa.expressions.javascript": {
+        "type": "Project",
+        "dependencies": {
+          "Acornima": "[1.6.1, )",
+          "CShells.Abstractions": "[0.0.30-preview.159, )",
+          "Elsa.Events.Core": "[4.0.0-dev, )",
+          "Elsa.Expressions.JavaScript.Core": "[4.0.0-dev, )",
+          "Elsa.Serialization.Core": "[4.0.0-dev, )"
+        }
+      },
+      "elsa.expressions.javascript.core": {
+        "type": "Project",
+        "dependencies": {
+          "Elsa.Expressions.Core": "[4.0.0-dev, )"
+        }
+      },
+      "elsa.expressions.javascript.jint": {
+        "type": "Project",
+        "dependencies": {
+          "CShells.Abstractions": "[0.0.30-preview.159, )",
+          "Elsa.Expressions.JavaScript.Core": "[4.0.0-dev, )",
+          "Jint": "[4.9.1, )"
+        }
+      },
       "elsa.foundation.identity": {
         "type": "Project",
         "dependencies": {
@@ -405,6 +439,13 @@
           "Elsa.Primitives": "[4.0.0-dev, )"
         }
       },
+      "elsa.workflows.design.validations.core": {
+        "type": "Project",
+        "dependencies": {
+          "Elsa.Events.Core": "[4.0.0-dev, )",
+          "Elsa.Workflows.Design.Core": "[4.0.0-dev, )"
+        }
+      },
       "elsa.workflows.runtime": {
         "type": "Project",
         "dependencies": {
@@ -461,6 +502,12 @@
           "Microsoft.EntityFrameworkCore.Relational": "[10.0.10, )"
         }
       },
+      "Acornima": {
+        "type": "CentralTransitive",
+        "requested": "[1.6.1, )",
+        "resolved": "1.6.1",
+        "contentHash": "EB2vFgpNar8DrC+KLJv8MG6YIU2xqNyrq8GpL69vectPCXoaq6XyZGb/VHbfPVYul7dscO1Mw30eblrxs05RHg=="
+      },
       "Cronos": {
         "type": "CentralTransitive",
         "requested": "[0.13.0, )",
@@ -495,6 +542,15 @@
         "dependencies": {
           "CShells.Abstractions": "0.0.30-preview.159",
           "JetBrains.Annotations": "2025.2.4"
+        }
+      },
+      "Jint": {
+        "type": "CentralTransitive",
+        "requested": "[4.9.1, )",
+        "resolved": "4.9.1",
+        "contentHash": "y878epycKuwyksZZOhB9LkuQed4P/v4yDdYK3H6lYJObGzhya6Saa9smWOLFscRDhgB4CVaXIYKPQEpNscwbNg==",
+        "dependencies": {
+          "Acornima": "1.6.1"
         }
       },
       "Microsoft.EntityFrameworkCore": {

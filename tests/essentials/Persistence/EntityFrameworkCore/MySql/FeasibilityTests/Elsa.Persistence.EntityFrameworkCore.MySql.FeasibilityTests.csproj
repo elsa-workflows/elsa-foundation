@@ -17,7 +17,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\..\..\..\..\src\essentials\Secrets\Elsa.Secrets.csproj" />
+    <ProjectReference Include="..\..\..\..\..\..\src\essentials\Secrets\Elsa.Secrets\Elsa.Secrets.csproj" />
     <ProjectReference Include="..\..\..\..\..\..\src\essentials\Secrets\Persistence\EntityFrameworkCore\Elsa.Secrets.Persistence.EntityFrameworkCore.csproj" />
   </ItemGroup>
 

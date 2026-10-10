@@ -11,6 +11,7 @@ public static class RuntimeArtifactEfModule
     public static readonly EfSchemaChain Chain = EfSchemaChain.Of(typeof(RuntimeArtifactEfModule).Assembly, SchemaFamily);
     public const string WorkflowExecutableTableName = "elsa_runtime_workflow_executable";
     public const string WorkflowExecutableCoordinationTableName = "elsa_runtime_workflow_executable_coordination";
+    public const string WorkflowExecutableRootWriteLeaseTableName = "elsa_runtime_workflow_executable_root_write_lease";
     public const string ExecutableActivityTemplateTableName = "elsa_runtime_executable_activity_template";
     public const string ExecutableActivityTemplateHashClaimTableName = "elsa_runtime_executable_activity_template_hash_claim";
     public const string SourceReferenceTableName = "elsa_runtime_workflow_executable_source_reference";

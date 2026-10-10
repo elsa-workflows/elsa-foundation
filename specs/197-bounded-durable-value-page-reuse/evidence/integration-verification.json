@@ -1,0 +1,171 @@
+{
+  "capturedAtUtc": "2026-10-07T20:45:59.650285+00:00",
+  "scope": "Spec197 integrated candidate; no primary HTTP/REST savings or latency claim",
+  "files": {
+    "src/essentials/Workflows/Runtime/Services/Coalescing/AsyncLocalRuntimeCoalescingSessionAccessor.cs": "ccb6d1dd17e3545550bb18abd96095f3654a3fa14ea49e1a944f574c8c5139d5",
+    "src/essentials/Workflows/Runtime/Services/Coalescing/CoalescingRuntimeCheckpointCommitStore.cs": "3796d79fa7e1b16bcac94ff9af3ec06c9be7936dec2c5bb2696a3ecc0729b5b3",
+    "src/essentials/Workflows/Runtime/Services/Coalescing/CoalescingRuntimeStateStores.cs": "c05176b3f628f81bec5ef397862de29935faa5a2cf5cfc604f4282c0241a400f",
+    "src/essentials/Workflows/Runtime/Services/Coalescing/RuntimeCoalescingDrainScopeFactory.cs": "46c9d64cebbdb473a254b8cf715ec39d30a87c9dd9b962e9f17bb6f3a80ff792",
+    "src/essentials/Workflows/Runtime/Services/Coalescing/RuntimeCoalescingDurableValuePageMemo.cs": "4c96a1ef95eff5e8fd611f3c3a0fcf59d8afab591853a1dd5975d622784356ff",
+    "src/essentials/Workflows/Runtime/Services/Coalescing/RuntimeCoalescingSession.cs": "695630641258d3aecff4c5d9eef368c049c6640bfdc3b705460092bd7ba051e7",
+    "src/essentials/Workflows/Runtime/Services/Scheduler/WorkflowDrainOrchestrator.cs": "19eb7ba3e640c0fd0fc98f22ff14627d16fbac80e929e1e9766117bda954640e",
+    "tests/essentials/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/EfDurableValuePageReuseTests.cs": "123af640d331a69c31a5dcbafd943211cc108e0fb59ef696b5b6b9f181a7fc60",
+    "tests/essentials/Workflows/Runtime/Tests/CoalescingDurableValuePageMemoTests.cs": "96761fc27924b64bbc062a71fe0e5239b41368bc5fcf59ffcffa8e84902cc0bc",
+    "tests/essentials/Workflows/Runtime/Tests/CoalescingDurableValuePageReuseEligibilityTests.cs": "4e619b20f353f9fec4ce490ef04233d817cbc480a1eac90be8745bc97627c2cf",
+    "tests/essentials/Workflows/Runtime/Tests/CoalescingDurableValuePageReuseTests.cs": "891a1cb9687faee82eff74048a2c1b4ea764cbdf43aa17aaba1ac75d99c89e08",
+    "src/essentials/Workflows/Runtime/Services/Coalescing/RuntimeCoalescingDurableValuePageReuseRegistration.cs": "1b6b3d38489af8d746a8127cd42496101191fb95f96980e16058163e8d08b4e7"
+  },
+  "verification": [
+    {
+      "label": "runtime-full",
+      "artifact": "1306-root-full-runtime-final.trx",
+      "sha256": "6bbf8389129058c2c7c8e2138fbcc9c827d31512afd4ca3b5cde0134751846ff",
+      "total": 2120,
+      "passed": 2120,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "label": "ef-full",
+      "artifact": "1306-root-full-ef-final.trx",
+      "sha256": "c1acdc30c455793bbf0c2c7ebd9144ab26679b2c05836f152648960ee0b7fbdb",
+      "total": 903,
+      "passed": 903,
+      "failed": 0,
+      "skipped": 0,
+      "pageReuseOutput": "Uncached durable-value page reads: 6; nonempty: 2.\nEnabled durable-value page reads: 2; nonempty: 1."
+    },
+    {
+      "label": "late-generation-before-fix",
+      "artifact": "1306-root-late-generation-before.trx",
+      "sha256": "935d012b419188de7a213160d91881d4b627cab7dfaedf9a888f814070eb009b",
+      "total": 2,
+      "passed": 1,
+      "failed": 1,
+      "skipped": 0
+    },
+    {
+      "label": "late-generation-fixed",
+      "artifact": "1306-root-late-generation-fixed.trx",
+      "sha256": "3f2b62dbb11e1a9e846327e38aecdda189a273f880f073c250a88f7786ca9fdc",
+      "total": 42,
+      "passed": 42,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "label": "original-cancellation-failure",
+      "artifact": "1306-root-full-runtime.trx",
+      "sha256": "24862e9e24b85702539f9bc05d1210e3eda536f2466bab4e236ec1d85fed14a0",
+      "total": 2113,
+      "passed": 2112,
+      "failed": 1,
+      "skipped": 0
+    },
+    {
+      "label": "architecture-full-after-canonical-restore",
+      "artifact": "1306-root-architecture-restored.trx",
+      "sha256": "baea7dec81d2d4eb75ab1b35a66439bc619258f36dbe6fdc8a1459f5a7c9164f",
+      "total": 635,
+      "passed": 635,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "label": "runtime-after-t007",
+      "artifact": "1306-root-runtime-t007.trx",
+      "sha256": "bd847fa3aa27b05c42e8ef043913d3994ec011f840676dc12c5564df25e1a961",
+      "total": 2125,
+      "passed": 2125,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "label": "failed-recapture-mutation",
+      "artifact": "1306-root-recapture-mutation.trx",
+      "sha256": "1a5f0b0f6f364fa87b2d3b69b88e8b584f2964c6b378183e6121b94792d65e96",
+      "total": 1,
+      "passed": 0,
+      "failed": 1,
+      "skipped": 0
+    },
+    {
+      "label": "ef-after-t007",
+      "artifact": "1306-root-ef-t007.trx",
+      "sha256": "3b6477bd2684ff06cc5a8f1087b28feb5b553cb7d64e0cdc0ea0be8107e2794d",
+      "total": 903,
+      "passed": 903,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "label": "architecture-after-t007",
+      "artifact": "1306-root-architecture-t007.trx",
+      "sha256": "f9c41740bc3d7314942eb9dd266bcdf18aab52acde1f85b80357a14c3f535de2",
+      "total": 635,
+      "passed": 635,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "label": "ef-after-t014",
+      "artifact": "1306-root-ef-t014.trx",
+      "sha256": "a97d69b747b3e734d61d8d60f5fbfd09a8b17e6e0fba4d5e7657a6641c46bbc3",
+      "total": 904,
+      "passed": 904,
+      "failed": 0,
+      "skipped": 0,
+      "recoveryTest": "Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.EfDurableValuePageReuseTests.Persisted_interruption_snapshot_recovers_memo_populated_coalesced_execution",
+      "recoveryOutcome": "Passed"
+    },
+    {
+      "label": "architecture-after-t014",
+      "artifact": "1306-root-architecture-t014.trx",
+      "sha256": "dba9e45d9e3ad36d368d00f8269eb6ea54353e1dce8c7d0549ad1aa57b0307e8",
+      "total": 635,
+      "passed": 635,
+      "failed": 0,
+      "skipped": 0
+    }
+  ],
+  "baseCandidateSha": "7667d1c4c47873fdf3ac313a37b9fea259295d93",
+  "laterDelta": "T007 registration-state simplification, five eligibility cases, T014 persisted interruption-snapshot recovery test and shared test setup, loop clarification and evidence/operator docs; PR receipt supplies resulting commit",
+  "registrationCoverage": {
+    "artifact": "1306-root-runtime-t007-coverage.xml",
+    "sha256": "b3b28b59151b48b2cece696aa87d175a5c15c37c431b4555e563231e91a227fb",
+    "classes": [
+      {
+        "name": "Elsa.Workflows.Runtime.Services.Coalescing.RuntimeCoalescingDurableValuePageReuseRegistration",
+        "lineRate": 1.0,
+        "branchRate": 1.0
+      },
+      {
+        "name": "Elsa.Workflows.Runtime.Services.Coalescing.RuntimeCoalescingDurableValuePageReuseRegistration/ServiceDecoration",
+        "lineRate": 1.0,
+        "branchRate": 1.0
+      }
+    ]
+  },
+  "recoveryVerification": {
+    "integratedOn": "312d86713532315b7281357ea367735a7e514e4f",
+    "kind": "Real EF persisted interruption-snapshot recovery",
+    "originalState": "Active Coalesced drain with nonempty provider-page memo hit, live persisted ownership lease, real unclaimed durable scheduler backstop. Active scheduler claim is held in the session overlay.",
+    "snapshotIdentity": "Source and copied queue WorkItemId sets are unique and exactly equal; copied lease fence equals the captured active fence.",
+    "recovery": "New host opens SQLite snapshot under advanced time; production IRuntimeResumptionService.SweepAsync accepts the execution; recovered leaf obtains fresh nonempty EF page then memo hit, a newer fence and active-lease rejection of the original fence. Expected inputs/results, Completed workflow and activities, zero incidents and empty queue are asserted.",
+    "rootEfTotal": 904,
+    "processKilledMidDrain": false,
+    "sameDatabaseFileReopened": false,
+    "scannerVsBacklogDirectlyObserved": false,
+    "priorAttempt": "The first worker fixture expected an active persisted queue claim. Source confirmed Coalesced claims are held in the overlay while the durable backstop stays unclaimed; the test expectation was corrected. No product defect or repair is inferred.",
+    "independentReview": "Root and independent reviewer accepted the mechanism; the copied-queue membership oracle was strengthened to exact unique ID set equality before final worker and root passes."
+  },
+  "finalLiveQualification": {
+    "sourceSha": "9d6fd212da419ef1d4efd978dc91c138d7776b4e",
+    "receipt": "final-live-verification.json",
+    "acceptedTasks": "T001-T017",
+    "remainingDeliveryGates": [
+      "Final PR-head hosted review and checks",
+      "Normal merge and resulting-main verification"
+    ]
+  }
+}

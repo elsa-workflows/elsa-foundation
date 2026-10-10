@@ -1,0 +1,88 @@
+{
+  "formatVersion": 1,
+  "baselineSourceReference": "cd6e2a2a7edaf3ec774c5688e9adddeee6a09d2c",
+  "captureGitHead": "d605dbe360621e649e1c947ab406928c91c4ee2f",
+  "captureBranch": "claude/runtime-db-response-2400",
+  "sourceEquivalence": {
+    "sourceTestsAndE2eTreesByteIdenticalToBaselineReference": true,
+    "fullDiffPathListFromBaselineReferenceToCaptureHead": [
+      ".specify/feature.json",
+      "AGENTS.md",
+      "docs/plans/runtime-db-access-program.md",
+      "docs/program-goals/runtime-db-access.md",
+      "docs/reports/runtime-db-access/evidence/enqueue-count-probe-2026-10-08.patch",
+      "docs/reports/runtime-db-access/evidence/enqueue-insert-first-trial-2026-10-08.patch",
+      "docs/reports/runtime-db-access/evidence/scheduler-outbox-access-spike-2026-10-08.json",
+      "docs/reports/runtime-db-access/scheduler-outbox-access-spike.md",
+      "specs/198-response-replay-safety/checklists/requirements.md",
+      "specs/198-response-replay-safety/data-model.md",
+      "specs/198-response-replay-safety/plan.md",
+      "specs/198-response-replay-safety/quickstart.md",
+      "specs/198-response-replay-safety/research.md",
+      "specs/198-response-replay-safety/spec.md",
+      "specs/198-response-replay-safety/tasks.md"
+    ],
+    "actualCaptureHeadRemainsDistinct": true,
+    "privateCaptureEvidenceFile": "source-equivalence.json",
+    "reproducibleVerification": "Compare baselineSourceReference..captureGitHead using git diff --name-only; the complete changed-path list is embedded above and excludes src/, tests/, e2e-tests/, and build inputs."
+  },
+  "persistenceIsolation": {
+    "configurationFilesChecked": [
+      "appsettings.json",
+      "appsettings.Development.json",
+      "shells.json"
+    ],
+    "contentRootRelativeSqliteConfigurationVerified": true,
+    "inheritedRedirectVariableNamesClearedFromChild": [],
+    "explicitlyRemovedChildVariableNames": [
+      "ConnectionStrings__Elsa"
+    ],
+    "inheritedRedirectVariableValuesRecorded": false
+  },
+  "publishedAtUtc": "2026-10-07T23:23:42.305010Z",
+  "publication": {
+    "workflowDefinitionId": "14AppvOb4Iq",
+    "workflowDefinitionVersionId": "14AppvYm7Zr",
+    "sourceReferenceId": "activation-ref:publication-14Apq0qvthc",
+    "artifactId": "artifact-b542eafc273a",
+    "artifactVersion": "1.0.0",
+    "artifactHash": "sha256:b542eafc273a2257ccc70481530f44448f0d9470f71144d1d12c686f49ae8574",
+    "rootArtifactId": "artifact-b542eafc273a",
+    "responseNodeId": "write-response",
+    "responseActivityType": "Elsa.Activities.Http.Activities.WriteHttpResponse",
+    "resolvedWriteHttpResponseProfile": "External",
+    "responseSideEffectProfilePropertySerialized": false,
+    "omittedDefaultResolution": "ActivityContract.cs [JsonConstructor] defaults SideEffectProfile to External at line 26, validates the schema fingerprint at lines 29-30, and omits the default property from JSON at lines 93-94.",
+    "routePath": "response-replay-baseline-767ec82c228b41268ca4bf78d4731f3e",
+    "responseMethod": "POST"
+  },
+  "workload": {
+    "sequenceNodeOrder": [
+      "http-in",
+      "set-reference-text",
+      "write-response"
+    ],
+    "requestContentType": "application/json",
+    "requestBody": "{\"firstName\":\"Alice\",\"lastName\":\"Smith\"}",
+    "computation": "getVariable('content').firstName + ' ' + getVariable('content').lastName",
+    "responseAssertionPassed": true,
+    "responseStatus": 200,
+    "responseBody": "Alice Smith",
+    "evidence": "capture-attempt-2.log: execution reached the subsequent closure-profile assertion; the capture script throws before that point if the real POST is not HTTP 200 with Alice Smith."
+  },
+  "export": {
+    "route": "/publishing/workflows/{versionId}/executable-export",
+    "formatVersion": 1,
+    "byteLength": 29661,
+    "sha256": "bde1e9a961e0c91734a86c9e565ee28e225f3d6637ebbd345e90db30f2656a13",
+    "responseStatus": 200,
+    "captureAttempt": "attempt-2; exported exact normal publisher bytes before the initial profile-verification assertion stopped"
+  },
+  "verification": {
+    "closureRootAndIdentityMatched": true,
+    "fourNodeFixtureShapeMatched": true,
+    "responseProfileResolvedFromOmittedDefault": true,
+    "sourceFile": "src/essentials/Activities/Runtime/Core/Models/ActivityContract.cs",
+    "sourceFileSha256": "8e8f212f87744118ade42cb3f576ad937062dda4f35f8981fcce8d6ee8fd132e"
+  }
+}

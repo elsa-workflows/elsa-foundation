@@ -620,6 +620,7 @@
           "Elsa.Tasks.Core": "[4.0.0-dev, )",
           "Elsa.Workflows.Design.Core": "[4.0.0-dev, )",
           "Elsa.Workflows.Design.Persistence.Core": "[4.0.0-dev, )",
+          "Elsa.Workflows.Design.Validations.Core": "[4.0.0-dev, )",
           "Microsoft.Extensions.Logging.Abstractions": "[10.0.10, )"
         }
       },
@@ -633,6 +634,7 @@
           "Elsa.Workflows.Design.Core": "[4.0.0-dev, )",
           "Elsa.Workflows.Design.Persistence.Core": "[4.0.0-dev, )",
           "Elsa.Workflows.Design.Reconciliation": "[4.0.0-dev, )",
+          "Elsa.Workflows.Design.Validations.Core": "[4.0.0-dev, )",
           "Microsoft.Extensions.DependencyInjection.Abstractions": "[10.0.10, )",
           "Microsoft.Extensions.Logging.Abstractions": "[10.0.10, )",
           "Microsoft.Extensions.Options": "[10.0.10, )"

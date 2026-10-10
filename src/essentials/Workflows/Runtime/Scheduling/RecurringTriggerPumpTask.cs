@@ -243,7 +243,19 @@ public sealed class RecurringTriggerPumpTask : BackoffSweepPumpTask
                 return false;
         }
 
-        if (!run.Result)
+        if (run.Result == RouteOutcome.Shed)
+        {
+            // Admission shed the start at capacity (#2548): nothing was written and the occurrence key is unconsumed, so
+            // settling would lose the occurrence. It is kept and retried after backoff, like any other undelivered start.
+            Logger.LogWarning(
+                "Recurring schedule '{ScheduleId}' occurrence {Occurrence} was refused by runtime admission at capacity; the occurrence is kept and retried after backoff",
+                schedule.ScheduleId,
+                schedule.NextOccurrence);
+            await ReleaseAsync(store, run.Claim, options, now, cancellationToken);
+            return false;
+        }
+
+        if (run.Result == RouteOutcome.NoOwnedBinding)
         {
             // Index drift (e.g. mid-republish): the occurrence is kept rather than hash-broadcast to whatever other
             // artifacts share the stimulus hash, and is retried against the refreshed index after backoff.
@@ -281,8 +293,15 @@ public sealed class RecurringTriggerPumpTask : BackoffSweepPumpTask
         return true;
     }
 
-    // Routes the occurrence through the schedule's own binding. Returns false when no binding is owned by the schedule.
-    private static async ValueTask<bool> RouteAsync(
+    private enum RouteOutcome
+    {
+        Routed,
+        NoOwnedBinding,
+        Shed
+    }
+
+    // Routes the occurrence through the schedule's own binding.
+    private static async ValueTask<RouteOutcome> RouteAsync(
         IWorkflowTriggerBindingStore bindingStore,
         IStimulusRouter router,
         RecurringTriggerSchedule schedule,
@@ -292,7 +311,7 @@ public sealed class RecurringTriggerPumpTask : BackoffSweepPumpTask
         // carry the schedule's OWN binding rather than let the router hash-broadcast the start.
         var ownedBindings = await ResolveOwnedBindingsAsync(bindingStore, schedule, cancellationToken);
         if (ownedBindings.Count == 0)
-            return false;
+            return RouteOutcome.NoOwnedBinding;
 
         var request = new StimulusDispatchRequest(
             stimulusType: schedule.StimulusType,
@@ -304,8 +323,8 @@ public sealed class RecurringTriggerPumpTask : BackoffSweepPumpTask
             // A slot-scoped key names the trigger across publications, so its start is not scoped to this artifact (#2198).
             startKeyScope: schedule.SlotId is null ? StimulusStartKeyScope.Artifact : StimulusStartKeyScope.Occurrence);
 
-        await router.RouteAsync(request, cancellationToken);
-        return true;
+        var result = await router.RouteAsync(request, cancellationToken);
+        return result.ShedStartCount > 0 ? RouteOutcome.Shed : RouteOutcome.Routed;
     }
 
     private async Task ReleaseAsync(

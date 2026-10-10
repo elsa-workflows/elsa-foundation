@@ -149,7 +149,6 @@ public sealed class ActivitiesDesignApiContractCompatibilityTests
     private static readonly Type[] ImplementationOnlyTypes =
     [
         typeof(DefaultActivityVersionSelectionPolicy),
-        typeof(IActivityAuthoringContext),
         typeof(IActivityAuthoringContextAsync),
         typeof(IActivityVersionSelectionPolicy),
         typeof(ActivityAuthoringException),

@@ -4,7 +4,6 @@ using Elsa.Tasks.Services;
 using Elsa.Workflows.Runtime.Reconciliation.Contracts;
 using Elsa.Workflows.Runtime.Reconciliation.Core.Models;
 using Elsa.Workflows.Runtime.Reconciliation.Startup;
-using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
 
@@ -49,20 +48,6 @@ public sealed class ArtifactReconcilerStartupTaskTests
         await Assert.ThrowsAsync<TimeoutException>(() => _executor.ExecuteTaskAsync(_task, CancellationToken.None));
 
         Assert.Equal(0, _reconciler.Passes);
-    }
-
-    [Fact]
-    public void The_feature_refuses_the_retired_lock_timeout()
-    {
-        var feature = new JsonWorkflowArtifactReconciliationFeature { Options = { SourceId = "catalog", FilePath = "/mounts/artifacts.json" } };
-#pragma warning disable CS0618 // Setting the retired value is the case under test.
-        feature.StartupTaskOptions.LockTimeoutMs = "5000";
-#pragma warning restore CS0618
-
-        var failure = Assert.Throws<InvalidOperationException>(() => feature.ConfigureServices(new ServiceCollection()));
-
-        Assert.Contains("'StartupTaskOptions:LockTimeoutMs'", failure.Message);
-        Assert.Contains("LockAcquisitionTimeoutMinutes", failure.Message);
     }
 
     private sealed class SpyArtifactReconciler : IWorkflowArtifactReconciler

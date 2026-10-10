@@ -2,7 +2,7 @@
 
 **Feature Branch**: `codex/runtime-inprocess-agent-provider`
 **Created**: 2026-06-11
-**Status**: Draft
+**Status**: Implemented — all tasks checked in 7213d26d2
 **Input**: Locked Runtime Execution Seam addendum direction: the default single-node runtime is actor-like, with one in-process mailbox per `WorkflowExecutionId`.
 
 ## Scenarios & Tests

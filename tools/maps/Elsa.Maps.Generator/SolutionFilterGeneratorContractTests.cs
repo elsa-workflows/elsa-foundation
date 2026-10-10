@@ -8,6 +8,8 @@ namespace Elsa.Maps.Generator;
 /// </summary>
 public static class SolutionFilterGeneratorContractTests
 {
+    private const string OnDemandFilter = "Elsa.Server.Integration.slnf";
+
     public static void Run()
     {
         var root = Path.Join(Path.GetTempPath(), $"elsa-solution-filter-tests-{Environment.ProcessId}-{Guid.NewGuid():N}");
@@ -20,14 +22,31 @@ public static class SolutionFilterGeneratorContractTests
 
             SolutionFilterGenerator.Generate(repo);
             AssertProjects(root, "Feature.slnf", ["src/Feature/Feature.csproj", "src/Shared/Shared.csproj"]);
-            AssertProjects(root, "Integration.slnf", ["tests/Container.csproj", "tests/Transitive.csproj"]);
-            Assert(SolutionFilterGenerator.GetRoots(repo, "Integration.slnf")
+            AssertProjects(root, "Fast.slnf", ["tests/Comment.csproj"]);
+            Assert(!File.Exists(Path.Join(root, OnDemandFilter)),
+                "A profile marked committed:false must not be written by the committed-filter generator.");
+            Assert(SolutionFilterGenerator.GetOutputPaths(repo).SequenceEqual(["Feature.slnf", "Fast.slnf"], StringComparer.Ordinal),
+                "Only committed profiles are manifest-owned outputs.");
+            Assert(SolutionFilterGenerator.GetRoots(repo, OnDemandFilter)
                     .SequenceEqual(["tests/Container.csproj", "tests/Transitive.csproj"], StringComparer.Ordinal),
                 "Package selectors must use parsed PackageReference elements, ignore comment text, and follow "
                 + "ProjectReference edges so a project that only reaches the package transitively still counts.");
-            AssertProjects(root, "Fast.slnf", ["tests/Comment.csproj"]);
             Assert(SolutionFilterGenerator.Check(repo) == 0,
-                "Fresh manifest-owned solution filters must pass the independent freshness gate.");
+                "Fresh manifest-owned solution filters must pass the independent freshness gate without the on-demand filter.");
+
+            Assert(SolutionFilterGenerator.Write(repo, OnDemandFilter) == OnDemandFilter,
+                "Writing an on-demand filter must report its repository-relative path.");
+            AssertProjects(root, OnDemandFilter, ["tests/Container.csproj", "tests/Transitive.csproj"]);
+            var onDemand = File.ReadAllBytes(Path.Join(root, OnDemandFilter));
+            Assert(SolutionFilterGenerator.Check(repo) == 1,
+                "An uncommitted on-demand filter left at the repository root must fail the freshness gate as unlisted.");
+            File.Delete(Path.Join(root, OnDemandFilter));
+            WriteManifest(root, [], onDemandCommitted: true);
+            SolutionFilterGenerator.Generate(repo);
+            Assert(onDemand.AsSpan().SequenceEqual(File.ReadAllBytes(Path.Join(root, OnDemandFilter))),
+                "An on-demand filter must be byte-identical to the filter the same profile would commit.");
+            File.Delete(Path.Join(root, OnDemandFilter));
+            WriteManifest(root, []);
             var featureFilterPath = Path.Join(root, "Feature.slnf");
             File.AppendAllText(featureFilterPath, " ");
             Assert(SolutionFilterGenerator.Check(repo) == 1,
@@ -128,7 +147,8 @@ public static class SolutionFilterGeneratorContractTests
     private static void WriteManifest(
         string root,
         IReadOnlyList<string> allowedExternalReferences,
-        bool duplicateOutput = false)
+        bool duplicateOutput = false,
+        bool onDemandCommitted = false)
     {
         var profiles = new List<object>
         {
@@ -140,7 +160,8 @@ public static class SolutionFilterGeneratorContractTests
             },
             new
             {
-                outputPath = "Integration.slnf",
+                outputPath = OnDemandFilter,
+                committed = onDemandCommitted,
                 includeProjectPathPrefixes = new[] { "tests\\" },
                 requirePackageReferencePrefixes = new[] { "Testcontainers." }
             },

@@ -242,34 +242,11 @@ public sealed class HttpContextActivityDesignAuthorizationContextTests
         Assert.Equal(0, service.Calls);
         Assert.True(await context.CanAuthorProviderAsync("provider"));
         Assert.True(service.Calls > 0);
-
-        Assert.Throws<InvalidOperationException>(() => context.AuthorizationProfile);
-        Assert.Throws<InvalidOperationException>(() => context.CanAuthorProvider("provider"));
-        Assert.Throws<InvalidOperationException>(() => context.CanReadProviderPayload("provider"));
-        Assert.Throws<InvalidOperationException>(() => context.CanRead(new("ActivityVersion", "definition")));
-        Assert.Throws<InvalidOperationException>(() => context.CanManageActivityDefinitions);
     }
 
     [Fact]
-    public async Task Origin_constructor_fails_closed_without_permission_matching()
+    public void Constructor_guards_null_dependencies()
     {
-        var accessor = new HttpContextAccessor { HttpContext = new DefaultHttpContext { User = Principal("tenant-a", "*") } };
-        var context = new HttpContextActivityDesignAuthorizationContext(accessor);
-
-        Assert.False(await context.CanAuthorProviderAsync("provider"));
-        Assert.False(await context.CanReadProviderPayloadAsync("provider"));
-        Assert.False(await context.CanManageActivityDefinitionsAsync());
-        Assert.False(await context.CanReadAsync(new("ActivityVersion", "definition")));
-        Assert.Equal("untrusted", await context.GetAuthorizationProfileAsync());
-    }
-
-    [Fact]
-    public void Constructors_guard_null_dependencies_and_public_adapters()
-    {
-        Assert.Throws<ArgumentNullException>(() => new HttpContextActivityDesignAuthorizationContext(null!));
-        Assert.Throws<ArgumentNullException>(() => new LegacyActivityAuthoringContextAdapter(null!));
-        Assert.Throws<ArgumentNullException>(() => new LegacyActivityDependencyContextAdapter(null!));
-
         using var provider = CreateServices().BuildServiceProvider();
         var accessor = new HttpContextAccessor();
         var authorization = provider.GetRequiredService<IPermissionAuthorizationService>();

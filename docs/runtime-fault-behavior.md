@@ -7,7 +7,7 @@
 > **Knowledge role:** worked reference. It describes behavior and the decisions behind it; it is not a
 > registration inventory. Canonical short definitions live in
 > [`docs/glossary/elsa.md`](glossary/elsa.md), and the extension-point contracts live in
-> [`src/essentials/Workflows/Runtime/EXTENSION_POINTS.md`](../src/essentials/Workflows/Runtime/EXTENSION_POINTS.md).
+> [`src/essentials/Workflows/Runtime/Elsa.Workflows.Runtime/EXTENSION_POINTS.md`](../src/essentials/Workflows/Runtime/Elsa.Workflows.Runtime/EXTENSION_POINTS.md).
 
 ## Why this doc exists
 
@@ -56,6 +56,11 @@ sequential fault boundaries, and each one funnels into the same private `RecordF
 cancel is not a fault. The other three activity-facing handlers (`WorkflowResumeBookmark...`,
 `WorkflowParentActivityCompletion...`, `WorkflowNotifyParentActivity...`) use the same recorder with
 the same shape.
+
+Between that catch and the capture, these four handlers mask any value resolved from a secret for the
+execution with [`IRuntimeSecretMask`](../src/essentials/Workflows/Runtime/Elsa.Workflows.Runtime/EXTENSION_POINTS.md#iruntimesecretmask-core-elsaworkflowsruntimecore) (spec 188): the thrown arms through `RecordFaultAsync` (the parent handlers'
+`RecordParentFaultAsync`), and the returned-fault arm by masking the fault's message once before it
+records.
 
 ### What it records
 
@@ -165,7 +170,10 @@ also lands here, via the internal `FaultingMissingSchedulerWorkHandler`.
 
 ### What it does
 
-1. Captures fault info (and inner fault info) through `IRuntimeFaultCapturePolicy`.
+1. Captures fault info (and inner fault info) through `IRuntimeFaultCapturePolicy`. An exception an
+   activity handler lets escape is not masked here; the masking step sits in the handler, between its
+   catch and the capture, and covers what such a handler throws only for the aggregate a cancellation
+   arm reports when disposal also failed (see [`IRuntimeSecretMask`](../src/essentials/Workflows/Runtime/Elsa.Workflows.Runtime/EXTENSION_POINTS.md#iruntimesecretmask-core-elsaworkflowsruntimecore)).
 2. **Ack-deletes the work item first**, before any poison handling. A handler fault is a decided
    outcome, not a crash, so the source item must leave the queue or a deterministically-poisoning
    handler would be redelivered forever. (A process crash never reaches this line, which is exactly
@@ -216,9 +224,21 @@ persistence failure is caught and logged with the original fault, and the drain 
 It does not terminate the workflow. The `WaitForIntervention` outcome is non-null, so
 `BlockingIncidentWorkflowFaultObserver` filters the incident out and leaves the workflow in its
 existing status; the strategy observer skips it too, both because the drain stopped on a fault rather
-than quiescing and because the incident carries no `ActivityExecutionId`. It also does not touch
-activity state: the activity that was mid-dispatch stays whatever it was, typically `Scheduled` or
-`Running`.
+than quiescing and because its intervention outcome is already decided. Activity lifecycle stays whatever
+it was, typically `Scheduled` or `Running`; an attributable activity gains the incident association
+and an inspection projection in the same `IncidentRecorded` checkpoint.
+
+Activity command payloads supply the exact activity execution and executable node address. A portable
+input failure also records its input key, expression language, phase and failure classification. The
+observer synthesizes payload-free failed-input evidence linked to the incident: there is no successful
+value snapshot to invent. Existing fault capture and sensitive inspection permissions govern the cause;
+protected inputs retain their redacted cause. Unattributable engine failures keep a run-level incident.
+Cancellation, lost claims and checkpoint-rule failures retain their existing handling.
+
+Instance summaries distinguish historical totals from current Open/Blocking and Blocking counts.
+Resolved/Suppressed records remain history. The API advertises health filtering through its additive
+capability relation; the filter applies before authorized total counts and cursor paging. Studio uses
+this current health to show intervention cues without rewriting workflow or activity lifecycle.
 
 So the honest one-line answer to "what happens by default when a handler faults" is: **the work item
 is dropped from the queue, parked as poisoned with no retry, and surfaced as a blocking critical
@@ -309,7 +329,7 @@ when it lands, cite it for the exhaustive list rather than duplicating one here.
 | `IIncidentStrategy` (per workflow, pinned at publish) | `Fault/1` (`FaultIncidentStrategy`) | an unhandled activity fault terminalizes the run |
 | `IRuntimeDomainRetryPolicy` | `NoopRuntimeDomainRetryPolicy` → `DoNotRetry` | no handler-fault retries; poison on first failure |
 | `IWorkflowSchedulerPoisonStore` | `InMemoryWorkflowSchedulerPoisonStore` | poison records are process-local until a durable provider is composed; the drainer requires one by construction, so there is no "no store" mode |
-| `IRuntimeFaultCapturePolicy` | `DefaultRuntimeFaultCapturePolicy` | what of the exception reaches durable state |
+| `IRuntimeFaultCapturePolicy` | `DefaultRuntimeFaultCapturePolicy` | what of the exception reaches durable state; an activity handler masks resolved secret values before the capture ([`IRuntimeSecretMask`](../src/essentials/Workflows/Runtime/Elsa.Workflows.Runtime/EXTENSION_POINTS.md#iruntimesecretmask-core-elsaworkflowsruntimecore)), and the policy reports the original type for a `SecretMaskedException` |
 | `IIncidentStateStore` | `InMemoryIncidentStateStore` | same caveat as the poison store |
 
 The four seams are registered with `TryAdd`, so a host or module that registers its own first wins.
@@ -321,23 +341,23 @@ Changing the catalog default only affects workflows published afterwards.
 
 | Claim | Source |
 | --- | --- |
-| activity faults are caught in the work handler and funnel to one recorder | `src/essentials/Activities/Runtime/Services/WorkflowInvokeActivitySchedulerWorkHandler.cs` (`InvokeActivityAsync` fault arms, `RecordFaultAsync`) |
-| the recorded incident is `Blocking` with a null resolution outcome, and the activity goes `Faulted` | `src/essentials/Activities/Runtime/Services/ActivityFaultIncidentRecorder.cs` (`NewIncident`, `NewFaultedActivityState`) |
-| activation failures are recorded pre-resolved and leave the activity `Waiting` | `ActivityFaultIncidentRecorder.NewIncident` / `NewFaultedActivityState`, `src/essentials/Workflows/Runtime/Services/Incidents/ActivityActivationFailureHandler.cs` |
-| the strategy observer runs only at quiescence and only for activity-scoped undecided incidents | `src/essentials/Workflows/Runtime/Services/Incidents/IncidentStrategyResolutionDrainObserver.cs` |
-| the strategy is pinned on the executable and applied in one checkpoint, with a fail-closed fallback to `FaultWorkflow` | `src/essentials/Workflows/Runtime/Services/Incidents/IncidentResolutionBatchExecutor.cs` |
-| `FaultWorkflow` keeps the incident blocking and faults the workflow; `ContinueWithIncidents` opens it and does not | `src/essentials/Workflows/Runtime/Services/Incidents/IncidentResolutionActions.cs` |
-| the default strategy is `Fault/1` | `src/essentials/Workflows/Runtime/Core/Models/IncidentStrategyCatalogOptions.cs`, `src/essentials/Workflows/Publishing/Services/WorkflowExecutableCompiler.cs` (`ResolveIncidentStrategy`), `src/essentials/Workflows/Runtime/Services/Incidents/FaultIncidentStrategy.cs` |
-| the fault observer skips terminal workflows, decided incidents, and activation failures; it faults non-terminal ancestors | `src/essentials/Workflows/Runtime/Services/Incidents/BlockingIncidentWorkflowFaultObserver.cs` |
-| handler faults are caught in the dispatch arm, with claim-lost / consume-conflict / cancellation excluded | `src/essentials/Workflows/Runtime/Services/Scheduler/WorkflowSchedulerDrainer.cs` (`DispatchAsync`) |
+| activity faults are caught in the work handler and funnel to one recorder | `src/essentials/Activities/Runtime/Elsa.Activities.Runtime/Services/WorkflowInvokeActivitySchedulerWorkHandler.cs` (`InvokeActivityAsync` fault arms, `RecordFaultAsync`) |
+| the recorded incident is `Blocking` with a null resolution outcome, and the activity goes `Faulted` | `src/essentials/Activities/Runtime/Elsa.Activities.Runtime/Services/ActivityFaultIncidentRecorder.cs` (`NewIncident`, `NewFaultedActivityState`) |
+| activation failures are recorded pre-resolved and leave the activity `Waiting` | `ActivityFaultIncidentRecorder.NewIncident` / `NewFaultedActivityState`, `src/essentials/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Incidents/ActivityActivationFailureHandler.cs` |
+| the strategy observer runs only at quiescence and only for activity-scoped undecided incidents | `src/essentials/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Incidents/IncidentStrategyResolutionDrainObserver.cs` |
+| the strategy is pinned on the executable and applied in one checkpoint, with a fail-closed fallback to `FaultWorkflow` | `src/essentials/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Incidents/IncidentResolutionBatchExecutor.cs` |
+| `FaultWorkflow` keeps the incident blocking and faults the workflow; `ContinueWithIncidents` opens it and does not | `src/essentials/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Incidents/IncidentResolutionActions.cs` |
+| the default strategy is `Fault/1` | `src/essentials/Workflows/Runtime/Core/Models/IncidentStrategyCatalogOptions.cs`, `src/essentials/Workflows/Publishing/Elsa.Workflows.Publishing/Services/WorkflowExecutableCompiler.cs` (`ResolveIncidentStrategy`), `src/essentials/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Incidents/FaultIncidentStrategy.cs` |
+| the fault observer skips terminal workflows, decided incidents, and activation failures; it faults non-terminal ancestors | `src/essentials/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Incidents/BlockingIncidentWorkflowFaultObserver.cs` |
+| handler faults are caught in the dispatch arm, with claim-lost / consume-conflict / cancellation excluded | `src/essentials/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Scheduler/WorkflowSchedulerDrainer.cs` (`DispatchAsync`) |
 | ack-before-poison, and the retry-mode ladder | `WorkflowSchedulerDrainer.HandleHandlerCrashAsync` |
 | the poison store is required by construction, so an ack-deleted fault always leaves a record | `WorkflowSchedulerDrainer` constructor (`ArgumentNullException.ThrowIfNull(poisonStore)`) |
 | the dispatch deadline is routed into the poison ladder on purpose | `WorkflowSchedulerDrainer.RenewClaimUntilStoppedAsync`, `RuntimeSchedulerDispatchDeadlineExceededException` |
-| the default retry policy returns an explicit `DoNotRetry` | `src/essentials/Workflows/Runtime/Services/Incidents/NoopRuntimeDomainRetryPolicy.cs` |
-| poison records become blocking critical incidents with a `WaitForIntervention` outcome, idempotently and best-effort | `src/essentials/Workflows/Runtime/Services/Incidents/PoisonedSchedulerWorkIncidentObserver.cs` |
-| observer order, and the defaults table | `src/essentials/Workflows/Runtime/Extensions/RuntimeCoreServiceCollectionExtensions.cs` |
-| quiescence is the orchestrator's aggregate stop reason, and observers are notified after the drain | `src/essentials/Workflows/Runtime/Services/Scheduler/WorkflowDrainOrchestrator.cs` (`DrainSchedulerAndPostCommitWorkAsync`, `NotifyObserversAsync`) |
-| a checkpoint rule refusal faults the workflow under the drain's lease, with a commit built from its last accepted state, or from the start command when a dispatched child's first commit was refused | `WorkflowDrainOrchestrator.DrainAsync`, `src/essentials/Workflows/Runtime/Services/Incidents/CheckpointRuleViolationWorkflowFaulter.cs`, `WorkflowSchedulerDrainer.DispatchAsync` (`checkpointRuleViolation`) |
+| the default retry policy returns an explicit `DoNotRetry` | `src/essentials/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Incidents/NoopRuntimeDomainRetryPolicy.cs` |
+| poison records become blocking critical incidents with a `WaitForIntervention` outcome, idempotently and best-effort | `src/essentials/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Incidents/PoisonedSchedulerWorkIncidentObserver.cs` |
+| observer order, and the defaults table | `src/essentials/Workflows/Runtime/Elsa.Workflows.Runtime/Extensions/RuntimeCoreServiceCollectionExtensions.cs` |
+| quiescence is the orchestrator's aggregate stop reason, and observers are notified after the drain | `src/essentials/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Scheduler/WorkflowDrainOrchestrator.cs` (`DrainSchedulerAndPostCommitWorkAsync`, `NotifyObserversAsync`) |
+| a checkpoint rule refusal faults the workflow under the drain's lease, with a commit built from its last accepted state, or from the start command when a dispatched child's first commit was refused | `WorkflowDrainOrchestrator.DrainAsync`, `src/essentials/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Incidents/CheckpointRuleViolationWorkflowFaulter.cs`, `WorkflowSchedulerDrainer.DispatchAsync` (`checkpointRuleViolation`) |
 
 Behavioral guards worth reading alongside the code:
 

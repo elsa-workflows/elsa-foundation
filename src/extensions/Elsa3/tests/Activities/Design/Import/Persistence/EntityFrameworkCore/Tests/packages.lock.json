@@ -568,6 +568,7 @@
           "Elsa.Serialization.Core": "[4.0.0-dev, )",
           "Elsa.Tasks.Schedules": "[4.0.0-dev, )",
           "Elsa.Workflows.Design.Persistence.Core": "[4.0.0-dev, )",
+          "Elsa.Workflows.Design.Validations.Core": "[4.0.0-dev, )",
           "Elsa.Workflows.Runtime.Core": "[4.0.0-dev, )",
           "Elsa3.Models": "[4.0.0-dev, )",
           "NativeEndpoints": "[1.0.0-preview.6, )"

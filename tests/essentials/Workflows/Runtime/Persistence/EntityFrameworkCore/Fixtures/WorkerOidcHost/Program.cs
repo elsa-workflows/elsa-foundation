@@ -1,5 +1,5 @@
-using System.Collections.Concurrent;
 using System.Data.Common;
+using System.Diagnostics;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
@@ -174,8 +174,25 @@ internal static class Program
 
                 try
                 {
+                    if (request.ResetEpochAfterOperationEntry && request.Command != "list-rules")
+                    {
+                        await WriteAsync(new { status = "error", code = "control-input-invalid" });
+                        continue;
+                    }
+
+                    using var operation = mappingReads.BeginControlOperation(request.Command);
+                    if (request.ResetEpochAfterOperationEntry)
+                        mappingReads.Reset();
                     var result = await ExecuteControlAsync(activeApp, input, mappingReads, candidateConfiguration.FileHashes, request);
-                    await WriteAsync(new { status = "ok", data = result.Value });
+                    await WriteAsync(new
+                    {
+                        status = "ok",
+                        operationId = operation.Tag.OperationId,
+                        operationKind = operation.Tag.OperationKind,
+                        operationCategory = operation.Tag.ContextCategory,
+                        operationEpoch = operation.Tag.OperationEpoch,
+                        data = result.Value
+                    });
                     if (result.Stop)
                         break;
                 }
@@ -254,7 +271,15 @@ internal static class Program
                 typeof(TasksFeature).Assembly)
             .WithConfigurationProvider(candidateConfiguration));
 
-        return builder.Build();
+        var app = builder.Build();
+        mappingReads.SetHttpContextAccessor(app.Services.GetRequiredService<IHttpContextAccessor>());
+        app.Use(async (context, next) =>
+        {
+            using var operation = mappingReads.BeginHttpOperation(context);
+            context.Response.Headers[MappingReadCounter.ResponseOperationIdHeader] = operation.Tag.OperationId;
+            await next();
+        });
+        return app;
     }
 
     private static string GetListeningAddress(WebApplication app)
@@ -465,14 +490,24 @@ internal static class Program
         IReadOnlyCollection<BookmarkState> bookmarks = executionId is null
             ? Array.Empty<BookmarkState>()
             : await bookmarkStore.ListAllBookmarkStatesAsync(executionId);
+        var workflowExecutionStateRows = await runtime.WorkflowExecutionStates.CountAsync();
+        var activityExecutionStateRows = await runtime.ActivityExecutionStates.CountAsync();
+        var bookmarkRows = await runtime.Bookmarks.CountAsync();
+        var userCount = await iam.Users.CountAsync();
+        var externalIdentityCount = await iam.ExternalIdentities.CountAsync();
         var access = scope.ServiceProvider.GetRequiredService<IPersistenceAccessContextAccessor>().Current;
+        var mappingReadSnapshot = mappingReads.Snapshot();
 
         return new
         {
-            mappingReadCount = mappingReads.Count,
-            workflowExecutionStateRows = await runtime.WorkflowExecutionStates.CountAsync(),
-            activityExecutionStateRows = await runtime.ActivityExecutionStates.CountAsync(),
-            bookmarkRows = await runtime.Bookmarks.CountAsync(),
+            mappingReadCount = mappingReadSnapshot.MappingReadCount,
+            lifetimeMappingReadCount = mappingReadSnapshot.LifetimeMappingReadCount,
+            epochStartLifetimeMappingReadCount = mappingReadSnapshot.EpochStartLifetimeMappingReadCount,
+            mappingReadEpoch = mappingReadSnapshot.MappingReadEpoch,
+            observationRecordsTruncated = mappingReadSnapshot.ObservationRecordsTruncated,
+            workflowExecutionStateRows,
+            activityExecutionStateRows,
+            bookmarkRows,
             workflowStatus = execution?.Status.ToString(),
             activityStatuses = activities.Select(activity => activity.Status.ToString()).ToArray(),
             bookmarks = bookmarks.Select(bookmark => new
@@ -480,13 +515,13 @@ internal static class Program
                 bookmark.StimulusType,
                 bookmark.StimulusHash
             }).ToArray(),
-            userCount = await iam.Users.CountAsync(),
-            externalIdentityCount = await iam.ExternalIdentities.CountAsync(),
+            userCount,
+            externalIdentityCount,
             persistenceScope = access.Scope?.Value,
             persistenceAccessPolicy = access.AccessPolicy.ToString(),
             persistenceAcrossScopes = access.AcrossScopes,
-            persistenceAccessCategories = mappingReads.PersistenceAccessCategories,
-            mappingReadCategories = mappingReads.MappingReadCategories
+            persistenceAccessObservations = mappingReadSnapshot.PersistenceAccessObservations,
+            mappingReadObservations = mappingReadSnapshot.MappingReadObservations
         };
     }
 
@@ -599,7 +634,7 @@ internal static class Program
         }
     }
 
-    private sealed record ControlRequest(string Command, JsonElement Payload);
+    private sealed record ControlRequest(string Command, JsonElement Payload, bool ResetEpochAfterOperationEntry = false);
     private sealed record ControlResult(object Value, bool Stop);
     private sealed record SaveRuleCommand(
         string Id,
@@ -626,8 +661,10 @@ internal static class Program
             get
             {
                 var httpContext = httpContextAccessor.HttpContext;
-                var probe = httpContext?.Request.Headers["X-Worker-Persistence-Probe"].ToString();
-                var category = observations.ObservePersistenceAccessCategory(probe, httpContext is not null);
+                var category = observations.PersistenceAccessCategory(
+                    httpContext?.Request.Headers[MappingReadCounter.PersistenceProbeHeader].ToString(),
+                    httpContext is not null);
+                observations.ObservePersistenceAccess(httpContext, category);
                 if (httpContext is null && FixturePersistenceControl.Value is { } fixtureControl)
                     return fixtureControl;
 
@@ -647,49 +684,92 @@ internal static class Program
 
     private sealed class MappingReadCounter : DbCommandInterceptor
     {
-        private readonly ConcurrentQueue<string> _persistenceAccessCategories = new();
-        private readonly ConcurrentQueue<string> _mappingReadCategories = new();
-        private readonly AsyncLocal<string?> _currentPersistenceAccessCategory = new();
-        private int _count;
+        public const string ResponseOperationIdHeader = "X-Worker-Oidc-Fixture-Operation";
+        public const string PersistenceProbeHeader = "X-Worker-Persistence-Probe";
+        private const int MaxObservationRecords = 256;
+        private static readonly object HttpOperationItemKey = new();
+        private readonly object _gate = new();
+        private readonly AsyncLocal<OperationTag?> _currentOperation = new();
+        private readonly List<PersistenceAccessObservation> _persistenceAccessObservations = [];
+        private readonly List<MappingReadObservation> _mappingReadObservations = [];
+        private IHttpContextAccessor? _httpContextAccessor;
+        private long _nextOperationId;
+        private long _epoch;
+        private long _lifetimeCount;
+        private long _epochStartCount;
+        private bool _observationRecordsTruncated;
 
-        public int Count => Volatile.Read(ref _count);
+        public void SetHttpContextAccessor(IHttpContextAccessor accessor) => _httpContextAccessor = accessor;
 
-        public string[] PersistenceAccessCategories => _persistenceAccessCategories.ToArray();
+        public OperationScope BeginHttpOperation(HttpContext context)
+        {
+            var operation = CreateOperation(
+                "http-request",
+                PersistenceAccessCategory(context.Request.Headers[PersistenceProbeHeader].ToString(), hasRequest: true));
+            context.Items[HttpOperationItemKey] = operation;
+            return EnterOperation(operation);
+        }
 
-        public string[] MappingReadCategories => _mappingReadCategories.ToArray();
+        public OperationScope BeginControlOperation(string command) =>
+            EnterOperation(CreateOperation("fixture-control", ControlCategory(command)));
+
+        public void ObservePersistenceAccess(HttpContext? httpContext, string persistenceAccessCategory)
+        {
+            var evidence = CaptureOperationEvidence(httpContext);
+            lock (_gate)
+            {
+                AppendBounded(_persistenceAccessObservations, new PersistenceAccessObservation(
+                    persistenceAccessCategory,
+                    evidence.OperationId,
+                    evidence.OperationKind,
+                    evidence.ContextCategory,
+                    evidence.OperationSource,
+                    evidence.OperationEpoch,
+                    _epoch,
+                    evidence.DirectHttpContextPresent,
+                    evidence.DirectHttpOperationId,
+                    evidence.FlowedOperationId,
+                    evidence.FlowedOperationKind,
+                    evidence.FlowedContextCategory));
+            }
+        }
+
+        public CounterSnapshot Snapshot()
+        {
+            lock (_gate)
+            {
+                return new CounterSnapshot(
+                    _epoch,
+                    _lifetimeCount - _epochStartCount,
+                    _lifetimeCount,
+                    _epochStartCount,
+                    _persistenceAccessObservations.ToArray(),
+                    _mappingReadObservations.ToArray(),
+                    _observationRecordsTruncated);
+            }
+        }
 
         public void Reset()
         {
-            Interlocked.Exchange(ref _count, 0);
-            _persistenceAccessCategories.Clear();
-            _mappingReadCategories.Clear();
-            _currentPersistenceAccessCategory.Value = null;
+            lock (_gate)
+            {
+                _epoch++;
+                _epochStartCount = _lifetimeCount;
+                _persistenceAccessObservations.Clear();
+                _mappingReadObservations.Clear();
+                _observationRecordsTruncated = false;
+            }
         }
 
-        public string ObservePersistenceAccessCategory(string? probe, bool hasRequest)
-        {
-            var category = !hasRequest
-                ? "no-request"
-                : probe switch
-                {
-                    "mismatch" => "mismatch",
-                    "global" => "global",
-                    "privileged" => "privileged",
-                    "across" => "across",
-                    _ => "ordinary"
-                };
-
-            _currentPersistenceAccessCategory.Value = category;
-            _persistenceAccessCategories.Enqueue(category);
-            return category;
-        }
+        public string PersistenceAccessCategory(string? probe, bool hasRequest) =>
+            !hasRequest ? "no-request" : ProbeCategory(probe);
 
         public override InterceptionResult<DbDataReader> ReaderExecuting(
             DbCommand command,
             CommandEventData eventData,
             InterceptionResult<DbDataReader> result)
         {
-            CountIfMappingRead(command);
+            CountIfMappingRead(command, eventData);
             return result;
         }
 
@@ -699,20 +779,232 @@ internal static class Program
             InterceptionResult<DbDataReader> result,
             CancellationToken cancellationToken = default)
         {
-            CountIfMappingRead(command);
+            CountIfMappingRead(command, eventData);
             return ValueTask.FromResult(result);
         }
 
-        private void CountIfMappingRead(DbCommand command)
+        private void CountIfMappingRead(DbCommand command, CommandEventData eventData)
         {
             var sql = command.CommandText.TrimStart();
             if (sql.StartsWith("SELECT", StringComparison.OrdinalIgnoreCase) &&
                 sql.Contains(IdentityIamEfModule.ClaimMappingTableName, StringComparison.OrdinalIgnoreCase))
             {
-                Interlocked.Increment(ref _count);
-                _mappingReadCategories.Enqueue(_currentPersistenceAccessCategory.Value ?? "no-request");
+                var evidence = CaptureOperationEvidence(_httpContextAccessor?.HttpContext);
+                var callerPath = CaptureCallerPath();
+                lock (_gate)
+                {
+                    _lifetimeCount++;
+                    AppendBounded(_mappingReadObservations, new MappingReadObservation(
+                        evidence.OperationId,
+                        evidence.OperationKind,
+                        evidence.ContextCategory,
+                        evidence.OperationSource,
+                        evidence.OperationEpoch,
+                        _epoch,
+                        _lifetimeCount - _epochStartCount,
+                        _lifetimeCount,
+                        evidence.DirectHttpContextPresent,
+                        evidence.DirectHttpOperationId,
+                        evidence.FlowedOperationId,
+                        evidence.FlowedOperationKind,
+                        evidence.FlowedContextCategory,
+                        callerPath,
+                        eventData.CommandId.ToString("N"),
+                        eventData.Context?.ContextId.InstanceId.ToString("N"),
+                        eventData.Context is null ? "none" : eventData.Context is IdentityIamDbContext ? "identity-iam" : "other"));
+                }
             }
         }
+
+        private static string CaptureCallerPath()
+        {
+            const int maxFrames = 64;
+            const string claimMappingStore = "Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Stores.EfClaimMappingStore";
+            const string schemaStampedTable = "Elsa.Persistence.EntityFramework.SchemaBackfill.EfSchemaStampedTable";
+
+            var frames = new StackTrace(fNeedFileInfo: false).GetFrames();
+            if (frames is null)
+                return "unknown";
+
+            foreach (var frame in frames.Take(maxFrames))
+            {
+                var method = frame.GetMethod();
+                var frameType = method?.DeclaringType;
+                if (frameType is null)
+                    continue;
+
+                if (string.Equals(frameType.FullName, claimMappingStore, StringComparison.Ordinal) ||
+                    string.Equals(frameType.DeclaringType?.FullName, claimMappingStore, StringComparison.Ordinal))
+                    return "claim-mapping-store";
+
+                if (string.Equals(frameType.FullName, schemaStampedTable, StringComparison.Ordinal))
+                {
+                    if (method!.Name == "CountCoreAsync")
+                        return "schema-stamped-count";
+                    if (method.Name == "PageCoreAsync")
+                        return "schema-stamped-page";
+                }
+
+                if (!string.Equals(frameType.DeclaringType?.FullName, schemaStampedTable, StringComparison.Ordinal) ||
+                    !string.Equals(method!.Name, "MoveNext", StringComparison.Ordinal))
+                    continue;
+
+                if (frameType.Name.StartsWith("<CountCoreAsync>d__", StringComparison.Ordinal))
+                    return "schema-stamped-count";
+                if (frameType.Name.StartsWith("<PageCoreAsync>d__", StringComparison.Ordinal))
+                    return "schema-stamped-page";
+            }
+
+            return "unknown";
+        }
+
+        private OperationTag CreateOperation(string operationKind, string contextCategory)
+        {
+            lock (_gate)
+                return new OperationTag($"op-{++_nextOperationId}", operationKind, contextCategory, _epoch);
+        }
+
+        private void AppendBounded<T>(List<T> records, T observation)
+        {
+            if (records.Count == MaxObservationRecords)
+            {
+                records.RemoveAt(0);
+                _observationRecordsTruncated = true;
+            }
+
+            records.Add(observation);
+        }
+
+        private static string ProbeCategory(string? probe) => probe switch
+        {
+            "mismatch" => "mismatch",
+            "global" => "global",
+            "privileged" => "privileged",
+            "across" => "across",
+            _ => "ordinary"
+        };
+
+        private static string ControlCategory(string command) => command switch
+        {
+            "describe" => "describe",
+            "reset-mapping-reads" => "reset-mapping-reads",
+            "save-rule" => "save-rule",
+            "list-rules" => "list-rules",
+            "seed-executable" => "seed-executable",
+            "snapshot" => "snapshot",
+            "shutdown" => "shutdown",
+            _ => "other-control"
+        };
+
+        private OperationScope EnterOperation(OperationTag operation)
+        {
+            var previous = _currentOperation.Value;
+            _currentOperation.Value = operation;
+            return new OperationScope(this, operation, previous);
+        }
+
+        private OperationEvidence CaptureOperationEvidence(HttpContext? httpContext)
+        {
+            var directOperation = httpContext is not null &&
+                                  httpContext.Items.TryGetValue(HttpOperationItemKey, out var value)
+                ? value as OperationTag
+                : null;
+            var flowedOperation = _currentOperation.Value;
+            var correlatedOperation = httpContext is null ? flowedOperation : directOperation;
+            var operationSource = directOperation is not null
+                ? "direct-http-context"
+                : httpContext is not null
+                    ? "direct-http-context-untracked"
+                    : flowedOperation?.OperationKind switch
+                    {
+                        "http-request" => "flowed-http-operation",
+                        "fixture-control" => "flowed-control-operation",
+                        _ => "none"
+                    };
+
+            return new OperationEvidence(
+                correlatedOperation?.OperationId ?? "none",
+                correlatedOperation?.OperationKind ?? operationSource,
+                correlatedOperation?.ContextCategory ?? operationSource,
+                operationSource,
+                correlatedOperation?.OperationEpoch,
+                httpContext is not null,
+                directOperation?.OperationId,
+                flowedOperation?.OperationId,
+                flowedOperation?.OperationKind,
+                flowedOperation?.ContextCategory);
+        }
+
+        public sealed record OperationTag(
+            string OperationId,
+            string OperationKind,
+            string ContextCategory,
+            long OperationEpoch);
+
+        public sealed record PersistenceAccessObservation(
+            string PersistenceAccessCategory,
+            string OperationId,
+            string OperationKind,
+            string ContextCategory,
+            string OperationSource,
+            long? OperationEpoch,
+            long ObservationEpoch,
+            bool DirectHttpContextPresent,
+            string? DirectHttpOperationId,
+            string? FlowedOperationId,
+            string? FlowedOperationKind,
+            string? FlowedContextCategory);
+
+        public sealed record MappingReadObservation(
+            string OperationId,
+            string OperationKind,
+            string ContextCategory,
+            string OperationSource,
+            long? OperationEpoch,
+            long QueryEpoch,
+            long MappingReadCount,
+            long LifetimeMappingReadCount,
+            bool DirectHttpContextPresent,
+            string? DirectHttpOperationId,
+            string? FlowedOperationId,
+            string? FlowedOperationKind,
+            string? FlowedContextCategory,
+            string CallerPath,
+            string CommandId,
+            string? DbContextId,
+            string DbContextKind);
+
+        public sealed record CounterSnapshot(
+            long MappingReadEpoch,
+            long MappingReadCount,
+            long LifetimeMappingReadCount,
+            long EpochStartLifetimeMappingReadCount,
+            PersistenceAccessObservation[] PersistenceAccessObservations,
+            MappingReadObservation[] MappingReadObservations,
+            bool ObservationRecordsTruncated);
+
+        private sealed record OperationEvidence(
+            string OperationId,
+            string OperationKind,
+            string ContextCategory,
+            string OperationSource,
+            long? OperationEpoch,
+            bool DirectHttpContextPresent,
+            string? DirectHttpOperationId,
+            string? FlowedOperationId,
+            string? FlowedOperationKind,
+            string? FlowedContextCategory);
+
+        public sealed class OperationScope(
+            MappingReadCounter counter,
+            OperationTag tag,
+            OperationTag? previous) : IDisposable
+        {
+            public OperationTag Tag { get; } = tag;
+
+            public void Dispose() => counter._currentOperation.Value = previous;
+        }
+
     }
 }
 

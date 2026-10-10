@@ -8,7 +8,9 @@ public sealed record DispatchStimulusResponse(
     int SkippedStartCount,
     int ResumedCount,
     IReadOnlyCollection<StimulusStartView> Starts,
-    IReadOnlyCollection<StimulusResumeView> Resumes)
+    IReadOnlyCollection<StimulusResumeView> Resumes,
+    int ShedStartCount = 0,
+    int? RetryAfterSeconds = null)
 {
     public static DispatchStimulusResponse From(StimulusRoutingResult result) =>
         new(
@@ -16,10 +18,12 @@ public sealed record DispatchStimulusResponse(
             result.SkippedStartCount,
             result.ResumedCount,
             result.Starts.Select(StimulusStartView.From).ToArray(),
-            result.Resumes.Select(StimulusResumeView.From).ToArray());
+            result.Resumes.Select(StimulusResumeView.From).ToArray(),
+            result.ShedStartCount,
+            result.ShedRetryAfter is { } retryAfter ? Math.Max(1, (int)Math.Ceiling(retryAfter.TotalSeconds)) : null);
 }
 
-/// <summary>One started (or duplicate-skipped) instance produced by routing a stimulus to the trigger index.</summary>
+/// <summary>One started, duplicate-skipped or admission-shed start produced by routing a stimulus to the trigger index.</summary>
 public sealed record StimulusStartView(string TriggerBindingId, string ArtifactId, string Status, string? WorkflowExecutionId)
 {
     public static StimulusStartView From(StimulusStartOutcome outcome) =>

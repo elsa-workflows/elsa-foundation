@@ -1,0 +1,8 @@
+{
+  "source": "a1b300f2a757d23ffbeafd8e921edf8c1247a2b0",
+  "assemblies": {
+    "Elsa.Workbench.dll": "b8cdea9da6482eb3d6a3b586bff6136c43ddc7c8a6b45cc32ab08c3a31cc0666",
+    "Elsa.Workflows.Runtime.Api.dll": "0592c8919a1f02f87b693bb16474e09943ac6caaaac73767000b9375d83d98f3",
+    "Elsa.Workflows.Runtime.dll": "7e6fb75fdf4616a6aa3a564426eb44bcd1fe0b7c5d3342eb0cbfda303e207b4b"
+  }
+}

@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+	<ItemGroup>
+		<PackageReference Include="Microsoft.Extensions.Logging.Abstractions" />
+		<PackageReference Include="Microsoft.Extensions.Options" />
+		<PackageReference Include="CShells.Abstractions" />
+    <PackageReference Include="Elsa.Specifications.PackageManifest.Generator" PrivateAssets="all" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<ProjectReference Include="..\..\Primitives\Primitives\Elsa.Primitives.csproj" />
+		<ProjectReference Include="..\..\Locking\Core\Elsa.Locking.Core.csproj" />
+		<!-- The shared schema dormancy check a task declaring [RequiresSchemaVersion] is asked through (#2192). -->
+		<ProjectReference Include="..\..\Cluster\Core\Elsa.Cluster.Core.csproj" />
+		<ProjectReference Include="..\Core\Elsa.Tasks.Core.csproj" />
+	</ItemGroup>
+
+</Project>

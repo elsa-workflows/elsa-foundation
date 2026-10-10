@@ -1,0 +1,907 @@
+[
+  {
+    "traceId": "e5acc2e4ccc5b19b7771ec7d3ec1cd97",
+    "spanId": "5cff22c3ce0fd413",
+    "parentSpanId": "4d76eb7a0bb77d49",
+    "name": "elsa.runtime.drain",
+    "startTime": "2026-10-06T03:21:56.960038+02:00",
+    "endTime": "2026-10-06T03:21:57.152923+02:00",
+    "status": "Unset",
+    "attributes": {
+      "elsa.workflow.execution_id": "147eTn6gBLT",
+      "elsa.drain.outermost": "True",
+      "elsa.drain.items_processed": "2"
+    }
+  },
+  {
+    "traceId": "e5acc2e4ccc5b19b7771ec7d3ec1cd97",
+    "spanId": "fcb5e7e8c74899d6",
+    "parentSpanId": "5cff22c3ce0fd413",
+    "name": "elsa.runtime.dispatch",
+    "startTime": "2026-10-06T03:21:57.003103+02:00",
+    "endTime": "2026-10-06T03:21:57.057708+02:00",
+    "status": "Unset",
+    "attributes": {
+      "elsa.workflow.execution_id": "147eTn6gBLT",
+      "elsa.work_item.id": "147eTnErUMc",
+      "elsa.command.kind": "Start",
+      "elsa.handler.name": "WorkflowStartSchedulerWorkHandler",
+      "elsa.outcome": "completed"
+    }
+  },
+  {
+    "traceId": "e5acc2e4ccc5b19b7771ec7d3ec1cd97",
+    "spanId": "cca0427160cc10e3",
+    "parentSpanId": "5cff22c3ce0fd413",
+    "name": "elsa.runtime.dispatch",
+    "startTime": "2026-10-06T03:21:57.072223+02:00",
+    "endTime": "2026-10-06T03:21:57.151805+02:00",
+    "status": "Unset",
+    "attributes": {
+      "elsa.workflow.execution_id": "147eTn6gBLT",
+      "elsa.work_item.id": "b9b6cdc6930ede37:checkpoint:WorkflowStarted",
+      "elsa.command.kind": "Checkpoint",
+      "elsa.handler.name": "WorkflowCheckpointSchedulerWorkHandler",
+      "elsa.outcome": "completed"
+    }
+  },
+  {
+    "traceId": "e5acc2e4ccc5b19b7771ec7d3ec1cd97",
+    "spanId": "6cad86cf640710b8",
+    "parentSpanId": "cca0427160cc10e3",
+    "name": "elsa.runtime.checkpoint.commit",
+    "startTime": "2026-10-06T03:21:57.124231+02:00",
+    "endTime": "2026-10-06T03:21:57.151322+02:00",
+    "status": "Unset",
+    "attributes": {
+      "elsa.workflow.execution_id": "147eTn6gBLT",
+      "elsa.checkpoint.id": "checkpoint:b9b6cdc6930ede37:checkpoint:WorkflowStarted",
+      "elsa.checkpoint.persistence_mode": "Deferred",
+      "elsa.checkpoint.mandatory": "False",
+      "elsa.checkpoint.post_commit_intents": "1"
+    }
+  },
+  {
+    "traceId": "e5acc2e4ccc5b19b7771ec7d3ec1cd97",
+    "spanId": "882f853db3a91bf1",
+    "parentSpanId": "4d76eb7a0bb77d49",
+    "name": "elsa.runtime.drain",
+    "startTime": "2026-10-06T03:21:57.216908+02:00",
+    "endTime": "2026-10-06T03:21:57.536742+02:00",
+    "status": "Unset",
+    "attributes": {
+      "elsa.workflow.execution_id": "147eTn6gBLT",
+      "elsa.drain.outermost": "True",
+      "elsa.drain.items_processed": "2"
+    }
+  },
+  {
+    "traceId": "e5acc2e4ccc5b19b7771ec7d3ec1cd97",
+    "spanId": "963ad8062f9622c2",
+    "parentSpanId": "882f853db3a91bf1",
+    "name": "elsa.runtime.dispatch",
+    "startTime": "2026-10-06T03:21:57.216976+02:00",
+    "endTime": "2026-10-06T03:21:57.524362+02:00",
+    "status": "Unset",
+    "attributes": {
+      "elsa.workflow.execution_id": "147eTn6gBLT",
+      "elsa.work_item.id": "b9b6cdc6930ede37:schedule:root",
+      "elsa.command.kind": "ScheduleActivity",
+      "elsa.handler.name": "WorkflowScheduleActivitySchedulerWorkHandler",
+      "elsa.outcome": "completed"
+    }
+  },
+  {
+    "traceId": "e5acc2e4ccc5b19b7771ec7d3ec1cd97",
+    "spanId": "283564d30e08b958",
+    "parentSpanId": "963ad8062f9622c2",
+    "name": "elsa.runtime.activity.execute",
+    "startTime": "2026-10-06T03:21:57.218789+02:00",
+    "endTime": "2026-10-06T03:21:57.517557+02:00",
+    "status": "Unset",
+    "attributes": {
+      "elsa.workflow.execution_id": "147eTn6gBLT",
+      "elsa.work_item.id": "b9b6cdc6930ede37:schedule:root",
+      "elsa.command.kind": "ScheduleActivity"
+    }
+  },
+  {
+    "traceId": "e5acc2e4ccc5b19b7771ec7d3ec1cd97",
+    "spanId": "c00ff4e1e5871875",
+    "parentSpanId": "283564d30e08b958",
+    "name": "elsa.runtime.checkpoint.commit",
+    "startTime": "2026-10-06T03:21:57.268539+02:00",
+    "endTime": "2026-10-06T03:21:57.270306+02:00",
+    "status": "Unset",
+    "attributes": {
+      "elsa.workflow.execution_id": "147eTn6gBLT",
+      "elsa.checkpoint.id": "checkpoint:b9b6cdc6930ede37:schedule:root:activity-scheduled:147eTpDs6QP",
+      "elsa.checkpoint.persistence_mode": "Deferred",
+      "elsa.checkpoint.mandatory": "True",
+      "elsa.checkpoint.post_commit_intents": "0"
+    }
+  },
+  {
+    "traceId": "e5acc2e4ccc5b19b7771ec7d3ec1cd97",
+    "spanId": "b996f93c7d406337",
+    "parentSpanId": "283564d30e08b958",
+    "name": "elsa.runtime.checkpoint.commit",
+    "startTime": "2026-10-06T03:21:57.395336+02:00",
+    "endTime": "2026-10-06T03:21:57.395436+02:00",
+    "status": "Unset",
+    "attributes": {
+      "elsa.workflow.execution_id": "147eTn6gBLT",
+      "elsa.checkpoint.id": "checkpoint:6982e934cc8a88a9:start:147eTpDs6QP:activity-started:147eTpDs6QP",
+      "elsa.checkpoint.persistence_mode": "Deferred",
+      "elsa.checkpoint.mandatory": "True",
+      "elsa.checkpoint.post_commit_intents": "0"
+    }
+  },
+  {
+    "traceId": "e5acc2e4ccc5b19b7771ec7d3ec1cd97",
+    "spanId": "c5fb1e0c13a6bb5d",
+    "parentSpanId": "283564d30e08b958",
+    "name": "elsa.runtime.checkpoint.commit",
+    "startTime": "2026-10-06T03:21:57.457354+02:00",
+    "endTime": "2026-10-06T03:21:57.457555+02:00",
+    "status": "Unset",
+    "attributes": {
+      "elsa.workflow.execution_id": "147eTn6gBLT",
+      "elsa.checkpoint.id": "checkpoint:44f029db4f3989d2:invoke:147eTpDs6QP:activity-attempt-claimed:147eTpDs6QP:147eTpDs6QP:attempt:1",
+      "elsa.checkpoint.persistence_mode": "Deferred",
+      "elsa.checkpoint.mandatory": "True",
+      "elsa.checkpoint.post_commit_intents": "0"
+    }
+  },
+  {
+    "traceId": "e5acc2e4ccc5b19b7771ec7d3ec1cd97",
+    "spanId": "27679e9db8a0f5bc",
+    "parentSpanId": "283564d30e08b958",
+    "name": "elsa.runtime.checkpoint.commit",
+    "startTime": "2026-10-06T03:21:57.502329+02:00",
+    "endTime": "2026-10-06T03:21:57.502637+02:00",
+    "status": "Unset",
+    "attributes": {
+      "elsa.workflow.execution_id": "147eTn6gBLT",
+      "elsa.checkpoint.id": "checkpoint:44f029db4f3989d2:invoke:147eTpDs6QP:activity-inspection-captured:147eTpDs6QP",
+      "elsa.checkpoint.persistence_mode": "Deferred",
+      "elsa.checkpoint.mandatory": "True",
+      "elsa.checkpoint.post_commit_intents": "1"
+    }
+  },
+  {
+    "traceId": "e5acc2e4ccc5b19b7771ec7d3ec1cd97",
+    "spanId": "4c87cccab2b880ad",
+    "parentSpanId": "882f853db3a91bf1",
+    "name": "elsa.runtime.dispatch",
+    "startTime": "2026-10-06T03:21:57.524438+02:00",
+    "endTime": "2026-10-06T03:21:57.536701+02:00",
+    "status": "Unset",
+    "attributes": {
+      "elsa.workflow.execution_id": "147eTn6gBLT",
+      "elsa.work_item.id": "263fd72e689e50b1:schedule-child:http-in:147eTrQB0sQ",
+      "elsa.command.kind": "ScheduleActivity",
+      "elsa.handler.name": "WorkflowScheduleActivitySchedulerWorkHandler",
+      "elsa.outcome": "completed"
+    }
+  },
+  {
+    "traceId": "e5acc2e4ccc5b19b7771ec7d3ec1cd97",
+    "spanId": "d7c24af5b1c01a3a",
+    "parentSpanId": "4c87cccab2b880ad",
+    "name": "elsa.runtime.activity.execute",
+    "startTime": "2026-10-06T03:21:57.524612+02:00",
+    "endTime": "2026-10-06T03:21:57.533301+02:00",
+    "status": "Unset",
+    "attributes": {
+      "elsa.workflow.execution_id": "147eTn6gBLT",
+      "elsa.work_item.id": "263fd72e689e50b1:schedule-child:http-in:147eTrQB0sQ",
+      "elsa.command.kind": "ScheduleActivity"
+    }
+  },
+  {
+    "traceId": "e5acc2e4ccc5b19b7771ec7d3ec1cd97",
+    "spanId": "940a8c961974e575",
+    "parentSpanId": "4c87cccab2b880ad",
+    "name": "elsa.runtime.checkpoint.commit",
+    "startTime": "2026-10-06T03:21:57.533795+02:00",
+    "endTime": "2026-10-06T03:21:57.535238+02:00",
+    "status": "Unset",
+    "attributes": {
+      "elsa.workflow.execution_id": "147eTn6gBLT",
+      "elsa.checkpoint.id": "checkpoint:263fd72e689e50b1:schedule-child:http-in:147eTrQB0sQ:activity-scheduled:147eTrQB0sQ",
+      "elsa.checkpoint.persistence_mode": "Deferred",
+      "elsa.checkpoint.mandatory": "True",
+      "elsa.checkpoint.post_commit_intents": "1"
+    }
+  },
+  {
+    "traceId": "e5acc2e4ccc5b19b7771ec7d3ec1cd97",
+    "spanId": "40260be3ea6a06d7",
+    "parentSpanId": "4d76eb7a0bb77d49",
+    "name": "elsa.runtime.drain",
+    "startTime": "2026-10-06T03:21:57.540486+02:00",
+    "endTime": "2026-10-06T03:21:57.60403+02:00",
+    "status": "Unset",
+    "attributes": {
+      "elsa.workflow.execution_id": "147eTn6gBLT",
+      "elsa.drain.outermost": "True",
+      "elsa.drain.items_processed": "1"
+    }
+  },
+  {
+    "traceId": "e5acc2e4ccc5b19b7771ec7d3ec1cd97",
+    "spanId": "c5f46675bf9ddbed",
+    "parentSpanId": "40260be3ea6a06d7",
+    "name": "elsa.runtime.dispatch",
+    "startTime": "2026-10-06T03:21:57.562766+02:00",
+    "endTime": "2026-10-06T03:21:57.603981+02:00",
+    "status": "Unset",
+    "attributes": {
+      "elsa.workflow.execution_id": "147eTn6gBLT",
+      "elsa.work_item.id": "244f9c0d830fae00:start:147eTrQB0sQ",
+      "elsa.command.kind": "StartActivity",
+      "elsa.handler.name": "WorkflowStartActivitySchedulerWorkHandler",
+      "elsa.outcome": "completed"
+    }
+  },
+  {
+    "traceId": "e5acc2e4ccc5b19b7771ec7d3ec1cd97",
+    "spanId": "fb3dc5d122c8fdf6",
+    "parentSpanId": "c5f46675bf9ddbed",
+    "name": "elsa.runtime.activity.execute",
+    "startTime": "2026-10-06T03:21:57.562931+02:00",
+    "endTime": "2026-10-06T03:21:57.603351+02:00",
+    "status": "Unset",
+    "attributes": {
+      "elsa.workflow.execution_id": "147eTn6gBLT",
+      "elsa.work_item.id": "244f9c0d830fae00:start:147eTrQB0sQ",
+      "elsa.command.kind": "StartActivity"
+    }
+  },
+  {
+    "traceId": "e5acc2e4ccc5b19b7771ec7d3ec1cd97",
+    "spanId": "a916d54f27f0aa64",
+    "parentSpanId": "c5f46675bf9ddbed",
+    "name": "elsa.runtime.checkpoint.commit",
+    "startTime": "2026-10-06T03:21:57.603447+02:00",
+    "endTime": "2026-10-06T03:21:57.603653+02:00",
+    "status": "Unset",
+    "attributes": {
+      "elsa.workflow.execution_id": "147eTn6gBLT",
+      "elsa.checkpoint.id": "checkpoint:244f9c0d830fae00:start:147eTrQB0sQ:activity-started:147eTrQB0sQ",
+      "elsa.checkpoint.persistence_mode": "Deferred",
+      "elsa.checkpoint.mandatory": "True",
+      "elsa.checkpoint.post_commit_intents": "1"
+    }
+  },
+  {
+    "traceId": "e5acc2e4ccc5b19b7771ec7d3ec1cd97",
+    "spanId": "3cf9c5f55cee08fe",
+    "parentSpanId": "4d76eb7a0bb77d49",
+    "name": "elsa.runtime.drain",
+    "startTime": "2026-10-06T03:21:57.60509+02:00",
+    "endTime": "2026-10-06T03:21:59.260373+02:00",
+    "status": "Unset",
+    "attributes": {
+      "elsa.workflow.execution_id": "147eTn6gBLT",
+      "elsa.drain.outermost": "True",
+      "elsa.drain.items_processed": "1"
+    }
+  },
+  {
+    "traceId": "e5acc2e4ccc5b19b7771ec7d3ec1cd97",
+    "spanId": "5c42764c195243da",
+    "parentSpanId": "3cf9c5f55cee08fe",
+    "name": "elsa.runtime.dispatch",
+    "startTime": "2026-10-06T03:21:57.608527+02:00",
+    "endTime": "2026-10-06T03:21:59.260342+02:00",
+    "status": "Unset",
+    "attributes": {
+      "elsa.workflow.execution_id": "147eTn6gBLT",
+      "elsa.work_item.id": "69f22fce7bf122e5:invoke:147eTrQB0sQ",
+      "elsa.command.kind": "InvokeActivity",
+      "elsa.handler.name": "WorkflowInvokeActivitySchedulerWorkHandler",
+      "elsa.outcome": "completed"
+    }
+  },
+  {
+    "traceId": "e5acc2e4ccc5b19b7771ec7d3ec1cd97",
+    "spanId": "b18b8b564127388c",
+    "parentSpanId": "5c42764c195243da",
+    "name": "elsa.runtime.activity.execute",
+    "startTime": "2026-10-06T03:21:57.60866+02:00",
+    "endTime": "2026-10-06T03:21:59.25992+02:00",
+    "status": "Unset",
+    "attributes": {
+      "elsa.workflow.execution_id": "147eTn6gBLT",
+      "elsa.work_item.id": "69f22fce7bf122e5:invoke:147eTrQB0sQ",
+      "elsa.command.kind": "InvokeActivity"
+    }
+  },
+  {
+    "traceId": "e5acc2e4ccc5b19b7771ec7d3ec1cd97",
+    "spanId": "8a644c1915e0344d",
+    "parentSpanId": "b18b8b564127388c",
+    "name": "elsa.runtime.checkpoint.commit",
+    "startTime": "2026-10-06T03:21:57.65231+02:00",
+    "endTime": "2026-10-06T03:21:59.033903+02:00",
+    "status": "Unset",
+    "attributes": {
+      "elsa.workflow.execution_id": "147eTn6gBLT",
+      "elsa.checkpoint.id": "checkpoint:69f22fce7bf122e5:invoke:147eTrQB0sQ:activity-attempt-claimed:147eTrQB0sQ:147eTrQB0sQ:attempt:1",
+      "elsa.checkpoint.persistence_mode": "Immediate",
+      "elsa.checkpoint.mandatory": "True",
+      "elsa.checkpoint.post_commit_intents": "0"
+    }
+  },
+  {
+    "traceId": "e5acc2e4ccc5b19b7771ec7d3ec1cd97",
+    "spanId": "e52ae711d954f8a9",
+    "parentSpanId": "b18b8b564127388c",
+    "name": "elsa.runtime.checkpoint.commit",
+    "startTime": "2026-10-06T03:21:59.252469+02:00",
+    "endTime": "2026-10-06T03:21:59.259522+02:00",
+    "status": "Unset",
+    "attributes": {
+      "elsa.workflow.execution_id": "147eTn6gBLT",
+      "elsa.checkpoint.id": "checkpoint:69f22fce7bf122e5:invoke:147eTrQB0sQ:activity-completed:147eTrQB0sQ",
+      "elsa.checkpoint.persistence_mode": "Deferred",
+      "elsa.checkpoint.mandatory": "True",
+      "elsa.checkpoint.post_commit_intents": "1"
+    }
+  },
+  {
+    "traceId": "e5acc2e4ccc5b19b7771ec7d3ec1cd97",
+    "spanId": "8c99460416516add",
+    "parentSpanId": "4d76eb7a0bb77d49",
+    "name": "elsa.runtime.drain",
+    "startTime": "2026-10-06T03:21:59.263444+02:00",
+    "endTime": "2026-10-06T03:21:59.438426+02:00",
+    "status": "Unset",
+    "attributes": {
+      "elsa.workflow.execution_id": "147eTn6gBLT",
+      "elsa.drain.outermost": "True",
+      "elsa.drain.items_processed": "2"
+    }
+  },
+  {
+    "traceId": "e5acc2e4ccc5b19b7771ec7d3ec1cd97",
+    "spanId": "6b1041fa12a73de6",
+    "parentSpanId": "8c99460416516add",
+    "name": "elsa.runtime.dispatch",
+    "startTime": "2026-10-06T03:21:59.263552+02:00",
+    "endTime": "2026-10-06T03:21:59.321795+02:00",
+    "status": "Unset",
+    "attributes": {
+      "elsa.workflow.execution_id": "147eTn6gBLT",
+      "elsa.work_item.id": "b680a8b1dd239fff:complete:147eTrQB0sQ",
+      "elsa.command.kind": "CompleteActivity",
+      "elsa.handler.name": "WorkflowCompleteActivitySchedulerWorkHandler",
+      "elsa.outcome": "completed"
+    }
+  },
+  {
+    "traceId": "e5acc2e4ccc5b19b7771ec7d3ec1cd97",
+    "spanId": "43d5af1c1cf5164f",
+    "parentSpanId": "8c99460416516add",
+    "name": "elsa.runtime.dispatch",
+    "startTime": "2026-10-06T03:21:59.321887+02:00",
+    "endTime": "2026-10-06T03:21:59.438398+02:00",
+    "status": "Unset",
+    "attributes": {
+      "elsa.workflow.execution_id": "147eTn6gBLT",
+      "elsa.work_item.id": "f5eb8a084b9b5564:parent:147eTpDs6QP:child:147eTrQB0sQ",
+      "elsa.command.kind": "CompleteActivity",
+      "elsa.handler.name": "WorkflowParentActivityCompletionSchedulerWorkHandler",
+      "elsa.outcome": "completed"
+    }
+  },
+  {
+    "traceId": "e5acc2e4ccc5b19b7771ec7d3ec1cd97",
+    "spanId": "1d572b09cc609389",
+    "parentSpanId": "43d5af1c1cf5164f",
+    "name": "elsa.runtime.activity.execute",
+    "startTime": "2026-10-06T03:21:59.324492+02:00",
+    "endTime": "2026-10-06T03:21:59.438176+02:00",
+    "status": "Unset",
+    "attributes": {
+      "elsa.workflow.execution_id": "147eTn6gBLT",
+      "elsa.work_item.id": "f5eb8a084b9b5564:parent:147eTpDs6QP:child:147eTrQB0sQ",
+      "elsa.command.kind": "CompleteActivity"
+    }
+  },
+  {
+    "traceId": "e5acc2e4ccc5b19b7771ec7d3ec1cd97",
+    "spanId": "a4064d1bfc9d8a9f",
+    "parentSpanId": "1d572b09cc609389",
+    "name": "elsa.runtime.checkpoint.commit",
+    "startTime": "2026-10-06T03:21:59.390004+02:00",
+    "endTime": "2026-10-06T03:21:59.390085+02:00",
+    "status": "Unset",
+    "attributes": {
+      "elsa.workflow.execution_id": "147eTn6gBLT",
+      "elsa.checkpoint.id": "checkpoint:f5eb8a084b9b5564:parent:147eTpDs6QP:child:147eTrQB0sQ:activity-attempt-claimed:147eTpDs6QP:147eTpDs6QP:attempt:2",
+      "elsa.checkpoint.persistence_mode": "Deferred",
+      "elsa.checkpoint.mandatory": "True",
+      "elsa.checkpoint.post_commit_intents": "0"
+    }
+  },
+  {
+    "traceId": "e5acc2e4ccc5b19b7771ec7d3ec1cd97",
+    "spanId": "bf11502f17b24be2",
+    "parentSpanId": "1d572b09cc609389",
+    "name": "elsa.runtime.checkpoint.commit",
+    "startTime": "2026-10-06T03:21:59.437811+02:00",
+    "endTime": "2026-10-06T03:21:59.438081+02:00",
+    "status": "Unset",
+    "attributes": {
+      "elsa.workflow.execution_id": "147eTn6gBLT",
+      "elsa.checkpoint.id": "checkpoint:f5eb8a084b9b5564:parent:147eTpDs6QP:child:147eTrQB0sQ:activity-inspection-captured:147eTpDs6QP",
+      "elsa.checkpoint.persistence_mode": "Deferred",
+      "elsa.checkpoint.mandatory": "True",
+      "elsa.checkpoint.post_commit_intents": "1"
+    }
+  },
+  {
+    "traceId": "e5acc2e4ccc5b19b7771ec7d3ec1cd97",
+    "spanId": "f1b2ba8b4ad6d433",
+    "parentSpanId": "4d76eb7a0bb77d49",
+    "name": "elsa.runtime.drain",
+    "startTime": "2026-10-06T03:21:59.439725+02:00",
+    "endTime": "2026-10-06T03:22:03.664645+02:00",
+    "status": "Unset",
+    "attributes": {
+      "elsa.workflow.execution_id": "147eTn6gBLT",
+      "elsa.drain.outermost": "True",
+      "elsa.drain.items_processed": "2"
+    }
+  },
+  {
+    "traceId": "e5acc2e4ccc5b19b7771ec7d3ec1cd97",
+    "spanId": "e772ceb153df6b4d",
+    "parentSpanId": "f1b2ba8b4ad6d433",
+    "name": "elsa.runtime.dispatch",
+    "startTime": "2026-10-06T03:21:59.439749+02:00",
+    "endTime": "2026-10-06T03:22:03.65452+02:00",
+    "status": "Unset",
+    "attributes": {
+      "elsa.workflow.execution_id": "147eTn6gBLT",
+      "elsa.work_item.id": "2fed3e10836a3a30:schedule-child:set-reference-text:147eU0EvgTC",
+      "elsa.command.kind": "ScheduleActivity",
+      "elsa.handler.name": "WorkflowScheduleActivitySchedulerWorkHandler",
+      "elsa.outcome": "completed"
+    }
+  },
+  {
+    "traceId": "e5acc2e4ccc5b19b7771ec7d3ec1cd97",
+    "spanId": "d2af03c5655d7a7c",
+    "parentSpanId": "e772ceb153df6b4d",
+    "name": "elsa.runtime.activity.execute",
+    "startTime": "2026-10-06T03:21:59.439773+02:00",
+    "endTime": "2026-10-06T03:22:03.654329+02:00",
+    "status": "Unset",
+    "attributes": {
+      "elsa.workflow.execution_id": "147eTn6gBLT",
+      "elsa.work_item.id": "2fed3e10836a3a30:schedule-child:set-reference-text:147eU0EvgTC",
+      "elsa.command.kind": "ScheduleActivity"
+    }
+  },
+  {
+    "traceId": "e5acc2e4ccc5b19b7771ec7d3ec1cd97",
+    "spanId": "b5a99d46fcac7b82",
+    "parentSpanId": "d2af03c5655d7a7c",
+    "name": "elsa.runtime.checkpoint.commit",
+    "startTime": "2026-10-06T03:21:59.445209+02:00",
+    "endTime": "2026-10-06T03:21:59.445319+02:00",
+    "status": "Unset",
+    "attributes": {
+      "elsa.workflow.execution_id": "147eTn6gBLT",
+      "elsa.checkpoint.id": "checkpoint:2fed3e10836a3a30:schedule-child:set-reference-text:147eU0EvgTC:activity-scheduled:147eU0EvgTC",
+      "elsa.checkpoint.persistence_mode": "Deferred",
+      "elsa.checkpoint.mandatory": "True",
+      "elsa.checkpoint.post_commit_intents": "0"
+    }
+  },
+  {
+    "traceId": "e5acc2e4ccc5b19b7771ec7d3ec1cd97",
+    "spanId": "36a4b0cc7f7a82c1",
+    "parentSpanId": "d2af03c5655d7a7c",
+    "name": "elsa.runtime.checkpoint.commit",
+    "startTime": "2026-10-06T03:22:03.630796+02:00",
+    "endTime": "2026-10-06T03:22:03.631278+02:00",
+    "status": "Unset",
+    "attributes": {
+      "elsa.workflow.execution_id": "147eTn6gBLT",
+      "elsa.checkpoint.id": "checkpoint:4fbaa968effcd074:start:147eU0EvgTC:intrinsic:147eU0EvgTC",
+      "elsa.checkpoint.persistence_mode": "Deferred",
+      "elsa.checkpoint.mandatory": "True",
+      "elsa.checkpoint.post_commit_intents": "1"
+    }
+  },
+  {
+    "traceId": "e5acc2e4ccc5b19b7771ec7d3ec1cd97",
+    "spanId": "d56a5bd551959862",
+    "parentSpanId": "d2af03c5655d7a7c",
+    "name": "elsa.runtime.checkpoint.commit",
+    "startTime": "2026-10-06T03:22:03.642443+02:00",
+    "endTime": "2026-10-06T03:22:03.642519+02:00",
+    "status": "Unset",
+    "attributes": {
+      "elsa.workflow.execution_id": "147eTn6gBLT",
+      "elsa.checkpoint.id": "checkpoint:ee7e118770986c47:parent:147eTpDs6QP:child:147eU0EvgTC:activity-attempt-claimed:147eTpDs6QP:147eTpDs6QP:attempt:3",
+      "elsa.checkpoint.persistence_mode": "Deferred",
+      "elsa.checkpoint.mandatory": "True",
+      "elsa.checkpoint.post_commit_intents": "0"
+    }
+  },
+  {
+    "traceId": "e5acc2e4ccc5b19b7771ec7d3ec1cd97",
+    "spanId": "f0df5920966eab2c",
+    "parentSpanId": "d2af03c5655d7a7c",
+    "name": "elsa.runtime.checkpoint.commit",
+    "startTime": "2026-10-06T03:22:03.653749+02:00",
+    "endTime": "2026-10-06T03:22:03.65394+02:00",
+    "status": "Unset",
+    "attributes": {
+      "elsa.workflow.execution_id": "147eTn6gBLT",
+      "elsa.checkpoint.id": "checkpoint:ee7e118770986c47:parent:147eTpDs6QP:child:147eU0EvgTC:activity-inspection-captured:147eTpDs6QP",
+      "elsa.checkpoint.persistence_mode": "Deferred",
+      "elsa.checkpoint.mandatory": "True",
+      "elsa.checkpoint.post_commit_intents": "1"
+    }
+  },
+  {
+    "traceId": "e5acc2e4ccc5b19b7771ec7d3ec1cd97",
+    "spanId": "2b0640004fc607e7",
+    "parentSpanId": "f1b2ba8b4ad6d433",
+    "name": "elsa.runtime.dispatch",
+    "startTime": "2026-10-06T03:22:03.654548+02:00",
+    "endTime": "2026-10-06T03:22:03.664609+02:00",
+    "status": "Unset",
+    "attributes": {
+      "elsa.workflow.execution_id": "147eTn6gBLT",
+      "elsa.work_item.id": "049969fc74de51fc:schedule-child:write-response:147eUJaXm71",
+      "elsa.command.kind": "ScheduleActivity",
+      "elsa.handler.name": "WorkflowScheduleActivitySchedulerWorkHandler",
+      "elsa.outcome": "completed"
+    }
+  },
+  {
+    "traceId": "e5acc2e4ccc5b19b7771ec7d3ec1cd97",
+    "spanId": "f00ae701e2992798",
+    "parentSpanId": "2b0640004fc607e7",
+    "name": "elsa.runtime.activity.execute",
+    "startTime": "2026-10-06T03:22:03.654592+02:00",
+    "endTime": "2026-10-06T03:22:03.664206+02:00",
+    "status": "Unset",
+    "attributes": {
+      "elsa.workflow.execution_id": "147eTn6gBLT",
+      "elsa.work_item.id": "049969fc74de51fc:schedule-child:write-response:147eUJaXm71",
+      "elsa.command.kind": "ScheduleActivity"
+    }
+  },
+  {
+    "traceId": "e5acc2e4ccc5b19b7771ec7d3ec1cd97",
+    "spanId": "567b1322f6b6b072",
+    "parentSpanId": "2b0640004fc607e7",
+    "name": "elsa.runtime.checkpoint.commit",
+    "startTime": "2026-10-06T03:22:03.664289+02:00",
+    "endTime": "2026-10-06T03:22:03.664431+02:00",
+    "status": "Unset",
+    "attributes": {
+      "elsa.workflow.execution_id": "147eTn6gBLT",
+      "elsa.checkpoint.id": "checkpoint:049969fc74de51fc:schedule-child:write-response:147eUJaXm71:activity-scheduled:147eUJaXm71",
+      "elsa.checkpoint.persistence_mode": "Deferred",
+      "elsa.checkpoint.mandatory": "True",
+      "elsa.checkpoint.post_commit_intents": "1"
+    }
+  },
+  {
+    "traceId": "e5acc2e4ccc5b19b7771ec7d3ec1cd97",
+    "spanId": "c2732063d7cbd3e9",
+    "parentSpanId": "4d76eb7a0bb77d49",
+    "name": "elsa.runtime.drain",
+    "startTime": "2026-10-06T03:22:03.666644+02:00",
+    "endTime": "2026-10-06T03:22:03.77998+02:00",
+    "status": "Unset",
+    "attributes": {
+      "elsa.workflow.execution_id": "147eTn6gBLT",
+      "elsa.drain.outermost": "True",
+      "elsa.drain.items_processed": "1"
+    }
+  },
+  {
+    "traceId": "e5acc2e4ccc5b19b7771ec7d3ec1cd97",
+    "spanId": "13505ce90b18ad5d",
+    "parentSpanId": "c2732063d7cbd3e9",
+    "name": "elsa.runtime.dispatch",
+    "startTime": "2026-10-06T03:22:03.669553+02:00",
+    "endTime": "2026-10-06T03:22:03.779951+02:00",
+    "status": "Unset",
+    "attributes": {
+      "elsa.workflow.execution_id": "147eTn6gBLT",
+      "elsa.work_item.id": "9098873ba363cf6b:start:147eUJaXm71",
+      "elsa.command.kind": "StartActivity",
+      "elsa.handler.name": "WorkflowStartActivitySchedulerWorkHandler",
+      "elsa.outcome": "completed"
+    }
+  },
+  {
+    "traceId": "e5acc2e4ccc5b19b7771ec7d3ec1cd97",
+    "spanId": "6ef6aac3f03bd920",
+    "parentSpanId": "13505ce90b18ad5d",
+    "name": "elsa.runtime.activity.execute",
+    "startTime": "2026-10-06T03:22:03.669579+02:00",
+    "endTime": "2026-10-06T03:22:03.779438+02:00",
+    "status": "Unset",
+    "attributes": {
+      "elsa.workflow.execution_id": "147eTn6gBLT",
+      "elsa.work_item.id": "9098873ba363cf6b:start:147eUJaXm71",
+      "elsa.command.kind": "StartActivity"
+    }
+  },
+  {
+    "traceId": "e5acc2e4ccc5b19b7771ec7d3ec1cd97",
+    "spanId": "d5d8663918bb3433",
+    "parentSpanId": "13505ce90b18ad5d",
+    "name": "elsa.runtime.checkpoint.commit",
+    "startTime": "2026-10-06T03:22:03.779537+02:00",
+    "endTime": "2026-10-06T03:22:03.779794+02:00",
+    "status": "Unset",
+    "attributes": {
+      "elsa.workflow.execution_id": "147eTn6gBLT",
+      "elsa.checkpoint.id": "checkpoint:9098873ba363cf6b:start:147eUJaXm71:activity-started:147eUJaXm71",
+      "elsa.checkpoint.persistence_mode": "Deferred",
+      "elsa.checkpoint.mandatory": "True",
+      "elsa.checkpoint.post_commit_intents": "1"
+    }
+  },
+  {
+    "traceId": "e5acc2e4ccc5b19b7771ec7d3ec1cd97",
+    "spanId": "473667cdc4abbd3a",
+    "parentSpanId": "4d76eb7a0bb77d49",
+    "name": "elsa.runtime.drain",
+    "startTime": "2026-10-06T03:22:03.780879+02:00",
+    "endTime": "2026-10-06T03:22:04.011294+02:00",
+    "status": "Unset",
+    "attributes": {
+      "elsa.workflow.execution_id": "147eTn6gBLT",
+      "elsa.drain.outermost": "True",
+      "elsa.drain.items_processed": "1"
+    }
+  },
+  {
+    "traceId": "e5acc2e4ccc5b19b7771ec7d3ec1cd97",
+    "spanId": "a15f7ab9254f92dc",
+    "parentSpanId": "473667cdc4abbd3a",
+    "name": "elsa.runtime.dispatch",
+    "startTime": "2026-10-06T03:22:03.784918+02:00",
+    "endTime": "2026-10-06T03:22:04.011253+02:00",
+    "status": "Unset",
+    "attributes": {
+      "elsa.workflow.execution_id": "147eTn6gBLT",
+      "elsa.work_item.id": "b5fcbbc025c1b501:invoke:147eUJaXm71",
+      "elsa.command.kind": "InvokeActivity",
+      "elsa.handler.name": "WorkflowInvokeActivitySchedulerWorkHandler",
+      "elsa.outcome": "completed"
+    }
+  },
+  {
+    "traceId": "e5acc2e4ccc5b19b7771ec7d3ec1cd97",
+    "spanId": "df9b3bdca7163059",
+    "parentSpanId": "a15f7ab9254f92dc",
+    "name": "elsa.runtime.activity.execute",
+    "startTime": "2026-10-06T03:22:03.784954+02:00",
+    "endTime": "2026-10-06T03:22:04.011047+02:00",
+    "status": "Unset",
+    "attributes": {
+      "elsa.workflow.execution_id": "147eTn6gBLT",
+      "elsa.work_item.id": "b5fcbbc025c1b501:invoke:147eUJaXm71",
+      "elsa.command.kind": "InvokeActivity"
+    }
+  },
+  {
+    "traceId": "e5acc2e4ccc5b19b7771ec7d3ec1cd97",
+    "spanId": "ab644f56b2abef80",
+    "parentSpanId": "df9b3bdca7163059",
+    "name": "elsa.runtime.checkpoint.commit",
+    "startTime": "2026-10-06T03:22:03.835914+02:00",
+    "endTime": "2026-10-06T03:22:03.998095+02:00",
+    "status": "Unset",
+    "attributes": {
+      "elsa.workflow.execution_id": "147eTn6gBLT",
+      "elsa.checkpoint.id": "checkpoint:b5fcbbc025c1b501:invoke:147eUJaXm71:activity-attempt-claimed:147eUJaXm71:147eUJaXm71:attempt:1",
+      "elsa.checkpoint.persistence_mode": "Immediate",
+      "elsa.checkpoint.mandatory": "True",
+      "elsa.checkpoint.post_commit_intents": "0"
+    }
+  },
+  {
+    "traceId": "e5acc2e4ccc5b19b7771ec7d3ec1cd97",
+    "spanId": "24f76d2b698b32a4",
+    "parentSpanId": "df9b3bdca7163059",
+    "name": "elsa.runtime.checkpoint.commit",
+    "startTime": "2026-10-06T03:22:04.010795+02:00",
+    "endTime": "2026-10-06T03:22:04.011021+02:00",
+    "status": "Unset",
+    "attributes": {
+      "elsa.workflow.execution_id": "147eTn6gBLT",
+      "elsa.checkpoint.id": "checkpoint:b5fcbbc025c1b501:invoke:147eUJaXm71:activity-completed:147eUJaXm71",
+      "elsa.checkpoint.persistence_mode": "Deferred",
+      "elsa.checkpoint.mandatory": "True",
+      "elsa.checkpoint.post_commit_intents": "1"
+    }
+  },
+  {
+    "traceId": "e5acc2e4ccc5b19b7771ec7d3ec1cd97",
+    "spanId": "00ca92afd7b169fe",
+    "parentSpanId": "4d76eb7a0bb77d49",
+    "name": "elsa.runtime.drain",
+    "startTime": "2026-10-06T03:22:04.01268+02:00",
+    "endTime": "2026-10-06T03:22:04.028359+02:00",
+    "status": "Unset",
+    "attributes": {
+      "elsa.workflow.execution_id": "147eTn6gBLT",
+      "elsa.drain.outermost": "True",
+      "elsa.drain.items_processed": "2"
+    }
+  },
+  {
+    "traceId": "e5acc2e4ccc5b19b7771ec7d3ec1cd97",
+    "spanId": "d0a224beba8ea45e",
+    "parentSpanId": "00ca92afd7b169fe",
+    "name": "elsa.runtime.dispatch",
+    "startTime": "2026-10-06T03:22:04.012711+02:00",
+    "endTime": "2026-10-06T03:22:04.01292+02:00",
+    "status": "Unset",
+    "attributes": {
+      "elsa.workflow.execution_id": "147eTn6gBLT",
+      "elsa.work_item.id": "dfec27570f5b93ad:complete:147eUJaXm71",
+      "elsa.command.kind": "CompleteActivity",
+      "elsa.handler.name": "WorkflowCompleteActivitySchedulerWorkHandler",
+      "elsa.outcome": "completed"
+    }
+  },
+  {
+    "traceId": "e5acc2e4ccc5b19b7771ec7d3ec1cd97",
+    "spanId": "249d198347e763e8",
+    "parentSpanId": "00ca92afd7b169fe",
+    "name": "elsa.runtime.dispatch",
+    "startTime": "2026-10-06T03:22:04.012944+02:00",
+    "endTime": "2026-10-06T03:22:04.028334+02:00",
+    "status": "Unset",
+    "attributes": {
+      "elsa.workflow.execution_id": "147eTn6gBLT",
+      "elsa.work_item.id": "a8d8f2269bff8a81:parent:147eTpDs6QP:child:147eUJaXm71",
+      "elsa.command.kind": "CompleteActivity",
+      "elsa.handler.name": "WorkflowParentActivityCompletionSchedulerWorkHandler",
+      "elsa.outcome": "completed"
+    }
+  },
+  {
+    "traceId": "e5acc2e4ccc5b19b7771ec7d3ec1cd97",
+    "spanId": "4a1853afbe681784",
+    "parentSpanId": "249d198347e763e8",
+    "name": "elsa.runtime.activity.execute",
+    "startTime": "2026-10-06T03:22:04.012988+02:00",
+    "endTime": "2026-10-06T03:22:04.028207+02:00",
+    "status": "Unset",
+    "attributes": {
+      "elsa.workflow.execution_id": "147eTn6gBLT",
+      "elsa.work_item.id": "a8d8f2269bff8a81:parent:147eTpDs6QP:child:147eUJaXm71",
+      "elsa.command.kind": "CompleteActivity"
+    }
+  },
+  {
+    "traceId": "e5acc2e4ccc5b19b7771ec7d3ec1cd97",
+    "spanId": "85c52d131034dcb2",
+    "parentSpanId": "4a1853afbe681784",
+    "name": "elsa.runtime.checkpoint.commit",
+    "startTime": "2026-10-06T03:22:04.013197+02:00",
+    "endTime": "2026-10-06T03:22:04.01324+02:00",
+    "status": "Unset",
+    "attributes": {
+      "elsa.workflow.execution_id": "147eTn6gBLT",
+      "elsa.checkpoint.id": "checkpoint:a8d8f2269bff8a81:parent:147eTpDs6QP:child:147eUJaXm71:activity-attempt-claimed:147eTpDs6QP:147eTpDs6QP:attempt:4",
+      "elsa.checkpoint.persistence_mode": "Deferred",
+      "elsa.checkpoint.mandatory": "True",
+      "elsa.checkpoint.post_commit_intents": "0"
+    }
+  },
+  {
+    "traceId": "e5acc2e4ccc5b19b7771ec7d3ec1cd97",
+    "spanId": "f1349fbb2a4bf6f6",
+    "parentSpanId": "4a1853afbe681784",
+    "name": "elsa.runtime.checkpoint.commit",
+    "startTime": "2026-10-06T03:22:04.027713+02:00",
+    "endTime": "2026-10-06T03:22:04.028128+02:00",
+    "status": "Unset",
+    "attributes": {
+      "elsa.workflow.execution_id": "147eTn6gBLT",
+      "elsa.checkpoint.id": "checkpoint:a8d8f2269bff8a81:parent:147eTpDs6QP:child:147eUJaXm71:parent-activity-completed:147eTpDs6QP",
+      "elsa.checkpoint.persistence_mode": "Deferred",
+      "elsa.checkpoint.mandatory": "True",
+      "elsa.checkpoint.post_commit_intents": "1"
+    }
+  },
+  {
+    "traceId": "e5acc2e4ccc5b19b7771ec7d3ec1cd97",
+    "spanId": "0f4bb4288d7ea5fc",
+    "parentSpanId": "4d76eb7a0bb77d49",
+    "name": "elsa.runtime.drain",
+    "startTime": "2026-10-06T03:22:04.03037+02:00",
+    "endTime": "2026-10-06T03:22:04.257538+02:00",
+    "status": "Unset",
+    "attributes": {
+      "elsa.workflow.execution_id": "147eTn6gBLT",
+      "elsa.drain.outermost": "True",
+      "elsa.drain.items_processed": "3",
+      "elsa.drain.stop_reason": "WorkflowTerminated"
+    }
+  },
+  {
+    "traceId": "e5acc2e4ccc5b19b7771ec7d3ec1cd97",
+    "spanId": "dcb762c8d9b98337",
+    "parentSpanId": "0f4bb4288d7ea5fc",
+    "name": "elsa.runtime.dispatch",
+    "startTime": "2026-10-06T03:22:04.030398+02:00",
+    "endTime": "2026-10-06T03:22:04.031958+02:00",
+    "status": "Unset",
+    "attributes": {
+      "elsa.workflow.execution_id": "147eTn6gBLT",
+      "elsa.work_item.id": "4c752b308550c6a9:complete:147eTpDs6QP",
+      "elsa.command.kind": "CompleteActivity",
+      "elsa.handler.name": "WorkflowCompleteActivitySchedulerWorkHandler",
+      "elsa.outcome": "completed"
+    }
+  },
+  {
+    "traceId": "e5acc2e4ccc5b19b7771ec7d3ec1cd97",
+    "spanId": "90c556cc6e6a0da9",
+    "parentSpanId": "0f4bb4288d7ea5fc",
+    "name": "elsa.runtime.dispatch",
+    "startTime": "2026-10-06T03:22:04.031993+02:00",
+    "endTime": "2026-10-06T03:22:04.035682+02:00",
+    "status": "Unset",
+    "attributes": {
+      "elsa.workflow.execution_id": "147eTn6gBLT",
+      "elsa.work_item.id": "98b4de419834ac01:continuation:147eTpDs6QP",
+      "elsa.command.kind": "CompleteActivity",
+      "elsa.handler.name": "WorkflowCompleteActivitySchedulerWorkHandler",
+      "elsa.outcome": "completed"
+    }
+  },
+  {
+    "traceId": "e5acc2e4ccc5b19b7771ec7d3ec1cd97",
+    "spanId": "461e7c23b5aeb3c0",
+    "parentSpanId": "0f4bb4288d7ea5fc",
+    "name": "elsa.runtime.dispatch",
+    "startTime": "2026-10-06T03:22:04.035711+02:00",
+    "endTime": "2026-10-06T03:22:04.250208+02:00",
+    "status": "Unset",
+    "attributes": {
+      "elsa.workflow.execution_id": "147eTn6gBLT",
+      "elsa.work_item.id": "16b05fada204da7c:checkpoint:WorkflowCompleted:147eTpDs6QP",
+      "elsa.command.kind": "Checkpoint",
+      "elsa.handler.name": "WorkflowCheckpointSchedulerWorkHandler",
+      "elsa.outcome": "completed"
+    }
+  },
+  {
+    "traceId": "e5acc2e4ccc5b19b7771ec7d3ec1cd97",
+    "spanId": "c6e5bbe358b0defd",
+    "parentSpanId": "461e7c23b5aeb3c0",
+    "name": "elsa.runtime.checkpoint.commit",
+    "startTime": "2026-10-06T03:22:04.087467+02:00",
+    "endTime": "2026-10-06T03:22:04.249953+02:00",
+    "status": "Unset",
+    "attributes": {
+      "elsa.workflow.execution_id": "147eTn6gBLT",
+      "elsa.checkpoint.id": "checkpoint:16b05fada204da7c:checkpoint:WorkflowCompleted:147eTpDs6QP",
+      "elsa.checkpoint.persistence_mode": "Immediate",
+      "elsa.checkpoint.mandatory": "False",
+      "elsa.checkpoint.post_commit_intents": "0"
+    }
+  }
+]

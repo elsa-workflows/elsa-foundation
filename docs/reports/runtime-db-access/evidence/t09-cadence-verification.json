@@ -1,0 +1,255 @@
+{
+  "workId": "T09",
+  "issue": 2399,
+  "sourceHead": "81b7e94dee8dac452ac94e922c71b9496e324c14",
+  "provider": "PostgreSQL 16.15",
+  "scenario": "HttpEndpoint -> deterministic SetVariable intrinsic -> WriteHttpResponse",
+  "timingEvidence": false,
+  "queryReductionEvidence": false,
+  "cases": [
+    {
+      "id": "coalesced-50-default",
+      "hostMode": "Coalesced",
+      "hostCapSetting": 50,
+      "authoredCadence": null,
+      "authoredMaxSegmentCheckpoints": null,
+      "expectedCadence": "Coalesced",
+      "expectedMaxSegmentCheckpoints": 50,
+      "definitionId": "14A9gJWKEOW",
+      "versionId": "14A9gJYAf3W",
+      "artifactId": "artifact-edbd809ad0d4",
+      "sourceReferenceId": "activation-ref:publication-14A9gKMXpBK",
+      "workflowExecutionId": "14A9gReMxyV",
+      "httpStatus": 200,
+      "responseBodyMatchedExactly": true,
+      "status": "Completed",
+      "incidentCount": 0,
+      "checkpointCadence": "Coalesced",
+      "maxSegmentCheckpoints": 50,
+      "inspectionGranularity": "boundary-level",
+      "readbacks": [
+        {
+          "afterHostStage": "coalesced-host-12",
+          "status": "Completed",
+          "incidentCount": 0,
+          "checkpointCadence": "Coalesced",
+          "maxSegmentCheckpoints": 50,
+          "inspectionGranularity": "boundary-level",
+          "stampMatchedOriginalRun": true
+        },
+        {
+          "afterHostStage": "immediate-host",
+          "status": "Completed",
+          "incidentCount": 0,
+          "checkpointCadence": "Coalesced",
+          "maxSegmentCheckpoints": 50,
+          "inspectionGranularity": "boundary-level",
+          "stampMatchedOriginalRun": true
+        }
+      ]
+    },
+    {
+      "id": "coalesced-50-authored-immediate",
+      "hostMode": "Coalesced",
+      "hostCapSetting": 50,
+      "authoredCadence": "Immediate",
+      "authoredMaxSegmentCheckpoints": null,
+      "expectedCadence": "Immediate",
+      "expectedMaxSegmentCheckpoints": null,
+      "definitionId": "14A9gazxT5B",
+      "versionId": "14A9gb0DRAP",
+      "artifactId": "artifact-7072b512f8e6",
+      "sourceReferenceId": "activation-ref:publication-14A9gb7ju9d",
+      "workflowExecutionId": "14A9ggMzQEV",
+      "httpStatus": 200,
+      "responseBodyMatchedExactly": true,
+      "status": "Completed",
+      "incidentCount": 0,
+      "checkpointCadence": "Immediate",
+      "maxSegmentCheckpoints": null,
+      "inspectionGranularity": "activity-level",
+      "readbacks": [
+        {
+          "afterHostStage": "coalesced-host-12",
+          "status": "Completed",
+          "incidentCount": 0,
+          "checkpointCadence": "Immediate",
+          "maxSegmentCheckpoints": null,
+          "inspectionGranularity": "activity-level",
+          "stampMatchedOriginalRun": true
+        },
+        {
+          "afterHostStage": "immediate-host",
+          "status": "Completed",
+          "incidentCount": 0,
+          "checkpointCadence": "Immediate",
+          "maxSegmentCheckpoints": null,
+          "inspectionGranularity": "activity-level",
+          "stampMatchedOriginalRun": true
+        }
+      ]
+    },
+    {
+      "id": "coalesced-50-authored-coalesced-8",
+      "hostMode": "Coalesced",
+      "hostCapSetting": 50,
+      "authoredCadence": "Coalesced",
+      "authoredMaxSegmentCheckpoints": 8,
+      "expectedCadence": "Coalesced",
+      "expectedMaxSegmentCheckpoints": 8,
+      "definitionId": "14A9goiMK1Z",
+      "versionId": "14A9goiIhSN",
+      "artifactId": "artifact-30ff15d0586e",
+      "sourceReferenceId": "activation-ref:publication-14A9goqdVjy",
+      "workflowExecutionId": "14A9guA6LW3",
+      "httpStatus": 200,
+      "responseBodyMatchedExactly": true,
+      "status": "Completed",
+      "incidentCount": 0,
+      "checkpointCadence": "Coalesced",
+      "maxSegmentCheckpoints": 8,
+      "inspectionGranularity": "boundary-level",
+      "readbacks": [
+        {
+          "afterHostStage": "coalesced-host-12",
+          "status": "Completed",
+          "incidentCount": 0,
+          "checkpointCadence": "Coalesced",
+          "maxSegmentCheckpoints": 8,
+          "inspectionGranularity": "boundary-level",
+          "stampMatchedOriginalRun": true
+        },
+        {
+          "afterHostStage": "immediate-host",
+          "status": "Completed",
+          "incidentCount": 0,
+          "checkpointCadence": "Coalesced",
+          "maxSegmentCheckpoints": 8,
+          "inspectionGranularity": "boundary-level",
+          "stampMatchedOriginalRun": true
+        }
+      ]
+    },
+    {
+      "id": "coalesced-12-authored-coalesced-host-fallback",
+      "hostMode": "Coalesced",
+      "hostCapSetting": 12,
+      "authoredCadence": "Coalesced",
+      "authoredMaxSegmentCheckpoints": null,
+      "expectedCadence": "Coalesced",
+      "expectedMaxSegmentCheckpoints": 12,
+      "definitionId": "14A9henWWTs",
+      "versionId": "14A9hepeKHi",
+      "artifactId": "artifact-f1facb2dc580",
+      "sourceReferenceId": "activation-ref:publication-14A9hfeS9pw",
+      "workflowExecutionId": "14A9hmNHwtp",
+      "httpStatus": 200,
+      "responseBodyMatchedExactly": true,
+      "status": "Completed",
+      "incidentCount": 0,
+      "checkpointCadence": "Coalesced",
+      "maxSegmentCheckpoints": 12,
+      "inspectionGranularity": "boundary-level",
+      "readbacks": [
+        {
+          "afterHostStage": "immediate-host",
+          "status": "Completed",
+          "incidentCount": 0,
+          "checkpointCadence": "Coalesced",
+          "maxSegmentCheckpoints": 12,
+          "inspectionGranularity": "boundary-level",
+          "stampMatchedOriginalRun": true
+        }
+      ]
+    },
+    {
+      "id": "immediate-authored-coalesced-8-clamped",
+      "hostMode": "Immediate",
+      "hostCapSetting": 12,
+      "authoredCadence": "Coalesced",
+      "authoredMaxSegmentCheckpoints": 8,
+      "expectedCadence": "Immediate",
+      "expectedMaxSegmentCheckpoints": null,
+      "definitionId": "14A9iPFeJXl",
+      "versionId": "14A9iPHqK4Q",
+      "artifactId": "artifact-62f315ce64e9",
+      "sourceReferenceId": "activation-ref:publication-14A9iQByUSp",
+      "workflowExecutionId": "14A9iXWouRt",
+      "httpStatus": 200,
+      "responseBodyMatchedExactly": true,
+      "status": "Completed",
+      "incidentCount": 0,
+      "checkpointCadence": "Immediate",
+      "maxSegmentCheckpoints": null,
+      "inspectionGranularity": "activity-level",
+      "readbacks": []
+    },
+    {
+      "id": "immediate-host-default",
+      "hostMode": "Immediate",
+      "hostCapSetting": 12,
+      "authoredCadence": null,
+      "authoredMaxSegmentCheckpoints": null,
+      "expectedCadence": "Immediate",
+      "expectedMaxSegmentCheckpoints": null,
+      "definitionId": "14A9ijilPKr",
+      "versionId": "14A9ijipbWS",
+      "artifactId": "artifact-f9685f6a54ed",
+      "sourceReferenceId": "activation-ref:publication-14A9ijwgxD0",
+      "workflowExecutionId": "14A9ipImvqn",
+      "httpStatus": 200,
+      "responseBodyMatchedExactly": true,
+      "status": "Completed",
+      "incidentCount": 0,
+      "checkpointCadence": "Immediate",
+      "maxSegmentCheckpoints": null,
+      "inspectionGranularity": "activity-level",
+      "readbacks": []
+    }
+  ],
+  "boundaries": {
+    "bookmarkExecutionId": "14A9gyautgQ",
+    "incidentExecutionId": "14A9h039UkW",
+    "originalCadence": "Coalesced",
+    "originalCap": 50,
+    "hostCapAfterRestart": 12,
+    "persistedAcrossRestart": true,
+    "resumedWithPersistedValue": true,
+    "setRecordsBeforeAndAfter": 1,
+    "waitRecordsBeforeAndAfterRestart": 1,
+    "echoRecordsAfterResume": 1,
+    "incidentCountBeforeAndAfterRestart": 1
+  },
+  "evidence": {
+    "privateArchiveSha256": "e8a7851737940ca778991b94ca2c35e8e8f461af87e68fe63d2a42e2a8dd51e2",
+    "privateArchiveBytes": 1063344,
+    "metadataSha256": "fb3783bf1a84a87578358d9c047df9bd5597d88120a877350b335515f0b5762e",
+    "scriptHashes": {
+      "prepare.ps1": "25ba8c66ab69fe2873538142cb60aec966b5e2b93450dbe52e2082275b32e247",
+      "run.ps1": "a9f0f63fef797ef5a0759edee118f96d58bb724abada5b982866127d2e363e72",
+      "requests.ps1": "e8299b2edc3bc1627ffdd7008daf604a99cc45c06763464a16b7b41ac65e26c2",
+      "boundaries.ps1": "5396074f1fe31524daa8b222c93058a9ea49ea023043ef793614471412ef041c"
+    },
+    "boundaryHashes": {
+      "bookmark-after-c12.json": "0c629cb2d4a7b5e509da384ff61b6ba85f278532dffe74756e5b9ed2db32ac4e",
+      "bookmark-before-restart.json": "0c629cb2d4a7b5e509da384ff61b6ba85f278532dffe74756e5b9ed2db32ac4e",
+      "bookmark-resumed-c12.json": "23646a87dd46df1cc1256e1f89c45c228f4484d1fd9a581cdb9fef374ca9cf4c",
+      "incident-after-c12.json": "3273e147755964230f26dab323c64b9fafe1ae3896efff4a70a54507ddf4f454",
+      "incident-before-restart.json": "3273e147755964230f26dab323c64b9fafe1ae3896efff4a70a54507ddf4f454",
+      "incident-list-after-c12.json": "209518eadf27f3037be5a4ec83f01e2710083a04ae2895aae489e821e05c160e",
+      "incident-list-before-restart.json": "209518eadf27f3037be5a4ec83f01e2710083a04ae2895aae489e821e05c160e"
+    }
+  },
+  "cleanup": {
+    "hostRootRemoved": true,
+    "containerRemoved": true,
+    "secretFilesRemoved": true,
+    "completedUtc": "2026-10-07T13:34:23.9708640+00:00"
+  },
+  "limits": [
+    "Six sequential HTTP requests, not concurrency or timing evidence.",
+    "No SQL counts or new query reduction are measured.",
+    "Checkpoint durability in these fixtures does not prove exactly-once external side effects.",
+    "Current candidate fault/C4/malformed-body and final integrated recovery remain T17/T18 gates."
+  ]
+}

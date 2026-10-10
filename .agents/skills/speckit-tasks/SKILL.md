@@ -58,7 +58,7 @@ You **MUST** consider the user input before proceeding (if not empty).
 2. **Load design documents**: Read from FEATURE_DIR:
    - **Required**: plan.md (tech stack, libraries, structure), spec.md (user stories with priorities)
    - **Optional**: data-model.md (entities), contracts/ (interface contracts), research.md (decisions), quickstart.md (test scenarios)
-   - **IF EXISTS**: Load `.specify/memory/constitution.md` for project principles and governance constraints
+   - **IF EXISTS**: Load `.specify/memory/constitution.md` from the repository root for project principles and governance constraints
    - Note: Not all projects have all documents. Generate tasks based on what's available.
 
 3. **Execute task generation workflow**:
@@ -77,7 +77,7 @@ You **MUST** consider the user input before proceeding (if not empty).
    - Phase 1: Setup tasks (project initialization)
    - Phase 2: Foundational tasks (blocking prerequisites for all user stories)
    - Phase 3+: One phase per user story (in priority order from spec.md)
-   - Each phase includes: story goal, independent test criteria, tests (if requested), implementation tasks
+   - Each phase includes: story goal, independent test criteria, applicable test tasks, and implementation tasks; order test tasks according to the declared application cadence
    - Final Phase: Polish & cross-cutting concerns
    - All tasks must follow the strict checklist format (see Task Generation Rules below)
    - Clear file paths for each task
@@ -137,7 +137,9 @@ The tasks.md should be immediately executable - each task must be specific enoug
 
 **CRITICAL**: Tasks MUST be organized by user story to enable independent implementation and testing.
 
-**Tests are OPTIONAL**: Only generate test tasks if explicitly requested in the feature specification or if user requests TDD approach.
+**Test-task generation**: A silent feature specification does not waive tests required by repository policy. For Foundation feature classes and logic-bearing implementations in scope, include the registration and per-implementation unit-test tasks required by [framework §2.23](../../../.specify/memory/constitution-framework.md#223-unit-tests). Test existence and cadence are separate: for greenfield work, follow [framework §2.21.2](../../../.specify/memory/constitution-framework.md#2212-greenfield-test-discipline); use test-first ordering and require a failing run only when the application's derived constitution declares TDD. Add other tests when requested or warranted by the story's changed behavior, contracts, or acceptance criteria. If no test obligation applies (for example, a docs-only correction), omit unrelated tests, including runtime tests.
+
+For greenfield work without a declared cadence, record that gap in the plan and tasks for the application owner to resolve. Do not infer a test-first requirement from the examples or omit applicable required tests.
 
 ### Checklist Format (REQUIRED)
 
@@ -179,12 +181,11 @@ Every task MUST strictly follow this format:
      - Models needed for that story
      - Services needed for that story
      - Interfaces/UI needed for that story
-     - If tests requested: Tests specific to that story
+     - Include applicable repository-required tests for the feature classes and implementations in that story, even when the spec is silent; include additional tests when requested or warranted by scope
    - Mark story dependencies (most stories should be independent)
 
 2. **From Contracts**:
-   - Map each interface contract → to the user story it serves
-   - If tests requested: Each interface contract → contract test task [P] before implementation in that story's phase
+   - Map each interface contract to its story. Add a contract-test task when requested or warranted by the contract's scope and acceptance criteria; applicable repository-required tests still apply when the spec is silent.
 
 3. **From Data Model**:
    - Map each entity to the user story(ies) that need it
@@ -201,7 +202,7 @@ Every task MUST strictly follow this format:
 - **Phase 1**: Setup (project initialization)
 - **Phase 2**: Foundational (blocking prerequisites - MUST complete before user stories)
 - **Phase 3+**: User Stories in priority order (P1, P2, P3...)
-  - Within each story: Tests (if requested) → Models → Services → Endpoints → Integration
+  - Within each story, order applicable tests by the declared application cadence (§2.21.2); if the application's derived constitution declares TDD, place tests before implementation. Keep implementation tasks in dependency order: Models → Services → Endpoints → Integration.
   - Each phase should be a complete, independently testable increment
 - **Final Phase**: Polish & Cross-Cutting Concerns
 

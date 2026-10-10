@@ -2,7 +2,7 @@
 
 `Elsa.Activities.Design.Api` owns the supported management-client view of installed activity definitions, versions, authoring descriptors, and availability policy. The normalized catalog is the client bootstrap surface for constructing authored activity state; workflow-context evaluation remains in Workflow Design API.
 
-See the [domain-owned API specification](../../../../../specs/092-domain-owned-apis/spec.md) and [Elsa glossary](../../../../../docs/glossary/elsa.md) for canonical ownership and terminology.
+See the [domain-owned API specification](../../../../../specs/220-domain-owned-apis/spec.md) and [Elsa glossary](../../../../../docs/glossary/elsa.md) for canonical ownership and terminology.
 
 ## Composition
 
@@ -36,4 +36,4 @@ Each catalog input carries `isSensitive` and `isCredential`, the activity's sens
 
 ## Extension points
 
-See [EXTENSION_POINTS.md](EXTENSION_POINTS.md) and the [reconciliation extension catalog](../Reconciliation/EXTENSION_POINTS.md).
+See [EXTENSION_POINTS.md](EXTENSION_POINTS.md) and the [reconciliation extension catalog](../Reconciliation/Elsa.Activities.Design.Reconciliation/EXTENSION_POINTS.md).

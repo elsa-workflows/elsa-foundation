@@ -4,7 +4,7 @@
 
 `WorkflowsDesignApiFeature` composes the canonical Workflow Design management-client slice described in [README.md](README.md). Its endpoints are host-independent and have no `Elsa.Workbench` dependency. This catalog covers the seams behind those endpoints; it does not make mediator handlers or API response projections extension points.
 
-The authoring endpoints resolve `IActivityInputOptionsProvider` contributions and traverse authored structures through `IActivityStructureService`. Definition and draft endpoints depend on the provider-neutral stores and commands listed below. Replace a single-owner store/command deliberately; add keyed providers and structure handlers as contributors. Canonical ownership and terminology remain in the [domain-owned API spec](../../../../../specs/092-domain-owned-apis/spec.md) and [Elsa glossary](../../../../../docs/glossary/elsa.md).
+The authoring endpoints resolve `IActivityInputOptionsProvider` contributions and traverse authored structures through `IActivityStructureService`. Definition and draft endpoints depend on the provider-neutral stores and commands listed below. Replace a single-owner store/command deliberately; add keyed providers and structure handlers as contributors. Canonical ownership and terminology remain in the [domain-owned API spec](../../../../../specs/220-domain-owned-apis/spec.md) and [Elsa glossary](../../../../../docs/glossary/elsa.md).
 
 The per-domain catalog (framework §2.22.1) of everything you can implement or override in the Workflows.Design domain, plus the events it publishes. Anchored at `Elsa.Workflows.Design.Api` — the composition root where `WorkflowsDesignApiFeature` wires the default implementations and aggregating handlers. Three sections:
 
@@ -32,7 +32,7 @@ The per-domain catalog (framework §2.22.1) of everything you can implement or o
 ### Commands — `IUpdateDraftCommand` + 5 lifecycle *(Core — `Elsa.Workflows.Design.Persistence.Core`)*
 Full detail in the persistence catalog: [`Elsa.Workflows.Design.Persistence.EntityFrameworkCore/EXTENSION_POINTS.md`](../Elsa.Workflows.Design.Persistence.EntityFrameworkCore/EXTENSION_POINTS.md).
 
-Summary: `IUpdateDraftCommand`, `ICreateDraftCommand`, `ICloneDraftFromVersionCommand`, `IDiscardDraftCommand`, `IPromoteDraftToVersionCommand`, `IAddWorkflowDefinitionCommand` — each backed by an EF Core default; `services.Replace(...)` to swap individual commands while keeping the rest (the canonical *swap-commands-keep-queries* example per Joey's framing).
+Summary: `IUpdateDraftCommand`, `ICreateDraftCommand`, `ICloneDraftFromVersionCommand`, `IDiscardDraftCommand`, `IPromoteDraftToVersionCommand`, `IAddWorkflowDefinitionCommand` — each backed by an EF Core default; `services.Replace(...)` to swap individual commands while keeping the rest (the canonical *swap-commands-keep-queries* example per Joey's framing). A replacement `IPromoteDraftToVersionCommand` keeps its content precondition: it takes the `WorkflowDraftStateHash` of the draft the Drafts/Promote route admitted and refuses with `WorkflowDraftChangedException` (409) when the draft it promotes no longer has that content (spec 188, research R7).
 
 ### `IDraftStateDiffEngine` *(Contract — `Elsa.Workflows.Design.Persistence.Core`)*
 - **Signature:** `IReadOnlyList<IEvent> Evaluate(string draftId, WorkflowDefinitionState stored, IReadOnlyCollection<DesignMetadataRecord> storedLayout, WorkflowDefinitionState desired, IReadOnlyCollection<DesignMetadataRecord> desiredLayout)`

@@ -72,20 +72,17 @@ methods before or after Foundation registration. Direct competing registrations 
 than selected by registration order. `IPermissionContributor` and `IPermissionResourceHandler`
 remain additive fan-in seams.
 
-### Async authorization context replacement window
+### Async authorization contexts
 
 Feature APIs that need authorization during request handling should depend on their asynchronous
-context sibling (`IActivityAuthoringContextAsync`, `IActivityDependencyContextAsync`,
+authorization context (`IActivityAuthoringContextAsync`, `IActivityDependencyContextAsync`,
 or `IActivityInspectionContextAsync`) and call the async methods with the
 request cancellation token. These contexts delegate decisions to `IPermissionAuthorizationService`;
 they do not inspect permission claims themselves. Provider-specific or resource-specific rules receive
 a stable resource object and remain in `IPermissionResourceHandler` implementations.
 
-The original synchronous context interfaces remain source-compatible during the advisory replacement
-window for external hosts, but the built-in HTTP adapters mark their permission members obsolete and
-fail closed rather than blocking on asynchronous work. First-party production callers are migrated to
-the async siblings. The synchronous members are candidates for removal in the next major release;
-hosts should migrate replacements before then.
+The original synchronous context interfaces and their legacy adapters were removed by #2566 (ADR 0080
+D4); the async contexts are the only request authorization contexts.
 
 ## Events
 

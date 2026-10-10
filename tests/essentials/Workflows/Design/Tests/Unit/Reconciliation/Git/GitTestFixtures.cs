@@ -11,6 +11,7 @@ using Elsa.Workflows.Design.Persistence.Core.Stores;
 using Elsa.Testing;
 using Elsa.Workflows.Design.Reconciliation.Git.Options;
 using Elsa.Workflows.Design.Reconciliation.Git.Services;
+using Elsa.Workflows.Design.Tests.Infrastructure;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
@@ -132,8 +133,12 @@ public abstract class GitExportTest : GitIntegrationTest
     {
         _definitions.With(new WorkflowDefinition { Id = definitionId, Name = name });
         foreach (var version in versions)
-            _versions.With(new WorkflowDefinitionVersion(definitionId, version) { State = WorkflowDefinitionState.Empty });
+            AddVersion(definitionId, version, WorkflowDefinitionState.Empty);
     }
+
+    /// <summary>Adds one version holding <paramref name="state"/> to a definition already in the shared catalog.</summary>
+    protected void AddVersion(string definitionId, string version, WorkflowDefinitionState state) =>
+        _versions.With(new WorkflowDefinitionVersion(definitionId, version) { State = state });
 
     /// <summary>
     /// A Writer node of the shared catalog and remote, with a clone of its own: at a path of its own, or, given
@@ -171,7 +176,9 @@ public abstract class GitExportTest : GitIntegrationTest
             slot.RepositoryPath,
             slot,
             git,
-            new GitWorkflowExporter(workspace, git, serializer, _definitions, _versions, options, exportLog),
+            new GitWorkflowExporter(
+                workspace, git, serializer, _definitions, _versions, options,
+                CredentialLiteralTestSupport.Validator(CredentialLiteralTestSupport.Catalog()), exportLog),
             new GitWorkflowReconciliationSource(workspace, git, serializer, options, NullLogger<GitWorkflowReconciliationSource>.Instance),
             workspaceLog,
             exportLog);

@@ -1,0 +1,218 @@
+{
+  "CShells": {
+    "Shells": {
+      "default": {
+        "Name": "default",
+        "Features": {
+          "ActivitiesBpmn": {},
+          "ActivitiesControlFlow": {},
+          "ActivitiesDispatchWorkflowRuntime": {},
+          "ActivitiesDispatchWorkflowDesign": {},
+          "ActivitiesDesignApi": {},
+          "ActivitiesGraphDesign": {},
+          "ActivitiesDesignReconciliation": {},
+          "ActivitiesFlowchart": {},
+          "ActivitiesHttp": {},
+          "ActivitiesPrimitives": {},
+          "ActivitiesGraphRuntime": {},
+          "ActivitiesRuntime": {},
+          "ActivitiesScheduling": {},
+          "ActivitiesSequence": {},
+          "ApiCapabilities": {},
+          "ClrActivityReconciliation": {
+            "Options": {
+              "FolderPath": "/app/curated-clr-scan"
+            }
+          },
+          "DiagnosticsOpenTelemetry": {},
+          "DiagnosticsOpenTelemetryEntityFrameworkCore": {},
+          "DiagnosticsStructuredLogsEntityFrameworkCore": {},
+          "DiagnosticsStructuredLogs": {},
+          "Events": {},
+          "Expressions": {},
+          "ExpressionsApi": {},
+          "FileSystemDistributedLocking": {},
+          "FoundationAgentAbstractions": {},
+          "FoundationAgentApi": {},
+          "FoundationIdentityAbstractions": {},
+          "FoundationIdentityApi": {},
+          "FoundationIdentityAspNetCoreIdentity": {
+            "IsDefault": true,
+            "AllowedReturnUrlOrigins": [
+              "https://localhost:7030",
+              "http://localhost:5089"
+            ]
+          },
+          "IdentityIamEntityFrameworkCore": {},
+          "IdentityProviderConfigurationEntityFrameworkCore": {},
+          "FoundationIdentityAspNetCoreIdentityEntityFrameworkCore": {
+            "IsDevelopmentOrDemo": true,
+            "SeedAdminUserName": "admin",
+            "SeedAdminPassword": "Password123!",
+            "SeedAdminEmail": "admin@elsa.local",
+            "SeedAdminRoleName": "administrator"
+          },
+          "FoundationIdentityOidc": {
+            "IsDefault": false
+          },
+          "FoundationIdentityOpenIddict": {
+            "IsDevelopmentOrDemo": true
+          },
+          "FoundationWorkflowsAgent": {},
+          "GitHubCopilotAgent": {
+            "Enabled": true,
+            "GitHubTokenEnvironmentVariable": "COPILOT_GITHUB_TOKEN",
+            "Model": "auto",
+            "BaseDirectory": ".elsa/copilot"
+          },
+          "WorkflowsRuntimeEntityFrameworkCore": {
+            "CacheWorkflowExecutables": true,
+            "WorkflowExecutableCacheCapacity": 256,
+            "RecoveryContinuationSigningKey": "development-demo-only-recovery-continuation-key",
+            "HierarchyCursorSigningKey": "development-demo-only-hierarchy-cursor-signing-key",
+            "Provider": "PostgreSql",
+            "ConnectionName": "ElsaRuntime2412"
+          },
+          "ActivitiesDesignEntityFrameworkCore": {
+            "Provider": "PostgreSql",
+            "ConnectionName": "ElsaRuntime2412"
+          },
+          "WorkflowsDesignEntityFrameworkCore": {
+            "Provider": "PostgreSql",
+            "ConnectionName": "ElsaRuntime2412"
+          },
+          "WorkflowsRuntimeDistributed": {},
+          "WorkflowsRuntimeDistributedEntityFrameworkCorePersistence": {},
+          "WorkflowsRuntimeDistributedCommandTransportEntityFrameworkCorePersistence": {},
+          "WorkflowsDashboardEntityFrameworkCore": {},
+          "Http": {},
+          "HttpJavaScript": {},
+          "JavaScriptActivities": {},
+          "JavaScriptEndpoints": {},
+          "JavaScriptExpressions": {
+            "TypeDescriptors": [
+              {
+                "TypeFullName": "System.DateTime"
+              },
+              {
+                "TypeFullName": "System.DateTimeOffset"
+              },
+              {
+                "TypeFullName": "System.TimeSpan"
+              },
+              {
+                "TypeFullName": "System.Guid"
+              },
+              {
+                "TypeFullName": "System.Random"
+              },
+              {
+                "TypeFullName": "System.Object"
+              },
+              {
+                "TypeFullName": "System.Text.Json.Nodes.JsonNode, System.Text.Json"
+              },
+              {
+                "TypeFullName": "System.String"
+              },
+              {
+                "TypeFullName": "System.Boolean"
+              },
+              {
+                "TypeFullName": "System.Int16"
+              },
+              {
+                "TypeFullName": "System.Int32"
+              },
+              {
+                "TypeFullName": "System.Int64"
+              },
+              {
+                "TypeFullName": "System.Decimal"
+              },
+              {
+                "TypeFullName": "System.Single"
+              },
+              {
+                "TypeFullName": "System.Double"
+              },
+              {
+                "TypeFullName": "System.Byte[]"
+              },
+              {
+                "TypeFullName": "System.IO.Stream"
+              },
+              {
+                "TypeFullName": "System.DateOnly"
+              },
+              {
+                "TypeFullName": "System.TimeOnly"
+              },
+              {
+                "TypeFullName": "System.Collections.Generic.IDictionary`2[[System.String, System.Private.CoreLib, Version=10.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e],[System.Object, System.Private.CoreLib, Version=10.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e]]"
+              }
+            ]
+          },
+          "JavaScriptJintEngine": {},
+          "JavaScriptWorkflowsDesign": {},
+          "Mediator": {},
+          "MemoryCache": {},
+          "ModularityApi": {},
+          "Primitives": {},
+          "Secrets": {},
+          "SecretsApi": {},
+          "SecretsWorkflows": {},
+          "SecretsEntityFrameworkCore": {},
+          "Serialization": {},
+          "AttentionApi": {},
+          "ModularityAttention": {},
+          "StudioPreferences": {},
+          "StudioPreferencesApi": {},
+          "StudioPreferencesEntityFrameworkCore": {},
+          "Tasks": {},
+          "WorkflowsDesignApi": {},
+          "WorkflowDesignValidations": {},
+          "WorkflowsDashboard": {},
+          "WorkflowsRuntimeAttention": {},
+          "WorkflowsPublishing": {},
+          "WorkflowsPublishingApi": {},
+          "WorkflowsPublishingEntityFrameworkCore": {
+            "Provider": "PostgreSql",
+            "ConnectionName": "ElsaRuntime2412"
+          },
+          "WorkflowsRuntimeApi": {
+            "WorkflowAlterationPayloadProtectionActiveKeyId": "development-demo-only",
+            "WorkflowAlterationPayloadProtectionKeys": {
+              "development-demo-only": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="
+            }
+          },
+          "WorkflowsRuntimeResumption": {},
+          "WorkflowsRuntimeScheduling": {},
+          "WorkflowsRuntimeRecurringTriggers": {},
+          "WorkflowsRuntimeHttp": {},
+          "WorkflowsRuntimeCheckpointPersistence": {
+            "Mode": "Immediate",
+            "MaxSegmentCheckpoints": 50
+          },
+          "WorkflowsRuntimeTracing": {},
+          "WorkflowsRuntimeTriggers": {},
+          "WorkflowsExecutionEvidence": {}
+        },
+        "Configuration": {
+          "WebRouting": {
+            "Path": ""
+          },
+          "Elsa": {
+            "Persistence": {
+              "Bindings": {
+                "DiagnosticsOpenTelemetryEntityFrameworkCore": "ElsaDiagnostics",
+                "DiagnosticsStructuredLogsEntityFrameworkCore": "ElsaDiagnostics"
+              },
+              "DefaultResource": "ElsaRuntime2412"
+            }
+          }
+        }
+      }
+    }
+  }
+}

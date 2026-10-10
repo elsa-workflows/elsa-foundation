@@ -10,6 +10,8 @@ using Elsa.Workflows.Design.Persistence.Core.Contracts;
 using Elsa.Workflows.Design.Persistence.Core.Entities;
 using Elsa.Workflows.Design.Persistence.Core.Services;
 using Elsa.Workflows.Design.Persistence.Core.Stores;
+using Elsa.Workflows.Design.Validations.Core;
+using Elsa.Workflows.Design.Validations.Core.Contracts;
 using NativeEndpoints;
 
 namespace Elsa.Workflows.Design.Api.Endpoints.Drafts.Replace;
@@ -18,7 +20,8 @@ namespace Elsa.Workflows.Design.Api.Endpoints.Drafts.Replace;
 [RequirePermission(WorkflowDesignPermissions.Manage)]
 public sealed class Endpoint(
     IWorkflowDefinitionDraftStore draftStore,
-    IUpdateDraftCommand updateDraftCommand) : ApiEndpoint<ReplaceDraft, WorkflowDraftView>
+    IUpdateDraftCommand updateDraftCommand,
+    ICredentialLiteralValidator credentialLiterals) : ApiEndpoint<ReplaceDraft, WorkflowDraftView>
 {
     public override void Configure(ApiEndpointOptions options)
     {
@@ -37,11 +40,13 @@ public sealed class Endpoint(
             ? current.ActivityPresentation
             : ActivityPresentationRecord.NormalizeCollection(
                 command.ActivityPresentation.Select(x => x.ToRecord()));
+        var state = command.State.ToState();
+        await credentialLiterals.AdmitAsync(state, cancellationToken);
         await updateDraftCommand.Execute(
             DesignOperationKey.CreateOrGenerate(command.OperationKey),
             new UpdateDraftRequest(
                 command.DraftId,
-                command.State.ToState(),
+                state,
                 layout,
                 activityPresentation),
             cancellationToken);

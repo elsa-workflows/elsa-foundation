@@ -233,13 +233,11 @@ public sealed class ActivityVersionDiffApiTests
         }
     }
 
-    private sealed class TestAuthoringContext : IActivityAuthoringContext, IActivityAuthoringContextAsync
+    private sealed class TestAuthoringContext : IActivityAuthoringContextAsync
     {
         public string? TenantId => "tenant-a";
         public string ActorId => "actor-a";
         public string AuthorizationProfile => "tenant-a/read";
-        public bool CanAuthorProvider(string providerKey) => true;
-        public bool CanReadProviderPayload(string providerKey) => false;
         public ValueTask<string> GetAuthorizationProfileAsync(CancellationToken cancellationToken = default) => ValueTask.FromResult(AuthorizationProfile);
         public ValueTask<bool> CanAuthorProviderAsync(string providerKey, CancellationToken cancellationToken = default) => ValueTask.FromResult(true);
         public ValueTask<bool> CanReadProviderPayloadAsync(string providerKey, CancellationToken cancellationToken = default) => ValueTask.FromResult(false);

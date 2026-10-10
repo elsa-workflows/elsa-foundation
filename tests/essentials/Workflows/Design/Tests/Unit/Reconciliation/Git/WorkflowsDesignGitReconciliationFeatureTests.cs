@@ -30,6 +30,7 @@ public sealed class WorkflowsDesignGitReconciliationFeatureTests
     private static bool Registers(IServiceCollection services, Type service, Type implementation) =>
         services.Any(d => d.ServiceType == service && d.ImplementationType == implementation);
 
+    // Kept beside the composition test (§2.23.1): conditional registration, the role-independent part, under the consumer role.
     [Fact]
     public void Registers_git_source_and_base_import_startup_task_for_any_role()
     {
@@ -40,6 +41,7 @@ public sealed class WorkflowsDesignGitReconciliationFeatureTests
         Assert.True(Registers(services, typeof(IStartupTask), typeof(WorkflowsVersionReconcilerStartupTask)));
     }
 
+    // Kept beside the composition test (§2.23.1): lifetime, one container-owned clone slot per shell, released with it.
     [Fact]
     public void Registers_one_clone_slot_per_shell_that_the_shell_container_releases()
     {
@@ -49,6 +51,7 @@ public sealed class WorkflowsDesignGitReconciliationFeatureTests
         Assert.NotNull(registration.ImplementationFactory); // created, and so disposed, by the container
     }
 
+    // Kept beside the composition test (§2.23.1): conditional registration, the consumer role registers no exporter.
     [Fact]
     public void Consumer_role_registers_no_exporter_or_export_task()
     {
@@ -58,6 +61,7 @@ public sealed class WorkflowsDesignGitReconciliationFeatureTests
         Assert.False(Registers(services, typeof(IStartupTask), typeof(GitWorkflowExportStartupTask)));
     }
 
+    // Kept beside the composition test (§2.23.1): conditional registration, the writer role registers the exporter.
     [Fact]
     public void Writer_role_registers_exporter_and_export_task()
     {
@@ -100,6 +104,7 @@ public sealed class WorkflowsDesignGitReconciliationFeatureTests
         Assert.Equal(expected, options.Value.Token);
     }
 
+    // Kept beside the composition test (§2.23.1): options validation, a token with a line break or NUL is refused.
     [Theory]
     [InlineData("ab\ncd")]
     [InlineData("ab\rcd")]
@@ -118,6 +123,7 @@ public sealed class WorkflowsDesignGitReconciliationFeatureTests
         Assert.Null(Record.Exception(() => feature.ConfigureServices(new ServiceCollection())));
     }
 
+    // Kept beside the composition test (§2.23.1): options validation, token mode needs an http(s) remote.
     [Theory]
     [InlineData("git@example.com:acme/wf.git")]
     [InlineData("ssh://git@example.com/acme/wf.git")]
@@ -130,6 +136,7 @@ public sealed class WorkflowsDesignGitReconciliationFeatureTests
         Assert.Contains("http(s)", refusal.Message);
     }
 
+    // Kept beside the composition test (§2.23.1): options validation, an unusable workflows path is refused.
     [Theory]
     [InlineData("")]
     [InlineData(".")]

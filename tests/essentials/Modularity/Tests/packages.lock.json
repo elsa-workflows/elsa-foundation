@@ -1893,7 +1893,8 @@
           "Elsa.Serialization.Core": "[4.0.0-dev, )",
           "Elsa.Tasks.Core": "[4.0.0-dev, )",
           "Elsa.Workflows.Design.Core": "[4.0.0-dev, )",
-          "Elsa.Workflows.Design.Persistence.Core": "[4.0.0-dev, )"
+          "Elsa.Workflows.Design.Persistence.Core": "[4.0.0-dev, )",
+          "Elsa.Workflows.Design.Validations.Core": "[4.0.0-dev, )"
         }
       },
       "elsa.workflows.design.reconciliation.git": {
@@ -1905,7 +1906,8 @@
           "Elsa.Tasks.Core": "[4.0.0-dev, )",
           "Elsa.Workflows.Design.Core": "[4.0.0-dev, )",
           "Elsa.Workflows.Design.Persistence.Core": "[4.0.0-dev, )",
-          "Elsa.Workflows.Design.Reconciliation": "[4.0.0-dev, )"
+          "Elsa.Workflows.Design.Reconciliation": "[4.0.0-dev, )",
+          "Elsa.Workflows.Design.Validations.Core": "[4.0.0-dev, )"
         }
       },
       "elsa.workflows.design.reconciliation.json": {

@@ -1,0 +1,6 @@
+{
+  "baseUrl": "http://127.0.0.1:49899",
+  "contentRoot": "/home/elsarunner/track-b-evidence/2ea800cd5c17232cbfd50e0115344bab0ec79056/series/series-1/content",
+  "runtimeProvider": "PostgreSQL + SQLite diagnostics",
+  "diagnostics": "On"
+}
