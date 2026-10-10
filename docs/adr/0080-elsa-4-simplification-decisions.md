@@ -73,8 +73,10 @@ Studio:
 | `Ephemeral` | Only on suspend or fault, plus a completion record unless `RecordCompletion` is off | A run that never suspended leaves only its completion record, or no trace with `RecordCompletion` off |
 
 `Immediate`/`Coalesced` and `CommitStrategyType` are removed. Suspend, bookmark and fault checkpoints are flushed
-in every mode (ADR 0032). The completion checkpoint is flushed in every mode except `Ephemeral` with
-`RecordCompletion` off, which is the one opt-in case that keeps no record of a finished run.
+in every mode (ADR 0032). The completion checkpoint is flushed in every mode, with one opt-in exception: under
+`Ephemeral` with `RecordCompletion` off, a run that completes without ever having been persisted writes no
+record at all. A run that already has a record (because it suspended or faulted earlier) always gets its
+completion flushed, so no stored run is left looking suspended.
 
 ADR 0073 D7 is amended: **deterministic** budgets on EF command counts per reference workflow are correctness
 gates, not performance measurement, and run in CI. Wall-clock timing stays retired. The Runtime Throughput
