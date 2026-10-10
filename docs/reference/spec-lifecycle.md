@@ -15,8 +15,9 @@ prompted this.
 
 ## Numbering
 
-**One lane, monotonically increasing.** The next spec takes the highest existing number plus one,
-across the whole `specs/` tree — not per topic, not per program-goal bucket.
+**One lane, monotonically increasing.** The next spec takes the highest number ever used plus one,
+not per topic or per program-goal bucket. That means the highest across the `specs/` tree, any archive
+that finished specs have moved to, and open pull requests that add a `specs/` folder.
 
 The tree once held 27 duplicate numbers because a runtime lane and a groundwork lane allocated
 numbers concurrently. Issue #2567 (ADR 0080 D6) gave the later folder of each collision a new number

@@ -1,7 +1,8 @@
 # Architecture decision records
 
 Index of every ADR in this folder. Generated from each file's H1 and status line; the ADR files are the source of truth.
-The early Extension Builder series carries its own `EB-` prefix; every ADR number is unique.
+The early Extension Builder series carries its own `EB-` prefix and is closed; every ADR number is unique.
+A new ADR, Extension Builder ones included, takes the highest number in the main series plus one. Two open branches can still pick the same number, so check open pull requests that add a file under `docs/adr/` before choosing.
 
 | Number | Title | Status |
 |---|---|---|
