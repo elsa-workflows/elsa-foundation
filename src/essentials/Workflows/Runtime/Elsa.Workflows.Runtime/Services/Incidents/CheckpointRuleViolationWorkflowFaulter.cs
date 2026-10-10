@@ -1,4 +1,3 @@
-using System.Text.Json;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Exceptions;
@@ -135,78 +134,22 @@ public sealed class CheckpointRuleViolationWorkflowFaulter
     /// The execution a refused first commit would have created, read back from the start command that carried it. Only a
     /// start that declares a parent qualifies: it is the case whose refusal has nowhere else to go, and the payload carries
     /// every field a dispatch is matched on, so the synthesized child cannot drift from the dispatch that is waiting on it.
+    /// A root start reports its refusal to its caller.
     /// </summary>
     private WorkflowExecutionState? SynthesizeDispatchedStart(
         WorkflowExecutionCommandEnvelope? envelope,
         string workflowExecutionId,
         DateTimeOffset occurredAt)
     {
-        // Faulting a child into existence is worth doing only because the ordinary enrichers then project its dispatch
-        // and resume its parent, and that projection reads the dispatch store through its additive query capability. A
-        // store without it projects nothing, so a synthesized child would be a terminal execution nothing can act on,
-        // and the durable child-evidence rule would read it as a delivered start and discard the start failure that is
-        // the parent's only other way home. Leave that configuration on the path it already had.
-        return _workflowDispatchStore is IWorkflowDispatchQueryStore
-            ? ReadDispatchedStart(envelope, workflowExecutionId, occurredAt)
-            : null;
-    }
-
-    private WorkflowExecutionState? ReadDispatchedStart(
-        WorkflowExecutionCommandEnvelope? envelope,
-        string workflowExecutionId,
-        DateTimeOffset occurredAt)
-    {
-        if (envelope?.Command is not { Kind: WorkflowExecutionCommandKind.Start, Payload: { } payloadElement } ||
-            !StringComparer.Ordinal.Equals(envelope.WorkflowExecutionId, workflowExecutionId))
+        // Leave a store that cannot project the dispatch on the path it already had (see CanFaultDispatchedChild).
+        if (!StartCommandExecution.CanFaultDispatchedChild(_workflowDispatchStore))
             return null;
 
-        // A payload this runtime cannot read cannot stand in for the execution, and nothing about failing to read it may
-        // escape: this runs on the way out of a refused drain, so an exception here would be reported in place of the
-        // refusal it was called to handle, and the child would be neither faulted nor reported. The refusal then travels
-        // the way it did before, through the start's own delivery result.
-        //
-        // Deliberately not narrowed to a ParamName whitelist. The payload's constructor rejects `testScope` and
-        // `startAuthority` as well as the six names the start work handler lists, so a whitelist that drifts from it
-        // turns a merely invalid payload into an escaping exception, which is the outcome this is here to prevent. The
-        // cause is logged with the exception instead, so nothing is hidden by catching broadly.
-        WorkflowExecutionStartCommandPayload? payload;
-        try
-        {
-            payload = payloadElement.Deserialize<WorkflowExecutionStartCommandPayload>();
-        }
-        catch (Exception exception) when (exception is not OperationCanceledException)
-        {
-            _logger.LogWarning(
-                exception,
-                "Workflow execution {WorkflowExecutionId} could not be faulted from its start command because the command payload could not be read; its refusal stays with the start's delivery result",
-                workflowExecutionId);
-            return null;
-        }
-
-        if (payload?.ParentWorkflowExecutionId is null)
-            return null;
-
-        return new WorkflowExecutionState(
-            workflowExecutionId,
-            payload.PinnedExecutable,
-            WorkflowExecutionStatus.Running,
-            SubStatus: null,
-            CreatedAt: occurredAt,
-            StartedAt: occurredAt,
-            UpdatedAt: occurredAt,
-            CompletedAt: null,
-            payload.CorrelationId,
-            payload.ParentWorkflowExecutionId,
-            payload.TenantId,
-            new Dictionary<string, string>())
-        {
-            RunKind = payload.RunKind,
-            PinnedSource = payload.PinnedSource,
-            Partition = payload.Partition,
-            Authority = payload.Authority,
-            DispatchNestingDepth = payload.DispatchNestingDepth,
-            TestScope = payload.TestScope
-        };
+        var execution = StartCommandExecution.Read(envelope, workflowExecutionId, occurredAt, exception => _logger.LogWarning(
+            exception,
+            "Workflow execution {WorkflowExecutionId} could not be faulted from its start command because the command payload could not be read; its refusal stays with the start's delivery result",
+            workflowExecutionId));
+        return execution?.ParentWorkflowExecutionId is null ? null : execution;
     }
 
     private static RuntimeCheckpointCommit NewFaultCommit(

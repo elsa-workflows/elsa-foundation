@@ -1,9 +1,11 @@
+using System.Text.Json;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Api.Models;
 using Elsa.Workflows.Runtime.Services.ActivityExecutions;
 using Elsa.Workflows.Runtime.Services.Checkpoints;
+using Elsa.Workflows.Runtime.Services.Dispatch;
 using Elsa.Workflows.Runtime.Services.Executions;
 using Elsa.Workflows.Runtime.Services.Incidents;
 using Elsa.Workflows.Runtime.Services.Scheduler;
@@ -549,8 +551,234 @@ public sealed class PoisonedSchedulerWorkIncidentObserverTests
         Assert.Equal(IncidentResolutionSystemSources.PoisonedSchedulerWork, incident.ResolutionOutcome.SystemSource);
     }
 
+    /// <summary>
+    /// #2537: a poisoned FIRST checkpoint leaves no workflow row. On a durable provider the incident-only commit is then
+    /// refused (it needs the workflow and its run-health projection), so the execution was absent from every read model
+    /// with no incident. The start command the drain ran still carries the execution's identity, so the observer records
+    /// the execution as Faulted together with the blocking incident.
+    /// </summary>
+    [Fact]
+    public async Task OnDrainedAsync_PoisonedFirstCheckpointOfARootStart_RecordsTheExecutionFaultedWithTheIncident()
+    {
+        await _harness.RecordPoison(RuntimeSchedulerPoisonDisposition.Poisoned);
+        var observer = _harness.CreateStartAwareObserver(dispatchStore: null);
+
+        await observer.OnDrainedAsync(Harness.StartEnvelope(parentWorkflowExecutionId: null), _harness.FaultedDrainResult);
+
+        var workflow = await _harness.WorkflowStore.FindAsync("wfexec-1");
+        Assert.NotNull(workflow);
+        Assert.Equal(WorkflowExecutionStatus.Faulted, workflow!.Status);
+        Assert.Equal(_now, workflow.CompletedAt);
+        Assert.Equal(Harness.PinnedExecutable, workflow.PinnedExecutable);
+        Assert.Equal("tenant-1", workflow.TenantId);
+        Assert.Equal("correlation-1", workflow.CorrelationId);
+        var incident = Assert.Single(await _harness.IncidentStore.ListAsync("wfexec-1"));
+        Assert.Equal(PoisonedSchedulerWorkIncidentObserver.IncidentId("workitem-1"), incident.IncidentId);
+        Assert.Equal(IncidentStatus.Blocking, incident.Status);
+        Assert.Equal(IncidentResolutionActionKinds.FaultWorkflow, incident.ResolutionOutcome!.ActionKind);
+        Assert.Equal(IncidentResolutionSystemSources.PoisonedSchedulerWork, incident.ResolutionOutcome.SystemSource);
+        var commit = Assert.Single(_harness.CommitStore.ListCommits()).Commit;
+        Assert.Equal(RuntimeCheckpointNames.WorkflowFaulted, commit.Checkpoint.Name);
+        Assert.Equal(WorkflowExecutionStatus.Faulted, commit.StateChanges.WorkflowExecution!.State.Status);
+
+        // The downstream fault observer finds the execution already terminal and adds nothing.
+        await _harness.FaultObserver.OnDrainedAsync(Harness.StartEnvelope(parentWorkflowExecutionId: null), _harness.FaultedDrainResult);
+        Assert.Single(_harness.CommitStore.ListCommits());
+        Assert.Equal(WorkflowExecutionStatus.Faulted, (await _harness.WorkflowStore.FindAsync("wfexec-1"))!.Status);
+    }
+
+    /// <summary>
+    /// A dispatched child is faulted into existence only when the dispatch store can project its parent's resume, the
+    /// rule CheckpointRuleViolationWorkflowFaulter applies to a refused first commit (#1799): otherwise the synthesized
+    /// terminal child would read as a delivered start that nothing can act on.
+    /// </summary>
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task OnDrainedAsync_PoisonedFirstCheckpointOfAChildStart_FaultsItOnlyWhenTheDispatchCanBeProjected(bool queryableDispatchStore)
+    {
+        await _harness.RecordPoison(RuntimeSchedulerPoisonDisposition.Poisoned);
+        var observer = _harness.CreateStartAwareObserver(
+            queryableDispatchStore ? new InMemoryWorkflowDispatchStore() : new NonQueryableWorkflowDispatchStore());
+
+        await observer.OnDrainedAsync(Harness.StartEnvelope(parentWorkflowExecutionId: "wfexec-parent"), _harness.FaultedDrainResult);
+
+        var workflow = await _harness.WorkflowStore.FindAsync("wfexec-1");
+        if (queryableDispatchStore)
+        {
+            Assert.Equal(WorkflowExecutionStatus.Faulted, workflow!.Status);
+            Assert.Equal("wfexec-parent", workflow.ParentWorkflowExecutionId);
+        }
+        else
+            Assert.Null(workflow);
+        Assert.Single(await _harness.IncidentStore.ListAsync("wfexec-1"));
+    }
+
+    /// <summary>
+    /// Without this execution's start command there is no identity to fault it from; the incident is recorded as before.
+    /// </summary>
+    [Theory]
+    [InlineData(WorkflowExecutionCommandKind.RunSchedulerWork, "wfexec-1")]
+    [InlineData(WorkflowExecutionCommandKind.Start, "wfexec-other")]
+    public async Task OnDrainedAsync_PoisonedRecordWithoutThisExecutionsStart_RecordsOnlyTheIncident(
+        WorkflowExecutionCommandKind kind,
+        string envelopeWorkflowExecutionId)
+    {
+        await _harness.RecordPoison(RuntimeSchedulerPoisonDisposition.Poisoned);
+        var observer = _harness.CreateStartAwareObserver(dispatchStore: null);
+
+        await observer.OnDrainedAsync(
+            Harness.StartEnvelope(parentWorkflowExecutionId: null, kind, envelopeWorkflowExecutionId),
+            _harness.FaultedDrainResult);
+
+        Assert.Null(await _harness.WorkflowStore.FindAsync("wfexec-1"));
+        var commit = Assert.Single(_harness.CommitStore.ListCommits()).Commit;
+        Assert.Equal(RuntimeCheckpointNames.IncidentRecorded, commit.Checkpoint.Name);
+        Assert.Null(commit.StateChanges.WorkflowExecution);
+    }
+
+    /// <summary>
+    /// An execution that exists keeps the documented poison contract: a WaitForIntervention incident, lifecycle untouched.
+    /// </summary>
+    [Fact]
+    public async Task OnDrainedAsync_PoisonedRecordOfAnExistingExecution_DoesNotFaultItEvenFromItsStart()
+    {
+        await _harness.SaveWorkflow(WorkflowExecutionStatus.Running);
+        await _harness.RecordPoison(RuntimeSchedulerPoisonDisposition.Poisoned);
+        var observer = _harness.CreateStartAwareObserver(dispatchStore: null);
+
+        await observer.OnDrainedAsync(Harness.StartEnvelope(parentWorkflowExecutionId: null), _harness.FaultedDrainResult);
+
+        Assert.Equal(WorkflowExecutionStatus.Running, (await _harness.WorkflowStore.FindAsync("wfexec-1"))!.Status);
+        var incident = Assert.Single(await _harness.IncidentStore.ListAsync("wfexec-1"));
+        Assert.Equal(IncidentResolutionActionKinds.WaitForIntervention, incident.ResolutionOutcome!.ActionKind);
+    }
+
+    /// <summary>
+    /// The workflow read only chooses between faulting an unstarted execution and recording the incident alone. A read
+    /// that fails must not cost the incident: it falls back to the incident-only commit the observer made before #2537.
+    /// </summary>
+    [Fact]
+    public async Task OnDrainedAsync_WhenTheWorkflowReadFails_StillRecordsTheIncident()
+    {
+        await _harness.RecordPoison(RuntimeSchedulerPoisonDisposition.Poisoned);
+        var observer = new PoisonedSchedulerWorkIncidentObserver(
+            _harness.PoisonStore,
+            _harness.IncidentStore,
+            _harness.CheckpointCommitter,
+            _harness.TimeProvider,
+            _harness.ActivityStore,
+            inspectionAccumulator: null,
+            activityExecutionInspectionStore: _harness.InspectionStore,
+            workflowExecutionStateStore: new FindThrowingWorkflowExecutionStateStore(_harness.WorkflowStore),
+            workflowDispatchStore: null);
+
+        await observer.OnDrainedAsync(Harness.StartEnvelope(parentWorkflowExecutionId: null), _harness.FaultedDrainResult);
+
+        var incident = Assert.Single(await _harness.IncidentStore.ListAsync("wfexec-1"));
+        Assert.Equal(IncidentResolutionActionKinds.WaitForIntervention, incident.ResolutionOutcome!.ActionKind);
+        Assert.Equal(RuntimeCheckpointNames.IncidentRecorded, Assert.Single(_harness.CommitStore.ListCommits()).Commit.Checkpoint.Name);
+    }
+
+    private sealed class FindThrowingWorkflowExecutionStateStore(IWorkflowExecutionStateStore inner) : IWorkflowExecutionStateStore
+    {
+        /// <inheritdoc/>
+        public ValueTask<WorkflowExecutionState> SaveAsync(WorkflowExecutionState state, CancellationToken cancellationToken = default) =>
+            inner.SaveAsync(state, cancellationToken);
+
+        /// <summary>Simulates an unavailable workflow store while the observer tries to recover a start.</summary>
+        public ValueTask<WorkflowExecutionState?> FindAsync(string workflowExecutionId, CancellationToken cancellationToken = default) =>
+            throw new InvalidOperationException("workflow state store unavailable");
+
+        /// <inheritdoc/>
+        public ValueTask<IReadOnlyCollection<WorkflowExecutionState>> ListAsync(CancellationToken cancellationToken = default) =>
+            inner.ListAsync(cancellationToken);
+
+        /// <inheritdoc/>
+        public ValueTask<WorkflowExecutionStatePage> QueryPageAsync(WorkflowExecutionStatePageQuery query, CancellationToken cancellationToken = default) =>
+            inner.QueryPageAsync(query, cancellationToken);
+
+        /// <inheritdoc/>
+        public ValueTask<IReadOnlyCollection<string>> ListPinnedExecutableArtifactIdsAsync(CancellationToken cancellationToken = default) =>
+            inner.ListPinnedExecutableArtifactIdsAsync(cancellationToken);
+
+        /// <inheritdoc/>
+        public ValueTask<bool> DeleteAsync(string workflowExecutionId, CancellationToken cancellationToken = default) =>
+            inner.DeleteAsync(workflowExecutionId, cancellationToken);
+    }
+
+    private sealed class NonQueryableWorkflowDispatchStore : IWorkflowDispatchStore
+    {
+        /// <inheritdoc/>
+        public ValueTask<WorkflowDispatchRecord> SaveAsync(WorkflowDispatchRecord record, CancellationToken cancellationToken = default) =>
+            ValueTask.FromResult(record);
+
+        /// <inheritdoc/>
+        public ValueTask<WorkflowDispatchRecord?> FindAsync(string dispatchId, CancellationToken cancellationToken = default) =>
+            ValueTask.FromResult<WorkflowDispatchRecord?>(null);
+
+        /// <inheritdoc/>
+        public ValueTask<IReadOnlyCollection<WorkflowDispatchRecord>> ListAsync(string parentWorkflowExecutionId, CancellationToken cancellationToken = default) =>
+            ValueTask.FromResult<IReadOnlyCollection<WorkflowDispatchRecord>>([]);
+    }
+
     private sealed class Harness
     {
+        public static readonly WorkflowExecutableIdentity PinnedExecutable =
+            new("artifact-1", "definition-1", "version-1", "1.0.0", "sha256:test");
+
+        /// <summary>Builds a root or child start envelope with stable identity and lineage for recovery assertions.</summary>
+        public static WorkflowExecutionCommandEnvelope StartEnvelope(
+            string? parentWorkflowExecutionId,
+            WorkflowExecutionCommandKind kind = WorkflowExecutionCommandKind.Start,
+            string workflowExecutionId = "wfexec-1")
+        {
+            var payload = new WorkflowExecutionStartCommandPayload(
+                pinnedExecutable: PinnedExecutable,
+                requestedArtifactId: PinnedExecutable.ArtifactId,
+                variables: null,
+                inputs: null,
+                stimulusInput: null,
+                triggerNodeId: null,
+                runKind: WorkflowRunKind.PublishedRun,
+                pinnedSource: null,
+                parentWorkflowExecutionId: parentWorkflowExecutionId,
+                correlationId: "correlation-1",
+                tenantId: "tenant-1",
+                partition: null,
+                authority: null,
+                startAuthority: null,
+                dispatchNestingDepth: parentWorkflowExecutionId is null ? 0 : 1,
+                testScope: null);
+            var command = new WorkflowExecutionCommand(
+                CommandId: "command-start",
+                WorkflowExecutionId: workflowExecutionId,
+                Kind: kind,
+                EnqueuedAt: DateTimeOffset.UnixEpoch,
+                Payload: JsonSerializer.SerializeToElement(payload),
+                Metadata: new Dictionary<string, string>());
+            return new WorkflowExecutionCommandEnvelope(
+                envelopeId: "envelope-start",
+                workflowExecutionId: workflowExecutionId,
+                command: command,
+                idempotencyKey: "idem-start",
+                deliveryMode: WorkflowExecutionCommandDeliveryMode.AtLeastOnce,
+                enqueuedAt: DateTimeOffset.UnixEpoch);
+        }
+
+        /// <summary>Creates an observer that can read workflow state and check the supplied dispatch capability.</summary>
+        public PoisonedSchedulerWorkIncidentObserver CreateStartAwareObserver(IWorkflowDispatchStore? dispatchStore) =>
+            new(
+                PoisonStore,
+                IncidentStore,
+                CheckpointCommitter,
+                TimeProvider,
+                ActivityStore,
+                inspectionAccumulator: null,
+                activityExecutionInspectionStore: InspectionStore,
+                workflowExecutionStateStore: WorkflowStore,
+                workflowDispatchStore: dispatchStore);
+
         private readonly DateTimeOffset _now;
         public InMemoryWorkflowSchedulerPoisonStore PoisonStore { get; } = new();
         public InMemoryIncidentStateStore IncidentStore { get; } = new();
