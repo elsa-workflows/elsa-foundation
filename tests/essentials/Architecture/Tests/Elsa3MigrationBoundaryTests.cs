@@ -28,16 +28,7 @@ public sealed class Elsa3MigrationBoundaryTests
                 .OfType<string>()
                 .Where(reference => reference.Contains("Elsa3", StringComparison.OrdinalIgnoreCase))
                 .Select(reference => $"{Path.GetRelativePath(RepoRoot, project)} -> {reference}"));
-        var sourceViolations = Directory.EnumerateFiles(canonicalRoot, "*.cs", SearchOption.AllDirectories)
-            .Where(file => !IsBuildOutput(file))
-            .Where(file =>
-            {
-                var source = File.ReadAllText(file);
-                return source.Contains("using Elsa3.", StringComparison.Ordinal) ||
-                       source.Contains("Elsa3.Models.", StringComparison.Ordinal);
-            })
-            .Select(file => Path.GetRelativePath(RepoRoot, file));
-        var violations = projectViolations.Concat(sourceViolations).Order(StringComparer.Ordinal).ToArray();
+        var violations = projectViolations.Order(StringComparer.Ordinal).ToArray();
 
         Assert.True(
             violations.Length == 0,

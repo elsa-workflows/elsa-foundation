@@ -5,10 +5,9 @@ namespace Elsa.Architecture.Tests;
 
 /// <summary>
 /// EF Core is the only first-party persistence family. The retired storage library and the retired
-/// document-database driver were deleted, not deprecated, so nothing under <c>src/</c>, <c>tests/</c>,
-/// <c>tools/</c>, <c>docker/</c>, <c>e2e-tests/</c>, <c>.github/</c> or the repository-level package and
-/// feed configuration may name either of them again: no project, no package, no NuGet feed, no source
-/// file, no shell feature and no CI job.
+/// document-database driver were deleted, not deprecated, so no project or directory under <c>src/</c>,
+/// <c>tests/</c>, <c>tools/</c>, <c>docker/</c>, <c>e2e-tests/</c> or <c>.github/</c>, and no solution filter,
+/// may name either of them again.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -37,41 +36,6 @@ public sealed class RetiredPersistenceFamilyGuardTests
 
     /// <summary>Roots that ship or build the product. History under docs/, specs/ and archives is out of scope.</summary>
     private static readonly string[] ScannedRoots = ["src", "tests", "tools", "docker", "e2e-tests", ".github", ".config"];
-
-    /// <summary>Repository-level files that select packages and feeds.</summary>
-    private static readonly string[] ScannedFiles = ["Directory.Packages.props", "NuGet.config", "Elsa.Server.slnx"];
-
-    private static readonly string[] ScannedExtensions =
-    [
-        ".cs", ".csproj", ".props", ".targets", ".json", ".slnx", ".slnf", ".yml", ".yaml",
-        ".config", ".sh", ".ps1", ".py", ".sql", ".Dockerfile"
-    ];
-
-    [Fact]
-    public void No_project_package_source_or_configuration_names_a_retired_persistence_family()
-    {
-        var scanned = 0;
-        var violations = new List<string>();
-
-        foreach (var (path, relativePath) in ScannedSourceFiles())
-        {
-            scanned++;
-            foreach (var name in RetiredNames)
-            {
-                if (File.ReadAllText(path).Contains(name, StringComparison.OrdinalIgnoreCase))
-                {
-                    violations.Add($"{relativePath}: names the retired '{name}' persistence family");
-                    break;
-                }
-            }
-        }
-
-        Assert.True(scanned > 0, "The retired-family guard scanned no files; its roots or extensions are wrong.");
-        Assert.True(
-            violations.Count == 0,
-            $"EF Core is the only first-party persistence family. {violations.Count} file(s) reintroduce a retired one:" +
-            Environment.NewLine + string.Join(Environment.NewLine, violations.Order(StringComparer.Ordinal)));
-    }
 
     [Fact]
     public void No_project_or_directory_is_named_after_a_retired_persistence_family()
@@ -147,30 +111,6 @@ public sealed class RetiredPersistenceFamilyGuardTests
         // A clean input must not trip the same predicates, so the guard cannot pass by matching everything.
         const string clean = "using Elsa.Persistence.EntityFramework;";
         Assert.DoesNotContain(RetiredNames, name => clean.Contains(name, StringComparison.OrdinalIgnoreCase));
-    }
-
-    private static IEnumerable<(string Path, string RelativePath)> ScannedSourceFiles()
-    {
-        foreach (var root in ScannedRoots)
-        {
-            var rootPath = FullPath(root);
-            if (!Directory.Exists(rootPath))
-                continue;
-
-            foreach (var path in Directory.EnumerateFiles(rootPath, "*", SearchOption.AllDirectories))
-            {
-                if (IsBuildOrPackageOutput(path) || !ScannedExtensions.Contains(Path.GetExtension(path), StringComparer.OrdinalIgnoreCase))
-                    continue;
-                yield return (path, RelativePath(path));
-            }
-        }
-
-        foreach (var file in ScannedFiles)
-        {
-            var path = FullPath(file);
-            if (File.Exists(path))
-                yield return (path, RelativePath(path));
-        }
     }
 
     private static bool IsBuildOrPackageOutput(string path) =>

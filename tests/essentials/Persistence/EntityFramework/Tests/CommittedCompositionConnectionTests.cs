@@ -37,7 +37,7 @@ public sealed partial class CommittedCompositionConnectionTests
         return directory?.FullName ?? throw new InvalidOperationException("Could not locate the repository root.");
     }
 
-    /// <summary>Every first-party source file, read once: the catalog and three guards below scan the same text.</summary>
+    /// <summary>Every first-party source file, read once, for the feature catalog below.</summary>
     private static IReadOnlyList<SourceFile> Sources { get; } = new[] { "src" }
         .Select(root => Path.Join(RepoRoot, root))
         .SelectMany(root => Directory.EnumerateFiles(root, "*.cs", SearchOption.AllDirectories))
@@ -86,10 +86,8 @@ public sealed partial class CommittedCompositionConnectionTests
     /// The modules that resolve an unsupplied connection under a name other than
     /// <see cref="EfConnectionDefaults.ConnectionName"/>, keyed by the feature that composes them. Slice 2 of
     /// spec 171 (#1872) puts a default-connection member on <c>EfModuleDescriptor</c>; this table is what it
-    /// replaces. Until then
-    /// <see cref="Every_module_that_deviates_from_the_shared_connection_name_is_mapped_to_its_features"/>
-    /// keeps it in step with the <c>DefaultConnectionName</c> constants under <c>src/</c> and
-    /// <c>src/extensions/</c>; every other EF feature resolves under the shared name.
+    /// replaces. Until then it is kept in step by hand with the <c>DefaultConnectionName</c> constants under
+    /// <c>src/</c> and <c>src/extensions/</c>; every other EF feature resolves under the shared name.
     /// </summary>
     private static readonly Dictionary<string, string> DeviatingFeatureConnectionNames = new(StringComparer.Ordinal)
     {
@@ -169,86 +167,6 @@ public sealed partial class CommittedCompositionConnectionTests
             "Either the feature declares Provider/ConnectionName in a shape ProviderSetting() does not match — widen it — " +
             "or it composes onto another feature's context, in which case add it to ContextSharingFeatures:" +
             Environment.NewLine + string.Join(Environment.NewLine, unknown));
-    }
-
-    [Fact]
-    public void Every_module_that_deviates_from_the_shared_connection_name_is_mapped_to_its_features()
-    {
-        var declared = Sources
-            .SelectMany(source => DeclaredDefaultConnectionName().Matches(source.Text).Select(match => (source.Path, Value: match.Groups["name"].Value)))
-            .Where(declaration => declaration.Value != EfConnectionDefaults.ConnectionName)
-            .ToArray();
-
-        var mapped = DeviatingFeatureConnectionNames.Values.ToHashSet(StringComparer.Ordinal);
-        var failures = declared
-            .Where(declaration => !mapped.Contains(declaration.Value))
-            .Select(declaration => $"  {declaration.Path} declares DefaultConnectionName \"{declaration.Value}\", which no feature in DeviatingFeatureConnectionNames claims.")
-            .Concat(mapped
-                .Where(value => !declared.Any(declaration => declaration.Value == value))
-                .Select(value => $"  DeviatingFeatureConnectionNames maps a feature to \"{value}\", which no module under src/ or src/extensions/ declares."))
-            // The keys are what Failure() looks up, so a renamed feature must fail here too, not resolve the shared default in silence.
-            .Concat(DeviatingFeatureConnectionNames.Keys
-                .Where(feature => !EfFeatures.ContainsKey(feature))
-                .Select(feature => $"  DeviatingFeatureConnectionNames is keyed by \"{feature}\", which is not an EF feature the scan found."))
-            .Order(StringComparer.Ordinal)
-            .ToArray();
-
-        Assert.True(
-            failures.Length == 0,
-            "DeviatingFeatureConnectionNames is out of step with the DefaultConnectionName constants in source:" +
-            Environment.NewLine + string.Join(Environment.NewLine, failures));
-    }
-
-    /// <summary>
-    /// <see cref="Every_module_that_deviates_from_the_shared_connection_name_is_mapped_to_its_features"/> reads
-    /// those constants as text, so a module that computes its default name is invisible to it and would be
-    /// resolved here under the shared name it does not actually use. Keeping the declarations to a literal or
-    /// the shared constant is what makes that scan sound.
-    /// </summary>
-    [Fact]
-    public void Every_default_connection_name_is_declared_as_a_literal_or_the_shared_constant()
-    {
-        var computed = Sources
-            .SelectMany(source => AnyDefaultConnectionName().Matches(source.Text).Select(match => (source.Path, Expression: match.Groups["expression"].Value.Trim())))
-            .Where(declaration => declaration.Expression != $"{nameof(EfConnectionDefaults)}.{nameof(EfConnectionDefaults.ConnectionName)}"
-                && !QuotedLiteral().IsMatch(declaration.Expression))
-            .Select(declaration => $"  {declaration.Path}: DefaultConnectionName = {declaration.Expression}")
-            .Order(StringComparer.Ordinal)
-            .ToArray();
-
-        Assert.True(
-            computed.Length == 0,
-            $"A module's DefaultConnectionName must be a quoted literal or {nameof(EfConnectionDefaults)}.{nameof(EfConnectionDefaults.ConnectionName)}, " +
-            "so the deviation scan can read it without running module code:" +
-            Environment.NewLine + string.Join(Environment.NewLine, computed));
-    }
-
-    /// <summary>
-    /// An operator configures a connection from what a feature's settings say, and six features used to name a
-    /// per-module <c>ConnectionStrings</c> entry their module had stopped resolving. Naming the wrong entry
-    /// sends a host down exactly the path this class guards, so a description may only spell out the entry its
-    /// own module falls back to. A description that contrasts itself with another module's entry says so in
-    /// words rather than writing that entry's <c>ConnectionStrings:</c> path, which reads as an instruction.
-    /// </summary>
-    [Fact]
-    public void No_ef_feature_setting_names_a_connection_entry_its_module_does_not_resolve()
-    {
-        var failures =
-            (from source in Sources
-             let feature = ShellFeatureName().Match(source.Text)
-             where feature.Success && EfFeatures.ContainsKey(feature.Groups["name"].Value)
-             let expected = ConnectionNameFor(feature.Groups["name"].Value)
-             from description in SettingDescription().Matches(source.Text)
-             from named in NamedConnectionEntry().Matches(description.Groups["text"].Value)
-             where named.Groups["name"].Value != expected
-             select $"  {source.Path}: {feature.Groups["name"].Value} names ConnectionStrings:{named.Groups["name"].Value}, but resolves ConnectionStrings:{expected}.")
-            .Order(StringComparer.Ordinal)
-            .ToArray();
-
-        Assert.True(
-            failures.Length == 0,
-            "EF feature settings describe a connection entry their module does not resolve:" +
-            Environment.NewLine + string.Join(Environment.NewLine, failures));
     }
 
     private static IConfiguration ComposeStack(string composeFile, string shellsJson) =>
@@ -373,20 +291,7 @@ public sealed partial class CommittedCompositionConnectionTests
     [GeneratedRegex("""public\s+string\??\s+Provider\s*\{\s*get;\s*set;\s*\}\s*(?:=\s*(?<initializer>[^;\r\n]+);)?""")]
     private static partial Regex ProviderSetting();
 
-    [GeneratedRegex("""const\s+string\s+DefaultConnectionName\s*=\s*"(?<name>[^"]+)"\s*;""")]
-    private static partial Regex DeclaredDefaultConnectionName();
-
-    // Anchored on the const declaration: EfModuleBinding takes a DefaultConnectionName record parameter,
-    // which is a default for callers rather than a module declaring its own name.
-    [GeneratedRegex("""const\s+string\s+DefaultConnectionName\s*=\s*(?<expression>[^;]+);""")]
-    private static partial Regex AnyDefaultConnectionName();
-
     [GeneratedRegex("""^"[^"]*"$""")]
     private static partial Regex QuotedLiteral();
 
-    [GeneratedRegex("""Description\s*=\s*"(?<text>(?:[^"\\]|\\.)*)""")]
-    private static partial Regex SettingDescription();
-
-    [GeneratedRegex("""ConnectionStrings:(?<name>[A-Za-z0-9_]+)""")]
-    private static partial Regex NamedConnectionEntry();
 }

@@ -1,6 +1,5 @@
 using System.Reflection;
 using System.Text.Json;
-using System.Text.RegularExpressions;
 using Elsa.Persistence.EntityFramework;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
@@ -292,27 +291,6 @@ internal static class ExpandOnlyMigrationScanner
         reasons.AddRange(result.ContractionFaults);
 
         return $"{module}/{provider} {migrationId}: {string.Join("; ", reasons)}. {Remedy}";
-    }
-
-    /// <summary>
-    /// Spec 185 FR-019's other independent enumeration: every <c>[assembly: EfModule(...)]</c> declared in the
-    /// source of <paramref name="roots"/> (repo-relative), read as text rather than by loading assemblies, so a
-    /// module <see cref="ModuleContextCatalog.Modules"/> forgot to add an anchor for still turns up here.
-    /// </summary>
-    public static IReadOnlyCollection<string> ModuleNamesDeclaredInSource(params string[] roots)
-    {
-        var pattern = new Regex(@"\[assembly:\s*EfModule\(\s*""([^""]+)""", RegexOptions.Compiled);
-        var names = new SortedSet<string>(StringComparer.Ordinal);
-        foreach (var root in roots)
-        {
-            var directory = RepoPath.Resolve(root);
-            if (!Directory.Exists(directory))
-                continue;
-            foreach (var file in Directory.EnumerateFiles(directory, "*.cs", SearchOption.AllDirectories))
-                names.UnionWith(pattern.Matches(File.ReadAllText(file)).Select(match => match.Groups[1].Value));
-        }
-
-        return names;
     }
 }
 

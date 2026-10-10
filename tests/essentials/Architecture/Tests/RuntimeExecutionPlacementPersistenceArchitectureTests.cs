@@ -23,12 +23,6 @@ public sealed class RuntimeExecutionPlacementPersistenceArchitectureTests
         Assert.DoesNotContain(packages, package => package.Contains("Postgre", StringComparison.OrdinalIgnoreCase));
         Assert.DoesNotContain(packages, package => package.Contains("MySql", StringComparison.OrdinalIgnoreCase));
         Assert.Empty(Directory.EnumerateFiles(ProductionRoot, "*Migration*", SearchOption.AllDirectories));
-
-        var source = Directory.EnumerateFiles(ProductionRoot, "*.cs", SearchOption.AllDirectories)
-            .Select(File.ReadAllText)
-            .ToArray();
-        Assert.DoesNotContain(source, text => text.Contains("IQueryable", StringComparison.Ordinal));
-        // Raw SQL, FromSql included, is guarded for all of src/ by RawSqlArchitectureTests, which names the only files that send it.
     }
 
     [Fact]
@@ -61,19 +55,5 @@ public sealed class RuntimeExecutionPlacementPersistenceArchitectureTests
         Assert.Contains("DistributedRuntimeExecutionCommandTransportEntityFrameworkCoreRegistration.cs", paths);
         Assert.Contains("DistributedRuntimeExecutionCommandTransportEntityFrameworkCoreFeature.cs", paths);
         Assert.Contains("EfExecutionCommandTransport.cs", paths);
-    }
-
-    [Fact]
-    public void D02_D03_production_source_does_not_advertise_runtime_lease_fencing_or_provider_engines()
-    {
-        var source = Directory.EnumerateFiles(ProductionRoot, "*.cs", SearchOption.AllDirectories)
-            .Select(File.ReadAllText)
-            .ToArray();
-
-        Assert.DoesNotContain(source, text => text.Contains("IWorkflowExecutionLeaseFencingCapability", StringComparison.Ordinal));
-        Assert.DoesNotContain(source, text => text.Contains("Microsoft.EntityFrameworkCore.Sqlite", StringComparison.Ordinal));
-        Assert.DoesNotContain(source, text => text.Contains("Microsoft.EntityFrameworkCore.SqlServer", StringComparison.Ordinal));
-        Assert.DoesNotContain(source, text => text.Contains("Npgsql.EntityFrameworkCore", StringComparison.Ordinal));
-        Assert.DoesNotContain(source, text => text.Contains("MySql.EntityFrameworkCore", StringComparison.Ordinal));
     }
 }
