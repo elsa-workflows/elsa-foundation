@@ -59,6 +59,8 @@
     <Compile Include="..\..\..\..\..\Persistence\EntityFramework\Tests\TemporarySqliteDatabase.cs" Link="TemporarySqliteDatabase.cs" />
     <!-- Injects provider failures, such as a deadlock wrapped by SQL Server's execution strategy. -->
     <Compile Include="..\..\..\..\..\Persistence\EntityFramework\Tests\ProviderFailures.cs" Link="ProviderFailures.cs" />
+    <!-- Counts and inspects the commands a store issues. -->
+    <Compile Include="..\..\..\..\..\Persistence\EntityFramework\Tests\CommandCaptureInterceptor.cs" Link="CommandCaptureInterceptor.cs" />
     <!-- Arranges and asserts a newer-schema row that must report skew, not corruption. -->
     <Compile Include="..\..\..\..\..\Persistence\EntityFramework\Tests\EfSchemaVersionSkewTestSupport.cs" Link="EfSchemaVersionSkewTestSupport.cs" />
     <!-- Stages a finalization by a newer build. -->

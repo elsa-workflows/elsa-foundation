@@ -21,8 +21,8 @@ using Elsa.Specifications.PackageManifest.Generator.Hints;
 [assembly: ManifestExtension("efModules", "DataProtection.Keys")]
 
 // The schema family this module owns (spec 180, FR-001), at the version its rows are stamped and read with. A host's
-// readability report is derived from it alone (spec 183, FR-020); EfSchemaFamilyChainDeclarationGuardTests fails the build
-// when a SchemaFamily constant is not declared here, or is declared at another version.
+// readability report is derived from it alone (spec 183, FR-020); every SchemaFamily constant must be declared here, at
+// the version its rows use; that holds by review until #2606 restores a compiled check.
 [assembly: EfSchemaFamily(DataProtectionKeysEfModule.SchemaFamily, "DataProtection.Keys", DataProtectionKeysEfModule.SchemaVersion)]
 
 // Content and integrity columns: see src/essentials/Persistence/EntityFramework/EXTENSION_POINTS.md, "Content and integrity

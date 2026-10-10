@@ -23,6 +23,7 @@ public sealed class ClusterMembershipConfigurationTests : IDisposable
 
     public void Dispose() => _store.Dispose();
 
+    // Kept beside the composition test (§2.23.1): conditional registration, nothing is registered unless configuration enables the provider.
     [Theory]
     [InlineData(null)]
     [InlineData("false")]

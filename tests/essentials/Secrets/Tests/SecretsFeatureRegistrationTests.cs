@@ -50,19 +50,6 @@ public sealed class SecretsFeatureRegistrationTests
     }
 
     [Fact]
-    public void Secrets_feature_registers_secret_manager()
-    {
-        var services = new ServiceCollection();
-        var feature = new SecretsFeature();
-
-        feature.ConfigureServices(services);
-        using var provider = services.BuildServiceProvider();
-
-        // MD-10 (§2.23.1): construct the feature class itself and prove its wiring, complementing the AddSecrets() extension test above.
-        provider.GetRequiredService<ISecretManager>();
-    }
-
-    [Fact]
     public void Secrets_feature_builds_the_key_ring_from_its_settings()
     {
         using var provider = Compose(new SecretsFeature

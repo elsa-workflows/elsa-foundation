@@ -12,8 +12,7 @@ namespace Elsa.Persistence.EntityFrameworkCore.Migrations.Tests;
 /// Every schema family's content declaration (<c>[EfSchemaContent]</c>, <c>[EfSchemaIntegrity]</c>; spec 180, FR-009
 /// and FR-008) against the model its module's context actually builds, on every provider: a declared column is a column
 /// of a stamped table in that model, and every document column of a stamped table is declared, content or integrity, by
-/// one family of the module that maps it. Nothing falls through, so the guards that read the declaration
-/// (<c>EfSchemaFamilyContentReadGuardTests</c>, <c>EfSchemaFamilyRestampGuardTests</c>) see every column that needs a
+/// one family of the module that maps it. Nothing falls through, so the declaration names every column that needs a
 /// chain on read and a stamp on write.
 /// </summary>
 /// <remarks>

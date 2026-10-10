@@ -3,7 +3,6 @@ using Elsa.Activities.Design.Persistence.Core.Entities;
 using Elsa.Activities.Design.Persistence.Core.Stores;
 using Elsa.Expressions.Core.Contracts;
 using Elsa.Expressions.Core.Models;
-using Elsa.Workflows.Design.Api;
 using Elsa.Primitives.Models;
 using Elsa.Workflows.Design.Api.Services;
 using Elsa.Workflows.Design.Core.Contracts;
@@ -21,30 +20,6 @@ namespace Elsa.Workflows.Design.Api.Tests.Unit;
 
 public sealed class PersistedExpressionAuthoringContextSourceTests
 {
-    [Fact]
-    public void Service_provider_resolves_source_with_registered_draft_store()
-    {
-        var node = new ActivityNode("node", "activity", [], []);
-        var structure = new ScopeStructureService(node, node, node, Variable("inside"), Variable("hidden"));
-        var draft = new WorkflowDefinitionDraft
-        {
-            Id = "draft",
-            WorkflowDefinitionId = "workflow",
-            State = new([], node, [], [], null),
-            LastModifiedAt = DateTimeOffset.UnixEpoch
-        };
-        var services = new ServiceCollection();
-        services.AddSingleton<IWorkflowDefinitionDraftStore>(new SingleDraftStore(draft));
-        services.AddSingleton<IActivityStructureService>(structure);
-        services.AddSingleton(new ScopedVariablePicker(new ScopedVariableResolver(structure)));
-        new WorkflowsDesignApiFeature().ConfigureServices(services);
-        using var provider = services.BuildServiceProvider();
-
-        var source = provider.GetRequiredService<IExpressionAuthoringContextSource>();
-
-        Assert.NotNull(source);
-    }
-
     [Fact]
     public async Task Policy_only_change_invalidates_the_existing_context_revision()
     {

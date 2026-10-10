@@ -199,6 +199,7 @@ public sealed class FailoverTests : IAsyncDisposable
             _cluster.State.Executions,
             new WorkflowSchedulerPauseGate(new RuntimePauseDecisionProvider(new InMemoryWorkflowHoldStateStore()), _cluster.Clock),
             new RuntimeResumptionDiscoveryStateStore(),
+            _cluster.State.Liveness,
             recoveryCandidateSources: candidates);
 
         var sweep = await resumption.SweepAsync(new RuntimeResumptionSweepRequest());

@@ -22,7 +22,7 @@ The per-domain catalog (framework §2.22.1). Anchored at `Elsa.Expressions.JavaS
 
 ## Events
 
-`CatalogParityTests` scans `Elsa.Expressions.JavaScript.Rendering.Core` for `IEvent` types and asserts bidirectional alignment with `### On…` headings here.
+Every `IEvent` type in `Elsa.Expressions.JavaScript.Rendering.Core` has a `### <EventClassName>` heading here, and every such heading names one; review keeps the two in step.
 
 ### DeclarationsDocumentGenerating
 `(IJavaScriptDeclarationsContributionContext Context)`

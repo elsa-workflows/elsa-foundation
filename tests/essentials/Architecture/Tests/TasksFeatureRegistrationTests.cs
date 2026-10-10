@@ -11,6 +11,7 @@ namespace Elsa.Architecture.Tests;
 
 public sealed class TasksFeatureRegistrationTests
 {
+    // Kept beside the composition test (§2.23.1): ordering, the terminator's lifecycle phase and order.
     [Fact]
     public async Task TasksFeature_RegistersShellLifecycleThatStartsAndStopsTasks()
     {
