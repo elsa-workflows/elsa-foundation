@@ -7,6 +7,7 @@
 
 	<ItemGroup>
 		<PackageReference Include="CShells.Management.Api" />
+		<PackageReference Include="CShells.Nuplane" />
 		<PackageReference Include="Elsa.Specifications.PackageManifest.Generator" PrivateAssets="all" />
 		<PackageReference Include="Microsoft.AspNetCore.OpenApi" />
 		<PackageReference Include="Microsoft.EntityFrameworkCore.Design" PrivateAssets="all" />

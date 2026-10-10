@@ -1,5 +1,13 @@
 # Nuplane Package-Use Safety Spike
 
+## Current selected contract — 2026-10-09
+
+Root selected opt-in physical-root coordination with durable multi-state enrollment under the standing end-to-end delivery authorization. The earlier owner-answer hold in this report is superseded; its source findings remain historical evidence. Nuplane #108 Spec 030 (`108-safe-package-store-pruning`, `85a96e7611c27d5859b513e38f69941df7051c23`) records the selected requirements: non-enrolled defaults stay unchanged; existing-root enrollment is a fully quiescent cutover that explicitly enrolls every persistent state; all supported reader, installer, restore, reconcile and load paths for an enrolled root participate regardless of local prune flag; offline active/LKG graphs and actual reader lifetimes remain protected. Unknown or unreadable membership/closure refuses deletion. Nonparticipating legacy/external access is undetectable and outside the guarantee. The spec is requirements-only; planning is underway. No product code, customer store or package store was changed, and no safety proof or M3 readiness is claimed. See the [current decision ledger](../plans/modular-hosting-upstream/decisions.md#m3-selected-design-and-remaining-safety-gate) and [Nuplane spec](https://github.com/valence-works/nuplane/blob/108-safe-package-store-pruning/specs/030-safe-package-store-pruning/spec.md).
+
+The selected contract does not make legacy/external processes discoverable: operators must stop all existing users and enroll every persistent state before resuming access. Admission, crash consistency, all managed reader paths, graph leases, and exact-identity no-follow deletion still require design, implementation and acceptance proof.
+
+## Historical spike findings
+
 Program: [Modular Hosting Upstream Delivery](../program-goals/modular-hosting-upstream-delivery.md). Research for [Nuplane #108](https://github.com/valence-works/nuplane/issues/108); source baseline `21e2c24fe8070a92ded13f7cc391353f7c6df856`, inspected 2026-10-08. Status: design evidence only; destructive implementation remains deferred.
 
 ## Decision

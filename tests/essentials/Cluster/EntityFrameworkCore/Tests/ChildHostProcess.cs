@@ -1,0 +1,376 @@
+using System.Diagnostics;
+using System.Net;
+using System.ComponentModel;
+using System.Reflection;
+using System.Text.Json;
+using System.Text.Json.Nodes;
+
+namespace Elsa.Cluster.EntityFrameworkCore.Tests;
+
+/// <summary>
+/// A built Elsa application running as a child process under an isolated root, the way an operator runs it: a content root of its
+/// own holding its <c>appsettings.json</c>, a <c>shells.json</c> the test authors and a <c>packages</c> directory feed,
+/// and every other setting an environment variable. Nothing of the host is loaded into the test process, so the module
+/// the host loads from the feed reaches the host's membership by the types the host really shares (#2143).
+/// </summary>
+internal sealed class ChildHostProcess : IAsyncDisposable
+{
+    /// <summary>The header the host's module-management endpoints read their key from, restated: the host is never loaded into this process.</summary>
+    public const string ModuleManagementKeyHeader = "X-Elsa-Module-Management-Key";
+
+    /// <summary>A ceiling for pathological hangs: the host reconciles its feed and activates its shell in seconds.</summary>
+    private static readonly TimeSpan ReadyTimeout = TimeSpan.FromMinutes(5);
+
+    /// <summary>How long a killed host gets to be gone before disposal stops waiting.</summary>
+    private static readonly TimeSpan StopTimeout = TimeSpan.FromSeconds(30);
+
+    private readonly Process _process;
+    private readonly string _host;
+    private readonly CapturedOutput _output = new();
+    private readonly TaskCompletionSource<Uri> _listening = new(TaskCreationOptions.RunContinuationsAsynchronously);
+    private readonly HttpClient _client = new();
+    private readonly bool _awaitShells;
+    private bool _started;
+
+    private ChildHostProcess(Process process, string contentRoot, string host, bool awaitShells)
+    {
+        _process = process;
+        _host = host;
+        ContentRoot = contentRoot;
+        _awaitShells = awaitShells;
+    }
+
+    /// <summary>The host's console output so far, for assertion messages.</summary>
+    public string Output => _output.ToString();
+
+    /// <summary>Where Nuplane extracts the packages this host acquires, one directory per package.</summary>
+    public string PackageInstallRoot => InstallRoot(ContentRoot);
+
+    /// <summary>
+    /// Starts the host over <paramref name="packages"/>, a directory of <c>.nupkg</c> files it takes as its feed, with
+    /// <paramref name="shells"/> as its <c>shells.json</c> and <paramref name="settings"/> as environment variables, and
+    /// returns once its shells are active, or, with <paramref name="awaitShells"/> false, once it listens.
+    /// </summary>
+    public static Task<ChildHostProcess> StartAsync(string host, string sourceDirectory, string rootPrefix, string shells, string packages, IReadOnlyDictionary<string, string> settings, bool awaitShells = true) =>
+        StartAsync(host, sourceDirectory, rootPrefix, shells, Directory.EnumerateFiles(packages, "*.nupkg"), settings, awaitShells: awaitShells);
+
+    /// <summary>
+    /// Starts the selected host over exactly <paramref name="packageFiles"/>.
+    /// With <paramref name="deployed"/>, the host runs from a copy of its build output that is also its content root, as an operator's
+    /// published host does: the persistence tool reads that directory's own <c>.nuplane</c> state, the package set the running host
+    /// last reconciled, which a host running from its build output with a content root of its own never leaves there. With
+    /// <paramref name="awaitShells"/> false it returns once the host listens, for a host whose shell is expected not to activate.
+    /// </summary>
+    public static async Task<ChildHostProcess> StartAsync(string host, string sourceDirectory, string rootPrefix, string shells, IEnumerable<string> packageFiles, IReadOnlyDictionary<string, string> settings, bool deployed = false, bool awaitShells = true)
+    {
+        var assemblyPath = AssemblyPath(host, sourceDirectory);
+        var contentRoot = Directory.CreateTempSubdirectory(rootPrefix).FullName;
+        try
+        {
+            if (deployed)
+                CopyDirectory(Path.GetDirectoryName(assemblyPath)!, contentRoot);
+            foreach (var file in new[] { "appsettings.json", "appsettings.Development.json" })
+                File.Copy(Path.Join(sourceDirectory, file), Path.Join(contentRoot, file), overwrite: true);
+            File.WriteAllText(Path.Join(contentRoot, "shells.json"), shells);
+            var feed = Directory.CreateDirectory(Path.Join(contentRoot, "packages")).FullName;
+            foreach (var package in packageFiles)
+                File.Copy(package, Path.Join(feed, Path.GetFileName(package)));
+
+            // Kestrel reserves its own ephemeral port: picking a free one and releasing it races other test processes.
+            var startInfo = new ProcessStartInfo(DotnetPath,
+                [deployed ? Path.Join(contentRoot, host + ".dll") : assemblyPath, "--contentRoot", contentRoot, "--urls", "http://127.0.0.1:0"])
+            {
+                WorkingDirectory = contentRoot,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                UseShellExecute = false
+            };
+            startInfo.Environment["ASPNETCORE_ENVIRONMENT"] = "Development";
+            // Nuplane keeps its store state and the packages it installs beside the host binaries by default, which every
+            // run would share.
+            startInfo.Environment["Nuplane__Setup__StateFilePath"] = Path.Join(contentRoot, ".nuplane", "store-state.json");
+            startInfo.Environment["Nuplane__FeedResolution__PackageInstallRoot"] = InstallRoot(contentRoot);
+            startInfo.Environment["Logging__LogLevel__Microsoft.Hosting.Lifetime"] = "Information";
+            foreach (var (key, value) in settings)
+                startInfo.Environment[key.Replace(":", "__", StringComparison.Ordinal)] = value;
+
+            var process = new ChildHostProcess(new Process { StartInfo = startInfo }, contentRoot, host, awaitShells);
+            try
+            {
+                await process.StartAndWaitUntilReadyAsync();
+                return process;
+            }
+            catch
+            {
+                await process.DisposeAsync();
+                throw;
+            }
+        }
+        catch
+        {
+            TryDelete(contentRoot);
+            throw;
+        }
+    }
+
+    /// <summary>The host's content root and, when it was started <c>deployed</c>, its own directory: what <c>--host</c> names to the persistence tool.</summary>
+    public string ContentRoot { get; }
+
+    /// <summary>The directory the host's feed reads, where a package dropped in is a package installed.</summary>
+    public string PackagesDirectory => Path.Join(ContentRoot, "packages");
+
+    /// <summary>Whether the host process started for this test is still running.</summary>
+    public bool IsRunning => _started && !_process.HasExited;
+
+    /// <summary>The operating-system process id, stable for this owned process lifetime.</summary>
+    public int ProcessId => _process.Id;
+
+    /// <summary>
+    /// Upgrades a package in place, the way an operator does on a running host: every release of
+    /// <paramref name="packageId"/> leaves the host's feed folder and <paramref name="package"/> takes its place, written
+    /// under another name and moved in, so the folder's watcher never reads half a file. The host is not restarted.
+    /// </summary>
+    public void UpgradeInPlace(string packageId, string package)
+    {
+        foreach (var previous in Releases(PackagesDirectory, packageId).ToArray())
+            File.Delete(previous);
+
+        var staged = Path.Join(PackagesDirectory, Path.GetFileName(package) + ".partial");
+        File.Copy(package, staged);
+        File.Move(staged, Path.Join(PackagesDirectory, Path.GetFileName(package)));
+    }
+
+    /// <summary>
+    /// The <c>.nupkg</c> files in <paramref name="directory"/> that are a release of <paramref name="packageId"/>, whatever
+    /// their version, and not of a longer id it prefixes: <c>{id}.{version}.nupkg</c>, whose version starts with a digit.
+    /// </summary>
+    public static IEnumerable<string> Releases(string directory, string packageId) =>
+        Directory.EnumerateFiles(directory, $"{packageId}.*.nupkg")
+            .Where(file => char.IsAsciiDigit(Path.GetFileName(file)[packageId.Length + 1]));
+
+    /// <summary>
+    /// The packages Nuplane has active in this host, by id, at the version active, read from the store state the host
+    /// wrote: what it acquired from its feeds, as opposed to what it found it already carries.
+    /// </summary>
+    /// <remarks>
+    /// Nuplane rewrites the state file in place on every reconciliation, the periodic one included, so a read that races
+    /// one can find it half written; such a read is retried a few times rather than failing the test.
+    /// </remarks>
+    public async Task<IReadOnlyDictionary<string, string>> ActivePackagesAsync()
+    {
+        for (var attempt = 1; ; attempt++)
+        {
+            try
+            {
+                return JsonNode.Parse(File.ReadAllText(Path.Join(ContentRoot, ".nuplane", "store-state.json")))!["activeVersionById"]!.AsObject()
+                    .ToDictionary(package => package.Key, package => package.Value!.GetValue<string>(), StringComparer.OrdinalIgnoreCase);
+            }
+            catch (Exception exception) when (attempt < 5 && exception is IOException or JsonException)
+            {
+                await Task.Delay(TimeSpan.FromMilliseconds(200));
+            }
+        }
+    }
+
+    /// <summary>
+    /// The managed assemblies (<c>.dll</c> files) the host process has mapped, by path, as the operating system reports them:
+    /// <c>/proc/pid/maps</c> on Linux, <c>lsof</c> elsewhere. It shows which copy of an assembly a host loaded, and from where.
+    /// </summary>
+    public async Task<IReadOnlyList<string>> MappedAssembliesAsync()
+    {
+        var maps = $"/proc/{_process.Id}/maps";
+        IEnumerable<string> paths;
+        if (File.Exists(maps))
+            paths = (await File.ReadAllLinesAsync(maps)).Select(line => line.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)[^1]);
+        else
+        {
+            using var lsof = Process.Start(new ProcessStartInfo("lsof", ["-nP", "-Fn", "-p", _process.Id.ToString()]) { RedirectStandardOutput = true })!;
+            paths = (await lsof.StandardOutput.ReadToEndAsync()).Split('\n').Where(line => line.StartsWith('n')).Select(line => line[1..]);
+            await lsof.WaitForExitAsync();
+        }
+
+        return [.. paths.Where(path => path.EndsWith(".dll", StringComparison.OrdinalIgnoreCase)).Distinct().Order(StringComparer.Ordinal)];
+    }
+
+    /// <summary>The status a request to <paramref name="path"/> is answered with, and its body.</summary>
+    public Task<(HttpStatusCode Status, string Body)> GetAsync(string path) => SendAsync(new HttpRequestMessage(HttpMethod.Get, path));
+
+    /// <summary>The status and body of a root management GET, with its host credential header.</summary>
+    public Task<(HttpStatusCode Status, string Body)> GetManagementAsync(string path, string? key)
+    {
+        var request = new HttpRequestMessage(HttpMethod.Get, path);
+        if (key is not null)
+            request.Headers.Add(ModuleManagementKeyHeader, key);
+
+        return SendAsync(request);
+    }
+
+    /// <summary>
+    /// The status a <c>POST</c> to <paramref name="path"/>, one of the host's module-management endpoints, is answered with, and its
+    /// body, carrying <paramref name="key"/> as the module-management key, or no key at all when it is <see langword="null"/>. A host
+    /// that has not answered within <paramref name="timeout"/> fails the call with what it logged, instead of hanging the test.
+    /// </summary>
+    public Task<(HttpStatusCode Status, string Body)> PostModuleManagementAsync(string path, string? key, TimeSpan? timeout = null)
+    {
+        var request = new HttpRequestMessage(HttpMethod.Post, path);
+        if (key is not null)
+            request.Headers.Add(ModuleManagementKeyHeader, key);
+
+        return SendAsync(request, timeout);
+    }
+
+    private async Task<(HttpStatusCode Status, string Body)> SendAsync(HttpRequestMessage request, TimeSpan? timeout = null)
+    {
+        using (request)
+        using (var deadline = timeout is { } limit ? new CancellationTokenSource(limit) : null)
+        {
+            try
+            {
+                using var response = await _client.SendAsync(request, deadline?.Token ?? CancellationToken.None);
+                return (response.StatusCode, await response.Content.ReadAsStringAsync());
+            }
+            catch (TaskCanceledException exception)
+            {
+                throw new InvalidOperationException($"{_host} did not answer {request.Method} {request.RequestUri} in time. Host output:{Environment.NewLine}{Output}", exception);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Stops the host's process tree if it is running. Safe when the process never started or has already exited, so it
+    /// never masks the error that made a start fail, and it cannot wait for ever on a process that will not die.
+    /// </summary>
+    public async ValueTask DisposeAsync()
+    {
+        _client.Dispose();
+        try
+        {
+            if (_started && !_process.HasExited)
+            {
+                _process.Kill(entireProcessTree: true);
+                using var timeout = new CancellationTokenSource(StopTimeout);
+                await _process.WaitForExitAsync(timeout.Token);
+            }
+        }
+        catch (Exception exception) when (exception is InvalidOperationException or Win32Exception or OperationCanceledException)
+        {
+            // Exited between the check and the kill, or would not die in time: nothing left here to act on.
+        }
+        finally
+        {
+            _process.Dispose();
+            TryDelete(ContentRoot);
+        }
+    }
+
+    /// <summary>The build output, less the folders a host run in place from it leaves behind: its feed and its Nuplane state.</summary>
+    private static void CopyDirectory(string source, string destination)
+    {
+        foreach (var file in Directory.EnumerateFiles(source, "*", SearchOption.AllDirectories))
+        {
+            var relative = Path.GetRelativePath(source, file);
+            if (relative.StartsWith("packages" + Path.DirectorySeparatorChar, StringComparison.Ordinal) || relative.StartsWith(".nuplane" + Path.DirectorySeparatorChar, StringComparison.Ordinal))
+                continue;
+
+            Directory.CreateDirectory(Path.GetDirectoryName(Path.Join(destination, relative))!);
+            File.Copy(file, Path.Join(destination, relative), overwrite: true);
+        }
+    }
+
+    /// <summary>A temp directory left behind is harmless; failing the test over it, or masking an earlier failure, is not.</summary>
+    private static void TryDelete(string directory)
+    {
+        try
+        {
+            if (Directory.Exists(directory))
+                Directory.Delete(directory, recursive: true);
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+        }
+    }
+
+    private async Task StartAndWaitUntilReadyAsync()
+    {
+        _process.OutputDataReceived += (_, line) => Append(line.Data);
+        _process.ErrorDataReceived += (_, line) => Append(line.Data);
+        _process.Start();
+        _started = true;
+        _process.BeginOutputReadLine();
+        _process.BeginErrorReadLine();
+
+        var deadline = DateTimeOffset.UtcNow + ReadyTimeout;
+        while (true)
+        {
+            if (_process.HasExited)
+                throw Failure($"exited with code {_process.ExitCode} before its shells were active");
+            if (_client.BaseAddress is null && _listening.Task.IsCompletedSuccessfully)
+                _client.BaseAddress = await _listening.Task;
+            if (_client.BaseAddress is not null && (!_awaitShells || await IsReadyAsync()))
+                return;
+            if (DateTimeOffset.UtcNow > deadline)
+                throw Failure($"did not activate its shells within {ReadyTimeout}");
+
+            await Task.Delay(250);
+        }
+    }
+
+    private async Task<bool> IsReadyAsync()
+    {
+        try
+        {
+            using var response = await _client.GetAsync("/health/ready");
+            return response.StatusCode == HttpStatusCode.OK;
+        }
+        catch (HttpRequestException)
+        {
+            return false; // Not listening yet.
+        }
+    }
+
+    private InvalidOperationException Failure(string reason) => new($"{_host} {reason}. Host output:{Environment.NewLine}{Output}");
+
+    private void Append(string? line)
+    {
+        _output.Append(line);
+        if (line is null)
+            return;
+
+        const string marker = "Now listening on: ";
+        var index = line.IndexOf(marker, StringComparison.Ordinal);
+        if (index >= 0 && Uri.TryCreate(line[(index + marker.Length)..].Trim(), UriKind.Absolute, out var address) && address.Port > 0)
+            _listening.TrySetResult(address);
+    }
+
+    private static string InstallRoot(string contentRoot) => Path.Join(contentRoot, ".nuplane", "packages");
+
+    /// <summary>
+    /// The selected host's assembly from its own <c>bin</c> folder, built with this assembly's configuration and
+    /// target framework. The build-order project reference guarantees it exists.
+    /// </summary>
+    private static string AssemblyPath(string host, string sourceDirectory)
+    {
+        var framework = Path.GetFileName(Path.TrimEndingDirectorySeparator(AppContext.BaseDirectory));
+        var path = Path.Join(sourceDirectory, "bin", Configuration, framework, host + ".dll");
+        return File.Exists(path) ? path : throw new FileNotFoundException($"Build {Path.GetRelativePath(RepoRoot, sourceDirectory)} ({Configuration}) before running these tests.", path);
+    }
+
+    public static string RepoRoot { get; } = FindRepoRoot();
+
+    /// <summary>The build configuration this assembly was built with, which the host and the packages are built in too.</summary>
+    public static string Configuration { get; } = typeof(ChildHostProcess).Assembly.GetCustomAttribute<AssemblyConfigurationAttribute>()!.Configuration;
+
+    /// <summary>The <c>dotnet</c> that is running the tests, so a child runs on the same SDK and runtime.</summary>
+    public static string DotnetPath { get; } = Environment.GetEnvironmentVariable("DOTNET_HOST_PATH") ?? "dotnet";
+
+    private static string FindRepoRoot()
+    {
+        for (var directory = new DirectoryInfo(AppContext.BaseDirectory); directory is not null; directory = directory.Parent)
+        {
+            if (File.Exists(Path.Join(directory.FullName, "Elsa.Server.slnx")))
+                return directory.FullName;
+        }
+
+        throw new InvalidOperationException($"No Elsa.Server.slnx above {AppContext.BaseDirectory}.");
+    }
+}

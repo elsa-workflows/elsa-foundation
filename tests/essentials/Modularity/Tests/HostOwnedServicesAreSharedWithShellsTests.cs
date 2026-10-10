@@ -1,7 +1,9 @@
 using System.Diagnostics;
 using System.Reflection;
 using CShells.DependencyInjection;
+using CShells.Hosting;
 using CShells.Lifecycle;
+using CShells.Nuplane;
 using Elsa.Attention.Core;
 using Elsa.Cluster.Core.Contracts;
 using Elsa.Cluster.Core.Models;
@@ -17,6 +19,7 @@ using Elsa.Workbench.OpenIddict;
 using Elsa.Workbench.OpenIddictEngines;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.DataProtection.KeyManagement;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
@@ -33,20 +36,56 @@ namespace Elsa.Modularity.Tests;
 /// a fleet of its own (#2159). This builds the real <c>Elsa.Foundation.Host</c> and <c>Elsa.Workbench</c> compositions by running
 /// their entry points up to the built host, activates a shell through CShells, and compares every singleton the host registers
 /// under a type of an <c>Elsa.*</c> or <c>Nuplane.*</c> assembly: each must be the same instance in the shell as at the root, or
-/// be named in <see cref="PerShell"/> with the reason it is not.
+/// be named in <see cref="PerShell"/> with the reason it is not, or be explicitly <see cref="RootOnly"/> and absent from the shell.
 /// </summary>
 /// <remarks>
 /// The comparison is over what the host registered, so a service someone adds later is held without anyone remembering to list
 /// it. A new difference fails with the type named: share it with <c>ShareWithShells</c> when a shell can reach the host's
-/// state through it, or list it with the reason a shell's own copy is right.
+/// state through it, list it with the reason a shell's own copy is right, or require its explicit exclusion from shells.
 /// </remarks>
 public sealed class HostOwnedServicesAreSharedWithShellsTests
 {
+    [Fact]
+    public void Registering_the_runner_twice_adds_one_root_service_and_no_hosted_service()
+    {
+        var services = new ServiceCollection();
+
+        services.AddShellActivationRunner();
+        services.AddShellActivationRunner();
+
+        Assert.Single(services, descriptor => descriptor.ServiceType == typeof(IShellActivationRunner));
+        Assert.DoesNotContain(services, descriptor => descriptor.ServiceType == typeof(IHostedService));
+    }
+
+    [Theory]
+    [InlineData("Elsa.Foundation.Host")]
+    [InlineData("Elsa.Workbench")]
+    public async Task The_real_host_resolves_one_runner_that_is_excluded_from_its_shells(string host)
+    {
+        using var content = ContentRoot.For(host);
+        using var built = BuiltHost.Run(EntryAssembly(host), content.Arguments(durableMembership: false));
+        var root = built.Host.Services;
+        var runner = root.GetRequiredService<IShellActivationRunner>();
+        Assert.Same(runner, root.GetRequiredService<IShellActivationRunner>());
+        Assert.Single(root.GetServices<IShellActivationRunner>());
+
+        var shell = await root.GetRequiredService<IShellRegistry>().GetOrActivateAsync(ProbeShell);
+
+        Assert.Null(shell.ServiceProvider.GetService<IShellActivationRunner>());
+        Assert.Null(shell.ServiceProvider.GetService(runner.GetType()));
+    }
+
     private const string ProbeShell = "probe";
 
     private const string IntentionallyPerShell = "intentionally per shell: ";
 
     private const string UnreachableFromShells = "unreachable from shell code today; an upstream Nuplane instance registration would remove the entry";
+
+    /// <summary>Root registrations CShells must exclude from shell containers; their absence is asserted, not treated as per-shell ownership.</summary>
+    private static readonly IReadOnlyDictionary<Type, string> RootOnly = new Dictionary<Type, string>
+    {
+        [typeof(NuplanePackageGenerationBuildParticipant)] = "The root registry owns this participant's readability leases and catalog subscription; CShells excludes build participants from shell providers."
+    };
 
     /// <summary>
     /// The singletons a shell is meant to hold its own copy of, or that nothing in a shell reaches, by the name the failure gives,
@@ -90,14 +129,6 @@ public sealed class HostOwnedServicesAreSharedWithShellsTests
         Entries(
             IntentionallyPerShell + "records what its own container's options pipeline resolved the store's AutoMigrate to, for the host's migrator, which a shell never starts",
             "Elsa.Workbench.WorkbenchOpenIddictMigrationSwitch"),
-        Entries(
-            "unreachable from shell code: only CShells' runtime feature catalog, which the host holds, resolves the feature assembly provider, and a shell's copy would read a Nuplane catalog that has loaded nothing",
-            "Elsa.Foundation.Host.Feed.NuplaneAssemblyProvider",
-            "Elsa.Workbench.NuplaneAssemblyProvider"),
-        Entries(
-            "unreachable from shell code: Nuplane's dispatcher, which runs on the host's own container, is the only caller of its observers",
-            "Elsa.Foundation.Host.Shells.ShellReloadOnPackagesChanged",
-            "Elsa.Workbench.ShellCatalogRefreshOnPackagesChanged"),
         Entries(
             UnreachableFromShells,
         "Nuplane.Abstractions.IActivePackageCatalog", "Nuplane.Abstractions.ICycleFailureContributor", "Nuplane.Abstractions.IDesiredPackageSource", "Nuplane.Abstractions.IDesiredStateContributor", "Nuplane.Abstractions.INuplaneObserver", "Nuplane.Abstractions.IPackageResolver",
@@ -159,13 +190,19 @@ public sealed class HostOwnedServicesAreSharedWithShellsTests
 
         Assert.Equal(durableMembership ? ClusterProviderKind.Durable : ClusterProviderKind.InProcess, root.GetRequiredService<IClusterMembership>().ProviderKind);
         var compared = SingletonServiceTypes(root).Select(type => (Type: type, Difference: Difference(type, root, shell.ServiceProvider))).ToArray();
+        foreach (var (type, reason) in RootOnly)
+        {
+            Assert.Contains(type, compared.Select(service => service.Type));
+            Assert.True(Resolve(root, type) is { Count: 1 }, $"{host} must register exactly one root {Describe(type)}. {reason}");
+            Assert.True(Resolve(shell.ServiceProvider, type) is { Count: 0 }, $"{host}'s shell must exclude {Describe(type)}. {reason}");
+        }
         var notShared = compared
-            .Where(service => service.Difference is not null && !PerShell.ContainsKey(Describe(service.Type)))
+            .Where(service => service.Difference is not null && !PerShell.ContainsKey(Describe(service.Type)) && !RootOnly.ContainsKey(service.Type))
             .Select(service => $"{Describe(service.Type)} ({service.Difference})")
             .ToArray();
         Assert.True(
             notShared.Length == 0,
-            $"{host}'s shell holds a different instance from the host's of: {string.Join("; ", notShared)}. Share each with ShareWithShells if a shell can reach the host's state through it, or list it in {nameof(PerShell)} with the reason it is per shell.");
+            $"{host}'s shell holds a different instance from the host's of: {string.Join("; ", notShared)}. Share each with ShareWithShells if a shell can reach the host's state through it, list it in {nameof(PerShell)} with the reason it is per shell, or require its absence in {nameof(RootOnly)}.");
         // The allowlist and the other things this compared are only worth anything if the comparison saw the services it exists for.
         Assert.Contains(typeof(IReconciliationTriggerIngress), compared.Select(service => service.Type));
         Assert.Contains(typeof(IEfSchemaFleet), compared.Select(service => service.Type));
@@ -262,24 +299,54 @@ public sealed class HostOwnedServicesAreSharedWithShellsTests
     }
 
     /// <summary>
-    /// Nuplane calls its observers in the order they were registered, and the Workbench's catalog refresh reads what Nuplane's
-    /// auto-loader loaded in the same reconcile, so Workbench's own entry point registers the refresh after the auto-loader.
-    /// Registered before it, the refresh would run ahead of the load and rebuild the catalog without the package that arrived.
+    /// Nuplane calls observers in registration order, so each host registers CShells.Nuplane after its auto-loader. The
+    /// coordinator is root-owned and the shell's borrowed observer resolves to that same object.
     /// </summary>
-    [Fact]
-    public void Workbench_registers_its_catalog_refresh_after_the_package_auto_loader()
+    [Theory(DisplayName = "Both host compositions register and borrow one root-owned Nuplane coordinator")]
+    [InlineData("Elsa.Foundation.Host")]
+    [InlineData("Elsa.Workbench")]
+    public async Task Each_host_registers_feature_discovery_after_the_package_auto_loader_and_shares_its_coordinator(string host)
     {
         const string AutoLoader = "Nuplane.Loading.PackageAutoLoadingObserver";
-        using var content = ContentRoot.For("Elsa.Workbench");
-        using var built = BuiltHost.Run(EntryAssembly("Elsa.Workbench"), content.Arguments(durableMembership: false));
+        using var content = ContentRoot.For(host);
+        using var built = BuiltHost.Run(EntryAssembly(host), content.Arguments(durableMembership: false));
 
-        var observers = built.Host.Services.GetServices<INuplaneObserver>().Select(observer => observer.GetType().FullName).ToList();
+        var root = built.Host.Services;
+        var observers = root.GetServices<INuplaneObserver>().ToArray();
+        var adapter = Assert.Single(observers.Where(observer => observer is IShellGenerationBuildParticipant));
+        var observerTypes = observers.Select(observer => observer.GetType().FullName).ToList();
 
-        Assert.Contains(AutoLoader, observers);
-        Assert.Contains(typeof(ShellCatalogRefreshOnPackagesChanged).FullName, observers);
+        Assert.Contains(AutoLoader, observerTypes);
+        Assert.Contains(adapter.GetType().FullName, observerTypes);
         Assert.True(
-            observers.IndexOf(AutoLoader) < observers.IndexOf(typeof(ShellCatalogRefreshOnPackagesChanged).FullName),
-            "The catalog refresh is called before the auto-loader, so it refreshes before the new assemblies are loaded.");
+            observerTypes.IndexOf(AutoLoader) < observerTypes.IndexOf(adapter.GetType().FullName),
+            "The auto-loader must be registered before feature discovery so newly loaded assemblies are visible.");
+        Assert.Same(adapter, root.GetRequiredService<IShellGenerationBuildParticipant>());
+        var readabilityParticipant = Assert.Single(root.GetServices<NuplanePackageGenerationBuildParticipant>());
+        Assert.Same(readabilityParticipant, Assert.Single(root.GetServices<IShellGenerationBuildParticipant>().OfType<NuplanePackageGenerationBuildParticipant>()));
+
+        var shell = await root.GetRequiredService<IShellRegistry>().GetOrActivateAsync(ProbeShell);
+        var borrowedAdapter = Assert.Single(shell.ServiceProvider.GetServices<INuplaneObserver>()
+            .Where(observer => observer is IShellGenerationBuildParticipant));
+        Assert.Same(adapter, borrowedAdapter);
+        // Build participants belong to the root registry and are excluded from shell providers.
+        Assert.Empty(shell.ServiceProvider.GetServices<IShellGenerationBuildParticipant>());
+        Assert.Empty(shell.ServiceProvider.GetServices<NuplanePackageGenerationBuildParticipant>());
+        var monitor = root.GetRequiredService<IOptionsMonitor<NuplaneIntegrationOptions>>();
+        var configuration = (IConfigurationRoot)root.GetRequiredService<IConfiguration>();
+        var initialReload = host == "Elsa.Foundation.Host";
+
+        Assert.Equal(initialReload, monitor.CurrentValue.AutoReload);
+        Assert.True(monitor.CurrentValue.Enabled);
+        Assert.Equal(
+            host == "Elsa.Foundation.Host" ? NuplaneRefreshTrigger.EveryEligibleCompletion : NuplaneRefreshTrigger.ChangedOrPending,
+            monitor.CurrentValue.RefreshTrigger);
+
+        content.SetReloadOnPackageChange(!initialReload);
+        configuration.Reload();
+
+        Assert.Equal(host == "Elsa.Foundation.Host" ? true : !initialReload, monitor.CurrentValue.AutoReload);
+        Assert.Equal(host == "Elsa.Foundation.Host" ? !initialReload : true, monitor.CurrentValue.Enabled);
     }
 
     /// <summary>
@@ -394,6 +461,22 @@ public sealed class HostOwnedServicesAreSharedWithShellsTests
                 ]);
 
             return [.. arguments];
+        }
+
+        public void SetReloadOnPackageChange(bool value)
+        {
+            var path = Path.Join(_directory, "appsettings.json");
+            var settings = System.Text.Json.Nodes.JsonNode.Parse(File.ReadAllText(path), documentOptions: new System.Text.Json.JsonDocumentOptions
+            {
+                CommentHandling = System.Text.Json.JsonCommentHandling.Skip,
+                AllowTrailingCommas = true
+            })!.AsObject();
+            var elsa = settings["Elsa"] as System.Text.Json.Nodes.JsonObject ?? new System.Text.Json.Nodes.JsonObject();
+            var shells = elsa["Shells"] as System.Text.Json.Nodes.JsonObject ?? new System.Text.Json.Nodes.JsonObject();
+            shells["ReloadOnPackageChange"] = value;
+            elsa["Shells"] = shells;
+            settings["Elsa"] = elsa;
+            File.WriteAllText(path, settings.ToJsonString(new System.Text.Json.JsonSerializerOptions { WriteIndented = true }));
         }
 
         /// <summary>The Data Protection key store a clustered host shares its key ring through (#2191).</summary>

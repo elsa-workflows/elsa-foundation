@@ -97,12 +97,17 @@
         {
           "type": "external",
           "id": "CShells.AspNetCore",
-          "version": "0.0.30-preview.159"
+          "version": "0.0.30-preview.173"
         },
         {
           "type": "external",
           "id": "CShells.FastEndpoints",
-          "version": "0.0.30-preview.159"
+          "version": "0.0.30-preview.173"
+        },
+        {
+          "type": "external",
+          "id": "CShells.Nuplane",
+          "version": "0.0.30-preview.173"
         },
         {
           "type": "external",
@@ -127,22 +132,22 @@
         {
           "type": "external",
           "id": "Nuplane",
-          "version": "0.0.11-preview.94"
+          "version": "0.0.11-preview.99"
         },
         {
           "type": "external",
           "id": "Nuplane.Admin",
-          "version": "0.0.11-preview.94"
+          "version": "0.0.11-preview.99"
         },
         {
           "type": "external",
           "id": "Nuplane.Loading",
-          "version": "0.0.11-preview.94"
+          "version": "0.0.11-preview.99"
         },
         {
           "type": "external",
           "id": "Nuplane.Sources.Directory",
-          "version": "0.0.11-preview.94"
+          "version": "0.0.11-preview.99"
         }
       ]
     },
@@ -641,7 +646,12 @@
         {
           "type": "external",
           "id": "CShells.Management.Api",
-          "version": "0.0.30-preview.159"
+          "version": "0.0.30-preview.173"
+        },
+        {
+          "type": "external",
+          "id": "CShells.Nuplane",
+          "version": "0.0.30-preview.173"
         },
         {
           "type": "external",
@@ -686,22 +696,22 @@
         {
           "type": "external",
           "id": "Nuplane",
-          "version": "0.0.11-preview.94"
+          "version": "0.0.11-preview.99"
         },
         {
           "type": "external",
           "id": "Nuplane.Admin",
-          "version": "0.0.11-preview.94"
+          "version": "0.0.11-preview.99"
         },
         {
           "type": "external",
           "id": "Nuplane.Loading",
-          "version": "0.0.11-preview.94"
+          "version": "0.0.11-preview.99"
         },
         {
           "type": "external",
           "id": "Nuplane.Sources.Directory",
-          "version": "0.0.11-preview.94"
+          "version": "0.0.11-preview.99"
         },
         {
           "type": "external",
@@ -745,7 +755,7 @@
         {
           "type": "external",
           "id": "CShells.Abstractions",
-          "version": "0.0.30-preview.159"
+          "version": "0.0.30-preview.173"
         },
         {
           "type": "external",
@@ -844,12 +854,12 @@
         {
           "type": "external",
           "id": "CShells.Abstractions",
-          "version": "0.0.30-preview.159"
+          "version": "0.0.30-preview.173"
         },
         {
           "type": "external",
           "id": "CShells.AspNetCore.Abstractions",
-          "version": "0.0.30-preview.159"
+          "version": "0.0.30-preview.173"
         },
         {
           "type": "external",
@@ -903,7 +913,7 @@
         {
           "type": "external",
           "id": "CShells.Abstractions",
-          "version": "0.0.30-preview.159"
+          "version": "0.0.30-preview.173"
         },
         {
           "type": "external",
@@ -1022,12 +1032,12 @@
         {
           "type": "pinned-transitive",
           "id": "CShells.Abstractions",
-          "version": "0.0.30-preview.159"
+          "version": "0.0.30-preview.173"
         },
         {
           "type": "pinned-transitive",
           "id": "CShells.AspNetCore.Abstractions",
-          "version": "0.0.30-preview.159"
+          "version": "0.0.30-preview.173"
         },
         {
           "type": "pinned-transitive",
@@ -1149,7 +1159,7 @@
         {
           "type": "external",
           "id": "CShells.Abstractions",
-          "version": "0.0.30-preview.159"
+          "version": "0.0.30-preview.173"
         },
         {
           "type": "external",
@@ -1179,7 +1189,7 @@
         {
           "type": "pinned-transitive",
           "id": "CShells",
-          "version": "0.0.30-preview.159"
+          "version": "0.0.30-preview.173"
         },
         {
           "type": "pinned-transitive",
@@ -1263,7 +1273,7 @@
         {
           "type": "external",
           "id": "CShells.Abstractions",
-          "version": "0.0.30-preview.159"
+          "version": "0.0.30-preview.173"
         },
         {
           "type": "external",
@@ -1362,7 +1372,7 @@
         {
           "type": "external",
           "id": "CShells.Abstractions",
-          "version": "0.0.30-preview.159"
+          "version": "0.0.30-preview.173"
         },
         {
           "type": "external",
@@ -1426,7 +1436,7 @@
         {
           "type": "external",
           "id": "CShells.Abstractions",
-          "version": "0.0.30-preview.159"
+          "version": "0.0.30-preview.173"
         },
         {
           "type": "external",
@@ -1505,7 +1515,7 @@
         {
           "type": "external",
           "id": "CShells.Abstractions",
-          "version": "0.0.30-preview.159"
+          "version": "0.0.30-preview.173"
         },
         {
           "type": "external",
@@ -1569,7 +1579,7 @@
         {
           "type": "external",
           "id": "CShells.Abstractions",
-          "version": "0.0.30-preview.159"
+          "version": "0.0.30-preview.173"
         },
         {
           "type": "external",
@@ -1643,7 +1653,7 @@
         {
           "type": "external",
           "id": "CShells.Abstractions",
-          "version": "0.0.30-preview.159"
+          "version": "0.0.30-preview.173"
         },
         {
           "type": "external",
@@ -1732,7 +1742,7 @@
         {
           "type": "external",
           "id": "CShells.Abstractions",
-          "version": "0.0.30-preview.159"
+          "version": "0.0.30-preview.173"
         },
         {
           "type": "external",
@@ -1796,7 +1806,7 @@
         {
           "type": "external",
           "id": "CShells.Abstractions",
-          "version": "0.0.30-preview.159"
+          "version": "0.0.30-preview.173"
         },
         {
           "type": "external",
@@ -1875,12 +1885,12 @@
         {
           "type": "external",
           "id": "CShells.Abstractions",
-          "version": "0.0.30-preview.159"
+          "version": "0.0.30-preview.173"
         },
         {
           "type": "external",
           "id": "CShells.AspNetCore.Abstractions",
-          "version": "0.0.30-preview.159"
+          "version": "0.0.30-preview.173"
         },
         {
           "type": "external",
@@ -1939,7 +1949,7 @@
         {
           "type": "external",
           "id": "CShells.Abstractions",
-          "version": "0.0.30-preview.159"
+          "version": "0.0.30-preview.173"
         },
         {
           "type": "external",
@@ -2067,7 +2077,7 @@
         {
           "type": "external",
           "id": "CShells.Abstractions",
-          "version": "0.0.30-preview.159"
+          "version": "0.0.30-preview.173"
         },
         {
           "type": "external",
@@ -2146,7 +2156,7 @@
         {
           "type": "external",
           "id": "CShells.Abstractions",
-          "version": "0.0.30-preview.159"
+          "version": "0.0.30-preview.173"
         },
         {
           "type": "external",
@@ -2215,7 +2225,7 @@
         {
           "type": "external",
           "id": "CShells.Abstractions",
-          "version": "0.0.30-preview.159"
+          "version": "0.0.30-preview.173"
         },
         {
           "type": "external",
@@ -2279,7 +2289,7 @@
         {
           "type": "external",
           "id": "CShells.Abstractions",
-          "version": "0.0.30-preview.159"
+          "version": "0.0.30-preview.173"
         },
         {
           "type": "external",
@@ -2377,12 +2387,12 @@
         {
           "type": "external",
           "id": "CShells.Abstractions",
-          "version": "0.0.30-preview.159"
+          "version": "0.0.30-preview.173"
         },
         {
           "type": "external",
           "id": "CShells.AspNetCore.Abstractions",
-          "version": "0.0.30-preview.159"
+          "version": "0.0.30-preview.173"
         },
         {
           "type": "external",
@@ -2431,12 +2441,12 @@
         {
           "type": "external",
           "id": "CShells.Abstractions",
-          "version": "0.0.30-preview.159"
+          "version": "0.0.30-preview.173"
         },
         {
           "type": "external",
           "id": "CShells.AspNetCore.Abstractions",
-          "version": "0.0.30-preview.159"
+          "version": "0.0.30-preview.173"
         },
         {
           "type": "external",
@@ -2507,7 +2517,7 @@
         {
           "type": "external",
           "id": "CShells.Abstractions",
-          "version": "0.0.30-preview.159"
+          "version": "0.0.30-preview.173"
         },
         {
           "type": "external",
@@ -2630,17 +2640,17 @@
         {
           "type": "external",
           "id": "Nuplane",
-          "version": "0.0.11-preview.94"
+          "version": "0.0.11-preview.99"
         },
         {
           "type": "external",
           "id": "Nuplane.Loading",
-          "version": "0.0.11-preview.94"
+          "version": "0.0.11-preview.99"
         },
         {
           "type": "external",
           "id": "Nuplane.Sources.Directory",
-          "version": "0.0.11-preview.94"
+          "version": "0.0.11-preview.99"
         }
       ]
     },
@@ -2733,12 +2743,12 @@
         {
           "type": "pinned-transitive",
           "id": "CShells",
-          "version": "0.0.30-preview.159"
+          "version": "0.0.30-preview.173"
         },
         {
           "type": "pinned-transitive",
           "id": "CShells.Abstractions",
-          "version": "0.0.30-preview.159"
+          "version": "0.0.30-preview.173"
         },
         {
           "type": "pinned-transitive",
@@ -2856,7 +2866,7 @@
         {
           "type": "external",
           "id": "CShells.Abstractions",
-          "version": "0.0.30-preview.159"
+          "version": "0.0.30-preview.173"
         },
         {
           "type": "external",
@@ -2866,7 +2876,7 @@
         {
           "type": "external",
           "id": "Nuplane.Loading.Abstractions",
-          "version": "0.0.11-preview.94"
+          "version": "0.0.11-preview.99"
         },
         {
           "type": "pinned-transitive",
@@ -2983,12 +2993,12 @@
         {
           "type": "external",
           "id": "CShells.Abstractions",
-          "version": "0.0.30-preview.159"
+          "version": "0.0.30-preview.173"
         },
         {
           "type": "external",
           "id": "CShells.AspNetCore",
-          "version": "0.0.30-preview.159"
+          "version": "0.0.30-preview.173"
         },
         {
           "type": "external",
@@ -3003,12 +3013,12 @@
         {
           "type": "pinned-transitive",
           "id": "CShells",
-          "version": "0.0.30-preview.159"
+          "version": "0.0.30-preview.173"
         },
         {
           "type": "pinned-transitive",
           "id": "CShells.AspNetCore.Abstractions",
-          "version": "0.0.30-preview.159"
+          "version": "0.0.30-preview.173"
         }
       ]
     },
@@ -3047,7 +3057,7 @@
         {
           "type": "external",
           "id": "CShells.Abstractions",
-          "version": "0.0.30-preview.159"
+          "version": "0.0.30-preview.173"
         },
         {
           "type": "external",
@@ -3087,17 +3097,17 @@
         {
           "type": "pinned-transitive",
           "id": "CShells",
-          "version": "0.0.30-preview.159"
+          "version": "0.0.30-preview.173"
         },
         {
           "type": "pinned-transitive",
           "id": "CShells.AspNetCore",
-          "version": "0.0.30-preview.159"
+          "version": "0.0.30-preview.173"
         },
         {
           "type": "pinned-transitive",
           "id": "CShells.AspNetCore.Abstractions",
-          "version": "0.0.30-preview.159"
+          "version": "0.0.30-preview.173"
         },
         {
           "type": "pinned-transitive",
@@ -3176,7 +3186,7 @@
         {
           "type": "external",
           "id": "CShells.Abstractions",
-          "version": "0.0.30-preview.159"
+          "version": "0.0.30-preview.173"
         },
         {
           "type": "external",
@@ -3284,12 +3294,12 @@
         {
           "type": "external",
           "id": "CShells.Abstractions",
-          "version": "0.0.30-preview.159"
+          "version": "0.0.30-preview.173"
         },
         {
           "type": "external",
           "id": "CShells.AspNetCore.Abstractions",
-          "version": "0.0.30-preview.159"
+          "version": "0.0.30-preview.173"
         },
         {
           "type": "external",
@@ -3338,7 +3348,7 @@
         {
           "type": "external",
           "id": "CShells.Abstractions",
-          "version": "0.0.30-preview.159"
+          "version": "0.0.30-preview.173"
         },
         {
           "type": "external",
@@ -3378,12 +3388,12 @@
         {
           "type": "pinned-transitive",
           "id": "CShells",
-          "version": "0.0.30-preview.159"
+          "version": "0.0.30-preview.173"
         },
         {
           "type": "pinned-transitive",
           "id": "CShells.AspNetCore.Abstractions",
-          "version": "0.0.30-preview.159"
+          "version": "0.0.30-preview.173"
         },
         {
           "type": "pinned-transitive",
@@ -3501,7 +3511,7 @@
         {
           "type": "external",
           "id": "CShells.Abstractions",
-          "version": "0.0.30-preview.159"
+          "version": "0.0.30-preview.173"
         },
         {
           "type": "external",
@@ -3604,12 +3614,12 @@
         {
           "type": "external",
           "id": "CShells.Abstractions",
-          "version": "0.0.30-preview.159"
+          "version": "0.0.30-preview.173"
         },
         {
           "type": "external",
           "id": "CShells.AspNetCore.Abstractions",
-          "version": "0.0.30-preview.159"
+          "version": "0.0.30-preview.173"
         },
         {
           "type": "external",
@@ -3702,7 +3712,7 @@
         {
           "type": "external",
           "id": "CShells.Abstractions",
-          "version": "0.0.30-preview.159"
+          "version": "0.0.30-preview.173"
         },
         {
           "type": "external",
@@ -3795,7 +3805,7 @@
         {
           "type": "external",
           "id": "CShells.Abstractions",
-          "version": "0.0.30-preview.159"
+          "version": "0.0.30-preview.173"
         },
         {
           "type": "external",
@@ -3849,7 +3859,7 @@
         {
           "type": "external",
           "id": "CShells.Abstractions",
-          "version": "0.0.30-preview.159"
+          "version": "0.0.30-preview.173"
         },
         {
           "type": "external",
@@ -3962,12 +3972,12 @@
         {
           "type": "external",
           "id": "CShells.Abstractions",
-          "version": "0.0.30-preview.159"
+          "version": "0.0.30-preview.173"
         },
         {
           "type": "external",
           "id": "CShells.AspNetCore.Abstractions",
-          "version": "0.0.30-preview.159"
+          "version": "0.0.30-preview.173"
         },
         {
           "type": "external",
@@ -4036,7 +4046,7 @@
         {
           "type": "external",
           "id": "CShells.Abstractions",
-          "version": "0.0.30-preview.159"
+          "version": "0.0.30-preview.173"
         },
         {
           "type": "external",
@@ -4125,17 +4135,17 @@
         {
           "type": "pinned-transitive",
           "id": "CShells",
-          "version": "0.0.30-preview.159"
+          "version": "0.0.30-preview.173"
         },
         {
           "type": "pinned-transitive",
           "id": "CShells.Abstractions",
-          "version": "0.0.30-preview.159"
+          "version": "0.0.30-preview.173"
         },
         {
           "type": "pinned-transitive",
           "id": "Nuplane.Loading.Abstractions",
-          "version": "0.0.11-preview.94"
+          "version": "0.0.11-preview.99"
         }
       ]
     },
@@ -4169,12 +4179,12 @@
         {
           "type": "external",
           "id": "CShells.Abstractions",
-          "version": "0.0.30-preview.159"
+          "version": "0.0.30-preview.173"
         },
         {
           "type": "external",
           "id": "CShells.AspNetCore.Abstractions",
-          "version": "0.0.30-preview.159"
+          "version": "0.0.30-preview.173"
         },
         {
           "type": "external",
@@ -4223,12 +4233,12 @@
         {
           "type": "external",
           "id": "CShells.Abstractions",
-          "version": "0.0.30-preview.159"
+          "version": "0.0.30-preview.173"
         },
         {
           "type": "external",
           "id": "CShells.AspNetCore.Abstractions",
-          "version": "0.0.30-preview.159"
+          "version": "0.0.30-preview.173"
         },
         {
           "type": "external",
@@ -4267,7 +4277,7 @@
         {
           "type": "external",
           "id": "CShells.Abstractions",
-          "version": "0.0.30-preview.159"
+          "version": "0.0.30-preview.173"
         },
         {
           "type": "external",
@@ -4287,12 +4297,12 @@
         {
           "type": "pinned-transitive",
           "id": "CShells",
-          "version": "0.0.30-preview.159"
+          "version": "0.0.30-preview.173"
         },
         {
           "type": "pinned-transitive",
           "id": "CShells.AspNetCore.Abstractions",
-          "version": "0.0.30-preview.159"
+          "version": "0.0.30-preview.173"
         },
         {
           "type": "pinned-transitive",
@@ -4339,12 +4349,12 @@
         {
           "type": "external",
           "id": "CShells.Abstractions",
-          "version": "0.0.30-preview.159"
+          "version": "0.0.30-preview.173"
         },
         {
           "type": "external",
           "id": "CShells.AspNetCore.Abstractions",
-          "version": "0.0.30-preview.159"
+          "version": "0.0.30-preview.173"
         },
         {
           "type": "external",
@@ -4388,7 +4398,7 @@
         {
           "type": "external",
           "id": "CShells.Abstractions",
-          "version": "0.0.30-preview.159"
+          "version": "0.0.30-preview.173"
         },
         {
           "type": "external",
@@ -4413,7 +4423,7 @@
         {
           "type": "pinned-transitive",
           "id": "CShells.AspNetCore.Abstractions",
-          "version": "0.0.30-preview.159"
+          "version": "0.0.30-preview.173"
         },
         {
           "type": "pinned-transitive",
@@ -4482,12 +4492,12 @@
         {
           "type": "pinned-transitive",
           "id": "CShells.Abstractions",
-          "version": "0.0.30-preview.159"
+          "version": "0.0.30-preview.173"
         },
         {
           "type": "pinned-transitive",
           "id": "CShells.AspNetCore.Abstractions",
-          "version": "0.0.30-preview.159"
+          "version": "0.0.30-preview.173"
         },
         {
           "type": "pinned-transitive",
@@ -4521,7 +4531,7 @@
         {
           "type": "external",
           "id": "CShells.Abstractions",
-          "version": "0.0.30-preview.159"
+          "version": "0.0.30-preview.173"
         },
         {
           "type": "external",
@@ -4531,7 +4541,7 @@
         {
           "type": "pinned-transitive",
           "id": "CShells.AspNetCore.Abstractions",
-          "version": "0.0.30-preview.159"
+          "version": "0.0.30-preview.173"
         },
         {
           "type": "pinned-transitive",
@@ -4585,7 +4595,7 @@
         {
           "type": "external",
           "id": "CShells.Abstractions",
-          "version": "0.0.30-preview.159"
+          "version": "0.0.30-preview.173"
         },
         {
           "type": "external",
@@ -4615,12 +4625,12 @@
         {
           "type": "pinned-transitive",
           "id": "CShells",
-          "version": "0.0.30-preview.159"
+          "version": "0.0.30-preview.173"
         },
         {
           "type": "pinned-transitive",
           "id": "CShells.AspNetCore.Abstractions",
-          "version": "0.0.30-preview.159"
+          "version": "0.0.30-preview.173"
         },
         {
           "type": "pinned-transitive",
@@ -4761,7 +4771,7 @@
         {
           "type": "external",
           "id": "CShells.Abstractions",
-          "version": "0.0.30-preview.159"
+          "version": "0.0.30-preview.173"
         },
         {
           "type": "external",
@@ -4825,7 +4835,7 @@
         {
           "type": "external",
           "id": "CShells.Abstractions",
-          "version": "0.0.30-preview.159"
+          "version": "0.0.30-preview.173"
         },
         {
           "type": "external",
@@ -4897,7 +4907,7 @@
         {
           "type": "external",
           "id": "CShells.Abstractions",
-          "version": "0.0.30-preview.159"
+          "version": "0.0.30-preview.173"
         },
         {
           "type": "external",
@@ -4996,7 +5006,7 @@
         {
           "type": "external",
           "id": "CShells.Abstractions",
-          "version": "0.0.30-preview.159"
+          "version": "0.0.30-preview.173"
         },
         {
           "type": "external",
@@ -5079,7 +5089,7 @@
         {
           "type": "external",
           "id": "CShells.Abstractions",
-          "version": "0.0.30-preview.159"
+          "version": "0.0.30-preview.173"
         },
         {
           "type": "external",
@@ -5168,12 +5178,12 @@
         {
           "type": "external",
           "id": "CShells.Abstractions",
-          "version": "0.0.30-preview.159"
+          "version": "0.0.30-preview.173"
         },
         {
           "type": "external",
           "id": "CShells.AspNetCore.Abstractions",
-          "version": "0.0.30-preview.159"
+          "version": "0.0.30-preview.173"
         },
         {
           "type": "external",
@@ -5188,7 +5198,7 @@
         {
           "type": "pinned-transitive",
           "id": "CShells",
-          "version": "0.0.30-preview.159"
+          "version": "0.0.30-preview.173"
         },
         {
           "type": "pinned-transitive",
@@ -5208,12 +5218,12 @@
         {
           "type": "pinned-transitive",
           "id": "Nuplane",
-          "version": "0.0.11-preview.94"
+          "version": "0.0.11-preview.99"
         },
         {
           "type": "pinned-transitive",
           "id": "Nuplane.Admin",
-          "version": "0.0.11-preview.94"
+          "version": "0.0.11-preview.99"
         }
       ]
     },
@@ -5255,12 +5265,12 @@
         {
           "type": "external",
           "id": "CShells",
-          "version": "0.0.30-preview.159"
+          "version": "0.0.30-preview.173"
         },
         {
           "type": "external",
           "id": "CShells.Abstractions",
-          "version": "0.0.30-preview.159"
+          "version": "0.0.30-preview.173"
         },
         {
           "type": "external",
@@ -5359,7 +5369,7 @@
         {
           "type": "external",
           "id": "CShells",
-          "version": "0.0.30-preview.159"
+          "version": "0.0.30-preview.173"
         },
         {
           "type": "external",
@@ -5374,12 +5384,12 @@
         {
           "type": "external",
           "id": "Nuplane.Admin",
-          "version": "0.0.11-preview.94"
+          "version": "0.0.11-preview.99"
         },
         {
           "type": "pinned-transitive",
           "id": "CShells.Abstractions",
-          "version": "0.0.30-preview.159"
+          "version": "0.0.30-preview.173"
         },
         {
           "type": "pinned-transitive",
@@ -5434,7 +5444,7 @@
         {
           "type": "pinned-transitive",
           "id": "Nuplane",
-          "version": "0.0.11-preview.94"
+          "version": "0.0.11-preview.99"
         }
       ]
     },
@@ -5476,12 +5486,12 @@
         {
           "type": "external",
           "id": "CShells",
-          "version": "0.0.30-preview.159"
+          "version": "0.0.30-preview.173"
         },
         {
           "type": "external",
           "id": "CShells.Abstractions",
-          "version": "0.0.30-preview.159"
+          "version": "0.0.30-preview.173"
         },
         {
           "type": "external",
@@ -5618,7 +5628,7 @@
         {
           "type": "external",
           "id": "CShells.Abstractions",
-          "version": "0.0.30-preview.159"
+          "version": "0.0.30-preview.173"
         },
         {
           "type": "external",
@@ -5705,12 +5715,12 @@
         {
           "type": "external",
           "id": "CShells.Abstractions",
-          "version": "0.0.30-preview.159"
+          "version": "0.0.30-preview.173"
         },
         {
           "type": "external",
           "id": "CShells.AspNetCore.Abstractions",
-          "version": "0.0.30-preview.159"
+          "version": "0.0.30-preview.173"
         },
         {
           "type": "external",
@@ -5823,7 +5833,7 @@
         {
           "type": "external",
           "id": "CShells.Abstractions",
-          "version": "0.0.30-preview.159"
+          "version": "0.0.30-preview.173"
         },
         {
           "type": "external",
@@ -5887,7 +5897,7 @@
         {
           "type": "external",
           "id": "CShells.Abstractions",
-          "version": "0.0.30-preview.159"
+          "version": "0.0.30-preview.173"
         },
         {
           "type": "external",
@@ -5902,7 +5912,7 @@
         {
           "type": "external",
           "id": "Nuplane",
-          "version": "0.0.11-preview.94"
+          "version": "0.0.11-preview.99"
         },
         {
           "type": "pinned-transitive",
@@ -5976,7 +5986,7 @@
         {
           "type": "external",
           "id": "CShells.Abstractions",
-          "version": "0.0.30-preview.159"
+          "version": "0.0.30-preview.173"
         },
         {
           "type": "external",
@@ -6011,7 +6021,7 @@
         {
           "type": "pinned-transitive",
           "id": "CShells",
-          "version": "0.0.30-preview.159"
+          "version": "0.0.30-preview.173"
         },
         {
           "type": "pinned-transitive",
@@ -6090,7 +6100,7 @@
         {
           "type": "external",
           "id": "CShells.Abstractions",
-          "version": "0.0.30-preview.159"
+          "version": "0.0.30-preview.173"
         },
         {
           "type": "external",
@@ -6178,7 +6188,7 @@
         {
           "type": "external",
           "id": "CShells.Abstractions",
-          "version": "0.0.30-preview.159"
+          "version": "0.0.30-preview.173"
         },
         {
           "type": "external",
@@ -6257,7 +6267,7 @@
         {
           "type": "external",
           "id": "CShells.Abstractions",
-          "version": "0.0.30-preview.159"
+          "version": "0.0.30-preview.173"
         },
         {
           "type": "external",
@@ -6331,12 +6341,12 @@
         {
           "type": "external",
           "id": "CShells.Abstractions",
-          "version": "0.0.30-preview.159"
+          "version": "0.0.30-preview.173"
         },
         {
           "type": "external",
           "id": "CShells.AspNetCore.Abstractions",
-          "version": "0.0.30-preview.159"
+          "version": "0.0.30-preview.173"
         },
         {
           "type": "external",
@@ -6428,7 +6438,7 @@
         {
           "type": "external",
           "id": "CShells.Abstractions",
-          "version": "0.0.30-preview.159"
+          "version": "0.0.30-preview.173"
         },
         {
           "type": "external",
@@ -6458,7 +6468,7 @@
         {
           "type": "pinned-transitive",
           "id": "CShells",
-          "version": "0.0.30-preview.159"
+          "version": "0.0.30-preview.173"
         },
         {
           "type": "pinned-transitive",
@@ -6571,7 +6581,7 @@
         {
           "type": "external",
           "id": "CShells.Abstractions",
-          "version": "0.0.30-preview.159"
+          "version": "0.0.30-preview.173"
         },
         {
           "type": "external",
@@ -6704,12 +6714,12 @@
         {
           "type": "external",
           "id": "CShells.Abstractions",
-          "version": "0.0.30-preview.159"
+          "version": "0.0.30-preview.173"
         },
         {
           "type": "external",
           "id": "CShells.AspNetCore.Abstractions",
-          "version": "0.0.30-preview.159"
+          "version": "0.0.30-preview.173"
         },
         {
           "type": "external",
@@ -6758,7 +6768,7 @@
         {
           "type": "external",
           "id": "CShells.Abstractions",
-          "version": "0.0.30-preview.159"
+          "version": "0.0.30-preview.173"
         },
         {
           "type": "external",
@@ -6783,12 +6793,12 @@
         {
           "type": "pinned-transitive",
           "id": "CShells",
-          "version": "0.0.30-preview.159"
+          "version": "0.0.30-preview.173"
         },
         {
           "type": "pinned-transitive",
           "id": "CShells.AspNetCore.Abstractions",
-          "version": "0.0.30-preview.159"
+          "version": "0.0.30-preview.173"
         },
         {
           "type": "pinned-transitive",
@@ -6952,12 +6962,12 @@
         {
           "type": "external",
           "id": "CShells.Abstractions",
-          "version": "0.0.30-preview.159"
+          "version": "0.0.30-preview.173"
         },
         {
           "type": "external",
           "id": "CShells.AspNetCore.Abstractions",
-          "version": "0.0.30-preview.159"
+          "version": "0.0.30-preview.173"
         },
         {
           "type": "external",
@@ -7059,7 +7069,7 @@
         {
           "type": "external",
           "id": "CShells.Abstractions",
-          "version": "0.0.30-preview.159"
+          "version": "0.0.30-preview.173"
         },
         {
           "type": "external",
@@ -7192,7 +7202,7 @@
         {
           "type": "external",
           "id": "CShells.Abstractions",
-          "version": "0.0.30-preview.159"
+          "version": "0.0.30-preview.173"
         },
         {
           "type": "external",
@@ -7222,7 +7232,7 @@
         {
           "type": "pinned-transitive",
           "id": "CShells",
-          "version": "0.0.30-preview.159"
+          "version": "0.0.30-preview.173"
         },
         {
           "type": "pinned-transitive",
@@ -7331,7 +7341,7 @@
         {
           "type": "external",
           "id": "CShells.Abstractions",
-          "version": "0.0.30-preview.159"
+          "version": "0.0.30-preview.173"
         },
         {
           "type": "external",
@@ -7415,7 +7425,7 @@
         {
           "type": "external",
           "id": "CShells.Abstractions",
-          "version": "0.0.30-preview.159"
+          "version": "0.0.30-preview.173"
         },
         {
           "type": "external",
@@ -7484,7 +7494,7 @@
         {
           "type": "external",
           "id": "CShells.Abstractions",
-          "version": "0.0.30-preview.159"
+          "version": "0.0.30-preview.173"
         },
         {
           "type": "external",
@@ -7587,7 +7597,7 @@
         {
           "type": "external",
           "id": "CShells.Abstractions",
-          "version": "0.0.30-preview.159"
+          "version": "0.0.30-preview.173"
         },
         {
           "type": "external",
@@ -7656,12 +7666,12 @@
         {
           "type": "external",
           "id": "CShells.Abstractions",
-          "version": "0.0.30-preview.159"
+          "version": "0.0.30-preview.173"
         },
         {
           "type": "external",
           "id": "CShells.AspNetCore.Abstractions",
-          "version": "0.0.30-preview.159"
+          "version": "0.0.30-preview.173"
         },
         {
           "type": "external",
@@ -7785,12 +7795,12 @@
         {
           "type": "pinned-transitive",
           "id": "CShells.Abstractions",
-          "version": "0.0.30-preview.159"
+          "version": "0.0.30-preview.173"
         },
         {
           "type": "pinned-transitive",
           "id": "CShells.AspNetCore.Abstractions",
-          "version": "0.0.30-preview.159"
+          "version": "0.0.30-preview.173"
         },
         {
           "type": "pinned-transitive",
@@ -7973,7 +7983,7 @@
         {
           "type": "pinned-transitive",
           "id": "CShells.Abstractions",
-          "version": "0.0.30-preview.159"
+          "version": "0.0.30-preview.173"
         },
         {
           "type": "pinned-transitive",
@@ -8067,7 +8077,7 @@
         {
           "type": "external",
           "id": "CShells.Abstractions",
-          "version": "0.0.30-preview.159"
+          "version": "0.0.30-preview.173"
         },
         {
           "type": "external",
@@ -8097,7 +8107,7 @@
         {
           "type": "pinned-transitive",
           "id": "CShells",
-          "version": "0.0.30-preview.159"
+          "version": "0.0.30-preview.173"
         },
         {
           "type": "pinned-transitive",
@@ -8221,12 +8231,12 @@
         {
           "type": "pinned-transitive",
           "id": "CShells.Abstractions",
-          "version": "0.0.30-preview.159"
+          "version": "0.0.30-preview.173"
         },
         {
           "type": "pinned-transitive",
           "id": "CShells.AspNetCore.Abstractions",
-          "version": "0.0.30-preview.159"
+          "version": "0.0.30-preview.173"
         },
         {
           "type": "pinned-transitive",
@@ -8359,7 +8369,7 @@
         {
           "type": "external",
           "id": "CShells.Abstractions",
-          "version": "0.0.30-preview.159"
+          "version": "0.0.30-preview.173"
         },
         {
           "type": "external",
@@ -8433,7 +8443,7 @@
         {
           "type": "external",
           "id": "CShells.Abstractions",
-          "version": "0.0.30-preview.159"
+          "version": "0.0.30-preview.173"
         },
         {
           "type": "external",
@@ -8463,7 +8473,7 @@
         {
           "type": "pinned-transitive",
           "id": "CShells",
-          "version": "0.0.30-preview.159"
+          "version": "0.0.30-preview.173"
         },
         {
           "type": "pinned-transitive",
@@ -8567,7 +8577,7 @@
         {
           "type": "external",
           "id": "CShells.Abstractions",
-          "version": "0.0.30-preview.159"
+          "version": "0.0.30-preview.173"
         },
         {
           "type": "external",
@@ -8656,7 +8666,7 @@
         {
           "type": "external",
           "id": "CShells.Abstractions",
-          "version": "0.0.30-preview.159"
+          "version": "0.0.30-preview.173"
         },
         {
           "type": "external",
@@ -8725,12 +8735,12 @@
         {
           "type": "external",
           "id": "CShells.Abstractions",
-          "version": "0.0.30-preview.159"
+          "version": "0.0.30-preview.173"
         },
         {
           "type": "external",
           "id": "CShells.AspNetCore.Abstractions",
-          "version": "0.0.30-preview.159"
+          "version": "0.0.30-preview.173"
         },
         {
           "type": "external",
@@ -8809,7 +8819,7 @@
         {
           "type": "external",
           "id": "CShells.Abstractions",
-          "version": "0.0.30-preview.159"
+          "version": "0.0.30-preview.173"
         },
         {
           "type": "external",
@@ -8839,7 +8849,7 @@
         {
           "type": "pinned-transitive",
           "id": "CShells",
-          "version": "0.0.30-preview.159"
+          "version": "0.0.30-preview.173"
         },
         {
           "type": "pinned-transitive",
@@ -8992,7 +9002,7 @@
         {
           "type": "external",
           "id": "CShells.Abstractions",
-          "version": "0.0.30-preview.159"
+          "version": "0.0.30-preview.173"
         },
         {
           "type": "external",
@@ -9076,7 +9086,7 @@
         {
           "type": "external",
           "id": "CShells.Abstractions",
-          "version": "0.0.30-preview.159"
+          "version": "0.0.30-preview.173"
         },
         {
           "type": "external",
@@ -9160,7 +9170,7 @@
         {
           "type": "external",
           "id": "CShells.Abstractions",
-          "version": "0.0.30-preview.159"
+          "version": "0.0.30-preview.173"
         },
         {
           "type": "external",
@@ -9244,7 +9254,7 @@
         {
           "type": "external",
           "id": "CShells.Abstractions",
-          "version": "0.0.30-preview.159"
+          "version": "0.0.30-preview.173"
         },
         {
           "type": "external",
@@ -9318,7 +9328,7 @@
         {
           "type": "external",
           "id": "CShells.Abstractions",
-          "version": "0.0.30-preview.159"
+          "version": "0.0.30-preview.173"
         },
         {
           "type": "external",
@@ -9407,12 +9417,12 @@
         {
           "type": "external",
           "id": "CShells.Abstractions",
-          "version": "0.0.30-preview.159"
+          "version": "0.0.30-preview.173"
         },
         {
           "type": "external",
           "id": "CShells.AspNetCore.Abstractions",
-          "version": "0.0.30-preview.159"
+          "version": "0.0.30-preview.173"
         },
         {
           "type": "external",
@@ -9461,7 +9471,7 @@
         {
           "type": "external",
           "id": "CShells.Abstractions",
-          "version": "0.0.30-preview.159"
+          "version": "0.0.30-preview.173"
         },
         {
           "type": "external",
@@ -9530,7 +9540,7 @@
         {
           "type": "external",
           "id": "CShells.Abstractions",
-          "version": "0.0.30-preview.159"
+          "version": "0.0.30-preview.173"
         },
         {
           "type": "external",
@@ -9609,7 +9619,7 @@
         {
           "type": "external",
           "id": "CShells.Abstractions",
-          "version": "0.0.30-preview.159"
+          "version": "0.0.30-preview.173"
         },
         {
           "type": "external",
@@ -9797,12 +9807,12 @@
         {
           "type": "external",
           "id": "CShells.Abstractions",
-          "version": "0.0.30-preview.159"
+          "version": "0.0.30-preview.173"
         },
         {
           "type": "external",
           "id": "CShells.AspNetCore.Abstractions",
-          "version": "0.0.30-preview.159"
+          "version": "0.0.30-preview.173"
         },
         {
           "type": "external",
@@ -9866,7 +9876,7 @@
         {
           "type": "external",
           "id": "CShells.Abstractions",
-          "version": "0.0.30-preview.159"
+          "version": "0.0.30-preview.173"
         },
         {
           "type": "external",
@@ -9896,12 +9906,12 @@
         {
           "type": "pinned-transitive",
           "id": "CShells",
-          "version": "0.0.30-preview.159"
+          "version": "0.0.30-preview.173"
         },
         {
           "type": "pinned-transitive",
           "id": "CShells.AspNetCore.Abstractions",
-          "version": "0.0.30-preview.159"
+          "version": "0.0.30-preview.173"
         },
         {
           "type": "pinned-transitive",
@@ -10020,7 +10030,7 @@
         {
           "type": "external",
           "id": "CShells.Abstractions",
-          "version": "0.0.30-preview.159"
+          "version": "0.0.30-preview.173"
         },
         {
           "type": "external",
@@ -10035,7 +10045,7 @@
         {
           "type": "pinned-transitive",
           "id": "CShells.AspNetCore.Abstractions",
-          "version": "0.0.30-preview.159"
+          "version": "0.0.30-preview.173"
         },
         {
           "type": "pinned-transitive",
@@ -10329,17 +10339,17 @@
         {
           "type": "external",
           "id": "Nuplane.Admin",
-          "version": "0.0.11-preview.94"
+          "version": "0.0.11-preview.99"
         },
         {
           "type": "pinned-transitive",
           "id": "CShells.Abstractions",
-          "version": "0.0.30-preview.159"
+          "version": "0.0.30-preview.173"
         },
         {
           "type": "pinned-transitive",
           "id": "CShells.AspNetCore.Abstractions",
-          "version": "0.0.30-preview.159"
+          "version": "0.0.30-preview.173"
         },
         {
           "type": "pinned-transitive",
@@ -10354,12 +10364,12 @@
         {
           "type": "pinned-transitive",
           "id": "Nuplane",
-          "version": "0.0.11-preview.94"
+          "version": "0.0.11-preview.99"
         },
         {
           "type": "pinned-transitive",
           "id": "Nuplane.Loading.Abstractions",
-          "version": "0.0.11-preview.94"
+          "version": "0.0.11-preview.99"
         }
       ]
     },
@@ -11169,7 +11179,7 @@
         {
           "type": "external",
           "id": "CShells.FastEndpoints",
-          "version": "0.0.30-preview.159"
+          "version": "0.0.30-preview.173"
         },
         {
           "type": "external",
@@ -11700,7 +11710,7 @@
         {
           "type": "external",
           "id": "CShells.AspNetCore",
-          "version": "0.0.30-preview.159"
+          "version": "0.0.30-preview.173"
         },
         {
           "type": "external",
@@ -12067,7 +12077,7 @@
         {
           "type": "external",
           "id": "CShells",
-          "version": "0.0.30-preview.159"
+          "version": "0.0.30-preview.173"
         },
         {
           "type": "external",
@@ -12502,12 +12512,12 @@
         {
           "type": "external",
           "id": "CShells",
-          "version": "0.0.30-preview.159"
+          "version": "0.0.30-preview.173"
         },
         {
           "type": "external",
           "id": "CShells.FastEndpoints",
-          "version": "0.0.30-preview.159"
+          "version": "0.0.30-preview.173"
         },
         {
           "type": "external",
@@ -12561,7 +12571,7 @@
         {
           "type": "external",
           "id": "CShells.FastEndpoints",
-          "version": "0.0.30-preview.159"
+          "version": "0.0.30-preview.173"
         },
         {
           "type": "external",
@@ -13148,12 +13158,12 @@
         {
           "type": "external",
           "id": "CShells.AspNetCore",
-          "version": "0.0.30-preview.159"
+          "version": "0.0.30-preview.173"
         },
         {
           "type": "external",
           "id": "CShells.FastEndpoints",
-          "version": "0.0.30-preview.159"
+          "version": "0.0.30-preview.173"
         },
         {
           "type": "external",
@@ -13188,7 +13198,7 @@
         {
           "type": "external",
           "id": "Nuplane.Loading",
-          "version": "0.0.11-preview.94"
+          "version": "0.0.11-preview.99"
         },
         {
           "type": "external",
@@ -13606,17 +13616,17 @@
         {
           "type": "external",
           "id": "Nuplane",
-          "version": "0.0.11-preview.94"
+          "version": "0.0.11-preview.99"
         },
         {
           "type": "external",
           "id": "Nuplane.Loading",
-          "version": "0.0.11-preview.94"
+          "version": "0.0.11-preview.99"
         },
         {
           "type": "external",
           "id": "Nuplane.Sources.Directory",
-          "version": "0.0.11-preview.94"
+          "version": "0.0.11-preview.99"
         }
       ]
     },
@@ -13650,17 +13660,17 @@
         {
           "type": "external",
           "id": "Nuplane",
-          "version": "0.0.11-preview.94"
+          "version": "0.0.11-preview.99"
         },
         {
           "type": "external",
           "id": "Nuplane.Loading",
-          "version": "0.0.11-preview.94"
+          "version": "0.0.11-preview.99"
         },
         {
           "type": "external",
           "id": "Nuplane.Sources.Directory",
-          "version": "0.0.11-preview.94"
+          "version": "0.0.11-preview.99"
         }
       ]
     },
@@ -13726,7 +13736,7 @@
         {
           "type": "external",
           "id": "CShells.Abstractions",
-          "version": "0.0.30-preview.159"
+          "version": "0.0.30-preview.173"
         },
         {
           "type": "external",
@@ -13736,12 +13746,12 @@
         {
           "type": "external",
           "id": "Nuplane",
-          "version": "0.0.11-preview.94"
+          "version": "0.0.11-preview.99"
         },
         {
           "type": "external",
           "id": "Nuplane.Loading",
-          "version": "0.0.11-preview.94"
+          "version": "0.0.11-preview.99"
         }
       ]
     },
@@ -14134,6 +14144,11 @@
         },
         {
           "type": "internal",
+          "id": "Elsa.Workbench",
+          "path": "src/apps/Elsa.Workbench/Elsa.Workbench.csproj"
+        },
+        {
+          "type": "internal",
           "id": "dotnet-elsa",
           "path": "src/essentials/Cli/Elsa.Cli/Elsa.Cli.csproj"
         },
@@ -14155,7 +14170,7 @@
         {
           "type": "external",
           "id": "CShells.AspNetCore.Abstractions",
-          "version": "0.0.30-preview.159"
+          "version": "0.0.30-preview.173"
         },
         {
           "type": "external",
@@ -14170,7 +14185,7 @@
         {
           "type": "external",
           "id": "Nuplane.Loading",
-          "version": "0.0.11-preview.94"
+          "version": "0.0.11-preview.99"
         },
         {
           "type": "external",
@@ -14219,7 +14234,7 @@
         {
           "type": "external",
           "id": "CShells.AspNetCore.Abstractions",
-          "version": "0.0.30-preview.159"
+          "version": "0.0.30-preview.173"
         },
         {
           "type": "external",
@@ -14253,7 +14268,7 @@
         {
           "type": "external",
           "id": "CShells.AspNetCore.Abstractions",
-          "version": "0.0.30-preview.159"
+          "version": "0.0.30-preview.173"
         },
         {
           "type": "external",
@@ -14302,7 +14317,7 @@
         {
           "type": "external",
           "id": "CShells",
-          "version": "0.0.30-preview.159"
+          "version": "0.0.30-preview.173"
         },
         {
           "type": "external",
@@ -14317,7 +14332,7 @@
         {
           "type": "external",
           "id": "Nuplane.Loading",
-          "version": "0.0.11-preview.94"
+          "version": "0.0.11-preview.99"
         },
         {
           "type": "external",
@@ -14666,12 +14681,12 @@
         {
           "type": "external",
           "id": "CShells",
-          "version": "0.0.30-preview.159"
+          "version": "0.0.30-preview.173"
         },
         {
           "type": "external",
           "id": "CShells.FastEndpoints",
-          "version": "0.0.30-preview.159"
+          "version": "0.0.30-preview.173"
         },
         {
           "type": "external",
@@ -14962,17 +14977,17 @@
         {
           "type": "external",
           "id": "CShells",
-          "version": "0.0.30-preview.159"
+          "version": "0.0.30-preview.173"
         },
         {
           "type": "external",
           "id": "CShells.AspNetCore",
-          "version": "0.0.30-preview.159"
+          "version": "0.0.30-preview.173"
         },
         {
           "type": "external",
           "id": "CShells.AspNetCore.Abstractions",
-          "version": "0.0.30-preview.159"
+          "version": "0.0.30-preview.173"
         },
         {
           "type": "external",
@@ -15692,12 +15707,12 @@
         {
           "type": "external",
           "id": "CShells",
-          "version": "0.0.30-preview.159"
+          "version": "0.0.30-preview.173"
         },
         {
           "type": "external",
           "id": "CShells.AspNetCore",
-          "version": "0.0.30-preview.159"
+          "version": "0.0.30-preview.173"
         },
         {
           "type": "external",
@@ -15914,7 +15929,7 @@
         {
           "type": "external",
           "id": "CShells",
-          "version": "0.0.30-preview.159"
+          "version": "0.0.30-preview.173"
         },
         {
           "type": "external",
@@ -16032,7 +16047,7 @@
         {
           "type": "external",
           "id": "CShells",
-          "version": "0.0.30-preview.159"
+          "version": "0.0.30-preview.173"
         },
         {
           "type": "external",
@@ -16387,7 +16402,7 @@
         {
           "type": "external",
           "id": "CShells",
-          "version": "0.0.30-preview.159"
+          "version": "0.0.30-preview.173"
         },
         {
           "type": "external",
@@ -17168,7 +17183,7 @@
         {
           "type": "external",
           "id": "CShells.Abstractions",
-          "version": "0.0.30-preview.159"
+          "version": "0.0.30-preview.173"
         },
         {
           "type": "external",
@@ -17443,7 +17458,7 @@
         {
           "type": "external",
           "id": "CShells.AspNetCore",
-          "version": "0.0.30-preview.159"
+          "version": "0.0.30-preview.173"
         },
         {
           "type": "external",
@@ -17492,7 +17507,7 @@
         {
           "type": "external",
           "id": "CShells.AspNetCore",
-          "version": "0.0.30-preview.159"
+          "version": "0.0.30-preview.173"
         },
         {
           "type": "external",
@@ -17620,12 +17635,12 @@
         {
           "type": "external",
           "id": "CShells",
-          "version": "0.0.30-preview.159"
+          "version": "0.0.30-preview.173"
         },
         {
           "type": "external",
           "id": "CShells.AspNetCore",
-          "version": "0.0.30-preview.159"
+          "version": "0.0.30-preview.173"
         },
         {
           "type": "external",
@@ -17729,22 +17744,22 @@
         {
           "type": "external",
           "id": "CShells",
-          "version": "0.0.30-preview.159"
+          "version": "0.0.30-preview.173"
         },
         {
           "type": "external",
           "id": "CShells.AspNetCore",
-          "version": "0.0.30-preview.159"
+          "version": "0.0.30-preview.173"
         },
         {
           "type": "external",
           "id": "CShells.AspNetCore.Abstractions",
-          "version": "0.0.30-preview.159"
+          "version": "0.0.30-preview.173"
         },
         {
           "type": "external",
           "id": "CShells.FastEndpoints",
-          "version": "0.0.30-preview.159"
+          "version": "0.0.30-preview.173"
         },
         {
           "type": "external",
@@ -17983,12 +17998,12 @@
         {
           "type": "external",
           "id": "CShells",
-          "version": "0.0.30-preview.159"
+          "version": "0.0.30-preview.173"
         },
         {
           "type": "external",
           "id": "CShells.AspNetCore",
-          "version": "0.0.30-preview.159"
+          "version": "0.0.30-preview.173"
         },
         {
           "type": "external",
@@ -18264,22 +18279,22 @@
         {
           "type": "external",
           "id": "CShells",
-          "version": "0.0.30-preview.159"
+          "version": "0.0.30-preview.173"
         },
         {
           "type": "external",
           "id": "CShells.AspNetCore",
-          "version": "0.0.30-preview.159"
+          "version": "0.0.30-preview.173"
         },
         {
           "type": "external",
           "id": "CShells.AspNetCore.Abstractions",
-          "version": "0.0.30-preview.159"
+          "version": "0.0.30-preview.173"
         },
         {
           "type": "external",
           "id": "CShells.FastEndpoints",
-          "version": "0.0.30-preview.159"
+          "version": "0.0.30-preview.173"
         },
         {
           "type": "external",
@@ -18617,12 +18632,12 @@
         {
           "type": "external",
           "id": "CShells",
-          "version": "0.0.30-preview.159"
+          "version": "0.0.30-preview.173"
         },
         {
           "type": "external",
           "id": "CShells.AspNetCore",
-          "version": "0.0.30-preview.159"
+          "version": "0.0.30-preview.173"
         },
         {
           "type": "external",
@@ -18745,12 +18760,12 @@
         {
           "type": "external",
           "id": "CShells.AspNetCore",
-          "version": "0.0.30-preview.159"
+          "version": "0.0.30-preview.173"
         },
         {
           "type": "external",
           "id": "CShells.FastEndpoints",
-          "version": "0.0.30-preview.159"
+          "version": "0.0.30-preview.173"
         },
         {
           "type": "external",
@@ -19339,7 +19354,7 @@
         {
           "type": "external",
           "id": "CShells.FastEndpoints",
-          "version": "0.0.30-preview.159"
+          "version": "0.0.30-preview.173"
         },
         {
           "type": "external",
@@ -19498,7 +19513,7 @@
         {
           "type": "external",
           "id": "CShells.AspNetCore",
-          "version": "0.0.30-preview.159"
+          "version": "0.0.30-preview.173"
         },
         {
           "type": "external",
@@ -19652,7 +19667,7 @@
         {
           "type": "external",
           "id": "CShells.AspNetCore.Abstractions",
-          "version": "0.0.30-preview.159"
+          "version": "0.0.30-preview.173"
         },
         {
           "type": "external",
@@ -19928,7 +19943,7 @@
         {
           "type": "external",
           "id": "CShells",
-          "version": "0.0.30-preview.159"
+          "version": "0.0.30-preview.173"
         },
         {
           "type": "external",
@@ -20002,7 +20017,7 @@
         {
           "type": "external",
           "id": "CShells",
-          "version": "0.0.30-preview.159"
+          "version": "0.0.30-preview.173"
         },
         {
           "type": "external",
@@ -20186,12 +20201,12 @@
         {
           "type": "external",
           "id": "CShells",
-          "version": "0.0.30-preview.159"
+          "version": "0.0.30-preview.173"
         },
         {
           "type": "external",
           "id": "CShells.AspNetCore",
-          "version": "0.0.30-preview.159"
+          "version": "0.0.30-preview.173"
         },
         {
           "type": "external",
@@ -20434,12 +20449,12 @@
         {
           "type": "external",
           "id": "CShells",
-          "version": "0.0.30-preview.159"
+          "version": "0.0.30-preview.173"
         },
         {
           "type": "external",
           "id": "CShells.AspNetCore",
-          "version": "0.0.30-preview.159"
+          "version": "0.0.30-preview.173"
         },
         {
           "type": "external",

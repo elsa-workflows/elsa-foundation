@@ -208,6 +208,8 @@ Reads current `specs/*` folders and task checkboxes. Status clues are textual, n
 | [198-response-replay-safety](../../specs/198-response-replay-safety/spec.md) | Response Replay Safety | Implemented — [PR #2518](https://github.com/elsa-workflows/elsa-foundation/pull/2518) | - | 19 | 0 | out of scope |
 | [199-shared-nuplane-adoption](../../specs/199-shared-nuplane-adoption/spec.md) | Shared Nuplane Adapter Adoption | Draft | - | 13 | 2 | retained |
 | [200-root-write-lease-rows](../../specs/200-root-write-lease-rows/spec.md) | Root-Write Lease Coordination Without a Hot Row | Implemented — PR #2539 | - | 30 | 0 | out of scope |
+| [201-package-generation-readability](../../specs/201-package-generation-readability/spec.md) | Protect Package Generations | Draft — prepared; current integration qualification and stable acceptance remain open | - | 20 | 1 | out of scope |
+| [202-adopt-startup-runner](../../specs/202-adopt-startup-runner/spec.md) | Shared Startup Runner Adoption | Draft — preview locally qualified; stable acceptance (T019) remains open | - | 18 | 1 | retained |
 | [203-groundwork-persistence-foundation](../../specs/203-groundwork-persistence-foundation/spec.md) | Groundwork Persistence Foundation | Draft | - | 23 | 2 | - |
 | [204-groundwork-core-manifest-planner](../../specs/204-groundwork-core-manifest-planner/spec.md) | Groundwork Core Manifest And Planner Kernel | Implemented | - | 38 | 0 | - |
 | [205-groundwork-sqlite-document-store](../../specs/205-groundwork-sqlite-document-store/spec.md) | Groundwork SQLite Document Store | Implemented | - | 17 | 0 | - |

@@ -3,19 +3,19 @@ using Elsa.Attention.Core;
 namespace Elsa.Foundation.Host.Shells;
 
 /// <summary>
-/// One Attention item for every shell that is not active and that the host has tried to activate and could not: a warning while
-/// the host retries a fault, critical when an EF module refused the activation and an operator has to resolve it. The item goes
-/// when the shell is active, by any path (see <see cref="ShellActivationTracker"/>).
+/// One Attention item for every recorded activation failure whose shell is not currently active: a warning for a fault, critical
+/// when an EF module refused activation and an operator has to resolve it. Its retry time describes the last selected decision;
+/// it does not promise another attempt after startup recovery ends (see <see cref="ShellActivationTracker"/>).
 /// </summary>
 /// <remarks>
 /// <para>
 /// A host-level <see cref="IAttentionContributor"/>, registered as an instance on the host's container, which CShells copies into
 /// every shell, so any active shell's Attention endpoint lists it: the contract the modules contribute through, from the one
-/// place that knows a shell is not running.
+/// place that records a shell's failed activation.
 /// </para>
 /// <para>
 /// It is served by an active shell, so when the only shell is the one that is down, nothing can serve it. That host's operators
-/// see the failure on <c>/health/ready</c> (a stable reason code, the attempts and the next attempt) and in the host log, which
+/// see the failure on <c>/health/ready</c> (a stable reason code, the attempts and the last selected retry time) and in the host log, which
 /// has every failure with its exception.
 /// </para>
 /// <para>
@@ -43,8 +43,9 @@ public sealed class ShellActivationAttentionContributor(ShellActivationTracker t
     {
         var refusal = failure.Refusal;
         var cause = refusal is null
-            ? $"Activation failed {failure.Attempts} time(s), the last with {failure.FailureType}; the host log has the exception. The host retries"
-            : $"EF module '{refusal.Module}' refused the activation ({refusal.Code}{(refusal.PendingMigrations.Count == 0 ? "" : $": {string.Join(", ", refusal.PendingMigrations)}")}), which an operator resolves. The host checks again";
+            ? $"Activation failed {failure.Attempts} time(s), the last with {failure.FailureType}; the host log has the exception. The last retry decision was due"
+            : $"EF module '{refusal.Module}' refused the activation ({refusal.Code}{(refusal.PendingMigrations.Count == 0 ? "" : $": {string.Join(", ", refusal.PendingMigrations)}")}), which an operator resolves. The last recheck decision was due";
+        const string currentReadiness = "Check live readiness: startup recovery may have ended after another activation path completed.";
         List<AttentionCorrelation> correlations = [new("shell", failure.Shell)];
         if (refusal is not null)
             correlations.Add(new("module", refusal.Module));
@@ -54,7 +55,7 @@ public sealed class ShellActivationAttentionContributor(ShellActivationTracker t
             $"{failure.FailureType}:{refusal?.Code}",
             refusal is null ? AttentionSeverity.Warning : AttentionSeverity.Critical,
             $"Shell '{failure.Shell}' is not active",
-            $"{cause} at {failure.NextAttemptAt:u}.",
+            $"{cause} at {failure.NextAttemptAt:u}. {currentReadiness}",
             failure.FirstFailedAt,
             observedAt,
             failure.Attempts,
