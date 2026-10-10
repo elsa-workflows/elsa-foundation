@@ -226,7 +226,8 @@ public sealed class DurableTimerRestartCrashTests
             harness.Services.GetRequiredService<TimeProvider>(),
             harness.Services.GetRequiredService<IWorkflowExecutionStateStore>(),
             harness.Services.GetRequiredService<IWorkflowSchedulerPauseGate>(),
-            harness.Services.GetRequiredService<RuntimeResumptionDiscoveryStateStore>());
+            harness.Services.GetRequiredService<RuntimeResumptionDiscoveryStateStore>(),
+            harness.Services.GetRequiredService<IExecutionLivenessStateStore>());
 
     private static IDurableTimerStore TimerStore(WorkflowExecutionHarness harness) =>
         harness.Services.GetRequiredService<IDurableTimerStore>();
