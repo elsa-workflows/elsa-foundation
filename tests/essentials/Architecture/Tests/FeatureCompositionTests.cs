@@ -11,6 +11,7 @@ using CShells.DependencyInjection;
 using CShells.Features;
 using CShells.Lifecycle;
 using Elsa.Cluster.Readability;
+using Elsa.Tasks.Core;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.TestHost;
@@ -543,7 +544,9 @@ public sealed class FeatureCompositionTests
                     ContentRootPath = directory
                 });
                 builder.WebHost.UseTestServer();
-                builder.Logging.ClearProviders().AddProvider(log).SetMinimumLevel(LogLevel.Warning);
+                // A rule for this provider outranks every rule that names none, so Logging:LogLevel settings from the
+                // environment (Default=None, CShells=None) cannot filter out what the test reads.
+                builder.Logging.ClearProviders().AddProvider(log).AddFilter<CapturedLog>(null, LogLevel.Warning);
 
                 builder.Services.AddSingleton<IShellFeatureFactory>(services => factory.Decorating(new DefaultShellFeatureFactory(services)));
                 AddHostServices(builder.Services, directory);
@@ -567,7 +570,9 @@ public sealed class FeatureCompositionTests
                 app.MapShells();
                 app.UseAuthentication();
                 app.UseAuthorization();
+                log.Recording = true;
                 await app.StartAsync();
+                log.Recording = false;
 
                 var host = new CompositionHost(app, factory, settings, log, directory);
                 foreach (var composition in compositions)
@@ -617,8 +622,18 @@ public sealed class FeatureCompositionTests
             }
         }
 
+        /// <summary>
+        /// Activates a shell with the log recording, then stops the shell's tasks. Only host start and the activations are
+        /// recorded: they cover binding, the initializers, endpoint mapping and middleware. After activation the shell's
+        /// recurring pumps tick on timers, and whether one of them failed before the log was read would depend on the
+        /// machine's speed, so their output is not read; stopping them here keeps one shell's pumps from logging into the
+        /// next shell's activation. A pump first ticks one interval (seconds) after the Start-phase initializer that
+        /// schedules it, and only endpoint mapping follows that initializer, so a tick lands inside the window only if a
+        /// pump's interval is shorter than that step. Background tasks that initializer starts do run inside it.
+        /// </summary>
         private async Task ActivateAsync(string shell)
         {
+            log.Recording = true;
             try
             {
                 _active[shell] = await app.Services.GetRequiredService<IShellRegistry>().GetOrActivateAsync(shell);
@@ -627,8 +642,14 @@ public sealed class FeatureCompositionTests
             {
                 _refused[shell] = exception;
             }
+            finally
+            {
+                log.Recording = false;
+            }
 
             factory.Recordings.SingleOrDefault(recording => recording.Shell == shell)?.Complete();
+            if (_active.GetValueOrDefault(shell)?.ServiceProvider.GetService<ITaskManager>() is IStoppableTaskManager tasks)
+                await tasks.StopExecutingRegisteredTasks();
         }
 
         public async Task<IReadOnlyList<string>> ResolveAsync(string shell, IReadOnlySet<string> featureNames)
@@ -707,8 +728,8 @@ public sealed class FeatureCompositionTests
     }
 
     /// <summary>
-    /// What the host and its shells log at Warning and above. CShells logs some failures and carries on, so a feature it
-    /// skipped would otherwise leave this test green: these entries fail it.
+    /// What the host and its shells log at Warning and above while <see cref="Recording"/> is on. CShells logs some
+    /// failures and carries on, so a feature it skipped would otherwise leave this test green: these entries fail it.
     /// </summary>
     private sealed class CapturedLog : ILoggerProvider
     {
@@ -727,6 +748,13 @@ public sealed class FeatureCompositionTests
         ];
 
         private readonly ConcurrentQueue<Entry> _entries = new();
+        private volatile bool _recording;
+
+        public bool Recording
+        {
+            get => _recording;
+            set => _recording = value;
+        }
 
         public IEnumerable<string> Failures() => _entries
             .Where(entry => entry.Level >= LogLevel.Error ||
@@ -734,7 +762,7 @@ public sealed class FeatureCompositionTests
             .Select(entry => $"[log] {entry.Level} {entry.Category}: {entry.Message}" +
                              (entry.Exception is null ? "" : $" ({entry.Exception.GetType().Name}: {entry.Exception.Message})"));
 
-        public ILogger CreateLogger(string categoryName) => new Logger(categoryName, _entries);
+        public ILogger CreateLogger(string categoryName) => new Logger(categoryName, this);
 
         public void Dispose()
         {
@@ -742,7 +770,7 @@ public sealed class FeatureCompositionTests
 
         private sealed record Entry(string Category, LogLevel Level, string Template, string Message, Exception? Exception);
 
-        private sealed class Logger(string category, ConcurrentQueue<Entry> entries) : ILogger
+        private sealed class Logger(string category, CapturedLog log) : ILogger
         {
             public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
 
@@ -750,13 +778,13 @@ public sealed class FeatureCompositionTests
 
             public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter)
             {
-                if (!IsEnabled(logLevel))
+                if (!IsEnabled(logLevel) || !log.Recording)
                     return;
 
                 var message = formatter(state, exception);
                 var template = (state as IEnumerable<KeyValuePair<string, object?>>)?
                     .FirstOrDefault(value => value.Key == "{OriginalFormat}").Value as string;
-                entries.Enqueue(new Entry(category, logLevel, template ?? message, message, exception));
+                log._entries.Enqueue(new Entry(category, logLevel, template ?? message, message, exception));
             }
         }
     }
