@@ -4,14 +4,13 @@ namespace Elsa.Maps.Generator;
 /// Where the maps look for code, and how they decide whether a path is test code.
 /// </summary>
 /// <remarks>
-/// Module code lives under one root. <c>src/core</c> holds the required modules, <c>src/extensions</c> the
-/// optional ones (#1815), and <c>src/apps</c> the deployable hosts; core test projects sit under
-/// <c>tests/core</c>, while an extension carries its own <c>tests/</c> subtree beside its <c>src/</c>.
+/// Module code lives under one root. <c>src/essentials</c> holds the required modules, <c>src/extensions</c> the
+/// optional ones (#1815), and <c>src/apps</c> the deployable hosts; every test project sits under <c>tests/</c>,
+/// extension tests under <c>tests/extensions</c> (#2579).
 /// <para>
-/// That last detail is why the test rule cannot be a bare <c>tests/</c> prefix: it would read
-/// <c>src/extensions/Bpmn/tests/…</c> as production code, so the test map would undercount its suites and
-/// the feature scan would treat test fixtures as shipping features. Matching <c>/tests/</c> anywhere covers
-/// both placements. No production path contains that segment, so the broader rule misclassifies nothing.
+/// The test rule also matches <c>/tests/</c> anywhere, so a test folder added under <c>src/</c> again is still read
+/// as test code rather than as shipping features. No production path contains that segment, so the broader rule
+/// misclassifies nothing.
 /// </para>
 /// <para>
 /// These are git pathspecs, not filesystem globs: <c>*</c> crosses directory separators, so

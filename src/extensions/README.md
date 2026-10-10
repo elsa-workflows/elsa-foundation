@@ -1,7 +1,8 @@
 # Extensions
 
-Optional modules live here. Required ones are in [`../core`](../core), deployable hosts in
-[`../apps`](../apps).
+Optional modules live here. Required ones are in [`../essentials`](../essentials), deployable hosts in
+[`../apps`](../apps). Extension tests live under [`../../tests/extensions`](../../tests/extensions), mirroring
+this folder the way `tests/essentials` mirrors `src/essentials`.
 
 The tooling that enumerates modules was taught about this folder before any module moved into it, so
 that each move is a pure move rather than a move plus a set of silent tooling regressions. See
@@ -14,11 +15,17 @@ that decides what belongs here, and for the staged plan.
 src/extensions/
   <Name>/
     src/     one folder per project, mirroring the shape the module had under src/
-    tests/   the module's test projects
+tests/extensions/
+  <Name>/    the module's test projects
 ```
 
-`<Name>` is the module bucket, not a project name: `src/extensions/Diagnostics` holds all eight diagnostics
-projects, `src/extensions/Elsa3` holds all four Elsa 3 import projects.
+`<Name>` is the module bucket, not a project name. Today there are three:
+
+| Bucket | Projects | Tests |
+|---|---|---|
+| `Agent` | five (`Elsa.Agent.*`) | `tests/extensions/Agent` |
+| `Elsa3` | four Elsa 3 import projects (`Elsa3.*`) | `tests/extensions/Elsa3` |
+| `ExtensionBuilder` | one (`Elsa.ExtensionBuilder.Api`) | `tests/extensions/ExtensionBuilder` |
 
 ## Extensions a host composes at its root
 
@@ -54,21 +61,21 @@ site already covers `src/extensions/`, and this is the complete list:
 | Site | What it enumerates | How it would have failed |
 |---|---|---|
 | `.github/workflows/packages.yml` | nothing itself: it packs the dependency map's packable projects, which `RepoLayout.cs` below enumerates | the version calculator refuses a map that misses a project, so packing fails |
-| `.github/workflows/ci.yml` | container-free test projects | the module's tests stop running, job still green |
+| `.github/workflows/ci.yml` | container-free test projects under `tests/` | the module's tests stop running, job still green |
 | `.github/workflows/docker.yml` | paths that trigger an image build | image stops rebuilding on changes to the module |
 | `src/apps/Elsa.Workbench/Dockerfile` | restore inputs and the source copy | image build fails (the one that fails loudly) |
-| `.dockerignore` | what reaches the build context | extension tests bloat the context |
+| `.dockerignore` | what reaches the build context; `tests/` is excluded whole | test projects bloat the context |
 | `tools/ef/generate-module-migrations.sh` | EF modules and model snapshots | finds no module, generates nothing |
 | `tools/maps/Elsa.Maps.Generator/RepoLayout.cs` | projects, sources and catalogs for every map | the module vanishes from every map |
-| `tools/solution-filters/profiles.json` | the integration profile's `src/extensions/` prefix | the module's Testcontainers suites drop out of the nightly integration lane |
+| `tools/solution-filters/profiles.json` | the integration profile's `tests/` prefix | the module's Testcontainers suites drop out of the nightly integration lane |
 
 Some sites name a specific project **by full path** rather than enumerating a directory. Those do not
 fail silently in the same way, but they do have to move with the module, and they are easy to miss:
 
 | Site | What it names |
 |---|---|
-| `.github/workflows/ci.yml`, the `ef-container-suites` matrix | one `.csproj` path per container suite |
-| `tests/essentials/Architecture/Tests/ArchitectureGuardTests.cs` | the name-to-path convention, which has a branch per root |
+| `tools/ci/ef-suites.json` | one `.csproj` path per container suite |
+| `tests/essentials/Architecture/Tests/ArchitectureGuardTests.cs` | the name-to-path convention, which has a branch per root and one `ExtensionBuckets` row per bucket |
 | `tests/essentials/Architecture/Tests/EfCoreDependencyGuardTests.cs` | the admitted-EF-path allowlist |
 | `tests/essentials/Architecture/Tests/EndpointSecurityTests.cs` | the directory scanned per endpoint group |
 | `tests/essentials/Architecture/Tests/ReusableActivityArchitectureTests.cs` | project and directory paths, and a path-prefix assertion |
@@ -117,7 +124,8 @@ most likely to trip and the easiest to forget, because the move itself compiles 
 stay green. Stage 2 pushed without it and CI caught a real boundary question the local run would have.
 
 
-1. Move the projects, keeping each `.csproj` file name unchanged.
+1. Move the projects, keeping each `.csproj` file name unchanged: production projects to
+   `src/extensions/<Name>/src/`, test projects to `tests/extensions/<Name>/`.
 2. Fix the `ProjectReference` paths that pointed at them, and their entries in `Elsa.Server.slnx`.
 3. Extensions get no solution filter of their own (#2577). If the module brings Testcontainers suites, check
    they reach the nightly lane: `dotnet run --project tools/maps/Elsa.Maps.Generator -- solution-filter-roots

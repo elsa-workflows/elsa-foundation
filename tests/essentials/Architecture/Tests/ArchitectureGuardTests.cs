@@ -742,7 +742,7 @@ public sealed partial class ArchitectureGuardTests
 
     /// <summary>
     /// Every repository root that holds first-party code. Required modules live under <c>src/</c> and
-    /// optional ones under <c>src/extensions/</c> (#1815), each extension carrying its own <c>tests/</c>.
+    /// optional ones under <c>src/extensions/</c> (#1815), with their tests under <c>tests/extensions/</c> (#2579).
     /// </summary>
     /// <remarks>
     /// Sweeps built on this must enumerate all of them. A sweep pinned to <c>src/</c> keeps compiling and
@@ -1128,15 +1128,17 @@ public sealed partial class ArchitectureGuardTests
         if (project.Name == "Elsa.Primitives")
             return "src/essentials/Primitives/Primitives/Elsa.Primitives.csproj";
 
-        // Optional modules live under src/extensions/<Bucket>/<src|tests>/ rather than in the src/essentials tree
-        // (#1815). The name-to-path derivation is the same one the src/ rules below use; only the root
-        // differs, and the src|tests split sits inside the extension rather than at the top of the tree.
-        // Moving a module is therefore one row in ExtensionBuckets, not another branch here.
+        // Optional modules live under src/extensions/<Bucket>/src/ rather than in the src/essentials tree
+        // (#1815), and their tests under tests/extensions/<Bucket>/, mirroring src/ (#2579). The name-to-path
+        // derivation is the same one the src/ rules below use; only the root differs. Moving a module is
+        // therefore one row in ExtensionBuckets, not another branch here.
         if (ExtensionBuckets.FirstOrDefault(bucket => project.Name.StartsWith(bucket.Prefix, StringComparison.Ordinal)) is { Bucket.Length: > 0 } owner)
         {
             var subPath = string.Join('/', project.Name[owner.Prefix.Length..].Split('.'));
-            var root = project.RelativePath.Contains("/tests/", StringComparison.Ordinal) ? "tests" : "src";
-            return NameDerivedPath(project, $"src/extensions/{owner.Bucket}/{root}/{subPath}", projectDirectories);
+            var root = project.RelativePath.StartsWith("tests/", StringComparison.Ordinal)
+                ? $"tests/extensions/{owner.Bucket}"
+                : $"src/extensions/{owner.Bucket}/src";
+            return NameDerivedPath(project, $"{root}/{subPath}", projectDirectories);
         }
 
         // Matched against src/essentials and tests/essentials specifically, not a bare src/ prefix: every extension

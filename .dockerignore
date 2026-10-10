@@ -25,9 +25,6 @@
 
 # --- Repo areas not needed to build the server host -------------------------
 tests/
-# Optional-module tests (#1815). src/extensions/<Name>/src is build input and stays; its sibling
-# tests/ is not, and unlike the top-level tests/ tree it is not covered by the rule above.
-src/extensions/*/tests/
 docs/
 samples/
 specs/

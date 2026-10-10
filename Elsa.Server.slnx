@@ -8,11 +8,7 @@
     <Project Path="src/extensions/Agent/src/GitHubCopilot/Elsa.Agent.GitHubCopilot.csproj" />
     <Project Path="src/extensions/Agent/src/Workflows/Elsa.Agent.Workflows.csproj" />
   </Folder>
-  <Folder Name="/src/extensions/Agent/tests/">
-    <Project Path="src/extensions/Agent/tests/Tests/Elsa.Agent.Tests.csproj" />
-  </Folder>
   <Folder Name="/src/extensions/Elsa3/" />
-  <Folder Name="/src/extensions/Elsa3/tests/" />
   <Folder Name="/src/extensions/Elsa3/src/">
     <Project Path="src/extensions/Elsa3/src/Mapping/Elsa3.Mapping.csproj" />
     <Project Path="src/extensions/Elsa3/src/Models/Elsa3.Models.csproj" />
@@ -26,24 +22,9 @@
     <Project Path="src/extensions/Elsa3/src/Activities/Design/Import/Persistence/EntityFrameworkCore/Elsa3.Activities.Design.Import.Persistence.EntityFrameworkCore.csproj" />
   </Folder>
   <Folder Name="/src/extensions/Elsa3/src/Mapping/" />
-  <Folder Name="/src/extensions/Elsa3/tests/Activities/" />
-  <Folder Name="/src/extensions/Elsa3/tests/Activities/Design/" />
-  <Folder Name="/src/extensions/Elsa3/tests/Activities/Design/Import/" />
-  <Folder Name="/src/extensions/Elsa3/tests/Activities/Design/Import/Persistence/" />
-  <Folder Name="/src/extensions/Elsa3/tests/Activities/Design/Import/Persistence/EntityFrameworkCore/">
-    <Project Path="src/extensions/Elsa3/tests/Activities/Design/Import/Persistence/EntityFrameworkCore/ProviderTests/Elsa3.Activities.Design.Import.Persistence.EntityFrameworkCore.ProviderTests.csproj" />
-    <Project Path="src/extensions/Elsa3/tests/Activities/Design/Import/Persistence/EntityFrameworkCore/Tests/Elsa3.Activities.Design.Import.Persistence.EntityFrameworkCore.Tests.csproj" />
-  </Folder>
-  <Folder Name="/src/extensions/Elsa3/tests/Mapping/">
-    <Project Path="src/extensions/Elsa3/tests/Mapping/Tests/Elsa3.Mapping.Tests.csproj" />
-  </Folder>
   <Folder Name="/src/extensions/ExtensionBuilder/" />
   <Folder Name="/src/extensions/ExtensionBuilder/src/">
     <Project Path="src/extensions/ExtensionBuilder/src/Api/Elsa.ExtensionBuilder.Api.csproj" />
-  </Folder>
-  <Folder Name="/src/extensions/ExtensionBuilder/tests/" />
-  <Folder Name="/src/extensions/ExtensionBuilder/tests/Api/">
-    <Project Path="src/extensions/ExtensionBuilder/tests/Api/Tests/Elsa.ExtensionBuilder.Api.Tests.csproj" />
   </Folder>
   <Folder Name="/samples/">
     <Project Path="samples/Elsa.Samples.Nuplane.Activities/Elsa.Samples.Nuplane.Activities.csproj" />
@@ -325,6 +306,26 @@
     <Project Path="src/essentials/Workflows/Runtime/Persistence/EntityFrameworkCore/Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.csproj" />
   </Folder>
   <Folder Name="/tests/" />
+  <Folder Name="/tests/extensions/" />
+  <Folder Name="/tests/extensions/Agent/">
+    <Project Path="tests/extensions/Agent/Tests/Elsa.Agent.Tests.csproj" />
+  </Folder>
+  <Folder Name="/tests/extensions/Elsa3/" />
+  <Folder Name="/tests/extensions/Elsa3/Activities/" />
+  <Folder Name="/tests/extensions/Elsa3/Activities/Design/" />
+  <Folder Name="/tests/extensions/Elsa3/Activities/Design/Import/" />
+  <Folder Name="/tests/extensions/Elsa3/Activities/Design/Import/Persistence/" />
+  <Folder Name="/tests/extensions/Elsa3/Activities/Design/Import/Persistence/EntityFrameworkCore/">
+    <Project Path="tests/extensions/Elsa3/Activities/Design/Import/Persistence/EntityFrameworkCore/ProviderTests/Elsa3.Activities.Design.Import.Persistence.EntityFrameworkCore.ProviderTests.csproj" />
+    <Project Path="tests/extensions/Elsa3/Activities/Design/Import/Persistence/EntityFrameworkCore/Tests/Elsa3.Activities.Design.Import.Persistence.EntityFrameworkCore.Tests.csproj" />
+  </Folder>
+  <Folder Name="/tests/extensions/Elsa3/Mapping/">
+    <Project Path="tests/extensions/Elsa3/Mapping/Tests/Elsa3.Mapping.Tests.csproj" />
+  </Folder>
+  <Folder Name="/tests/extensions/ExtensionBuilder/" />
+  <Folder Name="/tests/extensions/ExtensionBuilder/Api/">
+    <Project Path="tests/extensions/ExtensionBuilder/Api/Tests/Elsa.ExtensionBuilder.Api.Tests.csproj" />
+  </Folder>
   <Folder Name="/tests/essentials/">
     <Project Path="tests/essentials/Testing/Elsa.Testing.csproj" />
   </Folder>

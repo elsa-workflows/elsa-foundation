@@ -112,9 +112,8 @@ public sealed class ReusableActivityArchitectureTests
     {
         // Both module roots: required modules stay under src/, optional ones live under src/extensions/ (#1815).
         // Scanning only src/ here would make the guard vacuous now that Elsa 3 has moved, and would stop it
-        // catching the marker leaking back into core. Test code stays out of scope, as it was when src/ was
-        // the only root and tests/ sat outside it: fixtures legitimately construct the legacy shape, and an
-        // extension carries its own tests/ subtree inside the root being scanned.
+        // catching the marker leaking back into core. Test code stays out of scope: fixtures legitimately
+        // construct the legacy shape.
         var hits = ModuleRoots.ProductionSourceFiles(RepoRoot)
             .Where(file => File.ReadAllText(file).Contains("UsableAsActivity", StringComparison.Ordinal))
             .Select(file => Path.GetRelativePath(RepoRoot, file).Replace('\\', '/'))

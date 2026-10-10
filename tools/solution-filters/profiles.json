@@ -111,8 +111,7 @@
       "outputPath": "Elsa.Server.Persistence.Integration.slnf",
       "committed": false,
       "includeProjectPathPrefixes": [
-        "tests/",
-        "src/extensions/"
+        "tests/"
       ],
       "requiredRootPaths": [
         "tests/essentials/Persistence/EntityFrameworkCore/Migrations/ProviderTests/Elsa.Persistence.EntityFrameworkCore.Migrations.ProviderTests.csproj",

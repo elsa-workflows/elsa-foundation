@@ -6,8 +6,8 @@ namespace Elsa.Architecture.Tests;
 /// </summary>
 /// <remarks>
 /// All module code lives under <c>src/</c>: required modules in <c>src/core</c>, optional ones in
-/// <c>src/extensions</c> (#1815), hosts in <c>src/apps</c>. Core tests sit under <c>tests/</c>, while an
-/// extension carries its own <c>tests/</c> subtree beside its <c>src/</c>. A guard pinned to a single root
+/// <c>src/extensions</c> (#1815), hosts in <c>src/apps</c>. Every test project sits under <c>tests/</c>, extension
+/// tests under <c>tests/extensions</c> (#2579). A guard pinned to a single root
 /// keeps compiling and keeps passing once a module moves out of it; it simply stops looking at that module.
 /// Resolving roots here means widening a sweep is one edit rather than one per call site.
 /// </remarks>
@@ -16,7 +16,7 @@ internal static class ModuleRoots
     /// <summary>Every root holding project files, production and test alike.</summary>
     internal static readonly string[] All = ["src", "tests"];
 
-    /// <summary>The roots holding shipping module code. An extension's own tests live inside these.</summary>
+    /// <summary>The roots holding shipping module code.</summary>
     internal static readonly string[] Production = ["src"];
 
     /// <summary>
@@ -49,10 +49,10 @@ internal static class ModuleRoots
 
     /// <summary>Shipping module source: <see cref="Production"/> with each extension's own tests left out.</summary>
     /// <remarks>
-    /// A guard that sweeps <see cref="Production"/> raw also sweeps <c>src/extensions/&lt;bucket&gt;/tests/</c>, because an
-    /// extension carries its tests inside its own root rather than under the repository's <c>tests/</c>. Guards that
-    /// state a rule about production code — no EF namespace outside the admitted surfaces, no pruned contract
-    /// reappearing — then fail on test code that was always allowed to do those things. Every such guard wants this.
+    /// Extension tests moved to <c>tests/extensions</c> (#2579), so <see cref="Production"/> holds no test project
+    /// today. The exclusion stays so that a test folder added under <c>src/</c> again cannot make guards that state a
+    /// rule about production code (no EF namespace outside the admitted surfaces, no pruned contract reappearing)
+    /// fail on test code that was always allowed to do those things.
     /// </remarks>
     internal static IEnumerable<string> ProductionSourceFiles(string repoRoot) =>
         SourceFiles(repoRoot, Production).Where(file => IsNotTestFile(repoRoot, file));

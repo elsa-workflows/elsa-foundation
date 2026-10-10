@@ -19,9 +19,9 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\..\..\..\..\..\src\Activities\Design\Import\Persistence\EntityFrameworkCore\Elsa3.Activities.Design.Import.Persistence.EntityFrameworkCore.csproj" />
-    <ProjectReference Include="..\..\..\..\..\..\..\src\Mapping\Elsa3.Mapping.csproj" />
-    <ProjectReference Include="..\..\..\..\..\..\..\..\..\essentials\Serialization\SystemText\Elsa.Serialization.SystemText.csproj" />
+    <ProjectReference Include="..\..\..\..\..\..\..\..\..\src\extensions\Elsa3\src\Activities\Design\Import\Persistence\EntityFrameworkCore\Elsa3.Activities.Design.Import.Persistence.EntityFrameworkCore.csproj" />
+    <ProjectReference Include="..\..\..\..\..\..\..\..\..\src\extensions\Elsa3\src\Mapping\Elsa3.Mapping.csproj" />
+    <ProjectReference Include="..\..\..\..\..\..\..\..\..\src\essentials\Serialization\SystemText\Elsa.Serialization.SystemText.csproj" />
   </ItemGroup>
 
   <ItemGroup>

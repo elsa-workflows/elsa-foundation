@@ -1313,16 +1313,16 @@ public sealed class EfCoreDependencyGuardTests
         public static readonly string[] SurfacePathPrefixes =
         [
             "src/extensions/Elsa3/src/Activities/Design/Import/Persistence/EntityFrameworkCore/",
-            "src/extensions/Elsa3/tests/Activities/Design/Import/Persistence/EntityFrameworkCore/"
+            "tests/extensions/Elsa3/Activities/Design/Import/Persistence/EntityFrameworkCore/"
         ];
 
         public static readonly IReadOnlyDictionary<string, string[]> ExpectedEfPackagesByProject =
             new Dictionary<string, string[]>(StringComparer.Ordinal)
             {
                 ["src/extensions/Elsa3/src/Activities/Design/Import/Persistence/EntityFrameworkCore/Elsa3.Activities.Design.Import.Persistence.EntityFrameworkCore.csproj"] = CorePackages(),
-                ["src/extensions/Elsa3/tests/Activities/Design/Import/Persistence/EntityFrameworkCore/Tests/Elsa3.Activities.Design.Import.Persistence.EntityFrameworkCore.Tests.csproj"] =
+                ["tests/extensions/Elsa3/Activities/Design/Import/Persistence/EntityFrameworkCore/Tests/Elsa3.Activities.Design.Import.Persistence.EntityFrameworkCore.Tests.csproj"] =
                 [.. CorePackages(), "Microsoft.EntityFrameworkCore.Sqlite", "Microsoft.EntityFrameworkCore.Sqlite.Core", "Microsoft.EntityFrameworkCore.SqlServer"],
-                ["src/extensions/Elsa3/tests/Activities/Design/Import/Persistence/EntityFrameworkCore/ProviderTests/Elsa3.Activities.Design.Import.Persistence.EntityFrameworkCore.ProviderTests.csproj"] =
+                ["tests/extensions/Elsa3/Activities/Design/Import/Persistence/EntityFrameworkCore/ProviderTests/Elsa3.Activities.Design.Import.Persistence.EntityFrameworkCore.ProviderTests.csproj"] =
                 [.. CorePackages(), "Microsoft.EntityFrameworkCore.SqlServer", "MySql.EntityFrameworkCore", "Npgsql.EntityFrameworkCore.PostgreSQL"]
             };
 

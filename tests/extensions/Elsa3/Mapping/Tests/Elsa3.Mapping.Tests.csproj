@@ -12,10 +12,10 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\..\src\Mapping\Elsa3.Mapping.csproj" />
-    <ProjectReference Include="..\..\..\..\..\essentials\Serialization\SystemText\Elsa.Serialization.SystemText.csproj" />
+    <ProjectReference Include="..\..\..\..\..\src\extensions\Elsa3\src\Mapping\Elsa3.Mapping.csproj" />
+    <ProjectReference Include="..\..\..\..\..\src\essentials\Serialization\SystemText\Elsa.Serialization.SystemText.csproj" />
     <!-- The credential-literal rule the collection import admits its mapped states through (spec 188). -->
-    <ProjectReference Include="..\..\..\..\..\essentials\Workflows\Design\Validations\Elsa.Workflows.Design.Validations\Elsa.Workflows.Design.Validations.csproj" />
+    <ProjectReference Include="..\..\..\..\..\src\essentials\Workflows\Design\Validations\Elsa.Workflows.Design.Validations\Elsa.Workflows.Design.Validations.csproj" />
   </ItemGroup>
 
 </Project>
