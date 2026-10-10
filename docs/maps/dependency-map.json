@@ -11728,6 +11728,11 @@
       "edges": [
         {
           "type": "internal",
+          "id": "Elsa.Activities.ControlFlow",
+          "path": "src/essentials/Activities/ControlFlow/Elsa.Activities.ControlFlow.csproj"
+        },
+        {
+          "type": "internal",
           "id": "Elsa.Activities.Http",
           "path": "src/essentials/Activities/Http/Elsa.Activities.Http.csproj"
         },
@@ -11760,6 +11765,16 @@
           "type": "internal",
           "id": "Elsa.Expressions",
           "path": "src/essentials/Expressions/Elsa.Expressions/Elsa.Expressions.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Expressions.JavaScript",
+          "path": "src/essentials/Expressions/JavaScript/Elsa.Expressions.JavaScript/Elsa.Expressions.JavaScript.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Expressions.JavaScript.Jint",
+          "path": "src/essentials/Expressions/JavaScript/Jint/Elsa.Expressions.JavaScript.Jint.csproj"
         },
         {
           "type": "internal",

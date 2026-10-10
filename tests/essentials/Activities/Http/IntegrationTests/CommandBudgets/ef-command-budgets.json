@@ -1,0 +1,5 @@
+{
+  "writeline-sequence": { "Immediate": 1482, "Coalesced": 318 },
+  "http-reference": { "Immediate": 569, "Coalesced": 103 },
+  "fork-join-resume": { "Immediate": 507, "Coalesced": 241 }
+}

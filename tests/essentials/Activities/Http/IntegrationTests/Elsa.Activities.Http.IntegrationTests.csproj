@@ -42,6 +42,10 @@
     <ProjectReference Include="..\..\..\..\..\src\essentials\Workflows\Runtime\Api\Elsa.Workflows.Runtime.Api.csproj" />
     <ProjectReference Include="..\..\..\..\..\src\essentials\Workflows\Runtime\Persistence\EntityFrameworkCore\Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.csproj" />
     <ProjectReference Include="..\..\Testing\Elsa.Activities.Testing.csproj" />
+    <!-- The EF command budgets' reference workflows: a Parallel fork/join and JavaScript-bound values. -->
+    <ProjectReference Include="..\..\..\..\..\src\essentials\Activities\ControlFlow\Elsa.Activities.ControlFlow.csproj" />
+    <ProjectReference Include="..\..\..\..\..\src\essentials\Expressions\JavaScript\Elsa.Expressions.JavaScript\Elsa.Expressions.JavaScript.csproj" />
+    <ProjectReference Include="..\..\..\..\..\src\essentials\Expressions\JavaScript\Jint\Elsa.Expressions.JavaScript.Jint.csproj" />
   </ItemGroup>
 
   <ItemGroup>
@@ -50,8 +54,11 @@
 
   <ItemGroup>
     <Compile Include="../Fixtures/ResponseReplayHost/ResponseReplayObservation.Core.cs" Link="ResponseReplayObservation.Core.cs" />
+    <!-- Counts the runtime's EF commands for the command budgets. -->
+    <Compile Include="../../../Persistence/EntityFramework/Tests/CommandCaptureInterceptor.cs" Link="CommandCaptureInterceptor.cs" />
     <None Include="../Fixtures/ResponseReplayHost/Fixtures/current-format-external-closure.json" Link="Fixtures/ResponseReplayHost/Fixtures/current-format-external-closure.json" CopyToOutputDirectory="PreserveNewest" />
     <None Include="../Fixtures/ResponseReplayHost/Fixtures/current-format-external-manifest.json" Link="Fixtures/ResponseReplayHost/Fixtures/current-format-external-manifest.json" CopyToOutputDirectory="PreserveNewest" />
+    <None Update="CommandBudgets/ef-command-budgets.json" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
   <ItemGroup>
