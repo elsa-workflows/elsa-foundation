@@ -9,6 +9,7 @@ namespace Elsa.Activities.DispatchWorkflow.Tests;
 
 public sealed class DispatchWorkflowDesignFeatureTests
 {
+    // Kept beside the composition test (§2.23.1): idempotence, registering twice adds each source once.
     [Fact]
     public void ConfigureServices_registers_options_and_compilation_sources_once()
     {

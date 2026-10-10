@@ -51,6 +51,7 @@ public sealed class SecretResolverCompositionTests
     [Fact]
     public async Task No_composed_resolver_starts() => await InitializeAsync();
 
+    // Kept beside the composition test (§2.23.1): idempotence, composing twice registers the check once.
     [Fact]
     public async Task Composing_the_runtime_twice_registers_the_check_once()
     {

@@ -28,6 +28,7 @@ public sealed class OpenIddictSchemeCompositionTests : IAsyncDisposable
 {
     private readonly OpenIddictIdentityFixture _fixture = new();
 
+    // Kept beside the composition test (§2.23.1): asserts what the composite must not register (vendor persistence and lifecycle).
     [Fact]
     public void Behavior_composite_does_not_register_vendor_persistence_or_lifecycle_ownership()
     {
@@ -49,6 +50,7 @@ public sealed class OpenIddictSchemeCompositionTests : IAsyncDisposable
         Assert.Contains(schemes, x => x.Name == OpenIddictIdentityDefaults.SelectorScheme);
     }
 
+    // Kept beside the composition test (§2.23.1): resolves without shells or server wiring, which the composition test never exercises.
     [Fact]
     public void Feature_Registers_Cleanly_Without_Shells_Or_Server_Wiring()
     {
@@ -65,6 +67,7 @@ public sealed class OpenIddictSchemeCompositionTests : IAsyncDisposable
         Assert.IsType<OpenIddictTokenService>(scope.ServiceProvider.GetRequiredService<ITokenService>());
     }
 
+    // Kept beside the composition test (§2.23.1): ordering, the selector stays the default in either registration order.
     [Theory]
     [InlineData(true)]
     [InlineData(false)]
@@ -98,6 +101,7 @@ public sealed class OpenIddictSchemeCompositionTests : IAsyncDisposable
         }
     }
 
+    // Kept beside the composition test (§2.23.1): ordering, the selector stays the default authenticate scheme in either registration order.
     [Theory]
     [InlineData(true)]
     [InlineData(false)]

@@ -16,38 +16,6 @@ namespace Elsa.Activities.Scheduling.Tests;
 public sealed class ActivitiesSchedulingFeatureTests
 {
     [Fact]
-    public void ConfigureServices_RegistersTimerAndCronTriggerStimulusProviders()
-    {
-        var services = new ServiceCollection();
-
-        new ActivitiesSchedulingFeature().ConfigureServices(services);
-
-        var providers = services
-            .Where(d => d.ServiceType == typeof(IActivityTriggerStimulusProvider))
-            .Select(d => d.ImplementationType)
-            .ToArray();
-
-        Assert.Contains(typeof(TimerTriggerStimulusProvider), providers);
-        Assert.Contains(typeof(CronTriggerStimulusProvider), providers);
-    }
-
-    [Fact]
-    public void ConfigureServices_RegistersTimerAndCronScheduleProviders()
-    {
-        var services = new ServiceCollection();
-
-        new ActivitiesSchedulingFeature().ConfigureServices(services);
-
-        var providers = services
-            .Where(d => d.ServiceType == typeof(IRecurringTriggerScheduleProvider))
-            .Select(d => d.ImplementationType)
-            .ToArray();
-
-        Assert.Contains(typeof(TimerRecurringScheduleProvider), providers);
-        Assert.Contains(typeof(CronRecurringScheduleProvider), providers);
-    }
-
-    [Fact]
     public void DeclaresSchedulingAndRecurringTriggerDependencies()
     {
         var attribute = Assert.Single(

@@ -18,6 +18,7 @@ namespace Elsa.Workflows.Runtime.Tests;
 /// </summary>
 public sealed class WorkflowsRuntimeTracingFeatureTests
 {
+    // Kept beside the composition test (§2.23.1): replacement, the no-op default the tracing feature replaces.
     [Fact]
     public void RuntimeCore_RegistersNoOpTracer_ByDefault()
     {

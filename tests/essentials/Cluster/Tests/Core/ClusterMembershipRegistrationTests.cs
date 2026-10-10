@@ -24,6 +24,7 @@ public sealed class ClusterMembershipRegistrationTests
         Assert.Contains("'second'", refusal.Message, StringComparison.Ordinal);
     }
 
+    // Kept beside the composition test (§2.23.1): replacement-contract rejection, a durable provider beside a direct membership.
     [Fact]
     public void A_durable_provider_is_refused_beside_a_membership_registered_directly()
     {
@@ -48,6 +49,7 @@ public sealed class ClusterMembershipRegistrationTests
         Assert.Same(durable, Assert.Single(Registrations()));
     }
 
+    // Kept beside the composition test (§2.23.1): ordering, the default yields to a registered membership.
     [Fact]
     public void The_default_does_nothing_once_a_membership_is_registered()
     {
@@ -90,6 +92,7 @@ public sealed class ClusterMembershipRegistrationTests
     public void A_durable_provider_with_an_explicit_host_id_passes() =>
         Assert.Equal("web-1", Settings(options => options.HostId = "web-1", services => services.AddClusterMembershipProvider(Durable("durable"))).HostId);
 
+    // Kept beside the composition test (§2.23.1): replacement-contract rejection, a direct membership after the provider.
     [Fact]
     public void A_membership_registered_directly_after_the_provider_is_refused_naming_both()
     {

@@ -53,6 +53,7 @@ public sealed class RuntimeCheckpointCoalescingTests(ITestOutputHelper output)
         Assert.NotNull(provider.GetRequiredService<IRuntimeCoalescingDrainScopeFactory>());
     }
 
+    // Kept beside the composition test (§2.23.1): idempotence, repeated registration keeps the explicit lifetime.
     [Theory]
     [InlineData(ServiceLifetime.Singleton)]
     [InlineData(ServiceLifetime.Scoped)]

@@ -1,5 +1,3 @@
-using Elsa.Agent.Api;
-using Elsa.Agent.Core;
 using Elsa.Agent.Core.Contracts;
 using Elsa.Agent.Core.Extensions;
 using Elsa.Agent.Core.Models;
@@ -14,33 +12,6 @@ namespace Elsa.Agent.Tests;
 
 public sealed class AgentFeatureRegistrationTests
 {
-    [Fact]
-    public void Abstractions_feature_registers_backend_services()
-    {
-        var services = new ServiceCollection();
-
-        new FoundationAgentAbstractionsFeature().ConfigureServices(services);
-        using var provider = services.BuildServiceProvider();
-
-        Assert.NotNull(provider.GetRequiredService<IAgentSessionService>());
-        Assert.NotNull(provider.GetRequiredService<IAgentPolicyEvaluator>());
-        Assert.NotNull(provider.GetRequiredService<IAgentContextSanitizer>());
-        Assert.NotNull(provider.GetRequiredService<IAgentProposalService>());
-        Assert.NotNull(provider.GetRequiredService<IAgentAuditReader>());
-        Assert.NotNull(provider.GetRequiredService<IAgentToolRegistry>());
-    }
-
-    [Fact]
-    public void Api_feature_registers_agent_abstractions()
-    {
-        var services = new ServiceCollection();
-
-        new FoundationAgentApiFeature().ConfigureServices(services);
-        using var provider = services.BuildServiceProvider();
-
-        Assert.NotNull(provider.GetRequiredService<IAgentSessionService>());
-    }
-
     [Fact]
     public async Task Github_copilot_feature_registers_provider_facade()
     {
