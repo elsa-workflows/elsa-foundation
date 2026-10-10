@@ -823,7 +823,7 @@ The frozen EF source-tree baseline proves that the separately selectable EF impl
 ## 10. Landing Evidence
 
 Model B draft PR [#694](https://github.com/elsa-workflows/elsa-foundation/pull/694) targets `main` from
-`codex/222-groundwork-aspnetcore-identity`. Its description links #644/#629, records the immutable
+`codex/095-groundwork-aspnetcore-identity`. Its description links #644/#629, records the immutable
 four-provider generation and local validation, and keeps #646, #643, and #647 explicit as remaining
 program gates.
 

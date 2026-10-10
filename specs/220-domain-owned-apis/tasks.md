@@ -23,7 +23,7 @@
 - [X] T003 [P] Distinguish client-visible API capabilities from composition features in `docs/glossary/elsa.md`
 - [X] T004 [P] Scaffold `src/Elsa/Api/Capabilities/Elsa.Api.Capabilities.csproj` and `tests/Elsa/Api/Capabilities/Tests/Elsa.Api.Capabilities.Tests.csproj`, then add them to `Elsa.Server.slnx`
 - [X] T005 [P] Scaffold `src/Elsa/Expressions/Api/Elsa.Expressions.Api.csproj` and `tests/Elsa/Expressions/Api/Tests/Elsa.Expressions.Api.Tests.csproj`, then add them to `Elsa.Server.slnx`
-- [X] T006 Create the Studio worktree `/Users/sipke/.codex/worktrees/091-domain-owned-apis/elsa-foundation-studio` on branch `codex/220-domain-owned-apis` from current `origin/main`
+- [X] T006 Create the Studio worktree `/Users/sipke/.codex/worktrees/091-domain-owned-apis/elsa-foundation-studio` on branch `codex/092-domain-owned-apis` from current `origin/main`
 
 ---
 

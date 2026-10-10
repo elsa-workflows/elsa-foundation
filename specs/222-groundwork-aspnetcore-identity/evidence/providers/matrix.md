@@ -68,7 +68,7 @@ Consequently the preview.56 matrix below is historical execution provenance, not
 
 Preview.59 and earlier provider and SC-010 runs are historical regression evidence because the dependency advanced again before ratification. Elsa retains the generic codec boundary from PR #88 and provider-native ordered bounded-query explanations from PR #89 while keeping Elsa policies and concrete upcasters behind the Elsa marker. Do not rewrite a historical run to preview.60 or carry forward its manifest fingerprint; the current fingerprint must be calculated from the exact preview.60 candidate.
 
-The provider matrix was reverified on `codex/222-groundwork-aspnetcore-identity` after the preview.56 schema-tool remediation. The local execution provenance is the full conformance TRX; raw TRX files remain ignored because they contain machine-specific paths. This matrix is the only checked-in spec-095 provider evidence file at the T084 audit point:
+The provider matrix was reverified on `codex/095-groundwork-aspnetcore-identity` after the preview.56 schema-tool remediation. The local execution provenance is the full conformance TRX; raw TRX files remain ignored because they contain machine-specific paths. This matrix is the only checked-in spec-095 provider evidence file at the T084 audit point:
 
 - Test run: `artifacts/test-results/spec095-t083/conformance-preview56/spec095-t083-conformance-preview56.trx`
 - SHA-256: `a2cab2e1b2bb3d92816788cebfda1d36a64d00faf344577547681a2b9a4a4556`
