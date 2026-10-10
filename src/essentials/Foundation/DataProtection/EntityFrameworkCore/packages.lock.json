@@ -49,8 +49,8 @@
       },
       "Nuplane.Abstractions": {
         "type": "Transitive",
-        "resolved": "0.0.11-preview.94",
-        "contentHash": "YtytvT0fC6hyfz1GonNjNdw13jN1Ps3Zl0A+OK8/cZxuL/dUGQbVnWlV82vJkQo6TTmegXRXZx1gOvfGkpXm0g=="
+        "resolved": "0.0.11",
+        "contentHash": "g5qjXCaOFEEDtOKBYmgVLLqnhOpBpYRrzKksMbGWzV1Wk2jHfgW3fUWm1ydeTuX6OdIPFkKgObtzWhOhaLNqbQ=="
       },
       "elsa.cluster.core": {
         "type": "Project",
@@ -67,18 +67,18 @@
       "elsa.cluster.readability": {
         "type": "Project",
         "dependencies": {
-          "CShells.Abstractions": "[0.0.30-preview.159, )",
+          "CShells.Abstractions": "[0.0.30, )",
           "Elsa.Cluster.Core": "[4.0.0-dev, )",
           "Elsa.Cluster.InProcess": "[4.0.0-dev, )",
           "Elsa.Persistence.Schema": "[4.0.0-dev, )",
-          "Nuplane.Loading.Abstractions": "[0.0.11-preview.94, )"
+          "Nuplane.Loading.Abstractions": "[0.0.11, )"
         }
       },
       "elsa.persistence.entityframework": {
         "type": "Project",
         "dependencies": {
-          "CShells": "[0.0.30-preview.159, )",
-          "CShells.Abstractions": "[0.0.30-preview.159, )",
+          "CShells": "[0.0.30, )",
+          "CShells.Abstractions": "[0.0.30, )",
           "Elsa.Persistence.Schema": "[4.0.0-dev, )",
           "Elsa.Primitives": "[4.0.0-dev, )",
           "Microsoft.EntityFrameworkCore": "[10.0.10, )",
@@ -93,31 +93,31 @@
       },
       "CShells": {
         "type": "CentralTransitive",
-        "requested": "[0.0.30-preview.159, )",
-        "resolved": "0.0.30-preview.159",
-        "contentHash": "x6qrRjUbjj9FbgeeqgUWrDoSxbW48zna/cvXhZYJGsKBmnS0cErPY/+QiFSmuAzXrcwuf9nDBod5DK7BbpIReA==",
+        "requested": "[0.0.30, )",
+        "resolved": "0.0.30",
+        "contentHash": "tRC5UTQynnLqBTqP2s4U0R25BvrAyHbtr2uev0w3jzYoaMrfHU3NdhtNgZp6nEoawgwKa0EiruX8abVmSgJLBw==",
         "dependencies": {
-          "CShells.Abstractions": "0.0.30-preview.159",
+          "CShells.Abstractions": "0.0.30",
           "JetBrains.Annotations": "2025.2.4",
           "Microsoft.Extensions.DependencyModel": "10.0.1"
         }
       },
       "CShells.Abstractions": {
         "type": "CentralTransitive",
-        "requested": "[0.0.30-preview.159, )",
-        "resolved": "0.0.30-preview.159",
-        "contentHash": "es495Gvvqx1t0DJomzsfoxlIE/k8ZMEj3OaL/uKvdUd5cXpfQowko63T03LlRhTBS7Nhm6xoPoQW1cZAx6e8uQ==",
+        "requested": "[0.0.30, )",
+        "resolved": "0.0.30",
+        "contentHash": "Kf3tyvnuRMIZui951/iZA95SCnb3zPjnK02x/JXJE1xNhqlYqbMKtIhqlUAj54dC33g3n5rWpXYSKK5cGe3RKw==",
         "dependencies": {
           "JetBrains.Annotations": "2025.2.4"
         }
       },
       "Nuplane.Loading.Abstractions": {
         "type": "CentralTransitive",
-        "requested": "[0.0.11-preview.94, )",
-        "resolved": "0.0.11-preview.94",
-        "contentHash": "vjTnc+rW+guSOUq1CXpmxp3KKBLxOpazOVHV0nHOji7w5lS7+GLRzYvEyPs/LARwxo9weJO3ie8gF5/F10UIgg==",
+        "requested": "[0.0.11, )",
+        "resolved": "0.0.11",
+        "contentHash": "kxa6bzyk/rImyXlX6mJy+tU5d01ewJicE7Xbo+bZkEqcoXEuRiWBCxFIytEXMhiS+3fUFrVaYCuLFaJMehwDWQ==",
         "dependencies": {
-          "Nuplane.Abstractions": "0.0.11-preview.94"
+          "Nuplane.Abstractions": "0.0.11"
         }
       }
     }

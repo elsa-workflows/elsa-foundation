@@ -15,11 +15,11 @@ public sealed record ShellActivationRefusal(string Module, string Code, IReadOnl
 /// <summary>A shell the host has tried to activate and could not, and where its attempts stand.</summary>
 /// <param name="Shell">The shell's name.</param>
 /// <param name="Attempts">How many activations have failed, in a row, since the shell last was active.</param>
-/// <param name="FailureType">The type of the exception that stopped the last attempt. Nothing of its message: a driver's message can echo a connection string, so the host log is where that is read.</param>
+/// <param name="FailureType">The exception type that stopped the last attempt, or a safe outcome such as NotCurrent. Nothing of an exception message: a driver's message can echo a connection string, so the host log is where that is read.</param>
 /// <param name="Refusal">The EF module's refusal when that is what stopped it, which an operator resolves and a retry does not.</param>
 /// <param name="FirstFailedAt">When the first of these attempts failed.</param>
 /// <param name="LastFailedAt">When the last attempt failed.</param>
-/// <param name="RetryDelay">How long the host waits, from <paramref name="LastFailedAt"/>, before the next attempt.</param>
+/// <param name="RetryDelay">The delay selected by the last retry decision, from <paramref name="LastFailedAt"/>.</param>
 public sealed record ShellActivationFailure(
     string Shell,
     int Attempts,
@@ -29,7 +29,7 @@ public sealed record ShellActivationFailure(
     DateTimeOffset LastFailedAt,
     TimeSpan RetryDelay)
 {
-    /// <summary>When the host tries again.</summary>
+    /// <summary>The due time selected by the last retry decision; another activation path may finish recovery before then.</summary>
     public DateTimeOffset NextAttemptAt => LastFailedAt + RetryDelay;
 }
 
@@ -37,7 +37,7 @@ public sealed record ShellActivationFailure(
 /// What the host knows of the shells it could not activate: written by <see cref="EagerShellActivationHostedService"/> as its
 /// attempts fail and succeed, read by the readiness probe (<see cref="Health.HealthEndpoints"/>) and the Attention
 /// contributor (<see cref="ShellActivationAttentionContributor"/>). A shell appears here from its first failed activation until
-/// it is active, by any path: the retry that activates it, a request that does, or a reload.
+/// an active transition is observed, by any path: the retry that activates it, a request that does, or a reload.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -47,17 +47,18 @@ public sealed record ShellActivationFailure(
 /// <para>
 /// Once <see cref="Observe"/> has attached the registry, the tracker is also the registry's lifecycle subscriber, which forgets
 /// a shell the moment it becomes active, and it reports only shells the registry does not hold active, so a record that outlived
-/// a lazy activation is never read. It is the one clock of the retries too: <see cref="TimeProvider"/> stamps the failures and
-/// runs the delays between them.
+/// a lazy activation is never read. Failures use the runner callback's timestamp; <see cref="TimeProvider"/> stamps Attention
+/// observations. The host selects retry delays and jitter, while CShells owns scheduling.
 /// </para>
 /// </remarks>
 public sealed class ShellActivationTracker(TimeProvider? timeProvider = null) : IShellLifecycleSubscriber
 {
     private readonly object _gate = new();
     private readonly Dictionary<string, ShellActivationFailure> _failing = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<string, long> _attemptBases = new(StringComparer.OrdinalIgnoreCase);
     private IShellRegistry? _registry;
 
-    /// <summary>The clock that stamps the failures and runs the delays between attempts.</summary>
+    /// <summary>The clock that stamps Attention observations.</summary>
     public TimeProvider TimeProvider { get; } = timeProvider ?? TimeProvider.System;
 
     /// <summary>Attaches <paramref name="registry"/>: what it holds active is not failing, and a shell it activates is forgotten.</summary>
@@ -91,22 +92,61 @@ public sealed class ShellActivationTracker(TimeProvider? timeProvider = null) : 
     }
 
     /// <summary>
-    /// Records one more failed activation of <paramref name="shell"/>, and with it how long the host waits before the next
-    /// attempt, from <paramref name="retry"/> and the number of failed attempts, this one included. A shell the registry already
-    /// holds active is not recorded: its activation was observed while this attempt was failing, and writing the failure after
-    /// that would bring back a record nothing clears until the shell leaves and re-enters the active state. The failure is
-    /// returned all the same, for the caller's log and its next delay.
+    /// Projects a runner callback into the existing failure row and selects its one retry delay. The runner's cumulative
+    /// attempt number is the source of sequence; this tracker only keeps the offset needed to preserve Elsa's consecutive
+    /// visible-failure semantics across a reset. A failure hidden by a raw Active read retains a previous row, but rebases the
+    /// projection so the hidden callback does not inflate the next visible count.
     /// </summary>
-    public ShellActivationFailure Failed(string shell, string failureType, ShellActivationRefusal? refusal, EagerShellActivationRetryOptions retry)
+    public ShellActivationFailure FailedAttempt(
+        string shell,
+        int attemptNumber,
+        string failureType,
+        ShellActivationRefusal? refusal,
+        DateTimeOffset failedAt,
+        EagerShellActivationRetryOptions retry)
     {
-        var now = TimeProvider.GetUtcNow();
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(attemptNumber);
+
         lock (_gate)
         {
             var previous = _failing.GetValueOrDefault(shell);
-            var attempts = (previous?.Attempts ?? 0) + 1;
+            var active = IsActive(shell);
+            long attemptBase;
+            int attempts;
+
+            if (active)
+            {
+                // A raw Active read suppresses this write but is not proof of a lifecycle reset. Preserve any old row and
+                // move its offset past the suppressed callback so the next visible failure increments only once.
+                attempts = (previous?.Attempts ?? 0) + 1;
+                if (previous is null)
+                    _attemptBases.Remove(shell);
+                else
+                    _attemptBases[shell] = (long)attemptNumber - previous.Attempts;
+            }
+            else
+            {
+                if (!_attemptBases.TryGetValue(shell, out attemptBase))
+                {
+                    // If a prior row survived a new runner instance, continue its visible failure streak. Otherwise this is
+                    // the first visible failure after an observed reset (or the first row for this shell).
+                    attemptBase = (long)attemptNumber - (previous?.Attempts ?? 0) - 1;
+                    _attemptBases[shell] = attemptBase;
+                }
+
+                attempts = ProjectAttemptCount(attemptNumber, attemptBase);
+            }
+
             var failure = new ShellActivationFailure(
-                shell, attempts, failureType, refusal, previous?.FirstFailedAt ?? now, now, retry.NextDelay(attempts, refused: refusal is not null));
-            if (!IsActive(shell))
+                shell,
+                attempts,
+                failureType,
+                refusal,
+                previous?.FirstFailedAt ?? failedAt,
+                failedAt,
+                retry.NextDelay(attempts, refused: refusal is not null));
+
+            if (!active)
                 _failing[shell] = failure;
 
             return failure;
@@ -117,7 +157,10 @@ public sealed class ShellActivationTracker(TimeProvider? timeProvider = null) : 
     public void Activated(string shell)
     {
         lock (_gate)
+        {
             _failing.Remove(shell);
+            _attemptBases.Remove(shell);
+        }
     }
 
     /// <summary>Forgets a shell as it becomes active, whoever activated it: the eager attempt, a request, a reload.</summary>
@@ -130,4 +173,7 @@ public sealed class ShellActivationTracker(TimeProvider? timeProvider = null) : 
     }
 
     private bool IsActive(string shell) => _registry?.GetActive(shell)?.State == ShellLifecycleState.Active;
+
+    private static int ProjectAttemptCount(int attemptNumber, long attemptBase) =>
+        (int)Math.Clamp((long)attemptNumber - attemptBase, 1, int.MaxValue);
 }

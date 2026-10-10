@@ -1,6 +1,6 @@
 using System.Diagnostics;
 using CShells.Features;
-using CShells.Lifecycle;
+using CShells.Hosting;
 using Elsa.Primitives.Diagnostics;
 using Microsoft.Extensions.Options;
 
@@ -9,7 +9,7 @@ namespace Elsa.Workbench.Readiness;
 public sealed class DefaultShellWarmup(
     IHostApplicationLifetime applicationLifetime,
     IRuntimeFeatureCatalog featureCatalog,
-    IShellRegistry shellRegistry,
+    IShellActivationRunner activationRunner,
     ShellReadinessState readinessState,
     IOptions<ShellReadinessOptions> options,
     ILogger<DefaultShellWarmup> logger) : IHostedService
@@ -17,12 +17,13 @@ public sealed class DefaultShellWarmup(
     private readonly object _syncRoot = new();
     private CancellationTokenSource? _stopping;
     private Task? _backgroundTask;
+    private Task? _stopTask;
 
     public Task StartAsync(CancellationToken cancellationToken)
     {
         lock (_syncRoot)
         {
-            if (_backgroundTask is not null)
+            if (_backgroundTask is not null || _stopTask is not null)
                 return Task.CompletedTask;
 
             options.Value.Validate();
@@ -37,19 +38,55 @@ public sealed class DefaultShellWarmup(
 
     public async Task StopAsync(CancellationToken cancellationToken)
     {
-        Task? backgroundTask;
+        Task stopTask;
         lock (_syncRoot)
         {
-            _stopping?.Cancel();
-            backgroundTask = _backgroundTask;
+            _stopTask ??= StopCoreAsync(_stopping, _backgroundTask);
+            stopTask = _stopTask;
         }
 
-        if (backgroundTask is not null)
-            await backgroundTask.WaitAsync(cancellationToken);
+        await stopTask.WaitAsync(cancellationToken);
+    }
+
+    private static async Task StopCoreAsync(CancellationTokenSource? stopping, Task? backgroundTask)
+    {
+        Exception? cancellationFailure = null;
+        try
+        {
+            if (stopping is not null)
+                await stopping.CancelAsync();
+        }
+        catch (Exception exception)
+        {
+            cancellationFailure = exception;
+        }
+
+        Exception? workFailure = null;
+        try
+        {
+            if (backgroundTask is not null)
+                await backgroundTask;
+        }
+        catch (Exception exception)
+        {
+            workFailure = exception;
+        }
+        finally
+        {
+            stopping?.Dispose();
+        }
+
+        if (cancellationFailure is not null && workFailure is not null)
+            throw new AggregateException("Warmup cancellation and owned work both failed during shutdown.", cancellationFailure, workFailure);
+        if (cancellationFailure is not null)
+            System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(cancellationFailure).Throw();
+        if (workFailure is not null)
+            System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(workFailure).Throw();
     }
 
     private async Task WarmAsync(CancellationToken cancellationToken)
     {
+        IShellActivationRun? run = null;
         try
         {
             await WaitForApplicationStartedAsync(cancellationToken);
@@ -64,7 +101,7 @@ public sealed class DefaultShellWarmup(
                 return;
 
             logger.LogInformation("Preparing default shell {ShellName} after the server began listening", value.DefaultShellName);
-            var shell = await ObservePhaseAsync(
+            var generation = await ObservePhaseAsync(
                 ShellActivationTelemetry.OverallPhase,
                 async () =>
                 {
@@ -73,13 +110,32 @@ public sealed class DefaultShellWarmup(
                         () => featureCatalog.GetSnapshotAsync(cancellationToken));
                     return await ObservePhaseAsync(
                         ShellActivationTelemetry.ShellActivationPhase,
-                        () => shellRegistry.GetOrActivateAsync(value.DefaultShellName, cancellationToken));
+                        async () =>
+                        {
+                            var observer = new WarmupAttemptObserver();
+                            run = activationRunner.Start(
+                                [value.DefaultShellName],
+                                static _ => ShellActivationRetryDecision.Stop,
+                                observer,
+                                cancellationToken);
+                            await run.InitialPass;
+
+                            var attempt = observer.Attempt
+                                ?? throw new InvalidOperationException("The shell activation completed without an attempt result.");
+                            return attempt.Outcome switch
+                            {
+                                ShellActivationAttemptOutcome.Succeeded when attempt.ReturnedGeneration is long returnedGeneration => checked((int)returnedGeneration),
+                                ShellActivationAttemptOutcome.Succeeded => throw new InvalidOperationException("The shell activation completed without a returned generation."),
+                                ShellActivationAttemptOutcome.ActivationFailed => ThrowActivationFailure(attempt),
+                                _ => throw new InvalidOperationException("The shell activation did not return a current generation.")
+                            };
+                        });
                 });
-            readinessState.MarkReady(shell.Descriptor.Generation);
+            readinessState.MarkReady(generation);
             logger.LogInformation(
                 "Default shell {ShellName} generation {Generation} is ready after {DurationMs:F3} ms",
                 value.DefaultShellName,
-                shell.Descriptor.Generation,
+                generation,
                 readinessState.Snapshot.Duration?.TotalMilliseconds);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
@@ -91,6 +147,31 @@ public sealed class DefaultShellWarmup(
         {
             readinessState.MarkFailed("shell_activation_failed");
             logger.LogError(exception, "Default shell preparation failed");
+        }
+        finally
+        {
+            if (run is not null)
+                await run.StopAsync(CancellationToken.None);
+        }
+    }
+
+    private static int ThrowActivationFailure(ShellActivationAttempt attempt)
+    {
+        if (attempt.Exception is not { } exception)
+            throw new InvalidOperationException("The shell activation failed without an exception.");
+
+        System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(exception).Throw();
+        throw new InvalidOperationException("Unreachable after rethrowing the activation exception.");
+    }
+
+    private sealed class WarmupAttemptObserver : IShellActivationAttemptObserver
+    {
+        public ShellActivationAttempt? Attempt { get; private set; }
+
+        public ValueTask OnAttemptCompletedAsync(ShellActivationAttempt attempt, CancellationToken cancellationToken)
+        {
+            Attempt = attempt;
+            return ValueTask.CompletedTask;
         }
     }
 

@@ -4,12 +4,12 @@
     "net10.0": {
       "CShells.FastEndpoints": {
         "type": "Direct",
-        "requested": "[0.0.30-preview.159, )",
-        "resolved": "0.0.30-preview.159",
-        "contentHash": "pb3/5XWSdWQcaeG5NTLq+iIzXZ+6yhLJExri9pZnt9gZFmlcYVtwuBtP/bKCv0m/7w55pQwICn45Em90f0QFCg==",
+        "requested": "[0.0.30, )",
+        "resolved": "0.0.30",
+        "contentHash": "ZmEV0pl20M+5FqkMk2CnZXs9WdTJ4BQ/oSsQAWOMTK7Mgdgy7q3SEKtNIBsP32NyeKqINLJxUwBgGPBVyevIew==",
         "dependencies": {
-          "CShells.AspNetCore": "0.0.30-preview.159",
-          "CShells.FastEndpoints.Abstractions": "0.0.30-preview.159",
+          "CShells.AspNetCore": "0.0.30",
+          "CShells.FastEndpoints.Abstractions": "0.0.30",
           "FastEndpoints": "7.2.0",
           "JetBrains.Annotations": "2025.2.4"
         }
@@ -111,8 +111,8 @@
       "elsa.foundation.identity": {
         "type": "Project",
         "dependencies": {
-          "CShells.Abstractions": "[0.0.30-preview.159, )",
-          "CShells.AspNetCore.Abstractions": "[0.0.30-preview.159, )",
+          "CShells.Abstractions": "[0.0.30, )",
+          "CShells.AspNetCore.Abstractions": "[0.0.30, )",
           "Elsa.Api.AspNetCore": "[4.0.0-dev, )",
           "Elsa.Foundation.Identity.Core": "[4.0.0-dev, )"
         }
@@ -125,52 +125,52 @@
       },
       "CShells": {
         "type": "CentralTransitive",
-        "requested": "[0.0.30-preview.159, )",
-        "resolved": "0.0.30-preview.159",
-        "contentHash": "x6qrRjUbjj9FbgeeqgUWrDoSxbW48zna/cvXhZYJGsKBmnS0cErPY/+QiFSmuAzXrcwuf9nDBod5DK7BbpIReA==",
+        "requested": "[0.0.30, )",
+        "resolved": "0.0.30",
+        "contentHash": "tRC5UTQynnLqBTqP2s4U0R25BvrAyHbtr2uev0w3jzYoaMrfHU3NdhtNgZp6nEoawgwKa0EiruX8abVmSgJLBw==",
         "dependencies": {
-          "CShells.Abstractions": "0.0.30-preview.159",
+          "CShells.Abstractions": "0.0.30",
           "JetBrains.Annotations": "2025.2.4",
           "Microsoft.Extensions.DependencyModel": "10.0.1"
         }
       },
       "CShells.Abstractions": {
         "type": "CentralTransitive",
-        "requested": "[0.0.30-preview.159, )",
-        "resolved": "0.0.30-preview.159",
-        "contentHash": "es495Gvvqx1t0DJomzsfoxlIE/k8ZMEj3OaL/uKvdUd5cXpfQowko63T03LlRhTBS7Nhm6xoPoQW1cZAx6e8uQ==",
+        "requested": "[0.0.30, )",
+        "resolved": "0.0.30",
+        "contentHash": "Kf3tyvnuRMIZui951/iZA95SCnb3zPjnK02x/JXJE1xNhqlYqbMKtIhqlUAj54dC33g3n5rWpXYSKK5cGe3RKw==",
         "dependencies": {
           "JetBrains.Annotations": "2025.2.4"
         }
       },
       "CShells.AspNetCore": {
         "type": "CentralTransitive",
-        "requested": "[0.0.30-preview.159, )",
-        "resolved": "0.0.30-preview.159",
-        "contentHash": "A8Ekcd7WHN/rVWLEEMtfA/P2UbJ2pbGLbkOtx7pwIx2kBYmzx5DwpzTyK+LBiCuGIAXODsZW8YUFwD9Yfk4Z5A==",
+        "requested": "[0.0.30, )",
+        "resolved": "0.0.30",
+        "contentHash": "9a1s35LsKtscpNcRK4i2MDw4NhPU9C5dFcP/7ASLDQyzWIUlpuisw2Hb9P83vcpOwOjnyMZ0ys8QxgSJ8uRSkw==",
         "dependencies": {
-          "CShells": "0.0.30-preview.159",
-          "CShells.AspNetCore.Abstractions": "0.0.30-preview.159",
+          "CShells": "0.0.30",
+          "CShells.AspNetCore.Abstractions": "0.0.30",
           "JetBrains.Annotations": "2025.2.4"
         }
       },
       "CShells.AspNetCore.Abstractions": {
         "type": "CentralTransitive",
-        "requested": "[0.0.30-preview.159, )",
-        "resolved": "0.0.30-preview.159",
-        "contentHash": "13PD+8QJBhWA9gwU3Io4bFRzSDpMJrvwjfKiW7AvfSY+EaSI5Aa7Jsa26O4N7n49eN/fWXMtRhbOibYUqnom1A==",
+        "requested": "[0.0.30, )",
+        "resolved": "0.0.30",
+        "contentHash": "/RIj39NcSccZ+fFHYrf3ahXnh+jKq73O4OVWFGRKq82RIxFY8KT+ByL8Iy0TkCmXJCZP5SpOk4HyNeybJhoYOw==",
         "dependencies": {
-          "CShells.Abstractions": "0.0.30-preview.159",
+          "CShells.Abstractions": "0.0.30",
           "JetBrains.Annotations": "2025.2.4"
         }
       },
       "CShells.FastEndpoints.Abstractions": {
         "type": "CentralTransitive",
-        "requested": "[0.0.30-preview.159, )",
-        "resolved": "0.0.30-preview.159",
-        "contentHash": "kkCHfCtIKRLvpWtdHOvlrqHRifbYTC0OgBYMRJJ70Ximc/zdrvhfVwGb06HC9IxjLULMhZ02HeC1eDgpOmieLQ==",
+        "requested": "[0.0.30, )",
+        "resolved": "0.0.30",
+        "contentHash": "RafGPiZRg+5HXEPu+umGLbZayVtsEFM/eQOvChWnshcRj+kuAcuMMquBMLov9ZwyaeJz0emxQDQb+eQib0SB4g==",
         "dependencies": {
-          "CShells.Abstractions": "0.0.30-preview.159",
+          "CShells.Abstractions": "0.0.30",
           "FastEndpoints": "7.2.0",
           "JetBrains.Annotations": "2025.2.4"
         }
