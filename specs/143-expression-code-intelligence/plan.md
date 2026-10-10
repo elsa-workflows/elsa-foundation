@@ -6,7 +6,7 @@
 
 ## Summary
 
-Create an additive, versioned authoring-tooling seam. `Elsa.Workflows.Design` builds a permission- and host-policy-filtered, language-neutral context for one expression location. `Elsa.Expressions.Core` owns the per-expression-type provider and common symbol/diagnostic contracts. JavaScript and Liquid project that safe context into their own language semantics. `Elsa.Workflows.Design.Api` owns and advertises the capability-discoverable, cancellable, no-store endpoints only when the complete transport path is composed. The existing draft validation gate supplies consequential-operation validation: draft editing remains permissive, test run rejects known errors (with an explicit unavailable-validator override), and publication/promotion fail closed.
+Create and extend an additive, versioned authoring-tooling seam. `Elsa.Workflows.Design` builds a permission- and host-policy-filtered, language-neutral context for one expression location. `Elsa.Expressions.Core` owns the per-expression-type provider and common symbol/diagnostic contracts. JavaScript and Liquid project that safe context into their own language semantics. `Elsa.Workflows.Design.Api` owns and advertises the capability-discoverable, cancellable, no-store endpoints only when the complete transport path is composed. The existing draft validation gate supplies consequential-operation validation: draft editing remains permissive, test run rejects known errors (with an explicit unavailable-validator override), and publication/promotion fail closed. Program #2310 keeps that baseline intact while proving it through a real persisted host and aligning provider metadata with the exact JavaScript/Liquid runtime profiles.
 
 ## Technical Context
 
@@ -32,7 +32,7 @@ Create an additive, versioned authoring-tooling seam. `Elsa.Workflows.Design` bu
 
 *GATE: Passed before Phase 0 research and re-checked after Phase 1 design.*
 
-- **Status warning**: The Elsa and framework constitutions remain draft/provisional. This work applies their current gates without treating them as ratified doctrine.
+- **Status warning**: Both constitutions are ratified at document level as of 2026-08-08. Section-level draft/provisional material, including Elsa §E2.9, remains excluded; Program #2310 does not rely on those unsettled sections.
 - **Design/runtime separation (Elsa §E2.2)**: PASS. All context and semantic work stays in Design/Expressions/API. Runtime receives neither authoring context nor tooling contracts.
 - **Artifact-only execution (Elsa §E2.6)**: PASS. Tooling cannot execute expressions or supply runtime facts; publication compiles its existing artifact only after validation.
 - **Core seam ownership (framework §2)**: PASS. `Elsa.Expressions.Core` exposes the provider contract; `Elsa.Workflows.Design` owns workflow-specific context assembly; API projects these seams without reversing dependencies.
@@ -101,6 +101,13 @@ tests/Elsa/
 ```
 
 **Structure Decision**: Extend existing module, registry, capability, validation, and publishing seams in place. `Elsa.Expressions.Core` carries only the reusable expression tooling contract. Workflow graph facts and policy filtering stay owned by `Elsa.Workflows.Design`; JavaScript and Liquid remain provider modules. No Studio project or package is referenced.
+
+## Program #2310 continuation design
+
+1. Add one real-host test path that persists a workflow draft and exercises capability discovery, context, completion, hover and validation with actual JavaScript and Liquid providers plus scoped inputs, variables and activity outputs.
+2. Introduce runtime-profile-owned metadata sources inside the JavaScript and Liquid modules; the tooling providers consume those sources but never runtime values, contexts or evaluation services.
+3. Add parser-position classification and richer signature/known-shape diagnostics without changing v1 outcome, revision, authorization, cancellation or no-store semantics.
+4. Prove independent composition and degraded states. Studio remains responsible for editor/UI conformance and consumes only the existing engine-neutral contracts.
 
 ## Complexity Tracking
 
