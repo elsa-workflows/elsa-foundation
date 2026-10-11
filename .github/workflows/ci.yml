@@ -206,7 +206,7 @@ jobs:
   ef-container-suites:
     name: EF container suites (${{ matrix.suite }})
     needs: select-ef-suites
-    if: ${{ (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') && needs.select-ef-suites.outputs.count != '0' }}
+    if: ${{ github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
     strategy:

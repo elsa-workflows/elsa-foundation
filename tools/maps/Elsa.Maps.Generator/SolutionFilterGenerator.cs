@@ -86,15 +86,6 @@ public static class SolutionFilterGenerator
         return SelectRoots(manifest, ReadSolution(repo, manifest), profile);
     }
 
-    /// <summary>Returns the validated, manifest-owned filter paths that are committed to the repository.</summary>
-    public static IReadOnlyList<string> GetOutputPaths(RepoContext repo)
-    {
-        var profiles = ReadManifest(repo).Profiles;
-        foreach (var profile in profiles)
-            ValidateProfile(profile);
-        return profiles.Where(profile => profile.Committed).Select(profile => Normalize(profile.OutputPath)).ToArray();
-    }
-
     private static SolutionFilterProfile FindProfile(SolutionFilterManifest manifest, string outputPath)
     {
         var normalizedOutputPath = Normalize(outputPath);
@@ -103,7 +94,7 @@ public static class SolutionFilterGenerator
                ?? throw new InvalidOperationException($"Unknown solution filter profile: {outputPath}");
     }
 
-    /// <summary>Returns the validated solution graph for impact checks that need reverse consumers.</summary>
+    /// <summary>Returns the validated solution graph: every solution project and its project references.</summary>
     public static IReadOnlyDictionary<string, IReadOnlyList<string>> GetProjectReferences(RepoContext repo)
     {
         var solution = ReadSolution(repo, ReadManifest(repo));
