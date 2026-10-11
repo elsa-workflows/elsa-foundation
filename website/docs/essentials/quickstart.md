@@ -59,3 +59,7 @@ docker compose -p elsa-first-workflow -f docker-compose.images.yml down
 ```
 
 This removes the demo containers and their container-held workflow data. Named volumes remain. If you also want to discard this disposable project's volumes, add `--volumes` to that command after checking the project name. Preserve any data you need before removing its container or volumes.
+
+---
+
+[Edit this page on GitHub](https://github.com/elsa-workflows/elsa-foundation/edit/main/website/docs/essentials/quickstart.md).

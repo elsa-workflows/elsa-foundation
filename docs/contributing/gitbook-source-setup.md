@@ -1,56 +1,88 @@
-# GitBook source setup
+# GitBook source setup and recovery
 
-This runbook is for the person configuring GitBook. It is intentionally outside `website/docs/`, which is the published content root. The trial is a separate Elsa 4 space; preserve the existing Elsa 3 space and its Git Sync configuration.
+This runbook is for Elsa 4 documentation maintainers. It lives outside `website/docs/`, the published content root. Preserve the Elsa 3 site at [docs.elsaworkflows.io](https://docs.elsaworkflows.io/) and its Git Sync configuration.
 
-## Source and navigation
+## Current configuration
 
-Site Git Sync reads `gitbook-docs.yaml` at the repository root. This maps one default Elsa 4 space to the repository root (`content.directory: ./`). The separate `.gitbook.yaml` tells that space to read `website/docs/`; `structure.readme` and `structure.summary` identify the landing page and navigation file inside that content root. Keep both files: renaming `.gitbook.yaml` does not create a site mapping. The site filename has a hyphen and no leading dot.
+The owner published the site and enabled Git Sync on 11 October 2026, then configured [v4.elsaworkflows.io](https://v4.elsaworkflows.io/). These are observed settings, not instructions to reconnect the live site:
 
-Keep the source tree in GitHub and review content changes through Foundation pull requests.
+| Setting | Observed value |
+| --- | --- |
+| Organization | Elsa Workflows |
+| Site / content space | `site_kpGrc` / `gq3cpwGkKOuvVeJzeNZN` |
+| Source | `elsa-workflows/elsa-foundation`, branch `main` |
+| Project directory | Repository root (empty field, equivalent to `./`) |
+| Public address | `https://v4.elsaworkflows.io/` |
+| Account signals | Site marked Sponsored; public footer identifies the free Community Plan |
+| Fork previews | Disabled when inspected on 11 October 2026 |
 
-GitBook's [content configuration](https://gitbook.com/docs/docs-as-code/git-sync/content-configuration.md) documents these paths and the `SUMMARY.md` format. Paths under `structure` are relative to the configured root.
+The authenticated overview reported **Published / Public / Synced**. All seven pages, code blocks and the workflow diagram were visually checked on the GitBook domain. Separate direct HTTPS checks verified all seven pages, canonical URLs and image endpoints on the custom domain. Full plan entitlements, multi-space limits and external-contributor preview access remain unverified.
 
-## Prepare a safe Elsa 4 trial
+Evidence: [hosted checkpoint](https://github.com/elsa-workflows/elsa-foundation/issues/2498#issuecomment-6113578105), [custom-domain checkpoint](https://github.com/elsa-workflows/elsa-foundation/issues/2498#issuecomment-6113922514). Source preparation landed through #2641 and #2643; the latter merged as `d4d7b6bbcc814d3b8229c933931115ccefe116ec`. These observations do not prove every later revision has synced.
 
-1. Create or select a dedicated, empty Elsa 4 trial site. Before initial import, verify it has no content to preserve. Do not select the Elsa 3 site or a site with existing content: initial sync selection can replace content. The committed site mapping creates the trial space during import.
-2. Set the Git Sync **Project directory** to the Elsa Foundation repository root (`./`), not to `website/docs/`. The root `gitbook-docs.yaml` maps the default space to that same directory; `.gitbook.yaml` narrows its content to `website/docs/`.
-3. Verify that the isolated trial branch `claude/2498-foundation-gitbook-source` exists on GitHub at the reviewed head before selecting it. PR #2641 merged the initial source; a merged PR does not prove its branch still exists. If the branch is absent, coordinate restoration from the retained local branch with the current Foundation checkpoint owner. Do not substitute `main`. Select the trial branch and the initial **GitHub to GitBook** direction. Do not choose **GitBook to GitHub**. The YAML directs GitBook to `website/docs/`.
-4. Do not purchase or upgrade a plan, change DNS, or publish the trial site as part of this setup.
+## Source mapping and navigation
 
-The initial space key is `elsa-4-docs`, a logical mapping key selected for this empty site, rather than a guessed GitBook site/space ID. Treat it as permanent after the first sync. If GitBook updates `gitbook-docs.yaml`, inspect and review the changes on the trial branch. Do not change a live mapping key: GitBook treats a changed key as a replacement space.
+Site Git Sync reads `gitbook-docs.yaml` at the repository root. It maps the default space to the repository root (`content.directory: ./`). The separate `.gitbook.yaml` directs that space to `website/docs/`; `structure.readme` and `structure.summary` identify the landing and navigation files relative to that content root. Keep both configurations. The site filename has a hyphen and no leading dot.
 
-GitBook describes Git Sync as two-way; do not assume sync itself creates or requires a GitHub pull request. Keep GitHub pull requests as the accepted content review path. Avoid direct editor changes unless the write-back behavior and a protected branch or change-request path have been explicitly configured and verified.
+The logical mapping key `elsa-4-docs` is permanent after the first sync. Changing a live key can replace its space; it is not a rollback mechanism. Review any GitBook-generated configuration changes through the content review path.
 
-Before connecting, record the actual organization, site/space identifiers, current plan, custom-domain and multi-space entitlements, editor-seat terms, and external-fork preview settings. Record observations from the account; public pricing alone does not establish its entitlements. Do not purchase a plan or expand access to complete the trial. Capture the existing Elsa 3 URL and sync target read-only for the preservation comparison.
+Link to canonical source guides instead of copying their explanations. Current-development source links must describe the actual `main` tree. During Foundation/Studio consolidation, update them only after the new paths land and their targets are verified. Preserve immutable quickstart links and image digests: they document a specific historical pair and environment.
 
-## Hosted proof checklist
+GitBook's [content configuration](https://gitbook.com/docs/docs-as-code/git-sync/content-configuration) explains YAML mapping and `SUMMARY.md` navigation.
 
-Record each result from the dedicated trial space; local checks do not substitute for hosted proof:
+## Contribution and publishing boundary
 
-- Rendered navigation matches `website/docs/SUMMARY.md`, including Essentials, Extensions, Studio, and Contributing.
-- Markdown headings, fenced code blocks, and any inline code render correctly.
-- Relative page links and image assets resolve in the hosted pages; external source links open their intended destinations.
-- A reviewed branch update appears in the trial space, and a follow-up revert removes that change.
-- Any GitHub “edit source” links point to the intended Foundation repository, branch, and file path.
-- Preview access is checked for a contributor outside the Elsa organization or a signed-out reader where possible. Record the GitBook account, membership, and fork restrictions that affect external contributors; do not promise preview availability.
-- The existing Elsa 3 space and sync remain unchanged, and the trial has not written to `main`.
+Contributors edit Foundation Markdown and submit a GitHub pull request. Each public page includes **Edit this page on GitHub**, pointing to its owning file on `main`. GitHub may require sign-in or a fork; editing a file is not permission to commit directly to the live branch. Opening a PR does not require a GitBook editor seat. Review claims, links, navigation and the exact preview revision before accepting a change.
 
-GitBook's [Git Sync import guide](https://gitbook.com/docs/guides/editing-and-publishing-documentation/import-or-migrate-your-content-to-gitbook-with-git-sync) describes repository connection and initial sync directions. Connecting GitBook and qualifying the trial require an operator with the necessary account access. The existing Elsa 3 space, plan, DNS, publishers, and `main` remain outside this setup.
+GitBook documents [PR previews and publication after merge](https://gitbook.com/docs/getting-started/quickstart) and [two-way Git Sync](https://gitbook.com/docs/guides/editing-and-publishing-documentation/import-or-migrate-your-content-to-gitbook-with-git-sync). Treat a merge to the configured branch as publication-impacting. GitBook editor actions can also write back to GitHub; sync does not itself establish a required GitHub review.
 
-## Record evidence and test rollback
+Read-only GitHub inspection on 12 October 2026 found effective `main` rules requiring **Build & test** and **Generated maps fresh**, plus deletion and non-fast-forward restrictions. They did not require a PR or reviewer approval. A classic branch-protection 404 does not mean no rules exist: inspect rulesets too. The intended GitHub review path is therefore not proven to be enforced for all GitBook-originated writes. Do not claim it is protected, and avoid direct GitBook editor changes until the owner selects and verifies the write-back/review policy. This runbook does not authorize a settings change.
 
-For each hosted check, record the source SHA, synced branch, page or preview URL, observed result, date, and relevant screenshot. Preserve failures and access restrictions alongside passes. An HTTP success response or local audit does not establish that GitBook rendered the expected revision.
+Check actual account controls before relying on them. GitBook's [member roles](https://gitbook.com/docs/collaborate/member-management/roles) describe editing permissions, but do not establish this account's seat entitlements or external-preview access. Do not invite members, purchase seats or enable fork previews merely to obtain a passing check.
 
-On the isolated trial branch, make one reviewed, harmless text update, observe it in the hosted space, then revert that commit through the same reviewed path. Verify the original text returns, navigation/assets still resolve, and the space identifier and mapping keys remain unchanged. Keep both commit identifiers and the hosted observations. Do not use a mapping-key change as a rollback mechanism.
+## Safe preview update and revert check
 
-## Prepare the publishing handover
+Use an unmerged Foundation review branch; keep the live source branch and mapping unchanged. A retained local trial branch does not establish that its remote branch still exists or is the live source.
 
-Before requesting production authority, present the actual site and space, configured source branch, review path, publisher behavior, maintenance owner, and verified rollback results. Explain which GitHub merges or GitBook editor actions publish content and which observed controls prevent unreviewed writes.
+1. Record the live text, `main` SHA, site/space identifiers and mapping keys. Create a separate branch from that source checkpoint.
+2. Make a harmless, identifiable text change in one page. Review it locally, commit it and open a draft Foundation PR. Do not merge it or reconnect the live site to it.
+3. Inspect the exact-head GitBook check/status or PR comment for a preview URL. If none is produced, record that limitation. A local branch or HTTP 200 is not preview-sync proof.
+4. Open the supplied preview and verify the marker, navigation, code and image asset. Record the commit SHA, preview URL, account/access context, date and screenshot.
+5. Revert the marker commit with a normal follow-up commit. Verify the preview shows the original text at the revert SHA. Confirm the live page and source mapping stayed unchanged.
+6. Retain both commits and observations. Close or retain the test PR according to its agreed review scope; do not delete shared branches without authority.
 
-The target public address is `v4.elsaworkflows.io`. Obtain the exact DNS target from GitBook's [custom-domain setup](https://gitbook.com/docs/publish/custom-domain.md); do not guess it. Before any separately authorized DNS change, capture the existing record and TTL, identify the rollback operator, and prepare restoration and DNS/HTTPS verification steps. Preserve all Elsa 3 URLs and Git Sync settings.
+A preview update/revert qualifies the branch-preview path. It does not prove recovery of already-published content or GitBook-originated write-back. Keep those results distinct.
 
-For a content rollback, revert the accepted content change on the configured source branch through its review path and verify the resulting hosted revision, links and assets. DNS rollback is a separate operation using the captured pre-change record. A successful trial content revert does not prove DNS recovery or authorize a main merge or public launch.
+On 12 October 2026, draft PR #2645 exercised this path: marker commit `26823005fff6b11ec1586786dc188fca8a6bd972` appeared in its GitBook revision's main HTML; normal revert `713d3131b3c5262de97a4d56210765cdb803fa81` removed it. All seven owning edit links, five code blocks and the workflow asset were served from the revert preview. Live-page checks before and after the revert found no marker, and `main` remained unchanged at readback. This was HTTP access without cookies; preview browser navigation timed out, so fresh visual rendering and an outside-contributor identity were not verified. See the [exact revision and commit evidence](https://github.com/elsa-workflows/elsa-foundation/issues/2498#issuecomment-6114699971).
 
-## Local review
+Fork previews are an observed access limit, not a successful test. With them disabled, use the GitHub diff as the external contributor's review surface. An actual external-fork preview needs a separately authorized test under the selected policy and an outside contributor or signed-out access check; an organization member testing their own fork is not equivalent evidence.
 
-Before proposing a content change, validate `gitbook-docs.yaml` against its declared schema, verify both YAML files' directory mapping, confirm every page in `SUMMARY.md` exists under `website/docs/`, and check relative Markdown links and image paths within that content root. Review the resulting GitBook preview after sync; local checks do not prove hosted rendering or publication.
+## Recovery and operational handover
+
+Before accepting a publishing change, identify the maintenance owner, source branch and SHA, GitHub reviewer, publishing trigger, expected site/space and recovery operator. Confirm merge authority separately; green checks or enabled sync do not confer it.
+
+For a bad accepted content change:
+
+1. Identify the introducing commit and last known good published text. Preserve failure evidence.
+2. Prepare a normal revert PR on the configured source branch and run affected documentation checks. Review configuration changes carefully; preserve the permanent mapping key.
+3. Obtain the usual merge authority. After the revert lands, wait for sync and verify expected public content, navigation, code and assets. Record source and hosted evidence.
+4. If sync fails, inspect GitBook status and logs before reconnecting. Initial import can overwrite content; never use a direction swap as improvised recovery.
+
+GitBook also documents [change requests and restoring version history](https://gitbook.com/docs/guides/docs-best-practices/make-your-documentation-process-more-collaborative-with-change-requests). A GitBook history restore can interact with two-way sync; do not use it until its GitHub effect and review policy have been verified. Published content recovery and GitBook-originated write-back have not yet been exercised for this site.
+
+The owner configured the custom domain. DNS recovery is separate: capture its current target and TTL with the authorized DNS operator before any future change, then prepare restoration and DNS/HTTPS checks. Do not infer a previous record or tested DNS rollback from a working domain. Preserve Elsa 3 addresses and sync throughout.
+
+## Validation and outstanding evidence
+
+Before proposing a change, validate `gitbook-docs.yaml` against its schema, verify both YAML directory mappings, confirm every `SUMMARY.md` page exists, and check relative links/assets and per-page GitHub edit targets. Review the synced exact revision when a preview is available.
+
+| Check | Evidence state |
+| --- | --- |
+| Initial live sync, seven-page rendering and custom-domain HTTPS | Observed; checkpoint links above |
+| Same-repository PR preview update/revert | Served-HTML update/revert observed in #2645; fresh visual check pending |
+| External-fork preview and outside-contributor access | Unverified; fork previews observed disabled |
+| Direct owning-repository edit links | Seven targets served in #2645 preview; live proof pending merge/sync |
+| GitBook-originated write-back and enforced review | Unverified; effective `main` rules do not require PR approval |
+| Published content revert / DNS recovery | Procedures prepared; not exercised |
+
+Keep #2498 open while required proof is unresolved. Record restrictions and failures beside passes; do not relabel unavailable hosted checks as successful local validation.
