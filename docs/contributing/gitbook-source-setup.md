@@ -53,6 +53,8 @@ Use an unmerged Foundation review branch; keep the live source branch and mappin
 
 A preview update/revert qualifies the branch-preview path. It does not prove recovery of already-published content or GitBook-originated write-back. Keep those results distinct.
 
+On 12 October 2026, draft PR #2645 exercised this path: marker commit `26823005fff6b11ec1586786dc188fca8a6bd972` appeared in its GitBook revision's main HTML; normal revert `713d3131b3c5262de97a4d56210765cdb803fa81` removed it. All seven owning edit links, five code blocks and the workflow asset were served from the revert preview. Live-page checks before and after the revert found no marker, and `main` remained unchanged at readback. This was HTTP access without cookies; preview browser navigation timed out, so fresh visual rendering and an outside-contributor identity were not verified. See the [exact revision and commit evidence](https://github.com/elsa-workflows/elsa-foundation/issues/2498#issuecomment-6114699971).
+
 Fork previews are an observed access limit, not a successful test. With them disabled, use the GitHub diff as the external contributor's review surface. An actual external-fork preview needs a separately authorized test under the selected policy and an outside contributor or signed-out access check; an organization member testing their own fork is not equivalent evidence.
 
 ## Recovery and operational handover
@@ -77,9 +79,9 @@ Before proposing a change, validate `gitbook-docs.yaml` against its schema, veri
 | Check | Evidence state |
 | --- | --- |
 | Initial live sync, seven-page rendering and custom-domain HTTPS | Observed; checkpoint links above |
-| Same-repository PR preview update/revert | Pending hosted proof |
+| Same-repository PR preview update/revert | Served-HTML update/revert observed in #2645; fresh visual check pending |
 | External-fork preview and outside-contributor access | Unverified; fork previews observed disabled |
-| Direct owning-repository edit links | Added in source; hosted proof pending merge/sync |
+| Direct owning-repository edit links | Seven targets served in #2645 preview; live proof pending merge/sync |
 | GitBook-originated write-back and enforced review | Unverified; effective `main` rules do not require PR approval |
 | Published content revert / DNS recovery | Procedures prepared; not exercised |
 
