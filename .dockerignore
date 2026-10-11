@@ -2,7 +2,7 @@
 # root as context (e.g. Essentials/apps/Elsa.Workbench/Dockerfile).
 #
 # Goal: send only what `dotnet restore`/`publish` needs. Keep repo-root build
-# config (*.props, *.targets, NuGet.config, *.slnx) and the src/ tree with
+# config (*.props, *.targets, NuGet.config, *.slnx) and the product source trees with
 # its committed wwwroot assets; drop build output, tests, docs and local dev state.
 
 # --- Build output -----------------------------------------------------------
@@ -54,6 +54,14 @@ Essentials/apps/Elsa.Workbench/packages/
 Essentials/apps/Elsa.Workbench/extension-builder/
 # GitHubCopilotAgent working directory (config.json is regenerated / supplied via mount)
 Essentials/apps/Elsa.Workbench/.elsa/
+Studio/src/apps/Elsa.Studio.Web/packages/
+Studio/.git/
+Studio/.github/
+Studio/.specify/
+Studio/.claude/
+Studio/specs/
+Studio/docs/
+Studio/artifacts/
 
 # --- Docker / compose assets ------------------------------------------------
 docker/

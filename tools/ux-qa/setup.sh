@@ -5,7 +5,8 @@
 # PID is recorded as soon as it launches, and any failure stops what this invocation started.
 # .state/env is data (KEY=value lines), read with sed and never sourced, so a checkout path cannot run as shell code.
 #
-#   STUDIO_DIR=/path/to/elsa-foundation-studio bash tools/ux-qa/setup.sh
+#   bash tools/ux-qa/setup.sh
+# STUDIO_DIR can override the default Foundation/Studio directory.
 #
 # Prints `STAGE <name>` before each step, so a failure names the step that broke.
 set -euo pipefail
@@ -34,13 +35,13 @@ record() { printf '%s=%s\n' "$1" "$2" >> "$state/env"; }
 
 find_studio() {
   local candidate
-  for candidate in "${STUDIO_DIR:-}" "$root/../elsa-foundation-studio" "$HOME/elsa-foundation-studio" "/home/user/elsa-foundation-studio"; do
-    if [ -n "$candidate" ] && [ -f "$candidate/Essentials/apps/Elsa.Studio.Web/Elsa.Studio.Web.csproj" ]; then
+  for candidate in "${STUDIO_DIR:-}" "$root/Studio"; do
+    if [ -n "$candidate" ] && [ -f "$candidate/src/apps/Elsa.Studio.Web/Elsa.Studio.Web.csproj" ]; then
       (cd "$candidate" && pwd)
       return 0
     fi
   done
-  echo "Elsa Studio checkout not found; set STUDIO_DIR to an elsa-foundation-studio clone." >&2
+  echo "Elsa Studio source not found; set STUDIO_DIR to the consolidated Studio directory." >&2
   return 1
 }
 
@@ -120,7 +121,7 @@ step studio-build
   || { tail -40 "$logs/studio-build.log" >&2; false; }
 
 step studio-host-build
-dotnet build "$studio/Essentials/apps/Elsa.Studio.Web/Elsa.Studio.Web.csproj" -v:q -nologo > "$logs/studio-host-build.log" 2>&1 \
+dotnet build "$studio/src/apps/Elsa.Studio.Web/Elsa.Studio.Web.csproj" -v:q -nologo > "$logs/studio-host-build.log" 2>&1 \
   || { tail -40 "$logs/studio-host-build.log" >&2; false; }
 
 step browser-install
@@ -138,7 +139,7 @@ record WORKBENCH_PID "$workbench_pid"
 wait_for "Workbench" workbench_ready "$workbench_pid"
 
 step studio-start
-Studio__BackendBaseUrl="$workbench_url" dotnet run --no-build --project "$studio/Essentials/apps/Elsa.Studio.Web/Elsa.Studio.Web.csproj" \
+Studio__BackendBaseUrl="$workbench_url" dotnet run --no-build --project "$studio/src/apps/Elsa.Studio.Web/Elsa.Studio.Web.csproj" \
   --launch-profile http > "$logs/studio.log" 2>&1 &
 studio_pid=$!
 record STUDIO_PID "$studio_pid"

@@ -6,9 +6,11 @@ public static class RepoLayoutContractTests
     public static void Run()
     {
         var repo = RepoContext.Discover();
-        var expectedProjects = new[] { "Essentials/src", "Essentials/apps", "Essentials/tests" }
+        var roots = new[] { "Essentials/src", "Essentials/apps", "Essentials/tests" }
             .Concat(ExtensionRoots(repo.Root, "src", "tests"))
-            .Where(Directory.Exists)
+            .Where(root => Directory.Exists(repo.Absolute(root)))
+            .ToArray();
+        var expectedProjects = roots
             .SelectMany(root => Directory.EnumerateFiles(repo.Absolute(root), "*.csproj", SearchOption.AllDirectories))
             .Select(path => Path.GetRelativePath(repo.Root, path).Replace('\\', '/'))
             .ToHashSet(StringComparer.Ordinal);
@@ -38,6 +40,14 @@ public static class RepoLayoutContractTests
             !sourceFiles.Any(RepoLayout.IsExtensionSourcePath) ||
             sourceFiles.Any(path => !RepoLayout.IsModulePath(path) || path.Contains("/studio/", StringComparison.Ordinal)))
             throw new InvalidOperationException("Backend source pathspecs missed a product root or included a non-backend/Studio source path.");
+
+        var expectedCatalogs = roots.Where(root => !RepoLayout.IsTestPath(root + "/"))
+            .SelectMany(root => Directory.EnumerateFiles(repo.Absolute(root), "EXTENSION_POINTS.md", SearchOption.AllDirectories))
+            .Select(path => Path.GetRelativePath(repo.Root, path).Replace('\\', '/'))
+            .ToHashSet(StringComparer.Ordinal);
+        var actualCatalogs = repo.ListFiles(RepoLayout.CatalogPathspecs).ToHashSet(StringComparer.Ordinal);
+        if (expectedCatalogs.Count == 0 || !expectedCatalogs.SetEquals(actualCatalogs))
+            throw new InvalidOperationException("Catalog selectors must cover exactly backend EXTENSION_POINTS.md files, never ordinary README or Studio files.");
 
         if (!RepoLayout.IsTestPath("Essentials/tests/Architecture/Tests/Example.cs") ||
             !RepoLayout.IsTestProjectPath("Extensions/Agent/tests/Tests/Example.csproj") ||

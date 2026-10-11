@@ -30,9 +30,9 @@ public static class RepoLayout
     /// <summary>Pathspecs covering extension-point catalogs in backend module roots.</summary>
     public static readonly string[] CatalogPathspecs =
     [
-        "Essentials/src/*.md",
-        "Essentials/apps/*.md",
-        "Extensions/*/src/*.md"
+        "Essentials/src/EXTENSION_POINTS.md", "Essentials/src/*/EXTENSION_POINTS.md",
+        "Essentials/apps/EXTENSION_POINTS.md", "Essentials/apps/*/EXTENSION_POINTS.md",
+        "Extensions/*/src/EXTENSION_POINTS.md", "Extensions/*/src/*/EXTENSION_POINTS.md"
     ];
 
     /// <summary>Tracked C# files in backend production roots, excluding any nested test subtree.</summary>

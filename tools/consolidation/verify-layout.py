@@ -34,6 +34,8 @@ def verify(root: Path, manifest: dict) -> tuple[list[str], dict]:
             identity = prop(name) or path.stem
             if identity != entry[key]:
                 errors.append(f"Changed {name}: {entry['target']}: {entry[key]} -> {identity}")
+        if prop("IsPackable") != entry["explicit_is_packable"]:
+            errors.append(f"Changed explicit IsPackable: {entry['target']}")
         for ref in project.iter("ProjectReference"):
             value = ref.get("Include", "").replace("\\", "/")
             if "$" in value or "*" in value:

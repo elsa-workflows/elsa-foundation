@@ -163,8 +163,7 @@ Demo credentials and the demo-only warning are the same as the [table in section
   docker compose version
   ```
 
-- **For the full stack only:** a checkout of the sibling repo **`elsa-foundation-studio`** next to
-  this repository (the Studio image is built from there — see step 3). Not needed for the fast path.
+- **For the full stack:** Studio is included under `Studio/` in this same repository.
 - **No credentials required.** All NuGet feeds used by the image builds are public, so the builds
   work on a clean machine with no `~/.nuget` setup.
 
@@ -206,18 +205,10 @@ continue to step 3.
 
 ## 3. Full stack — add Elsa Studio
 
-The Studio image is **not** built from this repository. Build it once from the sibling repo
-`elsa-foundation-studio`, whose Dockerfile also uses **its own repo root** as the build context.
+The Studio image is built from this repository, with the Foundation root as its build context.
+From `docker/compose`, bring up the whole stack with the `studio` profile:
 
 ```bash
-cd ../../../elsa-foundation-studio          # from Foundation docker/compose to the sibling checkout
-docker build -f Essentials/apps/Elsa.Studio.Web/Dockerfile -t elsa-studio-web:local .
-```
-
-Back in this directory, bring up the whole stack with the `studio` profile:
-
-```bash
-cd -                                         # back to docker/compose
 docker compose --profile studio up --build
 ```
 

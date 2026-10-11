@@ -136,7 +136,7 @@ jobs:
               keep+=("$p")
             fi
           done < <({ find Essentials/tests -name '*.csproj'
-                     find Extensions -path '*/tests/*' -name '*.csproj'; } | sort)
+                     find Extensions -path '*/tests/*' -not -path '*/studio/*' -name '*.csproj'; } | sort)
           if (( ${#keep[@]} == 0 )); then
             echo "::error::No container-free test projects found; refusing to run an empty fast-test filter."
             exit 1

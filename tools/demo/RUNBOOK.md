@@ -124,11 +124,11 @@ bash tools/demo/prepack.sh
 command -v docker jq curl python3 rsync sqlite3 caffeinate
 docker info >/dev/null && echo docker ok
 docker image inspect postgres:16-alpine >/dev/null && echo image ok
-ls ../elsa-foundation-studio-demo/Essentials/apps/Elsa.Studio.Web/bin/Release/net10.0/Elsa.Studio.Web.dll
+ls Studio/src/apps/Elsa.Studio.Web/bin/Release/net10.0/Elsa.Studio.Web.dll
 ```
 
 - **Expect:** seven paths, then `docker ok` and `image ok`, then the path of the Studio build (Act 3; a checkout elsewhere is named by `DEMO_STUDIO_DIR`). The image is used from the cache and nothing is pulled: with Wi-Fi off, an evicted image is a dead demo, so check it here.
-- **If it goes wrong:** no Studio build: build the Studio checkout (its `README.md`: `pnpm install`, `pnpm build`, then `dotnet build -c Release Essentials/apps/Elsa.Studio.Web`), or present Acts 1 and 2 and do Act 3 by its fallback.
+- **If it goes wrong:** no Studio build: from the Foundation root run `pnpm --dir Studio install --frozen-lockfile`, `pnpm --dir Studio build`, then `dotnet build -c Release Studio/src/apps/Elsa.Studio.Web/Elsa.Studio.Web.csproj`, or present Acts 1 and 2 and do Act 3 by its fallback.
 
 Plug in the power adapter and open a new terminal tab, **awake**. Run this in it and leave it running until the demo is over:
 
