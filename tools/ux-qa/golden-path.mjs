@@ -35,7 +35,8 @@ await journey("golden-path", async qa => {
     } catch {
       throw new Error("the Flowchart root option never became available in the Create Workflow dialog");
     }
-    await dialog.locator("label.wf-root-card").filter({ has: flowchart }).click(); // the radio itself is visually hidden
+    // The radio itself is visually hidden behind its card. A `has` locator resolves inside the card, so it is unscoped.
+    await dialog.locator("label.wf-root-card").filter({ has: page.getByRole("radio", { name: "Flowchart", exact: true }) }).click();
     await dialog.getByRole("button", { name: "Create", exact: true }).click();
     await page.waitForFunction(() => new URL(window.location.href).searchParams.has("definition"));
   });
