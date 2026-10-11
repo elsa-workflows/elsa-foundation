@@ -128,6 +128,9 @@ step browser-install
   || { tail -40 "$logs/browser-install.log" >&2; false; }
 
 step workbench-start
+# The Workbench writes its Nuplane lock file into the project on startup; teardown removes it when this run created it.
+lock_file="$root/src/apps/Elsa.Workbench/nuplane.lock.json"
+[ -e "$lock_file" ] || record GENERATED_LOCK_FILE "$lock_file"
 dotnet run --no-build --project "$root/src/apps/Elsa.Workbench/Elsa.Workbench.csproj" --launch-profile http \
   > "$logs/workbench.log" 2>&1 &
 workbench_pid=$!

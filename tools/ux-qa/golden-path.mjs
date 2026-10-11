@@ -27,6 +27,15 @@ await journey("golden-path", async qa => {
     await page.locator('button[title="Create workflow"]').click();
     const dialog = page.getByRole("dialog", { name: "Create Workflow" });
     await dialog.getByLabel("Display name", { exact: true }).fill(workflowName);
+    // Choose the root explicitly once the activity catalog has enabled it. Create is clickable before the catalog
+    // loads, and a workflow created then has no root and no way to add one.
+    const flowchart = dialog.getByRole("radio", { name: "Flowchart", exact: true });
+    try {
+      await flowchart.and(page.locator(":enabled")).waitFor({ state: "attached", timeout: 30_000 });
+    } catch {
+      throw new Error("the Flowchart root option never became available in the Create Workflow dialog");
+    }
+    await dialog.locator("label.wf-root-card").filter({ has: flowchart }).click(); // the radio itself is visually hidden
     await dialog.getByRole("button", { name: "Create", exact: true }).click();
     await page.waitForFunction(() => new URL(window.location.href).searchParams.has("definition"));
   });
