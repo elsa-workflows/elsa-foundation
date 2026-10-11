@@ -23,9 +23,10 @@ on:
 permissions:
   contents: read
 
+# A newer push to main supersedes an older push scan; scheduled and manual scans are never cancelled.
 concurrency:
-  group: codeql-${{ github.ref }}
-  cancel-in-progress: true
+  group: ${{ github.event_name == 'push' && format('codeql-push-{0}', github.ref) || format('codeql-run-{0}', github.run_id) }}
+  cancel-in-progress: ${{ github.event_name == 'push' }}
 
 jobs:
   analyze:
@@ -43,6 +44,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          persist-credentials: false
 
       - name: Initialize CodeQL
         uses: github/codeql-action/init@v4
