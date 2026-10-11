@@ -203,7 +203,7 @@ public sealed class WorkbenchConfigurationTests
         Dictionary<string, string?>? environment = null)
     {
         var builder = new ConfigurationBuilder()
-            .SetBasePath(Path.Join(RepoRoot, "src", "apps", "Elsa.Workbench"))
+            .SetBasePath(Path.Join(RepoRoot, "Essentials", "apps", "Elsa.Workbench"))
             .AddJsonFile("shells.json");
         if (overlay is not null)
             builder.AddJsonFile(overlay);
@@ -214,7 +214,7 @@ public sealed class WorkbenchConfigurationTests
     // compose environment can supply what the overlay blanks or requires, so resolve the same layering here.
     [Theory]
     [InlineData("docker-compose.yml", "docker/compose/elsa-workbench.shells.json")]
-    [InlineData("docker-compose.images.yml", "src/apps/Elsa.Workbench/shells.json")]
+    [InlineData("docker-compose.images.yml", "Essentials/apps/Elsa.Workbench/shells.json")]
     public void Production_compose_stacks_supply_the_secrets_the_overlay_requires(string composeFile, string shellsJson)
     {
         var environment = ReadWorkbenchEnvironment(Path.Join(RepoRoot, "docker", "compose", composeFile));
@@ -222,7 +222,7 @@ public sealed class WorkbenchConfigurationTests
 
         var features = new ConfigurationBuilder()
             .AddJsonFile(Path.Join(RepoRoot, shellsJson))
-            .AddJsonFile(Path.Join(RepoRoot, "src", "apps", "Elsa.Workbench", "shells.Production.json"))
+            .AddJsonFile(Path.Join(RepoRoot, "Essentials", "apps", "Elsa.Workbench", "shells.Production.json"))
             .AddInMemoryCollection(environment.Select(x => KeyValuePair.Create(x.Key.Replace("__", ":"), (string?)x.Value)))
             .Build()
             .GetSection("CShells:Shells:default:Features");

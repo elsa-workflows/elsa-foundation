@@ -6,7 +6,7 @@ namespace Elsa.Architecture.Tests;
 
 public sealed class DispatchWorkflowArchitectureTests
 {
-    private static readonly string DispatchRoot = Path.Combine(RepoRoot, "src", "essentials", "Activities", "DispatchWorkflow");
+    private static readonly string DispatchRoot = Path.Combine(RepoRoot, "Essentials", "src", "Activities", "DispatchWorkflow");
 
     [Fact]
     public void DispatchWorkflow_runtime_does_not_reference_design()

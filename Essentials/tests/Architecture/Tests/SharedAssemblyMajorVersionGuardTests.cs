@@ -94,7 +94,7 @@ public sealed class SharedAssemblyMajorVersionGuardTests
 
         Assert.True(
             missing.Length == 0,
-            $"{host}'s Nuplane:Loading:SharedAssemblies (src/apps/{host}/appsettings.json) shares assemblies its build does not " +
+            $"{host}'s Nuplane:Loading:SharedAssemblies (Essentials/apps/{host}/appsettings.json) shares assemblies its build does not " +
             "carry, which refuses every package carrying one of them and stops the host at startup (#2150): " +
             $"{string.Join(", ", missing)}. Remove the entry, or reference what it names from the host.");
     }
@@ -242,7 +242,7 @@ public sealed class SharedAssemblyMajorVersionGuardTests
         $"major {entry.MajorVersion}{(entry.PublicKeyToken.Length == 0 ? ", unsigned" : $" with token {entry.PublicKeyToken}")}";
 
     private static string Report(string host, string build, IReadOnlyList<string> unmatched) =>
-        $"{host}'s Nuplane:Loading:SharedAssemblies (src/apps/{host}/appsettings.json) has Elsa shares that Nuplane's matcher " +
+        $"{host}'s Nuplane:Loading:SharedAssemblies (Essentials/apps/{host}/appsettings.json) has Elsa shares that Nuplane's matcher " +
         $"does not take for the reference a package built against {build} carries. Such a share never matches, so a package " +
         "carrying its own copy of the assembly loads that copy instead of the host's (#2150):" +
         string.Concat(unmatched.Select(line => $"{Environment.NewLine}  {line}"));

@@ -175,7 +175,7 @@ public sealed partial class ArchitectureGuardTests
 
     // Every production module root, not just src/. This was src/-only on the reasoning that a .Core
     // project is a required-module shape and no extension declared one; moving the Agent bucket to
-    // src/extensions/ made Elsa.Agent.Core the first that does (#1815). The narrowing showed up as sixteen
+    // Extensions/ made Elsa.Agent.Core the first that does (#1815). The narrowing showed up as sixteen
     // baseline entries reported stale rather than as missed violations, which is the inverse assertion
     // earning its keep: without it the guard would simply have stopped checking Agent and stayed green.
     private static IEnumerable<Assembly> CoreProjectAssemblies() => ProjectFiles()

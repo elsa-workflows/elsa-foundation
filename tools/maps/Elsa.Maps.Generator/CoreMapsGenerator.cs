@@ -63,7 +63,7 @@ public static partial class CoreMapsGenerator
     {
         var rows = new List<FeatureRow>();
 
-        foreach (var relativePath in repo.ListFiles(RepoLayout.SourceFilePathspecs))
+        foreach (var relativePath in RepoLayout.SourceFiles(repo))
         {
             var text = File.ReadAllText(repo.Absolute(relativePath));
             if (!text.Contains("FeatureBase", StringComparison.Ordinal) &&

@@ -5,7 +5,7 @@ namespace Elsa.Architecture.Tests;
 
 /// <summary>
 /// EF Core is the only first-party persistence family. The retired storage library and the retired
-/// document-database driver were deleted, not deprecated, so nothing under <c>src/</c>, <c>tests/</c>,
+/// document-database driver were deleted, not deprecated, so nothing under <c>Essentials/</c> or <c>Extensions/</c>,
 /// <c>tools/</c>, <c>docker/</c>, <c>e2e-tests/</c>, <c>.github/</c> or the repository-level package and
 /// feed configuration may name either of them again: no project, no package, no NuGet feed, no build or CI
 /// configuration, no directory and no solution filter.
@@ -41,8 +41,8 @@ public sealed class RetiredPersistenceFamilyGuardTests
         string.Concat("Mon", "go")
     ];
 
-    /// <summary>Roots that ship or build the product. History under docs/, specs/ and archives is out of scope.</summary>
-    private static readonly string[] ScannedRoots = ["src", "tests", "tools", "samples", "docker", "e2e-tests", ".github", ".config"];
+    /// <summary>Roots that ship or build the product, including Studio as a sibling product under Extensions/. History under docs/, specs/ and archives is out of scope.</summary>
+    private static readonly string[] ScannedRoots = ["Essentials", "Extensions", "tools", "samples", "docker", "e2e-tests", ".github", ".config"];
 
     /// <summary>Scanned by name wherever they sit; repository-root files of a scanned extension are read too.</summary>
     private static readonly string[] ScannedFiles = ["Directory.Packages.props", "NuGet.config", "Elsa.Server.slnx", "Dockerfile"];
@@ -145,9 +145,9 @@ public sealed class RetiredPersistenceFamilyGuardTests
             ["Directory.Packages.props", "NuGet.config", "src/Module/Elsa.Module.csproj", ".github/workflows/ci.yml"],
             Violations(files).Select(violation => violation[..violation.IndexOf(':')]));
 
-        Assert.True(NamesRetiredFamily($"src/essentials/Persistence/{retired}/Elsa.Persistence.{retired}.csproj"));
+        Assert.True(NamesRetiredFamily($"Essentials/src/Persistence/{retired}/Elsa.Persistence.{retired}.csproj"));
         Assert.True(NamesRetiredFamily(retired));
-        Assert.False(NamesRetiredFamily("src/essentials/Persistence/EntityFramework/Elsa.Persistence.EntityFramework.csproj"));
+        Assert.False(NamesRetiredFamily("Essentials/src/Persistence/EntityFramework/Elsa.Persistence.EntityFramework.csproj"));
         Assert.False(IsScannedConfigurationFile("src/Module/Store.cs"));
         Assert.False(IsScannedConfigurationFile("src/Module/README.md"));
     }

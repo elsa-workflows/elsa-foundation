@@ -70,7 +70,9 @@ public sealed class ValueFlowArchitectureTests(ITestOutputHelper output)
     private static string FormatEdge((string Project, string Reference) edge) => $"{edge.Project} -> {edge.Reference}";
 
     private static IEnumerable<ProjectInfo> ProductionProjects() =>
-        Directory.EnumerateFiles(Path.Combine(RepoRoot, "src", "essentials"), "*.csproj", SearchOption.AllDirectories)
+        ModuleRoots.Resolve(RepoRoot, ModuleRoots.Production)
+            .SelectMany(root => Directory.EnumerateFiles(root, "*.csproj", SearchOption.AllDirectories))
+            .Where(path => ModuleRoots.IsNotTestFile(RepoRoot, path))
             .Select(path => new ProjectInfo(Path.GetFileNameWithoutExtension(path), path));
 
     private static IEnumerable<string> ProjectReferences(ProjectInfo project)

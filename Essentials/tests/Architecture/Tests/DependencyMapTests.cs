@@ -23,14 +23,14 @@ public sealed class DependencyMapTests
     private static IReadOnlyList<Node> Nodes { get; } = ReadNodes();
 
     /// <summary>
-    /// SC-001: for every tracked file under <c>src/</c> and <c>tests/</c>, the owner resolved from the dataset alone
+    /// SC-001: for every tracked file under the backend Essentials and extension roots, the owner resolved from the dataset alone
     /// is the project whose directory is nearest above the file on disk. The oracle walks the filesystem and never
     /// reads the dataset, so a node missing from it, or a resolver that is not longest-prefix, disagrees.
     /// </summary>
     [Fact]
     public void Every_tracked_file_resolves_to_the_nearest_project_on_disk()
     {
-        var files = TrackedFiles("src", "tests");
+        var files = TrackedFiles("Essentials/src", "Essentials/apps", "Essentials/tests", "Extensions/*/src/**", "Extensions/*/tests/**");
         var projectsOnDisk = new Dictionary<string, string?>(StringComparer.Ordinal);
         var owners = files.Select(file => (File: file, Owner: OwningProject(file))).ToArray();
 
@@ -55,8 +55,8 @@ public sealed class DependencyMapTests
     [Fact]
     public void No_project_directory_is_nested_inside_another()
     {
-        // Every tracked project, not only the dependency map's nodes, so tools/ and samples/ are held to it too.
-        var directories = TrackedFiles("src", "tests", "tools", "samples")
+        // Every tracked backend project, not only the dependency map's nodes, so tools/ and samples/ are held to it too.
+        var directories = TrackedFiles("Essentials/src", "Essentials/apps", "Essentials/tests", "Extensions/*/src/**", "Extensions/*/tests/**", "tools", "samples")
             .Where(file => file.EndsWith(".csproj", StringComparison.Ordinal))
             .Select(file => file[..(file.LastIndexOf('/') + 1)])
             .ToArray();
@@ -70,7 +70,7 @@ public sealed class DependencyMapTests
                 .Select(group => $"{group.Key} holds {group.Count()} projects"))
             .ToArray();
 
-        Assert.All((string[])["src/", "tests/", "tools/", "samples/"],
+        Assert.All((string[])["Essentials/src/", "Essentials/apps/", "Essentials/tests/", "Extensions/", "tools/", "samples/"],
             root => Assert.Contains(directories, directory => directory.StartsWith(root, StringComparison.Ordinal)));
         Assert.True(nested.Length == 0,
             "Move the outer project into a sub-folder named after it instead of excluding the inner one from its globs:" +
@@ -79,11 +79,11 @@ public sealed class DependencyMapTests
 
     /// <summary>FR-006 on paths that need no file to exist: the deeper project owns its subtree, and nothing is guessed.</summary>
     [Theory]
-    [InlineData("src/essentials/Workflows/Runtime/Core/Services/Foo.cs", "Elsa.Workflows.Runtime.Core")]
-    [InlineData("src/essentials/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Foo.cs", "Elsa.Workflows.Runtime")]
-    [InlineData("src/essentials/Workflows/Runtime/Elsa.Workflows.RuntimeExtras/Foo.cs", null)]
-    [InlineData("src/essentials/Workflows/Foo.cs", null)]
-    [InlineData("tests/Directory.Build.props", null)]
+    [InlineData("Essentials/src/Workflows/Runtime/Core/Services/Foo.cs", "Elsa.Workflows.Runtime.Core")]
+    [InlineData("Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Foo.cs", "Elsa.Workflows.Runtime")]
+    [InlineData("Essentials/src/Workflows/Runtime/Elsa.Workflows.RuntimeExtras/Foo.cs", null)]
+    [InlineData("Essentials/src/Workflows/Foo.cs", null)]
+    [InlineData("Essentials/tests/Directory.Build.props", null)]
     public void A_path_is_owned_by_the_longest_matching_project_directory(string path, string? expected) =>
         Assert.Equal(expected, OwningProject(path)?.Name);
 

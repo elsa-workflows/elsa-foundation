@@ -4,8 +4,9 @@ using Xunit;
 namespace Elsa.Architecture.ExtensionBoundary.Tests;
 
 /// <summary>
-/// Issue #1815 splits the tree into a required core under <c>src/</c> and optional modules under
-/// <c>src/extensions/</c>. The split is only worth anything if the direction of dependency is enforced, so
+/// Issue #1815 splits the tree into required modules under <c>Essentials/src/</c> and optional backend
+/// modules under <c>Extensions/&lt;capability&gt;/src/</c>. Studio projects under each extension's
+/// <c>studio/</c> sibling are a separate product and stay outside this backend boundary, so
 /// this guard fails when core reaches into an extension, and when one extension reaches into another
 /// without that edge having been declared.
 /// </summary>
@@ -26,8 +27,8 @@ namespace Elsa.Architecture.ExtensionBoundary.Tests;
 /// </remarks>
 public sealed class ExtensionBoundaryTests
 {
-    private const string ExtensionsRoot = "src/extensions";
-    private const string CoreRoot = "src/essentials";
+    private const string ExtensionsRoot = "Extensions";
+    private const string CoreRoot = "Essentials/src";
 
     /// <summary>
     /// Deployable hosts, which compose modules rather than being one.
@@ -39,14 +40,14 @@ public sealed class ExtensionBoundaryTests
     /// module roots, so they fall outside this check by construction; what still needs asserting is that
     /// nothing else hides there, which <see cref="Excluded_hosts_are_deployable_hosts_not_libraries"/> does.
     /// </remarks>
-    private const string HostRoot = "src/apps";
+    private const string HostRoot = "Essentials/apps";
 
     /// <summary>
     /// Extension-to-extension edges that have been reviewed and accepted, as
     /// <c>referencing project -> referenced project</c>.
     /// </summary>
     /// <remarks>
-    /// Empty because Elsa 3, the one bucket in <c>src/extensions/</c>, declares no edge — not because the
+    /// Empty because Elsa 3, the one bucket in <c>Extensions/</c>, declares no edge — not because the
     /// tree is empty. Every entry added later needs a comment saying why the
     /// edge is legitimate, in the same spirit as <c>EfCoreDependencyGuardTests.AllowedEfConsumers</c>:
     /// the point is that the list is short and argued, not that it is absent.
@@ -104,6 +105,18 @@ public sealed class ExtensionBoundaryTests
 
         Assert.True(Directory.Exists(root), $"'{ExtensionsRoot}/' is missing. The boundary guards cannot mean anything without it.");
         Assert.True(File.Exists(Path.Join(root, "README.md")), $"'{ExtensionsRoot}/README.md' is missing; it carries the layout rules.");
+
+        var backendProjects = BackendExtensionProjectPaths().ToArray();
+        var studioProjects = Directory.EnumerateFiles(root, "*.csproj", SearchOption.AllDirectories)
+            .Where(path => Relative(path).Contains("/studio/", StringComparison.Ordinal))
+            .ToArray();
+        var guardedExtensions = ReadModuleProjects().Where(project => project.IsExtension).Select(project => project.Path).ToHashSet(StringComparer.Ordinal);
+
+        Assert.NotEmpty(backendProjects);
+        Assert.NotEmpty(studioProjects);
+        Assert.True(backendProjects.All(path => guardedExtensions.Contains(Relative(path))),
+            "Every extension backend project must be covered by the boundary scan.");
+        Assert.DoesNotContain(guardedExtensions, path => path.Contains("/studio/", StringComparison.Ordinal));
     }
 
     /// <summary>
@@ -157,7 +170,10 @@ public sealed class ExtensionBoundaryTests
     {
         var projects = new List<ModuleProject>();
 
-        foreach (var root in new[] { CoreRoot, ExtensionsRoot })
+        var roots = new[] { CoreRoot }
+            .Concat(BackendExtensionRoots())
+            .ToArray();
+        foreach (var root in roots)
         {
             var absoluteRoot = Path.Join(RepoRoot, root);
             if (!Directory.Exists(absoluteRoot)) continue;
@@ -165,12 +181,12 @@ public sealed class ExtensionBoundaryTests
             foreach (var absolutePath in Directory.EnumerateFiles(absoluteRoot, "*.csproj", SearchOption.AllDirectories))
             {
                 var path = Relative(absolutePath);
-                if (IsTestPath(path) || IsHostPath(path)) continue;
+                if (IsTestPath(path) || IsHostPath(path) || IsStudioPath(path)) continue;
 
                 projects.Add(new ModuleProject(
                     Path.GetFileNameWithoutExtension(path),
                     path,
-                    root == ExtensionsRoot,
+                    IsUnder(path, ExtensionsRoot),
                     Bucket(path),
                     ReadReferences(absolutePath)));
             }
@@ -178,6 +194,16 @@ public sealed class ExtensionBoundaryTests
 
         return projects;
     }
+
+    private static IEnumerable<string> BackendExtensionRoots() =>
+        Directory.Exists(Path.Join(RepoRoot, ExtensionsRoot))
+            ? Directory.EnumerateDirectories(Path.Join(RepoRoot, ExtensionsRoot))
+                .Select(extension => Path.Join(ExtensionsRoot, Path.GetFileName(extension), "src"))
+                .Where(root => Directory.Exists(Path.Join(RepoRoot, root)))
+            : [];
+
+    private static IEnumerable<string> BackendExtensionProjectPaths() =>
+        BackendExtensionRoots().SelectMany(root => Directory.EnumerateFiles(Path.Join(RepoRoot, root), "*.csproj", SearchOption.AllDirectories));
 
     private static IReadOnlyList<ProjectReference> ReadReferences(string absoluteProjectPath)
     {
@@ -196,7 +222,7 @@ public sealed class ExtensionBoundaryTests
             .ToArray();
     }
 
-    /// <summary>The extension a path belongs to, i.e. the segment right under <c>src/extensions/</c>.</summary>
+    /// <summary>The extension a path belongs to, i.e. the segment right under <c>Extensions/</c>.</summary>
     /// <remarks>
     /// Taken relative to the root rather than by a fixed segment index: the root gained a segment when
     /// extensions moved under <c>src/</c>, and an index would have silently started returning
@@ -215,8 +241,10 @@ public sealed class ExtensionBoundaryTests
         relativePath.StartsWith(HostRoot + "/", StringComparison.Ordinal);
 
     private static bool IsTestPath(string relativePath) =>
-        relativePath.StartsWith("tests/", StringComparison.Ordinal) ||
         relativePath.Contains("/tests/", StringComparison.Ordinal);
+
+    private static bool IsStudioPath(string relativePath) =>
+        relativePath.Contains("/studio/", StringComparison.Ordinal);
 
     private static string Relative(string absolutePath) =>
         Path.GetRelativePath(RepoRoot, absolutePath).Replace('\\', '/');

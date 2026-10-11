@@ -99,14 +99,14 @@ public sealed class CommittedCompositionConnectionTests
     // class does not care about connections.
     [Theory]
     [InlineData("docker-compose.yml", "docker/compose/elsa-workbench.shells.json")]
-    [InlineData("docker-compose.images.yml", "src/apps/Elsa.Workbench/shells.json")]
+    [InlineData("docker-compose.images.yml", "Essentials/apps/Elsa.Workbench/shells.json")]
     public void Every_ef_feature_a_production_compose_stack_composes_resolves_a_connection(string composeFile, string shellsJson) =>
         AssertEveryEfFeatureResolves(ComposeStack(composeFile, shellsJson), $"{composeFile} over {shellsJson}");
 
     // The compositions a host runs directly, with no overlay and no environment.
     [Theory]
-    [InlineData("src/apps/Elsa.Workbench/shells.json")]
-    [InlineData("src/apps/Elsa.Workbench/shells.baseline.json")]
+    [InlineData("Essentials/apps/Elsa.Workbench/shells.json")]
+    [InlineData("Essentials/apps/Elsa.Workbench/shells.baseline.json")]
     public void Every_ef_feature_a_committed_shell_composition_composes_resolves_a_connection(string shellsJson) =>
         AssertEveryEfFeatureResolves(
             WorkbenchConfiguration().AddJsonFile(Path.Join(RepoRoot, shellsJson)).Build(),
@@ -120,8 +120,8 @@ public sealed class CommittedCompositionConnectionTests
     /// no longer throws.
     /// </summary>
     [Theory]
-    [InlineData("src/apps/Elsa.Workbench/shells.json")]
-    [InlineData("src/apps/Elsa.Workbench/shells.baseline.json")]
+    [InlineData("Essentials/apps/Elsa.Workbench/shells.json")]
+    [InlineData("Essentials/apps/Elsa.Workbench/shells.baseline.json")]
     public void Every_ef_feature_a_committed_shell_composition_composes_selects_sqlite(string shellsJson)
     {
         var configuration = WorkbenchConfiguration().AddJsonFile(Path.Join(RepoRoot, shellsJson)).Build();
@@ -170,7 +170,7 @@ public sealed class CommittedCompositionConnectionTests
     private static IConfiguration ComposeStack(string composeFile, string shellsJson) =>
         WorkbenchConfiguration()
             .AddJsonFile(Path.Join(RepoRoot, shellsJson))
-            .AddJsonFile(Path.Join(RepoRoot, "src", "apps", "Elsa.Workbench", "shells.Production.json"))
+            .AddJsonFile(Path.Join(RepoRoot, "Essentials", "apps", "Elsa.Workbench", "shells.Production.json"))
             .AddInMemoryCollection(ReadWorkbenchEnvironment(Path.Join(RepoRoot, "docker", "compose", composeFile))
                 .Select(entry => KeyValuePair.Create(entry.Key.Replace("__", ":"), (string?)entry.Value)))
             .Build();
@@ -182,13 +182,13 @@ public sealed class CommittedCompositionConnectionTests
     /// deployment moved its connection string out of <c>environment:</c> and into an appsettings file.
     /// </summary>
     private static IConfigurationBuilder WorkbenchConfiguration() =>
-        new ConfigurationBuilder().AddJsonFile(Path.Join(RepoRoot, "src", "apps", "Elsa.Workbench", "appsettings.json"));
+        new ConfigurationBuilder().AddJsonFile(Path.Join(RepoRoot, "Essentials", "apps", "Elsa.Workbench", "appsettings.json"));
 
     private static IEnumerable<(string Name, IConfiguration Configuration)> Compositions()
     {
         yield return ("docker-compose.yml", ComposeStack("docker-compose.yml", "docker/compose/elsa-workbench.shells.json"));
-        yield return ("docker-compose.images.yml", ComposeStack("docker-compose.images.yml", "src/apps/Elsa.Workbench/shells.json"));
-        foreach (var shellsJson in new[] { "src/apps/Elsa.Workbench/shells.json", "src/apps/Elsa.Workbench/shells.baseline.json" })
+        yield return ("docker-compose.images.yml", ComposeStack("docker-compose.images.yml", "Essentials/apps/Elsa.Workbench/shells.json"));
+        foreach (var shellsJson in new[] { "Essentials/apps/Elsa.Workbench/shells.json", "Essentials/apps/Elsa.Workbench/shells.baseline.json" })
             yield return (shellsJson, WorkbenchConfiguration().AddJsonFile(Path.Join(RepoRoot, shellsJson)).Build());
     }
 

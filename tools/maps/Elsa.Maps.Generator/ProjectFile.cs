@@ -51,7 +51,7 @@ public sealed record ProjectFile(string RelativePath, XDocument Document)
     /// Web and Worker SDKs and for test projects, true otherwise.
     /// </summary>
     /// <remarks>
-    /// <c>tests/Directory.Build.props</c> is why a test project that declares nothing is not packable, and
+    /// <c>Essentials/tests/Directory.Build.props</c> is why a test project that declares nothing is not packable, and
     /// <c>Microsoft.NET.Test.Sdk</c> sets <c>IsTestProject</c> for the projects that reference it. Pack
     /// compares the value to <c>true</c> case-insensitively, so anything else counts as not packable.
     /// </remarks>

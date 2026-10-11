@@ -15,8 +15,8 @@ public sealed class HostEndpointMetadataTests
     [Fact]
     public void Foundation_host_Dockerfile_includes_its_project_reference_graph()
     {
-        var projectPath = Path.Combine(RepoRoot, "src", "apps", "Elsa.Foundation.Host", "Elsa.Foundation.Host.csproj");
-        var dockerfile = ReadSource("src/apps/Elsa.Foundation.Host/Dockerfile");
+        var projectPath = Path.Combine(RepoRoot, "Essentials", "apps", "Elsa.Foundation.Host", "Elsa.Foundation.Host.csproj");
+        var dockerfile = ReadSource("Essentials/apps/Elsa.Foundation.Host/Dockerfile");
         var projectReferences = DiscoverProjectReferences(projectPath);
 
         Assert.NotEmpty(projectReferences);

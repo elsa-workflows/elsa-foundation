@@ -93,7 +93,7 @@ public sealed class SharedAssemblyClosureGuardTests
         {
             Assert.True(shared.Contains(share, StringComparer.OrdinalIgnoreCase),
                 $"{host} composes cluster membership on its own container but does not share {share} " +
-                $"(src/apps/{host}/appsettings.json, Nuplane:Loading:SharedAssemblies). A feed-loaded EF module would load a " +
+                $"(Essentials/apps/{host}/appsettings.json, Nuplane:Loading:SharedAssemblies). A feed-loaded EF module would load a " +
                 "private copy of it and never reach the host's fleet (ADR 0067, amended 2026-09-29; #2143).");
             Assert.True(carried.Contains(share), $"{host} shares {share} but does not reference the project that builds it.");
         });
@@ -134,7 +134,7 @@ public sealed class SharedAssemblyClosureGuardTests
         Assert.All(FoundationHostMembershipShares, share =>
         {
             Assert.True(entries.ContainsKey(share),
-                $"{host} carries {share} for its cluster membership but does not share it (src/apps/{host}/appsettings.json, " +
+                $"{host} carries {share} for its cluster membership but does not share it (Essentials/apps/{host}/appsettings.json, " +
                 "Nuplane:Loading:SharedAssemblies), so a feed-loaded EF module could bind a copy of its own (#2151).");
             Assert.True(carried.Contains(share) || locked.ContainsKey(share), $"{host} shares {share} but does not carry it.");
         });
@@ -232,7 +232,7 @@ public sealed class SharedAssemblyClosureGuardTests
     private static string Report(string host, IReadOnlyDictionary<string, IReadOnlyList<string>> gaps) =>
         $"{host} shares Elsa assemblies whose Elsa project dependencies it does not share. A feed-loaded feature " +
         "would load its own copy of each, and the types it exchanges with the shared assembly would not match the " +
-        $"host's. Share each in src/apps/{host}/appsettings.json (Nuplane:Loading:SharedAssemblies):" +
+        $"host's. Share each in Essentials/apps/{host}/appsettings.json (Nuplane:Loading:SharedAssemblies):" +
         string.Concat(Lines(gaps).Select(line => $"{Environment.NewLine}  {line}"));
 
     private static IEnumerable<string> Lines(IReadOnlyDictionary<string, IReadOnlyList<string>> gaps) =>

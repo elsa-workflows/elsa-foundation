@@ -844,20 +844,20 @@ public sealed class EfCoreDependencyGuardTests
     {
         public static readonly string[] SurfacePathPrefixes =
         [
-            "src/essentials/Persistence/EntityFramework/",
-            "src/essentials/Secrets/Persistence/EntityFrameworkCore/",
-            "tests/essentials/Persistence/EntityFramework/",
-            "tests/essentials/Secrets/Persistence/EntityFrameworkCore/"
+            "Essentials/src/Persistence/EntityFramework/",
+            "Essentials/src/Secrets/Persistence/EntityFrameworkCore/",
+            "Essentials/tests/Persistence/EntityFramework/",
+            "Essentials/tests/Secrets/Persistence/EntityFrameworkCore/"
         ];
 
         public static readonly IReadOnlyDictionary<string, string[]> ExpectedEfPackagesByProject =
             new Dictionary<string, string[]>(StringComparer.Ordinal)
             {
-                ["src/essentials/Persistence/EntityFramework/Elsa.Persistence.EntityFramework.csproj"] = CorePackages(),
-                ["src/essentials/Secrets/Persistence/EntityFrameworkCore/Elsa.Secrets.Persistence.EntityFrameworkCore.csproj"] = CorePackages(),
+                ["Essentials/src/Persistence/EntityFramework/Elsa.Persistence.EntityFramework.csproj"] = CorePackages(),
+                ["Essentials/src/Secrets/Persistence/EntityFrameworkCore/Elsa.Secrets.Persistence.EntityFrameworkCore.csproj"] = CorePackages(),
                 // Binds all four engines at the pinned versions so a provider upgrade that moved a Use* extension
                 // fails CI instead of a host; nothing here opens a connection.
-                ["tests/essentials/Persistence/EntityFramework/BindingDriftTests/Elsa.Persistence.EntityFramework.BindingDriftTests.csproj"] =
+                ["Essentials/tests/Persistence/EntityFramework/BindingDriftTests/Elsa.Persistence.EntityFramework.BindingDriftTests.csproj"] =
                 [
                     .. CorePackages(),
                     "Microsoft.EntityFrameworkCore.SqlServer",
@@ -866,19 +866,19 @@ public sealed class EfCoreDependencyGuardTests
                     "MySql.EntityFrameworkCore",
                     "Npgsql.EntityFrameworkCore.PostgreSQL"
                 ],
-                ["tests/essentials/Persistence/EntityFramework/Tests/Elsa.Persistence.EntityFramework.Tests.csproj"] =
+                ["Essentials/tests/Persistence/EntityFramework/Tests/Elsa.Persistence.EntityFramework.Tests.csproj"] =
                 [.. CorePackages(), "Microsoft.EntityFrameworkCore.Sqlite", "Microsoft.EntityFrameworkCore.Sqlite.Core"],
-                ["tests/essentials/Secrets/Persistence/EntityFrameworkCore/MySql/Tests/Elsa.Secrets.Persistence.EntityFrameworkCore.MySql.Tests.csproj"] =
+                ["Essentials/tests/Secrets/Persistence/EntityFrameworkCore/MySql/Tests/Elsa.Secrets.Persistence.EntityFrameworkCore.MySql.Tests.csproj"] =
                 [.. CorePackages(), "MySql.EntityFrameworkCore"],
-                ["tests/essentials/Secrets/Persistence/EntityFrameworkCore/PostgreSql/PackageFeedProbe/Elsa.Secrets.Persistence.EntityFrameworkCore.PostgreSql.PackageFeedProbe.csproj"] =
+                ["Essentials/tests/Secrets/Persistence/EntityFrameworkCore/PostgreSql/PackageFeedProbe/Elsa.Secrets.Persistence.EntityFrameworkCore.PostgreSql.PackageFeedProbe.csproj"] =
                 [.. CorePackages(), "Npgsql.EntityFrameworkCore.PostgreSQL"],
-                ["tests/essentials/Secrets/Persistence/EntityFrameworkCore/PostgreSql/Tests/Elsa.Secrets.Persistence.EntityFrameworkCore.PostgreSql.Tests.csproj"] =
+                ["Essentials/tests/Secrets/Persistence/EntityFrameworkCore/PostgreSql/Tests/Elsa.Secrets.Persistence.EntityFrameworkCore.PostgreSql.Tests.csproj"] =
                 [.. CorePackages(), "Npgsql.EntityFrameworkCore.PostgreSQL"],
-                ["tests/essentials/Secrets/Persistence/EntityFrameworkCore/SqlServer/Tests/Elsa.Secrets.Persistence.EntityFrameworkCore.SqlServer.Tests.csproj"] =
+                ["Essentials/tests/Secrets/Persistence/EntityFrameworkCore/SqlServer/Tests/Elsa.Secrets.Persistence.EntityFrameworkCore.SqlServer.Tests.csproj"] =
                 [.. CorePackages(), "Microsoft.EntityFrameworkCore.SqlServer"],
                 // One engine, its own: the SqlServer and Npgsql this resolved before #1878 came in through
                 // the retired Secrets Tooling project, never from anything this suite loads.
-                ["tests/essentials/Secrets/Persistence/EntityFrameworkCore/Tests/Elsa.Secrets.Persistence.EntityFrameworkCore.Tests.csproj"] =
+                ["Essentials/tests/Secrets/Persistence/EntityFrameworkCore/Tests/Elsa.Secrets.Persistence.EntityFrameworkCore.Tests.csproj"] =
                 [.. CorePackages(), "Microsoft.EntityFrameworkCore.Sqlite", "Microsoft.EntityFrameworkCore.Sqlite.Core"]
             };
 
@@ -905,15 +905,15 @@ public sealed class EfCoreDependencyGuardTests
         public static readonly IReadOnlyDictionary<string, string[]> ExpectedEfPackagesByProject =
             new Dictionary<string, string[]>(StringComparer.Ordinal)
             {
-                ["src/essentials/Studio/Preferences/Persistence/EntityFrameworkCore/Elsa.Studio.Preferences.Persistence.EntityFrameworkCore.csproj"] = CorePackages(),
-                ["tests/essentials/Studio/Preferences/Persistence/EntityFrameworkCore/ProviderTests/Elsa.Studio.Preferences.Persistence.EntityFrameworkCore.ProviderTests.csproj"] =
+                ["Essentials/src/Studio/Preferences/Persistence/EntityFrameworkCore/Elsa.Studio.Preferences.Persistence.EntityFrameworkCore.csproj"] = CorePackages(),
+                ["Essentials/tests/Studio/Preferences/Persistence/EntityFrameworkCore/ProviderTests/Elsa.Studio.Preferences.Persistence.EntityFrameworkCore.ProviderTests.csproj"] =
                 [
                     .. CorePackages(),
                     "Microsoft.EntityFrameworkCore.SqlServer",
                     "MySql.EntityFrameworkCore",
                     "Npgsql.EntityFrameworkCore.PostgreSQL"
                 ],
-                ["tests/essentials/Studio/Preferences/Persistence/EntityFrameworkCore/Tests/Elsa.Studio.Preferences.Persistence.EntityFrameworkCore.Tests.csproj"] =
+                ["Essentials/tests/Studio/Preferences/Persistence/EntityFrameworkCore/Tests/Elsa.Studio.Preferences.Persistence.EntityFrameworkCore.Tests.csproj"] =
                 [
                     .. CorePackages(),
                     "Microsoft.EntityFrameworkCore.Sqlite",
@@ -941,10 +941,10 @@ public sealed class EfCoreDependencyGuardTests
         public static readonly IReadOnlyDictionary<string, string[]> ExpectedEfPackagesByProject =
             new Dictionary<string, string[]>(StringComparer.Ordinal)
             {
-                ["src/essentials/Activities/Design/Persistence/EntityFrameworkCore/Elsa.Activities.Design.Persistence.EntityFrameworkCore.csproj"] = CorePackages(),
-                ["tests/essentials/Activities/Design/Persistence/EntityFrameworkCore/Tests/Elsa.Activities.Design.Persistence.EntityFrameworkCore.Tests.csproj"] =
+                ["Essentials/src/Activities/Design/Persistence/EntityFrameworkCore/Elsa.Activities.Design.Persistence.EntityFrameworkCore.csproj"] = CorePackages(),
+                ["Essentials/tests/Activities/Design/Persistence/EntityFrameworkCore/Tests/Elsa.Activities.Design.Persistence.EntityFrameworkCore.Tests.csproj"] =
                 [.. CorePackages(), "Microsoft.EntityFrameworkCore.Sqlite", "Microsoft.EntityFrameworkCore.Sqlite.Core", "Microsoft.EntityFrameworkCore.SqlServer"],
-                ["tests/essentials/Activities/Design/Persistence/EntityFrameworkCore/ProviderTests/Elsa.Activities.Design.Persistence.EntityFrameworkCore.ProviderTests.csproj"] =
+                ["Essentials/tests/Activities/Design/Persistence/EntityFrameworkCore/ProviderTests/Elsa.Activities.Design.Persistence.EntityFrameworkCore.ProviderTests.csproj"] =
                 [.. CorePackages(), "Microsoft.EntityFrameworkCore.SqlServer", "MySql.EntityFrameworkCore", "Npgsql.EntityFrameworkCore.PostgreSQL"]
             };
 
@@ -962,14 +962,14 @@ public sealed class EfCoreDependencyGuardTests
         public static readonly IReadOnlyDictionary<string, string[]> ExpectedEfPackagesByProject =
             new Dictionary<string, string[]>(StringComparer.Ordinal)
             {
-                ["src/essentials/Workflows/Runtime/Distributed/Persistence/EntityFrameworkCore/Elsa.Workflows.Runtime.Distributed.Persistence.EntityFrameworkCore.csproj"] = CorePackages(),
-                ["tests/essentials/Workflows/Runtime/Distributed/Persistence/EntityFrameworkCore/Tests/Elsa.Workflows.Runtime.Distributed.Persistence.EntityFrameworkCore.Tests.csproj"] =
+                ["Essentials/src/Workflows/Runtime/Distributed/Persistence/EntityFrameworkCore/Elsa.Workflows.Runtime.Distributed.Persistence.EntityFrameworkCore.csproj"] = CorePackages(),
+                ["Essentials/tests/Workflows/Runtime/Distributed/Persistence/EntityFrameworkCore/Tests/Elsa.Workflows.Runtime.Distributed.Persistence.EntityFrameworkCore.Tests.csproj"] =
                 [
                     .. CorePackages(),
                     "Microsoft.EntityFrameworkCore.Sqlite",
                     "Microsoft.EntityFrameworkCore.Sqlite.Core"
                 ],
-                ["tests/essentials/Workflows/Runtime/Distributed/Persistence/EntityFrameworkCore/ProviderTests/Elsa.Workflows.Runtime.Distributed.Persistence.EntityFrameworkCore.ProviderTests.csproj"] =
+                ["Essentials/tests/Workflows/Runtime/Distributed/Persistence/EntityFrameworkCore/ProviderTests/Elsa.Workflows.Runtime.Distributed.Persistence.EntityFrameworkCore.ProviderTests.csproj"] =
                 [
                     .. CorePackages(),
                     "Microsoft.EntityFrameworkCore.Sqlite",
@@ -1003,8 +1003,8 @@ public sealed class EfCoreDependencyGuardTests
         public static readonly IReadOnlyDictionary<string, string[]> ExpectedEfPackagesByProject =
             new Dictionary<string, string[]>(StringComparer.Ordinal)
             {
-                ["src/essentials/Workflows/Runtime/Persistence/EntityFrameworkCore/Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.csproj"] = CorePackages(),
-                ["tests/essentials/Workflows/Runtime/Persistence/EntityFrameworkCore/ProviderTests/Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.csproj"] =
+                ["Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.csproj"] = CorePackages(),
+                ["Essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/ProviderTests/Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.csproj"] =
                 [
                     .. CorePackages(),
                     "Microsoft.EntityFrameworkCore.SqlServer",
@@ -1013,7 +1013,7 @@ public sealed class EfCoreDependencyGuardTests
                     "MySql.EntityFrameworkCore",
                     "Npgsql.EntityFrameworkCore.PostgreSQL"
                 ],
-                ["tests/essentials/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.csproj"] =
+                ["Essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.csproj"] =
                 [.. CorePackages(), "Microsoft.EntityFrameworkCore.Sqlite", "Microsoft.EntityFrameworkCore.Sqlite.Core"]
             };
 
@@ -1034,7 +1034,7 @@ public sealed class EfCoreDependencyGuardTests
     /// <summary>ADR 0073's opt-in Dashboard run-health reader, backed by the admitted Runtime EF projection.</summary>
     internal static class Adr0073DashboardRunHealthEf
     {
-        private const string Prefix = "src/essentials/Workflows/Dashboard/Persistence/EntityFrameworkCore/";
+        private const string Prefix = "Essentials/src/Workflows/Dashboard/Persistence/EntityFrameworkCore/";
         public static readonly IReadOnlyDictionary<string, string[]> ExpectedEfPackagesByProject =
             new Dictionary<string, string[]>(StringComparer.Ordinal)
             {
@@ -1056,8 +1056,8 @@ public sealed class EfCoreDependencyGuardTests
     /// </summary>
     internal static class Adr0073PublishingSnapshotReviewEf
     {
-        private const string Source = "src/essentials/Workflows/Publishing/Persistence/EntityFrameworkCore/";
-        private const string Tests = "tests/essentials/Workflows/Publishing/Persistence/EntityFrameworkCore/";
+        private const string Source = "Essentials/src/Workflows/Publishing/Persistence/EntityFrameworkCore/";
+        private const string Tests = "Essentials/tests/Workflows/Publishing/Persistence/EntityFrameworkCore/";
         private static string[] CorePackages() =>
         [
             "Microsoft.EntityFrameworkCore",
@@ -1094,15 +1094,15 @@ public sealed class EfCoreDependencyGuardTests
         public static readonly IReadOnlyDictionary<string, string[]> ExpectedEfPackagesByProject =
             new Dictionary<string, string[]>(StringComparer.Ordinal)
             {
-                ["src/essentials/Diagnostics/StructuredLogs/Persistence/EntityFrameworkCore/Elsa.Diagnostics.StructuredLogs.Persistence.EntityFrameworkCore.csproj"] = CorePackages(),
-                ["tests/essentials/Diagnostics/StructuredLogs/Persistence/EntityFrameworkCore/ProviderTests/Elsa.Diagnostics.StructuredLogs.Persistence.EntityFrameworkCore.ProviderTests.csproj"] =
+                ["Essentials/src/Diagnostics/StructuredLogs/Persistence/EntityFrameworkCore/Elsa.Diagnostics.StructuredLogs.Persistence.EntityFrameworkCore.csproj"] = CorePackages(),
+                ["Essentials/tests/Diagnostics/StructuredLogs/Persistence/EntityFrameworkCore/ProviderTests/Elsa.Diagnostics.StructuredLogs.Persistence.EntityFrameworkCore.ProviderTests.csproj"] =
                 [
                     .. CorePackages(),
                     "Microsoft.EntityFrameworkCore.SqlServer",
                     "MySql.EntityFrameworkCore",
                     "Npgsql.EntityFrameworkCore.PostgreSQL"
                 ],
-                ["tests/essentials/Diagnostics/StructuredLogs/Persistence/EntityFrameworkCore/Tests/Elsa.Diagnostics.StructuredLogs.Persistence.EntityFrameworkCore.Tests.csproj"] =
+                ["Essentials/tests/Diagnostics/StructuredLogs/Persistence/EntityFrameworkCore/Tests/Elsa.Diagnostics.StructuredLogs.Persistence.EntityFrameworkCore.Tests.csproj"] =
                 [.. CorePackages(), "Microsoft.EntityFrameworkCore.Sqlite", "Microsoft.EntityFrameworkCore.Sqlite.Core"]
             };
 
@@ -1130,8 +1130,8 @@ public sealed class EfCoreDependencyGuardTests
         public static readonly IReadOnlyDictionary<string, string[]> ExpectedEfPackagesByProject =
             new Dictionary<string, string[]>(StringComparer.Ordinal)
             {
-                ["src/essentials/Diagnostics/OpenTelemetry/Persistence/EntityFrameworkCore/Elsa.Diagnostics.OpenTelemetry.Persistence.EntityFrameworkCore.csproj"] = CorePackages(),
-                ["tests/essentials/Diagnostics/OpenTelemetry/Persistence/EntityFrameworkCore/ProviderTests/Elsa.Diagnostics.OpenTelemetry.Persistence.EntityFrameworkCore.ProviderTests.csproj"] =
+                ["Essentials/src/Diagnostics/OpenTelemetry/Persistence/EntityFrameworkCore/Elsa.Diagnostics.OpenTelemetry.Persistence.EntityFrameworkCore.csproj"] = CorePackages(),
+                ["Essentials/tests/Diagnostics/OpenTelemetry/Persistence/EntityFrameworkCore/ProviderTests/Elsa.Diagnostics.OpenTelemetry.Persistence.EntityFrameworkCore.ProviderTests.csproj"] =
                 [
                     .. CorePackages(),
                     "Microsoft.EntityFrameworkCore.Sqlite",
@@ -1140,7 +1140,7 @@ public sealed class EfCoreDependencyGuardTests
                     "MySql.EntityFrameworkCore",
                     "Npgsql.EntityFrameworkCore.PostgreSQL"
                 ],
-                ["tests/essentials/Diagnostics/OpenTelemetry/Persistence/EntityFrameworkCore/Tests/Elsa.Diagnostics.OpenTelemetry.Persistence.EntityFrameworkCore.Tests.csproj"] =
+                ["Essentials/tests/Diagnostics/OpenTelemetry/Persistence/EntityFrameworkCore/Tests/Elsa.Diagnostics.OpenTelemetry.Persistence.EntityFrameworkCore.Tests.csproj"] =
                 [.. CorePackages(), "Microsoft.EntityFrameworkCore.Sqlite", "Microsoft.EntityFrameworkCore.Sqlite.Core"]
             };
 
@@ -1168,18 +1168,18 @@ public sealed class EfCoreDependencyGuardTests
         public static readonly IReadOnlyDictionary<string, string[]> ExpectedEfPackagesByProject =
             new Dictionary<string, string[]>(StringComparer.Ordinal)
             {
-                ["src/essentials/Foundation/Identity/AspNetCoreIdentity/EntityFrameworkCore/Elsa.Foundation.Identity.AspNetCoreIdentity.EntityFrameworkCore.csproj"] = CorePackages(),
-                ["src/essentials/Foundation/Identity/Persistence/EntityFrameworkCore/Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.csproj"] = CorePackages(),
-                ["tests/essentials/Foundation/Identity/AspNetCoreIdentity/EntityFrameworkCore/Tests/Elsa.Foundation.Identity.AspNetCoreIdentity.EntityFrameworkCore.Tests.csproj"] =
+                ["Essentials/src/Foundation/Identity/AspNetCoreIdentity/EntityFrameworkCore/Elsa.Foundation.Identity.AspNetCoreIdentity.EntityFrameworkCore.csproj"] = CorePackages(),
+                ["Essentials/src/Foundation/Identity/Persistence/EntityFrameworkCore/Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.csproj"] = CorePackages(),
+                ["Essentials/tests/Foundation/Identity/AspNetCoreIdentity/EntityFrameworkCore/Tests/Elsa.Foundation.Identity.AspNetCoreIdentity.EntityFrameworkCore.Tests.csproj"] =
                 [.. CorePackages(), "Microsoft.EntityFrameworkCore.Sqlite", "Microsoft.EntityFrameworkCore.Sqlite.Core"],
-                ["tests/essentials/Foundation/Identity/Persistence/EntityFrameworkCore/ProviderTests/Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.ProviderTests.csproj"] =
+                ["Essentials/tests/Foundation/Identity/Persistence/EntityFrameworkCore/ProviderTests/Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.ProviderTests.csproj"] =
                 [
                     .. CorePackages(),
                     "Microsoft.EntityFrameworkCore.SqlServer",
                     "MySql.EntityFrameworkCore",
                     "Npgsql.EntityFrameworkCore.PostgreSQL"
                 ],
-                ["tests/essentials/Foundation/Identity/Persistence/EntityFrameworkCore/Tests/Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Tests.csproj"] =
+                ["Essentials/tests/Foundation/Identity/Persistence/EntityFrameworkCore/Tests/Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Tests.csproj"] =
                 [.. CorePackages(), "Microsoft.EntityFrameworkCore.Sqlite", "Microsoft.EntityFrameworkCore.Sqlite.Core"]
             };
 
@@ -1207,10 +1207,10 @@ public sealed class EfCoreDependencyGuardTests
         public static readonly IReadOnlyDictionary<string, string[]> ExpectedEfPackagesByProject =
             new Dictionary<string, string[]>(StringComparer.Ordinal)
             {
-                ["src/extensions/Elsa3/src/Activities/Design/Import/Persistence/EntityFrameworkCore/Elsa3.Activities.Design.Import.Persistence.EntityFrameworkCore.csproj"] = CorePackages(),
-                ["src/extensions/Elsa3/tests/Activities/Design/Import/Persistence/EntityFrameworkCore/Tests/Elsa3.Activities.Design.Import.Persistence.EntityFrameworkCore.Tests.csproj"] =
+                ["Extensions/Elsa3/src/Activities/Design/Import/Persistence/EntityFrameworkCore/Elsa3.Activities.Design.Import.Persistence.EntityFrameworkCore.csproj"] = CorePackages(),
+                ["Extensions/Elsa3/tests/Activities/Design/Import/Persistence/EntityFrameworkCore/Tests/Elsa3.Activities.Design.Import.Persistence.EntityFrameworkCore.Tests.csproj"] =
                 [.. CorePackages(), "Microsoft.EntityFrameworkCore.Sqlite", "Microsoft.EntityFrameworkCore.Sqlite.Core", "Microsoft.EntityFrameworkCore.SqlServer"],
-                ["src/extensions/Elsa3/tests/Activities/Design/Import/Persistence/EntityFrameworkCore/ProviderTests/Elsa3.Activities.Design.Import.Persistence.EntityFrameworkCore.ProviderTests.csproj"] =
+                ["Extensions/Elsa3/tests/Activities/Design/Import/Persistence/EntityFrameworkCore/ProviderTests/Elsa3.Activities.Design.Import.Persistence.EntityFrameworkCore.ProviderTests.csproj"] =
                 [.. CorePackages(), "Microsoft.EntityFrameworkCore.SqlServer", "MySql.EntityFrameworkCore", "Npgsql.EntityFrameworkCore.PostgreSQL"]
             };
 
@@ -1237,10 +1237,10 @@ public sealed class EfCoreDependencyGuardTests
         public static readonly IReadOnlyDictionary<string, string[]> ExpectedEfPackagesByProject =
             new Dictionary<string, string[]>(StringComparer.Ordinal)
             {
-                ["src/essentials/Workflows/Design/Persistence/EntityFrameworkCore/Elsa.Workflows.Design.Persistence.EntityFrameworkCore.csproj"] = CorePackages(),
-                ["tests/essentials/Workflows/Design/Persistence/EntityFrameworkCore/Tests/Elsa.Workflows.Design.Persistence.EntityFrameworkCore.Tests.csproj"] =
+                ["Essentials/src/Workflows/Design/Persistence/EntityFrameworkCore/Elsa.Workflows.Design.Persistence.EntityFrameworkCore.csproj"] = CorePackages(),
+                ["Essentials/tests/Workflows/Design/Persistence/EntityFrameworkCore/Tests/Elsa.Workflows.Design.Persistence.EntityFrameworkCore.Tests.csproj"] =
                 [.. CorePackages(), "Microsoft.EntityFrameworkCore.Sqlite", "Microsoft.EntityFrameworkCore.Sqlite.Core"],
-                ["tests/essentials/Workflows/Design/Persistence/EntityFrameworkCore/ProviderTests/Elsa.Workflows.Design.Persistence.EntityFrameworkCore.ProviderTests.csproj"] =
+                ["Essentials/tests/Workflows/Design/Persistence/EntityFrameworkCore/ProviderTests/Elsa.Workflows.Design.Persistence.EntityFrameworkCore.ProviderTests.csproj"] =
                 [.. CorePackages(), "Microsoft.EntityFrameworkCore.SqlServer", "MySql.EntityFrameworkCore", "Npgsql.EntityFrameworkCore.PostgreSQL"]
             };
 
@@ -1266,7 +1266,7 @@ public sealed class EfCoreDependencyGuardTests
     /// </summary>
     internal static class Adr0076ActivationGuardEf
     {
-        public const string AdapterProject = "src/essentials/Modularity/EntityFramework/Elsa.Modularity.EntityFramework.csproj";
+        public const string AdapterProject = "Essentials/src/Modularity/EntityFramework/Elsa.Modularity.EntityFramework.csproj";
 
         public static readonly IReadOnlyDictionary<string, string[]> ExpectedEfPackagesByProject =
             new Dictionary<string, string[]>(StringComparer.Ordinal)
@@ -1277,7 +1277,7 @@ public sealed class EfCoreDependencyGuardTests
                 [AdapterProject] = CorePackages(),
                 // Its tests carry exactly one engine, which is also what makes their unbindable-provider
                 // case real rather than simulated.
-                ["tests/essentials/Modularity/EntityFramework/Tests/Elsa.Modularity.EntityFramework.Tests.csproj"] =
+                ["Essentials/tests/Modularity/EntityFramework/Tests/Elsa.Modularity.EntityFramework.Tests.csproj"] =
                 [.. CorePackages(), "Microsoft.EntityFrameworkCore.Sqlite", "Microsoft.EntityFrameworkCore.Sqlite.Core"]
             };
 
@@ -1310,7 +1310,7 @@ public sealed class EfCoreDependencyGuardTests
         public static readonly IReadOnlyDictionary<string, string[]> ExpectedEfPackagesByProject =
             new Dictionary<string, string[]>(StringComparer.Ordinal)
             {
-                ["tests/essentials/Cluster/Readability/Tests/Elsa.Cluster.Readability.Tests.csproj"] = CorePackages()
+                ["Essentials/tests/Cluster/Readability/Tests/Elsa.Cluster.Readability.Tests.csproj"] = CorePackages()
             };
 
         public static bool IsProjectPath(string relativePath) =>
@@ -1348,12 +1348,12 @@ public sealed class EfCoreDependencyGuardTests
         public static readonly IReadOnlyDictionary<string, string[]> ExpectedEfPackagesByProject =
             new Dictionary<string, string[]>(StringComparer.Ordinal)
             {
-                ["src/essentials/Cluster/EntityFrameworkCore/Elsa.Cluster.EntityFrameworkCore.csproj"] = HostComposedModulePackages(),
+                ["Essentials/src/Cluster/EntityFrameworkCore/Elsa.Cluster.EntityFrameworkCore.csproj"] = HostComposedModulePackages(),
                 // The shared conformance fixture and scenarios: engine-neutral, each test project supplies the engine.
-                ["tests/essentials/Cluster/EntityFrameworkCore/Testing/Elsa.Cluster.EntityFrameworkCore.Testing.csproj"] = HostComposedModulePackages(),
-                ["tests/essentials/Cluster/EntityFrameworkCore/Tests/Elsa.Cluster.EntityFrameworkCore.Tests.csproj"] =
+                ["Essentials/tests/Cluster/EntityFrameworkCore/Testing/Elsa.Cluster.EntityFrameworkCore.Testing.csproj"] = HostComposedModulePackages(),
+                ["Essentials/tests/Cluster/EntityFrameworkCore/Tests/Elsa.Cluster.EntityFrameworkCore.Tests.csproj"] =
                     [.. HostComposedModulePackages(), "Microsoft.EntityFrameworkCore.Sqlite", "Microsoft.EntityFrameworkCore.Sqlite.Core"],
-                ["tests/essentials/Cluster/EntityFrameworkCore/ProviderTests/Elsa.Cluster.EntityFrameworkCore.ProviderTests.csproj"] =
+                ["Essentials/tests/Cluster/EntityFrameworkCore/ProviderTests/Elsa.Cluster.EntityFrameworkCore.ProviderTests.csproj"] =
                     [.. HostComposedModulePackages(), "Microsoft.EntityFrameworkCore.SqlServer", "MySql.EntityFrameworkCore", "Npgsql.EntityFrameworkCore.PostgreSQL"]
             };
 
@@ -1374,11 +1374,11 @@ public sealed class EfCoreDependencyGuardTests
         public static readonly IReadOnlyDictionary<string, string[]> ExpectedEfPackagesByProject =
             new Dictionary<string, string[]>(StringComparer.Ordinal)
             {
-                ["src/essentials/Foundation/DataProtection/EntityFrameworkCore/Elsa.Foundation.DataProtection.EntityFrameworkCore.csproj"] =
+                ["Essentials/src/Foundation/DataProtection/EntityFrameworkCore/Elsa.Foundation.DataProtection.EntityFrameworkCore.csproj"] =
                     HostComposedModulePackages(),
-                ["tests/essentials/Foundation/DataProtection/EntityFrameworkCore/Tests/Elsa.Foundation.DataProtection.EntityFrameworkCore.Tests.csproj"] =
+                ["Essentials/tests/Foundation/DataProtection/EntityFrameworkCore/Tests/Elsa.Foundation.DataProtection.EntityFrameworkCore.Tests.csproj"] =
                     [.. HostComposedModulePackages(), "Microsoft.EntityFrameworkCore.Sqlite", "Microsoft.EntityFrameworkCore.Sqlite.Core"],
-                ["tests/essentials/Foundation/DataProtection/EntityFrameworkCore/ProviderTests/Elsa.Foundation.DataProtection.EntityFrameworkCore.ProviderTests.csproj"] =
+                ["Essentials/tests/Foundation/DataProtection/EntityFrameworkCore/ProviderTests/Elsa.Foundation.DataProtection.EntityFrameworkCore.ProviderTests.csproj"] =
                     [.. HostComposedModulePackages(), "Microsoft.EntityFrameworkCore.SqlServer", "MySql.EntityFrameworkCore", "Npgsql.EntityFrameworkCore.PostgreSQL"]
             };
 

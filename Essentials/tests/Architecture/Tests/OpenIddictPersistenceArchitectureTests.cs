@@ -24,7 +24,7 @@ public sealed class OpenIddictPersistenceArchitectureTests
     [Fact]
     public void Identity_core_and_implementation_projects_are_free_of_concrete_persistence_dependencies()
     {
-        var identityRoot = Path.Combine(RepoRoot, "src", "essentials", "Foundation", "Identity");
+        var identityRoot = Path.Combine(RepoRoot, "Essentials", "src", "Foundation", "Identity");
         var implementationRoot = Path.Combine(identityRoot, "Elsa.Foundation.Identity");
         var coreFiles = Directory.EnumerateFiles(Path.Combine(identityRoot, "Core"), "*", SearchOption.AllDirectories);
         var implementationFiles = OwnProjectFiles(implementationRoot).ToArray();
@@ -68,7 +68,7 @@ public sealed class OpenIddictPersistenceArchitectureTests
     /// </summary>
     public void Elsa_OpenIddict_package_has_no_EF_packages_or_wrapper_sources()
     {
-        var openIddictRoot = Path.Combine(RepoRoot, "src", "essentials", "Foundation", "Identity", "OpenIddict");
+        var openIddictRoot = Path.Combine(RepoRoot, "Essentials", "src", "Foundation", "Identity", "OpenIddict");
         var packageRoot = Path.Combine(openIddictRoot, "Elsa.Foundation.Identity.OpenIddict");
         var projectPath = Path.Combine(packageRoot, "Elsa.Foundation.Identity.OpenIddict.csproj");
         var project = XDocument.Load(projectPath);

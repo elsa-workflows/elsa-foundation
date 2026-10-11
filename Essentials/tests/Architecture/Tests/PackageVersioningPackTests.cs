@@ -10,7 +10,7 @@ namespace Elsa.Architecture.Tests;
 
 /// <summary>
 /// Real <c>dotnet build</c> and <c>dotnet pack</c> runs, through the real SDK and NuGet, of a two-project fixture laid
-/// out like this repository, under <c>src/</c> beside a copy of the root build files: proof that a packed nupkg carries
+/// out like this repository, under <c>Essentials/src/</c> beside a copy of the root build files: proof that a packed nupkg carries
 /// what spec 150 asks of it (#2080). With the calculator's pack-properties file, passed the way a pipeline passes it,
 /// its range on its own project reference is bounded below the next major (FR-007), a third party's range is left
 /// exactly as central package management restored it, and the package carries the computed version, the input
@@ -41,9 +41,9 @@ public sealed class PackageVersioningPackTests : IDisposable
     {
         MsBuildFixture.CopyRootBuildFiles(root.FullName);
         WriteCentralPackages(PrimitivesVersion);
-        Write("src/Lib/Fixture.Lib.csproj", """<Project Sdk="Microsoft.NET.Sdk" />""");
-        Write("src/Lib/Lib.cs", "namespace Fixture; public static class Lib;");
-        Write("src/App/Fixture.App.csproj", """
+        Write("Essentials/src/Lib/Fixture.Lib.csproj", """<Project Sdk="Microsoft.NET.Sdk" />""");
+        Write("Essentials/src/Lib/Lib.cs", "namespace Fixture; public static class Lib;");
+        Write("Essentials/src/App/Fixture.App.csproj", """
             <Project Sdk="Microsoft.NET.Sdk">
               <ItemGroup>
                 <ProjectReference Include="..\Lib\Fixture.Lib.csproj" />
@@ -52,7 +52,7 @@ public sealed class PackageVersioningPackTests : IDisposable
             </Project>
             """);
         // App uses a type of Lib's, so its assembly records the version of Lib it was compiled against.
-        Write("src/App/App.cs", "namespace Fixture; public static class App { public static System.Type Lib => typeof(Fixture.Lib); }");
+        Write("Essentials/src/App/App.cs", "namespace Fixture; public static class App { public static System.Type Lib => typeof(Fixture.Lib); }");
 
         Git("init", "--quiet", "--initial-branch=main");
         Git("add", "--all");
@@ -70,7 +70,7 @@ public sealed class PackageVersioningPackTests : IDisposable
     [Fact]
     public void A_dev_pack_leaves_every_range_unbounded_and_carries_no_fingerprint()
     {
-        Dotnet("pack", "src/App/Fixture.App.csproj", "-c", "Release", "-o", Output);
+        Dotnet("pack", "Essentials/src/App/Fixture.App.csproj", "-c", "Release", "-o", Output);
 
         var package = Path.Join(Output, "Fixture.App.4.0.0-dev.nupkg");
         Assert.Equal([("Fixture.Lib", "4.0.0-dev"), ("Microsoft.Extensions.Primitives", PrimitivesVersion)], Dependencies(package));
@@ -85,7 +85,7 @@ public sealed class PackageVersioningPackTests : IDisposable
     [Fact]
     public void A_pack_with_only_a_global_version_matches_todays_unbounded_ranges_and_carries_no_fingerprint()
     {
-        Dotnet("pack", "src/App/Fixture.App.csproj", "-c", "Release", "-p:Version=4.0.0-preview.999", "-o", Output);
+        Dotnet("pack", "Essentials/src/App/Fixture.App.csproj", "-c", "Release", "-p:Version=4.0.0-preview.999", "-o", Output);
 
         var package = Path.Join(Output, "Fixture.App.4.0.0-preview.999.nupkg");
         Assert.Equal(
@@ -105,8 +105,8 @@ public sealed class PackageVersioningPackTests : IDisposable
     {
         var properties = Computed(head);
 
-        Dotnet("build", "src/App/Fixture.App.csproj", "-c", "Release", $"-p:CustomBeforeDirectoryBuildProps={properties}");
-        Dotnet("pack", "src/App/Fixture.App.csproj", "-c", "Release", "--no-build", $"-p:CustomBeforeDirectoryBuildProps={properties}", "-o", Output);
+        Dotnet("build", "Essentials/src/App/Fixture.App.csproj", "-c", "Release", $"-p:CustomBeforeDirectoryBuildProps={properties}");
+        Dotnet("pack", "Essentials/src/App/Fixture.App.csproj", "-c", "Release", "--no-build", $"-p:CustomBeforeDirectoryBuildProps={properties}", "-o", Output);
 
         var package = Path.Join(Output, "Fixture.App.4.0.8-preview.nupkg");
         var metadata = Metadata(package);
@@ -123,10 +123,10 @@ public sealed class PackageVersioningPackTests : IDisposable
     [Fact]
     public void A_no_build_pack_with_other_version_input_than_its_build_fails()
     {
-        Dotnet("build", "src/App/Fixture.App.csproj", "-c", "Release");
+        Dotnet("build", "Essentials/src/App/Fixture.App.csproj", "-c", "Release");
 
         var output = DotnetFailing(
-            "pack", "src/App/Fixture.App.csproj", "-c", "Release", "--no-build", $"-p:CustomBeforeDirectoryBuildProps={Computed(head)}", "-o", Output);
+            "pack", "Essentials/src/App/Fixture.App.csproj", "-c", "Release", "--no-build", $"-p:CustomBeforeDirectoryBuildProps={Computed(head)}", "-o", Output);
 
         Assert.Contains("ELSAPV007", output);
         Assert.False(Directory.Exists(Output) && Directory.EnumerateFiles(Output, "*.nupkg").Any());
@@ -137,7 +137,7 @@ public sealed class PackageVersioningPackTests : IDisposable
     public void A_computation_for_another_commit_fails_the_pack()
     {
         var output = DotnetFailing(
-            "pack", "src/App/Fixture.App.csproj", "-c", "Release", $"-p:CustomBeforeDirectoryBuildProps={Computed(new string('1', 40))}", "-o", Output);
+            "pack", "Essentials/src/App/Fixture.App.csproj", "-c", "Release", $"-p:CustomBeforeDirectoryBuildProps={Computed(new string('1', 40))}", "-o", Output);
 
         Assert.Contains("ELSAPV006", output);
         Assert.False(Directory.Exists(Output) && Directory.EnumerateFiles(Output, "*.nupkg").Any());
@@ -156,8 +156,8 @@ public sealed class PackageVersioningPackTests : IDisposable
         WriteCentralPackages($"[{PrimitivesVersion}, )");
         var properties = Computed(head);
 
-        Dotnet("build", "src/App/Fixture.App.csproj", "-c", "Release", $"-p:CustomBeforeDirectoryBuildProps={properties}");
-        Dotnet("pack", "src/App/Fixture.App.csproj", "-c", "Release", "--no-build", $"-p:CustomBeforeDirectoryBuildProps={properties}", "-o", Output);
+        Dotnet("build", "Essentials/src/App/Fixture.App.csproj", "-c", "Release", $"-p:CustomBeforeDirectoryBuildProps={properties}");
+        Dotnet("pack", "Essentials/src/App/Fixture.App.csproj", "-c", "Release", "--no-build", $"-p:CustomBeforeDirectoryBuildProps={properties}", "-o", Output);
 
         var package = Path.Join(Output, "Fixture.App.4.0.8-preview.nupkg");
         Assert.Equal([("Fixture.Lib", "[4.0.3-preview, 5.0.0)"), ("Microsoft.Extensions.Primitives", PrimitivesVersion)], Dependencies(package));

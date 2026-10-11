@@ -63,12 +63,13 @@ public sealed class DockerBuildContextGuardTests
     [Fact]
     public void Every_dockerfile_copies_every_required_build_file_before_restore()
     {
-        var dockerfiles = Directory.EnumerateFiles(Path.Join(RepoRoot, "src"), "Dockerfile", SearchOption.AllDirectories)
+        var dockerfiles = ModuleRoots.Resolve(RepoRoot, ModuleRoots.Production)
+            .SelectMany(root => Directory.EnumerateFiles(root, "Dockerfile", SearchOption.AllDirectories))
             .Where(path => !IsBuildOutput(path))
             .Order(StringComparer.Ordinal)
             .ToArray();
 
-        Assert.True(dockerfiles.Length >= 2, $"Expected at least two Dockerfiles under src/; found {dockerfiles.Length}.");
+        Assert.True(dockerfiles.Length >= 2, $"Expected at least two Dockerfiles under backend production roots; found {dockerfiles.Length}.");
 
         var violations = new List<string>();
         foreach (var dockerfile in dockerfiles)
@@ -129,7 +130,7 @@ public sealed class DockerBuildContextGuardTests
     [InlineData("Elsa.Foundation.Host")]
     public void The_host_publish_restores_with_every_property_it_publishes_with(string host)
     {
-        var dockerfile = File.ReadAllText(Path.Join(RepoRoot, "src", "apps", host, "Dockerfile"));
+        var dockerfile = File.ReadAllText(Path.Join(RepoRoot, "Essentials", "apps", host, "Dockerfile"));
 
         Assert.Contains("-p:CustomBeforeDirectoryBuildProps=", PublishInstruction(dockerfile), StringComparison.Ordinal);
         Assert.Empty(PublishPropertiesItsRestoreLacks(dockerfile));
@@ -146,8 +147,8 @@ public sealed class DockerBuildContextGuardTests
         var dockerfile = $"""
             FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
             RUN set -- -p:CustomBeforeDirectoryBuildProps=/tmp/elsa/package-versions.props \
-                && dotnet restore src/apps/Fixture/Fixture.csproj {restoreArguments} \
-                && dotnet publish src/apps/Fixture/Fixture.csproj -c Release --no-restore -p:PublishReadyToRun=true "$@" -o /app/publish
+                && dotnet restore Essentials/apps/Fixture/Fixture.csproj {restoreArguments} \
+                && dotnet publish Essentials/apps/Fixture/Fixture.csproj -c Release --no-restore -p:PublishReadyToRun=true "$@" -o /app/publish
             """;
 
         Assert.Equal(lacking is null ? [] : [lacking], PublishPropertiesItsRestoreLacks(dockerfile));
@@ -174,8 +175,8 @@ public sealed class DockerBuildContextGuardTests
         {
             const string dockerfile = """
                 FROM mcr.microsoft.com/dotnet/sdk:10.0
-                COPY src/apps/Fixture/Fixture.csproj src/apps/Fixture/
-                RUN dotnet restore src/apps/Fixture/Fixture.csproj
+                COPY Essentials/apps/Fixture/Fixture.csproj Essentials/apps/Fixture/
+                RUN dotnet restore Essentials/apps/Fixture/Fixture.csproj
                 """;
 
             var (copies, missingRestore) = CopyInstructionsBeforeRestore(dockerfile);
@@ -183,8 +184,8 @@ public sealed class DockerBuildContextGuardTests
 
             var (applicationFiles, unresolvable) = ResolveRequiredFilesForDockerfile(root, dockerfile);
             Assert.Empty(unresolvable);
-            Assert.Contains("src/apps/Sibling.targets", applicationFiles);
-            Assert.Contains("src/apps/Sibling.targets", UncoveredRequiredFiles(copies, applicationFiles));
+            Assert.Contains("Essentials/apps/Sibling.targets", applicationFiles);
+            Assert.Contains("Essentials/apps/Sibling.targets", UncoveredRequiredFiles(copies, applicationFiles));
         }
         finally
         {
@@ -198,7 +199,7 @@ public sealed class DockerBuildContextGuardTests
         const string dockerfile = """
             FROM mcr.microsoft.com/dotnet/sdk:10.0 AS restore
             COPY Directory.Build.props Directory.Packages.props NuGet.config ./
-            RUN dotnet restore src/apps/Fixture/Fixture.csproj
+            RUN dotnet restore Essentials/apps/Fixture/Fixture.csproj
             """;
 
         var (copies, missingRestore) = CopyInstructionsBeforeRestore(dockerfile);

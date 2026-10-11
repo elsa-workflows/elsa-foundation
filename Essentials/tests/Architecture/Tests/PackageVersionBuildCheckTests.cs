@@ -5,7 +5,7 @@ namespace Elsa.Architecture.Tests;
 
 /// <summary>
 /// Proves how <c>PackageVersioning.props</c> chooses each project's version, and the checks it runs on every build and
-/// pack (spec 150, #2080), against small SDK-less fixture projects under <c>src/</c> of a copy of the root build files.
+/// pack (spec 150, #2080), against small SDK-less fixture projects under the backend source roots of a copy of the root build files.
 /// Computed input is the calculator's pack-properties file, which the fixture imports ahead of
 /// <c>Directory.Build.props</c> as MSBuild's <c>CustomBeforeDirectoryBuildProps</c> hook does;
 /// <see cref="PackageVersioningPackTests"/> proves the hook itself, with real packs.
@@ -38,7 +38,7 @@ public sealed class PackageVersionBuildCheckTests : IDisposable
     }
 
     /// <summary>
-    /// FR-005 covers <c>src/</c>, where every published package lives. A project elsewhere - a test fixture pinning an
+    /// FR-005 covers backend package roots. A project elsewhere - a test fixture pinning an
     /// assembly version, a sample package - is left exactly as its own properties have it.
     /// </summary>
     [Fact]
@@ -49,6 +49,30 @@ public sealed class PackageVersionBuildCheckTests : IDisposable
         Assert.True(exitCode == 0, $"build failed with exit {exitCode}:\n{output}");
         Assert.Contains("PackageVersion= Version=2.1.0 ", output);
         Assert.Contains("AssemblyVersion=.", output);
+    }
+
+    [Theory]
+    [InlineData("Essentials/src", true)]
+    [InlineData("Essentials/apps", true)]
+    [InlineData("Extensions/Agent/src", true)]
+    [InlineData("Essentials/tests", false)]
+    [InlineData("Extensions/Agent/tests", false)]
+    [InlineData("Extensions/Agent/studio", false)]
+    public void Package_version_path_classifier_matches_backend_roots_and_excludes_tests_and_studio(string projectRoot, bool versioned)
+    {
+        var (exitCode, output) = MsBuildFixture.Run("Fixture.LineB", ShowVersion, repositoryRoot: root, projectRoot: projectRoot);
+
+        Assert.True(exitCode == 0, $"build failed with exit {exitCode}:\n{output}");
+        if (versioned)
+        {
+            Assert.Contains("PackageVersion=4.0.0-dev", output);
+            Assert.Contains("AssemblyVersion=4.0.0.0.", output);
+        }
+        else
+        {
+            Assert.Contains("PackageVersion= Version= ", output);
+            Assert.Contains("AssemblyVersion=.", output);
+        }
     }
 
     /// <summary>

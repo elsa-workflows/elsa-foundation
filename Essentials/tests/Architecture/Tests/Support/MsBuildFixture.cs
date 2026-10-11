@@ -22,15 +22,15 @@ internal static class MsBuildFixture
     /// <c>CustomBeforeDirectoryBuildProps</c> hook imports ahead of <c>Directory.Build.props</c> - then
     /// <c>Directory.Build.props</c>, then <paramref name="body"/>. Without <paramref name="repositoryRoot"/> it imports the
     /// real root file from a directory outside the repository; with one, a copy made by <see cref="CopyRootBuildFiles"/>,
-    /// from under that copy's <c>src/</c>, where the checks that apply only to published projects apply too.
+    /// from under that copy's <c>Essentials/src/</c> by default, where the checks that apply only to published projects apply too.
     /// </remarks>
     internal static (int ExitCode, string Output) Run(
         string projectName, string body = "", IEnumerable<string>? globalProperties = null, string? repositoryRoot = null,
-        string target = "BeforeBuild", string? importFirst = null)
+        string target = "BeforeBuild", string? importFirst = null, string projectRoot = "Essentials/src")
     {
         var directory = repositoryRoot is null
             ? Directory.CreateTempSubdirectory(nameof(MsBuildFixture))
-            : Directory.CreateDirectory(Path.Join(repositoryRoot, "src", projectName));
+            : Directory.CreateDirectory(Path.Join(repositoryRoot, projectRoot, projectName));
         try
         {
             var projectPath = Path.Join(directory.FullName, $"{projectName}.proj");

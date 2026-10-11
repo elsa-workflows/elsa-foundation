@@ -5,8 +5,8 @@ using System.Text.Json;
 namespace Elsa.Maps.Generator;
 
 /// <summary>
-/// Writes <c>docs/maps/dependency-map.json</c>, the canonical dependency map (spec 149): every project under
-/// <c>src/</c> and <c>tests/</c> as a node, keyed by path, with its typed dependency edges.
+/// Writes <c>docs/maps/dependency-map.json</c>, the canonical backend dependency map (spec 149): every project under
+/// the Essentials and extension backend roots as a node, keyed by path, with its typed dependency edges.
 /// </summary>
 /// <remarks>
 /// <para>

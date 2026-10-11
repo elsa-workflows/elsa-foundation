@@ -8,7 +8,7 @@ namespace Elsa.Architecture.Tests;
 public sealed class RuntimeExecutionPlacementPersistenceArchitectureTests
 {
     private static readonly string ProductionRoot = Path.Join(
-        RepoRoot, "src", "essentials", "Workflows", "Runtime", "Distributed", "Persistence", "EntityFrameworkCore");
+        RepoRoot, "Essentials", "src", "Workflows", "Runtime", "Distributed", "Persistence", "EntityFrameworkCore");
 
     [Fact]
     public void Production_adapter_is_provider_neutral_and_has_no_migrations()

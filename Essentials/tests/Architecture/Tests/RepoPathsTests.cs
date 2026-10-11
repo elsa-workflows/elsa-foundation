@@ -14,7 +14,7 @@ public sealed class RepoPathsTests
 
     [Theory]
     [InlineData("src/Module/Feature.cs", true)]
-    [InlineData("src/extensions/Ext/tests/ExtTests.cs", false)]
+    [InlineData("Extensions/Ext/tests/ExtTests.cs", false)]
     [InlineData("tests/Module/ModuleTests.cs", false)]
     public void Is_not_test_file_is_judged_by_the_path_relative_to_the_repository_root(string repoRelativePath, bool expected) =>
         Assert.Equal(expected, ModuleRoots.IsNotTestFile(_repoRoot, Absolute(repoRelativePath)));

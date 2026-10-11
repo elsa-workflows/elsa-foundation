@@ -12,9 +12,8 @@ namespace Elsa.Architecture.Tests;
 /// <remarks>
 /// Line A membership is read from <c>VersionLines.props</c> via <see cref="VersionLines.LineAMembers"/>, the
 /// same source <see cref="LineAClosureGuardTests"/> uses, rather than restated here. The sweep covers every
-/// <c>src/</c> root <see cref="ModuleRoots.Production"/> resolves — <c>src/essentials</c>, <c>src/extensions</c>
-/// and <c>src/apps</c> — so a Line B project anywhere in the tree is caught, not just the ones under
-/// <c>src/essentials</c> where all ten Line A projects happen to live.
+/// backend production root <see cref="ModuleRoots.Production"/> resolves — Essentials source/apps and each
+/// extension's source tree — while Studio remains outside the backend inventory.
 /// </remarks>
 public sealed class PublicApiFilesGuardTests
 {
@@ -53,21 +52,19 @@ public sealed class PublicApiFilesGuardTests
 
     /// <summary>
     /// Pins that the sweep is not vacuous: it names more than ten Elsa projects outside Line A, and it found
-    /// at least one under each of the three roots <see cref="ModuleRoots.Production"/> resolves. A guard
-    /// scoped only to <c>src/essentials</c> — where every Line A project happens to live — would still read
-    /// green if <c>src/extensions</c> or <c>src/apps</c> silently grew a Line B project carrying these files.
+    /// at least one under Essentials source/apps and extension source roots <see cref="ModuleRoots.Production"/> resolves.
     /// </summary>
     [Fact]
-    public void The_scan_covers_a_nontrivial_line_b_universe_across_every_src_root()
+    public void The_scan_covers_a_nontrivial_line_b_universe_across_every_backend_source_root()
     {
         Assert.NotEmpty(LineAMembers);
         Assert.True(LineBDirectories.Count > LineAMembers.Count,
             $"Expected more Line B Elsa projects than the {LineAMembers.Count} Line A members, to prove this " +
             $"guard checks a real, non-trivial set; found {LineBDirectories.Count}.");
 
-        var essentialsRoot = Path.Join(RepoRoot, "src", "essentials");
-        var extensionsRoot = Path.Join(RepoRoot, "src", "extensions");
-        var appsRoot = Path.Join(RepoRoot, "src", "apps");
+        var essentialsRoot = Path.Join(RepoRoot, "Essentials", "src");
+        var extensionsRoot = Path.Join(RepoRoot, "Extensions");
+        var appsRoot = Path.Join(RepoRoot, "Essentials", "apps");
 
         Assert.Contains(LineBDirectories.Values, dir => dir.StartsWith(essentialsRoot, StringComparison.Ordinal));
         Assert.Contains(LineBDirectories.Values, dir => dir.StartsWith(extensionsRoot, StringComparison.Ordinal));

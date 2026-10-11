@@ -333,7 +333,8 @@ public sealed class EfSchemaVersionStampGuardTests
     /// </summary>
     private static Dictionary<string, string> DeclaredSnapshots()
     {
-        var snapshots = Directory.EnumerateFiles(Path.Join(RepoRoot, "src"), "*ModelSnapshot.cs", SearchOption.AllDirectories)
+        var snapshots = ModuleRoots.Resolve(RepoRoot, ModuleRoots.Production)
+            .SelectMany(root => Directory.EnumerateFiles(root, "*ModelSnapshot.cs", SearchOption.AllDirectories))
             .Where(file => !IsBuildOutput(file))
             .ToLookup(file => Path.GetFileName(file)[..^"ModelSnapshot.cs".Length], StringComparer.Ordinal);
         var contexts = RuntimeLibraries.Assemblies

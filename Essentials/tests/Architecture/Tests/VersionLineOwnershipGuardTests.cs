@@ -16,8 +16,8 @@ namespace Elsa.Architecture.Tests;
 /// the wrong line for that project without either failing loudly.
 /// </summary>
 /// <remarks>
-/// This guard scans every <c>.csproj</c>, <c>.props</c>, and <c>.targets</c> file under <c>src/</c> and
-/// <c>tests/</c> — not just <c>.csproj</c>, because a <c>Directory.Build.props</c> or a <c>.targets</c> file
+/// This guard scans every <c>.csproj</c>, <c>.props</c>, and <c>.targets</c> file under Essentials' backend roots
+/// and extension <c>src/</c>/<c>tests/</c> roots — not just <c>.csproj</c>, because a <c>Directory.Build.props</c> or a <c>.targets</c> file
 /// is exactly where a stray setter would land, and a <c>PropertyGroup</c> nested inside a <c>&lt;Target&gt;</c>
 /// counts too. The root <c>Directory.Build.props</c> and <c>VersionLines.props</c> live outside both
 /// <c>src/</c> and <c>tests/</c>, so they are never part of this scan; they are the two sanctioned setters,
@@ -34,13 +34,13 @@ public sealed class VersionLineOwnershipGuardTests
     private static readonly string[] ScannedExtensions = [".csproj", ".props", ".targets"];
 
     [Fact]
-    public void No_file_under_src_or_tests_sets_a_version_line_property()
+    public void No_file_under_backend_roots_sets_a_version_line_property()
     {
         var (scanned, violations) = Scan(ModuleRoots.Resolve(RepoRoot, ModuleRoots.All));
 
-        Assert.True(scanned.Count > 0, "The version-line ownership guard scanned no files under src/ or tests/; its root is wrong.");
+        Assert.True(scanned.Count > 0, "The version-line ownership guard scanned no files under backend roots; its roots are wrong.");
 
-        var expectedRoots = new[] { "src/essentials", "src/extensions", "src/apps", "tests" };
+        var expectedRoots = new[] { "Essentials/src", "Essentials/apps", "Essentials/tests", "Extensions" };
         var missingRoots = expectedRoots
             .Where(root => !scanned.Any(path => RelativePath(path).StartsWith($"{root}/", StringComparison.Ordinal)))
             .ToArray();
@@ -48,7 +48,7 @@ public sealed class VersionLineOwnershipGuardTests
 
         var scannedSet = scanned.Select(Path.GetFullPath).ToHashSet(StringComparer.OrdinalIgnoreCase);
 
-        Assert.Contains(Path.GetFullPath(Path.Join(RepoRoot, "tests", "Directory.Build.props")), scannedSet);
+        Assert.Contains(Path.GetFullPath(Path.Join(RepoRoot, "Essentials", "tests", "Directory.Build.props")), scannedSet);
 
         var missingProjects = ProjectGraph.ElsaProjectPaths(RepoRoot)
             .Select(Path.GetFullPath)
@@ -61,7 +61,7 @@ public sealed class VersionLineOwnershipGuardTests
 
         Assert.True(
             violations.Count == 0,
-            $"{violations.Count} file(s) under src/ or tests/ set a version-line property. The one place " +
+            $"{violations.Count} file(s) under backend roots set a version-line property. The one place " +
             "to change Line A membership is VersionLines.props:" +
             Environment.NewLine + string.Join(Environment.NewLine, violations.Order(StringComparer.Ordinal)));
     }

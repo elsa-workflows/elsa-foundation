@@ -21,8 +21,8 @@ public sealed class RootBuildFileTests
         var parsed = MsBuildFile.Parse(File.ReadAllBytes(Path.Join(RepoRoot, file)));
 
         Assert.False(parsed.NamesEveryFile);
-        Assert.False(parsed.Names("src/essentials/Tasks/README.md", "src/essentials/Tasks/", file));
-        Assert.All(parsed.Imports, import => Assert.NotNull(RepositoryPath.Expand(import, string.Empty, string.Empty, "src/essentials/Tasks/")));
+        Assert.False(parsed.Names("Essentials/src/Tasks/README.md", "Essentials/src/Tasks/", file));
+        Assert.All(parsed.Imports, import => Assert.NotNull(RepositoryPath.Expand(import, string.Empty, string.Empty, "Essentials/src/Tasks/")));
     }
 
     private static string FindRepoRoot()

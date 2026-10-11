@@ -59,6 +59,58 @@ public sealed class MoveAndRenameTests : SyntheticHistory
         Assert.Empty(CommitAndCompute().Affected);
     }
 
+    /// <summary>
+    /// The repository-root cutover changes owned file keys, but a package remains the same package id and advances
+    /// from its last published version. The old snapshot still uses its committed src/tests paths; the new snapshot
+    /// uses the consolidated roots, so the calculator sees removed and added inputs instead of losing the history.
+    /// </summary>
+    [Fact]
+    public void A_root_consolidation_preserves_historical_package_identity_and_advances_once()
+    {
+        Repo.MoveDirectory("src", "Essentials/src");
+        Repo.MoveDirectory("tests", "Essentials/tests");
+        Repo.AddProject("Extensions/Example/src/Elsa.Example.Core.csproj");
+        Repo.Write("Extensions/Example/src/Example.cs", "public sealed class Example;");
+        Repo.Write("Extensions/Example/studio/Elsa.Studio.Example.csproj", "<Project />");
+
+        var computation = CommitAndCompute("Consolidate backend roots");
+
+        Assert.All(AllPackages, packageId => Assert.Contains(packageId, computation.Affected));
+        Assert.Contains("Elsa.Example.Core", computation.Affected);
+        Assert.Equal(AllPackages.Length + 1, computation.Affected.Count);
+        Assert.Contains("Elsa.Example.Core", computation.Packages.Select(package => package.PackageId));
+        Assert.Equal("Extensions/Example/src/Elsa.Example.Core.csproj", computation["Elsa.Example.Core"].Path);
+        Assert.Equal("4.0.0", computation["Elsa.Example.Core"].Version.ToString());
+        Assert.Equal("Essentials/src/Tasks/Elsa.Tasks.csproj", computation["Elsa.Tasks"].Path);
+        Assert.Contains("src/Tasks/Scheduler.cs (removed)", computation["Elsa.Tasks"].Reasons);
+        Assert.Contains("Essentials/src/Tasks/Scheduler.cs (added)", computation["Elsa.Tasks"].Reasons);
+        foreach (var package in computation.Packages.Where(package => AllPackages.Contains(package.PackageId, StringComparer.Ordinal)))
+        {
+            var lastPublished = Record.Find(package.PackageId)!;
+            Assert.Equal(lastPublished.Version.Major, package.Version.Major);
+            Assert.Equal(lastPublished.Version.Minor, package.Version.Minor);
+            Assert.True(package.Version.Patch > lastPublished.Version.Patch,
+                $"{package.PackageId} reset or failed to advance across the path migration: {lastPublished.Version} -> {package.Version}.");
+        }
+
+        Publish(computation);
+        Assert.Empty(CommitAndCompute("No changes after publishing the consolidated tree").Affected);
+    }
+
+    /// <summary>A new-layout commit cannot hide a missed project move by leaving it under a legacy root.</summary>
+    [Fact]
+    public void A_legacy_project_left_beside_the_consolidated_layout_is_refused()
+    {
+        Repo.MoveDirectory("src", "Essentials/src");
+        Repo.MoveDirectory("tests", "Essentials/tests");
+        Repo.Write("src/Orphan/Orphan.csproj", "<Project />");
+        var commit = Repo.Commit("Leave a project in the old source root");
+
+        var exception = Assert.Throws<InvalidOperationException>(() => Compute(commit));
+
+        Assert.Contains("legacy src/ or tests/ roots", exception.Message, StringComparison.Ordinal);
+    }
+
     /// <summary>Edge case: a renamed package id is a new package at patch 0; the old id's record entry is untouched.</summary>
     [Fact]
     public void A_renamed_package_id_starts_at_patch_zero()

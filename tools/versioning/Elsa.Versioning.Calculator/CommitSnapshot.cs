@@ -77,10 +77,40 @@ internal sealed class CommitSnapshot
     /// <summary>The content of a file in this commit, or null when the commit has no such file.</summary>
     public byte[]? ReadFile(string path) => tree.TryGetValue(path, out var entry) ? objects.Read(entry.ObjectId) : null;
 
-    /// <summary>Every <c>.csproj</c> under <c>src/</c> or <c>tests/</c>: the projects the dependency map must describe.</summary>
-    public IEnumerable<string> ProjectFiles() =>
-        tree.Keys.Where(path => (path.StartsWith("src/", StringComparison.Ordinal) || path.StartsWith("tests/", StringComparison.Ordinal)) &&
-                                path.EndsWith(".csproj", StringComparison.Ordinal));
+    /// <summary>The backend projects in this commit: the projects the dependency map must describe.</summary>
+    /// <remarks>
+    /// Published history before the product split used repository-level <c>src/</c> and <c>tests/</c> roots. Newer
+    /// commits use <c>Essentials/{src,apps,tests}</c> and <c>Extensions/&lt;capability&gt;/{src,tests}</c>. Choosing
+    /// by the commit's own tree lets a record compare across the cutover without reinterpreting historical paths.
+    /// A mixed tree fails closed: leaving a project at an old root after the cutover would otherwise escape the new
+    /// map's inventory and silently contribute no package inputs.
+    /// </remarks>
+    public IEnumerable<string> ProjectFiles()
+    {
+        var consolidatedLayout = tree.Keys.Any(path => path.StartsWith("Essentials/", StringComparison.Ordinal) ||
+                                                       path.StartsWith("Extensions/", StringComparison.Ordinal));
+        if (consolidatedLayout && tree.Keys.Any(IsLegacyProjectPath))
+            throw new InvalidOperationException(
+                $"Commit {Commit} has projects under legacy src/ or tests/ roots beside Essentials/ or Extensions/. Every backend project must use the consolidated layout.");
+
+        return tree.Keys.Where(path => path.EndsWith(".csproj", StringComparison.Ordinal) &&
+            (consolidatedLayout ? IsConsolidatedProjectPath(path) : IsLegacyProjectPath(path)));
+    }
+
+    private static bool IsLegacyProjectPath(string path) =>
+        path.EndsWith(".csproj", StringComparison.Ordinal) &&
+        (path.StartsWith("src/", StringComparison.Ordinal) || path.StartsWith("tests/", StringComparison.Ordinal));
+
+    private static bool IsConsolidatedProjectPath(string path)
+    {
+        if (path.StartsWith("Essentials/src/", StringComparison.Ordinal) ||
+            path.StartsWith("Essentials/apps/", StringComparison.Ordinal) ||
+            path.StartsWith("Essentials/tests/", StringComparison.Ordinal))
+            return true;
+
+        var segments = path.Split('/');
+        return segments.Length >= 4 && segments[0] == "Extensions" && segments[2] is "src" or "tests";
+    }
 
     /// <summary>The MSBuild facts of a file in this commit, or null when the commit has no such file.</summary>
     public MsBuildFile? BuildFile(string path) => tree.TryGetValue(path, out var entry) ? objects.Parse(entry.ObjectId) : null;

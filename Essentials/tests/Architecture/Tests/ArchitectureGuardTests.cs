@@ -54,42 +54,48 @@ public sealed partial class ArchitectureGuardTests
 
     /// <summary>
     /// Every guard below is built on <see cref="ProjectFiles"/>, so if that enumeration ever stops seeing a
-    /// module root, fifteen guards go quietly vacuous instead of red. That is not hypothetical: moving Elsa 3
-    /// to <c>src/extensions/</c> dropped seven projects out of all of them while the suite stayed green, because
-    /// the enumeration was pinned to <c>src/</c> and <c>tests/</c> (#1815).
+    /// module root, guards go quietly vacuous instead of red. The inventory deliberately treats backend extension
+    /// roots as <c>Extensions/&lt;capability&gt;/{src,tests}</c>; the Studio sibling is not a backend module root.
     /// </summary>
     /// <remarks>
-    /// The expected roots are discovered from the working tree, deliberately NOT read from
-    /// <see cref="ModuleRoots.All"/>. Checking the enumeration against the same list it is built from is
-    /// circular and passes even when a whole root has been dropped, which is precisely the bug being guarded
-    /// against. The excluded roots hold projects that are not first-party modules and are outside every
-    /// guard's remit: <c>samples/</c>, <c>tools/</c>, and <c>docs/</c>, whose
-    /// <c>reports/repros/</c> tree carries standalone reproduction projects attached to written reports.
+    /// The expected paths are independently discovered from the working tree, deliberately NOT read from
+    /// <see cref="ModuleRoots.All"/>. The oracle scans Essentials' three backend roots and each extension's
+    /// <c>src/</c> and <c>tests/</c> roots. Studio projects are found separately and must remain outside this backend
+    /// enumeration, even though they live below <c>Extensions/</c>.
     /// </remarks>
     [Fact]
     public void Project_enumeration_covers_every_module_root()
     {
-        string[] notModuleRoots = ["samples", "tools", "docs"];
-
-        var rootsHoldingProjects = Directory.EnumerateDirectories(RepoRoot)
-            .Select(directory => Path.GetFileName(directory)!)
-            .Where(name => !name.StartsWith('.'))
-            .Where(name => !notModuleRoots.Contains(name, StringComparer.Ordinal))
-            .Where(name => Directory.EnumerateFiles(Path.Join(RepoRoot, name), "*.csproj", SearchOption.AllDirectories).Any())
-            .Order(StringComparer.Ordinal)
+        var roots = new[] { "Essentials/src", "Essentials/apps", "Essentials/tests" }
+            .Concat(Directory.Exists(Path.Join(RepoRoot, "Extensions"))
+                ? Directory.EnumerateDirectories(Path.Join(RepoRoot, "Extensions"))
+                    .SelectMany(extension => new[] { "src", "tests" }
+                        .Select(segment => $"Extensions/{Path.GetFileName(extension)}/{segment}"))
+                : [])
+            .Where(root => Directory.Exists(Path.Join(RepoRoot, root)))
             .ToArray();
-
-        Assert.NotEmpty(rootsHoldingProjects);
-
+        var expectedPaths = roots
+            .SelectMany(root => Directory.EnumerateFiles(Path.Join(RepoRoot, root), "*.csproj", SearchOption.AllDirectories))
+            .Select(path => Path.GetRelativePath(RepoRoot, path).Replace('\\', '/'))
+            .ToHashSet(StringComparer.Ordinal);
         var projects = ProjectFiles().ToArray();
-        var ignored = rootsHoldingProjects
-            .Where(root => !projects.Any(project => project.RelativePath.StartsWith(root + "/", StringComparison.Ordinal)))
+        var actualPaths = projects.Select(project => project.RelativePath).ToHashSet(StringComparer.Ordinal);
+        var missing = expectedPaths.Except(actualPaths, StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray();
+        var unexpected = actualPaths.Except(expectedPaths, StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray();
+        var studioProjects = Directory.Exists(Path.Join(RepoRoot, "Extensions"))
+            ? Directory.EnumerateFiles(Path.Join(RepoRoot, "Extensions"), "*.csproj", SearchOption.AllDirectories)
+                .Where(path => Path.GetRelativePath(RepoRoot, path).Replace('\\', '/').Contains("/studio/", StringComparison.Ordinal))
+                .ToArray()
+            : [];
+        var rootCoverage = new[] { "Essentials/src/", "Essentials/apps/", "Essentials/tests/", "Extensions/" }
+            .Where(root => !projects.Any(project => project.RelativePath.StartsWith(root, StringComparison.Ordinal)))
             .ToArray();
 
-        Assert.True(
-            ignored.Length == 0,
-            "These roots hold projects but contribute none to ProjectFiles(), so every guard built on it is "
-            + "silently ignoring them. Add them to ModuleRoots.All: " + string.Join(", ", ignored));
+        Assert.NotEmpty(expectedPaths);
+        Assert.NotEmpty(studioProjects);
+        Assert.True(missing.Length == 0 && unexpected.Length == 0 && rootCoverage.Length == 0,
+            "Backend project discovery must exactly cover Essentials and Extensions src/tests while excluding Studio. " +
+            $"Missing: {string.Join(", ", missing)}; unexpected: {string.Join(", ", unexpected)}; uncovered roots: {string.Join(", ", rootCoverage)}.");
     }
 
     [Fact]
@@ -110,7 +116,7 @@ public sealed partial class ArchitectureGuardTests
     [Fact]
     public void Shared_persistence_resolution_does_not_depend_on_feature_assemblies()
     {
-        var policy = Path.Combine(RepoRoot, "src", "essentials", "Persistence", "EntityFramework");
+        var policy = Path.Combine(RepoRoot, "Essentials", "src", "Persistence", "EntityFramework");
         var project = XDocument.Load(Path.Join(policy, "Elsa.Persistence.EntityFramework.csproj"));
         // Its two project references are no feature assembly: Elsa.Primitives, the root of the Line A contract baseline,
         // holds the write refusal's persistence-agnostic base that the domain APIs answer (spec 180, FR-016a), and
@@ -123,9 +129,9 @@ public sealed partial class ArchitectureGuardTests
     }
 
     [Theory]
-    [InlineData("src/essentials/Modularity/Core/Elsa.Modularity.Core.csproj")]
-    [InlineData("src/essentials/Modularity/Nuplane/Elsa.Modularity.Nuplane.csproj")]
-    [InlineData("src/essentials/Cli/Worker/Elsa.Cli.Worker.csproj")]
+    [InlineData("Essentials/src/Modularity/Core/Elsa.Modularity.Core.csproj")]
+    [InlineData("Essentials/src/Modularity/Nuplane/Elsa.Modularity.Nuplane.csproj")]
+    [InlineData("Essentials/src/Cli/Worker/Elsa.Cli.Worker.csproj")]
     public void Neutral_activation_and_tooling_projects_have_no_entity_framework_dependency(string projectPath)
     {
         var project = XDocument.Load(Path.Join(RepoRoot, projectPath));
@@ -321,7 +327,7 @@ public sealed partial class ArchitectureGuardTests
     [Fact]
     public void Server_Dockerfile_restores_ReadyToRun_packages_before_no_restore_publish()
     {
-        var dockerfile = File.ReadAllText(Path.Combine(RepoRoot, "src", "apps", "Elsa.Workbench", "Dockerfile"));
+        var dockerfile = File.ReadAllText(Path.Combine(RepoRoot, "Essentials", "apps", "Elsa.Workbench", "Dockerfile"));
         var restoreStart = dockerfile.IndexOf("    && dotnet restore ", StringComparison.Ordinal);
         var publishStart = dockerfile.IndexOf("    && dotnet publish ", StringComparison.Ordinal);
 
@@ -459,11 +465,11 @@ public sealed partial class ArchitectureGuardTests
     {
         string[] removedPaths =
         [
-            "src/essentials/Activities/Runtime/Elsa.Activities.Runtime/Services/ActivityFactory.cs",
-            "src/essentials/Activities/Runtime/Elsa.Activities.Runtime/Services/ActivityConstructorRegistry.cs",
-            "src/essentials/Activities/Runtime/Core/Contracts/IActivityFactory.cs",
-            "src/essentials/Activities/Runtime/Core/Contracts/IActivityConstructor.cs",
-            "src/essentials/Activities/Runtime/Core/Contracts/IActivityConstructorRegistry.cs"
+            "Essentials/src/Activities/Runtime/Elsa.Activities.Runtime/Services/ActivityFactory.cs",
+            "Essentials/src/Activities/Runtime/Elsa.Activities.Runtime/Services/ActivityConstructorRegistry.cs",
+            "Essentials/src/Activities/Runtime/Core/Contracts/IActivityFactory.cs",
+            "Essentials/src/Activities/Runtime/Core/Contracts/IActivityConstructor.cs",
+            "Essentials/src/Activities/Runtime/Core/Contracts/IActivityConstructorRegistry.cs"
         ];
         var violations = removedPaths.Where(relativePath =>
             File.Exists(Path.Combine(RepoRoot, relativePath.Replace('/', Path.DirectorySeparatorChar))));
@@ -498,8 +504,8 @@ public sealed partial class ArchitectureGuardTests
         packageName.EndsWith(".Abstractions", StringComparison.Ordinal);
 
     /// <summary>
-    /// Every repository root that holds first-party code. Required modules live under <c>src/</c> and
-    /// optional ones under <c>src/extensions/</c> (#1815), each extension carrying its own <c>tests/</c>.
+    /// Every repository root that holds first-party code. Required modules and hosts live under <c>Essentials/</c>;
+    /// optional backend modules and their tests live under <c>Extensions/</c> (#1815).
     /// </summary>
     /// <remarks>
     /// Sweeps built on this must enumerate all of them. A sweep pinned to <c>src/</c> keeps compiling and
@@ -578,7 +584,7 @@ public sealed partial class ArchitectureGuardTests
     }
 
     /// <summary>
-    /// Project-name prefixes that belong to an optional module, and the <c>src/extensions/</c> bucket owning
+    /// Project-name prefixes that belong to an optional module, and the <c>Extensions/</c> bucket owning
     /// each (#1815). Order matters only if one prefix is a prefix of another, which none are today.
     /// </summary>
     private static readonly (string Prefix, string Bucket)[] ExtensionBuckets =
@@ -595,9 +601,9 @@ public sealed partial class ArchitectureGuardTests
     private static readonly Dictionary<string, string> RelocatedTestProjects = new(StringComparer.Ordinal)
     {
         // The CLR scanner tests read this assembly's name ("Elsa.Activities.Design.Tests.ClrFixture") and its activities' type names.
-        ["Elsa.Activities.Design.Tests.ClrFixture"] = "tests/essentials/Activities/Design/Fixtures/ClrFixture/Elsa.Activities.Design.Tests.ClrFixture.csproj",
+        ["Elsa.Activities.Design.Tests.ClrFixture"] = "Essentials/tests/Activities/Design/Fixtures/ClrFixture/Elsa.Activities.Design.Tests.ClrFixture.csproj",
         // Beside the library it tests, as Elsa.Cluster.Tests sits beside Elsa.Cluster.Testing.
-        ["Elsa.Api.Compatibility.Testing.Tests"] = "tests/essentials/Api/Compatibility/Tests/Elsa.Api.Compatibility.Testing.Tests.csproj",
+        ["Elsa.Api.Compatibility.Testing.Tests"] = "Essentials/tests/Api/Compatibility/Tests/Elsa.Api.Compatibility.Testing.Tests.csproj",
     };
 
     /// <summary>
@@ -620,21 +626,21 @@ public sealed partial class ArchitectureGuardTests
     private static string ExpectedProjectPath(ProjectInfo project, IReadOnlySet<string> projectDirectories)
     {
         if (project.Name == "Elsa.Workbench")
-            return "src/apps/Elsa.Workbench/Elsa.Workbench.csproj";
+            return "Essentials/apps/Elsa.Workbench/Elsa.Workbench.csproj";
 
-        // Deployable host app, like Elsa.Workbench: it lives under src/apps/, not the src/essentials/<domain>/
+        // Deployable host app, like Elsa.Workbench: it lives under Essentials/apps/, not the Essentials/src/<domain>/
         // tree, so its name (which collides with the Elsa.Foundation identity domain) does not dictate its
         // path.
         if (project.Name == "Elsa.Foundation.Host")
-            return "src/apps/Elsa.Foundation.Host/Elsa.Foundation.Host.csproj";
+            return "Essentials/apps/Elsa.Foundation.Host/Elsa.Foundation.Host.csproj";
 
         if (RelocatedTestProjects.TryGetValue(project.Name, out var relocated))
             return relocated;
 
         if (project.Name == "Elsa.Primitives")
-            return "src/essentials/Primitives/Primitives/Elsa.Primitives.csproj";
+            return "Essentials/src/Primitives/Primitives/Elsa.Primitives.csproj";
 
-        // Optional modules live under src/extensions/<Bucket>/<src|tests>/ rather than in the src/essentials tree
+        // Optional modules live under Extensions/<Bucket>/<src|tests>/ rather than in Essentials/src
         // (#1815). The name-to-path derivation is the same one the src/ rules below use; only the root
         // differs, and the src|tests split sits inside the extension rather than at the top of the tree.
         // Moving a module is therefore one row in ExtensionBuckets, not another branch here.
@@ -642,26 +648,26 @@ public sealed partial class ArchitectureGuardTests
         {
             var subPath = string.Join('/', project.Name[owner.Prefix.Length..].Split('.'));
             var root = project.RelativePath.Contains("/tests/", StringComparison.Ordinal) ? "tests" : "src";
-            return NameDerivedPath(project, $"src/extensions/{owner.Bucket}/{root}/{subPath}", projectDirectories);
+            return NameDerivedPath(project, $"Extensions/{owner.Bucket}/{root}/{subPath}", projectDirectories);
         }
 
-        // Matched against src/essentials and tests/essentials specifically, not a bare src/ prefix: every extension
-        // also lives under src/ now, so a loose prefix would quietly hand an unregistered bucket the core
+        // Matched against Essentials/src and Essentials/tests specifically, not a broad root prefix: an unregistered bucket
+        // must not quietly receive the core
         // expectation instead of reaching the refusal below.
-        if (project.Name.StartsWith("Elsa.", StringComparison.Ordinal) && project.RelativePath.StartsWith("src/essentials/", StringComparison.Ordinal))
-            return NameDerivedPath(project, $"src/essentials/{string.Join('/', project.Name.Split('.')[1..])}", projectDirectories);
+        if (project.Name.StartsWith("Elsa.", StringComparison.Ordinal) && project.RelativePath.StartsWith("Essentials/src/", StringComparison.Ordinal))
+            return NameDerivedPath(project, $"Essentials/src/{string.Join('/', project.Name.Split('.')[1..])}", projectDirectories);
 
-        if (project.Name.StartsWith("Elsa.", StringComparison.Ordinal) && project.RelativePath.StartsWith("tests/essentials/", StringComparison.Ordinal))
-            return NameDerivedPath(project, $"tests/essentials/{string.Join('/', project.Name.Split('.')[1..])}", projectDirectories);
+        if (project.Name.StartsWith("Elsa.", StringComparison.Ordinal) && project.RelativePath.StartsWith("Essentials/tests/", StringComparison.Ordinal))
+            return NameDerivedPath(project, $"Essentials/tests/{string.Join('/', project.Name.Split('.')[1..])}", projectDirectories);
 
         // An Elsa.* project outside every root this method knows has no expected path to compare against,
         // and returning its own path would compare it with itself — the guard would pass while checking
-        // nothing. Most likely it is a module moved to src/extensions without a row in ExtensionBuckets,
+        // nothing. Most likely it is a module moved to Extensions without a row in ExtensionBuckets,
         // so refuse and say so rather than go quiet.
         if (project.Name.StartsWith("Elsa.", StringComparison.Ordinal))
         {
             throw new InvalidOperationException(
-                $"{project.Name} lives at {project.RelativePath}, which is neither src/essentials, tests/essentials, nor a " +
+                $"{project.Name} lives at {project.RelativePath}, which is neither Essentials/src, Essentials/tests, Essentials/apps, nor a " +
                 "registered extension bucket. Add its bucket to ExtensionBuckets, or teach ExpectedProjectPath " +
                 "where that root puts a module.");
         }
@@ -672,12 +678,12 @@ public sealed partial class ArchitectureGuardTests
     private static string ExpectedSolutionFolder(ProjectInfo project, HashSet<string> projectDirectories)
     {
         if (project.Name == "Elsa.Workbench")
-            return "/src/apps/";
+            return "/Essentials/apps/";
 
-        // Deployable host app under src/apps/ (see ExpectedProjectPath): grouped directly beneath the Apps
+        // Deployable host app under Essentials/apps/ (see ExpectedProjectPath): grouped directly beneath the Apps
         // solution folder, alongside Elsa.Workbench.
         if (project.Name == "Elsa.Foundation.Host")
-            return "/src/apps/";
+            return "/Essentials/apps/";
 
         var directory = Path.GetDirectoryName(project.RelativePath)!.Replace('\\', '/');
         var lastProjectSegment = project.Name.Split('.')[^1];
