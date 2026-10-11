@@ -18,7 +18,7 @@ $ARGUMENTS
 
 ## Outline
 
-1. Read `AGENTS.md#personal-operating-preferences`.
+1. Read `docs/contributing/agent-preferences.md`.
 2. Read `docs/skills/catalog.md#initialize-agent-preferences`.
 3. Read `docs/reference/agent-preferences.md#expected-preference-files` to discover known preference files and ask triggers.
 4. Read `docs/reference/git-operating-models.md` only when Git workflow setup is relevant.

@@ -1,618 +1,112 @@
 <!--
-Draft history moved to ../../docs/reports/archive/constitution-draft-history.md.
-This constitution file is the Elsa-specific quality-gate layer: gates, allowed exceptions,
-ratification state, and governance. Canonical term lookup lives in ../../docs/glossary/.
-
-Sync Impact Report (4.2.0 -> 5.0.0, 2026-10-10)
-- Bump rationale: MAJOR. Propagates framework constitution 5.0.0 (ADR 0080): the restated §2.21.1
-  summary matches the framework rule. §E5's two-line versioning gate is suspended until GA (ADR 0080 D4).
-  §E6 R4's `…Contributor` suffix becomes `…Extension` as ADR 0080 D5 renames each domain. The §E5
-  Nuplane strategy paragraph now marks the host's Line A pins as suspended until GA.
-- Ratification: Sipke Schoorstra, 2026-10-10 (ADR 0080).
-- Templates requiring updates: none beyond those listed in the framework 5.0.0 report.
-
-Sync Impact Report (4.1.0 -> 4.2.0, 2026-09-17)
-- Bump rationale: MINOR. R4 already gave `…Source` one meaning, pull/returns, and framework §2.6.1
-  defines `I<X>Source` the same way, so reserving the suffix restates the rule. What is new is guidance
-  for types that use "source" in another sense: it names those senses and their established names,
-  keeps the existing origin-value types as exceptions, and says what a new one ends in. Read strictly,
-  that could pass as a PATCH clarification. It is recorded as MINOR because the SemVer policy below counts
-  materially expanded guidance as MINOR, as 4.1.0 did for the View/Response and State/Status conventions,
-  and because MINOR requires the maintainers' review. No gate is added, removed, or redefined, and no type
-  is renamed.
-- Ratification: pending. Governance requires consensus among Joey Barten, Sipke Schoorstra, and Frans van
-  Ek, and no agreement is recorded yet. The R4 bullet stays marked pending inline until there is.
-- Source: finding 3.5 of the 2026-09 code review, "Source means five things". The tree has 46 types that
-  end in `Source` and 34 more with `Source` elsewhere in the name, counted from type declarations under
-  `src/` on 2026-09-17; the review reported 39 of the latter. The finding's read-model query services
-  (`…DataSource`) return values on request, so they use the extension-point sense. Its reconciliation
-  origin is the provenance sense.
-- Added: §E6 R4, a nested rule reserving the `…Source` suffix for the extension-point sense, with three
-  named senses that keep their names: provenance ("source reference", already in the glossary since
-  4.1.0), OpenTelemetry's external `ActivitySource`, and origin values such as `RuntimeInputBindingSource`.
-- Unchanged deliberately: every existing type name, including wire-bearing `…Source` enums and records.
-- Templates requiring updates: none.
-
-Sync Impact Report (4.0.1 -> 4.1.0, 2026-09-16)
-- Bump rationale: MINOR. Most of this change is factual sync with the tree: propagation from accepted
-  ADR 0073, which made EF Core the only first-party persistence family, and a reconciliation of every
-  package name in this document against the shipped projects. It is MINOR rather than PATCH because it
-  also writes down two naming conventions the code already follows but R4 never stated, which the
-  SemVer policy below counts as materially expanded guidance. No gate is added, removed, or redefined.
-- Ratification: taken on Sipke Schoorstra's authority on 2026-09-16. Governance calls for consensus
-  among Joey Barten, Sipke Schoorstra, and Frans van Ek; like the 2026-08-08 ratification, this is open
-  to revision if the other architects dissent. The two new R4 conventions are the part that most
-  warrants their review.
-- Modified: §E2.1 domain tree. Removed the "Surface package(s)" column; the table now records purpose
-  only and defers package enumeration to the generated domain map. By this date roughly a quarter of
-  the column named packages that no longer existed (`Elsa.Api.FastEndpoints`,
-  `Elsa.Activities.Testing`, `Elsa.Activities.Composition.*`, `Elsa.Workflows.Publishing.Api.Core`,
-  `Elsa.Persistence.EFCore{,.Sqlite}`, `Elsa.Persistence.Groundwork.*`,
-  `Elsa.Secrets.Persistence.Groundwork`). The generated map is regenerated with the tree and cannot
-  drift the same way. Added the four shipped domains the table omitted: `Elsa.Attention`, `Elsa.Git`,
-  `Elsa.Studio`, `Elsa.Workflows.Dashboard`. Refreshed the `Elsa.Api` and `Elsa.Persistence` purpose
-  sentences, which described superseded packages.
-- Modified: §E2.2.1 Design persistence. The `.EFCore` and `.EFCore.Sqlite` project pair is replaced by
-  the single `Elsa.Workflows.Design.Persistence.EntityFrameworkCore` project, which carries all four
-  supported providers with per-provider migrations rather than a project per provider.
-- Modified: §E2.7 Elsa 3 import. The adapter module was named `Elsa3.Workflows.Import`, which never
-  shipped; it now names `Elsa3.Activities.Design.Import` with its `Elsa3.Models` and `Elsa3.Mapping`
-  support projects. Scope statements are unchanged.
-- Modified: §E5 minimum-project-size worked examples. Dropped `Elsa.Persistence.EFCore.Sqlite` and
-  `Elsa.Expressions.JavaScript.Libraries`, neither of which exists. Recorded that the migration-boundary
-  class has no live example: `Elsa3.Activities.Design.Import` measured 56 lines in the 2026-07-04 audit
-  and has since grown past the threshold, and no Elsa 3 project is under it today.
-- Modified: §E6 R7 provider prefixes. `EFCore…`/`Groundwork…`/`Sqlite…` -> `Ef…`, the convention
-  actually in use; `EFCore…` has never appeared on a type. R5's jargon list and R3's wire-identifier
-  example no longer name Groundwork.
-- Unchanged deliberately: §E2.5's `ElsaDbContextBase` opt-in text, which ADR 0042 predicted would
-  become obsolete. The prediction inverted; that text reads correctly again.
-- Unchanged deliberately: package names that appear as history (earlier sync reports, the retired
-  `Elsa.Common` leakage, the removed `Elsa.Scheduling`/`Elsa.Messaging`/`Elsa.Notifications` drafts),
-  as intent (`Elsa.Foundation.Core` is held back), or as a reservation (`Elsa.Server` is reserved for a
-  future product host).
-- Added: §E6 R4 conventions. `…View` names a wire-shaped endpoint projection and `…Response` the
-  envelope that wraps views; `…State` names a data structure and `…Status` a lifecycle enum. Both
-  describe what the code already does rather than prescribing a change: `…Status` is an enum in all but
-  one case, and nearly every `…View` sits in an API project. The two API projects that predate the
-  first rule, and the few `…State` enums that predate the second, are named as exceptions and are not
-  renamed where serialized.
-- Modified: §E2.7 import naming rule, widened. `Elsa3.<Domain>.Import` still names the adapters; the
-  shared `Elsa3.Models` and `Elsa3.Mapping` support projects are stated not to be adapters, which is
-  why they do not take the suffix. Chosen over renaming `Elsa3.Mapping`, since the code's organization
-  was right and the rule was incomplete.
-
-Sync Impact Report (4.0.0 -> 4.0.1, 2026-09-11)
-- Bump rationale: PATCH. Factual sync with the tree; no gate added, removed, or redefined.
-- Modified: Pinned tree, the `Elsa.Workflows.Primitives` domain row removed. Its one live type,
-  `IncidentStrategyReference`, moved to `Elsa.Primitives`; its three constant classes had no callers.
-- Modified: §E5 minimum-project-size note. The primitives worked example now names
-  `Elsa.Primitives.Hosting`, and one sentence records that an exemption permits a small project
-  without requiring one: the 2026-09 maintainability pass merged eight small projects into their parents.
-- Source: owner-approved maintainability plan, Phase 2 wave 2.
-- Templates requiring updates: none.
-
-Sync Impact Report (3.4.0 -> 3.5.0, 2026-08-07)
-- Bump rationale: MINOR. Materially expanded Elsa-specific guidance; no rule removed or redefined
-  incompatibly.
-- Modified: §E5, retitled "Elsa packaging snapshot" to "Elsa packaging and versioning". Adds the
-  workbench/product distinction, the two version lines, computed versions with selective publishing,
-  magnitude enforcement, and Line A stability policy. Rewrites the Nuplane strategy paragraph, which
-  named the removed `Elsa.Server` project and claimed the host pins all `.Core` libraries.
-- Modified: §E2.4, "the host" clarified to "the workbench host" following the Elsa.Server rename.
-- Modified: Pinned root, "Application instance = `Elsa.Server`" corrected to name `Elsa.Workbench`
-  and note that the product host is not yet built.
-- Source: ADR 0067, agreed on issue #1144 by Joey Barten, Sipke Schoorstra and Frans van Ek.
-- Open: Line A membership is partial. Six candidate packages are deferred to the clean host
-  specification (#1145).
-- Templates requiring review: plan-template.md, spec-template.md, tasks-template.md for any
-  Constitution Check text that assumes uniform package versions.
-
-SYNC IMPACT REPORT — 3.5.0 -> 4.0.0 (2026-08-08)
-Amendment: tracks framework constitution 4.0.0 — event types are never named with an `On` prefix.
-  MAJOR because this document normatively PINS event names that are now redefined
-  (§2.9 specialization and §E5 lifecycle/validation events), not merely illustrated.
-Modified sections:
-  §2.9 specialization - EF Core save/load event mirrors renamed
-                        `OnEntitySaving`/`OnEntityLoading` -> `EntitySaving`/`EntityLoading`.
-  §E2.9.7 (draft-mutation surface) - `OnDraftCreated`/`OnDraftDiscarded` -> `DraftCreated`/`DraftDiscarded`;
-                        `OnDraftValidating`/`OnDraftValidated` -> `DraftValidating`/`DraftValidated`;
-                        the dropped `OnDraftClonedFromVersion` reference follows the same shape.
-  §E6 - ADDED an R4 cross-reference to the framework event-naming rule so the type-name gate
-        surfaces it. Note the rename also brings the longest Draft-mutation event names back
-        inside the R1 component budget (`OnActivityOutputRemovedFromDraft` was 6 components,
-        over the hard cap of 5; `ActivityOutputRemovedFromDraft` is 5).
-Added sections: none.
-Removed sections: none.
-Derives-from pointer: framework v3.2.0 -> v4.0.0.
-Templates requiring updates: none (see framework report).
-Ratification: RATIFIED 2026-08-08 by Sipke Schoorstra, on his authority alone; Joey Barten and Frans van Ek
-  did not sign off, so this is open to revision if they dissent.
+SYNC IMPACT REPORT — 5.0.0 -> 6.0.0 (2026-10-12)
+MAJOR: compaction to enforceable gates (#2578, ADR 0080 D6), tracking framework 6.0.0. Owner decisions D1–D9 per #2578.
+Removed: §E1 (case study in docs/reference/elsa-worked-examples.md); §E3 (index only; the examples stay in docs/reference/elsa-worked-examples.md); §E4 (-> framework Deferred); §E2.4 (-> docs/reference/architecture-rationale.md#repository-organisation, D2); the §E5 Line A/B, computed-patch, magnitude and Line A stability rules (D5: ADR 0067 keeps the reasoning, #2576 retires Line A); the §E6 R4 `On` bullet (framework §2.6.6 owns it).
+Redefined: §E2.1 pins domain names only, purposes -> docs/reference/elsa-domain-tree.md (D1); the generic §E2.3 charter merged into framework §2.3; amendment venue -> the framework ADR process (D7). R1–R8 stay Elsa-only (D8); no Elsa test-cadence gate (D9).
+Moved: detail and history to docs/reference/ (elsa-worked-examples, elsa-naming, elsa-domain-tree); review-only gates to docs/contributing/review-checklist.md. Every surviving § number is kept. Reports before 6.0.0 are removed; git keeps them.
+Templates requiring updates: .specify/templates/plan-template.md.
+Approval: Sipke Schoorstra, 2026-10-12 (#2578), on his authority alone; open to revision if Joey Barten or Frans van Ek dissent, as with the 4.0.0 ratification.
 -->
 # Elsa Workflow Engine Constitution
 
-**Version:** 5.0.0
-**Status:** Ratified 2026-08-08 by Sipke Schoorstra. Governance > Amendment process calls for consensus among Joey Barten, Sipke Schoorstra, and Frans van Ek; this ratification was taken on Sipke Schoorstra's authority alone and is open to revision if the other architects dissent. Section-level gates still marked draft, provisional, or pending architecture-review ratification — whether via their own `Status:` line (§E5) or inline wording (§E2.8 Model X, §E2.9, §E2.9.7) — remain so and are **not** covered by this ratification.
-**Layer:** Elsa-specific specialization of the [Modular Software Design Framework Constitution](constitution-framework.md).
-**Derives from:** framework constitution **v5.0.1**.
+**Version:** 6.0.0 | **Ratified:** 2026-08-08 | **Last Amended:** 2026-10-12 | **Derives from:** [framework constitution](constitution-framework.md) **v6.0.0**
 
-**Knowledge boundary note:** treat this document as the Elsa-specific
-quality-gate layer. Canonical term lookup lives in `../../docs/glossary/`;
-current findings and inventory live in `../../docs/reports/`. Planned work
-routes through the shared program-goals planner.
+**Status:** Ratified 2026-08-08 by Sipke Schoorstra. Governance calls for consensus among Joey Barten, Sipke Schoorstra and Frans van Ek; this ratification was taken on Sipke Schoorstra's authority alone and is open to revision if the other architects dissent. Sections marked draft or provisional (§E2.8 activity versioning and Model X, §E2.9) are **not** covered by it.
 
----
+**Read both files.** This is the Elsa specialization; every framework rule applies by reference with `<App>` = `Elsa`, and a Constitution Check that loads only this file is incomplete (Governance).
 
-## Table of Contents
+## Gate index
 
-- [Derivation](#derivation)
-- [Glossary — Elsa specializations](#glossary--elsa-specializations)
-- [§E1 Refactor baseline](#e1-refactor-baseline)
-- [§E2 Elsa domain decomposition](#e2-elsa-domain-decomposition)
-  - [§E2.1 The Elsa domain tree](#e21-the-elsa-domain-tree)
-  - [§E2.2 Workflows.Design ↔ Workflows.Runtime bounded-context split](#e22-workflowsdesign--workflowsruntime-bounded-context-split)
-    - [§E2.2.1 Design sub-domain](#e221-design-sub-domain--the-designed-contract) · [§E2.2.2 Runtime sub-domain](#e222-runtime-sub-domain--the-runtime-representation) · [§E2.2.3 Deployment-shape gate](#e223-deployment-shape-gate)
-  - [§E2.3 `Elsa.Primitives` charter](#e23-elsaprimitives-charter)
-  - [§E2.4 Elsa foundation repo composition](#e24-elsa-foundation-repo-composition)
-  - [§E2.5 `ElsaDbContextBase` — opt-in capability](#e25-elsadbcontextbase--opt-in-capability-not-requirement)
-  - [§E2.6 Runtime contract — executable-always-runs and artifact-only design](#e26-runtime-contract--executable-always-runs-and-artifact-only-design) · [§E2.6.1 Executable-always-runs](#e261-executable-always-runs) · [§E2.6.2 Artifact-only runtime](#e262-artifact-only-runtime)
-  - [§E2.7 Elsa 3 backward compatibility — import-only](#e27-elsa-3-backward-compatibility--import-only)
-- [§E3 Elsa-specific worked example references](#e3-elsa-specific-worked-example-references)
-- [§E4 Elsa configuration — \[DEFERRED\]](#e4-elsa-configuration--deferred)
-- [§E5 Elsa packaging snapshot](#e5-elsa-packaging-snapshot)
-- [§E6 Type-naming rules](#e6-type-naming-rules)
-- [Governance](#governance)
+The framework Gate index applies. Elsa-specific gates with an automated check (tests in `tests/essentials/Architecture/Tests/`); every other gate is on [docs/contributing/review-checklist.md](../../docs/contributing/review-checklist.md).
 
----
+| § | Gate | Check |
+|---|---|---|
+| §E2.2 | Runtime takes no Design reference beyond the allow-list | `ArchitectureGuardTests.Runtime_projects_do_not_add_design_references` (allow-list `DeferredRuntimeDesignReferences`), `.Activity_construction_runtime_path_has_no_design_reference`, `.Dispatch_workflow_modules_preserve_runtime_design_and_transport_boundaries` |
+| §E2.3 | `Elsa.Primitives` has no external package | `ArchitectureGuardTests.Elsa_primitives_has_no_external_package_references` |
+| §E2.7 | Elsa 3 stays behind the import boundary | `Elsa3MigrationBoundaryTests`, `ArchitectureGuardTests.Runtime_projects_do_not_reference_elsa3_compatibility_projects` |
 
 ## Derivation
 
-This document is the **Elsa-specific** layer of a two-layer constitution. It is read alongside `constitution-framework.md`, which carries the framework-neutral rules.
-
-**Rules of derivation.**
-
-- All rules in the framework constitution apply to Elsa by reference.
-- Where Elsa specializes or overrides a framework rule, it does so explicitly with the convention **`framework §X — Elsa specialization: …`**.
-- Where this document is silent, the framework constitution applies.
-- This document pins Elsa's **root domain name**, **concrete domain decomposition**, **foundation repo composition**, and Elsa-specific architectural rules that have no framework-level analog (notably the Workflows.Design ↔ Workflows.Runtime bounded-context split, §E2.2).
-
-**Pinned root.**
-
-- `<App>` = `Elsa`. Every framework-level token of the form `<App>.<Domain>` resolves to `Elsa.<Domain>` in this constitution.
-- Application instance = the host project. Today that is `Elsa.Workbench`, a development and demo host; the product host is not yet built (§E5).
-- Foundation repo = `github.com/elsa-workflows/elsa-foundation` (created 2026-05-08).
-
----
-
-## Glossary — Elsa specializations
-
-Canonical framework terms live in [docs/glossary/root.md](../../docs/glossary/root.md). Canonical Elsa-specific terms and bindings live in [docs/glossary/elsa.md](../../docs/glossary/elsa.md).
-
-This constitution uses those terms as gate vocabulary. Elsa-specific bindings that matter to interpretation are also pinned in §E2, especially the root domain, application host, foundation repository, and `Elsa.Primitives` charter.
-
----
-
-## §E1 Refactor baseline
-
-The historical `elsa-core` case study lives in
-[docs/reference/elsa-worked-examples.md](../../docs/reference/elsa-worked-examples.md#elsa-core-baseline-case-study).
-The Elsa refactor replaces those failure modes with the rules in framework §2
-and the Elsa-specific decomposition in §E2.
-
-**Refactor work in this constitution's scope is governed by framework §2.21.1** — the golden rule of refactoring. Tests that still describe valid behaviour keep passing; a test whose code was removed, or whose behaviour is proven elsewhere, may be rewritten or deleted, with the PR naming which applies.
-
----
+`<App>` = `Elsa`. The host today is `Elsa.Workbench`, a development and demo host; the product host is not yet built (§E5). The foundation repo is `github.com/elsa-workflows/elsa-foundation` (created 2026-05-08). A specialization is written `framework §X — Elsa specialization: …`. Terms: [docs/glossary/root.md](../../docs/glossary/root.md) and [docs/glossary/elsa.md](../../docs/glossary/elsa.md).
 
 ## §E2 Elsa domain decomposition
 
 ### §E2.1 The Elsa domain tree
 
-Applying framework §2.18's methodology to Elsa, the root-level domains are listed below *(domains
-reconciled against the shipped tree 2026-09-16)*. This table records only what a generated map cannot:
-each domain's purpose. It deliberately names no packages. Package names changed faster than this
-table was maintained, and by 2026-09-16 roughly a quarter of the names it listed no longer existed.
-The generated [domain map](../../docs/maps/domain-map.md) owns package enumeration and project counts,
-and it is regenerated with the tree, so it cannot drift the same way.
-
-| Domain | Purpose (one verb-led sentence) |
-|---|---|
-| `Elsa.Activities` | Provides the activity system: design-time activity definitions, reconciliation, reusable-activity composition, runtime activity handling, and the built-in activity libraries. |
-| `Elsa.Agent` | Hosts AI-agent sessions and capabilities behind provider modules. |
-| `Elsa.Api` | Exposes application APIs through the endpoint framework and publishes the client capability document. |
-| `Elsa.Attention` | Aggregates permission-scoped attention items from domain contributors behind one query endpoint. |
-| `Elsa.Caching` | Provides caching contracts and providers. |
-| `Elsa.Diagnostics` | Streams and persists diagnostics: console logs, structured logs, and OpenTelemetry ingestion. |
-| `Elsa.Events` | Publishes and delivers in-process events (framework §2.6 unified event model). |
-| `Elsa.Expressions` | Evaluates expressions inside workflow steps. |
-| `Elsa.Foundation` | Provides application-foundation services such as identity. |
-| `Elsa.Git` | Wraps the git executable for sources that reconcile workflow definitions from a repository. |
-| `Elsa.Http` | Provides HTTP content, routing, download, and cache behavior. |
-| `Elsa.Locking` | Provides distributed locking. |
-| `Elsa.Mediator` | Routes commands and requests in-process. |
-| `Elsa.Modularity` | Discovers, describes, enables, validates, and composes modules and features. |
-| `Elsa.Persistence` | Provides the shared EF Core persistence policy that each domain's `*.Persistence.EntityFrameworkCore` module builds on (ADR 0073). |
-| `Elsa.Pipelines` | Defines pipeline contracts for composable middleware. |
-| `Elsa.Primitives` | Provides dependency-free base primitives and hosting seams (charter in §E2.3). |
-| `Elsa.Secrets` | Stores and resolves secrets. |
-| `Elsa.Serialization` | Serialises payloads and workflow models. |
-| `Elsa.Studio` | Persists Studio client state, currently per-user preferences. |
-| `Elsa.Tasks` | Schedules background work inside the host. |
-| `Elsa.Workflows.Dashboard` | Serves workflow run-health and portfolio queries from Runtime and Design projections. |
-| `Elsa.Workflows.Design` | Designs workflow definitions: contracts, models, validations, reconciliation, and design-time persistence. |
-| `Elsa.Workflows.Publishing` | Publishes executable workflow artifacts from designed definitions. |
-| `Elsa.Workflows.Runtime` | Executes workflows: instances, execution pipeline, bookmarks, runtime persistence. |
-| `Elsa3` | Imports Elsa 3 definitions one-way at the migration boundary (§E2.7). |
-
-Host and test-only groupings that appear in the generated map — `Elsa.Workbench`, `Elsa.Architecture`,
-`Elsa.Samples`, `Elsa.Testing` — are not domains and are intentionally absent.
-
-Three domains listed in earlier drafts — `Elsa.Scheduling`, `Elsa.Messaging`,
-and `Elsa.Notifications` — do not exist in code and are removed from the pinned
-tree; they may return as planned domains when work starts. In-process pub/sub
-(formerly `Elsa.Notifications`) shipped as `Elsa.Events` under the framework
-§2.6 unified event model.
-
-Sub-domain decomposition follows framework §2.1's naming convention. Variation suffixes are added only when a domain hosts more than one implementation (e.g. `Elsa.Serialization.Newtonsoft` vs `Elsa.Serialization.SystemText`) or when a single implementation already implies a variation choice (e.g. `Elsa.Locking.FileSystem`).
+The pinned root-level domains (D1): `Elsa.Activities`, `Elsa.Agent`, `Elsa.Api`, `Elsa.Attention`, `Elsa.Caching`, `Elsa.Diagnostics`, `Elsa.Events`, `Elsa.Expressions`, `Elsa.Foundation`, `Elsa.Git`, `Elsa.Http`, `Elsa.Locking`, `Elsa.Mediator`, `Elsa.Modularity`, `Elsa.Persistence`, `Elsa.Pipelines`, `Elsa.Primitives`, `Elsa.Secrets`, `Elsa.Serialization`, `Elsa.Studio`, `Elsa.Tasks`, `Elsa.Workflows.Dashboard`, `Elsa.Workflows.Design`, `Elsa.Workflows.Publishing`, `Elsa.Workflows.Runtime`, `Elsa3`. Purposes: [docs/reference/elsa-domain-tree.md](../../docs/reference/elsa-domain-tree.md); packages: the generated [domain map](../../docs/maps/domain-map.md). `Elsa.Workbench`, `Elsa.Architecture`, `Elsa.Samples` and `Elsa.Testing` are host and test groupings, not domains.
 
 ### §E2.2 Workflows.Design ↔ Workflows.Runtime bounded-context split
 
-**framework §2.18 — Elsa specialization:** `Elsa.Workflows.*` is split into **two dedicated sub-domains with separate persistence layers**: `.Design.*` (designs and persists workflow definitions) and `.Runtime.*` (executes workflows and persists runtime state). The asymmetry is load-bearing for Elsa's deployment shapes (§E2.2.3) and is the agreed boundary.
+**framework §2.18 — Elsa specialization.** `Elsa.Workflows.*` splits into two co-equal sub-domains with separate persistence: `.Design.*` designs and persists workflow definitions; `.Runtime.*` executes workflows and persists runtime state. Their packages (§E2.2.1 Design, §E2.2.2 Runtime): [elsa-worked-examples](../../docs/reference/elsa-worked-examples.md#design-and-runtime-packages).
 
-**Hard rule.** There **must be no direct dependency from `Elsa.Workflows.Runtime.*` to `Elsa.Workflows.Design.*`.** The two sub-domains are co-equal — neither owns the other; the dependency direction is enforced (or at least audited) in CI via project references.
+**Hard rule.** No `Elsa.Workflows.Runtime.*` project depends on `Elsa.Workflows.Design.*`. **One allow-listed exception:** `Elsa.Workflows.Runtime.JavaScript → Elsa.Workflows.Design.Core` (MD-2, 2026-07-02), held in `ArchitectureGuardTests.DeferredRuntimeDesignReferences` while JavaScript function-declaration ownership is unstable, with its follow-up in the [runtime-execution-seam program goal](../../docs/program-goals/runtime-execution-seam.md). A new exception needs the same: a guard allow-list entry plus program-goal tracking. The Design → Runtime seam itself is deferred (framework Deferred).
 
-**One tracked exception is currently allow-listed** *(amended 2026-07-02 — MD-2, Elsa 4 architecture review)*: `Elsa.Workflows.Runtime.JavaScript → Elsa.Workflows.Design.Core`, held in the architecture-guard allow-list (`ArchitectureGuardTests.DeferredRuntimeDesignReferences`) while JavaScript function-declaration ownership across designer and runtime surfaces is unstable. The follow-up is tracked in the [runtime-execution-seam program goal](../../docs/program-goals/runtime-execution-seam.md). Any new exception requires the same treatment: an explicit guard-test allow-list entry plus program-goal tracking — silent drift stays forbidden.
-
-**The seam between Design and Runtime is deferred.** The mechanism by which a workflow flows from Design into Runtime for execution — the carrier type, the activity-contract surfacing, the role of publication, the implications for an `ActivityRegistry` — is **not pinned by this constitution**. It is scheduled for the workflow execution seam follow-up and resurfaces when the Runtime refactor begins; current repo-local findings live in [unfinished work](../../docs/reports/unfinished-work.md), and planned durable work routes through the shared program-goals planner.
-
-#### §E2.2.1 Design sub-domain — the designed contract
-
-Design owns the *designed contract* of a workflow: input/output definitions, activity tree, expression bindings, plus the persistence layer that stores them.
-
-Packages:
-
-- `Elsa.Workflows.Design.Core` — contracts: `IWorkflowDefinition`, `IInputDefinition`, `IOutputDefinition`, etc.
-- `Elsa.Workflows.Design.Persistence.Core` — design-time persistence contracts.
-- `Elsa.Workflows.Design.Persistence.EntityFrameworkCore` — EF Core implementation. One project carries all four
-  supported providers (SQLite, SQL Server, PostgreSQL, MySQL) with per-provider migrations, rather than a
-  project per provider.
-
-#### §E2.2.2 Runtime sub-domain — the runtime representation
-
-Runtime owns the *runtime representation* of workflow execution and its own dedicated persistence layer, separate from Design.
-
-Packages (the specific runtime contracts and entities remain governed by the workflow execution seam follow-up recorded in [unfinished work](../../docs/reports/unfinished-work.md)):
-
-- `Elsa.Workflows.Runtime.Core` — runtime contracts and the execution engine.
-- `Elsa.Workflows.Runtime.Api`, `Elsa.Workflows.Runtime.Http`, `Elsa.Workflows.Runtime.JavaScript` — runtime surface modules.
-
-Runtime does **not** reference `Elsa.Workflows.Design.Core`, except for the single tracked allow-list exception recorded in §E2.2.
-
-#### §E2.2.3 Deployment-shape gate
-
-The Design ↔ Runtime split exists so Elsa can support Design-only, Runtime-only,
-and combined execution deployments. Any change to the split MUST preserve those
-deployment shapes or explicitly amend this section.
+**§E2.2.3 Deployment-shape gate.** The split exists so Elsa supports Design-only, Runtime-only and combined deployments. A change to it MUST preserve those shapes or amend this section.
 
 ### §E2.3 `Elsa.Primitives` charter
 
-**framework §2.3 — Elsa specialization.** `Elsa.Primitives` is the narrow
-domainless-primitives package that replaced the historical `Elsa.Common` leakage
-surface identified by §E1.
-
-**Current charter:**
-
-- `Elsa.Primitives` carries only truly domainless building blocks: `Result<T>`, `Page<T>`, base entity abstractions, guard helpers.
-- Zero external NuGet dependencies. Without exception.
-- Three-repetition rule applies.
-
-**Anticipated further decomposition.** As code reviews land, additional concerns are split out per framework §2.3:
-
-- `Elsa.Serialization` — already present.
-- `Elsa.Events.Core` / `Elsa.Events.Strategies` / `Elsa.Events` — the single in-process event concept over the shared `Elsa.Pipelines.Core` engine.
-- `Elsa.Mediator.Core` / `Elsa.Mediator` — command + request dispatch only. It shares `Elsa.Pipelines.Core` with `Elsa.Events.Core`; the two do not reference each other.
-
-**`Elsa.Foundation.Core` is held back.** Elsa does not eagerly create a framework-foundation `.Core` package. If a coherent set of framework-foundation contracts emerges that does not fit in existing packages, the package can be introduced at that point. 
-
-### §E2.4 Elsa foundation repo composition
-
-**framework §2.15 — Elsa specialization.** Elsa's foundation repo is this repository (`elsa-foundation`). It contains the workbench host (§E5), the baseline domain cores, and default implementations needed for local development. Heavy provider-specific or optional integrations remain candidates for standalone feature packages.
-
-The current composition remains revisable as evidence accrues.
+**framework §2.3 — Elsa specialization.** `Elsa.Primitives` is the framework's `<App>.Primitives`; it replaced the historical `Elsa.Common` leakage surface. Elsa delta: it also holds base entity abstractions, and `Elsa.Foundation.Core` is held back until a coherent set of foundation contracts needs it ([decomposition](../../docs/reference/elsa-worked-examples.md#elsaprimitives-decomposition)).
 
 ### §E2.5 `ElsaDbContextBase` — opt-in capability, not requirement
 
-**framework §2.9 — Elsa specialization.** Framework §2.9 forbids the constitution from mandating a base `DbContext` type. Elsa documents an **opt-in** `ElsaDbContextBase` pattern that consumers may inherit from to receive Elsa's global entity save/load hooks (`IEntitySavingHandler`, `IEntityLoadingHandler`). The save hooks are invoked before `SaveChangesAsync` reaches EF Core; provider-specific adapters may publish the loading hook after materialisation. Both are useful for shadow properties, custom deserializers, and similar cross-cutting concerns. Each hook has a `§2.6.1` domain event mirror — `EntitySaving` (from `ElsaDbContextBase`) and `EntityLoading` (from provider-specific read paths) — that features may use.
+**framework §2.9 — Elsa specialization.** Elsa offers an **opt-in** `ElsaDbContextBase` whose save/load hooks (`IEntitySavingHandler`, `IEntityLoadingHandler`) run before `SaveChangesAsync` reaches EF Core and, on provider read paths, after materialisation; their §2.6.1 event mirrors are `EntitySaving` and `EntityLoading`. It is shared EF Core infrastructure and one way to enforce persistence invariants, never the only one.
 
-**`ElsaDbContextBase` is shared EF-Core infrastructure, not a model/entity-design requirement.** The persistence invariants Elsa enforces (immutability of Version entities, audit timestamps, etc. — see framework §2.9's "Persistence invariants are defined independently of the persistence provider") are defined independently of EF Core. An EF-Core-backed application MAY enforce those invariants through `ElsaDbContextBase`; another persistence provider MAY enforce the same invariants through interceptors, mappings, store logic, or whatever its native mechanism is. Inheriting from `ElsaDbContextBase` is one integration path, not the only one.
-
-**Hard rules per framework §2.9:**
-
-- The base context is **opt-in only**. Consumer-owned `DbContext` types remain first-class.
-- The framework's only constraint at the EF Core contract layer is `where TDbContext : DbContext`. Never `where TDbContext : ElsaDbContextBase` or `where TDbContext : IElsaDbContext`.
-- Consumers must be able to install Elsa's entity mappings and contracts **without** inheriting from `ElsaDbContextBase`.
-
-The save/load handler hooks are documented as an opt-in feature in the relevant module's README. They are not a constitutional requirement.
+**Hard rules:** consumer-owned `DbContext` types stay first-class; the EF contract-layer constraint is `where TDbContext : DbContext`, never `ElsaDbContextBase` or `IElsaDbContext`; consumers install Elsa's mappings and contracts without inheriting the base. The hooks are documented as opt-in in their module's README.
 
 ### §E2.6 Runtime contract — executable-always-runs and artifact-only design
 
-Elsa imposes two coupled invariants on its runtime contract. Together they make the Runtime sub-domain self-sufficient and predictable: given a published runnable artifact, the runtime always runs it; given that artifact, the runtime needs nothing else.
+**§E2.6.1 Executable-always-runs.** A published runnable artifact MUST load and execute. No condition internal to the runtime (missing activity types or modules, registry drift, runtime-infrastructure misconfiguration) may break that; such a failure is a bug. Whether an artifact may run for a tenant, environment, role or business state is a domain gate in domain code: it may deny execution, never destroy executability.
 
-#### §E2.6.1 Executable-always-runs
-
-If an artifact is published as a runnable representation of a workflow, the runtime MUST be able to load and execute it. **No condition internal to the runtime system** — missing activity types, missing module installation, in-memory registry drift, version misconfiguration of runtime infrastructure — may break this contract.
-
-**Whether** an artifact is allowed to run in a given context — per tenant, per environment, per role, per workflow-business state — is a **domain/business gate**, implemented in domain code. The runtime's ability to load and run is a **storage/system contract** that is not subject to those gates.
-
-The separation:
-
-- Domain gates may deny execution; they may not destroy executability.
-- System failures to execute (missing types, broken loaders, infrastructure errors) are bugs, not features. They violate the contract.
-
-The runtime artifact format carries enough information to be executed independently of any non-runtime concern. The specific artifact name and shape are settled in the entity-design pass (follow-up `2026-05-08_entity_design.md`).
-
-#### §E2.6.2 Artifact-only runtime
-
-The Runtime sub-domain depends on **only** two things:
-
-1. The **runnable artifact** (the entity carrying the structured runtime-oriented representation produced by Build/Compile).
-2. The **configured runtime features** that interpret that artifact's format.
-
-Source artefacts (the design-time workflow definition the artifact was built from), authoring history, draft revisions, designer layout metadata, and visualisation projections live in the Design sub-domain and adjacent application-layer projections. They are reachable from the runtime artifact via foreign keys, **but the runtime does not require them to execute**.
-
-Visualisation of an executed instance happens at the application layer, traversing the FK chain from the executed-instance entity → runnable artifact → source-design entities. The runtime sub-domain is not aware of, and does not load, the source side.
-
-**Hard rule.** A runtime that needs to load design-side data to execute is a §E2.2 hard-rule violation. The seam between Design and Runtime is the runnable artifact; nothing else crosses it at execution time.
-
-**See also §E2.9** — `WorkflowExecutable` is named in the architectural triplet `WorkflowDefinitionState` ↔ read models/projections ↔ `WorkflowExecutable`. State is the source; `WorkflowExecutable` is the derived runnable form the Runtime sub-domain consumes per this section's artifact-only contract.
+**§E2.6.2 Artifact-only runtime.** The runtime depends only on the runnable artifact (`WorkflowExecutable`, §E2.9) and the runtime features that interpret it. Source definitions, history, drafts, layout and visualisation stay on the Design side, reachable by foreign key but never needed to execute; a runtime that loads design-side data to execute violates §E2.2 ([detail](../../docs/reference/elsa-worked-examples.md#runtime-contract)).
 
 ### §E2.7 Elsa 3 backward compatibility — import-only
 
-Elsa 4's compatibility with Elsa 3 is bounded to **import**. Dedicated adapter modules — today `Elsa3.Activities.Design.Import`, supported by `Elsa3.Models` and `Elsa3.Mapping`, with siblings added as needed for workflows, instances, or other Elsa 3 artefacts — map Elsa 3 workflow definitions, activity descriptors, and persistence schemas into the Elsa 4 entity model. Once imported, Elsa 4 runs them natively through its own runtime.
-
-**In scope:**
-
-- One-way one-time mapping: read Elsa 3 source, produce Elsa 4 entities, persist.
-- Adapter modules named `Elsa3.<Domain>.Import` per the Elsa-3-side concern they map. Shared support that every adapter uses is not an adapter and does not take the suffix: `Elsa3.Models` holds the Elsa 3 source shapes and `Elsa3.Mapping` holds the converters.
-
-**Out of scope:**
-
-- **Dual-run support.** Elsa 3 and Elsa 4 do not run side-by-side from the same process. A migrating consumer imports, then switches.
-- **Ongoing viewmodel mapping** for Elsa-3-shaped endpoints in `elsa-studio`. The Elsa 4 API surface is the API; elsa-studio adapts to it, not the other way around.
-- **Round-trip translation** back to Elsa 3 entity shapes after import. Imports are terminal.
-
-The compatibility surface is **"one-way, one-time"** by design. Mapping details are tracked outside the constitution as migration/entity-design work.
-
----
+Elsa 3 compatibility is **one-way, one-time import**: adapter modules named `Elsa3.<Domain>.Import` (today `Elsa3.Activities.Design.Import`) map Elsa 3 definitions, descriptors and schemas to Elsa 4 entities, which then run natively. Shared support (`Elsa3.Models`, `Elsa3.Mapping`) is not an adapter and takes no suffix. Out of scope: dual-run in one process, Elsa-3-shaped view models for elsa-studio, round-trip translation back to Elsa 3.
 
 ### §E2.8 Activity catalog is the single source of truth for picker visibility
 
-**Rule.** If an activity is visible in the design-time picker, it has a persisted catalog entry. The picker / design-time API surface MUST query the catalog store; it MUST NOT enumerate live providers, scan loaded assemblies, or otherwise produce picker entries that have no corresponding `ActivityDefinition` row.
+Every activity the design-time picker can show is a persisted `ActivityDefinition` row with provenance (`SourceKind`, `SourceId`, `ProvisionedAt`, `ProvisionedBy`). The picker MUST query the catalog store, never live providers or loaded assemblies; every source (CLR module, workflow, JSON file, script) reaches it through the catalog, and there is no `IsBrowsable` toggle. Context-aware filtering (tenant, role, feature flags, licensing) narrows the catalog's output and never creates entries ([detail](../../docs/reference/elsa-worked-examples.md#activity-catalog)).
 
-**Cross-references:**
+**Activity versioning** *(draft pending ratification)*: an author-owned SemVer 2.0.0 string from the declaring assembly, overridable by `[Version("…")]`; never an engine-assigned integer.
 
-- Framework §2.6.4 (design-time vs runtime contract split): the picker reads design-time contracts; runtime construction happens elsewhere.
-- Sipke item 7 (2026-05-26): "the catalog is the source-of-truth for picker visibility" — adopted verbatim.
+**Reconciliation — Model X** *(provisional pending architecture review)*: catalogs reconcile from trusted sources at creation time only, with no operational sibling, `LastSeenAt`, `IsStale` or `RemovedAt`. Lookup is by `(DefinitionId, Version)`, ignoring build metadata: absent → create; present with another `ReconcilliationHash` → throw `ActivityVersionHashMismatchException`; same hash → skip or throw per source configuration. Versions are never deleted and sort by SemVer.
 
-**In scope of this rule (must follow):**
+### §E2.9 `WorkflowDefinitionState` scope policy + architectural triplet
 
-- Every entry the picker can return is a `IActivityDefinition` row, with provenance fields populated (`SourceKind`, `SourceId`, `ProvisionedAt`, `ProvisionedBy`).
-- Activities contributed from a CLR module, a workflow definition, a JSON file, a script source, etc. all reach the picker through the catalog (the reconciler-with-source-modules pattern; Unit B implementation).
-- Non-CLR activities (Workflow descriptors, script descriptors) are first-class catalog citizens — the descriptor's `Kind` discriminator on each version row is the runtime resolver lookup key (Unit B §E2.6.1-style domain-failure path on unknown kinds).
+**Status:** provisional pending architecture-review ratification; it revises in tandem with §E2.8. History: [elsa-worked-examples](../../docs/reference/elsa-worked-examples.md#workflow-definition-state).
 
-**Out of scope (deferred to a separate policy layer):**
+`WorkflowDefinitionState` is the canonical authored document of a workflow definition, stored on `WorkflowDefinitionVersion` (immutable) and `WorkflowDefinitionDraft` (mutable).
 
-- **Context-aware visibility filtering** — tenant scoping, role-based access, feature flags, licensing gates, instance-level overrides. These are visibility refinements over the catalog; they reduce the catalog's output for a given context. They do NOT generate picker entries themselves.
-
-**Removed surface:**
-
-- `IsBrowsable` on `ActivityDefinition` is **not** the visibility mechanism. It does not exist. Visibility = catalog presence. The "should this row appear in the picker?" question has no per-row toggle; it is structurally derived from catalog membership.
-
-**Activity versioning *(Unit 3 2026-06-04; draft pending ratification)*.** The activity version is an author-controlled **string semantic version (SemVer 2.0.0)**, not an engine-assigned integer. The author owns it: it is sourced from the declaring assembly's version and may be overridden per-activity by a `[Version("…")]` attribute. A CLR assembly-scanning `IActivityReconciliationSource` (in `Elsa.Activities.Design.Reconciliation.Clr`) reads the attribute (falling back to the assembly version) and supplies it as the version when the reconciler calls the source — the same DI-source pattern Unit B established (framework §2.6.1). The scanner reads no UI metadata (no display name, description, category from CLR); the only author-intent attribute it honours beyond `[Version]` is `[Required]` on an input (→ `InputDefinition.IsRequired`). The `[Version]` attribute and the version-resolution contract live in the zero-dep `Elsa.Activities.*.Core` so an author can annotate without a heavy dependency.
-
-**Reconciliation policy — Model X *(Unit C 2026-05-28; pending 2026-06-01 architecture review)*.** The activity catalog is reconciled from trusted sources at creation time only. There is **no operational sibling entity**, no `LastSeenAt` heartbeat, no `IsStale` drift flag, no `RemovedAt` source-disappearance tracking. The immutable content hash for a version lives directly on `IActivityDefinitionVersion.ReconcilliationHash` and is the basis of the duplicate-detection path:
-
-- Lookup by `(DefinitionId, Version)`, **build-metadata-insensitive**: the match is on the normalised SemVer sort key (`SemVer.ToSortKey` — a zero-padded comparable form that excludes build metadata), so `1.0.0` and `1.0.0+build` resolve as the same logical version. If absent → create with immutable provenance.
-- If present and hash differs → throw `ActivityVersionHashMismatchException` (the source is broken — same identity, different content).
-- If present and hash matches → skip or throw per the reconciliation source's duplicate-handling configuration.
-
-"Latest version" / ordering queries sort by the same SemVer sort key descending (a release sorts above its prereleases); there is no integer ordering. Source disappearance is intentionally not tracked at the entity layer; versions are never deleted. Context-aware visibility (tenant / role / feature-flag) is a separate policy layer that filters the catalog for a given context; it is not a reconciliation concern. This codification is **provisional** pending architecture-review ratification.
-
-This section codifies the rule for the activity catalog. The same shape generalises to other catalogs as Elsa accrues them (workflow catalog, script catalog, expression-evaluator catalog); each will get its own catalog-as-source-of-truth section as that catalog matures.
-
----
-
-### §E2.9 `WorkflowDefinitionState` scope policy + architectural triplet *(Unit C 2026-05-28; pending 2026-06-01 architecture review)*
-
-`WorkflowDefinitionState` is persisted as the `StateSource` shadow JSON on `WorkflowDefinitionVersion` (immutable) and `WorkflowDefinitionDraft` (mutable) inside the `Elsa.Workflows.Design` sub-domain. It is **the canonical authored document of a workflow definition** — the structured shape an author produces and the system promotes through Draft → Version. Pinning its scope explicitly prevents the god-object failure mode flagged in Sipke's 2026-05-26 entity-design review (item 2): as Units D–G crystallize, `WorkflowDefinitionState` is the natural dumping ground for any workflow-related concern unless its boundary is constitutional.
-
-#### §E2.9.1 In scope of `WorkflowDefinitionState`
-
-Members of State carry **authored content** — the structured representation of what the author drew, declared, and configured:
-
-- Variables (the workflow's variable declarations).
-- The workflow root activity: one authored `RootActivity`. The root can be any activity kind, including a primitive activity, `Sequence`, `Flowchart`, `StateMachine`, or another composite activity. Child activities, flowchart edges, state transitions, start nodes, and similar composition details belong to the owning activity's authored contract; they are not workflow-level members.
-- Workflow-level input/output declarations (`Inputs`, `Outputs`).
-- Workflow-level authored options (`WorkflowActivityOptions`, `StrategyOptions`).
-
-This root-activity rule supersedes the earlier provisional `Activities` + `ActivityConnections` workflow-level graph shape. That earlier shape accidentally made every workflow definition a flowchart and is corrected by the Runtime Execution Seam root-activity work unit.
-
-`ActivityNode` itself is not a universal composition carrier. It MUST NOT expose a generic child collection, generic connection list, generic start-child member, or generic executable composition mirror. Activity-specific child ownership is expressed through the activity's own contract: for example `Sequence` owns ordered child activity slots, `If` owns `Then` / `Else`, `ForEach` owns `Body`, `Composite` owns `Root`, and `Flowchart` owns its activities, connections, start selection, and join rules. Core may provide opaque named child slot records so infrastructure can traverse persisted activity trees, but core MUST NOT define framework-wide slot-name constants, metadata keys, port endpoint records, connection records, or executable edge records for activity-specific concepts such as `Body`, `Then`, `Else`, `Root`, or flowchart start/edge selection. Design validation, publishing, and runtime lookup tables may discover children through opaque slot records or activity-specific adapters, but they must not make every activity look like a flowchart-shaped container.
-
-#### §E2.9.2 Out of scope of `WorkflowDefinitionState`
-
-Members that are NOT authored content live elsewhere. Categories explicitly excluded:
-
-- **Instance / runtime / operational state.** Workflow instances, execution log, current activity-execution state, runtime variable bindings, scheduled activations. Owned by the Runtime sub-domain per §E2.2 + §E2.6.
-- **Executable / build metadata.** Compiled runtime artifact, build pipeline outputs, materialised executables. Owned by `WorkflowExecutable` (see §E2.9.3) — Units E/G's territory.
-- **Publication / deployment state.** Publication status, deployment target, environment-specific configuration overlays. A separate concern with its own entity surface; never folded into State.
-- **Search / listing-projection types.** Listing views, dashboard projections, full-text indexes. Derived read models (see §E2.9.3); never fields on State.
-- **Security / ownership types.** Tenant ownership, permission grants, audit-of-author identifiers. Carried by ambient `TenantEntity` columns and a separate security model; not authored content.
-- **Designer layout metadata.** Canvas positions, sizes, visual node grouping, designer-only annotations. Owned by the sibling entities `WorkflowDefinitionVersionLayout` / `WorkflowDefinitionDraftLayout` (Unit C FR-006), unified by `IWorkflowDefinitionLayout` (FR-007); never nested into `ActivityNode` and never reachable through `WorkflowDefinitionState`.
-- **Validation errors.** Owned by the sibling entity `WorkflowDefinitionDraftValidation` (Unit C FR-021) — derived from State, not part of it.
-
-A property newly proposed for `WorkflowDefinitionState` whose category is genuinely ambiguous between authored content and one of these out-of-State categories surfaces as an architecture-meeting escalation; resolution is constitutional (amend this section), not silent.
-
-#### §E2.9.3 Architectural triplet
-
-`WorkflowDefinitionState` participates in an irreducible triplet that names the three artefacts every workflow definition produces in the system:
-
-1. **`WorkflowDefinitionState`** — the canonical authored document (above).
-2. **Read models / projections** — derived views over State for listing, search, dashboarding, and any non-authoring read need. These live in `Elsa.Workflows.Design.Api` or downstream domains' query layers; they are projection-shaped, not authoring-shaped. They are never persisted back into State.
-3. **`WorkflowExecutable`** — the compiled runtime artifact (substance owned by Units E/G; named here so the triplet is complete). Build/Compile produces it from an immutable `WorkflowDefinitionVersion.State`; the Runtime sub-domain executes it per §E2.6's artifact-only contract. State is the source; `WorkflowExecutable` is the derived runnable form.
-
-The three sit at separate scopes — **authoring**, **reading**, **executing** — and **must not be merged**. Conflating authoring and projection collapses the read side back into State and creates the god-object Sipke flagged. Conflating authoring and executable conflates source with output, breaking §E2.6's artifact-only rule. The triplet is the load-bearing structural rule that lets Design and Runtime stay separable per §E2.2.
-
-#### §E2.9.4 Enforcement
-
-The in-State / out-of-State boundary is enforced by:
-
-1. **The XML documentation header** on the `WorkflowDefinitionState` record (Unit C FR-003), quoting the scope and pointing at this section.
-2. **PR review discipline** against this constitutional rule — reviewers reject creep.
-
-Automated compile-/build-time enforcement (scope-policy static analyser) is **deferred to a future *Code Analysers* epic** that approaches the platform's static analysis as a unified bundle, rather than shipping ad-hoc per-rule micro-validators. The list of categories in §E2.9.2 will inform the eventual analyser when that epic opens; current repo-local findings live in [unfinished work](../../docs/reports/unfinished-work.md), and planned durable work routes through the shared program-goals planner.
-
-#### §E2.9.5 Reconciliation policy applies here too
-
-`WorkflowDefinition` / `WorkflowDefinitionVersion` / `WorkflowDefinitionDraft` reconciliation follows **Model X** — the same immutable-provenance, skip-or-throw-with-hash-safety-net policy codified for the activity catalog at the end of §E2.8. No per-pass mutating fields (no `LastSeenAt`, no `IsStale`, no `RemovedAt`) live on any workflow-design entity; reconciliation is transactional at creation time only. Where the provenance fields (`SourceKind` / `SourceId` / `SourceVersion` / `ProvisioningHash` / `ProvisionedAt` / `ProvisionedBy`) ultimately live on workflow-design entities is Unit D's allocation pass; Unit C codifies the policy and leaves the field allocation to Unit D.
-
-#### §E2.9.6 Status
-
-**Provisional pending architecture-review ratification.** If the review revises the surrounding activity-reconciliation or workflow-definition scope rules, this section revises in tandem.
-
-**Cross-references:** §E2.2 (Design ↔ Runtime split — the triplet operates within Design and seams into Runtime via `WorkflowExecutable`); §E2.6 (artifact-only runtime — the seam terminates at `WorkflowExecutable`, not at State); §E2.8 (Model X reconciliation policy, applies symmetrically per §E2.9.5).
-
-#### §E2.9.7 Draft-mutation command surface *(Unit 2 2026-06-03; provisional, pending architecture-review ratification)*
-
-The canonical command surface for **mutating** a `WorkflowDefinitionDraft` is a **single coarse, diff-based command** — `IUpdateDraftCommand` — not a family of granular per-concept mutation commands.
-
-- **One mutation command.** `IUpdateDraftCommand.Execute(UpdateDraftRequest)` accepts the **complete desired** `WorkflowDefinitionState` (+ its layout sibling, carried beside State per §E2.9.2 — never inside it). Full-state-always: there is no patch API. Inside the per-Draft distributed lock (`workflow-draft:{DraftId}`) it loads the stored state, wholesale-assigns the desired state (last-writer-wins — no version check), **diffs** stored vs desired per concept (Variables/Inputs/Outputs by `ReferenceKey`, Activities and layout by `NodeId`, activity I/O by (`NodeId`,`ReferenceKey`), connections by endpoint tuple), runs the in-lock validation gate, persists atomically, then publishes **one event per detected difference**.
-- **The event surface is preserved, not collapsed.** The diff emits the same 20 per-concept mutation events the former granular commands published (catalogued in the Events section of `Elsa.Workflows.Design.Api/EXTENSION_POINTS.md`); their *types* and catalog headings are unchanged — only the publication site moved onto `IUpdateDraftCommand`. This keeps the event-sourcing seam open for a later event-sourcing unit (Unit H): subscribers observe the per-diff stream regardless of whether the mutation arrived via 20 commands or one.
-- **Lifecycle commands remain distinct.** `ICreateDraftCommand`, `ICloneDraftFromVersionCommand`, `IDiscardDraftCommand`, and `IPromoteDraftToVersionCommand` are **not** mutations of an existing Draft's content and stay as separate commands with their own lifecycle events (`DraftCreated`, `DraftDiscarded`). `IUpdateDraftCommand` emits none of these.
-- **One origination event, not two.** A cloned Draft and a fresh Draft share the single origination event `DraftCreated`; there is **no** separate `DraftClonedFromVersion`. `ICloneDraftFromVersionCommand` delegates to `ICreateDraftCommand` (the single origination path), and clone-vs-fresh is distinguished solely by the immutable optional `WorkflowDefinitionDraft.SourceVersionId` — a plain provenance column (no navigation property) surfaced on `DraftCreated.SourceVersionId` (`null` for a fresh Draft).
-- **Reads route through the named read ports.** Commands that only read (no change tracking) — e.g. `ICloneDraftFromVersionCommand` loading the source Version + layout — use the named per-aggregate read ports (`IWorkflowDefinitionVersionStore`, `IWorkflowDefinitionVersionLayoutStore`, …). Provider adapters own query execution and any read-side hydration; a command opens its own tracked context only when it queries, mutates, and saves the *same* entity.
-- **Validation pair unchanged.** The `DraftValidating` (Sequential, in-lock gate) / `DraftValidated` (Background, outcome) pair is published by the command exactly as before.
-
-This supersedes Unit C's Phase-7 granular-command surface for Draft mutation. The framework-level CQS separation remains unaffected — this rule narrows only the **Draft-mutation** surface within the Design domain.
-
-**Status:** Provisional pending architecture-review ratification. Current repo-local findings live in [unfinished work](../../docs/reports/unfinished-work.md), and planned durable work routes through the shared program-goals planner.
-
-**Cross-references:** §E2.9.1/§E2.9.2 (what State carries — the diff operates over exactly those in-scope fields, layout stays beside State); §E2.6.6 (Sequential vs Background delivery strategies the command uses for the gate vs the per-diff stream).
-
----
-
-## §E3 Elsa-specific worked example references
-
-Elsa-specific worked examples instantiate framework rules using concrete
-`Elsa.*` names and live in
-[docs/reference/elsa-worked-examples.md](../../docs/reference/elsa-worked-examples.md).
-They are reference material, not additional gates. Framework sections link
-to the reference material only when a gate needs a concrete example.
-
----
-
-## §E4 Elsa configuration — [DEFERRED]
-
-The Configuration & Settings classification (framework §2.12) is deferred to the **Configuration & Infrastructure follow-up meeting**. Pending Elsa-specific findings are recorded in [unfinished work](../../docs/reports/unfinished-work.md). Planned durable work routes through the shared program-goals planner. This section will be revised when that follow-up closes.
-
----
+- **§E2.9.1 In scope:** variables; one authored `RootActivity` of any kind, whose composition belongs to that activity's own contract; workflow-level `Inputs`/`Outputs`; `WorkflowActivityOptions` and `StrategyOptions`. `ActivityNode` MUST NOT expose a generic child collection, connection list, start-child member or executable mirror, and core MUST NOT define framework-wide slot names, metadata keys or edge records for activity-specific concepts.
+- **§E2.9.2 Out of scope:** runtime state (§E2.2, §E2.6); executable and build metadata; publication and deployment state; listing and search projections; security and ownership; designer layout (the `…Layout` siblings); validation errors (`WorkflowDefinitionDraftValidation`). An ambiguous new member is escalated and settled by amending this section.
+- **§E2.9.3 Triplet:** State (authoring), read models and projections (reading) and `WorkflowExecutable` (executing, compiled from an immutable version) MUST NOT be merged.
+- **§E2.9.4 Enforcement:** the XML doc header on `WorkflowDefinitionState` and review; a scope analyser waits for a future code-analysers epic.
+- **§E2.9.5** Workflow-definition reconciliation follows Model X (§E2.8); no workflow-design entity carries per-pass mutating fields.
+- **§E2.9.7 Draft mutation:** one diff-based `IUpdateDraftCommand` takes the complete desired state with its layout beside it, assigns it last-writer-wins inside the per-draft lock, validates in the lock, persists atomically and publishes one event per detected difference. Lifecycle commands (`ICreateDraftCommand`, `ICloneDraftFromVersionCommand`, `IDiscardDraftCommand`, `IPromoteDraftToVersionCommand`) stay separate; a clone is a `DraftCreated` carrying `SourceVersionId`. Read-only commands use the named read ports. `DraftValidating` (Sequential, in the lock) and `DraftValidated` (Background) are unchanged.
 
 ## §E5 Elsa packaging and versioning
 
-**framework §2.13 — Elsa specialization.** Elsa's current packaging is the snapshot in §E2.4 above. The framework rule (packaging cohesion follows dependency cohesion; packaging is application-level and revisable) governs. Framework §2.13 places the choice of how versions are shared with the application; Elsa's choice is recorded below.
+**framework §2.13 — Elsa specialization.** `src/apps/Elsa.Workbench` is a development and demo host, not the product; it publishes as `elsaworkflows/elsa-workbench`. A clean product host is a product specification, and the `Elsa.Server` name and `elsaworkflows/elsa-server` image are reserved for it.
 
-**The workbench is not the product.** `src/apps/Elsa.Workbench` is a development and demo host used to build out modules. It is not the deliverable executable, and no product host has existed in any Elsa major version. A clean host is therefore a product specification rather than a refactor of the workbench, and the `Elsa.Server` name and the `elsaworkflows/elsa-server` image are reserved for it. The workbench publishes as `elsaworkflows/elsa-workbench`.
-
-> **Suspended until GA** by [ADR 0080 D4](../../docs/adr/0080-elsa-4-simplification-decisions.md#d4--pre-ga-cleanup): every package uses one version line until 4.0 GA, and the Line A rules below do not apply. They are retired by #2576 and revisited for post-GA versioning.
-
-**Two version lines.** Elsa uses neither whole-version sharing nor fully independent versioning, both of which framework §2.13 permits.
-
-- **Line A, the host baseline.** The cross-cutting contract packages a host pins share one version that moves only when the contract surface changes, governed by framework §4.2. Membership begins with `Elsa.Primitives`, `Elsa.Events.Core`, `Elsa.Tasks.Core`, `Elsa.Serialization.Core`, `Elsa.Mediator.Core`, `Elsa.Attention.Core` and `Elsa.Expressions.Core`. Membership is recorded in the dependency map and is not final; packages whose cross-domain reach and churn do not decide the question are settled by the clean host specification.
-- **Line B, everything else.** All features and all domain `.Core` packages share `major.minor` across the repository, with the patch digit per package. A domain's `.Core` ships with its domain, because a domain is a delivery unit.
-
-The rule this expresses: **a dependency floor must state what a package actually needs.** Uniform versioning inflates floors, which under Strategy B prevents a feature from being installed into a host pinned at an older contract version.
-
-**Versions are computed, not authored.** The patch digit is derived from the count of commits touching a package's own files since the release tag, with file ownership resolved through the dependency map. No `<Version>` element is hand-maintained. Publishing is selective: a package whose own files did not change is not republished, so its floors are never restamped for a change it did not take part in. Preview builds carry no run-number counter, and a release promotes the artifact already built rather than rebuilding from a tag.
-
-**Version magnitude is enforced, not asserted.** Public API additions and breaks are detected mechanically against the last released baseline, and a gate fails when the version bump is smaller than the detected delta requires. A compatible dependency update does not oblige dependents to republish; only a major change propagates. Dependency ranges carry an upper bound at the next major.
-
-**Line A stabilizes by policy after 4.0.** Breaking contract changes batch into planned majors. Without this the contract line churns and the two-line split degrades to uniform versioning.
-
-Rationale, rejected alternatives and the supporting measurements are recorded in [ADR 0067](../../docs/adr/0067-package-versioning-uses-two-lines-with-computed-patch.md).
-
-**Reversibility.** If, e.g., `Elsa.Serialization.Newtonsoft` and `Elsa.Serialization.SystemText` become demanded by applications outside Elsa, they could graduate into separately published features that Elsa's other features pull in via NuGet. The packaging is reversible per framework §2.16 (refactor-cost test) — preserving NuGet identity insulates consumers from the restructuring.
-
-**Minimum project size (framework §2.16.1 — Elsa interpretive note).** Elsa's tree intentionally contains many sub-100-LoC projects; the 2026-07-04 audit ([MD-5 amendment report](../../docs/reports/elsa-4-w21-md5-minimum-project-size-amendment.md)) found all 13 of them exempt under the §2.16.1 exemption test, so the guidance ratifies the current shape rather than triggering a merge campaign. An exemption permits a small project; it does not require one: the 2026-09 maintainability pass merged eight of them into their parents where no dependency-direction or packaging reason held them apart. Worked examples per exception class: contracts-only `.Core` seams (`Elsa.Locking.Core`, `Elsa.Caching.Core`), primitives projects (`Elsa.Primitives.Hosting`), provider leaves (`Elsa.Locking.FileSystem`), the §E2.7 migration boundary, Layer-2 helpers (`Elsa.Serialization.Newtonsoft`), and independently-composable `[ShellFeature]` units / cross-domain contribution seams (`Elsa.Http.JavaScript`). The migration-boundary class currently has no live example: the audit's example, `Elsa3.Activities.Design.Import`, measured 56 lines then and has since grown past two thousand, so it no longer needs the exemption, and no Elsa 3 project is under the threshold today. The class stays valid for future boundary projects. New sub-100-LoC projects that fit none of the six classes need the one-sentence justification of §2.16.1.
-
-**Nuplane strategy.** Elsa adopts **Strategy B** per framework §3: the host pins its baseline contract packages (Line A, suspended until GA per the notice above); Nuplane dynamically loads Layer-3 implementations, helper libraries, and optional features. A domain's `.Core` is not host-pinned, because a clean host carries no domains; Nuplane promotes it to a shared assembly within that domain's subtree when the domain is installed, for first-party and third-party domains alike. Strategy A is not adopted as Elsa's default, but is not hard-excluded for specific deployment contexts.
-
----
+**One version line until GA** ([ADR 0080 D4](../../docs/adr/0080-elsa-4-simplification-decisions.md#d4--pre-ga-cleanup)): every package shares one version line until 4.0 GA; post-GA versioning is revisited once #2576 retires Line A. **Nuplane:** Strategy B per framework §3, including `.Core` promotion within an installed domain's subtree; Strategy A is not the default but not excluded. Small-project audit and reversibility notes: [elsa-worked-examples](../../docs/reference/elsa-worked-examples.md#elsa-packaging).
 
 ## §E6 Type-naming rules
 
-**framework §2.2 — Elsa specialization.** Framework §2.2 fixes the *namespace/domain* naming convention (domain-only namespaces, no layer-marker buckets). This section specializes it into a **mechanical type-name style guide** for Elsa-owned types. It is a gate: plans, specs, and code that introduce or rename Elsa-owned types are checked against R1–R8 below. The rules and their supporting analysis originate in the Elsa 4 architecture review (`docs/reports/elsa-4-architecture-review-2026-07/review-naming.md`, findings NM-1..NM-14); this section is the ratified, enforceable extract.
+**framework §2.2 — Elsa specialization.** R1–R8 govern Elsa-owned type names (D8) and are checked at review whenever a type is introduced or renamed. Names mirroring an external contract are exempt. Persisted and wire identifiers (type discriminators, document-kind strings, `nameof()`-derived names, checkpoint constants, serialized keys) are never renamed to satisfy them: keep the value and comment the divergence. Full text and origins: [docs/reference/elsa-naming.md](../../docs/reference/elsa-naming.md).
 
-**Scope.** R1–R8 govern **Elsa-owned** type names. Names that mirror an external framework contract are explicitly exempt (see R3). Persisted/wire identifiers (JSON type discriminators, persisted document-kind strings, `nameof()`-derived handler names, checkpoint-name constants, serialized member keys) are **not** renamed to satisfy these rules — the literal wire value is preserved and the divergence is commented at the site. Behavior preservation outranks naming.
+- **R1** At most **4** CamelCase components; **5** is a hard cap.
+- **R2** Don't repeat the namespace; a leading `Workflow`/`Runtime`/`Activity` only to disambiguate from a sibling.
+- **R3** Banned vague words: `Manager`, `Helper`, `Util(s)`, `Info`, `Data`, `Object`, `Service` (when a specific role fits), `Processor`. External mirrors (`UserManager`, `IApplicationManager`, `IRoleManager`, `ILiquidTemplateManager`) keep their names.
+- **R4** One suffix, one meaning: `…Source` returns on request (reserved for that sense, *pending maintainer consensus*); `…Contributor` pushes into a context (→ `…Extension`, ADR 0080 D5); `…PreProcessor`/`…PostProcessor` phased; `…Validator` returns findings; `…Store` persists one aggregate; `…View` wire projection, `…Response` its envelope; `…State` data structure, `…Status` lifecycle enum; `…Provider` yields, `…Factory` constructs, `…Resolver` maps key→value, `…Registry` holds registrations; `…Executor`/`…Runner` do the work, `…Router`/`…Dispatcher` select and forward, `…Orchestrator`/`…Coordinator` sequence; `…Handler` only for mediator and sanctioned entity-lifecycle handlers.
+- **R5** Concrete domain nouns over borrowed infra metaphors; kept jargon (`Quiesce`, `Passivation`, `ControlPlane`, `Nuplane`) MUST have a `docs/glossary/elsa.md` entry.
+- **R6** One concept, one head noun; the head makes the distinction.
+- **R7** Default-implementation prefixes `Default…`, `InMemory…`, `Noop…` and the provider prefix `Ef…`.
+- **R8** `Agent` is reserved for the AI-assistant domain; workflow-execution roles use `Actor`/`Worker`/`Host`.
 
-- **R1 — Component budget.** A type name carries at most **4** CamelCase components; **5** is a hard cap. Beyond that, a component is almost always redundant with the namespace — drop it.
-- **R2 — Don't repeat the namespace in the type name.** Inside e.g. `Elsa.Workflows.Runtime.Core`, a type does not need both `Runtime` and `WorkflowExecution` prefixes. Leading `Workflow`/`Runtime`/`Activity` qualifiers are allowed only when they *disambiguate* from a sibling type without them.
-- **R3 — Banned vague words for Elsa-owned types:** `Manager`, `Helper`, `Util(s)`, `Info`, `Data`, `Object`, `Service` (when a more specific role fits), `Processor` (prefer a concrete verb). **Exception:** names that mirror an external framework contract (ASP.NET Core Identity `UserManager`, OpenIddict `IApplicationManager`, `IRoleManager`, `ILiquidTemplateManager`) keep the external name.
-- **R4 — One suffix, one meaning.** Codified role suffixes, pick exactly one per layer and never use two synonyms for adjacent steps:
-  - `…Source` = pull/returns; `…Contributor` = push/mutates context (becoming `…Extension` per ADR 0080 D5, domain by domain; both accepted until the rename completes); `…PreProcessor`/`…PostProcessor` = phased contributor; `…Validator` = returns findings.
-  - **The `…Source` suffix is reserved for that extension-point sense** *(4.2.0; pending maintainer consensus)*: a contract, or an implementation of one, that returns values on request, as framework §2.6.1's `I<X>Source` does. `IActivityReconciliationSource`, `IJsonConverterSource`, `IApiCapabilitySource` and the read-model query contracts `IWorkflowPortfolioDataSource` and `IWorkflowRunHealthDataSource` all use it this way. "Source" has other senses in the tree. Those keep their established names, and none of them makes a type an extension point:
-    - *Provenance.* `Source` before another component means origin and gives the type no role. `WorkflowExecutableSourceReference` points back to the design document an executable was compiled from; it does not yield executables. The glossary term is **source reference** (`docs/glossary/elsa.md`). The source-identity fields `SourceKind`/`SourceId`/`SourceVersion` and names such as `WorkflowExecutableSourceKinds` belong to the same sense.
-    - *OpenTelemetry.* `ActivitySource` is the external `System.Diagnostics` type. Names that mirror it, such as `ActivitySourceWorkflowEngineTracer` and the `ActivitySourceName` constants, are external names (see Scope and R3).
-    - *Origin values.* Some existing types end in `…Source` but hold where a value came from instead of returning values: the enums `RuntimeInputBindingSource` and `PublicationPolicySource`, records such as `WorkflowActivationSource` and `LogSource`, and the authoring values `ExpressionSource<T>` and `ActivityResultSource<T>`. They are exceptions and keep their names; several are persisted or returned over HTTP. A new type in this sense ends in another head noun, as `RuntimeIngressSourceKind` does.
-  - `…Store` = persistence over one aggregate.
-  - `…View` = a wire-shaped projection an endpoint returns; `…Response` = the envelope that wraps views, for a collection or an operation result. A view and its envelope sit in one file (`IncidentStrategyViews.cs` declares the `…View` items and `IncidentStrategiesResponse`). `Elsa.Agent.Api` and `Elsa.Foundation.Identity.Api` predate the rule and use `…Response` for single payloads; those are serialized shapes and are not renamed.
-  - `…State` = a structure that holds data, as a record or class; `…Status` = an enum naming one lifecycle position. When a type has both, they share a file (`WorkflowExecutionState.cs` declares `WorkflowExecutionState` and its `WorkflowExecutionStatus`). A few older enums still end in `…State`; rename one only where its values are not serialized.
-  - `…Provider` = yields impls/descriptors; `…Factory` = constructs; `…Resolver` = maps key→value; `…Registry` = holds registrations.
-  - `…Executor`/`…Runner` = *does* the work (terminal); `…Router`/`…Dispatcher` = *selects a target and forwards*; `…Orchestrator`/`…Coordinator` = *sequences a multi-step operation*.
-  - Reserve `…Handler` for (a) mediator handlers and (b) sanctioned entity-lifecycle handlers. The scheduler `…WorkHandler` family is grandfathered.
-  - **Event types carry no `On` prefix** (framework §2.6.6). `On` belongs to the handling side; the event is named for the fact — `DraftValidating` / `DraftValidated`, not `OnDraftValidating` / `OnDraftValidated`. Word order is subject-first. Note this also keeps the longest Draft-mutation names inside R1: `OnActivityOutputRemovedFromDraft` was 6 components, over the hard cap.
-- **R5 — Prefer concrete domain nouns over borrowed infra metaphors** unless the metaphor is glossary-documented. Favor `HoldState`/`LivenessState` over `ControlPlaneState`/`OperationalState`. Terms kept as jargon (`Quiesce`, `Passivation`, `ControlPlane`, `Nuplane`) MUST have a `docs/glossary/elsa.md` entry.
-- **R6 — One concept, one head-noun.** If several types share a `…State` (or similar) head, the *head* must make the distinction obvious (`Hold`, `Liveness`, `Scheduler…`) rather than leaning on a vague adjective.
-- **R7 — Default-impl prefixes are fixed and good:** `Default…`, `InMemory…`, `Noop…`, plus the provider prefix `Ef…` (the convention in use across the EF implementations; `EfCore…` appears on a handful of older types and is not the pattern to copy). Keep using them.
-- **R8 — Reserve `Agent` for the AI-assistant domain.** Workflow-execution "agents" use `Actor`/`Worker`/`Host` to avoid the cross-domain homonym.
-
-**Protected names (NM-14, do not "fix").** `Bookmark`, `Trigger`, `Incident`, `Outbox`, `Checkpoint`, `WorkItem`, `Hold`, `PauseGate`, `Envelope`, `Slot` are concrete, evocative domain nouns — they are exempt from any shortening pressure. The extension-point grammar (R4 first bullet), `.Core`/Feature layering, `…Store`, Command/Request/Result, and the R7 prefixes are strengths to protect, not simplify (NM-13).
-
-**First application.** The W14 naming pass (Elsa 4 review remediation; `docs/program-goals/elsa-4-review-remediation.md`) applied R1–R8 to the runtime cluster and vague-word offenders (rename families A–E). Subsequent type introductions/renames are expected to conform or record an explicit exception.
-
----
+**Exceptions:** provenance `Source…` names, OpenTelemetry `ActivitySource` mirrors and the existing origin-value `…Source` types; the serialized single-payload `…Response` types in `Elsa.Agent.Api` and `Elsa.Foundation.Identity.Api`; older `…State` enums with serialized values; the scheduler `…WorkHandler` family. **Protected names (NM-14):** `Bookmark`, `Trigger`, `Incident`, `Outbox`, `Checkpoint`, `WorkItem`, `Hold`, `PauseGate`, `Envelope` and `Slot` are exempt from shortening pressure.
 
 ## Governance
 
-### Amendment process
+**Amendment process** (D7): the framework's ADR process. A numbered decision under `docs/adr/` is ratified by consensus of Joey Barten, Sipke Schoorstra and Frans van Ek, folded in with a version bump, and propagated to the Speckit templates in the same change. This file re-pins the framework version on every framework bump and versions itself the same way: PATCH for wording, MINOR for new or expanded Elsa guidance, MAJOR for a removed or redefined Elsa rule.
 
-This constitution is amended together with the framework constitution where the change affects both layers. Elsa-only amendments follow framework Governance > Amendment process:
-
-1. **Propose** as a numbered decision in `ARCHITECTURE_v2.md` (or its successor `DECISIONS.md`) in the meta-repo.
-2. **Discuss** with Sipke + Frans.
-3. **Ratify** by consensus; fold into this document with the next version bump.
-4. **Propagate** to speckit templates (`plan-template.md`, `spec-template.md`, `tasks-template.md`) and any runtime guidance.
-
-### Sync rule with framework constitution
-
-This document declares the framework constitution version it derives from in the header (currently **v5.0.1**). When the framework constitution bumps:
-
-- **PATCH** — re-pin the version; review for clarification impact; no Elsa SemVer bump unless wording downstream of an Elsa specialization is affected.
-- **MINOR** — re-pin the version; review every Elsa specialization for compatibility with new framework guidance.
-- **MAJOR** — re-pin the version; full review pass; Elsa constitution typically bumps MAJOR in sync.
-
-### SemVer of this constitution
-
-Same rules as framework §4.2 applied to constitutional content:
-
-- **PATCH** — clarifications, wording, typo fixes.
-- **MINOR** — new section added or materially expanded Elsa-specific guidance.
-- **MAJOR** — backward-incompatible removals or redefinitions of Elsa-specific rules.
-
-### Compliance and review
-
-- Plans and specs generated against this constitution must satisfy a Constitution Check that loads **both** this file and `constitution-framework.md`.
-- CI is expected to enforce naming conventions, dependency-envelope assertions (notably the Workflows.Design ↔ Workflows.Runtime asymmetry of §E2.2), and namespace-segment forbids.
-- Where AI cannot apply a rule cleanly, that is the signal to escalate — Joey + Sipke + Frans intervene, analyse, decide on a new rule. The constitution matures via this loop (Definition of Done point 2).
-
----
-
-**Version:** 5.0.0 | **Ratified:** 2026-08-08 | **Last Amended:** 2026-10-10 | **Derives from framework constitution:** v5.0.1
+**Constitution Check loads both files.** Speckit's plan and analyze steps read only this file; they MUST also load `constitution-framework.md`, apply both Gate indexes and [docs/contributing/review-checklist.md](../../docs/contributing/review-checklist.md). CI enforces what admits mechanical checking, notably the §E2.2 asymmetry. A rule that cannot be applied cleanly is escalated to the architects.

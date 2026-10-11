@@ -18,7 +18,7 @@ $ARGUMENTS
 
 ## Outline
 
-1. Read `AGENTS.md`, especially source-of-truth layers and the program goals / drift guard.
+1. Read `AGENTS.md` (source-of-truth layers) and `docs/contributing/program-goals-and-drift-guard.md`.
 2. Read `docs/skills/catalog.md#program-goal-drift-review`.
 3. Inspect `docs/program-goals/` and identify the current program-goal state: a named bucket, `none/free-flow`, or temporarily `unknown/not-assessed`.
 4. Identify recent short-term objectives and the next proposed objective.
