@@ -4,7 +4,7 @@
 
 **Created**: 2026-10-09
 
-**Status**: Draft — preview locally qualified; stable acceptance (T019) remains open
+**Status**: Implemented — stable acceptance completed in [PR #2530](https://github.com/elsa-workflows/elsa-foundation/pull/2530) at `9f09cf8dc78efc611fd99cd90ab1fa70efe709ff`; [final evidence](https://github.com/elsa-workflows/elsa-foundation/pull/2530#issuecomment-6103608442).
 
 **Input**: Deliver the modular-hosting upstream program end to end, adopting general startup activation support in Foundation.Host and Workbench while retaining Elsa policy and existing host behavior.
 
@@ -112,6 +112,6 @@ An operator stops either host during startup recovery or warmup. New work stops 
 ## Assumptions
 
 - General runner support is already delivered upstream; research must resolve adapter parity before implementation. A required upstream contract correction, if any, is coordinated separately before consumers depend on it.
-- The qualified observer candidate is preserved as local commit `af83b06bb2b4dcd84b1269cc39575ff68033cbbf`; source adoption remains release-gated.
+- During preview qualification, the observer candidate was preserved as local commit `af83b06bb2b4dcd84b1269cc39575ff68033cbbf`; stable source adoption was later completed in Foundation PR #2530.
 - This unit does not take over #2354 host-library composition extraction, #2164 package-generation readability, #2362 unloading, safe physical pruning or container PID-1 startup behavior tracked by #2128.
 - Copilot and Greptile requests are waived by the owner; independent self-review and the remaining verification gates apply.

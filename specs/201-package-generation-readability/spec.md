@@ -4,7 +4,7 @@
 
 **Created**: 2026-10-08
 
-**Status**: Draft — prepared; current integration qualification and stable acceptance remain open
+**Status**: Implemented — stable acceptance completed in [PR #2530](https://github.com/elsa-workflows/elsa-foundation/pull/2530) at `9f09cf8dc78efc611fd99cd90ab1fa70efe709ff`; [final evidence](https://github.com/elsa-workflows/elsa-foundation/pull/2530#issuecomment-6103608442).
 
 **Input**: Foundation issue [#2164](https://github.com/elsa-workflows/elsa-foundation/issues/2164), which closes the remaining shell-build timing gap in [Spec 183](../183-cluster-membership/spec.md).
 

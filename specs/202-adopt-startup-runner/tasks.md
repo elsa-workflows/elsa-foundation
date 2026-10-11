@@ -4,9 +4,11 @@ description: "Dependency-ordered work for adopting the shared shell activation r
 
 # Tasks: Shared Startup Runner Adoption
 
+**Current stable status (2026-10-11)**: Nuplane `0.0.11` and CShells `0.0.30` are published. Foundation PR #2530 merged at `9f09cf8dc78efc611fd99cd90ab1fa70efe709ff`; current-head, actual-host/consumer/demo and backend evidence is accepted. Resulting-main CI, Maps, Packages and Docker publication have passed; the stable tasks below are complete. See the [release acceptance record](../../docs/reports/modular-hosting-release-plan.md#foundation-stable-adoption-checkpoint--2026-10-11). Earlier preparation scope and preview evidence below are historical.
+
 **Input**: `spec.md`, `plan.md`, `research.md`, `data-model.md`, `contracts/startup-profiles.md`, and `quickstart.md` in `specs/202-adopt-startup-runner/`.
 
-**Status**: Preview implementation and local qualification complete; T019 stable package adoption and stable actual-host/resulting-main acceptance remain open. Completed steps are checked below. Preview proof is interim and cannot close the feature.
+**Status**: Stable package adoption, actual-host acceptance and resulting-main gates passed; T019 is complete. Completed steps are checked below; historical preview proof alone cannot close the feature.
 
 **Test cadence**: The derived application constitution does not declare test-first, test-after, or another cadence. The order below follows implementation dependencies and does not impose TDD. Preserve every existing test subject and objective under framework §2.21.1/§2.23. Add registration and per-implementation tests for changed logic-bearing implementations; never weaken or remove existing assertions.
 
@@ -73,7 +75,7 @@ description: "Dependency-ordered work for adopting the shared shell activation r
 - [x] T016 Run the affected application test projects in `tests/essentials/Modularity/Tests/Elsa.Modularity.Tests.csproj`, `tests/essentials/Workbench/Tests/Elsa.Workbench.Tests.csproj`, and `tests/essentials/Cluster/EntityFrameworkCore/Tests/Elsa.Cluster.EntityFrameworkCore.Tests.csproj`, serializing builds through the repository wrapper and recording exact results.
 - [x] T017 Run `tests/essentials/Architecture/Elsa.Architecture.Tests.csproj`, exercise the Workbench backend using the owned-server and process-control guidance in `e2e-tests/README.md` (including the `e2e-tests/Test-WorkflowFlow.ps1` smoke), and run `dotnet run --project tools/maps/Elsa.Maps.Generator -- check`; review any generated-map change rather than restamping unrelated maps.
 - [x] T018 Complete `docs/reports/modular-hosting-package-qualification.md` for the exact `.173` CShells family and `.99` Nuplane dependency, including source/archive identity, locked restore, and actual rebuilt-host evidence; label all preview proof interim and do not use it as stable-release acceptance.
-- [ ] T019 After the specified upstream source/package families are released, update `Directory.Packages.props` and all reached `packages.lock.json` files to the exact stable versions, run clean-cache locked restore, rerun the affected host/process gates, the owned-server Workbench backend smoke in `e2e-tests/README.md`, and architecture/maps; inspect resulting-main CI and record exact stable source commits, family archive identities, package versions, and host evidence in `docs/reports/modular-hosting-release-plan.md` before marking this feature complete.
+- [x] T019 After the specified upstream source/package families are released, update `Directory.Packages.props` and all reached `packages.lock.json` files to the exact stable versions, run clean-cache locked restore, rerun the affected host/process gates, the owned-server Workbench backend smoke in `e2e-tests/README.md`, and architecture/maps; inspect resulting-main CI and record exact stable source commits, family archive identities, package versions, and host evidence in `docs/reports/modular-hosting-release-plan.md` before marking this feature complete.
 
 ## Dependencies & Execution Order
 
