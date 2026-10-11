@@ -16,8 +16,9 @@ if [ -x "$install_dir/dotnet" ] && "$install_dir/dotnet" --list-sdks 2>/dev/null
   echo "dotnet SDK $required already installed."
 else
   script="$(mktemp)"
-  if curl -fsSL https://dot.net/v1/dotnet-install.sh -o "$script" \
-     && bash "$script" --jsonfile global.json --install-dir "$install_dir" --no-path >/dev/null; then
+  # Bounded, so a stalled download reaches the warning below instead of holding the session at startup.
+  if curl -fsSL --connect-timeout 20 --max-time 120 https://dot.net/v1/dotnet-install.sh -o "$script" \
+     && timeout 900 bash "$script" --jsonfile global.json --install-dir "$install_dir" --no-path >/dev/null; then
     echo "Installed dotnet SDK $required into $install_dir."
   else
     echo "WARNING: could not install dotnet SDK $required. Allow dot.net and builds.dotnet.microsoft.com" \
