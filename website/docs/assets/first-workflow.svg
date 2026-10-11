@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 232" role="img" aria-labelledby="title desc">
+  <title id="title">Your first published workflow</title>
+  <desc id="desc">Create a definition, publish an artifact, run that artifact, and inspect the execution.</desc>
+  <rect width="640" height="232" rx="16" fill="#f8fafc"/>
+  <g fill="#ffffff" stroke="#94a3b8" stroke-width="1.5">
+    <rect x="24" y="24" width="272" height="72" rx="10"/>
+    <rect x="344" y="24" width="272" height="72" rx="10"/>
+    <rect x="24" y="136" width="272" height="72" rx="10"/>
+    <rect x="344" y="136" width="272" height="72" rx="10"/>
+  </g>
+  <g fill="none" stroke="#475569" stroke-width="2">
+    <path d="M300 60h36m-7-6 7 6-7 6"/>
+    <path d="M480 100v28m-6-7 6 7 6-7"/>
+    <path d="M336 172h-36m7-6-7 6 7 6"/>
+  </g>
+  <g fill="#0f172a" font-family="system-ui, sans-serif" font-size="18" text-anchor="middle">
+    <text x="160" y="55">1. Create a definition</text>
+    <text x="480" y="55">2. Publish an artifact</text>
+    <text x="480" y="167">3. Run the artifact</text>
+    <text x="160" y="167">4. Inspect the execution</text>
+  </g>
+  <g fill="#475569" font-family="system-ui, sans-serif" font-size="14" text-anchor="middle">
+    <text x="160" y="78">Add one Write Line activity</text>
+    <text x="480" y="78">Note its identifier</text>
+    <text x="480" y="190">Use Workflows → Executables</text>
+    <text x="160" y="190">Completed · one activity · no incidents</text>
+  </g>
+</svg>

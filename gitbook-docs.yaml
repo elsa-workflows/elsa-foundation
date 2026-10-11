@@ -1,0 +1,14 @@
+$schema: https://api.gitbook.com/gitbook-docs.yaml
+
+site:
+  title: Elsa 4
+  structure:
+    - type: space
+      # Keep this key unchanged after the first sync; it identifies the space.
+      key: elsa-4-docs
+      title: Elsa 4 documentation
+      path: docs
+      default: true
+      content:
+        directory: ./
+        language: en
