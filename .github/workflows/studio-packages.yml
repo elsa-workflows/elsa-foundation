@@ -198,6 +198,9 @@ jobs:
       - name: Pack
         run: dotnet pack Elsa.Studio.slnx -c Release --no-build "/p:Version=$VERSION" -p:WarningsNotAsErrors=NU1603 "-p:PackageOutputPath=$(pwd)/packages/nuget"
 
+      - name: Verify exact Studio NuGet package set
+        run: python3 ../tools/ci/verify_studio_nuget_packages.py --root .. --packages packages/nuget --version "$VERSION"
+
       - name: Write Studio artifact provenance
         env:
           PUBLISH_TARGET: ${{ inputs.publish_target }}

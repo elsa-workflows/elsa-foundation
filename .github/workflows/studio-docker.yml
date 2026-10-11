@@ -124,11 +124,11 @@ jobs:
           import json
           import os
           import sys
-          import zipfile
           from pathlib import Path
 
           sys.path.insert(0, "tools/ci")
           from studio_image_tags import derive_tags
+          from verify_studio_nuget_packages import verify_packages
 
           artifact = Path("Studio/packages/nuget")
           manifest_path = artifact / "studio-package-build.json"
@@ -150,17 +150,7 @@ jobs:
           if os.environ["PUBLISH_IMAGE"] == "true" and manifest.get("ref") != expected_ref:
               raise SystemExit("Studio artifact ref does not match the selected Actions run ref.")
 
-          packages = sorted(artifact.glob("*.nupkg"))
-          if not packages:
-              raise SystemExit("The selected Studio package artifact contains no NuGet packages.")
-          for package in packages:
-              with zipfile.ZipFile(package) as archive:
-                  nuspecs = [name for name in archive.namelist() if name.endswith(".nuspec")]
-                  if len(nuspecs) != 1:
-                      raise SystemExit(f"Expected exactly one nuspec in {package.name}.")
-                  nuspec = archive.read(nuspecs[0]).decode("utf-8")
-                  if f"<version>{manifest['version']}</version>" not in nuspec:
-                      raise SystemExit(f"Package version does not match provenance in {package.name}.")
+          package_ids = verify_packages(Path.cwd(), artifact, manifest["version"])
 
           target = manifest.get("publish_target")
           gate_enabled = manifest.get("publisher_gate_enabled") is True
@@ -176,7 +166,7 @@ jobs:
           with open(os.environ["GITHUB_OUTPUT"], "a") as output:
               output.write(f"publish_image={'true' if publish_requested else 'false'}\n")
               output.write("image_tags<<TAGS\n" + "\n".join(tags) + "\nTAGS\n")
-          print(f"Verified {len(packages)} Studio packages at version {version} from {sha}.")
+          print(f"Verified the exact {len(package_ids)} Studio package IDs at version {version} from {sha}.")
           PY
 
       - name: Setup pnpm
