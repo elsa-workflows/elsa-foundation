@@ -6,9 +6,9 @@ name: Studio Packages (consolidated gated)
 # explicitly enabled during the approved cutover. The Foundation `Packages` workflow
 # remains the sole publisher for Foundation packages and its Docker consumer.
 #
-# Frontend (React/Vite) client assets are pre-built and committed under each module's
-# wwwroot, so no Node/pnpm build step is needed to pack the NuGet packages — packing uses the
-# same committed assets the Docker image ships.
+# Frontend (React/Vite) client assets are generated into each module's ignored wwwroot.
+# Build them in this job before .NET build/test/pack so the NuGet packages contain the
+# same host and RCL assets that the Studio Docker image ships.
 #
 # Alongside the NuGet packages, four workspace libraries are also published to npm as standalone
 # deliverables (@elsa-workflows/studio-sdk, studio-ui, studio-code-editor, studio-workflows).
@@ -77,7 +77,7 @@ jobs:
           PUBLISHING_ENABLED: ${{ vars.ELSA_STUDIO_CONSOLIDATED_PUBLISHING }}
         run: |
           set -euo pipefail
-          git fetch --no-tags --prune origin +refs/heads/main:refs/remotes/origin/main +refs/tags/*:refs/tags/*
+          git fetch --no-tags origin +refs/heads/main:refs/remotes/origin/main +refs/tags/*:refs/tags/*
 
           if [[ "$PUBLISH_TARGET" != "none" && "$PUBLISHING_ENABLED" != "true" ]]; then
             echo "::error::Publishing was requested, but ELSA_STUDIO_CONSOLIDATED_PUBLISHING is not true."
@@ -146,12 +146,33 @@ jobs:
     name: Build packages
     needs: version
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 60
     env:
       VERSION: ${{ needs.version.outputs.version }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          package_json_file: Studio/package.json
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: Studio/pnpm-lock.yaml
+
+      - name: Install frontend dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build Studio host and RCL frontend assets
+        run: pnpm build
+
+      - name: Verify generated Studio host and RCL assets
+        run: python3 ../tools/ci/verify-studio-assets.py --root ..
 
       - uses: actions/setup-dotnet@v4
         with:
@@ -322,10 +343,11 @@ jobs:
           set -euo pipefail
           shopt -s nullglob
           tarballs=(packages/npm/*.tgz)
-          if [[ ${#tarballs[@]} -eq 0 ]]; then
-            echo "No .tgz files found in packages/npm" >&2
+          if [[ ${#tarballs[@]} -ne 4 ]]; then
+            echo "Expected exactly four npm package tarballs, found ${#tarballs[@]}" >&2
             exit 1
           fi
+          actual_ids=()
           for tgz in "${tarballs[@]}"; do
             echo "Verifying $tgz"
             contents=$(tar -tzf "$tgz")
@@ -360,6 +382,13 @@ jobs:
             # and a consumer cannot take a newer dependency at all. prepare-npm-package.mjs emits a
             # caret; this is the gate that stops a regression to `deps[name] = versionArg`.
             manifest=$(tar -xzOf "$tgz" package/package.json)
+            package_id=$(node -p 'JSON.parse(require("fs").readFileSync(0, "utf8")).name' <<< "$manifest")
+            package_version=$(node -p 'JSON.parse(require("fs").readFileSync(0, "utf8")).version' <<< "$manifest")
+            actual_ids+=("$package_id")
+            if [[ "$package_version" != "$VERSION" ]]; then
+              echo "  VERSION MISMATCH in $tgz: expected $VERSION, got $package_version" >&2
+              exit 1
+            fi
             pinned=$(node -e '
               const pkg = JSON.parse(require("fs").readFileSync(0, "utf8"));
               const bad = [];
@@ -373,6 +402,19 @@ jobs:
               exit 1
             fi
           done
+          expected_ids=$(printf '%s\n' \
+            '@elsa-workflows/studio-sdk' \
+            '@elsa-workflows/studio-ui' \
+            '@elsa-workflows/studio-code-editor' \
+            '@elsa-workflows/studio-workflows' | sort)
+          actual_id_set=$(printf '%s\n' "${actual_ids[@]}" | sort)
+          if [[ "$actual_id_set" != "$expected_ids" ]]; then
+            echo "Unexpected npm package identities. Expected:" >&2
+            printf '%s\n' "$expected_ids" >&2
+            echo "Found:" >&2
+            printf '%s\n' "$actual_id_set" >&2
+            exit 1
+          fi
           echo "All tarballs verified."
 
       - name: Upload artifact

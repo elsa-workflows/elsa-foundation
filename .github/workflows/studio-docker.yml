@@ -123,9 +123,12 @@ jobs:
           python3 - <<'PY'
           import json
           import os
-          import re
+          import sys
           import zipfile
           from pathlib import Path
+
+          sys.path.insert(0, "tools/ci")
+          from studio_image_tags import derive_tags
 
           artifact = Path("Studio/packages/nuget")
           manifest_path = artifact / "studio-package-build.json"
@@ -168,26 +171,7 @@ jobs:
           sha = manifest["commit"]
           version = manifest["version"]
           ref = manifest["ref"]
-          if ref == "refs/heads/main":
-              if not re.fullmatch(r"4\.0\.0-preview\.[0-9]+", version):
-                  raise SystemExit("Main package artifact has an invalid Studio preview version.")
-              preview_tag = os.environ["PREVIEW_IMAGE_TAG"]
-              if publish_requested and not re.fullmatch(r"4\.0\.0-preview\.[0-9]+", preview_tag):
-                  raise SystemExit("A main image push requires preview_image_tag in the form 4.0.0-preview.N after checking Docker Hub's current floor.")
-              tags = [f"sha-{sha[:7]}"]
-              if publish_requested:
-                  tags = ["latest", preview_tag, f"sha-{sha[:7]}"]
-          elif ref.startswith("refs/tags/"):
-              if not re.fullmatch(r"4\.[0-9]+\.[0-9]+(?:-[0-9A-Za-z.-]+)?", version):
-                  raise SystemExit("Release artifact has an invalid Studio semver.")
-              if "-" in version:
-                  # Prerelease tags must not move the stable major/minor aliases.
-                  tags = [version, f"sha-{sha[:7]}"]
-              else:
-                  major, minor, _ = version.split(".")
-                  tags = [version, f"{major}.{minor}", major, f"sha-{sha[:7]}"]
-          else:
-              tags = [f"sha-{sha[:7]}"]
+          tags = derive_tags(ref, version, sha, publish_requested, os.environ["PREVIEW_IMAGE_TAG"])
 
           with open(os.environ["GITHUB_OUTPUT"], "a") as output:
               output.write(f"publish_image={'true' if publish_requested else 'false'}\n")
@@ -216,7 +200,7 @@ jobs:
         working-directory: Studio
 
       - name: Verify Studio frontend assets
-        run: test -f Studio/src/apps/Elsa.Studio.Web/wwwroot/studio/index.html
+        run: python3 tools/ci/verify-studio-assets.py
 
       - name: Set up QEMU for the multi-platform publisher
         if: ${{ steps.manifest.outputs.publish_image == 'true' }}
