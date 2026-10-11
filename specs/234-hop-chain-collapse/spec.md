@@ -47,23 +47,23 @@ transaction that schedules it, so that each scheduled continuation costs no extr
 separate "Delivered" mark for 15 outbox continuations) without changing what is durable or when.
 
 **Independent Test**: Run the 4-activity HTTP reference workflow under per-hop persistence on a store whose
-scheduler queue shares the checkpoint store's database. Count durable commits per request; compare with the
+scheduler queue shares the checkpoint store's unit of work. Count durable commits per request; compare with the
 baseline. Kill the host between a checkpoint commit and the next hop's claim; restart; the run continues from the
 committed continuation exactly once.
 
 **Acceptance Scenarios**:
 
 1. **Given** a checkpoint that schedules a continuation and a scheduler queue that shares the checkpoint store's
-   database, **When** the checkpoint commits, **Then** the continuation's work item exists durably as of that same
+   unit of work, **When** the checkpoint commits, **Then** the continuation's work item exists durably as of that same
    commit, and no separate enqueue or "Delivered" commit follows for it.
 2. **Given** that checkpoint's transaction fails or rolls back, **When** the run is inspected, **Then** neither the
    checkpoint nor the continuation exists.
 3. **Given** the host crashes after the commit and before the continuation is claimed, **When** the resumption sweep
    runs, **Then** the continuation is claimed and run exactly once, with the same work-item identity it was committed
    with.
-4. **Given** a scheduler queue that does not share the checkpoint store's database (or a continuation kind other
-   than scheduler work), **When** the checkpoint commits, **Then** behaviour is unchanged: the continuation goes
-   through the post-commit outbox as today.
+4. **Given** a scheduler queue that does not share the checkpoint store's unit of work, even on the same database
+   (or a continuation kind other than scheduler work), **When** the checkpoint commits, **Then** behaviour is
+   unchanged: the continuation goes through the post-commit outbox as today.
 
 ---
 
@@ -105,14 +105,18 @@ whichever service scope the handler commits from.
 different scope (for example the HTTP request's services) may not see the drain's pending acknowledgement, so the
 drain acknowledges separately.
 
-**Independent Test**: Trace a synchronous HTTP endpoint run; every claimed item whose dispatch committed is deleted in
-that commit; separate acknowledgements remain only for dispatches that made no commit.
+**Independent Test**: Trace a synchronous HTTP endpoint run on a claim-capable provider; every claimed item whose
+dispatch committed is deleted in that commit; separate acknowledgements remain only for dispatches that made no commit.
+On a non-atomic or legacy provider, acknowledgements are unchanged.
 
 **Acceptance Scenarios**:
 
-1. **Given** a dispatch that makes a checkpoint commit through any committer in the drain, **When** it commits,
-   **Then** the claimed work item is deleted in the same transaction and the drain does not acknowledge it again.
+1. **Given** a claim-capable provider and a dispatch that makes a checkpoint commit through any committer in the
+   drain, **When** it commits, **Then** the claimed work item is deleted in the same transaction and the drain does
+   not acknowledge it again.
 2. **Given** a dispatch that makes no commit, **When** it finishes, **Then** the drain acknowledges it as today.
+3. **Given** a non-atomic or legacy provider, **When** a dispatch commits, **Then** the drain acknowledges it
+   separately, as today (spec 105 FR-006).
 
 ---
 
@@ -148,13 +152,16 @@ that commit; separate acknowledgements remain only for dispatches that made no c
   non-routable parent, workflow tail, or any case the existing fusion rules exclude) MUST fall back to the queued hop.
 - **FR-006**: An in-process routing pass MUST be re-derivable from durable state: if the host stops anywhere inside it,
   recovery MUST reach the same next durable boundary with no duplicated activity execution and no lost continuation.
-  The work item that started the pass MUST stay claimed until the pass reaches a durable boundary, and MUST be
-  deleted in that boundary's commit.
+  The work item that started the pass MUST stay claimed until the pass reaches a durable boundary. On a claim-capable
+  provider it MUST be deleted in that boundary's commit; on any other provider it is acknowledged separately after
+  that commit, as today.
 - **FR-007**: Durability per activity MUST be unchanged: every checkpoint that commits today under per-hop persistence
   MUST still commit, with the same content, before the work it guards proceeds.
-- **FR-008**: A claimed work item whose dispatch makes a checkpoint commit MUST be deleted inside that commit regardless
-  of which committer instance in the drain performs it; the drain MUST acknowledge separately only dispatches that
-  made no commit.
+- **FR-008**: On a claim-capable provider (spec 105 FR-004), a claimed work item whose dispatch makes a checkpoint
+  commit MUST be deleted inside that commit regardless of which committer instance in the drain performs it; there the
+  drain MUST acknowledge separately only dispatches that made no commit. Every other path keeps spec 105 FR-006's
+  separate acknowledgement and tripwire unchanged: non-atomic and legacy providers (including dispatches that commit),
+  dispatches that made no commit, and the handler-fault path.
 - **FR-009**: One switch MUST control all three changes: continuations in the checkpoint transaction (FR-001),
   in-process routing (FR-004, FR-006) and acknowledgements inside the dispatch's commit (FR-008). It defaults on.
   Off restores today's behaviour exactly, including today's separate continuation commits and acknowledgements, so
@@ -192,7 +199,8 @@ that commit; separate acknowledgements remain only for dispatches that made no c
   Other compositions keep the outbox.
 - ADR 0020 ("the commit records post-commit work but never dispatches it inline") is read as permitting a durable
   queue write inside the commit: writing the next work item is recording, not dispatching. The plan records this
-  reading; if the architect disagrees, FR-001 needs an ADR amendment first.
+  reading; if the architect disagrees, FR-001 needs an ADR amendment first. Until that reading is confirmed, FR-001 is
+  not accepted for the per-hop HTTP composition, and US1 work does not start.
 - The spec-228 fusion rules (single-predecessor edges, routing memo) are the starting point for "routable in-process";
   this spec extends their use to per-hop persistence rather than defining new routing rules.
 - `Immediate` is the per-hop mode until ADR 0080 D2 renames it to `Durable` (#2585); the requirements apply to
