@@ -496,6 +496,13 @@ jobs:
         if: ${{ !cancelled() && steps.generator.outcome == 'success' }}
         run: dotnet run --project tools/maps/Elsa.Maps.Generator -c Release --no-build -- solution-filters-self-test
 
+      # Cheap, container-free: a new Testcontainers project missing from tools/ci/ef-suites.json fails here on the PR,
+      # instead of silently running nowhere until the nightly EF matrix notices.
+      - name: Check every Testcontainers project is in the nightly EF suite manifest
+        id: ef-suites-self-test
+        if: ${{ !cancelled() && steps.generator.outcome == 'success' }}
+        run: dotnet run --project tools/maps/Elsa.Maps.Generator -c Release --no-build -- ef-suites-self-test
+
       - name: Validate filters with the .NET CLI
         id: filters-cli
         if: ${{ !cancelled() }}
