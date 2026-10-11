@@ -103,15 +103,17 @@ explicit "backend management unavailable" state.
 > The `.NET` commands below are existing developer commands; the scoped checks do not establish a complete fresh-machine setup or source-edit journey.
 
 ```bash
+cd Studio
 pnpm install
 pnpm build
-dotnet build
-dotnet test
+dotnet build Elsa.Studio.slnx
+dotnet test Elsa.Studio.slnx
 ```
 
 ## Run
 
 ```bash
+cd Studio
 dotnet run --project src/apps/Elsa.Studio.Web/Elsa.Studio.Web.csproj
 ```
 
@@ -176,9 +178,9 @@ Preview builds (`4.0.0-preview.<n>`) publish to the elsa-4 feedz.io npm feed on 
 (the build context must be the repo root):
 
 ```bash
-pnpm install --frozen-lockfile
-pnpm build
-docker build -f src/apps/Elsa.Studio.Web/Dockerfile -t elsa-studio-web:local .
+pnpm --dir Studio install --frozen-lockfile
+pnpm --dir Studio build
+docker build -f Studio/src/apps/Elsa.Studio.Web/Dockerfile -t elsa-studio-web:local .
 docker run --rm -p 8080:8080 \
   -e Studio__BackendBaseUrl=https://your-elsa-server:443 \
   elsa-studio-web:local

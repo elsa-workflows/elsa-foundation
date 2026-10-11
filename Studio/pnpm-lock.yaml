@@ -67,6 +67,116 @@ importers:
         specifier: ^2.1.8
         version: 2.1.9(jsdom@25.0.1)
 
+  ../Extensions/Attention/studio/Elsa.Studio.Attention/Client:
+    dependencies:
+      '@elsa-workflows/studio-sdk':
+        specifier: workspace:*
+        version: link:../../../../../Studio/src/apps/Elsa.Studio.Web/StudioSdk
+      '@elsa-workflows/studio-ui':
+        specifier: workspace:*
+        version: link:../../../../../Studio/src/apps/Elsa.Studio.Web/StudioUi
+      react:
+        specifier: ^18.0.0 || ^19.0.0
+        version: 19.2.7
+      react-dom:
+        specifier: ^18.0.0 || ^19.0.0
+        version: 19.2.7(react@19.2.7)
+    devDependencies:
+      '@types/react':
+        specifier: ^19.2.17
+        version: 19.2.17
+      '@types/react-dom':
+        specifier: ^19.2.3
+        version: 19.2.3(@types/react@19.2.17)
+
+  ../Extensions/ConsoleStream/studio/Elsa.Studio.ConsoleStream/Client:
+    dependencies:
+      '@microsoft/signalr':
+        specifier: ^8.0.7
+        version: 8.0.17
+
+  ../Extensions/Diagnostics.OpenTelemetry/studio/Elsa.Studio.Diagnostics.OpenTelemetry/Client: {}
+
+  ../Extensions/Diagnostics.StructuredLogs/studio/Elsa.Studio.Diagnostics.StructuredLogs/Client: {}
+
+  ../Extensions/ExpressionEditors.JavaScript/studio/Elsa.Studio.ExpressionEditors.JavaScript/Client:
+    dependencies:
+      '@elsa-workflows/studio-code-editor':
+        specifier: workspace:*
+        version: link:../../../../../Studio/src/essentials/Elsa.Studio.CodeEditor/Client
+
+  ../Extensions/ExpressionEditors.Liquid/studio/Elsa.Studio.ExpressionEditors.Liquid/Client:
+    dependencies:
+      '@elsa-workflows/studio-code-editor':
+        specifier: workspace:*
+        version: link:../../../../../Studio/src/essentials/Elsa.Studio.CodeEditor/Client
+
+  ../Extensions/ExtensionBuilder/studio/Elsa.Studio.ExtensionBuilder/Client:
+    dependencies:
+      '@elsa-workflows/studio-code-editor':
+        specifier: workspace:*
+        version: link:../../../../../Studio/src/essentials/Elsa.Studio.CodeEditor/Client
+      '@elsa-workflows/studio-sdk':
+        specifier: workspace:*
+        version: link:../../../../../Studio/src/apps/Elsa.Studio.Web/StudioSdk
+      '@elsa-workflows/studio-ui':
+        specifier: workspace:*
+        version: link:../../../../../Studio/src/apps/Elsa.Studio.Web/StudioUi
+      lucide-react:
+        specifier: ^0.468.0
+        version: 0.468.0(react@19.2.7)
+      react:
+        specifier: ^18.0.0 || ^19.0.0
+        version: 19.2.7
+      react-dom:
+        specifier: ^18.0.0 || ^19.0.0
+        version: 19.2.7(react@19.2.7)
+    devDependencies:
+      '@types/react':
+        specifier: ^19.2.17
+        version: 19.2.17
+      '@types/react-dom':
+        specifier: ^19.2.3
+        version: 19.2.3(@types/react@19.2.17)
+
+  ../Extensions/FeatureManagement/studio/Elsa.Studio.FeatureManagement/Client:
+    dependencies:
+      '@elsa-workflows/studio-ui':
+        specifier: workspace:*
+        version: link:../../../../../Studio/src/apps/Elsa.Studio.Web/StudioUi
+
+  ../Extensions/Samples.WeatherForecast/studio/Elsa.Studio.Samples.WeatherForecast/Client: {}
+
+  ../Extensions/Secrets/studio/Elsa.Studio.Secrets/Client: {}
+
+  ../Extensions/Weaver/studio/Elsa.Studio.Weaver.Workflows/Client:
+    dependencies:
+      '@elsa-workflows/studio-workflows':
+        specifier: workspace:*
+        version: link:../../../../../Studio/src/essentials/Elsa.Studio.Workflows/Client
+
+  ../Extensions/Workflows.Dashboard/studio/Elsa.Studio.Workflows.Dashboard/Client:
+    dependencies:
+      '@elsa-workflows/studio-sdk':
+        specifier: workspace:*
+        version: link:../../../../../Studio/src/apps/Elsa.Studio.Web/StudioSdk
+      '@elsa-workflows/studio-ui':
+        specifier: workspace:*
+        version: link:../../../../../Studio/src/apps/Elsa.Studio.Web/StudioUi
+      react:
+        specifier: ^18.0.0 || ^19.0.0
+        version: 19.2.7
+      react-dom:
+        specifier: ^18.0.0 || ^19.0.0
+        version: 19.2.7(react@19.2.7)
+    devDependencies:
+      '@types/react':
+        specifier: ^19.2.17
+        version: 19.2.17
+      '@types/react-dom':
+        specifier: ^19.2.3
+        version: 19.2.3(@types/react@19.2.17)
+
   examples/react-host:
     dependencies:
       '@elsa-workflows/studio-code-editor':
@@ -329,116 +439,6 @@ importers:
       vite-plugin-dts:
         specifier: ^4.5.0
         version: 4.5.4(rollup@4.62.0)(typescript@5.9.3)(vite@7.3.5)
-
-  src/extensions/Elsa.Studio.Attention/Client:
-    dependencies:
-      '@elsa-workflows/studio-sdk':
-        specifier: workspace:*
-        version: link:../../../apps/Elsa.Studio.Web/StudioSdk
-      '@elsa-workflows/studio-ui':
-        specifier: workspace:*
-        version: link:../../../apps/Elsa.Studio.Web/StudioUi
-      react:
-        specifier: ^18.0.0 || ^19.0.0
-        version: 19.2.7
-      react-dom:
-        specifier: ^18.0.0 || ^19.0.0
-        version: 19.2.7(react@19.2.7)
-    devDependencies:
-      '@types/react':
-        specifier: ^19.2.17
-        version: 19.2.17
-      '@types/react-dom':
-        specifier: ^19.2.3
-        version: 19.2.3(@types/react@19.2.17)
-
-  src/extensions/Elsa.Studio.ConsoleStream/Client:
-    dependencies:
-      '@microsoft/signalr':
-        specifier: ^8.0.7
-        version: 8.0.17
-
-  src/extensions/Elsa.Studio.Diagnostics.OpenTelemetry/Client: {}
-
-  src/extensions/Elsa.Studio.Diagnostics.StructuredLogs/Client: {}
-
-  src/extensions/Elsa.Studio.ExpressionEditors.JavaScript/Client:
-    dependencies:
-      '@elsa-workflows/studio-code-editor':
-        specifier: workspace:*
-        version: link:../../../essentials/Elsa.Studio.CodeEditor/Client
-
-  src/extensions/Elsa.Studio.ExpressionEditors.Liquid/Client:
-    dependencies:
-      '@elsa-workflows/studio-code-editor':
-        specifier: workspace:*
-        version: link:../../../essentials/Elsa.Studio.CodeEditor/Client
-
-  src/extensions/Elsa.Studio.ExtensionBuilder/Client:
-    dependencies:
-      '@elsa-workflows/studio-code-editor':
-        specifier: workspace:*
-        version: link:../../../essentials/Elsa.Studio.CodeEditor/Client
-      '@elsa-workflows/studio-sdk':
-        specifier: workspace:*
-        version: link:../../../apps/Elsa.Studio.Web/StudioSdk
-      '@elsa-workflows/studio-ui':
-        specifier: workspace:*
-        version: link:../../../apps/Elsa.Studio.Web/StudioUi
-      lucide-react:
-        specifier: ^0.468.0
-        version: 0.468.0(react@19.2.7)
-      react:
-        specifier: ^18.0.0 || ^19.0.0
-        version: 19.2.7
-      react-dom:
-        specifier: ^18.0.0 || ^19.0.0
-        version: 19.2.7(react@19.2.7)
-    devDependencies:
-      '@types/react':
-        specifier: ^19.2.17
-        version: 19.2.17
-      '@types/react-dom':
-        specifier: ^19.2.3
-        version: 19.2.3(@types/react@19.2.17)
-
-  src/extensions/Elsa.Studio.FeatureManagement/Client:
-    dependencies:
-      '@elsa-workflows/studio-ui':
-        specifier: workspace:*
-        version: link:../../../apps/Elsa.Studio.Web/StudioUi
-
-  src/extensions/Elsa.Studio.Samples.WeatherForecast/Client: {}
-
-  src/extensions/Elsa.Studio.Secrets/Client: {}
-
-  src/extensions/Elsa.Studio.Weaver.Workflows/Client:
-    dependencies:
-      '@elsa-workflows/studio-workflows':
-        specifier: workspace:*
-        version: link:../../../essentials/Elsa.Studio.Workflows/Client
-
-  src/extensions/Elsa.Studio.Workflows.Dashboard/Client:
-    dependencies:
-      '@elsa-workflows/studio-sdk':
-        specifier: workspace:*
-        version: link:../../../apps/Elsa.Studio.Web/StudioSdk
-      '@elsa-workflows/studio-ui':
-        specifier: workspace:*
-        version: link:../../../apps/Elsa.Studio.Web/StudioUi
-      react:
-        specifier: ^18.0.0 || ^19.0.0
-        version: 19.2.7
-      react-dom:
-        specifier: ^18.0.0 || ^19.0.0
-        version: 19.2.7(react@19.2.7)
-    devDependencies:
-      '@types/react':
-        specifier: ^19.2.17
-        version: 19.2.17
-      '@types/react-dom':
-        specifier: ^19.2.3
-        version: 19.2.3(@types/react@19.2.17)
 
 packages:
 

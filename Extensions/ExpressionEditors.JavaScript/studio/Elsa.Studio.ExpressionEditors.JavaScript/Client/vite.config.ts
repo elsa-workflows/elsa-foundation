@@ -1,4 +1,4 @@
-import { defineModuleConfig } from "../../../../vite.module.base";
+import { defineModuleConfig } from "../../../../../Studio/vite.module.base";
 
 export default defineModuleConfig({
   root: __dirname,

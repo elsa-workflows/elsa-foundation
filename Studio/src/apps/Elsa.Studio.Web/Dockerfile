@@ -3,11 +3,10 @@
 # =============================================================================
 # Elsa.Studio.Web production image
 #
-# Build context MUST be the repository root, because the build relies on
-# repo-root configuration (Directory.Build.props, Directory.Packages.props,
-# NuGet.config). Example:
+# Build context MUST be the Elsa Foundation repository root so the Studio host can
+# consume its co-located optional modules. Example:
 #
-#   docker build -f src/apps/Elsa.Studio.Web/Dockerfile -t elsa-studio-web:local .
+#   docker build -f Studio/src/apps/Elsa.Studio.Web/Dockerfile -t elsa-studio-web:local .
 #
 # The frontend (React/Vite) assets are generated before this Docker build (by CI or
 # by running `pnpm build` locally) under each project's wwwroot. No MSBuild target
@@ -19,18 +18,31 @@
 FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
 WORKDIR /src
 
-# Copy repo-root build configuration first so restore layers cache well.
-COPY Directory.Build.props Directory.Packages.props ./
-COPY NuGet.config ./
-COPY Elsa.Studio.slnx ./
+# Copy Studio-owned build configuration first so restore layers cache well. The extension
+# projects import these files through their studio-level Directory.Build/Packages wrappers.
+COPY Studio/Directory.Build.props Studio/Directory.Packages.props Studio/NuGet.config Studio/icon.png ./Studio/
+COPY Studio/Elsa.Studio.slnx ./Studio/
 
-# Copy the source tree (tests, docs, etc. are excluded via .dockerignore).
-COPY src/ ./src/
+# Copy the Studio host and shared modules.
+COPY Studio/src/ ./Studio/src/
+
+# Copy only the optional Studio modules consumed by the host, not every Foundation extension.
+COPY Extensions/Attention/studio/ ./Extensions/Attention/studio/
+COPY Extensions/ConsoleStream/studio/ ./Extensions/ConsoleStream/studio/
+COPY Extensions/Diagnostics.OpenTelemetry/studio/ ./Extensions/Diagnostics.OpenTelemetry/studio/
+COPY Extensions/Diagnostics.StructuredLogs/studio/ ./Extensions/Diagnostics.StructuredLogs/studio/
+COPY Extensions/ExpressionEditors.JavaScript/studio/ ./Extensions/ExpressionEditors.JavaScript/studio/
+COPY Extensions/ExpressionEditors.Liquid/studio/ ./Extensions/ExpressionEditors.Liquid/studio/
+COPY Extensions/ExtensionBuilder/studio/ ./Extensions/ExtensionBuilder/studio/
+COPY Extensions/FeatureManagement/studio/ ./Extensions/FeatureManagement/studio/
+COPY Extensions/Secrets/studio/ ./Extensions/Secrets/studio/
+COPY Extensions/Weaver/studio/ ./Extensions/Weaver/studio/
+COPY Extensions/Workflows.Dashboard/studio/ ./Extensions/Workflows.Dashboard/studio/
 
 # Fail the image build clearly if the frontend build was skipped. The generated
 # wwwroot files are intentionally ignored by Git, so this protects both CI and
 # local Docker builds from publishing an assetless image that returns 404 at `/`.
-RUN test -f src/apps/Elsa.Studio.Web/wwwroot/studio/index.html
+RUN test -f Studio/src/apps/Elsa.Studio.Web/wwwroot/studio/index.html
 
 # Restore and publish only the web host; project references are pulled in transitively.
 #
@@ -38,9 +50,10 @@ RUN test -f src/apps/Elsa.Studio.Web/wwwroot/studio/index.html
 # tolerating a restore-only warning that appears in a clean environment: a transitive
 # preview dependency (ConsoleLogStreaming.AspNetCore preview.13) is no longer on the
 # feed and NuGet resolves the newer stable version instead.
-RUN dotnet restore src/apps/Elsa.Studio.Web/Elsa.Studio.Web.csproj \
+RUN dotnet restore Studio/src/apps/Elsa.Studio.Web/Elsa.Studio.Web.csproj \
+        --configfile Studio/NuGet.config \
         -p:WarningsNotAsErrors=NU1603
-RUN dotnet publish src/apps/Elsa.Studio.Web/Elsa.Studio.Web.csproj \
+RUN dotnet publish Studio/src/apps/Elsa.Studio.Web/Elsa.Studio.Web.csproj \
         -c Release \
         --no-restore \
         -p:WarningsNotAsErrors=NU1603 \

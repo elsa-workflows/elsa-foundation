@@ -20,7 +20,7 @@ For Spec Kit feature work, follow the feature directory identified by the issue,
 
 ## Local checks and hosted checks
 
-For frontend work, use Node.js 22 and the pnpm version declared in [`package.json`](package.json) (`pnpm@11.9.0`), matching the current PR workflow. Install the workspace with:
+For frontend work, use Node.js 22 and the pnpm version declared in [`package.json`](package.json) (`pnpm@11.9.0`), matching the current PR workflow. Run workspace commands from `Studio/` (or use `pnpm --dir Studio` from the repository root). Install the workspace with:
 
 ```bash
 pnpm install --frozen-lockfile

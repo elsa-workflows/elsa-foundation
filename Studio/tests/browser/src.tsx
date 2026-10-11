@@ -52,8 +52,8 @@ import { ActivityVersionChangeDialog } from "../../src/essentials/Elsa.Studio.Wo
 import { PublicationReviewDialog } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/workflow-editor/PublicationReviewDialog";
 import { createPublicationReview, type PublicationReviewState, type PublicationVersionSelection } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/workflow-editor/publicationReview";
 import type { PublicationIntent } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/api/publishing";
-import { JavaScriptExpandedEditor, JavaScriptInlineEditor } from "../../src/extensions/Elsa.Studio.ExpressionEditors.JavaScript/Client/src/module";
-import { LiquidExpandedEditor, LiquidInlineEditor } from "../../src/extensions/Elsa.Studio.ExpressionEditors.Liquid/Client/src/module";
+import { JavaScriptExpandedEditor, JavaScriptInlineEditor } from "../../../Extensions/ExpressionEditors.JavaScript/studio/Elsa.Studio.ExpressionEditors.JavaScript/Client/src/module";
+import { LiquidExpandedEditor, LiquidInlineEditor } from "../../../Extensions/ExpressionEditors.Liquid/studio/Elsa.Studio.ExpressionEditors.Liquid/Client/src/module";
 import {
   applyActivityVersionChange,
   findActivityOccurrence,

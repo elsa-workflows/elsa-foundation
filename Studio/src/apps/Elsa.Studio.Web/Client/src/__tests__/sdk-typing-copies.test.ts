@@ -9,9 +9,9 @@ import { read } from "./themeTestUtils";
 // declares the property editor context must carry the edited activity's id.
 const typingSources = {
   "canonical SDK": "../sdk/index.ts",
-  "Secrets copy": "../../../../../extensions/Elsa.Studio.Secrets/Client/src/studio-sdk.d.ts",
-  "JavaScript copy": "../../../../../extensions/Elsa.Studio.ExpressionEditors.JavaScript/Client/src/studio-sdk.d.ts",
-  "Liquid copy": "../../../../../extensions/Elsa.Studio.ExpressionEditors.Liquid/Client/src/studio-sdk.d.ts"
+  "Secrets copy": "../../../../../../../Extensions/Secrets/studio/Elsa.Studio.Secrets/Client/src/studio-sdk.d.ts",
+  "JavaScript copy": "../../../../../../../Extensions/ExpressionEditors.JavaScript/studio/Elsa.Studio.ExpressionEditors.JavaScript/Client/src/studio-sdk.d.ts",
+  "Liquid copy": "../../../../../../../Extensions/ExpressionEditors.Liquid/studio/Elsa.Studio.ExpressionEditors.Liquid/Client/src/studio-sdk.d.ts"
 };
 
 /** The text between the braces of `interface <name>`, or empty when it is not declared. */

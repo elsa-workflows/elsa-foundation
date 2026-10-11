@@ -1,13 +1,13 @@
 # Running Elsa.Studio.Web in Docker
 
-`src/apps/Elsa.Studio.Web` ships with a production `Dockerfile` that produces a self-contained
+`Studio/src/apps/Elsa.Studio.Web` ships with a production `Dockerfile` that produces a self-contained
 container image of the Studio host. Point it at an Elsa Server backend at runtime via
 environment variables and, optionally, a mounted `shells.json`.
 
-The Dockerfile lives at `src/apps/Elsa.Studio.Web/Dockerfile`, but the **build context must be
+The Dockerfile lives at `Studio/src/apps/Elsa.Studio.Web/Dockerfile`, but the **build context must be
 the repository root** because the build depends on repo-root configuration
-(`Directory.Build.props`, `Directory.Build.targets`, `Directory.Packages.props`,
-`NuGet.config`).
+(`Studio/Directory.Build.props`, `Studio/Directory.Packages.props`, `Studio/NuGet.config`),
+and the optional Studio modules beside their Foundation capabilities.
 
 > The React/Vite frontend assets are generated into each project's `wwwroot` by
 > `pnpm build` before the Docker build. No MSBuild target invokes pnpm/vite, so the
@@ -88,9 +88,9 @@ must sign in before the Studio management and console surfaces can be used.
 From the repository root:
 
 ```bash
-pnpm install --frozen-lockfile
-pnpm build
-docker build -f src/apps/Elsa.Studio.Web/Dockerfile -t elsa-studio-web:local .
+pnpm --dir Studio install --frozen-lockfile
+pnpm --dir Studio build
+docker build -f Studio/src/apps/Elsa.Studio.Web/Dockerfile -t elsa-studio-web:local .
 ```
 
 The image is a two-stage build: `mcr.microsoft.com/dotnet/sdk:10.0` publishes the app and
@@ -178,7 +178,7 @@ watches `/app/packages`, the runtime user owns `/app` so it can write there.
 ```yaml
 services:
   studio:
-    image: elsa-studio-web:local   # build: { context: ., dockerfile: src/apps/Elsa.Studio.Web/Dockerfile }
+    image: elsa-studio-web:local   # build: { context: ., dockerfile: Studio/src/apps/Elsa.Studio.Web/Dockerfile }
     ports:
       - "8080:8080"
     environment:
