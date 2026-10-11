@@ -73,7 +73,7 @@ export async function journey(name, fn, { viewport = { width: 1440, height: 1000
   };
   const browser = await chromium.launch({ headless: process.env.HEADED !== "1" });
   const context = await browser.newContext({ viewport });
-  context.on("page", page => observe(page, trace));
+  context.on("page", page => observe(page, trace)); // fires for newPage() too, so every page is observed once
   const page = await context.newPage();
   page.setDefaultTimeout(20_000);
   let stepNumber = 0;
@@ -96,10 +96,13 @@ export async function journey(name, fn, { viewport = { width: 1440, height: 1000
       await page.goto(`${studioUrl}/workflows/definitions`, { waitUntil: "domcontentloaded" });
       const form = page.locator('form[action="/_elsa/identity/login"]');
       await form.waitFor({ state: "visible", timeout: 45_000 });
+      // The form is served by the Workbench, so only a redirect back to Studio can satisfy the wait below.
+      if (new URL(page.url()).origin === studioUrl) throw new Error("the sign-in form rendered on the Studio origin");
       await form.locator('input[name="username"]').fill(username);
       await form.locator('input[name="password"]').fill(password);
       await form.locator('button[type="submit"]').click({ noWaitAfter: true });
-      await page.waitForURL(url => url.origin === studioUrl, { timeout: 45_000 });
+      await page.waitForURL(url => url.origin === studioUrl && !url.pathname.startsWith("/_elsa/identity"), { timeout: 45_000 });
+      await form.waitFor({ state: "detached" });
     },
 
     /** Runs axe-core (WCAG 2 A/AA) on the current page and records the violations. */
@@ -113,7 +116,6 @@ export async function journey(name, fn, { viewport = { width: 1440, height: 1000
       return violations;
     }
   };
-  observe(page, trace);
 
   try {
     await fn(qa);
