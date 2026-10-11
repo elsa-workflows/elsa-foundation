@@ -223,6 +223,11 @@ public sealed class DiagnosticsDrain<TItem, TResult> : IDisposable, IAsyncDispos
         {
             while (await reader.WaitToReadAsync(cancellationToken))
             {
+                // Let a partial batch gather for FlushDelay so a trickle of captures shares one commit instead of
+                // paying one each. A batch already full commits now.
+                if (_options.FlushDelay > TimeSpan.Zero && reader.Count < _options.BatchSize)
+                    await Task.Delay(_options.FlushDelay, cancellationToken);
+
                 batch.Clear();
                 while (batch.Count < _options.BatchSize && TryReadQueuedItem(out var item, out var queueDepthUpdate))
                 {

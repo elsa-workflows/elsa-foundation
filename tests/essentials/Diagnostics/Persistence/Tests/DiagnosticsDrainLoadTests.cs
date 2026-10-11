@@ -30,6 +30,55 @@ public sealed class DiagnosticsDrainLoadTests : DiagnosticsDrainTestBase
         Assert.Equal(200, target.State.PersistedItems.Count);
     }
 
+    /// <summary>
+    /// A trickle of captures shares one commit when a flush delay is set (#2613). Without it the drain wakes on the first
+    /// capture and commits it alone, so a request logging ten lines paid ten commits on the diagnostics database.
+    /// </summary>
+    [Fact]
+    public async Task A_flush_delay_gathers_a_trickle_of_captures_into_one_commit()
+    {
+        var target = new DiagnosticsFailureTarget();
+        var drain = Fixture.Create(target, queueCapacity: 64, batchSize: 50, flushDelay: TimeSpan.FromSeconds(1));
+        drain.Start();
+
+        Assert.True(drain.TryEnqueue(1, out var first));
+        await Task.Delay(TimeSpan.FromMilliseconds(20));
+        Assert.True(drain.TryEnqueue(2, out var second));
+        Assert.True(drain.TryEnqueue(3, out var third));
+
+        Assert.Equal(new[] { 1, 2, 3 }, await Task.WhenAll(first, second, third).WaitAsync(TimeSpan.FromSeconds(30)));
+        Assert.Equal(1, target.Attempts);
+    }
+
+    /// <summary>Without a flush delay the drain commits what it finds the moment it wakes, so the trickle above is two commits.</summary>
+    [Fact]
+    public async Task Without_a_flush_delay_a_trickle_of_captures_commits_as_it_arrives()
+    {
+        var target = new DiagnosticsFailureTarget();
+        var drain = Fixture.Create(target, queueCapacity: 64, batchSize: 50);
+        drain.Start();
+
+        Assert.True(drain.TryEnqueue(1, out var first));
+        await first.WaitAsync(TimeSpan.FromSeconds(30));
+        Assert.True(drain.TryEnqueue(2, out var second));
+        await second.WaitAsync(TimeSpan.FromSeconds(30));
+
+        Assert.Equal(2, target.Attempts);
+    }
+
+    [Fact]
+    public async Task A_full_batch_commits_without_waiting_for_the_flush_delay()
+    {
+        var target = new DiagnosticsFailureTarget();
+        var drain = Fixture.Create(target, queueCapacity: 64, batchSize: 2, flushDelay: TimeSpan.FromMinutes(5));
+        Assert.True(drain.TryEnqueue(1, out var first));
+        Assert.True(drain.TryEnqueue(2, out var second));
+
+        drain.Start();
+
+        Assert.Equal(new[] { 1, 2 }, await Task.WhenAll(first, second).WaitAsync(TimeSpan.FromSeconds(30)));
+    }
+
     [Fact]
     public async Task Overflow_sheds_the_oldest_item_and_settles_its_acknowledgement()
     {

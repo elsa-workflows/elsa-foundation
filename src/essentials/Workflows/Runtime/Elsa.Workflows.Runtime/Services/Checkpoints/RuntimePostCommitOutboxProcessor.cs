@@ -582,7 +582,10 @@ public sealed class RuntimePostCommitOutboxProcessor : IRuntimePostCommitOutboxP
     private void LogDelivered(RuntimePostCommitOutboxItem item)
     {
         item.Intent.Metadata.TryGetValue(RuntimeMetadataKeys.DispatchId, out var dispatchId);
-        _logger.LogInformation(
+        // Debug, not Information (#2613): a delivery succeeding is the expected path of every checkpoint, and at
+        // Information it was ~99% of all persisted structured-log volume, each line a commit on the diagnostics store.
+        // Failures, retries and supersessions keep their levels.
+        _logger.LogDebug(
             new EventId(68104, "RuntimePostCommitDeliverySucceeded"),
             "Runtime post-commit delivery succeeded. OutboxItemId={OutboxItemId} IntentId={IntentId} IntentKind={IntentKind} DispatchId={DispatchId} DeliveryAttemptCount={DeliveryAttemptCount} EffectiveStatus={EffectiveStatus}",
             item.OutboxItemId,
