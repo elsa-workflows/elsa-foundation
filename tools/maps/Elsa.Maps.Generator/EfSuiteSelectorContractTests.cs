@@ -77,6 +77,23 @@ public static class EfSuiteSelectorContractTests
                 ["tests/Shared/Guard.cs"] = ["tests/Publishing/Publishing.Tests.csproj"]
             }), "selected", "publishing");
 
+        // Pull requests drop the suites that exist only for SQL Server or MySQL and run the rest on SQLite and PostgreSQL.
+        EfSuite[] engineSuites =
+        [
+            new("multi", "tests/Multi/Multi.Tests.csproj", ""),
+            new("sqlite-only", "tests/Sqlite/Sqlite.Tests.csproj", "", "sqlite"),
+            new("postgresql-only", "tests/PostgreSql/PostgreSql.Tests.csproj", "", "postgresql"),
+            new("sqlserver-only", "tests/SqlServer/SqlServer.Tests.csproj", "", "sqlserver"),
+            new("mysql-only", "tests/MySql/MySql.Tests.csproj", "", "mysql")
+        ];
+        var scoped = EfSuiteSelector.ScopeToPullRequest(new EfSuiteSelection("full", "every suite", engineSuites));
+        Assert(scoped, "full", "multi", "sqlite-only", "postgresql-only");
+        AssertEngines(scoped, EfSuiteSelector.PullRequestEngines);
+        var engineOnly = EfSuiteSelector.ScopeToPullRequest(new EfSuiteSelection("selected", "engine suites", engineSuites[3..]));
+        Assert(engineOnly, "none");
+        AssertEngines(engineOnly, EfSuiteSelector.PullRequestEngines);
+        Assert(EfSuiteSelector.ScopeToPullRequest(new EfSuiteSelection("none", "PR diff is empty", [])), "none");
+
         const string separateSecrets = "tests/essentials/Secrets/Persistence/EntityFrameworkCore/PostgreSql/Tests/Elsa.Secrets.Persistence.EntityFrameworkCore.PostgreSql.Tests.csproj";
         var roots = suites.Select(suite => suite.Project).Append(separateSecrets).ToArray();
         EfSuiteSelector.ValidateCoverage(suites, roots, suites.Select(suite => suite.Project).ToArray(), projects.Keys.ToArray());
@@ -95,9 +112,23 @@ public static class EfSuiteSelectorContractTests
             .RootElement.GetProperty("suites").GetArrayLength();
         if (full.Mode != "full" || full.Suites.Count != manifestSuites)
             throw new InvalidOperationException($"Manual dispatch must select all {manifestSuites} EF suites of the manifest.");
-        if (EfSuiteSelector.Select(repo, "push", null, null).Suites.Count != manifestSuites ||
-            EfSuiteSelector.Select(repo, "pull_request", "missing", "missing").Mode != "full")
-            throw new InvalidOperationException("Main and an unavailable PR diff must fail closed to the full matrix.");
+        AssertEngines(full, EfSuiteSelector.AllEngines);
+        foreach (var eventName in new[] { "push", "schedule" })
+        {
+            var selection = EfSuiteSelector.Select(repo, eventName, null, null);
+            if (selection.Mode != "full" || selection.Suites.Count != manifestSuites)
+                throw new InvalidOperationException($"A {eventName} run must select all {manifestSuites} EF suites of the manifest.");
+            AssertEngines(selection, EfSuiteSelector.AllEngines);
+        }
+        // The manifest marks its SQL Server- and MySQL-only suites; a field that failed to bind would drop none.
+        var engineOnlySuites = full.Suites.Count(suite => suite.OnlyEngine is "sqlserver" or "mysql");
+        var unavailableDiff = EfSuiteSelector.Select(repo, "pull_request", "missing", "missing");
+        if (unavailableDiff.Mode != "full" ||
+            engineOnlySuites == 0 ||
+            unavailableDiff.Suites.Count != manifestSuites - engineOnlySuites ||
+            unavailableDiff.Suites.Any(suite => suite.OnlyEngine is "sqlserver" or "mysql"))
+            throw new InvalidOperationException("An unavailable PR diff must fail closed to every suite a pull request runs.");
+        AssertEngines(unavailableDiff, EfSuiteSelector.PullRequestEngines);
 
         var actualProjects = SolutionFilterGenerator.GetProjectReferences(repo);
         var committedFilters = SolutionFilterGenerator.GetOutputPaths(repo);
@@ -127,6 +158,12 @@ public static class EfSuiteSelectorContractTests
         if (selection.Mode != mode || !actual.SequenceEqual(expected, StringComparer.Ordinal))
             throw new InvalidOperationException(
                 $"Expected {mode}: {string.Join(", ", expected)}; got {selection.Mode}: {string.Join(", ", actual)}.");
+    }
+
+    private static void AssertEngines(EfSuiteSelection selection, string engines)
+    {
+        if (selection.Engines != engines)
+            throw new InvalidOperationException($"Expected engines {engines}; got {selection.Engines}.");
     }
 
     private static void ExpectInvalid(Action action)

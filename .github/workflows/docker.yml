@@ -9,12 +9,14 @@ name: Docker Images
 #   - pushes to main produce latest + 4.0.0-preview.<run_number>
 # That tag is a build number and names no package version. The Elsa assemblies in both images
 # carry the versions the Packages workflow computes for the same commit (the versions job below).
-# Pull requests touching the same paths build both images for both platforms
-# but push nothing, so a Dockerfile that no longer builds fails on the PR, not
-# on main. Without this, #2087 added a root props file the Dockerfiles did not
-# copy and main stayed red for three merges before anyone saw it. A PR's run
-# checks its merge with main as of when it ran, not as of when it merges, so a
-# root file that lands on main in between still reaches main untested (#2114's PackageRanges.targets). With push off
+# Pull requests that change a Dockerfile, docker/, .dockerignore, this workflow or its guard scripts build
+# both images for both platforms but push nothing, so a Dockerfile that no longer builds fails on the PR,
+# not on main. Until #2622 every src/** and root build-file change triggered that build too; it was narrowed
+# because Actions was queueing. The cost is known: #2087 added a root props file the Dockerfiles did not
+# copy and main stayed red for three merges before anyone saw it, and a change like that now reaches main
+# untested again and fails the post-merge build. A PR's run also checks its merge with main as of when it
+# ran, not as of when it merges, so a root file that lands on main in between reached main untested even
+# before (#2114's PackageRanges.targets). With push off
 # the builder skips registry login and signing, so fork PRs need no secrets.
 # Docker's maintained builder fans the platforms out to native x64 and ARM64
 # GitHub-hosted runners, then assembles the multi-platform manifest.
@@ -65,15 +67,15 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
+    # Narrowed to the image definitions themselves (#2622); the post-merge build after Packages is unchanged.
+    # '**/Dockerfile' matches src/apps/Elsa.Workbench/Dockerfile and src/apps/Elsa.Foundation.Host/Dockerfile.
     paths:
+      - '**/Dockerfile'
+      - '**/*.Dockerfile'
+      - 'docker/**'
       - .dockerignore
       - .github/workflows/docker.yml
       - tools/contributor-checkpoints/**
-      - '*.props'
-      - '*.targets'
-      - Elsa.Server.slnx
-      - NuGet.config
-      - src/**
   workflow_dispatch:
     inputs:
       commit:
