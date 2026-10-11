@@ -1,0 +1,1136 @@
+/* Extension Builder module styles (#535). Every rule resolves colour through the --studio-* token contract
+   (docs/design-tokens.md); the page also uses the host's shared studio-button and studio-icon-button classes,
+   which the host owns and serves. */
+
+/* Page header, inspector sections, metadata, lists and diagnostics: the module's own copies of the host Module
+   Management page's look, so the module does not depend on that page's private classes. */
+.extension-builder-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin: 0;
+}
+
+.extension-builder-header > div:first-child {
+  display: grid;
+  gap: 4px;
+}
+
+.extension-builder-header h2 {
+  margin: 0;
+  font-family: var(--studio-font-display);
+  font-size: var(--studio-page-title-size, 20px);
+  font-weight: var(--studio-title-weight, 720);
+  line-height: 1.2;
+  color: var(--studio-text);
+}
+
+.extension-builder-header p {
+  margin: 0;
+  color: var(--studio-text-muted);
+  line-height: 1.5;
+  font-size: 13px;
+}
+
+.extension-builder-muted {
+  color: var(--studio-text-muted);
+}
+
+.extension-builder-metadata {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin: 0 0 14px;
+}
+
+.extension-builder-metadata div {
+  display: grid;
+  gap: 3px;
+  border-bottom: 1px solid var(--studio-border);
+  border-radius: 0;
+  padding: 0 0 7px;
+}
+
+.extension-builder-metadata dt {
+  color: var(--studio-text-muted);
+  font-size: var(--studio-label-size);
+  font-weight: 700;
+}
+
+.extension-builder-metadata dd {
+  margin: 0;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font-size: var(--studio-body-size);
+}
+
+.extension-builder-inspector-section {
+  display: grid;
+  gap: 10px;
+  border-top: 1px solid var(--studio-border);
+  padding-top: 13px;
+  margin-top: 13px;
+}
+
+.extension-builder-inspector-section h4 {
+  margin: 0;
+  font-size: 14px;
+}
+
+.extension-builder-manifest-code {
+  max-height: 360px;
+  overflow: auto;
+  border: 1px solid var(--studio-border);
+  border-radius: var(--studio-radius);
+  background: var(--studio-bg);
+  color: var(--studio-text);
+  font-family: var(--studio-font-mono);
+  font-size: 12px;
+  line-height: 1.45;
+  margin: 0;
+  padding: 10px;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.extension-builder-contribution-list,
+.extension-builder-diagnostics-list,
+.extension-builder-list {
+  display: grid;
+  gap: 8px;
+}
+
+.extension-builder-contribution-row,
+.extension-builder-diagnostic-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border: 1px solid var(--studio-border);
+  border-radius: var(--studio-radius);
+  padding: 8px 10px;
+}
+
+.extension-builder-contribution-row code {
+  color: var(--studio-text-muted);
+  font-family: var(--studio-font-mono);
+  font-size: 12px;
+}
+
+.extension-builder-diagnostic-row {
+  align-items: flex-start;
+  justify-content: flex-start;
+}
+
+.extension-builder-list-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  border: 1px solid var(--studio-border);
+  border-radius: var(--studio-radius);
+  background: var(--studio-surface);
+  padding: 8px 10px;
+}
+
+.extension-builder-list-row:hover {
+  border-color: color-mix(in srgb, var(--studio-accent) 28%, var(--studio-border));
+  background: color-mix(in srgb, var(--studio-accent) 5%, var(--studio-surface));
+}
+
+.extension-builder-list-row > span {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.extension-builder-list-row strong {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.extension-builder-operation-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+@media (max-width: 640px) {
+  .extension-builder-header {
+    flex-direction: column;
+    align-items: flex-start;
+    margin: 24px 0 16px 0;
+  }
+
+  .extension-builder-operation-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* The Extension Builder workspace is a full-bleed IDE: drop the host content container's padding so the
+   shell fills the whole area (the home view keeps the normal padded layout). */
+.content:has(> .extension-builder-page-workspace) {
+  padding: 0;
+  overflow: hidden;
+}
+
+.extension-builder-file-create {
+  display: grid;
+  gap: 5px;
+}
+
+.extension-builder-file-create input {
+  min-width: 0;
+  width: 100%;
+  border: 1px solid var(--studio-border);
+  border-radius: var(--studio-radius);
+  background: var(--studio-bg);
+  color: var(--studio-text);
+  font-size: var(--studio-body-size);
+  padding: 7px 8px;
+}
+
+.extension-builder-danger-actions {
+  display: grid;
+  gap: 7px;
+  border-top: 1px solid var(--studio-border);
+  padding-top: 10px;
+}
+
+.extension-builder-advanced-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-size: var(--studio-label-size);
+  font-weight: 700;
+  color: var(--studio-text-muted);
+  cursor: pointer;
+  user-select: none;
+}
+
+.extension-builder-advanced-toggle input {
+  width: 16px;
+  height: 16px;
+}
+
+.extension-builder-file-create {
+  grid-template-columns: minmax(0, 1fr) auto;
+  margin-bottom: 4px;
+}
+
+.extension-builder-file-create input {
+  height: 30px;
+}
+
+.extension-builder-solution-picker {
+  display: grid;
+  gap: 5px;
+  border-bottom: 1px solid var(--studio-border);
+  padding-bottom: 8px;
+}
+
+.extension-builder-solution-picker span {
+  color: var(--studio-text-muted);
+  font-size: var(--studio-label-size);
+  font-weight: 700;
+}
+
+.extension-builder-solution-picker select {
+  min-width: 0;
+  width: 100%;
+  border: 1px solid var(--studio-border);
+  border-radius: var(--studio-radius);
+  background: var(--studio-bg);
+  color: var(--studio-text);
+  font-size: var(--studio-body-size);
+  padding: 7px 8px;
+}
+
+.extension-builder-file-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  border: 1px solid transparent;
+  border-radius: var(--studio-radius);
+}
+
+.extension-builder-file-row.active {
+  border-color: color-mix(in srgb, var(--studio-accent) 42%, var(--studio-border));
+  background: var(--studio-accent-soft);
+}
+
+.extension-builder-file-row > button:first-child {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  min-height: 30px;
+  border: 0;
+  background: transparent;
+  color: var(--studio-text);
+  padding: 5px 7px;
+  text-align: left;
+}
+
+.extension-builder-file-row > button:first-child:disabled {
+  cursor: default;
+  color: var(--studio-text-muted);
+}
+
+.extension-builder-file-row code {
+  min-width: 0;
+  overflow: hidden;
+  font-family: var(--studio-font-mono);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.extension-builder-code-panel {
+  display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr) auto;
+  gap: 8px;
+  min-width: 0;
+  min-height: 0;
+}
+
+.extension-builder-editor-tabs {
+  display: flex;
+  min-width: 0;
+  overflow-x: auto;
+  border-bottom: 1px solid var(--studio-border);
+}
+
+.extension-builder-editor-tab {
+  display: inline-flex;
+  align-items: center;
+  max-width: 220px;
+  min-height: 32px;
+  border-right: 1px solid var(--studio-border);
+  background: var(--studio-surface-muted);
+  color: var(--studio-text-muted);
+}
+
+.extension-builder-editor-tab.active {
+  background: var(--studio-bg);
+  color: var(--studio-text);
+}
+
+.extension-builder-editor-tab-select {
+  display: inline-flex;
+  align-items: center;
+  min-width: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  font-size: var(--studio-label-size);
+  padding: 0 4px 0 8px;
+}
+
+.extension-builder-editor-tab-close {
+  display: inline-grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  margin-right: 6px;
+  border: 0;
+  border-radius: var(--studio-radius-sm);
+  background: transparent;
+  color: var(--studio-text-muted);
+  cursor: pointer;
+  font-size: 13px;
+  line-height: 1;
+}
+
+.extension-builder-editor-tab-close:hover {
+  background: color-mix(in srgb, var(--studio-text-muted) 18%, transparent);
+  color: var(--studio-text);
+}
+
+.extension-builder-editor-tabs span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.extension-builder-code-panel .studio-code-editor {
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) auto;
+  min-height: 0;
+  overflow: hidden;
+  border: 1px solid var(--studio-border);
+  border-radius: var(--studio-radius);
+  background: var(--studio-bg);
+}
+
+.extension-builder-code-panel .studio-code-editor-header {
+  display: none;
+}
+
+.extension-builder-code-panel .studio-code-editor-input,
+.extension-builder-code-panel .studio-code-editor .cm-editor {
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  border: 0;
+  background: var(--studio-bg);
+  color: var(--studio-text);
+  font-family: var(--studio-font-mono);
+  font-size: 12px;
+  line-height: 1.55;
+  letter-spacing: 0;
+}
+
+.extension-builder-code-panel .studio-code-editor-input {
+  resize: none;
+  padding: 12px;
+  tab-size: 2;
+}
+
+.extension-builder-code-panel .studio-code-editor .cm-scroller {
+  font-family: var(--studio-font-mono);
+}
+
+.extension-builder-code-panel .studio-code-editor:focus-within {
+  border-color: var(--studio-accent);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--studio-accent) 35%, transparent);
+}
+
+.extension-builder-code-panel .studio-code-editor-diagnostics {
+  display: grid;
+  gap: 5px;
+  border-top: 1px solid var(--studio-border);
+  padding: 8px;
+}
+
+.extension-builder-code-panel .studio-code-editor-diagnostic {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin: 0;
+  color: var(--studio-text);
+  font-size: var(--studio-label-size);
+}
+
+.extension-builder-code-panel .studio-code-editor-diagnostic span {
+  font-family: var(--studio-font-mono);
+  font-weight: 700;
+}
+
+.extension-builder-code-panel .studio-code-editor-diagnostic small {
+  color: var(--studio-text-muted);
+}
+
+.extension-builder-code-panel .studio-code-editor-diagnostic.error {
+  color: var(--studio-danger);
+}
+
+.extension-builder-code-panel .studio-code-editor-diagnostic.warning {
+  color: var(--studio-warning);
+}
+
+.extension-builder-editor-status,
+.extension-builder-runtime-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 0;
+}
+
+.extension-builder-editor-status > span:first-child {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--studio-text-muted);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.extension-builder-editor-status code {
+  font-family: var(--studio-font-mono);
+  font-size: 12px;
+}
+
+.extension-builder-inline-diagnostics {
+  display: grid;
+  gap: 5px;
+  border: 1px solid color-mix(in srgb, var(--studio-warning) 45%, var(--studio-border));
+  border-radius: var(--studio-radius);
+  background: color-mix(in srgb, var(--studio-warning) 8%, var(--studio-surface));
+  padding: 8px;
+}
+
+.extension-builder-inline-diagnostics span {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--studio-text);
+  font-size: var(--studio-label-size);
+}
+
+.extension-builder-build-log {
+  min-height: 180px;
+}
+
+.extension-builder-source-control {
+  display: grid;
+  gap: 14px;
+}
+
+.extension-builder-source-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.extension-builder-source-list {
+  display: grid;
+  gap: 8px;
+}
+
+.extension-builder-source-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+}
+
+.extension-builder-source-row > button:first-child {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  border: 1px solid var(--studio-border);
+  border-radius: var(--studio-radius);
+  background: var(--studio-surface);
+  color: var(--studio-text);
+  padding: 7px 8px;
+  text-align: left;
+}
+
+.extension-builder-source-row code {
+  min-width: 0;
+  overflow: hidden;
+  font-family: var(--studio-font-mono);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.extension-builder-commit-message {
+  width: 100%;
+  min-height: 68px;
+  resize: vertical;
+  border: 1px solid var(--studio-border);
+  border-radius: var(--studio-radius);
+  background: var(--studio-bg);
+  color: var(--studio-text);
+  font: inherit;
+  padding: 8px;
+}
+
+.extension-builder-diff {
+  max-height: 280px;
+  overflow: auto;
+  border: 1px solid var(--studio-border);
+  border-radius: var(--studio-radius);
+  background: var(--studio-bg);
+  color: var(--studio-text);
+  font-family: var(--studio-font-mono);
+  font-size: 11px;
+  line-height: 1.5;
+  padding: 10px;
+  white-space: pre;
+}
+
+.extension-builder-diagnostic-button,
+.extension-builder-history-row {
+  width: 100%;
+  background: var(--studio-surface);
+  color: var(--studio-text);
+  text-align: left;
+}
+
+.extension-builder-diagnostic-button span {
+  display: grid;
+  gap: 3px;
+}
+
+.extension-builder-diagnostic-button small,
+.extension-builder-history-row small {
+  color: var(--studio-text-muted);
+  font-size: var(--studio-label-size);
+}
+
+.extension-builder-runtime-heading {
+  align-items: start;
+}
+
+/* ============================================================
+   Extension Builder — two-mode layout (home + solution workspace)
+   ============================================================ */
+
+.extension-builder-page {
+  display: grid;
+  gap: 12px;
+}
+
+.extension-builder-page-workspace {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+}
+
+.extension-builder-home {
+  display: grid;
+  gap: 18px;
+}
+
+.extension-builder-hero {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 24px;
+}
+
+.extension-builder-hero-text h2 {
+  margin: 0;
+  font-size: var(--studio-page-title-size);
+  line-height: 1.2;
+}
+
+.extension-builder-hero-text p {
+  margin: 6px 0 0;
+  max-width: 640px;
+  color: var(--studio-text-muted);
+  font-size: var(--studio-body-size);
+  line-height: 1.5;
+}
+
+.extension-builder-hero-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex: 0 0 auto;
+}
+
+.extension-builder-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 12px;
+}
+
+.extension-builder-stat {
+  display: grid;
+  gap: 3px;
+  border: 1px solid var(--studio-border);
+  border-radius: var(--studio-radius-md);
+  background: var(--studio-surface);
+  padding: 14px 16px;
+}
+
+.extension-builder-stat strong {
+  color: var(--studio-text);
+  font-size: 22px;
+  font-weight: 720;
+  line-height: 1;
+}
+
+.extension-builder-stat span {
+  color: var(--studio-text-muted);
+  font-size: var(--studio-label-size);
+  font-weight: 650;
+}
+
+.extension-builder-create-bar {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 12px;
+}
+
+.extension-builder-create-block {
+  display: grid;
+  gap: 10px;
+  border: 1px solid var(--studio-border);
+  border-radius: var(--studio-radius-md);
+  background: var(--studio-surface);
+  padding: 14px;
+}
+
+.extension-builder-create-block.extension-builder-create-primary {
+  border-color: color-mix(in srgb, var(--studio-accent) 42%, var(--studio-border));
+}
+
+.extension-builder-create-block h4 {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin: 0;
+  font-size: var(--studio-body-size);
+  font-weight: 700;
+}
+
+.extension-builder-create-fields {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.extension-builder-create-fields input {
+  flex: 1 1 180px;
+  min-width: 0;
+  border: 1px solid var(--studio-border);
+  border-radius: var(--studio-radius);
+  background: var(--studio-bg);
+  color: var(--studio-text);
+  font-size: var(--studio-body-size);
+  padding: 8px 9px;
+}
+
+.extension-builder-create-fields .studio-button {
+  flex: 0 0 auto;
+}
+
+.extension-builder-section-title {
+  margin: 4px 0 0;
+  color: var(--studio-text-muted);
+  font-size: var(--studio-label-size);
+  font-weight: 800;
+  letter-spacing: .05em;
+  text-transform: uppercase;
+}
+
+.extension-builder-empty {
+  display: grid;
+  justify-items: center;
+  gap: 10px;
+  border: 1px dashed var(--studio-border);
+  border-radius: var(--studio-radius-md);
+  background: var(--studio-surface);
+  padding: 40px 20px;
+  color: var(--studio-text-muted);
+  text-align: center;
+}
+
+.extension-builder-empty p {
+  margin: 0;
+}
+
+.extension-builder-solution-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 14px;
+}
+
+.extension-builder-solution-card {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-height: 132px;
+  border: 1px solid var(--studio-border);
+  border-radius: var(--studio-radius-md);
+  background: var(--studio-surface);
+  padding: 16px;
+  cursor: pointer;
+  text-align: left;
+  color: inherit;
+  font: inherit;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.extension-builder-solution-card:hover {
+  border-color: color-mix(in srgb, var(--studio-accent) 55%, var(--studio-border));
+  box-shadow: var(--studio-shadow-sm);
+}
+
+.extension-builder-solution-card.active {
+  border-color: var(--studio-accent);
+  box-shadow: 0 0 0 1px var(--studio-accent);
+}
+
+.extension-builder-solution-card-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  color: var(--studio-text-muted);
+}
+
+.extension-builder-solution-card h4 {
+  margin: 0;
+  font-size: 15px;
+  line-height: 1.25;
+}
+
+.extension-builder-solution-card p {
+  margin: 0;
+}
+
+.extension-builder-solution-card-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: auto;
+  color: var(--studio-text-muted);
+  font-size: var(--studio-label-size);
+}
+
+.extension-builder-solution-card-meta span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.extension-builder-shell {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  flex: 1;
+  min-height: 0;
+  background: var(--studio-surface);
+  overflow: hidden;
+}
+
+.extension-builder-commandbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border-bottom: 1px solid var(--studio-border);
+  background: color-mix(in srgb, var(--studio-surface) 82%, var(--studio-surface-muted));
+  padding: 9px 12px;
+}
+
+.extension-builder-commandbar-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.extension-builder-commandbar-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 0 0 auto;
+}
+
+/* Active-progress spinner for busy buttons (Save/Build/Pack) in the command bar and dock, so a running
+   operation gives live feedback, not just a disabled control. */
+.extension-builder-page .is-spinning,
+.extension-builder-dock .is-spinning {
+  animation: extension-builder-spin 0.8s linear infinite;
+}
+
+@keyframes extension-builder-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  /* Stop the spinner from rotating, but keep the icon rendered so the "loading" affordance stays visible. */
+  .extension-builder-page .is-spinning,
+  .extension-builder-dock .is-spinning {
+    animation: none;
+  }
+}
+
+.extension-builder-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  border: 1px solid transparent;
+  border-radius: var(--studio-radius);
+  background: transparent;
+  color: var(--studio-accent);
+  cursor: pointer;
+  font-size: var(--studio-body-size);
+  font-weight: 650;
+  padding: 5px 8px 5px 5px;
+}
+
+.extension-builder-back:hover {
+  background: var(--studio-accent-soft);
+}
+
+.extension-builder-crumb {
+  min-width: 0;
+  overflow: hidden;
+  font-size: 14px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.extension-builder-crumb strong {
+  font-weight: 720;
+}
+
+.extension-builder-ide {
+  display: grid;
+  grid-template-columns: minmax(220px, 280px) minmax(0, 1fr);
+  min-height: 0;
+}
+
+.extension-builder-explorer {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  border-right: 1px solid var(--studio-border);
+  background: color-mix(in srgb, var(--studio-surface) 72%, var(--studio-surface-muted));
+}
+
+.extension-builder-explorer-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  border-bottom: 1px solid var(--studio-border);
+  padding: 9px 12px;
+  color: var(--studio-text-muted);
+  font-size: var(--studio-label-size);
+  font-weight: 800;
+  letter-spacing: .05em;
+  text-transform: uppercase;
+}
+
+.extension-builder-explorer-scroll {
+  display: grid;
+  align-content: start;
+  gap: 8px;
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 10px;
+}
+
+.extension-builder-explorer-label {
+  color: var(--studio-text-muted);
+  font-size: var(--studio-label-size);
+  font-weight: 700;
+}
+
+.extension-builder-project-switch {
+  display: grid;
+  gap: 4px;
+  margin-top: 5px;
+}
+
+.extension-builder-project-switch button {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  border: 1px solid transparent;
+  border-radius: var(--studio-radius);
+  background: transparent;
+  color: var(--studio-text);
+  cursor: pointer;
+  font: inherit;
+  padding: 6px 8px;
+  text-align: left;
+}
+
+.extension-builder-project-switch button.active {
+  border-color: color-mix(in srgb, var(--studio-accent) 42%, var(--studio-border));
+  background: var(--studio-accent-soft);
+}
+
+.extension-builder-tree {
+  display: grid;
+  gap: 2px;
+}
+
+.extension-builder-file-glyph {
+  display: inline-grid;
+  place-items: center;
+  width: 16px;
+  color: var(--studio-text-muted);
+  font-size: 11px;
+}
+
+.extension-builder-file-actions {
+  display: inline-flex;
+  gap: 2px;
+  opacity: 0;
+}
+
+.extension-builder-file-row:hover .extension-builder-file-actions,
+.extension-builder-file-row.active .extension-builder-file-actions {
+  opacity: 1;
+}
+
+.extension-builder-file-row .studio-icon-button {
+  width: 24px;
+  height: 24px;
+  border-color: transparent;
+  background: transparent;
+}
+
+.extension-builder-explorer-details {
+  display: grid;
+  gap: 7px;
+  border-top: 1px solid var(--studio-border);
+  padding-top: 9px;
+}
+
+.extension-builder-explorer-details > summary {
+  color: var(--studio-text-muted);
+  cursor: pointer;
+  font-size: var(--studio-label-size);
+  font-weight: 800;
+  list-style-position: inside;
+}
+
+.extension-builder-explorer-details > summary:hover {
+  color: var(--studio-accent);
+}
+
+.extension-builder-explorer-details label {
+  display: grid;
+  gap: 4px;
+}
+
+.extension-builder-explorer-details label span {
+  color: var(--studio-text-muted);
+  font-size: var(--studio-label-size);
+  font-weight: 700;
+}
+
+.extension-builder-explorer-details input,
+.extension-builder-explorer-details select {
+  width: 100%;
+  min-width: 0;
+  border: 1px solid var(--studio-border);
+  border-radius: var(--studio-radius);
+  background: var(--studio-bg);
+  color: var(--studio-text);
+  font-size: var(--studio-body-size);
+  padding: 6px 8px;
+}
+
+.extension-builder-explorer-details .extension-builder-checkbox {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.extension-builder-explorer-details .extension-builder-checkbox input {
+  width: 16px;
+  height: 16px;
+}
+
+.extension-builder-ide .extension-builder-code-panel {
+  height: 100%;
+  min-height: 0;
+  gap: 0;
+  background: var(--studio-bg);
+}
+
+.extension-builder-ide .extension-builder-editor-status {
+  padding: 7px 12px;
+  border-bottom: 1px solid var(--studio-border);
+}
+
+.extension-builder-ide .extension-builder-code-panel .studio-code-editor {
+  border: 0;
+  border-radius: 0;
+}
+
+.extension-builder-ide .extension-builder-code-panel .studio-code-editor:focus-within {
+  box-shadow: none;
+}
+
+.extension-builder-ide .extension-builder-inline-diagnostics {
+  border-left: 0;
+  border-right: 0;
+  border-bottom: 0;
+  border-radius: 0;
+}
+
+.extension-builder-dock {
+  border-top: 1px solid var(--studio-border);
+  background: var(--studio-surface);
+}
+
+.extension-builder-dock-tabs {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 10px;
+}
+
+.extension-builder-dock.open .extension-builder-dock-tabs {
+  border-bottom: 1px solid var(--studio-border);
+}
+
+.extension-builder-dock-tabs > button[role="tab"] {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 0;
+  border-radius: var(--studio-radius-sm);
+  background: transparent;
+  color: var(--studio-text-muted);
+  cursor: pointer;
+  font-size: var(--studio-label-size);
+  font-weight: 700;
+  padding: 5px 10px;
+}
+
+.extension-builder-dock-tabs > button[role="tab"]:hover {
+  color: var(--studio-text);
+}
+
+.extension-builder-dock-tabs > button[role="tab"].active {
+  background: var(--studio-surface-muted);
+  color: var(--studio-text);
+}
+
+.extension-builder-dock-badge {
+  border-radius: 999px;
+  background: var(--studio-surface-muted);
+  padding: 0 6px;
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.extension-builder-dock-badge.warn {
+  background: color-mix(in srgb, var(--studio-warning) 22%, var(--studio-surface));
+  color: var(--studio-warning);
+}
+
+.extension-builder-dock-spacer {
+  flex: 1;
+}
+
+.extension-builder-dock-body {
+  max-height: min(38vh, 320px);
+  overflow: auto;
+  border-top: 0;
+  padding: 12px 14px;
+}
+
+.extension-builder-autosave-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--studio-label-size);
+  font-weight: 650;
+  color: var(--studio-text-muted);
+  cursor: pointer;
+  user-select: none;
+  white-space: nowrap;
+}
+
+.extension-builder-autosave-toggle input {
+  width: 15px;
+  height: 15px;
+}

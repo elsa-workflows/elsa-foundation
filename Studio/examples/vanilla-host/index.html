@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Elsa Studio packages — framework-free host example</title>
+  </head>
+  <body>
+    <!--
+      This page is framework-free: no JSX, no React in the markup. It is plain HTML with a few
+      mount-point divs. src/main.ts imports the Studio widgets and mounts them into these divs
+      using React's createRoot/createElement under the hood — an implementation detail the page
+      never sees. `vite build` emits static JS/CSS servable by ANY backend.
+    -->
+    <main class="page">
+      <header class="page-header">
+        <h1>Framework-free Studio host</h1>
+        <p>
+          Plain HTML page (no JSX anywhere). The Studio widgets below are mounted from
+          <code>src/main.ts</code> with <code>createRoot</code> + <code>createElement</code>.
+        </p>
+      </header>
+
+      <section class="block">
+        <h2>Code editor</h2>
+        <div id="code-editor-mount"></div>
+      </section>
+
+      <section class="block">
+        <h2>UI primitives</h2>
+        <div id="toolbar-mount"></div>
+        <div id="grid-mount"></div>
+      </section>
+    </main>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

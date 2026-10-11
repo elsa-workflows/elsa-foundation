@@ -1,0 +1,50 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="coverlet.collector" />
+    <PackageReference Include="Microsoft.AspNetCore.Mvc.Testing" />
+    <PackageReference Include="Microsoft.AspNetCore.SignalR.Client" />
+    <PackageReference Include="Microsoft.Extensions.TimeProvider.Testing" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="xunit" />
+    <PackageReference Include="xunit.runner.visualstudio" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\essentials\Elsa.Studio.Api\Elsa.Studio.Api.csproj" />
+    <ProjectReference Include="..\..\src\extensions\Elsa.Studio.ConsoleStream\Elsa.Studio.ConsoleStream.csproj" />
+    <ProjectReference Include="..\..\src\essentials\Elsa.Studio.Core\Elsa.Studio.Core.csproj" />
+    <ProjectReference Include="..\..\src\extensions\Elsa.Studio.Diagnostics.OpenTelemetry\Elsa.Studio.Diagnostics.OpenTelemetry.csproj" />
+    <ProjectReference Include="..\..\src\extensions\Elsa.Studio.Diagnostics.StructuredLogs\Elsa.Studio.Diagnostics.StructuredLogs.csproj" />
+    <ProjectReference Include="..\..\src\extensions\Elsa.Studio.ExpressionEditors.JavaScript\Elsa.Studio.ExpressionEditors.JavaScript.csproj" />
+    <ProjectReference Include="..\..\src\extensions\Elsa.Studio.ExpressionEditors.Liquid\Elsa.Studio.ExpressionEditors.Liquid.csproj" />
+    <ProjectReference Include="..\..\src\extensions\Elsa.Studio.ExtensionBuilder\Elsa.Studio.ExtensionBuilder.csproj" />
+    <ProjectReference Include="..\..\src\extensions\Elsa.Studio.FeatureManagement\Elsa.Studio.FeatureManagement.csproj" />
+    <ProjectReference Include="..\..\src\extensions\Elsa.Studio.Secrets\Elsa.Studio.Secrets.csproj" />
+    <ProjectReference Include="..\..\src\extensions\Elsa.Studio.Weaver.Core\Elsa.Studio.Weaver.Core.csproj" />
+    <ProjectReference Include="..\..\src\extensions\Elsa.Studio.Weaver.Workflows\Elsa.Studio.Weaver.Workflows.csproj" />
+    <ProjectReference Include="..\..\src\essentials\Elsa.Studio.Workflows\Elsa.Studio.Workflows.csproj" />
+    <ProjectReference Include="..\..\src\essentials\Elsa.Studio.Dashboard\Elsa.Studio.Dashboard.csproj" />
+    <ProjectReference Include="..\..\src\extensions\Elsa.Studio.Samples.WeatherForecast\Elsa.Studio.Samples.WeatherForecast.csproj" />
+    <ProjectReference Include="..\..\src\apps\Elsa.Studio.Web\Elsa.Studio.Web.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="Xunit" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- The Web host's real shell configuration, read by WebHostShellFeatureDiscoveryTests. -->
+    <None Include="..\..\src\apps\Elsa.Studio.Web\shells.json" Link="WebHost\shells.json" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+</Project>

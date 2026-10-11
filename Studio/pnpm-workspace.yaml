@@ -1,0 +1,28 @@
+packages:
+  - "src/apps/Elsa.Studio.Web/Client"
+  - "src/apps/Elsa.Studio.Web/StudioSdk"
+  - "src/apps/Elsa.Studio.Web/StudioUi"
+  - "src/extensions/Elsa.Studio.ConsoleStream/Client"
+  - "src/extensions/Elsa.Studio.Diagnostics.OpenTelemetry/Client"
+  - "src/extensions/Elsa.Studio.Diagnostics.StructuredLogs/Client"
+  - "src/essentials/Elsa.Studio.CodeEditor/Client"
+  - "src/extensions/Elsa.Studio.ExpressionEditors.JavaScript/Client"
+  - "src/extensions/Elsa.Studio.ExpressionEditors.Liquid/Client"
+  - "src/extensions/Elsa.Studio.ExtensionBuilder/Client"
+  - "src/extensions/Elsa.Studio.FeatureManagement/Client"
+  - "src/extensions/Elsa.Studio.Secrets/Client"
+  - "src/extensions/Elsa.Studio.Weaver.Workflows/Client"
+  - "src/essentials/Elsa.Studio.Workflows/Client"
+  - "src/essentials/Elsa.Studio.Dashboard/Client"
+  - "src/extensions/Elsa.Studio.Attention/Client"
+  - "src/extensions/Elsa.Studio.Workflows.Dashboard/Client"
+  - "src/extensions/Elsa.Studio.Samples.WeatherForecast/Client"
+  - "examples/react-host"
+  - "examples/vanilla-host"
+overrides:
+  "@codemirror/view": "6.43.6"
+allowBuilds:
+  esbuild: true
+onlyBuiltDependencies:
+  - esbuild
+verifyDepsBeforeRun: false

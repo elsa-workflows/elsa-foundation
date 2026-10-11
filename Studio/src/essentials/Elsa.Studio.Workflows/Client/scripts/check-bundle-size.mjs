@@ -1,0 +1,222 @@
+import { readFile, stat } from "node:fs/promises";
+import { gzipSync } from "node:zlib";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+
+const packageRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
+const outputRoot = resolve(packageRoot, "../wwwroot/studio/modules/workflows");
+const manifest = JSON.parse(await readFile(resolve(outputRoot, ".vite/manifest.json"), "utf8"));
+
+// Budgets cover every Workflows asset the browser loads for the authenticated Definitions landing
+// path. The former 677.67 kB JavaScript monolith is the independent split baseline. CSS is split by
+// route so the staged-upgrade workbench has an independent measured budget and cannot increase the
+// authenticated Workflow Definitions landing baseline. Both landing budgets were raised by 6 kB for
+// the BPMN designer mode (shape styles in the shared stylesheet + shared bpmn structure types; the
+// measured paths moved 348.18 → 352.48 kB and 337.23 → 341.54 kB). Both were raised again by 6/4 kB
+// for the binding conversion controls (issue #449: conversion settings model + control styles in the
+// shared stylesheet; measured paths moved 352.48 → 358.69 kB and 341.54 → 343.31 kB). The definitions
+// landing budget was raised 2 kB for engine-intrinsic authoring (issue #929: Set Variable / Set Output
+// intrinsic helpers reached from the shared adapter + intrinsic inspector styles in the shared
+// stylesheet; the measured definitions path moved 358.69 → 362.31 kB). Both landing budgets were
+// raised another 2 kB for the route-transition skeleton fallback (lazy-boundary shimmer rows +
+// delayed fade-in styles in the shared stylesheet; the measured paths moved 362.31 → 364.16 kB and
+// 346.93 → 348.78 kB), and another 2 kB on top for the conversion-control progressive disclosure
+// (icon toggle + chip markup in the shared properties panel and their styles in the shared
+// stylesheet; the measured paths moved 364.16 → 365.48 kB and 348.78 → 349.99 kB). The landing
+// budgets were raised again for the simplified Inspector (the "Version & source" disclosure accordion
+// + the read-only Outputs section styles in the shared stylesheet). NOTE: CI's `pnpm install` links a
+// fuller workspace dependency dist than a local partial build, so CI measures higher than a local run
+// — the budgets below are sized against the CI-observed landing sizes (definitions 368.37 kB, upgrade
+// 356.31 kB; a local build reports ~366.70 kB and ~351.21 kB respectively). Definitions +2 kB, upgrade
+// +6 kB to clear the CI numbers with the usual ~2 kB margin. The activity output-capture editor initially
+// pulled the full conversion-settings module into the eager registration closure through activity-summary
+// formatting. That raised the clean-install entry/landing measurements to 120.52/369.60/356.52 kB. The
+// summary and built-in-profile primitives now live in the small conversionSource module, leaving the full
+// conversionSettings chunk deferred with the Workflow Editor. Clean-install measurements were consequently
+// 117.60/366.67/353.59 kB. Activity Definition graph authoring then added the small eager registry bridge
+// needed to pass shared property, expression, and graph-panel contributions into the deferred draft editor;
+// the definitions path measures 370.06 kB, so its budget gains 1 kB while the heavy designer stays deferred.
+// Per-occurrence activity presentation then added its normalization and display-label helpers to the shared
+// design adapter; CI measures the definitions path at 371.34 kB, so its budget gains 2 kB.
+// Expression tooling remains deferred from landing paths; the final pre-rebase production build measured
+// 373.16 kB for Definitions and 361.03 kB for the upgrade closure.
+// Safe publication-diagnostic formatting (code + authored path + range) is shared with the retained
+// version review and moved the measured upgrade closure to 362.17 kB. Rebasing both features together
+// measured the primary entry at 120.01 kB. Per-occurrence activity presentation then moved the combined
+// entry to 122.01 kB, Definitions to 376.93 kB, and upgrades to 365.34 kB. Retain a sub-0.5 kB review
+// margin for the entry and the usual ~2 kB landing-path margins around that combined contract.
+// The expression-editor authorization lifecycle (#481) and the dedicated Activity Definition graph
+// designer (#482) each measured under the budget on their own base but land together on main, so the
+// three eager budgets are re-baselined here against the merged tree: entry 124.16 kB (CI reports the
+// same byte count — the workspace packages resolve through their `src` exports, so the historical
+// local/CI dist skew noted above no longer applies to the entry), Definitions 379.12 kB, upgrades
+// 370.61 kB. The heavy surfaces all stay deferred; the growth is the shared code-editor shell's
+// authorization handling plus the designer's shared editor constants.
+// Checklist inputs reopened as "Object" after autosave, losing the checkbox list to a raw JSON summary.
+// Fixing it makes the descriptor-aware collection/dictionary detectors (previously deferred-only, in
+// collectionInputDescriptor.ts) shared with the eagerly-registered Object expression editor, which needs
+// them to recognize a #945 element-alias descriptor. That moves the entry to 125.23 kB — detectors alone
+// already measure 124.73 kB, so the growth is not avoidable by splitting the fix. Deferring the Object
+// editor's surfaces would reclaim it, but that restructuring is out of scope here. Re-baselined to 125.70 kB
+// to keep the usual sub-0.5 kB review margin.
+// The authored Flowchart start node (#493 follow-up) is eager by construction: the wire normalizer
+// decides the start (now preferring an activity that can start a workflow over the merely-first one) and
+// the canvas adapter marks which node it is, so `flowchartStartNode.ts` sits on the entry path through
+// both activityInputWire and workflowAdapter. Measured growth is ~1.7 kB on the entry (125.37 -> 127.07 kB)
+// and ~1 kB on each landing path (Definitions 383.01 kB, upgrades 373.98 kB); trimming the module's
+// re-export surface and its connection reader reclaimed under 0.1 kB, so the cost is the feature, not
+// packaging. Re-baselined with the usual sub-0.5 kB entry margin and ~1.5 kB landing margins. The
+// diagnostic half stays off the entry: the misplaced-trigger check and the panel's fault types are
+// reached through the deferred validation surface.
+const budgets = {
+  entryJavaScript: 127_500,
+  stylesheet: 185_000,
+  definitionsLandingTotal: 384_500,
+  upgradeLandingTotal: 375_500,
+  individualChunk: 500_000
+};
+
+const deferredHeavySurfaces = [
+  "ActivityUpgradeWorkbenchPage",
+  "ActivityAvailabilityPage",
+  "RuntimeDiagnosticsSettingsPage",
+  "WorkflowDefinitions",
+  "WorkflowEditor",
+  "WorkflowExecutableInspector",
+  "WorkflowExecutables",
+  "WorkflowInstances"
+];
+
+const excludedFromDefinitionsLanding = deferredHeavySurfaces.filter(name => name !== "WorkflowDefinitions");
+const deferredInspectorSharedChunks = ["conversionSettings"];
+const variableTargetPickerMarker = "Loading visible variables… The current target is preserved.";
+
+function collectStaticFiles(entryKey, files = new Set(), visitedEntries = new Set()) {
+  if (visitedEntries.has(entryKey)) return files;
+  visitedEntries.add(entryKey);
+  const entry = manifest[entryKey];
+  if (!entry) throw new Error(`Bundle manifest is missing ${entryKey}.`);
+
+  return collectStaticEntryFiles(entry, files, visitedEntries);
+}
+
+function collectStaticEntryFiles(entry, files = new Set(), visitedEntries = new Set()) {
+  files.add(entry.file);
+  for (const cssFile of entry.css ?? []) files.add(cssFile);
+  for (const importedKey of entry.imports ?? []) collectStaticFiles(importedKey, files, visitedEntries);
+  return files;
+}
+
+async function measure(files) {
+  const result = { bytes: 0, gzipBytes: 0 };
+  for (const file of files) {
+    const content = await readFile(resolve(outputRoot, file));
+    result.bytes += content.byteLength;
+    result.gzipBytes += gzipSync(content).byteLength;
+  }
+  return result;
+}
+
+async function readJavaScript(files) {
+  return (await Promise.all([...files].map(file => readFile(resolve(outputRoot, file), "utf8")))).join("\n");
+}
+
+function formatBytes(bytes) {
+  return `${(bytes / 1_000).toFixed(2)} kB`;
+}
+
+// Collected instead of thrown so a single run reports every overage; re-baselining one budget at a
+// time hides the rest and turns a merge-skew regression into several build/measure rounds.
+const overages = [];
+
+function assertBudget(label, actual, budget) {
+  if (actual > budget) {
+    overages.push(`${label} is ${formatBytes(actual)}; budget is ${formatBytes(budget)}.`);
+  }
+}
+
+function findChunk(name) {
+  const chunk = Object.values(manifest).find(entry => entry.name === name);
+  if (!chunk) throw new Error(`Bundle manifest is missing the ${name} chunk.`);
+  return chunk;
+}
+
+for (const chunkName of deferredHeavySurfaces) {
+  if (!findChunk(chunkName).isDynamicEntry) throw new Error(`${chunkName} is no longer emitted as a deferred entry.`);
+}
+
+const entryFiles = collectStaticFiles("src/module.tsx");
+const definitionsLandingFiles = new Set(entryFiles);
+collectStaticFiles("src/workflow-editor/pages.tsx", definitionsLandingFiles);
+collectStaticEntryFiles(findChunk("WorkflowDefinitions"), definitionsLandingFiles);
+const upgradeLandingFiles = new Set(entryFiles);
+collectStaticFiles("src/ActivityUpgradeWorkbenchPage.tsx", upgradeLandingFiles);
+const workflowEditorFiles = collectStaticEntryFiles(findChunk("WorkflowEditor"));
+const entryJavaScriptFiles = filesWithExtension(entryFiles, ".js");
+const stylesheetFiles = filesWithExtension(entryFiles, ".css");
+const definitionsLandingJavaScriptFiles = filesWithExtension(definitionsLandingFiles, ".js");
+const authenticatedLandingJavaScriptFiles = filesWithExtension(new Set([...definitionsLandingFiles, ...upgradeLandingFiles]), ".js");
+const workflowEditorJavaScriptFiles = filesWithExtension(workflowEditorFiles, ".js");
+
+if (stylesheetFiles.size === 0) throw new Error("Bundle manifest is missing the Workflows entry stylesheet.");
+
+for (const chunkName of excludedFromDefinitionsLanding) {
+  const chunk = findChunk(chunkName);
+  if (definitionsLandingFiles.has(chunk.file)) {
+    throw new Error(`The authenticated Definitions landing path eagerly includes ${chunkName}.`);
+  }
+}
+
+for (const chunkName of deferredInspectorSharedChunks) {
+  const chunk = findChunk(chunkName);
+  if (!workflowEditorFiles.has(chunk.file)) {
+    throw new Error(`The deferred Workflow Editor no longer includes ${chunkName}.`);
+  }
+  if (entryFiles.has(chunk.file) || definitionsLandingFiles.has(chunk.file) || upgradeLandingFiles.has(chunk.file)) {
+    throw new Error(`${chunkName} leaked into an eager Workflows landing closure.`);
+  }
+}
+
+const [authenticatedLandingJavaScript, workflowEditorJavaScript] = await Promise.all([
+  readJavaScript(authenticatedLandingJavaScriptFiles),
+  readJavaScript(workflowEditorJavaScriptFiles)
+]);
+if (!workflowEditorJavaScript.includes(variableTargetPickerMarker)) {
+  throw new Error("The Workflow Editor closure is missing the variable-target picker.");
+}
+if (authenticatedLandingJavaScript.includes(variableTargetPickerMarker)) {
+  throw new Error("The variable-target picker leaked into an eager Workflows landing closure.");
+}
+
+const [entrySize, stylesheetSize, definitionsLandingSize, definitionsLandingTotalSize, upgradeLandingTotalSize] = await Promise.all([
+  measure(entryJavaScriptFiles),
+  measure(stylesheetFiles),
+  measure(definitionsLandingJavaScriptFiles),
+  measure(definitionsLandingFiles),
+  measure(upgradeLandingFiles)
+]);
+
+const jsFiles = [...new Set(Object.values(manifest).map(entry => entry.file).filter(file => file.endsWith(".js")))];
+const jsSizes = await Promise.all(jsFiles.map(async file => ({ file, bytes: (await stat(resolve(outputRoot, file))).size })));
+const largestChunk = jsSizes.reduce((largest, candidate) => candidate.bytes > largest.bytes ? candidate : largest);
+
+assertBudget("Primary Workflows JavaScript entry", entrySize.bytes, budgets.entryJavaScript);
+assertBudget("Workflows stylesheet", stylesheetSize.bytes, budgets.stylesheet);
+assertBudget("Authenticated Definitions landing path", definitionsLandingTotalSize.bytes, budgets.definitionsLandingTotal);
+assertBudget("Activity Definition upgrades landing path", upgradeLandingTotalSize.bytes, budgets.upgradeLandingTotal);
+assertBudget(`Largest JavaScript chunk (${largestChunk.file})`, largestChunk.bytes, budgets.individualChunk);
+
+console.log("Workflows bundle budget");
+console.log(`  Primary JavaScript entry:          ${formatBytes(entrySize.bytes)} raw / ${formatBytes(entrySize.gzipBytes)} gzip (budget ${formatBytes(budgets.entryJavaScript)})`);
+console.log(`  Workflows stylesheet:              ${formatBytes(stylesheetSize.bytes)} raw / ${formatBytes(stylesheetSize.gzipBytes)} gzip (budget ${formatBytes(budgets.stylesheet)})`);
+console.log(`  Definitions JavaScript closure:    ${formatBytes(definitionsLandingSize.bytes)} raw / ${formatBytes(definitionsLandingSize.gzipBytes)} gzip`);
+console.log(`  Authenticated Definitions total:   ${formatBytes(definitionsLandingTotalSize.bytes)} raw / ${formatBytes(definitionsLandingTotalSize.gzipBytes)} gzip (budget ${formatBytes(budgets.definitionsLandingTotal)})`);
+console.log(`  Activity upgrades total:           ${formatBytes(upgradeLandingTotalSize.bytes)} raw / ${formatBytes(upgradeLandingTotalSize.gzipBytes)} gzip (budget ${formatBytes(budgets.upgradeLandingTotal)})`);
+console.log(`  Largest JavaScript chunk:          ${formatBytes(largestChunk.bytes)} (${largestChunk.file}; limit ${formatBytes(budgets.individualChunk)})`);
+console.log(`  Deferred heavy surfaces:           ${deferredHeavySurfaces.length}`);
+
+if (overages.length > 0) throw new Error(`Workflows bundle budget exceeded:\n  ${overages.join("\n  ")}`);
+
+function filesWithExtension(files, extension) {
+  return new Set([...files].filter(file => file.endsWith(extension)));
+}

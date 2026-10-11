@@ -1,0 +1,30 @@
+{
+  "name": "@elsa-workflows/example-react-host",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "test": "vitest run --passWithNoTests"
+  },
+  "dependencies": {
+    "@elsa-workflows/studio-code-editor": "workspace:*",
+    "@elsa-workflows/studio-sdk": "workspace:*",
+    "@elsa-workflows/studio-ui": "workspace:*",
+    "@elsa-workflows/studio-workflows": "workspace:*",
+    "@tanstack/react-query": "^5.101.0",
+    "@xyflow/react": "^12.10.2",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0"
+  },
+  "devDependencies": {
+    "@types/react": "^19.2.17",
+    "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-react": "^5.0.0",
+    "typescript": "^5.6.3",
+    "vite": "^7.1.0",
+    "vitest": "^2.1.8"
+  }
+}

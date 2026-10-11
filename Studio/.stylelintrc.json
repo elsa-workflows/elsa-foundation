@@ -1,0 +1,7 @@
+{
+  "plugins": ["./stylelint/no-raw-color-literal.mjs"],
+  "rules": {
+    "elsa/no-raw-color-literal": [true, { "ignoreSelectors": ["/console-stream-ansi/"] }]
+  },
+  "ignoreFiles": ["**/node_modules/**", "**/dist/**", "**/wwwroot/**", "**/Elsa.Studio.Web/Client/**"]
+}

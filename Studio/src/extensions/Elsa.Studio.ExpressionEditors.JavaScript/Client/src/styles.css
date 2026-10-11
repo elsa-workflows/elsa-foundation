@@ -1,0 +1,66 @@
+.js-expression-editor,
+.js-expression-expanded {
+  inline-size: 100%;
+  min-inline-size: 0;
+}
+
+.js-expression-editor.compact .studio-code-editor-rich .cm-editor,
+.js-expression-editor.compact .studio-code-editor-preview,
+.js-expression-editor.compact .studio-code-editor-input {
+  border: 0;
+  border-radius: var(--studio-radius-sm);
+}
+
+.js-expression-editor.compact .studio-code-editor-rich .cm-content,
+.js-expression-editor.compact .studio-code-editor-preview,
+.js-expression-editor.compact .studio-code-editor-input {
+  padding: 0.5rem 8.25rem 0.5rem 0.625rem;
+}
+
+.js-expression-expanded {
+  display: grid;
+  min-block-size: 0;
+}
+
+.js-expression-toolbar {
+  align-items: center;
+  background: var(--studio-surface-muted);
+  border: 1px solid var(--studio-border);
+  border-block-end: 0;
+  border-radius: var(--studio-radius-sm) var(--studio-radius-sm) 0 0;
+  color: var(--studio-text-muted);
+  display: flex;
+  min-block-size: 1.875rem;
+  padding-inline: 0.625rem;
+}
+
+.js-expression-toolbar span {
+  font-size: var(--studio-label-size);
+  font-weight: 700;
+}
+
+.js-expression-expanded .studio-code-editor {
+  border: 1px solid var(--studio-border);
+  border-radius: 0 0 var(--studio-radius-sm) var(--studio-radius-sm);
+  overflow: hidden;
+}
+
+.js-expression-expanded .studio-code-editor-header {
+  display: none;
+}
+
+.js-expression-expanded .studio-code-editor-rich .cm-editor,
+.js-expression-expanded .studio-code-editor-input {
+  border: 0;
+  border-radius: 0;
+}
+
+.js-expression-expanded .studio-code-editor-rich .cm-content,
+.js-expression-expanded .studio-code-editor-input {
+  padding: 0.75rem;
+}
+
+.js-expression-expanded .studio-code-editor:focus-within {
+  outline: 2px solid var(--studio-focus);
+  outline-offset: 2px;
+}

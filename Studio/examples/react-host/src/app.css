@@ -1,0 +1,68 @@
+/* App-shell styling for the example — not part of any Studio package. */
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: var(--studio-font-ui, system-ui, sans-serif);
+  background: var(--studio-bg, #fff);
+  color: var(--studio-text, #111);
+  font-size: 14px;
+}
+
+.example-shell {
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 32px 20px 64px;
+  display: flex;
+  flex-direction: column;
+  gap: 32px;
+}
+
+.example-header h1 {
+  margin: 0 0 6px;
+  font-size: 22px;
+}
+
+.example-header p {
+  margin: 0;
+  color: var(--studio-text-muted);
+  max-width: 62ch;
+  line-height: 1.5;
+}
+
+.example-section {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.example-section > h2 {
+  margin: 0;
+  font-size: 16px;
+}
+
+.example-section > .example-note {
+  margin: 0;
+  color: var(--studio-text-muted);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.example-panel {
+  border: 1px solid var(--studio-border);
+  border-radius: var(--studio-radius-md);
+  background: var(--studio-surface);
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.example-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}

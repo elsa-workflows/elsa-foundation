@@ -1,0 +1,378 @@
+openapi: 3.1.0
+info:
+  title: Elsa Expression Tooling API
+  version: 1.0.0
+  description: >
+    Foundation-owned, metadata-only expression tooling discovered through
+    capability expressions.tooling.v1. Every response produced by an endpoint handler is
+    Cache-Control: no-store.
+paths:
+  /design/workflows/expression-tooling/descriptors:
+    get:
+      operationId: describeExpressionTooling
+      responses:
+        "200":
+          description: Composed expression types and their declared tooling capabilities.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DescriptorsResponse" }
+        "401": { description: Authentication required. }
+        "403": { description: Workflow Design read permission is required. }
+  /design/workflows/expression-tooling/context:
+    post:
+      operationId: resolveExpressionToolingContext
+      requestBody: { $ref: "#/components/requestBodies/ContextRequest" }
+      responses:
+        "200": { $ref: "#/components/responses/ContextResponse" }
+        "401": { description: Authentication required. }
+        "403": { description: Workflow Design read permission is required. }
+  /design/workflows/expression-tooling/symbols:
+    post:
+      operationId: searchExpressionToolingSymbols
+      requestBody: { $ref: "#/components/requestBodies/ContextRequest" }
+      responses:
+        "200": { $ref: "#/components/responses/ItemsResponse" }
+        "401": { description: Authentication required. }
+        "403": { description: Workflow Design read permission is required. }
+  /design/workflows/expression-tooling/completions:
+    post:
+      operationId: completeExpression
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CompletionRequest" }
+      responses:
+        "200": { $ref: "#/components/responses/ItemsResponse" }
+        "401": { description: Authentication required. }
+        "403": { description: Workflow Design read permission is required. }
+  /design/workflows/expression-tooling/hover:
+    post:
+      operationId: hoverExpression
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/HoverRequest" }
+      responses:
+        "200": { $ref: "#/components/responses/HoverResponse" }
+        "401": { description: Authentication required. }
+        "403": { description: Workflow Design read permission is required. }
+  /design/workflows/expression-tooling/validate:
+    post:
+      operationId: validateExpression
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SourceRequest" }
+      responses:
+        "200": { $ref: "#/components/responses/ValidationResponse" }
+        "401": { description: Authentication required. }
+        "403": { description: Workflow Design read permission is required. }
+components:
+  requestBodies:
+    ContextRequest:
+      required: true
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ContextRequest" }
+  responses:
+    ContextResponse:
+      description: Permission-filtered, language-neutral authoring context envelope.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ContextResponse" }
+    ItemsResponse:
+      description: Bounded symbol or completion item envelope.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ItemsResponse" }
+    HoverResponse:
+      description: Version-bound hover result envelope.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/HoverResponse" }
+    ValidationResponse:
+      description: Version-bound diagnostic result envelope.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ValidationResponse" }
+  schemas:
+    ContractVersion:
+      type: object
+      additionalProperties: false
+      required: [major, minor]
+      properties:
+        major: { type: integer, const: 1 }
+        minor: { type: integer, minimum: 0 }
+    ToolingState:
+      type: string
+      enum: [success, supportedEmpty, unavailable, unauthorized, incompatible, stale, canceled]
+    ContextRequest:
+      type: object
+      additionalProperties: false
+      required: [contractVersion, workflowDraftId, nodeId, propertyKey, expressionType, documentRevision]
+      properties:
+        contractVersion: { $ref: "#/components/schemas/ContractVersion" }
+        workflowDraftId: { type: string }
+        nodeId: { type: string }
+        propertyKey: { type: string }
+        expressionType: { type: string }
+        documentRevision: { type: string }
+        contextRevision: { type: string }
+        search: { type: string, maxLength: 256 }
+        skip: { type: integer, minimum: 0, default: 0 }
+        take: { type: integer, minimum: 1, maximum: 500, default: 100 }
+    SourceRequest:
+      type: object
+      additionalProperties: false
+      required: [contractVersion, workflowDraftId, nodeId, propertyKey, expressionType, documentRevision, source]
+      properties:
+        contractVersion: { $ref: "#/components/schemas/ContractVersion" }
+        workflowDraftId: { type: string }
+        nodeId: { type: string }
+        propertyKey: { type: string }
+        expressionType: { type: string }
+        documentRevision: { type: string }
+        source: { type: string }
+        contextRevision: { type: string }
+    CompletionRequest:
+      type: object
+      additionalProperties: false
+      required: [contractVersion, workflowDraftId, nodeId, propertyKey, expressionType, documentRevision, source, cursor]
+      properties:
+        contractVersion: { $ref: "#/components/schemas/ContractVersion" }
+        workflowDraftId: { type: string }
+        nodeId: { type: string }
+        propertyKey: { type: string }
+        expressionType: { type: string }
+        documentRevision: { type: string }
+        source: { type: string }
+        cursor: { $ref: "#/components/schemas/Position" }
+        contextRevision: { type: string }
+    HoverRequest:
+      type: object
+      additionalProperties: false
+      required: [contractVersion, workflowDraftId, nodeId, propertyKey, expressionType, documentRevision, source, position]
+      properties:
+        contractVersion: { $ref: "#/components/schemas/ContractVersion" }
+        workflowDraftId: { type: string }
+        nodeId: { type: string }
+        propertyKey: { type: string }
+        expressionType: { type: string }
+        documentRevision: { type: string }
+        source: { type: string }
+        position: { $ref: "#/components/schemas/Position" }
+        contextRevision: { type: string }
+    OutcomeResult:
+      type: object
+      required: [state, contractVersion]
+      properties:
+        state: { $ref: "#/components/schemas/ToolingState" }
+        contractVersion: { $ref: "#/components/schemas/ContractVersion" }
+        documentRevision: { type: string }
+        contextRevision: { type: string }
+        payload: {}
+        code: { type: string }
+        message: { type: string }
+    ContextResponse:
+      type: object
+      additionalProperties: false
+      required: [result]
+      properties:
+        result:
+          allOf:
+            - $ref: "#/components/schemas/OutcomeResult"
+            - type: object
+              properties:
+                payload: { $ref: "#/components/schemas/AuthoringContext" }
+    ItemsResponse:
+      type: object
+      additionalProperties: false
+      required: [result]
+      properties:
+        result:
+          allOf:
+            - $ref: "#/components/schemas/OutcomeResult"
+            - type: object
+              properties:
+                payload:
+                  type: object
+                  properties:
+                    items:
+                      type: array
+                      maxItems: 500
+                      items: { $ref: "#/components/schemas/ToolingItem" }
+    HoverResponse:
+      type: object
+      additionalProperties: false
+      required: [result]
+      properties:
+        result:
+          allOf:
+            - $ref: "#/components/schemas/OutcomeResult"
+            - type: object
+              properties:
+                payload:
+                  type: object
+                  properties:
+                    contents: { type: string }
+                    range: { $ref: "#/components/schemas/Range" }
+    ValidationResponse:
+      type: object
+      additionalProperties: false
+      required: [result]
+      properties:
+        result:
+          allOf:
+            - $ref: "#/components/schemas/OutcomeResult"
+            - type: object
+              properties:
+                payload:
+                  type: object
+                  properties:
+                    diagnostics:
+                      type: array
+                      items: { $ref: "#/components/schemas/Diagnostic" }
+    DescriptorsResponse:
+      type: object
+      additionalProperties: false
+      required: [result]
+      properties:
+        result:
+          allOf:
+            - $ref: "#/components/schemas/OutcomeResult"
+            - type: object
+              properties:
+                payload:
+                  type: array
+                  items: { $ref: "#/components/schemas/ToolingDescriptor" }
+    Position:
+      type: object
+      additionalProperties: false
+      required: [line, character]
+      properties:
+        line: { type: integer, minimum: 0 }
+        character: { type: integer, minimum: 0 }
+    Range:
+      type: object
+      additionalProperties: false
+      required: [start, end]
+      properties:
+        start: { $ref: "#/components/schemas/Position" }
+        end: { $ref: "#/components/schemas/Position" }
+    Symbol:
+      type: object
+      required: [symbolId, name, kind]
+      properties:
+        symbolId: { type: string }
+        name: { type: string }
+        kind: { type: string }
+        documentation: { type: string }
+        valueShape: { $ref: "#/components/schemas/ValueShape" }
+        signatures:
+          type: array
+          items:
+            type: object
+            required: [display]
+            properties:
+              display: { type: string }
+              parameters: { type: array, items: { type: string } }
+              returnShape: { $ref: "#/components/schemas/ValueShape" }
+        childrenLink: { type: string }
+    ValueShape:
+      type: object
+      properties:
+        displayName: { type: string }
+        kind:
+          type: string
+          enum: [unknown, scalar, object, array, map, function, reference]
+        isNullable: { type: boolean, default: true }
+        hasLazyChildren:
+          type: boolean
+          const: false
+          description: Lazy member retrieval is not supported by v1 providers.
+        item: { $ref: "#/components/schemas/ValueShape" }
+        key: { $ref: "#/components/schemas/ValueShape" }
+        value: { $ref: "#/components/schemas/ValueShape" }
+        members:
+          type: array
+          description: Permission-filtered members inlined to a maximum depth of four.
+          items:
+            type: object
+            required: [name, shape]
+            properties:
+              name: { type: string }
+              documentation: { type: string }
+              shape: { $ref: "#/components/schemas/ValueShape" }
+    ToolingCapabilities:
+      type: object
+      required: [supportsCompletions, supportsHover, supportsValidation, supportsSymbolPaging, supportsLazyMembers, maximumSymbols]
+      properties:
+        supportsCompletions: { type: boolean }
+        supportsHover: { type: boolean }
+        supportsValidation: { type: boolean }
+        supportsSymbolPaging: { type: boolean }
+        supportsLazyMembers: { type: boolean, const: false }
+        maximumSymbols: { type: integer, minimum: 1, maximum: 500 }
+    ToolingDescriptor:
+      type: object
+      required: [expressionType, moduleId, moduleVersion, contractVersion, capabilities]
+      properties:
+        expressionType: { type: string }
+        moduleId: { type: string }
+        moduleVersion: { type: string }
+        contractVersion: { $ref: "#/components/schemas/ContractVersion" }
+        capabilities: { $ref: "#/components/schemas/ToolingCapabilities" }
+    AuthoringDocument:
+      type: object
+      required: [documentId, workflowDraftId, nodeId, propertyKey, expressionType, documentRevision]
+      properties:
+        documentId: { type: string }
+        workflowDraftId: { type: string }
+        nodeId: { type: string }
+        propertyKey: { type: string }
+        expressionType: { type: string }
+        documentRevision: { type: string }
+        expectedResultType: { type: string }
+        source: { type: string }
+    AuthoringContext:
+      type: object
+      required: [contractVersion, document, contextRevision, symbolCatalogRevision, rootSymbols, capabilities]
+      properties:
+        contractVersion: { $ref: "#/components/schemas/ContractVersion" }
+        document: { $ref: "#/components/schemas/AuthoringDocument" }
+        contextRevision: { type: string }
+        symbolCatalogRevision: { type: string }
+        rootSymbols:
+          type: array
+          maxItems: 500
+          items: { $ref: "#/components/schemas/Symbol" }
+        capabilities: { $ref: "#/components/schemas/ToolingCapabilities" }
+        expectedResultType: { type: string }
+        expectedResultShape: { $ref: "#/components/schemas/ValueShape" }
+        policyFingerprint: { type: string }
+        permissionRevision: { type: string }
+    ToolingItem:
+      type: object
+      required: [label]
+      properties:
+        label: { type: string }
+        detail: { type: string }
+        documentation: { type: string }
+        insertText: { type: string }
+        kind: { type: string }
+    Diagnostic:
+      type: object
+      required: [code, severity, message, documentRevision]
+      properties:
+        code: { type: string }
+        severity: { type: string, enum: [error, warning, information, hint] }
+        message: { type: string }
+        documentRevision: { type: string }
+        range: { $ref: "#/components/schemas/Range" }
+        authoredPath: { type: string }
+        relatedSymbols:
+          type: array
+          items: { type: string }

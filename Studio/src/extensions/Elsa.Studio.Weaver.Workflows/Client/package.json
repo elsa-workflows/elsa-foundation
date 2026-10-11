@@ -1,0 +1,14 @@
+{
+  "name": "@elsa-workflows/studio-weaver-workflows",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "build": "vite build",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@elsa-workflows/studio-workflows": "workspace:*"
+  },
+  "devDependencies": {}
+}
