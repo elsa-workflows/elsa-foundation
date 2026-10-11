@@ -79,6 +79,45 @@ public sealed class DiagnosticsDrainLoadTests : DiagnosticsDrainTestBase
         Assert.Equal(new[] { 1, 2 }, await Task.WhenAll(first, second).WaitAsync(TimeSpan.FromSeconds(30)));
     }
 
+    /// <summary>A batch that fills while the drain waits out the flush delay commits then, not when the delay ends.</summary>
+    [Fact]
+    public async Task A_batch_that_fills_during_the_flush_delay_commits_without_waiting_it_out()
+    {
+        var target = new DiagnosticsFailureTarget();
+        var drain = Fixture.Create(target, queueCapacity: 64, batchSize: 3, flushDelay: TimeSpan.FromMinutes(5));
+        drain.Start();
+
+        Assert.True(drain.TryEnqueue(1, out var first));
+        await Task.Delay(TimeSpan.FromMilliseconds(50));
+        Assert.True(drain.TryEnqueue(2, out var second));
+        Assert.True(drain.TryEnqueue(3, out var third));
+
+        Assert.Equal(new[] { 1, 2, 3 }, await Task.WhenAll(first, second, third).WaitAsync(TimeSpan.FromSeconds(30)));
+    }
+
+    /// <summary>
+    /// A stop ends the flush delay: the queued captures commit inside the shutdown budget instead of the stop timing out
+    /// while the drain still waits, which would report them lost.
+    /// </summary>
+    [Fact]
+    public async Task Stopping_during_the_flush_delay_commits_the_queued_captures()
+    {
+        var target = new DiagnosticsFailureTarget();
+        var drain = Fixture.Create(
+            target,
+            queueCapacity: 64,
+            batchSize: 50,
+            shutdownTimeout: TimeSpan.FromSeconds(5),
+            flushDelay: TimeSpan.FromMinutes(5));
+        drain.Start();
+        Assert.True(drain.TryEnqueue(1, out var first));
+        await Task.Delay(TimeSpan.FromMilliseconds(50));
+
+        await drain.StopAsync().WaitAsync(TimeSpan.FromSeconds(30));
+
+        Assert.Equal(1, await first.WaitAsync(TimeSpan.FromSeconds(30)));
+    }
+
     [Fact]
     public async Task Overflow_sheds_the_oldest_item_and_settles_its_acknowledgement()
     {

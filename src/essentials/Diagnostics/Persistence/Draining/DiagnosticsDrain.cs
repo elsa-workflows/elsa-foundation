@@ -31,6 +31,8 @@ public sealed class DiagnosticsDrain<TItem, TResult> : IDisposable, IAsyncDispos
     private int _forcedTermination;
     private int _shutdownDisposed;
     private int _state = (int)DiagnosticsDrainState.Created;
+    private int _writerCompleted;
+    private TaskCompletionSource _flushWake = NewFlushWake();
 
     public DiagnosticsDrain(
         IDiagnosticsDrainTarget<TItem, TResult> target,
@@ -107,7 +109,11 @@ public sealed class DiagnosticsDrain<TItem, TResult> : IDisposable, IAsyncDispos
         }
 
         if (queueDepthUpdate is { } update)
+        {
             ReportQueueDepth(update);
+            if (accepted && update.Depth >= _options.BatchSize)
+                Volatile.Read(ref _flushWake).TrySetResult();
+        }
         if (shed is not null)
             Fail(shed, DiagnosticsPersistenceLossReason.QueueOverflow, "The diagnostics capture was shed before commit because the queue was full.");
         if (accepted)
@@ -223,10 +229,8 @@ public sealed class DiagnosticsDrain<TItem, TResult> : IDisposable, IAsyncDispos
         {
             while (await reader.WaitToReadAsync(cancellationToken))
             {
-                // Let a partial batch gather for FlushDelay so a trickle of captures shares one commit instead of
-                // paying one each. A batch already full commits now.
-                if (_options.FlushDelay > TimeSpan.Zero && reader.Count < _options.BatchSize)
-                    await Task.Delay(_options.FlushDelay, cancellationToken);
+                if (_options.FlushDelay > TimeSpan.Zero)
+                    await WaitForFlushAsync(reader, cancellationToken);
 
                 batch.Clear();
                 while (batch.Count < _options.BatchSize && TryReadQueuedItem(out var item, out var queueDepthUpdate))
@@ -466,10 +470,36 @@ public sealed class DiagnosticsDrain<TItem, TResult> : IDisposable, IAsyncDispos
         }
     }
 
+    // Lets a partial batch gather for FlushDelay so a trickle of captures shares one commit instead of paying one each
+    // (#2613). The wait ends early when the batch fills or the writer completes: a full batch commits now, and a stop
+    // must not spend its shutdown budget waiting on a delay. The wake is installed before the checks, so a fill or a
+    // completion signalled after them is never missed.
+    private async Task WaitForFlushAsync(ChannelReader<PendingItem> reader, CancellationToken cancellationToken)
+    {
+        // Interlocked, not Volatile: each side stores then loads the other's field, and only a full fence stops that
+        // store-load pair from reordering and losing the wake.
+        var wake = NewFlushWake();
+        Interlocked.Exchange(ref _flushWake, wake);
+        if (Volatile.Read(ref _writerCompleted) != 0 || reader.Count >= _options.BatchSize)
+            return;
+
+        using var delayCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        var delay = Task.Delay(_options.FlushDelay, delayCancellation.Token);
+        await Task.WhenAny(delay, wake.Task);
+        await delayCancellation.CancelAsync();
+        cancellationToken.ThrowIfCancellationRequested();
+    }
+
+    private static TaskCompletionSource NewFlushWake() => new(TaskCreationOptions.RunContinuationsAsynchronously);
+
     private void CompleteWriter()
     {
         lock (_queueGate)
+        {
             _channel.Writer.TryComplete();
+            Interlocked.Exchange(ref _writerCompleted, 1);
+        }
+        Volatile.Read(ref _flushWake).TrySetResult();
     }
 
     private QueueDepthUpdate IncrementQueueDepth() => new(
