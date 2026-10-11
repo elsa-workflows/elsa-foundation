@@ -7,6 +7,7 @@ const workflowName = `UX QA golden path ${stamp}`;
 
 await journey("golden-path", async qa => {
   const { page, studioUrl } = qa;
+  /** Runs an action, labels any action error with the step name, and captures evidence after success. */
   const run = async (stepName, action) => {
     try {
       await action();

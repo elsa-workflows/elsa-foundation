@@ -20,6 +20,7 @@ import { chromium } from "playwright";
 const here = path.dirname(fileURLToPath(import.meta.url));
 const require = createRequire(import.meta.url);
 
+/** Reads setup's KEY=value state file as data, returning an empty object when it is absent. */
 function readState() {
   const file = path.join(here, ".state", "env");
   if (!existsSync(file)) return {};
@@ -34,13 +35,15 @@ export const studioUrl = process.env.STUDIO_URL ?? state.STUDIO_URL ?? "http://l
 export const workbenchUrl = process.env.WORKBENCH_URL ?? state.WORKBENCH_URL ?? "http://localhost:5095";
 const foundationDir = state.FOUNDATION_DIR ?? path.resolve(here, "../..");
 
-// The Development seed lives in the Workbench's shells.json; read it rather than copying it here.
+/** Reads the Development admin credentials from the Workbench's shells.json seed settings. */
 function seededAdmin() {
   const shells = readFileSync(path.join(foundationDir, "src/apps/Elsa.Workbench/shells.json"), "utf8");
+  /** Returns the first quoted value for a seed setting, or undefined when it is absent. */
   const value = key => shells.match(new RegExp(`"${key}"\\s*:\\s*"([^"]*)"`))?.[1];
   return { username: value("SeedAdminUserName"), password: value("SeedAdminPassword") };
 }
 
+/** Adds page console, runtime and network errors to the trace, queuing HTTP error body reads in trace.pending. */
 function observe(page, trace) {
   page.on("console", message => {
     if (message.type() === "error" || message.type() === "warning")
@@ -81,6 +84,7 @@ export async function journey(name, fn, { viewport = { width: 1440, height: 1000
   const qa = {
     page, context, studioUrl, workbenchUrl, outDir,
 
+    /** Saves a numbered screenshot and ARIA snapshot, then records the page URL and current event count. */
     async step(stepName) {
       const prefix = `${String(++stepNumber).padStart(2, "0")}-${stepName}`;
       await page.screenshot({ path: path.join(outDir, `${prefix}.png`) });
@@ -89,8 +93,10 @@ export async function journey(name, fn, { viewport = { width: 1440, height: 1000
       trace.steps.push({ step: prefix, url: page.url(), at: new Date().toISOString(), eventsSoFar: trace.events.length });
     },
 
+    /** Appends an observation to the journey trace's notes. */
     note(text) { trace.notes.push(text); },
 
+    /** Signs in with the seeded admin and waits for the redirect to Studio and removal of the login form. */
     async signIn() {
       const { username, password } = seededAdmin();
       await page.goto(`${studioUrl}/workflows/definitions`, { waitUntil: "domcontentloaded" });
