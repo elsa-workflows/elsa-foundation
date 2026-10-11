@@ -3,8 +3,8 @@ import { flushSync } from "react-dom";
 import { createRoot } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { StudioEndpointContext, StudioExpressionEditorContribution } from "@elsa-workflows/studio-sdk";
-import { ActivityPropertiesPanel } from "../../../../../essentials/Elsa.Studio.Workflows/Client/src/ActivityPropertiesPanel";
-import type { ActivityNode } from "../../../../../essentials/Elsa.Studio.Workflows/Client/src/workflowTypes";
+import { ActivityPropertiesPanel } from "../../../../../../../Studio/src/essentials/Elsa.Studio.Workflows/Client/src/ActivityPropertiesPanel";
+import type { ActivityNode } from "../../../../../../../Studio/src/essentials/Elsa.Studio.Workflows/Client/src/workflowTypes";
 import { SecretPickerEditor } from "../SecretPickerEditor";
 
 let dispose: (() => void) | null = null;
