@@ -86,6 +86,7 @@ public static class SolutionFilterGenerator
         return SelectRoots(manifest, ReadSolution(repo, manifest), profile);
     }
 
+    /// <summary>Finds a profile by normalized output path, ignoring case, and rejects unknown paths.</summary>
     private static SolutionFilterProfile FindProfile(SolutionFilterManifest manifest, string outputPath)
     {
         var normalizedOutputPath = Normalize(outputPath);

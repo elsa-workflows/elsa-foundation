@@ -14,6 +14,7 @@ public static partial class EfSuiteSelector
     private const string SeparateSecretsProject = "tests/essentials/Secrets/Persistence/EntityFrameworkCore/PostgreSql/Tests/Elsa.Secrets.Persistence.EntityFrameworkCore.PostgreSql.Tests.csproj";
     private static readonly JsonSerializerOptions JsonOptions = new() { PropertyNameCaseInsensitive = true };
 
+    /// <summary>Returns every manifest suite after validating coverage of the solution's Testcontainers roots.</summary>
     public static EfSuiteSelection Select(RepoContext repo)
     {
         var suites = ReadSuites(repo);
@@ -27,6 +28,7 @@ public static partial class EfSuiteSelector
         return new EfSuiteSelection(suites);
     }
 
+    /// <summary>Reads and validates manifest entries, rejects duplicates, and orders suites by name.</summary>
     private static IReadOnlyList<EfSuite> ReadSuites(RepoContext repo)
     {
         var manifest = JsonSerializer.Deserialize<EfSuiteManifest>(File.ReadAllText(repo.Absolute(ManifestPath)), JsonOptions)
@@ -47,6 +49,11 @@ public static partial class EfSuiteSelector
         return suites.OrderBy(suite => suite.Suite, StringComparer.Ordinal).ToArray();
     }
 
+    /// <summary>
+    /// Verifies that all test projects belong to the solution and that the matrix plus the separate Secrets job
+    /// cover exactly the Testcontainers roots, without duplicating the Secrets proof in the matrix.
+    /// </summary>
+    /// <exception cref="InvalidOperationException">A test project is unlisted or the suite inventory does not match.</exception>
     public static void ValidateCoverage(
         IReadOnlyList<EfSuite> suites,
         IReadOnlyCollection<string> integrationRoots,
@@ -69,22 +76,29 @@ public static partial class EfSuiteSelector
                 $"EF suite manifest does not match Testcontainers roots. Unmapped: {string.Join(", ", actual.Except(expected))}; obsolete: {string.Join(", ", expected.Except(actual))}");
     }
 
+    /// <summary>Converts path separators to forward slashes for repository path comparisons.</summary>
     private static string Normalize(string path) => path.Replace('\\', '/');
 
+    /// <summary>Matches an empty provider requirement or an ELSA environment variable name.</summary>
     [GeneratedRegex("^$|^ELSA_[A-Z0-9_]+$", RegexOptions.CultureInvariant)]
     private static partial Regex RequirePattern();
 
+    /// <summary>Matches suite identifiers containing lowercase letters, digits, and separating hyphens.</summary>
     [GeneratedRegex("^[a-z0-9]+(?:-[a-z0-9]+)*$", RegexOptions.CultureInvariant)]
     private static partial Regex SuitePattern();
 
+    /// <summary>Matches the allowed characters and project-file suffix of a manifest project path.</summary>
     [GeneratedRegex("^[A-Za-z0-9_./-]+\\.csproj$", RegexOptions.CultureInvariant)]
     private static partial Regex ProjectPattern();
 }
 
+/// <summary>Describes a matrix suite, its test project, and its required-provider environment variable, if any.</summary>
 public sealed record EfSuite(string Suite, string Project, string Require);
 
+/// <summary>Contains the complete set of suites selected for the nightly or manually dispatched EF matrix.</summary>
 public sealed record EfSuiteSelection(IReadOnlyList<EfSuite> Suites)
 {
+    /// <summary>Serializes the suite count and GitHub Actions matrix entries, including provider requirements.</summary>
     public string ToJson() => JsonSerializer.Serialize(new
     {
         count = Suites.Count,

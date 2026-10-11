@@ -5,6 +5,7 @@ namespace Elsa.Maps.Generator;
 /// <summary>Inventory cases for the nightly EF container matrix; CI runs them before trusting the matrix.</summary>
 public static class EfSuiteSelectorContractTests
 {
+    /// <summary>Checks inventory rejection cases and verifies that the real manifest's suites and requirements reach the matrix.</summary>
     public static void Run()
     {
         EfSuite[] suites =
@@ -47,6 +48,7 @@ public static class EfSuiteSelectorContractTests
         Console.WriteLine("EF suite selector contract cases passed.");
     }
 
+    /// <summary>Fails the contract test unless the supplied action throws an InvalidOperationException.</summary>
     private static void ExpectInvalid(Action action)
     {
         try

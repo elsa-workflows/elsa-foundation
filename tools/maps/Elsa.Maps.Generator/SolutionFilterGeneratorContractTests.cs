@@ -10,6 +10,7 @@ public static class SolutionFilterGeneratorContractTests
 {
     private const string OnDemandFilter = "Elsa.Server.Integration.slnf";
 
+    /// <summary>Checks filter generation, root selection, freshness, and invalid graphs using a temporary repository fixture.</summary>
     public static void Run()
     {
         var root = Path.Join(Path.GetTempPath(), $"elsa-solution-filter-tests-{Environment.ProcessId}-{Guid.NewGuid():N}");
