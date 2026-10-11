@@ -241,4 +241,4 @@ Reads current `specs/*` folders and task checkboxes. Status clues are textual, n
 | [231-bpmn-call-activity](../../specs/231-bpmn-call-activity/spec.md) | 231-bpmn-call-activity | Implemented | - | 0 | 0 | out of scope |
 | [232-container-readytorun-publish](../../specs/232-container-readytorun-publish/spec.md) | 232-container-readytorun-publish | unknown | - | 0 | 0 | out of scope |
 | [233-receive-correlation](../../specs/233-receive-correlation/spec.md) | Receive Event Correlation | Implemented — all tasks checked in ac027653e | - | 15 | 0 | retained, out of scope |
-| [234-hop-chain-collapse](../../specs/234-hop-chain-collapse/spec.md) | Collapse the per-activity hop chain under per-hop persistence | Draft | - | 0 | 0 | out of scope |
+| [234-hop-chain-collapse](../../specs/234-hop-chain-collapse/spec.md) | Collapse the per-activity hop chain under per-hop persistence | Draft | - | 0 | 65 | out of scope |

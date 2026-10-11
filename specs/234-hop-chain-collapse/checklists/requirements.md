@@ -37,5 +37,5 @@
   in **Why** and to the plan.
 - SC-001 counts durable commits on the runtime database, measured the same way as #2553 (fsyncs on the runtime WAL and
   EF transaction logs); SC-002 uses the CI command-count gate.
-- One assumption needs architect confirmation during planning: the ADR 0020 reading that a durable queue write inside
-  the commit is recording, not inline dispatch.
+- The ADR 0020 reading that a durable queue write inside the commit is recording, not inline dispatch, was confirmed
+  by the owner on 2026-10-11 (#2584) and is recorded as a clarification in ADR 0020.

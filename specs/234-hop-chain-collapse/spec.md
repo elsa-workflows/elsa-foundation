@@ -197,10 +197,11 @@ On a non-atomic or legacy provider, acknowledgements are unchanged.
 - The EF runtime stores (checkpoint, scheduler queue, outbox) share one runtime context per command scope, which the
   runtime context registration already enforces; "shares the unit of work" in FR-001 means exactly that composition.
   Other compositions keep the outbox.
-- ADR 0020 ("the commit records post-commit work but never dispatches it inline") is read as permitting a durable
-  queue write inside the commit: writing the next work item is recording, not dispatching. The plan records this
-  reading; if the architect disagrees, FR-001 needs an ADR amendment first. Until that reading is confirmed, FR-001 is
-  not accepted for the per-hop HTTP composition, and US1 work does not start.
+- ADR 0020 ("the commit records post-commit work but never dispatches it inline") permits a durable queue write
+  inside the commit: writing the next work item is recording, not dispatching. Nothing runs until a drain claims the
+  item, and the item exists if and only if the checkpoint committed. The owner confirmed this reading on 2026-10-11
+  ([#2584](https://github.com/elsa-workflows/elsa-foundation/issues/2584#issuecomment-6104682664)), and ADR 0020
+  carries a dated clarification that states it. FR-001 is accepted and US1 work may start.
 - The spec-228 fusion rules (single-predecessor edges, routing memo) are the starting point for "routable in-process";
   this spec extends their use to per-hop persistence rather than defining new routing rules.
 - `Immediate` is the per-hop mode until ADR 0080 D2 renames it to `Durable` (#2585); the requirements apply to
