@@ -175,7 +175,8 @@ On a non-atomic or legacy provider, acknowledgements are unchanged.
   MUST delete its claimed work item in the first commit that is not an attempt claim, so recovery after a crash
   mid-attempt is unchanged. Every other path keeps spec 105 FR-006's
   separate acknowledgement and tripwire unchanged: non-atomic and legacy providers (including dispatches that commit),
-  dispatches that made no commit, and the handler-fault path.
+  dispatches that made no commit, the handler-fault path, and a host that replaces the consume accessor (a replaced
+  accessor is never linked; research R6, contract A5).
 - **FR-009**: One switch MUST control all three changes: continuations in the checkpoint transaction (FR-001),
   in-process routing (FR-004, FR-006) and acknowledgements inside the dispatch's commit (FR-008). It defaults on.
   Off restores today's behaviour exactly, including today's separate continuation commits and acknowledgements, so
