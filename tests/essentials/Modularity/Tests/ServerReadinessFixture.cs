@@ -4,6 +4,7 @@ using CShells.AspNetCore.Configuration;
 using CShells.AspNetCore.Extensions;
 using CShells.DependencyInjection;
 using CShells.Features;
+using CShells.Hosting;
 using CShells.Lifecycle;
 using Elsa.Api.AspNetCore;
 using Elsa.Workbench;
@@ -72,6 +73,7 @@ public sealed class ServerReadinessFixture : IAsyncDisposable
         builder.Services.AddSingleton<IOptions<ShellReadinessOptions>>(Options.Create(readinessOptions));
         builder.Services.AddSingleton<ILogger<DefaultShellWarmup>>(warmupLogger);
         builder.Services.AddSingleton<DefaultShellWarmup>();
+        builder.Services.AddShellActivationRunner();
         if (startReadinessWarmup)
             builder.Services.AddSingleton<IHostedService>(services => services.GetRequiredService<DefaultShellWarmup>());
         builder.Services.AddCShellsAspNetCore(shells => shells
@@ -219,20 +221,34 @@ public sealed class ServerReadinessFixture : IAsyncDisposable
         {
             private readonly TaskCompletionSource _entered = new(TaskCreationOptions.RunContinuationsAsynchronously);
             private readonly TaskCompletionSource _release = new(TaskCreationOptions.RunContinuationsAsynchronously);
+            private readonly TaskCompletionSource _cancellationCallbackInvoked = new(TaskCreationOptions.RunContinuationsAsynchronously);
             private int _attempts;
 
             public int Attempts => Volatile.Read(ref _attempts);
             public bool Initialized { get; private set; }
+            public bool IgnoreCancellation { get; set; }
+            public bool ThrowFromCancellationCallback { get; set; }
             public Exception? Failure { get; set; }
 
             public Task WaitUntilEnteredAsync() => _entered.Task.WaitAsync(TimeSpan.FromSeconds(10));
+            public Task WaitUntilCancellationCallbackInvokedAsync() => _cancellationCallbackInvoked.Task.WaitAsync(TimeSpan.FromSeconds(10));
             public void Release() => _release.TrySetResult();
 
             public async Task InitializeAsync(CancellationToken cancellationToken)
             {
                 Interlocked.Increment(ref _attempts);
+                using var cancellationRegistration = ThrowFromCancellationCallback
+                    ? cancellationToken.Register(() =>
+                    {
+                        _cancellationCallbackInvoked.TrySetResult();
+                        throw new InvalidOperationException("readiness cancellation callback failed");
+                    })
+                    : default;
                 _entered.TrySetResult();
-                await _release.Task.WaitAsync(cancellationToken);
+                if (IgnoreCancellation)
+                    await _release.Task;
+                else
+                    await _release.Task.WaitAsync(cancellationToken);
                 if (Failure is not null)
                     throw Failure;
                 Initialized = true;

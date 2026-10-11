@@ -24,6 +24,10 @@ internal static class FoundationHostComposition
     /// </summary>
     public const string OrdersFeature = "FeedModuleFixtureOrders";
 
+    /// <summary>The fixture-only endpoint set used by the actual-host readability lifetime scenario.</summary>
+    public const string StartupControlFeature = "FeedModuleFixtureStartupControl";
+    public const string StartupControlStatusPath = "/feed-module-fixture/startup-control/status";
+
     /// <summary>The settings every boot test starts the host with, as configuration keys.</summary>
     public static Dictionary<string, string> Settings(FoundationHostFeed feed, string provider = "Sqlite") => new()
     {

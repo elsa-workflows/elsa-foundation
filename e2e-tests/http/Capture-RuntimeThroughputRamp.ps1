@@ -23,7 +23,7 @@
       - host 1/5-minute load averages (Linux /proc/loadavg);
       - host process CPU seconds, if -HostProcessId names a local process;
       - PostgreSQL wait events and ungranted lock counts, if -PostgresConnectionString is given (needs psql);
-      - dotnet-counters System.Runtime, Microsoft.AspNetCore.Hosting and Npgsql meters, if -HostProcessId is given
+      - dotnet-counters System.Runtime, Microsoft.AspNetCore.Hosting, Npgsql and Elsa.Workflows.Runtime.Admission meters, if -HostProcessId is given
         and dotnet-counters is on PATH.
     SQLite busy/locked errors come from the host log. Pass the log path as -HostLogPath so each step records the
     count of matching lines added during that step.
@@ -287,7 +287,7 @@ foreach ($level in $Levels) {
             $duration = [TimeSpan]::FromSeconds($WindowSeconds).ToString('hh\:mm\:ss')
             $counterProcess = Start-Process -FilePath $dotnetCounters.Source -PassThru -NoNewWindow -RedirectStandardOutput ([IO.Path]::GetTempFileName()) -ArgumentList @(
                 'collect', '--process-id', $HostProcessId, '--format', 'json', '--output', $counterFile, '--duration', $duration,
-                '--counters', 'System.Runtime,Microsoft.AspNetCore.Hosting,Npgsql')
+                '--counters', 'System.Runtime,Microsoft.AspNetCore.Hosting,Npgsql,Elsa.Workflows.Runtime.Admission')
         }
         $busyBefore = Get-HostLogBusyCount
         $cpuBefore = Get-HostCpuSeconds

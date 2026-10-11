@@ -1,6 +1,8 @@
 # Tasks: Shared Nuplane Adapter Adoption
 
-**Scope**: Implement and prepare Foundation #2314 against an isolated preview qualification worktree. Keep this canonical preparation branch documentation-only and leave its `.159`/`.94` package pins and lockfiles unchanged. Final stable-family adoption is a separate unchecked gate below.
+**Current stable status (2026-10-11)**: Nuplane `0.0.11` and CShells `0.0.30` are published. Foundation PR #2530 merged at `9f09cf8dc78efc611fd99cd90ab1fa70efe709ff`; current-head, actual-host/consumer/demo and backend evidence is accepted. Resulting-main CI, Maps, Packages and Docker publication have passed; the stable tasks below are complete. See the [release acceptance record](../../docs/reports/modular-hosting-release-plan.md#foundation-stable-adoption-checkpoint--2026-10-11). Earlier preparation scope and preview evidence below are historical.
+
+**Original preview-preparation scope**: Implement and prepare Foundation #2314 against an isolated preview qualification worktree. Keep this canonical preparation branch documentation-only and leave its `.159`/`.94` package pins and lockfiles unchanged. The subsequent stable-family gate below is now complete.
 
 **Evidence location**: `artifacts/modular-hosting-2500/foundation-2314-preparation/` means a directory under the session-owned artifact workspace outside the repository checkout. Keep raw package archives, caches, logs and generated qualification records out of source control.
 
@@ -53,12 +55,12 @@
 - [x] T012 Rebuild owned Foundation.Host (`src/apps/Elsa.Foundation.Host/Elsa.Foundation.Host.csproj`) and Workbench (`src/apps/Elsa.Workbench/Elsa.Workbench.csproj`) instances from the qualification worktree with fresh databases; verify package add/update/remove, Foundation reload-on, Workbench reload-off/opt-in, cold-build freshness, refusal retention and later recovery. Label all results as preview qualification; reserve backend `e2e-tests/` and frozen Acts1/2 rehearsal for the final stable-family gate.
 - [x] T013 Preserve the reviewed application-source diff, preview-only overlay/locks, package/source/cache provenance and validation results under `artifacts/modular-hosting-2500/foundation-2314-preparation/`; obtain root/independent source review and appropriate reversible mutations for monitored-option invalidation and coordinator alias/order. Leave canonical pins unchanged and do not publish preview pins as defaults.
 
-## Phase 7: Final Stable Adoption (Blocked Until Stable Families Exist)
+## Phase 7: Final Stable Adoption
 
 **Purpose**: Complete release-gated adoption only after Nuplane and the full CShells family are stable.
 
-- [ ] T014 After stable Nuplane and complete CShells releases are published, replay the reviewed application-source diff into the final adoption branch; update `Directory.Packages.props` with the normal stable `CShells.Nuplane` version and full stable families, then update reached `packages.lock.json` files, applicable Docker restore graph and generated maps together.
-- [ ] T015 Rebuild and test real Foundation.Host and Workbench against the exact stable family; rerun affected Modularity, Cluster/EF and architecture tests, relevant `e2e-tests/` suites and `bash tools/demo/rehearse.sh` frozen Acts1/2 rehearsal, then require current-head and resulting-main CI/Maps gates before closing #2314.
+- [x] T014 After stable Nuplane and complete CShells releases are published, replay the reviewed application-source diff into the final adoption branch; update `Directory.Packages.props` with the normal stable `CShells.Nuplane` version and full stable families, then update reached `packages.lock.json` files, applicable Docker restore graph and generated maps together.
+- [x] T015 Rebuild and test real Foundation.Host and Workbench against the exact stable family; rerun affected Modularity, Cluster/EF and architecture tests, relevant `e2e-tests/` suites and `bash tools/demo/rehearse.sh` frozen Acts1/2 rehearsal, then require current-head and resulting-main CI/Maps gates before closing #2314.
 
 ## Dependencies and Execution Order
 
@@ -66,7 +68,7 @@
 - User Story 1 source migration T004 is intentionally coherent across both hosts; it does not remove old behavior before new profiles and callbacks are connected. T005-T006 verify composition identity/order and cold-build freshness.
 - User Story 2 T007 and User Story 3 T008-T010 depend on T004; callback stub tests T008, Workbench dispatch tests T009 and retained Foundation host scenarios T010 cover separate boundaries.
 - T011-T013 validate and preserve the preview candidate after the three stories are complete.
-- T014-T015 are blocked until stable upstream families are published. Preview tasks do not satisfy final stable acceptance.
+- T014-T015 require published stable families and all final gates. Both stable families are published, adoption has merged, and resulting-main gates passed. Preview tasks alone do not satisfy final stable acceptance.
 
 ## Parallel Opportunities
 
@@ -74,6 +76,6 @@
 - After T004, callback stub coverage T008 and the Workbench dispatcher regression T009 use separate test files and can be prepared independently; Foundation host regression T010 retains its own integration boundary.
 - Build/test commands remain serialized through the shared build-slot wrapper; do not run overlapping solution or host builds on the shared machine.
 
-## Implementation Strategy
+## Historical Implementation Strategy
 
 Complete setup and isolated restore first. Deliver the coherent two-host source migration as the first working increment, then verify composition/cold-build behavior (US1), live policy changes (US2), and Elsa-specific refusal diagnostics (US3). Qualify only in the preview copy and preserve a reviewable source handoff. Keep stable adoption unchecked until stable packages exist; then update canonical pins/locks/maps and repeat actual-host, E2E, demo and resulting-main gates.

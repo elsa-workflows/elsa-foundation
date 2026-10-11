@@ -2,11 +2,10 @@ name: CI
 
 # Build-and-test gate for pull requests targeting main, and for main itself.
 #
-# Neither existing workflow guards PRs:
-#   - docker.yml   runs on push to main only.
-#   - packages.yml runs on push to feat/*|fix/*|bug/*|... (not pull_request, not
-#     claude/*) and deliberately packs/compiles only the src/ libraries -- it does
-#     NOT build test projects or run tests.
+# Neither of the other build workflows guards PRs:
+#   - docker.yml   builds images on PRs only when a Dockerfile or the image inputs change.
+#   - packages.yml runs on push to main only (#2622) and deliberately packs/compiles only
+#     the src/ libraries -- it does NOT build test projects or run tests.
 # Net result: PRs could merge to main with compile errors or failing tests undetected.
 # This bit in PR #543: a semantic merge conflict between #539 and #541 that compiled
 # on each branch but not when combined (HashMismatchTests.cs referenced
@@ -34,6 +33,11 @@ name: CI
 #     That test project references no Testcontainers, so it sits inside the container-free
 #     filter below and this job would have gone red on the merge commit within ~13 minutes.
 #   - workflow_dispatch: re-run on demand after a fix, without pushing an empty commit.
+#   - schedule: once a night, the full EF container matrix with every engine and every required-provider
+#     mode armed (#2622). Pull requests run SQLite and PostgreSQL only, and a newer push to main cancels an
+#     older run, so without this a quiet day or a burst of merges could leave the SQL Server and MySQL legs
+#     unexercised against main. integration.yml's nightly run reaches the same projects but arms no
+#     required-provider mode, so an engine that fails to start there skips instead of failing.
 #
 # The push run is deliberately the SAME job, not a scoped-down variant. Scoping it would mean
 # a second job name (the required-check context is tied to this one) and a second thing to
@@ -54,14 +58,24 @@ on:
     branches:
       - main
   workflow_dispatch:
+  schedule:
+    # 02:41 UTC daily. Odd minute to avoid the top-of-hour scheduler surge.
+    - cron: '41 2 * * *'
 
 permissions:
   contents: read
 
-# A newer head supersedes only its own PR. Main and manual runs keep every full-matrix proof.
+# A newer head supersedes its own PR, and a newer push to main supersedes an older main run (#2622): five
+# queued main runs once each ran the whole EF matrix for an hour. Manual and scheduled runs get a group of
+# their own and are never cancelled. A cancelled run is not a failure, so the alert job below stays quiet
+# for it, and the jobs that use always()-style conditions use !cancelled() so a cancellation cannot turn
+# into a red aggregate that files a "main is red" issue.
 concurrency:
-  group: ci-${{ github.event.pull_request.number || github.run_id }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+  group: >-
+    ${{ github.event_name == 'pull_request' && format('ci-pr-{0}', github.event.pull_request.number)
+    || github.event_name == 'push' && format('ci-push-{0}', github.ref)
+    || format('ci-run-{0}', github.run_id) }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' || github.event_name == 'push' }}
 
 jobs:
   build-and-test:
@@ -151,7 +165,9 @@ jobs:
         run: dotnet test Elsa.Server.test.slnf -c Release --no-build -p:WarningsNotAsErrors=NU1603
 
   # The manifest is the single suite list; the selector uses the validated solution-reference
-  # graph to run affected legs on PRs, and selects every leg on main and manual dispatch.
+  # graph to run affected legs on PRs, and selects every leg on main, manual dispatch and the schedule.
+  # On a PR it also drops the suites the manifest marks as existing only for SQL Server or MySQL, and
+  # reports engines=sqlite-postgresql so each remaining leg excludes those engines' tests (#2622).
   select-ef-suites:
     name: Select EF suites
     runs-on: ubuntu-latest
@@ -159,6 +175,7 @@ jobs:
       matrix: ${{ steps.select.outputs.matrix }}
       count: ${{ steps.select.outputs.count }}
       mode: ${{ steps.select.outputs.mode }}
+      engines: ${{ steps.select.outputs.engines }}
     steps:
       - name: Checkout full history for the PR diff
         uses: actions/checkout@v4
@@ -184,10 +201,12 @@ jobs:
             echo "matrix=$(jq -c '.matrix' <<< "$selection")"
             echo "count=$(jq -r '.count' <<< "$selection")"
             echo "mode=$(jq -r '.mode' <<< "$selection")"
+            echo "engines=$(jq -r '.engines' <<< "$selection")"
           } >> "$GITHUB_OUTPUT"
           {
             echo "### EF container selection"
             echo "Mode: $(jq -r '.mode' <<< "$selection")"
+            echo "Engines: $(jq -r '.engines' <<< "$selection")"
             echo "Reason: $(jq -r '.reason' <<< "$selection")"
           } >> "$GITHUB_STEP_SUMMARY"
           if [[ $(jq -r '.count' <<< "$selection") == 0 ]]; then
@@ -228,13 +247,45 @@ jobs:
       - name: Restore
         run: dotnet restore ${{ matrix.project }} --locked-mode -p:WarningsNotAsErrors=NU1603
 
+      # Every engine: main, manual dispatch, the schedule, and any selection that does not name the
+      # pull-request scope (so an unexpected value fails toward more coverage, not less).
       - name: Test
+        if: ${{ needs.select-ef-suites.outputs.engines != 'sqlite-postgresql' }}
         run: dotnet test ${{ matrix.project }} -c Release --no-restore -p:WarningsNotAsErrors=NU1603
+
+      # Pull requests: SQLite, PostgreSQL and engine-agnostic tests only. The engine-specific tests name their
+      # engine in the class, the method or a theory argument, all of which reach the display name, so one
+      # display-name filter covers the three shapes (SqlServer..., ..._on_sql_server, ("MySql")). VSTest
+      # compares `~` case-insensitively. A filter that matches nothing makes `dotnet test` pass with zero
+      # tests, so the TRX counters are read back and a leg that executed no test fails.
+      - name: Test (SQLite and PostgreSQL only)
+        if: ${{ needs.select-ef-suites.outputs.engines == 'sqlite-postgresql' }}
+        env:
+          ENGINE_FILTER: DisplayName!~SqlServer&DisplayName!~sql_server&DisplayName!~MySql
+        run: |
+          set -euo pipefail
+          results="$RUNNER_TEMP/ef-test-results"
+          dotnet test ${{ matrix.project }} -c Release --no-restore -p:WarningsNotAsErrors=NU1603 \
+            --filter "$ENGINE_FILTER" --logger "trx;LogFileName=ef.trx" --results-directory "$results"
+          python3 - "$results/ef.trx" <<'PY'
+          import sys
+          import xml.etree.ElementTree as ET
+          ns = {"t": "http://microsoft.com/schemas/VisualStudio/TeamTest/2010"}
+          counters = ET.parse(sys.argv[1]).getroot().find("t:ResultSummary/t:Counters", ns)
+          if counters is None:
+              sys.exit(f"::error::{sys.argv[1]} has no result counters.")
+          total, executed = int(counters.get("total", "0")), int(counters.get("executed", "0"))
+          print(f"Engine-filtered leg: {total} test(s) matched, {executed} executed.")
+          if executed == 0:
+              sys.exit("::error::The SQLite/PostgreSQL filter executed zero tests; a renamed suite or filter would pass vacuously.")
+          PY
 
   # Stable result for branch rules and reviewers, including an explicit no-impact PR.
   ef-container-result:
     name: EF container suites
-    if: ${{ always() }}
+    # !cancelled() rather than always(): a superseded run's cancelled legs must not turn into a red aggregate,
+    # which on main would file a "main is red" issue for a run that never failed.
+    if: ${{ !cancelled() }}
     needs: [select-ef-suites, ef-container-suites, secrets-ef-composition]
     runs-on: ubuntu-latest
     steps:
@@ -245,6 +296,7 @@ jobs:
           SECRETS_RESULT: ${{ needs.secrets-ef-composition.result }}
           COUNT: ${{ needs.select-ef-suites.outputs.count }}
           MODE: ${{ needs.select-ef-suites.outputs.mode }}
+          ENGINES: ${{ needs.select-ef-suites.outputs.engines }}
         run: |
           if [[ "$SELECT_RESULT" != success ]]; then
             echo "::error::EF suite selection failed; this is not a no-impact PR."
@@ -254,8 +306,8 @@ jobs:
             echo "::error::The always-run Secrets EF host proof did not pass."
             exit 1
           fi
-          if [[ "$GITHUB_EVENT_NAME" != pull_request && "$MODE" != full ]]; then
-            echo "::error::Main and manual runs must select the full EF matrix."
+          if [[ "$GITHUB_EVENT_NAME" != pull_request && ( "$MODE" != full || "$ENGINES" != all ) ]]; then
+            echo "::error::Main, manual and scheduled runs must select the full EF matrix on every engine."
             exit 1
           fi
           if [[ "$COUNT" == 0 && "$SUITES_RESULT" == skipped ]]; then
@@ -363,7 +415,7 @@ jobs:
   #
   # The filter is generated from tools/solution-filters/profiles.json by expanding the dependency
   # closure of the named core roots, so it cannot drift: add a core-to-extension reference and the
-  # closure grows, the committed .slnf stops matching, and the "Solution filters" workflow goes red
+  # closure grows, the committed .slnf stops matching, and the "Generated maps fresh" job goes red
   # alongside this one.
   #
   # The ExtensionBoundary guard that enforces the rule directly also runs inside "Build & test",
@@ -411,7 +463,9 @@ jobs:
       - ef-container-result
       - architecture-guards
       - core-only
-    if: ${{ failure() && github.event_name == 'push' }}
+    # A cancelled run (superseded by a newer push) is not a failure and files nothing. The nightly schedule
+    # files too: its failure mail goes to whoever last edited the cron, which is nobody watching.
+    if: ${{ failure() && !cancelled() && (github.event_name == 'push' || github.event_name == 'schedule') }}
     permissions:
       contents: read
       issues: write
@@ -419,7 +473,129 @@ jobs:
     with:
       gate: CI
 
-  # The "Generated maps fresh" job moved to maps.yml (issue #1274). It needed a push-to-main
-  # trigger as well, and this workflow was the pull_request gate at the time; both triggers now
-  # live here too, but the job stays in maps.yml. Its name is unchanged, so the required status
-  # check of that name still reports.
+  # Freshness gate for the committed maps under docs/maps/, the generated findings reports and the generated
+  # solution filters (Elsa.Server.*.slnf). It regenerates each into a scratch directory and byte-compares the
+  # result with what is committed. Generation itself stays manually initiated (AGENTS.md); this job only
+  # reports. It exists because the committed maps once went three projects stale and carried 25 corrupted
+  # rows with nothing objecting.
+  #
+  # "Generated maps fresh" is a required status check on main, matched by JOB name, so the name below is
+  # load-bearing and must not be renamed. Until #2622 it lived in maps.yml and the filter check in
+  # solution-filters.yml ("Solution filters fresh"); both were folded in here to cut the workflows a push
+  # queues. It runs on the same events as before, pull_request and push to main, plus this workflow's
+  # schedule. Until issue #1274 the maps check ran on pull_request only, so nothing evaluated main: PR #1202
+  # added a spec directory without regenerating, main went stale silently, and the next three unrelated PRs
+  # (#1243, #1247, #1248) went red on a check none of them had broken.
+  #
+  # Notify rather than auto-regenerate. Auto-regenerating and opening a PR would contradict AGENTS.md
+  # ("Generated maps are committed snapshots and are never refreshed automatically"), would skip the
+  # findings-report review a refresh is supposed to trigger, and would need a third-party pull-request
+  # action, which the org Actions allow-list gates (see the POLICY DEPENDENCY note in docker.yml).
+  #
+  # This job is deliberately NOT among the alert job's needs, as it was never wired to main-red-alert.yml in
+  # maps.yml either: a stale map is a request to open a refresh PR, not a broken main, and the actionable
+  # output is the refresh command in the run summary. Add it to the alert's needs if stale maps start
+  # surviving on main the way they did before issue #1274.
+  #
+  # The generator is built once and each check runs whenever that build succeeded, so stale maps do not
+  # hide stale solution filters or the reverse, just as when these were two workflows.
+  generated-maps:
+    name: Generated maps fresh
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.x
+
+      # No restore of the tree: the dependency map's pinned-transitive edges (spec 149 FR-012) are read from the NuGet lock
+      # files committed beside each project (#2122), so the check is a scan of the checkout alone. A lock file the tree
+      # has moved past is refused by name, and CI's locked restores fail on it too. The generator tool itself still
+      # restores to build, so that restore is locked (RestoreLockedMode=true) against its own lock file.
+      - name: Build the generator
+        id: generator
+        run: dotnet build tools/maps/Elsa.Maps.Generator -c Release -p:RestoreLockedMode=true
+
+      - name: Check generated maps against the tree
+        id: maps
+        if: ${{ !cancelled() && steps.generator.outcome == 'success' }}
+        run: dotnet run --project tools/maps/Elsa.Maps.Generator -c Release --no-build -- check
+
+      - name: Exercise project facts contract
+        id: project-facts
+        if: ${{ !cancelled() && steps.generator.outcome == 'success' }}
+        run: dotnet run --project tools/maps/Elsa.Maps.Generator -c Release --no-build -- project-facts-self-test
+
+      - name: Exercise feature facts contract
+        id: feature-facts
+        if: ${{ !cancelled() && steps.generator.outcome == 'success' }}
+        run: dotnet run --project tools/maps/Elsa.Maps.Generator -c Release --no-build -- feature-facts-self-test
+
+      - name: Check generated filters against the project graph
+        id: filters
+        if: ${{ !cancelled() && steps.generator.outcome == 'success' }}
+        run: dotnet run --project tools/maps/Elsa.Maps.Generator -c Release --no-build -- solution-filters-check
+
+      - name: Exercise solution filter generator contracts
+        id: filters-self-test
+        if: ${{ !cancelled() && steps.generator.outcome == 'success' }}
+        run: dotnet run --project tools/maps/Elsa.Maps.Generator -c Release --no-build -- solution-filters-self-test
+
+      - name: Validate filters with the .NET CLI
+        id: filters-cli
+        if: ${{ !cancelled() }}
+        shell: bash
+        run: |
+          for filter in Elsa.Server.*.slnf; do
+            echo "Validating $filter"
+            dotnet sln "$filter" list >/dev/null
+          done
+
+      - name: Explain how to refresh the maps
+        if: >-
+          ${{ failure() && (steps.generator.outcome == 'failure' || steps.maps.outcome == 'failure'
+          || steps.project-facts.outcome == 'failure' || steps.feature-facts.outcome == 'failure') }}
+        run: |
+          cat >> "$GITHUB_STEP_SUMMARY" <<'EOF'
+          ## Generated maps are stale
+
+          The committed maps no longer describe the tree. The failing step above lists
+          the files that would change. To fix it:
+
+          ```bash
+          dotnet run --project tools/maps/Elsa.Maps.Generator -- all
+          ```
+
+          If the generator refuses a lock file, the tree's dependencies changed without it: run
+          `dotnet restore Elsa.Server.slnx`, review and commit the changed `packages.lock.json`
+          files, then generate again.
+
+          Then stage every changed map file by explicit path, `docs/maps/manifest.json`
+          included. The manifest carries no per-commit provenance, so it changes only when
+          the tree did, and this check compares it like any other generated file.
+
+          If this run is on `main`, main is already stale: open a PR with the refreshed
+          maps. Review the generated findings reports before merging.
+          EOF
+
+      - name: Explain how to refresh the solution filters
+        if: >-
+          ${{ failure() && (steps.generator.outcome == 'failure' || steps.filters.outcome == 'failure'
+          || steps.filters-self-test.outcome == 'failure' || steps.filters-cli.outcome == 'failure') }}
+        run: |
+          cat >> "$GITHUB_STEP_SUMMARY" <<'EOF'
+          ## Generated solution filters are stale or invalid
+
+          Refresh and validate them locally:
+
+          ```bash
+          tools/solution-filters/generate-solution-filters.sh
+          tools/solution-filters/generate-solution-filters.sh --check
+          ```
+
+          Commit every changed `.slnf` file together with any manifest or generator change.
+          EOF

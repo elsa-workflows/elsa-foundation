@@ -157,7 +157,8 @@ run() {
   local status=0
   out="$("$@" 2>&1)" || status=$?
   printf '%s\n' "$out" >>"$logs/screen.txt"
-  if [[ -n "$out" ]]; then printf '%s\n' "$out" | cut -c1-240 | head -n 14 | sed 's/^/      /'; fi
+  # Read the entire stream: head can give cut SIGPIPE under pipefail on Linux.
+  if [[ -n "$out" ]]; then printf '%s\n' "$out" | cut -c1-240 | sed -n '1,14{s/^/      /;p;}'; fi
   [[ "$status" -eq 0 ]] || fail "exited $status: $*"
 }
 # stage COMMAND...: run, for what the audience sees: its output is also kept in stage.txt, which is checked for absolute paths.
@@ -175,15 +176,15 @@ apply_solo() { stage bash tools/demo/elsa.sh persistence apply --host "$solo_dir
 # http_code URL: the status code, 000 when nothing answers.
 http_code() { curl -s -o /dev/null -w '%{http_code}' -m 20 "$1" || true; }
 
-first_line() { printf '%s\n' "$1" | head -n 1; }
+first_line() { printf '%s\n' "$1" | sed -n '1p'; }
 line_count() { printf '%s\n' "$1" | wc -l | tr -d ' '; }
 
 expect_has() { # DESCRIPTION TEXT NEEDLE
-  printf '%s' "$2" | grep -qF -- "$3" || fail "$1: expected to find '$3' in: $(printf '%s' "$2" | cut -c1-600)"
+  printf '%s' "$2" | grep -F -- "$3" >/dev/null || fail "$1: expected to find '$3' in: $(printf '%s' "$2" | cut -c1-600)"
   ok "$1 (found '$3')"
 }
 expect_match() { # DESCRIPTION TEXT EXTENDED-REGEX
-  printf '%s\n' "$2" | grep -qE -- "$3" || fail "$1: expected a line matching '$3' in: $(printf '%s' "$2" | cut -c1-600)"
+  printf '%s\n' "$2" | grep -E -- "$3" >/dev/null || fail "$1: expected a line matching '$3' in: $(printf '%s' "$2" | cut -c1-600)"
   ok "$1 (matched '$3')"
 }
 expect_eq() { # DESCRIPTION EXPECTED ACTUAL
@@ -538,7 +539,7 @@ if [[ " $acts " == *" 2 "* ]]; then
   expect_match "host a switched: with-tags is no longer a 404" "$out" 'switched: with-tags answers HTTP (409|200) after '
   measure "host a answered with-tags with something but 404 $(elapsed "$published_at") s after the publish"
   # Host a has never loaded 1.1.0 before, so that line marks the install; the reload that follows it is the host switching over.
-  a_reloaded() { sed -n '/Loaded package Elsa.Samples.Nuplane.Notes@1.1.0/,$p' "$logs/a.log" | grep -q "Reloaded 1 active shell"; }
+  a_reloaded() { sed -n '/Loaded package Elsa.Samples.Nuplane.Notes@1.1.0/,$p' "$logs/a.log" | grep "Reloaded 1 active shell" >/dev/null; }
   wait_until "host a installed the release and reloaded its own shell" 180 a_reloaded
   no_refusal="$(grep -c "was refused" "$logs/a.log" || true)"
   [[ "$no_refusal" -eq 0 ]] || fail "host a refused the reload $no_refusal time(s), though its database was already migrated"
@@ -619,7 +620,7 @@ if [[ " $acts " == *" 3 "* ]]; then
   board wb
   expect_board wb "1.0.0, 1.1.0" "?" "1.0.0"
   # The Workbench refreshes its feature catalog once the new assemblies are loaded; a reload before that rebuilds the old shell.
-  wb_refreshed() { sed -n '/Loaded package Elsa.Samples.Nuplane.Notes.Activities@1.1.0/,$p' "$logs/wb.log" | grep -q "Refreshed runtime feature catalog"; }
+  wb_refreshed() { sed -n '/Loaded package Elsa.Samples.Nuplane.Notes.Activities@1.1.0/,$p' "$logs/wb.log" | grep "Refreshed runtime feature catalog" >/dev/null; }
   wait_until "host wb installed release 2 and refreshed its feature catalog" 180 wb_refreshed
   measure "wb installed release 2 and refreshed its catalog $(elapsed "$published_at") s after the publish"
   board wb

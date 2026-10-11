@@ -108,7 +108,7 @@ When work belongs to a program, the GitHub issue is the public, legible record o
 
 ## Post-merge gates
 
-A green PR is not the end of the gate. `CI` runs on every push to `main` as well as on pull requests, because a required check can be bypassed and because a change that passes on a branch can still break main in combination with what landed beside it. `Maps` also runs on both. The former `HTTP workflow performance` gate was retired with all performance measurement by owner decision (#1668, ADR 0073); no performance workflow remains to run or to report as passed. Deterministic EF command-count budgets per reference workflow are correctness gates, not performance measurement, and are allowed (ADR 0080 D2).
+A green PR is not the end of the gate. `CI` runs on every push to `main` as well as on pull requests, because a required check can be bypassed and because a change that passes on a branch can still break main in combination with what landed beside it. Its `Generated maps fresh` job, which checks the committed maps and solution filters, therefore runs on both too. The former `HTTP workflow performance` gate was retired with all performance measurement by owner decision (#1668, ADR 0073); no performance workflow remains to run or to report as passed. Deterministic EF command-count budgets per reference workflow are correctness gates, not performance measurement, and are allowed (ADR 0080 D2).
 
 When `CI` fails against `main`, and when `Integration (nightly)` fails on its schedule, it files or updates a GitHub issue titled `main is red: <gate>`. Those issues are machine-filed, deduplicated by title, and never auto-closed:
 
@@ -172,7 +172,7 @@ inputs: that would move on every source edit and would oblige every code PR to r
 thirteen map files even though most source edits change no map at all. So a red check means a
 committed map genuinely stopped describing the tree, and is worth acting on rather than restamping
 past. Refreshing stays a deliberate, human-initiated act. The check runs on every pull request and
-on every push to `main` (`.github/workflows/maps.yml`), so main going stale is reported against main
+on every push to `main` (the `Generated maps fresh` job in `.github/workflows/ci.yml`), so main going stale is reported against main
 instead of against whoever opens the next PR. A red run on `main` cannot block anything after the
 fact; treat it as a request to open a refresh PR. Before relying on any map for navigation or
 verification, run `-- check`: green means every committed map still describes the tree, and it is
@@ -279,5 +279,5 @@ New work should move toward this rule:
 <!-- SPECKIT START -->
 For additional context about technologies, project structure, shell commands, contracts, and
 validation scenarios for the active work unit, read
-`specs/199-shared-nuplane-adoption/plan.md`.
+`specs/201-package-generation-readability/plan.md`.
 <!-- SPECKIT END -->

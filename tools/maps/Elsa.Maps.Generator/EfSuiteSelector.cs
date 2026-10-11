@@ -9,6 +9,9 @@ namespace Elsa.Maps.Generator;
 public static partial class EfSuiteSelector
 {
     private const string ManifestPath = "tools/ci/ef-suites.json";
+    public const string AllEngines = "all";
+    public const string PullRequestEngines = "sqlite-postgresql";
+    private static readonly string[] PullRequestSkippedEngines = ["sqlserver", "mysql"];
     private const string IntegrationFilterPath = "Elsa.Server.Persistence.Integration.slnf";
     private const string SeparateSecretsProject = "tests/essentials/Secrets/Persistence/EntityFrameworkCore/PostgreSql/Tests/Elsa.Secrets.Persistence.EntityFrameworkCore.PostgreSql.Tests.csproj";
     private static readonly JsonSerializerOptions JsonOptions = new() { PropertyNameCaseInsensitive = true };
@@ -16,7 +19,7 @@ public static partial class EfSuiteSelector
     public static EfSuiteSelection Select(RepoContext repo, string eventName, string? baseSha, string? headSha)
     {
         var suites = ReadSuites(repo);
-        if (eventName is "push" or "workflow_dispatch")
+        if (eventName is "push" or "workflow_dispatch" or "schedule")
         {
             ReadValidatedProjects(repo, suites);
             return Full(suites, $"{eventName} always runs the full EF matrix");
@@ -24,6 +27,32 @@ public static partial class EfSuiteSelector
         if (eventName != "pull_request")
             throw new InvalidOperationException($"Unsupported EF selection event: {eventName}");
 
+        return ScopeToPullRequest(SelectPullRequest(repo, suites, baseSha, headSha));
+    }
+
+    /// <summary>
+    /// A pull request runs each selected suite on SQLite and PostgreSQL only, and drops the suites that exist only
+    /// for SQL Server or MySQL (#2622). Main, manual and scheduled runs keep every engine.
+    /// </summary>
+    public static EfSuiteSelection ScopeToPullRequest(EfSuiteSelection selection)
+    {
+        var kept = selection.Suites.Where(suite => !PullRequestSkippedEngines.Contains(suite.OnlyEngine ?? "")).ToArray();
+        if (kept.Length == 0 && selection.Suites.Count > 0)
+            return new EfSuiteSelection("none",
+                $"{selection.Reason}; only SQL Server or MySQL suites were affected, and those run on main and nightly",
+                [], PullRequestEngines);
+        return selection.Suites.Count == 0
+            ? selection with { Engines = PullRequestEngines }
+            : selection with
+            {
+                Reason = $"{selection.Reason}; pull request legs run SQLite and PostgreSQL only",
+                Suites = kept,
+                Engines = PullRequestEngines
+            };
+    }
+
+    private static EfSuiteSelection SelectPullRequest(RepoContext repo, IReadOnlyList<EfSuite> suites, string? baseSha, string? headSha)
+    {
         if (!CommitPattern().IsMatch(baseSha ?? "") || !CommitPattern().IsMatch(headSha ?? ""))
             return Full(suites, "PR base/head commits are unavailable");
 
@@ -116,7 +145,8 @@ public static partial class EfSuiteSelector
                 !suite.Project.StartsWith("tests/", StringComparison.Ordinal) &&
                 !suite.Project.StartsWith("src/extensions/", StringComparison.Ordinal) ||
                 !File.Exists(repo.Absolute(suite.Project)) ||
-                suite.Require is null || !RequirePattern().IsMatch(suite.Require)))
+                suite.Require is null || !RequirePattern().IsMatch(suite.Require) ||
+                suite.OnlyEngine is not (null or "sqlite" or "postgresql" or "sqlserver" or "mysql")))
             throw new InvalidOperationException("EF suite manifest contains an invalid entry");
         if (suites.Select(suite => suite.Suite).Distinct(StringComparer.Ordinal).Count() != suites.Count ||
             suites.Select(suite => suite.Project).Distinct(StringComparer.OrdinalIgnoreCase).Count() != suites.Count)
@@ -283,13 +313,20 @@ public static partial class EfSuiteSelector
     private static partial Regex ProjectPattern();
 }
 
-public sealed record EfSuite(string Suite, string Project, string Require);
-public sealed record EfSuiteSelection(string Mode, string Reason, IReadOnlyList<EfSuite> Suites)
+/// <param name="OnlyEngine">The one engine a suite exists for, or null when it covers several.</param>
+public sealed record EfSuite(string Suite, string Project, string Require, string? OnlyEngine = null);
+
+/// <param name="Engines">
+/// <see cref="EfSuiteSelector.AllEngines"/>, or <see cref="EfSuiteSelector.PullRequestEngines"/> when the CI leg
+/// excludes the SQL Server and MySQL tests.
+/// </param>
+public sealed record EfSuiteSelection(string Mode, string Reason, IReadOnlyList<EfSuite> Suites, string Engines = EfSuiteSelector.AllEngines)
 {
     public string ToJson() => JsonSerializer.Serialize(new
     {
         mode = Mode,
         reason = Reason,
+        engines = Engines,
         count = Suites.Count,
         matrix = new { include = Suites.Select(suite => new
         {

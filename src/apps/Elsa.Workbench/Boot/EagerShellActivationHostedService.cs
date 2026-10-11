@@ -1,5 +1,4 @@
-using System.Diagnostics;
-using CShells.Lifecycle;
+using CShells.Hosting;
 
 namespace Elsa.Workbench.Boot;
 
@@ -8,10 +7,8 @@ namespace Elsa.Workbench.Boot;
 ///
 /// It is registered only when <c>Elsa:Boot:EagerShellActivation:Enabled</c> is set, so a host that leaves the
 /// switch off never constructs it. When enabled, <see cref="StartAsync"/> resolves the target shells and drives
-/// each through <see cref="IShellRegistry.GetOrActivateAsync"/> — the exact call <c>ShellMiddleware</c> makes on a
-/// cold request — so the resulting shell state is byte-identical to lazy activation, just paid at boot instead of
-/// on the first user request. This removes the mid-activation contention tail: by the time Kestrel reports the app
-/// started, the activation wall has already been paid (or is in-flight and shared, not duplicated).
+/// each through the host-owned activation runner. This uses the same registry activation path as a cold request,
+/// while keeping a single, serial, one-shot startup pass that can overlap safely with other host activation work.
 ///
 /// Deliberately a HOST-level <see cref="IHostedService"/>: CShells does not run shell-scoped hosted services, and
 /// the eager trigger must live outside any shell container (it activates the shells). Activation failures are
@@ -19,11 +16,31 @@ namespace Elsa.Workbench.Boot;
 /// (the shell activates on its first request) rather than crashing the host.
 /// </summary>
 public sealed class EagerShellActivationHostedService(
-    IShellRegistry registry,
     IConfiguration configuration,
+    IShellActivationRunner activationRunner,
     ILogger<EagerShellActivationHostedService> logger) : IHostedService
 {
+    private readonly object _syncRoot = new();
+    private IShellActivationRun? _run;
+    private Task? _startTask;
+    private Task? _stopTask;
+
     public async Task StartAsync(CancellationToken cancellationToken)
+    {
+        Task startTask;
+        lock (_syncRoot)
+        {
+            if (_stopTask is not null)
+                return;
+
+            _startTask ??= StartCoreAsync(cancellationToken);
+            startTask = _startTask;
+        }
+
+        await startTask;
+    }
+
+    private async Task StartCoreAsync(CancellationToken cancellationToken)
     {
         var options = EagerShellActivationOptions.Read(configuration);
         if (!options.Enabled)
@@ -41,31 +58,103 @@ public sealed class EagerShellActivationHostedService(
 
         logger.LogInformation("Eager shell activation: activating {Count} shell(s) at boot: [{Shells}]", targets.Count, string.Join(", ", targets));
 
-        foreach (var name in targets)
+        var observer = new LoggingAttemptObserver(logger);
+        var run = activationRunner.Start(
+            targets,
+            static _ => ShellActivationRetryDecision.Stop,
+            observer,
+            cancellationToken);
+        lock (_syncRoot)
+            _run = run;
+
+        try
         {
-            cancellationToken.ThrowIfCancellationRequested();
-            var stopwatch = Stopwatch.StartNew();
+            await run.InitialPass;
+        }
+        catch (OperationCanceledException exception) when (cancellationToken.IsCancellationRequested)
+        {
             try
             {
-                await registry.GetOrActivateAsync(name, cancellationToken);
-                stopwatch.Stop();
-                logger.LogInformation("Eager shell activation: shell '{Shell}' active in {ElapsedMs} ms.", name, stopwatch.Elapsed.TotalMilliseconds);
+                await run.StopAsync(CancellationToken.None);
             }
-            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            catch (Exception cleanupFailure)
             {
-                throw;
+                throw new AggregateException("Eager activation was cancelled and its owned run failed during cleanup.", exception, cleanupFailure);
             }
-            catch (Exception exception)
-            {
-                stopwatch.Stop();
-                logger.LogWarning(
-                    exception,
-                    "Eager shell activation of shell '{Shell}' failed after {ElapsedMs} ms; it will activate lazily on its first request instead.",
-                    name,
-                    stopwatch.Elapsed.TotalMilliseconds);
-            }
+
+            throw;
         }
     }
 
-    public Task StopAsync(CancellationToken cancellationToken) => Task.CompletedTask;
+    public Task StopAsync(CancellationToken cancellationToken)
+    {
+        Task stopTask;
+        lock (_syncRoot)
+        {
+            _stopTask ??= StopCoreAsync(_run, _startTask);
+            stopTask = _stopTask;
+        }
+
+        return stopTask.WaitAsync(cancellationToken);
+    }
+
+    private static async Task StopCoreAsync(IShellActivationRun? run, Task? startTask)
+    {
+        Exception? stopFailure = null;
+        try
+        {
+            if (run is not null)
+                await run.StopAsync(CancellationToken.None);
+        }
+        catch (Exception exception)
+        {
+            stopFailure = exception;
+        }
+
+        Exception? startFailure = null;
+        if (startTask is not null)
+        {
+            try
+            {
+                await startTask;
+            }
+            catch (OperationCanceledException)
+            {
+                // The owned run has already been stopped and joined.
+            }
+            catch (Exception exception)
+            {
+                startFailure = exception;
+            }
+        }
+
+        if (stopFailure is not null && startFailure is not null)
+            throw new AggregateException("Eager activation stop and startup both failed.", stopFailure, startFailure);
+        if (stopFailure is not null)
+            System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(stopFailure).Throw();
+        if (startFailure is not null)
+            System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(startFailure).Throw();
+    }
+
+    private sealed class LoggingAttemptObserver(ILogger<EagerShellActivationHostedService> logger) : IShellActivationAttemptObserver
+    {
+        public ValueTask OnAttemptCompletedAsync(ShellActivationAttempt attempt, CancellationToken cancellationToken)
+        {
+            var elapsedMs = (attempt.CompletedAt - attempt.StartedAt).TotalMilliseconds;
+            if (attempt.Outcome == ShellActivationAttemptOutcome.Succeeded)
+            {
+                logger.LogInformation("Eager shell activation: shell '{Shell}' active in {ElapsedMs} ms.", attempt.ShellName, elapsedMs);
+            }
+            else
+            {
+                logger.LogWarning(
+                    attempt.Exception,
+                    "Eager shell activation of shell '{Shell}' failed after {ElapsedMs} ms; it will activate lazily on its first request instead.",
+                    attempt.ShellName,
+                    elapsedMs);
+            }
+
+            return ValueTask.CompletedTask;
+        }
+    }
 }

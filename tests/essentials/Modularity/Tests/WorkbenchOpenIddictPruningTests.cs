@@ -94,6 +94,30 @@ public sealed class WorkbenchOpenIddictPruningTests : IAsyncLifetime
     }
 
     /// <summary>
+    /// The development and demo store is EF Core's in-memory one, which cannot delete in bulk, so OpenIddict's prune fails on it
+    /// every time (#2612). The store is discarded when the host stops, so the prune is not run there: it says so once and stops.
+    /// </summary>
+    [Fact]
+    public async Task A_store_that_cannot_delete_in_bulk_is_not_pruned_and_says_so_once()
+    {
+        await using var demo = CreateProvider(new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["CShells:Shells:default:Features:FoundationIdentityOpenIddict:IsDevelopmentOrDemo"] = "true"
+            })
+            .Build());
+        var service = Service(demo);
+
+        await service.StartAsync(CancellationToken.None);
+        await service.ExecuteTask!.WaitAsync(TimeSpan.FromSeconds(30));
+        _time.Advance(Interval * 2);
+        await service.StopAsync(CancellationToken.None);
+
+        Assert.DoesNotContain(_log.Entries, entry => entry.Level >= LogLevel.Warning);
+        Assert.Single(_log.Entries, entry => entry.Level == LogLevel.Information && entry.Message.Contains("is not pruned", StringComparison.Ordinal));
+    }
+
+    /// <summary>
     /// Every node prunes, none claims it, so two prunes of one store at once, as two nodes' would be, both finish and leave the store
     /// pruned: what one has already deleted is not an error to the other.
     /// </summary>

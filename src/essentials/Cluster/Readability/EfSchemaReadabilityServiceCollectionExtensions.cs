@@ -27,12 +27,12 @@ public static class EfSchemaReadabilityServiceCollectionExtensions
     /// composes neither has gates that never finalize a version past the one each record was created at.
     /// <para>
     /// It also composes the host's <see cref="ISupersededAssemblySource"/>, <see cref="NuplanePackageGenerations"/>, unless
-    /// one is already registered (spec 183, FR-021, amended 2026-09-29): by instance, so every shell shares it, bound to
-    /// the host's own container through the CShells lifecycle subscriber registered beside it, which CShells builds from
-    /// the host's container alone, and fed by the shell initializer registered beside that, which every shell container
-    /// copies and constructs before its first initializer runs, so each shell generation is counted from then until its
-    /// container has finished disposing. On a host without Nuplane, or without CShells, it never names anything
-    /// superseded, and the report reads every load context as before.
+    /// one is already registered. The nondisposable source is shared by instance with shell providers. A separate
+    /// root-only <see cref="NuplanePackageGenerationBuildParticipant"/> acquires protection before catalog access and
+    /// retains the exact selected features until CShells confirms teardown. The lifecycle factory starts that same
+    /// canonical adapter before binding the source to the host's catalogs and membership. Root disposal detaches catalog
+    /// notifications and stops its custom-catalog watch; shell disposal cannot dispose the shared source. A host without
+    /// Nuplane has no positive replacement evidence. A host without CShells has no shell-generation pins.
     /// </para>
     /// <para>
     /// The host's <see cref="IEfSchemaFleet"/> is one instance for the whole host, shared with every shell container through
@@ -51,8 +51,13 @@ public static class EfSchemaReadabilityServiceCollectionExtensions
         services.TryAddSingleton<ISupersededAssemblySource>(generations);
         if (services.Any(descriptor => !descriptor.IsKeyedService && descriptor.ImplementationInstance == generations))
         {
-            services.AddSingleton<IShellLifecycleSubscriber>(host => generations.BindTo(host));
-            services.AddSingleton<IShellInitializer>(container => generations.Track(container));
+            services.AddSingleton<NuplanePackageGenerationBuildParticipant>(root => new(generations, root));
+            services.AddSingleton<IShellGenerationBuildParticipant>(root => root.GetRequiredService<NuplanePackageGenerationBuildParticipant>());
+            services.AddSingleton<IShellLifecycleSubscriber>(root =>
+            {
+                root.GetRequiredService<NuplanePackageGenerationBuildParticipant>().EnsureStarted();
+                return generations.BindTo(root);
+            });
         }
 
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IMemberReportSource<ReadabilitySection>, EfSchemaReadabilitySource>());
