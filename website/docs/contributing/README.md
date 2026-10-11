@@ -8,8 +8,6 @@ The published pages in this section are Markdown files in `website/docs/` in the
 
 GitHub review is the content acceptance path. Review the Markdown diff and check links even when no hosted preview is available. Fork previews were disabled in the site's settings when checked on 11 October 2026; an external-fork preview has not been demonstrated. Opening a documentation pull request does not require a GitBook editor seat. GitBook account and preview-access requirements have not been verified for external contributors.
 
-Preview qualification marker: `DOC2498-20261012-A`. This text is temporary verification content on an unmerged review branch.
-
 ---
 
 [Edit this page on GitHub](https://github.com/elsa-workflows/elsa-foundation/edit/main/website/docs/contributing/README.md).
