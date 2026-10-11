@@ -12,3 +12,7 @@
 ## Studio
 
 * [Elsa Studio](studio/README.md)
+
+## Contributing
+
+* [Contribute documentation](contributing/README.md)

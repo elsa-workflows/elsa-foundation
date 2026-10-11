@@ -1,6 +1,6 @@
 # Run and understand the server
 
-Elsa Foundation contains the Elsa 4 server libraries and the reference `Elsa.Workbench` host. These existing guides are the verified starting points for trying the reference composition or tracing its architecture:
+Elsa Foundation contains the Elsa 4 server libraries and the reference `Elsa.Workbench` host. These existing guides are starting points for trying the reference composition or tracing its architecture:
 
 - [Run the published Workbench and Studio images](https://github.com/elsa-workflows/elsa-foundation/blob/main/docker/compose/README.md#quick-start--published-images-no-clone-or-build).
 - [Build and run the backend from source](https://github.com/elsa-workflows/elsa-foundation/blob/main/docs/contributing/backend-source-quickstart.md).
