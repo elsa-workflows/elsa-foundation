@@ -20,6 +20,10 @@ cd "$root"
 filter="${1:-.*}"
 tooling="tools/ef/Elsa.EntityFrameworkCore.Tooling/Elsa.EntityFrameworkCore.Tooling.csproj"
 configuration="${ELSA_EF_CONFIGURATION:-Release}"
+module_roots=(Essentials/src)
+for capability in Extensions/*/src; do
+  [[ -d "$capability" ]] && module_roots+=("$capability")
+done
 
 # A schema belongs to a deployment, not to a migration: scaffolding with one bakes it into the model
 # snapshot and no host could choose another. Applying and scripting still honour ELSA_EF_SCHEMA.
@@ -29,8 +33,8 @@ dotnet tool restore >/dev/null
 
 module_project() {
   local assembly="$1"
-  # One root covers every module: required under Essentials/src, optional under Extensions (#1815).
-  find src -name "$assembly.csproj" -not -path '*/obj/*' | head -n 1
+  # Cover backend modules without admitting colocated Studio or extension tests.
+  find "${module_roots[@]}" -name "$assembly.csproj" -not -path '*/obj/*' | head -n 1
 }
 
 output_dir() {
@@ -62,7 +66,7 @@ while IFS= read -r snapshot; do
   [[ "$name" =~ ^($filter)$ ]] || continue
   [[ "$snapshot" == */Secrets/* && "$name" != SecretsMySqlDbContext ]] && continue
   rm -rf "$(dirname "$snapshot")"
-done < <(find src -name '*ModelSnapshot.cs' -path '*/EntityFrameworkCore/Migrations/*' -not -path '*/obj/*')
+done < <(find "${module_roots[@]}" -name '*ModelSnapshot.cs' -path '*/EntityFrameworkCore/Migrations/*' -not -path '*/obj/*')
 
 build_tooling
 rows=()
