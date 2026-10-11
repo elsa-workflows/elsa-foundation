@@ -37,7 +37,8 @@ export function defineModuleConfig({
   return defineConfig({
     server: {
       fs: {
-        allow: [searchForWorkspaceRoot(root), __dirname]
+        // Optional Studio module sources live in the sibling Extensions tree after consolidation.
+        allow: [searchForWorkspaceRoot(root), __dirname, resolve(__dirname, "../Extensions")]
       }
     },
     plugins: [react(), moduleCssContractPlugin()],
