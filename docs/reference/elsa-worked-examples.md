@@ -18,7 +18,7 @@ elsa-core exhibited every [anti-pattern](architecture-rationale.md#anti-patterns
 
 The Elsa refactor replaces those failure modes with the rules in framework §2 and the Elsa-specific decomposition in Elsa constitution §E2.
 
-Refactor work in this constitution's scope is governed by framework §2.21.1, the golden rule of refactoring. Existing tests on the implementations being refactored must continue to succeed across the reorganization; the subject under test and objective are preserved even when test setup, dependencies, or location change. Removing a test requires explicit recorded approval from at least one architect.
+Refactor work in this constitution's scope is governed by framework §2.21.1, the golden rule of refactoring. Existing tests on the implementations being refactored must continue to succeed across the reorganization; the subject under test and objective are preserved even when test setup, dependencies, or location change. Since framework 5.0, a refactor may rewrite or delete a test whose code was removed or whose behaviour is proven elsewhere, and the PR names which applies; no architect approval is needed.
 
 ## Cross-Core composition
 
