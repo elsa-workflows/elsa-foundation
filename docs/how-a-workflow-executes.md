@@ -174,6 +174,15 @@ has two implementations in this repository:
 In the Workbench the provider is SQLite (each EF module's `Provider` in `shells.json`, falling back to
 `ConnectionStrings:Elsa`); the file is `src/apps/Elsa.Workbench/elsa.db`.
 
+**What Immediate cadence costs on SQLite.** Under `Immediate`, every hop commits: a checkpoint per scheduler
+boundary, plus single-statement commits around the scheduler queue (enqueue, claim, delete) and the outbox
+("Delivered"). The 4-activity HTTP reference workflow measured about 106 commits on the runtime database per request,
+plus about 24 on the diagnostics database (#2553). SQLite allows one writer and, at its default `synchronous=FULL`,
+each commit is an fsync, so requests queue behind each other's fsyncs: on a cloud VM disk this one workflow plateaus
+at two concurrent clients, about one request per second. Treat SQLite with `Immediate` as a development or
+single-user composition; for throughput use `Coalesced` or PostgreSQL. Reducing the commit count itself is epic
+#2564 (ADR 0080 D2).
+
 ### 7. Suspending on a bookmark and resuming
 
 When an activity returns a suspend transition, the invoke handler enqueues `CreateBookmark`.
