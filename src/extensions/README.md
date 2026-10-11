@@ -60,7 +60,7 @@ site already covers `src/extensions/`, and this is the complete list:
 | `.dockerignore` | what reaches the build context | extension tests bloat the context |
 | `tools/ef/generate-module-migrations.sh` | EF modules and model snapshots | finds no module, generates nothing |
 | `tools/maps/Elsa.Maps.Generator/RepoLayout.cs` | projects, sources and catalogs for every map | the module vanishes from every map |
-| `tools/solution-filters/profiles.json` | the integration profile's `src/extensions/` prefix | the module's Testcontainers suites drop out of the nightly integration lane |
+| `tools/solution-filters/profiles.json` | the integration profile's `src/extensions/` prefix | the module's Testcontainers suites drop out of the fast lane's exclusion and the EF suite inventory check, so they run in fast CI without Docker, where their fixtures can self-skip |
 
 Some sites name a specific project **by full path** rather than enumerating a directory. Those do not
 fail silently in the same way, but they do have to move with the module, and they are easy to miss:
@@ -120,8 +120,9 @@ stay green. Stage 2 pushed without it and CI caught a real boundary question the
 1. Move the projects, keeping each `.csproj` file name unchanged.
 2. Fix the `ProjectReference` paths that pointed at them, and their entries in `Elsa.Server.slnx`.
 3. Extensions get no solution filter of their own (#2577). If the module brings Testcontainers suites, check
-   they reach the nightly lane: `dotnet run --project tools/maps/Elsa.Maps.Generator -- solution-filter-roots
-   Elsa.Server.Persistence.Integration.slnf` must list them.
+   they reach the nightly EF container matrix: `dotnet run --project tools/maps/Elsa.Maps.Generator -- solution-filter-roots
+   Elsa.Server.Persistence.Integration.slnf` must list them, and `tools/ci/ef-suites.json` must name each one
+   (`-- ef-suites-self-test` fails until it does).
 4. Refresh the maps with `dotnet run --project tools/maps/Elsa.Maps.Generator -- all` and stage every
    changed file under `docs/maps/`, `manifest.json` included.
 5. If the move introduces an extension-to-extension edge, declare it in the guard's allowlist with a

@@ -7,7 +7,7 @@ using Elsa.Maps.Generator;
 //   dependency-map | maps | domain | extension-points | architecture-reference | feature-dependency | all | check
 //   solution-filters | solution-filters-check | solution-filters-self-test
 //   solution-filter-roots <filter-path> | solution-filter <filter-path>
-//   ef-suites-select <event> [<base-sha> <head-sha>] | ef-suites-self-test
+//   ef-suites-select | ef-suites-self-test
 //   project-facts-self-test | feature-facts-self-test
 
 // "dependency-map" first: it is the dataset every project-graph map is a projection of (spec 149). Then "maps":
@@ -68,11 +68,9 @@ try
         return 0;
     }
 
-    if ((layers.Length is 2 or 4) && string.Equals(layers[0], "ef-suites-select", StringComparison.Ordinal))
+    if (layers.SequenceEqual(["ef-suites-select"], StringComparer.Ordinal))
     {
-        Console.WriteLine(EfSuiteSelector.Select(repo, layers[1],
-            layers.Length == 4 ? layers[2] : null,
-            layers.Length == 4 ? layers[3] : null).ToJson());
+        Console.WriteLine(EfSuiteSelector.Select(repo).ToJson());
         return 0;
     }
 
@@ -91,7 +89,7 @@ try
     // writing part of the maps and then throwing.
     var requested = layers.Contains("all", StringComparer.Ordinal) ? knownLayers : layers;
     if (requested.FirstOrDefault(layer => !knownLayers.Contains(layer, StringComparer.Ordinal)) is { } unknown)
-        throw new ArgumentException($"Unknown generator command '{unknown}'. Known map layers: {string.Join(", ", knownLayers)}, all, check, solution-filters, solution-filters-check, solution-filters-self-test, solution-filter-roots <filter-path>, solution-filter <filter-path>, ef-suites-select <event> [<base-sha> <head-sha>], ef-suites-self-test, project-facts-self-test, feature-facts-self-test.");
+        throw new ArgumentException($"Unknown generator command '{unknown}'. Known map layers: {string.Join(", ", knownLayers)}, all, check, solution-filters, solution-filters-check, solution-filters-self-test, solution-filter-roots <filter-path>, solution-filter <filter-path>, ef-suites-select, ef-suites-self-test, project-facts-self-test, feature-facts-self-test.");
 
     var projects = ProjectGraph.Read(repo);
     var written = new List<string>();

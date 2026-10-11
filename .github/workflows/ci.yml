@@ -13,9 +13,9 @@ name: CI
 #
 # This workflow builds the FULL solution -- including test projects, which is what
 # catches semantic-merge compile breaks -- then runs the fast unit tests only.
-# The Testcontainers-based integration tests (which need Docker) are intentionally
-# excluded here so no containers start; a full integration/nightly gate is a separate
-# follow-up. See issue #544.
+# The Testcontainers-based tests (which need Docker) are excluded from that job so no
+# containers start (#544). They run in the EF container jobs below, on the nightly schedule
+# and on manual dispatch only (#2632), never on a pull request or a push to main.
 #
 # "Build & test" IS a required status check on main. Branch protection matches the context
 # by JOB name, not by workflow file, so the job names below are load-bearing and must not be
@@ -33,11 +33,12 @@ name: CI
 #     That test project references no Testcontainers, so it sits inside the container-free
 #     filter below and this job would have gone red on the merge commit within ~13 minutes.
 #   - workflow_dispatch: re-run on demand after a fix, without pushing an empty commit.
-#   - schedule: once a night, the full EF container matrix with every engine and every required-provider
-#     mode armed (#2622). Pull requests run SQLite and PostgreSQL only, and a newer push to main cancels an
-#     older run, so without this a quiet day or a burst of merges could leave the SQL Server and MySQL legs
-#     unexercised against main. integration.yml's nightly run reaches the same projects but arms no
-#     required-provider mode, so an engine that fails to start there skips instead of failing.
+#   - schedule: once a night, every job above plus the EF container jobs: the full matrix, each suite run
+#     whole with its required-provider mode armed where it has one, and the Secrets EF composition proof. By owner
+#     decision (#2632) those are not a required check and run only here and on workflow_dispatch. This
+#     run replaced integration.yml (Integration (nightly)), which tested the same Testcontainers projects
+#     without arming any required-provider mode, so an engine that failed to start there skipped instead
+#     of failing; the one other test project it ran, Elsa.Workbench.Tests, is in "Build & test".
 #
 # The push run is deliberately the SAME job, not a scoped-down variant. Scoping it would mean
 # a second job name (the required-check context is tied to this one) and a second thing to
@@ -108,8 +109,8 @@ jobs:
         # Docker containers, so exclude those by reference -- the shared solution-filter generator
         # parses PackageReference elements rather than matching comments or other raw text, and
         # follows ProjectReference edges so a project that only inherits the package from another
-        # test project is excluded too. The integration profile is read, not a committed file: that
-        # filter is generated on demand by the nightly integration lane (#2577).
+        # test project is excluded too. The integration profile is read, not a committed file (#2577);
+        # the projects it names run in the nightly EF container jobs below.
         run: |
           container_roots_file=$(mktemp)
           trap 'rm -f "$container_roots_file"' EXIT
@@ -164,23 +165,22 @@ jobs:
       - name: Test (fast unit tests, no containers)
         run: dotnet test Elsa.Server.test.slnf -c Release --no-build -p:WarningsNotAsErrors=NU1603
 
-  # The manifest is the single suite list; the selector uses the validated solution-reference
-  # graph to run affected legs on PRs, and selects every leg on main, manual dispatch and the schedule.
-  # On a PR it also drops the suites the manifest marks as existing only for SQL Server or MySQL, and
-  # reports engines=sqlite-postgresql so each remaining leg excludes those engines' tests (#2622).
+  # The EF container jobs below run on the nightly schedule and on manual dispatch only (#2632): they are not
+  # a required check, and a pull request or a push to main skips all four. Every run is the full matrix.
+  #
+  # The manifest is the single suite list. The selector proves it still names every Testcontainers test
+  # project of the solution (plus the Secrets EF composition project, which has its own job), so a new
+  # container suite that nobody added to the manifest fails this run instead of running nowhere.
   select-ef-suites:
     name: Select EF suites
+    if: ${{ github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' }}
     runs-on: ubuntu-latest
     outputs:
       matrix: ${{ steps.select.outputs.matrix }}
       count: ${{ steps.select.outputs.count }}
-      mode: ${{ steps.select.outputs.mode }}
-      engines: ${{ steps.select.outputs.engines }}
     steps:
-      - name: Checkout full history for the PR diff
+      - name: Checkout
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
 
       - uses: actions/setup-dotnet@v4
         with:
@@ -189,36 +189,24 @@ jobs:
       - name: Verify selector contract
         run: dotnet run --project tools/maps/Elsa.Maps.Generator -c Release -p:RestoreLockedMode=true -v:q -- ef-suites-self-test
 
-      - name: Select affected suites
+      - name: Read the EF suite matrix
         id: select
-        env:
-          BASE_SHA: ${{ github.event.pull_request.base.sha }}
-          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: |
           set -euo pipefail
-          selection=$(dotnet run --project tools/maps/Elsa.Maps.Generator -c Release --no-build -- ef-suites-select "$GITHUB_EVENT_NAME" "$BASE_SHA" "$HEAD_SHA")
+          selection=$(dotnet run --project tools/maps/Elsa.Maps.Generator -c Release --no-build -- ef-suites-select)
           {
             echo "matrix=$(jq -c '.matrix' <<< "$selection")"
             echo "count=$(jq -r '.count' <<< "$selection")"
-            echo "mode=$(jq -r '.mode' <<< "$selection")"
-            echo "engines=$(jq -r '.engines' <<< "$selection")"
           } >> "$GITHUB_OUTPUT"
           {
-            echo "### EF container selection"
-            echo "Mode: $(jq -r '.mode' <<< "$selection")"
-            echo "Engines: $(jq -r '.engines' <<< "$selection")"
-            echo "Reason: $(jq -r '.reason' <<< "$selection")"
+            echo "### EF container suites"
+            jq -r '.matrix.include[] | "- " + .suite + (if .require == "" then "" else " (" + .require + ")" end)' <<< "$selection"
           } >> "$GITHUB_STEP_SUMMARY"
-          if [[ $(jq -r '.count' <<< "$selection") == 0 ]]; then
-            echo "No EF container suites selected." >> "$GITHUB_STEP_SUMMARY"
-          else
-            jq -r '.matrix.include[].suite | "- " + .' <<< "$selection" >> "$GITHUB_STEP_SUMMARY"
-          fi
 
   ef-container-suites:
     name: EF container suites (${{ matrix.suite }})
     needs: select-ef-suites
-    if: ${{ needs.select-ef-suites.outputs.count != '0' }}
+    if: ${{ github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
     strategy:
@@ -247,75 +235,35 @@ jobs:
       - name: Restore
         run: dotnet restore ${{ matrix.project }} --locked-mode -p:WarningsNotAsErrors=NU1603
 
-      # Every engine: main, manual dispatch, the schedule, and any selection that does not name the
-      # pull-request scope (so an unexpected value fails toward more coverage, not less).
       - name: Test
-        if: ${{ needs.select-ef-suites.outputs.engines != 'sqlite-postgresql' }}
         run: dotnet test ${{ matrix.project }} -c Release --no-restore -p:WarningsNotAsErrors=NU1603
 
-      # Pull requests: SQLite, PostgreSQL and engine-agnostic tests only. The engine-specific tests name their
-      # engine in the class, the method or a theory argument, all of which reach the display name, so one
-      # display-name filter covers the three shapes (SqlServer..., ..._on_sql_server, ("MySql")). VSTest
-      # compares `~` case-insensitively. A filter that matches nothing makes `dotnet test` pass with zero
-      # tests, so the TRX counters are read back and a leg that executed no test fails.
-      - name: Test (SQLite and PostgreSQL only)
-        if: ${{ needs.select-ef-suites.outputs.engines == 'sqlite-postgresql' }}
-        env:
-          ENGINE_FILTER: DisplayName!~SqlServer&DisplayName!~sql_server&DisplayName!~MySql
-        run: |
-          set -euo pipefail
-          results="$RUNNER_TEMP/ef-test-results"
-          dotnet test ${{ matrix.project }} -c Release --no-restore -p:WarningsNotAsErrors=NU1603 \
-            --filter "$ENGINE_FILTER" --logger "trx;LogFileName=ef.trx" --results-directory "$results"
-          python3 - "$results/ef.trx" <<'PY'
-          import sys
-          import xml.etree.ElementTree as ET
-          ns = {"t": "http://microsoft.com/schemas/VisualStudio/TeamTest/2010"}
-          counters = ET.parse(sys.argv[1]).getroot().find("t:ResultSummary/t:Counters", ns)
-          if counters is None:
-              sys.exit(f"::error::{sys.argv[1]} has no result counters.")
-          total, executed = int(counters.get("total", "0")), int(counters.get("executed", "0"))
-          print(f"Engine-filtered leg: {total} test(s) matched, {executed} executed.")
-          if executed == 0:
-              sys.exit("::error::The SQLite/PostgreSQL filter executed zero tests; a renamed suite or filter would pass vacuously.")
-          PY
-
-  # Stable result for branch rules and reviewers, including an explicit no-impact PR.
+  # One result for the whole matrix and the Secrets EF composition proof, which the alert job needs.
   ef-container-result:
     name: EF container suites
-    # !cancelled() rather than always(): a superseded run's cancelled legs must not turn into a red aggregate,
-    # which on main would file a "main is red" issue for a run that never failed.
-    if: ${{ !cancelled() }}
+    # !cancelled() rather than always(): a cancelled leg must not turn into a red aggregate, which would file a
+    # "main is red" issue for a run that never failed.
+    if: ${{ !cancelled() && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') }}
     needs: [select-ef-suites, ef-container-suites, secrets-ef-composition]
     runs-on: ubuntu-latest
     steps:
-      - name: Verify selected suite results
+      - name: Verify every EF suite passed
         env:
           SELECT_RESULT: ${{ needs.select-ef-suites.result }}
           SUITES_RESULT: ${{ needs.ef-container-suites.result }}
           SECRETS_RESULT: ${{ needs.secrets-ef-composition.result }}
           COUNT: ${{ needs.select-ef-suites.outputs.count }}
-          MODE: ${{ needs.select-ef-suites.outputs.mode }}
-          ENGINES: ${{ needs.select-ef-suites.outputs.engines }}
         run: |
           if [[ "$SELECT_RESULT" != success ]]; then
-            echo "::error::EF suite selection failed; this is not a no-impact PR."
+            echo "::error::Reading the EF suite matrix failed."
             exit 1
           fi
           if [[ "$SECRETS_RESULT" != success ]]; then
-            echo "::error::The always-run Secrets EF host proof did not pass."
+            echo "::error::The Secrets EF host proof did not pass."
             exit 1
-          fi
-          if [[ "$GITHUB_EVENT_NAME" != pull_request && ( "$MODE" != full || "$ENGINES" != all ) ]]; then
-            echo "::error::Main, manual and scheduled runs must select the full EF matrix on every engine."
-            exit 1
-          fi
-          if [[ "$COUNT" == 0 && "$SUITES_RESULT" == skipped ]]; then
-            echo "No EF suite impact; selection succeeded."
-            exit 0
           fi
           if [[ "$COUNT" =~ ^[1-9][0-9]*$ && "$SUITES_RESULT" == success ]]; then
-            echo "All $COUNT selected EF suites passed."
+            echo "All $COUNT EF suites passed."
             exit 0
           fi
           echo "::error::EF suites did not pass (count=$COUNT, result=$SUITES_RESULT)."
@@ -326,6 +274,7 @@ jobs:
   # child-host proof. Kept separate from the provider matrix because it boots a real shell.
   secrets-ef-composition:
     name: Secrets EF composition
+    if: ${{ github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' }}
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -464,7 +413,9 @@ jobs:
       - architecture-guards
       - core-only
     # A cancelled run (superseded by a newer push) is not a failure and files nothing. The nightly schedule
-    # files too: its failure mail goes to whoever last edited the cron, which is nobody watching.
+    # files too: its failure mail goes to whoever last edited the cron, which is nobody watching, and it is the
+    # only automatic run of the EF container jobs. On a pull request or a push those are skipped, and a skipped
+    # need is not a failure, so ef-container-result can only turn this red on the schedule or a manual run.
     if: ${{ failure() && !cancelled() && (github.event_name == 'push' || github.event_name == 'schedule') }}
     permissions:
       contents: read
@@ -544,6 +495,13 @@ jobs:
         id: filters-self-test
         if: ${{ !cancelled() && steps.generator.outcome == 'success' }}
         run: dotnet run --project tools/maps/Elsa.Maps.Generator -c Release --no-build -- solution-filters-self-test
+
+      # Cheap, container-free: a new Testcontainers project missing from tools/ci/ef-suites.json fails here on the PR,
+      # instead of silently running nowhere until the nightly EF matrix notices.
+      - name: Check every Testcontainers project is in the nightly EF suite manifest
+        id: ef-suites-self-test
+        if: ${{ !cancelled() && steps.generator.outcome == 'success' }}
+        run: dotnet run --project tools/maps/Elsa.Maps.Generator -c Release --no-build -- ef-suites-self-test
 
       - name: Validate filters with the .NET CLI
         id: filters-cli
