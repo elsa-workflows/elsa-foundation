@@ -76,7 +76,12 @@ fi
 
 step preflight
 studio=$(find_studio)
-command -v dotnet >/dev/null || { echo "dotnet is not on PATH." >&2; false; }
+if ! command -v dotnet >/dev/null; then
+  # A cloud session with several repositories starts outside them, so the repository's SessionStart hook never ran.
+  CLAUDE_CODE_REMOTE=true CLAUDE_PROJECT_DIR="$root" CLAUDE_ENV_FILE="$state/dotnet.env" bash "$root/.claude/hooks/session-start.sh"
+  export DOTNET_ROOT="$HOME/.dotnet" PATH="$HOME/.dotnet:$PATH" DOTNET_CLI_TELEMETRY_OPTOUT=1 DOTNET_NOLOGO=1
+  command -v dotnet >/dev/null || { echo "dotnet is not on PATH and could not be installed." >&2; false; }
+fi
 command -v node >/dev/null || { echo "node is not on PATH." >&2; false; }
 node_major=$(node -p 'process.versions.node.split(".")[0]')
 [ "$node_major" -ge 22 ] || { echo "Node 22 or later is required; found $(node --version)." >&2; false; }
