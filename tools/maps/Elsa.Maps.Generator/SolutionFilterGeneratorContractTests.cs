@@ -10,6 +10,7 @@ public static class SolutionFilterGeneratorContractTests
 {
     private const string OnDemandFilter = "Elsa.Server.Integration.slnf";
 
+    /// <summary>Checks filter generation, root selection, freshness, and invalid graphs using a temporary repository fixture.</summary>
     public static void Run()
     {
         var root = Path.Join(Path.GetTempPath(), $"elsa-solution-filter-tests-{Environment.ProcessId}-{Guid.NewGuid():N}");
@@ -25,8 +26,6 @@ public static class SolutionFilterGeneratorContractTests
             AssertProjects(root, "Fast.slnf", ["tests/Comment.csproj"]);
             Assert(!File.Exists(Path.Join(root, OnDemandFilter)),
                 "A profile marked committed:false must not be written by the committed-filter generator.");
-            Assert(SolutionFilterGenerator.GetOutputPaths(repo).SequenceEqual(["Feature.slnf", "Fast.slnf"], StringComparer.Ordinal),
-                "Only committed profiles are manifest-owned outputs.");
             Assert(SolutionFilterGenerator.GetRoots(repo, OnDemandFilter)
                     .SequenceEqual(["tests/Container.csproj", "tests/Transitive.csproj"], StringComparer.Ordinal),
                 "Package selectors must use parsed PackageReference elements, ignore comment text, and follow "

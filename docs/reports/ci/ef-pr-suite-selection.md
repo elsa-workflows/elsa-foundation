@@ -1,5 +1,7 @@
 # Select EF container suites on pull requests
 
+> **Superseded (#2632, 2026-10-11).** The EF container suites no longer run on pull requests or pushes to `main`, only in `CI`'s nightly schedule and on manual dispatch, always as the full matrix. The PR diff selection this report describes was removed from `tools/maps/Elsa.Maps.Generator`; the rest of this report is the historical record.
+
 Issue: [#1993](https://github.com/elsa-workflows/elsa-foundation/issues/1993). The 18 EF matrix legs remain distinct tests. The fast `Build & test` lane excludes projects that reach Testcontainers, so removing the legs would remove PR coverage. Running all 18 for a documentation or narrow feature PR is unnecessary; the full matrix remains on every push to `main` and manual dispatch.
 
 ## Baseline and inventory
