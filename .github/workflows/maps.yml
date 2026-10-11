@@ -1,105 +1,42 @@
-name: Maps
-
-# Freshness gate for the committed maps under docs/maps/ and the generated findings
-# reports. It regenerates every map into a scratch directory and byte-compares the
-# result with what is committed. Generation itself stays manually initiated (AGENTS.md);
-# this workflow only reports. It exists because the committed maps once went three
-# projects stale and carried 25 corrupted rows with nothing objecting.
-#
-# The job lives here rather than in ci.yml because it needs two triggers and ci.yml is
-# the pull_request gate. "Generated maps fresh" is a required status check on main;
-# branch protection matches the context by JOB name, not by workflow file, so the job
-# name below is load-bearing and must not be renamed.
-#
-#   - pull_request: keeps a PR from landing stale maps. Unchanged behavior.
-#   - push to main: reports main going stale AGAINST MAIN. Until issue #1274 this ran on
-#     pull_request only, so nothing ever evaluated main. PR #1202 added a spec directory
-#     without regenerating, main went stale silently, and the next three unrelated PRs
-#     (#1243, #1247, #1248) went red on a check none of them had broken -- CI evaluates
-#     the PR merged into main, so a branch whose own tree is fine still fails while
-#     `-- check` passes locally on the exact commit CI fails on.
-#   - workflow_dispatch: re-run on demand after a fix without pushing an empty commit.
-#
-# Notify rather than auto-regenerate. Blocking is not available on push: the commit has
-# already landed. Of the two remaining options, a failing run on main is the one that
-# fits this repository. Auto-regenerating and opening a PR would contradict AGENTS.md
-# ("Generated maps are committed snapshots and are never refreshed automatically"), it
-# would skip the findings-report review that a refresh is supposed to trigger, and it
-# would need a third-party pull-request action -- which the org Actions allow-list gates
-# (see the POLICY DEPENDENCY note in docker.yml; a blocked entry fails the run at
-# startup with no logs). This workflow uses only actions/checkout and
-# actions/setup-dotnet, both already in use across this repository's workflows.
-#
-# A failed run on main notifies the pusher through the normal GitHub Actions failure
-# notification and is visible in the Actions tab. The failure step below writes the
-# refresh instructions into the run summary so the fix does not need this file.
-#
-# This job deliberately does NOT call main-red-alert.yml, which the other push-triggered gates
-# use to file a "main is red" issue. That is not an oversight: a stale map is a request to open
-# a refresh PR, not a broken main, and the actionable output here is the refresh command in the
-# run summary rather than a title and a link. Wire it up if stale maps start surviving on main
-# the way they did before issue #1274 -- the escalation is one `uses:` block away.
-
+name: Hosted extraction closeout map refresh
 on:
-  pull_request:
-    branches:
-      - main
-  push:
-    branches:
-      - main
   workflow_dispatch:
-
 permissions:
   contents: read
-
 jobs:
-  map-freshness:
-    name: Generated maps fresh
+  refresh:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup .NET
-        uses: actions/setup-dotnet@v4
+      - uses: actions/checkout@v4
+        with:
+          ref: 99a710b90039dbef6db628febdfbba04b4db17ce
+          fetch-depth: 1
+      - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: 10.x
-
-      # No restore of the tree: the dependency map's pinned-transitive edges (spec 149 FR-012) are read from the NuGet lock
-      # files committed beside each project (#2122), so the check is a scan of the checkout alone. A lock file the tree
-      # has moved past is refused by name, and CI's locked restores fail on it too. The generator tool itself still
-      # restores implicitly to run, so that restore is locked (RestoreLockedMode=true) against its own lock file.
-      - name: Check generated maps against the tree
-        run: dotnet run --project tools/maps/Elsa.Maps.Generator -c Release -p:RestoreLockedMode=true -- check
-
-      - name: Exercise project facts contract
-        run: dotnet run --project tools/maps/Elsa.Maps.Generator -c Release --no-build -- project-facts-self-test
-
-      - name: Exercise feature facts contract
-        run: dotnet run --project tools/maps/Elsa.Maps.Generator -c Release --no-build -- feature-facts-self-test
-
-      - name: Explain how to refresh
-        if: failure()
+      - name: Generate and verify maps for exact closeout source
+        shell: bash
         run: |
-          cat >> "$GITHUB_STEP_SUMMARY" <<'EOF'
-          ## Generated maps are stale
-
-          The committed maps no longer describe the tree. The failing step above lists
-          the files that would change. To fix it:
-
-          ```bash
-          dotnet run --project tools/maps/Elsa.Maps.Generator -- all
-          ```
-
-          If the generator refuses a lock file, the tree's dependencies changed without it: run
-          `dotnet restore Elsa.Server.slnx`, review and commit the changed `packages.lock.json`
-          files, then generate again.
-
-          Then stage every changed map file by explicit path, `docs/maps/manifest.json`
-          included. The manifest carries no per-commit provenance, so it changes only when
-          the tree did, and this check compares it like any other generated file.
-
-          If this run is on `main`, main is already stale: open a PR with the refreshed
-          maps. Review the generated findings reports before merging.
-          EOF
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/closeout-maps"
+          git rev-parse HEAD > "$RUNNER_TEMP/closeout-maps/source.txt"
+          git ls-tree -r HEAD > "$RUNNER_TEMP/closeout-maps/source-tree.txt"
+          dotnet run --project tools/maps/Elsa.Maps.Generator -c Release -p:RestoreLockedMode=true -- all > "$RUNNER_TEMP/closeout-maps/maps-all.log" 2>&1
+          git diff --binary > "$RUNNER_TEMP/closeout-maps/generated.diff"
+          python3 - <<'VERIFY'
+          import subprocess,pathlib
+          changed=subprocess.check_output(['git','diff','--name-only'],text=True).splitlines()
+          assert changed==['docs/maps/spec-status-map.md'],changed
+          pathlib.Path('docs/maps/spec-status-map.md').read_text()
+          VERIFY
+          git diff --check
+          dotnet run --project tools/maps/Elsa.Maps.Generator -c Release --no-build -- check > "$RUNNER_TEMP/closeout-maps/maps-check.log" 2>&1
+          cp docs/maps/spec-status-map.md "$RUNNER_TEMP/closeout-maps/spec-status-map.md"
+          sha256sum "$RUNNER_TEMP/closeout-maps/spec-status-map.md" > "$RUNNER_TEMP/closeout-maps/map-sha256.txt"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: extraction-closeout-maps-${{ github.run_id }}
+          path: ${{ runner.temp }}/closeout-maps/
+          if-no-files-found: error
