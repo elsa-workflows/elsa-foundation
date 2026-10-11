@@ -120,7 +120,7 @@ if [[ "$command" == "pending" ]]; then
   count=0
   while IFS='|' read -r context _ assembly _; do
     [[ "$context" =~ ^($filter)$ ]] || continue
-    project="$(find "${module_roots[@]}" -name "$assembly.csproj" -not -path '*/obj/*' | head -n 1)"
+    project="$(find "${module_roots[@]}" -name "$assembly.csproj" -not -path '*/obj/*' -not -path '*/studio/*' | head -n 1)"
     count=$((count + 1))
     if ! ef "$context" "$project" migrations has-pending-model-changes >/dev/null 2>&1; then
       echo "pending model changes: $context" >&2

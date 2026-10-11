@@ -21,7 +21,7 @@ demo_logs="$demo_artifacts/logs"
 demo_pg_container="${DEMO_PG_CONTAINER:-elsa-demo-pg}"
 
 # Act 3: the Workbench build tools/demo/run-workbench.sh copies, and the Elsa Studio checkout tools/demo/run-studio.sh runs
-# (DEMO_STUDIO_DIR, relative to the repository root unless absolute; a sibling checkout by default).
+# (DEMO_STUDIO_DIR, relative to the repository root unless absolute; Studio/ by default).
 demo_workbench_build="$demo_root/Essentials/apps/Elsa.Workbench/bin/Release/net10.0"
 demo_studio_dir="${DEMO_STUDIO_DIR:-Studio}"
 [[ "$demo_studio_dir" == /* ]] || demo_studio_dir="$demo_root/$demo_studio_dir"

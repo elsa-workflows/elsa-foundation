@@ -4,13 +4,19 @@
 
 `elsa-foundation` is the transitional Elsa 4 foundation workspace.
 
-It contains the main Elsa domain core libraries, default foundation implementations, the Speckit specification flow, and the architecture knowledge needed to navigate and verify the refactor from `elsa-core`.
+It contains the Elsa backend and Studio in three product roots:
+
+- `Essentials/`: backend libraries, tests and host applications.
+- `Extensions/<capability>/`: optional backend implementations, tests and Studio components where present.
+- `Studio/`: the Studio shell, shared UI, tests and frontend tooling.
+
+Shared engineering documentation, tools and workflows remain at the root. Public Elsa 4 documentation source lives in `website/docs/` and syncs to GitBook. Server and Studio retain independent builds and package identities.
 
 These repositories develop the Elsa 4 preview. Elsa 3 uses the separate [elsa-core](https://github.com/elsa-workflows/elsa-core) and [elsa-studio](https://github.com/elsa-workflows/elsa-studio) repositories.
 
 - **Try Elsa 4:** [run Workbench and Studio from published Docker images](docker/compose/README.md#quick-start--published-images-no-clone-or-build).
 - **Contribute to the server:** follow the [Elsa Foundation contribution guide](CONTRIBUTING.md).
-- **Contribute to Studio:** follow the [Elsa Foundation Studio contribution guide](https://github.com/elsa-workflows/elsa-foundation-studio/blob/main/CONTRIBUTING.md).
+- **Contribute to Studio:** follow the [Elsa Foundation Studio contribution guide](Studio/CONTRIBUTING.md).
 
 ## Philosophy
 

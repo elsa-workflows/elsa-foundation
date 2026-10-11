@@ -40,7 +40,7 @@ done
 
 build_commands="cd ${DEMO_STUDIO_DIR:-Studio} && pnpm install && pnpm build && dotnet build -c Release src/apps/Elsa.Studio.Web"
 [[ -d "$demo_studio_dir" ]] ||
-  demo_fail "There is no Studio checkout at ${DEMO_STUDIO_DIR:-Studio} (DEMO_STUDIO_DIR). Clone elsa-workflows/elsa-foundation-studio there, or set DEMO_STUDIO_DIR to one, then build it: $build_commands"
+  demo_fail "There is no Studio directory at ${DEMO_STUDIO_DIR:-Studio} (DEMO_STUDIO_DIR). Use a complete consolidated checkout, or set DEMO_STUDIO_DIR to a retained Studio checkout, then build it: $build_commands"
 web="$demo_studio_dir/src/apps/Elsa.Studio.Web"
 [[ -f "$web/bin/Release/net10.0/Elsa.Studio.Web.dll" && -f "$web/wwwroot/studio/index.html" ]] ||
   demo_fail "The Studio checkout at ${DEMO_STUDIO_DIR:-Studio} is not built (no bin/Release/net10.0/Elsa.Studio.Web.dll or wwwroot/studio/index.html under src/apps/Elsa.Studio.Web). Build it: $build_commands"
