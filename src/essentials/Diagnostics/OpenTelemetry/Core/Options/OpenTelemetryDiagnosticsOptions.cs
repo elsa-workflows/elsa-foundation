@@ -63,6 +63,14 @@ public class OpenTelemetryDiagnosticsOptions
     public TimeSpan ShutdownDrainTimeout { get; set; } = TimeSpan.FromSeconds(10);
 
     /// <summary>
+    /// How long a durable store lets captures gather before committing them together. Without it a store commits each
+    /// capture the moment it arrives, so every exported span batch pays its own transaction on the diagnostics database
+    /// (#2613). Live subscribers see a capture once its group commits, so this is also the extra live-feed delay.
+    /// <see cref="TimeSpan.Zero"/> commits whatever is queued at once; negative values are clamped to zero.
+    /// </summary>
+    public TimeSpan PersistenceFlushDelay { get; set; } = TimeSpan.FromMilliseconds(100);
+
+    /// <summary>
     /// The most telemetry records (traces, spans, metric points and log records together) the durable
     /// capture commits in one provider transaction on a provider that does not serialize its writers.
     /// Queued batches are grouped up to this many records per commit; a single batch larger than this

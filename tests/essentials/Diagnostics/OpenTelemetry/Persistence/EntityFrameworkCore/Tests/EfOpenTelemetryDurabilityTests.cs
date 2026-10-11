@@ -453,6 +453,112 @@ public sealed class EfOpenTelemetryDurabilityTests
     }
 
     /// <summary>
+    /// Captures that arrive within the flush delay commit in one transaction, each still under its own ledger identity,
+    /// rather than one transaction per capture (#2613).
+    /// </summary>
+    [Fact]
+    public async Task Captures_arriving_within_the_flush_delay_commit_in_one_transaction()
+    {
+        await using var temp = new TempDatabaseDirectory("elsa-otel-flush-delay-");
+        var interceptor = new TransientTransactionStartInterceptor();
+        await using var provider = OpenTelemetryEntityFrameworkCoreFixture.BuildInterceptingProvider(
+            temp.DatabasePath, interceptor, new() { PersistenceFlushDelay = TimeSpan.FromMilliseconds(500) });
+        await OpenTelemetryEntityFrameworkCoreFixture.EnsureCreatedAsync(provider);
+        var store = provider.GetRequiredService<EfOpenTelemetryStore>();
+        store.Start();
+        try
+        {
+            var beginAttemptsBeforeWrite = interceptor.BeginAttempts;
+
+            await Task.WhenAll(
+                store.WriteAsync(TelemetryTestData.Batch("flush-a")).AsTask(),
+                store.WriteAsync(TelemetryTestData.Batch("flush-b")).AsTask(),
+                store.WriteAsync(TelemetryTestData.Batch("flush-c")).AsTask());
+
+            // One capture transaction and one retention transaction, not one of each per capture.
+            Assert.Equal(beginAttemptsBeforeWrite + 2, interceptor.BeginAttempts);
+            foreach (var traceId in new[] { "flush-a", "flush-b", "flush-c" })
+                Assert.NotNull(await store.GetTraceAsync(traceId));
+            await using var scope = provider.CreateAsyncScope();
+            Assert.Equal(3, await scope.ServiceProvider.GetRequiredService<OpenTelemetryDbContext>().CaptureLedger.CountAsync());
+        }
+        finally
+        {
+            await store.StopAsync();
+        }
+    }
+
+    /// <summary>
+    /// A capture that cannot commit because of its own data fails on its own: the captures grouped with it are still
+    /// committed and acknowledged, as they were when every capture had its own transaction.
+    /// </summary>
+    [Fact]
+    public async Task A_capture_that_fails_on_its_own_data_does_not_fail_the_captures_grouped_with_it()
+    {
+        await using var fixture = new OpenTelemetryEntityFrameworkCoreFixture();
+        await fixture.InitializeAsync(new() { MaxQuerySize = 100, PersistenceFlushDelay = TimeSpan.FromMilliseconds(500) });
+        var original = TelemetryTestData.Batch("poisoned");
+        await fixture.Store.WriteAsync(original);
+        await fixture.WithDbAsync(db => CorruptTraceSummaryAsync(db, "{not-json}"));
+        var poisoned = original with
+        {
+            Traces = [original.Traces.Single() with
+            {
+                StartTime = original.Traces.Single().StartTime.AddSeconds(1),
+                EndTime = original.Traces.Single().EndTime.AddSeconds(1)
+            }]
+        };
+
+        var poisonedWrite = fixture.Store.WriteAsync(poisoned).AsTask();
+        var healthyWrites = Task.WhenAll(
+            fixture.Store.WriteAsync(TelemetryTestData.Batch("healthy-a")).AsTask(),
+            fixture.Store.WriteAsync(TelemetryTestData.Batch("healthy-b")).AsTask());
+
+        var failure = await Assert.ThrowsAsync<OpenTelemetryPersistenceDataException>(() => poisonedWrite);
+        Assert.Equal(OpenTelemetryPersistenceFailureReason.CorruptData, failure.Reason);
+        await healthyWrites;
+        Assert.NotNull(await fixture.Store.GetTraceAsync("healthy-a"));
+        Assert.NotNull(await fixture.Store.GetTraceAsync("healthy-b"));
+        Assert.Equal(3, await fixture.WithDbAsync(db => db.CaptureLedger.CountAsync()));
+    }
+
+    /// <summary>
+    /// The drain retries a batch whose commit acknowledgement was lost under the same batch identity, so every capture
+    /// in a group must keep its identity across attempts: the retry then finds each one in the ledger instead of
+    /// appending it a second time.
+    /// </summary>
+    [Fact]
+    public async Task A_group_retried_after_a_lost_commit_acknowledgement_appends_each_capture_once()
+    {
+        await using var temp = new TempDatabaseDirectory("elsa-otel-lost-ack-");
+        var interceptor = new LostCommitAcknowledgementInterceptor();
+        await using var provider = OpenTelemetryEntityFrameworkCoreFixture.BuildInterceptingProvider(
+            temp.DatabasePath, interceptor, new() { PersistenceFlushDelay = TimeSpan.FromMilliseconds(500) });
+        await OpenTelemetryEntityFrameworkCoreFixture.EnsureCreatedAsync(provider);
+        var store = provider.GetRequiredService<EfOpenTelemetryStore>();
+        store.Start();
+        try
+        {
+            interceptor.Arm();
+
+            await Task.WhenAll(
+                store.WriteAsync(TelemetryTestData.Batch("replayed-a")).AsTask(),
+                store.WriteAsync(TelemetryTestData.Batch("replayed-b")).AsTask(),
+                store.WriteAsync(TelemetryTestData.Batch("replayed-c")).AsTask());
+
+            await using var scope = provider.CreateAsyncScope();
+            var db = scope.ServiceProvider.GetRequiredService<OpenTelemetryDbContext>();
+            Assert.Equal(3, await db.CaptureLedger.CountAsync());
+            Assert.Equal(3, await db.Spans.CountAsync());
+            Assert.Equal(3, await db.Logs.CountAsync());
+        }
+        finally
+        {
+            await store.StopAsync();
+        }
+    }
+
+    /// <summary>
     /// A schema write refusal raised while a capture commits must reach the caller as itself, the same way a schema
     /// version skew already does, never wrapped in <see cref="OpenTelemetryPersistenceException"/> (#2101).
     /// </summary>

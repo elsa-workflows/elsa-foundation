@@ -55,6 +55,56 @@ public sealed class DiagnosticsDrainValidationTests : DiagnosticsDrainTestBase
         Assert.Equal(2, target.CommitCalls);
     }
 
+    /// <summary>
+    /// A target that commits a batch's items independently reports the ones that could not commit; only those
+    /// acknowledgements fail, with the target's own exception, and the batch is not retried.
+    /// </summary>
+    [Fact]
+    public async Task Item_failures_fail_only_their_own_acknowledgements()
+    {
+        var refusal = new DiagnosticsOperationalException("item 2 cannot commit");
+        var target = new ScriptedTarget
+        {
+            Commit = batch => new(batch.Items.ToArray(), batch.Items.Count)
+            {
+                ItemFailures = batch.Items.Select(item => item == 2 ? refusal : null).ToArray()
+            }
+        };
+        var drain = CreateDrain(target);
+        var first = drain.EnqueueAsync(1).AsTask();
+        var second = drain.EnqueueAsync(2).AsTask();
+        var third = drain.EnqueueAsync(3).AsTask();
+
+        await drain.StopAsync();
+
+        Assert.Equal(1, await first);
+        Assert.Equal(3, await third);
+        var failure = await Assert.ThrowsAsync<DiagnosticsDrainException>(() => second);
+        Assert.Equal(DiagnosticsPersistenceLossReason.RetryExhausted, failure.Reason);
+        Assert.Same(refusal, failure.InnerException);
+        Assert.Equal(1, target.CommitCalls);
+    }
+
+    [Fact]
+    public async Task Item_failures_that_do_not_match_the_batch_are_invalid_and_fail_with_retry_exhaustion()
+    {
+        var target = new ScriptedTarget
+        {
+            Commit = batch => new(batch.Items.ToArray(), batch.Items.Count) { ItemFailures = [null] }
+        };
+        var drain = CreateDrain(target);
+        var first = drain.EnqueueAsync(1).AsTask();
+        var second = drain.EnqueueAsync(2).AsTask();
+
+        await drain.StopAsync();
+
+        Assert.Equal(DiagnosticsPersistenceLossReason.RetryExhausted,
+            (await Assert.ThrowsAsync<DiagnosticsDrainException>(() => first)).Reason);
+        Assert.Equal(DiagnosticsPersistenceLossReason.RetryExhausted,
+            (await Assert.ThrowsAsync<DiagnosticsDrainException>(() => second)).Reason);
+        Assert.Equal(2, target.CommitCalls);
+    }
+
     [Fact]
     public async Task Negative_retention_result_exhausts_retries_and_is_classified()
     {

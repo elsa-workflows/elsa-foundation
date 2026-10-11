@@ -290,11 +290,16 @@ public sealed class DiagnosticsDrain<TItem, TResult> : IDisposable, IAsyncDispos
             try
             {
                 var commit = await _target.CommitAsync(batch, cancellationToken);
-                if (commit.Results.Count != pending.Count)
+                if (commit.Results.Count != pending.Count || commit.ItemFailures is { } failures && failures.Count != pending.Count)
                     throw new InvalidOperationException("The diagnostics target returned an incomplete commit result.");
                 ArgumentOutOfRangeException.ThrowIfNegative(commit.RetentionUnits);
                 for (var index = 0; index < pending.Count; index++)
-                    Complete(pending[index], commit.Results[index]);
+                {
+                    if (commit.ItemFailures?[index] is { } failure)
+                        Fail(pending[index], DiagnosticsPersistenceLossReason.RetryExhausted, "The diagnostics capture could not be committed.", failure);
+                    else
+                        Complete(pending[index], commit.Results[index]);
+                }
                 return commit.RetentionUnits;
             }
             catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)

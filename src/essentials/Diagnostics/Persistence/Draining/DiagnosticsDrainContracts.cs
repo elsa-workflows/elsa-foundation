@@ -23,7 +23,15 @@ public sealed record DiagnosticsDrainBatch<TItem>(
 /// <summary>An authoritative commit outcome in the same order as the accepted batch.</summary>
 public sealed record DiagnosticsDrainCommit<TResult>(
     IReadOnlyList<TResult> Results,
-    int RetentionUnits);
+    int RetentionUnits)
+{
+    /// <summary>
+    /// Per-item failures, in batch order, for a target that commits a batch's items independently when one of them
+    /// cannot commit. A non-null entry fails that item's acknowledgement with its exception; its result is ignored. The
+    /// rest of the batch completes. Null means every item committed.
+    /// </summary>
+    public IReadOnlyList<Exception?>? ItemFailures { get; init; }
+}
 
 /// <summary>
 /// Replacement contract: exactly one target is composed per drain. Implementations keep provider

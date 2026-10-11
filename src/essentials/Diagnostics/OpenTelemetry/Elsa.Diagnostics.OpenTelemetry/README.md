@@ -35,7 +35,7 @@ own units. It does not read, export, import, or dual-write the previous diagnost
 
 ## Options (`OpenTelemetryDiagnosticsOptions`)
 
-Exposed manifest settings: **Trace / Span / Metric point / Log record / Resource capacity** (ring-buffer bounds), **Subscriber channel capacity** (live backpressure), **Max query size**, **Max HTTP request body size**, **API key** + **API key header**, **Allow unauthenticated loopback**. Additional tunables on the options type: `HttpEndpointPath` (default `/elsa/otlp/v1`), `StreamPath`, the redaction lists (`SensitiveNames`, `SensitiveTextPatterns`, `SensitiveTextPatternTimeout`), and the deferred gRPC knobs (`EnableGrpc`, `GrpcEndpointPath`, `GrpcDisabledReason`).
+Exposed manifest settings: **Trace / Span / Metric point / Log record / Resource capacity** (ring-buffer bounds), **Subscriber channel capacity** (live backpressure), **Max query size**, **Max HTTP request body size**, **API key** + **API key header**, **Allow unauthenticated loopback**. Additional tunables on the options type: `HttpEndpointPath` (default `/elsa/otlp/v1`), `StreamPath`, the redaction lists (`SensitiveNames`, `SensitiveTextPatterns`, `SensitiveTextPatternTimeout`), `PersistenceFlushDelay` (100 ms: how long a durable store lets captures gather into one commit, which is also the extra live-feed delay), and the deferred gRPC knobs (`EnableGrpc`, `GrpcEndpointPath`, `GrpcDisabledReason`).
 
 ## Authorization
 

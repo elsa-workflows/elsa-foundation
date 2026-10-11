@@ -27,9 +27,10 @@ namespace Elsa.Diagnostics.OpenTelemetry.Persistence.EntityFrameworkCore.Stores;
 /// </summary>
 public sealed class EfOpenTelemetryStore : IOpenTelemetryStore, IDiagnosticsPersistenceDrain, IDisposable, IAsyncDisposable
 {
-    // One queue item is one capture identity. Keeping the drain batch at one means each all-signal
-    // capture has one transaction and one replay ledger, while still retaining the shared lifecycle.
-    private const int DrainBatchSize = 1;
+    // One queue item is one capture identity with its own replay ledger row. A drain batch groups up to this many
+    // captures into one transaction (#2613); a capture that fails on its own data is then committed alone, so it
+    // fails without its neighbours. Kept small so a group's write transaction stays short on a single-writer provider.
+    private const int DrainBatchSize = 16;
     private const int MaxDrainAttempts = 3;
     private const int MaximumAffectedSummaryKeys = 100_000;
     private const int ProviderSafeKeyBatchSize = 500;
@@ -103,7 +104,8 @@ public sealed class EfOpenTelemetryStore : IOpenTelemetryStore, IDiagnosticsPers
                 MaxAttempts = MaxDrainAttempts,
                 BaseRetryDelay = RetryDelay,
                 MaxRetryDelay = TimeSpan.FromSeconds(5),
-                ShutdownTimeout = options.Value.ShutdownDrainTimeout <= TimeSpan.Zero ? TimeSpan.FromTicks(1) : options.Value.ShutdownDrainTimeout
+                ShutdownTimeout = options.Value.ShutdownDrainTimeout <= TimeSpan.Zero ? TimeSpan.FromTicks(1) : options.Value.ShutdownDrainTimeout,
+                FlushDelay = options.Value.PersistenceFlushDelay <= TimeSpan.Zero ? TimeSpan.Zero : options.Value.PersistenceFlushDelay
             }, observer);
     }
 
@@ -492,8 +494,58 @@ public sealed class EfOpenTelemetryStore : IOpenTelemetryStore, IDiagnosticsPers
 
     private async ValueTask<DiagnosticsDrainCommit<bool>> CommitBatchAsync(DiagnosticsDrainBatch<OpenTelemetryBatch> batch, CancellationToken cancellationToken)
     {
-        await CommitDurablyAsync(batch.Id, batch.Items.Single(), cancellationToken);
-        return new DiagnosticsDrainCommit<bool>([true], batch.Items.Count);
+        var captures = batch.Items.Select((item, index) => (BatchId: CaptureId(batch.Id, index), Batch: item)).ToArray();
+        var committed = Enumerable.Repeat(true, captures.Length).ToArray();
+        try
+        {
+            await CommitCapturesDurablyAsync("Write", captures, cancellationToken);
+            return new DiagnosticsDrainCommit<bool>(committed, captures.Length);
+        }
+        catch (Exception exception) when (captures.Length > 1 && IsCaptureSpecific(exception))
+        {
+            // One capture's own data refused the group. Commit each capture alone, so only the ones that cannot commit
+            // fail. A capture the group attempt already committed is found in the ledger, not appended again.
+            var failures = new Exception?[captures.Length];
+            for (var index = 0; index < captures.Length; index++)
+            {
+                try
+                {
+                    await CommitCapturesDurablyAsync("Write", [captures[index]], cancellationToken);
+                }
+                catch (Exception failure) when (IsCaptureSpecific(failure))
+                {
+                    failures[index] = failure;
+                }
+            }
+
+            // Every capture failing is no evidence that any one is at fault, so the drain retries the batch as before.
+            if (failures.All(failure => failure is not null))
+                throw;
+            return new DiagnosticsDrainCommit<bool>(committed, captures.Length) { ItemFailures = failures };
+        }
+    }
+
+    // Failures that belong to the captures being written rather than to the store: corrupt durable state they merge
+    // into, or an identity reused with different content. Provider, skew and refusal failures fail the whole batch.
+    private static bool IsCaptureSpecific(Exception exception) =>
+        exception is OpenTelemetryPersistenceDataException or OpenTelemetryPersistenceConflictException;
+
+    /// <summary>
+    /// The ledger identity of the capture at <paramref name="index"/> in a drain batch. The drain reuses a batch's
+    /// identity for every attempt, so an identity derived from it is stable across acknowledgement-loss retries and a
+    /// replayed capture is found in the ledger. The first capture keeps the batch identity itself, as a lone capture
+    /// always has.
+    /// </summary>
+    private static DiagnosticsDrainBatchId CaptureId(DiagnosticsDrainBatchId batchId, int index)
+    {
+        if (index == 0)
+            return batchId;
+        Span<byte> seed = stackalloc byte[20];
+        batchId.Value.TryWriteBytes(seed);
+        BinaryPrimitives.WriteInt32LittleEndian(seed[16..], index);
+        Span<byte> hash = stackalloc byte[SHA256.HashSizeInBytes];
+        SHA256.HashData(seed, hash);
+        return new DiagnosticsDrainBatchId(new Guid(hash[..16]), batchId.IssuedAt);
     }
 
     private async Task<int> ApplyRetentionCoreAsync(CancellationToken cancellationToken)
