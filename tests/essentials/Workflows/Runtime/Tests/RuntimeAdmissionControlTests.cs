@@ -284,6 +284,28 @@ public sealed class RuntimeAdmissionControlTests
         Assert.Equal(1, _diagnostics.LimitDecreases);
     }
 
+    /// <summary>
+    /// A command admitted on the same clock tick as the cut was still admitted before it: supersession follows admission
+    /// order, which cannot tie, not timestamps, which can.
+    /// </summary>
+    [Fact]
+    public void AdaptiveLimit_DoesNotCutForACompletionAdmittedOnTheSameTickAsTheCut()
+    {
+        var controller = NewController(AdaptiveOptions());
+        CompleteSaturatedSample(controller, TimeSpan.FromMilliseconds(10));
+        _signal.InFlightDispatches = 50;
+        var cutting = AdmitWithDispatch(controller);
+        _clock.Advance(TimeSpan.FromMilliseconds(500));
+        var sameTick = AdmitWithDispatch(controller);
+
+        cutting.Dispose();
+        _clock.Advance(TimeSpan.FromMilliseconds(500));
+        sameTick.Dispose();
+
+        Assert.Equal(50, controller.Limit);
+        Assert.Equal(1, _diagnostics.LimitDecreases);
+    }
+
     /// <summary>A completion admitted under the limit now in force is a new signal, so a host that stays slow keeps cutting.</summary>
     [Fact]
     public void AdaptiveLimit_CutsAgainForACompletionAdmittedAfterTheCut()

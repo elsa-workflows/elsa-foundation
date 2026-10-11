@@ -44,7 +44,8 @@ public sealed class RuntimeAdmissionController : IRuntimeAdmissionController
     private readonly object _limitLock = new();
     private double _limit;
     private long _baselineTicks;
-    private long _lastCutTimestamp = long.MinValue;
+    private long _admissionSequence;
+    private long _lastCutAdmissionSequence = long.MinValue;
 
     public RuntimeAdmissionController(
         IRuntimeAdmissionLoadSignal loadSignal,
@@ -140,10 +141,18 @@ public sealed class RuntimeAdmissionController : IRuntimeAdmissionController
         _diagnostics?.RecordAdmitted();
         RuntimeAdmissionTelemetry.Decisions.Add(1, new KeyValuePair<string, object?>(RuntimeAdmissionTelemetry.OutcomeTag, RuntimeAdmissionTelemetry.AdmittedOutcome));
         RuntimeAdmissionTelemetry.InFlight.Record(load);
-        return RuntimeAdmissionDecision.Admitted(charge, OnCompleted, load, limit, _timeProvider.GetTimestamp());
+        // Admission order, not time, decides whether a completion was admitted before the last cut: two clock reads can
+        // tie, and a tie would let a stale completion cut again.
+        var admissionSequence = Interlocked.Increment(ref _admissionSequence);
+        return RuntimeAdmissionDecision.Admitted(
+            charge,
+            completion => OnCompleted(completion, admissionSequence),
+            load,
+            limit,
+            _timeProvider.GetTimestamp());
     }
 
-    private void OnCompleted(RuntimeAdmissionCompletion completion)
+    private void OnCompleted(RuntimeAdmissionCompletion completion, long admissionSequence)
     {
         var duration = _timeProvider.GetElapsedTime(completion.StartTimestamp);
         if (duration <= TimeSpan.Zero)
@@ -180,7 +189,7 @@ public sealed class RuntimeAdmissionController : IRuntimeAdmissionController
             }
             else
             {
-                sample = MoveLimit(completion, duration);
+                sample = MoveLimit(completion, duration, admissionSequence);
             }
 
             newLimit = _limit;
@@ -193,7 +202,7 @@ public sealed class RuntimeAdmissionController : IRuntimeAdmissionController
     }
 
     // Called under _limitLock with a calibrated baseline. Returns which kind of sample this completion was.
-    private string MoveLimit(RuntimeAdmissionCompletion completion, TimeSpan duration)
+    private string MoveLimit(RuntimeAdmissionCompletion completion, TimeSpan duration, long admissionSequence)
     {
         string sample;
 
@@ -210,18 +219,18 @@ public sealed class RuntimeAdmissionController : IRuntimeAdmissionController
                 _diagnostics?.RecordLimitIncrease();
                 sample = RuntimeAdmissionTelemetry.IncreasedSample;
             }
-            else if (completion.StartTimestamp < _lastCutTimestamp)
+            else if (admissionSequence <= _lastCutAdmissionSequence)
             {
                 // One congestion episode cuts once (#2614). This command was admitted before the last cut, so its
                 // slowness is the same signal that cut reacted to. Compounding it took a host from 512 to 262 in one
-                // burst, below the load its clients keep in flight. Judged by admission time, not by the limit it was
+                // burst, below the load its clients keep in flight. Judged by admission order, not by the limit it was
                 // admitted under, because increases can carry the limit back above that before the command completes.
                 // A command admitted after the cut is a fresh signal and still cuts.
                 sample = RuntimeAdmissionTelemetry.SupersededSample;
             }
             else
             {
-                _lastCutTimestamp = _timeProvider.GetTimestamp();
+                _lastCutAdmissionSequence = Interlocked.Read(ref _admissionSequence);
                 _limit = Clamp(_limit * _options.DecreaseFactor);
                 _diagnostics?.RecordLimitDecrease();
                 sample = RuntimeAdmissionTelemetry.DecreasedSample;
