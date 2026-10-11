@@ -12,6 +12,10 @@ Issues are tracked in GitHub Issues for `elsa-workflows/elsa-foundation-studio`;
 
 Use only labels that currently exist in the repository. See `docs/agents/triage-labels.md` for the workflow-specific labels and verification command.
 
+### UX fix routine
+
+The scheduled UX fix routine follows `docs/agents/ux-fix-routine.md` and takes the `ready-for-agent` + `auto-qa` issues that elsa-foundation's UX QA routine files here.
+
 ### Domain docs
 
 Before domain-sensitive exploration, follow `docs/agents/domain.md`: read the root `CONTEXT.md`, or the relevant contexts from `CONTEXT-MAP.md` when present, plus applicable ADRs.
