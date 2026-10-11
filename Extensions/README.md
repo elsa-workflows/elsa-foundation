@@ -1,7 +1,8 @@
 # Extensions
 
-Optional modules live here. Required ones are in [`../core`](../core), deployable hosts in
-[`../apps`](../apps).
+Optional modules live here. Backend essentials are in [`../Essentials/src`](../Essentials/src),
+deployable backend hosts in [`../Essentials/apps`](../Essentials/apps), and the Studio shell in
+[`../Studio`](../Studio).
 
 The tooling that enumerates modules was taught about this folder before any module moved into it, so
 that each move is a pure move rather than a move plus a set of silent tooling regressions. See
@@ -14,11 +15,17 @@ that decides what belongs here, and for the staged plan.
 Extensions/
   <Name>/
     src/     one folder per project, mirroring the shape the module had under src/
+    studio/  optional Studio projects and their Client workspaces, where present
     tests/   the module's test projects
 ```
 
-`<Name>` is the module bucket, not a project name: `Extensions/Diagnostics` holds all eight diagnostics
-projects, `Extensions/Elsa3` holds all four Elsa 3 import projects.
+`<Name>` is the capability bucket, not a project name. Agent, Elsa3 and ExtensionBuilder retain their
+existing backend classification. Studio components occupy their named capability buckets; the two
+Weaver projects share `Weaver/studio/`. This consolidation does not reclassify all optional backend
+features or move backend essentials merely because a Studio component has a matching name.
+
+The five backend extension test projects stay beside their capabilities under `tests/`. This is the
+final placement for #2579 and supersedes the intermediate `tests/extensions/` move in closed PR #2620.
 
 ## Extensions a host composes at its root
 
@@ -26,7 +33,7 @@ Most extensions are CShells features: a shell lists them in `shells.json`, and n
 is a root-hosted subsystem the host has to compose itself:
 
 - **ExtensionBuilder** (`Elsa.ExtensionBuilder.Api`): see *Extension Builder* in the
-  [Elsa glossary](../../docs/glossary/elsa.md). Its root singletons, build worker and host-mapped routes cannot
+  [Elsa glossary](../docs/glossary/elsa.md). Its root singletons, build worker and host-mapped routes cannot
   live in a shell container, so a host calls `AddElsaExtensionBuilder(configuration)` and
   `MapElsaExtensionBuilderApi()` itself. Its settings, under `Elsa:ExtensionBuilder`:
   - `Enabled`: the Workbench composes it only when `true` (`Elsa__ExtensionBuilder__Enabled=true` as an

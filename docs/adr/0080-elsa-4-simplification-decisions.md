@@ -56,9 +56,10 @@ These are named exceptions to D0's parking and the two-program cap; the remainin
 continue to apply. The consolidation target is `Essentials/` (src/tests/apps),
 `Extensions/<capability>/` (src/optional studio/tests) and `Studio/` (shell/shared UI/tests/tooling),
 with shared docs/tools/workflows at the root. This direction does not rename package or API identities.
-Source moves, imports and consolidation builds await the coordinated preservation and quiet checkpoint
-tracked in [#2510](https://github.com/elsa-workflows/elsa-foundation/issues/2510). No global freeze,
-cleanup, publisher change or cutover is enacted by this amendment.
+The [11 October preservation checkpoint](https://github.com/elsa-workflows/elsa-foundation/issues/2510#issuecomment-6113334884)
+admits isolated source moves, imports and consolidation validation against captured copies under #2510.
+Fresh source capture and live cutover require delta reconciliation and renewed coordination. No global
+freeze, cleanup or publisher activation is enacted by this amendment.
 
 ### D1 — Risk-based testing
 
