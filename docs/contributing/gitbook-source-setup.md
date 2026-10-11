@@ -6,14 +6,16 @@ This runbook is for the person configuring GitBook. It is intentionally outside 
 
 The GitBook configuration is at the repository root in `.gitbook.yaml`. Its `root` points to `website/docs/`; `structure.readme` and `structure.summary` identify the landing page and navigation file inside that root. Keep the source tree in GitHub and review content changes through Foundation pull requests.
 
-GitBook's [content configuration](https://gitbook.com/docs/docs-as-code/git-sync/content-configuration) documents these paths and the `SUMMARY.md` format. Paths under `structure` are relative to the configured root.
+GitBook's [content configuration](https://gitbook.com/docs/docs-as-code/git-sync/content-configuration.md) documents these paths and the `SUMMARY.md` format. Paths under `structure` are relative to the configured root.
 
 ## Prepare a safe Elsa 4 trial
 
 1. Create a dedicated, empty Elsa 4 trial space. Before connecting a repository, verify the selected space is empty and has no existing Git Sync. Do not select the Elsa 3 space or any space with existing content: initial sync selection can replace content.
-2. Start Git Sync for the Elsa Foundation repository and select its repository root so GitBook can read the root `.gitbook.yaml`.
+2. Map the single trial space to the Elsa Foundation repository root, not to `website/docs/`. The root `.gitbook.yaml` selects `website/docs/` as this space's content directory.
 3. Once `claude/2498-foundation-gitbook-source` is available on GitHub, select that branch and the initial **GitHub to GitBook** direction. Do not configure writes to `main` or choose **GitBook to GitHub**. The YAML directs GitBook to `website/docs/`.
 4. Do not purchase or upgrade a plan, change DNS, or publish the trial site as part of this setup.
+
+If GitBook creates or updates `gitbook-docs.yaml` for site-to-space mappings, inspect and review that file on the trial branch before accepting it. Do not add guessed site identifiers, and do not change stable mapping keys after the space is live.
 
 GitBook describes Git Sync as two-way; do not assume sync itself creates or requires a GitHub pull request. Keep GitHub pull requests as the accepted content review path. Avoid direct editor changes unless the write-back behavior and a protected branch or change-request path have been explicitly configured and verified.
 
