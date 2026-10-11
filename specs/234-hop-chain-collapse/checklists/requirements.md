@@ -35,7 +35,11 @@
   names runtime concepts (checkpoint, work item, outbox, drain) because they are the domain vocabulary
   (see `docs/glossary/`), not because it prescribes code. Class and file names are confined to the measured baseline
   in **Why** and to the plan.
-- SC-001 counts durable commits on the runtime database, measured the same way as #2553 (fsyncs on the runtime WAL and
-  EF transaction logs); SC-002 uses the CI command-count gate.
+- SC-001 counts durable commits on the runtime database with the P0 gate's deterministic commit counter (the unit #2553
+  measured with fsyncs on the runtime WAL); SC-002 uses the CI command-count gate.
+- 2026-10-11 owner decisions after planning (#2584, PR #2639): the workflow tail is routed in-process and SC-001 is
+  restated (≤ 52 with #2586 unchanged, ≤ 45 once it lands); SC-003's crash suite is the EF suite
+  `EfHopCollapseCrashConvergenceTests` (ADR 0073 retired Groundwork); the existing-item edge case follows enqueue
+  (kept as-is, no conflict); FR-008 deletes a two-commit dispatch's item in its first non-attempt-claim commit.
 - The ADR 0020 reading that a durable queue write inside the commit is recording, not inline dispatch, was confirmed
   by the owner on 2026-10-11 (#2584) and is recorded as a clarification in ADR 0020.

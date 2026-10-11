@@ -82,9 +82,10 @@ written, exactly as `EfSchedulerWorkQueueStore.EnqueueAsync` and `InMemoryWorkfl
 today (create-only by identity, `IWorkflowSchedulerWorkQueue.EnqueueAsync` remarks). The row is still read through
 `EfSchedulerWorkQueueStore.ReadChecked`, so a damaged row fails the commit.
 
-**Finding**: the spec's edge case says "a different item under the same identity as a conflict, exactly as enqueue
-does today". Enqueue today does not compare content; it returns the existing item. The plan follows enqueue (FR-002
-parity) and records the discrepancy as open question OQ-3 in [plan.md](plan.md#open-questions).
+**Resolved (owner decision, 2026-10-11, OQ-3)**: the planning draft of the spec called a different item under the same
+identity "a conflict, exactly as enqueue does today", but enqueue does not compare content; it returns the existing
+item. The spec now matches the code: an item already present under the same `WorkItemId` is kept as-is (returned, not
+overwritten), and an in-commit write behaves the same way. No task adds conflict behaviour.
 
 A unique-key race inside the transaction rolls the whole checkpoint back. The store's existing reconciliation then
 reads the marker: present means replay, absent means the commit failed and the claimed item is redelivered. A race
@@ -124,7 +125,8 @@ has the composition precondition under which it saves commits; outside it the le
 2. The two handlers that direct-enqueue a non-committing next hop call `RuntimeRoutingPass.RouteAsync(next)` instead of
    `IWorkflowSchedulerWorkQueue.EnqueueAsync(next)`: `WorkflowStartSchedulerWorkHandler.HandleAsync` (the
    `WorkflowStarted` checkpoint item) and the three `Enqueue…Async` methods of
-   `WorkflowCompleteActivitySchedulerWorkHandler`. `RouteAsync` captures the item when the pass is open and the item is
+   `WorkflowCompleteActivitySchedulerWorkHandler` (`ParentCompletionEvaluation`, `ContinuationScheduling` and the tail
+   `Checkpoint`). `RouteAsync` captures the item when the pass is open and the item is
    routable (R7); otherwise it enqueues it, byte-identical to today.
 3. After the handler returns, the drainer dispatches captured items one at a time through the same handler resolution
    (`FindHandler`, custom before fallback) and the same pipeline dispatcher with the same ambient services, checking
@@ -148,7 +150,10 @@ session: under per-hop persistence every commit the routed steps make is still d
 reads those two fields into durable content: the only readers of a work item's timestamps in the work handlers are
 `WorkflowResumeBookmarkSchedulerWorkHandler` (bookmark resume, not routed), `WorkflowRetryActivityBoundarySchedulerWorkHandler`
 (not routed) and the `Start` handler, whose `now` reaches only the `WorkflowStarted` commit that a pre-boundary crash
-never committed. Kill point K4 in the crash suite proves convergence anyway.
+never committed. The tail's routed items (`ContinuationScheduling` and the tail `Checkpoint`, routed since the owner
+decision of 2026-10-11) carry no timestamp into durable content either: `WorkflowCompleteActivitySchedulerWorkHandler`
+builds the tail checkpoint payload from names, activity ids and the reason only, and `WorkflowCheckpointSchedulerWorkHandler`
+reads neither timestamp. Kill points K4 and K9 in the crash suite prove convergence anyway.
 
 **Alternatives considered**: a queue decorator that swallows enqueues (implicit, would capture work no rule names);
 re-running the spec-228 pump under Immediate (its peek/consume pair belongs to the coalescing overlay queue); routing
@@ -179,7 +184,7 @@ deletes the row in the handler's own transaction, and `MarkConsumedDurably` and 
 drainer and its renewal loop read them (#1254 keeps working). A replaced accessor implementation is not linked and keeps
 today's separate acknowledgement. Claim identity still travels by explicit threading, not an AsyncLocal (spec 105 FR-003).
 
-**Crash-safety refinement (open question OQ-4)**: `InvokeActivity` and `ParentCompletionEvaluation` commit more than
+**Crash-safety refinement (decided by the owner, 2026-10-11, OQ-4; now part of FR-008)**: `InvokeActivity` and `ParentCompletionEvaluation` commit more than
 once per dispatch. Their first commit is `ActivityAttemptClaimed` (`ActivityAttemptActivationClaimer`, checkpoint name
 `RuntimeCheckpointNames.ActivityAttemptClaimed`), made before the activity or structural callback runs. Today their
 work item survives that window, so a crash mid-attempt is recovered by redelivering the item. Folding the consume into
@@ -193,13 +198,15 @@ the rule changes nothing that folds today.
 
 **Decision**: the classification moves out of `ReplaySafeFusionDriver.ClassifyCompletionAsync` into a shared internal
 `HopRoutingClassifier` (`Elsa.Workflows.Runtime/Services/WorkHandlers/HopRoutingClassifier.cs`) that both the fusion
-driver and `RuntimeRoutingPass` call. No routing rule is new except the one the spec names explicitly (the Start hop).
+driver and `RuntimeRoutingPass` call. No routing rule is new except the ones the spec names explicitly: the Start hop
+and, under per-hop persistence only, the workflow tail (owner decision, 2026-10-11, OQ-1). The fusion driver keeps its
+tail fallback, because under coalescing the tail's commits are buffered.
 
 | Routed candidate | Rule | Source |
 |---|---|---|
 | `Checkpoint` item carrying `WorkflowStarted`, derived by the `Start` handler | routable | FR-004 "and the Start hop" |
 | `CompleteActivity` / `ParentCompletionEvaluation` | routable unless the work item carries `RuntimeMetadataKeys.ChildFaulted = true`, or the parent node's `ActivityContract.SideEffectProfile` is not `ReplaySafe` | spec 228 `ClassifyCompletionAsync` |
-| `CompleteActivity` / `ContinuationScheduling`, and the `Checkpoint` it derives (`ActivityCompleted`/`WorkflowCompleted`) | fallback (workflow tail) | spec 228, FR-005 |
+| `CompleteActivity` / `ContinuationScheduling` (derived from the root's `ActivityCompleted`), and the tail `Checkpoint` it derives (`ActivityCompleted`/`WorkflowCompleted`) | routable by `RuntimeRoutingPass` (the workflow tail); still a fallback for the spec-228 fusion pump | FR-004, FR-005 as amended 2026-10-11 |
 | any `ScheduleActivity` (join or not) | never captured: it is a committed continuation, not a routing step, so a multi-predecessor join edge always takes today's path | FR-005 "multi-predecessor join" |
 | anything else | fallback | FR-005 "any case the existing fusion rules exclude" |
 
@@ -240,29 +247,30 @@ command count and checks it against `ef-commit-budgets.json`.
 deterministic, CI-runnable and timer-free (ADR 0073 D7 forbids timing; ADR 0080 D2 allows deterministic counts as
 correctness gates). The fsync shim stays an optional manual cross-check in [quickstart.md](quickstart.md).
 
-## R11 — Projected commit count (SC-001 is not reachable as written)
+## R11 — Projected commit count and the SC-001 target
 
-Applying FR-001, FR-004 (with FR-005's fallbacks) and FR-008 to R0, with the root-write lease unchanged:
+Applying FR-001, FR-004 (including the workflow tail, owner decision 2026-10-11) and FR-008 to R0, with the root-write
+lease unchanged:
 
-| Kind | Today | After | Why |
+| Kind | Today | Target | Why |
 |---|---:|---:|---|
 | Checkpoint transactions | 22 | 22 | FR-007: every checkpoint still commits |
-| Work-item enqueues | 22 | 3 | −15 in the commit (FR-001); −4 routed (Start→`WorkflowStarted`, three `ParentCompletionEvaluation`); the router's `Start`, `ContinuationScheduling` and the tail `Checkpoint` remain |
-| Work-item claims | 22 | 18 | −4 routed items |
-| Separate acknowledgements | 12 | 2 | `Start` and three leaf `ActivityCompleted` fold into their pass's boundary commit; three `ParentCompletionEvaluation` disappear; three `InvokeActivity` fold (FR-008); root `ActivityCompleted` and `ContinuationScheduling` remain (tail) |
+| Work-item enqueues | 22 | 1 | −15 in the commit (FR-001); −6 routed (Start→`WorkflowStarted`, three `ParentCompletionEvaluation`, `ContinuationScheduling`, the tail `Checkpoint`); the router's `Start` remains |
+| Work-item claims | 22 | 16 | −6 routed items |
+| Separate acknowledgements | 12 | 0 | `Start`, the three leaf `ActivityCompleted` and the root `ActivityCompleted` fold into their pass's boundary commit; three `ParentCompletionEvaluation` and `ContinuationScheduling` disappear; three `InvokeActivity` fold (FR-008) |
 | Outbox `Delivered` | 15 | 0 | FR-001 |
 | Root-write lease | 8 | 8 | #2586, out of scope |
 | Liveness / placement | ~5 | ~5 | out of scope |
-| **Total** | **~106** | **~58** | |
+| **Total** | **~106** | **~52** | SC-001: ≤ 52 with #2586 unchanged |
 
-Routing the workflow tail too (root `ActivityCompleted` → `ContinuationScheduling` → `Checkpoint`) would give ~52.
-Neither reaches SC-001's 45 with the lease unchanged; ~52 minus #2586's 8 is ~44. The remaining large block is the 18
-claims of committed continuations. This is open question OQ-1 in [plan.md](plan.md#open-questions). The projection is
-arithmetic over R0; T004 measures the real per-kind baseline before any lever lands, and T054 measures the result.
+Without the tail the figure would be ~58; with #2586 as well it is ~44, under SC-001's second bound of 45. The largest
+remaining block is the 16 claims of committed continuations, left for a follow-up spec. The projection is arithmetic
+over R0; T004 measures the real per-kind baseline before any lever lands, and T057 checks the result against ≤ 52.
 
 ## R12 — The crash suite named in SC-003
 
-**Finding**: the Groundwork crash suite named in SC-003 no longer exists. ADR 0073 made EF Core the only first-party
+**Finding (resolved by the owner, 2026-10-11, OQ-2; SC-003 now names this suite)**: the Groundwork crash suite named in
+the planning draft of SC-003 no longer exists. ADR 0073 made EF Core the only first-party
 persistence family; Groundwork is "a migration source and historical evidence source" and
 `docs/program-goals/groundwork-persistence-readiness.md` is a historical record. Spec 228's corrective plan already
 states that "historical Groundwork paths ... are provenance, not commands to resurrect". The live equivalent is the EF
@@ -285,6 +293,7 @@ kill points (each also run with the switch off as its control):
 | K6 | After the routing pass's boundary commit (originating item consumed in it), before the drainer returns | nothing redelivered; the in-commit continuation (K1 shape) carries the run |
 | K7 | Inside `InvokeActivity` after `ActivityAttemptClaimed`, before the outcome commit, on the synchronous HTTP path (FR-008 cross-scope) | the `InvokeActivity` item survives and is redelivered; outcome identical to today's redelivery |
 | K8 | After an `InvokeActivity` outcome commit that consumed its item cross-scope, before the drainer's next claim | no separate acknowledgement was needed; no duplicate activity execution |
+| K9 | Tail pass: the root's `ActivityCompleted` dispatched, `ContinuationScheduling` run inline and the tail `Checkpoint` captured, before the tail checkpoint commit | the root's `ActivityCompleted` redelivered; the tail re-derived; `WorkflowCompleted` committed once; the run completes once |
 
 Every case asserts: the same terminal state as an uninterrupted run, no duplicated activity execution (attempt counts
 and inspection rows), no lost continuation, and a settled queue and outbox afterwards.

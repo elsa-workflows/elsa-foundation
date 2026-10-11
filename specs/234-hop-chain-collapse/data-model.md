@@ -86,7 +86,9 @@ dispatched inline or enqueued before the claimed item is acknowledged; nothing i
 `HopRoutingClassifier` — `internal sealed`, scoped,
 `Runtime/Elsa.Workflows.Runtime/Services/WorkHandlers/HopRoutingClassifier.cs`. Holds the spec-228 completion
 classification moved out of `ReplaySafeFusionDriver.ClassifyCompletionAsync` (child-faulted and parent-profile rules),
-plus `IsStartCheckpoint(item)` for the `WorkflowStarted` item. Both the fusion driver and `RuntimeRoutingPass` use it.
+plus `IsStartCheckpoint(item)` for the `WorkflowStarted` item and `IsTailStep(item)` for the workflow tail
+(`ContinuationScheduling` and the tail `Checkpoint` it derives; owner decision 2026-10-11). `RuntimeRoutingPass` uses
+all three; the fusion driver uses only the spec-228 rules and keeps its tail fallback under coalescing.
 Rule table: [research R7](research.md#r7--routable-in-process-fr-005-reconciled-with-spec-228).
 
 ## Consume frame link (FR-008)

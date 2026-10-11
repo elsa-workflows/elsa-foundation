@@ -78,7 +78,7 @@ durability. Removing them takes about 38 commits off the reference workflow and 
 
 **Independent Test**: Run the reference workflows under per-hop persistence; the routing hops no longer appear as
 queue items, and the commit count drops by the expected amount. Kill the host at every point inside the routing pass
-(Groundwork crash suite); after restart every run reaches the same terminal state as an uninterrupted run, with no
+(the EF crash suite `EfHopCollapseCrashConvergenceTests`); after restart every run reaches the same terminal state as an uninterrupted run, with no
 duplicated or lost activity execution.
 
 **Acceptance Scenarios**:
@@ -89,8 +89,9 @@ duplicated or lost activity execution.
    durable boundary, **When** the run recovers, **Then** the routing pass is re-derived from durable state and runs
    once to completion; no activity runs twice because of it and no continuation is lost.
 3. **Given** a routing step that cannot run in-process (a join with more than one predecessor, a child fault
-   evaluation, a parent that is not routable in-process, the workflow tail), **When** it is reached, **Then** it falls
-   back to the queued hop exactly as today.
+   evaluation, a parent that is not routable in-process), **When** it is reached, **Then** it falls back to the queued
+   hop exactly as today. The workflow tail (the root's `ActivityCompleted`, `ContinuationScheduling` and the tail
+   checkpoint) is routable under per-hop persistence and does not fall back (owner decision, 2026-10-11).
 4. **Given** the switch of FR-009 is off, **When** any workflow runs, **Then** behaviour, commits and the resulting
    durable state are identical to today, for all three changes (FR-001, FR-004, FR-008).
 
@@ -114,8 +115,11 @@ On a non-atomic or legacy provider, acknowledgements are unchanged.
 1. **Given** a claim-capable provider and a dispatch that makes a checkpoint commit through any committer in the
    drain, **When** it commits, **Then** the claimed work item is deleted in the same transaction and the drain does
    not acknowledge it again.
-2. **Given** a dispatch that makes no commit, **When** it finishes, **Then** the drain acknowledges it as today.
-3. **Given** a non-atomic or legacy provider, **When** a dispatch commits, **Then** the drain acknowledges it
+2. **Given** a dispatch that commits twice, an attempt-claim commit and then the outcome commit (`InvokeActivity`,
+   parent completion evaluation), **When** it runs, **Then** the claimed work item is deleted in the outcome commit,
+   the first commit that is not an attempt claim, so a crash between the two commits recovers exactly as today.
+3. **Given** a dispatch that makes no commit, **When** it finishes, **Then** the drain acknowledges it as today.
+4. **Given** a non-atomic or legacy provider, **When** a dispatch commits, **Then** the drain acknowledges it
    separately, as today (spec 105 FR-006).
 
 ---
@@ -124,13 +128,16 @@ On a non-atomic or legacy provider, acknowledgements are unchanged.
 
 - A checkpoint schedules several continuations: all are written in the same transaction, in the order they are
   produced today.
-- A continuation's work item already exists (redelivery, replay): the commit treats an identical existing item as
-  already written (WorkItemId idempotency, ADR 0031 (a)) and a different item under the same identity as a conflict,
-  exactly as enqueue does today.
+- A continuation's work item already exists under the same WorkItemId (redelivery, replay): the existing item is kept
+  as-is and nothing is overwritten, exactly as enqueue does today (create-only by identity, ADR 0031 (a)). An in-commit
+  write behaves the same way.
 - The resumption sweep and the live drain race for a continuation written in the checkpoint: the queue's claim fence
   decides; the loser does nothing.
 - The run pauses, is cancelled or faults during an in-process routing pass: the pass stops at the same point the
   queued chain would have stopped, and the durable state is the same.
+- The workflow tail is routed in-process: the root's completion, continuation scheduling and the tail checkpoint run in
+  one pass whose boundary is the tail checkpoint commit (`WorkflowCompleted` or the root's `ActivityCompleted`), which
+  deletes the work item that started the pass.
 - A coalesced (or Balanced) run: unaffected; it keeps its existing fusion and buffering paths.
 - In-memory runtime stores: behaviour unchanged; the in-memory composition already has no commit cost.
 
@@ -146,10 +153,14 @@ On a non-atomic or legacy provider, acknowledgements are unchanged.
 - **FR-003**: Continuations of other kinds, and all continuations on a composition whose queue does not share the
   checkpoint store's unit of work, MUST keep the post-commit outbox path unchanged.
 - **FR-004**: Under per-hop persistence, the routing steps that follow an activity's completion (activity completion,
-  parent completion evaluation, continuation scheduling) and the Start hop MUST run inside the owning drain without
-  their own queue item, claim or acknowledgement, when the step is routable in-process.
+  parent completion evaluation, continuation scheduling), the workflow tail (the root's completion, continuation
+  scheduling and the tail checkpoint) and the Start hop MUST run inside the owning drain without their own queue item,
+  claim or acknowledgement, when the step is routable in-process.
 - **FR-005**: A routing step that is not routable in-process (multi-predecessor join, child fault evaluation,
-  non-routable parent, workflow tail, or any case the existing fusion rules exclude) MUST fall back to the queued hop.
+  non-routable parent, or any other case the existing fusion rules exclude) MUST fall back to the queued hop. The
+  workflow tail is not a fallback case under per-hop persistence: spec 228 excluded it only because coalesced commits
+  were buffered, and under per-hop persistence each tail checkpoint still commits durably (owner decision,
+  2026-10-11).
 - **FR-006**: An in-process routing pass MUST be re-derivable from durable state: if the host stops anywhere inside it,
   recovery MUST reach the same next durable boundary with no duplicated activity execution and no lost continuation.
   The work item that started the pass MUST stay claimed until the pass reaches a durable boundary. On a claim-capable
@@ -159,7 +170,10 @@ On a non-atomic or legacy provider, acknowledgements are unchanged.
   MUST still commit, with the same content, before the work it guards proceeds.
 - **FR-008**: On a claim-capable provider (spec 105 FR-004), a claimed work item whose dispatch makes a checkpoint
   commit MUST be deleted inside that commit regardless of which committer instance in the drain performs it; there the
-  drain MUST acknowledge separately only dispatches that made no commit. Every other path keeps spec 105 FR-006's
+  drain MUST acknowledge separately only dispatches that made no commit. A dispatch that commits twice, an attempt-claim
+  commit (`ActivityAttemptClaimed`) and then the outcome commit (`InvokeActivity`, parent completion evaluation),
+  MUST delete its claimed work item in the first commit that is not an attempt claim, so recovery after a crash
+  mid-attempt is unchanged. Every other path keeps spec 105 FR-006's
   separate acknowledgement and tripwire unchanged: non-atomic and legacy providers (including dispatches that commit),
   dispatches that made no commit, and the handler-fault path.
 - **FR-009**: One switch MUST control all three changes: continuations in the checkpoint transaction (FR-001),
@@ -182,12 +196,15 @@ On a non-atomic or legacy provider, acknowledgements are unchanged.
 
 ### Measurable Outcomes
 
-- **SC-001**: The 4-activity HTTP reference workflow under per-hop persistence makes **at most 45 durable commits per
-  request** on the runtime database (baseline about 106), with the root-write lease (#2586) unchanged.
+- **SC-001**: The 4-activity HTTP reference workflow under per-hop persistence makes **at most 52 durable commits per
+  request** on the runtime database (baseline about 106) with the root-write lease (#2586) unchanged, and **at most 45**
+  once #2586 lands, measured by the deterministic commit counter of the P0 gate (owner decision, 2026-10-11).
 - **SC-002**: The deterministic command-count budgets of the P0 gate (#2569) drop for all three reference workflows
   under per-hop persistence, and are lowered in the same change.
-- **SC-003**: All eight A1 concurrency-correctness cases (#2532) pass, and the Groundwork crash suite passes with kill
-  points added inside the routing pass and between a checkpoint and its continuation's claim.
+- **SC-003**: All eight A1 concurrency-correctness cases (#2532) pass, and the EF crash suite
+  `EfHopCollapseCrashConvergenceTests` (the two-generation cut-and-recover harness, kill points K1–K9 inside the routing
+  pass, the tail pass and between a checkpoint and its continuation's claim) passes. It replaces the Groundwork crash
+  suite, which ADR 0073 retired with Groundwork.
 - **SC-004**: With the switch of FR-009 off, which disables FR-001, FR-004 and FR-008 together, the reference
   workflows' durable state and commit counts are identical to the baseline.
 - **SC-005**: Coalesced runs' commit counts and behaviour are unchanged.
@@ -212,6 +229,7 @@ On a non-atomic or legacy provider, acknowledgements are unchanged.
 ## Dependencies
 
 - #2569 (P0 command-count budget gate, done) is the yardstick.
-- A1 correctness suite (#2532) and the Groundwork crash suite are the safety net.
+- A1 correctness suite (#2532) and the EF crash suite `EfHopCollapseCrashConvergenceTests` (ADR 0073) are the safety
+  net.
 - Spec 105 (drain step single transaction), spec 106 (live-drain delivery), spec 109 (in-process hop fast path) and
   spec 228 (ReplaySafe hop fusion) define the behaviour this extends; the plan must reconcile with each.

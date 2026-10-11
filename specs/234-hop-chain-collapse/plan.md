@@ -8,7 +8,11 @@
 reading is confirmed (2026-10-11, [#2584](https://github.com/elsa-workflows/elsa-foundation/issues/2584#issuecomment-6104682664),
 now a dated clarification in `docs/adr/0020-runtime-checkpoint-commit-post-commit-work.md`); one switch controls all
 three levers, default on, off reproduces today exactly; Balanced/Ephemeral modes (#2585), the root-write lease skip
-(#2586) and diagnostics stores are out of scope.
+(#2586) and diagnostics stores are out of scope. **Owner decisions of 2026-10-11 on the planning open questions**
+(after review of PR #2639): the workflow tail is routed in-process and SC-001 becomes ≤ 52 (≤ 45 once #2586 lands);
+SC-003's crash suite is `EfHopCollapseCrashConvergenceTests`; an existing item under the same `WorkItemId` is kept
+as-is; a two-commit dispatch deletes its item in its first non-attempt-claim commit. All four are in the spec now; see
+"Resolved questions".
 
 ## Summary
 
@@ -23,16 +27,18 @@ Three levers, behind one switch, remove that plumbing without removing or moving
    ([R1](research.md#r1--fr-001-where-the-continuation-is-written), [R2](research.md#r2--replay-fingerprint-and-the-replay-result-stay-transport-neutral)).
 2. **In-process routing (US2, FR-004–FR-006).** The drainer runs a *routing pass* inside the dispatch of a claimed item:
    the non-committing next hops (`Start` → `WorkflowStarted` checkpoint item; leaf `ActivityCompleted` →
-   `ParentCompletionEvaluation`) are dispatched inline instead of being enqueued, claimed and acknowledged. The claimed
+   `ParentCompletionEvaluation`; the workflow tail, root `ActivityCompleted` → `ContinuationScheduling` → tail
+   `Checkpoint`) are dispatched inline instead of being enqueued, claimed and acknowledged. The claimed
    item stays claimed until the pass's first durable boundary commit, which deletes it; a crash re-derives the pass from
    it ([R5](research.md#r5--fr-004-the-routing-pass), [R7](research.md#r7--routable-in-process-fr-005-reconciled-with-spec-228)).
 3. **Acknowledgement in the dispatch's commit (US3, FR-008).** The drain's consume frame is staged on the pipeline
    workspace and linked into the scope the Activities handlers commit from, so spec 105's fold works for
-   `InvokeActivity` and `ParentCompletionEvaluation`, whose committers live in another DI scope today
+   `InvokeActivity` and `ParentCompletionEvaluation`, whose committers live in another DI scope today. A dispatch that
+   commits twice deletes its item in its first commit that is not an attempt claim
    ([R6](research.md#r6--fr-008-the-di-scope-split-confirmed-by-reading-the-code)).
 
-The projected result is ~58 commits per request (research [R11](research.md#r11--projected-commit-count-sc-001-is-not-reachable-as-written)),
-not SC-001's 45. That gap is open question OQ-1 below; the plan implements the spec as written and measures.
+The projected result is ~52 commits per request with the root-write lease unchanged (research [R11](research.md#r11--projected-commit-count-and-the-sc-001-target)),
+which is SC-001's target as restated by the owner on 2026-10-11; ~44 once #2586 lands, under the second bound of 45.
 
 ## Technical Context
 
@@ -82,11 +88,11 @@ draft section: framework §2.24 (draft) and Elsa §E2.9 (provisional) are not us
 | **§2.16 / §2.20 project granularity** | Pass. No new project or package. |
 | **§2.21.1 / §2.23.4 golden rule** | Pass, with a duty. Existing tests that assert today's separate enqueue, `Delivered` mark, routing-hop dispatches or separate acknowledgements on EF Immediate compositions describe the switch-off path, which must stay exact (FR-009). T005 inventories them; each is pinned to `CollapseHopChain = false` with its subject and objective unchanged, and a switch-on variant is added where the behaviour changes. No test is deleted. Spec 228's fusion guardrails must pass unchanged after the classifier extraction (T008). |
 | **§2.23.1 composition / registration test** | Pass, with a duty. `WorkflowsRuntimeCheckpointPersistenceFeature` gains conditional wiring (the setting replaces the options before the Immediate early return), so it gets a registration test (T013). |
-| **§2.23.2 behaviour tests** | Pass, with a duty. Risk paths get tests: committer partition and guard, store staging and replay, routing pass engagement/fallback/boundary, consume link, attempt-claim exclusion, crash convergence at eight kill points, ON/OFF guardrail, budgets. |
+| **§2.23.2 behaviour tests** | Pass, with a duty. Risk paths get tests: committer partition and guard, store staging and replay, routing pass engagement/fallback/boundary, consume link, attempt-claim rule, crash convergence at nine kill points (K1–K9), ON/OFF guardrail, budgets. |
 | **§2.23.3 visibility** | Pass. `RuntimeRoutingPass`, `HopRoutingClassifier` and the link are `internal sealed`; `InternalsVisibleTo` is added for the owning test assemblies (T001, T002). `RuntimeHopCollapseOptions` is public (options are public surface). |
 | **§2.23.5 exception boundaries** | Pass. In-commit staging failures surface through the store's existing paths: rollback plus marker reconciliation, `RuntimeSchedulerWorkConsumeConflictException`, and `InvalidDataException` from `ReadChecked`. No new infrastructure exception escapes. |
-| **§2.21.2 greenfield cadence** | **Gap recorded, not a failure.** The Elsa derived constitution declares no test-creation cadence (TDD, test-after or none). As in spec 200, tasks use red-first ordering where the base code can fail the test (the commit-count, crash and consume-link tests) and say so where a test is a non-regression guard. The owner may declare a cadence; see "Open questions". |
-| **§2.22 / §2.22.1 / §2.22.2 documentation and extension-point catalog** | Pass, with a duty. Update the Runtime catalog (`IRuntimeCheckpointCommitStore` entry with the capability; `WorkflowsRuntimeCheckpointPersistenceFeature` entry with `CollapseHopChain`), the Runtime API README, `docs/runtime-durable-resumption.md` crash windows, and the glossary (routing pass, §E6 R5) (T055–T058). A test never asserts on catalog text. |
+| **§2.21.2 greenfield cadence** | **Gap recorded, not a failure.** The Elsa derived constitution declares no test-creation cadence (TDD, test-after or none). As in spec 200, tasks use red-first ordering where the base code can fail the test (the commit-count, crash and consume-link tests) and say so where a test is a non-regression guard. The owner may declare a cadence; see "Resolved questions". |
+| **§2.22 / §2.22.1 / §2.22.2 documentation and extension-point catalog** | Pass, with a duty. Update the Runtime catalog (`IRuntimeCheckpointCommitStore` entry with the capability; `WorkflowsRuntimeCheckpointPersistenceFeature` entry with `CollapseHopChain`), the Runtime API README, `docs/runtime-durable-resumption.md` crash windows, and the glossary (routing pass, §E6 R5) (T058–T061). A test never asserts on catalog text. |
 | **Elsa §E2.2 / §E2.6** | Pass. Runtime stays artifact-only, no Design dependency. |
 | **Elsa §E6 naming** | Pass. `RuntimeHopCollapseOptions` (4 components), `RuntimeRoutingPass` (3), `HopRoutingClassifier` (3); no banned words; the EF staging method is added to the existing `EfRuntimeCheckpointParticipantStaging` rather than a new over-budget type name. |
 | **ADR 0020 (with 2026-10-11 clarification)** | Pass. The commit records the continuation and dispatches nothing. |
@@ -201,7 +207,13 @@ link, and the existing checkpoint-persistence feature owns the operator setting.
    terminal check, `FindHandler`, pipeline dispatcher); close at the boundary; fall back on any stop (contract P1–P8).
 2. `WorkflowStartSchedulerWorkHandler` and `WorkflowCompleteActivitySchedulerWorkHandler` route through
    `RuntimeRoutingPass.RouteAsync` (injected as an optional constructor argument; absent means enqueue).
-3. `HopRoutingClassifier` holds the spec-228 rules and the Start-hop rule; `ReplaySafeFusionDriver` uses it unchanged.
+3. `HopRoutingClassifier` holds the spec-228 rules, the Start-hop rule and the workflow-tail rule (`IsTailStep`).
+   `RuntimeRoutingPass` uses all of them; `ReplaySafeFusionDriver` uses only the spec-228 rules, so its tail fallback
+   under coalescing is unchanged.
+4. The tail pass starts at the claimed root `ActivityCompleted`, runs `ContinuationScheduling` and the tail
+   `Checkpoint` inline, and ends at the tail checkpoint commit (`WorkflowCompleted`, or the root's `ActivityCompleted`
+   when the root has no outcomes), which the `Checkpoint` handler makes through its drain-scope committer and which
+   consumes the claimed item. Kill point K9 covers it.
 
 ### US3 — acknowledgement in the dispatch's commit
 
@@ -209,7 +221,7 @@ link, and the existing checkpoint-persistence feature owns the operator setting.
 2. `RuntimeSchedulerWorkHandlerBase.ExecuteAsync` and `WorkflowStartActivitySchedulerWorkHandler.ExecuteWithServicesAsync`
    link the body's accessor to it while the switch is on.
 3. `RuntimeCheckpointCommitter.ResolveConsumedWorkItems` skips `ActivityAttemptClaimed` checkpoints while the switch is
-   on (R6 refinement, OQ-4).
+   on, so a two-commit dispatch deletes its item in the outcome commit (FR-008).
 
 US2's boundary commit for an `ActivityCompleted` pass is the routed `ParentCompletionEvaluation`'s outcome commit, made
 through a committer in another scope, so US2 reaches its full saving only with US3. Without US3 it is still correct:
@@ -225,33 +237,40 @@ the drainer acknowledges the claimed item separately after the pass (contract P6
 3. **Per story:** implement, run the story's tests and the affected full projects, then the ON/OFF guardrail.
 4. **Bite-proofs** (temporary working-tree mutations, reverted): remove the marker-last ordering (K2 must fail); fold
    the consume into `ActivityAttemptClaimed` (K5/K7 must fail); skip the fallback enqueue on a pause (the pause case
-   must fail); make the fingerprint include `SchedulerWorkInCommit` (the switch-flip replay case must fail).
-5. **Gates:** budgets lowered in the same change (SC-002), switch-off equality (SC-004), Coalesced unchanged (SC-005),
+   must fail); make the fingerprint include `SchedulerWorkInCommit` (the switch-flip replay case must fail); treat the
+   tail as a fallback in the routing pass (the tail-pass cases must fail).
+5. **SC-001 (T057):** the `http-reference` / `Immediate` durable-commit total must be ≤ 52, enforced by
+   `ef-commit-budgets.json`.
+6. **Gates:** budgets lowered in the same change (SC-002), switch-off equality (SC-004), Coalesced unchanged (SC-005),
    architecture tests, maps check, native providers in CI, owner-run A1 matrix (SC-003) and backend e2e.
 
-## Open questions
+## Resolved questions
 
-Recorded for the owner; the plan does not block on them, and tasks implement the spec as written.
+The planning draft raised four open questions. The owner decided all four on 2026-10-11 after reviewing PR #2639;
+each decision is now in the spec and in the artifacts below.
 
-- **OQ-1 — SC-001 (≤ 45) is not reachable with FR-001 + FR-004 + FR-008 and the lease unchanged.** Projection ~58;
-  ~52 if the workflow tail is routed too; ~44 with tail routing plus #2586 ([R11](research.md#r11--projected-commit-count-sc-001-is-not-reachable-as-written)).
-  The largest remaining block is the 18 claims of committed continuations. **Recommended answer:** (a) amend FR-005 to
-  route the workflow tail under per-hop persistence (spec 228 excluded it because its commits were buffered in a
-  coalesced segment; under per-hop persistence each tail checkpoint still commits durably), and (b) restate SC-001 as
-  "≤ 52 with #2586 unchanged; ≤ 45 once #2586 lands", measured by the deterministic commit counter. A further lever
-  (writing in-commit continuations already claimed by the committing drain, removing up to 15 claims) needs its own
-  crash analysis and belongs in a follow-up spec. T054 records the measured figure on #2584 either way.
-- **OQ-2 — The "Groundwork crash suite" in SC-003 no longer exists** (ADR 0073). **Recommended answer:** accept the new EF
-  two-generation suite `EfHopCollapseCrashConvergenceTests` with kill points K1–K8 ([R12](research.md#r12--the-crash-suite-named-in-sc-003))
-  as SC-003's crash suite, and update SC-003's wording when the spec is next touched.
-- **OQ-3 — Edge case "a different item under the same identity as a conflict, exactly as enqueue does today".** Enqueue
-  today keeps the existing item and reports no conflict. **Recommended answer:** follow enqueue (create-only, keep the
-  existing row), which FR-002 requires anyway, and correct the edge-case wording ([R3](research.md#r3--idempotency-of-an-in-commit-continuation-spec-edge-case)).
-- **OQ-4 — FR-008 for dispatches that commit more than once.** Folding the consume into `InvokeActivity`'s or
-  `ParentCompletionEvaluation`'s first commit (`ActivityAttemptClaimed`) would change how a crash mid-attempt recovers.
-  **Recommended answer:** fold into the dispatch's first commit that is not `ActivityAttemptClaimed`, which keeps today's
-  crash recovery and still removes every separate acknowledgement for a dispatch that commits ([R6](research.md#r6--fr-008-the-di-scope-split-confirmed-by-reading-the-code)).
-- **Cadence gap (§2.21.2).** The Elsa constitution declares no test cadence. **Recommended answer:** keep the spec 200
+- **OQ-1 — SC-001 (≤ 45) was not reachable with the lease unchanged.** The draft projected ~58, ~52 with the workflow
+  tail routed, ~44 with tail routing plus #2586. **Decided (owner, 2026-10-11): add tail routing.** Under per-hop
+  persistence the workflow tail (root `ActivityCompleted` → `ContinuationScheduling` → tail `Checkpoint`) is routed
+  in-process; spec 228 excluded it only because coalesced commits were buffered. SC-001 is restated as "at most 52
+  durable commits per request with the root-write lease (#2586) unchanged; at most 45 once #2586 lands", measured by the
+  deterministic commit counter. Applied to FR-004, FR-005, US2 acceptance scenario 3, the edge cases, research R7/R11,
+  the routing contract (P2a) and tasks T035, T037, T039 and T057. Writing in-commit continuations already claimed by
+  the committing drain (up to 15 fewer claims) stays a candidate for a follow-up spec ([R11](research.md#r11--projected-commit-count-and-the-sc-001-target)).
+- **OQ-2 — The Groundwork crash suite named in SC-003 no longer exists** (ADR 0073). **Decided (owner, 2026-10-11):**
+  SC-003 names the new EF suite `EfHopCollapseCrashConvergenceTests` (the two-generation cut-and-recover harness, kill
+  points K1–K9, [R12](research.md#r12--the-crash-suite-named-in-sc-003)), citing ADR 0073.
+- **OQ-3 — The existing-item edge case.** The draft spec called a different item under the same identity a conflict,
+  but enqueue keeps and returns the existing item. **Decided (owner, 2026-10-11):** the spec matches the code. An item
+  already present under the same `WorkItemId` is kept as-is (returned, not overwritten), and in-commit writes behave
+  the same way; there is no conflict outcome, and no task adds one
+  ([R3](research.md#r3--idempotency-of-an-in-commit-continuation-spec-edge-case), contract C12).
+- **OQ-4 — FR-008 for dispatches that commit twice.** **Decided (owner, 2026-10-11):** a dispatch that makes an
+  attempt-claim commit and then the outcome commit (`InvokeActivity`, parent completion evaluation) deletes its claimed
+  work item in the first commit that is not an attempt claim, so recovery after a crash mid-attempt is unchanged.
+  Applied to FR-008, US3 (acceptance scenario 2), contract A4 and tasks T048 and T055
+  ([R6](research.md#r6--fr-008-the-di-scope-split-confirmed-by-reading-the-code)).
+- **Cadence gap (§2.21.2), still open.** The Elsa constitution declares no test cadence. Recommended: keep the spec 200
   precedent (red-first for defect-shaped and crash tests) until the owner declares one.
 
 ## Complexity Tracking

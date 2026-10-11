@@ -14,6 +14,13 @@ the feature setting and the diagnostics counters.
   `next.WorkflowExecutionId`, before its boundary, and when `HopRoutingClassifier` classifies `next` routable
   ([research R7](../research.md#r7--routable-in-process-fr-005-reconciled-with-spec-228)). Otherwise it calls
   `IWorkflowSchedulerWorkQueue.EnqueueAsync(next)` and, if a pass was open, records a fallback.
+- P2a. **Routed steps.** Routable: the `Start` handler's `WorkflowStarted` checkpoint item; a leaf's
+  `ParentCompletionEvaluation` (not child-faulted, `ReplaySafe` parent); and the workflow tail, the
+  `ContinuationScheduling` item derived from the root's `ActivityCompleted` and the tail `Checkpoint` it derives (owner
+  decision 2026-10-11: under per-hop persistence the tail is not a fallback, since its checkpoint still commits
+  durably). Falls back: multi-predecessor joins (never captured, a `ScheduleActivity` is a committed continuation),
+  child-fault evaluations, non-`ReplaySafe` parents, and anything else the spec-228 rules exclude. The spec-228 fusion
+  pump keeps its own tail fallback under coalescing.
 - P3. **Inline dispatch.** After the claimed item's handler returns, the drainer dispatches captured items in capture
   order through `FindHandler` and the pipeline dispatcher, with the dispatch's ambient services, inside the same claim
   renewal and the same spec-105 consume frame. Before each item it evaluates the pause gate; after each it re-reads the
@@ -42,8 +49,11 @@ the feature setting and the diagnostics counters.
 - A3. A linked accessor delegates `PendingConsume`, `WasConsumedDurably`, `MarkConsumedDurably`,
   `BeginConsumeAttempt` and `IsConsumeInFlightOrDurable` to the drain's, so the drainer's skip-ack decision and its
   renewal loop (#1254) see a consume made by any committer in the dispatch.
-- A4. While the switch is on, the committer does not fold the consume into an `ActivityAttemptClaimed` checkpoint; it
-  folds into the dispatch's next commit. Off, folding is today's (first commit of the dispatch, same scope only).
+- A4. A dispatch that commits twice, an attempt-claim commit (`ActivityAttemptClaimed`) and then the outcome commit
+  (`InvokeActivity`, parent completion evaluation), deletes its claimed work item in the first commit that is not an
+  attempt claim, so recovery after a crash mid-attempt is unchanged (FR-008, owner decision 2026-10-11). While the
+  switch is on, the committer therefore never folds the consume into an `ActivityAttemptClaimed` checkpoint. Off,
+  folding is today's (first commit of the dispatch, same scope only).
 - A5. Non-atomic and legacy providers, dispatches that made no commit, and the handler-fault arm keep spec 105 FR-006's
   separate acknowledgement and tripwire. A replaced accessor implementation is never linked.
 
@@ -69,8 +79,9 @@ the feature setting and the diagnostics counters.
 | P1 gate matrix: each precondition false → no pass, handlers enqueue | `tests/essentials/Workflows/Runtime/Tests/RuntimeRoutingPassTests.cs` |
 | P2–P4 capture, inline dispatch, boundary close, capture-after-boundary enqueues | same |
 | P5 each fallback trigger enqueues the routed item before the claimed item is acknowledged | same |
-| P6/P7 claimed item stays claimed until the boundary; crash recovery | `RuntimeRoutingPassTests.cs`, `EfHopCollapseCrashConvergenceTests.cs` (K3–K6) |
-| A1–A5 linking, attempt-claim exclusion, non-atomic and fault paths unchanged | `tests/essentials/Workflows/Runtime/Tests/RuntimeDrainStepSingleTransactionTests.cs`, `RuntimeSchedulerWorkHandlerBaseTests.cs` |
+| P2a the workflow tail is captured and its checkpoint commit is the boundary | `RuntimeRoutingPassTests.cs`, `EfHopCollapseCrashConvergenceTests.cs` (K9) |
+| P6/P7 claimed item stays claimed until the boundary; crash recovery | `RuntimeRoutingPassTests.cs`, `EfHopCollapseCrashConvergenceTests.cs` (K3–K6, K9) |
+| A1–A5 linking, attempt-claim rule (K5, K7), non-atomic and fault paths unchanged | `tests/essentials/Workflows/Runtime/Tests/RuntimeDrainStepSingleTransactionTests.cs`, `RuntimeSchedulerWorkHandlerBaseTests.cs` |
 | S1 feature setting registration (conditional wiring, §2.23.1) | `tests/essentials/Workflows/Runtime/Tests/WorkflowsRuntimeCheckpointPersistenceFeatureTests.cs` |
 | S2 off reproduces the baseline counts exactly | `tests/essentials/Activities/Http/IntegrationTests/CommandBudgets/EfCommandBudgetTests.cs` |
 | D1–D3 counters | `RuntimeRoutingPassTests.cs` |

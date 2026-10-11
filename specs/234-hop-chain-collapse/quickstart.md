@@ -24,7 +24,7 @@ dotnet test tests/essentials/Workflows/Runtime/Persistence/EntityFrameworkCore/T
 ```
 
 Expected: the contract cases of [contracts/checkpoint-commit-continuations.md](contracts/checkpoint-commit-continuations.md),
-the ON/OFF guardrail and the eight crash kill points (K1–K8, [research R12](research.md#r12--the-crash-suite-named-in-sc-003))
+the ON/OFF guardrail and the nine crash kill points (K1–K9, [research R12](research.md#r12--the-crash-suite-named-in-sc-003))
 pass. Each crash case also runs with the switch off as its control.
 
 Native providers run in CI ("EF container suites (runtime)"); locally, with Docker available:
@@ -48,8 +48,8 @@ EF commands: workflow 'http-reference', mode 'Immediate': actual N, budget N.
 Durable commits: workflow 'http-reference', mode 'Immediate': actual C, budget C.
 ```
 
-- SC-001: the `http-reference` / `Immediate` durable-commit count. Target ≤ 45; see OQ-1 in [plan.md](plan.md#open-questions)
-  for the projected ~58.
+- SC-001: the `http-reference` / `Immediate` durable-commit count is at most 52 with the root-write lease (#2586)
+  unchanged, and at most 45 once #2586 lands (owner decision 2026-10-11; projection in research R11).
 - SC-002: every `Immediate` command count is below its pre-feature budget (1482 / 569 / 507), and the budget JSON is
   lowered to the new counts in the same change.
 - SC-004: the `Immediate.CollapseOff` cases equal the pre-feature counts exactly (the test asserts equality, not `≤`).
@@ -62,8 +62,8 @@ persisted diagnostics off, send one request to the reference workflow, and count
 ## 4. Diagnostics (FR-010)
 
 In any of the tests above, `RuntimeSchedulerDispatchDiagnostics.InProcessRoutingSteps` is non-zero for an Immediate EF
-run with the switch on and zero with it off or under Coalesced; `InProcessRoutingFallbacks` counts the tail and any
-child-fault evaluation.
+run with the switch on and zero with it off or under Coalesced; `InProcessRoutingFallbacks` counts child-fault
+evaluations and non-ReplaySafe parents; the workflow tail is routed, not a fallback.
 
 ## 5. Rollback lever
 

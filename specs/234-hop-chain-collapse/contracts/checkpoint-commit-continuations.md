@@ -35,8 +35,10 @@ bool CanStageSchedulerWork(IWorkflowSchedulerWorkQueue schedulerWorkQueue) => fa
 - C10. For each marked id, write the scheduler work item carried by the intent (its materialized item when present, else
   its payload, which MUST be equal) inside the same transaction as the checkpoint marker, and write no outbox row for it.
 - C11. Identity, payload and order are the item's own: the row is the one `EnqueueAsync` would write for that item.
-- C12. An existing row with the same identity is kept and nothing is written (create-only by identity, as
-  `EnqueueAsync`). A damaged existing row fails the commit.
+- C12. An item already present under the same `WorkItemId` (same scope and execution) is kept as-is and nothing is
+  written or overwritten, whatever the staged item's content, exactly as `EnqueueAsync` keeps and returns it today
+  (create-only by identity, spec edge case as corrected 2026-10-11). There is no conflict outcome. A damaged existing row
+  fails the commit, as `ReadChecked` does for enqueue.
 - C13. The marker records, as `PendingPostCommitWorkIds`, only the outbox rows it wrote.
 - C14. Replay: when the marker exists and the fingerprint matches, report `ScheduledSchedulerWorkItemIds` as the commit's
   `EnqueueSchedulerWork` outbox ids that the marker does not list as pending. Write nothing.
@@ -56,7 +58,7 @@ and run by the SQLite tests and the PostgreSQL/SQL Server/MySQL provider smoke t
 | marked continuation exists as a queued row after commit, no outbox row, marker pending set excludes it | C10, C13, US1 AS1 |
 | two marked continuations keep the order the outbox path gives (`ListAsync` order equals `WorkOrderKey` order) | C11, edge case "several continuations" |
 | transaction failure after staging leaves no checkpoint, marker, outbox or scheduler row | C15, US1 AS2 |
-| existing identical row: commit succeeds, row unchanged | C12, edge case "redelivery" |
+| item already present under the same `WorkItemId` (identical, and with different content): commit succeeds, existing row unchanged | C12, edge case "redelivery" |
 | replay of a committed commit reports the scheduled ids and writes nothing | C14 |
 | replay after the switch flips (same commit id, entry no longer marked) resolves without a replay conflict and delivers nothing twice | C7, C14 |
 | a marked commit sent to the in-memory store throws `NotSupportedException` | C16 |
