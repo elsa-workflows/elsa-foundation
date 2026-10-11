@@ -27,3 +27,12 @@ This change may break current runtime checkpoint adapter contracts. That is acce
 - `IRuntimeCheckpointWriter` should be replaced by the narrower `IRuntimeCheckpointCommitStore` rather than preserved under a misleading writer name.
 - `IRuntimePostCommitOutboxStore.SavePendingAsync` should be removed from the delivery-facing interface.
 - Migration should replace the old seam rather than layer compatibility over it.
+
+## Clarification (2026-10-11)
+
+Confirmed by the owner on [#2584](https://github.com/elsa-workflows/elsa-foundation/issues/2584#issuecomment-6104682664)
+for [spec 234](../../specs/234-hop-chain-collapse/spec.md). When the scheduler queue shares the checkpoint store's unit
+of work, writing a continuation's scheduler work item inside the checkpoint transaction is *recording* post-commit work,
+not *inline dispatch*. Nothing runs until a drain claims the item, and the item exists if and only if the checkpoint
+committed. The decision above is unchanged: the commit still dispatches nothing, and every other kind of post-commit work,
+and every composition whose queue does not share that unit of work, keeps the outbox.
