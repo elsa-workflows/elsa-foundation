@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "last_publish_commit": "ea450fc83f5fb6a97496631c2badce2d36c3fb11",
+  "last_publish_commit": "05a2d972b2d0feacfb398525157b3c67e710791f",
   "packages": [
     {
       "package_id": "Elsa.Activities.Bpmn",
@@ -199,18 +199,18 @@
     },
     {
       "package_id": "Elsa.Diagnostics.OpenTelemetry.Core",
-      "version": "4.0.4-preview",
-      "commit": "a88e37629c87c4c3f400b7a9d5750219848fda29"
+      "version": "4.0.5-preview",
+      "commit": "05a2d972b2d0feacfb398525157b3c67e710791f"
     },
     {
       "package_id": "Elsa.Diagnostics.OpenTelemetry.Persistence.EntityFrameworkCore",
-      "version": "4.0.15-preview",
-      "commit": "9f09cf8dc78efc611fd99cd90ab1fa70efe709ff"
+      "version": "4.0.16-preview",
+      "commit": "05a2d972b2d0feacfb398525157b3c67e710791f"
     },
     {
       "package_id": "Elsa.Diagnostics.Persistence",
-      "version": "4.0.7-preview",
-      "commit": "d8e02485d4e39c19479a22e1c2cc722a98b470a3"
+      "version": "4.0.8-preview",
+      "commit": "05a2d972b2d0feacfb398525157b3c67e710791f"
     },
     {
       "package_id": "Elsa.Diagnostics.StructuredLogs",
