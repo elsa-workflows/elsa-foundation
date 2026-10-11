@@ -47,6 +47,9 @@ public sealed class RetiredPersistenceFamilyGuardTests
     /// <summary>Scanned by name wherever they sit; repository-root files of a scanned extension are read too.</summary>
     private static readonly string[] ScannedFiles = ["Directory.Packages.props", "NuGet.config", "Elsa.Server.slnx", "Dockerfile"];
 
+    /// <summary>The path ledger preserves retired names only to translate the historical tree during migration.</summary>
+    private const string HistoricalMigrationLedger = "tools/consolidation/foundation-path-map.json";
+
     /// <summary>Project, package, feed, build and CI files. C# source and markdown are deliberately not read.</summary>
     private static readonly string[] ScannedExtensions =
     [
@@ -152,12 +155,23 @@ public sealed class RetiredPersistenceFamilyGuardTests
         Assert.False(IsScannedConfigurationFile("src/Module/README.md"));
     }
 
+    [Fact]
+    public void Only_the_foundation_historical_path_ledger_is_exempt_from_configuration_content_scanning()
+    {
+        Assert.True(IsHistoricalMigrationLedger("tools/consolidation/foundation-path-map.json"));
+        Assert.False(IsHistoricalMigrationLedger("tools/consolidation/studio-path-map.json"));
+        Assert.False(IsHistoricalMigrationLedger("tools/other/foundation-path-map.json"));
+    }
+
     private static bool NamesRetiredFamily(string text) =>
         RetiredNames.Any(name => text.Contains(name, StringComparison.OrdinalIgnoreCase));
 
     private static bool IsScannedConfigurationFile(string relativePath) =>
         ScannedFiles.Contains(Path.GetFileName(relativePath), StringComparer.Ordinal) ||
         ScannedExtensions.Contains(Path.GetExtension(relativePath), StringComparer.OrdinalIgnoreCase);
+
+    private static bool IsHistoricalMigrationLedger(string relativePath) =>
+        string.Equals(relativePath, HistoricalMigrationLedger, StringComparison.Ordinal);
 
     private static List<string> Violations(IEnumerable<(string RelativePath, string Text)> files) =>
         [.. files
@@ -175,7 +189,7 @@ public sealed class RetiredPersistenceFamilyGuardTests
             foreach (var path in Directory.EnumerateFiles(rootPath, "*", SearchOption.AllDirectories))
             {
                 var relativePath = RelativePath(path);
-                if (!IsBuildOrPackageOutput(path) && IsScannedConfigurationFile(relativePath))
+                if (!IsBuildOrPackageOutput(path) && IsScannedConfigurationFile(relativePath) && !IsHistoricalMigrationLedger(relativePath))
                     yield return (path, relativePath);
             }
         }

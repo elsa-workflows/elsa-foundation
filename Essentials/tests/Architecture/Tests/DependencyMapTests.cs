@@ -30,7 +30,12 @@ public sealed class DependencyMapTests
     [Fact]
     public void Every_tracked_file_resolves_to_the_nearest_project_on_disk()
     {
-        var files = TrackedFiles("Essentials/src", "Essentials/apps", "Essentials/tests", "Extensions/*/src/**", "Extensions/*/tests/**");
+        var files = TrackedFiles(BackendFileRoots().ToArray());
+        var extensionFiles = TrackedFiles("Extensions");
+        var studioProjects = extensionFiles
+            .Where(IsStudioPath)
+            .Where(path => path.EndsWith(".csproj", StringComparison.Ordinal))
+            .ToArray();
         var projectsOnDisk = new Dictionary<string, string?>(StringComparer.Ordinal);
         var owners = files.Select(file => (File: file, Owner: OwningProject(file))).ToArray();
 
@@ -46,6 +51,8 @@ public sealed class DependencyMapTests
 
         // Not vacuous: the sweep covers files no project owns.
         Assert.Contains(owners, owned => owned.Owner is null);
+        Assert.NotEmpty(studioProjects);
+        Assert.DoesNotContain(files, IsStudioPath);
     }
 
     /// <summary>
@@ -55,8 +62,8 @@ public sealed class DependencyMapTests
     [Fact]
     public void No_project_directory_is_nested_inside_another()
     {
-        // Every tracked backend project, not only the dependency map's nodes, so tools/ and samples/ are held to it too.
-        var directories = TrackedFiles("Essentials/src", "Essentials/apps", "Essentials/tests", "Extensions/*/src/**", "Extensions/*/tests/**", "tools", "samples")
+        // Every tracked backend project, not only the dependency map's nodes; tools/ and samples/ are held to it too.
+        var directories = TrackedFiles([.. BackendFileRoots(), "tools", "samples"])
             .Where(file => file.EndsWith(".csproj", StringComparison.Ordinal))
             .Select(file => file[..(file.LastIndexOf('/') + 1)])
             .ToArray();
@@ -161,6 +168,31 @@ public sealed class DependencyMapTests
             ? $"{directory}/{project}"
             : NearestProjectOnDisk(directory, projectsOnDisk);
     }
+
+    private static IReadOnlyList<string> BackendFileRoots()
+    {
+        var roots = new List<string> { "Essentials/src", "Essentials/apps", "Essentials/tests" };
+        var extensionsRoot = Path.Join(RepoRoot, "Extensions");
+        if (Directory.Exists(extensionsRoot))
+        {
+            foreach (var extension in Directory.EnumerateDirectories(extensionsRoot))
+            {
+                var capability = Path.GetFileName(extension);
+                foreach (var segment in new[] { "src", "tests" })
+                {
+                    var root = $"Extensions/{capability}/{segment}";
+                    if (Directory.Exists(Path.Join(RepoRoot, root)))
+                        roots.Add(root);
+                }
+            }
+        }
+
+        return roots;
+    }
+
+    private static bool IsStudioPath(string relativePath) =>
+        relativePath.StartsWith("Extensions/", StringComparison.Ordinal) &&
+        relativePath.Contains("/studio/", StringComparison.Ordinal);
 
     private static IReadOnlyList<string> TrackedFiles(params string[] roots)
     {

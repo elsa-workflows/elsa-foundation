@@ -163,9 +163,9 @@ public sealed class DockerBuildContextGuardTests
     public void A_dockerfile_restoring_a_project_that_imports_an_uncopied_sibling_targets_file_is_flagged()
     {
         var root = Path.Join(Path.GetTempPath(), Guid.NewGuid().ToString("N"));
-        Directory.CreateDirectory(Path.Join(root, "src", "apps", "Fixture"));
-        File.WriteAllText(Path.Join(root, "src", "apps", "Sibling.targets"), "<Project />");
-        File.WriteAllText(Path.Join(root, "src", "apps", "Fixture", "Fixture.csproj"), """
+        Directory.CreateDirectory(Path.Join(root, "Essentials", "apps", "Fixture"));
+        File.WriteAllText(Path.Join(root, "Essentials", "apps", "Sibling.targets"), "<Project />");
+        File.WriteAllText(Path.Join(root, "Essentials", "apps", "Fixture", "Fixture.csproj"), """
             <Project>
               <Import Project="$(MSBuildThisFileDirectory)../Sibling.targets" />
             </Project>

@@ -47,8 +47,8 @@ public sealed class OpenIddictPersistenceArchitectureTests
     {
         var root = Path.Combine(
             RepoRoot,
+            "Essentials",
             "src",
-            "essentials",
             "Foundation",
             "Identity",
             "OpenIddict",
@@ -100,7 +100,7 @@ public sealed class OpenIddictPersistenceArchitectureTests
     {
         var project = XDocument.Load(Path.Combine(
             RepoRoot,
-            "src",
+            "Essentials",
             "apps",
             "Elsa.Workbench",
             "Elsa.Workbench.csproj"));
@@ -117,8 +117,8 @@ public sealed class OpenIddictPersistenceArchitectureTests
 
         var testProject = XDocument.Load(Path.Combine(
             RepoRoot,
+            "Essentials",
             "tests",
-            "essentials",
             "Foundation",
             "Identity",
             "Tests",

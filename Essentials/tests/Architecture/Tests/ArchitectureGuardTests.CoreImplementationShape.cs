@@ -178,11 +178,18 @@ public sealed partial class ArchitectureGuardTests
     // Extensions/ made Elsa.Agent.Core the first that does (#1815). The narrowing showed up as sixteen
     // baseline entries reported stale rather than as missed violations, which is the inverse assertion
     // earning its keep: without it the guard would simply have stopped checking Agent and stayed green.
-    private static IEnumerable<Assembly> CoreProjectAssemblies() => ProjectFiles()
-        .Where(project => ModuleRoots.Production.Any(root => project.RelativePath.StartsWith(root + "/", StringComparison.Ordinal)))
-        .Where(project => !project.RelativePath.Contains("/tests/", StringComparison.Ordinal))
-        .Where(project => project.Name.EndsWith(".Core", StringComparison.Ordinal))
-        .Select(project => Assembly.Load(new AssemblyName(project.Name)));
+    private static IEnumerable<Assembly> CoreProjectAssemblies()
+    {
+        var productionRoots = ModuleRoots.Resolve(RepoRoot, ModuleRoots.Production)
+            .Select(root => Path.GetRelativePath(RepoRoot, root).Replace('\\', '/') + "/")
+            .ToArray();
+
+        return ProjectFiles()
+            .Where(project => productionRoots.Any(root => project.RelativePath.StartsWith(root, StringComparison.Ordinal)))
+            .Where(project => !project.RelativePath.Contains("/tests/", StringComparison.Ordinal))
+            .Where(project => project.Name.EndsWith(".Core", StringComparison.Ordinal))
+            .Select(project => Assembly.Load(new AssemblyName(project.Name)));
+    }
 
     private static bool IsImplementationShaped(Type type) =>
         type is { IsClass: true, IsAbstract: false } &&

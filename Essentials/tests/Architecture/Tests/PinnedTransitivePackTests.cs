@@ -64,13 +64,13 @@ public sealed class PinnedTransitivePackTests : IDisposable
         // RepoContext.Discover's marker; PinnedTransitiveDependencies.Attach never lists files through it, only
         // resolves paths under root, so this fixture needs no git checkout.
         Write("Elsa.Server.slnx", "<Solution></Solution>");
-        Write("src/Lib/Fixture.Lib.csproj", """
+        Write("Essentials/src/Lib/Fixture.Lib.csproj", """
             <Project Sdk="Microsoft.NET.Sdk">
               <ItemGroup><PackageReference Include="Microsoft.Extensions.Options" /></ItemGroup>
             </Project>
             """);
-        Write("src/Lib/Lib.cs", "namespace Fixture; public static class Lib;");
-        Write("src/App/Fixture.App.csproj", """
+        Write("Essentials/src/Lib/Lib.cs", "namespace Fixture; public static class Lib;");
+        Write("Essentials/src/App/Fixture.App.csproj", """
             <Project Sdk="Microsoft.NET.Sdk">
               <ItemGroup>
                 <ProjectReference Include="..\Lib\Fixture.Lib.csproj" />
@@ -78,19 +78,19 @@ public sealed class PinnedTransitivePackTests : IDisposable
               </ItemGroup>
             </Project>
             """);
-        Write("src/App/App.cs", "namespace Fixture; public static class App;");
+        Write("Essentials/src/App/App.cs", "namespace Fixture; public static class App;");
     }
 
     [Fact]
     public void Pack_writes_exactly_the_pinned_transitive_packages_restore_lists_and_the_lock_file_adds_only_the_privately_reached()
     {
         var (exitCode, output) = ChildProcess.Dotnet(
-            ["pack", "src/App/Fixture.App.csproj", "-c", "Release", "-o", Path.Join(root.FullName, "out"), "-nodeReuse:false"], root.FullName, TimeSpan.FromMinutes(5));
+            ["pack", "Essentials/src/App/Fixture.App.csproj", "-c", "Release", "-o", Path.Join(root.FullName, "out"), "-nodeReuse:false"], root.FullName, TimeSpan.FromMinutes(5));
         Assert.True(exitCode == 0, $"dotnet pack failed with exit {exitCode}:\n{output}");
 
         var listed = NuspecDependencies(Path.Join(root.FullName, "out", "Fixture.App.4.0.0-dev.nupkg")).Where(dependency => dependency.Id != "Fixture.Lib");
-        var restored = Pins(Path.Join(root.FullName, "src", "App", "obj", "project.assets.json"), "centralTransitiveDependencyGroups", "version", _ => true);
-        var locked = Pins(Path.Join(root.FullName, "src", "App", "packages.lock.json"), "dependencies", "requested",
+        var restored = Pins(Path.Join(root.FullName, "Essentials", "src", "App", "obj", "project.assets.json"), "centralTransitiveDependencyGroups", "version", _ => true);
+        var locked = Pins(Path.Join(root.FullName, "Essentials", "src", "App", "packages.lock.json"), "dependencies", "requested",
             package => package.GetProperty("type").GetString() == "CentralTransitive");
 
         Assert.Equal(restored, listed.Order());
@@ -106,14 +106,14 @@ public sealed class PinnedTransitivePackTests : IDisposable
         // file's own superset.
         var repo = RepoContext.Discover(root.FullName);
         var lib = new ProjectFacts(
-            "src/Lib/Fixture.Lib.csproj", "Fixture.Lib", "source", "Fixture", "Lib", "feature/implementation",
+            "Essentials/src/Lib/Fixture.Lib.csproj", "Fixture.Lib", "source", "Fixture", "Lib", "feature/implementation",
             null, false, null, null,
             [new ExternalEdge("Microsoft.Extensions.Options", pinVersions["Microsoft.Extensions.Options"])]);
         var app = new ProjectFacts(
-            "src/App/Fixture.App.csproj", "Fixture.App", "source", "Fixture", "App", "feature/implementation",
+            "Essentials/src/App/Fixture.App.csproj", "Fixture.App", "source", "Fixture", "App", "feature/implementation",
             null, true, "Fixture.App", null,
             [
-                new InternalEdge("Fixture.Lib", "src/Lib/Fixture.Lib.csproj"),
+                new InternalEdge("Fixture.Lib", "Essentials/src/Lib/Fixture.Lib.csproj"),
                 new ExternalEdge("Microsoft.Extensions.Caching.Memory", pinVersions["Microsoft.Extensions.Caching.Memory"])
             ])
         {
