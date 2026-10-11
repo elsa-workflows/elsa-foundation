@@ -28,7 +28,7 @@ public sealed class BridgeTestHostContentRootTests
 
             var defaultBuilder = WebApplication.CreateSlimBuilder();
             configurations.Add(defaultBuilder.Configuration);
-            Assert.Equal(alternatePath, Path.GetFullPath(defaultBuilder.Environment.ContentRootPath));
+            Assert.Equal(ResolvePhysicalPath(alternatePath), ResolvePhysicalPath(defaultBuilder.Environment.ContentRootPath));
 
             var bridgeBuilder = BridgeTestHost.CreateBuilder();
             configurations.Add(bridgeBuilder.Configuration);
