@@ -173,3 +173,11 @@ jobs:
           -p:WarningsNotAsErrors=NU1603
           "-p:PackageOutputPath=$RUNNER_TEMP/studio-nuget"
         working-directory: Studio
+
+      - name: Verify complete Studio NuGet artifact
+        run: |
+          python3 tools/ci/verify_studio_nuget_packages.py --self-test
+          python3 tools/ci/verify_studio_nuget_packages.py --packages "$RUNNER_TEMP/studio-nuget"
+
+      - name: Build standalone Studio image without publishing
+        run: docker build --file Studio/src/apps/Elsa.Studio.Web/Dockerfile --tag "elsa-studio:ci-${{ github.sha }}" .
