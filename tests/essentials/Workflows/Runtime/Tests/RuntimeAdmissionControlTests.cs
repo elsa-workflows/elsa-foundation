@@ -238,6 +238,88 @@ public sealed class RuntimeAdmissionControlTests
         Assert.Equal(0, _diagnostics.LimitDecreases);
     }
 
+    /// <summary>
+    /// One congestion episode cuts once (#2614). Commands admitted under the same limit and completing slow are one signal,
+    /// not several: once the first of them has cut the limit, the rest were admitted before that cut and must not compound
+    /// it. Before this rule four such completions took a host from 512 to 262 in one burst, below the load its clients
+    /// keep in flight, and it shed work it had room for.
+    /// </summary>
+    [Fact]
+    public void AdaptiveLimit_CutsOnceForCompletionsAdmittedBeforeTheLastCut()
+    {
+        var controller = NewController(AdaptiveOptions());
+        CompleteSaturatedSample(controller, TimeSpan.FromMilliseconds(10));
+        _signal.InFlightDispatches = 50;
+        var first = AdmitWithDispatch(controller);
+        var second = AdmitWithDispatch(controller);
+        _clock.Advance(TimeSpan.FromMilliseconds(500));
+
+        first.Dispose();
+        second.Dispose();
+
+        Assert.Equal(50, controller.Limit);
+        Assert.Equal(1, _diagnostics.LimitDecreases);
+    }
+
+    /// <summary>
+    /// Supersession follows admission time, not the limit a command was admitted under: increases can carry the limit back
+    /// above that before a long command completes, and its slowness is still the signal the earlier cut answered.
+    /// </summary>
+    [Fact]
+    public void AdaptiveLimit_DoesNotCutForACompletionAdmittedBeforeTheLastCutAfterTheLimitRecovers()
+    {
+        var controller = NewController(AdaptiveOptions());
+        CompleteSaturatedSample(controller, TimeSpan.FromMilliseconds(10));
+        _signal.InFlightDispatches = 50;
+        var stale = AdmitWithDispatch(controller);
+        CompleteSaturatedSample(controller, TimeSpan.FromMilliseconds(500));
+        Assert.Equal(50, controller.Limit);
+        while (controller.Limit < 100)
+            CompleteSaturatedSample(controller, TimeSpan.FromMilliseconds(10));
+        var recovered = controller.Limit;
+
+        stale.Dispose();
+
+        Assert.Equal(recovered, controller.Limit);
+        Assert.Equal(1, _diagnostics.LimitDecreases);
+    }
+
+    /// <summary>
+    /// A command admitted on the same clock tick as the cut was still admitted before it: supersession follows admission
+    /// order, which cannot tie, not timestamps, which can.
+    /// </summary>
+    [Fact]
+    public void AdaptiveLimit_DoesNotCutForACompletionAdmittedOnTheSameTickAsTheCut()
+    {
+        var controller = NewController(AdaptiveOptions());
+        CompleteSaturatedSample(controller, TimeSpan.FromMilliseconds(10));
+        _signal.InFlightDispatches = 50;
+        var cutting = AdmitWithDispatch(controller);
+        _clock.Advance(TimeSpan.FromMilliseconds(500));
+        var sameTick = AdmitWithDispatch(controller);
+
+        cutting.Dispose();
+        _clock.Advance(TimeSpan.FromMilliseconds(500));
+        sameTick.Dispose();
+
+        Assert.Equal(50, controller.Limit);
+        Assert.Equal(1, _diagnostics.LimitDecreases);
+    }
+
+    /// <summary>A completion admitted under the limit now in force is a new signal, so a host that stays slow keeps cutting.</summary>
+    [Fact]
+    public void AdaptiveLimit_CutsAgainForACompletionAdmittedAfterTheCut()
+    {
+        var controller = NewController(AdaptiveOptions());
+        CompleteSaturatedSample(controller, TimeSpan.FromMilliseconds(10));
+        CompleteSaturatedSample(controller, TimeSpan.FromMilliseconds(500));
+
+        CompleteSaturatedSample(controller, TimeSpan.FromMilliseconds(500));
+
+        Assert.Equal(25, controller.Limit);
+        Assert.Equal(2, _diagnostics.LimitDecreases);
+    }
+
     [Fact]
     public void AdaptiveLimit_StopsAtTheFloor()
     {
@@ -758,6 +840,15 @@ public sealed class RuntimeAdmissionControlTests
     // because the sample meant to detect the collapsed baseline was never evaluated against it at all.
     private void CompleteSaturatedSample(IRuntimeAdmissionController controller, TimeSpan duration, int dispatches = 1) =>
         CompleteSample(controller, duration, dispatches, load: (long)Math.Ceiling(controller.Limit / 2));
+
+    // Admits one command and records its one dispatch, leaving it in flight so the test decides when it completes.
+    private RuntimeAdmissionDecision AdmitWithDispatch(IRuntimeAdmissionController controller)
+    {
+        var decision = controller.TryAdmit();
+        Assert.True(decision.IsAdmitted);
+        _signal.RecordDispatch();
+        return decision;
+    }
 
     // Defaults to one dispatch because that is the shape of every command the limiter is meant to learn from: a drain
     // records at least one. dispatches: 0 is the zero-dispatch sample — an alteration, or anything else that opens a
