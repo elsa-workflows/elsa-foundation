@@ -94,7 +94,7 @@ An operator needs each failed shell reload reported without exposing arbitrary e
 ## Assumptions
 
 - [Program decisions](../../docs/plans/modular-hosting-upstream/decisions.md) D5, D6, D9, D14 and D15 are authoritative; no new product-policy choice is required for this observer-only unit.
-- Upstream live-options prerequisite [CShells #161](https://github.com/valence-works/cshells/issues/161) is delivered and qualified. Stable publication remains outstanding.
+- During preview qualification, the upstream live-options prerequisite [CShells #161](https://github.com/valence-works/cshells/issues/161) was delivered and qualified. Stable publication and adoption were later completed in Foundation PR #2530.
 - Source/test preparation may be qualified in an isolated copy with audited public previews. That evidence cannot satisfy FR-010 or justify merging against outdated committed pins.
 - Shared helper placement is selected by dependency analysis in the plan; it must preserve the host boundary rather than relax architecture guards.
-- Safe-pruning admission and custom-registry readiness policy remain separate unresolved decisions and cannot invalidate this observer-only preparation.
+- Safe-pruning admission and custom-registry readiness policy remain separate work and do not gate this observer-only adoption.
