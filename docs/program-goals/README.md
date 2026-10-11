@@ -26,10 +26,16 @@ Do not invent a named program-goal bucket just because one is missing. Propose c
 
 | Goal | Status | Area | Steward(s) | Current focus |
 |---|---|---|---|---|
+| [Foundation/Studio Consolidation](https://github.com/elsa-workflows/elsa-foundation/issues/2501) | Active; priority one | Essentials, Extensions and Studio in Foundation | Sipke | Accepted root layout; coordinate preservation and quiet checkpoint under #2510 before structural execution |
+| [Elsa 4 Website and Documentation](https://github.com/elsa-workflows/elsa-foundation/issues/2495) | Active in parallel | Foundation-owned documentation and GitBook | Sipke | #2498 source setup and hosted qualification; preserve Elsa 3 publishing |
 | [Elsa 4 Simplification](elsa-4-simplification.md) | Active | Whole product: tests, API, language, structure, docs | Sipke | Program #2559, ADR 0080 |
 | [Runtime Efficiency](runtime-efficiency.md) | Active | Runtime database access, persistence modes, concurrent correctness | Sipke | Program #2531; persistence-mode epic #2564 |
 
-Every other goal is parked until 2026-11-21 ([ADR 0080 D0](../adr/0080-elsa-4-simplification-decisions.md#d0--focus)), merged into one of the two above, or already finished. Each file carries its own status line.
+The [11 October owner amendment to ADR 0080 D0](../adr/0080-elsa-4-simplification-decisions.md#d0--focus)
+reactivates existing #2501 and #2495 as named exceptions to parking and the two-program cap.
+Their linked issues are the current charters and decision records; reuse their existing queues.
+This does not reactivate other parked goals or authorize new programs. The remaining goals below retain
+their own status and decisions, including the 2026-11-21 review for parked work unless separately superseded.
 
 | Goal | Status |
 |---|---|
