@@ -60,10 +60,12 @@ internal sealed class OpenTelemetryEntityFrameworkCoreFixture : IAsyncDisposable
         return services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
     }
 
-    public static ServiceProvider BuildInterceptingProvider(string path, IInterceptor interceptor)
+    public static ServiceProvider BuildInterceptingProvider(string path, IInterceptor interceptor, OpenTelemetryDiagnosticsOptions? diagnostics = null)
     {
         var services = new ServiceCollection();
         services.AddOptions<OpenTelemetryDiagnosticsOptions>();
+        if (diagnostics is not null)
+            services.Configure<OpenTelemetryDiagnosticsOptions>(options => Copy(diagnostics, options));
         services.AddSingleton(EfOpenTelemetryBinding.Default);
         services.AddDbContext<OpenTelemetrySqliteDbContext>((_, builder) =>
             builder.UseSqlite($"Data Source={path}").AddInterceptors(interceptor));
@@ -121,6 +123,7 @@ internal sealed class OpenTelemetryEntityFrameworkCoreFixture : IAsyncDisposable
         to.SubscriberChannelCapacity = from.SubscriberChannelCapacity;
         to.MaxQuerySize = from.MaxQuerySize;
         to.ShutdownDrainTimeout = from.ShutdownDrainTimeout;
+        to.PersistenceFlushDelay = from.PersistenceFlushDelay;
     }
 }
 
@@ -142,6 +145,27 @@ internal sealed class TransientTransactionStartInterceptor : DbTransactionInterc
         if (Interlocked.Exchange(ref failNextBegin, 0) == 1)
             throw new Microsoft.Data.Sqlite.SqliteException("Simulated transient transaction-begin failure.", 5, 5);
         return ValueTask.FromResult(result);
+    }
+}
+
+/// <summary>Fails once, after the database has committed, as a lost acknowledgement does: the work is durable but the caller sees an error.</summary>
+internal sealed class LostCommitAcknowledgementInterceptor : DbTransactionInterceptor
+{
+    private int armed;
+    private int commits;
+
+    public int Commits => Volatile.Read(ref commits);
+    public void Arm() => Interlocked.Exchange(ref armed, 1);
+
+    public override Task TransactionCommittedAsync(
+        System.Data.Common.DbTransaction transaction,
+        TransactionEndEventData eventData,
+        CancellationToken cancellationToken = default)
+    {
+        Interlocked.Increment(ref commits);
+        if (Interlocked.Exchange(ref armed, 0) == 1)
+            throw new InvalidOperationException("Simulated lost commit acknowledgement.");
+        return Task.CompletedTask;
     }
 }
 
