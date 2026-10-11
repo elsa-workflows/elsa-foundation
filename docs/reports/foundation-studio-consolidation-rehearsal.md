@@ -94,5 +94,9 @@ retained commit objects and clean checkouts are not independent recovery or work
 Before promotion: reconcile both repositories' new commits, open PRs, claims and publisher runs; obtain
 owner dispositions for retained local-only/dirty/ignored work; verify recovery and exact final refs; agree
 the bounded source switch and writer admission; then perform the reviewed source/publisher sequence in
-the companion cutover runbook. No branch deletion, worktree cleanup, repository rename or archive follows
-implicitly from consolidation.
+the [source cutover runbook](consolidation-source-cutover.md), together with the
+[publisher cutover runbook](consolidation-publisher-cutover.md). The source runbook records the
+captured bundle proof and its limits, requires fresh owner-attributed delta reconciliation and a
+pre-merge Foundation publisher hold, and defines abort and immutable-partial-publication recovery.
+None of those future steps has been authorized or applied here. No branch deletion, worktree cleanup,
+repository rename or archive follows implicitly from consolidation.

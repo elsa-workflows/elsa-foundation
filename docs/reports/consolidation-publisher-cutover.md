@@ -2,6 +2,8 @@
 
 This runbook describes a future, explicitly approved cutover from the standalone Studio repository to the consolidated Foundation repository. The consolidation change only stages the workflows and their gates. It does not change repository settings, secrets, feeds, images, or either live source publisher.
 
+Repository source switching and recovery are governed by the companion [source cutover runbook](consolidation-source-cutover.md). The publisher steps below do not authorize a merge, source switch, repository setting change, or publisher activation on their own.
+
 ## Publisher ownership and identities
 
 The root Foundation publisher remains `.github/workflows/packages.yml` (`Packages`). It owns the Foundation `Elsa.*` package plan, the `elsa-foundation-nuget-packages` artifact, and the `publish-state` branch. The root Docker Images workflow consumes that exact artifact from the `Packages` run. Keep this path and its state untouched during the Studio cutover.
@@ -16,9 +18,15 @@ The staged Studio image workflow is `.github/workflows/studio-docker.yml`, named
 
 ## Before changing publishers
 
+### Before merging to Foundation `main`
+
+Before the candidate is merged to Foundation `main`, obtain explicit approval for and apply a temporary, reversible hold on the automatic Foundation package publisher and any downstream automatic image publication. A push to Foundation `main` can invoke the existing package workflow, and its artifact can feed the Docker workflow; the hold must be effective before that push. Record the prior control state, approver, operator, UTC application time, restore owner and read-back evidence. This is a required future control, not a setting change authorized by this rehearsal; do not apply it without that separate approval. Do not manually publish Foundation packages, edit `publish-state`, or release an image while the hold is active. Keep it until the relocated-input package plan and feed floors have been reconciled and a separate Foundation publish decision is approved.
+
+### After merge, before Studio publisher opt-in
+
 1. Confirm the consolidation PR is reviewed and merged, Studio CI passes on the merge commit, and the root `Studio Packages (consolidated gated)` and `Studio Docker (consolidated gated)` workflows are present on `main`. Before any publisher opt-in, configure the `studio-publish` GitHub environment with required reviewers and deployment refs limited to `main`, `4.*` tags, and `v4.*` tags. Keep `ELSA_STUDIO_CONSOLIDATED_PUBLISHING` unset or `false` throughout this stage; the build-only Docker qualification uses a separate `studio-validation` environment.
 2. Record the exact source Studio publisher workflows and their last successful run, commit, package versions, and image tags. Confirm no publish run is in progress or queued. This check must include the standalone Studio repository; imported files under `Studio/.github/` do not disable workflows in that separate repository.
-3. Disable the standalone Studio `Packages` and `Docker Image` workflows before enabling any consolidated publisher. Wait for in-progress runs to finish or stop them through the repository’s normal release procedure, then verify that no old-source publisher remains eligible to write.
+3. Disable the standalone Studio `Packages` and `Docker Image` workflows before enabling any consolidated publisher. Wait for in-progress runs to finish or cancel them through the repository’s normal release procedure. Verify that every admitted old-source job is terminal and no old-source publisher remains eligible to write.
 4. Run the new root Studio Packages workflow from `main` with target `none`. Review both preserved artifact names, every expected NuGet package ID/version, all four npm identities/versions, tarball verification, and the provenance manifest. This is a build-only rehearsal.
 5. Before a Feedz preview, inspect the highest published preview version for every Studio NuGet package and each of the four npm packages. Choose a `preview_version` of the form `4.0.0-preview.N` whose numeric `N` is strictly greater than every existing floor. The root repository has a different Actions run-number sequence than the standalone Studio repository, so its run number is not evidence that the package version is monotonic. The workflow requires this explicit version on a main preview publish.
 6. Before a public release, verify that the intended stable `4.x.y` or `v4.x.y` tag is reachable from `main`, that its exact version is above the published floor for all Studio packages, and that the same version is available for all four npm packages. Do not use `--skip-duplicate` or a failed/partial publish as a substitute for this comparison.
@@ -31,6 +39,8 @@ Moving Foundation projects changes source fingerprints used by its existing pack
 
 ## Rollback
 
-If a consolidated Studio publication behaves unexpectedly, first unset or set `ELSA_STUDIO_CONSOLIDATED_PUBLISHING=false` so the staged package and image publishers fail closed. Stop any queued consolidated dispatches, inspect the per-feed and Docker Hub state for partial writes, and reconcile the exact versions before retrying. Keep run logs, artifacts, and the package provenance manifest for diagnosis.
+If a consolidated Studio publication behaves unexpectedly, first unset or set `ELSA_STUDIO_CONSOLIDATED_PUBLISHING=false` so later staged package and image publishers fail closed. This does not cancel a job already admitted. Cancel or wait for terminal completion of every active and queued consolidated Studio package and Docker run, and every active and queued standalone Studio package and Docker run; verify their final run states before restoring the old writer. Inspect each NuGet/npm feed identity/version and each Docker Hub tag/digest for partial writes, and reconcile exact external state before retrying. Preserve run logs, artifacts and the package provenance manifest.
 
-Re-enable the standalone Studio publisher only after the consolidated root publisher is confirmed stopped and the root opt-in is false. Never let both repositories publish the same Studio package identities concurrently. Leave the Foundation `Packages` workflow and its `publish-state` branch alone during a Studio rollback.
+Registry writes are not transactional. Treat a package version accepted by any NuGet or npm registry as consumed and immutable. Recover a partial package publication by completing forward with a new monotonic version above every affected feed floor. Reuse the same version only when registry evidence proves no package from that version was written; `--skip-duplicate` does not prove completeness. Docker tags can move, so capture and reconcile their digests explicitly. Never restore the standalone publisher while a consolidated job can still write or while partial external state lacks an owner-approved disposition.
+
+Re-enable the standalone Studio publisher only after the consolidated root publisher is confirmed stopped and the root opt-in is false. Never let both repositories publish the same Studio package identities concurrently. Preserve any separately approved Foundation package/image hold through a Studio rollback; neither changing that hold nor editing Foundation's `publish-state` is part of Studio rollback.
