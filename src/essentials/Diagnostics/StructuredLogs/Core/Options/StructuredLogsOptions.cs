@@ -48,6 +48,14 @@ public sealed class StructuredLogsOptions
     public TimeSpan ShutdownDrainTimeout { get; set; } = TimeSpan.FromSeconds(10);
 
     /// <summary>
+    /// How long a durable store lets captured entries gather before committing them as one batch. Without it a store
+    /// commits each entry the moment it arrives, so a request that logs ten lines pays ten commits on the diagnostics
+    /// database (#2613). Live subscribers see an entry once its batch commits, so this is also the extra live-feed delay.
+    /// <see cref="TimeSpan.Zero"/> commits immediately; negative values are clamped to zero.
+    /// </summary>
+    public TimeSpan PersistenceFlushDelay { get; set; } = TimeSpan.FromMilliseconds(100);
+
+    /// <summary>
     /// Maximum delay before an SSE durable tail checks storage for commits made by another process.
     /// In-process live notifications are wake hints only and may cause an earlier check.
     /// </summary>

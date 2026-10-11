@@ -11,6 +11,13 @@ public sealed class DiagnosticsDrainOptions
     public TimeSpan MaxRetryDelay { get; init; } = TimeSpan.FromSeconds(5);
     public TimeSpan ShutdownTimeout { get; init; } = TimeSpan.FromSeconds(30);
 
+    /// <summary>
+    /// How long the drain lets a partial batch gather before committing it. Zero (the default) commits whatever is queued
+    /// the moment the drain wakes, which under a slow trickle of captures means one commit per capture. A short delay
+    /// trades that much commit latency for fewer, larger commits; a full batch never waits (#2613).
+    /// </summary>
+    public TimeSpan FlushDelay { get; init; } = TimeSpan.Zero;
+
     internal void Validate()
     {
         ArgumentOutOfRangeException.ThrowIfLessThan(BatchSize, 1);
@@ -20,5 +27,6 @@ public sealed class DiagnosticsDrainOptions
         ArgumentOutOfRangeException.ThrowIfLessThan(BaseRetryDelay, TimeSpan.Zero);
         ArgumentOutOfRangeException.ThrowIfLessThan(MaxRetryDelay, BaseRetryDelay);
         ArgumentOutOfRangeException.ThrowIfLessThan(ShutdownTimeout, TimeSpan.Zero);
+        ArgumentOutOfRangeException.ThrowIfLessThan(FlushDelay, TimeSpan.Zero);
     }
 }

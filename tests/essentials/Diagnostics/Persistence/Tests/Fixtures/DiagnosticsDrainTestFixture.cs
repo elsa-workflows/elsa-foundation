@@ -17,7 +17,8 @@ public sealed class DiagnosticsDrainTestFixture : IAsyncDisposable
         int maxAttempts = 3,
         TimeSpan? baseRetryDelay = null,
         TimeSpan? maxRetryDelay = null,
-        TimeSpan? shutdownTimeout = null)
+        TimeSpan? shutdownTimeout = null,
+        TimeSpan? flushDelay = null)
     {
         var drain = new DiagnosticsDrain<int, int>(target, new()
         {
@@ -27,7 +28,8 @@ public sealed class DiagnosticsDrainTestFixture : IAsyncDisposable
             MaxAttempts = maxAttempts,
             BaseRetryDelay = baseRetryDelay ?? TimeSpan.FromMilliseconds(1),
             MaxRetryDelay = maxRetryDelay ?? TimeSpan.FromMilliseconds(2),
-            ShutdownTimeout = shutdownTimeout ?? TimeSpan.FromSeconds(2)
+            ShutdownTimeout = shutdownTimeout ?? TimeSpan.FromSeconds(2),
+            FlushDelay = flushDelay ?? TimeSpan.Zero
         }, observer);
         _drains.Add(drain);
         return drain;
