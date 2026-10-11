@@ -209,6 +209,14 @@ public sealed class RuntimeAdmissionController : IRuntimeAdmissionController
                 _diagnostics?.RecordLimitIncrease();
                 sample = RuntimeAdmissionTelemetry.IncreasedSample;
             }
+            else if (completion.Limit > _limit)
+            {
+                // One congestion episode cuts once (#2614). This command was admitted under a higher limit than the one
+                // now in force, so a cut has already happened since; its slowness is the same signal that cut reacted
+                // to. Compounding it took a host from 512 to 262 in one burst, below the load its clients keep in
+                // flight. A command admitted under the current limit is a fresh signal and still cuts.
+                sample = RuntimeAdmissionTelemetry.SupersededSample;
+            }
             else
             {
                 _limit = Clamp(_limit * _options.DecreaseFactor);

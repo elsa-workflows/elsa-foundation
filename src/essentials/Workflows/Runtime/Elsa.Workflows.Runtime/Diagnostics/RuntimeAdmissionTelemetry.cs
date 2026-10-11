@@ -32,6 +32,12 @@ public static class RuntimeAdmissionTelemetry
     /// <summary>A saturated completion slower than tolerance allows: the limit fell.</summary>
     public const string DecreasedSample = "decreased";
 
+    /// <summary>
+    /// A saturated completion slower than tolerance allows, admitted under a limit that has since been cut: the cut already
+    /// answered it, so the limit held.
+    /// </summary>
+    public const string SupersededSample = "superseded";
+
     /// <summary>A completion admitted below half the limit: it moved only the baseline.</summary>
     public const string UnsaturatedSample = "unsaturated";
 
