@@ -76,17 +76,29 @@ synthetic migration gate checks stable package IDs, advancing patches, omitted o
 empty affected set after recording the migrated publication. Actual publish-state and feed floors must
 be read again before cutover; no synthetic test proves a live feed is ready.
 
-Validation is in progress. The full backend Release build passed with zero errors; the version
-calculator passed 151 tests and publisher passed 90 tests. Studio's independent .NET Release build
-passed with zero warnings/errors. Generated maps and solution-filter checks pass after deliberate
-regeneration, including exact catalog-selector coverage. The independent history checker verified
-8,911 Foundation files, 1,081 Studio files and 698 mapped commits. These results precede remaining
-frontend corrections. Final exact-head test, pack, consumer, asset and browser results must be recorded
-on the PR before it is declared ready. Skipped, unavailable or pending checks are not passed.
+The implementation checkpoint `850b7d973220588b5d10c17b2bdeb3e0f7011cdc` passes backend Build & test
+(14,935 passed, 32 skipped), Core-only build & test, Architecture guards, generated maps, Linux and
+Windows backend source checks, all Studio CI jobs, and Workbench/Foundation Host image builds on
+amd64 and arm64. Studio CI includes 457 .NET tests, exact 17-package verification and a standalone
+image build without pushing. The real combined Studio/backend browser journey passed all nine
+steps through a Completed workflow and incident inspection; its trace retains three aborted GET
+requests, with no HTTP error response or page exception. Owned processes exited and the checkout
+remained clean. This runtime evidence is separate from the mocked Studio browser CI.
+
+Local qualification includes the calculator's 151 tests, publisher's 90 tests, 22 frontend asset
+checks, all four packed npm libraries in a fresh consumer and browser, and a clean-cache consumer
+of all 17 Studio NuGet packages. The independent history checker verified 8,911 Foundation files,
+1,081 Studio files and 698 mapped commits. Independent recovery repositories passed complete-history
+bundle read-back and fsck; that proves committed-source recovery only. The final computed backend
+138-package pack and clean-consumer check are still in progress at this receipt. Final results and
+any later-head checks must be recorded on the PR before it is declared ready. EF jobs were skipped;
+CodeRabbit skipped the file-count cap, and no Copilot review or GitHub approval is recorded. None
+of those absent checks is a pass. See the [root verification receipt](https://github.com/elsa-workflows/elsa-foundation/pull/2644#issuecomment-6114244229)
+and [reviewed publisher control proposal](https://github.com/elsa-workflows/elsa-foundation/pull/2644#issuecomment-6114344002).
 
 ## Live cutover boundary
 
-The acknowledged owner no-write window expires at 21:15 UTC on 11 October. Its scope is immutable capture
+The acknowledged owner no-write window ended at 21:15 UTC on 11 October 2026. Its scope was immutable capture
 and isolated rehearsal, not a global GitHub freeze. This candidate can continue from its captured copies;
 fresh live capture or promotion requires delta reconciliation and renewed coordination. Idle sessions,
 retained commit objects and clean checkouts are not independent recovery or working-file backup proof.
