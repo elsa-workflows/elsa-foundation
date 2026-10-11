@@ -1,6 +1,10 @@
 # Quickstart: Review and Verify Startup Runner Adoption
 
-**Status**: Reviewed design. This guide records the review path and expected proof; it does not claim implementation, preview, or stable-release acceptance.
+**Status**: Stable Nuplane `0.0.11` and CShells `0.0.30` adoption has merged in Foundation PR #2530. Consumer/actual-host/backend proof and resulting-main gates are accepted. The walkthrough below retains the required acceptance contract.
+
+## Current stable-adoption checkpoint — 2026-10-11
+
+Foundation PR #2530 merged at `9f09cf8dc78efc611fd99cd90ab1fa70efe709ff`, reviewed source `3a792f3e2544ddc6234732af4d9a7665933425a1`, adopting published Nuplane `0.0.11` and CShells `0.0.30`. Root and independent review accepted hosted actual-host/consumer/demo retry `38094631685`, PR CI `38094402753` and Ubuntu/Windows backend `38094402366`. Resulting-main CI, Maps, Packages and Docker publication passed; stable task acceptance is complete. See the [release acceptance record](../../docs/reports/modular-hosting-release-plan.md#foundation-stable-adoption-checkpoint--2026-10-11). Pruning and settled-readiness remain separate.
 
 ## Read the contract first
 

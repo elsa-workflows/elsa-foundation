@@ -1,5 +1,7 @@
 # Tasks: Protect Package Generations
 
+**Current stable status (2026-10-11)**: Nuplane `0.0.11` and CShells `0.0.30` are published. Foundation PR #2530 merged at `9f09cf8dc78efc611fd99cd90ab1fa70efe709ff`; current-head, actual-host/consumer/demo and backend evidence is accepted. Resulting-main CI, Maps, Packages and Docker publication have passed; the stable tasks below are complete. See the [release acceptance record](../../docs/reports/modular-hosting-release-plan.md#foundation-stable-adoption-checkpoint--2026-10-11). Earlier preparation scope and preview evidence below are historical.
+
 **Input**: [spec.md](spec.md), [plan.md](plan.md), [research.md](research.md), [data-model.md](data-model.md), and [quickstart.md](quickstart.md).
 
 **Ownership**: Existing Foundation #2164 under Program #2500. One implementation writer; root reviews, integrates, and verifies. These are execution steps within the existing task, not additional GitHub issues.
@@ -50,7 +52,7 @@
 
 - [X] T014 Run the affected readability project against actual public preview packages in the private copy, independently review the full candidate diff, and execute reversible bypass-Begin/current-snapshot/early-release/growth-only mutations; record exact commands/results and provenance in `specs/201-package-generation-readability/quickstart.md`.
 - [X] T015 Review duplication and cleanup, preserve the abstractions-only/EF-free closure, reconcile program execution/evidence in `docs/program-goals/modular-hosting-upstream-delivery.md` and `docs/plans/modular-hosting-upstream/evidence.md`, and commit the prepared source without claiming unchanged-default-pin CI or final acceptance.
-- [ ] T016 After upstream stable publication, coordinate final pins/locks and actual Foundation-host readability qualification with #2509, run affected suites/e2e, architecture and map gates, independent exact-head review and resulting-main checks; record acceptance in `specs/201-package-generation-readability/quickstart.md` before merge/Done. Do not wait for coordinating Features #145/#2509 to close before performing the consumer proof that supplies their acceptance.
+- [x] T016 After upstream stable publication, coordinate final pins/locks and actual Foundation-host readability qualification with #2509, run affected suites/e2e, architecture and map gates, independent exact-head review and resulting-main checks; record acceptance in `specs/201-package-generation-readability/quickstart.md` before merge/Done. Do not wait for coordinating Features #145/#2509 to close before performing the consumer proof that supplies their acceptance.
 
 ## Current Preview Integration — 2026-10-09
 
