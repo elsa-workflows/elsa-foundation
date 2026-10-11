@@ -13,4 +13,6 @@ for pid in "$(state_get STUDIO_PID)" "$(state_get WORKBENCH_PID)"; do
   kill -0 "$pid" 2>/dev/null && { kill -KILL -- "-$pid" 2>/dev/null || kill -KILL "$pid"; }
   echo "Stopped process group $pid."
 done
+lock_file=$(state_get GENERATED_LOCK_FILE)
+[ -z "$lock_file" ] || rm -f "$lock_file"
 rm -f "$state/env"
