@@ -32,7 +32,7 @@ retention. `StructuredLogSink` publishes the process-local wake hint from that c
 
 ## Options (`StructuredLogsOptions`)
 
-Exposed manifest settings: **Minimum level** (default `Information`), **Buffer capacity** (default `2000`), **Service name** (defaults to the process name), **Source display name**. Additional tunables on the options type: `SubscriberQueueCapacity`, `MaxRecentQuerySize`, `TailPollInterval`, the capture caps (`MaxCapturedProperties`, `MaxCapturedScopeDepth`, `MaxPropertyValueLength`), and the three endpoint paths.
+Exposed manifest settings: **Minimum level** (default `Information`), **Buffer capacity** (default `2000`), **Service name** (defaults to the process name), **Source display name**. Additional tunables on the options type: `SubscriberQueueCapacity`, `MaxRecentQuerySize`, `TailPollInterval`, `PersistenceFlushDelay` (100 ms: how long a durable store lets entries gather into one commit, which is also the extra live-feed delay), the capture caps (`MaxCapturedProperties`, `MaxCapturedScopeDepth`, `MaxPropertyValueLength`), and the three endpoint paths.
 
 ## Authorization
 

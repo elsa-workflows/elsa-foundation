@@ -41,6 +41,30 @@ public sealed class RuntimePostCommitOutboxProcessorTests
         Assert.Empty(await store.GetDeliverableAsync(new RuntimePostCommitOutboxQuery(_now.AddMinutes(1), limit: 10)));
     }
 
+    /// <summary>
+    /// A successful delivery is the expected path of every checkpoint, so it is logged at Debug (#2613): at Information
+    /// it was ~99% of the persisted structured-log volume, each line a commit on the diagnostics store.
+    /// </summary>
+    [Fact]
+    public async Task Processor_LogsASuccessfulDeliveryAtDebug()
+    {
+        var store = new InMemoryRuntimeCheckpointCommitStore();
+        var logger = new RecordingLogger<RuntimePostCommitOutboxProcessor>();
+        var processor = new RuntimePostCommitOutboxProcessor(
+            store,
+            new RecordingDispatcher(),
+            new FakeTimeProvider(_now),
+            DefaultRuntimeFaultCapturePolicy.CreateDefault(),
+            workflowDispatchStore: null,
+            logger);
+        await store.AddPendingForTestingAsync(NewOutboxItem("outbox-1", "intent-1", "wfexec-1", availableAt: _now.AddSeconds(-1)));
+
+        await processor.ProcessAsync(new RuntimePostCommitOutboxProcessRequest(limit: 10));
+
+        var delivered = Assert.Single(logger.Entries, entry => entry.EventId.Id == 68104);
+        Assert.Equal(LogLevel.Debug, delivered.Level);
+    }
+
     [Fact]
     public async Task Processor_RecordsRetryableFailureWhenDispatchFails()
     {

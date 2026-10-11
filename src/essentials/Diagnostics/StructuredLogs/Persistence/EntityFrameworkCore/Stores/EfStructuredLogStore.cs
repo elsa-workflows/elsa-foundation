@@ -73,7 +73,10 @@ public sealed class EfStructuredLogStore : IStructuredLogStore, IDiagnosticsPers
                 MaxRetryDelay = TimeSpan.FromSeconds(5),
                 ShutdownTimeout = options.Value.ShutdownDrainTimeout <= TimeSpan.Zero
                     ? TimeSpan.FromTicks(1)
-                    : options.Value.ShutdownDrainTimeout
+                    : options.Value.ShutdownDrainTimeout,
+                FlushDelay = options.Value.PersistenceFlushDelay <= TimeSpan.Zero
+                    ? TimeSpan.Zero
+                    : options.Value.PersistenceFlushDelay
             },
             observer);
     }
