@@ -10,11 +10,11 @@ on:
       - 'docs/contributing/backend-source-edit.md'
       - 'NuGet.config'
       - 'Directory.Packages.props'
-      - 'src/apps/Elsa.Workbench/Elsa.Workbench.csproj'
-      - 'src/apps/Elsa.Workbench/packages.lock.json'
-      - 'src/apps/Elsa.Workbench/appsettings*.json'
-      - 'src/apps/Elsa.Workbench/shells.json'
-      - 'tests/essentials/Activities/Runtime/Tests/packages.lock.json'
+      - 'Essentials/apps/Elsa.Workbench/Elsa.Workbench.csproj'
+      - 'Essentials/apps/Elsa.Workbench/packages.lock.json'
+      - 'Essentials/apps/Elsa.Workbench/appsettings*.json'
+      - 'Essentials/apps/Elsa.Workbench/shells.json'
+      - 'Essentials/tests/Activities/Runtime/Tests/packages.lock.json'
       - 'e2e-tests/README.md'
       - 'e2e-tests/Invoke-PlatformSourceJourney.ps1'
       - 'e2e-tests/Invoke-RunProfileSourceJourney.ps1'
@@ -29,8 +29,8 @@ on:
       - 'e2e-tests/_ServerLifecycle.ps1'
       - 'e2e-tests/_ElsaCommon.ps1'
       - 'e2e-tests/_WorkflowFlowVerdict.ps1'
-      - 'tests/essentials/Activities/Runtime/Tests/Elsa.Activities.Runtime.Tests.csproj'
-      - 'tests/essentials/Activities/Runtime/Tests/WriteLineBoundInputExecutionTests.cs'
+      - 'Essentials/tests/Activities/Runtime/Tests/Elsa.Activities.Runtime.Tests.csproj'
+      - 'Essentials/tests/Activities/Runtime/Tests/WriteLineBoundInputExecutionTests.cs'
   workflow_dispatch:
 
 permissions:
@@ -75,12 +75,12 @@ jobs:
       - name: Restore Workbench and the focused test project from committed public feeds
         shell: bash
         run: |
-          dotnet restore src/apps/Elsa.Workbench/Elsa.Workbench.csproj --locked-mode
-          dotnet restore tests/essentials/Activities/Runtime/Tests/Elsa.Activities.Runtime.Tests.csproj --locked-mode
+          dotnet restore Essentials/apps/Elsa.Workbench/Elsa.Workbench.csproj --locked-mode
+          dotnet restore Essentials/tests/Activities/Runtime/Tests/Elsa.Activities.Runtime.Tests.csproj --locked-mode
 
       - name: Build Workbench with the documented command
         shell: bash
-        run: dotnet build src/apps/Elsa.Workbench/Elsa.Workbench.csproj -p:RestoreLockedMode=true
+        run: dotnet build Essentials/apps/Elsa.Workbench/Elsa.Workbench.csproj -p:RestoreLockedMode=true
 
       - name: Verify the documented build left tracked lock files unchanged
         shell: bash
@@ -88,7 +88,7 @@ jobs:
 
       - name: Run the focused WriteLine bound-input test
         shell: bash
-        run: dotnet test tests/essentials/Activities/Runtime/Tests/Elsa.Activities.Runtime.Tests.csproj --configuration Debug --no-restore --filter 'FullyQualifiedName~WriteLineBoundInputExecutionTests'
+        run: dotnet test Essentials/tests/Activities/Runtime/Tests/Elsa.Activities.Runtime.Tests.csproj --configuration Debug --no-restore --filter 'FullyQualifiedName~WriteLineBoundInputExecutionTests'
 
       - name: Test strict result verdict and run the owned backend journey
         id: platform-journey

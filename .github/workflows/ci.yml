@@ -92,6 +92,9 @@ jobs:
       - name: Check contributor checkpoint workflow guards
         run: python3 tools/contributor-checkpoints/test_workflow_guards.py
 
+      - name: Check consolidation path mapping
+        run: python3 tools/consolidation/verify-layout.py --self-test
+
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: 10.x
@@ -132,8 +135,8 @@ jobs:
             if [[ -z "${container_tests[$p]+x}" ]]; then
               keep+=("$p")
             fi
-          done < <({ find tests -name '*.csproj'
-                     find src -path '*/tests/*' -name '*.csproj'; } | sort)
+          done < <({ find Essentials/tests -name '*.csproj'
+                     find Extensions -path '*/tests/*' -name '*.csproj'; } | sort)
           if (( ${#keep[@]} == 0 )); then
             echo "::error::No container-free test projects found; refusing to run an empty fast-test filter."
             exit 1
@@ -309,7 +312,7 @@ jobs:
           done
 
       - name: Restore the Secrets EF PostgreSQL shell proof
-        run: dotnet restore tests/essentials/Secrets/Persistence/EntityFrameworkCore/PostgreSql/Tests/Elsa.Secrets.Persistence.EntityFrameworkCore.PostgreSql.Tests.csproj --locked-mode -p:WarningsNotAsErrors=NU1603
+        run: dotnet restore Essentials/tests/Secrets/Persistence/EntityFrameworkCore/PostgreSql/Tests/Elsa.Secrets.Persistence.EntityFrameworkCore.PostgreSql.Tests.csproj --locked-mode -p:WarningsNotAsErrors=NU1603
 
       # Configuration-driven CShells composition, migration/validation, CRUD/OCC, runtime
       # resolution, restart persistence, and the packed-module child-host proof. Npgsql is
@@ -319,7 +322,7 @@ jobs:
           ELSA_SECRETS_EF_POSTGRESQL_TEST_CONNECTION_STRING: Host=127.0.0.1;Port=5432;Username=postgres;Database=postgres
         run: >-
           dotnet test
-          tests/essentials/Secrets/Persistence/EntityFrameworkCore/PostgreSql/Tests/Elsa.Secrets.Persistence.EntityFrameworkCore.PostgreSql.Tests.csproj
+          Essentials/tests/Secrets/Persistence/EntityFrameworkCore/PostgreSql/Tests/Elsa.Secrets.Persistence.EntityFrameworkCore.PostgreSql.Tests.csproj
           -c Release --no-restore
           -p:WarningsNotAsErrors=NU1603
 
@@ -356,7 +359,7 @@ jobs:
         run: bash tools/architecture/restore-ci-project-graph.sh --locked-mode -p:WarningsNotAsErrors=NU1603
 
       - name: Run the architecture guards
-        run: dotnet test tests/essentials/Architecture/Tests/Elsa.Architecture.Tests.csproj -c Release --no-restore -p:WarningsNotAsErrors=NU1603
+        run: dotnet test Essentials/tests/Architecture/Tests/Elsa.Architecture.Tests.csproj -c Release --no-restore -p:WarningsNotAsErrors=NU1603
 
   # Issue #1815 separates required modules from optional ones. This leg is what makes that
   # separation mean something: it builds and tests ONLY the core, so a dependency from core into

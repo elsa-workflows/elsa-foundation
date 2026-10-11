@@ -68,7 +68,7 @@ on:
   pull_request:
     branches: [main]
     # Narrowed to the image definitions themselves (#2622); the post-merge build after Packages is unchanged.
-    # '**/Dockerfile' matches src/apps/Elsa.Workbench/Dockerfile and src/apps/Elsa.Foundation.Host/Dockerfile.
+    # '**/Dockerfile' matches Essentials/apps/Elsa.Workbench/Dockerfile and Essentials/apps/Elsa.Foundation.Host/Dockerfile.
     paths:
       - '**/Dockerfile'
       - '**/*.Dockerfile'
@@ -233,7 +233,7 @@ jobs:
     # Pinned to an exact release, not the floating @v1. This workflow pins the
     # BuildKit and Buildx versions the build runs on, and a frontend older than
     # that BuildKit fails the build outright -- see the `# syntax=` pin in
-    # src/apps/Elsa.Workbench/Dockerfile. On the floating tag an upstream
+    # Essentials/apps/Elsa.Workbench/Dockerfile. On the floating tag an upstream
     # release moves BuildKit under us and breaks main with no change of ours;
     # pinned, that becomes a deliberate bump where both pins move together.
     uses: docker/github-builder/.github/workflows/build.yml@v1.16.0
@@ -244,7 +244,7 @@ jobs:
       output: image
       push: ${{ github.event_name != 'pull_request' }}
       context: .
-      file: src/apps/Elsa.Workbench/Dockerfile
+      file: Essentials/apps/Elsa.Workbench/Dockerfile
       # An empty value fails the build rather than falling back to a source build (see the Dockerfile).
       build-args: |
         ELSA_PACKAGE_VERSIONS=${{ needs.versions.outputs.package-versions }}
@@ -271,7 +271,7 @@ jobs:
     needs: versions
     # Same pinned reusable builder as the workbench job above (see the pinning note there):
     # the BuildKit/Buildx versions must match the `# syntax=` pin in
-    # src/apps/Elsa.Foundation.Host/Dockerfile.
+    # Essentials/apps/Elsa.Foundation.Host/Dockerfile.
     uses: docker/github-builder/.github/workflows/build.yml@v1.16.0
     permissions:
       contents: read
@@ -280,7 +280,7 @@ jobs:
       output: image
       push: ${{ github.event_name != 'pull_request' }}
       context: .
-      file: src/apps/Elsa.Foundation.Host/Dockerfile
+      file: Essentials/apps/Elsa.Foundation.Host/Dockerfile
       # An empty value fails the build rather than falling back to a source build (see the Dockerfile).
       build-args: |
         ELSA_PACKAGE_VERSIONS=${{ needs.versions.outputs.package-versions }}
