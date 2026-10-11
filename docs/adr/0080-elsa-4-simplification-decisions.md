@@ -48,6 +48,18 @@ parked for six weeks from this ADR's date and reviewed at the end of that window
 already belongs to one of the two active programs are folded into it instead of parked (Code Reality And Test
 Maturity and Architecture Review Remediation fold into Elsa 4 Simplification).
 
+**Owner amendment, 11 October 2026:** [Foundation/Studio consolidation #2501](https://github.com/elsa-workflows/elsa-foundation/issues/2501#issuecomment-6111314461)
+is the first priority now, without waiting until 21 November or for whole peer programs to finish.
+[Website and documentation #2495](https://github.com/elsa-workflows/elsa-foundation/issues/2495#issuecomment-6111314757)
+is reactivated in parallel, with Elsa 4 source in Foundation at `website/docs/` and native GitBook sync.
+These are named exceptions to D0's parking and the two-program cap; the remaining decisions in this ADR
+continue to apply. The consolidation target is `Essentials/` (src/tests/apps),
+`Extensions/<capability>/` (src/optional studio/tests) and `Studio/` (shell/shared UI/tests/tooling),
+with shared docs/tools/workflows at the root. This direction does not rename package or API identities.
+Source moves, imports and consolidation builds await the coordinated preservation and quiet checkpoint
+tracked in [#2510](https://github.com/elsa-workflows/elsa-foundation/issues/2510). No global freeze,
+cleanup, publisher change or cutover is enacted by this amendment.
+
 ### D1 — Risk-based testing
 
 - Test observable behaviour at the cheapest level that proves it; unit-test logic that carries real risk.
