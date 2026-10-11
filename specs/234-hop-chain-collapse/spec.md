@@ -91,8 +91,8 @@ duplicated or lost activity execution.
 3. **Given** a routing step that cannot run in-process (a join with more than one predecessor, a child fault
    evaluation, a parent that is not routable in-process, the workflow tail), **When** it is reached, **Then** it falls
    back to the queued hop exactly as today.
-4. **Given** the in-process routing switch is off, **When** any workflow runs, **Then** behaviour, commits and the
-   resulting durable state are identical to today.
+4. **Given** the switch of FR-009 is off, **When** any workflow runs, **Then** behaviour, commits and the resulting
+   durable state are identical to today, for all three changes (FR-001, FR-004, FR-008).
 
 ---
 
@@ -155,8 +155,10 @@ that commit; separate acknowledgements remain only for dispatches that made no c
 - **FR-008**: A claimed work item whose dispatch makes a checkpoint commit MUST be deleted inside that commit regardless
   of which committer instance in the drain performs it; the drain MUST acknowledge separately only dispatches that
   made no commit.
-- **FR-009**: The in-process routing (FR-004) MUST be controlled by a switch that defaults on and, when off, restores
-  today's behaviour exactly.
+- **FR-009**: One switch MUST control all three changes: continuations in the checkpoint transaction (FR-001),
+  in-process routing (FR-004, FR-006) and acknowledgements inside the dispatch's commit (FR-008). It defaults on.
+  Off restores today's behaviour exactly, including today's separate continuation commits and acknowledgements, so
+  it is the single rollback lever.
 - **FR-010**: The change MUST be observable: the existing scheduler dispatch diagnostics MUST count in-process routing
   steps and fallbacks, as they do for fused spans today.
 
@@ -179,8 +181,8 @@ that commit; separate acknowledgements remain only for dispatches that made no c
   under per-hop persistence, and are lowered in the same change.
 - **SC-003**: All eight A1 concurrency-correctness cases (#2532) pass, and the Groundwork crash suite passes with kill
   points added inside the routing pass and between a checkpoint and its continuation's claim.
-- **SC-004**: With the switch off (FR-009), the reference workflows' durable state and commit counts are identical to
-  the baseline.
+- **SC-004**: With the switch of FR-009 off, which disables FR-001, FR-004 and FR-008 together, the reference
+  workflows' durable state and commit counts are identical to the baseline.
 - **SC-005**: Coalesced runs' commit counts and behaviour are unchanged.
 
 ## Assumptions
