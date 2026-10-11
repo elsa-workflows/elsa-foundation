@@ -261,6 +261,29 @@ public sealed class RuntimeAdmissionControlTests
         Assert.Equal(1, _diagnostics.LimitDecreases);
     }
 
+    /// <summary>
+    /// Supersession follows admission time, not the limit a command was admitted under: increases can carry the limit back
+    /// above that before a long command completes, and its slowness is still the signal the earlier cut answered.
+    /// </summary>
+    [Fact]
+    public void AdaptiveLimit_DoesNotCutForACompletionAdmittedBeforeTheLastCutAfterTheLimitRecovers()
+    {
+        var controller = NewController(AdaptiveOptions());
+        CompleteSaturatedSample(controller, TimeSpan.FromMilliseconds(10));
+        _signal.InFlightDispatches = 50;
+        var stale = AdmitWithDispatch(controller);
+        CompleteSaturatedSample(controller, TimeSpan.FromMilliseconds(500));
+        Assert.Equal(50, controller.Limit);
+        while (controller.Limit < 100)
+            CompleteSaturatedSample(controller, TimeSpan.FromMilliseconds(10));
+        var recovered = controller.Limit;
+
+        stale.Dispose();
+
+        Assert.Equal(recovered, controller.Limit);
+        Assert.Equal(1, _diagnostics.LimitDecreases);
+    }
+
     /// <summary>A completion admitted under the limit now in force is a new signal, so a host that stays slow keeps cutting.</summary>
     [Fact]
     public void AdaptiveLimit_CutsAgainForACompletionAdmittedAfterTheCut()

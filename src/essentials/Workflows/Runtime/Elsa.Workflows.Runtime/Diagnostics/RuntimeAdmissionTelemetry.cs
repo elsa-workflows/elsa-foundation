@@ -33,8 +33,8 @@ public static class RuntimeAdmissionTelemetry
     public const string DecreasedSample = "decreased";
 
     /// <summary>
-    /// A saturated completion slower than tolerance allows, admitted under a limit that has since been cut: the cut already
-    /// answered it, so the limit held.
+    /// A saturated completion slower than tolerance allows, admitted before the last cut: the cut already answered it, so
+    /// the limit held.
     /// </summary>
     public const string SupersededSample = "superseded";
 

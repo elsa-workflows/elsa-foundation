@@ -62,8 +62,7 @@ public sealed class RuntimeAdmissionOptions
 
     /// <summary>
     /// Multiplicative decrease applied when a saturated completion exceeds <see cref="LatencyTolerance"/>. Applied once per
-    /// congestion episode: a slow completion admitted under a higher limit than the current one, so after a cut it did not
-    /// see, does not cut again (#2614).
+    /// congestion episode: a slow completion admitted before the last cut does not cut again (#2614).
     /// </summary>
     public double DecreaseFactor { get; set; } = 0.8;
 
