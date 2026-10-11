@@ -4,7 +4,7 @@
 
 **Created**: 2026-10-09
 
-**Status**: Draft — preview locally qualified; stable acceptance (T019) remains open
+**Status**: Implemented — stable acceptance completed in [PR #2530](https://github.com/elsa-workflows/elsa-foundation/pull/2530) at `9f09cf8dc78efc611fd99cd90ab1fa70efe709ff`; [final evidence](https://github.com/elsa-workflows/elsa-foundation/pull/2530#issuecomment-6103608442).
 
 **Input**: Deliver the modular-hosting upstream program end to end, adopting general startup activation support in Foundation.Host and Workbench while retaining Elsa policy and existing host behavior.
 

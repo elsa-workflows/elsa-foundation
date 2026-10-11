@@ -2,7 +2,7 @@
 
 **Feature Branch**: `2340-shared-nuplane-adoption`
 **Created**: 2026-10-09
-**Status**: Draft
+**Status**: Implemented — stable acceptance completed in [PR #2530](https://github.com/elsa-workflows/elsa-foundation/pull/2530) at `9f09cf8dc78efc611fd99cd90ab1fa70efe709ff`; [final evidence](https://github.com/elsa-workflows/elsa-foundation/pull/2530#issuecomment-6103608442).
 **Input**: Deliver Foundation #2314 under [Program #2500](https://github.com/elsa-workflows/elsa-foundation/issues/2500), preserving host policies while adopting the reusable upstream integration.
 
 ## User Scenarios & Testing
