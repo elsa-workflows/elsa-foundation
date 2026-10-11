@@ -45,9 +45,12 @@ An open issue is a commitment someone can act on, not a log entry.
   `ready-for-human`) or, for program-tracked work, a `status:*` label. Programs and epics are exempt.
   `wontfix` issues are closed. See [triage labels](../agents/triage-labels.md).
 - **Agents file new issues as `needs-triage`.** Only a maintainer promotes an issue to a `ready-*` state.
+  The exception is the [UX QA routine](../skills/catalog.md#ux-qa-routine). It may file a defect as
+  `ready-for-agent` when a second agent reproduced it, its fix needs no design choice, and the repository is
+  under the cap.
 - **Progress goes on the existing record.** Checkpoints, receipts and gate evidence belong in PR
   comments or on the issue being worked, not in new issues. Do not file tracking, sweep or checkpoint
-  issues.
+  issues. The standing `repo-hygiene` and `ux-qa-ledger` issues are the only exceptions.
 - **Work-in-progress caps:** at most 2 active `type:program` issues and at most 20 `ready-for-agent`
   issues. A program labelled `status:parked` stays open but does not count toward the cap, and gets no
   new child issues until it is reactivated. At the cap, add scope to the existing parent instead of
