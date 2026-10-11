@@ -24,7 +24,7 @@ public static class SolutionFilterGenerator
     /// <summary>Generates every committed filter and returns its repository-relative path.</summary>
     /// <remarks>
     /// A profile marked <c>"committed": false</c> is skipped here and in <see cref="Check"/>: it exists only to be
-    /// written on demand by <see cref="Write"/> (the nightly integration lane does this) or read through
+    /// written on demand by <see cref="Write"/> (to run every Testcontainers suite locally) or read through
     /// <see cref="GetRoots"/>.
     /// </remarks>
     public static IReadOnlyList<string> Generate(RepoContext repo, string? destinationRoot = null)

@@ -27,7 +27,7 @@ Use this matrix to choose focused checks while iterating. It summarizes existing
 ### Persistence
 
 - **Inner loop:** run the affected provider test project as a whole. The [solution-filter guide](../reference/developer-solution-filters.md) identifies the Testcontainers-backed profile; those tests need Docker. Use the E2E guide for persistence behavior exercised through a rebuilt Workbench.
-- **Evidence:** Foundation PR CI selects affected EF suites and runs the Secrets/PostgreSQL composition job. The broader Testcontainers integration workflow is nightly or manually dispatched, not a required PR check. Do not use its existence as evidence for an affected suite that did not run; identify and coordinate any additional required infrastructure-dependent check.
+- **Evidence:** Foundation PR CI runs no Testcontainers suite. The EF container matrix and the Secrets/PostgreSQL composition job run in `CI`'s nightly schedule and on manual dispatch only (#2632), not as a required PR check. Run the affected provider suite locally, or dispatch `CI` on the branch, and record the result; do not use the nightly's existence as evidence for an affected suite that did not run.
 
 ### Cross-repository change
 

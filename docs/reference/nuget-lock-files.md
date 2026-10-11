@@ -60,7 +60,7 @@ project beside it.
 ## Where restores are locked
 
 - Every `dotnet restore` step in `.github/workflows` passes `--locked-mode`: CI's build and test, architecture guards,
-  core-only, EF container suites and Secrets EF composition jobs, the nightly integration run, and the Packages
+  core-only, EF container suites and Secrets EF composition jobs, and the Packages
   workflow's pack. `tools/architecture/restore-ci-project-graph.sh` passes its arguments through, and CI calls it with
   `--locked-mode`. Its Release and Debug restores share each project's lock file, which works because no project
   conditions a reference on the configuration.
