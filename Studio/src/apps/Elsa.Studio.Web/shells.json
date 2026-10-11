@@ -1,0 +1,37 @@
+{
+  "CShells": {
+    "Shells": {
+      "Default": {
+        "Features": {
+          "ConsoleStream": {
+            "EndpointPrefix": "/_elsa/studio/diagnostics/console-logs",
+            "RecentCapacity": 2000,
+            "MaxRecentQuerySize": 2000,
+            "PreserveAnsi": true
+          },
+          "DashboardStudio": {},
+          "AttentionStudio": {},
+          "FeatureManagement": {},
+          "JavaScriptExpressionEditorStudio": {},
+          "LiquidExpressionEditorStudio": {},
+          "OpenTelemetryStudio": {},
+          "SecretsStudio": {},
+          "StructuredLogsStudio": {},
+          "StudioApi": {},
+          "ThemeManagement": {},
+          "ThemePicker": {},
+          "ThemeStoreCore": {},
+          "WeatherForecastSample": {},
+          "WeaverWorkflowsStudio": {},
+          "WorkflowsStudio": {},
+          "WorkflowsDashboardStudio": {}
+        },
+        "Configuration": {
+          "WebRouting": {
+            "Path": ""
+          }
+        }
+      }
+    }
+  }
+}

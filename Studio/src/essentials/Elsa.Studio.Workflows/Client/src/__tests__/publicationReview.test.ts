@@ -1,0 +1,361 @@
+import { describe, expect, it } from "vitest";
+import { activationSlotReadsUnavailableReason } from "../api/publishing";
+import type { ActivityCatalogItem, WorkflowDraft } from "../workflowTypes";
+import {
+  createPublicationReview,
+  publicationBaselineFor,
+  publicationChangesFor,
+  publicationIntentFor,
+  publicationIntentForChannel,
+  summarizePublicationChanges
+} from "../workflow-editor/publicationReview";
+import { flowchartActivity, sequenceActivity } from "./fixtures";
+import { activationSlot, importedActivationSlot, publishedSlot, versionDetails, withoutPublication } from "./fixtures/publicationSlots";
+
+describe("publication review model", () => {
+  it("summarizes changed activities, inputs, and outputs against the source version", () => {
+    const before = {
+      rootActivity: flowchart([activity("kept", { value: 1 }), activity("removed"), activity("trigger", {}, "trigger-v1")]),
+      inputs: [{ name: "orderId", type: "string" }],
+      outputs: [{ name: "result", type: "string" }]
+    };
+    const after = {
+      rootActivity: flowchart([activity("kept", { value: 2 }), activity("added"), activity("trigger", { inputs: [{ value: 2 }] }, "trigger-v1")]),
+      inputs: [{ name: "orderId", type: "number" }, { name: "priority", type: "number" }],
+      outputs: []
+    };
+
+    expect(summarizePublicationChanges(before, after, new Set(["trigger-v1"]), [flowchartActivity])).toEqual({
+      activities: { added: 1, changed: 2, removed: 1 },
+      inputs: { added: 1, changed: 1, removed: 0 },
+      outputs: { added: 0, changed: 0, removed: 1 },
+      triggers: { added: 0, changed: 1, removed: 0 }
+    });
+  });
+
+  it("treats activity-shaped property payloads as owner data instead of child activities", () => {
+    const before = {
+      rootActivity: activity("root", {
+        structure: {
+          kind: "acme.leaf.structure",
+          schemaVersion: "1.0.0",
+          payload: { configuration: null }
+        }
+      })
+    };
+    const after = {
+      rootActivity: activity("root", {
+        structure: {
+          kind: "acme.leaf.structure",
+          schemaVersion: "1.0.0",
+          payload: {
+            configuration: {
+              nodeId: "payload-id",
+              activityVersionId: "payload-version",
+              value: "ordinary configuration"
+            }
+          }
+        }
+      })
+    };
+
+    expect(summarizePublicationChanges(before, after).activities).toEqual({
+      added: 0,
+      changed: 1,
+      removed: 0
+    });
+  });
+
+  it("follows custom collection child slots declared by the activity catalog facet", () => {
+    const switchActivity: ActivityCatalogItem = {
+      ...flowchartActivity,
+      activityVersionId: "activity-switch-v1",
+      activityTypeKey: "Acme.Activities.Switch",
+      displayName: "Switch",
+      designFacets: [{
+        kind: "acme.switch.structure",
+        schemaVersion: "1.0.0",
+        payload: {
+          mode: "generic",
+          supportsScopedVariables: false,
+          slots: [{
+            name: "Case",
+            property: "case",
+            displayName: "Case",
+            cardinality: "single",
+            collectionProperty: "cases",
+            childProperty: "activity",
+            labelProperty: "name"
+          }],
+          initialPayload: { cases: [] }
+        }
+      }]
+    };
+    const switchNode = (...children: Array<ReturnType<typeof activity> | null>) => activity("switch", {
+      structure: {
+        kind: "acme.switch.structure",
+        schemaVersion: "1.0.0",
+        payload: {
+          cases: children.map((child, index) => ({ name: String.fromCharCode(65 + index), activity: child }))
+        }
+      }
+    }, switchActivity.activityVersionId);
+    const before = {
+      rootActivity: switchNode(activity("kept", { value: 1 }), activity("removed"), null)
+    };
+    const after = {
+      rootActivity: switchNode(activity("kept", { value: 2 }), null, activity("added"))
+    };
+
+    expect(summarizePublicationChanges(before, after, new Set(), [switchActivity]).activities).toEqual({
+      added: 1,
+      changed: 1,
+      removed: 1
+    });
+  });
+
+  it("keeps traversing nested Flowchart and Sequence activity-owned slots", () => {
+    const before = {
+      rootActivity: flowchart([sequence([activity("kept", { value: 1 })])])
+    };
+    const after = {
+      rootActivity: flowchart([sequence([activity("kept", { value: 2 }), activity("added")])])
+    };
+
+    expect(summarizePublicationChanges(before, after, new Set(), [flowchartActivity, sequenceActivity]).activities).toEqual({
+      added: 1,
+      changed: 1,
+      removed: 0
+    });
+  });
+
+  it("blocks an invalid draft before publication and protects replacement with the active publication id", () => {
+    const review = createPublicationReview({
+      draft: draft({ rootActivity: null }),
+      details: null,
+      slotVersions: {},
+      policy: { defaultAction: "replace", defaultSlotName: "default", source: "host" },
+      slots: [publishedSlot("default", { publicationId: "publication-1", versionId: "version-1" })],
+      catalog: []
+    });
+
+    expect(review.phase).toBe("validationBlocked");
+    expect(review.validationErrors).toEqual(["Workflow has no root activity."]);
+    expect(review.currentVersion).toBe("version-1");
+    expect(publicationIntentFor(review, "replace", "default")).toEqual({
+      action: "replace",
+      slotName: "default",
+      expectedPublicationId: "publication-1"
+    });
+  });
+
+  it("prefers the fetched design version's label over the publication's version id", () => {
+    const review = createPublicationReview({
+      draft: draft(),
+      details: null,
+      slotVersions: { default: versionDetails("version-1") },
+      policy: { defaultAction: "replace", defaultSlotName: "default", source: "host" },
+      slots: [publishedSlot("default", { publicationId: "publication-1", versionId: "version-1" })],
+      catalog: []
+    });
+
+    expect(review.currentVersion).toBe("1.0.0");
+  });
+
+  it("captures an immutable snapshot before publication", () => {
+    const original = draft();
+    const review = createPublicationReview({
+      draft: original,
+      details: null,
+      slotVersions: {},
+      policy: { defaultAction: "replace", defaultSlotName: "default", source: "host" },
+      slots: [],
+      catalog: []
+    });
+
+    original.state.inputs = [{ name: "late-change" }];
+
+    expect(review.draftSnapshot.state.inputs).toBeUndefined();
+  });
+
+  it("requires the author to name a side-by-side slot when policy forbids implicit replacement", () => {
+    const review = createPublicationReview({
+      draft: draft(),
+      details: null,
+      slotVersions: {},
+      policy: { defaultAction: "requireExplicitSlot", defaultSlotName: "default", source: "workflow" },
+      slots: [],
+      catalog: []
+    });
+
+    expect(review.intent).toEqual({ action: "sideBySide", slotName: "" });
+  });
+
+  it("describes automatic assignment as policy-owned rather than diff-derived", () => {
+    const review = createPublicationReview({
+      draft: draft(),
+      details: {
+        definition: {
+          id: "definition-1",
+          name: "Orders",
+          createdAt: "2026-07-01T00:00:00Z",
+          lastModifiedAt: "2026-07-01T00:00:00Z",
+          latestVersion: "1.0.0",
+          versionCount: 1
+        },
+        versions: []
+      },
+      slotVersions: {},
+      policy: { defaultAction: "replace", defaultSlotName: "default", source: "host" },
+      slots: [],
+      catalog: []
+    });
+
+    expect(review.proposedVersion).toBe("Assigned automatically by version policy");
+  });
+
+  it("protects an occupied side-by-side target with its publication id", () => {
+    const review = createPublicationReview({
+      draft: draft(),
+      details: null,
+      slotVersions: { blue: versionDetails("version-blue", { state: { inputs: [{ name: "blue" }] } }) },
+      policy: { defaultAction: "replace", defaultSlotName: "default", source: "host" },
+      slots: [publishedSlot("blue")],
+      catalog: []
+    });
+
+    expect(publicationIntentFor(review, "sideBySide", " blue ")).toEqual({
+      action: "sideBySide",
+      slotName: "blue",
+      expectedPublicationId: "publication-blue"
+    });
+  });
+
+  it("derives create or replace intent from the selected Publication channel", () => {
+    const review = createPublicationReview({
+      draft: draft(),
+      details: null,
+      slotVersions: { blue: versionDetails("version-blue") },
+      policy: { defaultAction: "replace", defaultSlotName: "default", source: "host" },
+      slots: [publishedSlot("blue")],
+      catalog: []
+    });
+
+    expect(publicationIntentForChannel(review, "blue")).toEqual({
+      action: "replace",
+      slotName: "blue",
+      expectedPublicationId: "publication-blue"
+    });
+    expect(publicationIntentForChannel(review, "canary")).toEqual({
+      action: "sideBySide",
+      slotName: "canary"
+    });
+    expect(publicationBaselineFor(review, "blue")).toBe("blue · 1.0.0");
+    expect(publicationBaselineFor(review, "canary")).toBe("New channel · canary · no previous publication");
+  });
+
+  it("falls back to the publication's version id when no design version detail was fetched for the slot", () => {
+    const review = createPublicationReview({
+      draft: draft(),
+      details: null,
+      slotVersions: {},
+      policy: { defaultAction: "replace", defaultSlotName: "default", source: "host" },
+      slots: [publishedSlot("blue")],
+      catalog: []
+    });
+
+    expect(publicationBaselineFor(review, "blue")).toBe("blue · version-blue");
+  });
+
+  it("recomputes changes against the selected occupied slot", () => {
+    const review = createPublicationReview({
+      draft: draft({ inputs: [{ name: "draft-only" }] }),
+      details: null,
+      slotVersions: {
+        default: versionDetails("version-default", { state: { inputs: [{ name: "draft-only" }] } }),
+        blue: versionDetails("version-blue", { state: { inputs: [{ name: "blue-only" }] } })
+      },
+      policy: { defaultAction: "replace", defaultSlotName: "default", source: "host" },
+      slots: [],
+      catalog: []
+    });
+
+    expect(publicationChangesFor(review, "default")?.inputs).toEqual({ added: 0, changed: 0, removed: 0 });
+    expect(publicationChangesFor(review, "blue")?.inputs).toEqual({ added: 1, changed: 0, removed: 1 });
+  });
+
+  it("treats a channel occupied by another activation source as occupied without a design version", () => {
+    const review = reviewWith({ slots: [withoutPublication(importedActivationSlot())] });
+
+    expect(publicationIntentForChannel(review, "imported")).toEqual({ action: "replace", slotName: "imported" });
+    expect(publicationBaselineFor(review, "imported")).toBe("imported · occupied by artifact-reconciliation (orders-bundle) · not a Studio design version");
+    expect(publicationChangesFor(review, "imported")).toBeNull();
+  });
+
+  it("does not treat a listed slot without an active activation as occupied or as a new channel", () => {
+    const review = reviewWith({ slots: [withoutPublication(activationSlot("canary"))] });
+
+    expect(publicationIntentForChannel(review, "canary")).toEqual({ action: "sideBySide", slotName: "canary" });
+    expect(publicationBaselineFor(review, "canary")).toBe("canary · no active publication");
+    expect(publicationChangesFor(review, "canary")).not.toBeNull();
+  });
+
+  it("never reports an unreadable channel as having no previous publication", () => {
+    const visible = reviewWith({ slots: [] });
+    const unavailable = reviewWith({ slots: [], slotsUnavailableReason: activationSlotReadsUnavailableReason });
+
+    expect(publicationBaselineFor(visible, "canary")).toBe("New channel · canary · no previous publication");
+    expect(publicationChangesFor(visible, "canary")).not.toBeNull();
+    expect(publicationBaselineFor(unavailable, "canary")).toBe("canary · current publication unknown");
+    expect(publicationChangesFor(unavailable, "canary")).toBeNull();
+    expect(publicationIntentForChannel(unavailable, "default")).toEqual({ action: "replace", slotName: "default" });
+    expect(unavailable.slotsUnavailableReason).toBe(activationSlotReadsUnavailableReason);
+  });
+});
+
+function reviewWith(input: Partial<Parameters<typeof createPublicationReview>[0]>) {
+  return createPublicationReview({
+    draft: draft(),
+    details: null,
+    slotVersions: {},
+    policy: { defaultAction: "replace", defaultSlotName: "default", source: "host" },
+    slots: [],
+    catalog: [],
+    ...input
+  });
+}
+
+function draft(state: Partial<WorkflowDraft["state"]> = {}): WorkflowDraft {
+  return {
+    id: "draft-1",
+    definitionId: "definition-1",
+    sourceVersionId: "version-1",
+    state: { rootActivity: activity("root"), ...state },
+    layout: [],
+    validationErrors: []
+  };
+}
+
+function activity(nodeId: string, extra: Record<string, unknown> = {}, activityVersionId = `activity-${nodeId}`) {
+  return { nodeId, activityVersionId, inputs: [], outputs: [], ...extra };
+}
+
+function flowchart(activities: ReturnType<typeof activity>[]) {
+  return activity("root", {
+    structure: {
+      kind: "elsa.flowchart.structure",
+      schemaVersion: "1.0.0",
+      payload: { activities, connections: [], startNodeId: null }
+    }
+  }, flowchartActivity.activityVersionId);
+}
+
+function sequence(activities: ReturnType<typeof activity>[]) {
+  return activity("sequence", {
+    structure: {
+      kind: "elsa.sequence.structure",
+      schemaVersion: "1.0.0",
+      payload: { activities }
+    }
+  }, sequenceActivity.activityVersionId);
+}

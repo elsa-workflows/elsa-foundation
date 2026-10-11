@@ -1,0 +1,335 @@
+/*
+ * Component visual rules for the shared Studio UI primitives.
+ *
+ * IMPORTANT — WHY THIS FILE EXISTS: the published `@elsa-workflows/studio-ui` package ships
+ * `tokens.css` (the semantic `--studio-*` token layer) but NOT the per-component visual
+ * rules. In Elsa.Studio.Web those rules live in the host's own `styles.css` (app chrome),
+ * so they are not part of the reusable package surface. A consuming app that wants the
+ * primitives (`StudioDataGrid`, `StatusChip`, `StudioToolbar`, `StudioTabs`, `StudioField`,
+ * `StudioInspector`, `StudioAlert`, `EmptyState`) to LOOK styled must therefore provide
+ * component CSS keyed off the `--studio-*` tokens — exactly as done here.
+ *
+ * These rules are a faithful, trimmed copy of the host's component styles and reference only
+ * the `--studio-*` tokens (from tokens.css) plus a couple of `--spacing-*`/`--shadow-*`
+ * primitives (from theme.css). They are safe to adapt to your own design.
+ */
+
+.studio-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--spacing-md);
+  min-width: 0;
+}
+
+.studio-toolbar-group {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  min-width: 0;
+}
+
+.studio-status-chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 20px;
+  border: 1px solid var(--studio-border);
+  border-radius: 5px;
+  background: var(--studio-surface-muted);
+  color: var(--studio-text-muted);
+  font-size: 11px;
+  font-weight: 650;
+  line-height: 1;
+  padding: 3px 7px;
+  white-space: nowrap;
+}
+
+.studio-status-chip[data-tone="success"] {
+  border-color: color-mix(in srgb, var(--studio-success) 42%, var(--studio-border));
+  background: color-mix(in srgb, var(--studio-success) 12%, var(--studio-surface));
+  color: var(--studio-success-fg);
+}
+
+.studio-status-chip[data-tone="warning"] {
+  border-color: color-mix(in srgb, var(--studio-warning) 48%, var(--studio-border));
+  background: color-mix(in srgb, var(--studio-warning) 13%, var(--studio-surface));
+  color: var(--studio-warning-fg);
+}
+
+.studio-status-chip[data-tone="danger"] {
+  border-color: color-mix(in srgb, var(--studio-danger) 48%, var(--studio-border));
+  background: color-mix(in srgb, var(--studio-danger) 10%, var(--studio-surface));
+  color: var(--studio-danger-fg);
+}
+
+.studio-status-chip[data-tone="accent"] {
+  border-color: color-mix(in srgb, var(--studio-accent) 48%, var(--studio-border));
+  background: var(--studio-accent-soft);
+  color: var(--studio-accent);
+}
+
+.studio-alert {
+  border: 1px solid color-mix(in srgb, var(--studio-accent) 45%, var(--studio-border));
+  border-radius: var(--studio-radius);
+  background: color-mix(in srgb, var(--studio-accent) 8%, var(--studio-surface));
+  color: var(--studio-text);
+  font-size: var(--studio-body-size);
+  line-height: 1.5;
+  padding: 9px 12px;
+}
+
+.studio-alert[data-tone="danger"] {
+  border-color: color-mix(in srgb, var(--studio-danger) 55%, var(--studio-border));
+  background: color-mix(in srgb, var(--studio-danger) 8%, var(--studio-surface));
+}
+
+.studio-alert[data-tone="warning"] {
+  border-color: color-mix(in srgb, var(--studio-warning) 55%, var(--studio-border));
+  background: color-mix(in srgb, var(--studio-warning) 10%, var(--studio-surface));
+}
+
+.studio-empty-state {
+  min-height: 180px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  align-items: center;
+  justify-content: center;
+  border: 1px dashed var(--studio-border);
+  border-radius: var(--studio-radius-md);
+  background: var(--studio-surface);
+  color: var(--studio-text-muted);
+  font-size: var(--studio-body-size);
+  padding: 28px 18px;
+  text-align: center;
+}
+
+.studio-tabs {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  border-bottom: 1px solid var(--studio-border);
+}
+
+.studio-tabs button {
+  min-height: 32px;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  background: transparent;
+  color: var(--studio-text-muted);
+  font-size: var(--studio-body-size);
+  font-weight: 650;
+  padding: 0 10px;
+  cursor: pointer;
+}
+
+.studio-tabs button:hover,
+.studio-tabs button.active,
+.studio-tabs button[aria-selected="true"] {
+  border-bottom-color: var(--studio-accent);
+  color: var(--studio-text);
+}
+
+.studio-tabs button:focus-visible {
+  outline: 2px solid var(--studio-focus);
+  outline-offset: -2px;
+}
+
+.studio-inspector {
+  border: 1px solid var(--studio-border);
+  border-radius: var(--studio-radius-md);
+  background: var(--studio-surface);
+  color: var(--studio-text);
+  overflow: auto;
+  padding: 14px;
+}
+
+.studio-inspector-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 14px;
+}
+
+.studio-inspector-heading span {
+  color: var(--studio-text-muted);
+  font-size: var(--studio-label-size);
+  font-weight: 650;
+}
+
+.studio-inspector-heading h3 {
+  margin: 2px 0 0;
+  font-size: 17px;
+  line-height: 1.25;
+}
+
+.studio-field {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  border: 1px solid var(--studio-border);
+  border-radius: var(--studio-radius-md);
+  background: var(--studio-surface);
+  padding: 10px 11px;
+}
+
+.studio-field-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.studio-field-label strong {
+  font-size: var(--studio-body-size);
+}
+
+.studio-field small {
+  color: var(--studio-text-muted);
+  line-height: 1.45;
+}
+
+.studio-data-grid {
+  display: grid;
+  border: 1px solid var(--studio-border);
+  border-radius: var(--studio-radius-md);
+  background: var(--studio-surface);
+  overflow: auto;
+}
+
+.studio-data-grid-header,
+.studio-data-grid-row {
+  display: grid;
+  grid-template-columns: var(--studio-grid-columns, repeat(4, minmax(120px, 1fr)));
+  align-items: center;
+  min-width: max-content;
+}
+
+.studio-data-grid-header {
+  border-bottom: 1px solid var(--studio-border);
+  background: color-mix(in srgb, var(--studio-surface) 72%, var(--studio-surface-muted));
+  color: var(--studio-text-muted);
+  font-size: var(--studio-label-size);
+  font-weight: 700;
+}
+
+.studio-data-grid-header span,
+.studio-data-grid-row span {
+  min-width: 0;
+  padding: 8px 10px;
+  text-align: left;
+}
+
+.studio-data-grid-row {
+  width: 100%;
+  border: 0;
+  border-bottom: 1px solid var(--studio-border);
+  border-radius: 0;
+  background: transparent;
+  color: var(--studio-text);
+  font-size: var(--studio-body-size);
+  min-height: 46px;
+  position: relative;
+}
+
+.studio-data-grid-row:hover {
+  background: var(--studio-accent-soft);
+}
+
+.studio-data-grid-row.selected {
+  background: color-mix(in srgb, var(--studio-accent) 12%, var(--studio-surface));
+  box-shadow: inset 3px 0 0 var(--studio-accent);
+}
+
+.studio-data-grid-row:focus-visible {
+  outline: 2px solid var(--studio-focus);
+  outline-offset: -2px;
+}
+
+/*
+ * Minimal styling for the code editor primitive from `@elsa-workflows/studio-code-editor`.
+ * As with the UI primitives, the host owns the visual rules for `.studio-code-editor*`;
+ * these are a trimmed version so the fallback textarea and CodeMirror surface look right.
+ */
+.studio-code-editor {
+  border: 1px solid var(--studio-border);
+  border-radius: var(--studio-radius-md);
+  background: var(--studio-surface);
+  overflow: hidden;
+}
+
+.studio-code-editor-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 11px;
+  border-bottom: 1px solid var(--studio-border);
+  color: var(--studio-text-muted);
+  font-size: var(--studio-label-size);
+  font-weight: 650;
+}
+
+.studio-code-editor-header code {
+  font-family: var(--studio-font-mono);
+  font-weight: 500;
+}
+
+.studio-code-editor-input,
+.studio-code-editor .cm-editor {
+  width: 100%;
+  border: 0;
+  background: var(--studio-surface);
+  color: var(--studio-text);
+  font-family: var(--studio-font-mono);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.studio-code-editor-input {
+  display: block;
+  resize: vertical;
+  padding: 11px;
+  outline: none;
+}
+
+.studio-code-editor:focus-within {
+  outline: 2px solid var(--studio-focus);
+  outline-offset: -2px;
+}
+
+.studio-code-editor-diagnostics {
+  border-top: 1px solid var(--studio-border);
+  padding: 8px 11px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.studio-code-editor-diagnostic {
+  margin: 0;
+  font-size: 12px;
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.studio-code-editor-diagnostic span {
+  font-weight: 700;
+}
+
+.studio-code-editor-diagnostic small {
+  color: var(--studio-text-muted);
+  font-family: var(--studio-font-mono);
+}
+
+.studio-code-editor-diagnostic.error {
+  color: var(--studio-danger-fg);
+}
+
+.studio-code-editor-diagnostic.warning {
+  color: var(--studio-warning-fg);
+}

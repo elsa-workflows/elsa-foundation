@@ -15,12 +15,13 @@ grep_ok() { grep "$@" || [[ $? -eq 1 ]]; }
 # /dev/null keeps grep and cat off stdin when a file list is empty.
 count() { grep_ok -hEc "$1" /dev/null "${@:2}" | awk '{s+=$1} END {print s+0}'; }
 
-mapfile -t essentials < <(cs_files src/essentials)
+mapfile -t essentials < <(cs_files Essentials/src)
 # Production and test files are disjoint, so a file under src/**/tests is counted once, as a test.
-mapfile -t src_all < <(cs_files src -not -path '*/tests/*')
-mapfile -t tests_all < <(cs_files tests src \( -path 'tests/*' -o -path '*/tests/*' \))
+backend_roots=(Essentials/src Essentials/apps Essentials/tests Extensions)
+mapfile -t src_all < <(cs_files "${backend_roots[@]}" -not -path '*/tests/*' -not -path '*/studio/*')
+mapfile -t tests_all < <(cs_files "${backend_roots[@]}" -path '*/tests/*' -not -path '*/studio/*')
 # Test classes can sit in a Migrations folder (EF migration tests); count their methods, not generated migration LOC.
-mapfile -t test_classes < <(find tests src -name '*.cs' -not -path '*/obj/*' -not -path '*/bin/*' \( -path 'tests/*' -o -path '*/tests/*' \))
+mapfile -t test_classes < <(find "${backend_roots[@]}" -name '*.cs' -not -path '*/obj/*' -not -path '*/bin/*' -path '*/tests/*' -not -path '*/studio/*')
 
 type_decl='^\s*((public|internal|private|protected|file)\s+)?((sealed|static|abstract|partial|readonly|unsafe|ref)\s+)*(class|record|struct|interface|enum|delegate)\s'
 public_decl='^\s*public\s+((sealed|static|abstract|partial|readonly|unsafe|ref)\s+)*(class|record|struct|interface|enum|delegate)\s'
@@ -29,7 +30,7 @@ public_types=$(count "$public_decl" "${essentials[@]}")
 all_types=$(count "$type_decl" "${essentials[@]}")
 pct=$(( all_types > 0 ? public_types * 100 / all_types : 0 ))
 
-prod_projects=$(find src -name '*.csproj' -not -path '*/tests/*' -not -name '*Tests.csproj' | wc -l)
+prod_projects=$(find "${backend_roots[@]}" -name '*.csproj' -not -path '*/tests/*' -not -path '*/studio/*' -not -name '*Tests.csproj' | wc -l)
 test_loc=$(cat /dev/null "${tests_all[@]}" | wc -l)
 test_methods=$(count '^\s*\[[A-Za-z]*(Fact|Theory)[](]' "${test_classes[@]}")
 obsolete=$(count '\[Obsolete' "${src_all[@]}")
@@ -45,10 +46,10 @@ kb() {
     du -sk --exclude=bin --exclude=obj "$@" 2>/dev/null | awk '{s+=$1} END {print s+0}'
   fi
 }
-meta_kb=$(kb docs specs); code_kb=$(kb src tests)
+meta_kb=$(kb docs specs); code_kb=$(kb Essentials Extensions ':(exclude)Extensions/*/studio/**')
 meta_pct=$(( meta_kb * 100 / (meta_kb + code_kb) ))
 
-budget_file=$(find tests -name 'ef-command-budgets.json' -not -path '*/bin/*' 2>/dev/null | head -1)
+budget_file=$(find Essentials/tests Extensions -name 'ef-command-budgets.json' -not -path '*/bin/*' -not -path '*/studio/*' 2>/dev/null | head -1)
 if [[ -n "$budget_file" ]] && command -v jq >/dev/null; then
   ef=$(jq -r 'to_entries | map("\(.key): \(.value)") | join("; ")' "$budget_file" 2>/dev/null || echo "unreadable")
 else
@@ -60,13 +61,13 @@ cat <<MD
 
 | Metric | Value | Target |
 |---|---|---|
-| Public types in \`src/essentials\` (excluding migrations) | $public_types of $all_types ($pct%) | < 1,500 |
+| Public types in \`Essentials/src\` (excluding migrations) | $public_types of $all_types ($pct%) | < 1,500 |
 | Production projects | $prod_projects | ~100 |
 | Test LOC / test methods | $test_loc / $test_methods | trend down |
-| \`[Obsolete]\` members in \`src\` | $obsolete | 0 |
+| \`[Obsolete]\` members in backend source | $obsolete | 0 |
 | spec/FR/ADR citations in code | $citations | 0 |
 | Glossary terms | $glossary | ~40 user-facing |
 | Constitution lines / AGENTS.md lines | $constitution / $agents | < 400 / < 120 |
-| Meta share of \`docs\`+\`specs\`+\`src\`+\`tests\` bytes | $meta_pct% | trend down |
+| Meta share of docs, specs and backend bytes | $meta_pct% | trend down |
 | EF command budgets | $ef | budgets only go down |
 MD

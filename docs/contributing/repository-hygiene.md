@@ -55,6 +55,10 @@ An open issue is a commitment someone can act on, not a log entry.
   issues. A program labelled `status:parked` stays open but does not count toward the cap, and gets no
   new child issues until it is reactivated. At the cap, add scope to the existing parent instead of
   filing more.
+  The [11 October owner amendment](../adr/0080-elsa-4-simplification-decisions.md#d0--focus) makes named
+  exceptions for existing consolidation #2501 and website/docs #2495. Keep those programs active under
+  their existing queues; do not re-park them solely to meet the cap. This does not raise the general cap
+  or authorize more programs, cleanup or changes to enforcement settings.
 - **Stale intake closes.** An issue labelled `needs-triage` or `needs-info` with no activity for 30 days
   is labelled `stale` and closes as not planned 14 days later. Programs, epics, `security`, `bug` and
   `keep-open` issues are exempt.

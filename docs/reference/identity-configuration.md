@@ -23,7 +23,7 @@ unauthenticated API call is rejected with `401`. A host-chosen `DefaultScheme` a
 
 ## Development / demo defaults
 
-The checked-in `src/apps/Elsa.Workbench/shells.json` enables the stack with `IsDevelopmentOrDemo: true`, which is
+The checked-in `Essentials/apps/Elsa.Workbench/shells.json` enables the stack with `IsDevelopmentOrDemo: true`, which is
 intended **only** for local development and demos:
 
 ```jsonc
@@ -221,7 +221,7 @@ deployment still read each other's payloads when they share a key ring, wherever
   every user signs in again, and a form open across the upgrade is posted again. Changing `ApplicationName` later has
   the same effect.
 
-`src/essentials/Foundation/DataProtection/EntityFrameworkCore/EXTENSION_POINTS.md` is the reference; Docker deployments
+`Essentials/src/Foundation/DataProtection/EntityFrameworkCore/EXTENSION_POINTS.md` is the reference; Docker deployments
 are covered in [Docker: Data Protection keys](../docker.md#data-protection-keys).
 
 ### No API kill-switch
@@ -264,7 +264,7 @@ same-origin as the server for the session cookie to flow. Cross-origin setups re
     ```bash
     dotnet ef database update \
       --context OpenIddictIdentityPostgreSqlDbContext \
-      --project src/apps/Elsa.Workbench \
+      --project Essentials/apps/Elsa.Workbench \
       -- --connectionString "<connection string>"
     ```
 

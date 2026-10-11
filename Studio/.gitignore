@@ -1,0 +1,27 @@
+bin/
+obj/
+node_modules/
+.pnpm-store/
+playwright-report/
+test-results/
+dist/
+build/
+coverage/
+# Generated Vite output, one level per tier (src/essentials|apps|extensions/<Module>/wwwroot).
+# A module whose wwwroot stops being ignored starts committing its build output, silently,
+# so scripts/check-module-layout.mjs asserts this holds for every module on disk.
+src/*/*/wwwroot/
+.DS_Store
+*.log
+.env*
+*.user
+*.suo
+.idea/
+.vscode/
+
+# Local dev-only visual harness for the studio client
+src/apps/Elsa.Studio.Web/Client/harness/
+
+# Local Studio host Theme Store data
+src/apps/Elsa.Studio.Web/studio-theme-store.json
+src/apps/Elsa.Studio.Web/theme-assets/

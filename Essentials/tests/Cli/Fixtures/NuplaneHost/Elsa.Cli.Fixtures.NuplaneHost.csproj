@@ -1,0 +1,29 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <IsPackable>false</IsPackable>
+    <Description>
+      A host shaped like a packaged one: it carries Nuplane, the persistence policy assembly and a provider
+      engine, and no module of its own. Its modules arrive from a package root, which is the only way to
+      exercise the loader path a Nuplane host actually resolves through.
+    </Description>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" />
+    <PackageReference Include="Nuplane" />
+    <PackageReference Include="Nuplane.Loading" />
+    <!-- What a host whose feeds are directories actually carries, and what a restore pass needs out of its
+         closure: the directory-feed module (core AddNuplane skips every feed declaring a directory path)
+         and the JSON configuration provider that reads its own appsettings.json. Elsa.Foundation.Host has
+         both — the module by PackageReference, the provider from the ASP.NET Core shared framework. -->
+    <PackageReference Include="Nuplane.Sources.Directory" />
+    <PackageReference Include="Microsoft.Extensions.Configuration.Json" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\..\src\Persistence\EntityFramework\Elsa.Persistence.EntityFramework.csproj" />
+  </ItemGroup>
+
+</Project>

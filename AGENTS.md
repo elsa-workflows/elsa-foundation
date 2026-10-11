@@ -12,7 +12,8 @@ The repo still supports feature development, but the operating model is shaped s
 
 [ADR 0080](docs/adr/0080-elsa-4-simplification-decisions.md) sets the current direction: risk-based tests,
 internal-by-default types, Balanced persistence by default, pre-GA cleanup, plain-language renames and a smaller
-meta footprint. Only two programs are active (Elsa 4 Simplification and Runtime Efficiency); see
+meta footprint. The owner's 11 October amendment makes Foundation/Studio consolidation the first priority
+and reactivates Foundation-owned GitBook documentation in parallel; see
 [program goals](docs/program-goals/README.md). Work that contradicts an ADR 0080 decision needs the owner's
 explicit go-ahead.
 
@@ -85,7 +86,7 @@ Follow [Repository hygiene](docs/contributing/repository-hygiene.md). In short:
 - Push a branch only when opening its PR (draft is fine) in the same session; otherwise keep the work local.
 - Never restore a branch deleted on merge; its work is in `main`. Restore a swept branch from its `archive/` tag only when a maintainer asks to resume that work, and open its PR in the same session.
 - File new issues as `needs-triage` only. The one exception is the [UX QA routine](docs/skills/catalog.md#ux-qa-routine), which files reproduced defects as `ready-for-agent`. Put checkpoints, receipts and evidence on the PR or the issue being worked, never in a new issue.
-- Respect the caps: at most 2 open programs and 20 `ready-for-agent` issues. At the cap, extend the existing parent instead of filing more.
+- Respect the caps and named owner exceptions in [Repository hygiene](docs/contributing/repository-hygiene.md#issues): normally at most 2 active programs and 20 `ready-for-agent` issues. The 11 October exception reactivates existing #2501 and #2495; it does not authorize more programs. At the cap, extend the existing parent instead of filing more.
 - Before closing an issue as not planned, run `git log origin/main -E --grep '(^|[^[:alnum:]_./-])#<number>([^0-9]|$)'`. If its work landed, close it as completed and name the commit or PR.
 
 ## Builds on a shared machine

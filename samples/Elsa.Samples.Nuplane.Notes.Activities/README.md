@@ -29,7 +29,7 @@ pending migration and the `dotnet elsa persistence apply` command that applies i
 
 A node pinned to version `1.0.0` keeps running after the upgrade, but on release 1.1.0's class: the activity's alias is its
 CLR type name, and one type is registered per alias (see
-[Elsa.Activities.Runtime](../../src/essentials/Activities/Runtime/Elsa.Activities.Runtime/README.md#activity-versions-after-an-in-place-upgrade)).
+[Elsa.Activities.Runtime](../../Essentials/src/Activities/Runtime/Elsa.Activities.Runtime/README.md#activity-versions-after-an-in-place-upgrade)).
 That is why release 1.1.0 keeps `Text` as it was and adds `Tags` as optional. A release that renamed or removed an input would
 break every workflow pinned to an earlier version, and nothing warns of that yet.
 
@@ -40,7 +40,7 @@ the feed resolves it from there:
 
 ```bash
 for project in Elsa.Samples.Nuplane.Notes Elsa.Samples.Nuplane.Notes.Activities; do
-  dotnet pack samples/$project/$project.csproj -c Release -p:DemoVersion=1 -o src/apps/Elsa.Workbench/packages
+  dotnet pack samples/$project/$project.csproj -c Release -p:DemoVersion=1 -o Essentials/apps/Elsa.Workbench/packages
 done
 ```
 
@@ -71,7 +71,7 @@ every workflow that uses it stores.
 
 ## Tests
 
-`tests/essentials/Samples/Nuplane/Notes/Activities/Tests` runs both releases of the activity against a real SQLite database:
+`Essentials/tests/Samples/Nuplane/Notes/Activities/Tests` runs both releases of the activity against a real SQLite database:
 release 1.0.0 writes a note; release 1.1.0 writes a note with its tags once schema version `2.0.0` is finalized, refuses a
 tagged note and writes nothing while it is not, and writes an untagged note in the old format while it is not. It also reads
 each release's catalog entry: `1.0.0` with `Text`, `1.1.0` with `Text` and `Tags`.

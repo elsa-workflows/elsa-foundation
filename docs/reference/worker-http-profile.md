@@ -26,7 +26,7 @@ Prepare the host source with feature settings as objects before generation. The 
 
 ## Host prerequisites
 
-- Configure the existing [OIDC feature](../../src/essentials/Foundation/Identity/Oidc/README.md): nonblank Authority and independent Audience, fixed ProviderId/TenantId and opt-in NormalizeBearerClaims. Deployment metadata uses HTTPS. ClientId is unnecessary for a bearer-only worker; authentication defaults remain the host's choice.
+- Configure the existing [OIDC feature](../../Essentials/src/Foundation/Identity/Oidc/README.md): nonblank Authority and independent Audience, fixed ProviderId/TenantId and opt-in NormalizeBearerClaims. Deployment metadata uses HTTPS. ClientId is unnecessary for a bearer-only worker; authentication defaults remain the host's choice.
 - Initialize the ordinary persistence context for that same static tenant before shell activation. Incoming token claims cannot choose or overwrite that context. Configure legitimate IAM claim-mapping rules; a valid external token without a grant is forbidden by the existing permission policy.
 - Configure a named Runtime persistence resource and its connection reference. Configure IAM's Provider/ConnectionName/connection and schema/migration provisioning independently; the Runtime default resource does not enroll IAM automatically.
 - Supply a writable local `LocksFolderPath` and required Runtime signing/protection configuration. Local filesystem locking does not certify a distributed topology. Review migration policy before starting the host.

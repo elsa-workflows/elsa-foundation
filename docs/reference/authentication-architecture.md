@@ -199,7 +199,7 @@ Enable these feature sets per shell. All scenarios also require `FoundationIdent
 Local users and roles, the backend login page, a seeded dev admin (`admin` / `Password123!`, sourced from the
 `SeedAdmin*` settings in `shells.json` under `IsDevelopmentOrDemo` only — no credential constants in code),
 cookie sign-in, and first-party JWT issuance. This is exactly what the
-checked-in `src/apps/Elsa.Workbench/shells.json` enables. **`FoundationIdentityOidc` is also enabled in
+checked-in `Essentials/apps/Elsa.Workbench/shells.json` enables. **`FoundationIdentityOidc` is also enabled in
 the default shell but is inert until you configure an `Authority`/`ClientId`** — with no provider
 configured, its interactive OpenID Connect handler is not even registered, and bearer validation
 stays the default so unauthenticated API calls return `401`.
@@ -226,7 +226,7 @@ The OIDC module registers a `JwtBearer` scheme (for API bearer validation agains
 a `ClientId` is present — an interactive `OpenIdConnect` scheme (for the browser redirect flow).
 See §8 for per-IdP recipes.
 
-External claims still need mapping into Elsa permissions. For a fixed-host API bearer layout, opt in through `NormalizeBearerClaims`, independent `Audience`, `ProviderId` and `TenantId`. The host supplies a matching ordinary persistence scope and explicit IAM mapping backend; the adapter validates the token, filters internal claims and loads current rules before normalization. It does not provision a local user. Without opt-in, the legacy external path remains unchanged. Interactive login/provisioning still requires its own bridge. See the [owning OIDC README](../../src/essentials/Foundation/Identity/Oidc/README.md) and [canonical contract](../../specs/190-worker-oidc-normalization/contracts/bearer-normalization.md); implementation proof is tracked separately under #2308.
+External claims still need mapping into Elsa permissions. For a fixed-host API bearer layout, opt in through `NormalizeBearerClaims`, independent `Audience`, `ProviderId` and `TenantId`. The host supplies a matching ordinary persistence scope and explicit IAM mapping backend; the adapter validates the token, filters internal claims and loads current rules before normalization. It does not provision a local user. Without opt-in, the legacy external path remains unchanged. Interactive login/provisioning still requires its own bridge. See the [owning OIDC README](../../Essentials/src/Foundation/Identity/Oidc/README.md) and [canonical contract](../../specs/190-worker-oidc-normalization/contracts/bearer-normalization.md); implementation proof is tracked separately under #2308.
 
 ### (c) Custom token issuer
 

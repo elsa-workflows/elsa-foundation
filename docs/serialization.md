@@ -9,7 +9,7 @@
 
 ## Why
 
-`IPayloadSerializer` ([`JsonPayloadSerializer`](../src/essentials/Serialization/SystemText/Services/JsonPayloadSerializer.cs))
+`IPayloadSerializer` ([`JsonPayloadSerializer`](../Essentials/src/Serialization/SystemText/Services/JsonPayloadSerializer.cs))
 is the single, configured contract for domain payloads: it applies the agreed naming policy
 (camelCase, case-insensitive on read) and the registry of converters contributed at startup. When one
 component serializes with it and another deserializes with raw `JsonSerializer` defaults, the round-trip
@@ -59,7 +59,7 @@ boundary or the use needs options the payload serializer can't provide:
   startup-contributed converter registry of `IPayloadSerializer` would itself be an unstamped format
   change — the exact class of drift the module exists to eliminate.
 - **The reconciliation content hasher**
-  ([`DefaultActivityDefinitionHasher`](../src/essentials/Activities/Design/Persistence/Core/Services/DefaultActivityDefinitionHasher.cs))
+  ([`DefaultActivityDefinitionHasher`](../Essentials/src/Activities/Design/Persistence/Core/Services/DefaultActivityDefinitionHasher.cs))
   — it needs a canonical, sorted-key serialization that `IPayloadSerializer` does not produce, and only
   the SHA-256 of that JSON is ever persisted (the JSON itself is never read back).
 
@@ -71,7 +71,7 @@ bindings) must be able to evolve without silently breaking already-suspended wor
 
 - **EF Core migrations are the mechanism.** Each module owns its own migrations set and its own
   `__EFMigrationsHistory_*` table, applied or validated on shell activation according to the module's
-  `EfMigratePolicy`. See [`src/essentials/Persistence/EntityFramework/README.md`](../src/essentials/Persistence/EntityFramework/README.md)
+  `EfMigratePolicy`. See [`Essentials/src/Persistence/EntityFramework/README.md`](../Essentials/src/Persistence/EntityFramework/README.md)
   for the shared policy.
 - **Loud enforcement on read.** A pending model change, a missing migration, or a provider mismatch fails
   shell activation rather than serving a partially readable store.
@@ -106,7 +106,7 @@ bindings) must be able to evolve without silently breaking already-suspended wor
   `Elsa.Workflows.Runtime.Distributed.Tests` suite re-serializes a canonical instance of the placement and
   transport payloads and compares each semantically against a committed `Fixtures/v1/*.json` expectation,
   so a field add/rename/remove/retype on those two payloads cannot land without an explicit, versioned
-  decision (see [`GoldenFixtureTestSupport`](../tests/essentials/Workflows/Runtime/Distributed/Tests/GoldenFixtureTestSupport.cs)).
+  decision (see [`GoldenFixtureTestSupport`](../Essentials/tests/Workflows/Runtime/Distributed/Tests/GoldenFixtureTestSupport.cs)).
   The rest of the Runtime EF Core module (bookmarks, executables, execution/scheduler/operational/
   control-plane/incident/durable-value state, checkpoint commits, the post-commit outbox, the durable
   scheduler work queue, workflow trigger bindings) has no such fixture today; its state-record shapes are
@@ -135,7 +135,7 @@ From 4.0 on, a change to what a family stores is a new version of that family ([
 4. Commit the upcaster's fixture pair under `Fixtures/SchemaUpcasters/<family>/<from>-to-<to>/` in the module's
    test project - one row per table, `<table>.source.json` and `<table>.expected.json`, each a JSON object of the row's
    content columns, the table named by its entity type - record it in
-   `tests/essentials/Architecture/Tests/Baselines/schema-upcaster-fixtures.sha256`, and prove the
+   `Essentials/tests/Architecture/Tests/Baselines/schema-upcaster-fixtures.sha256`, and prove the
    upcast, the old-format round trip and the store's read of the source fixture (FR-022) with a test class deriving
    directly from `EfSchemaUpcasterProof<TUpcaster, TValue>(family, store)`, compiled in from
    `EfSchemaUpcasterFixtureSupport.cs`. The base class holds all three proofs; the module supplies only the store's
@@ -233,7 +233,7 @@ key, silently starts every redelivered occurrence a second time. Change one by a
 
 A published workflow compiles to a `WorkflowExecutable` artifact that persists through the same Runtime
 EF Core module as every other runtime state, written by
-[`EfWorkflowExecutableStore`](../src/essentials/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/EfWorkflowExecutableStore.cs)
+[`EfWorkflowExecutableStore`](../Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/EfWorkflowExecutableStore.cs)
 over the `IWorkflowExecutableStore` seam. Its payload carries the compiled workflow-scope variable
 declarations (`workflowVariables`, #972), the pinned activity contract, and the explicit input-nullability
 data required by typed value flow. The

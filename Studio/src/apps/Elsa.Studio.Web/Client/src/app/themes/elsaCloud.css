@@ -1,0 +1,36 @@
+/*
+ * Elsa Cloud — the chrome a theme definition cannot carry.
+ *
+ * Colours, typography, radii and elevation come from the definition (foundationThemes.ts) and
+ * tokens.css. What lives here is the console's small structural details, all keyed on the theme:
+ * small labels set in the mono face, and the active navigation item drawn as a neutral bordered box.
+ */
+
+/* Small structural labels are mono: the breadcrumb eyebrow above each page title, the navigation
+   section headings and the status chips and pills. */
+html[data-theme="elsa-cloud"] .breadcrumb,
+html[data-theme="elsa-cloud"] .nav-heading,
+html[data-theme="elsa-cloud"] .studio-status-chip,
+html[data-theme="elsa-cloud"] .studio-status-pill {
+  font-family: var(--font-mono);
+  letter-spacing: 0.04em;
+}
+
+html[data-theme="elsa-cloud"] .breadcrumb,
+html[data-theme="elsa-cloud"] .nav-heading {
+  font-size: 10.5px;
+  font-weight: 500;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  opacity: 1;
+}
+
+/* The active navigation item is a neutral bordered box rather than a row with an accent bar. The
+   border is an inset ring so the row keeps its size. */
+html[data-theme="elsa-cloud"] .nav-section a.active {
+  box-shadow: inset 0 0 0 1px var(--border);
+}
+
+html[data-theme="elsa-cloud"] .nav-section a.active::before {
+  display: none;
+}

@@ -1,0 +1,349 @@
+import { bpmnStructureKind, flowchartStructureKind, readStructureDesignFacet, type StructureDesignSlotDescriptor } from "./workflowAdapter";
+import type {
+  ActivityCatalogItem,
+  ActivityNode,
+  ActivityNodeStructure,
+  ActivityPresentationRecord,
+  WorkflowExecutableChildSlot,
+  WorkflowExecutableConnection,
+  WorkflowExecutableConnectionEndpoint,
+  WorkflowExecutableAuthoredInput,
+  WorkflowExecutableActivityPresentation,
+  WorkflowExecutableCompiledInput,
+  WorkflowExecutableInputBinding,
+  WorkflowExecutableNode,
+  WorkflowExecutableOutputCapture
+} from "./workflowTypes";
+
+// Adapts the Execution Material node tree served by GET /executables/{artifactId} into the authored
+// ActivityNode shape the canvas machinery (buildCanvas, getChildSlots, resolveScope, slot navigation)
+// already understands, so the Executable Inspector reuses the Runs-page read-only canvas wholesale.
+//
+// Node ids use the authored activity id: the Layout Sidecar is a publish-time copy of the definition
+// layout keyed by authored node ids, so this is what makes the sidecar geometry land on the right nodes.
+//
+// The wire tree carries the structure kind, named child slots, and compact flowchart endpoints/ports.
+// Synthesis puts only those endpoint semantics into the authored-shaped flowchart payload so the
+// existing flowchartEdges() adapter produces edges while the Layout Sidecar remains geometry authority.
+
+// Per-node inspection facts the canvas cannot carry through ActivityNode: catalog availability
+// (ghost nodes), the runtime ids, and the input-binding summaries for the node details panel.
+export interface ExecutableGraphNodeFacts {
+  executableNodeId: string;
+  authoredActivityId: string;
+  activityType: string;
+  activityTypeVersion: string;
+  structureKind: string | null;
+  available: boolean;
+  inputBindings: WorkflowExecutableInputBinding[];
+  outputCaptures: WorkflowExecutableOutputCapture[];
+  authoredInputs: WorkflowExecutableAuthoredInput[];
+  authoredInputsAccess: string | null;
+  presentation?: ActivityPresentationRecord;
+}
+
+export interface ExecutableActivityGraph {
+  root: ActivityNode;
+  factsByNodeId: Map<string, ExecutableGraphNodeFacts>;
+  activityPresentation: ActivityPresentationRecord[];
+}
+
+export function buildExecutableActivityGraph(
+  root: WorkflowExecutableNode,
+  catalog: ActivityCatalogItem[],
+  authoredInputs: WorkflowExecutableAuthoredInput[] = [],
+  compiledInputs: WorkflowExecutableCompiledInput[] = [],
+  authoredInputsAccess: string | null = null,
+  activityPresentation: WorkflowExecutableActivityPresentation[] = []
+): ExecutableActivityGraph {
+  const catalogByType = new Map<string, ActivityCatalogItem[]>();
+  for (const item of catalog) {
+    catalogByType.set(item.activityTypeKey, [...(catalogByType.get(item.activityTypeKey) ?? []), item]);
+  }
+
+  const factsByNodeId = new Map<string, ExecutableGraphNodeFacts>();
+  const presentationByExecutableNodeId = new Map(
+    activityPresentation.map(record => [record.executableNodeId, record]));
+  const nodeIdsByExecutableId = selectGraphNodeIds(root);
+  const adaptedPresentation: ActivityPresentationRecord[] = [];
+  const authoredInputsByNodeId = new Map<string, WorkflowExecutableAuthoredInput[]>();
+  for (const input of authoredInputs) {
+    authoredInputsByNodeId.set(input.executableNodeId, [...(authoredInputsByNodeId.get(input.executableNodeId) ?? []), input]);
+  }
+  const compiledInputsByNodeId = new Map<string, WorkflowExecutableInputBinding[]>();
+  for (const input of compiledInputs) {
+    compiledInputsByNodeId.set(input.executableNodeId, [...(compiledInputsByNodeId.get(input.executableNodeId) ?? []), input.binding]);
+  }
+
+  const adapt = (node: WorkflowExecutableNode): ActivityNode => {
+    const catalogItem = resolveExecutableCatalogItem(node, catalogByType);
+    // Authored ids align ordinary nodes with the authored layout sidecar. Repeated reusable
+    // placements can legitimately project the same authored id more than once, however; those
+    // occurrences must use their executable ids so facts, labels, and React node identities remain
+    // distinct instead of overwriting one another.
+    const nodeId = nodeIdsByExecutableId.get(node.executableNodeId) ?? node.executableNodeId;
+    const presentation = presentationByExecutableNodeId.get(node.executableNodeId);
+    const adaptedNodePresentation = presentation
+      ? {
+          nodeId,
+          displayName: presentation.displayName,
+          description: presentation.description
+        }
+      : undefined;
+    factsByNodeId.set(nodeId, {
+      executableNodeId: node.executableNodeId,
+      authoredActivityId: node.authoredActivityId,
+      activityType: node.activityType,
+      activityTypeVersion: node.activityTypeVersion,
+      structureKind: node.structureKind ?? null,
+      available: !!catalogItem,
+      inputBindings: compiledInputsByNodeId.get(node.executableNodeId) ?? node.inputBindings ?? [],
+      outputCaptures: node.outputCaptures ?? [],
+      authoredInputs: authoredInputsByNodeId.get(node.executableNodeId) ?? [],
+      authoredInputsAccess,
+      presentation: adaptedNodePresentation
+    });
+    if (adaptedNodePresentation) adaptedPresentation.push(adaptedNodePresentation);
+
+    return {
+      nodeId,
+      // A catalog miss gets a synthetic version id no catalog can resolve, so downstream lookups
+      // treat the node as unknown; the canvas layer relabels it and marks it as a ghost.
+      activityVersionId: catalogItem?.activityVersionId ?? ghostActivityVersionId(node),
+      inputs: [],
+      outputs: [],
+      structure: synthesizeStructure(node, catalogItem, adapt, nodeIdsByExecutableId)
+    };
+  };
+
+  return { root: adapt(root), factsByNodeId, activityPresentation: adaptedPresentation };
+}
+
+function selectGraphNodeIds(root: WorkflowExecutableNode) {
+  const nodes: WorkflowExecutableNode[] = [];
+  const authoredIdCounts = new Map<string, number>();
+  const visit = (node: WorkflowExecutableNode) => {
+    nodes.push(node);
+    if (node.authoredActivityId) {
+      authoredIdCounts.set(
+        node.authoredActivityId,
+        (authoredIdCounts.get(node.authoredActivityId) ?? 0) + 1);
+    }
+    for (const slot of node.childSlots ?? []) {
+      for (const child of slot.activities ?? []) visit(child);
+    }
+  };
+  visit(root);
+  const preferredIds = new Map<WorkflowExecutableNode, string>();
+  const preferredIdCounts = new Map<string, number>();
+  for (const node of nodes) {
+    const preferredId = node.authoredActivityId &&
+      authoredIdCounts.get(node.authoredActivityId) === 1
+      ? node.authoredActivityId
+      : node.executableNodeId;
+    preferredIds.set(node, preferredId);
+    preferredIdCounts.set(preferredId, (preferredIdCounts.get(preferredId) ?? 0) + 1);
+  }
+
+  return new Map(nodes.map(node => {
+    const preferredId = preferredIds.get(node) ?? node.executableNodeId;
+    return [
+      node.executableNodeId,
+      preferredIdCounts.get(preferredId) === 1 ? preferredId : node.executableNodeId
+    ] as const;
+  }));
+}
+
+export function findExecutableNodeFacts(
+  graph: ExecutableActivityGraph | null | undefined,
+  identity: { executableNodeId?: string | null; authoredActivityId?: string | null } | null | undefined
+) {
+  if (!graph || !identity) return undefined;
+  if (identity.executableNodeId) {
+    const byExecutableId = [...graph.factsByNodeId.values()]
+      .find(fact => fact.executableNodeId === identity.executableNodeId);
+    if (byExecutableId) return byExecutableId;
+  }
+  if (identity.authoredActivityId) {
+    const byAuthoredId = graph.factsByNodeId.get(identity.authoredActivityId);
+    if (byAuthoredId) return byAuthoredId;
+  }
+  return undefined;
+}
+
+export function findExecutableGraphNodeId(
+  graph: ExecutableActivityGraph | null | undefined,
+  identity: { executableNodeId?: string | null; authoredActivityId?: string | null } | null | undefined
+) {
+  if (!graph || !identity) return null;
+  if (identity.executableNodeId) {
+    for (const [nodeId, facts] of graph.factsByNodeId) {
+      if (facts.executableNodeId === identity.executableNodeId) return nodeId;
+    }
+  }
+  return identity.authoredActivityId && graph.factsByNodeId.has(identity.authoredActivityId)
+    ? identity.authoredActivityId
+    : null;
+}
+
+// True when the graph node was minted for a catalog miss ("not available in this environment").
+export function isGhostFact(fact: ExecutableGraphNodeFacts | undefined): boolean {
+  return !!fact && !fact.available;
+}
+
+// Bare presentational name for a ghost node: the short activity type name, since no catalog display
+// name exists in this environment.
+export function ghostNodeLabel(activityType: string): string {
+  return activityType.split(".").filter(Boolean).at(-1) ?? activityType;
+}
+
+// Prefers the exact (type, version) catalog row; falls back to any version of the same type — the
+// same fidelity execution has (ADR 0039 note: rendering resolves from the live catalog).
+function resolveExecutableCatalogItem(node: WorkflowExecutableNode, catalogByType: Map<string, ActivityCatalogItem[]>) {
+  const candidates = catalogByType.get(node.activityType) ?? [];
+  return candidates.find(item => item.version === node.activityTypeVersion) ?? candidates[0];
+}
+
+function ghostActivityVersionId(node: WorkflowExecutableNode) {
+  return `executable-missing:${node.activityType}@${node.activityTypeVersion}`;
+}
+
+// Rebuilds an authored-style structure from the wire slots. When the environment catalog carries the
+// activity's structure design facet and every wire slot matches a plain facet slot by contract name,
+// the payload is keyed by the facet's properties so getChildSlots resolves through the facet exactly
+// as it does for authored definitions. Otherwise a generic payload keyed by slot-derived property
+// names is used, which getChildSlots renders through its generic fallback.
+function synthesizeStructure(
+  node: WorkflowExecutableNode,
+  catalogItem: ActivityCatalogItem | undefined,
+  adapt: (child: WorkflowExecutableNode) => ActivityNode,
+  nodeIdsByExecutableId: Map<string, string>
+): ActivityNodeStructure | null {
+  const slots = node.childSlots ?? [];
+  if (slots.length === 0 && !(node.structureKind === bpmnStructureKind && node.bpmnStructure)) return null;
+
+  const facet = readStructureDesignFacet(catalogItem);
+  const facetMatch = facet && (!node.structureKind || facet.kind === node.structureKind)
+    ? matchFacetSlots(slots, facet.payload.slots)
+    : null;
+
+  if (facet && facetMatch) {
+    const payload: Record<string, unknown> = { ...facet.payload.initialPayload };
+    for (const { slot, descriptor } of facetMatch) {
+      const activities = slot.activities.map(adapt);
+      payload[descriptor.property] = descriptor.cardinality === "single" ? activities[0] ?? null : activities;
+    }
+    copyExecutableTopology(facet.kind, node, payload, nodeIdsByExecutableId);
+    return { kind: facet.kind, schemaVersion: facet.schemaVersion, payload };
+  }
+
+  const payload: Record<string, unknown> = {};
+  for (const slot of slots) {
+    payload[uniqueSlotProperty(payload, slotProperty(slot.name))] = slot.activities.map(adapt);
+  }
+
+  const kind = node.structureKind ?? `executable:${node.activityType}`;
+  copyExecutableTopology(kind, node, payload, nodeIdsByExecutableId);
+
+  return {
+    kind,
+    schemaVersion: "1.0.0",
+    payload
+  };
+}
+
+function copyExecutableTopology(
+  kind: string,
+  node: WorkflowExecutableNode,
+  payload: Record<string, unknown>,
+  nodeIdsByExecutableId: Map<string, string>
+) {
+  if (kind === flowchartStructureKind && Array.isArray(node.connections)) {
+    payload.connections = node.connections
+      .filter(isValidConnection)
+      .map(connection => ({
+        source: cloneConnectionEndpoint(connection.source),
+        target: cloneConnectionEndpoint(connection.target)
+      }));
+  }
+  if (kind === bpmnStructureKind && node.bpmnStructure) {
+    const { elements, sequenceFlows } = node.bpmnStructure;
+    // Copy the compact execution topology explicitly. Undeclared payload fields and geometry
+    // never enter the canvas; bindings follow the same exact identities as the adapted children.
+    payload.elements = Array.isArray(elements) ? elements
+      .filter(element => element && nonblank(element.elementId) && nonblank(element.elementType))
+      .map(element => {
+        const childNodeId = nonblank(element.childNodeId) ? nodeIdsByExecutableId.get(element.childNodeId) : undefined;
+        return {
+          elementId: element.elementId,
+          elementType: element.elementType,
+          ...(childNodeId ? { childNodeId } : {}),
+          ...(typeof element.name === "string" ? { name: element.name } : {})
+        };
+      }) : [];
+    payload.sequenceFlows = Array.isArray(sequenceFlows) ? sequenceFlows
+      .filter(flow => flow && nonblank(flow.flowId) && nonblank(flow.sourceRef) && nonblank(flow.targetRef))
+      .map(flow => ({
+        flowId: flow.flowId,
+        sourceRef: flow.sourceRef,
+        targetRef: flow.targetRef,
+        ...(typeof flow.name === "string" ? { name: flow.name } : {}),
+        ...(typeof flow.conditionOutcome === "string" ? { conditionOutcome: flow.conditionOutcome } : {}),
+        ...(typeof flow.isDefault === "boolean" ? { isDefault: flow.isDefault } : {})
+      })) : [];
+  }
+}
+
+function nonblank(value: unknown): value is string {
+  return typeof value === "string" && value.trim().length > 0;
+}
+
+function isValidConnection(value: unknown): value is WorkflowExecutableConnection {
+  if (!value || typeof value !== "object") return false;
+  const connection = value as { source?: unknown; target?: unknown };
+  return isValidConnectionEndpoint(connection.source) && isValidConnectionEndpoint(connection.target);
+}
+
+function isValidConnectionEndpoint(value: unknown): value is WorkflowExecutableConnectionEndpoint {
+  if (!value || typeof value !== "object") return false;
+  const nodeId = (value as { nodeId?: unknown }).nodeId;
+  return typeof nodeId === "string" && nodeId.trim().length > 0;
+}
+
+// Rebuilds the compact wire projection field by field so undeclared server data (notably authored
+// routing vertices) cannot cross into the canvas payload. Geometry comes only from the Layout Sidecar.
+function cloneConnectionEndpoint(endpoint: WorkflowExecutableConnectionEndpoint) {
+  return {
+    nodeId: endpoint.nodeId,
+    ...(typeof endpoint.port === "string" ? { port: endpoint.port } : {})
+  };
+}
+
+// Pairs every wire slot with the facet slot descriptor sharing its contract name. Collection-backed
+// descriptors (e.g. Switch cases) key their payload by item, which the wire slot name alone cannot
+// reconstruct — those fall back to the generic payload.
+function matchFacetSlots(slots: WorkflowExecutableChildSlot[], descriptors: StructureDesignSlotDescriptor[]) {
+  const matches: { slot: WorkflowExecutableChildSlot; descriptor: StructureDesignSlotDescriptor }[] = [];
+  for (const slot of slots) {
+    const descriptor = descriptors.find(candidate => candidate.name === slot.name);
+    if (!descriptor || descriptor.collectionProperty || descriptor.childProperty) return null;
+    matches.push({ slot, descriptor });
+  }
+
+  return matches;
+}
+
+// "Sequence.Activities" -> "activities", "ForEach.Body" -> "body": the camelCased last segment of the
+// contract slot name, so canvas-mode structure kinds resolve their primary slot (getChildSlots reads
+// payload.activities for sequence/flowchart kinds) and generic labels stay readable.
+function slotProperty(name: string) {
+  const segment = name.split(".").filter(Boolean).at(-1) ?? name;
+  return segment.charAt(0).toLowerCase() + segment.slice(1);
+}
+
+function uniqueSlotProperty(payload: Record<string, unknown>, property: string) {
+  if (!(property in payload)) return property;
+  let index = 2;
+  while (`${property}${index}` in payload) index += 1;
+  return `${property}${index}`;
+}

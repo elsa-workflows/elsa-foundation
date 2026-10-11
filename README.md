@@ -4,13 +4,19 @@
 
 `elsa-foundation` is the transitional Elsa 4 foundation workspace.
 
-It contains the main Elsa domain core libraries, default foundation implementations, the Speckit specification flow, and the architecture knowledge needed to navigate and verify the refactor from `elsa-core`.
+It contains the Elsa backend and Studio in three product roots:
+
+- `Essentials/`: backend libraries, tests and host applications.
+- `Extensions/<capability>/`: optional backend implementations, tests and Studio components where present.
+- `Studio/`: the Studio shell, shared UI, tests and frontend tooling.
+
+Shared engineering documentation, tools and workflows remain at the root. Public Elsa 4 documentation source lives in `website/docs/` and syncs to GitBook. Server and Studio retain independent builds and package identities.
 
 These repositories develop the Elsa 4 preview. Elsa 3 uses the separate [elsa-core](https://github.com/elsa-workflows/elsa-core) and [elsa-studio](https://github.com/elsa-workflows/elsa-studio) repositories.
 
 - **Try Elsa 4:** [run Workbench and Studio from published Docker images](docker/compose/README.md#quick-start--published-images-no-clone-or-build).
 - **Contribute to the server:** follow the [Elsa Foundation contribution guide](CONTRIBUTING.md).
-- **Contribute to Studio:** follow the [Elsa Foundation Studio contribution guide](https://github.com/elsa-workflows/elsa-foundation-studio/blob/main/CONTRIBUTING.md).
+- **Contribute to Studio:** follow the [Elsa Foundation Studio contribution guide](Studio/CONTRIBUTING.md).
 
 ## Philosophy
 
@@ -22,7 +28,7 @@ Modules should stay opt-in. A shell composes only the capabilities it needs, and
 
 ## Start here
 
-- The process entry point is [`src/apps/Elsa.Workbench/Program.cs`](src/apps/Elsa.Workbench/Program.cs); which features it composes is decided by [`src/apps/Elsa.Workbench/shells.json`](src/apps/Elsa.Workbench/shells.json).
+- The process entry point is [`Essentials/apps/Elsa.Workbench/Program.cs`](Essentials/apps/Elsa.Workbench/Program.cs); which features it composes is decided by [`Essentials/apps/Elsa.Workbench/shells.json`](Essentials/apps/Elsa.Workbench/shells.json).
 - [How a workflow executes](docs/how-a-workflow-executes.md) traces one request from that entry point to a durable checkpoint, file by file.
 - [AGENTS.md](AGENTS.md) is the provider-neutral entrypoint for AI agents and engineers.
 - [docs/README.md](docs/README.md) routes to glossary, skills, maps, reports, and architecture orientation.
@@ -56,7 +62,7 @@ Management-client APIs are owned by their Elsa domains and can be composed direc
 `Elsa.Workbench` is a reference composition, not the implementation home of a server-wide management facade.
 
 The canonical areas are Workflow Design, Activity Design, Expressions, Publishing, Runtime, and
-[API Capabilities](src/essentials/Api/Capabilities/README.md). An authenticated client loads one shell-relative
+[API Capabilities](Essentials/src/Api/Capabilities/README.md). An authenticated client loads one shell-relative
 `GET /capabilities` document, then follows the advertised domain links. Omitted domain features advertise no
 capability and expose no routes; endpoint-level action permissions remain authoritative.
 

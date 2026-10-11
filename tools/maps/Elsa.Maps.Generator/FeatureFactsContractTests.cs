@@ -54,10 +54,10 @@ public static class FeatureFactsContractTests
         File.WriteAllText(Path.Join(root, "Elsa.Server.slnx"), "<Solution></Solution>");
         File.WriteAllText(Path.Join(root, "VersionLines.props"),
             "<Project><PropertyGroup><ElsaVersionLineAMembers>;Fixture.LineA;</ElsaVersionLineAMembers></PropertyGroup></Project>");
-        WriteProject(root, "src/Fixture.Features", "<Project Sdk=\"Microsoft.NET.Sdk\"></Project>");
+        WriteProject(root, "Essentials/src/Fixture.Features", "<Project Sdk=\"Microsoft.NET.Sdk\"></Project>");
 
         foreach (var (id, body, _) in Cases)
-            File.WriteAllText(Path.Join(root, $"src/Fixture.Features/{id}Feature.cs"),
+            File.WriteAllText(Path.Join(root, $"Essentials/src/Fixture.Features/{id}Feature.cs"),
                 $"[ShellFeature(\"{id}\")]\npublic sealed class {id}Feature : IShellFeature\n{{\n{body}\n}}\n");
 
         GitInit(root);

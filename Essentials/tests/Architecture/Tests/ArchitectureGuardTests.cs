@@ -1,0 +1,759 @@
+using System.Text.Json.Nodes;
+using System.Xml.Linq;
+using Xunit;
+using static Elsa.Architecture.Tests.RepoPaths;
+
+namespace Elsa.Architecture.Tests;
+
+public sealed partial class ArchitectureGuardTests
+{
+    private static readonly string[] AllowedCorePackageReferences =
+    [
+        "Microsoft.Extensions.Primitives",
+        "Microsoft.Extensions.Options"
+    ];
+
+    private static readonly HashSet<(string Project, string Reference)> DeferredRuntimeDesignReferences =
+    [
+        ("Elsa.Workflows.Runtime.JavaScript", "Elsa.Workflows.Design.Core")
+    ];
+
+    // Documented exceptions to the §2.23.3 no-InternalsVisibleTo rule. Each entry needs a reason
+    // recorded at the declaration site (csproj comment) and here. Additions require architect review.
+    private static readonly HashSet<(string Project, string Target)> AllowedInternalsVisibleTo =
+    [
+        // The Extension Builder subsystem is a host-private surface of ~80 interlocking internal types;
+        // publicizing it to satisfy §2.23.3 would promote host-only contracts into public API. It lives in
+        // its own optional extension (Elsa.ExtensionBuilder.Api, #2294) which exposes those internals to
+        // the extension's own test project (MD-3, Elsa 4 architecture review 2026-07).
+        ("Elsa.ExtensionBuilder.Api", "Elsa.ExtensionBuilder.Api.Tests"),
+        // Elsa.Workbench keeps a narrow exception for the host-only module-management registry builder
+        // (ModuleManagementRegistryBuilder), exercised by ModuleManagementRegistryBuilderTests.
+        ("Elsa.Workbench", "Elsa.Modularity.Tests"),
+        // The shared-persistence resolver stays internal to the EF policy assembly. Focused unit
+        // and migration metadata tests inspect detached plans without widening its production API.
+        ("Elsa.Persistence.EntityFramework", "Elsa.Persistence.EntityFramework.Tests"),
+        ("Elsa.Persistence.EntityFramework", "Elsa.Persistence.EntityFrameworkCore.Migrations.Tests"),
+        // The worker's reflected host-context API stays internal; CLI tests verify exact and
+        // partial shape negotiation without making those details part of its public surface.
+        ("Elsa.Cli.Worker", "Elsa.Cli.Tests")
+    ];
+
+    [Fact]
+    public void Solution_has_no_global_layer_marker_folders()
+    {
+        var solution = XDocument.Load(Path.Combine(RepoRoot, "Elsa.Server.slnx"));
+        var folders = solution.Descendants("Folder")
+            .Select(x => x.Attribute("Name")?.Value)
+            .Where(x => x is not null)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        Assert.DoesNotContain("/core/", folders);
+        Assert.DoesNotContain("/modules/", folders);
+    }
+
+    /// <summary>
+    /// Every guard below is built on <see cref="ProjectFiles"/>, so if that enumeration ever stops seeing a
+    /// module root, guards go quietly vacuous instead of red. The inventory deliberately treats backend extension
+    /// roots as <c>Extensions/&lt;capability&gt;/{src,tests}</c>; the Studio sibling is not a backend module root.
+    /// </summary>
+    /// <remarks>
+    /// The expected paths are independently discovered from the working tree, deliberately NOT read from
+    /// <see cref="ModuleRoots.All"/>. The oracle scans Essentials' three backend roots and each extension's
+    /// <c>src/</c> and <c>tests/</c> roots. Studio projects are found separately and must remain outside this backend
+    /// enumeration, even though they live below <c>Extensions/</c>.
+    /// </remarks>
+    [Fact]
+    public void Project_enumeration_covers_every_module_root()
+    {
+        var roots = new[] { "Essentials/src", "Essentials/apps", "Essentials/tests" }
+            .Concat(Directory.Exists(Path.Join(RepoRoot, "Extensions"))
+                ? Directory.EnumerateDirectories(Path.Join(RepoRoot, "Extensions"))
+                    .SelectMany(extension => new[] { "src", "tests" }
+                        .Select(segment => $"Extensions/{Path.GetFileName(extension)}/{segment}"))
+                : [])
+            .Where(root => Directory.Exists(Path.Join(RepoRoot, root)))
+            .ToArray();
+        var expectedPaths = roots
+            .SelectMany(root => Directory.EnumerateFiles(Path.Join(RepoRoot, root), "*.csproj", SearchOption.AllDirectories))
+            .Select(path => Path.GetRelativePath(RepoRoot, path).Replace('\\', '/'))
+            .ToHashSet(StringComparer.Ordinal);
+        var projects = ProjectFiles().ToArray();
+        var actualPaths = projects.Select(project => project.RelativePath).ToHashSet(StringComparer.Ordinal);
+        var missing = expectedPaths.Except(actualPaths, StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray();
+        var unexpected = actualPaths.Except(expectedPaths, StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray();
+        var studioProjects = Directory.Exists(Path.Join(RepoRoot, "Extensions"))
+            ? Directory.EnumerateFiles(Path.Join(RepoRoot, "Extensions"), "*.csproj", SearchOption.AllDirectories)
+                .Where(path => Path.GetRelativePath(RepoRoot, path).Replace('\\', '/').Contains("/studio/", StringComparison.Ordinal))
+                .ToArray()
+            : [];
+        var rootCoverage = new[] { "Essentials/src/", "Essentials/apps/", "Essentials/tests/", "Extensions/" }
+            .Where(root => !projects.Any(project => project.RelativePath.StartsWith(root, StringComparison.Ordinal)))
+            .ToArray();
+
+        Assert.NotEmpty(expectedPaths);
+        Assert.NotEmpty(studioProjects);
+        Assert.True(missing.Length == 0 && unexpected.Length == 0 && rootCoverage.Length == 0,
+            "Backend project discovery must exactly cover Essentials and Extensions src/tests while excluding Studio. " +
+            $"Missing: {string.Join(", ", missing)}; unexpected: {string.Join(", ", unexpected)}; uncovered roots: {string.Join(", ", rootCoverage)}.");
+    }
+
+    [Fact]
+    public void Project_paths_match_domain_tree_convention()
+    {
+        var projectDirectories = ProjectFiles()
+            .Select(project => Path.GetDirectoryName(project.RelativePath)!.Replace('\\', '/'))
+            .ToHashSet(StringComparer.Ordinal);
+        var mismatches = ProjectFiles()
+            .Select(project => (Project: project, Expected: ExpectedProjectPath(project, projectDirectories)))
+            .Where(x => x.Project.RelativePath != x.Expected)
+            .Select(x => $"{x.Project.Name}: expected {x.Expected}, actual {x.Project.RelativePath}")
+            .ToList();
+
+        Assert.True(mismatches.Count == 0, string.Join(Environment.NewLine, mismatches));
+    }
+
+    [Fact]
+    public void Shared_persistence_resolution_does_not_depend_on_feature_assemblies()
+    {
+        var policy = Path.Combine(RepoRoot, "Essentials", "src", "Persistence", "EntityFramework");
+        var project = XDocument.Load(Path.Join(policy, "Elsa.Persistence.EntityFramework.csproj"));
+        // Its two project references are no feature assembly: Elsa.Primitives, the root of the Line A contract baseline,
+        // holds the write refusal's persistence-agnostic base that the domain APIs answer (spec 180, FR-016a), and
+        // Elsa.Persistence.Schema is the EF-free half of the schema-family surface every host shares (#2143).
+        Assert.Equal(
+            new[] { @"..\..\Primitives\Primitives\Elsa.Primitives.csproj", @"..\Schema\Elsa.Persistence.Schema.csproj" },
+            project.Descendants("ProjectReference").Select(reference => reference.Attribute("Include")?.Value ?? string.Empty));
+        Assert.DoesNotContain(project.Descendants("PackageReference"), reference =>
+            (reference.Attribute("Include")?.Value ?? string.Empty).StartsWith("Elsa.", StringComparison.Ordinal));
+    }
+
+    [Theory]
+    [InlineData("Essentials/src/Modularity/Core/Elsa.Modularity.Core.csproj")]
+    [InlineData("Essentials/src/Modularity/Nuplane/Elsa.Modularity.Nuplane.csproj")]
+    [InlineData("Essentials/src/Cli/Worker/Elsa.Cli.Worker.csproj")]
+    public void Neutral_activation_and_tooling_projects_have_no_entity_framework_dependency(string projectPath)
+    {
+        var project = XDocument.Load(Path.Join(RepoRoot, projectPath));
+        var efReferences = project.Descendants()
+            .Where(element => element.Name.LocalName is "ProjectReference" or "PackageReference")
+            .Select(element => element.Attribute("Include")?.Value)
+            .OfType<string>()
+            .Where(reference => reference.Contains("EntityFramework", StringComparison.OrdinalIgnoreCase))
+            .ToArray();
+
+        Assert.True(efReferences.Length == 0,
+            $"{projectPath} must remain EF-free: {string.Join(", ", efReferences)}");
+    }
+
+    [Fact]
+    public void Active_project_and_solution_references_resolve_to_existing_projects()
+    {
+        var missing = new List<string>();
+
+        // ProjectFiles intentionally covers the source/test domain tree used by the architecture
+        // conventions. The benchmark project files this guard also walked were deleted when
+        // performance measurement was retired (#1668).
+        foreach (var project in ProjectFiles())
+        {
+            foreach (var path in ProjectGraph.ReferencedProjectPaths(project.FullPath).Where(path => !File.Exists(path)))
+                missing.Add($"{project.RelativePath} -> {Path.GetRelativePath(RepoRoot, path).Replace(Path.DirectorySeparatorChar, '/')}");
+        }
+
+        foreach (var solutionProject in SolutionProjects())
+        {
+            var path = Path.Combine(RepoRoot, solutionProject.Path.Replace('/', Path.DirectorySeparatorChar));
+            if (!File.Exists(path))
+                missing.Add($"Elsa.Server.slnx -> {solutionProject.Path}");
+        }
+
+        Assert.True(
+            missing.Count == 0,
+            "Every active ProjectReference and solution project must resolve to a checked-in project. " +
+            "Missing entries would otherwise be downgraded to MSB9008 warnings:" +
+            Environment.NewLine + string.Join(Environment.NewLine, missing));
+    }
+
+    [Fact]
+    public void Solution_folders_collapse_leaf_project_segments()
+    {
+        var projectDirectories = ProjectFiles()
+            .Select(project => Path.GetDirectoryName(project.RelativePath)!)
+            .ToHashSet(StringComparer.Ordinal);
+        var expectedFolders = ProjectFiles()
+            .ToDictionary(project => project.RelativePath, project => ExpectedSolutionFolder(project, projectDirectories), StringComparer.OrdinalIgnoreCase);
+        var actualFolders = SolutionProjects()
+            .ToDictionary(project => project.Path, project => project.Folder, StringComparer.OrdinalIgnoreCase);
+        var mismatches = expectedFolders
+            .Where(expected => !actualFolders.TryGetValue(expected.Key, out var actual) || actual != expected.Value)
+            .Select(expected =>
+            {
+                actualFolders.TryGetValue(expected.Key, out var actual);
+                return $"{expected.Key}: expected {expected.Value}, actual {actual ?? "<missing>"}";
+            })
+            .ToList();
+
+        Assert.True(mismatches.Count == 0, string.Join(Environment.NewLine, mismatches));
+    }
+
+    [Fact]
+    public void Core_projects_do_not_reference_implementation_projects()
+    {
+        var violations = ProjectFiles()
+            .Where(project => project.Name.EndsWith(".Core", StringComparison.Ordinal))
+            .SelectMany(project => ProjectReferences(project)
+                .Where(reference => !IsCoreSafeReference(reference.Name))
+                .Select(reference => $"{project.Name} -> {reference.Name}"))
+            .ToList();
+
+        Assert.True(violations.Count == 0, string.Join(Environment.NewLine, violations));
+    }
+
+    [Fact]
+    public void Core_projects_do_not_reference_heavy_packages()
+    {
+        var violations = ProjectFiles()
+            .Where(project => project.Name.EndsWith(".Core", StringComparison.Ordinal))
+            .SelectMany(project => PackageReferences(project)
+                .Where(package => !IsCoreSafePackage(package))
+                .Select(package => $"{project.Name} -> {package}"))
+            .ToList();
+
+        Assert.True(violations.Count == 0, string.Join(Environment.NewLine, violations));
+    }
+
+    [Fact]
+    public void In_scope_persistence_contract_projects_remain_free_of_concrete_provider_dependencies()
+    {
+        var projects = ProjectFiles().ToArray();
+        var projectsByName = projects.ToDictionary(project => project.Name, StringComparer.Ordinal);
+        var missing = PersistenceProviderNeutralityBoundary.ProjectNames
+            .Where(projectName => !projectsByName.ContainsKey(projectName))
+            .ToArray();
+        Assert.True(missing.Length == 0, "Missing provider-neutral persistence projects: " + string.Join(", ", missing));
+
+        var violations = PersistenceProviderNeutralityBoundary.ProjectNames
+            .Select(projectName => projectsByName[projectName])
+            .SelectMany(project => ReachableProjects(project)
+                .Where(reached => PersistenceProviderNeutralityBoundary.IsConcreteProviderProject(reached.Name, reached.RelativePath))
+                .Select(reached => $"{project.RelativePath} reaches concrete provider project {reached.RelativePath}")
+                .Concat(ReachableProjects(project).Prepend(project)
+                    .SelectMany(PackageReferences)
+                    .Where(PersistenceProviderNeutralityBoundary.IsConcreteProviderPackage)
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .Select(package => $"{project.RelativePath} reaches concrete provider package {package}")))
+            .ToList();
+
+        Assert.True(violations.Count == 0, string.Join(Environment.NewLine, violations));
+    }
+
+    [Fact]
+    public void Elsa_primitives_has_no_external_package_references()
+    {
+        var primitives = ProjectFiles().Single(x => x.Name == "Elsa.Primitives");
+
+        Assert.Empty(PackageReferences(primitives));
+    }
+
+    [Fact]
+    public void Runtime_projects_do_not_add_design_references()
+    {
+        var violations = ProjectFiles()
+            .Where(IsRuntimeProject)
+            .SelectMany(project => ProjectReferences(project)
+                .Where(reference =>
+                    reference.Name.StartsWith("Elsa.Workflows.Design.", StringComparison.Ordinal) ||
+                    reference.Name.StartsWith("Elsa.Activities.Design.", StringComparison.Ordinal))
+                .Where(reference => !DeferredRuntimeDesignReferences.Contains((project.Name, reference.Name)))
+                .Select(reference => $"{project.Name} -> {reference.Name}"))
+            .ToList();
+
+        Assert.True(violations.Count == 0, string.Join(Environment.NewLine, violations));
+    }
+
+    [Fact]
+    public void Runtime_projects_do_not_reference_elsa3_compatibility_projects()
+    {
+        var violations = ProjectFiles()
+            .Where(IsRuntimeProject)
+            .SelectMany(project => ProjectReferences(project)
+                .Where(reference => reference.Name.StartsWith("Elsa3.", StringComparison.Ordinal))
+                .Select(reference => $"{project.Name} -> {reference.Name}"))
+            .ToList();
+
+        Assert.True(violations.Count == 0, string.Join(Environment.NewLine, violations));
+    }
+
+    [Fact]
+    public void Docker_reference_shell_enables_graph_authoring_with_activity_design()
+    {
+        var path = Path.Combine(RepoRoot, "docker", "compose", "elsa-workbench.shells.json");
+        var features = ReadDefaultShellFeatures(path);
+
+        Assert.True(features.ContainsKey("ActivitiesDesignApi"));
+        Assert.True(features.ContainsKey("ActivitiesGraphDesign"));
+    }
+
+    [Fact]
+    public void Docker_reference_shell_inlines_the_entity_framework_modules()
+    {
+        var path = Path.Combine(RepoRoot, "docker", "compose", "elsa-workbench.shells.json");
+        var features = ReadDefaultShellFeatures(path);
+
+        foreach (var feature in new[]
+                 {
+                     "WorkflowsRuntimeEntityFrameworkCore",
+                     "ActivitiesDesignEntityFrameworkCore",
+                     "WorkflowsDesignEntityFrameworkCore",
+                     "WorkflowsRuntimeDistributedEntityFrameworkCorePersistence",
+                     "WorkflowsRuntimeDistributedCommandTransportEntityFrameworkCorePersistence",
+                     "WorkflowsPublishingEntityFrameworkCore",
+                     "DiagnosticsOpenTelemetryEntityFrameworkCore",
+                     "DiagnosticsStructuredLogsEntityFrameworkCore",
+                     "SecretsEntityFrameworkCore",
+                     "WorkflowsDashboardEntityFrameworkCore"
+                 })
+        {
+            Assert.True(features.ContainsKey(feature), $"Docker shell must explicitly enable {feature}.");
+        }
+
+        // No separate provider feature supplies the connection: each module selects its provider
+        // and resolves ConnectionStrings:Elsa, which docker-compose.yml supplies.
+        Assert.Equal(
+            "PostgreSql",
+            Assert.IsType<JsonObject>(features["WorkflowsRuntimeEntityFrameworkCore"])["Provider"]?.GetValue<string>());
+    }
+
+    [Fact]
+    public void Server_Dockerfile_restores_ReadyToRun_packages_before_no_restore_publish()
+    {
+        var dockerfile = File.ReadAllText(Path.Combine(RepoRoot, "Essentials", "apps", "Elsa.Workbench", "Dockerfile"));
+        var restoreStart = dockerfile.IndexOf("    && dotnet restore ", StringComparison.Ordinal);
+        var publishStart = dockerfile.IndexOf("    && dotnet publish ", StringComparison.Ordinal);
+
+        Assert.True(restoreStart >= 0, "The server Dockerfile must contain a dotnet restore command.");
+        Assert.True(publishStart > restoreStart, "The server Dockerfile must restore before publishing.");
+
+        var restoreCommand = dockerfile[restoreStart..publishStart];
+        var publishCommand = dockerfile[publishStart..];
+        Assert.Contains("-p:PublishReadyToRun=true", restoreCommand, StringComparison.Ordinal);
+        Assert.Contains("--no-restore", publishCommand, StringComparison.Ordinal);
+        Assert.Contains("-p:PublishReadyToRun=true", publishCommand, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Docker_reference_shell_enables_the_publish_engine_alongside_its_transport()
+    {
+        var features = ReadDefaultShellFeatures(Path.Combine(RepoRoot, "docker", "compose", "elsa-workbench.shells.json"));
+
+        Assert.True(features.ContainsKey("WorkflowsPublishingApi"));
+        Assert.True(features.ContainsKey("WorkflowsPublishing"));
+    }
+
+    [Fact] // spec 006 T050 (SC-001) — no project in the activity-construction runtime path references any Design project.
+    public void Activity_construction_runtime_path_has_no_design_reference() =>
+        AssertNoForbiddenProjectReferences(
+            [
+                "Elsa.Activities.Runtime",
+                "Elsa.Activities.Runtime.Core",
+                "Elsa.Activities.Primitives",
+                "Elsa.Activities.Graph.Runtime",
+                "Elsa.Activities.DispatchWorkflow.Runtime",
+            ],
+            IsDesignReference);
+
+    [Fact]
+    public void Dispatch_workflow_modules_preserve_runtime_design_and_transport_boundaries()
+    {
+        var projects = ProjectFiles().ToDictionary(project => project.Name, StringComparer.Ordinal);
+        var runtime = projects["Elsa.Activities.DispatchWorkflow.Runtime"];
+        var design = projects["Elsa.Activities.DispatchWorkflow.Design"];
+        var runtimeReferences = ProjectReferences(runtime).Select(reference => reference.Name).ToHashSet(StringComparer.Ordinal);
+        var designReferences = ProjectReferences(design).Select(reference => reference.Name).ToHashSet(StringComparer.Ordinal);
+        var forbiddenReferences = new[]
+        {
+            "Elsa.Activities.Composition.Runtime",
+            "Elsa.Workflows.Design.Core",
+            "Elsa.Studio"
+        };
+
+        Assert.Contains("Elsa.Workflows.Runtime.Core", runtimeReferences);
+        Assert.DoesNotContain("Elsa.Workflows.Runtime", runtimeReferences);
+        Assert.DoesNotContain("Elsa.Workflows.Runtime.Resumption", runtimeReferences);
+        Assert.DoesNotContain(forbiddenReferences, runtimeReferences.Contains);
+        Assert.DoesNotContain("Elsa.Activities.Composition.Runtime", designReferences);
+        Assert.DoesNotContain(PackageReferences(runtime), package => package.Contains("MassTransit", StringComparison.OrdinalIgnoreCase));
+        Assert.DoesNotContain(PackageReferences(design), package => package.Contains("MassTransit", StringComparison.OrdinalIgnoreCase));
+        Assert.DoesNotContain(PackageReferences(runtime), package => package.Contains("Broker", StringComparison.OrdinalIgnoreCase));
+        Assert.DoesNotContain(PackageReferences(design), package => package.Contains("Broker", StringComparison.OrdinalIgnoreCase));
+        Assert.DoesNotContain(PackageReferences(runtime), package => package.Contains("ServiceBus", StringComparison.OrdinalIgnoreCase));
+        Assert.DoesNotContain(PackageReferences(design), package => package.Contains("ServiceBus", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact] // spec 006 T053 (SC-006) — the seam's feature projects do not reference one another (G4).
+    public void Activity_construction_feature_projects_do_not_reference_each_other()
+    {
+        string[] featureProjects =
+        [
+            "Elsa.Activities.Primitives",
+            "Elsa.Activities.Graph.Runtime",
+            "Elsa.Activities.Graph.Design",
+            "Elsa.Activities.Design.Reconciliation.Clr",
+        ];
+        var featureSet = featureProjects.ToHashSet(StringComparer.Ordinal);
+
+        // Scoped to cross-references *among* the seam features (SC-006). A new seam feature must be added
+        // to this list to be covered — the check under-covers silently as the seam grows.
+        AssertNoForbiddenProjectReferences(featureProjects, reference => featureSet.Contains(reference.Name));
+    }
+
+    // Shared skeleton for the two SC-001/SC-006 project-reference facts: verify every named project exists,
+    // then assert none of them declares a <ProjectReference> the predicate forbids. Only DIRECT edges are
+    // checked — transitive pulls are the reference graph's own concern (and, for the runtime side, are also
+    // covered by Runtime_projects_do_not_add_design_references, which spans every runtime project).
+    private static void AssertNoForbiddenProjectReferences(string[] projectNames, Func<ProjectInfo, bool> isForbidden)
+    {
+        var nameSet = projectNames.ToHashSet(StringComparer.Ordinal);
+        var found = ProjectFiles().Where(p => nameSet.Contains(p.Name)).ToList();
+
+        var missing = nameSet.Except(found.Select(p => p.Name)).ToList();
+        Assert.True(missing.Count == 0, "Missing expected projects: " + string.Join(", ", missing));
+
+        var violations = found
+            .SelectMany(project => ProjectReferences(project)
+                .Where(isForbidden)
+                .Select(reference => $"{project.Name} -> {reference.Name}"))
+            .ToList();
+
+        Assert.True(violations.Count == 0, string.Join(Environment.NewLine, violations));
+    }
+
+    [Fact]
+    public void InternalsVisibleTo_occurrences_are_limited_to_documented_exceptions()
+    {
+        var violations = ProjectFiles()
+            .SelectMany(project => XDocument.Load(project.FullPath)
+                .Descendants("InternalsVisibleTo")
+                .Select(x => x.Attribute("Include")?.Value)
+                .OfType<string>()
+                .Where(target => !AllowedInternalsVisibleTo.Contains((project.Name, target)))
+                .Select(target => $"{project.Name} -> {target} ({project.RelativePath})"))
+            .ToList();
+
+        Assert.True(violations.Count == 0, string.Join(Environment.NewLine, violations));
+    }
+
+    [Fact]
+    public void Projects_do_not_declare_duplicate_project_references()
+    {
+        var violations = ProjectFiles()
+            .SelectMany(project => XDocument.Load(project.FullPath)
+                .Descendants("ProjectReference")
+                .Select(x => x.Attribute("Include")?.Value)
+                .OfType<string>()
+                .Select(include => include.Replace('\\', '/'))
+                .GroupBy(include => include, StringComparer.OrdinalIgnoreCase)
+                .Where(group => group.Count() > 1)
+                .Select(group => $"{project.Name}: duplicate ProjectReference {group.Key}"))
+            .ToList();
+
+        Assert.True(violations.Count == 0, string.Join(Environment.NewLine, violations));
+    }
+
+    [Fact]
+    public void Legacy_activity_factory_and_constructor_registry_are_absent()
+    {
+        string[] removedPaths =
+        [
+            "Essentials/src/Activities/Runtime/Elsa.Activities.Runtime/Services/ActivityFactory.cs",
+            "Essentials/src/Activities/Runtime/Elsa.Activities.Runtime/Services/ActivityConstructorRegistry.cs",
+            "Essentials/src/Activities/Runtime/Core/Contracts/IActivityFactory.cs",
+            "Essentials/src/Activities/Runtime/Core/Contracts/IActivityConstructor.cs",
+            "Essentials/src/Activities/Runtime/Core/Contracts/IActivityConstructorRegistry.cs"
+        ];
+        var violations = removedPaths.Where(relativePath =>
+            File.Exists(Path.Combine(RepoRoot, relativePath.Replace('/', Path.DirectorySeparatorChar))));
+        Assert.Empty(violations);
+    }
+
+    private static bool IsDesignReference(ProjectInfo reference) =>
+        reference.Name.StartsWith("Elsa.", StringComparison.Ordinal) &&
+        reference.Name.Contains(".Design", StringComparison.Ordinal);
+
+    // Extension Builder writes runtime-generated scratch projects under guid-named project/snapshot folders
+    // (gitignored, never part of the solution) when its storage path is relative to a content root in the
+    // tree. Skipped so generated output is neither held to the domain-tree convention nor read as a
+    // reintroduced public contract.
+    private static bool IsGeneratedScratchFile(string filePath) =>
+        filePath.Replace(Path.DirectorySeparatorChar, '/').Contains("/extension-builder/projects/", StringComparison.Ordinal);
+
+    private static bool IsRuntimeProject(ProjectInfo project) =>
+        project.Name == "Elsa.Workflows.Runtime"
+        || project.Name.StartsWith("Elsa.Workflows.Runtime.", StringComparison.Ordinal)
+        || project.Name == "Elsa.Activities.Runtime"
+        || project.Name.StartsWith("Elsa.Activities.Runtime.", StringComparison.Ordinal)
+        || project.Name == "Elsa.Activities.Graph.Runtime";
+
+    private static bool IsCoreSafeReference(string referenceName) =>
+        referenceName.EndsWith(".Core", StringComparison.Ordinal) ||
+        referenceName == "Elsa.Primitives" ||
+        referenceName.EndsWith(".Primitives", StringComparison.Ordinal);
+
+    private static bool IsCoreSafePackage(string packageName) =>
+        AllowedCorePackageReferences.Contains(packageName) ||
+        packageName.EndsWith(".Abstractions", StringComparison.Ordinal);
+
+    /// <summary>
+    /// Every repository root that holds first-party code. Required modules and hosts live under <c>Essentials/</c>;
+    /// optional backend modules and their tests live under <c>Extensions/</c> (#1815).
+    /// </summary>
+    /// <remarks>
+    /// Sweeps built on this must enumerate all of them. A sweep pinned to <c>src/</c> keeps compiling and
+    /// keeps passing once a module moves out; it simply stops looking at that module, which is a silent
+    /// loss of coverage rather than a failure. Moving Elsa 3 dropped seven projects out of the fifteen
+    /// guards below before this was widened.
+    /// </remarks>
+    private static IEnumerable<ProjectInfo> ProjectFiles() =>
+        ModuleRoots.Resolve(RepoRoot, ModuleRoots.All)
+            .SelectMany(directory => Directory.EnumerateFiles(directory, "*.csproj", SearchOption.AllDirectories))
+            .Where(file => !IsGeneratedScratchFile(file))
+            .Select(file => ProjectInfo.From(RepoRoot, file));
+
+    private static IEnumerable<SolutionProjectInfo> SolutionProjects()
+    {
+        var solution = XDocument.Load(Path.Combine(RepoRoot, "Elsa.Server.slnx"));
+        foreach (var folder in solution.Descendants("Folder"))
+        {
+            var folderName = folder.Attribute("Name")?.Value;
+            if (folderName is null)
+                continue;
+
+            foreach (var project in folder.Elements("Project"))
+            {
+                var path = project.Attribute("Path")?.Value;
+                if (path is not null)
+                    yield return new SolutionProjectInfo(folderName, path.Replace('\\', '/'));
+            }
+        }
+    }
+
+    private static IEnumerable<ProjectInfo> ProjectReferences(ProjectInfo project) =>
+        ProjectGraph.ReferencedProjectPaths(project.FullPath).Select(path => ProjectInfo.From(RepoRoot, path));
+
+    private static IEnumerable<ProjectInfo> ReachableProjects(ProjectInfo root)
+    {
+        var visited = new HashSet<string>(StringComparer.Ordinal) { root.FullPath };
+        var pending = new Stack<ProjectInfo>(ProjectReferences(root));
+        while (pending.TryPop(out var project))
+        {
+            if (!visited.Add(project.FullPath))
+                continue;
+
+            yield return project;
+            foreach (var reference in ProjectReferences(project))
+                pending.Push(reference);
+        }
+    }
+
+    private static IEnumerable<string> PackageReferences(ProjectInfo project)
+    {
+        var document = XDocument.Load(project.FullPath);
+        return document.Descendants("PackageReference")
+            .Where(x => !IsBuildTimeOnlyReference(x))
+            .Select(x => x.Attribute("Include")?.Value)
+            .OfType<string>();
+    }
+
+    private static bool IsBuildTimeOnlyReference(XElement reference)
+    {
+        var attribute = reference.Attribute("PrivateAssets")?.Value;
+        if (string.Equals(attribute, "all", StringComparison.OrdinalIgnoreCase))
+            return true;
+
+        var child = reference.Elements("PrivateAssets").FirstOrDefault()?.Value;
+        return string.Equals(child, "all", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static JsonObject ReadDefaultShellFeatures(string path)
+    {
+        var document = JsonNode.Parse(File.ReadAllText(path))?.AsObject()
+            ?? throw new InvalidOperationException($"{Path.GetFileName(path)} is not a JSON object.");
+
+        return document["CShells"]?["Shells"]?["default"]?["Features"] as JsonObject
+            ?? throw new InvalidOperationException($"{Path.GetFileName(path)} must contain CShells.Shells.default.Features.");
+    }
+
+    /// <summary>
+    /// Project-name prefixes that belong to an optional module, and the <c>Extensions/</c> bucket owning
+    /// each (#1815). Order matters only if one prefix is a prefix of another, which none are today.
+    /// </summary>
+    private static readonly (string Prefix, string Bucket)[] ExtensionBuckets =
+    [
+        ("Elsa3.", "Elsa3"),
+        ("Elsa.Agent.", "Agent"),
+        ("Elsa.ExtensionBuilder.", "ExtensionBuilder"),
+    ];
+
+    /// <summary>
+    /// Test fixtures that sit beside the test project they serve, under its area's <c>Fixtures/</c> folder, rather than
+    /// inside it (#2577). Their names stay what the tests load them by, so the names no longer spell the path.
+    /// </summary>
+    private static readonly Dictionary<string, string> RelocatedTestProjects = new(StringComparer.Ordinal)
+    {
+        // The CLR scanner tests read this assembly's name ("Elsa.Activities.Design.Tests.ClrFixture") and its activities' type names.
+        ["Elsa.Activities.Design.Tests.ClrFixture"] = "Essentials/tests/Activities/Design/Fixtures/ClrFixture/Elsa.Activities.Design.Tests.ClrFixture.csproj",
+        // Beside the library it tests, as Elsa.Cluster.Tests sits beside Elsa.Cluster.Testing.
+        ["Elsa.Api.Compatibility.Testing.Tests"] = "Essentials/tests/Api/Compatibility/Tests/Elsa.Api.Compatibility.Testing.Tests.csproj",
+    };
+
+    /// <summary>
+    /// The path a project's name implies: <c>{root}/{name segments}/{name}.csproj</c>. When that directory also holds
+    /// other projects, the project moves into a sub-folder named exactly after itself (#2577), so a folder is either a
+    /// project or a container of projects and never both.
+    /// </summary>
+    private static string NameDerivedPath(ProjectInfo project, string derivedDirectory, IReadOnlySet<string> projectDirectories)
+    {
+        var ownDirectory = Path.GetDirectoryName(project.RelativePath)!.Replace('\\', '/');
+        var isContainer = projectDirectories.Any(directory =>
+            !string.Equals(directory, ownDirectory, StringComparison.Ordinal) &&
+            directory.StartsWith(derivedDirectory + "/", StringComparison.Ordinal));
+
+        return isContainer
+            ? $"{derivedDirectory}/{project.Name}/{project.Name}.csproj"
+            : $"{derivedDirectory}/{project.Name}.csproj";
+    }
+
+    private static string ExpectedProjectPath(ProjectInfo project, IReadOnlySet<string> projectDirectories)
+    {
+        if (project.Name == "Elsa.Workbench")
+            return "Essentials/apps/Elsa.Workbench/Elsa.Workbench.csproj";
+
+        // Deployable host app, like Elsa.Workbench: it lives under Essentials/apps/, not the Essentials/src/<domain>/
+        // tree, so its name (which collides with the Elsa.Foundation identity domain) does not dictate its
+        // path.
+        if (project.Name == "Elsa.Foundation.Host")
+            return "Essentials/apps/Elsa.Foundation.Host/Elsa.Foundation.Host.csproj";
+
+        if (RelocatedTestProjects.TryGetValue(project.Name, out var relocated))
+            return relocated;
+
+        if (project.Name == "Elsa.Primitives")
+            return "Essentials/src/Primitives/Primitives/Elsa.Primitives.csproj";
+
+        // Optional modules live under Extensions/<Bucket>/<src|tests>/ rather than in Essentials/src
+        // (#1815). The name-to-path derivation is the same one the src/ rules below use; only the root
+        // differs, and the src|tests split sits inside the extension rather than at the top of the tree.
+        // Moving a module is therefore one row in ExtensionBuckets, not another branch here.
+        if (ExtensionBuckets.FirstOrDefault(bucket => project.Name.StartsWith(bucket.Prefix, StringComparison.Ordinal)) is { Bucket.Length: > 0 } owner)
+        {
+            var subPath = string.Join('/', project.Name[owner.Prefix.Length..].Split('.'));
+            var root = project.RelativePath.Contains("/tests/", StringComparison.Ordinal) ? "tests" : "src";
+            return NameDerivedPath(project, $"Extensions/{owner.Bucket}/{root}/{subPath}", projectDirectories);
+        }
+
+        // Matched against Essentials/src and Essentials/tests specifically, not a broad root prefix: an unregistered bucket
+        // must not quietly receive the core
+        // expectation instead of reaching the refusal below.
+        if (project.Name.StartsWith("Elsa.", StringComparison.Ordinal) && project.RelativePath.StartsWith("Essentials/src/", StringComparison.Ordinal))
+            return NameDerivedPath(project, $"Essentials/src/{string.Join('/', project.Name.Split('.')[1..])}", projectDirectories);
+
+        if (project.Name.StartsWith("Elsa.", StringComparison.Ordinal) && project.RelativePath.StartsWith("Essentials/tests/", StringComparison.Ordinal))
+            return NameDerivedPath(project, $"Essentials/tests/{string.Join('/', project.Name.Split('.')[1..])}", projectDirectories);
+
+        // An Elsa.* project outside every root this method knows has no expected path to compare against,
+        // and returning its own path would compare it with itself — the guard would pass while checking
+        // nothing. Most likely it is a module moved to Extensions without a row in ExtensionBuckets,
+        // so refuse and say so rather than go quiet.
+        if (project.Name.StartsWith("Elsa.", StringComparison.Ordinal))
+        {
+            throw new InvalidOperationException(
+                $"{project.Name} lives at {project.RelativePath}, which is neither Essentials/src, Essentials/tests, Essentials/apps, nor a " +
+                "registered extension bucket. Add its bucket to ExtensionBuckets, or teach ExpectedProjectPath " +
+                "where that root puts a module.");
+        }
+
+        return project.RelativePath;
+    }
+
+    private static string ExpectedSolutionFolder(ProjectInfo project, HashSet<string> projectDirectories)
+    {
+        if (project.Name == "Elsa.Workbench")
+            return "/Essentials/apps/";
+
+        // Deployable host app under Essentials/apps/ (see ExpectedProjectPath): grouped directly beneath the Apps
+        // solution folder, alongside Elsa.Workbench.
+        if (project.Name == "Elsa.Foundation.Host")
+            return "/Essentials/apps/";
+
+        var directory = Path.GetDirectoryName(project.RelativePath)!.Replace('\\', '/');
+        var lastProjectSegment = project.Name.Split('.')[^1];
+        var lastDirectorySegment = directory.Split('/')[^1];
+
+        // A project in a sub-folder named exactly after it (see ExpectedProjectPath) is grouped with the sibling
+        // projects of the container it sits in.
+        if (lastDirectorySegment == project.Name)
+            return $"/{Path.GetDirectoryName(directory)!.Replace('\\', '/')}/";
+        var hasChildProject = projectDirectories.Any(other =>
+            other.Length > directory.Length &&
+            other.StartsWith(directory + "/", StringComparison.Ordinal));
+        var keepLeafFolder = project.Name is "Elsa.Primitives" or "Elsa.Primitives.Hosting";
+
+        if (!keepLeafFolder && lastDirectorySegment == lastProjectSegment && !hasChildProject)
+            directory = Path.GetDirectoryName(directory)!.Replace('\\', '/');
+
+        return $"/{directory}/";
+    }
+
+    private sealed record ProjectInfo(string Name, string FullPath, string RelativePath)
+    {
+        public static ProjectInfo From(string repoRoot, string fullPath)
+        {
+            var normalizedFullPath = Path.GetFullPath(fullPath);
+            return new ProjectInfo(
+                Path.GetFileNameWithoutExtension(normalizedFullPath),
+                normalizedFullPath,
+                Path.GetRelativePath(repoRoot, normalizedFullPath).Replace(Path.DirectorySeparatorChar, '/'));
+        }
+    }
+
+    private sealed record SolutionProjectInfo(string Folder, string Path);
+}
+
+// Provider-neutral persistence contract projects must never gain a declared or transitive edge to a
+// concrete provider (EF Core or a database driver). Reviewed with spec 094; the resolved
+// project.assets.json check that used to accompany it went away with the EF surface ratchet.
+internal static class PersistenceProviderNeutralityBoundary
+{
+    public static IReadOnlyList<string> ProjectNames { get; } =
+    [
+        "Elsa.Workflows.Runtime.Core",
+        "Elsa.Foundation.Identity.Core",
+        "Elsa.Foundation.Identity",
+        "Elsa.Secrets.Core",
+        "Elsa.Workflows.Runtime.Distributed"
+    ];
+
+    public static bool IsConcreteProviderPackage(string packageName) =>
+        packageName.Contains("EntityFrameworkCore", StringComparison.OrdinalIgnoreCase) ||
+        IsPackageFamily(packageName, "Microsoft.Data.Sqlite") ||
+        IsPackageFamily(packageName, "SQLitePCLRaw") ||
+        IsPackageFamily(packageName, "Microsoft.Data.SqlClient") ||
+        IsPackageFamily(packageName, "System.Data.SqlClient") ||
+        IsPackageFamily(packageName, "Npgsql");
+
+    public static bool IsConcreteProviderProject(string projectName, string relativePath) =>
+        HasProviderMarker(projectName) || HasProviderMarker(relativePath);
+
+    private static bool IsPackageFamily(string packageName, string family) =>
+        packageName.Equals(family, StringComparison.OrdinalIgnoreCase) ||
+        packageName.StartsWith(family + ".", StringComparison.OrdinalIgnoreCase);
+
+    private static bool HasProviderMarker(string value) =>
+        value.Contains(".EFCore", StringComparison.OrdinalIgnoreCase) ||
+        value.Contains(".EntityFrameworkCore", StringComparison.OrdinalIgnoreCase) ||
+        value.Contains("/EFCore/", StringComparison.OrdinalIgnoreCase) ||
+        value.Contains("/EntityFrameworkCore/", StringComparison.OrdinalIgnoreCase) ||
+        value.Contains("/Sqlite/", StringComparison.OrdinalIgnoreCase) ||
+        value.Contains("/SqlServer/", StringComparison.OrdinalIgnoreCase) ||
+        value.Contains("/PostgreSql/", StringComparison.OrdinalIgnoreCase);
+}

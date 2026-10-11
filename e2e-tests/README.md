@@ -11,8 +11,8 @@ The opt-in shared-persistence journeys use two disposable PostgreSQL databases i
 Build and start the server (Development profile -> SQLite, seeded admin `admin` / `Password123!`):
 
 ```bash
-dotnet build src/apps/Elsa.Workbench/Elsa.Workbench.csproj
-dotnet run --project src/apps/Elsa.Workbench/Elsa.Workbench.csproj --launch-profile http
+dotnet build Essentials/apps/Elsa.Workbench/Elsa.Workbench.csproj
+dotnet run --project Essentials/apps/Elsa.Workbench/Elsa.Workbench.csproj --launch-profile http
 ```
 
 **There is no separate schema-deployment step.** Each EF Core module applies or validates its own
@@ -119,7 +119,7 @@ take no server argument and can run while yours is up:
 
 ```powershell
 # After building, start the server on 5295 instead of the launch profile's 5095 (separate terminal):
-#   dotnet run --no-build --project src/apps/Elsa.Workbench/Elsa.Workbench.csproj --no-launch-profile -- --urls http://localhost:5295 --environment Development
+#   dotnet run --no-build --project Essentials/apps/Elsa.Workbench/Elsa.Workbench.csproj --no-launch-profile -- --urls http://localhost:5295 --environment Development
 # In another terminal, wait until http://localhost:5295/health/ready reports ready, then use the same $base for each script.
 $base = 'http://localhost:5295'
 $selfHosted = 'Test-RestartRecovery.ps1', 'Test-AlterationReplayAndRestart.ps1', 'Test-FileBasedDeployment.ps1',
@@ -355,8 +355,8 @@ reproduce. This is an architecture difference (like the removed flow-activity mo
 
 `Test-ChildWorkflow.ps1` needs the `DispatchWorkflow` activity, which the reference server did not compose.
 Enabling it (separate from the bug fixes below):
-- `src/apps/Elsa.Workbench/Elsa.Workbench.csproj` - project refs to `Elsa.Activities.DispatchWorkflow.{Runtime,Design}`.
-- `src/apps/Elsa.Workbench/shells.json` - features `ActivitiesDispatchWorkflowRuntime` + `ActivitiesDispatchWorkflowDesign`.
+- `Essentials/apps/Elsa.Workbench/Elsa.Workbench.csproj` - project refs to `Elsa.Activities.DispatchWorkflow.{Runtime,Design}`.
+- `Essentials/apps/Elsa.Workbench/shells.json` - features `ActivitiesDispatchWorkflowRuntime` + `ActivitiesDispatchWorkflowDesign`.
 - No `Program.cs` change needed: `.WithHostAssemblies()` discovers the referenced assemblies' shell features.
 
 Fire-and-forget (`WaitForCompletion=false`, used by the test) works: the parent completes immediately with

@@ -314,7 +314,7 @@ not among them.
 
 ## Tests
 
-`tests/essentials/Samples/Nuplane/Notes/Tests` builds both releases and checks what each declares (schema version, upcaster,
+`Essentials/tests/Samples/Nuplane/Notes/Tests` builds both releases and checks what each declares (schema version, upcaster,
 content columns, migrations, feature requirement); applies `Initial` and then `AddTags` to a real Sqlite database and checks the
 schema and that each release's model matches its snapshot; writes a note under release 1.0.0 and reads it through release 1.1.0
 as a note with no tags; runs the rewriter against a real database, once for each outcome it can answer (rewritten, already current,
