@@ -11,8 +11,8 @@
     <Product>Elsa Studio</Product>
     <Copyright>Copyright © Elsa Workflows</Copyright>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
-    <PackageProjectUrl>https://github.com/elsa-workflows/elsa-foundation-studio</PackageProjectUrl>
-    <RepositoryUrl>https://github.com/elsa-workflows/elsa-foundation-studio.git</RepositoryUrl>
+    <PackageProjectUrl>https://github.com/elsa-workflows/elsa-foundation</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/elsa-workflows/elsa-foundation.git</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
     <PackageTags>elsa;studio;workflow;workflows;designer;ui</PackageTags>
     <!-- Each project's Client/ folder holds frontend (Vite/pnpm) source. It is built

@@ -1,5 +1,7 @@
 # Issue tracker: GitHub
 
+> Historical guide for the standalone `elsa-foundation-studio` repository. Current Studio issues and claims use the Foundation [issue-tracker guide](../../../docs/agents/issue-tracker.md) and [concurrent-work rules](../../../AGENTS.md#concurrent-work-claims); see [Foundation #2501](https://github.com/elsa-workflows/elsa-foundation/issues/2501). This note does not reparent earlier Studio issues.
+
 Issues and PRDs for this repo live as GitHub issues. Use the `gh` CLI for all operations.
 
 ## Conventions

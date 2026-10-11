@@ -1,5 +1,7 @@
 # UX fix routine
 
+> Historical routine for the standalone Studio repository. Current Studio fixes use the Foundation [Quality Fix Routine](../../../docs/skills/catalog.md#quality-fix-routine), its [issue-tracker guide](../../../docs/agents/issue-tracker.md), and the consolidation record in [#2501](https://github.com/elsa-workflows/elsa-foundation/issues/2501). Existing Studio issue references are preserved; no issue is reparented by this note.
+
 A scheduled routine runs this contract on weekdays. A user can also ask for one fixer pass. Each run starts in a fresh session on current `main`, does one bounded unit of work, and reports in its final message. The rules below are the routine's whole contract; the scheduled prompt only invokes the `studio-ux-fix` skill.
 
 Its input is the issues that elsa-foundation's [UX QA routine](https://github.com/elsa-workflows/elsa-foundation/blob/main/docs/skills/catalog.md#ux-qa-routine) files here. That routine runs the Workbench and Studio in a browser twice a week. It files a reproduced defect whose fix needs no design choice as `ready-for-agent` + `auto-qa`. It files everything else as `needs-triage` for a maintainer. Each issue carries its reproduction as a journey script on `tools/ux-qa/lib.mjs` in elsa-foundation.

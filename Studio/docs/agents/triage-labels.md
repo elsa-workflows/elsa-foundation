@@ -1,5 +1,7 @@
 # Triage Labels
 
+> Historical labels for the standalone Studio repository. Current work follows the active Foundation issue or workflow labels; see the Foundation [issue-tracker guide](../../../docs/agents/issue-tracker.md) and [#2501](https://github.com/elsa-workflows/elsa-foundation/issues/2501). Existing issue links are historical and are not reparented here.
+
 GitHub is the source of truth for this repository's labels. Verify the current set before applying one:
 
 ```shell

@@ -1,5 +1,5 @@
 import { resolve } from "node:path";
-import { defineConfig, type UserConfig } from "vite";
+import { defineConfig, searchForWorkspaceRoot, type UserConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import { moduleCssContractPlugin } from "./vite.module.css-contract";
 
@@ -35,6 +35,11 @@ export function defineModuleConfig({
   ];
 
   return defineConfig({
+    server: {
+      fs: {
+        allow: [searchForWorkspaceRoot(root), __dirname]
+      }
+    },
     plugins: [react(), moduleCssContractPlugin()],
     define: {
       "process.env.NODE_ENV": JSON.stringify("production")

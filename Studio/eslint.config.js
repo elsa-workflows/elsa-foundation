@@ -84,8 +84,11 @@ export default tseslint.config(
     files: [
       '**/*.config.{js,ts,mjs,cjs}',
       '**/vite.*.config.ts',
-      'scripts/**/*.mjs',
-      'src/**/scripts/**/*.mjs',
+      'Studio/scripts/**/*.mjs',
+      'Studio/src/**/scripts/**/*.mjs',
+      'Studio/tests/**/scripts/**/*.mjs',
+      'Studio/examples/**/scripts/**/*.mjs',
+      'Extensions/*/studio/**/scripts/**/*.mjs',
     ],
     languageOptions: {
       globals: {

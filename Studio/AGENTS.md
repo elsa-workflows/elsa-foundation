@@ -6,15 +6,15 @@ For Spec Kit feature work, read the plan in the feature directory identified by 
 
 ### Issue tracker
 
-Issues are tracked in GitHub Issues for `elsa-workflows/elsa-foundation-studio`; external PRs are not a triage request surface. See `docs/agents/issue-tracker.md`.
+Current Studio work is tracked in `elsa-workflows/elsa-foundation`. Follow the Foundation [issue-tracker guide](../docs/agents/issue-tracker.md) and [concurrent-work claim rules](../AGENTS.md#concurrent-work-claims). Foundation [#2501](https://github.com/elsa-workflows/elsa-foundation/issues/2501) records the Studio consolidation. Existing links to Studio-repository issues remain historical references; this does not reparent them. External PRs are not a triage request surface.
 
 ### Triage labels
 
-Use only labels that currently exist in the repository. See `docs/agents/triage-labels.md` for the workflow-specific labels and verification command.
+Use only labels defined by the active Foundation issue or workflow. The standalone Studio label list in `docs/agents/triage-labels.md` is historical; do not assume those labels exist in Foundation.
 
 ### UX fix routine
 
-The scheduled UX fix routine follows `docs/agents/ux-fix-routine.md` and takes the `ready-for-agent` + `auto-qa` issues that elsa-foundation's UX QA routine files here.
+For current fixes, follow Foundation's [Quality Fix Routine](../docs/skills/catalog.md#quality-fix-routine) and claim work on the Foundation issue using the root rules above. The standalone Studio routine in `docs/agents/ux-fix-routine.md` is retained as a historical record.
 
 ### Domain docs
 

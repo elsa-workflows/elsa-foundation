@@ -4,9 +4,9 @@ Elsa Foundation Studio is the modular React studio shell hosted by ASP.NET Core.
 
 ## Choose and align work
 
-Actionable Studio work is tracked in [GitHub Issues](https://github.com/elsa-workflows/elsa-foundation-studio/issues). Check an issue's comments and open pull requests before starting; an unassigned issue is not necessarily available. If ownership or scope is unclear, ask in the issue.
+Current actionable Studio work is tracked in [Elsa Foundation GitHub Issues](https://github.com/elsa-workflows/elsa-foundation/issues). Before starting, check the issue's comments and open pull requests, then follow Foundation's [issue-tracker guide](../docs/agents/issue-tracker.md) and [concurrent-work claim rules](../AGENTS.md#concurrent-work-claims). [Foundation #2501](https://github.com/elsa-workflows/elsa-foundation/issues/2501) records the consolidation. Existing Studio issue links below are historical references; this does not reparent old issues.
 
-A small, concrete fix may be proposed directly in a pull request. For a substantial feature, describe the desired behavior in a Studio issue first and align its scope there; a pull request is not a feature-request substitute. General questions belong in the shared [Foundation Q&A](https://github.com/elsa-workflows/elsa-foundation/discussions/categories/q-a). Keep actionable Studio work in Studio Issues.
+A small, concrete fix may be proposed directly in a pull request. For a substantial feature, describe the desired behavior in a Foundation issue first and align its scope there; a pull request is not a feature-request substitute. General questions belong in the shared [Foundation Q&A](https://github.com/elsa-workflows/elsa-foundation/discussions/categories/q-a).
 
 To report a suspected security vulnerability, use the [private security reporting guidance](SECURITY.md).
 
@@ -44,12 +44,12 @@ If GitHub displays a `license/cla` check on your pull request, follow the instru
 
 ## Open a pull request from a fork
 
-For an external contribution, use **Fork** on the [repository page](https://github.com/elsa-workflows/elsa-foundation-studio) to create a copy in your GitHub account. Clone your fork so `origin` points to your account. Replace `YOUR-ACCOUNT` with your GitHub account name before running the clone command, then add the upstream repository and branch from its current `main`:
+For an external contribution, use **Fork** on the [Elsa Foundation repository](https://github.com/elsa-workflows/elsa-foundation) to create a copy in your GitHub account. Clone your fork so `origin` points to your account. Replace `YOUR-ACCOUNT` with your GitHub account name before running the clone command, then add the upstream repository and branch from its current `main`:
 
 ```bash
-git clone https://github.com/YOUR-ACCOUNT/elsa-foundation-studio.git
-cd elsa-foundation-studio
-git remote add upstream https://github.com/elsa-workflows/elsa-foundation-studio.git
+git clone https://github.com/YOUR-ACCOUNT/elsa-foundation.git
+cd elsa-foundation
+git remote add upstream https://github.com/elsa-workflows/elsa-foundation.git
 git fetch upstream
 git switch -c docs/my-change upstream/main
 ```
@@ -62,7 +62,7 @@ git commit -m "Describe the change"
 git push -u origin docs/my-change
 ```
 
-On GitHub, open a **draft** pull request from `YOUR-ACCOUNT:docs/my-change` to `elsa-workflows/elsa-foundation-studio:main`. Include a short summary, link the issue when applicable, and report the checks you ran. Mark the draft ready when the change is reviewable. Respond to review requests and rerun and report affected checks after changes.
+On GitHub, open a **draft** pull request from `YOUR-ACCOUNT:docs/my-change` to `elsa-workflows/elsa-foundation:main`. Include a short summary, link the Foundation issue when applicable, and report the checks you ran. Mark the draft ready when the change is reviewable. Respond to review requests and rerun and report affected checks after changes.
 
 ## License
 

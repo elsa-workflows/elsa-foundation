@@ -42,6 +42,10 @@ const packages = [
   ...walk(moduleSourceRoots, name => name === "package.json"),
   ...walk([join(studioRoot, "examples")], name => name === "package.json")
 ].map(rel).sort();
+const packageManifests = new Map(packages.map(path => [
+  JSON.parse(readFileSync(join(repoRoot, path), "utf8")).name,
+  path
+]));
 
 // A module's root is the directory containing its project, or — for a Client-only module —
 // the parent of the package directory. Generated Vite output lives here.
@@ -142,6 +146,10 @@ const fail = (assertion, detail) => failures.push({ assertion, detail });
 
 // ── 5. enforce the consolidated Studio source boundary ─────────────────────────────────────
 {
+  for (const manifest of packages.filter(path => path.startsWith("Studio/src/"))) {
+    if (!/^Studio\/src\/(essentials|apps)\//.test(manifest))
+      fail("layout", `${manifest} is not under Studio/src/essentials or Studio/src/apps`);
+  }
   for (const project of projects.filter(path => path.startsWith("Studio/src/"))) {
     if (!/^Studio\/src\/(essentials|apps)\//.test(project))
       fail("layout", `${project} is not under Studio/src/essentials or Studio/src/apps`);
@@ -157,6 +165,17 @@ const fail = (assertion, detail) => failures.push({ assertion, detail });
       const target = rel(resolve(join(repoRoot, dirname(project)), include.split("\\").join("/")));
       if (target.startsWith("Extensions/"))
         fail("boundary", `${project} is a Studio essential but references optional module ${target}`);
+    }
+  }
+
+  for (const manifestPath of packages.filter(path => path.startsWith("Studio/src/essentials/"))) {
+    const manifest = JSON.parse(readFileSync(join(repoRoot, manifestPath), "utf8"));
+    for (const group of ["dependencies", "devDependencies", "peerDependencies"]) {
+      for (const [name, range] of Object.entries(manifest[group] ?? {})) {
+        const dependencyPath = packageManifests.get(name);
+        if (typeof range === "string" && range.startsWith("workspace:") && dependencyPath?.startsWith("Extensions/"))
+          fail("boundary", `${manifestPath} is an essential but depends on extension package ${name}`);
+      }
     }
   }
 }
