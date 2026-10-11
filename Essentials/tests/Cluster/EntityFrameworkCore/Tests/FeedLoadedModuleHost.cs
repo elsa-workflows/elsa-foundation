@@ -187,7 +187,7 @@ internal sealed class FeedLoadedModuleHost : IAsyncDisposable
 
     /// <summary>The host's <c>Nuplane:Loading:SharedAssemblies</c>, from its <c>appsettings.json</c>, as Nuplane binds and validates them.</summary>
     public static NuplaneSharedAssemblyPolicy SharedAssemblies(string host) =>
-        NuplaneSharedAssemblyPolicy.FromHostAppSettings(Path.Join(FoundationHostProcess.RepoRoot, "src", "apps", host, "appsettings.json"));
+        NuplaneSharedAssemblyPolicy.FromHostAppSettings(Path.Join(FoundationHostProcess.RepoRoot, "Essentials", "apps", host, "appsettings.json"));
 }
 
 /// <summary>

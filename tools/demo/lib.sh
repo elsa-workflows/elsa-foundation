@@ -22,8 +22,8 @@ demo_pg_container="${DEMO_PG_CONTAINER:-elsa-demo-pg}"
 
 # Act 3: the Workbench build tools/demo/run-workbench.sh copies, and the Elsa Studio checkout tools/demo/run-studio.sh runs
 # (DEMO_STUDIO_DIR, relative to the repository root unless absolute; a sibling checkout by default).
-demo_workbench_build="$demo_root/src/apps/Elsa.Workbench/bin/Release/net10.0"
-demo_studio_dir="${DEMO_STUDIO_DIR:-../elsa-foundation-studio-demo}"
+demo_workbench_build="$demo_root/Essentials/apps/Elsa.Workbench/bin/Release/net10.0"
+demo_studio_dir="${DEMO_STUDIO_DIR:-Studio}"
 [[ "$demo_studio_dir" == /* ]] || demo_studio_dir="$demo_root/$demo_studio_dir"
 
 # demo_workbench_connection HOSTDIR: the one Sqlite database a Workbench host of run-workbench.sh keeps everything in. The host is

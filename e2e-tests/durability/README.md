@@ -23,7 +23,7 @@ pid in the message instead of stopping it.
 On success the temporary root is removed; on failure it is retained with server logs for diagnosis.
 
 Requirements / caveats:
-- **Build first:** `dotnet build src/apps/Elsa.Workbench/Elsa.Workbench.csproj`.
+- **Build first:** `dotnet build Essentials/apps/Elsa.Workbench/Elsa.Workbench.csproj`.
 - Run `pwsh ./e2e-tests/durability/Test-RestartRecovery.ps1` from the repository root. `-RestartServer:$false`
   exercises the same isolated fixture without restarting it. To target a separately started server, pass
   `-UseExternalServer -RestartServer:$false`; this mode never stops that server.

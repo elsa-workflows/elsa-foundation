@@ -45,7 +45,7 @@ services:
     build:
       # Build context MUST be the repository root (two levels up from docker/compose).
       context: ../..
-      dockerfile: src/apps/Elsa.Workbench/Dockerfile
+      dockerfile: Essentials/apps/Elsa.Workbench/Dockerfile
     image: elsa-workbench:local
     depends_on:
       postgres:
@@ -128,7 +128,7 @@ services:
   # Dockerfile also uses its repo root as build context:
   #
   #   cd ../../../elsa-foundation-studio   # from Foundation docker/compose
-  #   docker build -f src/apps/Elsa.Studio.Web/Dockerfile -t elsa-studio-web:local .
+  #   docker build -f Essentials/apps/Elsa.Studio.Web/Dockerfile -t elsa-studio-web:local .
   #   cd -                               # back to Foundation docker/compose (Bash)
   #
   # Then start it with the 'studio' profile:
@@ -142,7 +142,7 @@ services:
     profiles: ["studio"]
     # build:
     #   context: ../../../elsa-foundation-studio
-    #   dockerfile: src/apps/Elsa.Studio.Web/Dockerfile
+    #   dockerfile: Essentials/apps/Elsa.Studio.Web/Dockerfile
     depends_on:
       elsa-workbench:
         condition: service_healthy

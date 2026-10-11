@@ -356,7 +356,7 @@ if [[ " $acts " == *" 3 "* ]]; then
   start_workbench wb "$port_wb"
   wait_ready wb "$port_wb"
   if [[ ! -f "$demo_studio_dir/src/apps/Elsa.Studio.Web/bin/Release/net10.0/Elsa.Studio.Web.dll" ]]; then
-    echo "    note: no built Studio checkout at ${DEMO_STUDIO_DIR:-../elsa-foundation-studio-demo}; the rehearsal does not need one, the presentation does (tools/demo/run-studio.sh)"
+    echo "    note: no built Studio checkout at ${DEMO_STUDIO_DIR:-Studio}; the rehearsal does not need one, the presentation does (tools/demo/run-studio.sh)"
   fi
 fi
 

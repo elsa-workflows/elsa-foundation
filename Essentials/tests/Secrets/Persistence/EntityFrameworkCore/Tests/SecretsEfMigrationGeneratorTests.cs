@@ -27,7 +27,7 @@ public sealed class SecretsEfMigrationGeneratorTests
         var library = File.ReadAllText(RepoPath("tools", "ef", "secrets-ef-lib.sh"));
 
         Assert.Equal(
-            "src/essentials/Secrets/Persistence/EntityFrameworkCore/Elsa.Secrets.Persistence.EntityFrameworkCore.csproj",
+            "Essentials/src/Secrets/Persistence/EntityFrameworkCore/Elsa.Secrets.Persistence.EntityFrameworkCore.csproj",
             Assignment(library, "secrets_ef_module"));
         var startup = Assignment(library, "secrets_ef_startup");
         Assert.Equal("tools/ef/Elsa.EntityFrameworkCore.Tooling/Elsa.EntityFrameworkCore.Tooling.csproj", startup);

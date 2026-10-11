@@ -15,7 +15,7 @@ grep_ok() { grep "$@" || [[ $? -eq 1 ]]; }
 # /dev/null keeps grep and cat off stdin when a file list is empty.
 count() { grep_ok -hEc "$1" /dev/null "${@:2}" | awk '{s+=$1} END {print s+0}'; }
 
-mapfile -t essentials < <(cs_files src/essentials)
+mapfile -t essentials < <(cs_files Essentials/src)
 # Production and test files are disjoint, so a file under src/**/tests is counted once, as a test.
 mapfile -t src_all < <(cs_files src -not -path '*/tests/*')
 mapfile -t tests_all < <(cs_files tests src \( -path 'tests/*' -o -path '*/tests/*' \))
@@ -60,7 +60,7 @@ cat <<MD
 
 | Metric | Value | Target |
 |---|---|---|
-| Public types in \`src/essentials\` (excluding migrations) | $public_types of $all_types ($pct%) | < 1,500 |
+| Public types in \`Essentials/src\` (excluding migrations) | $public_types of $all_types ($pct%) | < 1,500 |
 | Production projects | $prod_projects | ~100 |
 | Test LOC / test methods | $test_loc / $test_methods | trend down |
 | \`[Obsolete]\` members in \`src\` | $obsolete | 0 |

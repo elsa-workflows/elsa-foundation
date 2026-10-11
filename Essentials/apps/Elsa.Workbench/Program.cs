@@ -217,7 +217,7 @@ builder.Services.AddNuplane(nuplaneConfiguration, nuplane =>
     // configured DirectoryPath resolves against NuplaneBuilder.BasePath when something sets one, and against
     // the process's current directory otherwise — so without this line a Workbench whose content root is set
     // independently of where it was launched reads "DirectoryPath": "packages" out of one directory and
-    // looks for that folder under another. See src/apps/Elsa.Foundation.Host/Program.cs for the longer note.
+    // looks for that folder under another. See Essentials/apps/Elsa.Foundation.Host/Program.cs for the longer note.
     nuplane.UseBasePath(builder.Environment.ContentRootPath);
     nuplane.AddDirectoryFeedsFromConfiguration(nuplaneConfiguration);
     nuplane.AutoloadPackages(nuplaneConfiguration.GetSection("Loading"));

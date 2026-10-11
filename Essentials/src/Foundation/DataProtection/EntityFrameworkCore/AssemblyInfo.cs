@@ -25,6 +25,6 @@ using Elsa.Specifications.PackageManifest.Generator.Hints;
 // the version its rows use; that holds by review until #2606 restores a compiled check.
 [assembly: EfSchemaFamily(DataProtectionKeysEfModule.SchemaFamily, "DataProtection.Keys", DataProtectionKeysEfModule.SchemaVersion)]
 
-// Content and integrity columns: see src/essentials/Persistence/EntityFramework/EXTENSION_POINTS.md, "Content and integrity
+// Content and integrity columns: see Essentials/src/Persistence/EntityFramework/EXTENSION_POINTS.md, "Content and integrity
 // columns" (spec 180, FR-008, FR-009 and FR-014). The element is what the key manager parses.
 [assembly: EfSchemaContent(DataProtectionKeysEfModule.SchemaFamily, typeof(DataProtectionKeyEntity), nameof(DataProtectionKeyEntity.Xml))]

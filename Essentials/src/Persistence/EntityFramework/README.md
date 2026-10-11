@@ -30,7 +30,7 @@ First-party EF Core persistence supports four relational engines, and only these
 **Oracle is not supported.** There is no Oracle provider context, no Oracle migrations, and no Oracle
 error-code mapping; a module configured with `Oracle` is refused as it registers, by the same message
 that lists the four above, and that refusal is pinned by
-[`EfRelationalProviderBindingTests`](../../../../tests/essentials/Persistence/EntityFramework/Tests/EfRelationalProviderBindingTests.cs).
+[`EfRelationalProviderBindingTests`](../../../../Essentials/tests/Persistence/EntityFramework/Tests/EfRelationalProviderBindingTests.cs).
 This is a decision, not a gap awaiting a contribution: accepted
 [ADR 0075](../../../../docs/adr/0075-oracle-is-not-a-supported-ef-core-engine.md) records why, and names
 the condition under which it is revisited. The short form is that every engine here has a container leg
@@ -561,13 +561,13 @@ guards replace that compile check:
   `EfProviderBindingValidator` probes every one of them in the CShells `Prepare` phase — before any migrator runs, and
   as the first hosted service on a plain host. The error names each module, its configured provider, the missing
   assembly or extension method, and the `PackageReference` to add.
-- **In CI.** [tests/essentials/Persistence/EntityFramework/BindingDriftTests](../../../../tests/essentials/Persistence/EntityFramework/BindingDriftTests)
+- **In CI.** [Essentials/tests/Persistence/EntityFramework/BindingDriftTests](../../../../Essentials/tests/Persistence/EntityFramework/BindingDriftTests)
   references all four engines at the versions `Directory.Packages.props` pins and binds against each, so a provider
   upgrade that renames, moves, or reshapes a `Use*` extension fails CI rather than a host.
 
 ### Why no typed registration helper
 
-ADR 0073's [EF dependency guard](../../../../tests/essentials/Architecture/Tests/EfCoreDependencyGuardTests.cs) admits engine
+ADR 0073's [EF dependency guard](../../../../Essentials/tests/Architecture/Tests/EfCoreDependencyGuardTests.cs) admits engine
 packages in `Elsa.Workbench` only, and asserts each admitted module project's EF closure exactly. Adding a typed
 `UseSqlServer` call to a module project would therefore fail the guard as an unexpectedly resolved package, and
 splitting each module into four provider-specific projects would turn thirteen module projects into fifty-two and

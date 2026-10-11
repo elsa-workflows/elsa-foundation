@@ -1,5 +1,5 @@
 # .dockerignore (repo root) — applies to Docker builds that use the repository
-# root as context (e.g. src/apps/Elsa.Workbench/Dockerfile).
+# root as context (e.g. Essentials/apps/Elsa.Workbench/Dockerfile).
 #
 # Goal: send only what `dotnet restore`/`publish` needs. Keep repo-root build
 # config (*.props, *.targets, NuGet.config, *.slnx) and the src/ tree with
@@ -24,10 +24,12 @@
 **/*.DotSettings*
 
 # --- Repo areas not needed to build the server host -------------------------
-tests/
-# Optional-module tests (#1815). src/extensions/<Name>/src is build input and stays; its sibling
+Essentials/tests/
+Studio/tests/
+**/node_modules/
+# Optional-module tests (#1815). Extensions/<Name>/src is build input and stays; its sibling
 # tests/ is not, and unlike the top-level tests/ tree it is not covered by the rule above.
-src/extensions/*/tests/
+Extensions/*/tests/
 docs/
 samples/
 specs/
@@ -47,11 +49,11 @@ tools/
 **/*.sqlite-wal
 # Nuplane reconciliation state and directory-feed contents
 **/.nuplane/
-src/apps/Elsa.Workbench/packages/
-# Extension Builder runtime workspace (lowercase; source lives in src/extensions/ExtensionBuilder/)
-src/apps/Elsa.Workbench/extension-builder/
+Essentials/apps/Elsa.Workbench/packages/
+# Extension Builder runtime workspace (lowercase; source lives in Extensions/ExtensionBuilder/)
+Essentials/apps/Elsa.Workbench/extension-builder/
 # GitHubCopilotAgent working directory (config.json is regenerated / supplied via mount)
-src/apps/Elsa.Workbench/.elsa/
+Essentials/apps/Elsa.Workbench/.elsa/
 
 # --- Docker / compose assets ------------------------------------------------
 docker/

@@ -7,7 +7,7 @@ public static class WorkbenchBuild
 {
     public static readonly string RepositoryRoot = FindRepositoryRoot();
 
-    private static readonly string SourceDirectory = Path.Combine(RepositoryRoot, "src", "apps", "Elsa.Workbench");
+    private static readonly string SourceDirectory = Path.Combine(RepositoryRoot, "Essentials", "apps", "Elsa.Workbench");
 
     public static string SourceFile(string fileName) => Path.Combine(SourceDirectory, fileName);
 
@@ -23,7 +23,7 @@ public static class WorkbenchBuild
 
         return File.Exists(path)
             ? path
-            : throw new FileNotFoundException($"Build src/apps/Elsa.Workbench ({configuration}) before running these tests.", path);
+            : throw new FileNotFoundException($"Build Essentials/apps/Elsa.Workbench ({configuration}) before running these tests.", path);
     }
 
     private static string FindRepositoryRoot()

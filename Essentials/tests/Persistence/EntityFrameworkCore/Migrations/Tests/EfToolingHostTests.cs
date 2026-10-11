@@ -57,7 +57,7 @@ public sealed class EfToolingHostTests : IDisposable
 
     /// <summary>
     /// Clears the connection pool before removing the directory, for the reason recorded on
-    /// <c>TemporarySqliteDatabase</c> in <c>tests/essentials/Persistence/EntityFramework/Tests</c> (#1884):
+    /// <c>TemporarySqliteDatabase</c> in <c>Essentials/tests/Persistence/EntityFramework/Tests</c> (#1884):
     /// Microsoft.Data.Sqlite pools connections, so a bare delete can still find the file handle held —
     /// harmless on macOS/Linux, an <see cref="IOException"/> on Windows. This fixture owns a whole temp
     /// directory rather than one database path, so it clears the pool and removes the tree itself instead

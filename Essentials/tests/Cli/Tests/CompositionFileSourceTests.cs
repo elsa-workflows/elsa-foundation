@@ -926,7 +926,7 @@ public sealed class CompositionFileSourceTests
         public LocalFixture()
         {
             System.IO.Directory.CreateDirectory(Directory);
-            var source = Path.Join(RepoRoot, "tests", "essentials", "Cli", "Tests", "Fixtures", "CompositionBridge");
+            var source = Path.Join(RepoRoot, "Essentials", "tests", "Cli", "Tests", "Fixtures", "CompositionBridge");
             foreach (var file in System.IO.Directory.GetFiles(source, "*.json"))
                 File.Copy(file, Path.Join(Directory, Path.GetFileName(file)));
         }
@@ -935,7 +935,7 @@ public sealed class CompositionFileSourceTests
         {
             foreach (var file in System.IO.Directory.GetFiles(Directory, "*.json"))
                 File.Delete(file);
-            var workbench = Path.Join(RepoRoot, "src", "apps", "Elsa.Workbench");
+            var workbench = Path.Join(RepoRoot, "Essentials", "apps", "Elsa.Workbench");
             foreach (var file in System.IO.Directory.GetFiles(workbench, "*.json"))
                 if (Path.GetFileName(file).StartsWith("shells", StringComparison.Ordinal) ||
                     Path.GetFileName(file).StartsWith("appsettings", StringComparison.Ordinal))

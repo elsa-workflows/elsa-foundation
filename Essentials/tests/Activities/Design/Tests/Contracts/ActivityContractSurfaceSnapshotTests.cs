@@ -35,7 +35,7 @@ namespace Elsa.Activities.Design.Tests.Contracts;
 /// <para>
 /// To accept an intended contract change, re-run this test with
 /// <c>ELSA_UPDATE_ACTIVITY_CONTRACT_BASELINE=1</c> and commit the rewritten baseline alongside the source
-/// change, mirroring the <c>ELSA_UPDATE_EF_CORE_BASELINE</c> ratchet in <c>tests/essentials/Architecture/Tests</c>.
+/// change, mirroring the <c>ELSA_UPDATE_EF_CORE_BASELINE</c> ratchet in <c>Essentials/tests/Architecture/Tests</c>.
 /// </para>
 /// </remarks>
 public sealed class ActivityContractSurfaceSnapshotTests
@@ -43,7 +43,7 @@ public sealed class ActivityContractSurfaceSnapshotTests
     private const string UpdateEnvironmentVariable = "ELSA_UPDATE_ACTIVITY_CONTRACT_BASELINE";
 
     private const string RegenerationCommand =
-        $"{UpdateEnvironmentVariable}=1 dotnet test tests/essentials/Activities/Design/Tests/Elsa.Activities.Design.Tests.csproj " +
+        $"{UpdateEnvironmentVariable}=1 dotnet test Essentials/tests/Activities/Design/Tests/Elsa.Activities.Design.Tests.csproj " +
         "--filter FullyQualifiedName~ActivityContractSurfaceSnapshotTests";
 
     [Fact]
@@ -158,7 +158,7 @@ public sealed class ActivityContractSurfaceSnapshotTests
     private static string ActualPath => Path.Combine(ContractsDirectory, "activity-contract-surface.actual.json");
 
     private static string ContractsDirectory => Path.Combine(
-        RepoRoot, "tests", "essentials", "Activities", "Design", "Tests", "Contracts");
+        RepoRoot, "Essentials", "tests", "Activities", "Design", "Tests", "Contracts");
 
     private static string RepoRoot
     {

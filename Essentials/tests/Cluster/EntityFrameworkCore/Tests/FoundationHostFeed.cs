@@ -29,17 +29,17 @@ public sealed class FoundationHostFeed : IAsyncLifetime
     /// <summary>Packing a built project takes seconds; this is the ceiling for a <c>dotnet</c> that will never return.</summary>
     private static readonly TimeSpan DotnetTimeout = TimeSpan.FromMinutes(3);
 
-    private static readonly string Fixture = Path.Join(FoundationHostProcess.RepoRoot, "tests", "essentials", "Cluster", "Fixtures", "FeedModule", $"{FixturePackageId}.csproj");
+    private static readonly string Fixture = Path.Join(FoundationHostProcess.RepoRoot, "Essentials", "tests", "Cluster", "Fixtures", "FeedModule", $"{FixturePackageId}.csproj");
 
     /// <summary>The EF persistence project's restore: every package it needs, which the packed package declares.</summary>
-    private static readonly string PersistenceAssets = Path.Join(FoundationHostProcess.RepoRoot, "src", "essentials", "Persistence", "EntityFramework", "obj", "project.assets.json");
+    private static readonly string PersistenceAssets = Path.Join(FoundationHostProcess.RepoRoot, "Essentials", "src", "Persistence", "EntityFramework", "obj", "project.assets.json");
 
     /// <summary>
     /// The restore of the test project this is compiled into (<c>Tests</c>, or <c>ProviderTests</c>, which links this file),
     /// which carries the engine it runs on and the rest of what it needs.
     /// </summary>
     private static readonly string TestAssets = Path.Join(
-        FoundationHostProcess.RepoRoot, "tests", "essentials", "Cluster", "EntityFrameworkCore",
+        FoundationHostProcess.RepoRoot, "Essentials", "tests", "Cluster", "EntityFrameworkCore",
         typeof(FoundationHostFeed).Assembly.GetName().Name![(typeof(FoundationHostFeed).Assembly.GetName().Name!.LastIndexOf('.') + 1)..],
         "obj", "project.assets.json");
 

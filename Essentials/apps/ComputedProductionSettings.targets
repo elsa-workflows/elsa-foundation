@@ -1,7 +1,7 @@
 <Project>
 
   <!--
-    Shared by every host under src/apps/ that declares Elsa shares only when it is built with computed package
+    Shared by every host under Essentials/apps/ that declares Elsa shares only when it is built with computed package
     versions (ADR 0067, #2084, #2126): Elsa.Workbench.csproj and Elsa.Foundation.Host.csproj both import this file.
 
     The production configuration depends on how the importing host was built. A build with computed package

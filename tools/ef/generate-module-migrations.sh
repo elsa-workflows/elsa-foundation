@@ -29,7 +29,7 @@ dotnet tool restore >/dev/null
 
 module_project() {
   local assembly="$1"
-  # One root covers every module: required under src/essentials, optional under src/extensions (#1815).
+  # One root covers every module: required under Essentials/src, optional under Extensions (#1815).
   find src -name "$assembly.csproj" -not -path '*/obj/*' | head -n 1
 }
 

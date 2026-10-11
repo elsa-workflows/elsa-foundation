@@ -7,7 +7,7 @@ namespace Elsa.Cluster.EntityFrameworkCore.Tests;
 /// </summary>
 public sealed class MigratingModuleFeed : IAsyncLifetime
 {
-    private static readonly string Project = Path.Join(FoundationHostProcess.RepoRoot, "tests", "essentials", "Cluster", "Fixtures", "MigratingModule", "Elsa.Cluster.Fixtures.MigratingModule.csproj");
+    private static readonly string Project = Path.Join(FoundationHostProcess.RepoRoot, "Essentials", "tests", "Cluster", "Fixtures", "MigratingModule", "Elsa.Cluster.Fixtures.MigratingModule.csproj");
 
     private readonly DirectoryInfo _root = Directory.CreateTempSubdirectory("elsa-migrating-module-feed-");
 

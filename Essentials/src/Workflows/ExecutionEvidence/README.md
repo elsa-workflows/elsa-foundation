@@ -465,7 +465,7 @@ Bindable from `shells.json` under the feature's key, e.g.
 
 ## Tests
 
-`tests/essentials/Workflows/ExecutionEvidence/Tests` — 85 tests covering feature registration and settings flow,
+`Essentials/tests/Workflows/ExecutionEvidence/Tests` — 85 tests covering feature registration and settings flow,
 the commit-to-record mapping, all seven value dispositions and their change detection, replay dedupe and its
 bounded window, atomic append under mid-batch failure, buffer caps and the `firstSequence` gap signal,
 concurrent capture and query, and all three endpoints over a TestServer host.

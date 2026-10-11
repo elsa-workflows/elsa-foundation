@@ -377,7 +377,7 @@ try {
     Assert-RunProfilePortFree
 
     if ($InvalidCommandControl) {
-        $invalidProject = 'src/apps/Elsa.Workbench/NoSuchRunProfileControl.csproj'
+        $invalidProject = 'Essentials/apps/Elsa.Workbench/NoSuchRunProfileControl.csproj'
         $ownedProcess = Start-RunProfileProcess -ProjectPath $invalidProject -OutputLog $serverOutputLog -ErrorLog $serverErrorLog
         $ownedProcessSnapshots = @(New-RunProfileProcessSnapshot -ProcessId $ownedProcess.Id)
         $deadline = (Get-Date).AddSeconds(30)
@@ -401,7 +401,7 @@ try {
         Assert-RunProfilePortFree
         Write-Host "[negative control] nonexistent-project dotnet run returned exit code $failureControlExitCode and left port $port free."
     } else {
-        $ownedProcess = Start-RunProfileProcess -ProjectPath 'src/apps/Elsa.Workbench/Elsa.Workbench.csproj' -LaunchProfile 'http' -OutputLog $serverOutputLog -ErrorLog $serverErrorLog
+        $ownedProcess = Start-RunProfileProcess -ProjectPath 'Essentials/apps/Elsa.Workbench/Elsa.Workbench.csproj' -LaunchProfile 'http' -OutputLog $serverOutputLog -ErrorLog $serverErrorLog
         $ownedProcessSnapshots = @(New-RunProfileProcessSnapshot -ProcessId $ownedProcess.Id)
         $curlName = if ($runProfileIsWindows) { 'curl.exe' } else { 'curl' }
         $curl = Get-Command $curlName -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
@@ -524,7 +524,7 @@ if ($InvalidCommandControl) {
 
 Add-RunProfileSummary -Lines @(
     '### Documented run-profile journey: PASSED',
-    '- Replayed `dotnet run --no-build --project src/apps/Elsa.Workbench/Elsa.Workbench.csproj --launch-profile http` from the repository root on the fixed documented port 5095.',
+    '- Replayed `dotnet run --no-build --project Essentials/apps/Elsa.Workbench/Elsa.Workbench.csproj --launch-profile http` from the repository root on the fixed documented port 5095.',
     $(if ($SequenceSmoke) { '- A bounded curl readiness request reported `ready`; the canonical one-child Sequence smoke exited 0 with strict root/child/activity-count/zero-incident verdicts and the exact server stdout line.' } else { '- A bounded curl readiness request reported `ready`; the canonical REST smoke exited 0 with the strict one-WriteLine/zero-incident verdict and exact stdout line.' }),
     '- The wrapper stopped only the recorded dotnet run process tree, verified recorded process exit and port release, and removed only its temporary diagnostics directory.',
     '- This is automated command replay on a hosted runner, not a fresh bare-OS installation, an interactive Ctrl+C session, or a human newcomer trial.'

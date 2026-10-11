@@ -15,7 +15,7 @@
 # project and their sources must also be present in the Docker build context.
 # Example:
 #
-#   docker build -f src/apps/Elsa.Foundation.Host/Dockerfile \
+#   docker build -f Essentials/apps/Elsa.Foundation.Host/Dockerfile \
 #                -t elsa-foundation-host:local-<sha> .
 #
 # Runtime configuration is supplied via environment variables (standard .NET
@@ -38,59 +38,59 @@ COPY *.props *.targets NuGet.config ./
 # Restore inputs: the host, its shared endpoint-metadata project, Line A, its cluster membership, the EF closure that membership's
 # durable provider carries (Elsa.Persistence.EntityFramework plus the EF Core packages, #2151), its Data Protection key store,
 # which carries the same closure (#2191), and the computed-production-settings
-# swap Elsa.Foundation.Host.csproj imports from src/apps/ (shared with Elsa.Workbench.csproj, #2126) -- MSBuild
+# swap Elsa.Foundation.Host.csproj imports from Essentials/apps/ (shared with Elsa.Workbench.csproj, #2126) -- MSBuild
 # treats a missing <Import> as an error, not a no-op the way it does for the root files above, so this one has
 # to be copied before restore too, or restore fails outright with MSB4019 rather than silently.
 # Each project comes with its committed NuGet lock file, and both restores below are locked (#2122): they
 # restore exactly the versions those files name, and fail when one no longer matches its project or names a
 # version the feed no longer has. A project whose lock file is missing would restore unlocked without a word,
 # which is why HostEndpointMetadataTests requires each one here. See docs/reference/nuget-lock-files.md.
-COPY src/apps/ComputedProductionSettings.targets src/apps/
-COPY src/apps/Elsa.Foundation.Host/Elsa.Foundation.Host.csproj src/apps/Elsa.Foundation.Host/packages.lock.json src/apps/Elsa.Foundation.Host/
-COPY src/essentials/Api/AspNetCore/Elsa.Api.AspNetCore.csproj src/essentials/Api/AspNetCore/packages.lock.json src/essentials/Api/AspNetCore/
-COPY src/essentials/Attention/Core/Elsa.Attention.Core.csproj src/essentials/Attention/Core/packages.lock.json src/essentials/Attention/Core/
-COPY src/essentials/Caching/Core/Elsa.Caching.Core.csproj src/essentials/Caching/Core/packages.lock.json src/essentials/Caching/Core/
-COPY src/essentials/Cluster/Core/Elsa.Cluster.Core.csproj src/essentials/Cluster/Core/packages.lock.json src/essentials/Cluster/Core/
-COPY src/essentials/Cluster/EntityFrameworkCore/Elsa.Cluster.EntityFrameworkCore.csproj src/essentials/Cluster/EntityFrameworkCore/packages.lock.json src/essentials/Cluster/EntityFrameworkCore/
-COPY src/essentials/Cluster/InProcess/Elsa.Cluster.InProcess.csproj src/essentials/Cluster/InProcess/packages.lock.json src/essentials/Cluster/InProcess/
-COPY src/essentials/Cluster/Readability/Elsa.Cluster.Readability.csproj src/essentials/Cluster/Readability/packages.lock.json src/essentials/Cluster/Readability/
-COPY src/essentials/Events/Core/Elsa.Events.Core.csproj src/essentials/Events/Core/packages.lock.json src/essentials/Events/Core/
-COPY src/essentials/Expressions/Core/Elsa.Expressions.Core.csproj src/essentials/Expressions/Core/packages.lock.json src/essentials/Expressions/Core/
-COPY src/essentials/Foundation/DataProtection/EntityFrameworkCore/Elsa.Foundation.DataProtection.EntityFrameworkCore.csproj src/essentials/Foundation/DataProtection/EntityFrameworkCore/packages.lock.json src/essentials/Foundation/DataProtection/EntityFrameworkCore/
-COPY src/essentials/Locking/Core/Elsa.Locking.Core.csproj src/essentials/Locking/Core/packages.lock.json src/essentials/Locking/Core/
-COPY src/essentials/Mediator/Core/Elsa.Mediator.Core.csproj src/essentials/Mediator/Core/packages.lock.json src/essentials/Mediator/Core/
-COPY src/essentials/Persistence/EntityFramework/Elsa.Persistence.EntityFramework.csproj src/essentials/Persistence/EntityFramework/packages.lock.json src/essentials/Persistence/EntityFramework/
-COPY src/essentials/Persistence/Schema/Elsa.Persistence.Schema.csproj src/essentials/Persistence/Schema/packages.lock.json src/essentials/Persistence/Schema/
-COPY src/essentials/Pipelines/Core/Elsa.Pipelines.Core.csproj src/essentials/Pipelines/Core/packages.lock.json src/essentials/Pipelines/Core/
-COPY src/essentials/Primitives/Primitives/Elsa.Primitives.csproj src/essentials/Primitives/Primitives/packages.lock.json src/essentials/Primitives/Primitives/
-COPY src/essentials/Serialization/Core/Elsa.Serialization.Core.csproj src/essentials/Serialization/Core/packages.lock.json src/essentials/Serialization/Core/
-COPY src/essentials/Tasks/Core/Elsa.Tasks.Core.csproj src/essentials/Tasks/Core/packages.lock.json src/essentials/Tasks/Core/
+COPY Essentials/apps/ComputedProductionSettings.targets Essentials/apps/
+COPY Essentials/apps/Elsa.Foundation.Host/Elsa.Foundation.Host.csproj Essentials/apps/Elsa.Foundation.Host/packages.lock.json Essentials/apps/Elsa.Foundation.Host/
+COPY Essentials/src/Api/AspNetCore/Elsa.Api.AspNetCore.csproj Essentials/src/Api/AspNetCore/packages.lock.json Essentials/src/Api/AspNetCore/
+COPY Essentials/src/Attention/Core/Elsa.Attention.Core.csproj Essentials/src/Attention/Core/packages.lock.json Essentials/src/Attention/Core/
+COPY Essentials/src/Caching/Core/Elsa.Caching.Core.csproj Essentials/src/Caching/Core/packages.lock.json Essentials/src/Caching/Core/
+COPY Essentials/src/Cluster/Core/Elsa.Cluster.Core.csproj Essentials/src/Cluster/Core/packages.lock.json Essentials/src/Cluster/Core/
+COPY Essentials/src/Cluster/EntityFrameworkCore/Elsa.Cluster.EntityFrameworkCore.csproj Essentials/src/Cluster/EntityFrameworkCore/packages.lock.json Essentials/src/Cluster/EntityFrameworkCore/
+COPY Essentials/src/Cluster/InProcess/Elsa.Cluster.InProcess.csproj Essentials/src/Cluster/InProcess/packages.lock.json Essentials/src/Cluster/InProcess/
+COPY Essentials/src/Cluster/Readability/Elsa.Cluster.Readability.csproj Essentials/src/Cluster/Readability/packages.lock.json Essentials/src/Cluster/Readability/
+COPY Essentials/src/Events/Core/Elsa.Events.Core.csproj Essentials/src/Events/Core/packages.lock.json Essentials/src/Events/Core/
+COPY Essentials/src/Expressions/Core/Elsa.Expressions.Core.csproj Essentials/src/Expressions/Core/packages.lock.json Essentials/src/Expressions/Core/
+COPY Essentials/src/Foundation/DataProtection/EntityFrameworkCore/Elsa.Foundation.DataProtection.EntityFrameworkCore.csproj Essentials/src/Foundation/DataProtection/EntityFrameworkCore/packages.lock.json Essentials/src/Foundation/DataProtection/EntityFrameworkCore/
+COPY Essentials/src/Locking/Core/Elsa.Locking.Core.csproj Essentials/src/Locking/Core/packages.lock.json Essentials/src/Locking/Core/
+COPY Essentials/src/Mediator/Core/Elsa.Mediator.Core.csproj Essentials/src/Mediator/Core/packages.lock.json Essentials/src/Mediator/Core/
+COPY Essentials/src/Persistence/EntityFramework/Elsa.Persistence.EntityFramework.csproj Essentials/src/Persistence/EntityFramework/packages.lock.json Essentials/src/Persistence/EntityFramework/
+COPY Essentials/src/Persistence/Schema/Elsa.Persistence.Schema.csproj Essentials/src/Persistence/Schema/packages.lock.json Essentials/src/Persistence/Schema/
+COPY Essentials/src/Pipelines/Core/Elsa.Pipelines.Core.csproj Essentials/src/Pipelines/Core/packages.lock.json Essentials/src/Pipelines/Core/
+COPY Essentials/src/Primitives/Primitives/Elsa.Primitives.csproj Essentials/src/Primitives/Primitives/packages.lock.json Essentials/src/Primitives/Primitives/
+COPY Essentials/src/Serialization/Core/Elsa.Serialization.Core.csproj Essentials/src/Serialization/Core/packages.lock.json Essentials/src/Serialization/Core/
+COPY Essentials/src/Tasks/Core/Elsa.Tasks.Core.csproj Essentials/src/Tasks/Core/packages.lock.json Essentials/src/Tasks/Core/
 # NU1603: tolerate a restore-only warning when a transitive preview dependency
 # resolves to a newer available version; does not relax real code warnings.
-RUN dotnet restore src/apps/Elsa.Foundation.Host/Elsa.Foundation.Host.csproj \
+RUN dotnet restore Essentials/apps/Elsa.Foundation.Host/Elsa.Foundation.Host.csproj \
     --locked-mode \
     -p:WarningsNotAsErrors=NU1603
 
 # Now the host and shared infrastructure sources.
-COPY src/apps/Elsa.Foundation.Host/ src/apps/Elsa.Foundation.Host/
-COPY src/essentials/Api/AspNetCore/ src/essentials/Api/AspNetCore/
-COPY src/essentials/Attention/Core/ src/essentials/Attention/Core/
-COPY src/essentials/Caching/Core/ src/essentials/Caching/Core/
-COPY src/essentials/Cluster/Core/ src/essentials/Cluster/Core/
-COPY src/essentials/Cluster/EntityFrameworkCore/ src/essentials/Cluster/EntityFrameworkCore/
-COPY src/essentials/Cluster/InProcess/ src/essentials/Cluster/InProcess/
-COPY src/essentials/Cluster/Readability/ src/essentials/Cluster/Readability/
-COPY src/essentials/Events/Core/ src/essentials/Events/Core/
-COPY src/essentials/Expressions/Core/ src/essentials/Expressions/Core/
-COPY src/essentials/Foundation/DataProtection/EntityFrameworkCore/ src/essentials/Foundation/DataProtection/EntityFrameworkCore/
-COPY src/essentials/Locking/Core/ src/essentials/Locking/Core/
-COPY src/essentials/Mediator/Core/ src/essentials/Mediator/Core/
-COPY src/essentials/Persistence/EntityFramework/ src/essentials/Persistence/EntityFramework/
-COPY src/essentials/Persistence/Schema/ src/essentials/Persistence/Schema/
-COPY src/essentials/Pipelines/Core/ src/essentials/Pipelines/Core/
-COPY src/essentials/Primitives/Primitives/ src/essentials/Primitives/Primitives/
-COPY src/essentials/Serialization/Core/ src/essentials/Serialization/Core/
-COPY src/essentials/Tasks/Core/ src/essentials/Tasks/Core/
+COPY Essentials/apps/Elsa.Foundation.Host/ Essentials/apps/Elsa.Foundation.Host/
+COPY Essentials/src/Api/AspNetCore/ Essentials/src/Api/AspNetCore/
+COPY Essentials/src/Attention/Core/ Essentials/src/Attention/Core/
+COPY Essentials/src/Caching/Core/ Essentials/src/Caching/Core/
+COPY Essentials/src/Cluster/Core/ Essentials/src/Cluster/Core/
+COPY Essentials/src/Cluster/EntityFrameworkCore/ Essentials/src/Cluster/EntityFrameworkCore/
+COPY Essentials/src/Cluster/InProcess/ Essentials/src/Cluster/InProcess/
+COPY Essentials/src/Cluster/Readability/ Essentials/src/Cluster/Readability/
+COPY Essentials/src/Events/Core/ Essentials/src/Events/Core/
+COPY Essentials/src/Expressions/Core/ Essentials/src/Expressions/Core/
+COPY Essentials/src/Foundation/DataProtection/EntityFrameworkCore/ Essentials/src/Foundation/DataProtection/EntityFrameworkCore/
+COPY Essentials/src/Locking/Core/ Essentials/src/Locking/Core/
+COPY Essentials/src/Mediator/Core/ Essentials/src/Mediator/Core/
+COPY Essentials/src/Persistence/EntityFramework/ Essentials/src/Persistence/EntityFramework/
+COPY Essentials/src/Persistence/Schema/ Essentials/src/Persistence/Schema/
+COPY Essentials/src/Pipelines/Core/ Essentials/src/Pipelines/Core/
+COPY Essentials/src/Primitives/Primitives/ Essentials/src/Primitives/Primitives/
+COPY Essentials/src/Serialization/Core/ Essentials/src/Serialization/Core/
+COPY Essentials/src/Tasks/Core/ Essentials/src/Tasks/Core/
 
 # Package versions (ADR 0067, spec 150, #2084, #2126). The Docker Images workflow passes
 # ELSA_PACKAGE_VERSIONS: the pack-properties file the version calculator writes for this
@@ -120,11 +120,11 @@ RUN set -- \
             && printf '%s' "$ELSA_PACKAGE_VERSIONS" | base64 -d | gunzip > /tmp/elsa/package-versions.props \
             && set -- -p:CustomBeforeDirectoryBuildProps=/tmp/elsa/package-versions.props ;; \
     esac \
-    && dotnet restore src/apps/Elsa.Foundation.Host/Elsa.Foundation.Host.csproj \
+    && dotnet restore Essentials/apps/Elsa.Foundation.Host/Elsa.Foundation.Host.csproj \
         --locked-mode \
         -p:WarningsNotAsErrors=NU1603 \
         "$@" \
-    && dotnet publish src/apps/Elsa.Foundation.Host/Elsa.Foundation.Host.csproj \
+    && dotnet publish Essentials/apps/Elsa.Foundation.Host/Elsa.Foundation.Host.csproj \
         -c Release \
         --no-restore \
         -p:WarningsNotAsErrors=NU1603 \

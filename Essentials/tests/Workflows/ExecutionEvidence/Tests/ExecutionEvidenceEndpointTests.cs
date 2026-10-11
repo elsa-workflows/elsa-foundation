@@ -21,7 +21,7 @@ namespace Elsa.Workflows.ExecutionEvidence.Tests;
 
 /// <summary>
 /// Boots the module's three endpoints in an in-process TestServer, following the host pattern in
-/// tests/essentials/Architecture/Tests/DomainManagementApiCompositionTests.cs. Anonymous access is configured on the *test host*;
+/// Essentials/tests/Architecture/Tests/DomainManagementApiCompositionTests.cs. Anonymous access is configured on the *test host*;
 /// the module's own endpoints keep their permission requirements.
 /// </summary>
 public sealed class ExecutionEvidenceEndpointTests(ExecutionEvidenceEndpointTests.EvidenceHost host)

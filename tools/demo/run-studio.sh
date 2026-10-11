@@ -12,7 +12,7 @@ Usage: bash tools/demo/run-studio.sh [--port PORT] [--backend-port PORT]
   --backend-port PORT  the Workbench's port; default DEMO_PORT_WB, else 5301. Start the Workbench with the same Studio port
                        (run-workbench.sh --studio-port, which defaults to DEMO_PORT_STUDIO too), or it refuses Studio's calls
 
-The Studio checkout is DEMO_STUDIO_DIR, relative to the repository root unless absolute; default ../elsa-foundation-studio-demo.
+The Studio checkout is DEMO_STUDIO_DIR, relative to the repository root unless absolute; default Studio.
 It must be built:
 
   cd DEMO_STUDIO_DIR && pnpm install && pnpm build && dotnet build -c Release src/apps/Elsa.Studio.Web
@@ -38,12 +38,12 @@ done
 [[ "$port" =~ ^[0-9]+$ ]] || demo_fail "--port is a number, not '$port'."
 [[ "$backend_port" =~ ^[0-9]+$ ]] || demo_fail "--backend-port is a number, not '$backend_port'."
 
-build_commands="cd ${DEMO_STUDIO_DIR:-../elsa-foundation-studio-demo} && pnpm install && pnpm build && dotnet build -c Release src/apps/Elsa.Studio.Web"
+build_commands="cd ${DEMO_STUDIO_DIR:-Studio} && pnpm install && pnpm build && dotnet build -c Release src/apps/Elsa.Studio.Web"
 [[ -d "$demo_studio_dir" ]] ||
-  demo_fail "There is no Studio checkout at ${DEMO_STUDIO_DIR:-../elsa-foundation-studio-demo} (DEMO_STUDIO_DIR). Clone elsa-workflows/elsa-foundation-studio there, or set DEMO_STUDIO_DIR to one, then build it: $build_commands"
+  demo_fail "There is no Studio checkout at ${DEMO_STUDIO_DIR:-Studio} (DEMO_STUDIO_DIR). Clone elsa-workflows/elsa-foundation-studio there, or set DEMO_STUDIO_DIR to one, then build it: $build_commands"
 web="$demo_studio_dir/src/apps/Elsa.Studio.Web"
 [[ -f "$web/bin/Release/net10.0/Elsa.Studio.Web.dll" && -f "$web/wwwroot/studio/index.html" ]] ||
-  demo_fail "The Studio checkout at ${DEMO_STUDIO_DIR:-../elsa-foundation-studio-demo} is not built (no bin/Release/net10.0/Elsa.Studio.Web.dll or wwwroot/studio/index.html under src/apps/Elsa.Studio.Web). Build it: $build_commands"
+  demo_fail "The Studio checkout at ${DEMO_STUDIO_DIR:-Studio} is not built (no bin/Release/net10.0/Elsa.Studio.Web.dll or wwwroot/studio/index.html under src/apps/Elsa.Studio.Web). Build it: $build_commands"
 
 running="$(demo_host_pid studio)"
 [[ -z "$running" ]] || demo_fail "Studio is already running (process $running). Stop it (kill $running) before starting it again."
@@ -84,7 +84,7 @@ with open(target, "w") as out:
     json.dump(manifest, out)
 print(target)
 PY
-)" || demo_fail "The Studio build at ${DEMO_STUDIO_DIR:-../elsa-foundation-studio-demo} names asset folders that are not there. Build it again: $build_commands"
+)" || demo_fail "The Studio build at ${DEMO_STUDIO_DIR:-Studio} names asset folders that are not there. Build it again: $build_commands"
 asset_arguments=()
 if [[ -n "$assets" ]]; then
   asset_arguments=("--staticWebAssets=$assets")

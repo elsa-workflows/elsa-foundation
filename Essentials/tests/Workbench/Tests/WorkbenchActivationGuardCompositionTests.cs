@@ -28,7 +28,7 @@ namespace Elsa.Workbench.Tests;
 /// engine assembly that failed to load would.
 /// <para>
 /// The pending-migration path itself is already covered at the guard's own unit level
-/// (tests/essentials/Modularity/EntityFramework/Tests/EfPendingMigrationActivationGuardTests.cs) and is not repeated
+/// (Essentials/tests/Modularity/EntityFramework/Tests/EfPendingMigrationActivationGuardTests.cs) and is not repeated
 /// here. Driving it end-to-end would additionally require Migrate:Policy=Validate for the whole default shell,
 /// which — because CShells' own shell-activation schema check reads the same policy — would require every
 /// already-enabled EF feature's database (identity included) to be pre-migrated before the process starts, a

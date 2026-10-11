@@ -54,7 +54,7 @@ Add `Credentials` for a private feed — a *reference* to its secret, never the 
 A relative `DirectoryPath` is resolved against the host's **content root** — the same directory this
 `appsettings.json` was read from — because the host passes
 `nuplane.UseBasePath(builder.Environment.ContentRootPath)` where it composes Nuplane
-(`src/apps/Elsa.Foundation.Host/Program.cs`, and the same call in `Elsa.Workbench`). Without that call
+(`Essentials/apps/Elsa.Foundation.Host/Program.cs`, and the same call in `Elsa.Workbench`). Without that call
 Nuplane resolves such a path against the *process's current directory* instead, and the two are the same
 place only when the host is started from its own directory. A deployment that sets the content root
 independently of where the process is launched — `ASPNETCORE_CONTENTROOT`, a systemd unit, a container
@@ -155,7 +155,7 @@ The reverse direction is kept in step by this repository instead. A shared assem
 the host's copy, whatever version the feed package was built against within the entry's major, so each host's
 `appsettings.json` also declares, under `Nuplane:HostProvidedPackages`, the package of every assembly it
 lists in `Nuplane:Loading:SharedAssemblies` — restating Nuplane's two defaults, because a configured list
-replaces them. `HostProvidedPackagesGuardTests` (`tests/essentials/Architecture`) fails the build when a
+replaces them. `HostProvidedPackagesGuardTests` (`Essentials/tests/Architecture`) fails the build when a
 shared assembly's package is neither declared nor exempted by name. The declaration is what makes the
 version check apply: a feed package that needs a newer version of a declared package than the host's
 `deps.json` carries is refused at reconciliation (see [What fails loudly](#what-fails-loudly)) instead of
@@ -166,7 +166,7 @@ An entry takes effect only when Nuplane's matcher takes it, on the assembly's na
 assembly's `AssemblyVersion` is its line's major, `4.0.0.0` in a source build and a computed one alike
 ([ADR 0067](adr/0067-package-versioning-uses-two-lines-with-computed-patch.md),
 [#2150](https://github.com/elsa-workflows/elsa-foundation/issues/2150)), so every Elsa entry declares
-`"MajorVersion": 4`. `SharedAssemblyMajorVersionGuardTests` (`tests/essentials/Architecture`) binds each host's
+`"MajorVersion": 4`. `SharedAssemblyMajorVersionGuardTests` (`Essentials/tests/Architecture`) binds each host's
 entries with Nuplane's own code and fails the build when one would not take the reference a package built
 against either build carries. A feed package that carries its own copy of a shared assembly, in its own files
 or acquired into its graph, then binds the host's copy (since Nuplane `0.0.11-preview.94`,
@@ -201,7 +201,7 @@ the computed production file differs from the committed one in anything but that
 Sharing is also closed under Elsa project dependencies. A shared assembly's dependencies are not shared
 with it. A feed-loaded feature gets its own private copy of any Elsa dependency the host does not also
 share, so the types it exchanges with the shared assembly do not match the host's, and it fails at runtime.
-`SharedAssemblyClosureGuardTests` (`tests/essentials/Architecture`) fails the build when a host shares an
+`SharedAssemblyClosureGuardTests` (`Essentials/tests/Architecture`) fails the build when a host shares an
 assembly built from a project under `src/` without sharing every Elsa project it references, directly or
 transitively. That is why `Elsa.Workbench` shares `Elsa.Events.Core`, `Elsa.Pipelines.Core` and
 `Elsa.Workflows.Design.Validations.Core`, and it shares `Elsa.Attention.Core` because that assembly is a
@@ -277,7 +277,7 @@ by naming them. The engines' driver closures (`Microsoft.Data.Sqlite*`, `SQLiteP
 them out of your roots; see [Generating the closure](#generating-the-closure). The engine package itself may stay, since
 the `ef-provider` selection injects it as a root anyway.
 
-`FeedLoadedEfModuleTests` (`tests/essentials/Cluster/EntityFrameworkCore/Tests`) proves each direction on both hosts'
+`FeedLoadedEfModuleTests` (`Essentials/tests/Cluster/EntityFrameworkCore/Tests`) proves each direction on both hosts'
 configured shares, as Nuplane binds and matches them, a module carrying its own copy of `Elsa.Persistence.EntityFramework`
 included. `FoundationHostBootTests` (same project) boots the built `Elsa.Foundation.Host` as a child process over a
 directory feed of the packed fixture, plus a second, resolve-only `closure` feed holding EF Core and the Sqlite engine's
@@ -765,7 +765,7 @@ refreshed catalog:
 
 The `/_elsa/module-management` upload and reconcile endpoints answer `"RequiresReload": true` for the same reason: the
 package is reconciled and loaded and the catalog refreshed, but no shell has switched yet. The host-level
-`IShellReloader` is `NullShellReloader` (`src/apps/Elsa.Workbench/Modularity/NullShellReloader.cs`), a no-op that
+`IShellReloader` is `NullShellReloader` (`Essentials/apps/Elsa.Workbench/Modularity/NullShellReloader.cs`), a no-op that
 reports zero shells reloaded. The one exception is a shell that enables the `ModularityApi` feature: it replaces
 `NullShellReloader` inside that shell with a reloader that does reload it, so a feature change applied through that
 shell's module API also refreshes the feature catalog and rebuilds that one shell. That is a side effect of applying
@@ -773,7 +773,7 @@ feature configuration, not a response to reconciliation.
 
 After an in-place upgrade, the previous release of a package-loaded activity stays loaded, and a reloaded shell registers
 the class of the release it composes under the activity's alias; see
-[Activity versions after an in-place upgrade](../src/essentials/Activities/Runtime/Elsa.Activities.Runtime/README.md#activity-versions-after-an-in-place-upgrade)
+[Activity versions after an in-place upgrade](../Essentials/src/Activities/Runtime/Elsa.Activities.Runtime/README.md#activity-versions-after-an-in-place-upgrade)
 for what that means for a workflow pinned to an earlier version.
 
 ## Reconciling on demand
@@ -869,7 +869,7 @@ Elsa__Cluster__Membership__EntityFrameworkCore__ConnectionString="Host=db;Databa
   `PostgreSql` or `MySql`; default `Sqlite`), `ConnectionString`, or `ConnectionName` naming an entry under
   `ConnectionStrings` (with `ConnectionStrings:Elsa` as the fallback), `Schema`, `Pooling` and `CleanupPeriod` (10 min;
   it must exceed the expiry period plus the skew allowance). `ClusterMembershipConfigurationExtensions` in
-  `src/essentials/Cluster/EntityFrameworkCore` is the reference.
+  `Essentials/src/Cluster/EntityFrameworkCore` is the reference.
 - **The host id.** It is required once the provider is enabled: a host without one refuses to start, naming
   `Elsa:Cluster:Membership:HostId` (FR-003a). Give each host its own and keep it across restarts; two live processes
   under one id are refused rather than allowed to displace each other (FR-004b). A host restarted after a crash under
@@ -885,10 +885,10 @@ Elsa__Cluster__Membership__EntityFrameworkCore__ConnectionString="Host=db;Databa
   start once the durable provider is enabled, naming both ways out: the database lock, or a `LocksFolderPath` every host
   shares. SQLite has no database lock, so a SQLite composition keeps the file-system lock and is single-node by
   definition: several processes on that machine share one explicit `LocksFolderPath`. What a lock guarantees to a
-  `[SingleNodeTask]` is one at a time, at shell start, and no more; see `src/essentials/Tasks/Elsa.Tasks/EXTENSION_POINTS.md`.
+  `[SingleNodeTask]` is one at a time, at shell start, and no more; see `Essentials/src/Tasks/Elsa.Tasks/EXTENSION_POINTS.md`.
   The git workflow export takes no lock at all: every Writer node exports, and the fast-forward-only push keeps one
   writer per branch (#2197; see the section "Several Writer nodes of one catalog" in
-  `src/essentials/Workflows/Design/Reconciliation/Git/README.md`).
+  `Essentials/src/Workflows/Design/Reconciliation/Git/README.md`).
 - **Migrations.** The membership table is an EF module of its own (`Cluster.Membership`). Under the default policy the
   first host to start creates it; under `Elsa:Persistence:EntityFramework:Migrate:Policy=Validate` a host refuses to start
   until `dotnet elsa persistence apply` has created it, like any other module.
@@ -967,7 +967,7 @@ The running host reports the same blockers itself: a feature that needs the pend
 `schema-version-not-finalized`, and the Modularity API's Attention items carry the reason (spec 182). There is no separate
 status endpoint on `Elsa.Foundation.Host`; the CLI is the operator's view before and beside a running host.
 
-`FoundationHostClusterBootTests` (`tests/essentials/Cluster/EntityFrameworkCore/Tests`) runs this whole sequence on two
+`FoundationHostClusterBootTests` (`Essentials/tests/Cluster/EntityFrameworkCore/Tests`) runs this whole sequence on two
 built hosts over one SQLite database, and `PostgreSqlFoundationHostClusterTests` (`.../ProviderTests`, in a container) on
 one PostgreSQL database.
 

@@ -19,10 +19,10 @@ public sealed class LegacyCompositionReplacementTests
     {
         var repoRoot = FindRepoRoot();
 
-        Assert.False(File.Exists(Path.Combine(repoRoot, "src", "essentials", "Activities", "Composition", "Design", "Elsa.Activities.Composition.Design.csproj")));
-        Assert.False(File.Exists(Path.Combine(repoRoot, "src", "essentials", "Activities", "Composition", "Runtime", "Elsa.Activities.Composition.Runtime.csproj")));
-        Assert.False(File.Exists(Path.Combine(repoRoot, "src", "essentials", "Activities", "Composition", "Runtime", "Activities", "WorkflowDefinitionActivity.cs")));
-        Assert.False(File.Exists(Path.Combine(repoRoot, "src", "essentials", "Workflows", "Design", "Core", "Models", "WorkflowActivityOptions.cs")));
+        Assert.False(File.Exists(Path.Combine(repoRoot, "Essentials", "src", "Activities", "Composition", "Design", "Elsa.Activities.Composition.Design.csproj")));
+        Assert.False(File.Exists(Path.Combine(repoRoot, "Essentials", "src", "Activities", "Composition", "Runtime", "Elsa.Activities.Composition.Runtime.csproj")));
+        Assert.False(File.Exists(Path.Combine(repoRoot, "Essentials", "src", "Activities", "Composition", "Runtime", "Activities", "WorkflowDefinitionActivity.cs")));
+        Assert.False(File.Exists(Path.Combine(repoRoot, "Essentials", "src", "Workflows", "Design", "Core", "Models", "WorkflowActivityOptions.cs")));
     }
 
     private static string FindRepoRoot()

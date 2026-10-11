@@ -5,7 +5,7 @@ using Elsa3.Activities.Design.Import.Persistence.EntityFrameworkCore.Entities;
 
 // The single, discoverable declaration of this module (ADR 0076 D2). EfModuleCatalog.Discover reads this,
 // and EfModuleBinding.For derives the registration class's binding from it (#1872).
-// This module lives under src/extensions/, not src/, but is included in the vocabulary on the same terms as
+// This module lives under Extensions/, not src/, but is included in the vocabulary on the same terms as
 // every other module (spec 171 D2, D3). It names its own default connection instead of the shared "Elsa"
 // one (EfConnectionDefaults), because it must match whatever connection Activities and Workflows Design use.
 [assembly: EfModule(
@@ -29,7 +29,7 @@ using Elsa3.Activities.Design.Import.Persistence.EntityFrameworkCore.Entities;
 // version they read; that holds by review until #2606 restores a compiled check.
 [assembly: EfSchemaFamily(Elsa3ImportEfModule.SchemaFamily, "Elsa3.Activities.Design.Import", Elsa3ImportEfModule.SchemaVersion)]
 
-// Content and integrity columns: see src/essentials/Persistence/EntityFramework/EXTENSION_POINTS.md, "Content and integrity columns" (spec 180, FR-008, FR-009
+// Content and integrity columns: see Essentials/src/Persistence/EntityFramework/EXTENSION_POINTS.md, "Content and integrity columns" (spec 180, FR-008, FR-009
 // and FR-014).
 [assembly: EfSchemaContent(Elsa3ImportEfModule.SchemaFamily, typeof(Elsa3ImportCollectionRecord), nameof(Elsa3ImportCollectionRecord.ContentJson))]
 [assembly: EfSchemaContent(Elsa3ImportEfModule.SchemaFamily, typeof(Elsa3ImportReceiptRecord), nameof(Elsa3ImportReceiptRecord.ContentJson))]

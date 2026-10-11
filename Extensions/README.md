@@ -11,14 +11,14 @@ that decides what belongs here, and for the staged plan.
 ## Layout
 
 ```
-src/extensions/
+Extensions/
   <Name>/
     src/     one folder per project, mirroring the shape the module had under src/
     tests/   the module's test projects
 ```
 
-`<Name>` is the module bucket, not a project name: `src/extensions/Diagnostics` holds all eight diagnostics
-projects, `src/extensions/Elsa3` holds all four Elsa 3 import projects.
+`<Name>` is the module bucket, not a project name: `Extensions/Diagnostics` holds all eight diagnostics
+projects, `Extensions/Elsa3` holds all four Elsa 3 import projects.
 
 ## Extensions a host composes at its root
 
@@ -49,18 +49,18 @@ file name and its contents, so a folder move leaves every one of them alone. A c
 What a move does change is every path-shaped reference to the project: the `ProjectReference` includes
 that point at it, its entry in `Elsa.Server.slnx`, and any tooling that enumerates projects by path.
 The last of those is the dangerous one, because most of it fails quietly rather than loudly. Every such
-site already covers `src/extensions/`, and this is the complete list:
+site already covers `Extensions/`, and this is the complete list:
 
 | Site | What it enumerates | How it would have failed |
 |---|---|---|
 | `.github/workflows/packages.yml` | nothing itself: it packs the dependency map's packable projects, which `RepoLayout.cs` below enumerates | the version calculator refuses a map that misses a project, so packing fails |
 | `.github/workflows/ci.yml` | container-free test projects | the module's tests stop running, job still green |
 | `.github/workflows/docker.yml` | paths that trigger an image build | image stops rebuilding on changes to the module |
-| `src/apps/Elsa.Workbench/Dockerfile` | restore inputs and the source copy | image build fails (the one that fails loudly) |
+| `Essentials/apps/Elsa.Workbench/Dockerfile` | restore inputs and the source copy | image build fails (the one that fails loudly) |
 | `.dockerignore` | what reaches the build context | extension tests bloat the context |
 | `tools/ef/generate-module-migrations.sh` | EF modules and model snapshots | finds no module, generates nothing |
 | `tools/maps/Elsa.Maps.Generator/RepoLayout.cs` | projects, sources and catalogs for every map | the module vanishes from every map |
-| `tools/solution-filters/profiles.json` | the integration profile's `src/extensions/` prefix | the module's Testcontainers suites drop out of the fast lane's exclusion and the EF suite inventory check, so they run in fast CI without Docker, where their fixtures can self-skip |
+| `tools/solution-filters/profiles.json` | the integration profile's `Extensions/` prefix | the module's Testcontainers suites drop out of the fast lane's exclusion and the EF suite inventory check, so they run in fast CI without Docker, where their fixtures can self-skip |
 
 Some sites name a specific project **by full path** rather than enumerating a directory. Those do not
 fail silently in the same way, but they do have to move with the module, and they are easy to miss:
@@ -68,10 +68,10 @@ fail silently in the same way, but they do have to move with the module, and the
 | Site | What it names |
 |---|---|
 | `.github/workflows/ci.yml`, the `ef-container-suites` matrix | one `.csproj` path per container suite |
-| `tests/essentials/Architecture/Tests/ArchitectureGuardTests.cs` | the name-to-path convention, which has a branch per root |
-| `tests/essentials/Architecture/Tests/EfCoreDependencyGuardTests.cs` | the admitted-EF-path allowlist |
-| `tests/essentials/Architecture/Tests/EndpointSecurityTests.cs` | the directory scanned per endpoint group |
-| `tests/essentials/Architecture/Tests/ReusableActivityArchitectureTests.cs` | project and directory paths, and a path-prefix assertion |
+| `Essentials/tests/Architecture/Tests/ArchitectureGuardTests.cs` | the name-to-path convention, which has a branch per root |
+| `Essentials/tests/Architecture/Tests/EfCoreDependencyGuardTests.cs` | the admitted-EF-path allowlist |
+| `Essentials/tests/Architecture/Tests/EndpointSecurityTests.cs` | the directory scanned per endpoint group |
+| `Essentials/tests/Architecture/Tests/ReusableActivityArchitectureTests.cs` | project and directory paths, and a path-prefix assertion |
 | `EXTENSION_POINTS.md` | the root index of extension-point catalogs |
 
 This second list was **missing when stage 0 described the first one as complete**; it was found by
@@ -103,7 +103,7 @@ Adding a project root to the repository means auditing both lists again.
 ## Rules
 
 - **Core never references an extension.** Enforced by `ExtensionBoundaryTests` in
-  `tests/essentials/Architecture/ExtensionBoundary/Tests`, which fails and names the offending edge.
+  `Essentials/tests/Architecture/ExtensionBoundary/Tests`, which fails and names the offending edge.
 - **An extension may reference another extension only when the edge is declared** in that same guard's
   allowlist. Undeclared extension-to-extension edges fail the same way.
 - **Every project belongs to exactly one bucket.** No project sits inside another project's directory

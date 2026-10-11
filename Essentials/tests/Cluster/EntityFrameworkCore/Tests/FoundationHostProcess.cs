@@ -9,7 +9,7 @@ namespace Elsa.Cluster.EntityFrameworkCore.Tests;
 internal sealed class FoundationHostProcess : IAsyncDisposable
 {
     private const string Host = "Elsa.Foundation.Host";
-    private static readonly string SourceDirectory = Path.Join(RepoRoot, "src", "apps", Host);
+    private static readonly string SourceDirectory = Path.Join(RepoRoot, "Essentials", "apps", Host);
     private readonly ChildHostProcess _process;
 
     /// <summary>The header the host's module-management endpoints read their key from.</summary>

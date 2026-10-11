@@ -4,7 +4,7 @@ EF Core implementation of `ISecretRepository`, per accepted
 [ADR 0073](../../../../../docs/adr/0073-ef-core-is-the-only-first-party-persistence-family.md).
 Workbench catalogs this feature and the default shells enable it.
 
-Proof is `tests/essentials/Secrets/Persistence/EntityFrameworkCore/` plus the `Secrets EF composition`
+Proof is `Essentials/tests/Secrets/Persistence/EntityFrameworkCore/` plus the `Secrets EF composition`
 CI job on a native PostgreSQL, and the SQL Server and MySQL legs of the EF container-suite matrix.
 
 ## Replacement contract

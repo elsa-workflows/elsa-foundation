@@ -82,7 +82,7 @@
     "closureRootAndIdentityMatched": true,
     "fourNodeFixtureShapeMatched": true,
     "responseProfileResolvedFromOmittedDefault": true,
-    "sourceFile": "src/essentials/Activities/Runtime/Core/Models/ActivityContract.cs",
+    "sourceFile": "Essentials/src/Activities/Runtime/Core/Models/ActivityContract.cs",
     "sourceFileSha256": "8e8f212f87744118ade42cb3f576ad937062dda4f35f8981fcce8d6ee8fd132e"
   }
 }

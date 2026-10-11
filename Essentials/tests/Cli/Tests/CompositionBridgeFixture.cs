@@ -21,7 +21,7 @@ internal sealed class CompositionBridgeFixture : IDisposable
     {
         HostDirectory = _directory.File("host");
         Directory.CreateDirectory(HostDirectory);
-        var fixtureDirectory = Path.Join(RepoRoot, "tests", "essentials", "Cli", "Tests", "Fixtures", "CompositionBridge");
+        var fixtureDirectory = Path.Join(RepoRoot, "Essentials", "tests", "Cli", "Tests", "Fixtures", "CompositionBridge");
         foreach (var file in Directory.GetFiles(fixtureDirectory, "*.json"))
             File.Copy(file, Path.Join(HostDirectory, Path.GetFileName(file)));
 

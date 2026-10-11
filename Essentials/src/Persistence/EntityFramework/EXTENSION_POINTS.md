@@ -138,7 +138,7 @@ directly (`IEfSchemaVersionedContext`) declares no upcasters: its value converte
 upcaster could run, so `EfSchemaVersionMaterializationInterceptor` accepts its current version alone. Every upcaster
 ships a committed fixture pair under `Fixtures/SchemaUpcasters/<family>/<from>-to-<to>/` in its module's test project,
 one row per pair, `<table>.source.json` and `<table>.expected.json`, each a JSON object of the row's content columns,
-recorded in `tests/essentials/Architecture/Tests/Baselines/schema-upcaster-fixtures.sha256`, and a test class deriving directly
+recorded in `Essentials/tests/Architecture/Tests/Baselines/schema-upcaster-fixtures.sha256`, and a test class deriving directly
 from `EfSchemaUpcasterProof<TUpcaster, TValue>(family, store)`, which runs FR-022's three proofs over every pair of its
 step, comparing whole rows (FR-022). Both hold by review until #2606 restores a compiled check for them.
 

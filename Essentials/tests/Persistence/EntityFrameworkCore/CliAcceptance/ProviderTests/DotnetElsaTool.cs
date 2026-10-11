@@ -10,7 +10,7 @@ internal sealed record ToolRun(int ExitCode, string Output, string Error);
 /// Runs the real <c>dotnet-elsa</c> tool the way an operator does: a separate <c>dotnet exec</c> process
 /// against a host's build output, never loaded in process. An in-process shortcut would prove the artifact
 /// this leg checks matches nothing an operator could actually produce (issue #1875) -- this is the same
-/// pattern <c>tests/essentials/Cli/Tests/DotnetElsa.cs</c> uses, kept local to this project rather than shared
+/// pattern <c>Essentials/tests/Cli/Tests/DotnetElsa.cs</c> uses, kept local to this project rather than shared
 /// across an internal type boundary.
 /// </summary>
 internal static class DotnetElsaTool
@@ -21,14 +21,14 @@ internal static class DotnetElsaTool
     private static readonly string RepoRoot = FindRepoRoot();
 
     /// <summary>The tool's own build output, which is also where its worker sits -- the shipped layout.</summary>
-    private static readonly string ToolAssembly = Path.Join(RepoRoot, "src", "essentials", "Cli", "Elsa.Cli", "bin", Configuration, "net10.0", "Elsa.Cli.dll");
+    private static readonly string ToolAssembly = Path.Join(RepoRoot, "Essentials", "src", "Cli", "Elsa.Cli", "bin", Configuration, "net10.0", "Elsa.Cli.dll");
 
     /// <summary>
     /// The fixture host that ships every first-party EF module plus a third-party one and all four provider
-    /// engines (<c>tests/essentials/Cli/Fixtures/Host</c>) -- reused rather than a bespoke host for this leg, since
+    /// engines (<c>Essentials/tests/Cli/Fixtures/Host</c>) -- reused rather than a bespoke host for this leg, since
     /// it already carries exactly the module set this leg scripts.
     /// </summary>
-    public static readonly string Host = Path.Join(RepoRoot, "tests", "essentials", "Cli", "Fixtures", "Host", "bin", Configuration, "net10.0");
+    public static readonly string Host = Path.Join(RepoRoot, "Essentials", "tests", "Cli", "Fixtures", "Host", "bin", Configuration, "net10.0");
 
     public static ToolRun Script(string provider, IReadOnlyList<string> modules, string output) => Run(
         "persistence", "script",

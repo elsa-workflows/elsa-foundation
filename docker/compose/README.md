@@ -211,7 +211,7 @@ The Studio image is **not** built from this repository. Build it once from the s
 
 ```bash
 cd ../../../elsa-foundation-studio          # from Foundation docker/compose to the sibling checkout
-docker build -f src/apps/Elsa.Studio.Web/Dockerfile -t elsa-studio-web:local .
+docker build -f Essentials/apps/Elsa.Studio.Web/Dockerfile -t elsa-studio-web:local .
 ```
 
 Back in this directory, bring up the whole stack with the `studio` profile:

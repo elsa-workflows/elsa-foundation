@@ -33,7 +33,7 @@ add that engine.
 
 The MySQL context and provider selection are production-owned, but MySQL migration artifacts and
 full lifecycle proof remain deferred to the migration work unit. The focused MySQL model and
-repository proof is under `tests/essentials/Secrets/Persistence/EntityFrameworkCore/MySql/Tests`.
+repository proof is under `Essentials/tests/Secrets/Persistence/EntityFrameworkCore/MySql/Tests`.
 
 Enable `SecretsEntityFrameworkCore` in `shells.json` (or the docker compose overlay). Registering a
 second Secrets persistence backend throws an `InvalidOperationException` naming both backends.

@@ -13,7 +13,7 @@ namespace Elsa.Persistence.EntityFramework.Tests;
 /// <para>
 /// Opt-in, and out of CI by default. It takes minutes, and the race lies between two statements inside Microsoft.Data.Sqlite,
 /// so even an ungated run fails only after hundreds of waves. Run it alone:
-/// <c>ELSA_SQLITE_POOL_STRESS=1 dotnet test tests/essentials/Persistence/EntityFramework/Tests -c Release --filter "FullyQualifiedName~EfSqliteSerialOpenStressTests"</c>.
+/// <c>ELSA_SQLITE_POOL_STRESS=1 dotnet test Essentials/tests/Persistence/EntityFramework/Tests -c Release --filter "FullyQualifiedName~EfSqliteSerialOpenStressTests"</c>.
 /// <c>ELSA_SQLITE_POOL_STRESS_WAVES</c> (default 2,000) sets how many waves run, and <c>ELSA_SQLITE_POOL_STRESS_WIDTH</c>
 /// (default 16) how many connections each wave opens. With plain <c>UseSqlite</c> instead of the binding, this load on
 /// Microsoft.Data.Sqlite 10.0.10 failed from wave 301 of 3,000 and from wave 326 of 6,000 on an 8-core machine. Most errors

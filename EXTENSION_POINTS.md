@@ -52,119 +52,119 @@ not automatic constitution violations.
 
 | Domain | Catalog |
 |---|---|
-| Events (substrate — `IEvent`, `IEventHandler<T>`, strategies) | [`src/essentials/Events/Elsa.Events/EXTENSION_POINTS.md`](src/essentials/Events/Elsa.Events/EXTENSION_POINTS.md) |
-| Mediator (command / request pipelines) | [`src/essentials/Mediator/Elsa.Mediator/EXTENSION_POINTS.md`](src/essentials/Mediator/Elsa.Mediator/EXTENSION_POINTS.md) |
-| Pipelines (middleware — Core-only, no feature project) | [`src/essentials/Pipelines/Core/EXTENSION_POINTS.md`](src/essentials/Pipelines/Core/EXTENSION_POINTS.md) |
-| Tasks (startup / recurring / background tasks) | [`src/essentials/Tasks/Elsa.Tasks/EXTENSION_POINTS.md`](src/essentials/Tasks/Elsa.Tasks/EXTENSION_POINTS.md) |
-| Caching (cache manager + change-token signaling) | [`src/essentials/Caching/Memory/EXTENSION_POINTS.md`](src/essentials/Caching/Memory/EXTENSION_POINTS.md) |
-| Serialization (JSON converter sources) | [`src/essentials/Serialization/SystemText/EXTENSION_POINTS.md`](src/essentials/Serialization/SystemText/EXTENSION_POINTS.md) |
-| Locking (distributed lock provider) | [`src/essentials/Locking/FileSystem/EXTENSION_POINTS.md`](src/essentials/Locking/FileSystem/EXTENSION_POINTS.md) |
-| Cluster (membership provider, member report sources and the shared schema dormancy check) | [`src/essentials/Cluster/Core/EXTENSION_POINTS.md`](src/essentials/Cluster/Core/EXTENSION_POINTS.md) |
-| Modularity API (shell feature-management surface; feature-catalog contributors and activation guards) | [`src/essentials/Modularity/Api/EXTENSION_POINTS.md`](src/essentials/Modularity/Api/EXTENSION_POINTS.md) |
+| Events (substrate — `IEvent`, `IEventHandler<T>`, strategies) | [`Essentials/src/Events/Elsa.Events/EXTENSION_POINTS.md`](Essentials/src/Events/Elsa.Events/EXTENSION_POINTS.md) |
+| Mediator (command / request pipelines) | [`Essentials/src/Mediator/Elsa.Mediator/EXTENSION_POINTS.md`](Essentials/src/Mediator/Elsa.Mediator/EXTENSION_POINTS.md) |
+| Pipelines (middleware — Core-only, no feature project) | [`Essentials/src/Pipelines/Core/EXTENSION_POINTS.md`](Essentials/src/Pipelines/Core/EXTENSION_POINTS.md) |
+| Tasks (startup / recurring / background tasks) | [`Essentials/src/Tasks/Elsa.Tasks/EXTENSION_POINTS.md`](Essentials/src/Tasks/Elsa.Tasks/EXTENSION_POINTS.md) |
+| Caching (cache manager + change-token signaling) | [`Essentials/src/Caching/Memory/EXTENSION_POINTS.md`](Essentials/src/Caching/Memory/EXTENSION_POINTS.md) |
+| Serialization (JSON converter sources) | [`Essentials/src/Serialization/SystemText/EXTENSION_POINTS.md`](Essentials/src/Serialization/SystemText/EXTENSION_POINTS.md) |
+| Locking (distributed lock provider) | [`Essentials/src/Locking/FileSystem/EXTENSION_POINTS.md`](Essentials/src/Locking/FileSystem/EXTENSION_POINTS.md) |
+| Cluster (membership provider, member report sources and the shared schema dormancy check) | [`Essentials/src/Cluster/Core/EXTENSION_POINTS.md`](Essentials/src/Cluster/Core/EXTENSION_POINTS.md) |
+| Modularity API (shell feature-management surface; feature-catalog contributors and activation guards) | [`Essentials/src/Modularity/Api/EXTENSION_POINTS.md`](Essentials/src/Modularity/Api/EXTENSION_POINTS.md) |
 
 ### Expressions
 
 | Domain | Catalog |
 |---|---|
-| Expressions (evaluator + descriptor providers) | [`src/essentials/Expressions/Elsa.Expressions/EXTENSION_POINTS.md`](src/essentials/Expressions/Elsa.Expressions/EXTENSION_POINTS.md) |
-| Expressions API (descriptor projections and capability declaration) | [`src/essentials/Expressions/Api/EXTENSION_POINTS.md`](src/essentials/Expressions/Api/EXTENSION_POINTS.md) |
-| JavaScript expressions (pre/post-processors) | [`src/essentials/Expressions/JavaScript/Elsa.Expressions.JavaScript/EXTENSION_POINTS.md`](src/essentials/Expressions/JavaScript/Elsa.Expressions.JavaScript/EXTENSION_POINTS.md) |
-| JavaScript rendering (declaration contributors) | [`src/essentials/Expressions/JavaScript/Rendering/Elsa.Expressions.JavaScript.Rendering/EXTENSION_POINTS.md`](src/essentials/Expressions/JavaScript/Rendering/Elsa.Expressions.JavaScript.Rendering/EXTENSION_POINTS.md) |
-| Liquid expressions (rendering lifecycle) | [`src/essentials/Expressions/Liquid/EXTENSION_POINTS.md`](src/essentials/Expressions/Liquid/EXTENSION_POINTS.md) |
+| Expressions (evaluator + descriptor providers) | [`Essentials/src/Expressions/Elsa.Expressions/EXTENSION_POINTS.md`](Essentials/src/Expressions/Elsa.Expressions/EXTENSION_POINTS.md) |
+| Expressions API (descriptor projections and capability declaration) | [`Essentials/src/Expressions/Api/EXTENSION_POINTS.md`](Essentials/src/Expressions/Api/EXTENSION_POINTS.md) |
+| JavaScript expressions (pre/post-processors) | [`Essentials/src/Expressions/JavaScript/Elsa.Expressions.JavaScript/EXTENSION_POINTS.md`](Essentials/src/Expressions/JavaScript/Elsa.Expressions.JavaScript/EXTENSION_POINTS.md) |
+| JavaScript rendering (declaration contributors) | [`Essentials/src/Expressions/JavaScript/Rendering/Elsa.Expressions.JavaScript.Rendering/EXTENSION_POINTS.md`](Essentials/src/Expressions/JavaScript/Rendering/Elsa.Expressions.JavaScript.Rendering/EXTENSION_POINTS.md) |
+| Liquid expressions (rendering lifecycle) | [`Essentials/src/Expressions/Liquid/EXTENSION_POINTS.md`](Essentials/src/Expressions/Liquid/EXTENSION_POINTS.md) |
 
 ### HTTP
 
 | Domain | Catalog |
 |---|---|
-| HTTP (downloadable content handlers) | [`src/essentials/Http/Elsa.Http/EXTENSION_POINTS.md`](src/essentials/Http/Elsa.Http/EXTENSION_POINTS.md) |
+| HTTP (downloadable content handlers) | [`Essentials/src/Http/Elsa.Http/EXTENSION_POINTS.md`](Essentials/src/Http/Elsa.Http/EXTENSION_POINTS.md) |
 
 ### API
 
 | Domain | Catalog |
 |---|---|
-| API Capabilities (typed operational Sources and deterministic catalog replacement) | [`src/essentials/Api/Capabilities/EXTENSION_POINTS.md`](src/essentials/Api/Capabilities/EXTENSION_POINTS.md) |
+| API Capabilities (typed operational Sources and deterministic catalog replacement) | [`Essentials/src/Api/Capabilities/EXTENSION_POINTS.md`](Essentials/src/Api/Capabilities/EXTENSION_POINTS.md) |
 
 ### Agent and Identity
 
 | Domain | Catalog |
 |---|---|
-| Agent core (sessions, policy, context, proposals, provider facade, audit) | [`src/extensions/Agent/src/Core/EXTENSION_POINTS.md`](src/extensions/Agent/src/Core/EXTENSION_POINTS.md) |
-| Foundation Identity (authentication providers, IAM contracts, permissions, ownership capabilities) | [`src/essentials/Foundation/Identity/Core/EXTENSION_POINTS.md`](src/essentials/Foundation/Identity/Core/EXTENSION_POINTS.md) |
-| Foundation Identity ASP.NET Core Identity EF adapter (opt-in framework stores, authentication, session invalidation, and seeding over the shared EF authority) | [`src/essentials/Foundation/Identity/AspNetCoreIdentity/EntityFrameworkCore/EXTENSION_POINTS.md`](src/essentials/Foundation/Identity/AspNetCoreIdentity/EntityFrameworkCore/EXTENSION_POINTS.md) |
-| Foundation Identity EF persistence (opt-in complete IAM authority and provider-configuration backend; OpenIddict boundary) | [`src/essentials/Foundation/Identity/Persistence/EntityFrameworkCore/README.md`](src/essentials/Foundation/Identity/Persistence/EntityFrameworkCore/README.md) |
-| Foundation Data Protection (the host's key ring: fixed application name, opt-in EF key store, certificate at rest, startup warnings) | [`src/essentials/Foundation/DataProtection/EntityFrameworkCore/EXTENSION_POINTS.md`](src/essentials/Foundation/DataProtection/EntityFrameworkCore/EXTENSION_POINTS.md) |
-| Workflow Agent (workflow explain/troubleshoot/change-proposal contribution) | [`src/extensions/Agent/src/Workflows/EXTENSION_POINTS.md`](src/extensions/Agent/src/Workflows/EXTENSION_POINTS.md) |
+| Agent core (sessions, policy, context, proposals, provider facade, audit) | [`Extensions/Agent/src/Core/EXTENSION_POINTS.md`](Extensions/Agent/src/Core/EXTENSION_POINTS.md) |
+| Foundation Identity (authentication providers, IAM contracts, permissions, ownership capabilities) | [`Essentials/src/Foundation/Identity/Core/EXTENSION_POINTS.md`](Essentials/src/Foundation/Identity/Core/EXTENSION_POINTS.md) |
+| Foundation Identity ASP.NET Core Identity EF adapter (opt-in framework stores, authentication, session invalidation, and seeding over the shared EF authority) | [`Essentials/src/Foundation/Identity/AspNetCoreIdentity/EntityFrameworkCore/EXTENSION_POINTS.md`](Essentials/src/Foundation/Identity/AspNetCoreIdentity/EntityFrameworkCore/EXTENSION_POINTS.md) |
+| Foundation Identity EF persistence (opt-in complete IAM authority and provider-configuration backend; OpenIddict boundary) | [`Essentials/src/Foundation/Identity/Persistence/EntityFrameworkCore/README.md`](Essentials/src/Foundation/Identity/Persistence/EntityFrameworkCore/README.md) |
+| Foundation Data Protection (the host's key ring: fixed application name, opt-in EF key store, certificate at rest, startup warnings) | [`Essentials/src/Foundation/DataProtection/EntityFrameworkCore/EXTENSION_POINTS.md`](Essentials/src/Foundation/DataProtection/EntityFrameworkCore/EXTENSION_POINTS.md) |
+| Workflow Agent (workflow explain/troubleshoot/change-proposal contribution) | [`Extensions/Agent/src/Workflows/EXTENSION_POINTS.md`](Extensions/Agent/src/Workflows/EXTENSION_POINTS.md) |
 
 ### Secrets
 
 | Domain | Catalog |
 |---|---|
-| Secrets core (contracts — manager, resolver, repository, store, type provider, audit sink) | [`src/essentials/Secrets/Core/EXTENSION_POINTS.md`](src/essentials/Secrets/Core/EXTENSION_POINTS.md) |
-| Secrets (default services + shell feature registration) | [`src/essentials/Secrets/Elsa.Secrets/EXTENSION_POINTS.md`](src/essentials/Secrets/Elsa.Secrets/EXTENSION_POINTS.md) |
-| Secrets Entity Framework Core persistence (the Secrets persistence family under ADR 0073) | [`src/essentials/Secrets/Persistence/EntityFrameworkCore/EXTENSION_POINTS.md`](src/essentials/Secrets/Persistence/EntityFrameworkCore/EXTENSION_POINTS.md) |
+| Secrets core (contracts — manager, resolver, repository, store, type provider, audit sink) | [`Essentials/src/Secrets/Core/EXTENSION_POINTS.md`](Essentials/src/Secrets/Core/EXTENSION_POINTS.md) |
+| Secrets (default services + shell feature registration) | [`Essentials/src/Secrets/Elsa.Secrets/EXTENSION_POINTS.md`](Essentials/src/Secrets/Elsa.Secrets/EXTENSION_POINTS.md) |
+| Secrets Entity Framework Core persistence (the Secrets persistence family under ADR 0073) | [`Essentials/src/Secrets/Persistence/EntityFrameworkCore/EXTENSION_POINTS.md`](Essentials/src/Secrets/Persistence/EntityFrameworkCore/EXTENSION_POINTS.md) |
 
 ### Persistence
 
 | Domain | Catalog |
 |---|---|
-| Provider-neutral persistence access and scope selection | [`src/essentials/Workflows/Runtime/Elsa.Workflows.Runtime/EXTENSION_POINTS.md`](src/essentials/Workflows/Runtime/Elsa.Workflows.Runtime/EXTENSION_POINTS.md) |
-| Entity Framework persistence policy (history table, provider guard, migrate vs validate; shared policy under ADR 0073) | [`src/essentials/Persistence/EntityFramework/EXTENSION_POINTS.md`](src/essentials/Persistence/EntityFramework/EXTENSION_POINTS.md) |
+| Provider-neutral persistence access and scope selection | [`Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/EXTENSION_POINTS.md`](Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/EXTENSION_POINTS.md) |
+| Entity Framework persistence policy (history table, provider guard, migrate vs validate; shared policy under ADR 0073) | [`Essentials/src/Persistence/EntityFramework/EXTENSION_POINTS.md`](Essentials/src/Persistence/EntityFramework/EXTENSION_POINTS.md) |
 
 ### Activities
 
 | Domain | Catalog |
 |---|---|
-| Activities flowchart (scoped execution seam + runtime composite activity contracts + gateway policy contract) | [`src/essentials/Activities/Flowchart/EXTENSION_POINTS.md`](src/essentials/Activities/Flowchart/EXTENSION_POINTS.md) |
-| Activities runtime (activity constructors + resume target declarations) | [`src/essentials/Activities/Runtime/Elsa.Activities.Runtime/EXTENSION_POINTS.md`](src/essentials/Activities/Runtime/Elsa.Activities.Runtime/EXTENSION_POINTS.md) |
-| DispatchWorkflow runtime (staged checkpoint dispatch and child-start contribution) | [`src/essentials/Activities/DispatchWorkflow/Runtime/EXTENSION_POINTS.md`](src/essentials/Activities/DispatchWorkflow/Runtime/EXTENSION_POINTS.md) |
-| DispatchWorkflow design (options and executable-pin contribution) | [`src/essentials/Activities/DispatchWorkflow/Design/EXTENSION_POINTS.md`](src/essentials/Activities/DispatchWorkflow/Design/EXTENSION_POINTS.md) |
-| Activities HTTP (synchronous-response sink seam; HttpEndpoint/WriteHttpResponse + inbound middleware) | [`src/essentials/Activities/Http/EXTENSION_POINTS.md`](src/essentials/Activities/Http/EXTENSION_POINTS.md) |
-| Activities sequence (runtime composite activity contracts) | [`src/essentials/Activities/Sequence/EXTENSION_POINTS.md`](src/essentials/Activities/Sequence/EXTENSION_POINTS.md) |
-| Activities control-flow — If branch (Then/Else slots, True/False outcomes; `IActivityStructureHandler` contribution) | [`src/essentials/Activities/ControlFlow/If/EXTENSION_POINTS.md`](src/essentials/Activities/ControlFlow/If/EXTENSION_POINTS.md) |
-| Activities control-flow — Switch branches (per-case + default slots; `IActivityStructureHandler` contribution) | [`src/essentials/Activities/ControlFlow/Switch/EXTENSION_POINTS.md`](src/essentials/Activities/ControlFlow/Switch/EXTENSION_POINTS.md) |
-| Activities control-flow — While loop (body slot, `Done` outcome, per-iteration `IterationId`; structure handler contribution) | [`src/essentials/Activities/ControlFlow/While/EXTENSION_POINTS.md`](src/essentials/Activities/ControlFlow/While/EXTENSION_POINTS.md) |
-| Activities control-flow — Do loop (body slot, `Break`/`Done` outcomes, per-iteration `IterationId`; structure handler contribution) | [`src/essentials/Activities/ControlFlow/Do/EXTENSION_POINTS.md`](src/essentials/Activities/ControlFlow/Do/EXTENSION_POINTS.md) |
-| Activities control-flow — For loop (counted iteration; structure handler + consumed runtime extensions) | [`src/essentials/Activities/ControlFlow/For/EXTENSION_POINTS.md`](src/essentials/Activities/ControlFlow/For/EXTENSION_POINTS.md) |
-| Activities control-flow — ForEach loop (collection iteration; structure handler + runtime seam dependencies) | [`src/essentials/Activities/ControlFlow/ForEach/EXTENSION_POINTS.md`](src/essentials/Activities/ControlFlow/ForEach/EXTENSION_POINTS.md) |
-| Activities control-flow — Parallel branches (fan-out/join; consumed runtime extension points + structure handler) | [`src/essentials/Activities/ControlFlow/Parallel/EXTENSION_POINTS.md`](src/essentials/Activities/ControlFlow/Parallel/EXTENSION_POINTS.md) |
-| Activities design — reconciliation sources | [`src/essentials/Activities/Design/Reconciliation/Elsa.Activities.Design.Reconciliation/EXTENSION_POINTS.md`](src/essentials/Activities/Design/Reconciliation/Elsa.Activities.Design.Reconciliation/EXTENSION_POINTS.md) |
-| Activities design — CLR reconciliation source contribution | [`src/essentials/Activities/Design/Reconciliation/Clr/EXTENSION_POINTS.md`](src/essentials/Activities/Design/Reconciliation/Clr/EXTENSION_POINTS.md) |
-| Activities design — JSON reconciliation source contribution | [`src/essentials/Activities/Design/Reconciliation/Json/EXTENSION_POINTS.md`](src/essentials/Activities/Design/Reconciliation/Json/EXTENSION_POINTS.md) |
-| Activities design — persistence replacement (Entity Framework Core) | [`src/essentials/Activities/Design/Persistence/EntityFrameworkCore/EXTENSION_POINTS.md`](src/essentials/Activities/Design/Persistence/EntityFrameworkCore/EXTENSION_POINTS.md) |
-| Activities design API — catalog and availability services | [`src/essentials/Activities/Design/Api/EXTENSION_POINTS.md`](src/essentials/Activities/Design/Api/EXTENSION_POINTS.md) |
-| Activities graph design — authoring provider, compiler, dependency discovery, and reference rewriting | [`src/essentials/Activities/Graph/Design/EXTENSION_POINTS.md`](src/essentials/Activities/Graph/Design/EXTENSION_POINTS.md) |
+| Activities flowchart (scoped execution seam + runtime composite activity contracts + gateway policy contract) | [`Essentials/src/Activities/Flowchart/EXTENSION_POINTS.md`](Essentials/src/Activities/Flowchart/EXTENSION_POINTS.md) |
+| Activities runtime (activity constructors + resume target declarations) | [`Essentials/src/Activities/Runtime/Elsa.Activities.Runtime/EXTENSION_POINTS.md`](Essentials/src/Activities/Runtime/Elsa.Activities.Runtime/EXTENSION_POINTS.md) |
+| DispatchWorkflow runtime (staged checkpoint dispatch and child-start contribution) | [`Essentials/src/Activities/DispatchWorkflow/Runtime/EXTENSION_POINTS.md`](Essentials/src/Activities/DispatchWorkflow/Runtime/EXTENSION_POINTS.md) |
+| DispatchWorkflow design (options and executable-pin contribution) | [`Essentials/src/Activities/DispatchWorkflow/Design/EXTENSION_POINTS.md`](Essentials/src/Activities/DispatchWorkflow/Design/EXTENSION_POINTS.md) |
+| Activities HTTP (synchronous-response sink seam; HttpEndpoint/WriteHttpResponse + inbound middleware) | [`Essentials/src/Activities/Http/EXTENSION_POINTS.md`](Essentials/src/Activities/Http/EXTENSION_POINTS.md) |
+| Activities sequence (runtime composite activity contracts) | [`Essentials/src/Activities/Sequence/EXTENSION_POINTS.md`](Essentials/src/Activities/Sequence/EXTENSION_POINTS.md) |
+| Activities control-flow — If branch (Then/Else slots, True/False outcomes; `IActivityStructureHandler` contribution) | [`Essentials/src/Activities/ControlFlow/If/EXTENSION_POINTS.md`](Essentials/src/Activities/ControlFlow/If/EXTENSION_POINTS.md) |
+| Activities control-flow — Switch branches (per-case + default slots; `IActivityStructureHandler` contribution) | [`Essentials/src/Activities/ControlFlow/Switch/EXTENSION_POINTS.md`](Essentials/src/Activities/ControlFlow/Switch/EXTENSION_POINTS.md) |
+| Activities control-flow — While loop (body slot, `Done` outcome, per-iteration `IterationId`; structure handler contribution) | [`Essentials/src/Activities/ControlFlow/While/EXTENSION_POINTS.md`](Essentials/src/Activities/ControlFlow/While/EXTENSION_POINTS.md) |
+| Activities control-flow — Do loop (body slot, `Break`/`Done` outcomes, per-iteration `IterationId`; structure handler contribution) | [`Essentials/src/Activities/ControlFlow/Do/EXTENSION_POINTS.md`](Essentials/src/Activities/ControlFlow/Do/EXTENSION_POINTS.md) |
+| Activities control-flow — For loop (counted iteration; structure handler + consumed runtime extensions) | [`Essentials/src/Activities/ControlFlow/For/EXTENSION_POINTS.md`](Essentials/src/Activities/ControlFlow/For/EXTENSION_POINTS.md) |
+| Activities control-flow — ForEach loop (collection iteration; structure handler + runtime seam dependencies) | [`Essentials/src/Activities/ControlFlow/ForEach/EXTENSION_POINTS.md`](Essentials/src/Activities/ControlFlow/ForEach/EXTENSION_POINTS.md) |
+| Activities control-flow — Parallel branches (fan-out/join; consumed runtime extension points + structure handler) | [`Essentials/src/Activities/ControlFlow/Parallel/EXTENSION_POINTS.md`](Essentials/src/Activities/ControlFlow/Parallel/EXTENSION_POINTS.md) |
+| Activities design — reconciliation sources | [`Essentials/src/Activities/Design/Reconciliation/Elsa.Activities.Design.Reconciliation/EXTENSION_POINTS.md`](Essentials/src/Activities/Design/Reconciliation/Elsa.Activities.Design.Reconciliation/EXTENSION_POINTS.md) |
+| Activities design — CLR reconciliation source contribution | [`Essentials/src/Activities/Design/Reconciliation/Clr/EXTENSION_POINTS.md`](Essentials/src/Activities/Design/Reconciliation/Clr/EXTENSION_POINTS.md) |
+| Activities design — JSON reconciliation source contribution | [`Essentials/src/Activities/Design/Reconciliation/Json/EXTENSION_POINTS.md`](Essentials/src/Activities/Design/Reconciliation/Json/EXTENSION_POINTS.md) |
+| Activities design — persistence replacement (Entity Framework Core) | [`Essentials/src/Activities/Design/Persistence/EntityFrameworkCore/EXTENSION_POINTS.md`](Essentials/src/Activities/Design/Persistence/EntityFrameworkCore/EXTENSION_POINTS.md) |
+| Activities design API — catalog and availability services | [`Essentials/src/Activities/Design/Api/EXTENSION_POINTS.md`](Essentials/src/Activities/Design/Api/EXTENSION_POINTS.md) |
+| Activities graph design — authoring provider, compiler, dependency discovery, and reference rewriting | [`Essentials/src/Activities/Graph/Design/EXTENSION_POINTS.md`](Essentials/src/Activities/Graph/Design/EXTENSION_POINTS.md) |
 
 ### Workflows
 
 | Domain | Catalog |
 |---|---|
-| Workflows design — model, activity-input option providers, mutation events, commands, diff engine | [`src/essentials/Workflows/Design/Api/EXTENSION_POINTS.md`](src/essentials/Workflows/Design/Api/EXTENSION_POINTS.md) |
-| Workflows design — draft validators | [`src/essentials/Workflows/Design/Validations/Elsa.Workflows.Design.Validations/EXTENSION_POINTS.md`](src/essentials/Workflows/Design/Validations/Elsa.Workflows.Design.Validations/EXTENSION_POINTS.md) |
-| Workflows design — reconciliation sources | [`src/essentials/Workflows/Design/Reconciliation/Elsa.Workflows.Design.Reconciliation/EXTENSION_POINTS.md`](src/essentials/Workflows/Design/Reconciliation/Elsa.Workflows.Design.Reconciliation/EXTENSION_POINTS.md) |
-| Workflows design — persistence commands and stores (opt-in EF Core) | [`src/essentials/Workflows/Design/Persistence/EntityFrameworkCore/EXTENSION_POINTS.md`](src/essentials/Workflows/Design/Persistence/EntityFrameworkCore/EXTENSION_POINTS.md) |
-| Workflows publishing engine — compiler, slot authority/policy/preflight, publication activation, compilation fan-in, and activity-template registries | [`src/essentials/Workflows/Publishing/Elsa.Workflows.Publishing/EXTENSION_POINTS.md`](src/essentials/Workflows/Publishing/Elsa.Workflows.Publishing/EXTENSION_POINTS.md) |
-| Workflows publishing API — HTTP endpoints, transport authorization, and activity-draft publish/test-run | [`src/essentials/Workflows/Publishing/Api/EXTENSION_POINTS.md`](src/essentials/Workflows/Publishing/Api/EXTENSION_POINTS.md) |
-| Workflows publishing core — authority and projection contracts | [`src/essentials/Workflows/Publishing/Core/EXTENSION_POINTS.md`](src/essentials/Workflows/Publishing/Core/EXTENSION_POINTS.md) |
-| Workflows runtime (canonical domain catalog: Core contracts, composition root, engine implementations, trigger publication, recurring schedules) | [`src/essentials/Workflows/Runtime/Elsa.Workflows.Runtime/EXTENSION_POINTS.md`](src/essentials/Workflows/Runtime/Elsa.Workflows.Runtime/EXTENSION_POINTS.md) |
-| Workflows runtime API — executable inspection and diagnostics services | [`src/essentials/Workflows/Runtime/Api/EXTENSION_POINTS.md`](src/essentials/Workflows/Runtime/Api/EXTENSION_POINTS.md) |
-| Workflows runtime distributed EF Core placement persistence | [`src/essentials/Workflows/Runtime/Distributed/Persistence/EntityFrameworkCore/EXTENSION_POINTS.md`](src/essentials/Workflows/Runtime/Distributed/Persistence/EntityFrameworkCore/EXTENSION_POINTS.md) |
-| Workflows runtime — HTTP endpoint behaviour | [`src/essentials/Workflows/Runtime/Http/EXTENSION_POINTS.md`](src/essentials/Workflows/Runtime/Http/EXTENSION_POINTS.md) |
-| Workflows runtime — durable resumption (sweep service, recurring pump, feature gating) | [`src/essentials/Workflows/Runtime/Resumption/EXTENSION_POINTS.md`](src/essentials/Workflows/Runtime/Resumption/EXTENSION_POINTS.md) |
+| Workflows design — model, activity-input option providers, mutation events, commands, diff engine | [`Essentials/src/Workflows/Design/Api/EXTENSION_POINTS.md`](Essentials/src/Workflows/Design/Api/EXTENSION_POINTS.md) |
+| Workflows design — draft validators | [`Essentials/src/Workflows/Design/Validations/Elsa.Workflows.Design.Validations/EXTENSION_POINTS.md`](Essentials/src/Workflows/Design/Validations/Elsa.Workflows.Design.Validations/EXTENSION_POINTS.md) |
+| Workflows design — reconciliation sources | [`Essentials/src/Workflows/Design/Reconciliation/Elsa.Workflows.Design.Reconciliation/EXTENSION_POINTS.md`](Essentials/src/Workflows/Design/Reconciliation/Elsa.Workflows.Design.Reconciliation/EXTENSION_POINTS.md) |
+| Workflows design — persistence commands and stores (opt-in EF Core) | [`Essentials/src/Workflows/Design/Persistence/EntityFrameworkCore/EXTENSION_POINTS.md`](Essentials/src/Workflows/Design/Persistence/EntityFrameworkCore/EXTENSION_POINTS.md) |
+| Workflows publishing engine — compiler, slot authority/policy/preflight, publication activation, compilation fan-in, and activity-template registries | [`Essentials/src/Workflows/Publishing/Elsa.Workflows.Publishing/EXTENSION_POINTS.md`](Essentials/src/Workflows/Publishing/Elsa.Workflows.Publishing/EXTENSION_POINTS.md) |
+| Workflows publishing API — HTTP endpoints, transport authorization, and activity-draft publish/test-run | [`Essentials/src/Workflows/Publishing/Api/EXTENSION_POINTS.md`](Essentials/src/Workflows/Publishing/Api/EXTENSION_POINTS.md) |
+| Workflows publishing core — authority and projection contracts | [`Essentials/src/Workflows/Publishing/Core/EXTENSION_POINTS.md`](Essentials/src/Workflows/Publishing/Core/EXTENSION_POINTS.md) |
+| Workflows runtime (canonical domain catalog: Core contracts, composition root, engine implementations, trigger publication, recurring schedules) | [`Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/EXTENSION_POINTS.md`](Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/EXTENSION_POINTS.md) |
+| Workflows runtime API — executable inspection and diagnostics services | [`Essentials/src/Workflows/Runtime/Api/EXTENSION_POINTS.md`](Essentials/src/Workflows/Runtime/Api/EXTENSION_POINTS.md) |
+| Workflows runtime distributed EF Core placement persistence | [`Essentials/src/Workflows/Runtime/Distributed/Persistence/EntityFrameworkCore/EXTENSION_POINTS.md`](Essentials/src/Workflows/Runtime/Distributed/Persistence/EntityFrameworkCore/EXTENSION_POINTS.md) |
+| Workflows runtime — HTTP endpoint behaviour | [`Essentials/src/Workflows/Runtime/Http/EXTENSION_POINTS.md`](Essentials/src/Workflows/Runtime/Http/EXTENSION_POINTS.md) |
+| Workflows runtime — durable resumption (sweep service, recurring pump, feature gating) | [`Essentials/src/Workflows/Runtime/Resumption/EXTENSION_POINTS.md`](Essentials/src/Workflows/Runtime/Resumption/EXTENSION_POINTS.md) |
 
 ### Legacy
 
 | Domain | Catalog |
 |---|---|
-| Elsa3 activities import (JSON source for legacy activity definitions) | [`src/extensions/Elsa3/src/Activities/Design/Import/Elsa3.Activities.Design.Import/EXTENSION_POINTS.md`](src/extensions/Elsa3/src/Activities/Design/Import/Elsa3.Activities.Design.Import/EXTENSION_POINTS.md) |
-| Elsa3 mapping (workflow definition import boundary) | [`src/extensions/Elsa3/src/Mapping/EXTENSION_POINTS.md`](src/extensions/Elsa3/src/Mapping/EXTENSION_POINTS.md) |
+| Elsa3 activities import (JSON source for legacy activity definitions) | [`Extensions/Elsa3/src/Activities/Design/Import/Elsa3.Activities.Design.Import/EXTENSION_POINTS.md`](Extensions/Elsa3/src/Activities/Design/Import/Elsa3.Activities.Design.Import/EXTENSION_POINTS.md) |
+| Elsa3 mapping (workflow definition import boundary) | [`Extensions/Elsa3/src/Mapping/EXTENSION_POINTS.md`](Extensions/Elsa3/src/Mapping/EXTENSION_POINTS.md) |
 
 ### Diagnostics
 
 | Domain | Catalog |
 |---|---|
-| Diagnostics persistence lifecycle (bounded drain, durable acknowledgement, readiness, observability) | [`src/essentials/Diagnostics/Persistence/EXTENSION_POINTS.md`](src/essentials/Diagnostics/Persistence/EXTENSION_POINTS.md) |
-| Structured logs (log store, live feed, sink, source provider) | [`src/essentials/Diagnostics/StructuredLogs/Elsa.Diagnostics.StructuredLogs/EXTENSION_POINTS.md`](src/essentials/Diagnostics/StructuredLogs/Elsa.Diagnostics.StructuredLogs/EXTENSION_POINTS.md) |
-| OpenTelemetry (telemetry store, live feed, ingestor, redactor, trusted OTLP authentication/context, source registry, provider, collector config) | [`src/essentials/Diagnostics/OpenTelemetry/Elsa.Diagnostics.OpenTelemetry/EXTENSION_POINTS.md`](src/essentials/Diagnostics/OpenTelemetry/Elsa.Diagnostics.OpenTelemetry/EXTENSION_POINTS.md) |
+| Diagnostics persistence lifecycle (bounded drain, durable acknowledgement, readiness, observability) | [`Essentials/src/Diagnostics/Persistence/EXTENSION_POINTS.md`](Essentials/src/Diagnostics/Persistence/EXTENSION_POINTS.md) |
+| Structured logs (log store, live feed, sink, source provider) | [`Essentials/src/Diagnostics/StructuredLogs/Elsa.Diagnostics.StructuredLogs/EXTENSION_POINTS.md`](Essentials/src/Diagnostics/StructuredLogs/Elsa.Diagnostics.StructuredLogs/EXTENSION_POINTS.md) |
+| OpenTelemetry (telemetry store, live feed, ingestor, redactor, trusted OTLP authentication/context, source registry, provider, collector config) | [`Essentials/src/Diagnostics/OpenTelemetry/Elsa.Diagnostics.OpenTelemetry/EXTENSION_POINTS.md`](Essentials/src/Diagnostics/OpenTelemetry/Elsa.Diagnostics.OpenTelemetry/EXTENSION_POINTS.md) |
 
 ---
 

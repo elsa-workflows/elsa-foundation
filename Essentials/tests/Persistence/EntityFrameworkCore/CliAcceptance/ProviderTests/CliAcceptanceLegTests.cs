@@ -40,7 +40,7 @@ public sealed class CliAcceptanceLegTests
 
     /// <summary>
     /// The Workbench shell feature keys that back <see cref="Modules"/> above, read from
-    /// <c>src/apps/Elsa.Workbench/shells.json</c>: every enabled feature there whose name contains
+    /// <c>Essentials/apps/Elsa.Workbench/shells.json</c>: every enabled feature there whose name contains
     /// <c>EntityFrameworkCore</c> except <c>WorkflowsDashboardEntityFrameworkCore</c>, which declares no
     /// <c>Provider</c> setting of its own and is skipped by the provider-agreement comparison the same way
     /// (spec 171, research.md). Two keys -- <c>FoundationIdentityAspNetCoreIdentityEntityFrameworkCore</c>

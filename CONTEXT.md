@@ -1,34 +1,34 @@
 # Elsa Foundation
 
-`elsa-foundation` is the .NET 10 workflow engine "Elsa 4": a set of libraries under `src/essentials` that a host
+`elsa-foundation` is the .NET 10 workflow engine "Elsa 4": a set of libraries under `Essentials/src` that a host
 composes into a running server. Term definitions are authoritative in [`docs/glossary/elsa.md`](docs/glossary/elsa.md)
 (Elsa terms) and [`docs/glossary/root.md`](docs/glossary/root.md) (framework terms); this file only orients.
 
 ## Entry point
 
-The process starts in [`src/apps/Elsa.Workbench/Program.cs`](src/apps/Elsa.Workbench/Program.cs). It builds one
-or more CShells shells from [`src/apps/Elsa.Workbench/shells.json`](src/apps/Elsa.Workbench/shells.json); every
+The process starts in [`Essentials/apps/Elsa.Workbench/Program.cs`](Essentials/apps/Elsa.Workbench/Program.cs). It builds one
+or more CShells shells from [`Essentials/apps/Elsa.Workbench/shells.json`](Essentials/apps/Elsa.Workbench/shells.json); every
 key under `CShells:Shells:default:Features` names an `IShellFeature` class that registers services. A library
 whose feature is not listed there is not running. [How a workflow executes](docs/how-a-workflow-executes.md)
 traces one request from `Program.cs` to a durable checkpoint.
 
 ## The three planes
 
-- **Design** (`src/essentials/Workflows/Design`, `src/essentials/Activities/Design`): authoring. Definitions, drafts and
+- **Design** (`Essentials/src/Workflows/Design`, `Essentials/src/Activities/Design`): authoring. Definitions, drafts and
   immutable versions, plus the activity catalog and validations. Nothing here runs a workflow.
-- **Publishing** (`src/essentials/Workflows/Publishing`): compiles a definition version into a content-addressed
+- **Publishing** (`Essentials/src/Workflows/Publishing`): compiles a definition version into a content-addressed
   `WorkflowExecutable` and saves it through `IWorkflowExecutableStore`. This is the only bridge from Design to Runtime.
-- **Runtime** (`src/essentials/Workflows/Runtime`, `src/essentials/Activities/Runtime`): executes executables. Contracts and
-  models live in `src/essentials/Workflows/Runtime/Core`; the engine (dispatcher, mailbox, drainer, work handlers,
-  checkpoint committer) lives in `src/essentials/Workflows/Runtime/Elsa.Workflows.Runtime/Services`, one folder per concept; the API in
-  `src/essentials/Workflows/Runtime/Api`. Runtime must not depend on Design.
+- **Runtime** (`Essentials/src/Workflows/Runtime`, `Essentials/src/Activities/Runtime`): executes executables. Contracts and
+  models live in `Essentials/src/Workflows/Runtime/Core`; the engine (dispatcher, mailbox, drainer, work handlers,
+  checkpoint committer) lives in `Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services`, one folder per concept; the API in
+  `Essentials/src/Workflows/Runtime/Api`. Runtime must not depend on Design.
 
-Activity implementations (`HttpEndpoint`, `Sequence`, `Flowchart`, ...) live under `src/essentials/Activities/<Name>`.
+Activity implementations (`HttpEndpoint`, `Sequence`, `Flowchart`, ...) live under `Essentials/src/Activities/<Name>`.
 
 ## Persistence
 
 Every store contract has an in-memory default registered by `AddWorkflowRuntime()` in
-`src/essentials/Workflows/Runtime/Elsa.Workflows.Runtime/Extensions/RuntimeCoreServiceCollectionExtensions.cs`. [ADR 0073](docs/adr/0073-ef-core-is-the-only-first-party-persistence-family.md)
+`Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Extensions/RuntimeCoreServiceCollectionExtensions.cs`. [ADR 0073](docs/adr/0073-ef-core-is-the-only-first-party-persistence-family.md)
 establishes EF Core as the only first-party durable persistence destination, and it is the only one
 that ships: every runtime, design, publishing, identity, secrets, diagnostics and dashboard store has
 an EF Core implementation, selected per module by its own shell feature. The Workbench defaults to

@@ -37,6 +37,6 @@ retry/poison discipline. The staging seam mirrors the DispatchWorkflow stager's 
 publish-typed (it takes the send's facets, never a raw intent), so an activity cannot forge an arbitrary
 post-commit intent kind through it.
 
-Coverage lives in `tests/essentials/Activities/Runtime/Tests`, especially the CLR activator, input hydrator,
+Coverage lives in `Essentials/tests/Activities/Runtime/Tests`, especially the CLR activator, input hydrator,
 pinned-input, and completion contract fixtures, plus `PublishEventTests` (durable-first staging, the buffer's
 intent shape, and the `StartAndResume` handler pin).

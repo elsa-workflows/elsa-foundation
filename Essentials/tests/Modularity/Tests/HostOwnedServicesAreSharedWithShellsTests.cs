@@ -433,7 +433,7 @@ public sealed class HostOwnedServicesAreSharedWithShellsTests
         public static ContentRoot For(string host)
         {
             var content = new ContentRoot();
-            var source = Path.Join(RepositoryRoot(), "src", "apps", host);
+            var source = Path.Join(RepositoryRoot(), "Essentials", "apps", host);
             foreach (var file in new[] { "appsettings.json", "appsettings.Development.json" })
                 File.Copy(Path.Join(source, file), Path.Join(content._directory, file));
             Directory.CreateDirectory(Path.Join(content._directory, "packages"));

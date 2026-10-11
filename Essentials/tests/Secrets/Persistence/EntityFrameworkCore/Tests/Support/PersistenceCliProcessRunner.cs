@@ -35,8 +35,8 @@ internal enum ConnectionTransport
 /// contend.
 /// </para>
 /// <para>
-/// A third near-identical CLI process runner alongside <c>tests/essentials/Cli/Tests/DotnetElsa.cs</c> and
-/// <c>tests/essentials/Persistence/EntityFrameworkCore/CliAcceptance/ProviderTests/DotnetElsaTool.cs</c> -- same
+/// A third near-identical CLI process runner alongside <c>Essentials/tests/Cli/Tests/DotnetElsa.cs</c> and
+/// <c>Essentials/tests/Persistence/EntityFrameworkCore/CliAcceptance/ProviderTests/DotnetElsaTool.cs</c> -- same
 /// repo-root walk, same muxer resolution, same <see cref="ProcessStartInfo"/>/timeout/capture shape. Left
 /// unshared on purpose: the three live in test projects with disjoint dependency closures, and a shared
 /// test-utility project for this would be disproportionate, the same reasoning already applied to the
@@ -61,7 +61,7 @@ internal static class PersistenceCliProcessRunner
 
     /// <summary>The tool's own build output, which is also where its worker sits — the shipped layout.</summary>
     private static readonly string ToolAssembly =
-        Path.Join(RepositoryRoot, "src", "essentials", "Cli", "Elsa.Cli", "bin", Configuration, "net10.0", "Elsa.Cli.dll");
+        Path.Join(RepositoryRoot, "Essentials", "src", "Cli", "Elsa.Cli", "bin", Configuration, "net10.0", "Elsa.Cli.dll");
 
     /// <summary>
     /// The fixture host that ships every first-party EF module — Secrets among them — and all four provider
@@ -69,7 +69,7 @@ internal static class PersistenceCliProcessRunner
     /// inspects is a built host's output directory, which is all a packaged deployment offers it.
     /// </summary>
     private static readonly string Host =
-        Path.Join(RepositoryRoot, "tests", "essentials", "Cli", "Fixtures", "Host", "bin", Configuration, "net10.0");
+        Path.Join(RepositoryRoot, "Essentials", "tests", "Cli", "Fixtures", "Host", "bin", Configuration, "net10.0");
 
     /// <summary>
     /// Runs one <c>persistence</c> command against <paramref name="connection"/> for the Secrets module.

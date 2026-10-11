@@ -9,7 +9,7 @@ namespace Elsa.Persistence.EntityFrameworkCore.Migrations.Tests;
 /// persistence</c> now, so what this pins is the shim's own contract — that it builds the CLI and the
 /// tooling project, then calls the CLI with the right <c>--host</c>/<c>--provider</c>/module-selection/
 /// connection flags, and passes its exit code straight through. The SQL-layout and provider-agreement
-/// assertions that used to live here belong to the CLI's own tests now (<c>tests/essentials/Cli/Tests</c>), since
+/// assertions that used to live here belong to the CLI's own tests now (<c>Essentials/tests/Cli/Tests</c>), since
 /// the CLI is what actually generates and checks the artifact.
 /// </summary>
 public sealed class ModuleMigrateScriptToolTests : IDisposable
@@ -32,8 +32,8 @@ public sealed class ModuleMigrateScriptToolTests : IDisposable
         File.WriteAllText(
             Path.Join(repository, "tools", "ef", "Elsa.EntityFrameworkCore.Tooling", "Elsa.EntityFrameworkCore.Tooling.csproj"),
             "<Project />");
-        Directory.CreateDirectory(Path.Join(repository, "src", "essentials", "Cli", "Elsa.Cli"));
-        File.WriteAllText(Path.Join(repository, "src", "essentials", "Cli", "Elsa.Cli", "Elsa.Cli.csproj"), "<Project />");
+        Directory.CreateDirectory(Path.Join(repository, "Essentials", "src", "Cli", "Elsa.Cli"));
+        File.WriteAllText(Path.Join(repository, "Essentials", "src", "Cli", "Elsa.Cli", "Elsa.Cli.csproj"), "<Project />");
 
         WriteShim("dotnet", """
             #!/usr/bin/env bash

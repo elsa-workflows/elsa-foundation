@@ -53,7 +53,7 @@ so that mismatch, and the warning it produced, are both gone; the pin and the lo
 
 **A new project** gets its lock file from its first restore; commit it with the project. A locked restore of a project
 with no lock file does not fail: NuGet writes one and carries on, unlocked. So
-`tests/essentials/Architecture/Tests/NuGetLockFileTests.cs` fails for any project in `Elsa.Server.slnx` without a committed
+`Essentials/tests/Architecture/Tests/NuGetLockFileTests.cs` fails for any project in `Elsa.Server.slnx` without a committed
 lock file beside it, for two projects sharing a directory (and so one lock file), and for a committed lock file with no
 project beside it.
 
@@ -69,7 +69,7 @@ project beside it.
   implies it), or because the command carries `-p:RestoreLockedMode=true` itself: `dotnet run --project
   tools/maps/Elsa.Maps.Generator` and `dotnet build tools/versioning/Elsa.Versioning.Publisher`, the tool projects a
   workflow builds and runs with no separate restore step, restore themselves locked against their own committed lock
-  file this way. `WorkflowRestoreLockTests` (`tests/essentials/Architecture`) scans every workflow for one of these
+  file this way. `WorkflowRestoreLockTests` (`Essentials/tests/Architecture`) scans every workflow for one of these
   four markers on the same command and fails on a new step that restores unlocked.
 - Local restores are not locked, so the restore after a change is what updates the lock files.
 - **The one place CI does not restore locked**: Elsa.Workbench's Dockerfile restores its RID-specific ReadyToRun
