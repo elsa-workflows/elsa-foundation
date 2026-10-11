@@ -1,0 +1,9 @@
+# Run and understand the server
+
+Elsa Foundation contains the Elsa 4 server libraries and the reference `Elsa.Workbench` host. These existing guides are starting points for trying the reference composition or tracing its architecture:
+
+- [Run the published Workbench and Studio images](https://github.com/elsa-workflows/elsa-foundation/blob/main/docker/compose/README.md#quick-start--published-images-no-clone-or-build).
+- [Build and run the backend from source](https://github.com/elsa-workflows/elsa-foundation/blob/main/docs/contributing/backend-source-quickstart.md).
+- [Take the architecture tour](https://github.com/elsa-workflows/elsa-foundation/blob/main/docs/architecture-tour.md), then [follow a workflow execution](https://github.com/elsa-workflows/elsa-foundation/blob/main/docs/how-a-workflow-executes.md).
+
+The reference host is one composition of Elsa features. A custom host may compose a different set. Module-level notes and API details remain beside their projects in the [Foundation source tree](https://github.com/elsa-workflows/elsa-foundation/tree/main/src/essentials); check the package version you deploy before applying guidance from the development branch.
