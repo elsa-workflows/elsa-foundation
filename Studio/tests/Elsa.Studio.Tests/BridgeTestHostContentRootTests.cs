@@ -32,7 +32,9 @@ public sealed class BridgeTestHostContentRootTests
 
             var bridgeBuilder = BridgeTestHost.CreateBuilder();
             configurations.Add(bridgeBuilder.Configuration);
-            Assert.Equal(expectedContentRoot, Path.TrimEndingDirectorySeparator(Path.GetFullPath(bridgeBuilder.Environment.ContentRootPath)));
+            var actualContentRoot = bridgeBuilder.Environment.ContentRootPath;
+            // Hosting may resolve a symlinked parent (for example, /var to /private/var on macOS).
+            Assert.Equal(ResolvePhysicalPath(expectedContentRoot), ResolvePhysicalPath(actualContentRoot));
         }
         finally
         {
@@ -59,5 +61,21 @@ public sealed class BridgeTestHostContentRootTests
             EnvironmentName = Environments.Production,
             ContentRootPath = alternatePath
         }));
+    }
+
+    private static string ResolvePhysicalPath(string path)
+    {
+        var fullPath = Path.GetFullPath(path);
+        var root = Path.GetPathRoot(fullPath)!;
+        var currentPath = root;
+
+        var segments = fullPath[root.Length..].Split(Path.DirectorySeparatorChar, StringSplitOptions.RemoveEmptyEntries);
+        foreach (var segment in segments)
+        {
+            var candidatePath = Path.Combine(currentPath, segment);
+            currentPath = new DirectoryInfo(candidatePath).ResolveLinkTarget(returnFinalTarget: true)?.FullName ?? candidatePath;
+        }
+
+        return Path.TrimEndingDirectorySeparator(Path.GetFullPath(currentPath));
     }
 }
