@@ -16,3 +16,7 @@ Choose a path:
 The quickstart uses an explicitly recorded image pair. Other source guides may describe current development rather than a released package. Each verification record applies to its named revisions and environment.
 
 These pages are maintained in the Foundation repository. [Propose a documentation change](contributing/README.md) through GitHub.
+
+---
+
+[Edit this page on GitHub](https://github.com/elsa-workflows/elsa-foundation/edit/main/website/docs/README.md).

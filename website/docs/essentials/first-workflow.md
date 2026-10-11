@@ -32,3 +32,7 @@ Use the project name you chose in the quickstart. Your unique message should app
 You created a definition, published an artifact, and executed that artifact. The [workflow execution guide](https://github.com/elsa-workflows/elsa-foundation/blob/main/docs/how-a-workflow-executes.md) explains the runtime path in more detail. Use the [local demo cleanup steps](quickstart.md#stop-the-demo) when you finish.
 
 The [recorded browser verification](https://github.com/elsa-workflows/elsa-foundation/blob/69f067104c1a977d897911db7ecf16037cfbe542/docs/contributing/published-image-pair.md#recorded-image-provenance-and-hosted-result) covers a specific image pair and Linux/amd64 environment. It is automated technical evidence, rather than a human newcomer trial or proof for every later preview.
+
+---
+
+[Edit this page on GitHub](https://github.com/elsa-workflows/elsa-foundation/edit/main/website/docs/essentials/first-workflow.md).
