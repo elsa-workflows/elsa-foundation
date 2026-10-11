@@ -12,7 +12,7 @@
     <PackageReference Include="coverlet.collector" PrivateAssets="all" />
   </ItemGroup>
   <ItemGroup>
-    <ProjectReference Include="..\..\..\..\..\..\..\..\src\essentials\Workflows\Runtime\Distributed\Persistence\EntityFrameworkCore\Elsa.Workflows.Runtime.Distributed.Persistence.EntityFrameworkCore.csproj" />
+    <ProjectReference Include="..\..\..\..\..\..\..\src\Workflows\Runtime\Distributed\Persistence\EntityFrameworkCore\Elsa.Workflows.Runtime.Distributed.Persistence.EntityFrameworkCore.csproj" />
   </ItemGroup>
   <ItemGroup>
     <!-- Fails any unordered Skip or Take (EF warning 10102) in this suite. -->

@@ -15,7 +15,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\..\..\..\src\essentials\Persistence\EntityFramework\Elsa.Persistence.EntityFramework.csproj" />
+    <ProjectReference Include="..\..\..\..\src\Persistence\EntityFramework\Elsa.Persistence.EntityFramework.csproj" />
   </ItemGroup>
 
 </Project>

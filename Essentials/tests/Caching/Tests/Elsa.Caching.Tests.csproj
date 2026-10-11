@@ -12,8 +12,8 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\..\..\src\essentials\Caching\Core\Elsa.Caching.Core.csproj" />
-    <ProjectReference Include="..\..\..\..\src\essentials\Caching\Memory\Elsa.Caching.Memory.csproj" />
+    <ProjectReference Include="..\..\..\src\Caching\Core\Elsa.Caching.Core.csproj" />
+    <ProjectReference Include="..\..\..\src\Caching\Memory\Elsa.Caching.Memory.csproj" />
   </ItemGroup>
 
 </Project>

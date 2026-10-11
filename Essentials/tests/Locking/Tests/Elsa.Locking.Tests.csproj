@@ -19,10 +19,10 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\..\..\src\essentials\Locking\FileSystem\Elsa.Locking.FileSystem.csproj" />
-    <ProjectReference Include="..\..\..\..\src\essentials\Locking\Database\Elsa.Locking.Database.csproj" />
-    <ProjectReference Include="..\..\..\..\src\essentials\Cluster\Core\Elsa.Cluster.Core.csproj" />
-    <ProjectReference Include="..\..\..\..\src\essentials\Cluster\InProcess\Elsa.Cluster.InProcess.csproj" />
+    <ProjectReference Include="..\..\..\src\Locking\FileSystem\Elsa.Locking.FileSystem.csproj" />
+    <ProjectReference Include="..\..\..\src\Locking\Database\Elsa.Locking.Database.csproj" />
+    <ProjectReference Include="..\..\..\src\Cluster\Core\Elsa.Cluster.Core.csproj" />
+    <ProjectReference Include="..\..\..\src\Cluster\InProcess\Elsa.Cluster.InProcess.csproj" />
   </ItemGroup>
 
   <ItemGroup>

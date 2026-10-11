@@ -18,7 +18,7 @@
     <PackageReference Include="coverlet.collector" PrivateAssets="all" />
   </ItemGroup>
   <ItemGroup>
-    <ProjectReference Include="..\..\..\..\..\..\..\src\essentials\Activities\Design\Persistence\EntityFrameworkCore\Elsa.Activities.Design.Persistence.EntityFrameworkCore.csproj" />
+    <ProjectReference Include="..\..\..\..\..\..\src\Activities\Design\Persistence\EntityFrameworkCore\Elsa.Activities.Design.Persistence.EntityFrameworkCore.csproj" />
   </ItemGroup>
   <ItemGroup>
     <!-- One case table for the ContentAuthorityIsValid marker, shared with the module's SQLite suite. -->

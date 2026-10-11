@@ -19,7 +19,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\essentials\Elsa.Studio.Core\Elsa.Studio.Core.csproj" />
+    <ProjectReference Include="..\..\..\..\Studio\src\essentials\Elsa.Studio.Core\Elsa.Studio.Core.csproj" />
   </ItemGroup>
 
   <ItemGroup>

@@ -13,10 +13,10 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\..\..\..\src\essentials\Workflows\Runtime\Core\Elsa.Workflows.Runtime.Core.csproj" />
-    <ProjectReference Include="..\..\..\..\..\src\essentials\Workflows\Runtime\Api\Elsa.Workflows.Runtime.Api.csproj" />
-    <ProjectReference Include="..\..\..\..\..\src\essentials\Workflows\Runtime\Resumption\Elsa.Workflows.Runtime.Resumption.csproj" />
-    <ProjectReference Include="..\..\..\..\..\src\essentials\Workflows\Runtime\ReferenceGarbageCollection\Elsa.Workflows.Runtime.ReferenceGarbageCollection.csproj" />
+    <ProjectReference Include="..\..\..\..\src\Workflows\Runtime\Core\Elsa.Workflows.Runtime.Core.csproj" />
+    <ProjectReference Include="..\..\..\..\src\Workflows\Runtime\Api\Elsa.Workflows.Runtime.Api.csproj" />
+    <ProjectReference Include="..\..\..\..\src\Workflows\Runtime\Resumption\Elsa.Workflows.Runtime.Resumption.csproj" />
+    <ProjectReference Include="..\..\..\..\src\Workflows\Runtime\ReferenceGarbageCollection\Elsa.Workflows.Runtime.ReferenceGarbageCollection.csproj" />
     <ProjectReference Include="..\..\..\Testing\Elsa.Testing.csproj" />
   </ItemGroup>
 

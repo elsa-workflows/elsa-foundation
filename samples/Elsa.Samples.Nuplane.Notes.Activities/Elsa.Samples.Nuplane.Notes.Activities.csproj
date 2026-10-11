@@ -55,9 +55,9 @@
     <!-- The Notes release of the same DemoVersion: a dependency of the package, acquired from the same feed. -->
     <ProjectReference Include="..\Elsa.Samples.Nuplane.Notes\Elsa.Samples.Nuplane.Notes.csproj" />
     <!-- The activity contracts are the workflow host's own, shared with every package it loads. -->
-    <ProjectReference Include="..\..\src\essentials\Activities\Design\Core\Elsa.Activities.Design.Core.csproj" PrivateAssets="all" />
-    <ProjectReference Include="..\..\src\essentials\Activities\Runtime\Core\Elsa.Activities.Runtime.Core.csproj" PrivateAssets="all" />
-    <ProjectReference Include="..\..\src\essentials\Primitives\Primitives\Elsa.Primitives.csproj" PrivateAssets="all" />
+    <ProjectReference Include="..\..\Essentials\src\Activities\Design\Core\Elsa.Activities.Design.Core.csproj" PrivateAssets="all" />
+    <ProjectReference Include="..\..\Essentials\src\Activities\Runtime\Core\Elsa.Activities.Runtime.Core.csproj" PrivateAssets="all" />
+    <ProjectReference Include="..\..\Essentials\src\Primitives\Primitives\Elsa.Primitives.csproj" PrivateAssets="all" />
   </ItemGroup>
 
 </Project>

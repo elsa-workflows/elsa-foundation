@@ -16,8 +16,8 @@
     <PackageReference Include="coverlet.collector" PrivateAssets="all" />
   </ItemGroup>
   <ItemGroup>
-    <ProjectReference Include="..\..\..\..\..\..\..\src\essentials\Workflows\Runtime\Persistence\EntityFrameworkCore\Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.csproj" />
-    <ProjectReference Include="..\..\..\..\..\..\..\src\essentials\Workflows\Runtime\Scheduling\Elsa.Workflows.Runtime.Scheduling.csproj" />
+    <ProjectReference Include="..\..\..\..\..\..\src\Workflows\Runtime\Persistence\EntityFrameworkCore\Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.csproj" />
+    <ProjectReference Include="..\..\..\..\..\..\src\Workflows\Runtime\Scheduling\Elsa.Workflows.Runtime.Scheduling.csproj" />
     <!-- Whole runtime nodes for the PublishStimulus start scenarios. -->
     <ProjectReference Include="..\..\..\..\..\Activities\Testing\Elsa.Activities.Testing.csproj" />
     <!-- RecordingLogger, for the crash-repair contract's leaked-reference errors (#2251). -->

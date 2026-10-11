@@ -16,7 +16,7 @@
   -->
   <ItemGroup>
     <!-- Shared typed endpoint ownership/security metadata; this host still compiles no Elsa feature implementation. -->
-    <ProjectReference Include="..\..\essentials\Api\AspNetCore\Elsa.Api.AspNetCore.csproj" />
+    <ProjectReference Include="..\..\src\Api\AspNetCore\Elsa.Api.AspNetCore.csproj" />
 
     <!-- CShells: AddCShellsAspNetCore, MapShells, per-shell IMiddlewareShellFeature (auto re-composed per
          generation on reload — hot, no restart). Brings CShells.Abstractions + CShells.AspNetCore.Abstractions
@@ -51,16 +51,16 @@
     does not compile a feature into this host; every actual feature still arrives only through the Nuplane feed.
   -->
   <ItemGroup>
-    <ProjectReference Include="..\..\essentials\Attention\Core\Elsa.Attention.Core.csproj" />
-    <ProjectReference Include="..\..\essentials\Caching\Core\Elsa.Caching.Core.csproj" />
-    <ProjectReference Include="..\..\essentials\Events\Core\Elsa.Events.Core.csproj" />
-    <ProjectReference Include="..\..\essentials\Expressions\Core\Elsa.Expressions.Core.csproj" />
-    <ProjectReference Include="..\..\essentials\Locking\Core\Elsa.Locking.Core.csproj" />
-    <ProjectReference Include="..\..\essentials\Mediator\Core\Elsa.Mediator.Core.csproj" />
-    <ProjectReference Include="..\..\essentials\Pipelines\Core\Elsa.Pipelines.Core.csproj" />
-    <ProjectReference Include="..\..\essentials\Primitives\Primitives\Elsa.Primitives.csproj" />
-    <ProjectReference Include="..\..\essentials\Serialization\Core\Elsa.Serialization.Core.csproj" />
-    <ProjectReference Include="..\..\essentials\Tasks\Core\Elsa.Tasks.Core.csproj" />
+    <ProjectReference Include="..\..\src\Attention\Core\Elsa.Attention.Core.csproj" />
+    <ProjectReference Include="..\..\src\Caching\Core\Elsa.Caching.Core.csproj" />
+    <ProjectReference Include="..\..\src\Events\Core\Elsa.Events.Core.csproj" />
+    <ProjectReference Include="..\..\src\Expressions\Core\Elsa.Expressions.Core.csproj" />
+    <ProjectReference Include="..\..\src\Locking\Core\Elsa.Locking.Core.csproj" />
+    <ProjectReference Include="..\..\src\Mediator\Core\Elsa.Mediator.Core.csproj" />
+    <ProjectReference Include="..\..\src\Pipelines\Core\Elsa.Pipelines.Core.csproj" />
+    <ProjectReference Include="..\..\src\Primitives\Primitives\Elsa.Primitives.csproj" />
+    <ProjectReference Include="..\..\src\Serialization\Core\Elsa.Serialization.Core.csproj" />
+    <ProjectReference Include="..\..\src\Tasks\Core\Elsa.Tasks.Core.csproj" />
   </ItemGroup>
 
   <!--
@@ -77,9 +77,9 @@
     default (Elsa.Cluster.InProcess) and the dormancy check's source. None of them is a shell feature.
   -->
   <ItemGroup>
-    <ProjectReference Include="..\..\essentials\Cluster\Core\Elsa.Cluster.Core.csproj" />
-    <ProjectReference Include="..\..\essentials\Cluster\Readability\Elsa.Cluster.Readability.csproj" />
-    <ProjectReference Include="..\..\essentials\Persistence\Schema\Elsa.Persistence.Schema.csproj" />
+    <ProjectReference Include="..\..\src\Cluster\Core\Elsa.Cluster.Core.csproj" />
+    <ProjectReference Include="..\..\src\Cluster\Readability\Elsa.Cluster.Readability.csproj" />
+    <ProjectReference Include="..\..\src\Persistence\Schema\Elsa.Persistence.Schema.csproj" />
   </ItemGroup>
 
   <!--
@@ -98,13 +98,13 @@
     leaves undeclared).
   -->
   <ItemGroup>
-    <ProjectReference Include="..\..\essentials\Cluster\EntityFrameworkCore\Elsa.Cluster.EntityFrameworkCore.csproj" />
+    <ProjectReference Include="..\..\src\Cluster\EntityFrameworkCore\Elsa.Cluster.EntityFrameworkCore.csproj" />
     <!--
       The host's Data Protection composition and its opt-in EF key store (#2191; ADR 0076, amended 2026-10-01): the key ring
       is the host's, as its membership is, so it is composed on this container and never arrives through a shell's feature
       list. It carries the same EF closure as the membership provider, and nothing more.
     -->
-    <ProjectReference Include="..\..\essentials\Foundation\DataProtection\EntityFrameworkCore\Elsa.Foundation.DataProtection.EntityFrameworkCore.csproj" />
+    <ProjectReference Include="..\..\src\Foundation\DataProtection\EntityFrameworkCore\Elsa.Foundation.DataProtection.EntityFrameworkCore.csproj" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" />
     <PackageReference Include="MySql.EntityFrameworkCore" />
@@ -113,7 +113,7 @@
 
   <ItemGroup>
     <!-- The Nuplane directory feed drop-folder. -->
-    <Folder Include="packages\" />
+    <Folder Include="packages" />
   </ItemGroup>
 
   <ItemGroup>

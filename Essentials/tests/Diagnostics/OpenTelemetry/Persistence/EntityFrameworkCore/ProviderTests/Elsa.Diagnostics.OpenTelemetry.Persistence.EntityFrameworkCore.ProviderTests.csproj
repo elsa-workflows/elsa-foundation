@@ -25,8 +25,8 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\..\..\..\..\..\src\essentials\Diagnostics\OpenTelemetry\Persistence\EntityFrameworkCore\Elsa.Diagnostics.OpenTelemetry.Persistence.EntityFrameworkCore.csproj" />
-    <ProjectReference Include="..\..\..\..\..\..\..\src\essentials\Diagnostics\OpenTelemetry\Elsa.Diagnostics.OpenTelemetry\Elsa.Diagnostics.OpenTelemetry.csproj" />
+    <ProjectReference Include="..\..\..\..\..\..\src\Diagnostics\OpenTelemetry\Persistence\EntityFrameworkCore\Elsa.Diagnostics.OpenTelemetry.Persistence.EntityFrameworkCore.csproj" />
+    <ProjectReference Include="..\..\..\..\..\..\src\Diagnostics\OpenTelemetry\Elsa.Diagnostics.OpenTelemetry\Elsa.Diagnostics.OpenTelemetry.csproj" />
   </ItemGroup>
 
   <ItemGroup>

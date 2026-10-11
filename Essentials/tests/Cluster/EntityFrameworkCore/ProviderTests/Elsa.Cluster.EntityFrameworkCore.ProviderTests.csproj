@@ -33,7 +33,7 @@
   -->
   <ItemGroup>
     <Compile Include="..\Tests\FoundationHostFeed.cs;..\Tests\FoundationHostProcess.cs;..\Tests\ChildHostProcess.cs;..\Tests\FoundationHostComposition.cs;..\Tests\FoundationHostClusterScenario.cs;..\Tests\FeedModuleDatabase.cs;..\Tests\CapturedOutput.cs;..\Tests\Polling.cs;..\Tests\ChildProcess.cs" LinkBase="FoundationHost" />
-    <ProjectReference Include="..\..\..\..\..\src\apps\Elsa.Foundation.Host\Elsa.Foundation.Host.csproj" ReferenceOutputAssembly="false" />
+    <ProjectReference Include="..\..\..\..\apps\Elsa.Foundation.Host\Elsa.Foundation.Host.csproj" ReferenceOutputAssembly="false" />
     <ProjectReference Include="..\..\Fixtures\FeedModule\Elsa.Cluster.Fixtures.FeedModule.csproj" ReferenceOutputAssembly="false" />
   </ItemGroup>
 

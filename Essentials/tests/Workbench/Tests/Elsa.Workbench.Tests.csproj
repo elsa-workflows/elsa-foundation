@@ -17,7 +17,7 @@
       Build-order only. The tests start the Workbench's own build output as a child process, exactly as an
       operator runs it, so nothing from the host is loaded into the test process.
     -->
-    <ProjectReference Include="..\..\..\..\src\apps\Elsa.Workbench\Elsa.Workbench.csproj" ReferenceOutputAssembly="false" />
+    <ProjectReference Include="..\..\..\apps\Elsa.Workbench\Elsa.Workbench.csproj" ReferenceOutputAssembly="false" />
   </ItemGroup>
 
 </Project>

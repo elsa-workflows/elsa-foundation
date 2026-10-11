@@ -14,11 +14,11 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\..\..\..\src\essentials\Diagnostics\Persistence\Elsa.Diagnostics.Persistence.csproj" />
-    <ProjectReference Include="..\..\..\..\..\src\essentials\Diagnostics\OpenTelemetry\Elsa.Diagnostics.OpenTelemetry\Elsa.Diagnostics.OpenTelemetry.csproj" />
-    <ProjectReference Include="..\..\..\..\..\src\essentials\Diagnostics\OpenTelemetry\Core\Elsa.Diagnostics.OpenTelemetry.Core.csproj" />
-    <ProjectReference Include="..\..\..\..\..\src\essentials\Diagnostics\StructuredLogs\Elsa.Diagnostics.StructuredLogs\Elsa.Diagnostics.StructuredLogs.csproj" />
-    <ProjectReference Include="..\..\..\..\..\src\essentials\Diagnostics\StructuredLogs\Core\Elsa.Diagnostics.StructuredLogs.Core.csproj" />
+    <ProjectReference Include="..\..\..\..\src\Diagnostics\Persistence\Elsa.Diagnostics.Persistence.csproj" />
+    <ProjectReference Include="..\..\..\..\src\Diagnostics\OpenTelemetry\Elsa.Diagnostics.OpenTelemetry\Elsa.Diagnostics.OpenTelemetry.csproj" />
+    <ProjectReference Include="..\..\..\..\src\Diagnostics\OpenTelemetry\Core\Elsa.Diagnostics.OpenTelemetry.Core.csproj" />
+    <ProjectReference Include="..\..\..\..\src\Diagnostics\StructuredLogs\Elsa.Diagnostics.StructuredLogs\Elsa.Diagnostics.StructuredLogs.csproj" />
+    <ProjectReference Include="..\..\..\..\src\Diagnostics\StructuredLogs\Core\Elsa.Diagnostics.StructuredLogs.Core.csproj" />
   </ItemGroup>
 
 </Project>

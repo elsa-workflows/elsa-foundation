@@ -8,7 +8,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="../../../../../src/essentials/Modularity/Planning/Elsa.Modularity.Planning.csproj" />
+    <ProjectReference Include="../../../../src/Modularity/Planning/Elsa.Modularity.Planning.csproj" />
   </ItemGroup>
 
   <ItemGroup>

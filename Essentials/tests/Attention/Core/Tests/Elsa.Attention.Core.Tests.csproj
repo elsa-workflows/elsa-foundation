@@ -12,7 +12,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\..\..\..\src\essentials\Attention\Core\Elsa.Attention.Core.csproj" />
+    <ProjectReference Include="..\..\..\..\src\Attention\Core\Elsa.Attention.Core.csproj" />
   </ItemGroup>
 
   <ItemGroup>

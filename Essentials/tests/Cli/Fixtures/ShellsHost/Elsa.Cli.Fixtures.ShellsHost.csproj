@@ -20,10 +20,10 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\..\..\..\src\essentials\Secrets\Persistence\EntityFrameworkCore\Elsa.Secrets.Persistence.EntityFrameworkCore.csproj" />
-    <ProjectReference Include="..\..\..\..\..\src\essentials\Workflows\Dashboard\Persistence\EntityFrameworkCore\Elsa.Workflows.Dashboard.Persistence.EntityFrameworkCore.csproj" />
-    <ProjectReference Include="..\..\..\..\..\src\essentials\Workflows\Design\Persistence\EntityFrameworkCore\Elsa.Workflows.Design.Persistence.EntityFrameworkCore.csproj" />
-    <ProjectReference Include="..\..\..\..\..\src\essentials\Workflows\Runtime\Persistence\EntityFrameworkCore\Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.csproj" />
+    <ProjectReference Include="..\..\..\..\src\Secrets\Persistence\EntityFrameworkCore\Elsa.Secrets.Persistence.EntityFrameworkCore.csproj" />
+    <ProjectReference Include="..\..\..\..\src\Workflows\Dashboard\Persistence\EntityFrameworkCore\Elsa.Workflows.Dashboard.Persistence.EntityFrameworkCore.csproj" />
+    <ProjectReference Include="..\..\..\..\src\Workflows\Design\Persistence\EntityFrameworkCore\Elsa.Workflows.Design.Persistence.EntityFrameworkCore.csproj" />
+    <ProjectReference Include="..\..\..\..\src\Workflows\Runtime\Persistence\EntityFrameworkCore\Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.csproj" />
   </ItemGroup>
 
   <ItemGroup>

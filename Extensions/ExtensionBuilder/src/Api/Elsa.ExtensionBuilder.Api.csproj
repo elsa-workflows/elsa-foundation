@@ -15,13 +15,13 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\..\..\essentials\Api\AspNetCore\Elsa.Api.AspNetCore.csproj" />
+    <ProjectReference Include="..\..\..\..\Essentials\src\Api\AspNetCore\Elsa.Api.AspNetCore.csproj" />
     <!-- ShareWithShells: the build queue and storage the root build worker drains must be the instances a shell-resolved request reaches. -->
-    <ProjectReference Include="..\..\..\..\essentials\Cluster\Readability\Elsa.Cluster.Readability.csproj" />
-    <ProjectReference Include="..\..\..\..\essentials\Foundation\Identity\Core\Elsa.Foundation.Identity.Core.csproj" />
-    <ProjectReference Include="..\..\..\..\essentials\Foundation\Identity\Elsa.Foundation.Identity\Elsa.Foundation.Identity.csproj" />
-    <ProjectReference Include="..\..\..\..\essentials\Git\Elsa.Git.csproj" />
-    <ProjectReference Include="..\..\..\..\essentials\Modularity\Core\Elsa.Modularity.Core.csproj" />
+    <ProjectReference Include="..\..\..\..\Essentials\src\Cluster\Readability\Elsa.Cluster.Readability.csproj" />
+    <ProjectReference Include="..\..\..\..\Essentials\src\Foundation\Identity\Core\Elsa.Foundation.Identity.Core.csproj" />
+    <ProjectReference Include="..\..\..\..\Essentials\src\Foundation\Identity\Elsa.Foundation.Identity\Elsa.Foundation.Identity.csproj" />
+    <ProjectReference Include="..\..\..\..\Essentials\src\Git\Elsa.Git.csproj" />
+    <ProjectReference Include="..\..\..\..\Essentials\src\Modularity\Core\Elsa.Modularity.Core.csproj" />
   </ItemGroup>
 
   <ItemGroup>

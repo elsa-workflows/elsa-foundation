@@ -19,10 +19,10 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\..\..\..\src\essentials\Cluster\Readability\Elsa.Cluster.Readability.csproj" />
+    <ProjectReference Include="..\..\..\..\src\Cluster\Readability\Elsa.Cluster.Readability.csproj" />
     <!-- Two real modules, so a host that has loaded them reports exactly their declared families. -->
-    <ProjectReference Include="..\..\..\..\..\src\essentials\Workflows\Publishing\Persistence\EntityFrameworkCore\Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore.csproj" />
-    <ProjectReference Include="..\..\..\..\..\src\essentials\Workflows\Runtime\Persistence\EntityFrameworkCore\Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.csproj" />
+    <ProjectReference Include="..\..\..\..\src\Workflows\Publishing\Persistence\EntityFrameworkCore\Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore.csproj" />
+    <ProjectReference Include="..\..\..\..\src\Workflows\Runtime\Persistence\EntityFrameworkCore\Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.csproj" />
     <!-- RecordingLogger, to prove a malformed family's disagreement is logged rather than only isolated. -->
     <ProjectReference Include="..\..\..\Testing\Elsa.Testing.csproj" />
   </ItemGroup>

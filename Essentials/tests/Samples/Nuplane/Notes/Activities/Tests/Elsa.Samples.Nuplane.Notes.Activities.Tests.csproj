@@ -21,14 +21,14 @@
     <ProjectReference Include="..\..\..\..\..\..\..\samples\Elsa.Samples.Nuplane.Notes\Elsa.Samples.Nuplane.Notes.csproj"
                       AdditionalProperties="DemoVersion=2" />
     <!-- The activity contracts, which the activity package keeps private, and the shared dormancy check a host composes. -->
-    <ProjectReference Include="..\..\..\..\..\..\..\src\essentials\Activities\Design\Core\Elsa.Activities.Design.Core.csproj" />
-    <ProjectReference Include="..\..\..\..\..\..\..\src\essentials\Activities\Runtime\Core\Elsa.Activities.Runtime.Core.csproj" />
-    <ProjectReference Include="..\..\..\..\..\..\..\src\essentials\Cluster\InProcess\Elsa.Cluster.InProcess.csproj" />
+    <ProjectReference Include="..\..\..\..\..\..\src\Activities\Design\Core\Elsa.Activities.Design.Core.csproj" />
+    <ProjectReference Include="..\..\..\..\..\..\src\Activities\Runtime\Core\Elsa.Activities.Runtime.Core.csproj" />
+    <ProjectReference Include="..\..\..\..\..\..\src\Cluster\InProcess\Elsa.Cluster.InProcess.csproj" />
   </ItemGroup>
 
   <ItemGroup>
     <Compile Include="..\..\..\..\..\Persistence\EntityFramework\Tests\TemporarySqliteDatabase.cs" Link="TemporarySqliteDatabase.cs" />
-    <Compile Include="..\..\..\..\..\..\Shared\FakeObservedSchemaFinalization.cs" Link="FakeObservedSchemaFinalization.cs" />
+    <Compile Include="..\..\..\..\..\Shared\FakeObservedSchemaFinalization.cs" Link="FakeObservedSchemaFinalization.cs" />
   </ItemGroup>
 
   <!--

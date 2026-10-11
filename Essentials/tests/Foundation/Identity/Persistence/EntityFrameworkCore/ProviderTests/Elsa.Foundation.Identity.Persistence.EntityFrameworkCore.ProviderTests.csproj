@@ -21,8 +21,8 @@
     <FrameworkReference Include="Microsoft.AspNetCore.App" />
   </ItemGroup>
   <ItemGroup>
-    <ProjectReference Include="..\..\..\..\..\..\..\src\essentials\Foundation\Identity\AspNetCoreIdentity\EntityFrameworkCore\Elsa.Foundation.Identity.AspNetCoreIdentity.EntityFrameworkCore.csproj" />
-    <ProjectReference Include="..\..\..\..\..\..\..\src\essentials\Foundation\Identity\Persistence\EntityFrameworkCore\Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.csproj" />
+    <ProjectReference Include="..\..\..\..\..\..\src\Foundation\Identity\AspNetCoreIdentity\EntityFrameworkCore\Elsa.Foundation.Identity.AspNetCoreIdentity.EntityFrameworkCore.csproj" />
+    <ProjectReference Include="..\..\..\..\..\..\src\Foundation\Identity\Persistence\EntityFrameworkCore\Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.csproj" />
   </ItemGroup>
   <ItemGroup>
     <!-- Excludes the finalization tables every module maps from own-table assertions. -->

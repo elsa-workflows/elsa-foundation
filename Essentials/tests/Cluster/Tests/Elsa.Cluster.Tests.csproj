@@ -13,13 +13,13 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\..\..\src\essentials\Cluster\Core\Elsa.Cluster.Core.csproj" />
-    <ProjectReference Include="..\..\..\..\src\essentials\Cluster\InProcess\Elsa.Cluster.InProcess.csproj" />
+    <ProjectReference Include="..\..\..\src\Cluster\Core\Elsa.Cluster.Core.csproj" />
+    <ProjectReference Include="..\..\..\src\Cluster\InProcess\Elsa.Cluster.InProcess.csproj" />
     <ProjectReference Include="..\Testing\Elsa.Cluster.Testing.csproj" />
   </ItemGroup>
 
   <ItemGroup>
-    <Compile Include="../../../Shared/FakeObservedSchemaFinalization.cs" Link="FakeObservedSchemaFinalization.cs" />
+    <Compile Include="../../Shared/FakeObservedSchemaFinalization.cs" Link="FakeObservedSchemaFinalization.cs" />
     <Using Include="Xunit" />
     <Using Include="Elsa.Testing" />
   </ItemGroup>

@@ -13,8 +13,8 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\..\..\..\..\src\essentials\Activities\Design\Reconciliation\Elsa.Activities.Design.Reconciliation\Elsa.Activities.Design.Reconciliation.csproj" />
-    <ProjectReference Include="..\..\..\..\..\..\src\essentials\Workflows\Design\CodeGeneration\Elsa.Workflows.Design.CodeGeneration.csproj" />
+    <ProjectReference Include="..\..\..\..\..\src\Activities\Design\Reconciliation\Elsa.Activities.Design.Reconciliation\Elsa.Activities.Design.Reconciliation.csproj" />
+    <ProjectReference Include="..\..\..\..\..\src\Workflows\Design\CodeGeneration\Elsa.Workflows.Design.CodeGeneration.csproj" />
   </ItemGroup>
 
 </Project>

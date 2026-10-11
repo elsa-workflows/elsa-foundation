@@ -10,8 +10,8 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\..\..\..\..\samples\Elsa.Samples.Nuplane.Activities\Elsa.Samples.Nuplane.Activities.csproj" />
-    <ProjectReference Include="..\..\..\..\..\..\src\essentials\Activities\Design\Core\Elsa.Activities.Design.Core.csproj" />
-    <ProjectReference Include="..\..\..\..\..\..\src\essentials\Activities\Runtime\Core\Elsa.Activities.Runtime.Core.csproj" />
+    <ProjectReference Include="..\..\..\..\..\src\Activities\Design\Core\Elsa.Activities.Design.Core.csproj" />
+    <ProjectReference Include="..\..\..\..\..\src\Activities\Runtime\Core\Elsa.Activities.Runtime.Core.csproj" />
   </ItemGroup>
 
 </Project>

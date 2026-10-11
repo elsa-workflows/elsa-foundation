@@ -16,22 +16,22 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\..\..\src\apps\Elsa.Workbench\Elsa.Workbench.csproj" />
-    <ProjectReference Include="..\..\..\..\src\apps\Elsa.Foundation.Host\Elsa.Foundation.Host.csproj" />
-    <ProjectReference Include="..\..\..\..\src\essentials\Modularity\Api\Elsa.Modularity.Api.csproj" />
+    <ProjectReference Include="..\..\..\apps\Elsa.Workbench\Elsa.Workbench.csproj" />
+    <ProjectReference Include="..\..\..\apps\Elsa.Foundation.Host\Elsa.Foundation.Host.csproj" />
+    <ProjectReference Include="..\..\..\src\Modularity\Api\Elsa.Modularity.Api.csproj" />
     <ProjectReference Include="..\..\Api\Compatibility\Testing\Elsa.Api.Compatibility.Testing.csproj" />
-    <ProjectReference Include="..\..\..\..\src\essentials\Modularity\Core\Elsa.Modularity.Core.csproj" />
-    <ProjectReference Include="..\..\..\..\src\essentials\Modularity\Nuplane\Elsa.Modularity.Nuplane.csproj" />
+    <ProjectReference Include="..\..\..\src\Modularity\Core\Elsa.Modularity.Core.csproj" />
+    <ProjectReference Include="..\..\..\src\Modularity\Nuplane\Elsa.Modularity.Nuplane.csproj" />
     <!-- Not composed by the Workbench; referenced so SecretFeatureSettingTests can pin their secret settings. -->
-    <ProjectReference Include="..\..\..\..\src\extensions\Agent\src\Anthropic\Elsa.Agent.Anthropic.csproj" />
+    <ProjectReference Include="..\..\..\..\Extensions\Agent\src\Anthropic\Elsa.Agent.Anthropic.csproj" />
     <!-- The optional Extension Builder (#2294): its host-control routes and permission contribution join the Workbench's retained-route and permission-catalog guards. -->
-    <ProjectReference Include="..\..\..\..\src\extensions\ExtensionBuilder\src\Api\Elsa.ExtensionBuilder.Api.csproj" />
-    <ProjectReference Include="..\..\..\..\src\essentials\Workflows\Design\Reconciliation\Git\Elsa.Workflows.Design.Reconciliation.Git.csproj" />
+    <ProjectReference Include="..\..\..\..\Extensions\ExtensionBuilder\src\Api\Elsa.ExtensionBuilder.Api.csproj" />
+    <ProjectReference Include="..\..\..\src\Workflows\Design\Reconciliation\Git\Elsa.Workflows.Design.Reconciliation.Git.csproj" />
   </ItemGroup>
 
   <ItemGroup>
-    <Compile Include="../../../Shared/FakeRuntimeFeatureCatalog.cs" Link="FakeRuntimeFeatureCatalog.cs" />
-    <Compile Include="../../../Shared/FakeObservedSchemaFinalization.cs" Link="FakeObservedSchemaFinalization.cs" />
+    <Compile Include="../../Shared/FakeRuntimeFeatureCatalog.cs" Link="FakeRuntimeFeatureCatalog.cs" />
+    <Compile Include="../../Shared/FakeObservedSchemaFinalization.cs" Link="FakeObservedSchemaFinalization.cs" />
     <Using Include="Elsa.Testing" />
   </ItemGroup>
 

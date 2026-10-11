@@ -19,7 +19,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\..\..\..\src\essentials\Workflows\ExecutionEvidence\Elsa.Workflows.ExecutionEvidence.csproj" />
+    <ProjectReference Include="..\..\..\..\src\Workflows\ExecutionEvidence\Elsa.Workflows.ExecutionEvidence.csproj" />
     <ProjectReference Include="..\..\..\Testing\Elsa.Testing.csproj" />
   </ItemGroup>
 

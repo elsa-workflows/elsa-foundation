@@ -12,7 +12,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\..\..\..\src\essentials\Diagnostics\ConsoleLogStreaming\Elsa.Diagnostics.ConsoleLogStreaming.csproj" />
+    <ProjectReference Include="..\..\..\..\src\Diagnostics\ConsoleLogStreaming\Elsa.Diagnostics.ConsoleLogStreaming.csproj" />
   </ItemGroup>
 
 </Project>

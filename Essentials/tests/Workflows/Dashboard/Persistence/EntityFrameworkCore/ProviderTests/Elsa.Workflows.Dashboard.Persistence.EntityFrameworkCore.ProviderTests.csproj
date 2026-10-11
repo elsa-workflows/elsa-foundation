@@ -15,7 +15,7 @@
     <PackageReference Include="coverlet.collector" PrivateAssets="all" />
   </ItemGroup>
   <ItemGroup>
-    <ProjectReference Include="..\..\..\..\..\..\..\src\essentials\Workflows\Dashboard\Persistence\EntityFrameworkCore\Elsa.Workflows.Dashboard.Persistence.EntityFrameworkCore.csproj" />
+    <ProjectReference Include="..\..\..\..\..\..\src\Workflows\Dashboard\Persistence\EntityFrameworkCore\Elsa.Workflows.Dashboard.Persistence.EntityFrameworkCore.csproj" />
     <ProjectReference Include="..\..\..\..\Runtime\Persistence\EntityFrameworkCore\ProviderTests\Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.csproj" />
   </ItemGroup>
 </Project>

@@ -16,12 +16,12 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\..\..\..\..\src\essentials\Activities\Design\Api\Elsa.Activities.Design.Api.csproj" />
+    <ProjectReference Include="..\..\..\..\..\src\Activities\Design\Api\Elsa.Activities.Design.Api.csproj" />
     <ProjectReference Include="..\..\..\..\Testing\Elsa.Testing.csproj" />
   </ItemGroup>
 
   <ItemGroup>
-    <Compile Include="../../../../../Shared/FakeRuntimeFeatureCatalog.cs" Link="FakeRuntimeFeatureCatalog.cs" />
+    <Compile Include="../../../../Shared/FakeRuntimeFeatureCatalog.cs" Link="FakeRuntimeFeatureCatalog.cs" />
   </ItemGroup>
 
 </Project>

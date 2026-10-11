@@ -21,20 +21,20 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\essentials\Elsa.Studio.Api\Elsa.Studio.Api.csproj" />
-    <ProjectReference Include="..\..\src\extensions\Elsa.Studio.ConsoleStream\Elsa.Studio.ConsoleStream.csproj" />
+    <ProjectReference Include="..\..\..\Extensions\ConsoleStream\studio\Elsa.Studio.ConsoleStream\Elsa.Studio.ConsoleStream.csproj" />
     <ProjectReference Include="..\..\src\essentials\Elsa.Studio.Core\Elsa.Studio.Core.csproj" />
-    <ProjectReference Include="..\..\src\extensions\Elsa.Studio.Diagnostics.OpenTelemetry\Elsa.Studio.Diagnostics.OpenTelemetry.csproj" />
-    <ProjectReference Include="..\..\src\extensions\Elsa.Studio.Diagnostics.StructuredLogs\Elsa.Studio.Diagnostics.StructuredLogs.csproj" />
-    <ProjectReference Include="..\..\src\extensions\Elsa.Studio.ExpressionEditors.JavaScript\Elsa.Studio.ExpressionEditors.JavaScript.csproj" />
-    <ProjectReference Include="..\..\src\extensions\Elsa.Studio.ExpressionEditors.Liquid\Elsa.Studio.ExpressionEditors.Liquid.csproj" />
-    <ProjectReference Include="..\..\src\extensions\Elsa.Studio.ExtensionBuilder\Elsa.Studio.ExtensionBuilder.csproj" />
-    <ProjectReference Include="..\..\src\extensions\Elsa.Studio.FeatureManagement\Elsa.Studio.FeatureManagement.csproj" />
-    <ProjectReference Include="..\..\src\extensions\Elsa.Studio.Secrets\Elsa.Studio.Secrets.csproj" />
-    <ProjectReference Include="..\..\src\extensions\Elsa.Studio.Weaver.Core\Elsa.Studio.Weaver.Core.csproj" />
-    <ProjectReference Include="..\..\src\extensions\Elsa.Studio.Weaver.Workflows\Elsa.Studio.Weaver.Workflows.csproj" />
+    <ProjectReference Include="..\..\..\Extensions\Diagnostics.OpenTelemetry\studio\Elsa.Studio.Diagnostics.OpenTelemetry\Elsa.Studio.Diagnostics.OpenTelemetry.csproj" />
+    <ProjectReference Include="..\..\..\Extensions\Diagnostics.StructuredLogs\studio\Elsa.Studio.Diagnostics.StructuredLogs\Elsa.Studio.Diagnostics.StructuredLogs.csproj" />
+    <ProjectReference Include="..\..\..\Extensions\ExpressionEditors.JavaScript\studio\Elsa.Studio.ExpressionEditors.JavaScript\Elsa.Studio.ExpressionEditors.JavaScript.csproj" />
+    <ProjectReference Include="..\..\..\Extensions\ExpressionEditors.Liquid\studio\Elsa.Studio.ExpressionEditors.Liquid\Elsa.Studio.ExpressionEditors.Liquid.csproj" />
+    <ProjectReference Include="..\..\..\Extensions\ExtensionBuilder\studio\Elsa.Studio.ExtensionBuilder\Elsa.Studio.ExtensionBuilder.csproj" />
+    <ProjectReference Include="..\..\..\Extensions\FeatureManagement\studio\Elsa.Studio.FeatureManagement\Elsa.Studio.FeatureManagement.csproj" />
+    <ProjectReference Include="..\..\..\Extensions\Secrets\studio\Elsa.Studio.Secrets\Elsa.Studio.Secrets.csproj" />
+    <ProjectReference Include="..\..\..\Extensions\Weaver\studio\Elsa.Studio.Weaver.Core\Elsa.Studio.Weaver.Core.csproj" />
+    <ProjectReference Include="..\..\..\Extensions\Weaver\studio\Elsa.Studio.Weaver.Workflows\Elsa.Studio.Weaver.Workflows.csproj" />
     <ProjectReference Include="..\..\src\essentials\Elsa.Studio.Workflows\Elsa.Studio.Workflows.csproj" />
     <ProjectReference Include="..\..\src\essentials\Elsa.Studio.Dashboard\Elsa.Studio.Dashboard.csproj" />
-    <ProjectReference Include="..\..\src\extensions\Elsa.Studio.Samples.WeatherForecast\Elsa.Studio.Samples.WeatherForecast.csproj" />
+    <ProjectReference Include="..\..\..\Extensions\Samples.WeatherForecast\studio\Elsa.Studio.Samples.WeatherForecast\Elsa.Studio.Samples.WeatherForecast.csproj" />
     <ProjectReference Include="..\..\src\apps\Elsa.Studio.Web\Elsa.Studio.Web.csproj" />
   </ItemGroup>
 

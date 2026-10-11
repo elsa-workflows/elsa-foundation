@@ -26,7 +26,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\..\..\src\apps\Elsa.Workbench\Elsa.Workbench.csproj" />
+    <ProjectReference Include="..\..\..\apps\Elsa.Workbench\Elsa.Workbench.csproj" />
   </ItemGroup>
 
   <!-- The node host and the prune scenario of the SQLite tests, linked so each engine runs the same scenario. -->

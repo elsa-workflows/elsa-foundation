@@ -16,9 +16,9 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\..\..\..\..\src\essentials\Foundation\DataProtection\EntityFrameworkCore\Elsa.Foundation.DataProtection.EntityFrameworkCore.csproj" />
+    <ProjectReference Include="..\..\..\..\..\src\Foundation\DataProtection\EntityFrameworkCore\Elsa.Foundation.DataProtection.EntityFrameworkCore.csproj" />
     <!-- The clustered composition the startup check warns about: the durable EF membership provider. -->
-    <ProjectReference Include="..\..\..\..\..\..\src\essentials\Cluster\EntityFrameworkCore\Elsa.Cluster.EntityFrameworkCore.csproj" />
+    <ProjectReference Include="..\..\..\..\..\src\Cluster\EntityFrameworkCore\Elsa.Cluster.EntityFrameworkCore.csproj" />
   </ItemGroup>
 
   <ItemGroup>

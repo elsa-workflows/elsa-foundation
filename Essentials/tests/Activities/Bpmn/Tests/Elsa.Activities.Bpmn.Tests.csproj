@@ -13,15 +13,15 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\..\..\..\src\essentials\Activities\Bpmn\Elsa.Activities.Bpmn\Elsa.Activities.Bpmn.csproj" />
-    <ProjectReference Include="..\..\..\..\..\src\essentials\Activities\Runtime\Elsa.Activities.Runtime\Elsa.Activities.Runtime.csproj" />
-    <ProjectReference Include="..\..\..\..\..\src\essentials\Activities\Runtime\Core\Elsa.Activities.Runtime.Core.csproj" />
-    <ProjectReference Include="..\..\..\..\..\src\essentials\Workflows\Runtime\Api\Elsa.Workflows.Runtime.Api.csproj" />
-    <ProjectReference Include="..\..\..\..\..\src\essentials\Workflows\Runtime\Core\Elsa.Workflows.Runtime.Core.csproj" />
-    <ProjectReference Include="..\..\..\..\..\src\essentials\Activities\Primitives\Elsa.Activities.Primitives.csproj" />
-    <ProjectReference Include="..\..\..\..\..\src\essentials\Activities\Scheduling\Elsa.Activities.Scheduling.csproj" />
-    <ProjectReference Include="..\..\..\..\..\src\essentials\Workflows\Runtime\Scheduling\Elsa.Workflows.Runtime.Scheduling.csproj" />
-    <ProjectReference Include="..\..\..\..\..\src\essentials\Serialization\SystemText\Elsa.Serialization.SystemText.csproj" />
+    <ProjectReference Include="..\..\..\..\src\Activities\Bpmn\Elsa.Activities.Bpmn\Elsa.Activities.Bpmn.csproj" />
+    <ProjectReference Include="..\..\..\..\src\Activities\Runtime\Elsa.Activities.Runtime\Elsa.Activities.Runtime.csproj" />
+    <ProjectReference Include="..\..\..\..\src\Activities\Runtime\Core\Elsa.Activities.Runtime.Core.csproj" />
+    <ProjectReference Include="..\..\..\..\src\Workflows\Runtime\Api\Elsa.Workflows.Runtime.Api.csproj" />
+    <ProjectReference Include="..\..\..\..\src\Workflows\Runtime\Core\Elsa.Workflows.Runtime.Core.csproj" />
+    <ProjectReference Include="..\..\..\..\src\Activities\Primitives\Elsa.Activities.Primitives.csproj" />
+    <ProjectReference Include="..\..\..\..\src\Activities\Scheduling\Elsa.Activities.Scheduling.csproj" />
+    <ProjectReference Include="..\..\..\..\src\Workflows\Runtime\Scheduling\Elsa.Workflows.Runtime.Scheduling.csproj" />
+    <ProjectReference Include="..\..\..\..\src\Serialization\SystemText\Elsa.Serialization.SystemText.csproj" />
     <ProjectReference Include="..\..\Testing\Elsa.Activities.Testing.csproj" />
   </ItemGroup>
 

@@ -23,7 +23,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\..\..\..\..\src\essentials\Foundation\DataProtection\EntityFrameworkCore\Elsa.Foundation.DataProtection.EntityFrameworkCore.csproj" />
+    <ProjectReference Include="..\..\..\..\..\src\Foundation\DataProtection\EntityFrameworkCore\Elsa.Foundation.DataProtection.EntityFrameworkCore.csproj" />
   </ItemGroup>
 
   <!-- The suite and its harness are the Tests project's, linked rather than copied. -->

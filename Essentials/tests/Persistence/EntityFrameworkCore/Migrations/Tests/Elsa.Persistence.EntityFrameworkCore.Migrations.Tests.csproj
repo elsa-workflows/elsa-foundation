@@ -24,31 +24,31 @@
     <Compile Include="..\..\..\EntityFramework\Tests\ContractingModule.cs" Link="ContractingModule.cs" />
   </ItemGroup>
   <ItemGroup>
-    <ProjectReference Include="..\..\..\..\..\..\src\essentials\Activities\Design\Persistence\EntityFrameworkCore\Elsa.Activities.Design.Persistence.EntityFrameworkCore.csproj" />
-    <ProjectReference Include="..\..\..\..\..\..\src\essentials\Cluster\EntityFrameworkCore\Elsa.Cluster.EntityFrameworkCore.csproj" />
-    <ProjectReference Include="..\..\..\..\..\..\src\essentials\Foundation\DataProtection\EntityFrameworkCore\Elsa.Foundation.DataProtection.EntityFrameworkCore.csproj" />
-    <ProjectReference Include="..\..\..\..\..\..\src\extensions\Elsa3\src\Activities\Design\Import\Persistence\EntityFrameworkCore\Elsa3.Activities.Design.Import.Persistence.EntityFrameworkCore.csproj" />
-    <ProjectReference Include="..\..\..\..\..\..\src\essentials\Diagnostics\OpenTelemetry\Persistence\EntityFrameworkCore\Elsa.Diagnostics.OpenTelemetry.Persistence.EntityFrameworkCore.csproj" />
-    <ProjectReference Include="..\..\..\..\..\..\src\essentials\Diagnostics\StructuredLogs\Persistence\EntityFrameworkCore\Elsa.Diagnostics.StructuredLogs.Persistence.EntityFrameworkCore.csproj" />
-    <ProjectReference Include="..\..\..\..\..\..\src\essentials\Foundation\Identity\AspNetCoreIdentity\EntityFrameworkCore\Elsa.Foundation.Identity.AspNetCoreIdentity.EntityFrameworkCore.csproj" />
-    <ProjectReference Include="..\..\..\..\..\..\src\essentials\Foundation\Identity\Persistence\EntityFrameworkCore\Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.csproj" />
-    <ProjectReference Include="..\..\..\..\..\..\src\essentials\Secrets\Persistence\EntityFrameworkCore\Elsa.Secrets.Persistence.EntityFrameworkCore.csproj" />
-    <ProjectReference Include="..\..\..\..\..\..\src\essentials\Studio\Preferences\Persistence\EntityFrameworkCore\Elsa.Studio.Preferences.Persistence.EntityFrameworkCore.csproj" />
-    <ProjectReference Include="..\..\..\..\..\..\src\essentials\Workflows\Dashboard\Persistence\EntityFrameworkCore\Elsa.Workflows.Dashboard.Persistence.EntityFrameworkCore.csproj" />
-    <ProjectReference Include="..\..\..\..\..\..\src\essentials\Workflows\Design\Persistence\EntityFrameworkCore\Elsa.Workflows.Design.Persistence.EntityFrameworkCore.csproj" />
-    <ProjectReference Include="..\..\..\..\..\..\src\essentials\Workflows\Publishing\Persistence\EntityFrameworkCore\Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore.csproj" />
-    <ProjectReference Include="..\..\..\..\..\..\src\essentials\Workflows\Runtime\Distributed\Persistence\EntityFrameworkCore\Elsa.Workflows.Runtime.Distributed.Persistence.EntityFrameworkCore.csproj" />
-    <ProjectReference Include="..\..\..\..\..\..\src\essentials\Workflows\Runtime\Persistence\EntityFrameworkCore\Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.csproj" />
+    <ProjectReference Include="..\..\..\..\..\src\Activities\Design\Persistence\EntityFrameworkCore\Elsa.Activities.Design.Persistence.EntityFrameworkCore.csproj" />
+    <ProjectReference Include="..\..\..\..\..\src\Cluster\EntityFrameworkCore\Elsa.Cluster.EntityFrameworkCore.csproj" />
+    <ProjectReference Include="..\..\..\..\..\src\Foundation\DataProtection\EntityFrameworkCore\Elsa.Foundation.DataProtection.EntityFrameworkCore.csproj" />
+    <ProjectReference Include="..\..\..\..\..\..\Extensions\Elsa3\src\Activities\Design\Import\Persistence\EntityFrameworkCore\Elsa3.Activities.Design.Import.Persistence.EntityFrameworkCore.csproj" />
+    <ProjectReference Include="..\..\..\..\..\src\Diagnostics\OpenTelemetry\Persistence\EntityFrameworkCore\Elsa.Diagnostics.OpenTelemetry.Persistence.EntityFrameworkCore.csproj" />
+    <ProjectReference Include="..\..\..\..\..\src\Diagnostics\StructuredLogs\Persistence\EntityFrameworkCore\Elsa.Diagnostics.StructuredLogs.Persistence.EntityFrameworkCore.csproj" />
+    <ProjectReference Include="..\..\..\..\..\src\Foundation\Identity\AspNetCoreIdentity\EntityFrameworkCore\Elsa.Foundation.Identity.AspNetCoreIdentity.EntityFrameworkCore.csproj" />
+    <ProjectReference Include="..\..\..\..\..\src\Foundation\Identity\Persistence\EntityFrameworkCore\Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.csproj" />
+    <ProjectReference Include="..\..\..\..\..\src\Secrets\Persistence\EntityFrameworkCore\Elsa.Secrets.Persistence.EntityFrameworkCore.csproj" />
+    <ProjectReference Include="..\..\..\..\..\src\Studio\Preferences\Persistence\EntityFrameworkCore\Elsa.Studio.Preferences.Persistence.EntityFrameworkCore.csproj" />
+    <ProjectReference Include="..\..\..\..\..\src\Workflows\Dashboard\Persistence\EntityFrameworkCore\Elsa.Workflows.Dashboard.Persistence.EntityFrameworkCore.csproj" />
+    <ProjectReference Include="..\..\..\..\..\src\Workflows\Design\Persistence\EntityFrameworkCore\Elsa.Workflows.Design.Persistence.EntityFrameworkCore.csproj" />
+    <ProjectReference Include="..\..\..\..\..\src\Workflows\Publishing\Persistence\EntityFrameworkCore\Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore.csproj" />
+    <ProjectReference Include="..\..\..\..\..\src\Workflows\Runtime\Distributed\Persistence\EntityFrameworkCore\Elsa.Workflows.Runtime.Distributed.Persistence.EntityFrameworkCore.csproj" />
+    <ProjectReference Include="..\..\..\..\..\src\Workflows\Runtime\Persistence\EntityFrameworkCore\Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.csproj" />
     <!-- Include the real dependency closure of Publishing EF's shell feature for tooling composition tests. -->
-    <ProjectReference Include="..\..\..\..\..\..\src\essentials\Workflows\Publishing\Elsa.Workflows.Publishing\Elsa.Workflows.Publishing.csproj" />
-    <ProjectReference Include="..\..\..\..\..\..\src\essentials\Workflows\Runtime\Api\Elsa.Workflows.Runtime.Api.csproj" />
-    <ProjectReference Include="..\..\..\..\..\..\src\essentials\Workflows\Runtime\Resumption\Elsa.Workflows.Runtime.Resumption.csproj" />
-    <ProjectReference Include="..\..\..\..\..\..\src\essentials\Events\Elsa.Events\Elsa.Events.csproj" />
-    <ProjectReference Include="..\..\..\..\..\..\src\essentials\Api\Capabilities\Elsa.Api.Capabilities.csproj" />
-    <ProjectReference Include="..\..\..\..\..\..\src\essentials\Tasks\Elsa.Tasks\Elsa.Tasks.csproj" />
-    <ProjectReference Include="..\..\..\..\..\..\src\essentials\Cli\Elsa.Cli\Elsa.Cli.csproj" />
-    <ProjectReference Include="..\..\..\..\..\..\src\essentials\Modularity\EntityFramework\Elsa.Modularity.EntityFramework.csproj" />
-    <ProjectReference Include="..\..\..\..\..\..\src\essentials\Modularity\Planning\Elsa.Modularity.Planning.csproj" />
+    <ProjectReference Include="..\..\..\..\..\src\Workflows\Publishing\Elsa.Workflows.Publishing\Elsa.Workflows.Publishing.csproj" />
+    <ProjectReference Include="..\..\..\..\..\src\Workflows\Runtime\Api\Elsa.Workflows.Runtime.Api.csproj" />
+    <ProjectReference Include="..\..\..\..\..\src\Workflows\Runtime\Resumption\Elsa.Workflows.Runtime.Resumption.csproj" />
+    <ProjectReference Include="..\..\..\..\..\src\Events\Elsa.Events\Elsa.Events.csproj" />
+    <ProjectReference Include="..\..\..\..\..\src\Api\Capabilities\Elsa.Api.Capabilities.csproj" />
+    <ProjectReference Include="..\..\..\..\..\src\Tasks\Elsa.Tasks\Elsa.Tasks.csproj" />
+    <ProjectReference Include="..\..\..\..\..\src\Cli\Elsa.Cli\Elsa.Cli.csproj" />
+    <ProjectReference Include="..\..\..\..\..\src\Modularity\EntityFramework\Elsa.Modularity.EntityFramework.csproj" />
+    <ProjectReference Include="..\..\..\..\..\src\Modularity\Planning\Elsa.Modularity.Planning.csproj" />
     <!-- Guards spec 171 FR-019: every design-time factory line corresponds to a declared provider context
          and vice versa. This project already references all four provider engines and every module
          project, so it can also reference the tooling project rather than duplicating its factory list. -->

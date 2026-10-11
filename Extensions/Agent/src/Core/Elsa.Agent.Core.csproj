@@ -10,7 +10,7 @@
 	</ItemGroup>
 
 	<ItemGroup>
-		<ProjectReference Include="..\..\..\..\essentials\Primitives\Primitives\Elsa.Primitives.csproj" />
+		<ProjectReference Include="..\..\..\..\Essentials\src\Primitives\Primitives\Elsa.Primitives.csproj" />
 	</ItemGroup>
 
 </Project>

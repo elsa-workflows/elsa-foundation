@@ -13,10 +13,10 @@
     <PackageReference Include="coverlet.collector" PrivateAssets="all" />
   </ItemGroup>
   <ItemGroup>
-    <ProjectReference Include="..\..\..\..\..\..\..\src\essentials\Foundation\Identity\Core\Elsa.Foundation.Identity.Core.csproj" />
-    <ProjectReference Include="..\..\..\..\..\..\..\src\essentials\Foundation\Identity\Elsa.Foundation.Identity\Elsa.Foundation.Identity.csproj" />
-    <ProjectReference Include="..\..\..\..\..\..\..\src\essentials\Foundation\Identity\Persistence\EntityFrameworkCore\Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.csproj" />
-    <ProjectReference Include="..\..\..\..\..\..\..\src\essentials\Workflows\Runtime\Core\Elsa.Workflows.Runtime.Core.csproj" />
+    <ProjectReference Include="..\..\..\..\..\..\src\Foundation\Identity\Core\Elsa.Foundation.Identity.Core.csproj" />
+    <ProjectReference Include="..\..\..\..\..\..\src\Foundation\Identity\Elsa.Foundation.Identity\Elsa.Foundation.Identity.csproj" />
+    <ProjectReference Include="..\..\..\..\..\..\src\Foundation\Identity\Persistence\EntityFrameworkCore\Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.csproj" />
+    <ProjectReference Include="..\..\..\..\..\..\src\Workflows\Runtime\Core\Elsa.Workflows.Runtime.Core.csproj" />
   </ItemGroup>
   <ItemGroup>
     <!-- Fails any unordered Skip or Take (EF warning 10102) in this suite. -->

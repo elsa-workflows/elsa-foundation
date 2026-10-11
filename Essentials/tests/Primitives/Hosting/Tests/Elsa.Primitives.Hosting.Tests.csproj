@@ -9,7 +9,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\..\..\..\src\essentials\Primitives\Hosting\Elsa.Primitives.Hosting.csproj" />
+    <ProjectReference Include="..\..\..\..\src\Primitives\Hosting\Elsa.Primitives.Hosting.csproj" />
   </ItemGroup>
 
 </Project>
