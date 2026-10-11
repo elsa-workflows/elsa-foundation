@@ -106,14 +106,17 @@ public sealed class DiagnosticsDrain<TItem, TResult> : IDisposable, IAsyncDispos
                     queueDepthUpdate = new(Volatile.Read(ref _queueDepth), Volatile.Read(ref _queueSequence));
                 }
             }
+
+            // Signalled under the queue gate, the same gate the drain reads its batch under, so the wake reaches the
+            // wait this item can fill. Signalled after the gate, a stale fill could land on the next wait and commit
+            // a later partial batch without its delay. The wake runs its continuation asynchronously, so nothing runs
+            // under the gate.
+            if (accepted && queueDepthUpdate is { } filled && filled.Depth >= _options.BatchSize)
+                Volatile.Read(ref _flushWake).TrySetResult();
         }
 
         if (queueDepthUpdate is { } update)
-        {
             ReportQueueDepth(update);
-            if (accepted && update.Depth >= _options.BatchSize)
-                Volatile.Read(ref _flushWake).TrySetResult();
-        }
         if (shed is not null)
             Fail(shed, DiagnosticsPersistenceLossReason.QueueOverflow, "The diagnostics capture was shed before commit because the queue was full.");
         if (accepted)
