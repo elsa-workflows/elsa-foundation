@@ -8,11 +8,11 @@ using Microsoft.Extensions.Options;
 namespace Elsa.Workflows.Design.Validations.Validators;
 
 /// <summary>
-/// Baseline validator (Unit C FR-033, extended per-scope for #972). Detects duplicate variable names
+/// Baseline validator (extended per-scope for #972). Detects duplicate variable names
 /// within one declaring scope: the workflow-scope bag (<c>WorkflowDefinitionState.Variables</c>) and
 /// each container's structure-declared bag independently. Comparison is case-insensitive
 /// (<c>MyVar</c> and <c>myvar</c> collide). One error per offending name per scope. Names remain free
-/// to repeat ACROSS scopes — ADR 0027 allows nested shadowing (advisory warnings only).
+/// to repeat ACROSS scopes: nested shadowing is allowed (advisory warnings only).
 /// </summary>
 public sealed class VariableUniquenessValidator(
     IOptions<WorkflowDesignValidatorOptions> options,

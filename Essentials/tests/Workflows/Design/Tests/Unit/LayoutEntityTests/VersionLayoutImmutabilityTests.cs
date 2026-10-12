@@ -5,7 +5,7 @@ using Xunit;
 namespace Elsa.Workflows.Design.Tests.Unit.LayoutEntityTests;
 
 /// <summary>
-/// SC-021 + framework §2.9 + Unit C FR-006a: <c>WorkflowDefinitionVersionLayout</c> mirrors
+/// <c>WorkflowDefinitionVersionLayout</c> mirrors
 /// <c>WorkflowDefinitionVersion</c>'s immutability regime. Write-once properties are enforced
 /// via <c>PropertySaveBehavior.Throw</c> in <c>WorkflowDefinitionVersionLayoutConfiguration</c>
 /// (verified by the integration test <c>CrossContextLifecycleTests</c>).

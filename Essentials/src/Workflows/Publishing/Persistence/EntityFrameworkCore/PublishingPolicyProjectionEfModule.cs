@@ -31,6 +31,6 @@ public static class PublishingPolicyProjectionEfModule
     public const string SchemaVersion = "1.0.0";
     public const string SchemaFamily = "PublishingPolicyProjection";
     /// <summary>The family's one chain, from this assembly's declaration: what every reader of the family checks and
-    /// upcasts through (spec 180, FR-010).</summary>
+    /// upcasts through.</summary>
     public static readonly EfSchemaChain Chain = EfSchemaChain.Of(typeof(PublishingPolicyProjectionEfModule).Assembly, SchemaFamily);
 }

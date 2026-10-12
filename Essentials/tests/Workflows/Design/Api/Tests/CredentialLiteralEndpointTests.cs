@@ -12,7 +12,7 @@ using AuthorizationHost = Elsa.Workflows.Design.Api.Tests.WorkflowsDesignApiCont
 namespace Elsa.Workflows.Design.Api.Tests;
 
 /// <summary>
-/// Spec 188, FR-008 over HTTP, at every Design API route that writes workflow state (Definitions/Update has no route; it
+/// The credential-literal rule over HTTP, at every Design API route that writes workflow state (Definitions/Update has no route; it
 /// is a mediator command, proven by direct call in <c>CredentialLiteralStorageTests</c>). A literal on a credential input
 /// is answered with 400 and the contract's problem body: <c>errors</c> keyed by <c>{nodeId}/inputs/{referenceKey}</c>,
 /// each message starting with the rule id, and the value nowhere; the route's command never runs. A secret reference and

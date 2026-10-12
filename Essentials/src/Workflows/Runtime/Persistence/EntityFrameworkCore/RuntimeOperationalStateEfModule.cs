@@ -19,7 +19,7 @@ public static class RuntimeOperationalStateEfModule
     public const string SchemaVersion = "1.0.0";
     public const string SchemaFamily = "RuntimeOperationalState";
     /// <summary>The family's one chain, from this assembly's declaration: what every reader of the family checks and
-    /// upcasts through (spec 180, FR-010).</summary>
+    /// upcasts through.</summary>
     public static readonly EfSchemaChain Chain = EfSchemaChain.Of(typeof(RuntimeOperationalStateEfModule).Assembly, SchemaFamily);
     public const int IdentityMaximumLength = 128;
     public const int IdentityProjectionMaximumLength = ((IdentityMaximumLength * sizeof(char) + 2) / 3) * 4;

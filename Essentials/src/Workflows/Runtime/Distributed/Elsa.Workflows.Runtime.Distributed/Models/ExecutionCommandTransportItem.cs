@@ -81,8 +81,8 @@ public sealed class ExecutionCommandTransportItem
     public bool IsVisible(DateTimeOffset now) => LeasedByOwnerId is null || LeaseExpiresAt is null || LeaseExpiresAt.Value <= now;
 
     /// <summary>
-    /// Returns a copy whose lease ends at <paramref name="now"/>, so the item is visible again at once (spec 184, FR-019
-    /// and FR-024). The holder and the attempt count stay, so the lease token is not reused: the next lease issues a
+    /// Returns a copy whose lease ends at <paramref name="now"/>, so the item is visible again at once.
+    /// The holder and the attempt count stay, so the lease token is not reused: the next lease issues a
     /// greater one, and the released holder's acknowledgement is refused because the item is visible.
     /// </summary>
     public ExecutionCommandTransportItem ReleaseLease(DateTimeOffset now)

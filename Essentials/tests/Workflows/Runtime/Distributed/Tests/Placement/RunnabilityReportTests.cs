@@ -13,7 +13,7 @@ using static Elsa.Workflows.Runtime.Distributed.Tests.Placement.PlacementCluster
 namespace Elsa.Workflows.Runtime.Distributed.Tests.Placement;
 
 /// <summary>
-/// Spec 184, FR-008 and FR-009: each shell whose distributed runtime is active publishes one runnability entry, derived
+/// Each shell whose distributed runtime is active publishes one runnability entry, derived
 /// from exactly the registries its requirement checker reads, so a placement query over the entry and the checker agree
 /// on every requirement. It is published when the runtime activates, republished only when it changes, and withdrawn
 /// when the shell stops.

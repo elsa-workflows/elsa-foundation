@@ -234,7 +234,7 @@ public sealed class WorkflowSchedulerDrainer : IWorkflowSchedulerDrainer
         var startedAt = _timeProvider.GetUtcNow();
         var renewal = claim is null ? null : new ClaimRenewalState(claim);
 
-        // spec 123 FR-008: one dispatch per drained work item. This is the deterministic hop-count evidence for the
+        // One dispatch per drained work item. This is the deterministic hop-count evidence for the
         // ReplaySafe fusion A/B (fusion elides the intermediate StartActivity/InvokeActivity dispatches).
         _dispatchDiagnostics?.RecordDispatch();
 
@@ -244,7 +244,7 @@ public sealed class WorkflowSchedulerDrainer : IWorkflowSchedulerDrainer
         // one that admits an order of magnitude more for the shape production traffic has.
         _admissionLoadSignal?.RecordDispatch();
 
-        // spec 105: stage this dispatch's claim so a checkpoint commit can fold its fence-checked deletion into the
+        // Stage this dispatch's claim so a checkpoint commit can fold its fence-checked deletion into the
         // commit unit-of-work. When it does, the committer marks it consumed and the separate acknowledgement below is
         // skipped. Owner+token fence is renewal-stable, so the claim captured here stays valid across renewals.
         using var consumeScope = claim is not null && _consumedWorkClaimAccessor is not null
@@ -261,7 +261,7 @@ public sealed class WorkflowSchedulerDrainer : IWorkflowSchedulerDrainer
             handler = FindHandler(workItem);
             activity?.SetTag(WorkflowEngineTelemetry.HandlerNameTag, handler.Name);
 
-            // Move 1 (ADR 0029): route dispatch through the runtime execution pipeline when one is wired, running the
+            // Route dispatch through the runtime execution pipeline when one is wired, running the
             // handler as the pipeline's inner terminal delegate. When absent, dispatch the handler directly — with only
             // the built-in pass-through middleware registered the two paths are behavior-identical. The drain's
             // ambient services flow explicitly into the pipeline dispatcher, which stages them on the dispatch workspace
@@ -274,7 +274,7 @@ public sealed class WorkflowSchedulerDrainer : IWorkflowSchedulerDrainer
                 cancellationToken);
 
             // The handler's effect is now durable. On the atomic path a checkpoint commit already deleted the claimed item
-            // inside its unit-of-work (spec 105), so the separate acknowledgement is redundant and skipped;
+            // inside its unit-of-work, so the separate acknowledgement is redundant and skipped;
             // otherwise (legacy/non-atomic provider, or a dispatch that produced no commit) complete the fenced claim or
             // consume the FIFO head for a legacy single-writer provider. A crash before this point leaves the item queued
             // for idempotent re-drive.
@@ -303,7 +303,7 @@ public sealed class WorkflowSchedulerDrainer : IWorkflowSchedulerDrainer
         }
         catch (RuntimeSchedulerWorkConsumeConflictException)
         {
-            // The atomic commit's fence-checked consume failed: a successor reclaimed the item (spec 105). Treat it
+            // The atomic commit's fence-checked consume failed: a successor reclaimed the item. Treat it
             // exactly like a lost claim — the commit rolled back and persisted nothing, so never acknowledge or poison it.
             throw;
         }
@@ -328,7 +328,7 @@ public sealed class WorkflowSchedulerDrainer : IWorkflowSchedulerDrainer
             // deterministically-poisoning handler would hot-loop (redeliver forever). Ack-on-fault makes poison delivery
             // bounded. (A process crash — as opposed to a handler fault — never reaches this line, so the item stays
             // queued for idempotent re-drive, which is exactly the redrive-safety this unit adds.)
-            // spec 105: when an earlier checkpoint commit in THIS dispatch already consumed the item durably (a
+            // When an earlier checkpoint commit in THIS dispatch already consumed the item durably (a
             // multi-commit handler faulting after its first commit landed), the item is already gone from the queue —
             // poison delivery stays bounded without a second acknowledgement. A CompleteClaimAsync here would fail its
             // fence against the consumed claim and throw a spurious claim-lost out of this catch, skipping poison

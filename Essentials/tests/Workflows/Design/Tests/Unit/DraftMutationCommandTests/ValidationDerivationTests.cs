@@ -11,7 +11,7 @@ using static Elsa.Workflows.Design.Tests.Infrastructure.UpdateDraftTestKit;
 namespace Elsa.Workflows.Design.Tests.Unit.DraftMutationCommandTests;
 
 /// <summary>
-/// Unit C FR-021/FR-023, superseded 2026-07-05. Validation errors are no longer persisted to a
+/// Validation errors are no longer persisted to a
 /// <c>WorkflowDefinitionDraftValidation</c> sibling: they are derived state, recomputed on demand.
 /// This replaces the former <c>ValidationSiblingPersistenceTests</c>, preserving the surviving
 /// subjects against the new observation mechanisms:

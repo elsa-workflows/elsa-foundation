@@ -282,7 +282,7 @@ public sealed class RuntimeCreateBookmarkSchedulerWorkHandlerTests
     [Fact]
     public async Task HandleAsync_NotifiesLifecycleObservers_AfterTheDurableCommit()
     {
-        // Spec 089 D (T005): a bookmark-lifecycle observer is invoked with the committed bookmark AFTER the commit.
+        // A bookmark-lifecycle observer is invoked with the committed bookmark AFTER the commit.
         await _executableStore.SaveAsync(NewExecutable());
         await _activityStateStore.SaveAsync(NewRunningState());
         var observer = new RecordingBookmarkLifecycleObserver();
@@ -332,7 +332,7 @@ public sealed class RuntimeCreateBookmarkSchedulerWorkHandlerTests
     [Fact]
     public async Task PipelineDispatch_FiresCreatedNotification_FromTheCheckpointSlot_AfterTheStagedCommit()
     {
-        // Spec 089 D (bug fix): the drainer dispatches CreateBookmark through the ADR 0029 pipeline, where the handler
+        // Bug fix: the drainer dispatches CreateBookmark through the runtime execution pipeline, where the handler
         // only STAGES its commit (it does not commit inline), so the pipeline-aware HandleAsync must NOT notify. The
         // bookmark-created lifecycle notification fires from the Checkpoint slot instead, after the staged commit lands
         // — otherwise a mid-flow endpoint's route never refreshes and it can never be resumed.

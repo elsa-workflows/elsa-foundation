@@ -11,7 +11,7 @@ using Elsa.Workflows.Design.Api.Endpoints.Definitions.List;
 namespace Elsa.Workflows.Design.Api.Tests;
 
 /// <summary>
-/// RED query-budget contract for FR-029. The list response must be a Studio-ready aggregate projection,
+/// RED query-budget contract for listing definitions. The list response must be a Studio-ready aggregate projection,
 /// and the number of persistence reads must remain bounded as the number of definitions grows.
 /// </summary>
 public sealed class WorkflowDefinitionProjectionTests

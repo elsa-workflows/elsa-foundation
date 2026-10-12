@@ -6,7 +6,7 @@ using Elsa.Workflows.Runtime.Http.Exceptions;
 namespace Elsa.Workflows.Runtime.Http.Services;
 
 /// <summary>
-/// Publish-time HTTP endpoint <c>(template, method)</c> uniqueness (spec 089 follow-up, issue #592 item 2),
+/// Publish-time HTTP endpoint <c>(template, method)</c> uniqueness (issue #592 item 2),
 /// contributed on the trigger indexer's pre-write <see cref="IWorkflowTriggerIndexValidator"/> seam. For each
 /// HTTP-endpoint binding about to be written it looks up the existing claimants of the same stimulus identity
 /// (<c>(StimulusType, StimulusHash)</c> = <c>(template, method)</c>) and throws
@@ -75,7 +75,7 @@ public sealed class HttpEndpointRoutingUniquenessValidator(IWorkflowTriggerBindi
         WorkflowTriggerBinding existing)
     {
         // Publication-scoped replacement excludes only the authority in the candidate's own slot. Sharing an
-        // artifact or definition across two explicit slots is not an Exclusive-claim exemption (ADR 0043).
+        // artifact or definition across two explicit slots is not an Exclusive-claim exemption.
         if (candidate.ActivationId is not null)
         {
             if (StringComparer.Ordinal.Equals(existing.ActivationId, candidate.ActivationId))

@@ -4,7 +4,7 @@ namespace Elsa.Workflows.Design.Core.Events;
 
 /// <summary>
 /// Mutation event for a workflow variable removed from the Draft. Published by
-/// <c>IRemoveVariableFromDraftCommand</c>. Per Unit C FR-018 variables (definition-bag) bullet.
+/// <c>IRemoveVariableFromDraftCommand</c>.
 /// </summary>
 public sealed class VariableRemovedFromDraft(string draftId, string variableReferenceKey) : IEvent
 {

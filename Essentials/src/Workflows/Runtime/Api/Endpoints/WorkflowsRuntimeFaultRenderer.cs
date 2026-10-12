@@ -17,7 +17,7 @@ namespace Elsa.Workflows.Runtime.Api.Endpoints;
 /// Renders every dispatch failure for the Runtime owner's endpoints, reproducing the hand-written
 /// mapper's per-endpoint catch ladders: endpoint signals first, then the family the endpoint's
 /// shape marker names. Cancellation never reaches this renderer — the pipeline rethrows it. Every
-/// shape answers a schema write refusal with a 409 carrying its code (spec 180, FR-016a).
+/// shape answers a schema write refusal with a 409 carrying its code.
 /// </summary>
 internal sealed class WorkflowsRuntimeFaultRenderer : IEndpointFaultRenderer
 {

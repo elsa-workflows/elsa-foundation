@@ -25,7 +25,7 @@ using Xunit;
 namespace Elsa.Workflows.Publishing.Api.Tests;
 
 /// <summary>
-/// <c>GET publishing/workflows/{versionId}/executable-export</c> (FR-B-010a, T085–T087): the four contracted
+/// <c>GET publishing/workflows/{versionId}/executable-export</c>: the four contracted
 /// responses, the two engine-fault ones the contract's table omits, and the download name.
 /// </summary>
 /// <remarks>
@@ -197,7 +197,7 @@ public sealed class WorkflowExecutableExportEndpointTests
 
         using var response = await ExportAsync(host, VersionId);
 
-        // §2.23.5: the wrap happened at the factory; only its own message is client-visible.
+        // The wrap happened at the factory; only its own message is client-visible.
         Assert.Equal(HttpStatusCode.InternalServerError, response.StatusCode);
         Assert.DoesNotContain("connection string is wrong", await Messages(response), StringComparison.Ordinal);
     }
@@ -206,7 +206,7 @@ public sealed class WorkflowExecutableExportEndpointTests
     public async Task A_codec_failure_is_wrapped_rather_than_escaping_as_a_raw_json_exception()
     {
         // The codec deliberately lets JsonException through — this boundary owns the version id it does not, so
-        // this boundary is the one §2.23.5 obliges to wrap it.
+        // this boundary is the one that must wrap it.
         await using var host = await StartAsync(
             new StubClosureFactory(Fixture.Closure()),
             [new DownloadWorkflowArtifactExportTarget(new ThrowingCodec())]);

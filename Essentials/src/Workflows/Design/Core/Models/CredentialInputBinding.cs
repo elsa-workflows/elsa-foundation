@@ -4,7 +4,7 @@ using Elsa.Workflows.Design.Core.Authoring;
 namespace Elsa.Workflows.Design.Core.Models;
 
 /// <summary>
-/// The credential-literal rule (spec 188, FR-008, FR-009): an activity input the activity declares a credential accepts
+/// The credential-literal rule: an activity input the activity declares a credential accepts
 /// only a secret reference or no binding. This is the one acceptance predicate the design-time validator and publication
 /// both apply, so a binding is judged the same way at every entry point that applies the rule.
 /// </summary>

@@ -18,9 +18,9 @@ namespace Elsa.Workflows.Runtime.Reconciliation;
 /// <para>
 /// Abstract and carrying <b>no</b> <c>[ShellFeature]</c> attribute, so it is never composable on its own: arming
 /// the lifecycle without a source would run a pass over nothing on every boot. Concrete features (JSON today; a
-/// blob or OCI source later) extend it, which is §2.5's sanctioned cross-feature structural coupling — the same
-/// shape the design-side <c>WorkflowsDesignReconciliationFeature</c> uses. It is deliberately <b>not sealed</b>
-/// (§2.23.3): sealing a feature class amputates that pattern.
+/// blob or OCI source later) extend it, which is the sanctioned cross-feature structural coupling — the same
+/// shape the design-side <c>WorkflowsDesignReconciliationFeature</c> uses. It is deliberately <b>not sealed</b>:
+/// sealing a feature class amputates that pattern.
 /// </para>
 /// <para>
 /// Registering the startup task here rather than per source-variant means enabling <em>any</em> concrete
@@ -38,7 +38,7 @@ public abstract class WorkflowsArtifactReconciliationFeature : IShellFeature
 
     public virtual void ConfigureServices(IServiceCollection services)
     {
-        // Idempotent per ADR 0029 — every registration inside is TryAdd — so composing this feature beside any
+        // Idempotent: every registration inside is TryAdd, so composing this feature beside any
         // other runtime feature is safe, and a runtime-only engine gets the execution spine it needs to actually
         // run what this feature imports.
         services.AddWorkflowRuntime();
@@ -46,14 +46,14 @@ public abstract class WorkflowsArtifactReconciliationFeature : IShellFeature
         foreach (var source in Sources)
             services.AddSingleton(source);
 
-        // TryAdd, not Add: the reconciler is a single-implementation contract, so §2.6.2 forbids letting a host's
-        // replacement be decided by registration order. First-wins is the convention the three runtime
+        // TryAdd, not Add: the reconciler is a single-implementation contract, so a host's
+        // replacement must not be decided by registration order. First-wins is the convention the three runtime
         // replacement contracts already use, so a host registers its own BEFORE composing the feature — the same
         // gesture everywhere, rather than "before" here and "after" there.
         services.TryAddScoped<IWorkflowArtifactReconciler, WorkflowArtifactReconciler>();
 
-        // T124. The foreign-owner outcome is the default, not the whole story: a deployment that expects its mount
-        // to own its definitions may want the same condition reported as a rejection. Same §2.6.2 shape and same
+        // The foreign-owner outcome is the default, not the whole story: a deployment that expects its mount
+        // to own its definitions may want the same condition reported as a rejection. Same replacement-contract shape and same
         // first-wins gesture as the reconciler above — what it can answer is deliberately narrow, and never
         // includes taking the slot.
         services.TryAddScoped<IArtifactForeignOwnerPolicy, SkipArtifactForeignOwnerPolicy>();

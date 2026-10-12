@@ -8,12 +8,12 @@ using static Elsa.Workflows.Design.Tests.Unit.BaselineValidatorTests.ValidatorTe
 namespace Elsa.Workflows.Design.Tests.Unit.BaselineValidatorTests;
 
 /// <summary>
-/// FR-033 2026-07-05 amendment. Branch coverage — resolvable version clean, unresolvable version
+/// Branch coverage — resolvable version clean, unresolvable version
 /// flagged, per-node granularity in a mixed graph, recursion into ChildActivities, empty draft.
 /// An unresolvable <c>ActivityVersionId</c> is a compile error the author must see at the node:
 /// the store's Get contract throws <c>EntityNotFoundException</c> on a missing id (the stub
 /// mirrors that), and without this validator the gate faults with that opaque exception instead
-/// of reporting the offending node (see PromotionGateTests for the FR-024 consequence).
+/// of reporting the offending node (see PromotionGateTests for the consequence).
 /// </summary>
 public sealed class UnknownActivityVersionValidatorTests
 {

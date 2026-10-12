@@ -15,7 +15,7 @@ namespace Elsa.Workflows.Design.Reconciliation.Json;
 /// <see cref="IWorkflowReconciliationSource"/>.
 /// </summary>
 /// <remarks>
-/// Because <see cref="WorkflowsDesignReconciliationFeature"/> is abstract (framework §2.5: inheritance is
+/// Because <see cref="WorkflowsDesignReconciliationFeature"/> is abstract (inheritance is
 /// the sanctioned cross-feature coupling for source-variant features), this feature <b>extends</b> it and
 /// calls <c>base.ConfigureServices</c> so the reconciler, startup task, and universal handler are wired by
 /// the base; it then contributes the reader and the JSON source. Enabling this feature therefore also arms
@@ -31,7 +31,7 @@ namespace Elsa.Workflows.Design.Reconciliation.Json;
     name: "JsonWorkflowReconciliation",
     DisplayName = "Workflow Design JSON Reconciliation",
     Description = "Reconciliation source that reads workflow definitions from JSON files.",
-    // The reconciler admits each item through the credential-literal rule (spec 188, FR-008).
+    // The reconciler admits each item through the credential-literal rule.
     DependsOn = new object[] { "WorkflowDesignValidations" }
 )]
 public class JsonWorkflowReconciliationFeature : WorkflowsDesignReconciliationFeature

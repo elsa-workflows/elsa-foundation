@@ -23,7 +23,7 @@ internal sealed class WorkflowDesignExceptionTranslator : IEndpointExceptionTran
         DraftHasValidationErrorsException validation => new(
             StatusCodes.Status409Conflict,
             ErrorsByPath(validation.Errors, generalError: validation.Message)),
-        // The credential-literal refusal (spec 188, FR-008) is the caller's content, so it is a 400 with each finding
+        // The credential-literal refusal is the caller's content, so it is a 400 with each finding
         // keyed by its input's path. It derives from ArgumentException, so it must match before that arm.
         CredentialLiteralRefusedException refusal => new(StatusCodes.Status400BadRequest, ErrorsByPath(refusal.Findings)),
         EntityNotFoundException => EndpointProblem.General(StatusCodes.Status404NotFound, exception.Message),

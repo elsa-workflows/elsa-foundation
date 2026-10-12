@@ -189,19 +189,19 @@ public sealed class RuntimeCheckpointCommandPayload
     public IReadOnlyDictionary<string, JsonElement> SeedInputs { get; }
 
     /// <summary>
-    /// The start stimulus payload (spec 089 A) to persist on its reserved durable channel when this checkpoint
+    /// The start stimulus payload to persist on its reserved durable channel when this checkpoint
     /// commits. Populated only for the workflow-started checkpoint of a stimulus-triggered start; null otherwise.
     /// </summary>
     public JsonElement? SeedStimulusInput { get; }
 
     /// <summary>
-    /// The trigger-node identity (spec 089 D) to persist on its reserved durable channel when this checkpoint
+    /// The trigger-node identity to persist on its reserved durable channel when this checkpoint
     /// commits. Populated only for the workflow-started checkpoint of a trigger-matched start; null otherwise.
     /// </summary>
     public string? SeedTriggerNodeId { get; }
 
     /// <summary>
-    /// The matched trigger binding's metadata map (spec 117 D4) to persist on its reserved durable channel when
+    /// The matched trigger binding's metadata map to persist on its reserved durable channel when
     /// this checkpoint commits. Populated only for the workflow-started checkpoint of a trigger-matched start with
     /// binding metadata; empty otherwise.
     /// </summary>

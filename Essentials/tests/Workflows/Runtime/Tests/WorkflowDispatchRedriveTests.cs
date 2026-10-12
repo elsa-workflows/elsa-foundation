@@ -195,7 +195,7 @@ public sealed class WorkflowDispatchRedriveTests
         Assert.Equal(fixture.FinalClaim.FencingToken + 1, outbox.DeliveryFencingToken);
     }
 
-    // Kept beside the composition test (§2.23.1): decoration, the redrive guard wraps the atomic checkpoint store rather than being it.
+    // Kept beside the composition test: decoration, the redrive guard wraps the atomic checkpoint store rather than being it.
     [Fact]
     public void Runtime_core_registers_a_scoped_redrive_guard_over_the_atomic_checkpoint_store()
     {

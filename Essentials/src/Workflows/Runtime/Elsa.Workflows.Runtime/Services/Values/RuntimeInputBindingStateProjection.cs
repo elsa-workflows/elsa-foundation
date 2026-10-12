@@ -34,7 +34,7 @@ public static class RuntimeInputBindingStateProjection
         ProjectEnvelopesByMetadataKey(durableValues, RuntimeMetadataKeys.InputName);
 
     /// <summary>
-    /// Projects the start stimulus payload (spec 089 A) from its reserved single-slot channel
+    /// Projects the start stimulus payload from its reserved single-slot channel
     /// (<see cref="RuntimeMetadataKeys.StimulusInputName"/>). Null when the execution was not started by a
     /// stimulus carrying a payload. Deliberately not part of the workflow-input namespace.
     /// </summary>
@@ -43,7 +43,7 @@ public static class RuntimeInputBindingStateProjection
             .GetValueOrDefault(RuntimeWorkflowStateSeed.StimulusInputSlotName);
 
     /// <summary>
-    /// Projects the executable node id of the trigger that started this execution (spec 089 D) from its reserved
+    /// Projects the executable node id of the trigger that started this execution from its reserved
     /// single-slot channel (<see cref="RuntimeMetadataKeys.TriggerNodeId"/>). Null when the execution was not
     /// started by a trigger (a direct run) or was a resume-only path. Deliberately not part of the workflow-input
     /// namespace. Unwrapped from the inline JSON string the seed persisted.
@@ -55,7 +55,7 @@ public static class RuntimeInputBindingStateProjection
             : null;
 
     /// <summary>
-    /// Projects the matched trigger binding's metadata map (spec 117 D4) from its reserved single-slot channel
+    /// Projects the matched trigger binding's metadata map from its reserved single-slot channel
     /// (<see cref="RuntimeMetadataKeys.TriggerMetadataName"/>). Null when the execution was not started by a
     /// trigger carrying metadata. Deserialized from the JSON object the seed persisted; deliberately not part of
     /// the workflow-input namespace.
@@ -70,7 +70,7 @@ public static class RuntimeInputBindingStateProjection
     /// Projects the workflow identity (correlation id / instance name), workflow-input, and
     /// prior-activity-output snapshots in one call. Every scheduler work handler needs all of these from the same
     /// durable-value list before building its resolution context and execution-time expression carrier, so this
-    /// collapses the repeated projection block. Identity (spec 083 review) is projected from the same list, so a
+    /// collapses the repeated projection block. Identity is projected from the same list, so a
     /// <c>Correlate</c>/<c>SetName</c> is visible to a concurrent sibling branch without a workflow-execution-state read.
     /// Workflow variables are NOT projected here (#972): the canonical root variable frame is their single
     /// runtime read surface.
@@ -243,7 +243,7 @@ public readonly record struct RuntimeInputBindingStateProjectionSet(
 
 /// <summary>
 /// Projects the workflow identity (correlation id / instance name) out of the durable values captured for a workflow
-/// execution (spec 083 review). Identity slots are tagged with <see cref="RuntimeMetadataKeys.IdentityName"/> (slot
+/// execution. Identity slots are tagged with <see cref="RuntimeMetadataKeys.IdentityName"/> (slot
 /// name = tag value) by <see cref="RuntimeWorkflowStateSeed.BuildIdentityChanges"/>, so any activity invocation —
 /// including a concurrent sibling branch — re-lists them and observes the current value without a per-invocation
 /// workflow-execution-state read, restoring cross-branch visibility. Most-recent <c>CapturedAt</c> wins.
@@ -276,6 +276,6 @@ public static class RuntimeIdentityStateProjection
             : null; // Absent, or a JSON-null (cleared) inline value → no identity.
 }
 
-/// <summary>The workflow identity projected for the execution-time expression carrier (ADR 0030): the two
+/// <summary>The workflow identity projected for the execution-time expression carrier: the two
 /// runtime-mutable slots a <c>Correlate</c>/<c>SetName</c> leaf assigns. Both null until first assigned.</summary>
 public readonly record struct RuntimeWorkflowIdentity(string? CorrelationId, string? InstanceName);

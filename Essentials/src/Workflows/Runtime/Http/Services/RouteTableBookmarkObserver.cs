@@ -8,7 +8,7 @@ namespace Elsa.Workflows.Runtime.Http.Services;
 
 /// <summary>
 /// Keeps the per-shell HTTP <see cref="IRouteTable"/> in step with waiting HttpEndpoint bookmarks as workflow
-/// instances suspend on and resume from mid-flow endpoints (spec 089 D, D-D4). Registered as an
+/// instances suspend on and resume from mid-flow endpoints. Registered as an
 /// <see cref="IBookmarkLifecycleObserver"/>, it runs after a bookmark's durable create/consume commit and rebuilds
 /// the whole route table from the resolver — so a mid-flow endpoint's route appears when an instance suspends on it
 /// and disappears when that instance resumes (and no other instance still awaits it).
@@ -29,7 +29,7 @@ namespace Elsa.Workflows.Runtime.Http.Services;
 /// <para>
 /// <b>Lifetime + failure policy.</b> This is a singleton that delegates the read-then-swap to the shared
 /// <see cref="IHttpEndpointRouteTableSynchronizer"/>, which serializes every refresh (publish, run, startup) under one
-/// lock so a stale read can never clobber a newer swap (spec 089 D review fix). Unlike the trigger-index observer, an
+/// lock so a stale read can never clobber a newer swap. Unlike the trigger-index observer, an
 /// exception here MUST NOT fault the run: the <see cref="IBookmarkLifecycleObserver"/> seam fires on the RUN path (the
 /// <see cref="BookmarkLifecycleNotifier"/> catches and logs observer throws). A refresh that fails leaves a stale route
 /// that deterministically 404s until the next successful refresh — tolerated per the seam's contract.

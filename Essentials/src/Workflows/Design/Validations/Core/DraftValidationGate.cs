@@ -8,8 +8,8 @@ namespace Elsa.Workflows.Design.Validations.Core;
 /// <summary>
 /// The single validation gate. Deriving errors means publishing <see cref="DraftValidating"/>:
 /// the one <c>ExecuteValidations</c> handler resolves every <see cref="Contracts.IDraftValidator"/>,
-/// runs each against the post-mutation Draft, and aggregates their returned errors onto the event
-/// (§2.6.1 contribution). The publisher awaits the full chain; we read the accumulated
+/// runs each against the post-mutation Draft, and aggregates their returned errors onto the event,
+/// which handlers contribute to. The publisher awaits the full chain; we read the accumulated
 /// <see cref="DraftValidating.Errors"/> back afterwards.
 /// </summary>
 /// <remarks>
@@ -24,8 +24,8 @@ namespace Elsa.Workflows.Design.Validations.Core;
 /// (rather than <see cref="IEventPublisher"/> plus a caller-supplied strategy) makes the wrong
 /// semantics unrepresentable AT THE GATE: nobody can hand it a fire-and-forget publisher that would
 /// return before validators run and leave the error set silently empty. <c>.Core</c> depends only
-/// on <see cref="IInlineEventPublisher"/> (an <c>Elsa.Events.Core</c> abstraction), preserving
-/// framework §2.1 purity.
+/// on <see cref="IInlineEventPublisher"/> (an <c>Elsa.Events.Core</c> abstraction), keeping it
+/// free of implementation dependencies.
 /// </para>
 /// </remarks>
 public static class DraftValidationGate

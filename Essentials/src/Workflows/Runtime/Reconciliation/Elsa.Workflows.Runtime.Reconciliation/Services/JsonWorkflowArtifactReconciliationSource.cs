@@ -104,7 +104,7 @@ public sealed class JsonWorkflowArtifactReconciliationSource(
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
         {
-            // §2.23.5: no raw IO exception escapes the source boundary.
+            // No raw IO exception escapes the source boundary.
             throw new WorkflowArtifactReconciliationException(SourceId, $"the configured folder '{folderPath}' could not be scanned.", exception);
         }
 

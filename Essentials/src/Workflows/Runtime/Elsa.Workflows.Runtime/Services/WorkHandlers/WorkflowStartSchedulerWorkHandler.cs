@@ -231,8 +231,8 @@ public sealed class WorkflowStartSchedulerWorkHandler : IWorkflowSchedulerWorkHa
     /// Whitelist of the <see cref="WorkflowExecutionStartCommandPayload"/> constructor's own validation
     /// <c>ParamName</c>s. Only these are classified as payload-validation failures (wrapped as an invalid-payload
     /// <see cref="InvalidOperationException"/>); any other <see cref="ArgumentException"/> propagates so an
-    /// unrelated bug is not masked. Public so the narrowing boundary can be characterized without IVT
-    /// (constitution §2.23.3), matching the sibling handlers' predicate shape.
+    /// unrelated bug is not masked. Public so the narrowing boundary can be characterized without IVT,
+    /// matching the sibling handlers' predicate shape.
     /// </summary>
     public static bool IsStartPayloadValidationException(ArgumentException exception) =>
         exception.ParamName is

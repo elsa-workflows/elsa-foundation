@@ -4,8 +4,7 @@ namespace Elsa.Workflows.Design.Validations.Core.Models;
 /// Validation error contributed by a validator handling <c>DraftValidating</c>. Aggregated onto
 /// that event's <c>Errors</c> collection and read back by the publishing command — derived state,
 /// not persisted. Grouping key is the (<see cref="Path"/>, <see cref="Type"/>) tuple — multiple
-/// errors may share the same scope (e.g. two missing required inputs on the same activity). Per
-/// Unit C FR-022 + R2 + R3.
+/// errors may share the same scope (e.g. two missing required inputs on the same activity).
 /// </summary>
 /// <remarks>
 /// <para>
@@ -22,8 +21,8 @@ namespace Elsa.Workflows.Design.Validations.Core.Models;
 /// </list>
 /// </para>
 /// <para>
-/// <b>Type format (R3):</b> slash-delimited category. Reserved baseline categories (as shipped,
-/// incl. the FR-033 2026-07-05 amendment): <c>RootActivity/Missing</c>,
+/// <b>Type format (R3):</b> slash-delimited category. Reserved baseline categories (as shipped):
+/// <c>RootActivity/Missing</c>,
 /// <c>Variables/Uniqueness</c>, <c>InputOutput/MissingRequired</c>,
 /// <c>Expressions/UnresolvedVariable</c>, <c>Graph/UnknownActivityVersion</c>. The reserved
 /// <c>Validation/Faulted</c> category is never emitted by a validator — it is synthesized by the

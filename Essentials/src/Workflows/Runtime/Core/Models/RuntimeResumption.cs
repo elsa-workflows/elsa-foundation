@@ -105,7 +105,7 @@ public sealed class RuntimeResumptionSweepResult
 
     /// <summary>
     /// How many discovered executions were already in a terminal status and therefore had their residual scheduler
-    /// work purged instead of being re-driven (spec 113). A non-zero value means backlog discovery surfaced
+    /// work purged instead of being re-driven. A non-zero value means backlog discovery surfaced
     /// completed executions whose stranded work items would otherwise churn a drain span every sweep.
     /// </summary>
     public int TerminalExecutionsPurged { get; }

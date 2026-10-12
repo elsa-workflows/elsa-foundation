@@ -62,7 +62,7 @@ public sealed class RuntimeContainerScopeService(
         if (includeCurrentIteration && activityState.IterationVariableFrame is { } iteration)
             AddFrame(iteration, VariableFrameKind.Iteration, IterationActivationId(activityState), ordered);
 
-        // The self read (spec 123 D1): unlike the leaf input-binding path — which reads only the enclosing
+        // The self read: unlike the leaf input-binding path — which reads only the enclosing
         // ancestor chain — a structural activity reading its OWN container-scoped variables must also see its own
         // container frame as the innermost visible scope. Its lexical parent is the just-added own iteration
         // frame when present, otherwise the last ancestor/root frame, so appending it here keeps the parent chain
@@ -267,7 +267,7 @@ public sealed class RuntimeContainerScopeService(
 
     /// <summary>
     /// Projects the visible lexical frame chain into a name-keyed view of the raw committed
-    /// <see cref="ValueEnvelope"/>s (spec 123 D1), reusing the same declaration name mapping as
+    /// <see cref="ValueEnvelope"/>s, reusing the same declaration name mapping as
     /// <see cref="ProjectVisibleVariables"/> — the innermost scope wins for a shadowed name. Used to populate the
     /// runtime scoped-variable read seam without re-implementing envelope-unwrap or name→key resolution.
     /// </summary>
@@ -285,7 +285,7 @@ public sealed class RuntimeContainerScopeService(
     /// <summary>
     /// Projects an ordered (root → innermost) visible frame chain into the author-facing name → committed-envelope
     /// view for the JavaScript ambient read surface (issue #984), with the innermost scope winning for a shadowed
-    /// name. Unlike the strict spec-123 reader projection, this is a best-effort convenience surface: a frame whose
+    /// name. Unlike the strict scoped-variable reader projection, this is a best-effort convenience surface: a frame whose
     /// scope or key cannot be resolved to an author name is silently skipped rather than faulting expression
     /// evaluation — the value remains reachable through statically declared parameters. Exposed as a static so
     /// producers that assemble the visible chain by hand (e.g. the intrinsic executor) reuse one name resolution.
@@ -346,8 +346,8 @@ public sealed class RuntimeContainerScopeService(
     }
 
     /// <summary>
-    /// Builds the visible name→committed-envelope projection for a scoped-variable read seam consumer
-    /// (spec 123 D1), or returns <see langword="null"/> when <paramref name="activity"/> does not implement
+    /// Builds the visible name→committed-envelope projection for a scoped-variable read seam consumer,
+    /// or returns <see langword="null"/> when <paramref name="activity"/> does not implement
     /// <see cref="IRuntimeScopedVariableReader"/> so the seam stays unpopulated (every read returns false). The
     /// projection includes the activity's own container frame and its full visible ancestor chain, built from
     /// the already-committed state, so it is read-only and spoof-proof by construction.

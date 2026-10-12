@@ -8,7 +8,7 @@ public interface IWorkflowDefinitionFactory
 {
     /// <param name="deleted">
     /// When <c>true</c>, the produced read-model carries a non-null <c>DeletedAt</c> so a
-    /// source-driven soft-delete (spec 085 FR-008) propagates through the reconciler's create path.
+    /// source-driven soft-delete propagates through the reconciler's create path.
     /// </param>
     IWorkflowDefinition Create(string name, string? description = null, string? id = null, bool deleted = false);
 }

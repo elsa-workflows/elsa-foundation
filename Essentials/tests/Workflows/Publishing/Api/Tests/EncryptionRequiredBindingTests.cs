@@ -17,15 +17,15 @@ using static Elsa.Workflows.Publishing.Api.Tests.SecretBindingCompilerFixture;
 namespace Elsa.Workflows.Publishing.Api.Tests;
 
 /// <summary>
-/// <c>VF-ACT-011</c> (spec 188, FR-010, research R8): an input whose effective policy requires encryption accepts only a
+/// <c>VF-ACT-011</c>: an input whose effective policy requires encryption accepts only a
 /// secret reference or no binding, because no other value reaches the activity without being persisted first. It is
 /// decided through both <c>CompileAll</c> overloads: the catalog overload, where only a credential declaration makes an
 /// input require encryption, and the pinned-contract overload, where a contract's policy can require encryption on an
 /// input that is not a credential. A binding that carries no value, such as an empty or null literal, leaves the input
-/// unbound and compiles exactly as an unbound input does (spec 188 edge case). A non-credential sensitive input does not
-/// require encryption and takes a literal or an expression (T104). On a credential input the credential-literal rule
-/// (<c>Inputs/CredentialLiteral</c>, FR-008) is applied first, so it, not <c>VF-ACT-011</c>, refuses a binding there
-/// (T060); <c>VF-ACT-011</c> remains the refusal on an input that requires encryption without being a credential.
+/// unbound and compiles exactly as an unbound input does. A non-credential sensitive input does not
+/// require encryption and takes a literal or an expression. On a credential input the credential-literal rule
+/// (<c>Inputs/CredentialLiteral</c>) is applied first, so it, not <c>VF-ACT-011</c>, refuses a binding there;
+/// <c>VF-ACT-011</c> remains the refusal on an input that requires encryption without being a credential.
 /// </summary>
 public sealed class EncryptionRequiredBindingTests
 {
@@ -229,7 +229,7 @@ public sealed class EncryptionRequiredBindingTests
     [Fact]
     public void An_expression_on_a_sensitive_input_that_is_not_a_credential_compiles_sensitive_and_unencrypted()
     {
-        // T104 (spec edge case, A21): the declaration makes the input sensitive, and neither the credential rule nor
+        // The declaration makes the input sensitive, and neither the credential rule nor
         // VF-ACT-011 applies, so the expression compiles and its value is later materialized as present.
         var definition = Input() with { IsSensitive = true };
         var contract = Contract(new ActivityValuePolicy(true, IsSensitive: true, RequiresEncryption: false), isCredential: false, hasDefault: false);

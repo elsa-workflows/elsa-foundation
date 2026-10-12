@@ -6,7 +6,7 @@ namespace Elsa.Workflows.Design.Core.Events;
 /// <summary>
 /// Mutation event for a workflow variable updated on the Draft. Published by
 /// <c>IUpdateVariableInDraftCommand</c>. <see cref="VariableReferenceKey"/> is the stable
-/// identity per FR-010 (argument/variable-level <c>ReferenceKey</c> is unchanged in Unit C).
+/// identity (the argument/variable-level <c>ReferenceKey</c> is unchanged).
 /// </summary>
 public sealed class VariableUpdatedInDraft(
     string draftId,

@@ -13,9 +13,9 @@ namespace Elsa.Workflows.Design.Validations.Validators;
 /// Baseline validator (#972): every variable-writing intrinsic (<c>Set</c>/<c>Merge</c>/<c>Reduce</c>)
 /// must target a variable that is visible from the intrinsic's scope — a workflow-scope variable in
 /// <c>WorkflowDefinitionState.Variables</c> or a container-scoped variable declared by a visible
-/// ancestor container (ADR 0027). Without this guard an out-of-scope target publishes cleanly and then
+/// ancestor container. Without this guard an out-of-scope target publishes cleanly and then
 /// poisons at runtime ("Set intrinsic ... targets undeclared variable"); the author sees the error here
-/// instead, and promotion is blocked (FR-024). The publish-time backstop in
+/// instead, and promotion is blocked. The publish-time backstop in
 /// <c>ExecutableNodeCompiler.ValidateIntrinsicVariableTargets</c> mirrors this check (PR #971 two-guard
 /// pattern) so a draft that bypasses validation still fails closed at publication.
 /// </summary>

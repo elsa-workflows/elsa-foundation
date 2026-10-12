@@ -333,7 +333,7 @@ public sealed class WorkflowDrainOrchestrator : IWorkflowDrainOrchestrator
         if (_coalescingScopeFactory is null)
             return await DrainImmediateAsync(envelope, request, cancellationToken);
 
-        // Coalescing host, but cadence is resolved per execution (ADR 0032 R5). A workflow that authored Immediate must
+        // Coalescing host, but cadence is resolved per execution. A workflow that authored Immediate must
         // run Immediate even though the host default is Coalesced: skip establishing the session entirely and take the
         // immediate path, so no relaxable checkpoint is deferred for this run. The mandatory-boundary set is unaffected
         // either way — those flush immediately under both policies. Authored cadence is read off the pinned executable
@@ -368,7 +368,7 @@ public sealed class WorkflowDrainOrchestrator : IWorkflowDrainOrchestrator
     // intents in-memory (idempotent enqueue + direct Delivered mark) instead of taking the durable claim round-trip.
     // Deliberately NOT used on the coalescing path: there the overlay session is authoritative and folds
     // continuations itself. Reused both when no coalescing factory is registered and when a per-run authored Immediate
-    // cadence opts this run out of coalescing on an otherwise-coalesced host (ADR 0032 R5).
+    // cadence opts this run out of coalescing on an otherwise-coalesced host.
     private async ValueTask<RuntimeSchedulerDrainResult> DrainImmediateAsync(
         WorkflowExecutionCommandEnvelope envelope,
         RuntimeSchedulerDrainRequest request,

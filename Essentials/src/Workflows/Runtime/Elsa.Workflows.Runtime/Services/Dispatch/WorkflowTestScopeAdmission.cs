@@ -5,13 +5,13 @@ namespace Elsa.Workflows.Runtime.Services.Dispatch;
 
 /// <summary>
 /// When a test run's scope must be open, and what open means. Every store applies this one rule inside its own atomic
-/// boundary, against the scope record it read there (spec 102).
+/// boundary, against the scope record it read there.
 /// </summary>
 /// <remarks>
-/// Openness is checked only where test work is admitted: when a root test run starts (FR-024) and when a child dispatch is
-/// added (research Decision 4). A child's own start is not re-checked. Its admission (<c>TryAdmitAsync</c>) is what
-/// serializes against cleanup, and a child that won admission before teardown must start and then be cancelled by cleanup
-/// (FR-011), even when its scope began closing before the child's first checkpoint.
+/// Openness is checked only where test work is admitted: when a root test run starts and when a child dispatch is
+/// added. A child's own start is not re-checked. Its admission (<c>TryAdmitAsync</c>) is what
+/// serializes against cleanup, and a child that won admission before teardown must start and then be cancelled by cleanup,
+/// even when its scope began closing before the child's first checkpoint.
 /// </remarks>
 public static class WorkflowTestScopeAdmission
 {

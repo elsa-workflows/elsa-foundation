@@ -9,7 +9,7 @@ namespace Elsa.Workflows.Design.Core.Models;
 /// no member twice. Member names compare ordinally, as the Studio secret picker and the secret reference models write them.
 /// </summary>
 /// <remarks>
-/// This is the one definition of a well-formed secret reference (spec 188, FR-009): the credential-literal rule accepts a
+/// This is the one definition of a well-formed secret reference: the credential-literal rule accepts a
 /// bound <c>Secret</c> payload on a credential input only when it is well formed, and publication reads every secret
 /// reference through <see cref="Read"/>, so save and publish agree. A member outside the three is refused rather than
 /// ignored, because a stored definition would carry it, and an extra member is a place a value could ride.

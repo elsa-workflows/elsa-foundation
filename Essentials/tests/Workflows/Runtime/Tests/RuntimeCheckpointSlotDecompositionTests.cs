@@ -16,7 +16,7 @@ using Xunit;
 namespace Elsa.Workflows.Runtime.Tests;
 
 /// <summary>
-/// ADR 0029 Move 2 (first slice, slot-invoked handler model): the workflow <c>Invoke</c> slot runs the handler before
+/// The slot-invoked handler model, first slice: the workflow <c>Invoke</c> slot runs the handler before
 /// <c>next</c> and the <c>Checkpoint</c> slot persists the commit it staged. Covers the middleware, the Cancel handler's
 /// staging vs inline commit, the end-to-end feature path, the Invoke-before-Checkpoint ordering, and the fail-loud guard
 /// when the Invoke slot is missing. Cancel is the only handler migrated in this slice; behaviour is preserved.

@@ -4,7 +4,7 @@ using Elsa.Workflows.Runtime.Core.Contracts;
 namespace Elsa.Workflows.Runtime.Core.Models;
 
 /// <summary>
-/// Scheduler payload for a non-terminal child→parent structural notification (spec 126, seam C). Rides the
+/// Scheduler payload for a non-terminal child→parent structural notification. Rides the
 /// dedicated <see cref="WorkflowExecutionCommandKind.NotifyParentActivity"/> command and is handled by
 /// <c>WorkflowNotifyParentActivitySchedulerWorkHandler</c>, which reactivates the target parent from its
 /// pinned snapshot and dispatches <c>IRuntimeActivityChildNotificationHandler.OnChildNotifiedAsync</c>. The

@@ -6,7 +6,7 @@ namespace Elsa.Workflows.Design.Core.Events;
 /// <summary>
 /// Mutation event for a workflow-definition-level input updated on the Draft. Published by
 /// <c>IUpdateWorkflowInputInDraftCommand</c>. <see cref="InputReferenceKey"/> is the stable
-/// identity per FR-010.
+/// identity.
 /// </summary>
 public sealed class WorkflowInputUpdatedInDraft(
     string draftId,

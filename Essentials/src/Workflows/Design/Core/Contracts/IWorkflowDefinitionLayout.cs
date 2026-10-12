@@ -7,7 +7,7 @@ namespace Elsa.Workflows.Design.Core.Contracts;
 /// design-time consumers reading layout for either a <c>WorkflowDefinitionVersion</c> (via
 /// <c>WorkflowDefinitionVersionLayout</c>) or a <c>WorkflowDefinitionDraft</c> (via
 /// <c>WorkflowDefinitionDraftLayout</c>). Lets consumers read without depending on
-/// <c>*.Persistence.Core</c> and without branching on the parent type. Unit C FR-007.
+/// <c>*.Persistence.Core</c> and without branching on the parent type.
 /// </summary>
 public interface IWorkflowDefinitionLayout
 {
@@ -20,7 +20,7 @@ public interface IWorkflowDefinitionLayout
 
 /// <summary>
 /// One layout record per placed activity node. Keyed by <c>NodeId</c> — the join key into
-/// the parent's <c>WorkflowDefinitionState.RootActivity</c> tree. Unit C FR-006 sub-shape.
+/// the parent's <c>WorkflowDefinitionState.RootActivity</c> tree.
 /// </summary>
 public interface IDesignMetadataRecord
 {
@@ -31,8 +31,8 @@ public interface IDesignMetadataRecord
     double? Height { get; }
 
     /// <summary>
-    /// Opaque, Studio-authored per-node layout metadata, stored verbatim as a <see cref="JsonElement"/>
-    /// (ADR 0035 D3) — read as JSON, never indexed as a CLR dictionary.
+    /// Opaque, Studio-authored per-node layout metadata, stored verbatim as a <see cref="JsonElement"/>.
+    /// It is read as JSON, never indexed as a CLR dictionary.
     /// </summary>
     JsonElement? AdditionalProperties { get; }
 }

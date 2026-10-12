@@ -44,7 +44,7 @@ public sealed class ActivityActivationFailureHandler
                 (StorageDriverKeyMetadataKey, storageDriverException.DriverKey));
         }
 
-        // A host that cannot resolve secrets at all is missing a module (constitution §E2.6.1): composing a secret
+        // A host that cannot resolve secrets at all is missing a module: composing a secret
         // resolver repairs it, whereas faulting the activity would destroy an executable that is otherwise sound.
         if (exception is RuntimeSecretResolverNotFoundException)
         {

@@ -143,7 +143,7 @@ public sealed class WorkflowExecutableCompilerGoldenTests
     [Fact]
     public async Task ArtifactHashIsBehavioralOnly_SameTreeUnderDifferentSourcesYieldsSameHash()
     {
-        // ADR 0038: the ArtifactHash covers Execution Material only. The same authored tree published under
+        // The ArtifactHash covers Execution Material only. The same authored tree published under
         // two different source identities (definition version / artifact version / source reference version)
         // must resolve to the SAME hash — that is what makes executables content-addressed.
         var definition = Corpus["literal-input"];
@@ -209,7 +209,7 @@ public sealed class WorkflowExecutableCompilerGoldenTests
     {
         var model = new
         {
-            // ADR 0038: the artifact is pure behavior. Source identity (definition/version, artifact-version label)
+            // The artifact is pure behavior. Source identity (definition/version, artifact-version label)
             // is still carried on Identity as the runtime pinned-snapshot carrier, but scope/publishedAt/expiresAt
             // and the embedded source-reference object have left the artifact document — they are reference facts.
             identity = new

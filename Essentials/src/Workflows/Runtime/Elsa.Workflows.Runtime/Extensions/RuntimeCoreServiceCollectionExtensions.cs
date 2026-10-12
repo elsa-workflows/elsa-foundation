@@ -36,7 +36,7 @@ using Microsoft.Extensions.Logging;
 namespace Elsa.Workflows.Runtime.Extensions;
 
 /// <summary>
-/// Host-agnostic composition root for the workflow runtime (ADR 0029). Registers the runtime execution spine —
+/// Host-agnostic composition root for the workflow runtime. Registers the runtime execution spine —
 /// stores, scheduler, drainer, coordinator, command processor, the workflow/activity execution pipelines, and every
 /// scheduler work handler — independently of any HTTP/API host, so a worker, a test harness, or another module can
 /// compose and drive the runtime without the API feature. The API feature (<c>WorkflowsRuntimeApiFeature</c>)
@@ -107,12 +107,12 @@ public static class RuntimeCoreServiceCollectionExtensions
         services.TryAddScoped<WorkflowAlterationOrchestrationSweep>();
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IRecurringTask, WorkflowAlterationOrchestrationPumpTask>());
 
-        // spec 123: ReplaySafe hop-fusion toggle (default ON, ratification resolution #3) + the deterministic
-        // dispatch/fusion counters (FR-008). Singleton counters survive the per-command drain scopes.
+        // ReplaySafe hop-fusion toggle (default ON) + the deterministic
+        // dispatch/fusion counters. Singleton counters survive the per-command drain scopes.
         services.TryAddSingleton<RuntimeReplaySafeFusionOptions>();
         services.TryAddSingleton<RuntimeSchedulerDispatchDiagnostics>();
 
-        // spec 128 / #542: in-process actor terminal-eviction policy (default ON). Bounds the live agent registry by
+        // #542: in-process actor terminal-eviction policy (default ON). Bounds the live agent registry by
         // passivating an execution's mailbox after a terminal drain. The kill switch (PassivateOnTerminal = false)
         // restores the pre-#542 unbounded-growth behavior byte-for-byte.
         services.TryAddSingleton<RuntimeActorEvictionOptions>();
@@ -126,7 +126,7 @@ public static class RuntimeCoreServiceCollectionExtensions
         services.TryAddSingleton<IWorkflowExecutableStore, InMemoryWorkflowExecutableStore>();
         services.AddWorkflowActivationDefaults();
         services.TryAddScoped<IWorkflowExecutableHasher, WorkflowExecutableHasher>();
-        // Burst-scoped reconstructible cache (ADR 0031 item b, spec 111). The accessor is a singleton AsyncLocal (like
+        // Burst-scoped reconstructible cache. The accessor is a singleton AsyncLocal (like
         // the live-drain/coalescing accessors); the router pushes a scope per drain gated by the kill switch. The reader
         // is the first consumer — scoped so it composes with whichever IWorkflowExecutableStore the provider registers
         // (a durable provider RemoveAll+AddScoped the default), reading through the ambient burst scope when one is active.
@@ -186,7 +186,7 @@ public static class RuntimeCoreServiceCollectionExtensions
         services.TryAddSingleton<IBookmarkResumeResolver, BookmarkResumeResolver>();
         services.TryAddScoped<IBookmarkResumeDispatcher, BookmarkResumeDispatcher>();
         services.TryAddScoped<IBookmarkConsumptionCheckpointService, BookmarkConsumptionCheckpointService>();
-        // Fan-in notifier over IBookmarkLifecycleObserver contributions (spec 089 D). Singleton is safe because the
+        // Fan-in notifier over IBookmarkLifecycleObserver contributions. Singleton is safe because the
         // observers themselves register as singletons that open their own scopes (mirroring RouteTableTriggerIndexObserver).
         services.TryAddSingleton<BookmarkLifecycleNotifier>();
         services.TryAddSingleton<IDurableValueStateStore, InMemoryDurableValueStateStore>();
@@ -207,8 +207,8 @@ public static class RuntimeCoreServiceCollectionExtensions
         services.TryAddScoped<ActivityActivationFailureHandler>();
         services.AddOptions<RuntimeFaultCaptureOptions>();
         services.TryAddSingleton<IRuntimeFaultCapturePolicy, DefaultRuntimeFaultCapturePolicy>();
-        // Scoped: one per scheduler work item's scope, holding only the values resolved for the executions it handles
-        // (spec 188, FR-012). A replacement contract: the activities runtime fails shell activation on a second one.
+        // Scoped: one per scheduler work item's scope, holding only the values resolved for the executions it handles.
+        // A replacement contract: the activities runtime fails shell activation on a second one.
         services.TryAddScoped<IRuntimeSecretMask, DefaultRuntimeSecretMask>();
         services.TryAddSingleton<IWorkflowSchedulerPoisonStore, InMemoryWorkflowSchedulerPoisonStore>();
         services.TryAddSingleton<IRuntimeVolatileWaitPolicy, DefaultRuntimeVolatileWaitPolicy>();
@@ -217,7 +217,7 @@ public static class RuntimeCoreServiceCollectionExtensions
         services.TryAddSingleton<ISchedulerStateStore, InMemorySchedulerStateStore>();
         services.TryAddSingleton<RuntimeExecutionOwnershipOptions>();
         services.TryAddSingleton<IRuntimeExecutionOwnershipContextAccessor, AsyncLocalRuntimeExecutionOwnershipContextAccessor>();
-        // spec 105: scoped transport shared by the same-scope drainer and checkpoint committer so a checkpoint
+        // Scoped transport shared by the same-scope drainer and checkpoint committer so a checkpoint
         // commit can fold the claimed work item's acknowledgement into its unit-of-work.
         services.TryAddScoped<IRuntimeConsumedSchedulerWorkClaimAccessor, RuntimeConsumedSchedulerWorkClaimAccessor>();
         // Live-drain delivery marker. Always registered because Immediate is the default cost model: the drain
@@ -321,7 +321,7 @@ public static class RuntimeCoreServiceCollectionExtensions
         services.TryAddSingleton<IRuntimeDiagnosticsSettingsStore>(serviceProvider => serviceProvider.GetRequiredService<InMemoryRuntimeDiagnosticsSettingsStore>());
         services.TryAddSingleton<IRuntimeDiagnosticsSettingsAccessor>(serviceProvider => serviceProvider.GetRequiredService<InMemoryRuntimeDiagnosticsSettingsStore>());
 
-        // Runtime execution pipeline spine (ADR 0029). The built-in placeholder middleware are registered so the
+        // Runtime execution pipeline spine. The built-in placeholder middleware are registered so the
         // executor can resolve them by type from the built plan; the pass-through slots keep dispatch behavior-preserving
         // until modules register real middleware or a Move 2 slice makes a slot real.
         services.TryAddScoped<RuntimeWorkflowLoadStateMiddleware>();
@@ -378,9 +378,9 @@ public static class RuntimeCoreServiceCollectionExtensions
         services.AddRuntimePostCommitIntentHandler<RuntimeSchedulerPostCommitIntentDispatcher>(
             RuntimePostCommitIntentKinds.EnqueueSchedulerWork,
             RuntimeSchedulerPostCommitIntentDispatcher.RetryPolicy);
-        // spec 109: the in-process-hop fast path is on by default. A host or a guardrail test can disable it by
+        // The in-process-hop fast path is on by default. A host or a guardrail test can disable it by
         // registering RuntimeInProcessHopFastPathOptions { Enabled = false } before this call; the durable deserialize
-        // path then runs everywhere and MUST commit byte-identical state (ADR 0031 follow-up (c)).
+        // path then runs everywhere and MUST commit byte-identical state.
         services.TryAddSingleton<RuntimeInProcessHopFastPathOptions>();
         // Explicit factory (not greedy ctor selection): the coalescing session accessor is only registered when the
         // coalescing feature is enabled, so the container cannot always satisfy every constructor parameter. The factory
@@ -421,7 +421,7 @@ public static class RuntimeCoreServiceCollectionExtensions
         services.TryAddEnumerable(ServiceDescriptor.Scoped<IWorkflowSchedulerWorkHandler, WorkflowStartSchedulerWorkHandler>());
         services.TryAddEnumerable(ServiceDescriptor.Scoped<IWorkflowSchedulerWorkHandler, WorkflowScheduleActivitySchedulerWorkHandler>());
         services.TryAddEnumerable(ServiceDescriptor.Scoped<IWorkflowSchedulerWorkHandler, WorkflowStartActivitySchedulerWorkHandler>());
-        // spec 123 D1: the fusion driver runs the start stage inline via the concrete start handler (registered here so
+        // The fusion driver runs the start stage inline via the concrete start handler (registered here so
         // it is injectable) and dispatches the invoke stage through the scheduler-work-handler set. The schedule handler
         // takes the driver as an optional dependency; it stays null-safe when the runtime is composed without it.
         services.TryAddScoped<WorkflowStartActivitySchedulerWorkHandler>();
@@ -471,7 +471,7 @@ public static class RuntimeCoreServiceCollectionExtensions
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IWorkflowDispatchDurabilityEvidence, ProcessLocalOutboxEvidence>());
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IWorkflowDispatchDurabilityEvidence, ProcessLocalSchedulerEvidence>());
 
-        // Reference GC (ADR 0040): retained execution roots and creation grace are runtime safety policy. A host may
+        // Reference GC: retained execution roots and creation grace are runtime safety policy. A host may
         // configure the policy and schedule the collector through the separate sweeper feature.
         services.AddOptions<WorkflowExecutableGarbageCollectionOptions>();
         services.TryAddScoped<IWorkflowExecutableRootWriteLeaseManager, WorkflowExecutableRootWriteLeaseManager>();

@@ -17,9 +17,9 @@ using static Elsa.Workflows.Runtime.Distributed.Tests.Placement.PlacementCluster
 namespace Elsa.Workflows.Runtime.Distributed.Tests.Placement;
 
 /// <summary>
-/// Spec 184's failover (FR-022 to FR-026; User Stories 3, 4, 5 and 7): a departed host id's per-execution leases are
+/// Failover: a departed host id's per-execution leases are
 /// reclaimed within one sweep, and its executions made recovery candidates at once; a live, absent, restarted or
-/// cache-only-departed host id is never reclaimed from (SC-006); and reclaim never decides a commit (SC-005).
+/// cache-only-departed host id is never reclaimed from; and reclaim never decides a commit.
 /// </summary>
 public sealed class FailoverTests : IAsyncDisposable
 {
@@ -135,7 +135,7 @@ public sealed class FailoverTests : IAsyncDisposable
         await AssertStillHeldAsync(owner);
     }
 
-    /// <summary>FR-026: a lapsed member judges no departure and reclaims nothing, but keeps claiming work it can run.</summary>
+    /// <summary>A lapsed member judges no departure and reclaims nothing, but keeps claiming work it can run.</summary>
     [Fact]
     public async Task A_lapsed_member_reclaims_nothing_but_keeps_claiming()
     {
@@ -152,7 +152,7 @@ public sealed class FailoverTests : IAsyncDisposable
         Assert.Equal(WorkflowExecutionCommandDispatchStatus.Accepted, claimed.Status);
     }
 
-    /// <summary>User Story 4, scenario 3: survivors that reclaim concurrently release each lease once and touch nothing
+    /// <summary>Survivors that reclaim concurrently release each lease once and touch nothing
     /// held under any other host id.</summary>
     [Fact]
     public async Task Survivors_that_reclaim_concurrently_release_each_lease_once_and_touch_nothing_else()
@@ -175,7 +175,7 @@ public sealed class FailoverTests : IAsyncDisposable
     }
 
     /// <summary>
-    /// FR-024 and FR-027: the recovery sweep re-drives a reclaimed execution at once, while its execution lease is still
+    /// The recovery sweep re-drives a reclaimed execution at once, while its execution lease is still
     /// live, through the distributed provider; the re-drive acquires a strictly greater fencing token, the recovery
     /// source says it was reclaimed, and the candidate is settled.
     /// </summary>
@@ -211,7 +211,7 @@ public sealed class FailoverTests : IAsyncDisposable
     }
 
     /// <summary>
-    /// User Story 5 and SC-005: a member reclaimed from while alive reaches its commit after the re-drive's, and the fence
+    /// A member reclaimed from while alive reaches its commit after the re-drive's, and the fence
     /// refuses it; its next renewal takes nothing back.
     /// </summary>
     [Fact]
@@ -240,7 +240,7 @@ public sealed class FailoverTests : IAsyncDisposable
     }
 
     /// <summary>
-    /// User Story 3 and SC-003: a process that restarts under the same host id releases every lease its predecessor held
+    /// A process that restarts under the same host id releases every lease its predecessor held
     /// before it claims anything, and makes the predecessor's executions recovery candidates at once; the re-drive holds
     /// a strictly greater fencing token than the crashed drain, which is refused at its commit.
     /// </summary>
@@ -283,7 +283,7 @@ public sealed class FailoverTests : IAsyncDisposable
     }
 
     /// <summary>
-    /// FR-012 and FR-022: a joining member claims nothing, and neither renews nor releases what its host id holds, which
+    /// A joining member claims nothing, and neither renews nor releases what its host id holds, which
     /// may still be its predecessor's; once it is active its join sweep releases those leases and it claims.
     /// </summary>
     [Fact]
@@ -310,7 +310,7 @@ public sealed class FailoverTests : IAsyncDisposable
         Assert.Equal("new", Assert.Single(joining.Runtime.Commands.Committed).EnvelopeId);
     }
 
-    /// <summary>FR-022: a shell reload in the same process, or a second sweep, is not a first activation, and never
+    /// <summary>A shell reload in the same process, or a second sweep, is not a first activation, and never
     /// releases the leases the process itself holds.</summary>
     [Fact]
     public async Task A_shell_reload_in_the_same_process_does_not_sweep_its_own_leases()
@@ -356,7 +356,7 @@ public sealed class FailoverTests : IAsyncDisposable
     }
 
     /// <summary>
-    /// User Story 7 and SC-008: a single host on the in-process provider reclaims no other host id, however many sweeps
+    /// A single host on the in-process provider reclaims no other host id, however many sweeps
     /// pass, and releases its previous process's leases when it restarts.
     /// </summary>
     [Fact]

@@ -5,7 +5,7 @@ using Elsa.Workflows.Design.Core.Models;
 namespace Elsa.Workflows.Design.Core.Services;
 
 /// <summary>
-/// Computes scoped-variable visibility across an authored activity tree (ADR 0027). For every node
+/// Computes scoped-variable visibility across an authored activity tree. For every node
 /// it determines the ordered chain of visible variable scopes — nearest ancestor container first,
 /// then outer containers, then the workflow scope — so callers can validate structured variable
 /// references, populate authoring pickers, and resolve nearest-scope shadowing without each
@@ -70,12 +70,12 @@ public sealed record VisibleVariable(string ScopeId, bool IsWorkflowScope, Varia
 
 /// <summary>
 /// A non-blocking warning that a container scope declares a variable name that shadows a visible
-/// ancestor declaration of the same name (ADR 0027). Advisory only — shadowing is allowed.
+/// ancestor declaration of the same name. Advisory only — shadowing is allowed.
 /// </summary>
 public sealed record ScopedVariableShadowingWarning(string ScopeId, string ShadowedScopeId, string Name, string ReferenceKey);
 
 /// <summary>
-/// Backend picker contract (ADR 0027): resolves the variables visible from a selected activity so
+/// Backend picker contract: resolves the variables visible from a selected activity so
 /// authoring surfaces (Studio) show only in-scope variables by default. Wraps
 /// <see cref="ScopedVariableResolver"/> over a workflow design state.
 /// </summary>

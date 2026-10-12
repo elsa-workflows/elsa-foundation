@@ -171,7 +171,7 @@ public sealed class ExecutionEvidenceCheckpointEnricherTests
     }
 
     /// <summary>
-    /// A withheld envelope holds no value to capture or redact (spec 188, T067), so it is recorded by its marker whether or
+    /// A withheld envelope holds no value to capture or redact, so it is recorded by its marker whether or
     /// not sensitive values are redacted, and never as absent.
     /// </summary>
     [Theory]
@@ -199,7 +199,7 @@ public sealed class ExecutionEvidenceCheckpointEnricherTests
     }
 
     /// <summary>
-    /// A present value whose policy requires encryption is never capturable (spec 188, FR-010). Enrichers run before the
+    /// A present value whose policy requires encryption is never capturable. Enrichers run before the
     /// commit backstop, so the enricher withholds it itself, whatever <c>RedactSensitiveValues</c> says and whether or not
     /// the policy is also sensitive.
     /// </summary>

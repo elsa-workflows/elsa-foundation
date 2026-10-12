@@ -154,7 +154,7 @@ public sealed class EventPublisherSmokeTests
     [Fact]
     public async Task Real_pipeline_dispatches_every_registered_handler_for_the_same_event()
     {
-        // Two handlers registered against the same event — both must run (framework §2.6.1
+        // Two handlers registered against the same event — both must run (the
         // completeness rule, enforced by the invoker).
         await using var provider = BuildProvider(services =>
         {

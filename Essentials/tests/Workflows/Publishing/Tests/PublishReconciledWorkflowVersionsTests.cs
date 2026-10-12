@@ -18,7 +18,7 @@ using Xunit;
 namespace Elsa.Workflows.Publishing.Tests;
 
 /// <summary>
-/// Branch coverage (§2.23.2) for the publish-on-reconcile subscriber (spec 147). The handler's
+/// Branch coverage for the publish-on-reconcile subscriber. The handler's
 /// contract: latest claim per definition, opted-in sources only, deleted never published, a
 /// pre-check on the policy-resolved target slot (and only that slot) makes restarts idempotent,
 /// one failing definition never stops the rest, and no exception ever escapes <c>Handle</c>
@@ -104,7 +104,7 @@ public sealed class PublishReconciledWorkflowVersionsTests
     [Fact]
     public async Task Skips_when_the_slot_already_holds_an_active_publication_of_the_target_version()
     {
-        // Restart idempotency (FR-007): the pre-check avoids even compiling when nothing changed.
+        // Restart idempotency: the pre-check avoids even compiling when nothing changed.
         var sender = new SpySender();
         var handler = NewHandler(
             sender,

@@ -17,7 +17,7 @@ public sealed class WorkflowExecutableStartContractTests
     [Fact]
     public void ExistingRequestAndCommandConstructors_RemainAvailable()
     {
-        // spec 117 D4 appended a trailing optional trigger-metadata channel to these convenience constructors.
+        // A trailing optional trigger-metadata channel was appended to these convenience constructors.
         Assert.NotNull(typeof(WorkflowExecutionStartDispatchRequest).GetConstructor([
             typeof(string), typeof(string), typeof(string), typeof(string),
             typeof(IReadOnlyDictionary<string, string>), typeof(IReadOnlyDictionary<string, object>),

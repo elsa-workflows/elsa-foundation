@@ -30,7 +30,7 @@ public interface IWorkflowTestRunStarter
 }
 
 /// <summary>
-/// Test run (ADR 0040) = compile → idempotent save to the SINGLE content-addressed artifact store → append an
+/// Test run = compile → idempotent save to the SINGLE content-addressed artifact store → append an
 /// expiring <see cref="WorkflowExecutableReferenceScope.TestRun"/> Source Reference (source: the definition version
 /// or draft snapshot; expiry = the retention window; layout copied from the definition-version layout store when a
 /// version id exists, else empty) → dispatch gated on that reference. There is no transient store: a behaviorally
@@ -59,7 +59,7 @@ public sealed class StartWorkflowTestRunRequestHandler(
     public const string RequestedBy = "workflow-designer-test-run";
     public static readonly TimeSpan DefaultRetention = TimeSpan.FromMinutes(30);
     private static readonly RuntimeVariableDeclarationProjector VariableDeclarations = new();
-    // Unified with publish (ADR 0040): scope lives on the reference, not the artifact id, so a test run of a draft
+    // Unified with publish: scope lives on the reference, not the artifact id, so a test run of a draft
     // behaviorally identical to a published version resolves to the SAME artifact id — the free equivalence signal.
     private const string ArtifactPrefix = "artifact-";
     private const string DraftArtifactVersion = "draft";
@@ -288,7 +288,7 @@ public sealed class StartWorkflowTestRunRequestHandler(
             return await RejectAsync(testRunId, fallbackDefinitionId, fallbackDefinitionVersionId, now, expiresAt, exception.Message, cancellationToken);
         }
 
-        // Idempotent save into the single content-addressed store (ADR 0038/0040): a behaviorally identical publish
+        // Idempotent save into the single content-addressed store: a behaviorally identical publish
         // or prior test run already put this artifact there and it is left untouched.
         await executableStore.SaveAsync(executable, cancellationToken);
 
@@ -449,7 +449,7 @@ public sealed class StartWorkflowTestRunRequestHandler(
 
     // Builds the expiring TestRun reference. Source identity comes from the compile source when present (draft
     // snapshot), else from the compiled identity (durable definition version). The layout sidecar is copied verbatim
-    // from the definition-version layout store when a version id resolves one, else empty (ADR 0039) — a draft
+    // from the definition-version layout store when a version id resolves one, else empty — a draft
     // snapshot with no persisted layout carries an empty sidecar.
     private async Task<WorkflowExecutableSourceReference> BuildTestRunReferenceAsync(
         WorkflowExecutable executable,

@@ -56,7 +56,7 @@ public sealed record WorkflowArtifactExportDelivery(
 }
 
 /// <summary>
-/// A destination a portable workflow-artifact closure can be delivered to (FR-B-010a) — the export-side mirror of
+/// A destination a portable workflow-artifact closure can be delivered to — the export-side mirror of
 /// the import side's <c>IWorkflowArtifactReconciliationSource</c>.
 /// </summary>
 /// <remarks>
@@ -64,7 +64,7 @@ public sealed record WorkflowArtifactExportDelivery(
 /// <b>Fan-in, never replacement.</b> Targets contribute; a folder writer arriving later must not displace the
 /// built-in download. Register with <c>TryAddEnumerable</c> and resolve
 /// <c>IEnumerable&lt;IWorkflowArtifactExportTarget&gt;</c>, selecting by <see cref="TargetId"/>. This is the
-/// Strategy pattern (framework §2.24.2 #9), and it is the reason the closure factory stays destination-agnostic:
+/// Strategy pattern, and it is the reason the closure factory stays destination-agnostic:
 /// producing the closure and deciding where it goes are two decisions with two different lifetimes.
 /// </para>
 /// <para>

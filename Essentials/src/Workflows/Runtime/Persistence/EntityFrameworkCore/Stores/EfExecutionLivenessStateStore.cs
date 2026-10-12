@@ -180,8 +180,8 @@ public sealed class EfExecutionLivenessStateStore(
 
     /// <summary>
     /// Pages the scope's states whose execution lease or heartbeat names <paramref name="ownerId"/>, in the global
-    /// identity order. No index covers the owner columns: reclaim runs only when a host id departs or a process starts
-    /// (spec 184, FR-030), so a scope-bounded scan is the accepted cost rather than a schema change.
+    /// identity order. No index covers the owner columns: reclaim runs only when a host id departs or a process starts,
+    /// so a scope-bounded scan is the accepted cost rather than a schema change.
     /// </summary>
     public async ValueTask<RuntimeStorePage<ExecutionLivenessState>> ListOwnedPageAsync(
         string ownerId,

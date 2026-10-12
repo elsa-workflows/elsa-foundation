@@ -127,7 +127,7 @@ public sealed class JsonWorkflowReconciliationSourceTests
     public async Task Read_EntryWithoutDefinitionId_LogsAPinYourIdWarning()
     {
         // An omitted definitionId mints a fresh random id per restart → duplicate definitions. The
-        // import proceeds, but the source must surface the footgun (spec 147 edge case).
+        // import proceeds, but the source must surface the footgun.
         var reader = new StubReader { ["only.json"] = [Model(null!, "1.0.0") with { Name = "anon" }] };
         var logger = new RecordingLogger<JsonWorkflowReconciliationSource>();
         var source = new JsonWorkflowReconciliationSource(reader, Opts(new() { SourceId = "s", FilePath = "only.json" }), logger);

@@ -1,7 +1,7 @@
 namespace Elsa.Workflows.Design.Reconciliation.Git.Options;
 
 /// <summary>
-/// The git↔catalog flow role (ADR 0034 D11). Drives the clone mode and whether the node exports.
+/// The git↔catalog flow role. Drives the clone mode and whether the node exports.
 /// </summary>
 public enum GitReconciliationRole
 {
@@ -15,7 +15,7 @@ public enum GitReconciliationRole
     Writer,
 }
 
-/// <summary>How credentials reach git (FR-013). Never placed on the git command line.</summary>
+/// <summary>How credentials reach git. Never placed on the git command line.</summary>
 public enum GitCredentialsMode
 {
     /// <summary>Rely on the ambient credential helper / ssh-agent / deploy key. No configuration written.</summary>
@@ -31,7 +31,7 @@ public enum GitCredentialsMode
     Token,
 }
 
-/// <summary>When a Writer's local export commits reach the remote (FR-011). Honored only when Role=Writer.</summary>
+/// <summary>When a Writer's local export commits reach the remote. Honored only when Role=Writer.</summary>
 public enum GitPushMode
 {
     /// <summary>Commit locally; a push happens out-of-band. Default.</summary>

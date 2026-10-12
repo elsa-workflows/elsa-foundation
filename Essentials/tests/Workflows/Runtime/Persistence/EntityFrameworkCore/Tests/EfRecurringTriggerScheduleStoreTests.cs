@@ -265,7 +265,7 @@ public sealed class EfRecurringTriggerScheduleStoreTests
     /// The recurring-triggers feature, not the runtime root, registers the in-memory schedule store, so only this
     /// composition proves the EF registration still recognizes it as the replaceable default.
     /// </summary>
-    // Kept beside the composition test (§2.23.1): replacement, the EF store replaces the in-memory default.
+    // Kept beside the composition test: replacement, the EF store replaces the in-memory default.
     [Fact]
     public void Registration_replaces_the_in_memory_default_the_recurring_triggers_feature_registers()
     {
@@ -278,7 +278,7 @@ public sealed class EfRecurringTriggerScheduleStoreTests
         Assert.True(RecurringTriggerScheduleStoreBackend.Find(services)?.Owns(contract));
     }
 
-    // Kept beside the composition test (§2.23.1): replacement-contract rejection without mutation.
+    // Kept beside the composition test: replacement-contract rejection without mutation.
     [Fact]
     public void Registration_refuses_a_host_recurring_schedule_store_and_leaves_the_collection_unchanged()
     {

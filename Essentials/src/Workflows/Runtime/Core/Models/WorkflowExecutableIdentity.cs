@@ -1,7 +1,7 @@
 namespace Elsa.Workflows.Runtime.Core.Models;
 
 /// <summary>
-/// The identity a workflow execution pins to when it dispatches (the "pinned executable"). Under ADR 0038 the
+/// The identity a workflow execution pins to when it dispatches (the "pinned executable"). The
 /// artifact's OWN identity is content-addressed — <see cref="ArtifactId"/> plus <see cref="ArtifactHash"/> — and
 /// source provenance (definition/version, artifact-version label) lives on the
 /// <see cref="WorkflowExecutableSourceReference"/> that points at the artifact.

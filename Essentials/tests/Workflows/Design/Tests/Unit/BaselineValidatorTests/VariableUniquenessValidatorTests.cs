@@ -5,7 +5,7 @@ using static Elsa.Workflows.Design.Tests.Unit.BaselineValidatorTests.ValidatorTe
 namespace Elsa.Workflows.Design.Tests.Unit.BaselineValidatorTests;
 
 /// <summary>
-/// SC-022(c). Branch coverage — distinct names, case-insensitive collisions, multi-collisions.
+/// Branch coverage — distinct names, case-insensitive collisions, multi-collisions.
 /// </summary>
 public sealed class VariableUniquenessValidatorTests
 {
@@ -48,7 +48,7 @@ public sealed class VariableUniquenessValidatorTests
     [Fact]
     public async Task Duplicate_names_within_one_container_scope_emit_an_error()
     {
-        // #972 / ADR 0027: uniqueness is per declaring scope — a container's own bag must not collide.
+        // #972: uniqueness is per declaring scope — a container's own bag must not collide.
         var container = Node(
             "container-1",
             containerVariables: [Variable("v1", "Local"), Variable("v2", "local")]);
@@ -63,7 +63,7 @@ public sealed class VariableUniquenessValidatorTests
     [Fact]
     public async Task Same_name_in_different_scopes_is_allowed_shadowing()
     {
-        // ADR 0027: nested scopes may shadow; only within-scope duplicates are errors.
+        // Nested scopes may shadow; only within-scope duplicates are errors.
         var container = Node("container-1", containerVariables: [Variable("v-inner", "Shared")]);
         var root = Node("root", childActivities: [container], containerVariables: [Variable("v-outer", "Shared")]);
         var state = StateWithRoot(root, variables: [Variable("v-workflow", "Shared")]);

@@ -26,7 +26,7 @@ public sealed class JavaScriptDeclarationSurfaceTests
         Assert.Equal("declare const args: Readonly<Record<string, any>>;\n", rendered.ReplaceLineEndings("\n"));
     }
 
-    // Kept beside the composition test (§2.23.1): asserts what the feature must not register (removed ambient contributors).
+    // Kept beside the composition test: asserts what the feature must not register (removed ambient contributors).
     [Fact]
     public void Workflow_design_does_not_register_removed_ambient_declaration_contributors()
     {

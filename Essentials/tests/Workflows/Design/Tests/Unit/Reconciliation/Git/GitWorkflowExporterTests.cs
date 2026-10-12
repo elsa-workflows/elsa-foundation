@@ -12,7 +12,7 @@ using static Elsa.Workflows.Design.Tests.Infrastructure.CredentialLiteralTestSup
 namespace Elsa.Workflows.Design.Tests.Unit.Reconciliation.Git;
 
 /// <summary>
-/// US3 export reconciler: catalog versions absent from git are written + committed by the machine
+/// Export reconciler: catalog versions absent from git are written + committed by the machine
 /// identity; present ones are skipped so a second run is a no-op; Manual push leaves the remote untouched.
 /// What to commit, tag and push is decided from git state, so a rerun after a stop at any point completes
 /// the work (#2197).
@@ -51,7 +51,7 @@ public sealed class GitWorkflowExporterTests : GitExportTest
     [Fact]
     public async Task A_version_the_credential_literal_rule_refuses_is_left_out_while_everything_else_is_exported()
     {
-        // Spec 188, FR-008: wf-refused's only version, and wf-mixed's 1.0.0, bind a literal to a credential input.
+        // wf-refused's only version, and wf-mixed's 1.0.0, bind a literal to a credential input.
         Publish("wf-refused", "Refused");
         AddVersion("wf-refused", "1.0.0", CredentialBoundAs("Literal"));
         Publish("wf-mixed", "Mixed");

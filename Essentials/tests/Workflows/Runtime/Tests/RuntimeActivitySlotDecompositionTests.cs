@@ -13,7 +13,7 @@ using Xunit;
 namespace Elsa.Workflows.Runtime.Tests;
 
 /// <summary>
-/// ADR 0029 Move 2 (activity pipeline slot-invoked model): the activity <c>Invoke</c> slot runs the handler before
+/// The activity pipeline's slot-invoked model: the activity <c>Invoke</c> slot runs the handler before
 /// <c>next</c> and the <c>Checkpoint</c> slot drains the commits it staged. Covers the Invoke/Checkpoint middleware, the
 /// slot ordering, the fail-loud guard when the Invoke slot is missing, and — the control-room hard condition — that the
 /// Checkpoint slot drains N staged commits as N committer calls in stage order, never folded/batched into one.

@@ -44,7 +44,7 @@ public sealed class RuntimeWorkflowStateSeedTests
     [Fact]
     public void BuildSeedChanges_SeedsTriggerNodeIdOnItsOwnReservedChannel_AndProjectsBack()
     {
-        // Spec 089 D (T003): the trigger-node identity rides a reserved channel (trigger:*), never the input:*
+        // The trigger-node identity rides a reserved channel (trigger:*), never the input:*
         // namespace, and the projection unwraps the inline JSON string back to the node id.
         var changes = RuntimeWorkflowStateSeed.BuildSeedChanges(
             "wfexec-1",

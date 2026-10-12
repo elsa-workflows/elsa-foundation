@@ -58,8 +58,8 @@ public sealed class RuntimeInputBindingCompiler(
     private readonly ValueConversionPlanResolver resolvedConversionPlanResolver = conversionPlanResolver ?? new(wellKnownTypeRegistry: wellKnownTypeRegistry);
 
     /// <summary>
-    /// Compiles every input of a node against its catalog input definitions. The credential-literal rule (spec 188,
-    /// FR-008) is applied to the whole node first, so its refusal wins over <c>VF-ACT-011</c> and over any other input's
+    /// Compiles every input of a node against its catalog input definitions. The credential-literal rule
+    /// is applied to the whole node first, so its refusal wins over <c>VF-ACT-011</c> and over any other input's
     /// compile error.
     /// </summary>
     public IReadOnlyDictionary<string, RuntimeInputBinding> CompileAll(
@@ -88,8 +88,8 @@ public sealed class RuntimeInputBindingCompiler(
     }
 
     /// <summary>
-    /// Compiles every input of a node against its pinned activity input contracts. The credential-literal rule (spec 188,
-    /// FR-008) reads each contract's explicit <c>IsCredential</c> flag and is applied to the whole node first, as in the
+    /// Compiles every input of a node against its pinned activity input contracts. The credential-literal rule
+    /// reads each contract's explicit <c>IsCredential</c> flag and is applied to the whole node first, as in the
     /// catalog overload.
     /// </summary>
     public IReadOnlyDictionary<string, RuntimeInputBinding> CompileAll(
@@ -144,7 +144,7 @@ public sealed class RuntimeInputBindingCompiler(
         CompileBound(nodeId, inputDefinition, value, DeclaredPolicy(inputDefinition), conversion: null);
 
     /// <summary>
-    /// The effective policy of an activity input (spec 188, FR-007): its storage policy with the activity's
+    /// The effective policy of an activity input: its storage policy with the activity's
     /// sensitivity declaration applied, combined with the author's per-binding choice when the input is bound
     /// (<paramref name="state"/> is null for an unbound input). Publication pins this same policy into the activity's
     /// input contract, so the contract and the binding of an input cannot disagree.
@@ -172,7 +172,7 @@ public sealed class RuntimeInputBindingCompiler(
     /// <summary>
     /// Compiles an authored binding under its effective policy. On an input whose effective policy requires encryption,
     /// a binding that carries no value (<see cref="ArgumentState.IsBound"/>, the definition the design-time required-input
-    /// check uses) compiles exactly as an unbound input does (spec 188 edge case, FR-010), so an empty credential field
+    /// check uses) compiles exactly as an unbound input does, so an empty credential field
     /// does not fail publication. A secret reference and a request for the declared default keep their own handling.
     /// </summary>
     private RuntimeInputBinding CompileAuthored(
@@ -786,7 +786,7 @@ public sealed class RuntimeInputBindingCompiler(
     }
 
     // Closes the authored TypeReference (alias + collection kind) into a concrete CLR type via the
-    // well-known type registry, mirroring VariableMapper's resolution (FR-007). Unknown alias → object.
+    // well-known type registry, mirroring VariableMapper's resolution. Unknown alias → object.
     private Type ResolveInputType(InputDefinition inputDefinition) =>
         TypeReferenceFactory.Resolve(
             inputDefinition.Type,

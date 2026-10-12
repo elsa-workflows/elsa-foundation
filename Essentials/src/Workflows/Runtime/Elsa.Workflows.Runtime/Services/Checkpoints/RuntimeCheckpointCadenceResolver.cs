@@ -7,7 +7,7 @@ using Elsa.Workflows.Runtime.Services.Scheduler;
 namespace Elsa.Workflows.Runtime.Services.Checkpoints;
 
 /// <summary>
-/// Default <see cref="IRuntimeCheckpointCadenceResolver"/> (ADR 0032 R5). Resolves the effective checkpoint cadence
+/// Default <see cref="IRuntimeCheckpointCadenceResolver"/>. Resolves the effective checkpoint cadence
 /// with the precedence: mandatory boundaries (owned by the commit layer, never expressed here) &gt; per-workflow
 /// authored cadence &gt; host default. The host default is signalled by the presence of the registered coalescing
 /// options — absent means the shell runs the Immediate policy, so authored-Coalesced is clamped to Immediate because

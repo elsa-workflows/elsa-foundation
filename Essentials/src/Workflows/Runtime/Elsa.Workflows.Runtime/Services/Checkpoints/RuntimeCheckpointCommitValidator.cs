@@ -106,7 +106,7 @@ public static class RuntimeCheckpointCommitValidator
     }
 
     /// <summary>
-    /// The encryption backstop (spec 188, FR-010). Phase 0 has no encryption at rest, so a value whose policy requires
+    /// The encryption backstop. Phase 0 has no encryption at rest, so a value whose policy requires
     /// encryption may be committed only as a withheld marker, never as an inline or external payload. Publication refuses
     /// the bindings that would produce one (<c>VF-ACT-011</c>, <c>VF-ACT-012</c>). Behind it, the in-tree producers of the
     /// envelopes this rule reads withhold such a value before it reaches state through one rule,

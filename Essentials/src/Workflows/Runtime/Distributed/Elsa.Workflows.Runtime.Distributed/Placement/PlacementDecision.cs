@@ -2,28 +2,28 @@ using Elsa.Cluster.Core.Models;
 
 namespace Elsa.Workflows.Runtime.Distributed.Placement;
 
-/// <summary>Why a member refused to claim or renew placement of an execution (spec 184, FR-011, FR-012 and FR-016).</summary>
+/// <summary>Why a member refused to claim or renew placement of an execution.</summary>
 public enum PlacementRefusalKind
 {
-    /// <summary>The member is joining, draining or has left (FR-012).</summary>
+    /// <summary>The member is joining, draining or has left.</summary>
     MemberNotActive,
 
-    /// <summary>The shell's join sweep has not completed in this process (FR-012, FR-022).</summary>
+    /// <summary>The shell's join sweep has not completed in this process.</summary>
     JoinSweepPending,
 
-    /// <summary>The shell's runtime does not satisfy the execution's placement requirement (FR-011).</summary>
+    /// <summary>The shell's runtime does not satisfy the execution's placement requirement.</summary>
     RequirementUnmet,
 
-    /// <summary>The execution's placement requirement could not be resolved (FR-016).</summary>
+    /// <summary>The execution's placement requirement could not be resolved.</summary>
     RequirementUnresolved,
 
-    /// <summary>Spec 181 refuses this member's writes to a family of the Runtime EF module (FR-012).</summary>
+    /// <summary>The schema finalization gate refuses this member's writes to a family of the Runtime EF module.</summary>
     RuntimeWritesRefused
 }
 
 /// <summary>
 /// Whether this member may claim or renew placement of one execution now. A refusal is placement's decision, not a
-/// runtime fault: it writes nothing and records no incident (FR-013).
+/// runtime fault: it writes nothing and records no incident.
 /// </summary>
 public sealed record PlacementDecision
 {
@@ -52,11 +52,11 @@ public sealed record PlacementDecision
     public string? Reason { get; }
 
     /// <summary>The execution's placement requirement as membership requirement kinds, when it was resolved and checked,
-    /// so a member can ask whether any active member could run it (FR-017).</summary>
+    /// so a member can ask whether any active member could run it.</summary>
     public IReadOnlyList<RunnabilityRequirement> Requirements { get; }
 
     public bool IsRunnable => Refusal is null;
 
-    /// <summary>Whether the refusal is about the work rather than the member: such work may be unplaceable (FR-017).</summary>
+    /// <summary>Whether the refusal is about the work rather than the member: such work may be unplaceable.</summary>
     public bool IsAboutRequirement => Refusal is PlacementRefusalKind.RequirementUnmet or PlacementRefusalKind.RequirementUnresolved;
 }

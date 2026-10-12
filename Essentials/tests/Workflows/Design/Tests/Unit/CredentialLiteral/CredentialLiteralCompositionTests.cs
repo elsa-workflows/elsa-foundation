@@ -9,7 +9,7 @@ using Xunit;
 namespace Elsa.Workflows.Design.Tests.Unit.CredentialLiteral;
 
 /// <summary>
-/// Spec 188, FR-008: every feature whose services admit workflow state through the credential-literal rule depends on
+/// Every feature whose services admit workflow state through the credential-literal rule depends on
 /// the feature that registers the rule, so a host that composes one without the rule fails at composition instead of
 /// skipping it.
 /// </summary>

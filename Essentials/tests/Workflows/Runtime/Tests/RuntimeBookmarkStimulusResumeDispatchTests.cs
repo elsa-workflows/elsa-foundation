@@ -206,7 +206,7 @@ public sealed class RuntimeBookmarkStimulusResumeDispatchTests
     [Fact]
     public async Task DispatchAsync_ForwardsDispatchOptionsToAgentEnqueue()
     {
-        // Spec 089 E-D4 (FR-019 / scenario 5.5): the resume dispatcher forwards the caller's dispatch options verbatim
+        // The resume dispatcher forwards the caller's dispatch options verbatim
         // into the agent mailbox so a sync-authored endpoint's resume can author the live response on the caller's
         // async flow using the ambient request scope.
         var store = new InMemoryBookmarkStateStore();

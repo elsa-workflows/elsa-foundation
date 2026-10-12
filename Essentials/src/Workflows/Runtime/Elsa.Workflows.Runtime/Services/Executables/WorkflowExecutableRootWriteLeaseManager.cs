@@ -162,7 +162,7 @@ public sealed class WorkflowExecutableRootWriteLeaseManager(
     }
 
     // A release only shortens a lease that would otherwise expire on its own, so it never decides the outcome: a write
-    // that succeeded stays a success, and a failed write surfaces its own exception (spec 200, FR-011). A lease that could
+    // that succeeded stays a success, and a failed write surfaces its own exception. A lease that could
     // not be released holds its artifact from collection until it expires.
     private async ValueTask ReleaseAllAsync(IEnumerable<WorkflowExecutableRootWriteLease> leases)
     {

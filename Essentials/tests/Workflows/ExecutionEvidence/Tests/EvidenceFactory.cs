@@ -113,17 +113,17 @@ internal static class EvidenceFactory
             new DurableValueExternalReference(storageProfile, locator, new Dictionary<string, string>()),
             ExternalPolicy);
 
-    /// <summary>What a secret read leaves in runtime state: the reference, no value (spec 188).</summary>
+    /// <summary>What a secret read leaves in runtime state: the reference, no value.</summary>
     public static ValueEnvelope WithheldSecret(string referenceName) =>
         ValueEnvelope.Withheld(StringType, WithheldValue.SecretReference(new RuntimeSecretReference(referenceName), null), EncryptionRequiredPolicy);
 
-    /// <summary>What producer withholding leaves in place of a value whose policy requires encryption (spec 188).</summary>
+    /// <summary>What producer withholding leaves in place of a value whose policy requires encryption.</summary>
     public static ValueEnvelope WithheldForEncryption() =>
         ValueEnvelope.Withheld(StringType, new WithheldValue(WithheldValueKind.PolicyRequiresEncryption), EncryptionRequiredPolicy);
 
     /// <summary>
     /// A present value whose policy requires encryption, which producer withholding keeps out of runtime state and only a
-    /// producer that skipped it can commit (spec 188, research R13).
+    /// producer that skipped it can commit.
     /// </summary>
     public static ValueEnvelope PresentRequiringEncryption(string value, bool isSensitive) =>
         ValueEnvelope.Inline(

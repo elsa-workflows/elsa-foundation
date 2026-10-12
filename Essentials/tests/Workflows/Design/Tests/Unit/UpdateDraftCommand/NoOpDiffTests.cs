@@ -6,7 +6,7 @@ using static Elsa.Workflows.Design.Tests.Infrastructure.UpdateDraftTestKit;
 namespace Elsa.Workflows.Design.Tests.Unit.UpdateDraftCommand;
 
 /// <summary>
-/// T012 (SC-009, FR-013a) — no-op submission. The event half drives
+/// No-op submission. The event half drives
 /// <see cref="Elsa.Workflows.Design.Persistence.Core.Services.DraftStateDiffEngine"/> directly:
 /// when the desired state equals the stored state, the diff yields zero mutation events. The
 /// command half proves the validation gate still runs (it is unconditional) on a no-op re-submit.

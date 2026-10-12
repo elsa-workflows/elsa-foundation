@@ -78,7 +78,7 @@ internal static class ActivityExecutionProblemDetails
                 cancellationToken)
         };
 
-    /// <summary>A schema write refusal (spec 180, FR-016a): a 409 with its code, and a detail naming the family and both versions.</summary>
+    /// <summary>A schema write refusal: a 409 with its code, and a detail naming the family and both versions.</summary>
     public static Task SchemaWriteRefusedAsync(HttpContext context, SchemaWriteRefusedException refusal, CancellationToken cancellationToken) =>
         WriteAsync(
             context,

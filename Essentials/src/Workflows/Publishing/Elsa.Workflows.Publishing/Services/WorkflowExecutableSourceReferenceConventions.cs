@@ -13,9 +13,9 @@ public static class WorkflowExecutableSourceKinds
 }
 
 /// <summary>
-/// Verbatim copy of a definition version's layout into the reference sidecar (ADR 0039), shared by the publish and
+/// Verbatim copy of a definition version's layout into the reference sidecar, shared by the publish and
 /// test-run flows. The design records map 1:1 into the runtime-owned layout type; AdditionalProperties travels
-/// opaquely (ADR 0035).
+/// opaquely.
 /// </summary>
 public static class WorkflowExecutableLayoutSidecar
 {

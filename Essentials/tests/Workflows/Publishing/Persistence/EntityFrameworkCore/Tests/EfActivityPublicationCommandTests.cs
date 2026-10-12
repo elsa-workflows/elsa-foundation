@@ -21,7 +21,7 @@ using static Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore.Tests.Act
 namespace Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore.Tests;
 
 /// <summary>
-/// ADR 0066 over EF: reusable-activity publication is an ordered, forward-converging sequence across three
+/// Over EF, reusable-activity publication is an ordered, forward-converging sequence across three
 /// contexts, each in its own database here, exactly as on a host that splits the lanes. The crash tests cut the
 /// sequence at each phase boundary at the storage seam and assert what a host dying there leaves, and that a
 /// retry of the same commit converges without redoing a phase.

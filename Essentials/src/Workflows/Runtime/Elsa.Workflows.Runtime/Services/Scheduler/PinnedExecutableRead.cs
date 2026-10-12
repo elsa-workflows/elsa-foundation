@@ -5,10 +5,10 @@ using Microsoft.Extensions.DependencyInjection;
 namespace Elsa.Workflows.Runtime.Services.Scheduler;
 
 /// <summary>
-/// Drain-path pinned-executable read helper (spec 111). Routes the read through the burst-scoped cache
+/// Drain-path pinned-executable read helper. Routes the read through the burst-scoped cache
 /// (<see cref="IWorkflowExecutableReader"/>) when available and falls back to the durable store otherwise. The reader
 /// is registered by the runtime in production, so the fallback exists only for direct-construction unit tests that wire
-/// a handler without the reader — both paths return byte-identical results (the artifact is immutable, ADR 0038), so
+/// a handler without the reader — both paths return byte-identical results (the artifact is immutable), so
 /// the fallback changes read count only, never behavior.
 /// </summary>
 public static class PinnedExecutableRead

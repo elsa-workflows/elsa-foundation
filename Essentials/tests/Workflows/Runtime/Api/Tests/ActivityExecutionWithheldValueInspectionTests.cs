@@ -13,7 +13,7 @@ using Xunit;
 namespace Elsa.Workflows.Runtime.Api.Tests;
 
 /// <summary>
-/// The run inspector's activity-execution and value-payload reads of a withheld input (spec 188, FR-011, T067). A withheld
+/// The run inspector's activity-execution and value-payload reads of a withheld input. A withheld
 /// input is rendered by its marker and secret reference, which are not values, for every caller that may inspect the
 /// execution; it is always reported sensitive, and its payload is never released. The descendants read carries no value
 /// evidence, so it has no withheld branch to test.
@@ -48,7 +48,7 @@ public sealed class ActivityExecutionWithheldValueInspectionTests
     [Fact]
     public async Task A_withheld_input_recorded_as_not_sensitive_is_still_reported_sensitive()
     {
-        // An imported artifact can carry a secret read whose policy is not sensitive (research R13); the marker alone
+        // An imported artifact can carry a secret read whose policy is not sensitive; the marker alone
         // decides what the inspector reports.
         await SaveAsync(WithheldInput(isSensitive: false));
 

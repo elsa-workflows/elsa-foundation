@@ -1,7 +1,7 @@
 namespace Elsa.Workflows.Runtime.Core.Models;
 
 /// <summary>
-/// The effective checkpoint cadence a run executes under (ADR 0032 R5), after applying the precedence rule:
+/// The effective checkpoint cadence a run executes under, after applying the precedence rule:
 /// per-workflow authored cadence over host default, clamped to what the host can actually reach. The mandatory-boundary
 /// set is never expressed here — it overrides any cadence at the commit layer and can never be relaxed by configuration.
 /// </summary>

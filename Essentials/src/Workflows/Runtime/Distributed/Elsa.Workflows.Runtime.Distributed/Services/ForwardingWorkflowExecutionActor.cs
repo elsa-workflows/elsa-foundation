@@ -54,7 +54,7 @@ public sealed class ForwardingWorkflowExecutionActor : IWorkflowExecutionActor
     }
 
     /// <summary>
-    /// A forwarding stub for a command this member refused to run (spec 184, FR-013): no member owns the execution's
+    /// A forwarding stub for a command this member refused to run: no member owns the execution's
     /// placement, and the refusal says why this one did not claim it. It never names another host.
     /// </summary>
     internal static ForwardingWorkflowExecutionActor Refused(
@@ -154,7 +154,7 @@ public sealed class ForwardingWorkflowExecutionActor : IWorkflowExecutionActor
     /// <summary>Dispatch-result metadata naming the owning node of an execution another member owns.</summary>
     public const string OwningNodeMetadataKey = "runtime.distributed.owningNode";
 
-    /// <summary>Dispatch-result metadata naming why this member refused to claim the execution (spec 184, FR-013).</summary>
+    /// <summary>Dispatch-result metadata naming why this member refused to claim the execution.</summary>
     public const string PlacementRefusedMetadataKey = "runtime.distributed.placementRefused";
 
     /// <summary>Dispatch-result metadata naming the durable transport item a forwarded command became.</summary>

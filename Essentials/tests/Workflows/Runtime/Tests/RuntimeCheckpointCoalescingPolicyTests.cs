@@ -27,7 +27,7 @@ public sealed class RuntimeCheckpointCoalescingPolicyTests
         Assert.Equal(RuntimeCheckpointPersistenceMode.Immediate, decision.Mode);
     }
 
-    // ADR 0032 R2 / spec 107: the pre-activation attempt-claim boundary is no longer unconditionally
+    // The pre-activation attempt-claim boundary is no longer unconditionally
     // mandatory — its flush is gated by the CLR activity's declared side-effect profile.
     [Fact]
     public async Task AttemptClaimed_ReplaySafeProfile_IsDeferred()

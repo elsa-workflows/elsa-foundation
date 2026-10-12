@@ -6,12 +6,11 @@ using Xunit;
 namespace Elsa.Workflows.Design.Tests.Unit.EventSurfaceTests;
 
 /// <summary>
-/// SC-015 + framework §2.6.1 intent-revealing-methods sub-rule (Unit C Phase-3): every
-/// event in <c>Workflows.Design.Core</c> and <c>Workflows.Design.Validations.Core</c> is a
+/// Every event in <c>Workflows.Design.Core</c> and <c>Workflows.Design.Validations.Core</c> is a
 /// <c>sealed class</c> — NOT a <c>record</c>. Scans every <see cref="IEvent"/>.
 /// Records' value-equality semantics conflict with the contribution pattern (two events
 /// with the same payload would compare equal); the sealed-class form is the canonical
-/// per-§2.6.1 shape.
+/// event shape.
 /// </summary>
 public sealed class MethodPatternTests
 {

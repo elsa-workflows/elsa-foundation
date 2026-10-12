@@ -11,8 +11,8 @@ using Xunit;
 namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests;
 
 /// <summary>
-/// A secret read binding, the withheld envelope that stands in for its value (spec 188, T004) and a pinned credential
-/// input declaration (slice 5), round-tripped through the options the EF stores persist runtime artifacts with: enums by
+/// A secret read binding, the withheld envelope that stands in for its value and a pinned credential
+/// input declaration, round-tripped through the options the EF stores persist runtime artifacts with: enums by
 /// name, strings framed as UTF-16.
 /// </summary>
 public sealed class RuntimeArtifactJsonSecretBindingTests
@@ -76,7 +76,7 @@ public sealed class RuntimeArtifactJsonSecretBindingTests
     [Fact]
     public void A_pinned_credential_flag_round_trips_and_is_left_out_where_nothing_is_declared()
     {
-        // Spec 188, slice 5: the pinned contract carries the credential declaration explicitly, written only where set,
+        // The pinned contract carries the credential declaration explicitly, written only where set,
         // so a contract whose inputs declare none keeps its persisted shape.
         var contract = new ActivityContract(
             "test.activity",

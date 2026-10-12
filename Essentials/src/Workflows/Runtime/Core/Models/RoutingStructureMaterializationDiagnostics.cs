@@ -3,13 +3,13 @@ using System.Threading;
 namespace Elsa.Workflows.Runtime.Core.Models;
 
 /// <summary>
-/// ADR 0047 D3 benchmark-attribution counter. Counts how many times a per-node routing structure is actually
+/// Benchmark-attribution counter for the routing-structure memo. Counts how many times a per-node routing structure is actually
 /// materialized (deserialized + reconstructed from <see cref="ExecutableNode.Structure"/>) via
 /// <see cref="ExecutableNode.GetOrAddRoutingStructure{T}"/>, as opposed to being served from the in-memory memo.
 ///
-/// It exists so the engine benchmarks can attribute the D3 win: before D3 the composite engines rebuilt the
+/// It exists so the engine benchmarks can attribute the memo's win: before the memo the composite engines rebuilt the
 /// routing graph on every completion hop (once per <see cref="ExecutableNode"/> Start + once per child completion);
-/// with the memo riding on the spec-111 burst-cached executable instance, the structure materializes once per
+/// with the memo riding on the burst-cached executable instance, the structure materializes once per
 /// composite per burst. Counting only the actual factory execution (never a memo hit) makes the collapse a
 /// deterministic, reportable number — the routing analog of the existing commits/run and executable-reads/run
 /// counters.

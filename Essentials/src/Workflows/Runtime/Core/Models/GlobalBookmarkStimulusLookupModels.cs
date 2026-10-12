@@ -34,8 +34,8 @@ public sealed class GlobalBookmarkStimulusLookupRequest
 }
 
 /// <summary>
-/// Request to find every non-expired waiting bookmark of a stimulus type across all workflow executions
-/// (spec 089 D), regardless of hash. Used by the mid-flow HttpEndpoint route-table resolver and middleware to
+/// Request to find every non-expired waiting bookmark of a stimulus type across all workflow executions,
+/// regardless of hash. Used by the mid-flow HttpEndpoint route-table resolver and middleware to
 /// discover waiting endpoint bookmarks and read their durable route template + endpoint options metadata.
 /// </summary>
 public sealed class GlobalBookmarkStimulusTypeLookupRequest

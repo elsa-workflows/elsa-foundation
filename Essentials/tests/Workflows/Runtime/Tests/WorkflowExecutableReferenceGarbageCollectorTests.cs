@@ -210,7 +210,7 @@ public sealed class WorkflowExecutableReferenceGarbageCollectorTests
     }
 
     /// <summary>
-    /// Resolves the claim ADR 0066 left on reasoning alone: whether the material a split reusable-activity
+    /// Resolves a claim the split publication design left on reasoning alone: whether the material a split reusable-activity
     /// publication strands is reclaimable by this collector. The strand is what
     /// <c>A_crash_after_the_runtime_commit_leaves_nothing_but_inert_runtime_material</c> pins — a template
     /// and the create-only <see cref="WorkflowExecutableReferenceScope.Published"/> source reference committed

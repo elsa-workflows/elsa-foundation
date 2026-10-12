@@ -4,7 +4,7 @@ using Elsa.Workflows.Runtime.Core.Models;
 namespace Elsa.Workflows.Runtime.Services.Scheduler;
 
 /// <summary>
-/// <see cref="AsyncLocal{T}"/>-backed burst-scope accessor (ADR 0031 item b, spec 111). Mirrors
+/// <see cref="AsyncLocal{T}"/>-backed burst-scope accessor. Mirrors
 /// <see cref="AsyncLocalRuntimeLiveDrainDeliveryAccessor"/>: pushes form a stack so nested scopes restore their prior
 /// frame on dispose and the flow is confined to the pushing async context (the drain loop), following the async flow
 /// even when a handler opens its own DI scope.

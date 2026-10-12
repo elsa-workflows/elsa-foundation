@@ -11,7 +11,7 @@ namespace Elsa.Workflows.Design.Validations.Core.Events;
 /// </summary>
 /// <remarks>
 /// <para>
-/// Per framework §2.6.6, lifecycle events default to the <c>Background</c> publishing strategy.
+/// Lifecycle events default to the <c>Background</c> publishing strategy.
 /// The mutation pipeline returns to the caller before subscribers process this event; an
 /// in-process channel + a hosted-task worker (<c>BackgroundEventPublisher</c>) deliver each
 /// subscriber sequentially.

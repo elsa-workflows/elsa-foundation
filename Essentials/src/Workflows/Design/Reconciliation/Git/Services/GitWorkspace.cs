@@ -9,8 +9,8 @@ namespace Elsa.Workflows.Design.Reconciliation.Git.Services;
 
 /// <summary>
 /// Default <see cref="IGitWorkspace"/>: manages the shell's local working clone, which lives where its
-/// <see cref="GitCloneSlot"/> says, with role-based clone modes (ADR 0034 D11). Commands that reach the remote carry the
-/// <see cref="GitCredentials"/>, so nothing secret is on the command line or on disk (FR-013). A Writer clone is a
+/// <see cref="GitCloneSlot"/> says, with role-based clone modes. Commands that reach the remote carry the
+/// <see cref="GitCredentials"/>, so nothing secret is on the command line or on disk. A Writer clone is a
 /// persistent working copy that keeps the export commits it has yet to push for as long as the remote has not moved, and
 /// is otherwise brought to the remote without ever discarding a commit the export did not make (#2197); a Consumer clone
 /// is a disposable mirror.

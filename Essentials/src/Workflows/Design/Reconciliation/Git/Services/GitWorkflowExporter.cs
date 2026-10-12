@@ -13,19 +13,19 @@ using Microsoft.Extensions.Options;
 namespace Elsa.Workflows.Design.Reconciliation.Git.Services;
 
 /// <summary>
-/// The Writer-only export reconciler (ADR 0034 D4): a set-diff sweep making git's version files match
+/// The Writer-only export reconciler: a set-diff sweep making git's version files match
 /// the catalog. Every decision comes from git state (#2197): a version is written and committed only when its file is
 /// absent from the HEAD tree (present ⇒ skip), so loop-avoidance is structural and an export→import round-trip is a
 /// no-op; a version is tagged when its tag is missing from HEAD's history; and the branch is pushed whenever HEAD is
 /// ahead of the remote. A rerun after a stop at any point therefore completes the work. Commits use a machine identity.
 /// </summary>
 /// <remarks>
-/// Every Writer node runs it at shell start, without a lock: the fence is the push (ADR 0034 D7). Git refuses a push
+/// Every Writer node runs it at shell start, without a lock: the fence is the push. Git refuses a push
 /// that is not a fast-forward, so the remote branch only ever advances by one writer's commits on top of what every
 /// other writer has to build on. A writer whose push is refused because the remote moved resets onto the remote through
 /// the workspace and sweeps again, and since another writer of the same catalog pushed the same files, it normally finds
 /// nothing left to commit. A push refused for any other reason throws, as it always has.
-/// A version not yet committed is written only once it passes the credential-literal rule (spec 188, FR-008),
+/// A version not yet committed is written only once it passes the credential-literal rule,
 /// <see cref="ICredentialLiteralValidator"/>: a refused version gets no directory, file, commit or tag, and the pass logs a
 /// value-free warning, exports everything else and does not fail. A committed version file is skipped before the rule
 /// runs, and a node whose activity the catalog does not hold is not judged.
@@ -240,7 +240,7 @@ public sealed class GitWorkflowExporter(
     private async Task PushAsync(CancellationToken cancellationToken)
     {
         // No --force: git refuses a non-fast-forward push by default, so a divergent remote is rejected
-        // (surfaced, never forced or merged — the D7 single-writer gate).
+        // (surfaced, never forced or merged). That refusal is what keeps the export branch single-writer.
         LogPush(ExportBranch);
         await workspace.RunRemoteAsync(cancellationToken, "push", "origin", $"HEAD:{ExportBranch}");
     }

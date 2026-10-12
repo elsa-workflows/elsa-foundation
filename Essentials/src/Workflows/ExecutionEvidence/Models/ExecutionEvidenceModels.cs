@@ -84,7 +84,7 @@ public enum ExecutionEvidenceValueDisposition
     Truncated,
 
     /// <summary>
-    /// The runtime holds a withheld marker instead of the value (spec 188): a secret reference, named in
+    /// The runtime holds a withheld marker instead of the value: a secret reference, named in
     /// <see cref="ExecutionEvidenceRecord.SecretReferenceName"/>, or a value whose policy requires encryption. There is no
     /// value to capture, whatever <see cref="ExecutionEvidenceOptions.RedactSensitiveValues"/> says.
     /// </summary>

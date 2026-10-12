@@ -221,14 +221,14 @@ public sealed class ExecutableNode
         }
     }
 
-    // ADR 0047 D3: in-memory-only routing-structure memo. Private, so it is invisible to System.Text.Json —
-    // it never touches the persisted executable schema or the ADR 0038 content hash (resolution #2:
-    // "recomputed on materialization"). Keyed by structure type because a node reconstructs exactly one
+    // In-memory-only routing-structure memo. Private, so it is invisible to System.Text.Json —
+    // it never touches the persisted executable schema or the content hash (it is
+    // recomputed on materialization). Keyed by structure type because a node reconstructs exactly one
     // routing structure kind (FlowchartGraph / BpmnGraph / SequenceNavigator).
     private ConcurrentDictionary<Type, object>? _routingStructures;
 
     /// <summary>
-    /// ADR 0047 D3: returns a routing structure derived once from this node's immutable graph content
+    /// Returns a routing structure derived once from this node's immutable graph content
     /// (the connections / sequence flows / ordered children carried in <see cref="Structure"/>), computed on
     /// first access by <paramref name="factory"/> and cached on this materialized instance only.
     /// </summary>
@@ -236,7 +236,7 @@ public sealed class ExecutableNode
     /// The routing relation the runtime walks per child-completion (which successor(s) an outcome routes to) is
     /// fully determined at publish time, but the composite engines used to rebuild it — deserializing
     /// <see cref="Structure"/> and re-indexing — on every completion hop. This memo makes the reconstruction a
-    /// once-per-materialized-executable cost: because the spec-111 burst cache serves the same
+    /// once-per-materialized-executable cost: because the burst cache serves the same
     /// <see cref="ExecutableNode"/> instance for every hop in a drain, the structure builds once per composite per
     /// burst and every later hop is a dictionary lookup. It is derived by the exact same code path the walk uses
     /// (<paramref name="factory"/> is the composite's own <c>From</c>), so the table cannot diverge from the walk.
@@ -283,8 +283,8 @@ public static class WorkflowIntrinsicInputKeys
 
 /// <summary>
 /// Per-kind replay-safety for engine intrinsics — the intrinsic analogue of a CLR activity's
-/// <c>ActivityContract.SideEffectProfile</c> (ADR 0032 R1), used to decide whether an intrinsic node may execute as a
-/// fused hop inside a burst (ADR 0047 D1).
+/// <c>ActivityContract.SideEffectProfile</c>, used to decide whether an intrinsic node may execute as a
+/// fused hop inside a burst.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -311,7 +311,7 @@ public static class WorkflowIntrinsicInputKeys
 /// </para>
 /// <para>
 /// <b>On <see cref="WorkflowIntrinsicKind.SetOutput"/>, which an earlier revision held back.</b> The stated reason was
-/// that a workflow output is "published for the caller" and so belongs on ADR 0032's mandatory side. That conflated two
+/// that a workflow output is "published for the caller" and so belongs on the mandatory-checkpoint side. That conflated two
 /// independent dials. <em>When</em> an output becomes durable is decided by the checkpoint persistence policy, and
 /// <c>IntrinsicCompleted</c> is not in <c>CoalescingRuntimeCheckpointPersistencePolicy.MandatoryFlushCheckpointNames</c>
 /// — so under coalescing a <c>SetOutput</c> already deferred and folded into the segment flush, with or without fusion.

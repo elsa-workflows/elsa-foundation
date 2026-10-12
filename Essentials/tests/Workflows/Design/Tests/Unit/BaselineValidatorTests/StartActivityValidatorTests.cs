@@ -5,7 +5,7 @@ using static Elsa.Workflows.Design.Tests.Unit.BaselineValidatorTests.ValidatorTe
 namespace Elsa.Workflows.Design.Tests.Unit.BaselineValidatorTests;
 
 /// <summary>
-/// SC-022(b). Branch coverage per framework §2.23.2 — missing and present root activity.
+/// Branch coverage — missing and present root activity.
 /// </summary>
 public sealed class StartActivityValidatorTests
 {

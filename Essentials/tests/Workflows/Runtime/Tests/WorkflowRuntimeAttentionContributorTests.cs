@@ -42,7 +42,7 @@ public sealed class WorkflowRuntimeAttentionContributorTests
     }
 
     /// <summary>
-    /// Spec 184, FR-017: unplaceable work is a warning naming what it needs and how many executions wait, never a host,
+    /// Unplaceable work is a warning naming what it needs and how many executions wait, never a host,
     /// ranked after critical items, and counted in the total.
     /// </summary>
     [Fact]

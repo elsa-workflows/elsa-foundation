@@ -1,7 +1,7 @@
 namespace Elsa.Workflows.Design.Reconciliation.Git.Options;
 
 /// <summary>
-/// Bound configuration for the git reconciliation source + export sink (ADR 0034 config shape). The
+/// Bound configuration for the git reconciliation source + export sink. The
 /// concrete <c>WorkflowsDesignGitReconciliationFeature</c> surfaces these as CShells settings and
 /// registers this instance so the source, workspace, and exporter share one resolved configuration.
 /// </summary>
@@ -27,7 +27,7 @@ public sealed class GitReconciliationOptions
     /// <summary>The role (Writer|Consumer) — drives clone mode and export (D11).</summary>
     public GitReconciliationRole Role { get; set; } = GitReconciliationRole.Consumer;
 
-    /// <summary>How credentials are supplied (FR-013).</summary>
+    /// <summary>How credentials are supplied.</summary>
     public GitCredentialsMode CredentialsMode { get; set; } = GitCredentialsMode.HostDefault;
 
     /// <summary>SSH private-key path (SshKey mode). A path, not a secret.</summary>
@@ -94,7 +94,7 @@ public sealed class GitReconciliationOptions
     public string ResolvedExportBranch => string.IsNullOrWhiteSpace(Export.Branch) ? Branch : Export.Branch;
 }
 
-/// <summary>Export sub-options (FR-009/FR-010/FR-011).</summary>
+/// <summary>Export sub-options.</summary>
 public sealed class GitExportOptions
 {
     /// <summary>When local export commits reach the remote.</summary>

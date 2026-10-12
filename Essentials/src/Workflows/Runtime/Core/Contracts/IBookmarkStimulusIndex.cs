@@ -21,7 +21,7 @@ public interface IBookmarkStimulusIndex
 
     /// <summary>
     /// Returns one finite page of bookmarks of a given stimulus type across all workflow executions, regardless
-    /// of hash (spec 089 D). Unlike <see cref="ListByStimulusPageAsync"/> this is a type-scoped lookup — it lets a consumer
+    /// of hash. Unlike <see cref="ListByStimulusPageAsync"/> this is a type-scoped lookup — it lets a consumer
     /// enumerate all bookmarks waiting on a family of stimuli (e.g. every waiting <c>HttpEndpoint</c> bookmark)
     /// to union their route templates. Like the hash-scoped scan it applies no expiry or correlation filtering;
     /// that stays in <see cref="IGlobalBookmarkStimulusLookup"/> per the index's documented raw-read contract.

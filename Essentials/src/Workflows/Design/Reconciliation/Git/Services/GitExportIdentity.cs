@@ -1,7 +1,7 @@
 namespace Elsa.Workflows.Design.Reconciliation.Git.Services;
 
 /// <summary>
-/// The machine identity every export commit is made under (ADR 0034, commit shape). The workspace reads it back: a
+/// The machine identity every export commit is made under. The workspace reads it back: a
 /// Writer clone's unpushed commits under this identity are export output it may discard and regenerate, and a commit
 /// under any other identity is never discarded (#2197). A commit counts as the export's only when its author name, its
 /// author email and its committer email all are this identity, so a human's amend or rebase of an export commit, which

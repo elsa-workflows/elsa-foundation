@@ -9,7 +9,7 @@ public sealed record RuntimeDurableValueEncoding(
     DurableValueExternalReference? ExternalReference)
 {
     /// <summary>
-    /// The withheld envelope (spec 188, FR-010) a workflow-variable output capture writes into the variable frame
+    /// The withheld envelope a workflow-variable output capture writes into the variable frame
     /// instead of a value, or null for an encoding a storage driver produced. Set only by <see cref="ForWithheld"/>; such
     /// an encoding carries no inline value and no external reference, and no storage driver sees the value.
     /// </summary>

@@ -9,7 +9,7 @@ using Microsoft.Extensions.Options;
 namespace Elsa.Workflows.Runtime.ReferenceGarbageCollection;
 
 /// <summary>
-/// Recurring background pump that drives <see cref="IWorkflowExecutableReferenceGarbageCollector"/> (ADR 0040). Each
+/// Recurring background pump that drives <see cref="IWorkflowExecutableReferenceGarbageCollector"/>. Each
 /// tick runs one sweep; failure backoff comes from <see cref="BackoffSweepPumpTask"/>.
 /// </summary>
 public sealed class WorkflowExecutableReferenceGarbageCollectionPumpTask : BackoffSweepPumpTask

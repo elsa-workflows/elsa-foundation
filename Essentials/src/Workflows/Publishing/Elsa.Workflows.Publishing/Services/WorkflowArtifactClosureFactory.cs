@@ -267,7 +267,7 @@ public sealed class WorkflowArtifactClosureFactory(
     }
 
     /// <summary>
-    /// Runs one store read and wraps any provider fault in the closure exception family (§2.23.5), so no raw
+    /// Runs one store read and wraps any provider fault in the closure exception family, so no raw
     /// storage exception crosses the publishing boundary and the original survives as <c>InnerException</c>.
     /// </summary>
     /// <remarks>

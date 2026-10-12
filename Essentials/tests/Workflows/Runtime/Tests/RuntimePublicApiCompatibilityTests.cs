@@ -17,7 +17,7 @@ public sealed class RuntimePublicApiCompatibilityTests
             typeof(WorkflowExecutableIdentity), typeof(ExecutableNode),
             typeof(IReadOnlyDictionary<string, WorkflowExecutableResumeTarget>), typeof(DateTimeOffset),
             typeof(IReadOnlyDictionary<string, string>), typeof(IncidentStrategyReference));
-        // spec 117 D4 extended these convenience constructors with a trailing optional trigger-metadata channel
+        // These convenience constructors gained a trailing optional trigger-metadata channel
         // (pre-release, source-compatible for existing positional callers).
         AssertConstructor(
             typeof(WorkflowExecutionStartDispatchRequest),

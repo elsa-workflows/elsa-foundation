@@ -3,8 +3,8 @@ using Elsa.Workflows.Runtime.Core.Models;
 namespace Elsa.Workflows.Runtime.Core.Contracts;
 
 /// <summary>
-/// Resolves the effective checkpoint cadence for a workflow execution (ADR 0032 R5). The runtime reads the authored
-/// cadence off the pinned executable and applies it over the host default; it never reads a Design store (§E2.2).
+/// Resolves the effective checkpoint cadence for a workflow execution. The runtime reads the authored
+/// cadence off the pinned executable and applies it over the host default; it never reads a Design store.
 /// </summary>
 public interface IRuntimeCheckpointCadenceResolver
 {

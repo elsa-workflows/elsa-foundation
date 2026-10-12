@@ -9,7 +9,7 @@ using static Elsa.Workflows.Runtime.Distributed.Tests.Placement.PlacementCluster
 namespace Elsa.Workflows.Runtime.Distributed.Tests.Placement;
 
 /// <summary>
-/// Spec 184, User Story 6, FR-019 to FR-021 and SC-007: a draining member claims nothing new and hands off every
+/// A draining member claims nothing new and hands off every
 /// execution it holds, at once when idle and at the drain's next boundary when mid-drain; when it stops, it releases
 /// whatever it still holds; an active member claims each execution at its next sweep, and nothing is lost.
 /// </summary>

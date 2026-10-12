@@ -633,7 +633,7 @@ public sealed class RuntimeWorkflowExecutionStartDispatchTests
     [Fact]
     public async Task DispatchAsync_ForwardsDispatchOptionsToAgentEnqueue()
     {
-        // Spec 089 E-D4 (FR-019): the dispatcher forwards the caller's dispatch options verbatim into the agent
+        // The dispatcher forwards the caller's dispatch options verbatim into the agent
         // mailbox so an in-process inline drain builds activity execution contexts from the ambient request scope.
         await ActivateAsync();
         var options = new WorkflowExecutionCommandDispatchOptions();

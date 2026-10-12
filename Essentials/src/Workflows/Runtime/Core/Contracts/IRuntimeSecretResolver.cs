@@ -3,8 +3,7 @@ using Elsa.Workflows.Runtime.Core.Models;
 namespace Elsa.Workflows.Runtime.Core.Contracts;
 
 /// <summary>
-/// Declares <see cref="IRuntimeSecretResolver"/> as a single-implementation replacement contract (framework constitution
-/// §2.6.2).
+/// Declares <see cref="IRuntimeSecretResolver"/> as a single-implementation replacement contract.
 /// </summary>
 [AttributeUsage(AttributeTargets.Interface, Inherited = false)]
 public sealed class RuntimeSecretResolverReplacementContractAttribute : Attribute;
@@ -15,12 +14,12 @@ public sealed class RuntimeSecretResolverReplacementContractAttribute : Attribut
 /// </summary>
 /// <remarks>
 /// <para>
-/// This is a <b>replacement contract</b> (framework constitution §2.6.2), declared by
+/// This is a <b>replacement contract</b>, declared by
 /// <see cref="RuntimeSecretResolverReplacementContractAttribute"/>: at most one implementation is meaningful per
 /// container. The runtime registers none. A host that composes more than one does not start: the activities runtime's
 /// startup check fails shell activation with <see cref="Exceptions.MultipleRuntimeSecretResolversException"/>, naming
 /// every registration, whatever order they were registered in. The feature that registers an implementation (the Secrets
-/// bridge, spec 188 slice 4) also refuses one registered before it, as an early diagnostic. A host that composes none
+/// bridge) also refuses one registered before it, as an early diagnostic. A host that composes none
 /// cannot resolve secrets at all, which activation reports as a missing capability that parks the activity, not as a
 /// resolution failure.
 /// </para>

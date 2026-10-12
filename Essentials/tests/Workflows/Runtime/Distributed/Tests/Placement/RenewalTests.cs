@@ -10,7 +10,7 @@ using static Elsa.Workflows.Runtime.Distributed.Tests.Placement.PlacementCluster
 namespace Elsa.Workflows.Runtime.Distributed.Tests.Placement;
 
 /// <summary>
-/// Spec 184, FR-014 and mechanism 3: renewal extends only the lease the member still holds, under its placement token, as
+/// Renewal extends only the lease the member still holds, under its placement token, as
 /// a compare-and-set, and never grants. A reclaim that lands between the pump listing its leases and renewing them wins,
 /// and the lease it released is not taken back. A renewal that loses to a newer generation of the same shell, during a
 /// reload, releases nothing either: the lease is still the host id's, and that generation keeps renewing it.

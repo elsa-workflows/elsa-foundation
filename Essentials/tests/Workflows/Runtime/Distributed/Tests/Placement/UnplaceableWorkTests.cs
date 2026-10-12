@@ -11,7 +11,7 @@ using static Elsa.Workflows.Runtime.Distributed.Tests.Placement.PlacementCluster
 namespace Elsa.Workflows.Runtime.Distributed.Tests.Placement;
 
 /// <summary>
-/// Spec 184, User Story 2, FR-017, FR-018 and SC-002: work that no active member can run waits in the durable transport,
+/// Work that no active member can run waits in the durable transport,
 /// is never failed, dropped or recorded as an incident, and is reported in Attention for as long as it waits, naming
 /// what it needs and never a host. This is the case that looks like success: the sender was told its command was
 /// accepted for routing.

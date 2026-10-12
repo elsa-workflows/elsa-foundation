@@ -3,8 +3,8 @@ using Elsa.Workflows.Runtime.Core.Models;
 namespace Elsa.Workflows.Publishing.Core.Contracts;
 
 /// <summary>
-/// Builds the portable <see cref="WorkflowArtifactClosure"/> for one Published workflow definition version
-/// (FR-B-010): the pinned executable, its complete transitive dependency closure, the exporting engine's
+/// Builds the portable <see cref="WorkflowArtifactClosure"/> for one Published workflow definition version:
+/// the pinned executable, its complete transitive dependency closure, the exporting engine's
 /// <c>Published</c>-scope source references, and the trigger bindings those artifacts currently own.
 /// </summary>
 /// <remarks>
@@ -13,10 +13,10 @@ namespace Elsa.Workflows.Publishing.Core.Contracts;
 /// file name, never an HTTP concept. Encoding is the runtime-owned closure serializer's job and delivery is
 /// <see cref="IWorkflowArtifactExportTarget"/>'s, so one producer serves a download, a folder writer, a blob push,
 /// or a test that never leaves memory. Anything transport-shaped on this contract would make the export path
-/// un-reusable by exactly the callers FR-B-010a exists for.
+/// un-reusable by exactly the callers export targets exist for.
 /// </para>
 /// <para>
-/// <b>Published-only (FR-B-011).</b> <c>TestRun</c>-scope references are expiring, tied to a
+/// <b>Published-only.</b> <c>TestRun</c>-scope references are expiring, tied to a
 /// <c>WorkflowTestScope</c>, and carry <c>draft:</c>-prefixed version ids: they describe a snapshot that exists
 /// only on the engine that minted it, so they are not portable and are never a valid export subject.
 /// </para>

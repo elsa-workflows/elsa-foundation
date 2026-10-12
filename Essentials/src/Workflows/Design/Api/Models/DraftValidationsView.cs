@@ -26,7 +26,7 @@ public sealed record DraftValidationErrorView(
     string Severity)
 {
     /// <summary>
-    /// All validators emit compile errors (FR-024) — the internal model carries no severity axis, so
+    /// All validators emit compile errors — the internal model carries no severity axis, so
     /// every error projects as <c>Error</c>. Kept explicit so a future severity dimension is additive.
     /// </summary>
     public const string ErrorSeverity = "Error";

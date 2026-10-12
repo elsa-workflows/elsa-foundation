@@ -9,7 +9,7 @@ using static Elsa.Workflows.Design.Tests.Unit.BaselineValidatorTests.ValidatorTe
 namespace Elsa.Workflows.Design.Tests.Unit.BaselineValidatorTests;
 
 /// <summary>
-/// Baseline coverage for the declared-structure-without-handler guard. Spec 071 FR-008 keeps a
+/// Baseline coverage for the declared-structure-without-handler guard. Publication keeps a
 /// structure of UNKNOWN kind opaque, so the validator must flag ONLY the composition mismatch:
 /// the activity's catalog design facets declare the authored structure kind, but no handler is
 /// registered in the shell (e.g. a BPMN process authored while ActivitiesBpmn is disabled).

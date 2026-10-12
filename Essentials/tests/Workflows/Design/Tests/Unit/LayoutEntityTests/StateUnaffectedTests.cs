@@ -6,7 +6,7 @@ using Xunit;
 namespace Elsa.Workflows.Design.Tests.Unit.LayoutEntityTests;
 
 /// <summary>
-/// SC-004 + Elsa §E2.9.2: layout is owned by the Layout siblings and is NOT reachable
+/// Layout is owned by the Layout siblings and is NOT reachable
 /// through <see cref="WorkflowDefinitionState"/>. State has no layout-typed members.
 /// </summary>
 public sealed class StateUnaffectedTests

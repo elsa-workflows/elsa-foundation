@@ -5,12 +5,12 @@ using Elsa.Workflows.Runtime.Core.Models;
 namespace Elsa.Workflows.Runtime.Distributed.Placement;
 
 /// <summary>
-/// The executions a reclaim made recovery candidates in this shell, per persistence scope (spec 184, FR-024): those whose
+/// The executions a reclaim made recovery candidates in this shell, per persistence scope: those whose
 /// execution lease or heartbeat was held under a reclaimed host id. The recovery sweep re-drives them through
-/// <see cref="ReclaimedRecoveryCandidateSource"/> (FR-027).
+/// <see cref="ReclaimedRecoveryCandidateSource"/>.
 /// </summary>
 /// <remarks>
-/// It is memory only, an accelerator over the durable record (ADR 0031): if this process stops before the sweep
+/// It is memory only, an accelerator over the durable record: if this process stops before the sweep
 /// re-drives them, their execution leases still time out and the scanner finds them then. For the same reason a
 /// candidate is forgotten once it is older than <see cref="CandidateLifetime"/>, so a shell that composes no recovery
 /// sweep, where nothing settles candidates, does not accumulate them.
@@ -79,7 +79,7 @@ public sealed class ReclaimedExecutionRegistry
 
 /// <summary>
 /// The distributed runtime's <see cref="IRuntimeRecoveryCandidateSource"/>: the recovery sweep re-drives reclaimed
-/// executions at once rather than when their execution leases time out (spec 184, FR-027).
+/// executions at once rather than when their execution leases time out.
 /// </summary>
 public sealed class ReclaimedRecoveryCandidateSource(
     ReclaimedExecutionRegistry registry,

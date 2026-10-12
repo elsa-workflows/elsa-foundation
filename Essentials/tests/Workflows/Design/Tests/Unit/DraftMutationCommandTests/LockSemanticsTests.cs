@@ -4,7 +4,7 @@ using Xunit;
 namespace Elsa.Workflows.Design.Tests.Unit.DraftMutationCommandTests;
 
 /// <summary>
-/// SC-016 + Unit C FR-027 + FR-027a: two concurrent mutations on the SAME Draft execute
+/// Two concurrent mutations on the SAME Draft execute
 /// serially (the second waits for the first); mutations on DIFFERENT Drafts proceed in
 /// parallel without contention.
 /// </summary>

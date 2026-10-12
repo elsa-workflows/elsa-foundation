@@ -30,7 +30,7 @@ namespace Elsa.Workflows.Publishing;
 /// <c>WorkflowsPublishingApi</c> feature, not here.
 /// </summary>
 /// <remarks>
-/// The Api feature obtains the engine by <c>DependsOn</c> composition (framework §2.11), not
+/// The Api feature obtains the engine by <c>DependsOn</c> composition, not
 /// inheritance: it is its own <c>IWebShellFeature</c> and declares
 /// <c>DependsOn WorkflowsPublishing</c>.
 /// </remarks>
@@ -110,7 +110,7 @@ public class WorkflowsPublishingFeature : IShellFeature
             PublishingPersistenceFamilyBackend.ActivityPublicationReceipts,
             PublishingPersistenceFamilyBackend.ActivityPublicationReceiptContracts);
         // Fallback layout store for in-memory compositions; a design-persistence provider overrides this with its
-        // own registration so the publish flow copies the real layout sidecar onto the source reference (ADR 0039).
+        // own registration so the publish flow copies the real layout sidecar onto the source reference.
         services.TryAddScoped<IWorkflowDefinitionVersionLayoutStore, EmptyWorkflowDefinitionVersionLayoutStore>();
         services.TryAddScoped<IActivityStructureService, DefaultActivityStructureService>();
         // Permanent definition deletion must not strand a live publication: the guard is contributed into the
@@ -142,7 +142,7 @@ public class WorkflowsPublishingFeature : IShellFeature
         services.TryAddScoped<IWorkflowArtifactClosureFactory, WorkflowArtifactClosureFactory>();
         services.AddEventHandler<ExecutableCompilationCollecting, CollectExecutableCompilation>();
         services.AddEventHandler<ExecutableNodeMetadataCollecting, CollectExecutableNodeMetadata>();
-        // Publish-on-reconcile (spec 147): independent subscriber on the Design-side reconcile completion
+        // Publish-on-reconcile: independent subscriber on the Design-side reconcile completion
         // event. Only acts on claims whose source opted in (PublishOnReconcile); never throws.
         services.AddEventHandler<WorkflowVersionsReconciled, PublishReconciledWorkflowVersions>();
         services.TryAddScoped<IWorkflowExecutableCompiler, WorkflowExecutableCompiler>();

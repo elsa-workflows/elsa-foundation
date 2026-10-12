@@ -6,12 +6,12 @@ using Xunit;
 
 namespace Elsa.Workflows.Runtime.Tests;
 
-// Contract coverage for the burst-scoped reconstructible cache (ADR 0031 item b, spec 111) and its first consumer,
+// Contract coverage for the burst-scoped reconstructible cache and its first consumer,
 // the burst-cached executable reader. These are the unit-level guarantees; the end-to-end guardrail (byte-identical
 // committed durable state cache-on vs cache-off) and the read-count collapse live in the EF Runtime test project.
 public sealed class BurstScopeCacheTests
 {
-    // ---- WorkflowBurstScope contract (FR-001) ----------------------------------------------------------------
+    // ---- WorkflowBurstScope contract ----------------------------------------------------------------
 
     [Fact]
     public async Task GetOrAddAsync_MemoizesFactory_WithinScope()
@@ -43,7 +43,7 @@ public sealed class BurstScopeCacheTests
         Assert.Equal(1, factoryCalls); // a cached "not found" is a hit, not a re-read
     }
 
-    // ---- Reconstructibility: a lost cache re-reads durably (FR-005 / US3) -------------------------------------
+    // ---- Reconstructibility: a lost cache re-reads durably -------------------------------------
 
     [Fact]
     public async Task Clear_EvictsEntries_SoNextReadReconstructs()
@@ -61,7 +61,7 @@ public sealed class BurstScopeCacheTests
         Assert.Equal(2, factoryCalls);
     }
 
-    // ---- Deterministic disposal at burst end (FR-005 / US4) ---------------------------------------------------
+    // ---- Deterministic disposal at burst end ---------------------------------------------------
 
     [Fact]
     public async Task DisposeAsync_DisposesDisposableEntries_AndBlocksReuse()
@@ -95,7 +95,7 @@ public sealed class BurstScopeCacheTests
     }
 
 #if DEBUG
-    // ---- Debug-only misuse guard: must-survive values belong in durable storage, not the cache (FR-007) ------
+    // ---- Debug-only misuse guard: must-survive values belong in durable storage, not the cache ------
 
     [Fact]
     public async Task GetOrAddAsync_RejectsMustSurviveValue_InDebug()
@@ -108,7 +108,7 @@ public sealed class BurstScopeCacheTests
     }
 #endif
 
-    // ---- Accessor push/pop (FR-002) ---------------------------------------------------------------------------
+    // ---- Accessor push/pop ---------------------------------------------------------------------------
 
     [Fact]
     public void Accessor_PushPop_RestoresPriorScope()
@@ -129,7 +129,7 @@ public sealed class BurstScopeCacheTests
         Assert.Null(accessor.Current);
     }
 
-    // ---- BurstCachedWorkflowExecutableReader (FR-003) --------------------------------------------------------
+    // ---- BurstCachedWorkflowExecutableReader --------------------------------------------------------
 
     [Fact]
     public async Task Reader_NoBurst_PassesThroughToStore_EveryRead()

@@ -4,7 +4,7 @@ namespace Elsa.Workflows.Design.Persistence.Core.Contracts;
 
 /// <summary>
 /// Creates a new <c>WorkflowDefinitionDraft</c> by deep-copying State + Layout from an existing
-/// <c>WorkflowDefinitionVersion</c>. Per Unit C FR-028.
+/// <c>WorkflowDefinitionVersion</c>.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -14,7 +14,7 @@ namespace Elsa.Workflows.Design.Persistence.Core.Contracts;
 /// DraftId, acquires the per-Draft distributed lock (<c>workflow-draft:{NewDraftId}</c>), runs the
 /// validation gate, flushes atomically, and publishes the lifecycle events. Providers need not
 /// implement this by delegating to <see cref="ICreateDraftCommand"/>. NodeIds carry 1:1 from the
-/// Version into the new Draft per FR-009a copy semantics. Cloning never crosses Definitions — the
+/// Version into the new Draft with copy semantics. Cloning never crosses Definitions — the
 /// target is always the source Version's own Definition.
 /// </para>
 /// <para>

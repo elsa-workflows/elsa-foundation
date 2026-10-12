@@ -642,7 +642,7 @@ public sealed class WorkflowsDesignApiContractTests
                         services.ReplacePermissionEvaluator<RecordingPermissionEvaluator>();
                         // No mediator senders: every Workflows Design route now owns its handling.
                         DefinitionDomainFakes.Register(services);
-                        // The credential-literal admission the state-writing routes take (spec 188), as the feature's
+                        // The credential-literal admission the state-writing routes take, as the feature's
                         // DependsOn composes it, judging against an activity catalog that declares a credential input.
                         new Elsa.Workflows.Design.Validations.WorkflowDesignValidationsFeature().ConfigureServices(services);
                         services.AddSingleton<IActivityDefinitionLookup>(CredentialLiteralTestSupport.Catalog());

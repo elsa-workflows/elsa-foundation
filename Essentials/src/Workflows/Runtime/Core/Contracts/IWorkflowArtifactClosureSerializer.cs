@@ -4,7 +4,7 @@ namespace Elsa.Workflows.Runtime.Core.Contracts;
 
 /// <summary>
 /// The wire codec for <see cref="WorkflowArtifactClosure"/> — the one place the portable envelope's bytes are
-/// decided, shared by the exporting engine and the importing one (FR-B-001 / FR-B-010).
+/// decided, shared by the exporting engine and the importing one.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -24,7 +24,7 @@ namespace Elsa.Workflows.Runtime.Core.Contracts;
 /// <para>
 /// <b>Exception discipline.</b> This is a codec, not a feature boundary: a malformed document surfaces as
 /// <see cref="System.Text.Json.JsonException"/>. Callers that own an identifier worth naming — the importer owns
-/// a file path, the export endpoint owns a version id — wrap it in their own domain exception per §2.23.5.
+/// a file path, the export endpoint owns a version id — wrap it in their own domain exception.
 /// Wrapping here would only strip the identifier the caller has and this codec does not.
 /// </para>
 /// </remarks>
@@ -35,7 +35,7 @@ public interface IWorkflowArtifactClosureSerializer
 
     /// <summary>
     /// Decodes an envelope. Does not apply the format gate — version acceptance is the reader's fail-loud
-    /// decision (T050), taken once the document has parsed far enough to read <c>formatVersion</c> at all.
+    /// decision, taken once the document has parsed far enough to read <c>formatVersion</c> at all.
     /// </summary>
     /// <exception cref="System.Text.Json.JsonException">The document is not valid envelope JSON.</exception>
     WorkflowArtifactClosure? Deserialize(string json);

@@ -49,7 +49,7 @@ public sealed class JsonWorkflowArtifactReconciliationOptions
 
     /// <summary>
     /// The tenant stamped on every source reference this source mints. <see langword="null"/> by default — the
-    /// untenanted engine. Per-tenant fan-out (one mounted set activated once per tenant) is deferred (FR-B-002);
+    /// untenanted engine. Per-tenant fan-out (one mounted set activated once per tenant) is deferred;
     /// today one source serves one tenant, so configure a second source to serve a second tenant.
     /// </summary>
     public string? TenantId { get; set; }

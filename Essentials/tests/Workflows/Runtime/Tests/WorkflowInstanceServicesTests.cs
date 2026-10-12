@@ -671,7 +671,7 @@ public sealed class WorkflowInstanceServicesTests
     [Fact]
     public async Task GetWorkflowInstance_PrefersThePerRunStamp_OverAReconfiguredCoalescedHost()
     {
-        // ADR 0032 R5 per-run stamp: the run executed under Immediate cadence; the host was later reconfigured to
+        // Per-run cadence stamp: the run executed under Immediate cadence; the host was later reconfigured to
         // Coalesced. The instance must report the cadence it actually ran under, not the host's current setting.
         await _workflowStore.SaveAsync(Workflow(
             "wf-1",

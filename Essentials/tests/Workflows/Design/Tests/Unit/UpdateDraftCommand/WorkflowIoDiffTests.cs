@@ -5,7 +5,7 @@ using static Elsa.Workflows.Design.Tests.Infrastructure.UpdateDraftTestKit;
 namespace Elsa.Workflows.Design.Tests.Unit.UpdateDraftCommand;
 
 /// <summary>
-/// T010 (FR-013, SC-010) — workflow-level input/output diff coverage, driving
+/// Workflow-level input/output diff coverage, driving
 /// <see cref="Elsa.Workflows.Design.Persistence.Core.Services.DraftStateDiffEngine"/> directly
 /// (per-diff mutation-event publication retired from the mutation command). Workflow inputs and
 /// outputs match by <c>ReferenceKey</c> and are distinct from per-activity I/O:

@@ -54,7 +54,7 @@ public sealed class IntrinsicVariableTargetValidatorTests
     public async Task Set_targeting_a_sibling_containers_variable_emits_an_error()
     {
         // The declaring container is not an ancestor of the Set, so the reference is out of scope
-        // (ADR 0027: references are stable, never retargeted through the visible chain).
+        // (references are stable, never retargeted through the visible chain).
         var declaring = Node("container-a", containerVariables: [Variable("var-a", "A")]);
         var offending = Node("container-b", childActivities: [SetNode("set-1", "var-a", "container-a")]);
         var root = Node("root", childActivities: [declaring, offending]);

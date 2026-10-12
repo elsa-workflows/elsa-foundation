@@ -6,7 +6,7 @@ using Xunit;
 namespace Elsa.Workflows.Runtime.Tests;
 
 /// <summary>
-/// <see cref="ValueEnvelope.HoldsValueRequiringEncryption"/>, the one predicate of spec 188, FR-010 that producer
+/// <see cref="ValueEnvelope.HoldsValueRequiringEncryption"/>, the one predicate that producer
 /// withholding, the output capture guard, the checkpoint-commit backstop and the execution evidence enricher share: a
 /// present value whose own policy, or the destination's policy when one is given, requires encryption.
 /// </summary>

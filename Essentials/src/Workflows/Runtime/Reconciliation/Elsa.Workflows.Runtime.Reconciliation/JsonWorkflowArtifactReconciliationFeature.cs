@@ -71,7 +71,7 @@ public class JsonWorkflowArtifactReconciliationFeature : WorkflowsArtifactReconc
         // makes two JSON features share the last options registration, so both sources read the same mount and
         // claim the same owner. A snapshot also prevents later feature mutation from changing a built container.
         var options = SnapshotOptions();
-        // TryAdd for the reader (§2.6.2: single implementation, first-wins) — plain Add for the
+        // TryAdd for the reader (single implementation, first-wins) — plain Add for the
         // source, which is a fan-in contribution: several mounts legitimately contribute several sources.
         services.TryAddScoped<IWorkflowArtifactClosureReader, JsonWorkflowArtifactClosureReader>();
         services.AddScoped<IWorkflowArtifactReconciliationSource>(serviceProvider =>

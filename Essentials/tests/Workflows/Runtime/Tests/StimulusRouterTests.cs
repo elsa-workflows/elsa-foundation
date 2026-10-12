@@ -301,7 +301,7 @@ public sealed class StimulusRouterTests
     [Fact]
     public async Task Route_StartOnly_ForwardsStimulusInputOnTheDedicatedChannel()
     {
-        // Spec 089 FR-001: the start path delivers the stimulus payload on the first-class StimulusInput field
+        // The start path delivers the stimulus payload on the first-class StimulusInput field
         // (the start-side counterpart of the resume path's Input) — never through the workflow-inputs bag, so
         // it can neither collide with author-declared inputs nor be forged via caller-facing input maps.
         var bindingStore = new InMemoryWorkflowTriggerBindingStore();
@@ -321,7 +321,7 @@ public sealed class StimulusRouterTests
     [Fact]
     public async Task Route_StartOnly_ForwardsMatchedBindingNodeIdPerBinding()
     {
-        // Spec 089 D (T003): each start dispatch carries the matched binding's executable node id on the dedicated
+        // Each start dispatch carries the matched binding's executable node id on the dedicated
         // TriggerNodeId channel, so a mid-flow-capable activity can tell whether it is the node that triggered the
         // run. Two bindings on distinct nodes must each forward their own node id — never the workflow-inputs bag.
         var bindingStore = new InMemoryWorkflowTriggerBindingStore();
@@ -355,7 +355,7 @@ public sealed class StimulusRouterTests
     [Fact]
     public async Task Route_ResumeOnly_StillForwardsStimulusInputToResumeDispatch()
     {
-        // Regression pin: the resume path's input delivery predates spec 089 and must stay unchanged.
+        // Regression pin: the resume path's input delivery predates the start path's dedicated stimulus-input channel and must stay unchanged.
         var bookmarkStore = new InMemoryBookmarkStateStore();
         await bookmarkStore.SaveAsync(Bookmark("bk-1", "wfexec-1"));
         var resumeDispatcher = new RecordingResumeDispatcher();
@@ -387,7 +387,7 @@ public sealed class StimulusRouterTests
     [Fact]
     public async Task Route_StartOnly_WithMatchedBindingsSupplied_ReusesThemAndNeverQueriesTheStore()
     {
-        // Spec 089 efficiency #7: when the caller already fetched the match set (the HTTP middleware does, for its
+        // When the caller already fetched the match set (the HTTP middleware does, for its
         // ambiguity guard + options), the router reuses it instead of issuing its own identical ListByStimulusAsync
         // — one durable read per request, not two. The throwing store proves the router never consults it.
         var startDispatcher = new RecordingStartDispatcher();
@@ -404,7 +404,7 @@ public sealed class StimulusRouterTests
     [Fact]
     public async Task Route_ForwardsDispatchOptionsToStartDispatcher()
     {
-        // Spec 089 E-D4 (FR-019): the router forwards the request's DispatchOptions verbatim to the start dispatcher,
+        // The router forwards the request's DispatchOptions verbatim to the start dispatcher,
         // so an in-process inline drain of the started instance can build activity execution contexts from the
         // caller's ambient scope. Same instance — never a copy.
         var bindingStore = new InMemoryWorkflowTriggerBindingStore();
@@ -421,7 +421,7 @@ public sealed class StimulusRouterTests
     [Fact]
     public async Task Route_ForwardsDispatchOptionsToResumeDispatcher()
     {
-        // Spec 089 E-D4 (FR-019 / scenario 5.5): the same request scope serves resumes too, so a sync-authored
+        // The same request scope serves resumes too, so a sync-authored
         // resume gets the caller's ambient services on its same-exchange reply. Same instance — never a copy.
         var bookmarkStore = new InMemoryBookmarkStateStore();
         await bookmarkStore.SaveAsync(Bookmark("bk-1", "wfexec-1"));

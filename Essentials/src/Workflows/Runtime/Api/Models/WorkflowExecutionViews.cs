@@ -88,7 +88,7 @@ public sealed record WorkflowInstanceSummaryView(
 
 /// <summary>
 /// Instance detail read model. Beyond the per-instance projections it also surfaces two host-configuration-derived
-/// checkpoint-cadence properties (ADR 0032 R3): <paramref name="CheckpointCadence"/>
+/// checkpoint-cadence properties: <paramref name="CheckpointCadence"/>
 /// (<c>Immediate</c>/<c>Coalesced</c>, with <paramref name="MaxSegmentCheckpoints"/> when Coalesced) and the
 /// <paramref name="InspectionGranularity"/> that cadence implies (<c>activity-level</c> vs <c>boundary-level</c>). They
 /// let an inspection consumer know whether per-activity evidence is exact or folded to a coalesced boundary, rather than
@@ -369,7 +369,7 @@ public sealed record ActivityExecutionIncidentCausationView(
 /// value-payload read.
 /// </summary>
 /// <remarks>
-/// A withheld value (spec 188) is rendered by its marker: <see cref="WithheldKind"/> names the
+/// A withheld value is rendered by its marker: <see cref="WithheldKind"/> names the
 /// <c>WithheldValueKind</c> and <see cref="SecretReferenceName"/> the secret reference behind a secret-bound input. Both
 /// are shown to every caller that may inspect the execution, because neither is a value. A withheld record is always
 /// reported as sensitive, and its capture state and access state are always <c>unavailable</c>, whatever payload it
@@ -618,7 +618,7 @@ internal static class ActivityExecutionInspectionDisclosure
         canInspectSensitiveValues ? metadata : EmptyMetadata;
 
     /// <summary>
-    /// The <c>WithheldValueKind</c> of a value evidence record whose envelope was withheld (spec 188), or null. The
+    /// The <c>WithheldValueKind</c> of a value evidence record whose envelope was withheld, or null. The
     /// marker is the inspection metadata the runtime records for it; a withheld record has no value to show or resolve.
     /// </summary>
     public static string? WithheldKind(ActivityExecutionInspectionValueSnapshot snapshot) =>

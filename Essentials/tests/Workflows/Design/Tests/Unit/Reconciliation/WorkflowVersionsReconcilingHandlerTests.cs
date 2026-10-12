@@ -12,7 +12,7 @@ using Xunit;
 namespace Elsa.Workflows.Design.Tests.Unit.Reconciliation;
 
 /// <summary>
-/// Branch coverage per framework §2.23.2 for the universal reconciliation handler. Cases:
+/// Branch coverage for the universal reconciliation handler. Cases:
 /// no sources, single source with multiple entries, multi-source aggregation, source with
 /// no entries.
 /// </summary>
@@ -114,7 +114,7 @@ public sealed class WorkflowVersionsReconcilingHandlerTests
     public async Task Claims_carry_source_identity_and_publish_request_per_entry()
     {
         // Provenance is not persisted on design entities: the claim beside each version is the only
-        // carrier of (SourceId, PublishRequested) into the post-pass publish step (spec 147).
+        // carrier of (SourceId, PublishRequested) into the post-pass publish step.
         var sourceA = new StubSource("Json", "a", [Entry("wf-a", "Workflow A", version: "1.0.0")], requestsPublication: true);
         var sourceB = new StubSource("git", "b", [Entry("wf-b", "Workflow B", version: "2.0.0")]);
         var handler = NewHandler(sourceA, sourceB);

@@ -6,7 +6,7 @@ namespace Elsa.Workflows.Design.Core.Events;
 /// <summary>
 /// Mutation event for an output updated on a placed activity. Published by
 /// <c>IUpdateActivityOutputInDraftCommand</c>. <see cref="OutputReferenceKey"/> is the stable
-/// identity per Unit C FR-010.
+/// identity.
 /// </summary>
 public sealed class ActivityOutputUpdatedInDraft(
     string draftId,

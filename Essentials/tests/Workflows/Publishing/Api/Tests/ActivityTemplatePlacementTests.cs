@@ -89,7 +89,7 @@ public sealed class ActivityTemplatePlacementTests
     [Fact]
     public async Task Placement_refuses_a_secret_reference_authored_in_an_occurrence_overlay()
     {
-        // Spec 188: an occurrence inside a reusable activity is authored like any workflow node, so it gets the same
+        // An occurrence inside a reusable activity is authored like any workflow node, so it gets the same
         // secret refusals against its template root. This root's consumer does not resolve inputs at CLR activation,
         // and the input is text, so only this refusal stands in the way.
         var overlay = new ExecutableActivityTemplateOccurrenceOverlay(

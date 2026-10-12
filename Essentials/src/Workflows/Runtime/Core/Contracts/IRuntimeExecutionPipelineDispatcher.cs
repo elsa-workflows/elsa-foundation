@@ -5,7 +5,7 @@ namespace Elsa.Workflows.Runtime.Core.Contracts;
 /// <summary>
 /// Dispatches a drained scheduler work item through the runtime execution pipeline appropriate to its kind, running
 /// the selected work handler as the pipeline's inner terminal delegate ("wrap, do not replace"). This is the single
-/// seam the drainer invokes to make the pipeline the real execution spine (ADR 0029, Move 1).
+/// seam the drainer invokes to make the pipeline the real execution spine.
 /// </summary>
 public interface IRuntimeExecutionPipelineDispatcher
 {

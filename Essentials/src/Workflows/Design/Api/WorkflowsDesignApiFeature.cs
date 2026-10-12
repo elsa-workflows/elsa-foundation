@@ -32,7 +32,7 @@ namespace Elsa.Workflows.Design.Api;
     name: "WorkflowsDesignApi",
     DisplayName = "Workflows Design API",
     Description = "Contains endpoints to manage data in the Workflows Design Domain",
-    // Every endpoint that writes workflow state admits it through the credential-literal rule (spec 188, FR-008),
+    // Every endpoint that writes workflow state admits it through the credential-literal rule,
     // which WorkflowDesignValidations registers; a host without it fails at composition instead of skipping the rule.
     DependsOn = new object[] { "ApiCapabilities", "WorkflowDesignValidations" }
 )]

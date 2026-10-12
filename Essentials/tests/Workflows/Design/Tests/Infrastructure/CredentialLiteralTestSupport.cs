@@ -9,7 +9,7 @@ namespace Elsa.Workflows.Design.Tests.Infrastructure;
 
 /// <summary>
 /// One cataloged activity with a credential input, a sensitive input that is not a credential and a plain input, and the
-/// bindings the credential-literal rule (spec 188, FR-008) judges, for the tests of every entry point.
+/// bindings the credential-literal rule judges, for the tests of every entry point.
 /// </summary>
 /// <remarks>
 /// The Design API test project compiles this file too (a linked <c>Compile</c> item, with

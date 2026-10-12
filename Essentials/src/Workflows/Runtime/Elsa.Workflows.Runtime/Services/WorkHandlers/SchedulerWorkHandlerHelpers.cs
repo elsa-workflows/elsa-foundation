@@ -9,8 +9,8 @@ namespace Elsa.Workflows.Runtime.Services.WorkHandlers;
 /// duplication families that were copied verbatim (or near-verbatim) across the Invoke / Complete /
 /// Resume / Schedule / Start / Checkpoint / CreateBookmark handlers in both
 /// <c>Elsa.Workflows.Runtime</c> and <c>Elsa.Activities.Runtime</c>. Public (not internal) so the
-/// Activities-assembly handlers can consume it without <c>InternalsVisibleTo</c> (constitution
-/// §2.23.3), matching the runtime inspection-capture convention.
+/// Activities-assembly handlers can consume it without <c>InternalsVisibleTo</c>,
+/// matching the runtime inspection-capture convention.
 /// </summary>
 public static class SchedulerWorkHandlerHelpers
 {
@@ -115,7 +115,7 @@ public static class SchedulerWorkHandlerHelpers
     /// Builds the <see cref="RuntimePostCommitIntentKinds.EnqueueSchedulerWork"/> post-commit intent
     /// that enqueues a follow-up scheduler work item after the source commit lands (#412 item 2).
     /// Extracted from five verbatim copies. The <c>intentId</c> and <c>idempotencyKey</c> strings and
-    /// the intent kind are §E6-frozen persisted identifiers and are reproduced exactly.
+    /// the intent kind are frozen persisted identifiers and are reproduced exactly.
     /// </summary>
     public static RuntimePostCommitIntent NewEnqueueSchedulerWorkIntent(
         RuntimeSchedulerWorkItem sourceWorkItem,
@@ -131,7 +131,7 @@ public static class SchedulerWorkHandlerHelpers
             idempotencyKey: $"{sourceWorkItem.IdempotencyKey}:post-commit:{schedulerWorkItem.IdempotencyKey}",
             payload: JsonSerializer.SerializeToElement(schedulerWorkItem),
             metadata: sourceWorkItem.CommandMetadata,
-            // spec 109: carry the already-materialized work item alongside its authoritative serialized payload so
+            // Carry the already-materialized work item alongside its authoritative serialized payload so
             // a live drain's in-process hop can skip re-deserializing it. In-process conduit only ([JsonIgnore]); the
             // serialized payload above stays the sole durable form.
             materializedSchedulerWorkItem: schedulerWorkItem);

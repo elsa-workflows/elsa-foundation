@@ -5,7 +5,7 @@ namespace Elsa.Workflows.Design.Core.Events;
 /// <summary>
 /// Lifecycle-origination event for a newly-created <c>WorkflowDefinitionDraft</c>. Published by the
 /// provider's fresh-create or clone-from-version origination path after the Draft is persisted but
-/// before the command returns. Sealed class per framework §2.6.1.
+/// before the command returns. Sealed.
 /// </summary>
 /// <remarks>
 /// This is the single origination marker for a Draft's event stream regardless of how it was born.

@@ -10,9 +10,9 @@ using Xunit;
 namespace Elsa.Workflows.Design.Tests.Unit.Reconciliation.Git;
 
 /// <summary>
-/// US4 coherence: an exported version re-imports to the same identity (so a reconciler holding it skips
+/// Round-trip coherence: an exported version re-imports to the same identity (so a reconciler holding it skips
 /// it — a round-trip no-op), and the single-writer gate refuses a non-fast-forward push (never forced).
-/// The import-side hash tripwire (US4 #3) is covered by the reconciler's
+/// The import-side hash check is covered by the reconciler's
 /// <c>Same_id_version_different_content_logs_warning</c> unit test.
 /// </summary>
 public sealed class GitRoundTripTests : GitIntegrationTest

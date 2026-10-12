@@ -9,12 +9,12 @@ namespace Elsa.Workflows.Design.Reconciliation.Models;
 /// </summary>
 /// <param name="ContentHash">
 /// Optional canonical content hash (hex) of <paramref name="State"/> the source carries ahead of a
-/// persisted home (spec 085 FR-007; the persisted provenance/hash fields are FR-016a's allocation).
-/// The reconciler's Model X mismatch tripwire recomputes from <see cref="State"/>, so this is
+/// persisted home (persisted provenance/hash fields do not exist yet).
+/// The reconciler's Model X content-mismatch check recomputes from <see cref="State"/>, so this is
 /// forward-compat metadata rather than a required input today.
 /// </param>
 /// <param name="Deleted">
-/// Definition-level soft-delete intent (spec 085 FR-008), sourced from a source's mutable
+/// Definition-level soft-delete intent, sourced from a source's mutable
 /// definition metadata (git's <c>definition.json</c>). Latest-wins; never deletes a version row.
 /// </param>
 public sealed record WorkflowVersionReconciliationModel(

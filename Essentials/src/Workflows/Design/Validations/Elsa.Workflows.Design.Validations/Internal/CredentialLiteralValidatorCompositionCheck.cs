@@ -13,7 +13,7 @@ internal sealed record CredentialLiteralValidatorComposition(IServiceCollection 
 /// than one <see cref="ICredentialLiteralValidator"/>, naming every registration, whatever order they were registered in.
 /// </summary>
 /// <remarks>
-/// Framework constitution §2.6.2 requires a replacement-contract conflict to be prevented at registration time or
+/// A replacement-contract conflict must be prevented at registration time or
 /// detected at startup. A registration sees only what was registered before it, so this check reads the composed
 /// service collection once every feature has registered. It counts registrations rather than resolving them.
 /// </remarks>

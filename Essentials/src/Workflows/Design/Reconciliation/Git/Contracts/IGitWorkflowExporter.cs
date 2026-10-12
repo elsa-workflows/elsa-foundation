@@ -1,7 +1,7 @@
 namespace Elsa.Workflows.Design.Reconciliation.Git.Contracts;
 
 /// <summary>
-/// The Writer-only export reconciler (ADR 0034 D4): a set-diff sweep that makes git's version files
+/// The Writer-only export reconciler: a set-diff sweep that makes git's version files
 /// match the catalog's version set. Every decision comes from git state, never from files on disk (#2197):
 /// a catalog version whose <c>versions/{semver}.json</c> is absent from the HEAD tree is written and committed,
 /// and one present there is skipped; <c>definition.json</c> is committed when the HEAD copy differs from the

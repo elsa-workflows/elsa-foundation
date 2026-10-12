@@ -6,8 +6,8 @@ using Microsoft.Extensions.Options;
 namespace Elsa.Workflows.Runtime.Distributed.Placement;
 
 /// <summary>
-/// Refuses a <c>WorkflowsRuntimeDistributed:NodeId</c> setting that differs from the member's host id (spec 184, FR-003).
-/// The routing identity is the host id (FR-001); the setting is no longer a source of identity, and a value that names a
+/// Refuses a <c>WorkflowsRuntimeDistributed:NodeId</c> setting that differs from the member's host id.
+/// The routing identity is the host id; the setting is no longer a source of identity, and a value that names a
 /// different id would otherwise be accepted silently.
 /// </summary>
 public sealed class DistributedRuntimeNodeIdValidator(string? configuredNodeId) : IValidateOptions<ExecutionPlacementOptions>
@@ -26,7 +26,7 @@ public sealed class DistributedRuntimeNodeIdValidator(string? configuredNodeId) 
 
 /// <summary>
 /// Materializes the placement options while the shell starts, so a refused <c>NodeId</c> setting fails the shell's
-/// activation instead of its first placement decision (spec 184, FR-003).
+/// activation instead of its first placement decision.
 /// </summary>
 public sealed class ValidateDistributedRuntimeIdentityStartupTask(IOptions<ExecutionPlacementOptions> options) : IStartupTask
 {

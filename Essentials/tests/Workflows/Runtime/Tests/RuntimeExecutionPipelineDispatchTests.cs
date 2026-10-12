@@ -17,7 +17,7 @@ using Xunit;
 namespace Elsa.Workflows.Runtime.Tests;
 
 /// <summary>
-/// Guardrail (ADR 0029, Move 1): asserts a registered runtime middleware is ACTUALLY invoked during a real work-item
+/// Guardrail: asserts a registered runtime middleware is ACTUALLY invoked during a real work-item
 /// dispatch through the drainer — not merely that the builder registers it — so the pipeline cannot silently re-orphan.
 /// Also covers the work-item → pipeline-kind selector.
 /// </summary>
@@ -165,7 +165,7 @@ public sealed class RuntimeExecutionPipelineDispatchTests : RuntimePipelineTestS
     {
         var services = new ServiceCollection();
 
-        // The real Checkpoint slot middleware depends on the committer (Move 2); register it so the pipeline resolves.
+        // The real Checkpoint slot middleware depends on the checkpoint committer; register it so the pipeline resolves.
         services.AddSingleton<InMemoryRuntimeCheckpointCommitStore>();
         services.AddSingleton<IRuntimeCheckpointCommitStore>(sp => sp.GetRequiredService<InMemoryRuntimeCheckpointCommitStore>());
         services.AddSingleton<IRuntimeCheckpointPersistencePolicy, ImmediateRuntimeCheckpointPersistencePolicy>();

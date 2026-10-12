@@ -88,7 +88,7 @@ internal sealed class TestWriteLineActivity : Activity<ActivityUnit>
 }
 
 /// <summary>
-/// Declares a sensitive input, a credential input and an undeclared input (spec 188, slice 5). It refuses a secret
+/// Declares a sensitive input, a credential input and an undeclared input. It refuses a secret
 /// reference on <see cref="Persisted"/>, a separate input, so a node can hit <c>VF-ACT-012</c> and <c>VF-ACT-011</c> at once.
 /// </summary>
 [RefusesSecretBinding(nameof(Persisted), SecretBindingRefusalReason.PersistedByActivity)]

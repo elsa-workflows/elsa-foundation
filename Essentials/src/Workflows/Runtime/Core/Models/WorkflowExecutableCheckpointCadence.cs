@@ -1,9 +1,9 @@
 namespace Elsa.Workflows.Runtime.Core.Models;
 
 /// <summary>
-/// The authored checkpoint-persistence cadence compiled into a workflow executable (ADR 0032 R5). It travels with the
+/// The authored checkpoint-persistence cadence compiled into a workflow executable. It travels with the
 /// content-addressed artifact so the Runtime resolves replay-safety off the pinned executable, never a mutable Design
-/// store (§E2.2, §E2.6). Present only when the workflow authored a cadence; absent (<see langword="null"/> on the
+/// store. Present only when the workflow authored a cadence; absent (<see langword="null"/> on the
 /// executable) means the host default applies.
 /// </summary>
 /// <param name="Mode">The cadence alias: <see cref="ImmediateMode"/> or <see cref="CoalescedMode"/>.</param>

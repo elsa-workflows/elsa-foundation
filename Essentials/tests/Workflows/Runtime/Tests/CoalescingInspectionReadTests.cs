@@ -11,7 +11,7 @@ using Xunit;
 
 namespace Elsa.Workflows.Runtime.Tests;
 
-// Store-read coalescing for the inspection store (spec-110 family, re-aimed from the spec-130 KILL): the coalescing
+// Store-read coalescing for the inspection store: the coalescing
 // overlay memoizes the DURABLE BASELINE per activity execution — never the session's buffered state, which would flip
 // the accumulator's FromState/Merge branch — so mid-segment BuildProjectionAsync calls stop paying a durable FindAsync
 // per hop while every read, every flushed checkpoint commit, and every flushed inspection document stays byte-identical

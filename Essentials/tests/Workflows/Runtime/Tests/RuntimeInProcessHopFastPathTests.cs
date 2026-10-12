@@ -12,13 +12,13 @@ using Xunit;
 namespace Elsa.Workflows.Runtime.Tests;
 
 /// <summary>
-/// WU-3 (spec 109, ADR 0031 follow-up item (a)): the in-process-hop payload short-circuit. While a live drain owns an
+/// The in-process-hop payload short-circuit. While a live drain owns an
 /// execution's delivery, the checkpoint committer publishes the already-materialized continuation work item onto the
 /// drain-scoped carrier and the scheduler post-commit intent dispatcher takes it instead of deserializing the durable
 /// intent payload. These are the seam-level tests for the dispatcher + carrier: the durable serialized payload stays
 /// authoritative, so every absence (fast path off, no live-drain scope, different execution, post-crash empty scope,
 /// second delivery) falls back to the deserialize path and produces the same enqueue. The end-to-end byte-identical
-/// ENABLED-vs-DISABLED guardrail (follow-up item (c)) lives in Elsa.Activities.Runtime.Tests
+/// ENABLED-vs-DISABLED guardrail lives in Elsa.Activities.Runtime.Tests
 /// (RuntimeInProcessHopFastPathGuardrailTests) where a real multi-hop drain can be driven.
 /// </summary>
 public sealed class RuntimeInProcessHopFastPathTests
@@ -85,8 +85,8 @@ public sealed class RuntimeInProcessHopFastPathTests
         Assert.Equal(["work-DURABLE"], enqueued.Items.Select(item => item.WorkItemId));
     }
 
-    // A live-drain scope for a DIFFERENT execution must not divert this execution's delivery to the cache (mirrors
-    // spec 106 FR-005): the durable payload is deserialized.
+    // A live-drain scope applies only to the execution that owns it, so a scope for a DIFFERENT execution must not
+    // divert this execution's delivery to the cache: the durable payload is deserialized.
     [Fact]
     public async Task DifferentExecutionScope_DoesNotConsumeCache_Deserializes()
     {
@@ -225,7 +225,7 @@ public sealed class RuntimeInProcessHopFastPathTests
     }
 
     // No publish when a coalescing session owns the execution: the coalescing overlay is authoritative on continuation
-    // delivery (spec 106 FR-003), so the fast path stands down even though a live-drain scope is (defensively) ambient.
+    // delivery, so the fast path stands down even though a live-drain scope is (defensively) ambient.
     [Fact]
     public async Task Committer_DoesNotPublish_WhenCoalescingSessionOwnsExecution()
     {

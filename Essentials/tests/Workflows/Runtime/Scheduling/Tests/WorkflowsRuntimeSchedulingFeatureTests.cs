@@ -17,7 +17,7 @@ public sealed class WorkflowsRuntimeSchedulingFeatureTests
 
         new WorkflowsRuntimeSchedulingFeature().ConfigureServices(services);
 
-        // TS-1 (§2.23.1): single-implementation services asserted by registration presence, not implementation-type
+        // TS-1: single-implementation services asserted by registration presence, not implementation-type
         // or lifetime pinning (resolvability is proven by the composition test). The pump task is a named
         // participant in the multi-implementation IRecurringTask collection, preserved as a composition contract.
         Assert.Contains(services, d => d.ServiceType == typeof(IDurableTimerStore));

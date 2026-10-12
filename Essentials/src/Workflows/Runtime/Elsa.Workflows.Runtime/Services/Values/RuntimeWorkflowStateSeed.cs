@@ -29,19 +29,19 @@ public static class RuntimeWorkflowStateSeed
     public const string OutputValueIdPrefix = "output:";
     private const string DurableValueIdPrefix = "durable-";
 
-    // Reserved durable-value-id namespace for the start stimulus payload (spec 089 A). A single reserved slot:
+    // Reserved durable-value-id namespace for the start stimulus payload. A single reserved slot:
     // the stimulus is a per-execution singleton, not a named bag, and it deliberately does NOT share the
     // input:* namespace so it can never collide with (or be spoofed through) author-declared workflow inputs.
     public const string StimulusValueIdPrefix = "stimulus:";
     public const string StimulusInputSlotName = "input";
 
-    // Reserved durable-value-id namespace for the trigger-node identity (spec 089 D). A single reserved slot:
+    // Reserved durable-value-id namespace for the trigger-node identity. A single reserved slot:
     // the run has at most one trigger node, and — like the stimulus input above — it deliberately does NOT share
     // the input:* namespace so it can never collide with (or be spoofed through) author-declared workflow inputs.
     public const string TriggerNodeValueIdPrefix = "trigger:";
     public const string TriggerNodeIdSlotName = "nodeId";
 
-    // Reserved durable-value-id namespace for the matched trigger binding's metadata map (spec 117 D4). A
+    // Reserved durable-value-id namespace for the matched trigger binding's metadata map. A
     // single reserved slot holding the serialized string→string map: like the trigger-node identity above it
     // deliberately does NOT share the input:* namespace, so it can never collide with (or be spoofed through)
     // author-declared workflow inputs.
@@ -75,15 +75,15 @@ public static class RuntimeWorkflowStateSeed
         foreach (var (name, value) in inputs ?? EmptyValues)
             changes.Add(NewSeedChange(workflowExecutionId, RuntimeMetadataKeys.InputName, InputValueIdPrefix, name, value, capturedAt));
 
-        // The start stimulus payload rides its own reserved channel (spec 089 A): never the input:* namespace.
+        // The start stimulus payload rides its own reserved channel: never the input:* namespace.
         if (stimulusInput is { } stimulus)
             changes.Add(NewSeedChange(workflowExecutionId, RuntimeMetadataKeys.StimulusInputName, StimulusValueIdPrefix, StimulusInputSlotName, stimulus, capturedAt));
 
-        // The trigger-node identity rides its own reserved channel (spec 089 D): never the input:* namespace.
+        // The trigger-node identity rides its own reserved channel: never the input:* namespace.
         if (!string.IsNullOrWhiteSpace(triggerNodeId))
             changes.Add(NewSeedChange(workflowExecutionId, RuntimeMetadataKeys.TriggerNodeId, TriggerNodeValueIdPrefix, TriggerNodeIdSlotName, triggerNodeId, capturedAt));
 
-        // The matched trigger binding's metadata map rides its own reserved channel (spec 117 D4): the whole
+        // The matched trigger binding's metadata map rides its own reserved channel: the whole
         // string→string map is one durable value, never the input:* namespace. An empty map is not seeded.
         if (triggerMetadata is { Count: > 0 })
             changes.Add(NewSeedChange(
@@ -122,7 +122,7 @@ public static class RuntimeWorkflowStateSeed
 
     /// <summary>
     /// Builds the durable-value changes that project the workflow identity (correlation id / instance name)
-    /// assigned by a <c>Correlate</c>/<c>SetName</c> leaf (spec 083 review). Each requested slot is upserted under
+    /// assigned by a <c>Correlate</c>/<c>SetName</c> leaf. Each requested slot is upserted under
     /// its reserved <see cref="IdentityValueIdPrefix"/> value id, tagged with <see cref="RuntimeMetadataKeys.IdentityName"/>
     /// so <c>RuntimeIdentityStateProjection</c> can surface it to a later — including a concurrent sibling-branch —
     /// activity invocation without a workflow-execution-state read. This is an additional projection channel for

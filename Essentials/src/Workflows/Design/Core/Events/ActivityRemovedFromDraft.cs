@@ -4,7 +4,7 @@ namespace Elsa.Workflows.Design.Core.Events;
 
 /// <summary>
 /// Mutation event for an activity removed from the canvas. Published by
-/// <c>IRemoveActivityFromDraftCommand</c>. Per Unit C FR-018 activities-graph bullet.
+/// <c>IRemoveActivityFromDraftCommand</c>.
 /// </summary>
 public sealed class ActivityRemovedFromDraft(string draftId, string nodeId) : IEvent
 {

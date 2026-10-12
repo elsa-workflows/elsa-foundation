@@ -74,7 +74,7 @@ public sealed class WorkflowCheckpointSchedulerWorkHandler : IWorkflowSchedulerW
         await _checkpointCommitter.CommitAsync(commit, cancellationToken);
     }
 
-    /// <summary>Pipeline dispatch (Move 2): build the commit in the Invoke slot and stage it for the Checkpoint slot.</summary>
+    /// <summary>Pipeline dispatch: build the commit in the Invoke slot and stage it for the Checkpoint slot.</summary>
     public async ValueTask HandleAsync(RuntimeSchedulerWorkItem workItem, IRuntimePipelineContext pipelineContext, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(workItem);
@@ -150,7 +150,7 @@ public sealed class WorkflowCheckpointSchedulerWorkHandler : IWorkflowSchedulerW
             ? await PinnedExecutableRead.FindAsync(_executableReader, _workflowExecutableStore, payload.PinnedExecutable.ArtifactId, cancellationToken)
             : null;
 
-        // ADR 0032 R5: at start, resolve the effective cadence (authored-on-executable over host default) and stamp it
+        // At start, resolve the effective cadence (authored-on-executable over host default) and stamp it
         // onto the durable instance so the read model reports the cadence this run actually executed under, not the
         // host's current setting. On other checkpoints the stamp is carried forward via PreserveSystemMetadata.
         var resolvedCadence = executable is not null ? _cadenceResolver?.Resolve(executable) : null;
@@ -286,7 +286,7 @@ public sealed class WorkflowCheckpointSchedulerWorkHandler : IWorkflowSchedulerW
         else if (workItem?.CommandMetadata.TryGetValue(RuntimeMetadataKeys.SourceReferenceId, out var sourceReferenceId) == true)
             metadata[RuntimeMetadataKeys.SourceReferenceId] = sourceReferenceId;
 
-        // Carry the per-run cadence stamp (ADR 0032 R5) forward across every state rebuild that does not itself resolve
+        // Carry the per-run cadence stamp forward across every state rebuild that does not itself resolve
         // it (e.g. the workflow-completed transition), unless this rebuild is stamping a freshly-resolved cadence.
         if (!metadata.ContainsKey(RuntimeMetadataKeys.CheckpointCadence) &&
             priorWorkflowState?.SystemMetadata.TryGetValue(RuntimeMetadataKeys.CheckpointCadence, out var cadenceMode) == true)
@@ -299,7 +299,7 @@ public sealed class WorkflowCheckpointSchedulerWorkHandler : IWorkflowSchedulerW
         return metadata;
     }
 
-    // Writes the resolved per-run cadence (ADR 0032 R5) onto the workflow-started system metadata. Absent when no
+    // Writes the resolved per-run cadence onto the workflow-started system metadata. Absent when no
     // resolver is registered, leaving the read model to fall back to the host projection for that run.
     private static Dictionary<string, string> StampCheckpointCadence(
         Dictionary<string, string> metadata,

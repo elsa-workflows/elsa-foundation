@@ -14,11 +14,11 @@ namespace Elsa.Workflows.Runtime.Reconciliation.Core.Contracts;
 /// <param name="Closure">The envelope itself, already parsed by the source; absent only when <paramref name="ReadError"/> is present.</param>
 /// <param name="TenantId">
 /// The tenant to stamp on every source reference minted from this file, or <see langword="null"/> for the
-/// untenanted default (FR-B-002).
+/// untenanted default.
 /// </param>
 /// <remarks>
 /// Tenancy rides on the file rather than on <see cref="IWorkflowArtifactReconciliationSource"/> so the contract
-/// keeps exactly the three members T052 pins. A defaulted interface member would have made every future source
+/// keeps exactly its three members. A defaulted interface member would have made every future source
 /// silently untenanted unless it remembered to opt in — and widening a public <c>.Core</c> contract to carry
 /// configuration is a change that is cheap now and breaking later. Duplicating one string per file costs nothing.
 /// <para>
@@ -40,7 +40,7 @@ public sealed record WorkflowArtifactClosureFile(
     InvalidWorkflowArtifactClosureException? ReadError = null);
 
 /// <summary>
-/// A source of portable workflow-executable closures for the runtime-side reconciliation lifecycle (FR-B-002).
+/// A source of portable workflow-executable closures for the runtime-side reconciliation lifecycle.
 /// </summary>
 /// <remarks>
 /// <para>

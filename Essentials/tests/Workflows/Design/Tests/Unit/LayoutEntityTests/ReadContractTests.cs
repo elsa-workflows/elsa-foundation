@@ -5,7 +5,7 @@ using Xunit;
 namespace Elsa.Workflows.Design.Tests.Unit.LayoutEntityTests;
 
 /// <summary>
-/// SC-004 + Unit C FR-007: both layout entities implement <see cref="IWorkflowDefinitionLayout"/>
+/// Both layout entities implement <see cref="IWorkflowDefinitionLayout"/>
 /// — design-time consumers read via the contract without depending on
 /// <c>Elsa.Workflows.Design.Persistence.Core</c>.
 /// </summary>
@@ -51,7 +51,7 @@ public sealed class ReadContractTests
     [Fact]
     public void Layout_contract_lives_in_Workflows_Design_Core()
     {
-        // §E2.2 + framework §2.1 — read contracts live in .Core; consumers must not need Persistence.Core.
+        // Read contracts live in .Core; consumers must not need Persistence.Core.
         var contractAssembly = typeof(IWorkflowDefinitionLayout).Assembly.GetName().Name;
         Assert.Equal("Elsa.Workflows.Design.Core", contractAssembly);
 

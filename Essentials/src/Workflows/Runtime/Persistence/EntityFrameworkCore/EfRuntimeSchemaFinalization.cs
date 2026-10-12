@@ -6,7 +6,7 @@ using Microsoft.Extensions.DependencyInjection;
 namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore;
 
 /// <summary>
-/// The Runtime EF module's finalization gate in this shell, as the runtime sees it (spec 184, FR-008 and FR-012): the
+/// The Runtime EF module's finalization gate in this shell, as the runtime sees it: the
 /// database identity the gate read and whether it refuses writes to any Runtime family. Read live from the gate each
 /// time, so it follows every refresh without a restart.
 /// </summary>

@@ -216,7 +216,7 @@ public sealed class WorkflowExecutionStartDispatchRequest
     public IReadOnlyDictionary<string, object?> Inputs { get; }
 
     /// <summary>
-    /// The stimulus payload that triggered this start (spec 089 A), seeded as durable runtime state on its own
+    /// The stimulus payload that triggered this start, seeded as durable runtime state on its own
     /// reserved channel — the start-side counterpart of the resume path's
     /// <c>BookmarkResumeDispatchRequest.Input</c>. Deliberately NOT part of <see cref="Inputs"/>: it never
     /// shares the workflow-input namespace, so it cannot collide with author-declared inputs and cannot be
@@ -225,7 +225,7 @@ public sealed class WorkflowExecutionStartDispatchRequest
     public JsonElement? StimulusInput { get; }
 
     /// <summary>
-    /// The executable node id of the matched trigger binding that started this run (spec 089 D), carried on its
+    /// The executable node id of the matched trigger binding that started this run, carried on its
     /// own reserved channel — the start-side counterpart of the resume path's node identity. Lets a mid-flow-capable
     /// activity (e.g. <c>HttpEndpoint</c>) tell whether it is the node that triggered this run. Deliberately NOT part
     /// of <see cref="Inputs"/>: it never shares the workflow-input namespace, so it cannot collide with author-declared
@@ -234,7 +234,7 @@ public sealed class WorkflowExecutionStartDispatchRequest
     public string? TriggerNodeId { get; }
 
     /// <summary>
-    /// The matched trigger binding's free-form metadata map (spec 117 D4), carried verbatim from
+    /// The matched trigger binding's free-form metadata map, carried verbatim from
     /// <c>WorkflowTriggerBinding.Metadata</c> on its own reserved channel — never part of <see cref="Inputs"/>.
     /// Seeded durably at start so a structural trigger activity (e.g. <c>BpmnProcess</c>) can read per-descriptor
     /// routing facets (such as the BPMN start element id). Empty for direct starts and metadata-less bindings.
@@ -625,20 +625,20 @@ public sealed class WorkflowExecutionStartCommandPayload
     public IReadOnlyDictionary<string, JsonElement> Inputs { get; }
 
     /// <summary>
-    /// The stimulus payload (spec 089 A) carried from start dispatch so the workflow-started checkpoint can
+    /// The stimulus payload carried from start dispatch so the workflow-started checkpoint can
     /// seed it on its reserved durable channel, separate from <see cref="Inputs"/>. Null for non-stimulus starts.
     /// </summary>
     public JsonElement? StimulusInput { get; }
 
     /// <summary>
-    /// The trigger-node identity (spec 089 D) carried from start dispatch so the workflow-started checkpoint can
+    /// The trigger-node identity carried from start dispatch so the workflow-started checkpoint can
     /// seed it on its reserved durable channel, separate from <see cref="Inputs"/>. Null for direct (non-trigger)
     /// starts.
     /// </summary>
     public string? TriggerNodeId { get; }
 
     /// <summary>
-    /// The matched trigger binding's metadata map (spec 117 D4) carried from start dispatch so the
+    /// The matched trigger binding's metadata map carried from start dispatch so the
     /// workflow-started checkpoint can seed it on its reserved durable channel, separate from <see cref="Inputs"/>.
     /// Empty for direct starts and metadata-less bindings.
     /// </summary>

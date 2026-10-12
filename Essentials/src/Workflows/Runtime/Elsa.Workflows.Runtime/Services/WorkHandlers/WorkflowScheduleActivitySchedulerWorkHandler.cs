@@ -126,7 +126,7 @@ public sealed class WorkflowScheduleActivitySchedulerWorkHandler : IWorkflowSche
             return null;
         }
 
-        // spec 123 D1: when this fresh schedule targets a ReplaySafe leaf inside a live coalescing burst, fuse the
+        // When this fresh schedule targets a ReplaySafe leaf inside a live coalescing burst, fuse the
         // schedule → start → invoke stages into this one dispatch. Commit the intent-free ActivityScheduled checkpoint
         // and run the remaining stages inline, so the span's StartActivity/InvokeActivity work items are never enqueued.
         // Return null so neither dispatch path commits anything further; the invoke stage's terminal commit carries the
@@ -250,7 +250,7 @@ public sealed class WorkflowScheduleActivitySchedulerWorkHandler : IWorkflowSche
     /// <summary>
     /// Discrete adapter: builds the fused-mode <c>ActivityScheduled</c> commit core and re-attaches the
     /// <c>StartActivity</c> continuation intent, reproducing today's commit byte-for-byte. The commit builder and the
-    /// derived <c>StartActivity</c> work item are extracted into <see cref="BuildScheduledCommitAsync"/> so the spec-123
+    /// derived <c>StartActivity</c> work item are extracted into <see cref="BuildScheduledCommitAsync"/> so the
     /// fusion driver can commit the same stage without the continuation intent and run the next stage inline instead of
     /// enqueuing it.
     /// </summary>
@@ -272,7 +272,7 @@ public sealed class WorkflowScheduleActivitySchedulerWorkHandler : IWorkflowSche
     }
 
     /// <summary>
-    /// The <c>ActivityScheduled</c> stage core (spec 123 FR-002): produces the <c>ActivityScheduled</c> checkpoint
+    /// The <c>ActivityScheduled</c> stage core: produces the <c>ActivityScheduled</c> checkpoint
     /// commit <b>without</b> its <c>StartActivity</c> post-commit intent, alongside the derived <c>StartActivity</c>
     /// work item and the checkpoint's occurrence time. The discrete handler re-attaches the intent
     /// (<see cref="NewCommitAsync"/>); the fused driver commits the intent-free commit and dispatches the returned work
@@ -341,7 +341,7 @@ public sealed class WorkflowScheduleActivitySchedulerWorkHandler : IWorkflowSche
 
     /// <summary>
     /// The intent-free <c>ActivityScheduled</c> commit plus the derived <c>StartActivity</c> continuation work item and
-    /// the checkpoint's occurrence time (spec 123 FR-002).
+    /// the checkpoint's occurrence time.
     /// </summary>
     internal readonly record struct ScheduledCommitCore(
         RuntimeCheckpointCommit Commit,

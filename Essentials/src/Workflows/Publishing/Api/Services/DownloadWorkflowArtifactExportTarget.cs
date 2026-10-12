@@ -6,7 +6,7 @@ using Elsa.Workflows.Runtime.Core.Models;
 namespace Elsa.Workflows.Publishing.Api.Services;
 
 /// <summary>
-/// The v1 built-in export target (FR-B-010a): hands the encoded closure straight back to the caller and writes
+/// The v1 built-in export target: hands the encoded closure straight back to the caller and writes
 /// nothing anywhere.
 /// </summary>
 /// <remarks>

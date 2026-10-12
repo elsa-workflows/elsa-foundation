@@ -13,7 +13,7 @@ using Microsoft.Extensions.Time.Testing;
 namespace Elsa.Workflows.Runtime.Tests;
 
 /// <summary>
-/// WU-2 (spec 105-runtime-live-drain-delivery): a live Immediate-mode drain delivers EnqueueSchedulerWork intents
+/// A live Immediate-mode drain delivers EnqueueSchedulerWork intents
 /// in-memory — idempotent enqueue + a direct Delivered mark, skipping the durable claim round-trip — while the durable
 /// outbox item remains the crash backstop the resumption sweep re-drives idempotently.
 /// </summary>
@@ -113,7 +113,7 @@ public sealed class RuntimeLiveDrainDeliveryTests
             coalescingSessionAccessor: null);
 
     // Before it quiesces the drain checks, through the outbox store and the queue, that no other deliverer took a
-    // continuation (#2225); here none does, so the fast path's own delivery count still decides the loop (spec 106 FR-006).
+    // continuation (#2225); here none does, so the fast path's own delivery count still decides the loop.
     private static WorkflowDrainOrchestrator NewOrchestrator(
         IWorkflowSchedulerDrainer drainer,
         IRuntimePostCommitOutboxProcessor processor,

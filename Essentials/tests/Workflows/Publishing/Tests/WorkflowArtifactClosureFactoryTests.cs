@@ -5,7 +5,7 @@ using Xunit;
 namespace Elsa.Workflows.Publishing.Tests;
 
 /// <summary>
-/// §2.23.2 behaviour tests for the FR-B-010 export producer: what a closure contains, and every reason it refuses
+/// Behaviour tests for the export closure producer: what a closure contains, and every reason it refuses
 /// to produce one.
 /// </summary>
 /// <remarks>
@@ -123,7 +123,7 @@ public sealed class WorkflowArtifactClosureFactoryTests
     [Fact]
     public async Task Excludes_test_run_references_from_a_published_version_export()
     {
-        // US3 scenario 6: a version that was test-run before it was published must not leak the draft-scoped
+        // A version that was test-run before it was published must not leak the draft-scoped
         // provenance of that test run into the portable envelope.
         var fixture = new WorkflowArtifactExportFixture();
 
@@ -291,8 +291,8 @@ public sealed class WorkflowArtifactClosureFactoryTests
             dependencies: WorkflowArtifactExportFixture.DependencyOn(child, "p-root"));
         await fixture.PublishAsync(parent);
 
-        // Same id, different hash: what a store looks like after a non-content-addressed write. Under ADR 0038 an
-        // id whose content differs is corruption, and shipping it would produce an envelope whose edges lie.
+        // Same id, different hash: what a store looks like after a non-content-addressed write. With content
+        // addressing, an id whose content differs is corruption, and shipping it would produce an envelope whose edges lie.
         await fixture.SaveCorruptedAsync(
             child.Identity with { ArtifactHash = "sha256:not-the-pinned-hash" },
             WorkflowArtifactExportFixture.Node("c-root"));

@@ -20,7 +20,7 @@ namespace Elsa.Workflows.Runtime.Http.Services;
 /// </summary>
 /// <remarks>
 /// <para>
-/// <b>Per-shell authentication (spec 089 sub-unit C, T008).</b> The endpoint middleware runs inside the shell's
+/// <b>Per-shell authentication.</b> The endpoint middleware runs inside the shell's
 /// request branch. Whether <see cref="HttpContext.User"/> is already populated depends on host wiring: in the
 /// default composition the root <c>UseAuthentication</c> middleware runs after the shell-resolution middleware
 /// (which swaps <c>RequestServices</c> to the shell scope) and therefore authenticates against the shell's own

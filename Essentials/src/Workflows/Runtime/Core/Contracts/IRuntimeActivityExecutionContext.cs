@@ -15,7 +15,7 @@ public interface IRuntimeActivityExecutionContext : IActivityExecutionContext
     ActivityExecutionState ActivityExecutionState { get; }
 
     /// <summary>
-    /// The executable node id of the matched trigger binding that started this run (spec 089 D / 117 D4),
+    /// The executable node id of the matched trigger binding that started this run,
     /// populated from the committed workflow-started seed (spoof-proof, not user input). Null for direct
     /// (non-stimulus) starts. A structural trigger activity (e.g. <c>BpmnProcess</c>) compares it to
     /// <c>ExecutableNodeId</c> to tell whether it was the node that started this run.
@@ -23,7 +23,7 @@ public interface IRuntimeActivityExecutionContext : IActivityExecutionContext
     string? TriggerNodeId { get; }
 
     /// <summary>
-    /// The matched trigger binding's free-form metadata map (spec 117 D4), carried verbatim from
+    /// The matched trigger binding's free-form metadata map, carried verbatim from
     /// <c>WorkflowTriggerBinding.Metadata</c> and seeded on its own reserved durable channel. Null for direct
     /// starts and for stimulus starts whose binding carried no metadata. A structural trigger activity reads
     /// per-descriptor routing facets from it (e.g. the BPMN start element id under <c>"bpmn.startElementId"</c>).
@@ -40,7 +40,7 @@ public interface IRuntimeActivityExecutionContext : IActivityExecutionContext
     IReadOnlyCollection<RuntimeChildActivityScheduleRequest> GetChildActivityScheduleRequests();
 
     /// <summary>
-    /// The parent's direct, non-terminal child activity executions (spec 119 D4), populated by the runtime
+    /// The parent's direct, non-terminal child activity executions, populated by the runtime
     /// only during a child-completion/child-fault evaluation and only when the parent activity implements
     /// <c>IRuntimeLiveChildActivityConsumer</c>; empty otherwise. Read-only and spoof-proof (projected from
     /// committed activity-execution state). A structural activity that races sibling children (the BPMN
@@ -50,7 +50,7 @@ public interface IRuntimeActivityExecutionContext : IActivityExecutionContext
     IReadOnlyCollection<RuntimeLiveChildActivity> GetLiveChildActivities();
 
     /// <summary>
-    /// Reads the committed value of a container-scoped variable visible to this activity (spec 123 D1),
+    /// Reads the committed value of a container-scoped variable visible to this activity,
     /// populated by the runtime only for an activity implementing <c>IRuntimeScopedVariableReader</c> and only
     /// during an invoke, child-completion/child-fault, or bookmark-resume evaluation.
     /// </summary>
@@ -73,7 +73,7 @@ public interface IRuntimeActivityExecutionContext : IActivityExecutionContext
     bool TryReadScopedVariableValue(string variableName, out ValueEnvelope? envelope);
 
     /// <summary>
-    /// Stages cancellation of one scheduled child's activity-execution subtree (spec 112). Only valid
+    /// Stages cancellation of one scheduled child's activity-execution subtree. Only valid
     /// during a child-completion/child-fault evaluation with a <c>Defer</c> or <c>Complete</c>
     /// continuation; applied atomically in the same checkpoint commit as the continuation.
     /// </summary>
@@ -85,7 +85,7 @@ public interface IRuntimeActivityExecutionContext : IActivityExecutionContext
     IReadOnlyCollection<RuntimeChildSubtreeCancellationRequest> GetChildSubtreeCancellationRequests();
 
     /// <summary>
-    /// Stages absorption of the child fault this evaluation is processing (spec 115). Only valid
+    /// Stages absorption of the child fault this evaluation is processing. Only valid
     /// during a child-fault evaluation with a <c>Defer</c> or <c>Complete</c> continuation;
     /// <paramref name="incidentId"/> must name the evaluation's incident. Applied atomically in the
     /// same checkpoint commit as the continuation.
@@ -99,7 +99,7 @@ public interface IRuntimeActivityExecutionContext : IActivityExecutionContext
 
     /// <summary>
     /// Stages a non-terminal, coded notification from this still-running structural child to its own
-    /// committed parent (spec 126, seam C). The notification always and only reaches the notifying child's
+    /// committed parent. The notification always and only reaches the notifying child's
     /// committed parent — there is no target parameter (spoof-proofing). Valid during any of the child's own
     /// evaluations that end in a <c>Defer</c> or <c>Complete</c> continuation; it commits atomically with that
     /// state as a durable post-commit work item. Staging from a root activity (no committed parent) or

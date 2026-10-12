@@ -108,7 +108,7 @@ public sealed class WorkflowsRuntimeApiFeatureTests
     {
     }
 
-    // Kept beside the composition test (§2.23.1): asserts what the feature must not register, the concrete payload reader.
+    // Kept beside the composition test: asserts what the feature must not register, the concrete payload reader.
     [Fact]
     public void Registers_value_payload_reader_through_its_feature_contract_only()
     {
@@ -120,7 +120,7 @@ public sealed class WorkflowsRuntimeApiFeatureTests
         Assert.DoesNotContain(services, descriptor => descriptor.ServiceType == typeof(ActivityExecutionValuePayloadReader));
     }
 
-    // Kept beside the composition test (§2.23.1): asserts the scheduler work-handler order and what the feature must not register.
+    // Kept beside the composition test: asserts the scheduler work-handler order and what the feature must not register.
     [Fact]
     public void RegistersRuntimeExecutionServicesAndOperationSeams()
     {
@@ -129,7 +129,7 @@ public sealed class WorkflowsRuntimeApiFeatureTests
         services.AddFoundationIdentityAbstractions();
         new WorkflowsRuntimeApiFeature().ConfigureServices(services);
 
-        // TS-1 (constitution §2.23.1): assert registration presence + resolvability, not internal wiring.
+        // TS-1: assert registration presence + resolvability, not internal wiring.
         // ImplementationType / ServiceLifetime / ImplementationFactory pinning was removed so that swapping an
         // equivalent implementation no longer trips this test. Behavioural contracts are preserved: the
         // negative-wiring assertions prove certain contracts are deliberately NOT registered, and the scheduler
@@ -305,7 +305,7 @@ public sealed class WorkflowsRuntimeApiFeatureTests
             Array.FindIndex(schedulerWorkHandlers, handler => handler is NoopWorkflowSchedulerWorkHandler));
     }
 
-    // Kept beside the composition test (§2.23.1): replacement, a host's policy registered first is kept.
+    // Kept beside the composition test: replacement, a host's policy registered first is kept.
     [Fact]
     public void RegistersRuntimeDomainRetryPolicyAsOverridableDefault()
     {
@@ -318,7 +318,7 @@ public sealed class WorkflowsRuntimeApiFeatureTests
         Assert.IsType<CustomRuntimeDomainRetryPolicy>(provider.GetRequiredService<IRuntimeDomainRetryPolicy>());
     }
 
-    // Kept beside the composition test (§2.23.1): replacement, a host's policy registered first is kept.
+    // Kept beside the composition test: replacement, a host's policy registered first is kept.
     [Fact]
     public void RegistersRuntimeFaultCapturePolicyAsOverridableDefault()
     {
@@ -331,7 +331,7 @@ public sealed class WorkflowsRuntimeApiFeatureTests
         Assert.IsType<CustomRuntimeFaultCapturePolicy>(provider.GetRequiredService<IRuntimeFaultCapturePolicy>());
     }
 
-    // Kept beside the composition test (§2.23.1): replacement, a host's store registered first is kept.
+    // Kept beside the composition test: replacement, a host's store registered first is kept.
     [Fact]
     public void RegistersWorkflowSchedulerPoisonStoreAsOverridableDefault()
     {
@@ -344,7 +344,7 @@ public sealed class WorkflowsRuntimeApiFeatureTests
         Assert.IsType<CustomWorkflowSchedulerPoisonStore>(provider.GetRequiredService<IWorkflowSchedulerPoisonStore>());
     }
 
-    // Kept beside the composition test (§2.23.1): replacement, a host's policy registered first is kept.
+    // Kept beside the composition test: replacement, a host's policy registered first is kept.
     [Fact]
     public void RegistersRuntimeVolatileWaitPolicyAsOverridableDefault()
     {
@@ -357,7 +357,7 @@ public sealed class WorkflowsRuntimeApiFeatureTests
         Assert.IsType<CustomRuntimeVolatileWaitPolicy>(provider.GetRequiredService<IRuntimeVolatileWaitPolicy>());
     }
 
-    // Kept beside the composition test (§2.23.1): replacement, a host's provider registered first is kept.
+    // Kept beside the composition test: replacement, a host's provider registered first is kept.
     [Fact]
     public void RegistersRuntimePauseDecisionProviderAsOverridableDefault()
     {
@@ -370,7 +370,7 @@ public sealed class WorkflowsRuntimeApiFeatureTests
         Assert.IsType<CustomRuntimePauseDecisionProvider>(provider.GetRequiredService<IRuntimePauseDecisionProvider>());
     }
 
-    // Kept beside the composition test (§2.23.1): replacement, a host's scheduler registered first is kept.
+    // Kept beside the composition test: replacement, a host's scheduler registered first is kept.
     [Fact]
     public void RegistersRuntimeGeneratorEmissionSchedulerAsOverridableDefault()
     {
@@ -383,7 +383,7 @@ public sealed class WorkflowsRuntimeApiFeatureTests
         Assert.IsType<CustomRuntimeGeneratorEmissionScheduler>(provider.GetRequiredService<IRuntimeGeneratorEmissionScheduler>());
     }
 
-    // Kept beside the composition test (§2.23.1): replacement, a host's gate registered first is kept.
+    // Kept beside the composition test: replacement, a host's gate registered first is kept.
     [Fact]
     public void RegistersWorkflowSchedulerPauseGateAsOverridableDefault()
     {
@@ -396,7 +396,7 @@ public sealed class WorkflowsRuntimeApiFeatureTests
         Assert.IsType<CustomWorkflowSchedulerPauseGate>(provider.GetRequiredService<IWorkflowSchedulerPauseGate>());
     }
 
-    // Kept beside the composition test (§2.23.1): replacement, a host's store registered first is kept.
+    // Kept beside the composition test: replacement, a host's store registered first is kept.
     [Fact]
     public void RegistersWorkflowHoldStateStoreAsOverridableDefault()
     {
@@ -409,7 +409,7 @@ public sealed class WorkflowsRuntimeApiFeatureTests
         Assert.IsType<CustomWorkflowHoldStateStore>(provider.GetRequiredService<IWorkflowHoldStateStore>());
     }
 
-    // Kept beside the composition test (§2.23.1): replacement, a host's lookup registered first is kept.
+    // Kept beside the composition test: replacement, a host's lookup registered first is kept.
     [Fact]
     public void RegistersBookmarkStimulusLookupAsOverridableDefault()
     {
@@ -422,7 +422,7 @@ public sealed class WorkflowsRuntimeApiFeatureTests
         Assert.IsType<CustomBookmarkStimulusLookup>(provider.GetRequiredService<IBookmarkStimulusLookup>());
     }
 
-    // Kept beside the composition test (§2.23.1): replacement, a host's resolver registered first is kept.
+    // Kept beside the composition test: replacement, a host's resolver registered first is kept.
     [Fact]
     public void RegistersBookmarkResumeResolverAsOverridableDefault()
     {
@@ -435,7 +435,7 @@ public sealed class WorkflowsRuntimeApiFeatureTests
         Assert.IsType<CustomBookmarkResumeResolver>(provider.GetRequiredService<IBookmarkResumeResolver>());
     }
 
-    // Kept beside the composition test (§2.23.1): replacement, a host's dispatcher registered first is kept.
+    // Kept beside the composition test: replacement, a host's dispatcher registered first is kept.
     [Fact]
     public void RegistersBookmarkResumeDispatcherAsOverridableDefault()
     {

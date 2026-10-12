@@ -231,7 +231,7 @@ public sealed class RuntimeResumptionServiceTests
     }
 
     /// <summary>
-    /// Spec 184, FR-027: candidates a source supplies, as the distributed runtime's reclaim does, are re-driven by the
+    /// Candidates a source supplies, as the distributed runtime's reclaim does, are re-driven by the
     /// next sweep although no lease timed out; one the sweep re-drove is settled, one whose re-drive faulted is listed
     /// again and re-driven by the following sweep.
     /// </summary>
@@ -971,7 +971,7 @@ public sealed class RuntimeResumptionServiceTests
     [Fact]
     public async Task SweepAsync_PurgesResidualWorkForTerminalExecutionInsteadOfRedriving()
     {
-        // spec 113: the drainer's terminal-status guard strands a RunSchedulerWork item in the durable queue when a
+        // The drainer's terminal-status guard strands a RunSchedulerWork item in the durable queue when a
         // workflow reaches a terminal status. Backlog discovery has no terminal filter, so the completed execution is
         // surfaced every sweep. Re-driving it would enqueue yet another stranded item and emit a fresh drain span each
         // tick — perpetual churn. The sweep must instead purge the residue and never re-drive a terminal execution.
@@ -1044,7 +1044,7 @@ public sealed class RuntimeResumptionServiceTests
     [Fact]
     public async Task SweepAsync_ReapsLingeringTerminalMailbox_AfterPurgingResidualWork()
     {
-        // #542 / spec 128 straggler reaper: a terminal execution whose mailbox outlived it (eager eviction disabled,
+        // #542 straggler reaper: a terminal execution whose mailbox outlived it (eager eviction disabled,
         // skipped, or the terminal status arrived from a post-commit intent rather than the dispatched command) is
         // collected by the sweep — it purges residual work AND passivates the mailbox through the agent provider.
         var queue = new InMemoryWorkflowSchedulerWorkQueue();

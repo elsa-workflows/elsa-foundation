@@ -27,7 +27,7 @@ public sealed class RuntimeExecutionLivenessStateStoreTests
         Assert.Null(await store.FindAsync("wfexec-1", "missing"));
     }
 
-    /// <summary>Spec 184, FR-024: reclaim lists what one owner holds, by execution lease or by heartbeat, page by page.</summary>
+    /// <summary>Reclaim lists what one owner holds, by execution lease or by heartbeat, page by page.</summary>
     [Fact]
     public async Task InMemoryOperationalStateStore_ListsWhatOneOwnerHoldsPageByPage()
     {

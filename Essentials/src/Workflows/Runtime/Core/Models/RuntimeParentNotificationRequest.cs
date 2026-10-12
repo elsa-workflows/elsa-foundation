@@ -4,8 +4,8 @@ using System.Text.Json;
 namespace Elsa.Workflows.Runtime.Core.Models;
 
 /// <summary>
-/// Activity-owned request raised by a still-running structural child to notify its own committed parent
-/// (spec 126, seam C). Staged during any of the child's own evaluations (invoke, child-completion /
+/// Activity-owned request raised by a still-running structural child to notify its own committed parent.
+/// Staged during any of the child's own evaluations (invoke, child-completion /
 /// child-fault of its own children) and committed atomically with the child's <c>Defer</c>/<c>Complete</c>
 /// state as a durable post-commit work item. The child cannot name a target: the notification always and
 /// only reaches the notifying child's committed parent, derived by the runtime — this is the seam's

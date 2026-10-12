@@ -8,17 +8,17 @@ using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Elsa.Workflows.Runtime.Distributed.Placement;
 
-/// <summary>Why a host id's leases were reclaimed (spec 184, FR-028).</summary>
+/// <summary>Why a host id's leases were reclaimed.</summary>
 public enum HostIdReclaimKind
 {
-    /// <summary>A shell's distributed runtime first activated in a new process under the host id (FR-022).</summary>
+    /// <summary>A shell's distributed runtime first activated in a new process under the host id.</summary>
     JoinSweep,
 
-    /// <summary>A fresh read showed the host id departed: no live incarnation, its latest one left or expired (FR-023).</summary>
+    /// <summary>A fresh read showed the host id departed: no live incarnation, its latest one left or expired.</summary>
     Departure
 }
 
-/// <summary>What one reclaim released, per kind of per-execution lease (FR-028).</summary>
+/// <summary>What one reclaim released, per kind of per-execution lease.</summary>
 public sealed record HostIdReclaimResult(int PlacementLeases, int TransportItemLeases, int RecoveryCandidates)
 {
     public static HostIdReclaimResult None { get; } = new(0, 0, 0);
@@ -28,14 +28,14 @@ public sealed record HostIdReclaimResult(int PlacementLeases, int TransportItemL
 }
 
 /// <summary>
-/// Reclaims the per-execution leases held under one host id in one persistence scope of this shell's stores (spec 184,
-/// FR-024): it releases each placement lease and makes each transport item lease visible, both as a compare-and-set on
+/// Reclaims the per-execution leases held under one host id in one persistence scope of this shell's stores:
+/// it releases each placement lease and makes each transport item lease visible, both as a compare-and-set on
 /// the lease as observed, and it makes each execution whose execution lease or heartbeat is held under the host id a
 /// recovery candidate at once.
 /// </summary>
 /// <remarks>
 /// <para>
-/// <b>Reclaim never decides a commit</b> (FR-025, invariant 2). It writes no execution lease and no fencing token: a
+/// <b>Reclaim never decides a commit</b>. It writes no execution lease and no fencing token: a
 /// re-drive acquires its own lease, with a strictly greater token, so a member reclaimed from while it is still alive
 /// reaches its commit with a stale token and is refused by the fence.
 /// </para>

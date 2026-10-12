@@ -24,8 +24,8 @@ public sealed record ArtifactForeignOwnerContext(
 /// </summary>
 /// <remarks>
 /// <para>
-/// <b>There is no takeover answer, and adding one would not help (T124).</b> A policy that could authorise
-/// reconciliation to seize a foreign-owned slot would break the never-reclaim half of T118 and let a shell reload
+/// <b>There is no takeover answer, and adding one would not help.</b> A policy that could authorise
+/// reconciliation to seize a foreign-owned slot would break the never-reclaim rule and let a shell reload
 /// silently revert an operator's publish. Three independent things stop it, so the boundary does not rest on this
 /// comment:
 /// </para>
@@ -46,7 +46,7 @@ public sealed record ArtifactForeignOwnerContext(
 /// </item>
 /// </list>
 /// <para>
-/// Takeover therefore stays where T118 put it: behind the explicit
+/// Takeover therefore stays behind the explicit
 /// <see cref="WorkflowActivationOwnershipIntent.TakeOver"/> that only an operator-initiated command carries, and
 /// which reconciliation never passes.
 /// </para>

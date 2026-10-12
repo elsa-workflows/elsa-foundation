@@ -148,7 +148,7 @@ public sealed class RecurringTriggerScheduleIndexer : IWorkflowTriggerIndexer
 
             // A single-descriptor node (Timer/Cron) keeps the plain (artifact, node) schedule id so its identity is
             // unchanged; a fan-out node (a BPMN process with several timer starts) disambiguates each schedule by
-            // the descriptor's stimulus hash so the rows do not collapse onto one id (spec 117 D3).
+            // the descriptor's stimulus hash so the rows do not collapse onto one id.
             var fanOut = descriptors.Count > 1;
             foreach (var descriptor in descriptors)
             {

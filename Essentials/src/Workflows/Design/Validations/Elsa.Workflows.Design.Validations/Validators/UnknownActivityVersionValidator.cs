@@ -7,7 +7,7 @@ using Microsoft.Extensions.Options;
 namespace Elsa.Workflows.Design.Validations.Validators;
 
 /// <summary>
-/// Baseline validator (FR-033, 2026-07-05 amendment). For every catalog-backed activity in the
+/// Baseline validator. For every catalog-backed activity in the
 /// Draft (root + nested), resolves the node's <c>ActivityVersionId</c> via
 /// <see cref="CatalogVersionResolver"/> and emits a <see cref="ValidationError"/> when it does not
 /// resolve. Engine intrinsics are excluded because they deliberately have no catalog version.
@@ -18,8 +18,8 @@ namespace Elsa.Workflows.Design.Validations.Validators;
 /// </summary>
 /// <remarks>
 /// A draft referencing an activity from an uninstalled package carries this error (and cannot
-/// promote) until the package is reinstalled — intended semantics, ratified with the FR-033
-/// amendment. Other catalog-consulting validators (<see cref="RequiredInputOutputValidator"/>)
+/// promote) until the package is reinstalled — intended semantics.
+/// Other catalog-consulting validators (<see cref="RequiredInputOutputValidator"/>)
 /// skip the unresolvable node — this validator owns the report. Recurses via the iterative
 /// <see cref="ActivityTreeWalker"/>; max depth is
 /// <see cref="WorkflowDesignValidatorOptions.MaxRecursionDepth"/>.

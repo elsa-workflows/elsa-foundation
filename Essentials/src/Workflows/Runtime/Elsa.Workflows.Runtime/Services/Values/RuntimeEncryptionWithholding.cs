@@ -4,7 +4,7 @@ using Elsa.Workflows.Runtime.Core.Models;
 namespace Elsa.Workflows.Runtime.Services.Values;
 
 /// <summary>
-/// The producer withholding rule of spec 188, FR-010, in one place. Phase 0 has no encryption at rest, so a present value
+/// The producer withholding rule for values that require encryption, in one place. Phase 0 has no encryption at rest, so a present value
 /// whose policy requires encryption is replaced, before any inline or external storage decision, by a
 /// <see cref="WithheldValueKind.PolicyRequiresEncryption"/> marker that holds no value. The value cannot be recovered; a
 /// reader that needs it refuses the marker with <c>VF-ACT-010</c>.

@@ -104,7 +104,7 @@ public sealed class EfExecutionCommandTransportTests
     }
 
     /// <summary>
-    /// Spec 184, FR-019 and FR-024: a lease is released early only by its holder under its token, as a compare-and-set;
+    /// A lease is released early only by its holder under its token, as a compare-and-set;
     /// the item is visible at once, the released holder's acknowledgement is refused, and the next lease issues a
     /// greater token. Peeking leases nothing, and the holder's live leases can be listed.
     /// </summary>

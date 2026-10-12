@@ -3,7 +3,7 @@ using Elsa.Workflows.Design.Core.Models;
 namespace Elsa.Workflows.Design.Validations.Core.Models;
 
 /// <summary>
-/// The one shape of a credential-literal refusal (spec 188, FR-008), shared by the design-time validator and
+/// The one shape of a credential-literal refusal, shared by the design-time validator and
 /// publication: the input's path, the rule identifier as its type, and a message that starts with the rule identifier,
 /// so every surface that shows only messages still carries it. Nothing here receives the bound value.
 /// </summary>

@@ -9,10 +9,10 @@ using static Elsa.Workflows.Runtime.Distributed.Tests.Placement.PlacementCluster
 namespace Elsa.Workflows.Runtime.Distributed.Tests.Placement;
 
 /// <summary>
-/// Spec 184, User Story 1 and SC-001: during a rolling upgrade, an execution that needs what only upgraded members can
+/// During a rolling upgrade, an execution that needs what only upgraded members can
 /// run is never placed on a member without it, and every such execution is placed on one with it. The claimant checks
-/// itself (FR-011), a refused claim has no side effect but forwarding (FR-013), and a requirement that cannot be resolved
-/// is never treated as met (FR-016).
+/// itself, a refused claim has no side effect but forwarding, and a requirement that cannot be resolved
+/// is never treated as met.
 /// </summary>
 public sealed class RollingUpgradePlacementTests : IAsyncDisposable
 {
@@ -30,7 +30,7 @@ public sealed class RollingUpgradePlacementTests : IAsyncDisposable
 
         var result = await old.Runtime.DispatchAsync(RuntimeWork.Start(_needsVersionTwo, ExecutionId, _cluster.Now, "start"));
 
-        // Accepted for routing, with the reason it did not run here, and no other side effect (FR-013).
+        // Accepted for routing, with the reason it did not run here, and no other side effect.
         Assert.Equal(WorkflowExecutionCommandDispatchStatus.Deferred, result.Status);
         Assert.Equal(nameof(PlacementRefusalKind.RequirementUnmet), result.Metadata[ForwardingWorkflowExecutionActor.PlacementRefusedMetadataKey]);
         Assert.Contains("activates runtime consumer acme.approvals at schema version 2", result.Reason, StringComparison.Ordinal);
@@ -73,7 +73,7 @@ public sealed class RollingUpgradePlacementTests : IAsyncDisposable
     }
 
     /// <summary>
-    /// Each requirement kind of FR-006 in both directions: the member without it forwards, the member with it claims.
+    /// Each placement requirement kind in both directions: the member without it forwards, the member with it claims.
     /// </summary>
     [Theory]
     [InlineData("consumer schema version", "activates runtime consumer acme.approvals at schema version 2")]
@@ -109,7 +109,7 @@ public sealed class RollingUpgradePlacementTests : IAsyncDisposable
         Assert.Empty(withoutIt.Runtime.Commands.Committed);
     }
 
-    /// <summary>User Story 1, scenario 4, and FR-015: a member that loses the requirement stops renewing and hands the
+    /// <summary>A member that loses the requirement stops renewing and hands the
     /// execution off, and no incapable member claims it; while it keeps the requirement, it renews.</summary>
     [Fact]
     public async Task A_member_that_loses_the_requirement_hands_the_execution_off_and_no_incapable_member_claims_it()
@@ -139,7 +139,7 @@ public sealed class RollingUpgradePlacementTests : IAsyncDisposable
         Assert.Equal(1, await _cluster.State.Transport.CountPendingAsync(ExecutionId));
     }
 
-    /// <summary>FR-016: a requirement that cannot be resolved, because the pinned executable cannot be loaded, is never
+    /// <summary>A requirement that cannot be resolved, because the pinned executable cannot be loaded, is never
     /// treated as satisfied, on either claim path.</summary>
     [Fact]
     public async Task A_requirement_that_cannot_be_resolved_is_never_claimed_on_either_claim_path()

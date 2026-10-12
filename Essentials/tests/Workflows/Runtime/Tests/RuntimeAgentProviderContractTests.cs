@@ -128,7 +128,7 @@ public sealed class RuntimeAgentProviderContractTests
     [Fact]
     public void StimulusDispatchRequest_KeepsAmbientServicesOffTheDurableMetadataChannel()
     {
-        // Spec 089 E-D4 / FR-021: the request carries request-affine ambient services ONLY on the dedicated
+        // The request carries request-affine ambient services ONLY on the dedicated
         // DispatchOptions channel (a live reference), never through the durable Metadata channel that flows into the
         // persisted WorkflowExecutionCommandEnvelope. Reflection-pin both halves of that invariant.
         var options = new WorkflowExecutionCommandDispatchOptions(new EmptyServiceProvider());

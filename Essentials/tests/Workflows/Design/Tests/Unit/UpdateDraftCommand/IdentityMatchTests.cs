@@ -5,7 +5,7 @@ using static Elsa.Workflows.Design.Tests.Infrastructure.UpdateDraftTestKit;
 namespace Elsa.Workflows.Design.Tests.Unit.UpdateDraftCommand;
 
 /// <summary>
-/// T015 (SC-015, FR-013d) — identity vs payload, driving
+/// Identity vs payload, driving
 /// <see cref="Elsa.Workflows.Design.Persistence.Core.Services.DraftStateDiffEngine"/> directly
 /// (per-diff mutation-event publication retired from the mutation command). Same match key +
 /// changed payload → a single UPDATE event. A differing key → a REMOVE of the old + an ADD of the

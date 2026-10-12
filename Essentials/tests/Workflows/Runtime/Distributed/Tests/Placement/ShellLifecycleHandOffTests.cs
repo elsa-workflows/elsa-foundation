@@ -20,7 +20,7 @@ using static Elsa.Workflows.Runtime.Distributed.Tests.Placement.PlacementCluster
 namespace Elsa.Workflows.Runtime.Distributed.Tests.Placement;
 
 /// <summary>
-/// Spec 184, FR-021 and FR-022, on a real CShells host whose shell runs the distributed runtime over a store its
+/// Shell lifecycle hand-off, on a real CShells host whose shell runs the distributed runtime over a store its
 /// generations share. The leases a shell's runtime holds are its host id's: a reload, which activates the new generation
 /// before it drains the old one, leaves every one of them held and the new generation renews them, while a host stop
 /// hands every one of them off.

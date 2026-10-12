@@ -12,7 +12,7 @@ using Microsoft.Extensions.Options;
 namespace Elsa.Workflows.Design.Reconciliation.Git.Services;
 
 /// <summary>
-/// The inbound git reconciliation source (ADR 0034; <c>SourceKind = "git"</c>). Reads immutable
+/// The inbound git reconciliation source (<c>SourceKind = "git"</c>). Reads immutable
 /// <c>{WorkflowsPath}/{definitionId}/versions/{semver}.json</c> content plus the mutable sibling
 /// <c>definition.json</c> from a local working clone, emitting one
 /// <see cref="WorkflowVersionReconciliationModel"/> per version file. Read lazily per call, so a re-run
@@ -97,7 +97,7 @@ public sealed class GitWorkflowReconciliationSource(
         }
     }
 
-    /// <summary>The committer date of the commit that introduced the immutable version file (FR-005).</summary>
+    /// <summary>The committer date of the commit that introduced the immutable version file.</summary>
     private DateTimeOffset? ReadCommitterDate(string repoPath, string file)
     {
         var relativePath = Path.GetRelativePath(repoPath, file).Replace(Path.DirectorySeparatorChar, '/');

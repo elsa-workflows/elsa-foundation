@@ -7,18 +7,18 @@ using Microsoft.Extensions.DependencyInjection;
 namespace Elsa.Workflows.Runtime.Distributed.Placement;
 
 /// <summary>
-/// Resolves an execution's placement requirement before a claim, on both claim paths (spec 184, FR-005 and FR-016).
+/// Resolves an execution's placement requirement before a claim, on both claim paths.
 /// </summary>
 /// <remarks>
 /// <para>
 /// The pin is read from the execution's durable state when the execution exists, and otherwise from a start command
 /// for it: the command in hand on the activation path, or a pending one the transport holds on the pump's path. A pin
-/// is an immutable, content-addressed executable (ADR 0038), so its check subject is cached per artifact id for the life
+/// is an immutable, content-addressed executable, so its check subject is cached per artifact id for the life
 /// of the shell; only a successful load is cached, so an artifact that arrives later resolves then.
 /// </para>
 /// <para>
 /// Every failure resolves to an unresolved requirement with its reason, never to "nothing required": an execution whose
-/// pin cannot be read or loaded is not runnable here (FR-016).
+/// pin cannot be read or loaded is not runnable here.
 /// </para>
 /// </remarks>
 public sealed class ExecutionPlacementRequirementResolver
@@ -53,7 +53,7 @@ public sealed class ExecutionPlacementRequirementResolver
         // The state store and the transport behind `pending` are pluggable (EF, HTTP, etc.) and can throw
         // provider-specific exceptions this resolver cannot enumerate, on top of StartPin's own JSON/data-format and
         // invalid-operation exceptions; per the class remarks, any failure here must resolve to "not placeable" rather
-        // than crash the caller (FR-016). Cancellation and out-of-memory still propagate.
+        // than crash the caller. Cancellation and out-of-memory still propagate.
         catch (Exception exception) when (exception is not OperationCanceledException and not OutOfMemoryException)
         {
             return ExecutionPlacementRequirement.Unresolved($"the execution's pinned executable cannot be read ({exception.GetType().Name}: {exception.Message})");
@@ -79,7 +79,7 @@ public sealed class ExecutionPlacementRequirementResolver
         }
         // The executable reader is pluggable and can throw provider-specific data-format or storage exceptions this
         // resolver cannot enumerate; per the class remarks, any failure here must resolve to "not placeable" rather
-        // than crash the caller (FR-016). Cancellation and out-of-memory still propagate.
+        // than crash the caller. Cancellation and out-of-memory still propagate.
         catch (Exception exception) when (exception is not OperationCanceledException and not OutOfMemoryException)
         {
             return ExecutionPlacementRequirement.Unresolved($"pinned executable '{pin.ArtifactId}' cannot be loaded ({exception.GetType().Name}: {exception.Message})");

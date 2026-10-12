@@ -7,7 +7,7 @@ using static Elsa.Workflows.Design.Tests.Infrastructure.UpdateDraftTestKit;
 namespace Elsa.Workflows.Design.Tests.Unit.UpdateDraftCommand;
 
 /// <summary>
-/// T011 (FR-001a) — layout diff coverage, driving
+/// Layout diff coverage, driving
 /// <see cref="Elsa.Workflows.Design.Persistence.Core.Services.DraftStateDiffEngine"/> directly
 /// (per-diff mutation-event publication retired from the mutation command). Designer-layout records
 /// live on the <c>WorkflowDefinitionDraftLayout</c> sibling, NOT inside

@@ -814,7 +814,7 @@ public sealed class EfRecurringTriggerScheduleStore(
         state.Entity.IsActive = state.IsActive;
         state.Entity.ContentJson = JsonSerializer.Serialize(new ProjectionStateContent(ProjectionKind, state.ActivationId, state.ArtifactId is null ? null : Decode(state.ArtifactId), state.IsActive, state.ScheduleCount, state.ProjectionFingerprint, state.ScheduleIds, state.ScheduleFingerprints), JsonOptions);
         // Every declared content column is rewritten from the upcast snapshot together, so no column is left at the
-        // row's old stamp once SchemaVersion moves to the current version (spec 180, FR-014; #2144).
+        // row's old stamp once SchemaVersion moves to the current version (#2144).
         state.Entity.ScheduleIdsJson = JsonSerializer.Serialize(state.ScheduleIds, JsonOptions);
         state.Entity.ScheduleFingerprintsJson = JsonSerializer.Serialize(state.ScheduleFingerprints, JsonOptions);
         state.Entity.SchemaVersion = RuntimeOperationalStateEfModule.SchemaVersion;
@@ -830,7 +830,7 @@ public sealed class EfRecurringTriggerScheduleStore(
         try
         {
             // The id and fingerprint sets restate the content's and are compared with it and returned, so they are content
-            // too, upcast from the row's stamp together with it (spec 180, FR-009; #2140, #2144).
+            // too, upcast from the row's stamp together with it (#2140, #2144).
             var upcast = RuntimeOperationalStateEfModule.Chain.Upcast<RecurringTriggerScheduleProjectionStateEntity>(
                 entity.SchemaVersion,
                 (nameof(entity.ContentJson), entity.ContentJson),

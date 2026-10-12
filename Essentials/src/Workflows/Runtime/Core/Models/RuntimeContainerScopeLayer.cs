@@ -4,7 +4,7 @@ namespace Elsa.Workflows.Runtime.Core.Models;
 
 /// <summary>
 /// One concrete container activity execution contributing a variable scope to a descendant's
-/// visible scope chain (ADR 0027, #210). Layers are supplied outermost-first by the runtime, which
+/// visible scope chain (#210). Layers are supplied outermost-first by the runtime, which
 /// reads the declared variables from the container's compiled executable structure and the current
 /// values from the container execution's persisted snapshot (its single source of truth).
 /// </summary>

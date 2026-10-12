@@ -1,7 +1,7 @@
 namespace Elsa.Workflows.Runtime.Core.Models;
 
 /// <summary>
-/// The burst-scoped reconstructible cache for one drain of one workflow execution (ADR 0031 item b, spec 111). While a
+/// The burst-scoped reconstructible cache for one drain of one workflow execution. While a
 /// burst (a sticky single-writer drain) owns an execution, activities and drain-path handlers may publish and read
 /// heavy in-memory objects — a loaded model, an open client, a parsed document, or (the first consumer) the pinned
 /// executable artifact — through this cache instead of rebuilding or re-reading them on every hop.
@@ -21,7 +21,7 @@ namespace Elsa.Workflows.Runtime.Core.Models;
 /// drains and the table never grows unbounded. Two sequential drains of the same execution never share entries.
 /// </para>
 /// <para>
-/// <b>Concurrency.</b> Single-writer-per-execution is the ratified concurrency envelope (ADR 0031): one burst drains
+/// <b>Concurrency.</b> Single-writer-per-execution is the ratified concurrency envelope: one burst drains
 /// one execution with no concurrent writer, so get-or-add needs no locking and single-flight is trivial. This type is
 /// NOT thread-safe and must not be shared across executions.
 /// </para>
@@ -107,7 +107,7 @@ public sealed class WorkflowBurstScope(string workflowExecutionId) : IAsyncDispo
     private static void AssertReconstructible(object? value)
     {
 #if DEBUG
-        // The must-survive-⇒-durable-value rule (ADR 0031). Durable value carriers are the home of record for values
+        // The must-survive-⇒-durable-value rule. Durable value carriers are the home of record for values
         // that outlive a burst; caching one here would let a caller mistake the cache for durable storage. Cheap
         // reference check, DEBUG-only, zero release cost.
         if (value is DurableValueState or DurableValueExternalReference)

@@ -25,7 +25,7 @@ public sealed class WorkflowsRuntimeResumptionFeatureTests
 
         new WorkflowsRuntimeResumptionFeature().ConfigureServices(services);
 
-        // TS-1 (§2.23.1): single-implementation service asserted by registration presence, not implementation-type
+        // TS-1: single-implementation service asserted by registration presence, not implementation-type
         // or lifetime pinning. The resumption pump task is a named participant in the multi-implementation
         // IRecurringTask collection, preserved as a composition contract.
         Assert.Contains(services, d =>

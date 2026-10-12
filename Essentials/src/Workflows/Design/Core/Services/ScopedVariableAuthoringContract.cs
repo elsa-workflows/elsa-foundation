@@ -3,7 +3,7 @@ using Elsa.Workflows.Design.Core.Models;
 namespace Elsa.Workflows.Design.Core.Services;
 
 /// <summary>
-/// Backend wire contract for scoped-variable authoring (ADR 0027), consumed by the external Studio
+/// Backend wire contract for scoped-variable authoring, consumed by the external Studio
 /// client. Surfaces the variables visible from a selected activity (so pickers show only in-scope
 /// variables by default) and non-blocking shadowing warnings. Workflow-scoped and container-scoped
 /// declarations are presented through one uniform <see cref="VisibleVariableView"/> shape, so the

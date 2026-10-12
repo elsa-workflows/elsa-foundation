@@ -5,7 +5,7 @@ using static Elsa.Workflows.Design.Tests.Infrastructure.UpdateDraftTestKit;
 namespace Elsa.Workflows.Design.Tests.Unit.UpdateDraftCommand;
 
 /// <summary>
-/// T007 (FR-013, SC-010) — per-activity I/O diff coverage, driving
+/// Per-activity I/O diff coverage, driving
 /// <see cref="Elsa.Workflows.Design.Persistence.Core.Services.DraftStateDiffEngine"/> directly
 /// (per-diff mutation-event publication retired from the mutation command). A matched activity
 /// (same <c>NodeId</c>) diffs its <c>Inputs</c>/<c>Outputs</c> by (<c>NodeId</c>,<c>ReferenceKey</c>):

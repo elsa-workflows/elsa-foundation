@@ -2,7 +2,7 @@ namespace Elsa.Workflows.Runtime.Api.Coalescing;
 
 /// <summary>
 /// The effective checkpoint-persistence cadence of the host and the activity-execution inspection granularity it
-/// implies, projected onto the instance read model (ADR 0032 R3). Under <see cref="CheckpointPersistenceMode.Coalesced"/>
+/// implies, projected onto the instance read model. Under <see cref="CheckpointPersistenceMode.Coalesced"/>
 /// persistence, intra-segment inspection projections fold last-writer-per-state between durable boundaries, so
 /// per-activity inspection evidence becomes boundary-level rather than activity-level. Surfacing that here makes the
 /// coarsening an explicit, configured property of the response rather than a silent loss the inspection UI must guess at.

@@ -8,9 +8,9 @@ using Xunit;
 namespace Elsa.Workflows.Runtime.Tests;
 
 /// <summary>
-/// <see cref="SecretMaskedException"/> (spec 188, T074, research R9): it carries the masked message, stack trace and
+/// <see cref="SecretMaskedException"/>: it carries the masked message, stack trace and
 /// inner exception chain of the exception it stands in for, that exception's type name and its classification, and
-/// nothing else of it; the fault capture policy reports the original type name for it (T076).
+/// nothing else of it; the fault capture policy reports the original type name for it.
 /// </summary>
 public sealed class SecretMaskedExceptionTests
 {

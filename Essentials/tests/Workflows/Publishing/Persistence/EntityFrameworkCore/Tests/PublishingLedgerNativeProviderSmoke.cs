@@ -74,7 +74,7 @@ internal sealed record PublishingNativeProvider(
 }
 
 /// <summary>
-/// Native-provider round trips for the P01, P05 and P06 ledger stores and for the ADR 0066 ordered publication,
+/// Native-provider round trips for the P01, P05 and P06 ledger stores and for the ordered publication,
 /// against each provider's real collation, uniqueness and concurrency behaviour. Every race holds its contenders
 /// until all have read, so each one is a genuine write-write conflict the provider has to arbitrate.
 /// </summary>

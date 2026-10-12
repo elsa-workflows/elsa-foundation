@@ -9,7 +9,7 @@ public static class RuntimeWorkflowTestScopeEfModule
     public const string SchemaVersion = "1.0.0";
     public const string SchemaFamily = "RuntimeWorkflowTestScope";
     /// <summary>The family's one chain, from this assembly's declaration: what every reader of the family checks and
-    /// upcasts through (spec 180, FR-010).</summary>
+    /// upcasts through.</summary>
     public static readonly EfSchemaChain Chain = EfSchemaChain.Of(typeof(RuntimeWorkflowTestScopeEfModule).Assembly, SchemaFamily);
     public const int IdentityMaximumLength = 128;
     public const int TenantMaximumLength = 256;

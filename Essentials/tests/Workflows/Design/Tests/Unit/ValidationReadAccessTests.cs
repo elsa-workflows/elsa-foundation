@@ -4,13 +4,13 @@ using Xunit;
 namespace Elsa.Workflows.Design.Tests.Unit;
 
 /// <summary>
-/// SC-013 + Unit C FR-021/022. Validation errors are derived state (no persisted sibling and no
+/// Validation errors are derived state (no persisted sibling and no
 /// dedicated read contract — the former <c>IWorkflowDefinitionDraftValidation</c> was deleted).
 /// <see cref="ValidationError"/> still lives in <c>Elsa.Workflows.Design.Validations.Core</c> so UI
 /// / promotion-gate consumers read the derived error set without taking a dependency on
-/// <c>*.Persistence.Core</c>. The grouping key is <c>(Path, Type)</c> per FR-022 — verified here
-/// against representative outputs that follow research items R2 (Path format) and R3 (Type
-/// categories).
+/// <c>*.Persistence.Core</c>. The grouping key is <c>(Path, Type)</c> (see <see cref="ValidationError"/>), verified here
+/// against representative outputs that follow its path format and type
+/// categories.
 /// </summary>
 public sealed class ValidationReadAccessTests
 {
@@ -24,8 +24,8 @@ public sealed class ValidationReadAccessTests
     [Fact]
     public void Errors_grouped_by_Path_and_Type_pair()
     {
-        // Two missing required inputs on the same activity collapse to one (Path, Type) group
-        // even though the messages differ — matches FR-022's "multiple errors may share scope".
+        // Two missing required inputs on the same activity share a Type but not a Path, so they form two
+        // (Path, Type) groups rather than one; with the node-level and workflow-scope errors that makes four.
         IReadOnlyList<ValidationError> errors = [
             new("n1/inputs/body",   "InputOutput/MissingRequired", "body is required"),
             new("n1/inputs/header", "InputOutput/MissingRequired", "header is required"),
@@ -62,7 +62,7 @@ public sealed class ValidationReadAccessTests
     [InlineData("Variables/Uniqueness")]
     [InlineData("InputOutput/MissingRequired")]
     [InlineData("Expressions/UnresolvedVariable")]
-    [InlineData("Http/AuthPolicyUnknown")]      // cross-feature extension per FR-034
+    [InlineData("Http/AuthPolicyUnknown")]      // cross-feature extension
     public void Type_format_supports_baseline_and_extension_categories_per_R3(string type)
     {
         var error = new ValidationError("$workflow", type, "test");

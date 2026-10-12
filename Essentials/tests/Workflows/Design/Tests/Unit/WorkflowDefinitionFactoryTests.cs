@@ -5,10 +5,10 @@ using Xunit;
 namespace Elsa.Workflows.Design.Tests.Unit;
 
 /// <summary>
-/// Provider-neutral conversion (T070) of the soft-delete copy assertions that lived in the
+/// Provider-neutral conversion of the soft-delete copy assertions that lived in the
 /// EF-referencing <c>WorkflowDefinitionSoftDeleteTests</c>. <see cref="WorkflowDefinition.From"/> is a
 /// pure domain-model factory: it never touches a persistence provider, so these assertions are the
-/// EF-independent home for its copy semantics after the EF store is removed (T072).
+/// EF-independent home for its copy semantics after the EF store is removed.
 /// </summary>
 public sealed class WorkflowDefinitionFactoryTests
 {

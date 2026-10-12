@@ -3,7 +3,7 @@ using Xunit;
 
 namespace Elsa.Workflows.Runtime.Reconciliation.Tests;
 
-/// <summary>US4's deployment loop: latest wins, older versions never reactivate, and retries add no records.</summary>
+/// <summary>The deployment loop: latest wins, older versions never reactivate, and retries add no records.</summary>
 public sealed class ArtifactImportSupersessionTests : IDisposable
 {
     private readonly string _mount = Path.Combine(

@@ -41,7 +41,7 @@ namespace Elsa.Workflows.Runtime.Services.Recovery;
 /// <see cref="IWorkflowSchedulerWorkQueue.ListPendingWorkflowExecutionIdsAsync"/>, and the sweep warns once for its type.
 /// </para>
 /// <para>
-/// <b>Terminal-execution short-circuit (spec 113).</b> Backlog discovery has no terminal-status filter, so a
+/// <b>Terminal-execution short-circuit.</b> Backlog discovery has no terminal-status filter, so a
 /// scheduler work item stranded by the drainer's terminal-status guard (a sibling item enqueued before a parallel
 /// fork ran <c>Finish</c>, or a post-commit <c>EnqueueSchedulerWork</c> intent delivered after the terminal
 /// checkpoint) keeps the completed execution discoverable forever. Re-driving
@@ -106,7 +106,7 @@ public sealed class RuntimeResumptionService(
 
             // Never re-drive a terminal execution: it can only accumulate stranded RunSchedulerWork items the drainer
             // refuses to dispatch. Purge its residue so backlog discovery stops resurfacing it and the perpetual
-            // per-tick drain span ends. (spec 113)
+            // per-tick drain span ends.
             var terminal = await PurgeIfTerminalAsync(request, workflowExecutionId, cancellationToken);
             if (terminal.IsTerminal)
             {
@@ -192,7 +192,7 @@ public sealed class RuntimeResumptionService(
         return state is not null && state.Status.IsTerminal();
     }
 
-    // Straggler reaper (#542 / spec 128). The eager terminal-eviction trigger runs at drain end on the node that owns
+    // Straggler reaper (#542). The eager terminal-eviction trigger runs at drain end on the node that owns
     // the mailbox; this reaps a mailbox that outlived its execution because eviction was disabled, skipped (e.g. a
     // cancelled dispatch token), or never fired (the terminal status was reached by a post-commit intent or a sibling
     // fork rather than the dispatched command). PassivateAsync is idempotent — a no-op when no mailbox exists — and on
@@ -447,7 +447,7 @@ public sealed class RuntimeResumptionService(
             slots.NextRecoveryTurn(recoveryUsedSlot, slotUsed: selected.Count > 0));
     }
 
-    // Candidates a source supplies (spec 184, FR-027) are due now, so they join the sweep beside the durable backlog
+    // Candidates a source supplies are due now, so they join the sweep beside the durable backlog
     // rather than competing with the scanner's cursor. Each source bounds its own list to the scan batch.
     private async ValueTask<IReadOnlyList<SourcedCandidates>> ListSourcedCandidatesAsync(
         RuntimeResumptionSweepRequest request,

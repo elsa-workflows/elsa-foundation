@@ -70,7 +70,7 @@ public sealed class RuntimeCheckpointCommitValidatorTests
     }
 
     /// <summary>
-    /// The encryption backstop (spec 188, FR-010, T065): producer withholding keeps a value whose policy requires
+    /// The encryption backstop: producer withholding keeps a value whose policy requires
     /// encryption out of state, and only a producer that skipped it, such as an imported artifact, can put one into a
     /// commit. The refusal names the state and the value's key, never the value.
     /// </summary>

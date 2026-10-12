@@ -344,7 +344,7 @@ public sealed class WorkflowTriggerBindingExtractorTests
     [Fact]
     public void Extract_ProducesNoBindings_ForRecognizedNonStartNode_WithoutThrowing()
     {
-        // Spec 089 D: a recognized node that declares itself a non-start (CanStartWorkflow = false → zero
+        // A recognized node that declares itself a non-start (CanStartWorkflow = false → zero
         // descriptors) must yield no trigger bindings and must NOT trip the zero-descriptor publish guard, which
         // only fires for a node NO provider recognizes.
         var extractor = new WorkflowTriggerBindingExtractor([new NonStartProvider("Elsa.HttpEndpoint")]);

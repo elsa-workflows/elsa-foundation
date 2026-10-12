@@ -7,7 +7,7 @@ using Xunit;
 namespace Elsa.Workflows.Runtime.Tests;
 
 /// <summary>
-/// The default runtime secret mask (spec 188, T072, FR-012): a value resolved for one activity execution is replaced by
+/// The default runtime secret mask: a value resolved for one activity execution is replaced by
 /// <c>[secret:&lt;name&gt;]</c> in text produced for that execution, as written and JSON-escaped, and in no other
 /// execution's text; an empty value is ignored, and every non-empty value is masked however short.
 /// </summary>

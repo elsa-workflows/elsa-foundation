@@ -6,7 +6,7 @@ using static Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.Runtim
 namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests;
 
 /// <summary>
-/// Test-scope cleanup must converge when it finds a detached child's cancellation already recorded (spec 102 FR-014): a
+/// Test-scope cleanup must converge when it finds a detached child's cancellation already recorded: a
 /// concurrent or repeated cleaner may arrive after delivery has claimed, delivered, or retried that item. Every store must
 /// accept the recorded responsibility and leave the item exactly as it is, and must still fail loudly when the recorded item
 /// carries a different responsibility under the same identity.

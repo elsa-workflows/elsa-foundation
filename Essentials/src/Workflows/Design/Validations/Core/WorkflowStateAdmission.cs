@@ -5,7 +5,7 @@ using Elsa.Workflows.Design.Validations.Core.Exceptions;
 namespace Elsa.Workflows.Design.Validations.Core;
 
 /// <summary>
-/// The admission of workflow definition state through the credential-literal rule (spec 188, FR-008) before it is
+/// The admission of workflow definition state through the credential-literal rule before it is
 /// written: a caller that refuses a whole request calls <see cref="AdmitAsync"/> before its write, so a state it refuses
 /// is not stored. The rule lives in <see cref="ICredentialLiteralValidator"/>; this helper only throws its
 /// findings, so it holds no rule of its own and a host cannot replace it.

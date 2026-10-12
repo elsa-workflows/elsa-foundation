@@ -12,7 +12,7 @@ public sealed class ActivityActivationFailureHandlerTests
     public void A_missing_secret_resolver_classifies_as_an_activation_failure_with_recovery_metadata()
     {
         // A host that composes no secret resolver is missing a module: composing one repairs it, so the activity parks
-        // for deployment correction instead of being retried or faulted (spec 188, T032, constitution §E2.6.1).
+        // for deployment correction instead of being retried or faulted.
         var failure = _handler.Classify(new RuntimeSecretResolverNotFoundException("token"), "artifact-1", "node-1");
 
         Assert.NotNull(failure);

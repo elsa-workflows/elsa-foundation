@@ -35,7 +35,7 @@ public sealed class WorkflowsRuntimeTriggersFeatureTests
             descriptor.ServiceType == typeof(IBookmarkStimulusIndex));
     }
 
-    // Kept beside the composition test (§2.23.1): forwarding and scope, the bridged index is the runtime's own bookmark store, per scope.
+    // Kept beside the composition test: forwarding and scope, the bridged index is the runtime's own bookmark store, per scope.
     [Fact]
     public void ResolvesStimulusRouter_WhenComposedWithRuntimeApi()
     {
@@ -111,7 +111,7 @@ public sealed class WorkflowsRuntimeTriggersFeatureTests
         Assert.Contains("WorkflowsRuntimeApi", attribute.DependsOn.Select(dependency => dependency?.ToString()));
     }
 
-    // TS-1 (§2.23.1): assert single-implementation services by registration presence, not implementation-type or
+    // TS-1: assert single-implementation services by registration presence, not implementation-type or
     // lifetime pinning, so swapping an equivalent implementation no longer trips this test.
     private static void AssertRegistered<TService>(IServiceCollection services) =>
         Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(TService));

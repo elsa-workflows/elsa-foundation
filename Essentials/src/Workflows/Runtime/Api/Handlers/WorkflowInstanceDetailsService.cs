@@ -56,7 +56,7 @@ public sealed class WorkflowInstanceDetailsService(
                 : WorkflowOutputView.Redacted(output.CapturedAt),
             StringComparer.Ordinal);
 
-        // Checkpoint cadence + inspection granularity (ADR 0032 R3/R5): prefer the run's own per-run cadence stamp so an
+        // Checkpoint cadence + inspection granularity: prefer the run's own per-run cadence stamp so an
         // instance reports the cadence it actually executed under, falling back to the host projection for legacy runs.
         var cadence = checkpointCadenceInspector.Resolve(state);
 

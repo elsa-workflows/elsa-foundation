@@ -1,9 +1,9 @@
 namespace Elsa.Workflows.Design.Core.Models;
 
 /// <summary>
-/// Authored per-workflow checkpoint-persistence cadence (ADR 0032 R5). This is a design-time authoring selection
+/// Authored per-workflow checkpoint-persistence cadence. This is a design-time authoring selection
 /// that flows design → publish → executable and is resolved by the Runtime off the pinned artifact; it is never
-/// read from a Design store by the Runtime (§E2.2).
+/// read from a Design store by the Runtime.
 /// </summary>
 /// <remarks>
 /// <see cref="Mode"/> follows the same stable-alias convention as <see cref="WorkflowStrategyOptions.CommitStrategyType"/>:

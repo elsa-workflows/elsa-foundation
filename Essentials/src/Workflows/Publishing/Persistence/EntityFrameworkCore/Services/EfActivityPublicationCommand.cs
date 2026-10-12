@@ -13,7 +13,7 @@ namespace Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore.Services;
 
 /// <summary>
 /// Commits a reusable-activity publication across the Runtime, Activities Design and Publishing contexts as an
-/// ordered, forward-converging sequence (ADR 0066) rather than one cross-context transaction.
+/// ordered, forward-converging sequence rather than one cross-context transaction.
 /// </summary>
 /// <remarks>
 /// <list type="number">

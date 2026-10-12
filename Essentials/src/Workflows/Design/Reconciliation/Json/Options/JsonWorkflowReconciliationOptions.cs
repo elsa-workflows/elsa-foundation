@@ -25,8 +25,8 @@ public sealed class JsonWorkflowReconciliationOptions
     public IEnumerable<JsonWorkflowReconciliationFileOption> Files { get; set; } = [];
 
     /// <summary>
-    /// A directory scanned for <c>*.json</c> definition files — the mounted-volume/GitOps shape
-    /// (spec 147). The scan reads the folder's top level only (non-recursive, deliberately: mount
+    /// A directory scanned for <c>*.json</c> definition files — the mounted-volume/GitOps shape.
+    /// The scan reads the folder's top level only (non-recursive, deliberately: mount
     /// implementations such as Kubernetes ConfigMap <c>..data</c> symlink trees would double-read
     /// files under recursion) in deterministic ordinal file-name order. A missing folder fails the
     /// pass with an error naming this path; an empty folder (or one with no <c>*.json</c> matches)

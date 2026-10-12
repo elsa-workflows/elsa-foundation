@@ -10,7 +10,7 @@ public static class RuntimeActivityExecutionEfModule
     public const string SchemaVersion = "1.0.0";
     public const string SchemaFamily = "RuntimeActivityExecution";
     /// <summary>The family's one chain, from this assembly's declaration: what every reader of the family checks and
-    /// upcasts through (spec 180, FR-010).</summary>
+    /// upcasts through.</summary>
     public static readonly EfSchemaChain Chain = EfSchemaChain.Of(typeof(RuntimeActivityExecutionEfModule).Assembly, SchemaFamily);
     public const string ActivityExecutionStateTableName = "elsa_runtime_activity_execution_state";
     public const string ActivityExecutionInspectionTableName = "elsa_runtime_activity_execution_inspection";

@@ -13,7 +13,7 @@ using Xunit;
 namespace Elsa.Workflows.Runtime.Tests;
 
 /// <summary>
-/// Producer withholding (spec 188, FR-010, T066). <c>RuntimeExternalEnvelopeStorage.RewriteAsync</c> is the
+/// Producer withholding. <c>RuntimeExternalEnvelopeStorage.RewriteAsync</c> is the
 /// destination-storage decision that input materialization and intrinsic value writes share: it replaces a present value
 /// whose effective policy requires encryption with a <see cref="WithheldValueKind.PolicyRequiresEncryption"/> marker, so
 /// the value is neither kept inline nor written to external storage. The rewriter is internal, so these rows drive it

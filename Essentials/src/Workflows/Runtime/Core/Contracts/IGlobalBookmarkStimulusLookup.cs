@@ -14,8 +14,8 @@ public interface IGlobalBookmarkStimulusLookup
         CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Finds every non-expired waiting bookmark of a given stimulus type across all workflow executions
-    /// (spec 089 D), regardless of hash, and returns the matched <see cref="GlobalBookmarkStimulusLookupResult.Matches"/>
+    /// Finds every non-expired waiting bookmark of a given stimulus type across all workflow executions,
+    /// regardless of hash, and returns the matched <see cref="GlobalBookmarkStimulusLookupResult.Matches"/>
     /// snapshots (incl. <c>Metadata</c>) so a consumer can read the durable route template + endpoint options a
     /// mid-flow suspension stored. Expiry filtering lives here in the lookup layer — the raw
     /// <see cref="IBookmarkStimulusIndex"/> scan stays unfiltered per its documented contract. This is the

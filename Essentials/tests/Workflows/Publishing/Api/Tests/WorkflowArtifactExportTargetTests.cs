@@ -13,7 +13,7 @@ using Xunit;
 namespace Elsa.Workflows.Publishing.Api.Tests;
 
 /// <summary>
-/// §2.23.1 registration and §2.23.2 behaviour for the export-target seam and its one v1 implementation.
+/// Registration and behaviour for the export-target seam and its one v1 implementation.
 /// </summary>
 public sealed class WorkflowArtifactExportTargetTests
 {
@@ -37,7 +37,7 @@ public sealed class WorkflowArtifactExportTargetTests
     [Fact]
     public void A_later_target_contributes_alongside_the_built_in_rather_than_replacing_it()
     {
-        // Fan-in, never replacement (framework §2.24.2 #9): the deferred folder writer and blob push must not be
+        // Fan-in, never replacement: the deferred folder writer and blob push must not be
         // able to displace the one destination a safe GET is allowed to bind to.
         var services = new ServiceCollection();
         new WorkflowsPublishingApiFeature().ConfigureServices(services);
@@ -55,7 +55,7 @@ public sealed class WorkflowArtifactExportTargetTests
         Assert.Equal(["download", "folder"], targetIds);
     }
 
-    // Kept beside the composition test (§2.23.1): idempotence, registering twice yields one download target.
+    // Kept beside the composition test: idempotence, registering twice yields one download target.
     [Fact]
     public void Registering_the_built_in_twice_still_yields_one_download_target()
     {

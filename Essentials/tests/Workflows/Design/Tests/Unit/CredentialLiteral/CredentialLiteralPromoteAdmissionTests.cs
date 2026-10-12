@@ -16,8 +16,8 @@ using static Elsa.Workflows.Design.Tests.Infrastructure.CredentialLiteralTestSup
 namespace Elsa.Workflows.Design.Tests.Unit.CredentialLiteral;
 
 /// <summary>
-/// Spec 188, FR-008 at Drafts/Promote, over the real EF store, in a host whose promotion command runs the in-lock
-/// validation gate and in one composed without it (research R7): the endpoint admits the draft it reads, so a draft
+/// The credential-literal rule at Drafts/Promote, over the real EF store, in a host whose promotion command runs the in-lock
+/// validation gate and in one composed without it: the endpoint admits the draft it reads, so a draft
 /// holding a credential literal is refused by admission whatever the command's composition; and the command promotes
 /// only the content the endpoint admitted, so a draft changed between admission and the promotion lock is refused with a
 /// conflict and no version is written.

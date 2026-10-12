@@ -6,7 +6,7 @@ using System.Text.Json.Serialization;
 namespace Elsa.Workflows.Runtime.Core.Models;
 
 /// <summary>
-/// A content-addressed, fully immutable workflow executable artifact (ADR 0038): pure behavior, one row per
+/// A content-addressed, fully immutable workflow executable artifact: pure behavior, one row per
 /// distinct behavior. Per-publish facts — scope, expiry, published/deleted timestamps, source provenance and the
 /// layout sidecar — do NOT live here; they belong to the <see cref="WorkflowExecutableSourceReference"/> records
 /// that point at this artifact.
@@ -140,7 +140,7 @@ public sealed class WorkflowExecutable
     public IReadOnlyCollection<WorkflowExecutableDependency> Dependencies { get; }
 
     /// <summary>
-    /// The authored per-workflow checkpoint cadence compiled into this artifact (ADR 0032 R5), or <see langword="null"/>
+    /// The authored per-workflow checkpoint cadence compiled into this artifact, or <see langword="null"/>
     /// when the workflow authored none and the host default applies. Part of the behavioral content hash: a cadence
     /// change is a distinct executable identity, so it can never be silently aliased onto a same-graph artifact.
     /// </summary>

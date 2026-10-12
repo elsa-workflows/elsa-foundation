@@ -24,7 +24,7 @@ public interface IWorkflowSchedulerWorkQueue
     /// Records a scheduler work item for its workflow execution and returns the queued item.
     /// </summary>
     /// <remarks>
-    /// Providers MUST make this operation idempotent by work-item identity (ADR 0031). Re-enqueueing an item
+    /// Providers MUST make this operation idempotent by work-item identity. Re-enqueueing an item
     /// whose <see cref="RuntimeSchedulerWorkItem.WorkItemId"/> already exists for the same
     /// <see cref="RuntimeSchedulerWorkItem.WorkflowExecutionId"/> MUST return (and keep) the already-queued item
     /// and MUST NOT append a duplicate — enqueue is create-only by the <c>(WorkflowExecutionId, WorkItemId)</c>
@@ -131,8 +131,8 @@ public interface IWorkflowSchedulerWorkQueue
         throw new NotSupportedException("This scheduler work queue does not support claim transitions.");
 
     /// <summary>
-    /// Fence-checked consumption used to fold a claimed work item's deletion into a checkpoint commit's unit-of-work
-    /// (spec 105). Deletes the item only while its current claim owner and fencing token match
+    /// Fence-checked consumption used to fold a claimed work item's deletion into a checkpoint commit's unit-of-work.
+    /// Deletes the item only while its current claim owner and fencing token match
     /// <paramref name="consumed"/> (renewal-stable fence). Returns <see cref="RuntimeSchedulerWorkClaimTransitionStatus.Succeeded"/>
     /// when the item is deleted, <see cref="RuntimeSchedulerWorkClaimTransitionStatus.AlreadyApplied"/> when it is already
     /// gone under this exact claim (idempotent replay), and <see cref="RuntimeSchedulerWorkClaimTransitionStatus.Stale"/>

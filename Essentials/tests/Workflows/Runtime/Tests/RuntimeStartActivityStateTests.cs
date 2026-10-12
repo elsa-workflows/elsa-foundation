@@ -131,7 +131,7 @@ public sealed class RuntimeStartActivityStateTests : IDisposable
     [Fact]
     public async Task HandleAsync_MaterializesASensitiveExpressionInputAsAPresentValueWithItsPolicy()
     {
-        // Spec 188, T104: an input the activity declares sensitive, but not a credential, may take an expression. Its
+        // An input the activity declares sensitive, but not a credential, may take an expression. Its
         // effective policy is sensitive and does not require encryption, so its value is present, not withheld.
         var policy = new ValueProtectionPolicy(DurableValueLifecycle.Instance, DurableValueStorage.Inline, isSensitive: true, requiresEncryption: false);
         var executable = NewExecutable(

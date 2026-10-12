@@ -214,9 +214,9 @@ public sealed class EfWorkflowExecutableStore(
             pair.Value.Artifact.IncarnationId,
             cancellationToken);
     }
-    // Root-write leases (spec 200). Each lease is a row of its own, so a holder's acquire, renewal and release touch only
-    // that row and never contend with other holders of the artifact (FR-001, FR-002). The deletion guard stays on the
-    // coordination row. The two sides exclude each other by write-then-check (research R2): each commits its own record
+    // Root-write leases. Each lease is a row of its own, so a holder's acquire, renewal and release touch only
+    // that row and never contend with other holders of the artifact. The deletion guard stays on the
+    // coordination row. The two sides exclude each other by write-then-check: each commits its own record
     // and then reads the other side's in a fresh statement, so they cannot both succeed. Every lease operation runs on a
     // context of its own (CreateLeaseContext), so it never saves or discards what a caller staged on the shared one.
     public async ValueTask<WorkflowExecutableRootWriteLease?> TryAcquireRootWriteLeaseAsync(
@@ -367,7 +367,7 @@ public sealed class EfWorkflowExecutableStore(
                 return null;
             var row = pair.Value.Coordination;
             var state = ReadCoordination(row, scope, artifactId, CreateId(scope, artifactId));
-            // Leases still in the shared record from before spec 200 hold the artifact until they expire (owner decision 1).
+            // Leases still in the shared record, from before leases had rows of their own, hold the artifact until they expire.
             var leases = LiveLeases(state, now);
             if (leases.Count != 0)
                 return null;
@@ -658,7 +658,7 @@ public sealed class EfWorkflowExecutableStore(
     // A sibling of the injected context, built from its options: the same provider, interceptors and schema write gate,
     // but its own change tracker and, in a host (which configures a connection string), its own pooled connection. A
     // lease write therefore never saves or discards what a caller staged on the shared context, and a renewal that fires
-    // while a checkpoint write is using the shared context does not touch it (spec 200, research R4).
+    // while a checkpoint write is using the shared context does not touch it.
     private RuntimeDbContext CreateLeaseContext()
     {
         var options = context.GetService<IDbContextOptions>();
@@ -1041,7 +1041,7 @@ public sealed class EfWorkflowExecutableStore(
         current.ExpiresAt > now &&
         state.Leases.All(x => x.Value.ExpiresAt <= now);
 
-    // Privileged access to one partition bypasses the executable cache and lands here (spec 092).
+    // Privileged access to one partition bypasses the executable cache and lands here.
     private string RequireScope() => accessContextAccessor.Current.RequireScope(admitPrivileged: true).Value;
 
     private static void Validate(WorkflowExecutable executable)

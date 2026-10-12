@@ -6,7 +6,7 @@ using Xunit;
 namespace Elsa.Workflows.Runtime.Tests;
 
 /// <summary>
-/// The runtime-owned secret resolution shapes (spec 188, T017, T030): nothing a resolver hands back can carry free text
+/// The runtime-owned secret resolution shapes: nothing a resolver hands back can carry free text
 /// into a fault, and a resolved value is never printed.
 /// </summary>
 public sealed class RuntimeSecretResolutionTests

@@ -26,7 +26,7 @@ public sealed record WorkflowArtifactClosurePlan(
 /// </summary>
 /// <remarks>
 /// <para>
-/// <b>The store is never consulted here, and that is the whole point.</b> FR-B-010 promises a self-contained
+/// <b>The store is never consulted here, and that is the whole point.</b> An envelope promises a self-contained
 /// transitive closure, so envelope validity is environment-independent: the same file must fail identically on
 /// every runtime. An envelope that only validates because the target store happens to already contain a child is
 /// a broken export, and letting it pass would mean a file that imports on the machine it was tested on and fails

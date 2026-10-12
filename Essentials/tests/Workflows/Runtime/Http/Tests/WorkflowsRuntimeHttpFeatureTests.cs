@@ -22,7 +22,7 @@ namespace Elsa.Workflows.Runtime.Http.Tests;
 /// </summary>
 public sealed class WorkflowsRuntimeHttpFeatureTests
 {
-    // Kept beside the composition test (§2.23.1): lifetime, the route-table synchronizer is one singleton and the index validator scoped.
+    // Kept beside the composition test: lifetime, the route-table synchronizer is one singleton and the index validator scoped.
     [Fact]
     public void ConfigureServices_RegistersTheRouteTablePopulators()
     {
@@ -39,7 +39,7 @@ public sealed class WorkflowsRuntimeHttpFeatureTests
         Assert.Contains(services, d =>
             d.ServiceType == typeof(IWorkflowTriggerIndexValidator) &&
             d.Lifetime == ServiceLifetime.Scoped);
-        // The bookmark lifecycle observer keeps the table fresh as mid-flow endpoints suspend/resume (spec 089 D).
+        // The bookmark lifecycle observer keeps the table fresh as mid-flow endpoints suspend/resume.
         Assert.Contains(services, d => d.ServiceType == typeof(IBookmarkLifecycleObserver));
         Assert.Contains(services, d => d.ServiceType == typeof(IHttpEndpointRoutesResolver));
         // The single serialization point every refresh routes through — registered once as a singleton (review fix).
@@ -47,7 +47,7 @@ public sealed class WorkflowsRuntimeHttpFeatureTests
         Assert.Equal(ServiceLifetime.Singleton, synchronizer.Lifetime);
     }
 
-    // Kept beside the composition test (§2.23.1): the configured convergence bound flows into the registered pump's options.
+    // Kept beside the composition test: the configured convergence bound flows into the registered pump's options.
     [Fact]
     public void ConfigureServices_RegistersTheConvergencePump_WithTheConfiguredBound()
     {
