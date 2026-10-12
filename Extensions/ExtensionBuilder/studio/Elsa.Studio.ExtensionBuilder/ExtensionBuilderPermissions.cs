@@ -1,7 +1,7 @@
 namespace Elsa.Studio.ExtensionBuilder;
 
 /// <summary>
-/// The host-control permission keys that gate the Extension Builder bridge (#249, #256, ADR 0037). The string values
+/// The host-control permission keys that gate the Extension Builder bridge (#249, #256). The string values
 /// mirror the backend's Extension Builder permission contribution; Studio only needs the keys to check the user's
 /// permission claims. Implication is expanded locally: <see cref="ReadKeys"/> lists both <c>read</c> and <c>manage</c>,
 /// so a <c>manage</c>-only holder satisfies a read surface without Studio relying on the backend to expand it.

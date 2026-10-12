@@ -12,8 +12,8 @@ namespace Elsa3.Activities.Design.Import.Models;
 /// </summary>
 /// <remarks>
 /// No structure handler is registered for this kind, so the shared tree walkers (the design validators' walker and
-/// publication's projector) project no children from it, and the executable compiler compiles it as an opaque structure
-/// (spec 071 FR-008), because no activity's catalog design facets declare this kind; one that did would make publication
+/// publication's projector) project no children from it, and the executable compiler compiles it as an opaque structure,
+/// because no activity's catalog design facets declare this kind; one that did would make publication
 /// refuse the node instead. Registering a handler is not the way to reach these children: it would make every design
 /// validator, the design commands' tree walks and the publishing compiler start processing them, and change what
 /// publication emits. The extension that writes the shape therefore enumerates it itself.

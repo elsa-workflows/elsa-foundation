@@ -2,7 +2,7 @@ using Elsa.Versioning.Calculator.Tests.Support;
 
 namespace Elsa.Versioning.Calculator.Tests;
 
-/// <summary>Spec 150 FR-002, FR-006a, FR-009, SC-001, SC-003 and SC-008 over synthetic histories.</summary>
+/// <summary>Change detection over synthetic histories.</summary>
 public sealed class ChangeDetectionTests : SyntheticHistory
 {
     [Fact]
@@ -15,7 +15,7 @@ public sealed class ChangeDetectionTests : SyntheticHistory
         Assert.All(computation.Packages, package => Assert.Empty(package.Reasons));
     }
 
-    /// <summary>US1 scenario 1, SC-001, FR-006a: <c>Elsa.Tasks.Schedules</c> references Tasks but is not repacked.</summary>
+    /// <summary>A commit touching one project: <c>Elsa.Tasks.Schedules</c> references Tasks but is not repacked.</summary>
     [Fact]
     public void A_commit_touching_one_project_advances_exactly_that_package()
     {
@@ -29,7 +29,7 @@ public sealed class ChangeDetectionTests : SyntheticHistory
         Assert.Equal("4.0.1", VersionOf(computation, "Elsa.Tasks.Schedules"));
     }
 
-    /// <summary>Edge cases: a commit touching only files owned by no project, including the dependency map's own home.</summary>
+    /// <summary>A commit touching only files owned by no project, including the dependency map's own home.</summary>
     [Fact]
     public void Files_owned_by_no_project_advance_nothing()
     {
@@ -41,7 +41,7 @@ public sealed class ChangeDetectionTests : SyntheticHistory
         Assert.Empty(CommitAndCompute().Affected);
     }
 
-    /// <summary>Spec 149 FR-006: the deeper project owns its subtree, so the outer one does not move.</summary>
+    /// <summary>The deeper project owns its subtree, so the outer one does not move.</summary>
     [Fact]
     public void A_nested_project_owns_its_own_subtree()
     {
@@ -82,7 +82,7 @@ public sealed class ChangeDetectionTests : SyntheticHistory
     }
 
     /// <summary>
-    /// US2: however many commits land between publishes, a package advances once, to one past its last published
+    /// However many commits land between publishes, a package advances once, to one past its last published
     /// version; the old commit-height scheme counted them.
     /// </summary>
     [Fact]
@@ -98,7 +98,7 @@ public sealed class ChangeDetectionTests : SyntheticHistory
     }
 
     /// <summary>
-    /// US2 scenario 1, FR-009, SC-003, SC-008: the output is a function of the commit and the record revision alone, not
+    /// The output is a function of the commit and the record revision alone, not
     /// of the working tree, the directory it is run from, or the run.
     /// </summary>
     [Fact]
@@ -118,7 +118,7 @@ public sealed class ChangeDetectionTests : SyntheticHistory
     }
 
     /// <summary>
-    /// FR-006, FR-013, SC-008: the affected set is derived from the repository alone. The calculator references no HTTP
+    /// The affected set is derived from the repository alone. The calculator references no HTTP
     /// or NuGet client, and the only git commands it can run read local objects.
     /// </summary>
     [Fact]
@@ -130,7 +130,7 @@ public sealed class ChangeDetectionTests : SyntheticHistory
         Assert.Equal(["cat-file", "ls-tree", "merge-base", "rev-parse"], GitRepository.ReadOnlyCommands.Order(StringComparer.Ordinal));
     }
 
-    /// <summary>US4 scenario 3: of two consecutive builds where one package changed, only that package moves.</summary>
+    /// <summary>Of two consecutive builds where one package changed, only that package moves.</summary>
     [Fact]
     public void Consecutive_publishes_move_only_what_changed_since_each()
     {

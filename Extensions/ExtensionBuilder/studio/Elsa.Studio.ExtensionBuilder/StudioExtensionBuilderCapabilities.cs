@@ -7,7 +7,7 @@ using Microsoft.Extensions.Logging;
 namespace Elsa.Studio.ExtensionBuilder;
 
 /// <summary>
-/// Backend Extension Builder capabilities as seen by Studio (ADR 0037): a Studio concept ("host capabilities") the
+/// Backend Extension Builder capabilities as seen by Studio: a Studio concept ("host capabilities") the
 /// browser reads from the Studio origin instead of probing the backend host-control endpoint directly. The
 /// <see cref="Status"/> field carries the same explicit envelope as <see cref="StudioBackendManagementStatus"/> so the
 /// frontend branches on state, not on an HTTP failure. <see cref="Capabilities"/> is populated only when

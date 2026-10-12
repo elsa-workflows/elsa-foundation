@@ -1,9 +1,9 @@
 namespace Elsa.Cluster.Core.Models;
 
 /// <summary>
-/// The answer to a member query (FR-016): the members that match, and for every other member the query considered,
+/// The answer to a member query: the members that match, and for every other member the query considered,
 /// the requirement it failed. For a counting query the failures are the blockers: the answer is "yes" only when there
-/// are none (MR-007).
+/// are none.
 /// </summary>
 public sealed record MemberQueryAnswer(
     MemberQuery Query,

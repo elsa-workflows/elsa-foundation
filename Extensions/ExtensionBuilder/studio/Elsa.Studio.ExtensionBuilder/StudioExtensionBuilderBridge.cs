@@ -14,7 +14,7 @@ using Microsoft.Extensions.Logging;
 namespace Elsa.Studio.ExtensionBuilder;
 
 /// <summary>
-/// The Extension Builder half of the Studio management bridge (#256, ADR 0037): browser-facing Studio routes that
+/// The Extension Builder half of the Studio management bridge (#256): browser-facing Studio routes that
 /// relay Extension Builder operations to the backend Elsa host. The browser calls Studio with only its normal
 /// credentials; Studio attaches the server-side management key on the Studio→backend call, so the key never leaves the
 /// server and the SPA never issues doomed, 401-noisy requests against backend host-control endpoints. The
@@ -119,7 +119,7 @@ internal static class StudioExtensionBuilderBridge
 
     public static IEndpointRouteBuilder MapStudioExtensionBuilderBridge(this IEndpointRouteBuilder endpoints)
     {
-        // Host-control permission gating (#249, ADR 0037): reads require `extension-builder.read` (manage implies read,
+        // Host-control permission gating (#249): reads require `extension-builder.read` (manage implies read,
         // expanded locally in the policy); mutations require `extension-builder.manage`. When Studio auth is disabled
         // every policy allows anonymously (demo shell). The browser carries no Elsa host management key. The policies
         // travel inline (RequireStudioBridgePermission) because this is mapped from a shell feature, which cannot add
@@ -177,8 +177,8 @@ internal sealed class StudioExtensionBuilderRelayClient(
 
     public async Task RelayAsync(StudioExtensionBuilderBridge.BridgeOperation operation, HttpContext context)
     {
-        // Fail closed first: without a backend base URL or a management key ZERO outbound calls are issued (ADR 0037)
-        // — the infrastructure plane dominates.
+        // Fail closed first: without a backend base URL or a management key ZERO outbound calls are issued:
+        // the infrastructure plane dominates.
         if (!options.IsConfigured)
         {
             await WriteErrorAsync(context, StatusCodes.Status503ServiceUnavailable, StudioBackendManagementStatus.Unconfigured, StudioExtensionBuilderBridge.UnconfiguredDetail);

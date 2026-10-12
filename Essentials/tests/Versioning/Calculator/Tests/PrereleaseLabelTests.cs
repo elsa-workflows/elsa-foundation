@@ -1,6 +1,6 @@
 namespace Elsa.Versioning.Calculator.Tests;
 
-/// <summary>Spec 150 FR-008: main's label while the lines are unreleased and after, and a branch-scoped label everywhere else.</summary>
+/// <summary>Main's label while the lines are unreleased and after, and a branch-scoped label everywhere else.</summary>
 public sealed class PrereleaseLabelTests
 {
     [Theory]
@@ -15,7 +15,7 @@ public sealed class PrereleaseLabelTests
     public void Main_carries_no_label_once_the_lines_are_released() =>
         Assert.Null(PrereleaseLabel.For("main", string.Empty));
 
-    /// <summary>US4 scenario 2: every other branch is scoped to itself, with the same label before and after release.</summary>
+    /// <summary>Every other branch is scoped to itself, with the same label before and after release.</summary>
     [Theory]
     [InlineData("feat/Issue_2080", "branch-feat-issue-2080")]
     [InlineData("refs/heads/feat/Issue_2080", "branch-feat-issue-2080")]

@@ -12,7 +12,7 @@ public sealed partial class ArchitectureGuardTests
     private const string SharedSchemaSeam = "Elsa.Persistence.Schema";
     private const string ReadabilitySource = "Elsa.Cluster.Readability";
 
-    /// <summary>Package-id prefixes of the actor frameworks ADR 0078 admits only as membership providers.</summary>
+    /// <summary>Package-id prefixes of the actor frameworks admitted only as membership providers.</summary>
     private static readonly string[] ActorFrameworkPackagePrefixes = ["Microsoft.Orleans", "Orleans.", "Proto.Actor", "Proto.Cluster", "Proto.Remote", "Akka"];
 
     /// <summary>Database drivers <see cref="PersistenceProviderNeutralityBoundary"/> does not already recognize.</summary>
@@ -20,7 +20,7 @@ public sealed partial class ArchitectureGuardTests
 
     /// <summary>
     /// The membership contract takes no provider dependency, declared or transitive: no EF Core, database engine, actor
-    /// framework or membership provider project (spec 183, FR-002; #2097, Acceptance). Swapping the provider must
+    /// framework or membership provider project (#2097, Acceptance). Swapping the provider must
     /// never require touching the contract or its consumers.
     /// </summary>
     [Fact]
@@ -29,7 +29,7 @@ public sealed partial class ArchitectureGuardTests
 
     /// <summary>
     /// A host that is not clustered gets the in-process default, so that default's closure is what non-clustered
-    /// hosting pays for membership (FR-018; #2097). It reaches no provider, and no hosting or task library, so it cannot
+    /// hosting pays for membership (#2097). It reaches no provider, and no hosting or task library, so it cannot
     /// register a hosted service, a recurring task or a store.
     /// </summary>
     [Fact]
@@ -57,11 +57,11 @@ public sealed partial class ArchitectureGuardTests
     }
 
     /// <summary>
-    /// The EF-free half of the schema-family surface, which every host shares with every package it loads (#2143; ADR
-    /// 0067, amended 2026-09-29): no EF Core, database engine, actor framework or provider project, no Elsa project outside
+    /// The EF-free half of the schema-family surface, which every host shares with every package it loads (#2143):
+    /// no EF Core, database engine, actor framework or provider project, no Elsa project outside
     /// Line A, and no package but the <c>Microsoft.Extensions</c> abstractions. Anything more would be pinned by every host
     /// and loaded by every package, and EF Core in it would put EF into every host, even one that composes only the
-    /// in-process default (ADR 0076; #2151 admits EF into Elsa.Foundation.Host for its opt-in membership provider only).
+    /// in-process default (#2151 admits EF into Elsa.Foundation.Host for its opt-in membership provider only).
     /// </summary>
     [Fact]
     public void The_shared_schema_seam_takes_no_provider_and_only_abstractions()
@@ -86,8 +86,8 @@ public sealed partial class ArchitectureGuardTests
     /// <summary>
     /// What a host composes to reach its membership: the readability report, the fleet and the dormancy source (#2143). A
     /// host composes it whether or not it clusters, so it reaches no EF Core and no database engine: a cluster of one
-    /// needs no EF at all, and <c>Elsa.Foundation.Host</c> carries EF only for the opt-in durable provider (ADR 0076,
-    /// amended 2026-09-29; #2151). It is still classed as a provider project by name below, which keeps the contract and
+    /// needs no EF at all, and <c>Elsa.Foundation.Host</c> carries EF only for the opt-in durable provider (#2151).
+    /// It is still classed as a provider project by name below, which keeps the contract and
     /// the in-process default from reaching it.
     /// </summary>
     [Fact]
@@ -112,7 +112,7 @@ public sealed partial class ArchitectureGuardTests
 
     /// <summary>
     /// The readability source learns which package generations an in-place upgrade superseded from Nuplane's catalog and
-    /// CShells' feature catalog and shell lifecycle (spec 183, FR-021, amended 2026-09-29), and takes only their
+    /// CShells' feature catalog and shell lifecycle, and takes only their
     /// abstractions for it, which both hosts that compose it share with their packages. Never a runtime, declared or
     /// resolved: composing readability must not put Nuplane's loader or CShells' registry into a host, which is why it
     /// matches Nuplane's load contexts by the name of the assembly that defines them rather than by type.

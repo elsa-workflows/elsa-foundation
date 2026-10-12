@@ -28,9 +28,9 @@ public sealed class FeatureManagementService(
             new FeatureActivationContext(shell, request), cancellationToken);
         ArgumentNullException.ThrowIfNull(activationContext);
         // After validation and before the save, so a guard sees the request exactly as it would be stored —
-        // secrets restored — and a refusal costs nothing: no save, no catalog refresh, no shell reload
-        // (FR-060). A host that composes no guard keeps today's ordering, where the shell's own Validate-policy
-        // check refuses later, after shells.json has already been written (FR-070).
+        // secrets restored — and a refusal costs nothing: no save, no catalog refresh, no shell reload.
+        // A host that composes no guard keeps today's ordering, where the shell's own Validate-policy
+        // check refuses later, after shells.json has already been written.
         await EnsureActivationAllowedAsync(activationContext, cancellationToken);
 
         var changes = request.Features

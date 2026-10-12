@@ -16,7 +16,7 @@ using Xunit;
 namespace Elsa.Cluster.EntityFrameworkCore.Tests;
 
 /// <summary>
-/// Spec 181, User Story 3 and SC-005: a host that composes only the in-process membership default is a cluster of one,
+/// A host that composes only the in-process membership default is a cluster of one,
 /// so its families finalize at the module's activation, unless a hold applies. The database holds the module's tables
 /// and its finalization record, and no membership table: the finalization record is a fact about the database, and the
 /// fleet is a fact about nothing but this process.

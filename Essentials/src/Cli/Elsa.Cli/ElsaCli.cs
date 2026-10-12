@@ -4,8 +4,8 @@ using System.CommandLine;
 namespace Elsa.Cli;
 
 /// <summary>
-/// The <c>dotnet elsa</c> command surface (FR-024): <c>persistence list</c>, <c>plan</c>, <c>script</c>,
-/// <c>script-check</c>, <c>apply</c>, <c>validate</c> and <c>post-migrate</c>, and spec 181's <c>hold</c>,
+/// The <c>dotnet elsa</c> command surface: <c>persistence list</c>, <c>plan</c>, <c>script</c>,
+/// <c>script-check</c>, <c>apply</c>, <c>validate</c> and <c>post-migrate</c>, and the finalization commands <c>hold</c>,
 /// <c>release</c> and <c>status</c>.
 /// </summary>
 internal static class ElsaCli
@@ -103,7 +103,7 @@ internal static class ElsaCli
 
     /// <summary>
     /// The three commands that open the host's database: identical apart from their name and what the host's
-    /// tooling does with the request, including their connection handling (FR-030, FR-050, D7), so they are
+    /// tooling does with the request, including their connection handling, so they are
     /// built once rather than diverging one flag at a time.
     /// </summary>
     private static Command OpensDatabase(string name, string description)
@@ -137,7 +137,7 @@ internal static class ElsaCli
     }
 
     /// <summary>
-    /// <c>hold</c>, <c>release</c> and <c>status</c> (spec 181, FR-019, FR-020 and FR-022): the options and connection
+    /// <c>hold</c>, <c>release</c> and <c>status</c>: the options and connection
     /// handling of the commands that open a database, plus what each acts on. They write the finalization record
     /// directly, so a hold can be placed before any gate-aware host runs. None finalizes, forces finalization or lowers
     /// a finalized version.
@@ -302,7 +302,7 @@ internal static class ElsaCli
         };
 
         /// <summary>
-        /// Which shell's features are read (FR-028). With none given, every shell the host configures is
+        /// Which shell's features are read. With none given, every shell the host configures is
         /// read: a disagreement in any of them is reported rather than silently skipped, and naming a shell
         /// is how an operator narrows the check to the one the artifact is for.
         /// </summary>
@@ -312,8 +312,8 @@ internal static class ElsaCli
         };
 
         /// <summary>
-        /// The environment whose shell-configuration overlay is read, recorded in the manifest either way
-        /// (FR-038, FR-047). It defaults to <c>Production</c> — ASP.NET Core's own default when a host sets
+        /// The environment whose shell-configuration overlay is read, recorded in the manifest either way.
+        /// It defaults to <c>Production</c> — ASP.NET Core's own default when a host sets
         /// none — rather than to "no overlay", and never to this tool's own
         /// <c>ASPNETCORE_ENVIRONMENT</c>/<c>DOTNET_ENVIRONMENT</c>, which are facts about this process and
         /// not about the host it is inspecting.
@@ -378,8 +378,8 @@ internal static class ElsaCli
     }
 
     /// <summary>
-    /// Reads the host's shell configuration and attaches what the provider-agreement check needs (FR-035,
-    /// FR-038). The check runs whenever that configuration is found, under any selector — <c>--from-host</c>
+    /// Reads the host's shell configuration and attaches what the provider-agreement check needs.
+    /// The check runs whenever that configuration is found, under any selector — <c>--from-host</c>
     /// only makes it the selection as well — so this happens on every command, and its absence is recorded
     /// rather than refused. It is refused only when the command asked for something that configuration alone
     /// can answer: a named shell, or a selection made of the host's own features.
@@ -413,7 +413,7 @@ internal static class ElsaCli
     // Deliberately not `AllowMultipleArgumentsPerToken`: that setting makes a single `--packages`/`--modules`
     // occurrence swallow every following token as a value of its own, including one that looks like a flag
     // this build does not define — `--connection`, the one flag `apply`/`validate` must reject as a usage
-    // error (D7), among them. Repeated occurrences and comma-separated values inside one still work; only
+    // error, among them. Repeated occurrences and comma-separated values inside one still work; only
     // a bare space-separated run of extra tokens does not, and nothing here advertised that it did.
     private static Option<string[]> PackagesOption() => new("--packages")
     {
@@ -421,8 +421,8 @@ internal static class ElsaCli
     };
 
     /// <summary>
-    /// The one flag that lets this tool write under the host's directories and reach a feed (ADR 0076 D10's
-    /// opt-in exception, FR-083). Off by default and implied by nothing: every other flag leaves the
+    /// The one flag that lets this tool write under the host's directories and reach a feed, as an opt-in
+    /// exception to the rule that it never does either. Off by default and implied by nothing: every other flag leaves the
     /// "never downloads" rule exactly as it was, and this one only acts on a host that records no package
     /// set at all.
     /// </summary>
@@ -452,7 +452,7 @@ internal static class ElsaCli
     };
 
     /// <summary>
-    /// The schema this run targets: the flag when given, otherwise <c>ELSA_EF_SCHEMA</c> (FR-029), which
+    /// The schema this run targets: the flag when given, otherwise <c>ELSA_EF_SCHEMA</c>, which
     /// <c>tools/ef/module-migrate.sh</c> already reads and an operator already sets for a host that lives in
     /// its own schema. Read from this tool's own environment because it is an input to the command, unlike
     /// the host environment <c>--environment</c> names, which is a fact about a host this tool cannot see.
@@ -476,7 +476,7 @@ internal static class ElsaCli
     };
 
     /// <summary>
-    /// The connection the database-opening commands take (FR-030, D7): never a flag value, so it never lands
+    /// The connection the database-opening commands take: never a flag value, so it never lands
     /// in a process argument or shell history. <c>--connection-stdin</c> reads the value from this tool's
     /// own stdin — a stream distinct from the worker's stdin, which is a fresh pipe this process opens for
     /// that child, not the console stream read here — and carries it to the worker inside the request that
@@ -510,7 +510,7 @@ internal static class ElsaCli
     /// Also the one place the <c>--restore</c>/<c>--packages</c> combination is refused, because it is the
     /// one place both are read. A <c>--packages</c> root is an already-assembled set with nothing to
     /// populate it from, so the pair is a usage error rather than a flag that would be quietly ignored —
-    /// the same rule the tool applies to a <c>--connection</c> that does not exist (D7).
+    /// the same rule the tool applies to a <c>--connection</c> that does not exist.
     /// </remarks>
     private static WorkerRequest Request(
         string command,
@@ -544,7 +544,7 @@ internal static class ElsaCli
     }
 
     /// <summary>
-    /// Exactly one selector, and no default (FR-028). <c>list</c> is the one command that selects nothing by
+    /// Exactly one selector, and no default. <c>list</c> is the one command that selects nothing by
     /// default, because naming every module a host declares is what it is for.
     /// </summary>
     private static WorkerSelection? Selection(

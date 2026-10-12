@@ -9,11 +9,11 @@ namespace Elsa.Secrets.Workflows.Tests.Support;
 public sealed record CanaryHttpRequest(string Method, Uri Uri, IReadOnlyList<string> Authorization);
 
 /// <summary>
-/// The canary's local HTTP endpoint (spec 188, T108, research R17): the transport behind the <c>SendHttpRequest</c>
+/// The canary's local HTTP endpoint: the transport behind the <c>SendHttpRequest</c>
 /// activity's named client, in place of the network. It answers 200 when the request carries exactly one
 /// <c>Authorization</c> header value and it equals the value the scenario expects, and 401 otherwise, and its answer
 /// holds no header and a fixed body, so it never repeats a value it received. A server that reflected the value is the
-/// case the spec's Assumptions leave out. Registered in the canary host's root services, where both the shell and the
+/// case left out of scope. Registered in the canary host's root services, where both the shell and the
 /// tests see it.
 /// </summary>
 public sealed class CanaryHttpEndpoint
@@ -63,7 +63,7 @@ internal sealed class CanaryHttpEndpointHandler(CanaryHttpEndpoint endpoint) : H
 }
 
 /// <summary>
-/// Composes the canary's HTTP endpoint into the canary host's shell, and nowhere else (spec 188, T108): the named client
+/// Composes the canary's HTTP endpoint into the canary host's shell, and nowhere else: the named client
 /// <c>ActivitiesHttpFeature</c> configures gets the endpoint as its primary handler, a replacement made after every
 /// feature has registered its own, so the client's real pipeline (its logging handlers included) is the one in front of
 /// it. Enabled only in a host started with the HTTP activities.

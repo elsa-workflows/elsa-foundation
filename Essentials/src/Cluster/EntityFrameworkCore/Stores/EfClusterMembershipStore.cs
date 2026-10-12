@@ -9,7 +9,7 @@ namespace Elsa.Cluster.EntityFrameworkCore.Stores;
 
 /// <summary>
 /// The membership table's reads and writes. Every write is a compare-and-set on the row's revision inside one bounded
-/// retry loop (spec 183, FR-026; ADR 0074), with no provider SQL; every provider failure leaves here wrapped (FR-034).
+/// retry loop, with no provider SQL; every provider failure leaves here wrapped.
 /// </summary>
 /// <remarks>
 /// Each operation runs on a context of its own, opened from <paramref name="scopes"/>, because a member's heartbeat,
@@ -31,7 +31,7 @@ internal sealed class EfClusterMembershipStore(IServiceScopeFactory scopes)
         EfWriteConflict.Concurrency | EfWriteConflict.UniqueKey | EfWriteConflict.Transient,
         attempt => TimeSpan.FromMilliseconds(5 * attempt));
 
-    /// <summary>Every row, in one query, so a read either sees the whole table or fails (FR-012).</summary>
+    /// <summary>Every row, in one query, so a read either sees the whole table or fails.</summary>
     public Task<IReadOnlyList<StoredMember>> ReadAllAsync(CancellationToken cancellationToken) =>
         RunAsync<IReadOnlyList<StoredMember>>("reading the fleet", async context =>
             (await context.Members.AsNoTracking().ToListAsync(cancellationToken)).Select(StoredMember.From).ToArray(),
@@ -39,12 +39,12 @@ internal sealed class EfClusterMembershipStore(IServiceScopeFactory scopes)
 
     /// <summary>
     /// Joins <paramref name="identity"/> as a new incarnation, unless its host id's current incarnation is still live
-    /// on <paramref name="now"/> (FR-004a, FR-004b). The insert and the displacement commit together, and the
+    /// on <paramref name="now"/>. The insert and the displacement commit together, and the
     /// displacement is conditioned on the revision the liveness judgement read: an incumbent that renews in between
     /// fails the compare-and-set, and the retry judges it live and refuses.
     /// </summary>
     /// <param name="previous">The incarnation a lapsed member rejoins after. When a later incarnation has displaced it,
-    /// another process holds the host id and nothing is written (FR-007).</param>
+    /// another process holds the host id and nothing is written.</param>
     public Task<JoinOutcome> JoinAsync(
         ClusterMemberIdentity identity,
         ClusterMemberIdentity? previous,
@@ -90,7 +90,7 @@ internal sealed class EfClusterMembershipStore(IServiceScopeFactory scopes)
 
     /// <summary>
     /// Renews this member's own row from the start of a heartbeat, carrying its status forward and republishing its
-    /// report if it changed (FR-027). A row that is missing, displaced or left is not renewed.
+    /// report if it changed. A row that is missing, displaced or left is not renewed.
     /// </summary>
     public Task<OwnWrite> RenewAsync(
         ClusterMemberIdentity identity,
@@ -105,17 +105,17 @@ internal sealed class EfClusterMembershipStore(IServiceScopeFactory scopes)
             Republish(row, reportJson);
         }, cancellationToken);
 
-    /// <summary>Publishes this member's report (FR-011): once this returns, every later fresh read shows it.</summary>
+    /// <summary>Publishes this member's report: once this returns, every later fresh read shows it.</summary>
     public Task<OwnWrite> PublishAsync(ClusterMemberIdentity identity, string reportJson, CancellationToken cancellationToken) =>
         WriteOwnAsync($"publishing the report of {identity}", identity, row => Republish(row, reportJson), cancellationToken);
 
-    /// <summary>Moves this member's status forward, never back (FR-005). Leaving stamps when, for cleanup.</summary>
+    /// <summary>Moves this member's status forward, never back. Leaving stamps when, for cleanup.</summary>
     public Task<OwnWrite> SetStatusAsync(ClusterMemberIdentity identity, MemberStatus status, DateTimeOffset now, CancellationToken cancellationToken) =>
         WriteOwnAsync($"moving {identity} to {status}", identity, row => MoveForward(row, status, now), cancellationToken);
 
     /// <summary>
     /// Deletes up to one batch of entries that have been left, or expired, for longer than <paramref name="cleanupPeriod"/>
-    /// on <paramref name="now"/> (FR-031). Each deletion is conditioned on the revision the judgement read, so an entry
+    /// on <paramref name="now"/>. Each deletion is conditioned on the revision the judgement read, so an entry
     /// renewed in between is kept, and one another member already deleted is simply gone. Idempotent.
     /// </summary>
     public Task<int> CleanupAsync(DateTimeOffset now, TimeSpan cleanupPeriod, TimeSpan skewAllowance, CancellationToken cancellationToken) =>
@@ -175,15 +175,15 @@ internal sealed class EfClusterMembershipStore(IServiceScopeFactory scopes)
 
     private static void Republish(ClusterMemberEntity row, string reportJson)
     {
-        // Only a report stored at the current version is compared, as the bytes the chain would return unchanged (spec 180,
-        // FR-021); one stored at an older version is rewritten whatever it says, so the row moves to the current version
-        // with it (FR-014) rather than keeping an older stamp over bytes compared with the current format (#2140).
+        // Only a report stored at the current version is compared, as the bytes the chain would return unchanged;
+        // one stored at an older version is rewritten whatever it says, so the row moves to the current version
+        // with it rather than keeping an older stamp over bytes compared with the current format (#2140).
         if (StringComparer.Ordinal.Equals(row.SchemaVersion, ClusterMembershipEfModule.Chain.CurrentVersion) &&
             string.Equals(row.ReportJson, reportJson, StringComparison.Ordinal))
             return;
 
         // The report is the row's one content column and is written whole in the current format, so the row is stamped
-        // with it (spec 180, FR-014).
+        // with it.
         row.ReportJson = reportJson;
         row.ReportRevision = checked(row.ReportRevision + 1);
         row.SchemaVersion = ClusterMembershipEfModule.SchemaVersion;

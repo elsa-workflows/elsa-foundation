@@ -21,15 +21,15 @@ public static class EfClusterMembershipServiceCollectionExtensions
     private static readonly EfModuleBinding Binding = EfModuleBinding.For(typeof(ClusterMembershipDbContext));
 
     /// <summary>
-    /// Composes the EF membership provider on a host container (spec 183, FR-024). It replaces the in-process default in
-    /// either order, and refuses to sit beside any other provider (FR-001). The host starts only with an explicit host id
-    /// (FR-003a) and a cleanup period longer than the expiry period plus the skew allowance (FR-031).
+    /// Composes the EF membership provider on a host container. It replaces the in-process default in
+    /// either order, and refuses to sit beside any other provider. The host starts only with an explicit host id
+    /// and a cleanup period longer than the expiry period plus the skew allowance.
     /// </summary>
     /// <remarks>
-    /// Call it on the host container, never from a shell feature: membership is selected once per host (ADR 0078,
-    /// amended; spec 183, Decisions, Q20). Shell containers are built from copies of the host's registrations and all
-    /// resolve the one member the host created. The module migrates through the plain-host migrator only, before the
-    /// member joins, so a shell activation never migrates it again.
+    /// Call it on the host container, never from a shell feature: membership is selected once per host. Shell
+    /// containers are built from copies of the host's registrations and all resolve the one member the host created.
+    /// The module migrates through the plain-host migrator only, before the member joins, so a shell activation never
+    /// migrates it again.
     /// </remarks>
     public static IServiceCollection AddEfClusterMembership(this IServiceCollection services, EfClusterMembershipOptions options)
     {

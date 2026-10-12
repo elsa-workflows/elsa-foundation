@@ -1,7 +1,7 @@
 namespace Elsa.Cluster.Core.Models;
 
 /// <summary>
-/// The limits a host id must meet (FR-003): non-blank, well-formed Unicode, at most 128 UTF-16 code units, compared
+/// The limits a host id must meet: non-blank, well-formed Unicode, at most 128 UTF-16 code units, compared
 /// ordinally. They repeat the limits the distributed runtime sets on its node id, so placement can take its node id
 /// from the host id unchanged; this contract cannot reference the runtime.
 /// </summary>

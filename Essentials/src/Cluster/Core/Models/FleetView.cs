@@ -1,8 +1,8 @@
 namespace Elsa.Cluster.Core.Models;
 
 /// <summary>
-/// The fleet as one provider sees it, judged at one instant (FR-009). A fresh view holds every member the provider's
-/// store holds; a provider that cannot return all of them fails the read instead (FR-012).
+/// The fleet as one provider sees it, judged at one instant. A fresh view holds every member the provider's
+/// store holds; a provider that cannot return all of them fails the read instead.
 /// </summary>
 public sealed record FleetView(
     ClusterProviderKind ProviderKind,

@@ -53,11 +53,11 @@ public sealed class ModularityFaultRenderer : IEndpointFaultRenderer
                 return true;
             // An activation guard's refusal is a conflict with the host's current state — a schema that is
             // behind, an engine that cannot bind — not a malformed request, so it is a 409 like the conflict
-            // above (ADR 0076 D9) and, deriving from InvalidOperationException too, ahead of that arm.
+            // above and, deriving from InvalidOperationException too, ahead of that arm.
             case FeatureActivationRefusedException refused:
                 await ModularityProblemWriting.WriteLegacyErrorAsync(context, refused.Message, StatusCodes.Status409Conflict);
                 return true;
-            // A write the database may not hold yet is a conflict too (spec 180, FR-016a), carrying its code, family and
+            // A write the database may not hold yet is a conflict too, carrying its code, family and
             // versions as further entries of the envelope's errors.
             case SchemaWriteRefusedException refusal:
                 await ModularityProblemWriting.WriteLegacyErrorAsync(context, SchemaWriteRefusalProblem.For(refusal));

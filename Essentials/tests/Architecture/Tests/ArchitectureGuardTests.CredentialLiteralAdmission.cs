@@ -5,13 +5,13 @@ using Xunit;
 namespace Elsa.Architecture.Tests;
 
 /// <summary>
-/// The credential-literal rule (spec 188, FR-008, T055) runs only in the application layer. These guards keep its
+/// The credential-literal rule runs only in the application layer. These guards keep its
 /// compiled contract in shape: every design command contract is classified as admitted, exempt or not state-writing,
 /// and promotion cannot be called without the admitted draft's hash.
 /// </summary>
 /// <remarks>
-/// Whether a caller calls the helper before its command is proved per entry point by the behavioral tests (T051 to T054,
-/// and the Elsa 3 import's own tests).
+/// Whether a caller calls the helper before its command is proved per entry point by the behavioral tests, the Elsa 3
+/// import's own tests among them.
 /// </remarks>
 public sealed partial class ArchitectureGuardTests
 {

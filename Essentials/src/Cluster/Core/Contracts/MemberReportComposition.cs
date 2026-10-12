@@ -3,7 +3,7 @@ using Elsa.Cluster.Core.Models;
 
 namespace Elsa.Cluster.Core.Contracts;
 
-/// <summary>How a provider reads its report sources, so every provider composes a report the same way (FR-014).</summary>
+/// <summary>How a provider reads its report sources, so every provider composes a report the same way.</summary>
 public static class MemberReportComposition
 {
     /// <summary>

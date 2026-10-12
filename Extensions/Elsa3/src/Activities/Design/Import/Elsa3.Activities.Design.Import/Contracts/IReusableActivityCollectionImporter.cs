@@ -29,7 +29,7 @@ public interface IReusableActivityCollectionAnalyzer
 /// mapping dependency.
 /// </summary>
 /// <remarks>
-/// The importer judges the credential-literal rule (spec 188, FR-008) on each workflow version's state and on each
+/// The importer judges the credential-literal rule on each workflow version's state and on each
 /// reusable activity's <see cref="ImportedReusableActivity.Body"/>, not on the activity version's descriptor payload,
 /// whose graph format the graph activity module owns. An implementation must therefore build every descriptor payload
 /// from the <see cref="ImportedReusableActivity.Body"/> it returns beside it, and put no activity input into the payload

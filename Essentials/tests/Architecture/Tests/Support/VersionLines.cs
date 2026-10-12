@@ -2,7 +2,7 @@ using System.Xml.Linq;
 
 namespace Elsa.Architecture.Tests;
 
-/// <summary>The repository's one reviewed Line A list (ADR 0067), as the guards read it.</summary>
+/// <summary>The repository's one reviewed Line A list, as the guards read it.</summary>
 internal static class VersionLines
 {
     /// <summary>

@@ -149,7 +149,7 @@ public sealed class OpenApiLifetimeBoundaryTests
         Assert.Throws<ArgumentException>(() => new EndpointLifetimeMetadata("group", "GET /safe", default));
     }
 
-    // Kept beside the composition test (§2.23.1): idempotence and null guards of the refresh registration.
+    // Kept beside the composition test: idempotence and null guards of the refresh registration.
     [Fact]
     public void Dynamic_api_explorer_refresh_registration_is_idempotent_and_null_guarded()
     {

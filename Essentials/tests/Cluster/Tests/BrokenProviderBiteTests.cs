@@ -5,7 +5,7 @@ using Xunit.Sdk;
 namespace Elsa.Cluster.Tests;
 
 /// <summary>
-/// Each deliberately broken provider of FR-060 fails a named conformance test. A broken provider that passed would
+/// Each deliberately broken reference provider fails a named conformance test. A broken provider that passed would
 /// mean the suite cannot tell it from a correct one.
 /// </summary>
 public sealed class BrokenProviderBiteTests

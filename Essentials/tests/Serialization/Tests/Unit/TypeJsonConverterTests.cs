@@ -7,7 +7,7 @@ using Xunit;
 namespace Elsa.Serialization.Tests.Unit;
 
 /// <summary>
-/// FR-008 / research D8: the compiled-Type converter handles HashSet&lt;&gt; with the same alias-based
+/// The compiled-Type converter handles HashSet&lt;&gt; with the same alias-based
 /// read/write parity it already gives [] and List&lt;&gt;.
 /// </summary>
 public sealed class TypeJsonConverterTests
@@ -28,7 +28,7 @@ public sealed class TypeJsonConverterTests
     [Fact]
     public void Write_RegisteredNonPrimitive_EmitsAliasOnly_NoAssemblyOrVersion()
     {
-        // FR-004 / FR-004a: a registered non-primitive type serializes to its alias only — no assembly name,
+        // A registered non-primitive type serializes to its alias only — no assembly name,
         // no version, no assembly-qualified name in the JSON.
         var json = JsonSerializer.Serialize(typeof(Uri), _options);
 
@@ -49,7 +49,7 @@ public sealed class TypeJsonConverterTests
     [Fact]
     public void Read_UnknownAlias_ResolvesToObject_NoThrow()
     {
-        // FR-004a / FR-018: an unresolved alias resolves to object (logged) rather than throwing.
+        // An unresolved alias resolves to object (logged) rather than throwing.
         var type = JsonSerializer.Deserialize<Type>("\"Acme.Unregistered\"", _options);
 
         Assert.Equal(typeof(object), type);

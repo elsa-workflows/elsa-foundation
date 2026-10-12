@@ -82,7 +82,7 @@ internal static class ReusableActivityImportFixtures
     }
 
     /// <summary>
-    /// The real credential-literal validator (spec 188, FR-008) over a structure service with no handler, judging against
+    /// The real credential-literal validator over a structure service with no handler, judging against
     /// <paramref name="catalog"/>; for tests whose catalog declares no credential input, so the rule refuses nothing.
     /// The tests of the rule at the import compose it as a host does, through <see cref="ImportServices"/>.
     /// </summary>

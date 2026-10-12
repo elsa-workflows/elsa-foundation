@@ -330,8 +330,8 @@ public sealed class ReusableActivityImportOperationService(
     /// cancellation. A persistence failure includes a commit whose outcome is unknown, where the repeat needs the
     /// collection again. An idempotency conflict inside the commit means a concurrent request won the same key with
     /// other content; when that request applied another upload, this one is still usable under a new key. Every
-    /// other outcome refuses the upload's content, such as a mapped literal on an input declared a credential (spec
-    /// 188, FR-008), and that upload is deleted. Unknown outcomes fall on the deleting side on purpose: deleting an
+    /// other outcome refuses the upload's content, such as a mapped literal on an input declared a credential,
+    /// and that upload is deleted. Unknown outcomes fall on the deleting side on purpose: deleting an
     /// upload costs its owner a new upload, keeping one may keep a credential at rest.
     /// </summary>
     private static bool LeavesUploadUsable(Exception exception) => exception is

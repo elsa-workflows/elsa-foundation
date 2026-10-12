@@ -13,7 +13,7 @@ using Xunit;
 namespace Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Tests;
 
 /// <summary>
-/// Spec 180, FR-009 and FR-014, for the Identity IAM rows the coordinators edit in place: a user's seven content columns
+/// Content upgrades for the Identity IAM rows the coordinators edit in place: a user's seven content columns
 /// and a role's three. Every coordinator write of such a row upgrades it first, so its registries are read current and a
 /// row it stamps is never partly in an older format.
 /// </summary>
@@ -21,7 +21,7 @@ namespace Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Tests;
 /// Identity IAM has only ever had one version, so its own chain cannot hold a row two versions behind. These tests drive
 /// the upgrade the coordinators call over an Identity IAM chain 1, 2, 3 of their own, whose upcasters each append a
 /// marker to every column they are given, by calling <see cref="EfIdentityStoreSupport.Upgrade(UserEntity, EfSchemaChain)"/>
-/// and its role overload directly (§2.23.3). Which columns count as content comes from the model the module
+/// and its role overload directly. Which columns count as content comes from the model the module
 /// maps, not from a list here, so a content column added to either entity without being added to the upgrade fails.
 /// The other half - every Identity IAM content read goes through the chain, and every in-place content write upgrades
 /// or stamps its row - holds by review until #2606 restores a compiled check.
@@ -85,7 +85,7 @@ public sealed class IdentityIamContentUpgradeTests : IAsyncDisposable
         Assert.Equal("3", Stamp(stored!));
     }
 
-    /// <summary>FR-021: at the current version the upgrade runs no upcaster and leaves the row exactly as it was.</summary>
+    /// <summary>At the current version the upgrade runs no upcaster and leaves the row exactly as it was.</summary>
     [Theory]
     [MemberData(nameof(EditedInPlace))]
     public async Task A_row_at_the_current_version_is_left_exactly_as_it_was(Type entityType)

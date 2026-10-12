@@ -4,7 +4,7 @@ using Microsoft.Extensions.Configuration;
 namespace Elsa.Cli;
 
 /// <summary>
-/// The host's shell feature configuration, read the way the host itself reads it (FR-035, FR-038):
+/// The host's shell feature configuration, read the way the host itself reads it:
 /// <c>shells.json</c> in the <c>--host</c> directory, then <c>shells.&lt;environment&gt;.json</c> layered on
 /// top when that file exists, through the same JSON configuration providers a host composes at startup.
 /// </summary>
@@ -19,7 +19,7 @@ namespace Elsa.Cli;
 /// <para>
 /// The environment is the <c>--environment</c> value, never this process's own
 /// <c>ASPNETCORE_ENVIRONMENT</c>/<c>DOTNET_ENVIRONMENT</c>: the tool's environment is not the host's, and
-/// the overlay a host would read is decided by the host's environment alone (FR-038).
+/// the overlay a host would read is decided by the host's environment alone.
 /// </para>
 /// <para>
 /// The two <c>Features</c> shapes CShells accepts are both supported — an object map keyed by feature name,
@@ -53,7 +53,7 @@ public sealed class ShellConfiguration
 
     /// <summary>
     /// Reads the host's shell configuration, or <c>null</c> when neither the base file nor the overlay is
-    /// present — the one case FR-039 records as <c>providerAgreement: not-checked</c>.
+    /// present — the one case the manifest records as <c>providerAgreement: not-checked</c>.
     /// </summary>
     public static ShellConfiguration? Read(string hostDirectory, string environment)
     {

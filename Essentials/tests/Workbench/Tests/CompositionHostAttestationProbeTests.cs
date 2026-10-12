@@ -9,8 +9,8 @@ using Xunit;
 namespace Elsa.Workbench.Tests;
 
 /// <summary>
-/// Host-side evidence for spec 177 T010. The private CShells blueprint can show effective configuration, but the
-/// public readiness and authenticated reload contracts expose only lifecycle/generation data.
+/// Host-side evidence for the composition host's attestation. The private CShells blueprint can show effective
+/// configuration, but the public readiness and authenticated reload contracts expose only lifecycle/generation data.
 /// </summary>
 public sealed class CompositionHostAttestationProbeTests
 {

@@ -2,7 +2,7 @@ namespace Elsa.Serialization.Core.Exceptions;
 
 /// <summary>
 /// Thrown when a module attempts to register a bare (non-dotted) alias. The bare-alias namespace is
-/// reserved for framework primitives; modules must use dotted/reverse-DNS aliases (FR-011 / FR-013).
+/// reserved for framework primitives; modules must use dotted/reverse-DNS aliases.
 /// </summary>
 public sealed class ReservedAliasNamespaceException : Exception
 {

@@ -4,7 +4,7 @@ using static Elsa.Architecture.Tests.RepoPaths;
 namespace Elsa.Architecture.Tests;
 
 /// <summary>
-/// Keeps Line A closed under <c>ProjectReference</c> (ADR 0067, Consequences and Decision): a Line A
+/// Keeps Line A closed under <c>ProjectReference</c>: a Line A
 /// package may reference only Line A packages, because a Line B dependency's floor moves with every
 /// release and would drag the shared baseline with it.
 /// </summary>

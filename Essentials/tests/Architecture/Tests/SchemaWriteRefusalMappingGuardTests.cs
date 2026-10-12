@@ -24,7 +24,7 @@ using Xunit;
 namespace Elsa.Architecture.Tests;
 
 /// <summary>
-/// Spec 180, FR-016a: every domain API that can raise a schema write refusal answers it with HTTP 409 in its own problem
+/// Every domain API that can raise a schema write refusal answers it with HTTP 409 in its own problem
 /// envelope, carrying the refusal's code, never a 500, a 400 or a success. An API sees no EF Core, so it answers the
 /// <see cref="SchemaWriteRefusedException"/> both EF refusals derive from.
 /// </summary>
@@ -81,7 +81,7 @@ public sealed class SchemaWriteRefusalMappingGuardTests
     }
 
     /// <summary>
-    /// Spec 182, FR-015: the dormancy refusal the shared dormancy check raises is answered the same way by every endpoint,
+    /// The dormancy refusal the shared dormancy check raises is answered the same way by every endpoint,
     /// with its code, and with the feature and the reason it adds, which its message carries into every shape.
     /// </summary>
     [Theory]
@@ -197,8 +197,8 @@ public sealed class SchemaWriteRefusalMappingGuardTests
         Assert.Contains(("writeVersion", ProbeWriteVersion), pairs);
         Assert.Contains(("requiredVersion", ProbeRequiredVersion), pairs);
 
-        // A dormancy refusal carries its own code (spec 182, Q17), never the store-level one, plus its feature and its
-        // caller-neutral reason as entries of their own (FR-013).
+        // A dormancy refusal carries its own code, never the store-level one, plus its feature and its
+        // caller-neutral reason as entries of their own.
         var (dormantStatus, dormant) = await host.GetAsync("/contained/dormant");
         Assert.Equal(HttpStatusCode.Conflict, dormantStatus);
         var dormantErrors = dormant.GetProperty("errors");
@@ -230,7 +230,7 @@ public sealed class SchemaWriteRefusalMappingGuardTests
         return (app, endpoints);
     }
 
-    /// <summary>Proves the dormancy refusal answers with its own code (spec 182, Q17), never the store-level one.</summary>
+    /// <summary>Proves the dormancy refusal answers with its own code, never the store-level one.</summary>
     private static bool CarriesTheDormancy(string body) =>
         body.Contains("schema-version-not-finalized", StringComparison.Ordinal) &&
         body.Contains(ProbeFeature, StringComparison.Ordinal) &&
@@ -281,7 +281,7 @@ public sealed class SchemaWriteRefusalMappingGuardTests
         return (context.Response.StatusCode, await reader.ReadToEndAsync());
     }
 
-    /// <summary>A dormancy refusal as the shared dormancy check raises one (spec 182, FR-013).</summary>
+    /// <summary>A dormancy refusal as the shared dormancy check raises one.</summary>
     private static SchemaDormancyRefusedException DormancyProbe() =>
         new(ProbeFamily, ProbeWriteVersion, ProbeRequiredVersion, ProbeFeature, ProbeReason);
 

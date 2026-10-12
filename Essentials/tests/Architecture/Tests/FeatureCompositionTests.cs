@@ -27,7 +27,7 @@ using Xunit;
 namespace Elsa.Architecture.Tests;
 
 /// <summary>
-/// The composition test of framework constitution §2.23.1: shells composed from every feature, in which every service type
+/// The composition test: shells composed from every feature, in which every service type
 /// each feature registers resolves.
 /// </summary>
 /// <remarks>

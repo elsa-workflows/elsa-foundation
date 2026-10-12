@@ -10,12 +10,11 @@ using Elsa.Modularity.Core.Models;
 namespace Elsa.Modularity.Api.Attention;
 
 /// <summary>
-/// Turns the feature catalog's problems into Attention items: a manifest that could not be read (critical), a missing or
-/// disabled dependency (warning), a dormant feature with its reason and the finalization gate's status (info; spec 182,
-/// FR-010), a schema family whose writes this host refuses because it cannot read its finalized version (critical;
-/// spec 181, FR-012), and a schema family whose completion was withdrawn because a row below it turned up after it was
-/// recorded (critical; spec 186, FR-018). Everything comes from items Attention already has a shape for, so its public API
-/// does not change.
+/// Turns the feature catalog's problems into Attention items: a manifest that could not be read (critical), a missing
+/// or disabled dependency (warning), a dormant feature with its reason and the finalization gate's status (info), a
+/// schema family whose writes this host refuses because it cannot read its finalized version (critical), and a schema
+/// family whose completion was withdrawn because a row below it turned up after it was recorded (critical). Everything
+/// comes from items Attention already has a shape for, so its public API does not change.
 /// </summary>
 public sealed class ModularityAttentionContributor(
     IFeatureManagementService featureManagementService,
@@ -96,7 +95,7 @@ public sealed class ModularityAttentionContributor(
     }
 
     /// <summary>
-    /// One informational item for an enabled feature the catalog reports dormant (spec 182, FR-010, User Story 1): it names
+    /// One informational item for an enabled feature the catalog reports dormant: it names
     /// the feature and every unmet requirement's reason, which carries the finalization gate's status. It disappears once
     /// the catalog reports the feature available.
     /// </summary>
@@ -121,8 +120,8 @@ public sealed class ModularityAttentionContributor(
     }
 
     /// <summary>
-    /// One critical item for a schema family whose finalized version this host cannot read, so every write to it is refused
-    /// (spec 181, FR-012; spec 182, FR-010). That is not dormancy: this host has to be replaced by one that reads it.
+    /// One critical item for a schema family whose finalized version this host cannot read, so every write to it is refused.
+    /// That is not dormancy: this host has to be replaced by one that reads it.
     /// </summary>
     private static AttentionItem WritesRefused(SchemaFamilyObservation family, DateTimeOffset observedAt) =>
         new(
@@ -142,7 +141,7 @@ public sealed class ModularityAttentionContributor(
             AttentionSensitivity.Metadata);
 
     /// <summary>
-    /// One critical item for a schema family whose completion the backfill's audit withdrew (spec 186, FR-018): a row below
+    /// One critical item for a schema family whose completion the backfill's audit withdrew: a row below
     /// the completion version was written after it was recorded, by a writer that had not observed the finalization. It
     /// names the family, the tables and the counts, from the withdrawal the record carries, so every host reports it, and
     /// it disappears once a new verification pass records the completion again.

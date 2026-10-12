@@ -19,7 +19,7 @@ public sealed class EfClusterMembershipRegistrationTests : IAsyncDisposable
     public ValueTask DisposeAsync() => _fixture.DisposeAsync();
 
     /// <summary>
-    /// FR-024: the module migrates through the plain-host migrator. CShells copies every host registration into each
+    /// The module migrates through the plain-host migrator. CShells copies every host registration into each
     /// shell, so a shell hook would migrate the membership store again on every shell activation, from the shell's
     /// configuration. The control proves the check would see one.
     /// </summary>
@@ -43,7 +43,7 @@ public sealed class EfClusterMembershipRegistrationTests : IAsyncDisposable
         Assert.Contains("Oracle", failure.Message, StringComparison.Ordinal);
     }
 
-    /// <summary>FR-031: cleanup could otherwise delete an entry a reader still counts.</summary>
+    /// <summary>Cleanup could otherwise delete an entry a reader still counts.</summary>
     [Fact]
     public async Task A_cleanup_period_within_the_liveness_window_refuses_to_start_before_joining()
     {
@@ -57,8 +57,8 @@ public sealed class EfClusterMembershipRegistrationTests : IAsyncDisposable
     }
 
     /// <summary>
-    /// FR-027 through the host's own lifecycle: the member heartbeats on its interval as the host's clock advances, so it
-    /// stays live long past its expiry period, and it is active once the host has started.
+    /// Heartbeats through the host's own lifecycle: the member heartbeats on its interval as the host's clock advances,
+    /// so it stays live long past its expiry period, and it is active once the host has started.
     /// </summary>
     [Fact]
     public async Task A_started_host_heartbeats_on_its_interval_and_stays_live_past_its_expiry_period()
@@ -83,8 +83,8 @@ public sealed class EfClusterMembershipRegistrationTests : IAsyncDisposable
     }
 
     /// <summary>
-    /// The provider publishes every section whose source the host composed beside it (spec 183, FR-014; spec 184,
-    /// FR-008): a host whose runtime reports what it can run is seen with that section, never without it.
+    /// The provider publishes every section whose source the host composed beside it:
+    /// a host whose runtime reports what it can run is seen with that section, never without it.
     /// </summary>
     [Fact]
     public async Task A_started_host_publishes_every_section_whose_source_it_composed_beside_the_provider()

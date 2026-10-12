@@ -6,7 +6,7 @@ namespace Elsa.Cluster.Hosting;
 
 /// <summary>
 /// Whether the membership provider stopped this host because another process holds its host id: its member was
-/// displaced, or found a live duplicate when it tried to rejoin (spec 183, FR-007 and its 2026-10-01 note). The provider
+/// displaced, or found a live duplicate when it tried to rejoin. The provider
 /// records the lapse before it asks the host to stop, and never sets the process's exit code itself.
 /// </summary>
 /// <remarks>

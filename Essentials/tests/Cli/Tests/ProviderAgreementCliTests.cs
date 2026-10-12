@@ -5,9 +5,8 @@ using Xunit;
 namespace Elsa.Cli.Tests;
 
 /// <summary>
-/// The tool run end to end against a host that carries shell configuration beside its build output (spec
-/// 171 FR-035–FR-039, FR-028, FR-064; User Story 1 scenarios 4 and 5). The fixture host's
-/// <c>shells.json</c> has one shell per case, so each run names the shell it is about.
+/// The tool run end to end against a host that carries shell configuration beside its build output.
+/// The fixture host's <c>shells.json</c> has one shell per case, so each run names the shell it is about.
 /// </summary>
 public sealed class ProviderAgreementCliTests : IDisposable
 {
@@ -32,7 +31,7 @@ public sealed class ProviderAgreementCliTests : IDisposable
         Assert.Contains("environment-variable configuration overrides are invisible", run.Text, StringComparison.Ordinal);
     }
 
-    /// <summary>User Story 1 scenario 5: the agreeing feature does not speak for the module.</summary>
+    /// <summary>The agreeing feature does not speak for the module.</summary>
     [Fact]
     public void A_feature_left_at_its_own_sqlite_default_is_reported_while_its_sibling_agrees()
     {
@@ -97,8 +96,8 @@ public sealed class ProviderAgreementCliTests : IDisposable
     }
 
     /// <summary>
-    /// The check runs under an ordinary <c>--modules</c> selection, not only under <c>--from-host</c>
-    /// (FR-035): <c>plan</c> writes nothing and is still refused.
+    /// The check runs under an ordinary <c>--modules</c> selection, not only under <c>--from-host</c>:
+    /// <c>plan</c> writes nothing and is still refused.
     /// </summary>
     [Fact]
     public void The_check_runs_under_any_selector_not_only_from_host()
@@ -181,7 +180,7 @@ public sealed class ProviderAgreementCliTests : IDisposable
         Assert.Contains("cannot be combined", run.Text, StringComparison.Ordinal);
     }
 
-    /// <summary>User Story 1 scenario 4: a name outside the 13-name vocabulary.</summary>
+    /// <summary>A name outside the 13-name vocabulary.</summary>
     [Fact]
     public void A_module_outside_the_vocabulary_is_refused_before_anything_is_written()
     {
@@ -203,7 +202,7 @@ public sealed class ProviderAgreementCliTests : IDisposable
     }
 
     /// <summary>
-    /// FR-038's default, and the reason it is a constant rather than this process's own environment: the
+    /// The environment's default, and the reason it is a constant rather than this process's own environment: the
     /// overlay read is the host's <c>Production</c> one even when the tool itself is told it is running in
     /// Development.
     /// </summary>
@@ -252,7 +251,7 @@ public sealed class ProviderAgreementCliTests : IDisposable
     }
 
     /// <summary>
-    /// A host with no shells configuration at all is the one case FR-039 records as <c>not-checked</c>, and
+    /// A host with no shells configuration at all is the one case the manifest records as <c>not-checked</c>, and
     /// the one case <c>--from-host</c> cannot answer.
     /// </summary>
     [Fact]

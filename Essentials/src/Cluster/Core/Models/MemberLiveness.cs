@@ -1,8 +1,7 @@
 namespace Elsa.Cluster.Core.Models;
 
 /// <summary>
-/// The liveness rules every provider applies, so that expiry and lapse stay ordered the same way everywhere
-/// (FR-006 to FR-008).
+/// The liveness rules every provider applies, so that expiry and lapse stay ordered the same way everywhere.
 /// </summary>
 /// <remarks>
 /// A member stamps its heartbeat from its own clock at the start of the heartbeat it measures its lapse from. It
@@ -25,7 +24,7 @@ public static class MemberLiveness
     /// <summary>
     /// Whether a member has lapsed, given the time elapsed since the start of its last successful heartbeat measured by
     /// the wall clock and by a monotonic clock. The larger of the two counts: the wall clock catches a suspended VM
-    /// whose monotonic clock stood still, and the monotonic clock catches a wall clock stepped backwards (FR-007).
+    /// whose monotonic clock stood still, and the monotonic clock catches a wall clock stepped backwards.
     /// </summary>
     public static bool HasLapsed(TimeSpan wallClockElapsed, TimeSpan monotonicElapsed, TimeSpan expiryPeriod) =>
         (wallClockElapsed > monotonicElapsed ? wallClockElapsed : monotonicElapsed) >= expiryPeriod;

@@ -12,7 +12,7 @@ namespace Elsa.Expressions.JavaScript.Jint.Tests;
 
 public sealed class ExplicitExpressionParametersTests
 {
-    // Kept beside the composition test (§2.23.1): asserts what the feature must not register (engine internals stay unexposed).
+    // Kept beside the composition test: asserts what the feature must not register (engine internals stay unexposed).
     [Fact]
     public void Jint_feature_registers_only_the_isolated_expression_and_typed_script_evaluators()
     {

@@ -19,7 +19,7 @@ using OpenIddict.Validation.AspNetCore;
 namespace Elsa.Foundation.Identity.Tests.OpenIddict;
 
 /// <summary>
-/// B2: scheme registration and composition — the validation handler and selector scheme are registered, the
+/// Scheme registration and composition — the validation handler and selector scheme are registered, the
 /// selector becomes the default authenticate/challenge scheme deterministically regardless of feature
 /// registration order relative to the OIDC module, and per-request scheme selection routes by request shape
 /// (local bearer / external bearer / cookie / anonymous).
@@ -28,7 +28,7 @@ public sealed class OpenIddictSchemeCompositionTests : IAsyncDisposable
 {
     private readonly OpenIddictIdentityFixture _fixture = new();
 
-    // Kept beside the composition test (§2.23.1): asserts what the composite must not register (vendor persistence and lifecycle).
+    // Kept beside the composition test: asserts what the composite must not register (vendor persistence and lifecycle).
     [Fact]
     public void Behavior_composite_does_not_register_vendor_persistence_or_lifecycle_ownership()
     {
@@ -50,7 +50,7 @@ public sealed class OpenIddictSchemeCompositionTests : IAsyncDisposable
         Assert.Contains(schemes, x => x.Name == OpenIddictIdentityDefaults.SelectorScheme);
     }
 
-    // Kept beside the composition test (§2.23.1): resolves without shells or server wiring, which the composition test never exercises.
+    // Kept beside the composition test: resolves without shells or server wiring, which the composition test never exercises.
     [Fact]
     public void Feature_Registers_Cleanly_Without_Shells_Or_Server_Wiring()
     {
@@ -67,7 +67,7 @@ public sealed class OpenIddictSchemeCompositionTests : IAsyncDisposable
         Assert.IsType<OpenIddictTokenService>(scope.ServiceProvider.GetRequiredService<ITokenService>());
     }
 
-    // Kept beside the composition test (§2.23.1): ordering, the selector stays the default in either registration order.
+    // Kept beside the composition test: ordering, the selector stays the default in either registration order.
     [Theory]
     [InlineData(true)]
     [InlineData(false)]
@@ -101,7 +101,7 @@ public sealed class OpenIddictSchemeCompositionTests : IAsyncDisposable
         }
     }
 
-    // Kept beside the composition test (§2.23.1): ordering, the selector stays the default authenticate scheme in either registration order.
+    // Kept beside the composition test: ordering, the selector stays the default authenticate scheme in either registration order.
     [Theory]
     [InlineData(true)]
     [InlineData(false)]

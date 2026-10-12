@@ -7,7 +7,7 @@ using Microsoft.Extensions.Primitives;
 namespace Elsa.Cluster.Tests.Reference;
 
 /// <summary>
-/// The deliberately broken variants of the reference provider (FR-060). Each must fail a named conformance test.
+/// The deliberately broken variants of the reference provider. Each must fail a named conformance test.
 /// </summary>
 public enum SharedStoreFault
 {
@@ -143,7 +143,7 @@ internal sealed class SharedStoreClusterMembership(
         query.Evaluate(await ReadFleetAsync(mode, cancellationToken));
 
     /// <summary>
-    /// A change token that completes once, the next time the shared store observes a fleet change (FR-013). Call this
+    /// A change token that completes once, the next time the shared store observes a fleet change. Call this
     /// again after it completes to observe the next one.
     /// </summary>
     public IChangeToken GetChangeToken() => store.GetChangeToken();
@@ -170,10 +170,10 @@ internal sealed class SharedStoreClusterMembership(
     }
 
     /// <summary>
-    /// The FR-037 to FR-042 conditions this reader observes about <paramref name="entry"/> from data already in the
+    /// The conditions this reader observes about <paramref name="entry"/> from data already in the
     /// store, without a separate write for each: a lapse and a displacement are visible because they change what is
-    /// stored (FR-004a, FR-007); an uninterpretable entry, because its report is missing; a clock skew, by comparing
-    /// the entry's own heartbeat time to this reader's clock. FR-039 (a duplicate host id: a displacement while the
+    /// stored; an uninterpretable entry, because its report is missing; a clock skew, by comparing
+    /// the entry's own heartbeat time to this reader's clock. A duplicate host id (a displacement while the
     /// member's own heartbeats were still succeeding) cannot occur for this store: <see cref="SharedMembershipStore.Join"/>
     /// holds one lock across the liveness check and the displacement, so a live incumbent is never displaced.
     /// </summary>
@@ -202,7 +202,7 @@ internal sealed class SharedStoreClusterMembership(
     }
 
     /// <summary>Attaches a <see cref="MemberConditionKind.FailedFreshRead"/> condition to this reader's own entry in
-    /// <paramref name="cached"/>, and clears the flag so it is reported once (FR-042).</summary>
+    /// <paramref name="cached"/>, and clears the flag so it is reported once.</summary>
     private FleetView WithFailedFreshRead(FleetView cached)
     {
         _hadFailedFreshRead = false;

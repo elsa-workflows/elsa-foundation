@@ -14,7 +14,7 @@ namespace Elsa3.Activities.Design.Import.Persistence.EntityFrameworkCore.Stores;
 /// their encoded residuals and canonical JSON before a domain value is returned.
 /// <para>
 /// The two deletes remove collection rows and read no content. The expiry sweep touches only rows at a schema
-/// version this build reads (ADR 0077), so a node behind in a rolling upgrade leaves a newer node's rows to that node.
+/// version this build reads, so a node behind in a rolling upgrade leaves a newer node's rows to that node.
 /// </para>
 /// </summary>
 public sealed class EfReusableActivityImportOperationStore(

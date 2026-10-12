@@ -5,7 +5,7 @@ using static Elsa.Architecture.Tests.RepoPaths;
 namespace Elsa.Architecture.Tests;
 
 /// <summary>
-/// Line A membership (ADR 0067) is one reviewed list: <c>&lt;ElsaVersionLineAMembers&gt;</c> in the root
+/// Line A membership is one reviewed list: <c>&lt;ElsaVersionLineAMembers&gt;</c> in the root
 /// <c>VersionLines.props</c>. The root <c>Directory.Build.props</c> imports that file and derives
 /// <c>$(ElsaVersionLine)</c> from it (<c>B</c> by default, <c>A</c> when the project's name appears in the
 /// list). Nothing in MSBuild stops a project file, or a nested <c>Directory.Build.props</c>/<c>.targets</c>,

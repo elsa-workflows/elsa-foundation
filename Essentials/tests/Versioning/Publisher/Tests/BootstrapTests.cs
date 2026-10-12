@@ -31,7 +31,7 @@ public sealed class BootstrapTests : PublishingHistory
 
     /// <summary>
     /// #2081's acceptance: <c>publish-state</c> exists as an orphan branch holding only <c>published-versions.json</c>, with an
-    /// entry for every packable package id at its computed version, naming the main commit it was built from (FR-014, FR-021).
+    /// entry for every packable package id at its computed version, naming the main commit it was built from.
     /// </summary>
     [Fact]
     public async Task The_bootstrap_publishes_every_package_and_creates_publish_state_as_an_orphan_holding_only_the_record()

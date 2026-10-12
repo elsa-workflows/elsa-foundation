@@ -3,7 +3,7 @@ namespace Elsa.Serialization.Core.Exceptions;
 /// <summary>
 /// Thrown when a type alias (or its CLR type) is registered more than once in the well-known type
 /// registry. Registration is fail-fast: a duplicate alias would silently resolve to the wrong type,
-/// so the application refuses to start instead (FR-013 / SC-004).
+/// so the application refuses to start instead.
 /// </summary>
 public sealed class DuplicateTypeAliasException : Exception
 {

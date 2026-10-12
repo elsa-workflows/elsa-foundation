@@ -4,8 +4,8 @@ using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 
 // The canary activities live outside the test project's namespace on purpose: their full type name is the activity type
-// key the catalog, the runtime and every inspection surface record, and no part of it may match a name-based redactor
-// (spec 188, T078, research R10). "Secrets", in the project's namespace, would.
+// key the catalog, the runtime and every inspection surface record, and no part of it may match a name-based redactor.
+// "Secrets", in the project's namespace, would.
 namespace Elsa.Canary.Fixtures;
 
 /// <summary>What a canary activity does, chosen by the literal bound to its <see cref="CanaryActivity.Companion"/> input.</summary>
@@ -32,7 +32,7 @@ public sealed record CanaryWaitState(string Mode);
 public sealed record CanaryWaitTrigger(bool Released);
 
 /// <summary>
-/// The canary activity (spec 188, T078). <see cref="Primary"/> is declared a credential, <see cref="Companion"/> is
+/// The canary activity. <see cref="Primary"/> is declared a credential, <see cref="Companion"/> is
 /// undeclared and bound to a non-secret literal that selects the <see cref="CanaryModes">mode</see>, and
 /// <see cref="Plain"/> is undeclared, so its pinned contract policy is not sensitive (scenario S10).
 /// </summary>
@@ -47,7 +47,7 @@ public sealed record CanaryWaitTrigger(bool Released);
 /// It hands what it was hydrated with to <see cref="CanaryRecorder"/>, in memory, and puts the value it holds into
 /// the text of the exception it throws or the fault it returns in those modes, which is the text the runtime's masking
 /// is tested on. It does not log the value, return it in its result or store it in its private state or a bookmark
-/// payload, which phase 0 does not cover (research R9, limits).
+/// payload, which phase 0 does not cover.
 /// </para>
 /// </remarks>
 [ActivitySideEffectProfile(SideEffectProfile.ReplaySafe)]

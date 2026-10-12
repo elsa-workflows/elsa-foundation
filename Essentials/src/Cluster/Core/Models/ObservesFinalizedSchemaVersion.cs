@@ -3,7 +3,7 @@ namespace Elsa.Cluster.Core.Models;
 /// <summary>
 /// "Has observed schema family <see cref="Family"/> finalized at one of <see cref="Versions"/>", optionally for the
 /// database whose finalization record has <see cref="DatabaseIdentity"/>: the settle condition of the post-finalization
-/// backfill (spec 186, FR-012 and MR-001). Its versions are opaque labels, named rather than compared, because only a
+/// backfill. Its versions are opaque labels, named rather than compared, because only a
 /// family's chain orders them.
 /// </summary>
 /// <remarks>

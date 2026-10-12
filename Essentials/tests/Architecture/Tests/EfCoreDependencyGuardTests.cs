@@ -6,14 +6,14 @@ using static Elsa.Architecture.Tests.RepoPaths;
 namespace Elsa.Architecture.Tests;
 
 /// <summary>
-/// ADR 0073 selects EF Core as the destination persistence family, but each implementation still enters
+/// EF Core is the destination persistence family, but each implementation still enters
 /// through an explicitly reviewed program issue. This ratchet therefore keeps the currently admitted
 /// surface at the vendor-owned OpenIddict host boundary plus the repository implementations explicitly
-/// admitted by ADR 0072 and ADR 0073 / Program #1665. It reads
+/// admitted by the reviewed records below. It reads
 /// each source project's evaluated Release and Debug restore graphs, so imported, conditional, transitive,
 /// and provider-only EF edges anywhere else under <c>src/</c> fail and name the offender. Each host exception also
 /// validates its exact resolved EF package set. Each replacement changes this guard deliberately with its own
-/// architecture evidence; the destination ADR alone is not a repository-wide exemption.
+/// architecture evidence; the destination decision alone is not a repository-wide exemption.
 /// </summary>
 public sealed class EfCoreDependencyGuardTests
 {
@@ -21,7 +21,7 @@ public sealed class EfCoreDependencyGuardTests
     private static readonly string[] AllowedEfConsumers = ["Elsa.Foundation.Host", "Elsa.Workbench"];
 
     /// <summary>
-    /// ADR 0076, amended 2026-09-29 (#2151) and 2026-10-01 (#2191): <c>Elsa.Foundation.Host</c> carries EF Core for its opt-in
+    /// <c>Elsa.Foundation.Host</c> carries EF Core (#2151, #2191) for its opt-in
     /// cluster membership provider and its opt-in Data Protection key store and nothing else, so its closure is theirs - EF
     /// Core and Relational - plus the four engines their tables can live in. No design-time package, no in-memory provider
     /// and no vendor EF store: every feature's EF module still arrives from a feed.
@@ -401,7 +401,7 @@ public sealed class EfCoreDependencyGuardTests
     /// <summary>
     /// The adapter's reviewed closure is exact, so a provider engine appearing in it is flagged rather than
     /// absorbed — proved here against the record itself, because a passing guard cannot show what it would
-    /// refuse (FR-063).
+    /// refuse.
     /// </summary>
     [Fact]
     public void The_activation_guard_closure_rejects_a_provider_engine()
@@ -836,8 +836,8 @@ public sealed class EfCoreDependencyGuardTests
     private sealed record Project(string Name, IReadOnlyDictionary<string, string[]> EfPackagesByConfiguration, bool IsAdmittedRepository);
 
     /// <summary>
-    /// ADR 0072's accepted, now-superseded Secrets EF surface. ADR 0073 preserves this as the only currently
-    /// admitted first-party implementation while later Program #1665 replacements remain evidence-gated.
+    /// The Secrets EF pilot surface. The pilot's bounded policy is superseded, but its implementation stays
+    /// admitted as the reviewed starting surface while later Program #1665 replacements remain evidence-gated.
     /// <see cref="SecretsEfPersistencePilotArchitectureTests"/> owns the exact package and source inventory.
     /// </summary>
     internal static class Adr0072SecretsEfPilot
@@ -897,7 +897,7 @@ public sealed class EfCoreDependencyGuardTests
     }
 
     /// <summary>
-    /// ADR 0073's first repository-first admission beyond the Secrets pilot. Provider engines remain
+    /// The first repository-first admission beyond the Secrets pilot. Provider engines remain
     /// confined to the focused test project; the production adapter owns only EF Core relational APIs.
     /// </summary>
     internal static class Adr0073RepositoryFirstEf
@@ -935,7 +935,10 @@ public sealed class EfCoreDependencyGuardTests
         ];
     }
 
-    /// <summary>Activities Design EF replacement admitted by the audited A01-A21 implementation slice.</summary>
+    /// <summary>
+    /// Activities Design EF replacement, admitted by its audited implementation slice: the provider-neutral
+    /// adapter plus its SQLite and provider test projects.
+    /// </summary>
     internal static class Adr0073ActivitiesDesignEf
     {
         public static readonly IReadOnlyDictionary<string, string[]> ExpectedEfPackagesByProject =
@@ -954,7 +957,7 @@ public sealed class EfCoreDependencyGuardTests
     }
 
     /// <summary>
-    /// ADR 0073's Runtime D01 repository-first admission for issue #1717. The production
+    /// The Runtime repository-first admission for issue #1717. The production
     /// adapter is provider-neutral; provider engines remain in focused test projects.
     /// </summary>
     internal static class Adr0073RuntimePlacementEf
@@ -995,7 +998,7 @@ public sealed class EfCoreDependencyGuardTests
     }
 
     /// <summary>
-    /// ADR 0073's Runtime R01 bookmark-state admission for issue #1723. The production
+    /// The Runtime bookmark-state admission for issue #1723. The production
     /// adapter is provider-neutral; provider engines remain in focused test projects.
     /// </summary>
     internal static class Adr0073RuntimeBookmarksEf
@@ -1031,7 +1034,7 @@ public sealed class EfCoreDependencyGuardTests
         ];
     }
 
-    /// <summary>ADR 0073's opt-in Dashboard run-health reader, backed by the admitted Runtime EF projection.</summary>
+    /// <summary>The opt-in Dashboard run-health reader, backed by the admitted Runtime EF projection.</summary>
     internal static class Adr0073DashboardRunHealthEf
     {
         private const string Prefix = "Essentials/src/Workflows/Dashboard/Persistence/EntityFrameworkCore/";
@@ -1051,7 +1054,7 @@ public sealed class EfCoreDependencyGuardTests
     }
 
     /// <summary>
-    /// ADR 0073's opt-in Publishing ledger (P01-P06, issues #1748, #1751 and #1737). Its ordered activity-publication
+    /// The opt-in Publishing ledger (issues #1748, #1751 and #1737). Its ordered activity-publication
     /// commands reach the Activities Design and Runtime EF projects, whose closures are the same core packages.
     /// </summary>
     internal static class Adr0073PublishingSnapshotReviewEf
@@ -1085,7 +1088,7 @@ public sealed class EfCoreDependencyGuardTests
     }
 
     /// <summary>
-    /// ADR 0073's Diagnostics Structured Logs repository-first admission for issue #1695. The
+    /// The Diagnostics Structured Logs repository-first admission for issue #1695. The
     /// production adapter is provider-neutral; SQLite belongs to the behavioral test project and
     /// SQL Server, PostgreSQL, and MySQL packages belong only to the live-provider test project.
     /// </summary>
@@ -1121,7 +1124,7 @@ public sealed class EfCoreDependencyGuardTests
     }
 
     /// <summary>
-    /// ADR 0073's Diagnostics OpenTelemetry repository-first admission for issue #1697. The
+    /// The Diagnostics OpenTelemetry repository-first admission for issue #1697. The
     /// production adapter is provider-neutral; SQLite belongs to the behavioral test project and
     /// SQL Server, PostgreSQL, and MySQL packages belong only to the live-provider test project.
     /// </summary>
@@ -1159,7 +1162,7 @@ public sealed class EfCoreDependencyGuardTests
     }
 
     /// <summary>
-    /// ADR 0073's repository-first Identity EF admissions for issues #1708, #1710, and #1712.
+    /// The repository-first Identity EF admissions for issues #1708, #1710, and #1712.
     /// The production repository and ASP.NET Identity adapters stay provider-neutral; engines remain
     /// in focused test projects.
     /// </summary>
@@ -1198,7 +1201,7 @@ public sealed class EfCoreDependencyGuardTests
     }
 
     /// <summary>
-    /// ADR 0073's Elsa 3 import ledger admission for issue #1738 (L01-L03). The production adapter is
+    /// The Elsa 3 import ledger admission for issue #1738. The production adapter is
     /// provider-neutral; SQLite and the SQL Server provider-mismatch binding belong to the behavioral test
     /// project, and SQL Server, PostgreSQL, and MySQL engines only to the live-provider smoke.
     /// </summary>
@@ -1229,7 +1232,7 @@ public sealed class EfCoreDependencyGuardTests
     }
 
     /// <summary>
-    /// ADR 0073's Workflows Design repository-first admission for issue #1727 (W01-W05). The
+    /// The Workflows Design repository-first admission for issue #1727. The
     /// production adapter is provider-neutral; SQLite belongs only to its focused behavioral test project.
     /// </summary>
     internal static class Adr0073WorkflowsDesignEf
@@ -1259,10 +1262,10 @@ public sealed class EfCoreDependencyGuardTests
     }
 
     /// <summary>
-    /// ADR 0076 D9's activation-guard adapter: the one project that bridges Modularity to EF, so that
+    /// The activation-guard adapter: the one project that bridges Modularity to EF, so that
     /// Elsa.Modularity.Core and Elsa.Modularity.Nuplane keep no EF edge of their own. Admitted through its
     /// own record rather than through <c>AllowedEfConsumers</c>, which licenses a host to carry provider
-    /// engines — the opposite of what this adapter may have (FR-063).
+    /// engines — the opposite of what this adapter may have.
     /// </summary>
     internal static class Adr0076ActivationGuardEf
     {
@@ -1296,14 +1299,13 @@ public sealed class EfCoreDependencyGuardTests
     }
 
     /// <summary>
-    /// Spec 183's readability source (B3, #2099) reads schema-family declarations and reports them through the membership
+    /// The readability source (#2099) reads schema-family declarations and reports them through the membership
     /// contract. Since #2143 it reads them through <c>Elsa.Persistence.Schema</c>, which references no EF Core, so the
     /// source itself is no longer admitted here: it resolves no EF package, and
     /// <see cref="Only_admitted_consumers_and_pilot_projects_resolve_ef_core_packages"/> keeps it that way, which is what
-    /// lets a host compose it without EF (ADR 0076); <c>Elsa.Foundation.Host</c> carries EF only for its opt-in durable
-    /// membership provider and its opt-in Data Protection key store (ADR 0076, amended 2026-09-29 and 2026-10-01; #2151,
-    /// #2191). Its tests read the declarations of two first-party module assemblies, which resolve EF Core and Relational
-    /// and never a provider engine.
+    /// lets a host compose it without EF; <c>Elsa.Foundation.Host</c> carries EF only for its opt-in durable
+    /// membership provider and its opt-in Data Protection key store (#2151, #2191). Its tests read the declarations of
+    /// two first-party module assemblies, which resolve EF Core and Relational and never a provider engine.
     /// </summary>
     internal static class Spec183ReadabilityEf
     {
@@ -1339,7 +1341,7 @@ public sealed class EfCoreDependencyGuardTests
     ];
 
     /// <summary>
-    /// The opt-in EF Core cluster membership provider (spec 183, B2, #2098; ADR 0078). The module is provider-neutral:
+    /// The opt-in EF Core cluster membership provider (#2098). The module is provider-neutral:
     /// a host composes it once on its own container and brings the engine; provider engines stay in its focused tests,
     /// SQLite in the fast suite and the three container engines in its provider legs.
     /// </summary>
@@ -1364,7 +1366,7 @@ public sealed class EfCoreDependencyGuardTests
     }
 
     /// <summary>
-    /// The host's Data Protection composition and its opt-in EF key store (ADR 0076, amended 2026-10-01: Elsa.Foundation.Host
+    /// The host's Data Protection composition and its opt-in EF key store (Elsa.Foundation.Host
     /// may also carry it). Like cluster membership, a host composes it once on its own container and brings the engine;
     /// provider engines stay in its focused tests, SQLite in the fast suite and the three container engines in its provider
     /// legs.

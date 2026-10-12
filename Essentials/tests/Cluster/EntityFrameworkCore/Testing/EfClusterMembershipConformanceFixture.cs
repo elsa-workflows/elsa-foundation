@@ -16,8 +16,8 @@ using Xunit;
 namespace Elsa.Cluster.EntityFrameworkCore.Testing;
 
 /// <summary>
-/// A fleet of <see cref="EfClusterMembership"/> members over one real membership table, on clocks the suite controls
-/// (spec 183, FR-044). Heartbeats run exactly when they fall due as <see cref="AdvanceAsync"/> moves every clock
+/// A fleet of <see cref="EfClusterMembership"/> members over one real membership table, on clocks the suite controls.
+/// Heartbeats run exactly when they fall due as <see cref="AdvanceAsync"/> moves every clock
 /// together, through the provider's own heartbeat; nothing here reimplements what the provider does.
 /// </summary>
 /// <remarks>

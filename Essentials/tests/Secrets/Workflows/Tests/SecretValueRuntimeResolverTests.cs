@@ -10,8 +10,8 @@ namespace Elsa.Secrets.Workflows.Tests;
 
 /// <summary>
 /// The bridge passes the runtime's tenant and reference to the Secrets module unchanged and maps its answer: the value
-/// on success, and on failure a runtime code and classification per Secrets failure code, never the store's text
-/// (spec 188, T025 and T036). The runtime copies the classification into the fault unchanged, so FR-003's rule
+/// on success, and on failure a runtime code and classification per Secrets failure code, never the store's text.
+/// The runtime copies the classification into the fault unchanged, so the classification rule
 /// (<c>StoreUnavailable</c> transient, every other code permanent) rests on this mapping. The theory here covers every
 /// <see cref="SecretResolutionFailureCode"/> member; <see cref="SecretFailureIntegrationTests"/> covers the states the
 /// Secrets module can reach end to end.
@@ -123,7 +123,7 @@ public sealed class SecretValueRuntimeResolverTests
             $"The malformed result '{shape}' must resolve to permanent {nameof(SecretResolutionFailureCode.CorruptState)}, not {resolution}.");
     }
 
-    // Kept beside the composition test (§2.23.1): asserts what the bridge must not register, the resolver is its only contribution.
+    // Kept beside the composition test: asserts what the bridge must not register, the resolver is its only contribution.
     [Fact]
     public void The_bridge_registers_no_runtime_contract_but_the_secret_resolver()
     {
@@ -131,7 +131,7 @@ public sealed class SecretValueRuntimeResolverTests
 
         new SecretsWorkflowsFeature().ConfigureServices(services);
 
-        // No type-domain contract or any other runtime seam rides along (research R11): the resolver is the bridge's only
+        // No type-domain contract or any other runtime seam rides along: the resolver is the bridge's only
         // contribution to the runtime.
         Assert.Equal([typeof(IRuntimeSecretResolver)], services.Select(descriptor => descriptor.ServiceType));
     }

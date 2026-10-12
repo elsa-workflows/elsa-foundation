@@ -18,8 +18,8 @@ public static class ModularityApiServiceCollectionExtensions
 
         services.AddPermissionContributor<ModuleManagementPermissionContributor>();
         services.AddNuplaneFeatureCatalog();
-        // After the runtime contributor, which supplies each feature's class: a dormant feature's availability and reason
-        // (spec 182, FR-009), from the shared dormancy check the host composes. A host that composes none has every
+        // After the runtime contributor, which supplies each feature's class: a dormant feature's availability and reason,
+        // from the shared dormancy check the host composes. A host that composes none has every
         // declared requirement reported unmet, because it cannot tell, rather than available.
         services.TryAddEnumerable(ServiceDescriptor.Scoped<IFeatureCatalogContributor, FeatureAvailabilityCatalogContributor>());
         services.RemoveAll<IShellFeatureConfigurationStore>();

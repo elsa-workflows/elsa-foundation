@@ -4,7 +4,7 @@ using Xunit;
 namespace Elsa.Cli.Tests;
 
 /// <summary>
-/// The <c>--packages</c> probe for a root with no state file (FR-006): a completed install is one carrying
+/// The <c>--packages</c> probe for a root with no state file: a completed install is one carrying
 /// the completion marker, a staging directory is not a feed, and two versions of one package with nothing
 /// to choose between them are refused rather than guessed.
 /// </summary>
@@ -71,7 +71,7 @@ public sealed class PackageRootProbeTests : IDisposable
 
     /// <summary>
     /// A root with nothing installed and nothing downloadable is exit 3, not an empty success: the tool
-    /// never populates a package root (ADR 0076 D10), so an empty one cannot be worked around by running it.
+    /// never populates a package root, so an empty one cannot be worked around by running it.
     /// </summary>
     [Fact]
     public void The_tool_refuses_an_empty_package_root_rather_than_populating_it()

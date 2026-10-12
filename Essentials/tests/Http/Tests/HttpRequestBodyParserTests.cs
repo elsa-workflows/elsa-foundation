@@ -128,7 +128,7 @@ public class HttpRequestBodyParserTests
     [Fact]
     public void Parse_ExplicitJsonNull_ReturnsNullKindElement_NotClrNull()
     {
-        // Spec 089 #16: an explicit JSON `null` body is present content and must surface as a JsonElement of kind
+        // An explicit JSON `null` body is present content and must surface as a JsonElement of kind
         // Null — a well-defined value distinct from the CLR null an empty/unparseable body yields. This is the
         // origin of the "no content" vs "explicit null" distinction the HttpEndpoint activity's ParsedContent
         // output preserves.
@@ -143,7 +143,7 @@ public class HttpRequestBodyParserTests
     /// <see cref="IHttpContentParser"/> path used by SendHttpRequest. This pins that the response-side
     /// contract is unchanged — the (public) <see cref="XmlHttpContentParser"/> keeps its stream-shaped
     /// <c>HttpResponseParserContext</c> signature and still parses a response body verbatim into a string.
-    /// If T005 had reused/reshaped the response parsers, this signature or behaviour would break.
+    /// If the request-side parser had reused/reshaped the response parsers, this signature or behaviour would break.
     /// </summary>
     [Fact]
     public async Task ResponseSideParser_ContractUntouched_StillParsesVerbatim()

@@ -11,7 +11,7 @@ using Xunit;
 namespace Elsa.Modularity.Tests;
 
 /// <summary>
-/// Unit tests for opt-in eager shell activation (spec 132, First-Request/Cold-Start Readiness unit 4). Covers the
+/// Unit tests for opt-in eager shell activation. Covers the
 /// switch parsing, the configured-shell/target-shell resolution rules (default = all configured shells; named
 /// shells honored and de-duplicated; the "*" marker), and that the hosted service drives the shared runner for
 /// exactly the resolved shells, degrading to lazy activation when a shell fails.

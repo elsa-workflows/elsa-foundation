@@ -15,7 +15,7 @@ namespace Elsa.Secrets.Workflows.Tests;
 
 /// <summary>
 /// The tenant a secret is resolved under is the executing instance's own tenant on every path that activates a CLR
-/// activity (spec 188, T093; research R2 and R3a): invoke, bookmark resume, structural parent evaluation, child-completion
+/// activity: invoke, bookmark resume, structural parent evaluation, child-completion
 /// re-materialization and operator reschedule. Two tenants run, one host each, over one secret store that holds a secret
 /// of the same name for both, because on this background drain path a host's work items run under the host's
 /// persistence scope (see <see cref="SecretsWorkflowHost"/>); every request the bridge hands the Secrets module carries

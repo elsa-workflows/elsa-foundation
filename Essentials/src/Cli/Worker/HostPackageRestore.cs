@@ -23,7 +23,7 @@ internal enum RestoreVerdict
 
     /// <summary>
     /// At least one package declares a capability the host has not resolvably selected, so the cycle refused
-    /// it rather than installing a module without the engine it binds (spec 172 FR-005).
+    /// it rather than installing a module without the engine it binds.
     /// </summary>
     CapabilityRefused,
 
@@ -31,7 +31,7 @@ internal enum RestoreVerdict
     /// At least one package depends on a package the host declares it provides, and the host carries that
     /// package at a version outside the range the dependency requires, so the cycle refused it rather than
     /// installing a module that would load against an older assembly than it was built for and fail later at
-    /// a missing member (issue #1951, ADR 0077). Any capability refusal the same cycle recorded travels with
+    /// a missing member (issue #1951). Any capability refusal the same cycle recorded travels with
     /// it, so neither fault hides the other.
     /// </summary>
     HostVersionUnsatisfied,
@@ -91,8 +91,8 @@ internal sealed record RestoreOutcome(
 }
 
 /// <summary>
-/// The opt-in <c>--restore</c> pass (ADR 0076 D10's exception, spec 171 FR-083 to FR-086): everything that
-/// decides whether the tool may populate this host's package set, and every refusal that follows from what
+/// The opt-in <c>--restore</c> pass, the one exception to the rule that the tool never writes under the host's
+/// directories or reaches a feed: everything that decides whether the tool may populate this host's package set, and every refusal that follows from what
 /// the attempt reported.
 /// </summary>
 /// <remarks>

@@ -2,7 +2,7 @@ namespace Elsa.Cluster.Core.Models;
 
 /// <summary>
 /// "Reads schema family <see cref="Family"/> at version <see cref="Version"/>", optionally for the database whose
-/// finalization record has <see cref="DatabaseIdentity"/> (FR-015, FR-023).
+/// finalization record has <see cref="DatabaseIdentity"/>.
 /// </summary>
 /// <remarks>
 /// <para>

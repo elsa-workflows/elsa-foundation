@@ -57,7 +57,7 @@ public sealed class EfIdentityAuthorityAggregateCoordinator(
                 else
                 {
                     // Apply carries the registries it does not overwrite forward from the row's own upcast values, so
-                    // it restamps the row completely on its own (spec 180, FR-014; #2144).
+                    // it restamps the row completely on its own (#2144).
                     existing.Revision = checked(existing.Revision + 1);
                 }
 
@@ -126,7 +126,7 @@ public sealed class EfIdentityAuthorityAggregateCoordinator(
                 }
                 else
                 {
-                    // As for a user: Apply carries the claim and user-link registries forward itself (spec 180, FR-014; #2144).
+                    // As for a user: Apply carries the claim and user-link registries forward itself (#2144).
                     existing.Revision = checked(existing.Revision + 1);
                 }
                 Apply(existing, role);
@@ -520,7 +520,7 @@ public sealed class EfIdentityAuthorityAggregateCoordinator(
     {
         // A fresh row (no prior SchemaVersion) carries only current-format registries already; an existing row's own
         // are upcast from its own prior stamp, so this write restamps the row completely on its own rather than
-        // depending on a caller that upgraded it first (spec 180, FR-014; #2144).
+        // depending on a caller that upgraded it first (#2144).
         var content = entity.SchemaVersion is null ? null : EfIdentityStoreSupport.Content(entity);
         entity.TenantId = user.TenantId;
         entity.TenantLookupKey = EfIdentityStoreSupport.TenantLookup(user.TenantId);
@@ -551,7 +551,7 @@ public sealed class EfIdentityAuthorityAggregateCoordinator(
     private static void Apply(RoleEntity entity, RoleRecord role)
     {
         // As for a user: a fresh row needs nothing carried over, and an existing row's claim and user-link registries
-        // are upcast from its own prior stamp (spec 180, FR-014; #2144).
+        // are upcast from its own prior stamp (#2144).
         var content = entity.SchemaVersion is null ? null : EfIdentityStoreSupport.Content(entity);
         entity.TenantId = role.TenantId;
         entity.TenantLookupKey = EfIdentityStoreSupport.TenantLookup(role.TenantId);
@@ -573,7 +573,7 @@ public sealed class EfIdentityAuthorityAggregateCoordinator(
 
     /// <summary>
     /// A registry of the row being deleted, from its content columns upcast together through the family's chain from the
-    /// row's stamp (spec 180, FR-009; #2144). The row is removed rather than written, so it is read as stored and never
+    /// row's stamp (#2144). The row is removed rather than written, so it is read as stored and never
     /// upgraded.
     /// </summary>
     private static IReadOnlyList<string> ReadRegistry(EfSchemaRowContent registries, string column, string owner)

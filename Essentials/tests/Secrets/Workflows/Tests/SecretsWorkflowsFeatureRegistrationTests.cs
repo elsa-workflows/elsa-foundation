@@ -18,16 +18,15 @@ namespace Elsa.Secrets.Workflows.Tests;
 
 /// <summary>
 /// <c>SecretsWorkflows</c> registers exactly one <see cref="IRuntimeSecretResolver"/>, the bridge, and refuses to register
-/// it beside another one; a shell that composes another one after it does not start (spec 188, T024 and T027; framework
-/// constitution §2.6.2 and §2.23.1). Its dependencies are named as the features that own them are named, so a shell
-/// enabling only the bridge composes both.
+/// it beside another one; a shell that composes another one after it does not start. Its dependencies are named as the
+/// features that own them are named, so a shell enabling only the bridge composes both.
 /// </summary>
 public sealed class SecretsWorkflowsFeatureRegistrationTests
 {
     private const string ShellName = "secrets-workflows";
     private readonly ServiceCollection _services = new();
 
-    // Kept beside the composition test (§2.23.1): uniqueness, exactly one secret resolver, the bridge, beside AddSecrets.
+    // Kept beside the composition test: uniqueness, exactly one secret resolver, the bridge, beside AddSecrets.
     [Fact]
     public void The_feature_registers_exactly_one_secret_resolver_and_it_is_the_bridge()
     {
@@ -62,7 +61,7 @@ public sealed class SecretsWorkflowsFeatureRegistrationTests
         Assert.Equal(typeof(OtherSecretResolver), Assert.Single(_services, descriptor => descriptor.ServiceType == typeof(IRuntimeSecretResolver)).ImplementationType);
     }
 
-    // Kept beside the composition test (§2.23.1): replacement-contract rejection, a resolver beside the bridge is refused.
+    // Kept beside the composition test: replacement-contract rejection, a resolver beside the bridge is refused.
     [Fact]
     public void A_resolver_registered_beside_the_bridge_is_refused_when_the_bridge_is_composed_again()
     {
@@ -92,7 +91,7 @@ public sealed class SecretsWorkflowsFeatureRegistrationTests
     public async Task A_shell_composing_a_resolver_after_the_bridge_fails_activation_naming_both()
     {
         // The bridge's registration cannot see a resolver registered after it; the runtime's startup check refuses the
-        // shell instead of letting the last registration win (framework constitution §2.6.2).
+        // shell instead of letting the last registration win.
         await using var host = BuildShellHost(CompetingSecretResolverFeature.Name);
 
         var exception = await Assert.ThrowsAnyAsync<Exception>(() => host.GetRequiredService<IShellRegistry>().GetOrActivateAsync(ShellName));

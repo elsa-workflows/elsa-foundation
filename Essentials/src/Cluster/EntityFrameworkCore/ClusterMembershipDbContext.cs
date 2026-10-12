@@ -12,7 +12,7 @@ namespace Elsa.Cluster.EntityFrameworkCore;
 public abstract class ClusterMembershipDbContext(DbContextOptions options) : DbContext(options)
 {
     /// <summary>
-    /// Host ids are compared ordinally (spec 183, FR-003). On an engine whose default collation is linguistic, two host
+    /// Host ids are compared ordinally. On an engine whose default collation is linguistic, two host
     /// ids that differ only in case would otherwise share a key, and the join's uniqueness check would treat them as one.
     /// </summary>
     private static readonly string[] OrdinallyComparedColumns = ["HostId", "Incarnation", "CurrentHostId"];
@@ -25,7 +25,7 @@ public abstract class ClusterMembershipDbContext(DbContextOptions options) : DbC
         modelBuilder.HasElsaDefaultSchema(this);
         modelBuilder.ApplyConfiguration(new ClusterMemberEntityConfiguration());
         // After this module's own table and before its provider configuration, so the ordinal collation covers the
-        // family key and the stamp index covers both finalization tables (spec 181, FR-002).
+        // family key and the stamp index covers both finalization tables.
         modelBuilder.MapSchemaFinalization(ClusterMembershipEfModule.HistoryModuleName);
         ConfigureProvider(modelBuilder);
         modelBuilder.IndexSchemaVersionStamps();

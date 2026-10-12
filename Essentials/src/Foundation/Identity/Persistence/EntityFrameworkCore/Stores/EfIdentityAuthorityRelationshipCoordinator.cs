@@ -229,7 +229,7 @@ public sealed class EfIdentityAuthorityRelationshipCoordinator(
                 return new EfIdentityWriteResult(EfIdentityWriteStatus.NotFound);
             row.Value = string.Join(';', codes.Order(StringComparer.Ordinal));
             row.Revision = checked(row.Revision + 1);
-            // No registry changes, but the user row is written, so it is written current (spec 180, FR-014).
+            // No registry changes, but the user row is written, so it is written current.
             EfIdentityStoreSupport.Upgrade(user);
             user.Revision = checked(user.Revision + 1);
             return Updated(user.Id, user.Revision);
@@ -548,7 +548,7 @@ public sealed class EfIdentityAuthorityRelationshipCoordinator(
     private static void Prepare(ExternalIdentityEntity row, string tenant, string user) { row.SchemaVersion = IdentityIamEfModule.SchemaVersion; row.TenantId = tenant; row.TenantLookupKey = EfIdentityStoreSupport.TenantLookup(tenant); row.ProviderLookupKey = EfIdentityStoreSupport.Lookup(tenant, row.Provider); row.ProviderSubjectLookupKey = EfIdentityStoreSupport.Lookup(tenant, row.ProviderSubject); row.ExternalOrderKey = EfIdentityStoreSupport.ExternalOrderKey(row.Provider, row.ProviderSubject); row.UserLookupKey = EfIdentityStoreSupport.Lookup(tenant, user); row.Revision = row.Revision == 0 ? 1 : row.Revision; }
     // A fresh row (no prior SchemaVersion) carries only current-format registries already, set by the caller before
     // this runs; a row this ever receives with a prior stamp - not the case today - upcasts from it instead, so this
-    // restamps completely on its own (spec 180, FR-014; #2144).
+    // restamps completely on its own (#2144).
     private static void Prepare(TenantMembershipEntity row, string tenant, string user)
     {
         var content = row.SchemaVersion is null ? null : EfIdentityStoreSupport.Content(row);
@@ -566,7 +566,7 @@ public sealed class EfIdentityAuthorityRelationshipCoordinator(
     }
     // Each of these five Apply overloads assigns every mapped non-key column of the existing row from a freshly
     // prepared one - a full rewrite, not a revision-only bump - so each restamps to the write version, as
-    // Apply(TenantMembershipEntity, TenantMembershipEntity) below already does (spec 180, FR-014, 2026-09-28 note).
+    // Apply(TenantMembershipEntity, TenantMembershipEntity) below already does.
     private static void Apply(UserClaimEntity target, UserClaimEntity source) { target.TenantId = source.TenantId; target.TenantLookupKey = source.TenantLookupKey; target.UserId = source.UserId; target.UserLookupKey = source.UserLookupKey; target.ClaimType = source.ClaimType; target.ClaimValue = source.ClaimValue; target.ClaimKey = source.ClaimKey; target.SchemaVersion = IdentityIamEfModule.SchemaVersion; }
     private static void Apply(RoleClaimEntity target, RoleClaimEntity source) { target.TenantId = source.TenantId; target.TenantLookupKey = source.TenantLookupKey; target.RoleId = source.RoleId; target.RoleLookupKey = source.RoleLookupKey; target.ClaimType = source.ClaimType; target.ClaimValue = source.ClaimValue; target.ClaimKey = source.ClaimKey; target.SchemaVersion = IdentityIamEfModule.SchemaVersion; }
     private static void Apply(UserTokenEntity target, UserTokenEntity source) { target.TenantId = source.TenantId; target.TenantLookupKey = source.TenantLookupKey; target.UserId = source.UserId; target.UserLookupKey = source.UserLookupKey; target.LoginProvider = source.LoginProvider; target.Name = source.Name; target.TokenKey = source.TokenKey; target.Value = source.Value; target.SchemaVersion = IdentityIamEfModule.SchemaVersion; }
@@ -575,7 +575,7 @@ public sealed class EfIdentityAuthorityRelationshipCoordinator(
     private static void Apply(TenantMembershipEntity target, TenantMembershipEntity source) { target.Status = source.Status; target.RoleIdsJson = source.RoleIdsJson; target.DirectPermissionsJson = source.DirectPermissionsJson; target.SchemaVersion = IdentityIamEfModule.SchemaVersion; }
 
     /// <summary>
-    /// A user registry, read through the family's chain from the row's stamp (spec 180, FR-009): as stored before the
+    /// A user registry, read through the family's chain from the row's stamp: as stored before the
     /// write upgrades the row, and unchanged by the chain after it has.
     /// </summary>
     private static HashSet<string> Registry(UserEntity user, UserRegistry registry) => (registry switch
@@ -618,7 +618,7 @@ public sealed class EfIdentityAuthorityRelationshipCoordinator(
 
     /// <summary>
     /// Writes one user registry in the current format, so the row is upgraded first: its other registries are carried
-    /// over, and the stamp this write leaves must describe all of them (spec 180, FR-014).
+    /// over, and the stamp this write leaves must describe all of them.
     /// </summary>
     private static void SetRegistry(UserEntity user, UserRegistry registry, HashSet<string> values) { EfIdentityStoreSupport.Upgrade(user); var json = EfIdentityStoreSupport.SerializeSet(values); switch (registry) { case UserRegistry.Claims: user.ClaimIdsJson = json; break; case UserRegistry.Logins: user.LoginIdsJson = json; break; case UserRegistry.RoleLinks: user.RoleLinkIdsJson = json; break; case UserRegistry.Tokens: user.TokenIdsJson = json; break; case UserRegistry.TenantMemberships: user.TenantMembershipIdsJson = json; break; } }
     private static string ClaimId(string tenant, string owner, string type, string? value) => EfIdentityStoreSupport.CompoundKey(tenant, owner, type, value);

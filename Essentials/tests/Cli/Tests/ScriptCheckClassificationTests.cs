@@ -4,7 +4,7 @@ using Xunit;
 namespace Elsa.Cli.Tests;
 
 /// <summary>
-/// How a difference is classified (FR-045, FR-046). Every case here is built on disk rather than through a
+/// How a difference is classified. Every case here is built on disk rather than through a
 /// host, because the classification is the contract: a version-only difference reported as changed SQL
 /// sends a reviewer looking for a schema change that does not exist, and changed SQL reported as a version
 /// difference hides one that does.
@@ -50,8 +50,7 @@ public sealed class ScriptCheckClassificationTests : IDisposable
 
     /// <summary>
     /// Same byte difference, different cause: the module gained a migration since the artifact was
-    /// generated, so the file is out of date rather than edited. Reported distinctly (User Story 4,
-    /// scenarios 2 and 3).
+    /// generated, so the file is out of date rather than edited. Reported distinctly.
     /// </summary>
     [Fact]
     public void A_module_that_changed_since_the_artifact_was_generated_is_reported_as_stale()
@@ -129,7 +128,7 @@ public sealed class ScriptCheckClassificationTests : IDisposable
 
     /// <summary>
     /// A manifest field a package upgrade does not explain — here the package id itself — still reports the
-    /// documented "manifest versions differ, SQL identical" headline (the spec names only two headlines), but
+    /// documented "manifest versions differ, SQL identical" headline (only two headlines are documented), but
     /// the detail line names exactly which field moved so it is never mistaken for a version bump.
     /// </summary>
     [Fact]

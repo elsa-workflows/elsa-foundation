@@ -47,7 +47,7 @@ public enum SecretsWorkflowHostStore
 }
 
 /// <summary>
-/// An embedded workflow runtime host for the Secrets bridge (spec 188, slice 4), dedicated to one tenant: the in-process
+/// An embedded workflow runtime host for the Secrets bridge, dedicated to one tenant: the in-process
 /// runtime, the Secrets module with its encrypted store and, unless a test leaves it out, the <c>SecretsWorkflows</c>
 /// bridge.
 /// </summary>

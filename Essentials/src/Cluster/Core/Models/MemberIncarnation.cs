@@ -1,7 +1,7 @@
 namespace Elsa.Cluster.Core.Models;
 
 /// <summary>
-/// The identity of one run of a host (FR-004). A host gets a new incarnation each time its process starts and each
+/// The identity of one run of a host. A host gets a new incarnation each time its process starts and each
 /// time it rejoins after a lapse. It is opaque: consumers compare incarnations only for equality.
 /// </summary>
 public sealed record MemberIncarnation
