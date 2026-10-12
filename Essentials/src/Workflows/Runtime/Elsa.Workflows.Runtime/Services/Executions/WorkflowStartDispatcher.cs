@@ -18,6 +18,7 @@ public sealed class WorkflowStartDispatcher : IWorkflowStartDispatcher
     private readonly IWorkflowExecutableStartPolicy _startPolicy;
     private readonly IWorkflowDispatchStore? _workflowDispatchStore;
     private readonly IWorkflowExecutionStateStore? _workflowExecutionStateStore;
+    private readonly IRuntimePersistenceModeResolver? _persistenceModeResolver;
 
     public WorkflowStartDispatcher(
         IWorkflowExecutableStore executableStore,
@@ -79,7 +80,8 @@ public sealed class WorkflowStartDispatcher : IWorkflowStartDispatcher
         IWorkflowExecutionPartitionAccessor? partitionAccessor,
         IWorkflowExecutableStartPolicy startPolicy,
         IWorkflowDispatchStore? workflowDispatchStore,
-        IWorkflowExecutionStateStore? workflowExecutionStateStore)
+        IWorkflowExecutionStateStore? workflowExecutionStateStore,
+        IRuntimePersistenceModeResolver? persistenceModeResolver = null)
     {
         ArgumentNullException.ThrowIfNull(executableStore);
         ArgumentNullException.ThrowIfNull(sourceReferenceStore);
@@ -97,6 +99,7 @@ public sealed class WorkflowStartDispatcher : IWorkflowStartDispatcher
         _startPolicy = startPolicy;
         _workflowDispatchStore = workflowDispatchStore;
         _workflowExecutionStateStore = workflowExecutionStateStore;
+        _persistenceModeResolver = persistenceModeResolver;
     }
 
     public async ValueTask<WorkflowExecutionStartDispatchResult> DispatchAsync(
@@ -146,6 +149,7 @@ public sealed class WorkflowStartDispatcher : IWorkflowStartDispatcher
             keyed,
             partition,
             requiredScope,
+            _persistenceModeResolver?.Resolve(executable),
             dispatchOptions,
             cancellationToken);
     }
@@ -374,13 +378,14 @@ public sealed class WorkflowStartDispatcher : IWorkflowStartDispatcher
         KeyedWorkflowStartIdentity? keyed,
         WorkflowExecutionPartition partition,
         WorkflowExecutableReferenceScope requiredScope,
+        PersistenceMode? persistenceMode,
         WorkflowExecutionCommandDispatchOptions? dispatchOptions,
         CancellationToken cancellationToken)
     {
         var workflowExecutionId = request.WorkflowExecutionId ?? _idGenerator.NewWorkflowExecutionId();
         var requestedAt = _timeProvider.GetUtcNow();
         var enqueuedAt = retainedDispatch?.CreatedAt ?? requestedAt;
-        var metadata = CreateDispatchMetadata(request, pinnedIdentity, pinnedSource, retainedDispatch, requiredScope);
+        var metadata = CreateDispatchMetadata(request, pinnedIdentity, pinnedSource, retainedDispatch, requiredScope, persistenceMode);
         var payload = JsonSerializer.SerializeToElement(new WorkflowExecutionStartCommandPayload(
             pinnedExecutable: pinnedIdentity,
             requestedArtifactId: request.ArtifactId,
@@ -449,9 +454,16 @@ public sealed class WorkflowStartDispatcher : IWorkflowStartDispatcher
         WorkflowExecutableIdentity identity,
         WorkflowExecutableSourceProvenance? source,
         WorkflowDispatchRecord? retainedDispatch,
-        WorkflowExecutableReferenceScope requiredScope)
+        WorkflowExecutableReferenceScope requiredScope,
+        PersistenceMode? persistenceMode)
     {
         var metadata = request.Metadata.ToDictionary(item => item.Key, item => item.Value, StringComparer.Ordinal);
+        // The run's persistence mode, decided here once: the workflow's choice over the host default. The scheduler queue
+        // keeps it on the start until the run's first commit, so a drain that runs a never-committed run again finds the
+        // same mode. A caller cannot supply it.
+        metadata.Remove(RuntimeMetadataKeys.PersistenceMode);
+        if (persistenceMode is { } mode)
+            metadata[RuntimeMetadataKeys.PersistenceMode] = mode.ToString();
         // Diagnostic breadcrumb only — never read back or matched, so it is safe for this value to track the type name.
         metadata["runtime.dispatcher"] = nameof(WorkflowStartDispatcher);
         metadata["runtime.artifactId"] = identity.ArtifactId;

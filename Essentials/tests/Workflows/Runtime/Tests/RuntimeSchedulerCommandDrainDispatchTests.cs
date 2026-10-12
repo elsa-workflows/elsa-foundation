@@ -560,7 +560,8 @@ public sealed class RuntimeSchedulerCommandDrainDispatchTests
                 outbox,
                 new InMemoryWorkflowSchedulerWorkQueue(),
                 options,
-                NonFoldingDrainScopeFactory.Instance),
+                NonFoldingDrainScopeFactory.Instance,
+                persistenceModeResolver: NonFoldingDrainScopeFactory.Resolver),
             timeProvider);
     }
 

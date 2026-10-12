@@ -69,7 +69,7 @@ public sealed class WorkflowsRuntimeCheckpointPersistenceFeatureTests
         Assert.Same(selectedProvider, provider.GetRequiredService<CoalescingInner<IRuntimeCheckpointCommitStore>>().Value);
         Assert.NotNull(provider.GetService<IRuntimeCoalescingDrainScopeFactory>());
         using var scope = provider.CreateScope();
-        Assert.Equal(PersistenceMode.Balanced, scope.ServiceProvider.GetRequiredService<IRuntimePersistenceModeResolver>().Resolve(executable: null));
+        Assert.Equal(PersistenceMode.Balanced, scope.ServiceProvider.GetRequiredService<IRuntimePersistenceModeResolver>().Resolve(RuntimePersistenceModeResolverTests.Executable(null)));
     }
 
     [Fact]
@@ -86,7 +86,7 @@ public sealed class WorkflowsRuntimeCheckpointPersistenceFeatureTests
         Assert.Same(selectedProvider, provider.GetRequiredService<CoalescingInner<IRuntimeCheckpointCommitStore>>().Value);
         Assert.NotNull(provider.GetService<IRuntimeCoalescingDrainScopeFactory>());
         using var scope = provider.CreateScope();
-        Assert.Equal(PersistenceMode.Durable, scope.ServiceProvider.GetRequiredService<IRuntimePersistenceModeResolver>().Resolve(executable: null));
+        Assert.Equal(PersistenceMode.Durable, scope.ServiceProvider.GetRequiredService<IRuntimePersistenceModeResolver>().Resolve(RuntimePersistenceModeResolverTests.Executable(null)));
     }
 
     [Theory]

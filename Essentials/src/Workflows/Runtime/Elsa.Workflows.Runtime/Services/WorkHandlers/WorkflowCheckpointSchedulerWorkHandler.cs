@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Text.Json;
+using Elsa.Workflows.Runtime.Contracts;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
@@ -20,7 +21,7 @@ public sealed class WorkflowCheckpointSchedulerWorkHandler : IWorkflowSchedulerW
     private readonly IRuntimeActivityExecutionInspectionAccumulator? _inspectionAccumulator;
     private readonly IWorkflowExecutionStateStore? _workflowExecutionStateStore;
     private readonly IWorkflowExecutableStore? _workflowExecutableStore;
-    private readonly IRuntimePersistenceModeResolver? _persistenceModeResolver;
+    private readonly IRuntimeCoalescingSessionAccessor? _sessionAccessor;
     private readonly TimeProvider _timeProvider;
     private readonly IWorkflowExecutableReader? _executableReader;
 
@@ -28,7 +29,8 @@ public sealed class WorkflowCheckpointSchedulerWorkHandler : IWorkflowSchedulerW
     /// Constructs the handler. <paramref name="workflowExecutionStateStore"/> is optional: when supplied (the
     /// DI default — it is a registered service), the handler preserves durable instance fields (correlation id,
     /// parent, tenant) across the workflow-started/completed transitions; when null it falls back to the prior
-    /// behaviour of rebuilding workflow state from the checkpoint payload alone.
+    /// behaviour of rebuilding workflow state from the checkpoint payload alone. <paramref name="sessionAccessor"/>
+    /// gives the persistence mode the drain runs in, which the workflow-started checkpoint records on the run.
     /// </summary>
     public WorkflowCheckpointSchedulerWorkHandler(
         IActivityExecutionStateStore activityExecutionStateStore,
@@ -37,7 +39,7 @@ public sealed class WorkflowCheckpointSchedulerWorkHandler : IWorkflowSchedulerW
         TimeProvider timeProvider,
         IWorkflowExecutionStateStore? workflowExecutionStateStore = null,
         IWorkflowExecutableStore? workflowExecutableStore = null,
-        IRuntimePersistenceModeResolver? persistenceModeResolver = null,
+        IRuntimeCoalescingSessionAccessor? sessionAccessor = null,
         IWorkflowExecutableReader? executableReader = null)
     {
         ArgumentNullException.ThrowIfNull(activityExecutionStateStore);
@@ -49,7 +51,7 @@ public sealed class WorkflowCheckpointSchedulerWorkHandler : IWorkflowSchedulerW
         _inspectionAccumulator = inspectionAccumulator;
         _workflowExecutionStateStore = workflowExecutionStateStore;
         _workflowExecutableStore = workflowExecutableStore;
-        _persistenceModeResolver = persistenceModeResolver;
+        _sessionAccessor = sessionAccessor;
         _timeProvider = timeProvider;
         _executableReader = executableReader;
     }
@@ -150,10 +152,12 @@ public sealed class WorkflowCheckpointSchedulerWorkHandler : IWorkflowSchedulerW
             ? await PinnedExecutableRead.FindAsync(_executableReader, _workflowExecutableStore, payload.PinnedExecutable.ArtifactId, cancellationToken)
             : null;
 
-        // At start, resolve the run's persistence mode (the workflow's choice over the host default) and record it on
-        // the durable instance. Later drains read it back so the run keeps its mode, and the read model reports the mode
-        // the run actually used. Other checkpoints carry it forward via PreserveSystemMetadata.
-        var persistenceMode = executable is not null ? _persistenceModeResolver?.Resolve(executable) : null;
+        // At start, record the mode this drain runs the run in on the durable instance. Later drains read it back so the
+        // run keeps its mode, and the read model reports the mode the run actually used. Other checkpoints carry it
+        // forward via PreserveSystemMetadata.
+        var persistenceMode = StringComparer.Ordinal.Equals(payload.CheckpointName, RuntimeCheckpointNames.WorkflowStarted)
+            ? DrainModeOf(workItem.WorkflowExecutionId)
+            : null;
 
         return new RuntimeCheckpointCommit(
             CommitId: commitId,
@@ -295,8 +299,14 @@ public sealed class WorkflowCheckpointSchedulerWorkHandler : IWorkflowSchedulerW
         return metadata;
     }
 
-    // Records the run's resolved persistence mode on the workflow-started system metadata. Absent when no resolver is
-    // registered, leaving the read model to fall back to the host default for that run.
+    // Every drain runs in a session for its run, whatever its mode, so the session's mode is the one the run runs in.
+    private PersistenceMode? DrainModeOf(string workflowExecutionId) =>
+        _sessionAccessor?.Current is { } session && StringComparer.Ordinal.Equals(session.WorkflowExecutionId, workflowExecutionId)
+            ? session.Mode
+            : null;
+
+    // Records the mode the drain runs the run in on the workflow-started system metadata. Absent only when the handler is
+    // driven outside a drain, where no session gives a mode.
     private static Dictionary<string, string> RecordPersistenceMode(
         Dictionary<string, string> metadata,
         PersistenceMode? persistenceMode)

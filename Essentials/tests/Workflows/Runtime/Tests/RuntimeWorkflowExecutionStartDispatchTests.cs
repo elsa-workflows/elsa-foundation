@@ -631,6 +631,28 @@ public sealed class RuntimeWorkflowExecutionStartDispatchTests
     }
 
     [Fact]
+    public async Task DispatchAsync_WritesTheRunsPersistenceModeOnTheStartCommand_AndACallerCannotSupplyOne()
+    {
+        // The mode is decided once, here, and travels on the start the scheduler queue keeps until the run's first
+        // commit. A mode in the caller's metadata is not the run's: the resolver's decision replaces it, and without a
+        // resolver nothing is written.
+        await ActivateAsync();
+        var callerMetadata = new Dictionary<string, string> { [RuntimeMetadataKeys.PersistenceMode] = nameof(PersistenceMode.Durable) };
+
+        await NewDispatcher(new FixedModeResolver(PersistenceMode.Ephemeral)).DispatchAsync(
+            new WorkflowExecutionStartDispatchRequest(artifactId: "artifact-1", requestedBy: "test", metadata: callerMetadata));
+        await _dispatcher.DispatchAsync(
+            new WorkflowExecutionStartDispatchRequest(artifactId: "artifact-1", requestedBy: "test", metadata: callerMetadata));
+
+        var decided = _agentProvider.Agent.Envelopes[0];
+        Assert.Equal(nameof(PersistenceMode.Ephemeral), decided.Command.Metadata[RuntimeMetadataKeys.PersistenceMode]);
+        Assert.Equal(nameof(PersistenceMode.Ephemeral), decided.Metadata[RuntimeMetadataKeys.PersistenceMode]);
+        var undecided = _agentProvider.Agent.Envelopes[1];
+        Assert.False(undecided.Command.Metadata.ContainsKey(RuntimeMetadataKeys.PersistenceMode));
+        Assert.False(undecided.Metadata.ContainsKey(RuntimeMetadataKeys.PersistenceMode));
+    }
+
+    [Fact]
     public async Task DispatchAsync_ForwardsDispatchOptionsToAgentEnqueue()
     {
         // The dispatcher forwards the caller's dispatch options verbatim into the agent
@@ -813,6 +835,27 @@ public sealed class RuntimeWorkflowExecutionStartDispatchTests
             inputContract: null,
             dependencies: dependencies,
             incidentStrategy: IncidentStrategyBuiltIns.FaultReference);
+
+    private WorkflowStartDispatcher NewDispatcher(IRuntimePersistenceModeResolver persistenceModeResolver) =>
+        new(
+            _store,
+            _references,
+            _agentProvider,
+            new IncrementingRuntimeExecutionIdGenerator(),
+            new FakeTimeProvider(_now),
+            partitionAccessor: null,
+            new AllowWorkflowExecutableStartPolicy(),
+            workflowDispatchStore: null,
+            workflowExecutionStateStore: null,
+            persistenceModeResolver);
+
+    private sealed class FixedModeResolver(PersistenceMode mode) : IRuntimePersistenceModeResolver
+    {
+        public ValueTask<ResolvedPersistenceMode> ResolveAsync(WorkflowExecutionCommandEnvelope envelope, CancellationToken cancellationToken = default) =>
+            ValueTask.FromResult(new ResolvedPersistenceMode(mode, RunHasRecord: false));
+
+        public PersistenceMode Resolve(WorkflowExecutable executable) => mode;
+    }
 
     private WorkflowStartDispatcher NewDispatcher(IWorkflowExecutableStartPolicy policy) =>
         new(
