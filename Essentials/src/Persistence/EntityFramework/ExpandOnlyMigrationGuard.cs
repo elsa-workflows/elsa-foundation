@@ -104,7 +104,7 @@ public static class ExpandOnlyMigrationGuard
         {
             if (optOut.SchemaFamily is not null || optOut.FinalizedVersion is not null)
                 faults.Add($"its opt-out names {Named(optOut)}, but it removes nothing a stamped schema family covers, and only a " +
-                           "contracting migration names a family and version (spec 185 FR-023)");
+                           "contracting migration names a family and version");
             return faults;
         }
 
@@ -113,7 +113,7 @@ public static class ExpandOnlyMigrationGuard
             .Select(removal => removal.Table)
             .Distinct(StringComparer.Ordinal)
             .Select(table => $"it removes from stamped table '{table}', and which schema family covers that table cannot be told, " +
-                             "so no finalized version can be named for it (spec 185 FR-023)"));
+                             "so no finalized version can be named for it"));
         var contracted = removals
             .Select(removal => removal.Family)
             .OfType<string>()
@@ -122,7 +122,7 @@ public static class ExpandOnlyMigrationGuard
             .ToArray();
         if (contracted.Length > 1)
             faults.Add($"it removes from more than one stamped schema family ({string.Join(", ", contracted.Select(family => $"'{family}'"))}), " +
-                       "and an opt-out names one family and version: contract each family in a migration of its own (spec 185 FR-023)");
+                       "and an opt-out names one family and version: contract each family in a migration of its own");
         if (contracted.Length != 1)
             return faults;
 
@@ -130,16 +130,16 @@ public static class ExpandOnlyMigrationGuard
         var removed = string.Join(", ", removals.Where(removal => removal.Family == family).Select(removal => removal.Violation));
         if (optOut.SchemaFamily is null || optOut.FinalizedVersion is null)
             faults.Add($"it removes what stamped schema family '{family}' covers ({removed}), so its opt-out must name " +
-                       $"SchemaFamily = \"{family}\" and the FinalizedVersion whose finalization makes the removal safe (spec 185 FR-023)");
+                       $"SchemaFamily = \"{family}\" and the FinalizedVersion whose finalization makes the removal safe");
         else if (!StringComparer.Ordinal.Equals(optOut.SchemaFamily, family))
-            faults.Add($"its opt-out names schema family '{optOut.SchemaFamily}', but what it removes ({removed}) belongs to '{family}' (spec 185 FR-023)");
+            faults.Add($"its opt-out names schema family '{optOut.SchemaFamily}', but what it removes ({removed}) belongs to '{family}'");
         else
         {
             // A family the build declares no chain for reads no version.
             var versions = families.ReadableVersions.GetValueOrDefault(family) ?? [];
             if (!versions.Contains(optOut.FinalizedVersion, StringComparer.Ordinal))
                 faults.Add($"its opt-out names version '{optOut.FinalizedVersion}' of '{family}', which this build's chain for that family " +
-                           $"does not read ([{string.Join(", ", versions)}]) (spec 185 FR-023)");
+                           $"does not read ([{string.Join(", ", versions)}])");
         }
 
         return faults;

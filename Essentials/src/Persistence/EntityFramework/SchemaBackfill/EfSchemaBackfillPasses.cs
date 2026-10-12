@@ -91,7 +91,7 @@ internal sealed class EfSchemaBackfillPasses(
             var below = await scopes.WithScopeAsync(scope => table.CountAsync(scope.Context, EfSchemaStampFilter.In(run.Below), cancellationToken), cancellationToken);
             if (below > 0)
                 blockers.Add(new EfSchemaBackfillBlocker(EfSchemaBackfillBlockerKind.NoRewriter, table.Name, below,
-                    $"{below} row(s) of table '{table.Name}' are below '{run.Target}', and schema family '{run.Family}' names no rewriter to upgrade them (spec 186, FR-004)."));
+                    $"{below} row(s) of table '{table.Name}' are below '{run.Target}', and schema family '{run.Family}' names no rewriter to upgrade them."));
         }
 
         return new EfSchemaBackfillVerification(startedAt, time.GetUtcNow(), historyMark, found, blockers);
@@ -233,11 +233,11 @@ internal sealed class EfSchemaBackfillPasses(
             blockers.Add(new EfSchemaBackfillBlocker(EfSchemaBackfillBlockerKind.Skew, table.Name, skew,
                 $"{skew} row(s) of table '{table.Name}' carry a stamp that is missing or outside this host's readable set " +
                 $"[{string.Join(", ", run.Chain.ReadableVersions)}]. They are never rewritten, and schema family '{run.Family}' cannot be " +
-                "recorded complete until they are resolved (spec 180, FR-007)."));
+                "recorded complete until they are resolved."));
         if (table.ContentAddressed && await table.CountAsync(context, EfSchemaStampFilter.In(run.Below), cancellationToken) is > 0 and var below)
             blockers.Add(new EfSchemaBackfillBlocker(EfSchemaBackfillBlockerKind.ContentAddressed, table.Name, below,
                 $"{below} content-addressed row(s) of table '{table.Name}' are below '{run.Target}', and nothing may upgrade them " +
-                $"(spec 186, FR-010a), so schema family '{run.Family}' can never be recorded complete at '{run.Target}' while they remain."));
+                $"because a content-addressed row is identified by its content, so schema family '{run.Family}' can never be recorded complete at '{run.Target}' while they remain."));
         return blockers;
     }
 

@@ -131,7 +131,7 @@ internal sealed class EfClusterMembershipLifecycle(
         logger.LogCritical(
             "Cluster member {Member} was displaced ({Reason}): another process holds host id {HostId}, so this one never rejoins the fleet. " +
             "The host stops, so nothing goes on working under an identity the fleet no longer counts; start it again under a host id of its own, " +
-            "or after the other process has stopped (spec 183, FR-007).",
+            "or after the other process has stopped.",
             standing.Identity, lapse.Reason, standing.Identity.HostId);
         hostStop.Record(lapse);
         if (lifetime is null)

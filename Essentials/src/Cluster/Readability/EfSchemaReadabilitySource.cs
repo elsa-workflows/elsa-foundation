@@ -116,7 +116,7 @@ public sealed class EfSchemaReadabilitySource(
             // and the disagreement is logged so it is still visible.
             logger.LogError(
                 "Schema family '{Family}' is declared under more than one EF module: {Declarations}. A family's " +
-                "declarations must agree on its owning EF module, owned or shared (spec 180, FR-001); this host " +
+                "declarations must agree on its owning EF module, owned or shared; this host " +
                 "reports it as reading no version until its declarations agree.",
                 declarations.Key,
                 string.Join(", ", declarations.Select(declaration => $"'{declaration.Module ?? "no module (shared)"}' in {declaration.Assembly.GetName().Name}")));
@@ -126,7 +126,7 @@ public sealed class EfSchemaReadabilitySource(
 
         foreach (var declaration in declarations.Where(declaration => declaration.Defects.Count > 0))
             logger.LogError(
-                "Schema family '{Family}' declared in {Assembly} has an upcaster chain this build refuses (spec 180, FR-005): {Defects} " +
+                "Schema family '{Family}' declared in {Assembly} has an upcaster chain this build refuses: {Defects} " +
                 "This host reports only the versions the chain still reaches: {Readable}.",
                 declarations.Key,
                 declaration.Assembly.GetName().Name,
