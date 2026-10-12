@@ -3,7 +3,7 @@ using Elsa.Expressions.Core.Contracts;
 namespace Elsa.Expressions.Core.Models;
 
 /// <summary>
-/// A runtime variable scope and its visible-ancestor chain (ADR 0027). The nearest scope points at
+/// A runtime variable scope and its visible-ancestor chain. The nearest scope points at
 /// its parent scope, up to the workflow scope, so that a descendant activity can resolve both
 /// structured references (by declaring scope identity + reference key) and bare names (nearest
 /// declaring scope wins, allowing intentional shadowing).
@@ -48,7 +48,7 @@ public sealed class VariableScope
     public VariableScope? Parent { get; }
 
     /// <summary>
-    /// The concrete container activity execution this scope belongs to (ADR 0027). Container
+    /// The concrete container activity execution this scope belongs to. Container
     /// variable values are isolated per execution: repeated, retried, or parallel executions of the
     /// same authored container declaration (same <see cref="ScopeId"/>) get separate
     /// <see cref="VariableScope"/> instances with distinct execution ids and value stores. Null for

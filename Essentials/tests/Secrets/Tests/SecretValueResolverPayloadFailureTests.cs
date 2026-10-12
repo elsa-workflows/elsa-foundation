@@ -13,7 +13,7 @@ namespace Elsa.Secrets.Tests;
 
 /// <summary>
 /// When reading the secret's payload fails, the resolver reports a result rather than a throw, with none of the
-/// exception's text, classified as a failed metadata read is (spec 188, FR-003, User Story 2): an outage of the payload
+/// exception's text, classified as a failed metadata read is: an outage of the payload
 /// store is <see cref="SecretResolutionFailureCode.StoreUnavailable"/>, transient, and a store the host does not
 /// register or a payload that does not decrypt or parse is <see cref="SecretResolutionFailureCode.CorruptState"/>,
 /// permanent. A canceled resolution stays a cancellation.

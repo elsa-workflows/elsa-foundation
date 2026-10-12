@@ -93,7 +93,7 @@ public sealed record ReusableActivityImportMutation(
 
 /// <summary>
 /// One reusable Elsa 3 workflow mapped to a graph activity. <paramref name="Body"/> is the mapped workflow state the
-/// version's descriptor payload carries, kept so the import can admit it before the commit (spec 188, FR-008).
+/// version's descriptor payload carries, kept so the import can admit it before the commit.
 /// </summary>
 public sealed record ImportedReusableActivity(
     ActivityDefinition Definition,

@@ -62,8 +62,8 @@ public static class ElsaEndpointGroupExtensions
     /// <remarks>
     /// An operation mapped with <paramref name="containFailures"/> false leaves its failures to the host's exception
     /// handling, with one exception: a schema write refusal is a conflict the owner answers, not an unexpected failure
-    /// the host would answer with a 500, so it is answered 409 through <see cref="SchemaWriteRefusalProblem"/>
-    /// (spec 180, FR-016a). A contained operation answers it through the failure pipeline instead.
+    /// the host would answer with a 500, so it is answered 409 through <see cref="SchemaWriteRefusalProblem"/>.
+    /// A contained operation answers it through the failure pipeline instead.
     /// </remarks>
     public static IEndpointConventionBuilder MapUnboundOperation(
         this EndpointGroup api,

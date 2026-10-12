@@ -16,8 +16,8 @@ using static Elsa.Secrets.Workflows.Tests.Support.SecretsCanaryWorkflowHost;
 namespace Elsa.Secrets.Workflows.Tests;
 
 /// <summary>
-/// The canary (spec 188, T081, FR-013, SC-004). A secret's value, planted through the real Secrets bridge, is consumed by
-/// a canary activity in each run shape of FR-013 (success, a faulting exception, a returned fault, suspend and resume, a
+/// The canary. A secret's value, planted through the real Secrets bridge, is consumed by
+/// a canary activity in each run shape (success, a faulting exception, a returned fault, suspend and resume, a
 /// throw on resume, a structural child-completion throw and child-notification throw, and rotation, S1 to S4b), and is
 /// then found zero times on each surface the scenario scans: the eight surfaces for a published canary, and the six run
 /// surfaces for an imported artifact (S4, S4b), which has no definition to store or export. Each surface is read only
@@ -45,7 +45,7 @@ public abstract class WorkflowSecretCanaryTests(CanaryHostFixture fixture, ITest
     /// <summary>An imported artifact has no definition, so the stored definitions and the git export hold nothing of its run.</summary>
     private static readonly CanarySurface[] RunSurfaces = AllSurfaces.Except([CanarySurface.StoredDefinitions, CanarySurface.GitExport]).ToArray();
 
-    // ---- FR-013 run shapes (S1 to S4) ----------------------------------------------------------------------------
+    // ---- Run shapes (S1 to S4) -----------------------------------------------------------------------------------
 
     [Theory]
     [MemberData(nameof(Levels))]
@@ -388,7 +388,7 @@ public abstract class WorkflowSecretCanaryTests(CanaryHostFixture fixture, ITest
     /// <summary>The scenario labels, which name each scenario's node, secret and definition.</summary>
     public static readonly string[] ScenarioLabels = ["s1", "s2", "s2b", "s3", "s3b", "s4", "s4b", "s5", "s6", "s7", "s8", "s8b", "s8c", "s9", "s10", "http"];
 
-    /// <summary>A scenario's secret reference name: a scenario label and a hexadecimal suffix, which no redactor matches (T078).</summary>
+    /// <summary>A scenario's secret reference name: a scenario label and a hexadecimal suffix, which no redactor matches.</summary>
     public static string ReferenceName(string label, string suffix) => $"canary.{label}.{suffix}";
 
     internal static string Suffix() => Guid.NewGuid().ToString("N")[..8];
@@ -510,7 +510,7 @@ public abstract class WorkflowSecretCanaryTests(CanaryHostFixture fixture, ITest
 
     /// <summary>
     /// Reads each of <paramref name="surfaces"/>, asserting its precondition for every run first, and asserts that none of
-    /// <paramref name="values"/> occurs on it in any form the scanner searches for (SC-004).
+    /// <paramref name="values"/> occurs on it in any form the scanner searches for.
     /// </summary>
     protected Task AssertAbsentAsync(
         CanaryScenario scenario,

@@ -1,7 +1,7 @@
 namespace Elsa.Cli.Worker;
 
 /// <summary>
-/// A refusal the worker makes itself, carrying the exit code spec 171 assigns it, a stable machine-readable
+/// A refusal the worker makes itself, carrying its exit code from <see cref="ToolExitCode"/>, a stable machine-readable
 /// <see cref="Code"/>, and one <see cref="Details"/> line per offender for the refusals that must name every
 /// one rather than the first.
 /// </summary>

@@ -37,7 +37,7 @@ public sealed class CommittedArtifact : IDisposable
 }
 
 /// <summary>
-/// <c>script-check</c> against a real packaged host (spec 171 User Story 4). The classification itself is
+/// <c>script-check</c> against a real packaged host. The classification itself is
 /// pinned by <see cref="ScriptCheckClassificationTests"/>; these prove the command reaches it — that it
 /// regenerates from the committed plan rather than from anything typed on the command line, and that the
 /// exit code an operator's CI job reads is the one the check decided.
@@ -187,7 +187,7 @@ public sealed class ScriptCheckCliTests(CommittedArtifact artifact) : IClassFixt
         Assert.Contains("plan-host-mismatch", run.Error, StringComparison.Ordinal);
     }
 
-    /// <summary>The check takes no selection of its own: the plan is what the artifact claims to be (FR-044).</summary>
+    /// <summary>The check takes no selection of its own: the plan is what the artifact claims to be.</summary>
     [Fact]
     public void The_check_takes_no_module_selection_of_its_own()
     {
@@ -263,7 +263,7 @@ public sealed class MySqlCommittedArtifact : IDisposable
 }
 
 /// <summary>
-/// <c>script-check</c> against a MySQL artifact (spec 171 User Story 4). MySQL is the one provider whose
+/// <c>script-check</c> against a MySQL artifact. MySQL is the one provider whose
 /// script passes through a rewrite -- <c>EfMySqlIdempotentScript</c>, #1914 -- before <c>script-check</c>'s
 /// byte comparison ever sees it: that fix's own description records both directions verified by hand (up to
 /// date on a fresh artifact; "SQL differs" after a hand edit inside the generated procedure body), but

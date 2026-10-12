@@ -49,7 +49,7 @@ public sealed record EndpointOwnershipMetadata
     public string? ShellId { get; }
     public int? Generation { get; }
 
-    // Retained as the concise inventory-facing name while OwnerId is the ADR's conceptual field.
+    // Retained as the concise inventory-facing name while OwnerId is the conceptual field.
     public string Owner => OwnerId;
 
     public static EndpointOwnershipMetadata Host(string ownerId) => new(EndpointOwnerKind.Host, ownerId);

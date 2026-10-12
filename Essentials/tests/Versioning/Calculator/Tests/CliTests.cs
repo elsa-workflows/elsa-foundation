@@ -50,7 +50,7 @@ public sealed class CliTests : SyntheticHistory
         Assert.Equal(Compute(commit).ToJson(), File.ReadAllText(outputFile));
     }
 
-    /// <summary>FR-003's force-advance: the ids and the reason reach the computation, and the reason reaches the output.</summary>
+    /// <summary>The force-advance: the ids and the reason reach the computation, and the reason reaches the output.</summary>
     [Fact]
     public void The_cli_passes_a_force_advance_to_the_computation()
     {

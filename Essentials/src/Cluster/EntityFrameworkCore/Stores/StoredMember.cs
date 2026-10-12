@@ -12,7 +12,7 @@ namespace Elsa.Cluster.EntityFrameworkCore.Stores;
 /// <remarks>
 /// <para>
 /// A row stamped with a schema version outside the family's readable set, a status this build does not know, or a report
-/// it cannot upcast or parse is <em>uninterpretable</em> (spec 183, FR-012). Its report is
+/// it cannot upcast or parse is <em>uninterpretable</em>. Its report is
 /// <see cref="MemberReport.Unknown"/>, which counts as reading nothing, and nothing but its envelope is trusted: it is
 /// judged <see cref="MemberStatus.Active"/> and live until its own heartbeat and expiry pass, whatever status it claims.
 /// That is the conservative direction: such an entry blocks every readability answer while it may still be alive, and
@@ -20,7 +20,8 @@ namespace Elsa.Cluster.EntityFrameworkCore.Stores;
 /// </para>
 /// <para>
 /// A row whose envelope cannot even form an identity (a blank or over-long host id, a blank incarnation) fails the
-/// whole read instead: nothing can be said about it, and leaving it out would be the partial view FR-012 forbids.
+/// whole read instead: nothing can be said about it, and leaving it out would give the partial view a fresh read must
+/// never return.
 /// </para>
 /// </remarks>
 public sealed record StoredMember(
@@ -56,7 +57,7 @@ public sealed record StoredMember(
     /// <summary><see cref="HasLeft"/> for a row read for writing, which needs no identity formed to answer.</summary>
     public static bool SaysLeft(ClusterMemberEntity row) => Interpret(row)?.Status == MemberStatus.Left;
 
-    /// <summary>Whether a reader whose clock shows <paramref name="now"/> judges this member live (FR-006, FR-028).</summary>
+    /// <summary>Whether a reader whose clock shows <paramref name="now"/> judges this member live.</summary>
     public bool IsLive(DateTimeOffset now, TimeSpan skewAllowance) =>
         MemberLiveness.IsLive(Status, HeartbeatAt, ExpiryPeriod, skewAllowance, now);
 
@@ -88,7 +89,7 @@ public sealed record StoredMember(
 
     /// <summary>
     /// The row's report, upcast through <paramref name="chain"/> from the row's stamp to the current version before it is
-    /// parsed (spec 180, FR-009), or <see langword="null"/> when this build cannot interpret it. The stamp is readable by
+    /// parsed, or <see langword="null"/> when this build cannot interpret it. The stamp is readable by
     /// the time this runs. Membership has only ever had one version, so its tests drive this over a chain of their own.
     /// </summary>
     public static MemberReport? ReadReport(ClusterMemberEntity row, EfSchemaChain chain)
@@ -100,10 +101,10 @@ public sealed record StoredMember(
         }
         catch (InvalidDataException)
         {
-            // Spec 183, FR-012 takes precedence over spec 180, FR-009 for a membership report. FR-009 reports a readable
-            // row whose upcaster fails as corrupt, which would fail the whole membership read. A membership read must
-            // stay alive and never give a partial view, so the entry is uninterpretable instead: it is counted, reads as
-            // MemberReport.Unknown, and so conservatively counts as reading nothing.
+            // For a membership report, a whole fleet view takes precedence over the usual corruption rule. That rule reports
+            // a readable row whose upcaster fails as corrupt, which would fail the whole membership read. A membership
+            // read must stay alive and never give a partial view, so the entry is uninterpretable instead: it is
+            // counted, reads as MemberReport.Unknown, and so conservatively counts as reading nothing.
             return null;
         }
 

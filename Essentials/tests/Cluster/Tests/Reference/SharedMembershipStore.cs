@@ -28,15 +28,15 @@ internal sealed class SharedMembershipStore
 
     /// <summary>
     /// Inserts a new incarnation and displaces the earlier ones of its host id, unless the most recent one is still
-    /// live by FR-006's own liveness rule (heartbeat, expiry and skew): only a non-live (expired or left) earlier
-    /// incarnation may be displaced (FR-004a, FR-004b).
+    /// live by the liveness rule (heartbeat, expiry and skew): only a non-live (expired or left) earlier
+    /// incarnation may be displaced.
     /// </summary>
     /// <remarks>
     /// A refusal while the incumbent is live is retryable: <see cref="ClusterMembershipJoinRefusedException"/>, so the
     /// caller waits and tries again. But a joiner that has now been refused throughout one full liveness window since
     /// its first observation of this exact incumbent, with the incumbent renewing the whole time, is not looking at a
     /// crash to wait out: it is a live duplicate. That escalates to <see cref="ClusterMembershipDuplicateHostIdException"/>,
-    /// which the caller MUST NOT retry (FR-004b, FR-039, #2097 review).
+    /// which the caller MUST NOT retry (#2097 review).
     /// </remarks>
     public void Join(ClusterMemberIdentity identity, MemberReport report, DateTimeOffset now, ConformanceTimings timings)
     {
@@ -107,7 +107,7 @@ internal sealed class SharedMembershipStore
 
     /// <summary>
     /// A change token that completes once, the next time this store observes a fleet change: a join, a status change
-    /// (including a leave) or a report change (FR-013). Call this again after it completes to observe the next one, as
+    /// (including a leave) or a report change. Call this again after it completes to observe the next one, as
     /// with <see cref="IChangeToken"/> elsewhere in the framework (Elsa.Caching). It carries no dependency on the
     /// Events feature.
     /// </summary>
@@ -144,7 +144,7 @@ internal sealed class SharedMembershipStore
             _entries.Add(new StoredMember(new ClusterMemberIdentity(hostId, MemberIncarnation.New()), ++_sequence, MemberStatus.Active, now, expiryPeriod, Displaced: false, Report: null, ReportRevision: 1, LeftAt: null));
     }
 
-    /// <summary>Deletes entries that have been left, or expired, for longer than the cleanup period (FR-031).</summary>
+    /// <summary>Deletes entries that have been left, or expired, for longer than the cleanup period.</summary>
     public void Cleanup(DateTimeOffset now, TimeSpan cleanupPeriod, TimeSpan skewAllowance)
     {
         lock (_gate)
@@ -174,5 +174,5 @@ internal sealed record StoredMember(
     DateTimeOffset? LeftAt);
 
 /// <summary>When a joiner first observed <see cref="Incumbent"/> refusing it, so a later join for the same host id can
-/// tell a live duplicate (refused throughout a full liveness window) from a fresh crash (FR-004b, FR-039).</summary>
+/// tell a live duplicate (refused throughout a full liveness window) from a fresh crash.</summary>
 internal sealed record RefusalWatch(ClusterMemberIdentity Incumbent, DateTimeOffset FirstObservedAt);

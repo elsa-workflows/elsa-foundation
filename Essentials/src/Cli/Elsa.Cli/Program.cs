@@ -12,7 +12,7 @@ if (parse.Errors.Count > 0)
             Console.Error.WriteLine($"error [usage]: {error.Message}");
     Console.Error.WriteLine("Run `dotnet elsa --help` for the commands and flags this build accepts.");
     // A usage error is exit 2, not the parser's own default: every refusal this tool makes, wherever it is
-    // decided, uses the one exit-code vocabulary spec 171 assigns.
+    // decided, uses the one exit-code vocabulary of ToolExitCode.
     return ToolExitCode.Refusal;
 }
 

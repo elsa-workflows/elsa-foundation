@@ -1188,13 +1188,13 @@ public static class WorkerCommands
     public const string Validate = "validate";
     public const string PostMigrate = "post-migrate";
 
-    /// <summary>Places an operator's hold on a schema family's finalization (spec 181, FR-019, FR-020).</summary>
+    /// <summary>Places an operator's hold on a schema family's finalization.</summary>
     public const string Hold = "hold";
 
-    /// <summary>Releases an operator's hold (spec 181, FR-019, FR-020).</summary>
+    /// <summary>Releases an operator's hold.</summary>
     public const string Release = "release";
 
-    /// <summary>Reports each schema family's finalization status (spec 181, FR-020, FR-022).</summary>
+    /// <summary>Reports each schema family's finalization status.</summary>
     public const string Status = "status";
 
     /// <summary>The private, configuration-only candidate inspection operation.</summary>
@@ -1208,7 +1208,7 @@ public static class WorkerCommands
     /// <summary>The commands that read or write a schema family's finalization record rather than migrations.</summary>
     public static bool IsFinalization(string command) => command is Hold or Release or Status;
 
-    /// <summary>The commands that open the host's database and so need a connection (D7).</summary>
+    /// <summary>The commands that open the host's database and so need a connection.</summary>
     public static bool OpensDatabase(string command) => command is Apply or Validate or PostMigrate || IsFinalization(command);
 }
 
@@ -1223,7 +1223,7 @@ public static class WorkerContextSources
 }
 
 /// <summary>
-/// The exit codes spec 171 assigns the CLI, mirrored here so the front end can classify a failure of its
+/// The CLI's exit codes, mirrored here so the front end can classify a failure of its
 /// own — a missing deps file, a worker that never started — with the same vocabulary the worker and the
 /// host's tooling entry point use.
 /// </summary>
@@ -1244,7 +1244,7 @@ public sealed record WorkerRequest
     /// <summary>One of <see cref="WorkerCommands.All"/>.</summary>
     public string? Command { get; init; }
 
-    /// <summary>The <c>--host</c> directory, already validated to carry a runtimeconfig/deps pair (FR-011).</summary>
+    /// <summary>The <c>--host</c> directory, already validated to carry a runtimeconfig/deps pair.</summary>
     public string? HostDirectory { get; init; }
 
     /// <summary>The host application's own name, as the manifest's <c>host.name</c> records it.</summary>
@@ -1257,7 +1257,7 @@ public sealed record WorkerRequest
     public IReadOnlyList<string> PackageRoots { get; init; } = [];
 
     /// <summary>
-    /// Whether <c>--restore</c> was given (ADR 0076 D10's opt-in exception). The only field that lets this
+    /// Whether <c>--restore</c> was given. The only field that lets this
     /// tool write under the host's directories, and the only one that lets it touch a network. It is a bare
     /// boolean on purpose: what to restore, and from where, is read by the worker out of the host's own
     /// <c>appsettings.json</c>, so a feed's configured credential reference has nowhere to travel — not
@@ -1275,7 +1275,7 @@ public sealed record WorkerRequest
     /// <summary>Where <c>script</c> writes its artifact.</summary>
     public string? Output { get; init; }
 
-    /// <summary>The <c>--environment</c> value the manifest records (FR-038, FR-047).</summary>
+    /// <summary>The <c>--environment</c> value the manifest records.</summary>
     public string? Environment { get; init; }
 
     /// <summary>The <c>--shell</c> the provider-agreement check was narrowed to, or <c>null</c> for every configured shell.</summary>
@@ -1291,8 +1291,8 @@ public sealed record WorkerRequest
     public string? Resource { get; init; }
 
     /// <summary>
-    /// The host's enabled shell features, read from <c>shells.json</c> plus its <c>--environment</c> overlay
-    /// (FR-035). Present — even empty — exactly when that configuration was found beside the host, which is
+    /// The host's enabled shell features, read from <c>shells.json</c> plus its <c>--environment</c> overlay.
+    /// Present — even empty — exactly when that configuration was found beside the host, which is
     /// what the manifest's <c>providerAgreement: checked</c> states; <c>null</c> when none was found at all.
     /// Each entry carries a feature's <c>Provider</c> setting and nothing else: no other shell setting is
     /// lifted out of the file, so no connection string can travel here.
@@ -1300,7 +1300,7 @@ public sealed record WorkerRequest
     public IReadOnlyList<WorkerShellFeature>? Shells { get; init; }
 
     /// <summary>
-    /// The name of the environment variable <c>--connection-env</c> names (D7). Only its name travels here;
+    /// The name of the environment variable <c>--connection-env</c> names. Only its name travels here;
     /// the worker reads the value from its own (inherited) environment, never from this front end's request.
     /// Required by the commands that open a database unless <see cref="Connection"/> is given instead.
     /// </summary>
@@ -1325,7 +1325,7 @@ public sealed record WorkerRequest
 
     /// <summary>
     /// The connection string itself, read by this front end from its own stdin when <c>--connection-stdin</c>
-    /// was given (D7) — the one case where the value has nowhere to travel but this request. Never populated
+    /// was given — the one case where the value has nowhere to travel but this request. Never populated
     /// from <c>--connection-env</c>, and never logged, echoed, or included in a refusal.
     /// </summary>
     public string? Connection { get; init; }
@@ -1414,7 +1414,7 @@ public sealed record WorkerCandidateFile
     public string? Content { get; init; }
 }
 
-/// <summary>What a finalization command names (spec 181, FR-019): the family, an optional version, the reason and the operator.</summary>
+/// <summary>What a finalization command names: the family, an optional version, the reason and the operator.</summary>
 public sealed record WorkerFinalization
 {
     public string? Family { get; init; }
@@ -1432,7 +1432,7 @@ public sealed record WorkerSelection
     public const string AllKind = "all";
     public const string ModulesKind = "modules";
 
-    /// <summary>Every module the host's own enabled shell features map to through <c>[UsesEfModule]</c> (FR-028).</summary>
+    /// <summary>Every module the host's own enabled shell features map to through <c>[UsesEfModule]</c>.</summary>
     public const string FromHostKind = "from-host";
 
     public string? Kind { get; init; }
@@ -1443,7 +1443,7 @@ public sealed record WorkerSelection
 /// <summary>
 /// One feature a shell enables, reduced to what the provider-agreement check needs: the shell, the CShells
 /// feature name, and that feature's configured <c>Provider</c> setting (<c>null</c> when the shell sets
-/// none). A feature a shell disables never appears here — an unenabled feature is ignored (FR-036).
+/// none). A feature a shell disables never appears here — an unenabled feature is ignored.
 /// </summary>
 public sealed record WorkerShellFeature
 {

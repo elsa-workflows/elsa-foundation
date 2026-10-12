@@ -7,16 +7,16 @@ using Elsa.Modularity.Core.Models;
 namespace Elsa.Modularity.Api.Services;
 
 /// <summary>
-/// Carries each enabled feature's availability to the feature catalog (spec 182, FR-009): available, or dormant with a
+/// Carries each enabled feature's availability to the feature catalog: available, or dormant with a
 /// reason per unmet dormancy requirement its class declares with <c>[RequiresSchemaVersion]</c>. A dormant feature stays
-/// in the catalog, enabled, and says why, rather than simply being absent (FR-008, SC-002).
+/// in the catalog, enabled, and says why, rather than simply being absent.
 /// </summary>
 /// <remarks>
 /// <para>
-/// It asks the shared dormancy check, and computes nothing itself (FR-003). The catalog is an operator surface, so a
-/// dormant feature's reason carries the finalization gate's status, including the hosts that cannot read a version yet
-/// (FR-011; spec 181, FR-022). That status is read only when something is dormant; a catalog with nothing dormant reads no
-/// record. It is computed on every request, so it follows a finalization on the next one (FR-020).
+/// It asks the shared dormancy check, and computes nothing itself. The catalog is an operator surface, so a
+/// dormant feature's reason carries the finalization gate's status, including the hosts that cannot read a version yet.
+/// That status is read only when something is dormant; a catalog with nothing dormant reads no
+/// record. It is computed on every request, so it follows a finalization on the next one.
 /// </para>
 /// <para>
 /// A feature with no live descriptor on this host, such as one whose package is not loaded, has no class to read

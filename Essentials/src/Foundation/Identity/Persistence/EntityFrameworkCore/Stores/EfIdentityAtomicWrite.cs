@@ -63,7 +63,7 @@ public sealed class EfIdentityAtomicWrite
         EfWriteConflict.Transient,
         attempt => TimeSpan.FromMilliseconds(25 * attempt));
 
-    // Identity keeps its budget of 3 (spec 095, bounded retry): a receipt still changing after 3 observations is uncertain.
+    // Identity keeps its budget of 3 (bounded retry): a receipt still changing after 3 observations is uncertain.
     private static readonly EfWriteRetry ReceiptReclamation = new(3, EfWriteConflict.Concurrency);
     private static readonly TimeSpan DefaultReconciliationTimeout = TimeSpan.FromSeconds(10);
     private static readonly TimeSpan DefaultReceiptLifetime = TimeSpan.FromDays(7);

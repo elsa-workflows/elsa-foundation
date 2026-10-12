@@ -469,7 +469,7 @@ public sealed class EfOpenTelemetryStore : IOpenTelemetryStore, IDiagnosticsPers
                 operation, "The OpenTelemetry capture could not be committed after bounded retries.", ScopeContext(), lastRace!), cancellationToken);
         }
         catch (OpenTelemetryPersistenceException) { throw; }
-        // Skew is neither corrupt data nor a provider failure, so it leaves as itself (ADR 0077).
+        // Skew is neither corrupt data nor a provider failure, so it leaves as itself.
         catch (EfSchemaVersionSkewException) { throw; }
         catch (SchemaWriteRefusedException) { throw; }
         catch (OperationCanceledException) { throw; }
@@ -926,7 +926,7 @@ public sealed class EfOpenTelemetryStore : IOpenTelemetryStore, IDiagnosticsPers
     /// <summary>
     /// The content columns of <paramref name="summary"/> - its payload and its two memberships - upcast together from the
     /// row's stamp before any is parsed: the memberships restate the payload's and are merged with new ones or compared
-    /// with the upcast payload, so they are content (spec 180, FR-009; #2140, #2144).
+    /// with the upcast payload, so they are content (#2140, #2144).
     /// </summary>
     private static EfSchemaRowContent SummaryContent(OpenTelemetryTraceSummaryEntity summary) =>
         EfOpenTelemetryModule.Chain.Upcast<OpenTelemetryTraceSummaryEntity>(
@@ -1025,7 +1025,7 @@ public sealed class EfOpenTelemetryStore : IOpenTelemetryStore, IDiagnosticsPers
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
         catch (OpenTelemetryPersistenceException) { throw; }
-        // Skew is neither corrupt data nor a provider failure, so it leaves as itself (ADR 0077).
+        // Skew is neither corrupt data nor a provider failure, so it leaves as itself.
         catch (EfSchemaVersionSkewException) { throw; }
         catch (SchemaWriteRefusedException) { throw; }
         catch (InvalidDataException exception) { throw new OpenTelemetryPersistenceDataException(operation, "The durable OpenTelemetry payload is inconsistent.", ScopeContext(), exception); }

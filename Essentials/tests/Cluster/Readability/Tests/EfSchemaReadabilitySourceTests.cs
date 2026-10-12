@@ -11,7 +11,7 @@ using Microsoft.Extensions.Logging;
 namespace Elsa.Cluster.Readability.Tests;
 
 /// <summary>
-/// Spec 183's FR-019 to FR-022: a host reports one entry for each schema family whose declaration it has loaded, from
+/// A host reports one entry for each schema family whose declaration it has loaded, from
 /// any load context, at the versions every loaded declaration of it can read, and nothing it has not loaded.
 /// </summary>
 public sealed class EfSchemaReadabilitySourceTests : IDisposable
@@ -86,9 +86,9 @@ public sealed class EfSchemaReadabilitySourceTests : IDisposable
         });
 
     /// <summary>
-    /// Spec 183's FR-019 through spec 181's gate: an entry names the database and the finalized version the host read,
+    /// Read through the finalization gate, an entry names the database and the finalized version the host read,
     /// but names no database while the host is reading one it has not read before, or once it serves two, since an entry
-    /// naming one would not be counted for the other (FR-023) and would let the other finalize what this host cannot read.
+    /// naming one would not be counted for the other and would let the other finalize what this host cannot read.
     /// </summary>
     [Fact]
     public void An_entry_names_the_database_this_host_read_only_while_that_is_the_one_database_it_serves()
@@ -110,9 +110,9 @@ public sealed class EfSchemaReadabilitySourceTests : IDisposable
     }
 
     /// <summary>
-    /// Spec 183's FR-019, amended 2026-09-30: an entry says whether the family's module is active in this host, so the
-    /// backfill's settle condition can leave out a host that only loads the declaration (spec 186, FR-012). Loading it
-    /// keeps it in the report, and so in every readability count (FR-022).
+    /// An entry says whether the family's module is active in this host, so the
+    /// backfill's settle condition can leave out a host that only loads the declaration. Loading it
+    /// keeps it in the report, and so in every readability count.
     /// </summary>
     [Fact]
     public void An_entry_says_its_module_is_active_only_while_a_gate_of_the_host_has_it_admitted()
@@ -186,9 +186,9 @@ public sealed class EfSchemaReadabilitySourceTests : IDisposable
         Assert.Empty(generations.ReadableVersions);
     }
 
-    /// <summary>A family shared by no single EF module (spec 180, FR-001) reports an entry that names none, end to end
-    /// through <see cref="ReadabilityEntry.EfModule"/>, rather than a sentinel value a B5 or fleet-view consumer might
-    /// mistake for a real module name.</summary>
+    /// <summary>A family shared by no single EF module reports an entry that names none, end to end
+    /// through <see cref="ReadabilityEntry.EfModule"/>, rather than a sentinel value the finalization gate or a
+    /// fleet-view consumer might mistake for a real module name.</summary>
     [Fact]
     public void A_shared_family_reports_an_entry_naming_no_module()
     {
@@ -198,7 +198,7 @@ public sealed class EfSchemaReadabilitySourceTests : IDisposable
         Assert.Equal(["1"], entry.ReadableVersions);
     }
 
-    /// <summary>The finalization tables' family (spec 180, FR-001 extension; spec 181) is declared in
+    /// <summary>The finalization tables' family is declared in
     /// Elsa.Persistence.EntityFramework itself, shared by no single EF module, so a host that has loaded only that
     /// assembly - none of the EF modules that call <see cref="EfSchemaFinalization.MapSchemaFinalization"/> - still
     /// reports it, naming no module.</summary>

@@ -90,7 +90,7 @@ public sealed class GitClient(string gitExecutable, ILogger logger) : IGitClient
     /// Builds the <see cref="ProcessStartInfo"/> for a git invocation, with <paramref name="environment"/> added to the
     /// process environment. Notably sets <c>GIT_TERMINAL_PROMPT=0</c>, after that environment so it cannot be undone,
     /// so an unreachable or credential-protected remote fails fast instead of blocking on an interactive prompt.
-    /// Public (per §2.23.3, logic-bearing implementations are directly testable without <c>InternalsVisibleTo</c>) so
+    /// Public (logic-bearing implementations are directly testable without <c>InternalsVisibleTo</c>) so
     /// tests can assert this env var directly, independent of whether the host has a TTY.
     /// </summary>
     public static ProcessStartInfo CreateStartInfo(

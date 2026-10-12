@@ -3,7 +3,7 @@ using Elsa.Cluster.Core.Models;
 namespace Elsa.Cluster.Tests.Core;
 
 /// <summary>
-/// The runnability requirement kinds and section of spec 184 (FR-006, FR-008, FR-009): a member matches when one of its
+/// The runnability requirement kinds and section: a member matches when one of its
 /// entries that applies to the queried database satisfies every runnability requirement.
 /// </summary>
 public sealed class RunnabilityQueryTests

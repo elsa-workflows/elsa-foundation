@@ -4,7 +4,7 @@ namespace Elsa.Cluster.EntityFrameworkCore;
 
 public static class ClusterMembershipEfModule
 {
-    /// <summary>The module name operators select it by in the persistence tool (ADR 0076 D3).</summary>
+    /// <summary>The module name operators select it by in the persistence tool.</summary>
     public const string Name = "Cluster.Membership";
 
     public const string HistoryModuleName = "ElsaClusterMembership";
@@ -14,7 +14,7 @@ public static class ClusterMembershipEfModule
     /// <remarks>
     /// A row stamped with a version outside the family's readable set (<see cref="Chain"/>) was written by a provider
     /// version this build does not run. Unlike the other modules' stores, a reader does not refuse it: it returns the
-    /// entry with an unknown report, which counts as reading nothing (spec 183, FR-012), so a newer member blocks every
+    /// entry with an unknown report, which counts as reading nothing, so a newer member blocks every
     /// readability answer rather than dropping out of it.
     /// </remarks>
     public const string SchemaVersion = "1.0.0";
@@ -23,7 +23,7 @@ public static class ClusterMembershipEfModule
     public const string SchemaFamily = "ClusterMembership";
 
     /// <summary>The family's one chain, from this assembly's declaration: what every reader of the family checks and
-    /// upcasts through (spec 180, FR-010).</summary>
+    /// upcasts through.</summary>
     public static readonly EfSchemaChain Chain = EfSchemaChain.Of(typeof(ClusterMembershipEfModule).Assembly, SchemaFamily);
 
     public static string HistoryTableName => EfMigrationsHistory.TableName(HistoryModuleName);

@@ -26,7 +26,7 @@ public sealed class VariableConverter(IVariableMapper variableMapper) : JsonConv
         }
         catch (JsonException e)
         {
-            // Wrap the raw infrastructure exception at the authored-argument boundary (§2.23.5) so callers see a
+            // Wrap the raw infrastructure exception at the authored-argument boundary so callers see a
             // domain exception instead of System.Text.Json internals; preserve the original cause.
             throw new ArgumentDefinitionDeserializationException("Failed to deserialize the authored variable definition.", e);
         }

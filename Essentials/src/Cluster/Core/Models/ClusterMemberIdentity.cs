@@ -2,7 +2,7 @@ namespace Elsa.Cluster.Core.Models;
 
 /// <summary>
 /// One member of the fleet: a host id and one incarnation of it. A restarted host is a new member under the same host
-/// id (ADR 0078, Decision).
+/// id.
 /// </summary>
 public sealed record ClusterMemberIdentity
 {

@@ -98,10 +98,10 @@ internal static class Report
     }
 
     /// <summary>
-    /// Each family's finalization status (spec 181, FR-022): the finalized version, each pending version and the holds
+    /// Each family's finalization status: the finalized version, each pending version and the holds
     /// that keep it, any intent in flight and every hold, and what the finish record holds: the completion version, a
-    /// claimed backfill run and a withdrawn completion (spec 186, FR-021). Under each pending version it names the counted
-    /// members that cannot read it (FR-022), and after the families it lists the cluster's members, both read from the
+    /// claimed backfill run and a withdrawn completion. Under each pending version it names the counted
+    /// members that cannot read it, and after the families it lists the cluster's members, both read from the
     /// membership table in the database. How far a backfill has got is known only to a running host, whose memory this tool
     /// does not read.
     /// </summary>
@@ -289,11 +289,11 @@ internal static class Report
     }
 
     /// <summary>
-    /// What the manifest's <c>host.providerAgreement</c> field cannot say for itself (FR-039): the check
+    /// What the manifest's <c>host.providerAgreement</c> field cannot say for itself: the check
     /// reads <c>shells.json</c> plus its environment overlay, not a running host's own environment-variable
     /// configuration overrides, so a live host's effective provider can differ from the one verified here.
     /// Stated here, where an operator reading the run actually sees it, rather than as a manifest field —
-    /// the manifest's key set is frozen (FR-047).
+    /// the manifest's key set is frozen.
     /// </summary>
     private const string ProviderAgreementNote =
         "note: providerAgreement reflects shells.json plus its shells.<environment>.json overlay only. A " +

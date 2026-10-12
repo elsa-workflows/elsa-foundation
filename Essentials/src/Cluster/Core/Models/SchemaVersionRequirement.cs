@@ -1,8 +1,8 @@
 namespace Elsa.Cluster.Core.Models;
 
 /// <summary>
-/// A dormancy requirement (spec 182, Key Entities): schema family <see cref="Family"/> at <see cref="Version"/> or later,
-/// and, when <see cref="RequiresCompleteness"/>, no row of the family below that version remaining (FR-005).
+/// A dormancy requirement: schema family <see cref="Family"/> at <see cref="Version"/> or later,
+/// and, when <see cref="RequiresCompleteness"/>, no row of the family below that version remaining.
 /// </summary>
 public sealed record SchemaVersionRequirement
 {

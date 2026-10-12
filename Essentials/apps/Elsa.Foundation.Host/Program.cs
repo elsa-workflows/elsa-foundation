@@ -54,19 +54,19 @@ builder.Services.AddSingleton<IOptionsChangeTokenSource<NuplaneIntegrationOption
     new ConfigurationChangeTokenSource<NuplaneIntegrationOptions>(Options.DefaultName, configuration.GetSection("Elsa:Shells")));
 
 // ---------------------------------------------------------------------------------------------------------
-// Cluster membership — selected once per host, on this container, never per shell (spec 183, FR-017; #2143).
+// Cluster membership — selected once per host, on this container, never per shell (#2143).
 // ---------------------------------------------------------------------------------------------------------
 // Exactly as Elsa.Workbench composes it: the readability report of every schema family loaded in any load context,
 // the in-process membership default (a cluster of one, writing nothing durable), the finalization gate's view of the
 // fleet, and the dormancy check over what each shell's gates observed. CShells copies these registrations into every
 // shell, and the types they are registered under come from Elsa.Cluster.Core and Elsa.Persistence.Schema, which
 // Nuplane:Loading:SharedAssemblies shares with every package: so an EF module package finds this fleet and finalizes
-// its schema versions (spec 181, FR-021), and a feed-loaded feature leaves dormancy once the version it needs is
-// finalized (spec 182, FR-019). Without it, every gate here would stay at the version its record was created at, and
+// its schema versions, and a feed-loaded feature leaves dormancy once the version it needs is
+// finalized. Without it, every gate here would stay at the version its record was created at, and
 // every declared requirement would read "not observed".
 builder.Services.AddEfSchemaReadability();
 // The durable EF provider replaces that default only when the Elsa:Cluster:Membership section enables it, and then
-// refuses to start without an explicit Elsa:Cluster:Membership:HostId (spec 183, FR-003a, FR-024; #2151). Hosts that
+// refuses to start without an explicit Elsa:Cluster:Membership:HostId (#2151). Hosts that
 // share one database this way count each other, so a feed-loaded EF module's new schema version is finalized only once
 // every live host can read it. Provider settings without the enabling switch are refused, never ignored. This line
 // names no EF type: the extension lives in a provider-neutral namespace, and the host's EF closure exists for it and for
@@ -147,5 +147,5 @@ if (moduleManagement.Enabled)
 app.MapShells();
 
 // A host its cluster member stopped, because another process holds its host id, ends with exit code 1, so a supervisor
-// that restarts failed processes restarts it (spec 183, 2026-10-01 note).
+// that restarts failed processes restarts it.
 app.RunWithMembershipExitCode();

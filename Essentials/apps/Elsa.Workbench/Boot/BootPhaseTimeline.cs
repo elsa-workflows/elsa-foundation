@@ -6,7 +6,7 @@ using Microsoft.Extensions.Logging;
 namespace Elsa.Workbench.Boot;
 
 /// <summary>
-/// Opt-in boot / first-request phase-timing recorder (spec 129, First-Request/Cold-Start Readiness).
+/// Opt-in boot / first-request phase-timing recorder.
 ///
 /// This is a diagnostic-only instrument. It is created only when <c>Elsa:Boot:PhaseTiming:Enabled</c> is set,
 /// so a production host that leaves the switch off constructs nothing and pays nothing. When enabled it records

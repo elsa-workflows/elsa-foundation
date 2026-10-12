@@ -1,7 +1,7 @@
 namespace Elsa.Workbench.Boot;
 
 /// <summary>
-/// Opt-in eager shell-activation configuration (spec 132, First-Request/Cold-Start Readiness, program unit 4).
+/// Opt-in eager shell-activation configuration.
 ///
 /// CShells activates each shell lazily inside the first matching request (see <c>ShellMiddleware</c>), so the
 /// first user request pays the full activation wall — and every request that arrives mid-activation queues behind

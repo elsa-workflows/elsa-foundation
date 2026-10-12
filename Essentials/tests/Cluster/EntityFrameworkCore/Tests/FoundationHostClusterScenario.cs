@@ -14,8 +14,8 @@ namespace Elsa.Cluster.EntityFrameworkCore.Tests;
 /// #2151's acceptance, on the real thing: two built <c>Elsa.Foundation.Host</c> processes that share one database, each
 /// with the EF cluster membership provider enabled from configuration alone, and a feed-loaded EF module whose new schema
 /// version one of them runs before the other. They see each other; the new version is finalized only once both can read it;
-/// and a feature that needs it stays dormant, with the reason, until then (spec 181, FR-021; spec 182, FR-001 and FR-008;
-/// spec 183, FR-023 and FR-024). The engine is the derived class's: SQLite in <see cref="FoundationHostClusterBootTests"/>,
+/// and a feature that needs it stays dormant, with the reason, until then.
+/// The engine is the derived class's: SQLite in <see cref="FoundationHostClusterBootTests"/>,
 /// PostgreSQL in the container tests of <c>Elsa.Cluster.EntityFrameworkCore.ProviderTests</c>, which link this file.
 /// </summary>
 /// <remarks>

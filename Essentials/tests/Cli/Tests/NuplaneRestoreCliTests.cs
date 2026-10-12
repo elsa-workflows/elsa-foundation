@@ -7,7 +7,7 @@ using Xunit;
 namespace Elsa.Cli.Tests;
 
 /// <summary>
-/// The opt-in <c>--restore</c> pass (spec 171 FR-083 to FR-086, ADR 0076 D10's exception): a host whose
+/// The opt-in <c>--restore</c> pass, the exception to the tool never writing or downloading: a host whose
 /// package install root has never been populated can be scripted with one command, and every direction that
 /// could quietly produce a partial artifact instead refuses.
 /// </summary>
@@ -31,7 +31,7 @@ public sealed class NuplaneRestoreCliTests : IDisposable
     }
 
     /// <summary>
-    /// Without the flag nothing changes, which is the whole of ADR 0076 D10. What does change is the
+    /// Without the flag nothing changes: the tool never reconciles, downloads or writes. What does change is the
     /// message: a host that has never reconciled used to be reported as a missing provider engine, naming a
     /// package the operator had pinned correctly and never naming the state file that is actually absent.
     /// </summary>
@@ -49,7 +49,7 @@ public sealed class NuplaneRestoreCliTests : IDisposable
 
     /// <summary>
     /// A <c>--packages</c> root is an already-assembled set, so there is nothing for a restore to populate.
-    /// Refused as a usage error rather than accepted with one of the two flags quietly ignored (D7's rule
+    /// Refused as a usage error rather than accepted with one of the two flags quietly ignored (the rule
     /// for <c>--connection</c>, applied here).
     /// </summary>
     [Fact]
@@ -113,9 +113,9 @@ public sealed class NuplaneRestoreCliTests : IDisposable
     }
 
     /// <summary>
-    /// Pinned only (decision 4): a request that names more than one version would make the artifact depend
-    /// on what the feed resolved to at the moment the tool ran, which is exactly the determinism D6 exists
-    /// to protect. Every offender is named, and the refusal happens before a byte is downloaded.
+    /// Pinned only: a request that names more than one version would make the artifact depend
+    /// on what the feed resolved to at the moment the tool ran, which is exactly the determinism a restored artifact
+    /// must keep. Every offender is named, and the refusal happens before a byte is downloaded.
     /// </summary>
     [Fact]
     public void A_request_that_names_more_than_one_version_is_refused_before_anything_is_written()
@@ -144,7 +144,7 @@ public sealed class NuplaneRestoreCliTests : IDisposable
     /// refused instead, naming every feed at fault.
     /// </summary>
     /// <remarks>
-    /// The second half is D7's rule applied to the other kind of secret this tool can now see: the
+    /// The second half is the connection rule applied to the other kind of secret this tool can now see: the
     /// referenced environment variable's <em>name</em> is configured in the host's <c>appsettings.json</c>,
     /// which only the worker reads, so a sentinel embedded in it must appear on neither stream. What it
     /// deliberately does not cover is a credential <em>value</em>, which never exists on this path at all —
@@ -242,7 +242,7 @@ public sealed class NuplaneRestoreCliTests : IDisposable
     }
 
     /// <summary>
-    /// The store lock is the whole of the running-host defense (decision 6): every reconcile cycle, a
+    /// The store lock is the whole of the running-host defense: every reconcile cycle, a
     /// host's and a restore's alike, holds an exclusive handle on a file beside the state file, so a
     /// restore that cannot take it does nothing rather than becoming a second writer. This holds that exact
     /// handle the way <c>StoreLock</c> does — <c>FileShare.None</c> on <c>&lt;state file&gt;.lock</c>.
@@ -283,7 +283,7 @@ public sealed class NuplaneRestoreCliTests : IDisposable
     }
 
     /// <summary>
-    /// "Anything less than the whole set is a refusal" (FR-086): a package the feed pins but cannot actually
+    /// "Anything less than the whole set is a refusal": a package the feed pins but cannot actually
     /// hand over degrades the cycle, and a degraded cycle is refused rather than scripted from, the same as
     /// a skipped one. This is a directory feed's own failure mode, not a network one, so it needs no remote
     /// service to reach — the pinned <c>.nupkg</c> the feed indexes is unreadable, which is what a package a
@@ -357,7 +357,7 @@ internal sealed class RestoreHost : IDisposable
 
     /// <summary>
     /// Writes the host's own <c>appsettings.json</c>, carrying one or more feed declarations and, when given,
-    /// a <c>Nuplane:Capabilities</c> section (the shape spec 172 D3 defines) and a
+    /// a <c>Nuplane:Capabilities</c> section (the shape defines) and a
     /// <c>Nuplane:HostProvidedPackages</c> list — each written verbatim rather than through a helper, so a
     /// test reads as the operator's file.
     /// </summary>
@@ -391,7 +391,7 @@ internal sealed class RestoreHost : IDisposable
         Pack(packageId, version, [typeof(WidgetsDbContext).Assembly.Location], capabilities: null, (dependencyId, versionRange));
 
     /// <summary>
-    /// The same module packed the way a real EF module package ships since spec 172 FR-001: with a
+    /// The same module packed the way a real EF module package ships: with a
     /// package-root <c>nuplane.json</c> declaring the <c>ef-provider</c> capability, one option per engine
     /// it can bind, each pinned to the version this repository builds against.
     /// </summary>
@@ -452,7 +452,7 @@ internal sealed class RestoreHost : IDisposable
     }
 
     /// <summary>
-    /// The declaration every EF module package ships (spec 172 FR-001), in the fixture module's own copy:
+    /// The declaration every EF module package ships, in the fixture module's own copy:
     /// schema 2, one capability, one option per engine, each carrying that engine's package id and the exact
     /// single-point version this repository pins.
     /// </summary>

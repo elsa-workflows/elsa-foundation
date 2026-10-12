@@ -170,7 +170,7 @@ public sealed class TaskExecutor(
     /// <summary>
     /// Whether the schema requirements <paramref name="taskType"/> declares are met here, asked before any lock is taken. A
     /// shell that composes no dormancy check has observed nothing, so a declared requirement is unmet there, never assumed
-    /// met (spec 182, FR-003): the task is skipped, with a warning, because it can never run in that composition.
+    /// met: the task is skipped, with a warning, because it can never run in that composition.
     /// </summary>
     private async ValueTask<bool> IsAvailableAsync(Type taskType, CancellationToken cancellationToken)
     {

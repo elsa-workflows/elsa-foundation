@@ -4,14 +4,14 @@ namespace Elsa.Cli.Worker;
 public sealed record InstalledPackage(string Id, string Version, string InstallPath, string FeedName, DateTimeOffset InstalledAtUtc);
 
 /// <summary>
-/// The completion-marker probe for a <c>--packages &lt;dir&gt;</c> root that carries no state file (FR-006).
+/// The completion-marker probe for a <c>--packages &lt;dir&gt;</c> root that carries no state file.
 /// Nuplane's install layout is <c>&lt;root&gt;/&lt;feed&gt;/&lt;packageId&gt;/&lt;version&gt;/</c>, a raw
 /// extracted package marked complete by a <c>.nuplane-ready</c> file, staged through a <c>.tmp</c> directory
 /// that is not part of the installed set.
 /// </summary>
 /// <remarks>
-/// This is a directory scan, not a second implementation of Nuplane's loader or of its state-file format
-/// (ADR 0076 D12): what it produces is handed to Nuplane's own entry point to load. The two rules it keeps
+/// This is a directory scan, not a second implementation of Nuplane's loader or of its state-file format:
+/// what it produces is handed to Nuplane's own entry point to load. The two rules it keeps
 /// are the ones that decide whether a package exists at all — an extraction that never completed carries no
 /// marker and is treated as not installed rather than as a corrupt one, and a staging directory is skipped
 /// rather than read as a feed.

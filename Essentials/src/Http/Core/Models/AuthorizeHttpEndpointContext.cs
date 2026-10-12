@@ -3,7 +3,7 @@ using Microsoft.AspNetCore.Http;
 namespace Elsa.Http.Core.Models;
 
 /// <summary>
-/// Represents the context for authorizing an inbound HTTP endpoint request (spec 089 sub-unit C).
+/// Represents the context for authorizing an inbound HTTP endpoint request.
 /// </summary>
 /// <remarks>
 /// Carries only what the request middleware can supply for a single-definition claimant: the live

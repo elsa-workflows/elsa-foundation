@@ -1,9 +1,9 @@
 namespace Elsa.Versioning.Calculator.Tests;
 
 /// <summary>
-/// This repository's own root build files, as the calculator reads them. Every package reads them (FR-004), so an
+/// This repository's own root build files, as the calculator reads them. Every package reads them, so an
 /// import in them the calculator cannot resolve would stop every computation, and an item it cannot resolve would be
-/// taken to name every file, making every project's Markdown package-affecting (FR-002a). <c>PackageVersioning.props</c>
+/// taken to name every file, making every project's Markdown package-affecting. <c>PackageVersioning.props</c>
 /// is the file most likely to grow one: its pack targets build item lists, and they must do it through task outputs
 /// and metadata updates rather than an <c>Include</c> spelled with a property.
 /// </summary>

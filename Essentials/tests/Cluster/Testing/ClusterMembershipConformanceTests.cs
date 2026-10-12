@@ -7,16 +7,16 @@ using Xunit;
 namespace Elsa.Cluster.Testing;
 
 /// <summary>
-/// The provider-neutral cluster membership conformance suite (spec 183, FR-044). A provider is supported only once a
-/// test class deriving from this one, with the provider's fixture, passes (ADR 0078). Each test is named after the
+/// The provider-neutral cluster membership conformance suite. A provider is supported only once a
+/// test class deriving from this one, with the provider's fixture, passes. Each test is named after the
 /// requirement it proves, so a failure names exactly which one broke.
 /// </summary>
 /// <remarks>
 /// <para>
-/// The membership tier (FR-045 to FR-055, with FR-004b, FR-011 and FR-023 beside them) proves the semantics of the
-/// fleet view. The invariant tier (FR-056 and FR-058, with FR-001, FR-003a and FR-017 behind invariant 1) proves ADR
-/// 0078's invariants. FR-057 and FR-059 prove invariants 2 and 4 over the distributed runtime composed on the provider;
-/// they join this suite when placement consumes membership (B7, #2103).
+/// The membership tier proves the semantics of the fleet view. The invariant tier proves the membership invariants,
+/// starting from one active provider per host. Two of them, the commit fence and durable delivery of routed work, are
+/// proved over the distributed runtime composed on the provider; they join this suite when placement consumes
+/// membership (#2103).
 /// </para>
 /// <para>
 /// A test that needs more than one member reports itself not applicable for a cluster of one.
@@ -35,9 +35,9 @@ public abstract partial class ClusterMembershipConformanceTests(IClusterMembersh
 
     /// <summary>
     /// An observer clock offset that stays within the skew allowance of the boundary <see cref="KillAndAdvanceToDisplaceableAsync"/>
-    /// advances to: at that boundary, a restart may displace the killed member (FR-004a: only a non-live earlier
+    /// advances to: at that boundary, a restart may displace the killed member (only a non-live earlier
     /// incarnation may be displaced), while an observer running this far behind still counts it live, within the skew
-    /// allowance the framework already tolerates (FR-050).
+    /// allowance the framework already tolerates.
     /// </summary>
     protected TimeSpan DisplacedButStillLiveObserverOffset => -Timings.SkewAllowance;
 
@@ -46,9 +46,9 @@ public abstract partial class ClusterMembershipConformanceTests(IClusterMembersh
 
     /// <summary>
     /// Kills <paramref name="member"/> and advances every clock until <paramref name="reader"/> is exactly at its own
-    /// perceived expiry boundary for it (FR-006). At that instant a restart under the same host id may displace it
-    /// (FR-004a), and, because <paramref name="reader"/> runs <see cref="DisplacedButStillLiveObserverOffset"/> behind,
-    /// it still counts the about-to-be-displaced incarnation live (FR-050). Deterministic regardless of where the
+    /// perceived expiry boundary for it. At that instant a restart under the same host id may displace it,
+    /// and, because <paramref name="reader"/> runs <see cref="DisplacedButStillLiveObserverOffset"/> behind,
+    /// it still counts the about-to-be-displaced incarnation live. Deterministic regardless of where the
     /// fixture's heartbeat schedule happens to land, unlike advancing by a fixed guessed delay.
     /// </summary>
     protected async Task KillAndAdvanceToDisplaceableAsync(IConformanceMember reader, IConformanceMember member)

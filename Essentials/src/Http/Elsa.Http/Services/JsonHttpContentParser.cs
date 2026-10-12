@@ -35,7 +35,7 @@ internal sealed class JsonHttpContentParser(IObjectConverter objectConverter, IP
             return payloadSerializer.Deserialize(json, returnType);
         }
 
-        // Dynamic (Any) payload: the canonical runtime representation is a mutable JsonNode (ADR 0036).
+        // Dynamic (Any) payload: the canonical runtime representation is a mutable JsonNode.
         return JsonNode.Parse(json)!;
     }
 }

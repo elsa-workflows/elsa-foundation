@@ -5,14 +5,14 @@ using Elsa.Cluster.Core.Models;
 namespace Elsa.Cluster.EntityFrameworkCore.Stores;
 
 /// <summary>
-/// How a member report is stored: named sections, readability (spec 183) and runnability (spec 184), each an explicit
+/// How a member report is stored: named sections, readability and runnability, each an explicit
 /// document shape, so the stored form never follows a model type's shape by accident.
 /// </summary>
 /// <remarks>
 /// Reading is strict on purpose. A report with a member, a section or an entry field this build does not know was
 /// written by a provider version that says something this one cannot interpret, and ignoring the part it cannot read
 /// could credit the member with more than it reported. Such a report reads as <see langword="null"/>, which the reader
-/// returns as <see cref="MemberReport.Unknown"/>: counted, reading nothing (spec 183, FR-012). A report that lacks an
+/// returns as <see cref="MemberReport.Unknown"/>: counted, reading nothing. A report that lacks an
 /// entry field reads the same way: every writer writes every field, null included, so a missing one was not written by
 /// this envelope, and reading it as its default would credit the member with a claim it never made.
 /// </remarks>
@@ -64,8 +64,8 @@ internal static class MemberReportJson
     private static IEnumerable<T> Elements<T>(IEnumerable<T?> elements) where T : class =>
         elements.Select(element => element ?? throw new JsonException("A stored member report holds a null list element."));
 
-    /// <summary>Both sections, each <see langword="null"/> when the member has no source for it (spec 183, FR-014; spec 184,
-    /// FR-008). Each is written, null included, so a document without one was not written by this envelope.</summary>
+    /// <summary>Both sections, each <see langword="null"/> when the member has no source for it.
+    /// Each is written, null included, so a document without one was not written by this envelope.</summary>
     private sealed record ReportDocument(ReadabilityDocument? Readability, RunnabilityDocument? Runnability);
 
     private sealed record ReadabilityDocument(IReadOnlyList<EntryDocument> Entries);

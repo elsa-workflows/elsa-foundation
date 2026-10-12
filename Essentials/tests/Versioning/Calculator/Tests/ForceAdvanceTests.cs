@@ -3,7 +3,7 @@ using Elsa.Versioning.Calculator.Tests.Support;
 namespace Elsa.Versioning.Calculator.Tests;
 
 /// <summary>
-/// Spec 150 FR-003's force-advance: packages named at publish time advance although no input changed, each recording
+/// The force-advance: packages named at publish time advance although no input changed, each recording
 /// why, and every rule and gate holds for them as for a changed package.
 /// </summary>
 public sealed class ForceAdvanceTests : SyntheticHistory
@@ -35,7 +35,7 @@ public sealed class ForceAdvanceTests : SyntheticHistory
         Assert.Equal(["src/Tasks/Scheduler.cs (changed)", ForcedAdvance.ReasonPrefix + Reason], computation["Elsa.Tasks"].Reasons);
     }
 
-    /// <summary>Forcing a Line A member moves the line as one (FR-002), and a tool carrying a forced package moves with it.</summary>
+    /// <summary>Forcing a Line A member moves the line as one, and a tool carrying a forced package moves with it.</summary>
     [Fact]
     public void A_forced_package_moves_with_the_rules_a_changed_one_does()
     {
@@ -46,7 +46,7 @@ public sealed class ForceAdvanceTests : SyntheticHistory
         Assert.Equal(["carries Elsa.Http, which advances; a tool package holds the builds of what it references"], computation["dotnet-elsa"].Reasons);
     }
 
-    /// <summary>FR-012: forcing a package never lets it publish at or below its last published version.</summary>
+    /// <summary>Forcing a package never lets it publish at or below its last published version.</summary>
     [Fact]
     public void The_monotonicity_gate_holds_for_a_forced_package()
     {

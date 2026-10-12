@@ -11,7 +11,7 @@ namespace Elsa.Modularity.EntityFramework;
 
 /// <summary>
 /// Refuses to enable a feature whose EF module's schema is behind, or whose database holds a finalized schema
-/// version this host cannot read (spec 171 FR-062, FR-067–FR-069, ADR 0076 D9; spec 181, FR-016). It maps a
+/// version this host cannot read. It maps a
 /// feature to its module(s) through <c>[UsesEfModule]</c>, resolves that module's provider and connection from the
 /// feature's own configuration, and — under <c>Elsa:Persistence:EntityFramework:Migrate:Policy=Validate</c> — asks
 /// the module's own history table whether anything is outstanding. Under both policies it then reads the finalization
@@ -19,7 +19,7 @@ namespace Elsa.Modularity.EntityFramework;
 /// host's readable set, exactly as the module's gate would refuse it at Prepare. Under <c>AutoMigrate</c> it opens
 /// the database for that record alone, and a record table that does not exist yet has finalized nothing, so it passes.
 /// Under both policies it also refuses a feature whose module has a pending contracting migration its schema family is
-/// not yet finalized for (spec 185, FR-025), since the module's migrator would refuse that batch at Prepare. That is the
+/// not yet finalized for, since the module's migrator would refuse that batch at Prepare. That is the
 /// one thing that reads the history table under <c>AutoMigrate</c>, and only once such a migration's family is found
 /// below its version: a module that has no contracting migration, or whose families have reached their versions, is
 /// judged as before.
@@ -28,18 +28,18 @@ namespace Elsa.Modularity.EntityFramework;
 /// <para>
 /// Every refusal names the feature and the module and nothing else. The request this guard reads has had
 /// its secret settings restored to their real values before validation, so it is holding live connection
-/// strings (FR-061); the one realistic way one reaches an operator is a driver's own exception message
+/// strings; the one realistic way one reaches an operator is a driver's own exception message
 /// echoing it back. The two failure paths that can carry one treat it differently: a database that cannot
 /// be reached or read contributes only its exception <em>type</em> to the refusal — that message is
 /// dropped outright, not trusted to a redaction pattern — while a connection or schema this build could
 /// not resolve contributes its own message, which never holds anything but configuration key names, but is
-/// still redacted before it travels (FR-061 declines to assume "this one cannot leak"). This type writes no
+/// still redacted before it travels, rather than assuming "this one cannot leak". This type writes no
 /// log line at all, for the same reason.
 /// </para>
 /// <para>
 /// It checks pending migrations, not post-migration actions. A declared action is audited by
-/// <c>EfModuleMigrator</c> under both policies (FR-056), and auditing one here would mean reading more than
-/// the finalization record under <c>AutoMigrate</c> — exactly what FR-069 forbids. A module that declares
+/// <c>EfModuleMigrator</c> under both policies, and auditing one here would mean reading more than
+/// the finalization record under <c>AutoMigrate</c>, which this guard must not do. A module that declares
 /// actions has <c>post-migrate</c> named in its refusal instead, so the operator is pointed at the whole path
 /// rather than only its first step.
 /// </para>
@@ -140,7 +140,7 @@ public sealed class EfPendingMigrationActivationGuard(IServiceProvider services,
     /// what this guard probes. Ordinarily that is the feature itself. A feature with no <c>Provider</c>
     /// setting of its own — <c>WorkflowsDashboardEntityFrameworkCoreFeature</c> reads two modules' contexts
     /// and registers neither module's migrations — is evaluated through whichever enabled features in the
-    /// same shell do register them (FR-065). When none is enabled, this yields nothing and the guard passes
+    /// same shell do register them. When none is enabled, this yields nothing and the guard passes
     /// for that module: the feature's own startup check is what refuses a dashboard whose backends are not
     /// EF-owned, and it can say so with the shell's whole composition in view.
     /// </summary>
@@ -168,7 +168,7 @@ public sealed class EfPendingMigrationActivationGuard(IServiceProvider services,
         EfMigratePolicy policy,
         CancellationToken cancellationToken)
     {
-        // An engine this host cannot bind is a refusal whatever the policy says (FR-069): the feature
+        // An engine this host cannot bind is a refusal whatever the policy says: the feature
         // cannot start on a provider that is not there, and finding that out opens no database.
         if (EfRelationalProviderBinding.DescribeBindingFailure(settings.Provider) is { } binding)
             return new(Verdict.Unbindable, Redact(binding, settings));
@@ -196,7 +196,7 @@ public sealed class EfPendingMigrationActivationGuard(IServiceProvider services,
         {
             // These are this build's own messages, naming a connection's *name* or a schema rather than a
             // connection string — and redacted all the same, because "this one cannot leak" is exactly the
-            // assumption FR-061 declines to make.
+            // assumption this guard declines to make.
             return new(Verdict.Unresolved, Redact(failure.Message, settings));
         }
 
@@ -204,9 +204,9 @@ public sealed class EfPendingMigrationActivationGuard(IServiceProvider services,
         {
             await using var context = CreateContext(descriptor, contextType, settings.Provider, connection, schema);
             // Under AutoMigrate the module's own migrator brings the schema current at Prepare, so pending
-            // migrations are nothing to refuse and the history table is not read (FR-068) — except to learn whether a
+            // migrations are nothing to refuse and the history table is not read — except to learn whether a
             // contracting migration its family is not yet finalized for is pending, which the migrator would refuse at
-            // Prepare too (spec 185, FR-025). Under Validate the same refusal comes from EfDatabaseMigrator.
+            // Prepare too. Under Validate the same refusal comes from EfDatabaseMigrator.
             if (policy is EfMigratePolicy.Validate)
                 await EfDatabaseMigrator.ApplyAsync(
                     context,
@@ -216,7 +216,7 @@ public sealed class EfPendingMigrationActivationGuard(IServiceProvider services,
             else if (await EfContractingMigrationCheck.FindRefusalAsync(context, pending: null, cancellationToken) is { } withheld)
                 return new(Verdict.ContractingWithheld, withheld.Message);
             // Under both policies: a family finalized at a version this host cannot read would be refused at Prepare,
-            // so saving the request now would be the half-applied state this guard exists to prevent (spec 181, FR-016).
+            // so saving the request now would be the half-applied state this guard exists to prevent.
             var families = EfSchemaModuleFamilies.For(descriptor.Name, descriptor.Assembly);
             return await EfSchemaFinalizationCheck.FindRefusalAsync(context, families, cancellationToken) is { } refusal
                 ? new(Verdict.Unfinalizable, refusal.Message)
@@ -225,7 +225,7 @@ public sealed class EfPendingMigrationActivationGuard(IServiceProvider services,
         catch (EfContractingMigrationRefusedException withheld)
         {
             // Pending, but not appliable yet either, so it is not reported as Pending: that names an `apply` which
-            // would refuse it too. Its message is built from names and version labels alone (FR-061).
+            // would refuse it too. Its message is built from names and version labels alone.
             return new(Verdict.ContractingWithheld, withheld.Message);
         }
         catch (EfPendingMigrationsException)
@@ -238,7 +238,7 @@ public sealed class EfPendingMigrationActivationGuard(IServiceProvider services,
         }
         catch (Exception failure) when (failure is not OperationCanceledException)
         {
-            // Fail closed (FR-069): a database that cannot be opened, or whose history table cannot be
+            // Fail closed: a database that cannot be opened, or whose history table cannot be
             // read, is treated as having every migration pending rather than optimistically as current.
             // Only the failure's type travels into the refusal; a driver's message is the one realistic
             // path for a credential to reach an operator, and no redaction pattern is proof that it did not.
@@ -307,18 +307,18 @@ public sealed class EfPendingMigrationActivationGuard(IServiceProvider services,
         };
     }
 
-    /// <summary>The exact command(s) that bring <paramref name="descriptor"/>'s schema current, in ADR 0076 D9's order.</summary>
+    /// <summary>The exact command(s) that bring <paramref name="descriptor"/>'s schema current, in the order they must run.</summary>
     private static string Commands(EfModuleDescriptor descriptor, string provider)
     {
         var named = EfRelationalProviderBinding.Select(provider, descriptor.Name, "Sqlite", "SqlServer", "PostgreSql", "MySql");
-        // D5: EF cannot emit an idempotent script for SQLite, so `script` refuses that provider outright.
+        // EF cannot emit an idempotent script for SQLite, so `script` refuses that provider outright.
         // Naming it here would name a command that cannot run; `apply` is the path for a SQLite deployment.
         var bringCurrent = EfRelationalProviderBinding.Normalize(provider) == "sqlite"
             ? EfPersistenceCommand.Apply(host: null, descriptor.Name, named)
             : EfPersistenceCommand.Script(host: null, descriptor.Name, named);
 
         // A module that declares a post-migration action is not current until that has run too, and only
-        // `post-migrate` ever runs one (D8) — so the whole path is named rather than only its first step.
+        // `post-migrate` ever runs one — so the whole path is named rather than only its first step.
         return descriptor.PostMigration.Count == 0
             ? bringCurrent
             : $"{bringCurrent}{Environment.NewLine}  {EfPostMigrationActions.CommandFor(descriptor.Name, named)}";
@@ -344,12 +344,12 @@ public sealed class EfPendingMigrationActivationGuard(IServiceProvider services,
         Unsupported,
         Unbindable,
 
-        /// <summary>A schema family's finalized or completion version is one this host cannot read (spec 181, FR-016).</summary>
+        /// <summary>A schema family's finalized or completion version is one this host cannot read.</summary>
         Unfinalizable,
 
         /// <summary>
         /// A pending contracting migration's schema family is not yet finalized at the version its opt-out names, so the
-        /// module's pending batch would be refused at Prepare (spec 185, FR-025).
+        /// module's pending batch would be refused at Prepare.
         /// </summary>
         ContractingWithheld
     }
@@ -364,7 +364,7 @@ public sealed class EfPendingMigrationActivationGuard(IServiceProvider services,
     {
         public static Settings From(JsonElement configuration) =>
             new(
-                // FR-037: a feature that declares the setting and leaves it unset is its own default, Sqlite.
+                // A feature that declares the setting and leaves it unset is its own default, Sqlite.
                 Read(configuration, ProviderSetting) is { } provider && !string.IsNullOrWhiteSpace(provider)
                     ? provider
                     : EfProviderAgreement.UnsetProvider,

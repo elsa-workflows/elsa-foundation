@@ -13,14 +13,14 @@ namespace Elsa.Cluster.Readability;
 public static class EfSchemaReadabilityServiceCollectionExtensions
 {
     /// <summary>
-    /// Reports the schema families this host has loaded through its cluster membership (spec 183, FR-019 to FR-022).
-    /// Compose it once, on the host container and never per shell, so every shell publishes the same report (FR-017;
-    /// Decisions, Q20). It also registers the in-process membership default unless a provider is already registered, so
-    /// a host that is not clustered reports its readability without composing anything else, while a durable provider
-    /// composed in either order replaces the default and reads the same source.
+    /// Reports the schema families this host has loaded through its cluster membership.
+    /// Compose it once, on the host container and never per shell, so every shell publishes the same report. It also
+    /// registers the in-process membership default unless a provider is already registered, so a host that is not
+    /// clustered reports its readability without composing anything else, while a durable provider composed in either
+    /// order replaces the default and reads the same source.
     /// </summary>
     /// <remarks>
-    /// It is also the membership side of the schema finalization gate (spec 181): every EF module's gate counts the fleet
+    /// It is also the membership side of the schema finalization gate: every EF module's gate counts the fleet
     /// through <see cref="ClusterSchemaFleet"/>, and records what it read in the host's one
     /// <see cref="EfSchemaFinalizationObservations"/>, registered here by instance so every shell container built from
     /// copies of the host's registrations shares it, and this report names what the host's gates read. A host that
@@ -69,7 +69,7 @@ public static class EfSchemaReadabilityServiceCollectionExtensions
     }
 
     /// <summary>
-    /// Composes the shared dormancy check over what this container's EF finalization gates observe (spec 182, FR-003), so
+    /// Composes the shared dormancy check over what this container's EF finalization gates observe, so
     /// a feature that needs data only a newer schema version holds stays dormant until its host observes that version as
     /// finalized. <see cref="AddEfSchemaReadability"/> composes it; a host that composes no membership calls this alone.
     /// </summary>

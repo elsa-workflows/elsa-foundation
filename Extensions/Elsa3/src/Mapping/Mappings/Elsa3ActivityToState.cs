@@ -75,11 +75,11 @@ public sealed class Elsa3ActivityToState(IActivityDefinitionLookup activityLooku
         }
 
         return mapped[source];
-        // NOTE (Unit C, 2026-05-28): Elsa3 per-activity designer position/size in
+        // NOTE: Elsa3 per-activity designer position/size in
         // source.Metadata.Designer is no longer carried into ActivityNode — display metadata
-        // now lives on WorkflowDefinitionVersionLayout sibling as DesignMetadataRecord (§E2.9.2).
+        // now lives on WorkflowDefinitionVersionLayout sibling as DesignMetadataRecord.
         // Wiring the importer to populate the layout sibling alongside the version is a
-        // separate task — flagged in the Unit C follow-up as Elsa3-import layout-carryover.
+        // separate task.
     }
 
     /// <summary>
@@ -154,7 +154,7 @@ public sealed class Elsa3ActivityToState(IActivityDefinitionLookup activityLooku
     {
         var activity = await activityLookup.GetDefinition(source.Type, cancellationToken);
         var versions = await activityLookup.ListVersions(activity.Id, cancellationToken);
-        // Elsa-3 carries an int version; map it onto a semver string (FR-007: n → "n.0.0").
+        // Elsa-3 carries an int version; map it onto a semver string (n → "n.0.0").
         var sourceSemVer = $"{source.Version ?? 0}.0.0";
         var version = versions.FirstOrDefault(x => x.Version == sourceSemVer)
             ?? throw new ArgumentException($"Activity '{source.Type}' does not have version '{sourceSemVer}'");

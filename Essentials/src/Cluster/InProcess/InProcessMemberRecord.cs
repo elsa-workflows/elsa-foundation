@@ -11,11 +11,11 @@ namespace Elsa.Cluster.InProcess;
 /// <para>
 /// A shell container is built from copies of the host's registrations, so each shell constructs its own
 /// <see cref="InProcessClusterMembership"/>. Keeping the member here, once per process, is what makes every shell see
-/// the same incarnation and the same report (FR-017). The incarnation is minted when the process first asks for the
-/// host id, so it is new each time the process starts (FR-004).
+/// the same incarnation and the same report. The incarnation is minted when the process first asks for the
+/// host id, so it is new each time the process starts.
 /// </para>
 /// <para>
-/// The <see cref="Records"/> dictionary is process-wide by design (FR-017: one member per process, shared by every
+/// The <see cref="Records"/> dictionary is process-wide by design (one member per process, shared by every
 /// shell that host id resolves to). It is not scoped to a container or a shell. Two logical hosts running in the same
 /// process MUST be configured with distinct host ids; giving them the same one makes them share one incarnation and
 /// one report here, which is indistinguishable from a bug.
@@ -46,7 +46,7 @@ internal sealed class InProcessMemberRecord
     }
 
     /// <summary>Records a report. The revision rises only when the report differs from the one before it, in which
-    /// case the change token from <see cref="GetChangeToken"/> fires (FR-013).</summary>
+    /// case the change token from <see cref="GetChangeToken"/> fires.</summary>
     public PublishedMemberReport Publish(MemberReport report)
     {
         lock (_gate)
@@ -63,7 +63,7 @@ internal sealed class InProcessMemberRecord
         }
     }
 
-    /// <summary>A change token that completes once, the next time this member's published report changes (FR-013).
+    /// <summary>A change token that completes once, the next time this member's published report changes.
     /// Call this again after it completes to observe the next change.</summary>
     public IChangeToken GetChangeToken()
     {

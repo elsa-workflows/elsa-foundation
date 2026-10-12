@@ -14,7 +14,7 @@ public sealed class ProcessExitCodeCollection
 }
 
 /// <summary>
-/// Spec 183, FR-007 and its 2026-10-01 note: a host app that runs its host with
+/// A host app that runs its host with
 /// <see cref="ClusterMembershipHostExtensions.RunWithMembershipExitCode"/> ends with exit code 1 once the membership
 /// provider recorded that it stopped the host, and leaves the exit code as it was otherwise. The exit code is the test
 /// process's own, so the test restores it.

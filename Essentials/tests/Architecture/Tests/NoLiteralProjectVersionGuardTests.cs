@@ -6,15 +6,15 @@ namespace Elsa.Architecture.Tests;
 
 /// <summary>
 /// No <c>.csproj</c> under <c>src/</c> may hand-edit a property that determines the package version.
-/// ADR 0067 says no <c>&lt;Version&gt;</c> element is hand-edited. In the .NET SDK, <c>Version</c>
+/// No <c>&lt;Version&gt;</c> element is hand-edited. In the .NET SDK, <c>Version</c>
 /// defaults to <c>VersionPrefix[-VersionSuffix]</c>, and the <c>PackageVersion</c> property defaults
 /// to <c>Version</c>; a literal in any of those three is a hand-edited package version by another
 /// name, which is why they're covered too. A <c>&lt;PackageVersion Include="…"&gt;</c> item is central
 /// package management (it belongs in <c>Directory.Packages.props</c>, not a csproj) and is never
 /// flagged.
 /// <para>
-/// This guard scans project files under <c>src/</c>. Spec 150 FR-010 names shared MSBuild properties
-/// as the one place for major and minor — <c>ElsaVersion</c> and <c>ElsaContractsVersion</c> in
+/// This guard scans project files under <c>src/</c>. Shared MSBuild properties are
+/// the one place for major and minor — <c>ElsaVersion</c> and <c>ElsaContractsVersion</c> in
 /// <c>VersionLines.props</c> — so shared build files are deliberately not scanned here, and a project that
 /// set either of those would be hand-editing its package version's major and minor, so they are forbidden
 /// here too. <c>PackageVersioning.props</c> derives each package's version from them, or from the version
@@ -29,8 +29,8 @@ namespace Elsa.Architecture.Tests;
 /// assembly version of every artifact those produce. #2076 removed the eighteen <c>&lt;Version&gt;</c>
 /// elements that had accumulated; like every other project, those projects now take the package version
 /// <c>PackageVersioning.props</c> derives, and the SDK's default assembly version outside a computed build.
-/// This guard keeps the count at zero. FR-005's other clause — no global <c>/p:Version</c> from the packaging
-/// workflow — was met by #2082 and is guarded by <c>PackagesWorkflowTests</c> in the publisher's tests.
+/// This guard keeps the count at zero. The rule's other clause, no global <c>/p:Version</c> from the packaging
+/// workflow, was met by #2082 and is guarded by <c>PackagesWorkflowTests</c> in the publisher's tests.
 /// </para>
 /// </summary>
 public sealed class NoLiteralProjectVersionGuardTests

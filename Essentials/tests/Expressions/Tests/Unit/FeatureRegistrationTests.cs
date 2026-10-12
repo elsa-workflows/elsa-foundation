@@ -9,7 +9,7 @@ using Xunit;
 namespace Elsa.Expressions.Tests.Unit;
 
 /// <summary>
-/// §2.23.1 registration tests: the new type-descriptor provider and the registry-seeding startup task
+/// Registration tests: the new type-descriptor provider and the registry-seeding startup task
 /// are wired by their owning features and resolve from DI.
 /// </summary>
 public sealed class FeatureRegistrationTests
@@ -31,7 +31,7 @@ public sealed class FeatureRegistrationTests
         using var provider = services.BuildServiceProvider();
         var catalog = provider.GetRequiredService<IVariableTypeDescriptorCatalog>();
 
-        // TS-1 (§2.23.1): resolvability + behaviour, not concrete-type pinning of the catalog implementation.
+        // Resolvability + behaviour, not concrete-type pinning of the catalog implementation.
         Assert.Contains(catalog.GetDescriptors(), d => d.Alias == "String");
     }
 

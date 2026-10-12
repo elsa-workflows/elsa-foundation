@@ -3,7 +3,7 @@ using CShells.Hosting;
 namespace Elsa.Workbench.Boot;
 
 /// <summary>
-/// Host-level hosted service that eagerly activates the configured shell(s) at boot (spec 132, program unit 4).
+/// Host-level hosted service that eagerly activates the configured shell(s) at boot.
 ///
 /// It is registered only when <c>Elsa:Boot:EagerShellActivation:Enabled</c> is set, so a host that leaves the
 /// switch off never constructs it. When enabled, <see cref="StartAsync"/> resolves the target shells and drives

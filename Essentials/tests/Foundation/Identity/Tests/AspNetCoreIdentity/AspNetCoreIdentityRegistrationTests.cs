@@ -37,7 +37,7 @@ public sealed class AspNetCoreIdentityRegistrationTests : IAsyncDisposable
             x => x is EfCoreIdentitySeeder);
     }
 
-    // Kept beside the composition test (§2.23.1): conditional registration, no seeder outside development without a configured admin.
+    // Kept beside the composition test: conditional registration, no seeder outside development without a configured admin.
     [Fact]
     public void Non_Dev_Does_Not_Register_The_Seeder()
     {
@@ -49,7 +49,7 @@ public sealed class AspNetCoreIdentityRegistrationTests : IAsyncDisposable
         Assert.DoesNotContain(provider.GetServices<IShellInitializer>(), x => x is EfCoreIdentitySeeder);
     }
 
-    // Kept beside the composition test (§2.23.1): conditional registration, a configured admin registers the seeder outside development.
+    // Kept beside the composition test: conditional registration, a configured admin registers the seeder outside development.
     [Fact]
     public void Configured_Initial_Admin_Registers_Seeder_When_Not_Dev()
     {

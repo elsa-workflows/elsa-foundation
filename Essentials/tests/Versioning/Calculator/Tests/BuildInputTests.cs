@@ -2,11 +2,11 @@ using Elsa.Versioning.Calculator.Tests.Support;
 
 namespace Elsa.Versioning.Calculator.Tests;
 
-/// <summary>Spec 150 US3, FR-003, FR-004 and SC-004: inputs that sit outside every project.</summary>
+/// <summary>Inputs that sit outside every project.</summary>
 public sealed class BuildInputTests : SyntheticHistory
 {
     /// <summary>
-    /// US3 scenario 1, SC-004: a third-party bump advances exactly the projects whose nuspec lists it — the one that
+    /// A third-party bump advances exactly the projects whose nuspec lists it — the one that
     /// references it, and the one that reaches it through that project, whose nuspec transitive pinning writes it into.
     /// </summary>
     [Fact]
@@ -30,7 +30,7 @@ public sealed class BuildInputTests : SyntheticHistory
         Assert.Empty(CommitAndCompute("Bump xunit").Affected);
     }
 
-    /// <summary>US3 scenario 3: comments and layout in <c>Directory.Packages.props</c> advance nothing.</summary>
+    /// <summary>Comments and layout in <c>Directory.Packages.props</c> advance nothing.</summary>
     [Fact]
     public void A_comment_or_layout_edit_to_central_packages_advances_nothing()
     {
@@ -41,7 +41,7 @@ public sealed class BuildInputTests : SyntheticHistory
         Assert.Empty(Compute(Repo.CommitAsIs("Reindent")).Affected);
     }
 
-    /// <summary>FR-004 for the rest of <c>Directory.Packages.props</c>: a setting there has no edge to be precise with.</summary>
+    /// <summary>The rest of <c>Directory.Packages.props</c>: a setting there has no edge to be precise with.</summary>
     [Fact]
     public void A_central_package_management_setting_advances_every_package()
     {
@@ -51,7 +51,7 @@ public sealed class BuildInputTests : SyntheticHistory
     }
 
     /// <summary>
-    /// US3 scenario 2, FR-004: a repository-wide build input advances every project, including one a root file imports
+    /// A repository-wide build input advances every project, including one a root file imports
     /// (<c>VersionLines.props</c>) and ones MSBuild or the SDK find by walking up (a nested <c>Directory.Build.props</c>,
     /// <c>global.json</c>).
     /// </summary>
@@ -92,8 +92,8 @@ public sealed class BuildInputTests : SyntheticHistory
     }
 
     /// <summary>
-    /// The line properties reach packages through the version-line rules, not as content of the file they sit in
-    /// (FR-010), so rearranging them within <c>VersionLines.props</c> advances nothing.
+    /// The line properties reach packages through the version-line rules, not as content of the file they sit in,
+    /// so rearranging them within <c>VersionLines.props</c> advances nothing.
     /// </summary>
     [Fact]
     public void Rearranging_the_version_line_properties_advances_nothing()

@@ -8,14 +8,14 @@ using Elsa.Persistence.Schema;
 namespace Elsa.Cluster.EntityFrameworkCore.Tests;
 
 /// <summary>
-/// A membership report is read through the family's chain (spec 180, FR-009), and an upcaster that fails on a readable
-/// report makes the entry uninterpretable rather than corrupt: spec 183, FR-012 takes precedence over spec 180, FR-009
-/// for membership. Uninterpretable is what <c>StoredMember</c> turns into a counted entry with
+/// A membership report is read through the family's chain, and an upcaster that fails on a readable
+/// report makes the entry uninterpretable rather than corrupt: for membership, a whole fleet view takes precedence over
+/// the usual corruption rule. Uninterpretable is what <c>StoredMember</c> turns into a counted entry with
 /// <see cref="MemberReport.Unknown"/>, as the store tests show for a report this build cannot parse.
 /// </summary>
 /// <remarks>
 /// Membership has only ever had one version, so its own chain cannot hold an older report. These tests drive
-/// <see cref="StoredMember.ReadReport"/>, the report read the store uses, directly over chains of their own (§2.23.3).
+/// <see cref="StoredMember.ReadReport"/>, the report read the store uses, directly over chains of their own.
 /// </remarks>
 public sealed class ClusterMembershipReportUpcastTests
 {

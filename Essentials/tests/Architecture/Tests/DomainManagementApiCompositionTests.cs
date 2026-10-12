@@ -330,7 +330,7 @@ public sealed class DomainManagementApiCompositionTests
                 typeof(FoundationIdentityAbstractionsFeature).Assembly,
                 typeof(ActivitiesDesignApiFeature).Assembly,
                 typeof(GraphActivitiesDesignFeature).Assembly,
-                // spec 145: the publish engine split moved the workflow-publish feature out of
+                // The publish engine split moved the workflow-publish feature out of
                 // WorkflowsPublishingApi into the endpoint-free WorkflowsPublishing engine, which both
                 // WorkflowsPublishingApi and GraphActivitiesDesign now DependsOn. Seed the engine and its
                 // transitive Runtime-triggers/Events feature assemblies so shell composition can discover them.

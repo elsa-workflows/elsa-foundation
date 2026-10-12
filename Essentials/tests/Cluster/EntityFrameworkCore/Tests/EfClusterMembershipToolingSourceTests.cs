@@ -9,7 +9,7 @@ using Elsa.Persistence.EntityFramework.Tooling;
 namespace Elsa.Cluster.EntityFrameworkCore.Tests;
 
 /// <summary>
-/// What <c>dotnet elsa persistence status</c> reads of the fleet (spec 181, FR-022): over a real membership table, two hosts
+/// What <c>dotnet elsa persistence status</c> reads of the fleet: over a real membership table, two hosts
 /// that read different versions of a family, the pending version names the host that cannot read it yet, with the versions
 /// it does read, and every member of the table is listed with what it reads. The members are the provider's own, so the
 /// table is what a running two-host cluster leaves.
@@ -62,7 +62,7 @@ public sealed class EfClusterMembershipToolingSourceTests : IAsyncDisposable
 
     /// <summary>
     /// A member that left is listed, and never counted; one whose entry this build cannot interpret is listed and blocks every
-    /// version, as it does the gate's own count (spec 183, FR-012).
+    /// version, as it does the gate's own count.
     /// </summary>
     [Fact]
     public async Task A_member_that_left_is_listed_but_blocks_nothing_and_an_uninterpretable_one_blocks_every_version()

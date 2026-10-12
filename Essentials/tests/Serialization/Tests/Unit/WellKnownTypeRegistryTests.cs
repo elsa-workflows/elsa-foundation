@@ -6,7 +6,7 @@ using Xunit;
 namespace Elsa.Serialization.Tests.Unit;
 
 /// <summary>
-/// FR-010..FR-013 / SC-004 (research D7): registration is fail-fast. Duplicate alias or duplicate type throws;
+/// Registration is fail-fast. Duplicate alias or duplicate type throws;
 /// bare non-primitive aliases are rejected; reserved primitive bare aliases and dotted module aliases register;
 /// and the nullable auto-registration never self-collides.
 /// </summary>
@@ -122,7 +122,7 @@ public sealed class WellKnownTypeRegistryTests
     [Fact]
     public void GetAliasOrDefault_UnregisteredNonPrimitive_ReturnsFullName_NotAssemblyQualified()
     {
-        // FR-004 / FR-004a: an unregistered non-primitive type yields its dotted FullName (the convention alias) —
+        // An unregistered non-primitive type yields its dotted FullName (the convention alias) —
         // NEVER an assembly-qualified name with a version. The call is pure: it does not register the type.
         var alias = _registry.GetAliasOrDefault(typeof(Uri));
 
@@ -151,7 +151,7 @@ public sealed class WellKnownTypeRegistryTests
     [Fact]
     public void GetTypeOrDefault_UnknownAlias_ReturnsObject_NoTypeGetTypeFallback()
     {
-        // FR-004a: even a syntactically valid assembly-qualified name must NOT resolve via Type.GetType.
+        // Even a syntactically valid assembly-qualified name must NOT resolve via Type.GetType.
         Assert.Equal(typeof(object), _registry.GetTypeOrDefault("System.Uri, System.Private.Uri"));
         Assert.False(_registry.TryGetTypeOrDefault("System.Uri, System.Private.Uri", out _));
     }

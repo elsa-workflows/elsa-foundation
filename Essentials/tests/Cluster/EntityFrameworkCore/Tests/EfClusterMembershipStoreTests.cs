@@ -74,7 +74,7 @@ public sealed class EfClusterMembershipStoreTests : IAsyncDisposable
     }
 
     /// <summary>
-    /// Runnability entries are held to the same strictness (spec 184, FR-008): a consumer with a field this build does not
+    /// Runnability entries are held to the same strictness: a consumer with a field this build does not
     /// know, an entry missing a field, a null consumer, and a report without the runnability section at all were not
     /// written by this envelope, and reading any of them in part could place work on a member that never said it can run
     /// it.
@@ -103,7 +103,7 @@ public sealed class EfClusterMembershipStoreTests : IAsyncDisposable
         AssertEveryFieldRoundTripped(published, Assert.Single((await SeenAsync(reader, Identity(subject)))!.Report.Readability!.Entries));
     }
 
-    /// <summary>The same for the runnability section, its entries and their consumers (spec 184, FR-008).</summary>
+    /// <summary>The same for the runnability section, its entries and their consumers.</summary>
     [Fact]
     public async Task Every_runnability_section_and_entry_field_round_trips_through_the_stored_report()
     {
@@ -136,7 +136,7 @@ public sealed class EfClusterMembershipStoreTests : IAsyncDisposable
     }
 
     /// <summary>
-    /// A family shared by no single EF module, as the finalization tables' is, has a null module (spec 180, FR-001). It
+    /// A family shared by no single EF module, as the finalization tables' is, has a null module. It
     /// must round-trip as null: refusing it would fail every publish of a host that has loaded one, and reading it as
     /// unknown would stop that host counting for every family.
     /// </summary>
@@ -168,7 +168,7 @@ public sealed class EfClusterMembershipStoreTests : IAsyncDisposable
         Assert.True((await CountingAsync(reader)).EveryConsideredMemberMatches);
     }
 
-    /// <summary>A row nothing can be said about fails the read loudly; leaving it out would be a partial view (FR-012).</summary>
+    /// <summary>A row nothing can be said about fails the read loudly; leaving it out would be a partial view.</summary>
     [Fact]
     public async Task A_row_whose_identity_cannot_be_formed_fails_the_fresh_read_instead_of_being_left_out()
     {
@@ -179,7 +179,7 @@ public sealed class EfClusterMembershipStoreTests : IAsyncDisposable
         Assert.IsType<ArgumentException>(failure.InnerException, exactMatch: false);
     }
 
-    /// <summary>FR-034: a provider failure leaves the store wrapped, and nothing it says names the connection.</summary>
+    /// <summary>A provider failure leaves the store wrapped, and nothing it says names the connection.</summary>
     [Fact]
     public async Task A_provider_failure_is_wrapped_at_the_store_boundary_and_names_no_connection()
     {
@@ -213,7 +213,7 @@ public sealed class EfClusterMembershipStoreTests : IAsyncDisposable
         Assert.Equal(MemberLapseReason.Displaced, member.Membership.GetLocalStanding().Lapse?.Reason);
     }
 
-    /// <summary>FR-027: every heartbeat republishes a changed report, so a change reaches the fleet without a publish.</summary>
+    /// <summary>Every heartbeat republishes a changed report, so a change reaches the fleet without a publish.</summary>
     [Fact]
     public async Task A_heartbeat_republishes_a_changed_report()
     {
@@ -229,7 +229,7 @@ public sealed class EfClusterMembershipStoreTests : IAsyncDisposable
         Assert.True(seen.ReportRevision > before);
     }
 
-    /// <summary>FR-010: a cached read may lag, by at most one heartbeat interval: the reader's next heartbeat refreshes it.</summary>
+    /// <summary>A cached read may lag, by at most one heartbeat interval: the reader's next heartbeat refreshes it.</summary>
     [Fact]
     public async Task A_cached_read_lags_by_at_most_one_heartbeat_interval()
     {

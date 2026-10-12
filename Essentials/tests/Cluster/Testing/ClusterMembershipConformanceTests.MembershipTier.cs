@@ -202,8 +202,8 @@ public abstract partial class ClusterMembershipConformanceTests
     }
 
     /// <summary>
-    /// The gap FR-004a and FR-004b close: a killed incarnation that is well past one heartbeat interval, but still
-    /// live by FR-006's own rule (heartbeat, expiry and skew), MUST NOT be displaceable yet. A reference store that
+    /// The gap the displacement rules close: a killed incarnation that is well past one heartbeat interval, but still
+    /// live by the liveness rule (heartbeat, expiry and skew), MUST NOT be displaceable yet. A reference store that
     /// checked only heartbeat interval and skew (rather than the full liveness rule) would let this join through.
     /// </summary>
     [SkippableFact]
@@ -215,8 +215,9 @@ public abstract partial class ClusterMembershipConformanceTests
         var identity = Identity(first);
         await first.KillAsync();
 
-        // Two heartbeat intervals safely exceed a heartbeat-interval-only threshold, and, because FR-006 requires the
-        // expiry period to be at least three heartbeat intervals, safely stay within the correct expiry+skew window.
+        // Two heartbeat intervals safely exceed a heartbeat-interval-only threshold, and, because the liveness rule
+        // requires the expiry period to be at least three heartbeat intervals, safely stay within the correct
+        // expiry+skew window.
         await Fixture.AdvanceAsync(Timings.HeartbeatInterval * 2);
         Assert.True((await SeenAsync(observer, identity))!.IsLive, "Test setup assumption: the member must still be live by FR-006 at this point.");
 
@@ -249,8 +250,8 @@ public abstract partial class ClusterMembershipConformanceTests
 
     /// <summary>
     /// A joiner refused throughout one full liveness window, with the incumbent renewing the whole time, is looking at
-    /// a live duplicate, not a crash to wait out; it MUST stop retrying and fail startup instead (FR-004b, FR-039,
-    /// #2097 review). Bite-proofed by reverting the escalation: a joiner that always throws the retryable refusal
+    /// a live duplicate, not a crash to wait out; it MUST stop retrying and fail startup instead (#2097
+    /// review). Bite-proofed by reverting the escalation: a joiner that always throws the retryable refusal
     /// leaves <c>terminal</c> null forever, and this test fails.
     /// </summary>
     [SkippableFact]

@@ -4,7 +4,7 @@ namespace Elsa.Http.Services;
 
 /// <summary>
 /// Orders endpoint route templates by descending specificity so a "first match wins" enumeration resolves
-/// overlapping templates deterministically (spec 089 follow-up, issue #592 item 1). Backed by an unordered
+/// overlapping templates deterministically (issue #592 item 1). Backed by an unordered
 /// container, <c>orders/list</c> vs <c>orders/{id}</c> could match in either order — a request for
 /// <c>orders/list</c> might bind the parameter route, and the outcome could flip across republish or restart.
 /// This comparer makes the more specific template sort first, mirroring ASP.NET route precedence: per segment a

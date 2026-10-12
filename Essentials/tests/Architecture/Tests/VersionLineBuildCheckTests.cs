@@ -4,7 +4,7 @@ using static Elsa.Architecture.Tests.RepoPaths;
 namespace Elsa.Architecture.Tests;
 
 /// <summary>
-/// Proves the build-time half of ADR 0067's version-line guard: the <c>ElsaVerifyVersionLine</c> target in
+/// Proves the build-time half of the version-line guard: the <c>ElsaVerifyVersionLine</c> target in
 /// the root <c>Directory.Build.props</c>, which runs on <c>BeforeBuild</c>, <c>GenerateNuspec</c> and
 /// <c>_GetProjectVersion</c> so a pack-only override is caught too. <see cref="VersionLineOwnershipGuardTests"/> and
 /// <see cref="NoLiteralProjectVersionGuardTests"/> are static file scans that cannot see a global property passed on

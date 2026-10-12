@@ -5,7 +5,7 @@ namespace Elsa.Versioning.Publisher.Tests;
 /// <summary>
 /// <c>.github/workflows/docker.yml</c> takes a main image build's package versions from the Packages workflow run
 /// that produced them, never from a plan it computes itself, so it cannot race that run's plan and write-back to
-/// <c>publish-state</c> (spec 150 FR-020, #2084). It also never joins the <c>publish-state</c> concurrency group -
+/// <c>publish-state</c> (#2084). It also never joins the <c>publish-state</c> concurrency group -
 /// GitHub keeps only one pending run per group and would silently drop a queued Packages run.
 /// </summary>
 public sealed class DockerWorkflowTests

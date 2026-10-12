@@ -10,8 +10,7 @@ using Xunit;
 namespace Elsa.Cli.Tests;
 
 /// <summary>
-/// The tool run against a packaged host: build output, a deps file, and no source tree anywhere (spec 171
-/// User Stories 2 and 6).
+/// The tool run against a packaged host: build output, a deps file, and no source tree anywhere.
 /// </summary>
 public sealed class PersistenceCliTests : IDisposable
 {
@@ -45,7 +44,7 @@ public sealed class PersistenceCliTests : IDisposable
     public void Dispose() => output.Dispose();
 
     /// <summary>
-    /// Spec 171 User Story 2's independent test: a packaged host, no <c>--modules</c>, and every installed
+    /// A packaged host, no <c>--modules</c>, and every installed
     /// EF module named. An unscoped selection is the one that cannot be checked against a list the caller
     /// supplied, so this is what proves discovery sees the whole closure.
     /// </summary>
@@ -85,7 +84,7 @@ public sealed class PersistenceCliTests : IDisposable
     private static string[] ListedModules(CliRun run) =>
         [.. run.Output.Split('\n').Skip(1).Select(line => line.Split("  ")[0].Trim()).Where(name => name.Length > 0 && !name.EndsWith("module(s).", StringComparison.Ordinal))];
 
-    /// <summary>A third-party module is indistinguishable in shape from a first-party one (User Story 6, scenario 1).</summary>
+    /// <summary>A third-party module is indistinguishable in shape from a first-party one.</summary>
     [Fact]
     public void List_reports_a_third_party_module_the_same_way_it_reports_a_first_party_one()
     {
@@ -177,7 +176,7 @@ public sealed class PersistenceCliTests : IDisposable
         }
     }
 
-    /// <summary>A third-party module produces a numbered file and a manifest entry like any other (User Story 6, scenario 2).</summary>
+    /// <summary>A third-party module produces a numbered file and a manifest entry like any other.</summary>
     [Fact]
     public void Script_all_numbers_every_module_the_host_installs_including_the_third_party_one()
     {
@@ -209,8 +208,7 @@ public sealed class PersistenceCliTests : IDisposable
 
     /// <summary>
     /// Discovery covers the whole closure and fails closed, so a name collision withholds every module —
-    /// and the refusal has to name both assemblies, or an operator reads it as "my host has no modules"
-    /// (User Story 6, scenario 3).
+    /// and the refusal has to name both assemblies, or an operator reads it as "my host has no modules".
     /// </summary>
     [Fact]
     public void Two_modules_whose_names_collide_are_refused_naming_both_assemblies()
@@ -236,7 +234,7 @@ public sealed class PersistenceCliTests : IDisposable
         Assert.False(Directory.Exists(target));
     }
 
-    /// <summary>A provider the module declares no context for is a named refusal, not a null-reference failure (FR-016).</summary>
+    /// <summary>A provider the module declares no context for is a named refusal, not a null-reference failure.</summary>
     [Fact]
     public void Script_refuses_a_provider_the_module_declares_no_context_for()
     {
@@ -292,7 +290,7 @@ public sealed class PersistenceCliTests : IDisposable
             ["persistence", "script", "--host", DotnetElsa.Host("MinimalHost"), "--provider", "PostgreSql", "--output", output.Path, .. selector]);
 
     /// <summary>
-    /// The command surface is closed (FR-024): a command no build implements is a usage error rather than
+    /// The command surface is closed: a command no build implements is a usage error rather than
     /// one that quietly does nothing.
     /// </summary>
     [Fact]
@@ -305,7 +303,7 @@ public sealed class PersistenceCliTests : IDisposable
     }
 
     /// <summary>
-    /// Spec 171 User Story 5 through the real tool: on a database with no legacy rows, <c>post-migrate</c>
+    /// The post-migration action through the real tool: on a database with no legacy rows, <c>post-migrate</c>
     /// runs nothing and says so, and <c>apply</c> is not made to report a required action by it. The legacy
     /// round trip itself is driven against the frozen tooling contract in the Secrets suite, where a legacy
     /// row can be written; this is the command-surface half — that it exists, reaches the host, and reports.
@@ -328,8 +326,8 @@ public sealed class PersistenceCliTests : IDisposable
     }
 
     /// <summary>
-    /// <c>post-migrate</c> takes its connection the same way <c>apply</c> and <c>validate</c> do (FR-030,
-    /// D7), so a database it cannot reach is a database failure and never a clean exit.
+    /// <c>post-migrate</c> takes its connection the same way <c>apply</c> and <c>validate</c> do,
+    /// so a database it cannot reach is a database failure and never a clean exit.
     /// </summary>
     [Fact]
     public void Post_migrate_needs_a_connection_and_never_exits_zero_without_one()
@@ -349,7 +347,7 @@ public sealed class PersistenceCliTests : IDisposable
     /// <summary>
     /// A host that lives in its own schema is configured through <c>ELSA_EF_SCHEMA</c> today, and
     /// <c>tools/ef/module-migrate.sh</c> already reads it; the artifact has to target the same schema the
-    /// host will look for its history table in (FR-029).
+    /// host will look for its history table in.
     /// </summary>
     [Fact]
     public void The_schema_environment_variable_is_honoured_and_an_explicit_schema_overrides_it()
@@ -401,7 +399,7 @@ public sealed class PersistenceCliTests : IDisposable
     }
 
     /// <summary>
-    /// Spec 181, FR-019, FR-020 and FR-022, through the packaged host: a hold is placed with a reason and an operator
+    /// Holds, releases and status, through the packaged host: a hold is placed with a reason and an operator
     /// before any gate-aware host has run, <c>status</c> names it, a hold on the version already finalized is refused
     /// as crossing the rollback boundary (exit 2), and a release takes the hold away.
     /// </summary>
@@ -449,7 +447,7 @@ public sealed class PersistenceCliTests : IDisposable
         Assert.True(File.Exists(db));
     }
 
-    /// <summary>Reading the connection off this process's own stdin, the only other way in (D7).</summary>
+    /// <summary>Reading the connection off this process's own stdin, the only other way in.</summary>
     [Fact]
     public async Task Apply_reads_the_connection_from_stdin()
     {
@@ -469,7 +467,7 @@ public sealed class PersistenceCliTests : IDisposable
 
     /// <summary>
     /// Validate fails closed on a pending migration and applies nothing — proved by asserting the database
-    /// is unchanged, not merely by the exit code (FR-052).
+    /// is unchanged, not merely by the exit code.
     /// </summary>
     [Fact]
     public void Validate_fails_and_applies_nothing_when_a_migration_is_pending()
@@ -482,7 +480,7 @@ public sealed class PersistenceCliTests : IDisposable
         Assert.Equal(ToolExitCode.NegativeResult, validate.ExitCode);
         Assert.Contains("pending-migrations", validate.Error, StringComparison.Ordinal);
         // Nothing was applied: not just the exit code, but the database itself carries no table at all —
-        // SQLite may create the file lazily on connect, but validate's own policy never migrates (FR-052).
+        // SQLite may create the file lazily on connect, but validate's own policy never migrates.
         Assert.Equal(0L, TableCount(db));
     }
 
@@ -499,7 +497,7 @@ public sealed class PersistenceCliTests : IDisposable
     }
 
     /// <summary>
-    /// There is no <c>--connection</c> flag (D7): a script that passes one must be told, not silently
+    /// There is no <c>--connection</c> flag: a script that passes one must be told, not silently
     /// handed a command that ignored it.
     /// </summary>
     [Theory]
@@ -520,9 +518,9 @@ public sealed class PersistenceCliTests : IDisposable
     }
 
     /// <summary>
-    /// D7's promise extends past the process boundary: the connection string must not appear anywhere an
-    /// operator can read, including a failure's own message. This forces a real failure — a SQLite path
-    /// that cannot be opened — with a sentinel embedded in the connection string, and checks both output
+    /// The promise that a connection never travels in a flag extends past the process boundary: the connection string
+    /// must not appear anywhere an operator can read, including a failure's own message. This forces a real failure — a
+    /// SQLite path that cannot be opened — with a sentinel embedded in the connection string, and checks both output
     /// streams for it.
     /// </summary>
     [Fact]

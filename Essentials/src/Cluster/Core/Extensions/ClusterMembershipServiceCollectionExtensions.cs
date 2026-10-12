@@ -8,14 +8,14 @@ using Microsoft.Extensions.Options;
 namespace Elsa.Cluster.Core.Extensions;
 
 /// <summary>
-/// How a membership provider is selected. Exactly one is active per host process (FR-001; ADR 0078, invariant 1):
+/// How a membership provider is selected. Exactly one is active per host process:
 /// the in-process default yields to one durable provider, and two durable providers fail whatever order they are
 /// composed in, never resolved by last-write-wins.
 /// </summary>
 /// <remarks>
-/// A durable provider is composed once, on the host container (ADR 0076 D9; spec 183, Decisions, Q20). The host
+/// A durable provider is composed once, on the host container. The host
 /// starts only if its membership settings are valid, exactly one provider owns <see cref="IClusterMembership"/>, and a
-/// durable provider has an explicit host id (FR-003a). The startup check runs before any hosted service starts, so a
+/// durable provider has an explicit host id. The startup check runs before any hosted service starts, so a
 /// refused provider never attempts to join.
 /// </remarks>
 public static class ClusterMembershipServiceCollectionExtensions

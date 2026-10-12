@@ -4,13 +4,13 @@ using Elsa.Versioning.Calculator.Tests.Support;
 namespace Elsa.Versioning.Calculator.Tests;
 
 /// <summary>
-/// The last-published record and the dependency map as inputs: spec 150 FR-014, FR-016, FR-018, SC-012, and spec 149's
-/// schema version, which the calculator enforces at read time.
+/// The last-published record and the dependency map as inputs, and the dependency map's schema version, which the
+/// calculator enforces at read time.
 /// </summary>
 public sealed class RecordTests : SyntheticHistory
 {
     /// <summary>
-    /// SC-012, FR-016: a write-back lands on <c>publish-state</c> and changes nothing on <c>main</c>; computing the same
+    /// A write-back lands on <c>publish-state</c> and changes nothing on <c>main</c>; computing the same
     /// commit against the new revision, read from the branch, finds nothing left to publish and the same fingerprints.
     /// </summary>
     [Fact]
@@ -33,7 +33,7 @@ public sealed class RecordTests : SyntheticHistory
     }
 
     /// <summary>
-    /// Edge case, FR-006: the record moves only for packages whose push succeeded, so a re-run of the same commit
+    /// The record moves only for packages whose push succeeded, so a re-run of the same commit
     /// computes the same version for a package whose push failed and leaves the pushed ones alone.
     /// </summary>
     [Fact]
@@ -52,7 +52,7 @@ public sealed class RecordTests : SyntheticHistory
     }
 
     /// <summary>
-    /// FR-018: the fingerprint is a digest of the package-affecting inputs alone, so it is the same at every commit
+    /// The fingerprint is a digest of the package-affecting inputs alone, so it is the same at every commit
     /// where those inputs are, and changes exactly when the package does.
     /// </summary>
     [Fact]
@@ -71,7 +71,7 @@ public sealed class RecordTests : SyntheticHistory
         Assert.Matches("^sha256:[0-9a-f]{64}$", changed["Elsa.Tasks"].Fingerprint);
     }
 
-    /// <summary>FR-014: one serialization — sorted by package id, LF endings, a trailing newline — that reads back unchanged.</summary>
+    /// <summary>One serialization — sorted by package id, LF endings, a trailing newline — that reads back unchanged.</summary>
     [Fact]
     public void The_record_has_one_canonical_serialization()
     {
@@ -129,7 +129,7 @@ public sealed class RecordTests : SyntheticHistory
     }
 
     /// <summary>
-    /// Spec 149: a dependency map with a schema version this calculator was not written for is refused, not half-read —
+    /// A dependency map with a schema version this calculator was not written for is refused, not half-read —
     /// version 1 included, which records no pinned-transitive edges and so cannot say which packages a pin reaches.
     /// </summary>
     [Theory]

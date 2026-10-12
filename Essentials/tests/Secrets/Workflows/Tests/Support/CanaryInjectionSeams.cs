@@ -13,7 +13,7 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 namespace Elsa.Secrets.Workflows.Tests.Support;
 
 /// <summary>
-/// What the canary's injection seams do, per executable node (spec 188, T098, A15). Every seam is armed for the nodes a
+/// What the canary's injection seams do, per executable node. Every seam is armed for the nodes a
 /// scenario names and passes everything else through unchanged, so one host runs every scenario and a scenario's
 /// injection reaches its own run only. Registered in the canary host's root services, where both the shell and the
 /// tests see it.
@@ -27,7 +27,7 @@ public sealed class CanaryInjections
     /// <summary>
     /// S10: before the real materializer runs, the <c>SecretRead</c> binding of <paramref name="inputKey"/> on
     /// <paramref name="nodeId"/> is given the policy <c>{IsSensitive: false, RequiresEncryption: false}</c>, the shape a
-    /// hand-built imported artifact can already carry (research R13).
+    /// hand-built imported artifact can already carry.
     /// </summary>
     public void LowerSecretPolicy(string nodeId, string inputKey) => _materializations[nodeId] = new(LoweredInputKey: inputKey);
 
@@ -66,7 +66,7 @@ internal sealed record CanaryMaterialization(string? LoweredInputKey = null, Can
 internal sealed record CanaryReplant(string InputKey, string Value, ValueProtectionPolicy Policy);
 
 /// <summary>
-/// The materializer decorator (T098): lowers a secret read's policy before the real materializer runs (S10), or puts a
+/// The materializer decorator: lowers a secret read's policy before the real materializer runs (S10), or puts a
 /// planted value where the real materializer withheld one (S6, S8). Every other node is materialized unchanged.
 /// </summary>
 public sealed class CanaryInputMaterializer(IRuntimeActivityInputMaterializer inner, CanaryInjections injections) : IRuntimeActivityInputMaterializer
@@ -134,7 +134,7 @@ public sealed class CanaryInputMaterializer(IRuntimeActivityInputMaterializer in
     }
 }
 
-/// <summary>The capture-everything payload capture policy double (T098, S8b): it captures every payload of an armed node in full.</summary>
+/// <summary>The capture-everything payload capture policy double (S8b): it captures every payload of an armed node in full.</summary>
 public sealed class CanaryPayloadCapturePolicy(IRuntimePayloadCapturePolicy inner, CanaryInjections injections) : IRuntimePayloadCapturePolicy
 {
     public RuntimePayloadCaptureDecision Decide(RuntimePayloadCaptureRequest request) =>
@@ -144,7 +144,7 @@ public sealed class CanaryPayloadCapturePolicy(IRuntimePayloadCapturePolicy inne
 }
 
 /// <summary>
-/// The work-handler decorator (T098, S9): once the invoke handler has handled an armed node's invocation, an exception
+/// The work-handler decorator (S9): once the invoke handler has handled an armed node's invocation, an exception
 /// whose message is the planted value escapes it, as it would from a handler that let an unmasked exception out. The
 /// drainer records it as a handler fault.
 /// </summary>
@@ -187,7 +187,7 @@ public sealed class CanaryDiagnosticsSettingsAccessor(InMemoryRuntimeDiagnostics
 }
 
 /// <summary>
-/// Composes the canary's injection seams into the canary host's shell, and nowhere else (spec 188, T098): each is a
+/// Composes the canary's injection seams into the canary host's shell, and nowhere else: each is a
 /// replacement of a runtime contract's registration, made after every feature has registered its own. No production
 /// code gains a switch; a seam that is not armed for a node passes it through unchanged.
 /// </summary>

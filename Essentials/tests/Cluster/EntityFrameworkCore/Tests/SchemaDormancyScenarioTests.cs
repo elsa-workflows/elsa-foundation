@@ -21,9 +21,9 @@ using Xunit;
 namespace Elsa.Cluster.EntityFrameworkCore.Tests;
 
 /// <summary>
-/// Spec 182 end to end, on one host with the in-process membership: a family whose build is at version 2 against a
+/// Dormancy end to end, on one host with the in-process membership: a family whose build is at version 2 against a
 /// database finalized at 1, a store whose rows carry a <c>Currency</c> only version 2 can hold, a request handler that asks
-/// the shared dormancy check where it accepts that field (FR-002), and the real finalization gate, write check and
+/// the shared dormancy check where it accepts that field, and the real finalization gate, write check and
 /// dormancy source underneath. Each scenario is checked in both directions, because the dangerous one is the request that
 /// looks like it succeeded while its data was dropped.
 /// </summary>
@@ -84,7 +84,10 @@ public sealed class SchemaDormancyScenarioTests : IAsyncLifetime
             File.Delete(file);
     }
 
-    /// <summary>User Story 2, acceptance 1 to 3, and User Story 4, acceptance 2; SC-001.</summary>
+    /// <summary>
+    /// While held, a request that sets a version 2 field is refused and saves nothing, one without it is saved at 1, and
+    /// after finalization the field is saved and reads back.
+    /// </summary>
     [Fact]
     public async Task While_held_a_request_that_sets_a_version_2_field_is_refused_and_saves_nothing_one_without_it_is_saved_at_1_and_after_finalization_the_field_is_saved_and_reads_back()
     {
@@ -107,7 +110,7 @@ public sealed class SchemaDormancyScenarioTests : IAsyncLifetime
         Assert.Equal([("with-currency", "2", "EUR"), ("without-currency", "1", null)], await RowsAsync());
     }
 
-    /// <summary>User Story 1's reason, from the gate's status, on an operator surface only (FR-008, FR-011).</summary>
+    /// <summary>The dormancy reason, from the gate's status, on an operator surface only.</summary>
     [Fact]
     public async Task While_held_the_operator_reason_names_the_hold_and_who_placed_it()
     {
@@ -124,7 +127,7 @@ public sealed class SchemaDormancyScenarioTests : IAsyncLifetime
         Assert.Contains("finalized at '1'", reason, StringComparison.Ordinal);
     }
 
-    /// <summary>User Story 2, acceptance 4, and User Story 5; SC-005 and FR-017: the store is the backstop.</summary>
+    /// <summary>The store is the backstop.</summary>
     [Fact]
     public async Task A_unit_of_work_in_which_one_row_needs_dormant_data_writes_no_row_and_the_same_rows_without_it_are_written_at_1()
     {
@@ -140,7 +143,7 @@ public sealed class SchemaDormancyScenarioTests : IAsyncLifetime
         Assert.Equal([("plain", "1", null), ("priced", "1", null)], await RowsAsync());
     }
 
-    /// <summary>User Story 4, acceptance 1; SC-004 and FR-021: a single host finalizes at activation, so nothing is dormant.</summary>
+    /// <summary>A single host finalizes at activation, so nothing is dormant.</summary>
     [Fact]
     public async Task A_single_host_with_no_hold_serves_the_first_request_that_needs_version_2()
     {
@@ -151,7 +154,7 @@ public sealed class SchemaDormancyScenarioTests : IAsyncLifetime
         Assert.Equal([("first", "2", "EUR")], await RowsAsync());
     }
 
-    /// <summary>User Story 3; SC-003 and FR-019: no restart and no shell reload, only the gate's own background refresh.</summary>
+    /// <summary>No restart and no shell reload, only the gate's own background refresh.</summary>
     [Fact]
     public async Task A_dormant_feature_is_served_within_one_evaluation_interval_of_the_hold_being_released_in_the_same_process()
     {
@@ -181,8 +184,8 @@ public sealed class SchemaDormancyScenarioTests : IAsyncLifetime
     }
 
     /// <summary>
-    /// FR-014, both ways: within the bound the view stands and the request is refused without a read; past it, the check
-    /// reads the record again and serves what another host finalized meanwhile.
+    /// The refresh bound, both ways: within the bound the view stands and the request is refused without a read; past
+    /// it, the check reads the record again and serves what another host finalized meanwhile.
     /// </summary>
     [Fact]
     public async Task Before_refusing_the_check_rereads_a_view_older_than_the_bound_and_serves_what_another_host_finalized()
@@ -219,7 +222,7 @@ public sealed class SchemaDormancyScenarioTests : IAsyncLifetime
         Assert.False(await _gate.RefreshIfOlderThanAsync(bound));
     }
 
-    /// <summary>User Story 6; FR-005, FR-016 and SC-007: finalization alone is not enough for a query over version 2's data.</summary>
+    /// <summary>Finalization alone is not enough for a query over version 2's data.</summary>
     [Fact]
     public async Task A_query_that_needs_completeness_is_refused_after_finalization_until_the_finish_record_names_2_and_then_answers()
     {
@@ -239,18 +242,18 @@ public sealed class SchemaDormancyScenarioTests : IAsyncLifetime
     }
 
     /// <summary>
-    /// Spec 186, User Story 2 and User Story 7; SC-007, FR-012 and FR-017: spec 182's User Story 6 with the backfill running
-    /// instead of a stub, on a single host with the in-process membership. The case that looks like success comes first:
-    /// every row is already at 2 after the upgrade pass, yet the query stays dormant, with the upgrade-in-progress reason,
-    /// until the verification pass after the settle margin records the completion; then it answers from every row. No
-    /// membership table is created.
+    /// <see cref="A_query_that_needs_completeness_is_refused_after_finalization_until_the_finish_record_names_2_and_then_answers"/>
+    /// with the backfill running instead of a stub, on a single host with the in-process membership. The case that
+    /// looks like success comes first: every row is already at 2 after the upgrade pass, yet the query stays dormant,
+    /// with the upgrade-in-progress reason, until the verification pass after the settle margin records the completion;
+    /// then it answers from every row. No membership table is created.
     /// </summary>
     [Fact]
     public async Task With_the_backfill_running_a_query_that_needs_completeness_is_served_only_once_the_finish_record_names_2()
     {
         await SaveAsync(new Order("old-1", null), new Order("old-2", null));
         await ActivateAsync();
-        // The gate's status carries the backfill's once it is built over the gate (spec 186, FR-021).
+        // The gate's status carries the backfill's once it is built over the gate.
         var backfill = new EfSchemaBackfill(_gate, _fleet, new EfSchemaBackfillOptions(), _time);
         var needsComplete = new SchemaVersionRequirement(_family, "2", requiresCompleteness: true);
 
@@ -298,7 +301,7 @@ public sealed class SchemaDormancyScenarioTests : IAsyncLifetime
         Assert.Equal(SchemaDormancyKind.WritesRefused, Assert.Single(_check.Evaluate([NeedsTwo]).Unmet).Kind);
     }
 
-    /// <summary>The API's handler: a request that sets <c>Currency</c> needs version 2, and asks before anything is written (FR-002).</summary>
+    /// <summary>The API's handler: a request that sets <c>Currency</c> needs version 2, and asks before anything is written.</summary>
     private async Task PutAsync(string id, string? currency)
     {
         if (currency is not null)
@@ -360,7 +363,7 @@ public sealed class SchemaDormancyScenarioTests : IAsyncLifetime
         await store.CommitIntentAsync(_family, intended.Record.Revision, Chain, member);
     });
 
-    /// <summary>The post-finalization backfill recording that no row below <paramref name="version"/> remains (spec 186, FR-014).</summary>
+    /// <summary>The post-finalization backfill recording that no row below <paramref name="version"/> remains.</summary>
     private Task CompleteElsewhereAsync(string version) => WithStoreAsync(async store =>
         await store.RecordCompletionAsync(
             _family, (await store.FindAsync(_family))!.Revision, version, _time.GetUtcNow(), _time.GetUtcNow(), Chain, new SchemaFinalizationMember("backfill", "b"), worker: null));
@@ -402,7 +405,7 @@ public sealed class SchemaDormancyScenarioTests : IAsyncLifetime
     private sealed record Order(string Id, string? Currency);
 
     /// <summary>
-    /// The family's rewriter (spec 186, FR-004): a row an older writer left at 1 carries no currency, and version 2's write
+    /// The family's rewriter: a row an older writer left at 1 carries no currency, and version 2's write
     /// path fills the projection with the currency every version-1 order implicitly had.
     /// </summary>
     private sealed class OrderRewriter(DormancyContext context, EfSchemaFinalizationGates gates) : IEfSchemaRowRewriter

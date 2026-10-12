@@ -4,7 +4,7 @@ using Xunit;
 namespace Elsa.Cli.Tests;
 
 /// <summary>
-/// What the worker launch is allowed to carry (FR-002), and — the part that matters for the commands a
+/// What the worker launch is allowed to carry, and — the part that matters for the commands a
 /// later slice adds — what it has no way to carry.
 /// </summary>
 public sealed class WorkerLaunchTests
@@ -72,8 +72,8 @@ public sealed class WorkerLaunchTests
             fields);
         // SkewAllowance is `status`'s one further input: a TimeSpan the host's configured membership skew or the operator's
         // flag names, parsed by this tool before it travels, so it is not a string and nothing else can carry a credential there.
-        // Spec 181's hold, release and status name a schema family, a version, a reason and an operator identity, and
-        // nothing a feed credential could travel in.
+        // The finalization commands hold, release and status name a schema family, a version, a reason and an operator
+        // identity, and nothing a feed credential could travel in.
         Assert.Equal(
             ["Family", "Operator", "Reason", "Version"],
             typeof(WorkerFinalization).GetProperties().Select(property => property.Name).Order(StringComparer.Ordinal));

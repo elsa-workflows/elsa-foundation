@@ -9,7 +9,7 @@ using static Elsa.Persistence.EntityFramework.Tests.ContractingModule;
 namespace Elsa.Modularity.EntityFramework.Tests;
 
 /// <summary>
-/// Spec 185, FR-025 and User Story 5, scenarios 2 and 3: under both migrate policies, enabling a feature whose module
+/// Under both migrate policies, enabling a feature whose module
 /// would apply a contracting migration its schema family is not yet finalized for is refused before anything is saved,
 /// naming the family and the version it waits for, exactly as the module's migrator would refuse the batch at Prepare;
 /// and once the family reaches that version the same request goes through.

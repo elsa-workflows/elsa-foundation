@@ -36,7 +36,7 @@ public sealed class RuntimeExecutionSliceDependencyTests
     [Fact]
     public void PublishingEngine_DoesNotReferenceRuntimeApi()
     {
-        // spec 145: the endpoint-free publish engine composes the Runtime triggers feature via DependsOn
+        // The endpoint-free publish engine composes the Runtime triggers feature via DependsOn
         // (a shell-composition edge), not an assembly reference — so it must not pull in Runtime.Api.
         AssertNoReferences(
             typeof(Elsa.Workflows.Publishing.WorkflowsPublishingFeature).Assembly,

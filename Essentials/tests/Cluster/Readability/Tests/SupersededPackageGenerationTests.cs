@@ -19,7 +19,7 @@ using static Elsa.Cluster.Readability.Tests.UpgradedPackage;
 namespace Elsa.Cluster.Readability.Tests;
 
 /// <summary>
-/// Spec 183's FR-021, amended 2026-09-29: a package upgraded in place leaves its previous generation loaded in a Nuplane
+/// A package upgraded in place leaves its previous generation loaded in a Nuplane
 /// load context for the life of the process, and that generation stops counting for the readability report only once a
 /// newer generation of the same assembly is the active one and nothing that could still run it is left: no shell
 /// generation whose container has not finished disposing composes from its load context, and the feature catalog the next

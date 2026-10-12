@@ -79,7 +79,7 @@ public enum CanaryStartMode
 
     /// <summary>
     /// Coalesced checkpoint persistence, under which the runtime fuses a ReplaySafe leaf's schedule, start and invoke
-    /// stages into one dispatch (ADR 0047 D1).
+    /// stages into one dispatch.
     /// </summary>
     Fused
 }
@@ -98,7 +98,7 @@ public enum CanaryCaller
 public sealed record CanaryPublication(string DefinitionId, string VersionId, string ArtifactId, string SourceReferenceId);
 
 /// <summary>
-/// The canary host (spec 188, T079): one CShells web host on a test server whose one shell composes what the canary
+/// The canary host: one CShells web host on a test server whose one shell composes what the canary
 /// reads its eight surfaces from. Workflow design, its validations and its EF persistence and the activity catalog
 /// with CLR reconciliation, on SQLite files under <see cref="DesignDirectory"/>; publishing; the runtime, its EF
 /// persistence on a SQLite file under <see cref="RuntimeDirectory"/>, its engine tracing, its triggers and its API with

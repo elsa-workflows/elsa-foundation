@@ -4,14 +4,14 @@ using System.Runtime.CompilerServices;
 namespace Elsa.Cli.Worker;
 
 /// <summary>
-/// The engine a package-hosted host selects with <c>Nuplane:Capabilities:ef-provider</c> (spec 172 D3), read
+/// The engine a package-hosted host selects with <c>Nuplane:Capabilities:ef-provider</c>, read
 /// out of the same layered <c>appsettings.json</c> <c>--restore</c> hands to Nuplane.
 /// </summary>
 /// <remarks>
 /// <para>
 /// The key is Nuplane's, not Elsa's: every EF module package declares the <c>ef-provider</c> capability in
 /// its <c>nuplane.json</c>, and Nuplane turns the host's selection into a root package. This tool reads the
-/// same key for one purpose only — keeping <c>--provider</c> authoritative against it (ADR 0076 D4). It
+/// same key for one purpose only — keeping <c>--provider</c> authoritative against it. It
 /// never acts on the selection, and never lets it decide a provider.
 /// </para>
 /// <para>
@@ -23,13 +23,13 @@ namespace Elsa.Cli.Worker;
 /// </remarks>
 public static class HostCapabilitySelection
 {
-    /// <summary>The capability every EF module package declares (spec 172 FR-001).</summary>
+    /// <summary>The capability every EF module package declares.</summary>
     public const string CapabilityName = "ef-provider";
 
     /// <summary>
     /// The configuration key, spelled exactly as <c>EfRelationalProviderBinding.CapabilitySelectionKey</c>
     /// spells it. Repeated rather than shared because this assembly references no persistence assembly of
-    /// its own (ADR 0076 D1); the two are compared by
+    /// its own; the two are compared by
     /// <c>ToolingEntryPointTests.The_worker_and_the_persistence_assembly_name_the_same_capability_key</c>.
     /// </summary>
     public const string Key = $"Nuplane:Capabilities:{CapabilityName}";

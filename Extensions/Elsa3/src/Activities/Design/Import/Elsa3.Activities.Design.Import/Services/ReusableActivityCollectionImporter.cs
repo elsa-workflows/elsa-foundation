@@ -10,7 +10,7 @@ namespace Elsa3.Activities.Design.Import.Services;
 
 /// <summary>
 /// Applies a reviewed Elsa 3 collection selection: re-analyzes it, checks the selection, maps it, admits every activity
-/// node the mapping produced through the credential-literal rule (spec 188, FR-008) and commits the mutation as one unit.
+/// node the mapping produced through the credential-literal rule and commits the mutation as one unit.
 /// </summary>
 /// <remarks>
 /// <para>

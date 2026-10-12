@@ -30,7 +30,7 @@ public sealed record WorkbenchShell(
         // appsettings.Production.json validates instead of migrating, because a deployment applies migrations before
         // the host runs. This test starts against an empty database with no such step, which is the case that policy
         // is built to refuse, so it migrates on activation like the other compositions. One override covers every
-        // module: Secrets reads this same key since its own MigratePolicy setting was retired (ADR 0076 D8).
+        // module: Secrets reads this same key since its own MigratePolicy setting was retired.
         ["Elsa:Persistence:EntityFramework:Migrate:Policy"] = "AutoMigrate",
         [$"{FeaturesPath}:WorkflowsRuntimeEntityFrameworkCore:RecoveryContinuationSigningKey"] = "smoke-test-recovery-continuation-signing-key",
         [$"{FeaturesPath}:WorkflowsRuntimeEntityFrameworkCore:HierarchyCursorSigningKey"] = "smoke-test-hierarchy-cursor-signing-key",
