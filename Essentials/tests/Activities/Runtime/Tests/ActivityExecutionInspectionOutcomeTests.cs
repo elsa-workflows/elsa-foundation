@@ -24,11 +24,10 @@ namespace Elsa.Activities.Runtime.Tests;
 /// Written while investigating
 /// <see href="https://github.com/elsa-workflows/elsa-foundation/issues/1127">#1127</see>, where a real server
 /// reported <c>outcomeNames: []</c> on a workflow's ROOT activity while its durable
-/// <c>runtime.completionOutcomeNames</c> carried the truth. These four cases cover the two axes that looked
-/// implicated — root vs nested, completed inline vs resumed from a bookmark — and all four are <b>correct</b> on
-/// the in-process runtime over the in-memory stores. That is the point of keeping them: they pin the behaviour
-/// that already holds here, and they narrow #1127 to the parts of a real composition they do not cover
-/// (durable projection storage, the coalescing persistence decorator, the REST read path).
+/// <c>runtime.completionOutcomeNames</c> carried the truth. These cases cover the two axes that looked
+/// implicated, root vs nested and completed inline vs resumed from a bookmark, in every persistence mode. A root leaf
+/// that completes in the same commit as its workflow lost its outcome under the folding modes: the workflow's
+/// completion rebuilt the leaf's projection from the durable store, which did not hold the leaf's completion yet.
 /// </remarks>
 // Runs WriteLine activities, which write to the real Console.Out that ConsoleCapture redirects
 // process-wide. Without this collection those writes land inside a capturing class's output.
@@ -39,12 +38,20 @@ public sealed class ActivityExecutionInspectionOutcomeTests
     private const string RootNodeId = "node-root";
     private const string EventName = "go";
 
-    [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
-    public async Task Inline_completion_projects_its_outcome(bool nested)
+    public static TheoryData<bool, PersistenceMode> NestingInEveryMode()
     {
-        await using var harness = NewHarness();
+        var cases = new TheoryData<bool, PersistenceMode>();
+        foreach (var nested in new[] { false, true })
+        foreach (var mode in Enum.GetValues<PersistenceMode>())
+            cases.Add(nested, mode);
+        return cases;
+    }
+
+    [Theory]
+    [MemberData(nameof(NestingInEveryMode))]
+    public async Task Inline_completion_projects_its_outcome(bool nested, PersistenceMode mode)
+    {
+        await using var harness = NewHarness(mode);
         var leaf = NewLeaf(typeof(WriteLine), new Dictionary<string, object?> { ["text"] = "hi" });
         var run = await harness.RunAsync(WorkflowExecutionHarness.NewExecutable(nested ? NewSequenceRoot(leaf) : leaf));
 
@@ -54,11 +61,10 @@ public sealed class ActivityExecutionInspectionOutcomeTests
     }
 
     [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
-    public async Task Resumed_completion_projects_its_outcome(bool nested)
+    [MemberData(nameof(NestingInEveryMode))]
+    public async Task Resumed_completion_projects_its_outcome(bool nested, PersistenceMode mode)
     {
-        await using var harness = NewHarness();
+        await using var harness = NewHarness(mode);
         var scopedResumeTargetId = WorkflowExecutableResumeTarget.ComposeScopedId(LeafNodeId, Event.ResumeTargetId);
         var leaf = NewLeaf(typeof(Event), new Dictionary<string, object?>
         {
@@ -173,9 +179,10 @@ public sealed class ActivityExecutionInspectionOutcomeTests
             "having taken no port.");
     }
 
-    private static WorkflowExecutionHarness NewHarness() => WorkflowExecutionHarness.Create()
+    private static WorkflowExecutionHarness NewHarness(PersistenceMode mode = PersistenceMode.Durable) => WorkflowExecutionHarness.Create()
         .WithFeature(services => new ActivitiesPrimitivesFeature().ConfigureServices(services))
         .WithFeature(services => new Elsa.Activities.Sequence.ActivitiesSequenceFeature().ConfigureServices(services))
+        .WithPersistenceMode(mode)
         .Build("actexec-root", "actexec-leaf");
 
     private static ExecutableNode NewLeaf(Type activityType, IReadOnlyDictionary<string, object?> inputs) =>

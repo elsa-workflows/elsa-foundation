@@ -37,11 +37,6 @@ public enum CanarySurface
 /// Whether the subject input reaches the inspection surfaces as the withheld reference; false where an injection replaced
 /// the withheld envelope with a planted value.
 /// </param>
-/// <param name="CompletesInOneSegment">
-/// Whether the run completes without suspending or faulting. Under coalesced persistence such a run's value records are
-/// folded to the segment's durable boundary, so none of the subject input is kept; a run that suspends or faults keeps
-/// them at that boundary.
-/// </param>
 /// <param name="ActivityTypePrefix">The type name the run's activity facts in the execution evidence start with: the canary activities' namespace unless the run is of another activity.</param>
 /// <param name="CompanionInput">
 /// A non-sensitive input of the run's activity that the diagnostic snapshot factory captures at the diagnostics level's
@@ -58,7 +53,6 @@ public sealed record CanaryRun(
     string? ReferenceName,
     string RuntimeMarker,
     bool SubjectWithheld = true,
-    bool CompletesInOneSegment = false,
     string ActivityTypePrefix = CanaryRun.CanaryActivityTypePrefix,
     string CompanionInput = nameof(CanaryActivity.Companion))
 {
@@ -269,12 +263,11 @@ public sealed class CanarySurfaces(SecretsCanaryWorkflowHost host)
             var instancePath = $"runtime/workflows/instances/{run.WorkflowExecutionId}";
             var instance = await ReadRequiredAsync(run, instancePath, caller, contents, failures);
             Require(failures, instance.Contains(run.WorkflowExecutionId, StringComparison.Ordinal), $"{run.Scenario} precondition (inspector): the instance response does not name run '{run.WorkflowExecutionId}'.");
-            var keepsValueRecords = KeepsValueRecords(run, instance, failures);
+            RequireReportedGranularity(run, instance, failures);
 
             var (activities, _) = await host.ReadRunAsync(run.WorkflowExecutionId);
             Require(failures, activities.Count > 0, $"{run.Scenario} precondition (inspector): run '{run.WorkflowExecutionId}' has no activity execution to read.");
             var subjectShown = false;
-            var subjectRecorded = false;
             foreach (var activity in activities)
             {
                 var activityPath = $"{instancePath}/activity-executions/{activity.InvocationId}";
@@ -284,20 +277,14 @@ public sealed class CanarySurfaces(SecretsCanaryWorkflowHost host)
                 foreach (var snapshot in view["valueSnapshots"]?.AsArray() ?? [])
                 {
                     var isSubject = (string?)snapshot?["inputKey"] == run.SubjectInput;
-                    subjectRecorded |= isSubject;
                     if (isSubject && run.ShownReference is { } reference)
                         subjectShown |= (string?)snapshot!["secretReferenceName"] == reference;
                     await ReadAnsweredAsync($"{activityPath}/value-evidence/{(string?)snapshot?["evidenceId"]}/payload", caller, contents);
                 }
             }
 
-            if (run.ShownReference is not null && keepsValueRecords)
+            if (run.ShownReference is not null)
                 Require(failures, subjectShown, $"{run.Scenario} precondition (inspector): no activity execution view shows reference '{run.ShownReference}' for input '{run.SubjectInput}'.");
-            // A run folded under coalescing keeps no value record of the subject input, so the run inspector's
-            // sensitive-value rule has nothing to hide there. That absence is asserted: a value record of the subject
-            // input there is something the canary would have to bite on, so it turns the canary red.
-            if (!keepsValueRecords)
-                Require(failures, !subjectRecorded, $"{run.Scenario} (inspector, folded): an activity execution view shows a value record of input '{run.SubjectInput}', which coalesced persistence does not keep for a run that completes in one segment.");
 
             await ReadRequiredAsync(run, $"{instancePath}/incidents", caller, contents, failures);
             var executable = await ReadRequiredAsync(run, $"runtime/workflows/executables/{run.ArtifactId}", caller, contents, failures);
@@ -328,19 +315,7 @@ public sealed class CanarySurfaces(SecretsCanaryWorkflowHost host)
             var instance = response.IsSuccessStatusCode ? await response.Content.ReadAsStringAsync() : string.Empty;
             var snapshots = projections.SelectMany(projection => projection.ValueSnapshots).ToArray();
             var subject = snapshots.Where(snapshot => snapshot.InputKey == run.SubjectInput).ToArray();
-            if (!KeepsValueRecords(run, instance, failures))
-            {
-                // Under coalesced checkpoints the runtime folds inspection evidence to the segment's durable boundary,
-                // which the instance view reports, so a run that completes in one segment leaves no value
-                // record of the subject input, and the capture rules that protect one (P6, P7) have nothing to act on.
-                // That absence is asserted rather than assumed: a value record of the subject input there turns the
-                // canary red. Whatever the store does hold is scanned.
-                Require(
-                    failures,
-                    subject.Length == 0,
-                    $"{run.Scenario} (diagnostic snapshots, folded): the inspection store holds {subject.Length} value records of input '{run.SubjectInput}' in run '{run.WorkflowExecutionId}', which coalesced persistence does not keep for a run that completes in one segment.");
-                continue;
-            }
+            RequireReportedGranularity(run, instance, failures);
 
             // The factory ran: a non-sensitive input was captured at the configured level.
             Require(
@@ -408,17 +383,12 @@ public sealed class CanarySurfaces(SecretsCanaryWorkflowHost host)
         contents.Add(CanaryContent.Text($"GET {path} ({(int)response.StatusCode})", await response.Content.ReadAsStringAsync()));
     }
 
-    /// <summary>
-    /// Whether the run's value records are kept: always under activity-level inspection, and under boundary-level
-    /// inspection unless the run completes in one segment. The granularity the instance view reports must be the one the
-    /// host's checkpoint cadence implies.
-    /// </summary>
-    private bool KeepsValueRecords(CanaryRun run, string instanceView, List<string> failures)
+    /// <summary>The granularity the instance view reports must be the one the host's persistence mode implies.</summary>
+    private void RequireReportedGranularity(CanaryRun run, string instanceView, List<string> failures)
     {
         var granularity = instanceView.Length == 0 ? null : (string?)JsonNode.Parse(instanceView)?["inspectionGranularity"];
         var expected = host.Mode == CanaryStartMode.Fused ? CanaryInspectionGranularity.BoundaryLevel : CanaryInspectionGranularity.ActivityLevel;
         Require(failures, granularity == expected, $"{run.Scenario} precondition (inspection granularity): the instance view reports '{granularity}', not the '{expected}' a {host.Mode} host implies.");
-        return expected == CanaryInspectionGranularity.ActivityLevel || !run.CompletesInOneSegment;
     }
 
     private static void Require(List<string> failures, bool holds, string precondition)

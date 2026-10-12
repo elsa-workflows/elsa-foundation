@@ -400,11 +400,14 @@ timer *and* bookmark both persist directly, never through the buffer) by
 `PersistenceModeFlushTests` runs suspension, resume, fault, handler fault, cancellation and ownership loss under
 every mode.
 
-**Inspection reads are memoized, not overlaid** (spec 131). The per-hop inspection-projection build reads
-`IActivityExecutionInspectionStore.FindAsync` to pick its merge branch; under a folding session the overlay serves a
-per-drain memo of the **durable baseline** (never the buffered state, which would change the flushed projection
-bytes), invalidated at every durable flush. `PersistenceModeOptions.CoalesceInspectionReads` (default on) disables
-it back to per-hop durable reads.
+**Inspection reads see the segment's own projection first** (spec 131). The inspection-projection build reads
+`IActivityExecutionInspectionStore.FindAsync` to pick its merge branch. Under a folding session the overlay first
+serves the projection the session already recorded for that activity, so a later checkpoint in the segment merges onto
+it as it would onto a committed one; building from the durable baseline instead dropped what the earlier checkpoint
+recorded, such as the outcome of a root activity that completed in the same commit as its workflow. An activity the
+segment has not recorded yet is served from a per-drain memo of the **durable baseline**, invalidated at every
+durable flush. `PersistenceModeOptions.CoalesceInspectionReads` (default on) turns the memo off, back to a durable read
+for each such build.
 
 **Durable-value page reuse** (spec 197) avoids repeated reads of unchanged provider pages within one eligible
 folding drain. `WorkflowsRuntimeCheckpointPersistence.CoalesceDurableValueReads` defaults to `true`; set it to

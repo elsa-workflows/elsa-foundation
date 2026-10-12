@@ -427,6 +427,17 @@ public sealed class RuntimeCoalescingSession
         _outboxOrder.Add(item.OutboxItemId);
     }
 
+    /// <summary>
+    /// Returns the inspection projection this session last recorded for an activity execution, which is what a commit
+    /// of every checkpoint would have stored by now.
+    /// </summary>
+    public bool TryGetInspection(string activityExecutionId, out ActivityExecutionInspectionProjection? projection)
+    {
+        var found = _inspectionUpserts.TryGetValue(activityExecutionId, out var recorded);
+        projection = recorded;
+        return found;
+    }
+
     // ---- Inspection durable-baseline memo --------------------------------------------------------------------------
     // Store-read coalescing for IActivityExecutionInspectionStore.FindAsync: the memo holds what the
     // durable store returned (a cached null records a durable miss), never the buffered overlay state, so a memoized

@@ -61,7 +61,7 @@ public abstract class WorkflowSecretCanaryTests(CanaryHostFixture fixture, ITest
 
         Assert.Equal([scenario.Value], Host.Activations.For(first).Select(activation => activation.Primary));
         Assert.Equal([rotated], Host.Activations.For(second).Select(activation => activation.Primary));
-        await AssertAbsentAsync(scenario, [Run(scenario, first, publication) with { CompletesInOneSegment = true }, Run(scenario, second, publication) with { CompletesInOneSegment = true }], [scenario.Value, rotated], AllSurfaces);
+        await AssertAbsentAsync(scenario, [Run(scenario, first, publication), Run(scenario, second, publication)], [scenario.Value, rotated], AllSurfaces);
         await AssertSnapshotWithholdsAsync(first, scenario, nameof(CanaryActivity.Primary));
     }
 
@@ -254,7 +254,7 @@ public abstract class WorkflowSecretCanaryTests(CanaryHostFixture fixture, ITest
         await AssertSnapshotHoldsAsync(run, nameof(CanaryActivity.Primary), planted);
         await AssertAbsentAsync(
             scenario,
-            [Run(scenario, run, publication) with { SubjectWithheld = false, CompletesInOneSegment = true }],
+            [Run(scenario, run, publication) with { SubjectWithheld = false }],
             [planted],
             AllSurfaces,
             excludedRuntimeTables: CanarySurfaces.ReplantedSnapshotTables);
@@ -277,7 +277,7 @@ public abstract class WorkflowSecretCanaryTests(CanaryHostFixture fixture, ITest
         Assert.Contains((nameof(CanaryActivity.Primary), true), Host.Injections.CapturedEverything(scenario.NodeId));
         await AssertAbsentAsync(
             scenario,
-            [Run(scenario, run, publication) with { SubjectWithheld = false, CompletesInOneSegment = true }],
+            [Run(scenario, run, publication) with { SubjectWithheld = false }],
             [planted],
             AllSurfaces.Except([CanarySurface.DiagnosticSnapshots]),
             excludedRuntimeTables: CanarySurfaces.CapturedSnapshotTables,
@@ -312,7 +312,7 @@ public abstract class WorkflowSecretCanaryTests(CanaryHostFixture fixture, ITest
         // The artifact and the variable frame, in the runtime state, hold the value the import planted.
         await AssertAbsentAsync(
             scenario,
-            [Imported(scenario, run, sourceReferenceId, referenceName: null, scenario.NodeId) with { SubjectInput = nameof(CanaryActivity.Companion), CompletesInOneSegment = true }],
+            [Imported(scenario, run, sourceReferenceId, referenceName: null, scenario.NodeId) with { SubjectInput = nameof(CanaryActivity.Companion) }],
             [planted],
             RunSurfaces,
             excludedRuntimeTables: CanarySurfaces.SensitiveVariableTables);
@@ -369,7 +369,7 @@ public abstract class WorkflowSecretCanaryTests(CanaryHostFixture fixture, ITest
         Assert.Equal([scenario.Value], Host.Activations.For(run).Select(activation => activation.Plain));
         var executable = await Host.ReadExecutableAsync(publication.ArtifactId);
         Assert.False(executable.RootActivity.ActivityContract!.Inputs[nameof(CanaryActivity.Plain)].Policy.IsSensitive);
-        await AssertAbsentAsync(scenario, [Run(scenario, run, publication, nameof(CanaryActivity.Plain)) with { CompletesInOneSegment = true }], [scenario.Value], AllSurfaces);
+        await AssertAbsentAsync(scenario, [Run(scenario, run, publication, nameof(CanaryActivity.Plain))], [scenario.Value], AllSurfaces);
         // The committed snapshot holds the reference under the lowered policy, so no sensitive-value rule stands in front
         // of the value: only the withholding protections keep it out.
         var plain = await AssertSnapshotWithholdsAsync(run, scenario, nameof(CanaryActivity.Plain));
