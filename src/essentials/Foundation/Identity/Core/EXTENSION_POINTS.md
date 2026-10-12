@@ -81,6 +81,14 @@ request cancellation token. These contexts delegate decisions to `IPermissionAut
 they do not inspect permission claims themselves. Provider-specific or resource-specific rules receive
 a stable resource object and remain in `IPermissionResourceHandler` implementations.
 
+The architecture suite's `PermissionAuthorizationBoundaryTests` checks this in the compiled IL of every
+packable runtime library. A method fails it when it passes a permission value to a claims lookup
+(`FindFirst`, `FindFirstValue`, `FindAll`, `HasClaim`), hands a principal's `Claims` to a call together
+with a permission value, or calls a FastEndpoints `Permissions`/`PermissionsAll` helper. Only the
+reviewed list in that test may read permission claims: the claims evaluator, token issuance and the two
+session projections. `PermissionBypassScanner` documents what the IL scan does not follow, such as claim
+types held in arrays or claims enumerated by a loop; review still covers those.
+
 The original synchronous context interfaces and their legacy adapters were removed by #2566 (ADR 0080
 D4); the async contexts are the only request authorization contexts.
 
