@@ -7,11 +7,11 @@ on:
   workflow_dispatch:
     inputs:
       execute:
-        description: 'Publish the pinned20 and record confirmed successes. Requires separate owner approval. Default is GET-only preflight.'
+        description: 'Publish the pinned 20 packages and record confirmed successes. Requires separate owner approval. Default is GET-only preflight.'
         type: boolean
         default: false
       approval_comment_id:
-        description: 'Public owner-approval receipt comment on issue2505, bound to this workflow commit and manifest. Required for execution.'
+        description: 'Public owner-approval receipt comment on issue #2505, bound to this workflow commit and manifest. Required for execution.'
         type: string
         default: ''
       confirmation:
