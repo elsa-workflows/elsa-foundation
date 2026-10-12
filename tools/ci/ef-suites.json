@@ -106,6 +106,11 @@
       "require": "ELSA_REQUIRE_NATIVE_PROVIDER_MATRIX"
     },
     {
+      "suite": "command-cost",
+      "project": "Essentials/tests/Activities/Http/CommandCost/Tests/Elsa.Activities.Http.CommandCost.Tests.csproj",
+      "require": ""
+    },
+    {
       "suite": "locking-database",
       "project": "Essentials/tests/Locking/Database/ProviderTests/Elsa.Locking.Database.ProviderTests.csproj",
       "require": "ELSA_LOCKING_DATABASE_REQUIRE_NATIVE_PROVIDERS"

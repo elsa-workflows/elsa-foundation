@@ -1,0 +1,71 @@
+// Measures where each EF command of a workflow run comes from. Opt-in: every test skips unless ELSA_COMMAND_COST_OUT
+// names a directory, where the measured runs, one TSV of commands per run and summary.md are written. See README.md.
+[assembly: CollectionBehavior(DisableTestParallelization = true)]
+
+namespace Elsa.Activities.Http.CommandCost;
+
+/// <summary>Whether measurement is switched on, and where its output goes.</summary>
+internal static class CommandCostMeasurement
+{
+    public const string OutputVariable = "ELSA_COMMAND_COST_OUT";
+
+    public static string? OutputDirectory =>
+        Environment.GetEnvironmentVariable(OutputVariable) is { Length: > 0 } directory ? Path.GetFullPath(directory) : null;
+}
+
+[CollectionDefinition(Name)]
+public sealed class CommandCostCollection : ICollectionFixture<CommandCostPostgreSqlServer>
+{
+    public const string Name = "command-cost";
+}
+
+[Collection(CommandCostCollection.Name)]
+[Trait("Category", "Measurement")]
+public sealed class CommandCostMeasurementTests(CommandCostPostgreSqlServer postgreSql)
+{
+    private static readonly CommandCostMode[] ReferenceModes = [CommandCostMode.Durable, CommandCostMode.Coalesced50, CommandCostMode.Balanced];
+    private static readonly CommandCostMode[] SeriesModes = [CommandCostMode.Durable, CommandCostMode.Balanced];
+
+    [SkippableFact]
+    public Task Measures_the_reference_workflows_and_the_WriteLine_series_on_SQLite() =>
+        MeasureAsync(new SqliteCommandCostDatabase());
+
+    [SkippableFact]
+    public Task Measures_the_reference_workflows_and_the_WriteLine_series_on_PostgreSQL() =>
+        MeasureAsync(new PostgreSqlCommandCostDatabase(postgreSql));
+
+    private static async Task MeasureAsync(ICommandCostDatabase database)
+    {
+        var output = CommandCostMeasurement.OutputDirectory;
+        Skip.If(output is null, $"Set {CommandCostMeasurement.OutputVariable} to an output directory to measure EF command cost.");
+
+        var runs = new List<CommandCostRun>();
+        foreach (var mode in ReferenceModes)
+        foreach (var workflow in new[] { CommandCostScenarios.WriteLineSequence, CommandCostScenarios.HttpReference, CommandCostScenarios.ForkJoinResume })
+            runs.Add(await CommandCostScenarios.MeasureAsync(database, workflow, mode));
+
+        foreach (var mode in SeriesModes)
+        foreach (var writeLines in CommandCostReport.WriteLineSeries.Where(count => count != 10))
+            runs.Add(await CommandCostScenarios.MeasureAsync(database, CommandCostScenarios.WriteLineSequence, mode, writeLines));
+
+        foreach (var run in runs)
+            await CommandCostReport.WriteRunAsync(output!, run);
+        await File.WriteAllTextAsync(Path.Join(output, "summary.md"), CommandCostReport.Render(CommandCostReport.ReadRuns(output!)));
+
+        // Every statement on the wire is one the EF context sent, or a savepoint EF set or released around a save inside
+        // an open transaction, which Npgsql runs without passing through the command interceptor. Every round trip is one
+        // command, one COMMIT or one of those savepoint statements; Npgsql writes BEGIN and the reset of a pooled
+        // connection together with the next command. Any other difference means traffic the attribution misses, and
+        // the report's counts would not add up.
+        Assert.All(runs.Where(run => run.Wire is not null), run =>
+        {
+            var savepointStatements = run.Counters.SavepointsCreated + run.Counters.SavepointsReleased;
+            Assert.True(run.Wire!.Executes == run.Statements + savepointStatements,
+                $"{run.Provider} {run.Workflow} {run.Mode} {run.Activities}: the wire carried {run.Wire.Executes} statements; the EF context sent " +
+                $"{run.Statements} and {savepointStatements} savepoint statements.");
+            Assert.True(run.Wire.RoundTrips == run.Commands.Count + run.Counters.TransactionsCommitted + savepointStatements,
+                $"{run.Provider} {run.Workflow} {run.Mode} {run.Activities}: {run.Wire.RoundTrips} round trips; the EF context sent " +
+                $"{run.Commands.Count} commands, {run.Counters.TransactionsCommitted} commits and {savepointStatements} savepoint statements.");
+        });
+    }
+}

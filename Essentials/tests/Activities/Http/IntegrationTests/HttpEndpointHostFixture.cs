@@ -126,6 +126,24 @@ public sealed class HttpEndpointHostFixture : IAsyncDisposable
     }
 
     /// <summary>
+    /// As <see cref="StartDurableSqliteAsync"/>, over an empty database of any EF provider the caller owns, such as a
+    /// PostgreSQL database created for one run. The host's module migrator installs the schema.
+    /// </summary>
+    public static Task<HttpEndpointHostFixture> StartDurableAsync(
+        string provider,
+        string connectionString,
+        CheckpointPersistenceMode checkpointPersistenceMode,
+        int maxSegmentCheckpoints,
+        Action<IServiceCollection>? configureServices = null) =>
+        StartAsync(
+            services =>
+            {
+                configureServices?.Invoke(services);
+                AddDurableEf(services, provider, connectionString, checkpointPersistenceMode, maxSegmentCheckpoints);
+            },
+            databaseDirectory: null);
+
+    /// <summary>
     /// Starts one node of a multi-node deployment (#2190): its own host, so its own route table, observers and
     /// convergence pump, over the EF Core SQLite database at <paramref name="databasePath"/> that the other nodes share.
     /// The caller owns the database. The pump runs only once <see cref="StartRouteTableConvergence"/> is called, so a
@@ -144,18 +162,26 @@ public sealed class HttpEndpointHostFixture : IAsyncDisposable
         IServiceCollection services,
         string databasePath,
         CheckpointPersistenceMode checkpointPersistenceMode,
+        int maxSegmentCheckpoints) =>
+        AddDurableEf(services, "Sqlite", $"Data Source={databasePath};Pooling=False", checkpointPersistenceMode, maxSegmentCheckpoints);
+
+    private static void AddDurableEf(
+        IServiceCollection services,
+        string provider,
+        string connectionString,
+        CheckpointPersistenceMode checkpointPersistenceMode,
         int maxSegmentCheckpoints)
     {
         // Durable composition refuses the ephemeral development signer, so the fixture supplies the
         // stable recovery-continuation key a real durable host configures.
         services.AddRuntimeEntityFrameworkCore(new RuntimeEntityFrameworkCoreOptions
         {
-            Provider = "Sqlite",
-            ConnectionString = $"Data Source={databasePath};Pooling=False",
+            Provider = provider,
+            ConnectionString = connectionString,
             RecoveryContinuationSigningKey = "http-endpoint-fixture-recovery-signing-key-32-bytes",
             HierarchyCursorSigningKey = "http-endpoint-fixture-hierarchy-signing-key-32-bytes"
         });
-        services.AddEfModuleMigrations<RuntimeDbContext>("Sqlite");
+        services.AddEfModuleMigrations<RuntimeDbContext>(provider);
 
         new WorkflowsRuntimeCheckpointPersistenceFeature
         {
