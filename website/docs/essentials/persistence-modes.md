@@ -6,11 +6,11 @@ A persistence mode decides when a workflow run's state is committed to the runti
 |---|---|---|
 | `Durable` | After every activity | Resumes at the last completed activity |
 | `Balanced` (default) | On suspend, fault, completion, end of burst, and every N activities | Activities since the last commit run again (at-least-once) |
-| `Ephemeral` | On suspend or fault, before an activity that is not safe to repeat, at the end of a pass that does not complete the run, plus a completion record unless `RecordCompletion` is off | A run of activities that are all safe to repeat, completed in one pass, leaves only its completion record, or no trace with `RecordCompletion` off |
+| `Ephemeral` | On suspend or fault, on dispatching a child workflow, before an activity that is not safe to repeat, and at the end of a pass that does not complete the run, plus a completion record unless `RecordCompletion` is off | A run that completes in one pass with none of those earlier commits leaves only its completion record, or no trace with `RecordCompletion` off |
 
 - **Durable** keeps the checkpoints an activity produces in memory while it runs and commits them together, once per activity. It costs the most database work and loses the least on a crash.
 - **Balanced** keeps the checkpoints of a burst of work in memory and commits them together: when the run suspends, faults or completes, when the runtime finishes a pass over the run's queued work (the end of a burst), and after `MaxActivitiesPerCommit` activities (50 by default). It is the default for every workflow that does not choose a mode, on every host that does not configure one.
-- **Ephemeral** commits when the run suspends or faults, before an activity that is not safe to repeat, when a pass ends without completing the run, and once when it completes. It has no other intermediate commits, however long the pass.
+- **Ephemeral** commits when the run suspends or faults, when it dispatches a child workflow, before an activity that is not safe to repeat, when a pass ends without completing the run, and once when it completes. It has no other intermediate commits, however long the pass. A run that never suspends can still be committed before it completes, by a child dispatch or by the step before an activity that is not safe to repeat.
 
 ## What every mode commits
 
@@ -34,7 +34,7 @@ For Ephemeral, a suspension is any stop that is not completion. A run that waits
 
 - **Durable** for human-in-the-loop workflows and for workflows with side effects you never want repeated after a crash, when you are willing to pay a commit per activity.
 - **Balanced** for most workflows. After a crash, the activities since the last commit run again. Activities that are not safe to repeat are committed before they run in every mode, so Balanced repeats them no more often than Durable does.
-- **Ephemeral** for high-volume, short-lived runs whose history you do not need. A run leaves no record only if every activity in it is safe to repeat and it completes in one pass. Note that a long Ephemeral pass that meets none of its commit points keeps all its work in memory until it does: there is no intermediate commit to bound it.
+- **Ephemeral** for high-volume, short-lived runs whose history you do not need. A run leaves no record only if it completes in one pass without any earlier commit: no suspension, no child dispatch and no activity that is not safe to repeat. Note that a long Ephemeral pass that meets none of its commit points keeps all its work in memory until it does: there is no intermediate commit to bound it.
 
 ## Setting the mode
 

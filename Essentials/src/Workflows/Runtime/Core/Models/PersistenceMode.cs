@@ -24,11 +24,11 @@ public enum PersistenceMode
     Balanced,
 
     /// <summary>
-    /// Commits when the run suspends or faults, before an activity that is not safe to repeat runs, at the end of a pass
-    /// that does not complete the run, and once at completion. A host that turns
+    /// Commits when the run suspends or faults, when it dispatches a child workflow, before an activity that is not safe
+    /// to repeat runs, at the end of a pass that does not complete the run, and once at completion. A host that turns
     /// <see cref="PersistenceModeOptions.RecordCompletion"/> off drops that completion record for a run that was never
-    /// committed before, so a run whose activities are all safe to repeat and that completes in one pass leaves no trace;
-    /// a run that already has a record always gets its completion committed. After a crash the run starts again from its
+    /// committed before, so a run that completes in one pass with none of those earlier commits leaves no trace; a run
+    /// that already has a record always gets its completion committed. After a crash the run starts again from its
     /// last commit, which may be the beginning.
     /// </summary>
     Ephemeral
