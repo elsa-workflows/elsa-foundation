@@ -119,6 +119,6 @@ the exact full gates named by its spec or quickstart. The repository-wide baseli
 
 ```bash
 dotnet build Elsa.Server.slnx
-dotnet test tests/essentials/Architecture/Tests/Elsa.Architecture.Tests.csproj
+dotnet test Essentials/tests/Architecture/Tests/Elsa.Architecture.Tests.csproj
 dotnet run --project tools/maps/Elsa.Maps.Generator -- check
 ```

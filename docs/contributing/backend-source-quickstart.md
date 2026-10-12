@@ -53,7 +53,7 @@ steps and file allowlist are below.
 From the Foundation repository root, build the focused backend project:
 
 ```bash
-dotnet build src/apps/Elsa.Workbench/Elsa.Workbench.csproj -p:RestoreLockedMode=true
+dotnet build Essentials/apps/Elsa.Workbench/Elsa.Workbench.csproj -p:RestoreLockedMode=true
 ```
 
 The build still performs its normal restore when needed, but locked mode keeps that restore aligned with the
@@ -63,7 +63,7 @@ the [NuGet lock-file instructions](../reference/nuget-lock-files.md#updating-loc
 Start the HTTP launch profile in one terminal and leave it running:
 
 ```bash
-dotnet run --no-build --project src/apps/Elsa.Workbench/Elsa.Workbench.csproj --launch-profile http
+dotnet run --no-build --project Essentials/apps/Elsa.Workbench/Elsa.Workbench.csproj --launch-profile http
 ```
 
 This Development/SQLite profile listens at `http://localhost:5095`. If that port is occupied, leave the
@@ -112,19 +112,19 @@ nested paths and journal files.
 **macOS/Linux (Bash):**
 
 ```bash
-find src/apps/Elsa.Workbench -type f \( -name '*.db' -o -name '*.db-*' -o -name '*.sqlite*' -o -name '*-journal' \) -print
+find Essentials/apps/Elsa.Workbench -type f \( -name '*.db' -o -name '*.db-*' -o -name '*.sqlite*' -o -name '*-journal' \) -print
 ```
 
 **Windows PowerShell:**
 
 ```powershell
-Get-ChildItem -LiteralPath ./src/apps/Elsa.Workbench -Recurse -File -Force |
+Get-ChildItem -LiteralPath ./Essentials/apps/Elsa.Workbench -Recurse -File -Force |
     Where-Object { $_.Name -like '*.db' -or $_.Name -like '*.db-*' -or $_.Name -like '*.sqlite*' -or $_.Name -like '*-journal' } |
     Select-Object -ExpandProperty FullName
 ```
 
 Review every result before deleting anything. The only allowed paths are these six files directly under
-`src/apps/Elsa.Workbench/`: `elsa.db`, `elsa.db-wal`, `elsa.db-shm`, `elsa-diagnostics.db`,
+`Essentials/apps/Elsa.Workbench/`: `elsa.db`, `elsa.db-wal`, `elsa.db-shm`, `elsa-diagnostics.db`,
 `elsa-diagnostics.db-wal`, and `elsa-diagnostics.db-shm`. If configuration points to a database elsewhere,
 or the listing shows another database, a nested path, or any journal file, stop and identify its owner; do not
 widen this list or delete it. When the inventory contains only the allowed files, remove those exact names
@@ -134,12 +134,12 @@ using the command for your shell.
 
 ```bash
 rm -f -- \
-  src/apps/Elsa.Workbench/elsa.db \
-  src/apps/Elsa.Workbench/elsa.db-wal \
-  src/apps/Elsa.Workbench/elsa.db-shm \
-  src/apps/Elsa.Workbench/elsa-diagnostics.db \
-  src/apps/Elsa.Workbench/elsa-diagnostics.db-wal \
-  src/apps/Elsa.Workbench/elsa-diagnostics.db-shm
+  Essentials/apps/Elsa.Workbench/elsa.db \
+  Essentials/apps/Elsa.Workbench/elsa.db-wal \
+  Essentials/apps/Elsa.Workbench/elsa.db-shm \
+  Essentials/apps/Elsa.Workbench/elsa-diagnostics.db \
+  Essentials/apps/Elsa.Workbench/elsa-diagnostics.db-wal \
+  Essentials/apps/Elsa.Workbench/elsa-diagnostics.db-shm
 ```
 
 **Windows PowerShell:**
@@ -149,7 +149,7 @@ rm -f -- \
     'elsa.db', 'elsa.db-wal', 'elsa.db-shm',
     'elsa-diagnostics.db', 'elsa-diagnostics.db-wal', 'elsa-diagnostics.db-shm'
 ) | ForEach-Object {
-    $databasePath = Join-Path './src/apps/Elsa.Workbench' $_
+    $databasePath = Join-Path './Essentials/apps/Elsa.Workbench' $_
     if (Test-Path -LiteralPath $databasePath -PathType Leaf) {
         Remove-Item -LiteralPath $databasePath
     }
@@ -177,7 +177,7 @@ use. Do not stop a process you do not own. After the build above, start on this 
 the first terminal:
 
 ```bash
-dotnet run --no-build --project src/apps/Elsa.Workbench/Elsa.Workbench.csproj --no-launch-profile -- --urls http://localhost:5295 --environment Development
+dotnet run --no-build --project Essentials/apps/Elsa.Workbench/Elsa.Workbench.csproj --no-launch-profile -- --urls http://localhost:5295 --environment Development
 ```
 
 In a second terminal at the repository root, check readiness and then run the smoke test with the same

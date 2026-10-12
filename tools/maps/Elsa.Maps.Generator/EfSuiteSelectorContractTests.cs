@@ -14,7 +14,7 @@ public static class EfSuiteSelectorContractTests
             new("runtime", "tests/Runtime/Runtime.Tests.csproj", "ELSA_REQUIRE_NATIVE_PROVIDER_MATRIX")
         ];
         string[] solutionProjects = ["src/Shared/Shared.csproj", .. suites.Select(suite => suite.Project)];
-        const string separateSecrets = "tests/essentials/Secrets/Persistence/EntityFrameworkCore/PostgreSql/Tests/Elsa.Secrets.Persistence.EntityFrameworkCore.PostgreSql.Tests.csproj";
+        const string separateSecrets = "Essentials/tests/Secrets/Persistence/EntityFrameworkCore/PostgreSql/Tests/Elsa.Secrets.Persistence.EntityFrameworkCore.PostgreSql.Tests.csproj";
         var roots = suites.Select(suite => suite.Project).Append(separateSecrets).ToArray();
         var testProjects = suites.Select(suite => suite.Project).ToArray();
 

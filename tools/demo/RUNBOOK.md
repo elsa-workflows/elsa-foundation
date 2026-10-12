@@ -124,11 +124,11 @@ bash tools/demo/prepack.sh
 command -v docker jq curl python3 rsync sqlite3 caffeinate
 docker info >/dev/null && echo docker ok
 docker image inspect postgres:16-alpine >/dev/null && echo image ok
-ls ../elsa-foundation-studio-demo/src/apps/Elsa.Studio.Web/bin/Release/net10.0/Elsa.Studio.Web.dll
+ls Studio/src/apps/Elsa.Studio.Web/bin/Release/net10.0/Elsa.Studio.Web.dll
 ```
 
 - **Expect:** seven paths, then `docker ok` and `image ok`, then the path of the Studio build (Act 3; a checkout elsewhere is named by `DEMO_STUDIO_DIR`). The image is used from the cache and nothing is pulled: with Wi-Fi off, an evicted image is a dead demo, so check it here.
-- **If it goes wrong:** no Studio build: build the Studio checkout (its `README.md`: `pnpm install`, `pnpm build`, then `dotnet build -c Release src/apps/Elsa.Studio.Web`), or present Acts 1 and 2 and do Act 3 by its fallback.
+- **If it goes wrong:** no Studio build: from the Foundation root run `pnpm --dir Studio install --frozen-lockfile`, `pnpm --dir Studio build`, then `dotnet build -c Release Studio/src/apps/Elsa.Studio.Web/Elsa.Studio.Web.csproj`, or present Acts 1 and 2 and do Act 3 by its fallback.
 
 Plug in the power adapter and open a new terminal tab, **awake**. Run this in it and leave it running until the demo is over:
 
@@ -311,11 +311,11 @@ In tab **Studio** (after S8, so the logs folder exists):
 bash tools/demo/run-studio.sh 2>&1 | tee artifacts/demo/logs/studio.log
 ```
 
-- **Expect:** `studio: http://localhost:5302`, `workbench: http://localhost:5301`, then the host's own `Now listening on: http://localhost:5302`. It runs the Studio checkout `../elsa-foundation-studio-demo` (`DEMO_STUDIO_DIR` names another). On the presenter's machine that checkout is built in place, on Studio main `86a99789`, which contains the designer fix (PR #547), so no `assets: ...` line should appear. `run-studio.sh` still carries a workaround for a checkout that was built in another folder and then moved (it runs a re-based copy of the static web asset manifest, kept under `artifacts/demo/hosts/studio`, and says so in an `assets: ...` line): it is now a no-op safety net, and the line, if it ever appears, is harmless. To rebuild the checkout after pulling Studio, run `dotnet build -c Release src/apps/Elsa.Studio.Web` in it (`pnpm install && pnpm build` first only when the front end changed), never on stage.
+- **Expect:** `studio: http://localhost:5302`, `workbench: http://localhost:5301`, then the host's own `Now listening on: http://localhost:5302`. It runs the Studio checkout `../elsa-foundation-studio-demo` (`DEMO_STUDIO_DIR` names another). On the presenter's machine that checkout is built in place, on Studio main `86a99789`, which contains the designer fix (PR #547), so no `assets: ...` line should appear. `run-studio.sh` still carries a workaround for a checkout that was built in another folder and then moved (it runs a re-based copy of the static web asset manifest, kept under `artifacts/demo/hosts/studio`, and says so in an `assets: ...` line): it is now a no-op safety net, and the line, if it ever appears, is harmless. To rebuild the checkout after pulling Studio, run `dotnet build -c Release Essentials/apps/Elsa.Studio.Web` in it (`pnpm install && pnpm build` first only when the front end changed), never on stage.
 - **If it goes wrong:** `There is no Studio checkout` or `is not built`: the message gives the build commands. Never run them on stage.
 
 In the browser, open a new tab on `http://localhost:5302`. Studio sends you to the Workbench's sign-in page (`localhost:5301/_elsa/identity/login`) and, once signed in, back to Studio. Sign in with the Workbench's **development admin**: the
-user name and the password are the values of `SeedAdminUserName` and `SeedAdminPassword` in `artifacts/demo/hosts/wb/shells.json`, under the feature `FoundationIdentityAspNetCoreIdentityEntityFrameworkCore` (the Workbench's own development seed, copied from `src/apps/Elsa.Workbench/shells.json`).
+user name and the password are the values of `SeedAdminUserName` and `SeedAdminPassword` in `artifacts/demo/hosts/wb/shells.json`, under the feature `FoundationIdentityAspNetCoreIdentityEntityFrameworkCore` (the Workbench's own development seed, copied from `Essentials/apps/Elsa.Workbench/shells.json`).
 Read them in an editor, off screen; never print that file on the screen, the password is in it. Sign in now, before the audience arrives: the sign-in page shows nothing sensitive, but it is a wasted minute on stage, and nothing is then typed but the demo. Then open **Workflows**, and leave the tab there.
 
 Then look at the bottom of the Studio page. Its bottom panel (**Console** / **Structured Logs**) may be open, and it shows the Studio checkout's absolute path, with your user name. Collapse it with the chevron at the panel's right edge before the audience sees the screen.

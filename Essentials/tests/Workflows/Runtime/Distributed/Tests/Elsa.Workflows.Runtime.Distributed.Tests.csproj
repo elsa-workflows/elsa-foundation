@@ -1,0 +1,38 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <IsTestProject>true</IsTestProject>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- A real CShells host, to prove a shell reload keeps the leases a host stop hands off (spec 184, FR-021, FR-022). -->
+    <PackageReference Include="CShells" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="Microsoft.Extensions.TimeProvider.Testing" />
+    <PackageReference Include="xunit" />
+    <PackageReference Include="xunit.runner.visualstudio" />
+    <PackageReference Include="coverlet.collector" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Committed golden fixtures: the frozen v1 wire shape of the cross-node command transport item. -->
+    <None Include="Fixtures\**\*.json" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\..\..\src\Activities\DispatchWorkflow\Runtime\Elsa.Activities.DispatchWorkflow.Runtime.csproj" />
+    <ProjectReference Include="..\..\..\..\..\src\Workflows\Runtime\Api\Elsa.Workflows.Runtime.Api.csproj" />
+    <ProjectReference Include="..\..\..\..\..\src\Workflows\Runtime\Distributed\Elsa.Workflows.Runtime.Distributed\Elsa.Workflows.Runtime.Distributed.csproj" />
+    <ProjectReference Include="..\..\..\..\..\src\Workflows\Runtime\Core\Elsa.Workflows.Runtime.Core.csproj" />
+    <ProjectReference Include="..\..\..\..\..\src\Tasks\Elsa.Tasks\Elsa.Tasks.csproj" />
+    <!-- The distributed runtime composed on a membership provider, shared with the membership conformance kit (spec 184). -->
+    <ProjectReference Include="..\..\..\..\Cluster\Testing\Elsa.Cluster.Testing.csproj" />
+    <!-- AddShellStartupValidation, which both shipped hosts compose: a shell runs its ValidateOnStart checks as it activates (#2331). -->
+    <ProjectReference Include="..\..\..\..\..\src\Cluster\Readability\Elsa.Cluster.Readability.csproj" />
+  </ItemGroup>
+
+</Project>

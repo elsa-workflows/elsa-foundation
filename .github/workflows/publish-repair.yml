@@ -3,7 +3,7 @@ name: Publish repair
 # Settles by hand what a publish cannot settle itself (spec 150 FR-019), run from main only, through the repair
 # command of tools/versioning/Elsa.Versioning.Publisher (tools/versioning/README.md, Publishing). This workflow only
 # runs it; the logic - reading the feed, refusing to lower an entry, refusing a commit not on main - lives in the
-# tool, tested against a fake feed and local git (tests/essentials/Versioning/Publisher/Tests).
+# tool, tested against a fake feed and local git (Essentials/tests/Versioning/Publisher/Tests).
 #
 # A separate workflow rather than a dispatch mode of packages.yml: a repair packs and builds nothing, so folding it
 # into the pack/publish job graph there would either run pack's restore-build-pack steps for no reason or need a

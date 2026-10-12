@@ -8,7 +8,7 @@ using Elsa.Maps.Generator;
 //   solution-filters | solution-filters-check | solution-filters-self-test
 //   solution-filter-roots <filter-path> | solution-filter <filter-path>
 //   ef-suites-select | ef-suites-self-test
-//   project-facts-self-test | feature-facts-self-test
+//   project-facts-self-test | feature-facts-self-test | repo-layout-self-test
 
 // "dependency-map" first: it is the dataset every project-graph map is a projection of (spec 149). Then "maps":
 // the v2 findings report reads summary lines out of the v1 maps, so they must exist first.
@@ -68,6 +68,12 @@ try
         return 0;
     }
 
+    if (layers.SequenceEqual(["repo-layout-self-test"], StringComparer.Ordinal))
+    {
+        RepoLayoutContractTests.Run();
+        return 0;
+    }
+
     if (layers.SequenceEqual(["ef-suites-select"], StringComparer.Ordinal))
     {
         Console.WriteLine(EfSuiteSelector.Select(repo).ToJson());
@@ -89,7 +95,7 @@ try
     // writing part of the maps and then throwing.
     var requested = layers.Contains("all", StringComparer.Ordinal) ? knownLayers : layers;
     if (requested.FirstOrDefault(layer => !knownLayers.Contains(layer, StringComparer.Ordinal)) is { } unknown)
-        throw new ArgumentException($"Unknown generator command '{unknown}'. Known map layers: {string.Join(", ", knownLayers)}, all, check, solution-filters, solution-filters-check, solution-filters-self-test, solution-filter-roots <filter-path>, solution-filter <filter-path>, ef-suites-select, ef-suites-self-test, project-facts-self-test, feature-facts-self-test.");
+        throw new ArgumentException($"Unknown generator command '{unknown}'. Known map layers: {string.Join(", ", knownLayers)}, all, check, solution-filters, solution-filters-check, solution-filters-self-test, solution-filter-roots <filter-path>, solution-filter <filter-path>, ef-suites-select, ef-suites-self-test, project-facts-self-test, feature-facts-self-test, repo-layout-self-test.");
 
     var projects = ProjectGraph.Read(repo);
     var written = new List<string>();

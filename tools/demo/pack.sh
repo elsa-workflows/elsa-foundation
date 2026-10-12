@@ -54,10 +54,10 @@ done
 demo_require_python
 cd "$demo_root"
 configuration="Release"
-host="src/apps/Elsa.Foundation.Host/Elsa.Foundation.Host.csproj"
-host_deps="src/apps/Elsa.Foundation.Host/bin/$configuration/net10.0/Elsa.Foundation.Host.deps.json"
+host="Essentials/apps/Elsa.Foundation.Host/Elsa.Foundation.Host.csproj"
+host_deps="Essentials/apps/Elsa.Foundation.Host/bin/$configuration/net10.0/Elsa.Foundation.Host.deps.json"
 sample="samples/Elsa.Samples.Nuplane.Notes/Elsa.Samples.Nuplane.Notes.csproj"
-persistence="src/essentials/Persistence/EntityFramework/Elsa.Persistence.EntityFramework.csproj"
+persistence="Essentials/src/Persistence/EntityFramework/Elsa.Persistence.EntityFramework.csproj"
 tooling="tools/demo/Elsa.Samples.Nuplane.Notes.Tooling/Elsa.Samples.Nuplane.Notes.Tooling.csproj"
 
 resolved=()
@@ -108,7 +108,7 @@ done
 echo "== filling the closure feed ${closure#"$demo_root"/}"
 demo_quiet "Restoring the tooling project" dotnet restore "$tooling" -nologo -v q
 python3 - "$closure" \
-  "$demo_root/src/essentials/Persistence/EntityFramework/obj/project.assets.json" \
+  "$demo_root/Essentials/src/Persistence/EntityFramework/obj/project.assets.json" \
   "$demo_root/tools/demo/Elsa.Samples.Nuplane.Notes.Tooling/obj/project.assets.json" <<'PY'
 import json, os, shutil, sys
 

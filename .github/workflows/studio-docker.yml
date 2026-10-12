@@ -1,0 +1,221 @@
+name: Studio Docker (consolidated gated)
+
+# Manual-only replacement for Studio/.github/workflows/docker.yml. The operator must
+# name a successful run of Studio Packages (consolidated gated); this workflow then
+# downloads that run's Studio NuGet artifact, verifies its provenance, and builds the
+# image from the exact same commit. Image pushes remain separately opt-in.
+on:
+  workflow_dispatch:
+    inputs:
+      packages_run_id:
+        description: 'Successful run ID from Studio Packages (consolidated gated).'
+        required: true
+        type: string
+      publish:
+        description: 'Push the verified image after package publishing has succeeded. Leave false for build-only qualification.'
+        required: true
+        type: boolean
+        default: false
+      preview_image_tag:
+        description: 'Required for a main image push. Check Docker Hub first and enter a strictly higher 4.0.0-preview.N tag.'
+        required: false
+        type: string
+        default: ''
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: studio-docker-${{ inputs.packages_run_id }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Build & optionally publish elsaworkflows/elsa-studio
+    if: ${{ github.ref == 'refs/heads/main' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    environment:
+      name: ${{ inputs.publish == true && 'studio-publish' || 'studio-validation' }}
+    steps:
+      - name: Verify the selected Studio Packages run
+        id: source
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SOURCE_RUN_ID: ${{ inputs.packages_run_id }}
+          PUBLISH_IMAGE: ${{ inputs.publish }}
+          PUBLISHING_ENABLED: ${{ vars.ELSA_STUDIO_CONSOLIDATED_PUBLISHING }}
+        run: |
+          set -euo pipefail
+          if [[ ! "$SOURCE_RUN_ID" =~ ^[0-9]+$ ]]; then
+            echo "::error::packages_run_id must be a numeric Actions run ID."
+            exit 1
+          fi
+          if [[ "$PUBLISH_IMAGE" == "true" && "$PUBLISHING_ENABLED" != "true" ]]; then
+            echo "::error::Image publishing was requested, but ELSA_STUDIO_CONSOLIDATED_PUBLISHING is not true."
+            exit 1
+          fi
+
+          run=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$SOURCE_RUN_ID")
+          name=$(jq -r '.name // ""' <<< "$run")
+          path=$(jq -r '.path // ""' <<< "$run")
+          path=${path%%@*}
+          event=$(jq -r '.event // ""' <<< "$run")
+          status=$(jq -r '.status // ""' <<< "$run")
+          conclusion=$(jq -r '.conclusion // ""' <<< "$run")
+          head_repository=$(jq -r '.head_repository.full_name // ""' <<< "$run")
+          head_branch=$(jq -r '.head_branch // ""' <<< "$run")
+          head_sha=$(jq -r '.head_sha // ""' <<< "$run")
+          run_number=$(jq -r '.run_number // ""' <<< "$run")
+
+          if [[ "$name" != "Studio Packages (consolidated gated)" || "$path" != ".github/workflows/studio-packages.yml" ]]; then
+            echo "::error::The selected run is not the consolidated Studio Packages workflow."
+            exit 1
+          fi
+          if [[ "$event" != "workflow_dispatch" || "$status" != "completed" || "$conclusion" != "success" ]]; then
+            echo "::error::The selected Studio Packages run must be a successful completed manual dispatch."
+            exit 1
+          fi
+          if [[ "$head_repository" != "$GITHUB_REPOSITORY" || ! "$head_sha" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "::error::The selected run must belong to this repository and identify a full commit SHA."
+            exit 1
+          fi
+          if [[ "$PUBLISH_IMAGE" == "true" && "$head_branch" != "main" && ! "$head_branch" =~ ^v?4\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]; then
+            echo "::error::Image publication requires a Studio Packages run dispatched from main or a 4.x release tag."
+            exit 1
+          fi
+          {
+            echo "run_id=$SOURCE_RUN_ID"
+            echo "head_branch=$head_branch"
+            echo "sha=$head_sha"
+            echo "run_number=$run_number"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Checkout the package run's exact source commit
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.source.outputs.sha }}
+          persist-credentials: false
+
+      - name: Download that run's Studio package artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: elsa-foundation-studio-nuget-packages
+          path: Studio/packages/nuget
+          github-token: ${{ github.token }}
+          repository: ${{ github.repository }}
+          run-id: ${{ steps.source.outputs.run_id }}
+
+      - name: Verify Studio artifact provenance and derive image tags
+        id: manifest
+        env:
+          EXPECTED_REPOSITORY: ${{ github.repository }}
+          EXPECTED_RUN_ID: ${{ steps.source.outputs.run_id }}
+          EXPECTED_RUN_NUMBER: ${{ steps.source.outputs.run_number }}
+          EXPECTED_HEAD_BRANCH: ${{ steps.source.outputs.head_branch }}
+          EXPECTED_SHA: ${{ steps.source.outputs.sha }}
+          PUBLISH_IMAGE: ${{ inputs.publish }}
+          PREVIEW_IMAGE_TAG: ${{ inputs.preview_image_tag }}
+          PUBLISHING_ENABLED: ${{ vars.ELSA_STUDIO_CONSOLIDATED_PUBLISHING }}
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json
+          import os
+          import sys
+          from pathlib import Path
+
+          sys.path.insert(0, "tools/ci")
+          from studio_image_tags import derive_tags
+          from verify_studio_nuget_packages import verify_packages
+
+          artifact = Path("Studio/packages/nuget")
+          manifest_path = artifact / "studio-package-build.json"
+          if not manifest_path.is_file():
+              raise SystemExit("Studio package provenance manifest is missing from the selected artifact.")
+          manifest = json.loads(manifest_path.read_text())
+          expected = {
+              "repository": os.environ["EXPECTED_REPOSITORY"],
+              "workflow": "Studio Packages (consolidated gated)",
+              "run_id": os.environ["EXPECTED_RUN_ID"],
+              "run_number": int(os.environ["EXPECTED_RUN_NUMBER"]),
+              "commit": os.environ["EXPECTED_SHA"],
+          }
+          for key, value in expected.items():
+              if manifest.get(key) != value:
+                  raise SystemExit(f"Studio artifact provenance mismatch for {key}.")
+          source_branch = os.environ["EXPECTED_HEAD_BRANCH"]
+          expected_ref = "refs/heads/main" if source_branch == "main" else f"refs/tags/{source_branch}"
+          if os.environ["PUBLISH_IMAGE"] == "true" and manifest.get("ref") != expected_ref:
+              raise SystemExit("Studio artifact ref does not match the selected Actions run ref.")
+
+          package_ids = verify_packages(Path.cwd(), artifact, manifest["version"])
+
+          target = manifest.get("publish_target")
+          gate_enabled = manifest.get("publisher_gate_enabled") is True
+          publish_requested = os.environ["PUBLISH_IMAGE"] == "true"
+          if publish_requested and (target not in {"feedz-preview", "public-release"} or not gate_enabled or os.environ["PUBLISHING_ENABLED"] != "true"):
+              raise SystemExit("Image publishing requires a successful package publication with the repository gate enabled.")
+
+          sha = manifest["commit"]
+          version = manifest["version"]
+          ref = manifest["ref"]
+          tags = derive_tags(ref, version, sha, publish_requested, os.environ["PREVIEW_IMAGE_TAG"])
+
+          with open(os.environ["GITHUB_OUTPUT"], "a") as output:
+              output.write(f"publish_image={'true' if publish_requested else 'false'}\n")
+              output.write("image_tags<<TAGS\n" + "\n".join(tags) + "\nTAGS\n")
+          print(f"Verified the exact {len(package_ids)} Studio package IDs at version {version} from {sha}.")
+          PY
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          package_json_file: Studio/package.json
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: Studio/pnpm-lock.yaml
+
+      - name: Install frontend dependencies
+        run: pnpm install --frozen-lockfile
+        working-directory: Studio
+
+      - name: Build frontend assets
+        run: pnpm build
+        working-directory: Studio
+
+      - name: Verify Studio frontend assets
+        run: python3 tools/ci/verify-studio-assets.py
+
+      - name: Set up QEMU for the multi-platform publisher
+        if: ${{ steps.manifest.outputs.publish_image == 'true' }}
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Docker Hub
+        if: ${{ steps.manifest.outputs.publish_image == 'true' }}
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+
+      - name: Build and optionally publish
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Studio/src/apps/Elsa.Studio.Web/Dockerfile
+          platforms: ${{ steps.manifest.outputs.publish_image == 'true' && 'linux/amd64,linux/arm64' || 'linux/amd64' }}
+          push: ${{ steps.manifest.outputs.publish_image == 'true' }}
+          tags: ${{ steps.manifest.outputs.image_tags }}
+          labels: |
+            org.opencontainers.image.title=Elsa Studio
+            org.opencontainers.image.description=Elsa 4 workflow studio
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

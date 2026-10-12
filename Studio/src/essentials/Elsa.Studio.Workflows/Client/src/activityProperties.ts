@@ -1,0 +1,575 @@
+import type {
+  StudioActivityInputDescriptor,
+  StudioExpressionDescriptor
+} from "@elsa-workflows/studio-sdk";
+import type { ActivityNode } from "./workflowTypes";
+
+export interface ActivityExpression {
+  type: string;
+  value: unknown;
+}
+
+export interface WrappedActivityInputValue {
+  typeName: string;
+  expression: ActivityExpression;
+  memoryReference?: unknown;
+  /** Authored conversion request (backend AuthoredValueConversionRequest); absent = default (Auto). */
+  conversion?: unknown;
+  /** Passthrough ArgumentState fields the editor doesn't model; owned by activityInputWire. */
+  argumentExtras?: Record<string, unknown>;
+}
+
+/** The expression syntax whose value is a Secret Reference. */
+export const secretSyntax = "Secret";
+
+/**
+ * Whether the input is secret-only: the activity declares that it accepts only a Secret Reference (the
+ * backend's `isCredential`). Such an input is authored with the secret picker alone: it has no literal
+ * entry, and emptying it unbinds it (`clearSecretOnlyInput`) rather than leaving an empty value behind.
+ */
+export function acceptsOnlySecretReference(descriptor: StudioActivityInputDescriptor) {
+  return descriptor.isCredential === true;
+}
+
+export function camelize(value: string) {
+  const trimmed = value.trim();
+  return trimmed ? trimmed.charAt(0).toLowerCase() + trimmed.slice(1) : value;
+}
+
+/**
+ * The in-memory property key for an authored input is the catalog's stable `referenceKey`, verbatim —
+ * the same key the backend validates against (it may be any casing or shape: "text", "URL",
+ * "customer-id"). The camelized display name is only a fallback for descriptors without one.
+ */
+export function getInputPropertyName(descriptor: StudioActivityInputDescriptor) {
+  const referenceKey = descriptor.referenceKey?.trim();
+  return referenceKey ? referenceKey : camelize(descriptor.name);
+}
+
+export function readInputValue(activity: ActivityNode, descriptor: StudioActivityInputDescriptor) {
+  const propertyName = getInputPropertyName(descriptor);
+  const value = activity[propertyName];
+  return descriptor.isWrapped === false ? value ?? descriptor.defaultValue ?? "" : readWrappedInputValue(value, descriptor);
+}
+
+export function readWrappedInput(activity: ActivityNode, descriptor: StudioActivityInputDescriptor) {
+  return readWrappedInputValue(activity[getInputPropertyName(descriptor)], descriptor);
+}
+
+export function withLiteralValue(previous: WrappedActivityInputValue, value: unknown): WrappedActivityInputValue {
+  return {
+    ...previous,
+    expression: {
+      type: previous.expression.type || "Literal",
+      value
+    }
+  };
+}
+
+export function withSyntax(previous: WrappedActivityInputValue, syntax: string): WrappedActivityInputValue {
+  return {
+    ...previous,
+    expression: {
+      type: syntax,
+      value: previous.expression.value
+    }
+  };
+}
+
+export function withExpression(previous: WrappedActivityInputValue, syntax: string, value: unknown): WrappedActivityInputValue {
+  return {
+    ...previous,
+    expression: { type: syntax, value }
+  };
+}
+
+/** Sets or (with null) clears the binding's authored conversion request. */
+export function withConversion(previous: WrappedActivityInputValue, conversion: unknown): WrappedActivityInputValue {
+  if (conversion == null) {
+    const { conversion: _cleared, ...rest } = previous;
+    void _cleared;
+    return rest;
+  }
+  return { ...previous, conversion };
+}
+
+export interface ExpressionModeTransition {
+  requiresConfirmation: boolean;
+  nextValue: unknown;
+}
+
+/** Plans a syntax change without mutating the Activity Property Value. */
+export function planExpressionModeTransition(
+  sourceMode: StudioExpressionDescriptor["editingMode"],
+  targetMode: StudioExpressionDescriptor["editingMode"],
+  propertyTypeName: string,
+  currentValue: unknown,
+  targetDefaultValue: unknown
+): ExpressionModeTransition {
+  if (sourceMode === "text" && targetMode === "text") {
+    return { requiresConfirmation: false, nextValue: currentValue };
+  }
+
+  if (isEmptyExpressionValue(currentValue)) {
+    return { requiresConfirmation: false, nextValue: targetDefaultValue };
+  }
+
+  if (sourceMode === "literal" && targetMode === "text" && isPrimitiveValue(currentValue)) {
+    return { requiresConfirmation: false, nextValue: String(currentValue) };
+  }
+
+  if (sourceMode === "text" && targetMode === "literal" && isStringType(propertyTypeName)) {
+    return { requiresConfirmation: false, nextValue: currentValue };
+  }
+
+  if (sourceMode === targetMode && (sourceMode === "literal" || sourceMode === "text")) {
+    return { requiresConfirmation: false, nextValue: currentValue };
+  }
+
+  return { requiresConfirmation: true, nextValue: targetDefaultValue };
+}
+
+export function isEmptyExpressionValue(value: unknown): boolean {
+  if (value == null || value === "") return true;
+  if (Array.isArray(value)) return value.length === 0;
+  if (typeof value !== "object") return false;
+  const prototype = Object.getPrototypeOf(value);
+  return (prototype === Object.prototype || prototype === null) && Object.keys(value).length === 0;
+}
+
+export function getLiteralDefaultValue(descriptor: StudioActivityInputDescriptor): unknown {
+  if (descriptor.defaultValue != null) return descriptor.defaultValue;
+  // Descriptor-aware, not a `typeName` parse: under #945 a collection input's typeName is the element
+  // alias, so parsing it would hand back a scalar "" instead of [] when switching into Literal mode.
+  if (describeDictionaryForInput(descriptor)) return {};
+  if (describeCollectionForInput(descriptor)) return [];
+  const typeName = descriptor.typeName.trim().toLowerCase();
+  return typeName === "system.boolean" || typeName === "boolean" || typeName === "bool" ? false : "";
+}
+
+function isPrimitiveValue(value: unknown): boolean {
+  return ["string", "number", "boolean", "bigint"].includes(typeof value);
+}
+
+function isStringType(typeName: string): boolean {
+  const normalized = typeName.split(",", 1)[0]?.trim().toLowerCase();
+  return normalized === "system.string" || normalized === "string";
+}
+
+export function writeInputValue(activity: ActivityNode, descriptor: StudioActivityInputDescriptor, value: unknown): ActivityNode {
+  return {
+    ...activity,
+    [getInputPropertyName(descriptor)]: value
+  };
+}
+
+export function getLiteralEditorValue(activity: ActivityNode, descriptor: StudioActivityInputDescriptor) {
+  if (descriptor.isWrapped === false) return readInputValue(activity, descriptor);
+  return readWrappedInput(activity, descriptor).expression.value;
+}
+
+// --- "Object" demotion -------------------------------------------------------------------------
+//
+// `toWireArgument` (activityInputWire.ts) promotes a Literal holding a structured value to an "Object"
+// expression, because the backend's literal converter only handles scalars — the Object handler is what
+// JSON-deserializes a list into ICollection<T>. That promotion is a *serialization* detail, but nothing
+// reversed it on the way back in, so every saved list input reopened as "Object": the syntax picker read
+// "Object" and, since `editingMode` was then "structured", the checklist/repeater was replaced by the raw
+// JSON summary.
+//
+// Restore the authored syntax here, at the single seam every reader goes through. Scoped to
+// collection/dictionary inputs, where Literal and Object describe the identical value and Literal is the
+// mode that owns structured editing; a scalar input's Object expression is left alone. Authors who
+// genuinely want raw JSON keep it persistently via `isRepeaterOptOut` (uiHint json/code), and Object
+// remains selectable per-session for anything else.
+//
+// This is presentation-only: `withLiteralValue` keeps the Literal type and `toWireArgument` re-promotes on
+// save, so the bytes sent to the backend are unchanged.
+function resolveAuthoredExpression(
+  expression: ActivityExpression,
+  descriptor: StudioActivityInputDescriptor
+): ActivityExpression {
+  if (expression.type !== "Object" || isRepeaterOptOut(descriptor)) return expression;
+  const structured = asStructuredValue(expression.value);
+  if (structured === undefined) return expression;
+  const kind = structuredEditorKind(descriptor);
+  if (!kind || conflictsWithStructuredEditor(kind, structured)) return expression;
+  return { type: "Literal", value: structured };
+}
+
+/** Which structured editor a descriptor authors with, or null for a scalar input. */
+export function structuredEditorKind(
+  descriptor: StudioActivityInputDescriptor
+): "collection" | "dictionary" | null {
+  if (describeCollectionForInput(descriptor)) return "collection";
+  return describeDictionaryForInput(descriptor) ? "dictionary" : null;
+}
+
+/**
+ * Whether a value's shape disagrees with the structured editor that would author it.
+ *
+ * Those editors coerce on sight, so merely rendering the row would rewrite an authored value:
+ * `toLiteralCollection` wraps a stray object into a one-item list, and the dictionary editor flattens a
+ * stray array to `{}`. A mismatch means the value is genuinely malformed, so it belongs in the generic
+ * Object/JSON editor until the author repairs it — which is why every site that routes a value into a
+ * collection or dictionary editor has to ask this, not just the Object-to-Literal demotion. Sees through
+ * the JSON string an Object-syntax value carries after a wire round-trip.
+ *
+ * Scalars and absent values return false: the editors' coercions for those (a bare string becoming a
+ * single row, an empty value starting an empty list) are intended and long-standing. Text that is
+ * *meant* to be JSON but does not parse conflicts too — the shape cannot be confirmed, so coercing it
+ * would destroy a half-typed value the author still needs to repair.
+ */
+export function conflictsWithStructuredEditor(kind: "collection" | "dictionary", value: unknown): boolean {
+  const structured = asStructuredValue(value);
+  if (structured === undefined) return looksLikeJsonText(value);
+  return kind === "collection" ? !Array.isArray(structured) : Array.isArray(structured);
+}
+
+/** Text opening with a JSON container token — an author's attempt at structured JSON, parsable or not. */
+function looksLikeJsonText(value: unknown): value is string {
+  if (typeof value !== "string") return false;
+  const trimmed = value.trim();
+  return trimmed.startsWith("[") || trimmed.startsWith("{");
+}
+
+// Mirrors `toWireArgument`'s `isRecord` test (arrays and plain objects), seeing through the JSON string
+// the wire round-trip leaves behind. `undefined` means "not structured" — leave the expression as Object
+// so an unparsable value stays repairable in the JSON editor instead of being silently reshaped.
+function asStructuredValue(value: unknown): unknown {
+  if (typeof value === "object" && value !== null) return value;
+  if (!looksLikeJsonText(value)) return undefined;
+  try {
+    const parsed = JSON.parse(value.trim());
+    return typeof parsed === "object" && parsed !== null ? parsed : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+// A secret-only input shows only the secret picker. Anything authored under another syntax (possible only
+// from before the rule) is not read as text: the picker starts empty and the stored value stays untouched
+// on the node until the author picks a Secret.
+function secretOnlyExpression(expression: ActivityExpression): ActivityExpression {
+  return expression.type === secretSyntax ? expression : { type: secretSyntax, value: null };
+}
+
+export function readWrappedInputValue(value: unknown, descriptor: StudioActivityInputDescriptor): WrappedActivityInputValue {
+  const secretOnly = acceptsOnlySecretReference(descriptor);
+  if (isWrappedInputValue(value)) {
+    const authored = {
+      type: value.expression.type || descriptor.defaultSyntax || "Literal",
+      value: value.expression.value
+    };
+    return {
+      typeName: value.typeName || descriptor.typeName,
+      expression: secretOnly ? secretOnlyExpression(authored) : resolveAuthoredExpression(authored, descriptor),
+      ...(value.memoryReference ? { memoryReference: value.memoryReference } : {}),
+      ...(value.conversion != null ? { conversion: value.conversion } : {}),
+      ...(value.argumentExtras ? { argumentExtras: value.argumentExtras } : {})
+    };
+  }
+
+  const fallback = {
+    type: descriptor.defaultSyntax || "Literal",
+    value: value ?? descriptor.defaultValue ?? ""
+  };
+  return {
+    typeName: descriptor.typeName,
+    expression: secretOnly ? secretOnlyExpression(fallback) : fallback
+  };
+}
+
+// --- collection (list) literal authoring ----------------------------------
+//
+// A Literal-typed input whose .NET type is a collection (List<T>, ICollection<T>, T[], …) is authored
+// as a repeater of per-element editors instead of a single text box, so values are structured rather
+// than jammed into one ambiguous delimited string. Collection element types come through `typeName`
+// only when the backend includes generic arguments; when they don't, rows fall back to text editors.
+
+const collectionTypeNames = new Set([
+  "icollection", "ireadonlycollection", "ilist", "ireadonlylist", "list",
+  "collection", "ienumerable", "iset", "hashset", "sortedset", "observablecollection", "array"
+]);
+
+const dictionaryTypeNames = new Set([
+  "system.collections.generic.idictionary",
+  "system.collections.generic.ireadonlydictionary",
+  "system.collections.generic.dictionary",
+  "system.collections.generic.sorteddictionary",
+  "system.collections.concurrent.concurrentdictionary",
+  "system.collections.immutable.immutabledictionary",
+  "system.collections.immutable.immutablesorteddictionary"
+]);
+
+export interface DictionaryTypeInfo {
+  valueTypeName: string;
+}
+
+/** Recognize only the supported CLR dictionary families when their key type is known to be string. */
+export function describeDictionaryType(typeName: string): DictionaryTypeInfo | null {
+  const core = stripAssemblyQualifier(typeName?.trim() ?? "");
+  const backtick = core.indexOf("`");
+  if (backtick < 0 || core.slice(backtick + 1).match(/^2(?:\[|$)/) == null) return null;
+  const family = core.slice(0, backtick).toLowerCase();
+  if (!dictionaryTypeNames.has(family)) return null;
+
+  const arguments_ = parseRawGenericArguments(core.slice(backtick));
+  if (arguments_.length !== 2 || !isClrStringType(arguments_[0])) return null;
+  return { valueTypeName: arguments_[1] };
+}
+
+export interface CollectionTypeInfo {
+  /** The element type name when it can be recovered from `typeName`, otherwise null (render text rows). */
+  elementTypeName: string | null;
+}
+
+/** Recognize a collection-typed input from its .NET `typeName`; returns null for non-collection types. */
+export function describeCollectionType(typeName: string): CollectionTypeInfo | null {
+  const trimmed = typeName?.trim();
+  if (!trimmed) return null;
+
+  // Array form: "Namespace.Element[]" optionally followed by ", Assembly".
+  const arrayMatch = /^([\w.+]+)\[\]/.exec(trimmed);
+  if (arrayMatch) return { elementTypeName: arrayMatch[1] };
+
+  // Generic form: "...Kind`N[...]" — the collection kind is the last segment before the arity backtick.
+  const backtick = trimmed.indexOf("`");
+  if (backtick < 0) return null;
+  const base = trimmed.slice(0, backtick);
+  const kind = (base.split(".").pop() ?? base).toLowerCase();
+  if (!collectionTypeNames.has(kind)) return null;
+
+  return { elementTypeName: extractFirstGenericArgument(trimmed.slice(backtick)) };
+}
+
+// Pull the first generic argument's type name from either the assembly-qualified "[[Type, Asm], …]"
+// form or the short "[Type, …]" form; null when no arguments are present (e.g. a bare "ICollection`1").
+function extractFirstGenericArgument(genericPart: string): string | null {
+  const assemblyQualified = /\[\[([\w.+]+)/.exec(genericPart);
+  if (assemblyQualified) return assemblyQualified[1];
+  const shortForm = /\[([\w.+]+)/.exec(genericPart);
+  return shortForm ? shortForm[1] : null;
+}
+
+// --- descriptor-aware collection/dictionary detection (elsa-foundation#945) ----------------------
+//
+// The authoring catalog reports a truthful `collectionKind` (Single/Array/List/HashSet/Dictionary)
+// alongside `typeName` — for a collection input `typeName` is the ELEMENT-type alias (#924's scalar-lie
+// fix). When present it authoritatively selects the list/dictionary editor; when absent (older backend)
+// we fall back to parsing the CLR `typeName`, preserving the pre-#945 behavior exactly.
+//
+// Every surface that asks "is this input a list/dictionary?" must go through these two helpers rather
+// than the raw `typeName` parsers above — a `typeName`-only check silently misses element-alias
+// descriptors, which is what stranded the Object surface on its JSON fallback.
+
+const listCollectionKinds = new Set(["array", "list", "hashset"]);
+
+function readCollectionKind(input: StudioActivityInputDescriptor): string | null {
+  const kind = input.collectionKind;
+  return typeof kind === "string" && kind.trim() ? kind.trim().toLowerCase() : null;
+}
+
+/** Collection detection preferring the descriptor's `collectionKind`, else the `typeName` parse. */
+export function describeCollectionForInput(input: StudioActivityInputDescriptor): CollectionTypeInfo | null {
+  const kind = readCollectionKind(input);
+  if (kind === "dictionary" || kind === "single") return null;
+  if (kind && listCollectionKinds.has(kind)) {
+    // Prefer a full collection type name when the backend still sends one; otherwise `typeName` is the
+    // element alias itself (the #945 contract).
+    return describeCollectionType(input.typeName) ?? { elementTypeName: input.typeName?.trim() || null };
+  }
+  return describeCollectionType(input.typeName);
+}
+
+/** Dictionary detection preferring the descriptor's `collectionKind`, else the `typeName` parse. */
+export function describeDictionaryForInput(input: StudioActivityInputDescriptor): DictionaryTypeInfo | null {
+  const kind = readCollectionKind(input);
+  if (kind === "dictionary") {
+    // A full dictionary type name yields the value type directly; otherwise treat `typeName` as the value
+    // alias (dictionary keys are string-typed in every supported family).
+    return describeDictionaryType(input.typeName) ?? { valueTypeName: input.typeName?.trim() || "System.String" };
+  }
+  if (kind && (kind === "single" || listCollectionKinds.has(kind))) return null;
+  return describeDictionaryType(input.typeName);
+}
+
+/** Authors opt out of the repeater (back to a raw text/JSON box) via a hint or a uiSpecifications flag. */
+export function isRepeaterOptOut(input: StudioActivityInputDescriptor): boolean {
+  const hint = input.uiHint?.toLowerCase();
+  if (hint === "json" || hint === "code") return true;
+  return input.uiSpecifications?.repeater === false;
+}
+
+// Coerce a stored literal value into an array of elements without guessing delimiters of legacy strings.
+// Deliberately parallel to `toValueArray` in the host's propertyEditors.tsx: the studio-sdk boundary is
+// type-only (modules import no runtime SDK values), so sharing this would add load-time coupling for ~10
+// lines. Keep the two in sync by hand rather than crossing that boundary.
+export function toLiteralCollection(value: unknown): unknown[] {
+  if (Array.isArray(value)) return value;
+  if (value == null) return [];
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    if (!trimmed) return [];
+    if (trimmed.startsWith("[")) {
+      try {
+        const parsed = JSON.parse(trimmed);
+        if (Array.isArray(parsed)) return parsed;
+      } catch {
+        // Not JSON — preserve the original text as a single item rather than splitting on a guess.
+      }
+    }
+    return [value];
+  }
+  return [value];
+}
+
+/** A new row's starting value, typed from the element type so booleans start unchecked rather than "". */
+export function defaultCollectionItem(elementTypeName: string | null): unknown {
+  const type = (elementTypeName ?? "").toLowerCase();
+  return type === "system.boolean" || type === "boolean" || type === "bool" ? false : "";
+}
+
+/** A synthetic descriptor describing one element, so a repeater row resolves the right element editor. */
+export function makeCollectionElementDescriptor(
+  input: StudioActivityInputDescriptor,
+  elementTypeName: string | null
+): StudioActivityInputDescriptor {
+  return {
+    ...input,
+    typeName: elementTypeName ?? "System.String",
+    isWrapped: false,
+    // The description documents the collection as a whole; repeating it on every row is noise.
+    description: null
+  };
+}
+
+/** Immutably move an item between positions; out-of-range or no-op moves return the original array. */
+export function moveCollectionItem<T>(items: T[], from: number, to: number): T[] {
+  if (from === to || from < 0 || to < 0 || from >= items.length || to >= items.length) return items;
+  const next = [...items];
+  const [moved] = next.splice(from, 1);
+  next.splice(to, 0, moved);
+  return next;
+}
+
+function isWrappedInputValue(value: unknown): value is WrappedActivityInputValue {
+  if (!value || typeof value !== "object") return false;
+  const record = value as Record<string, unknown>;
+  const expression = record.expression;
+  return typeof record.typeName === "string" &&
+    !!expression &&
+    typeof expression === "object" &&
+    typeof (expression as Record<string, unknown>).type === "string";
+}
+
+// --- friendly type-name formatting (type badge) ----------------------------
+//
+// Render a .NET type name as a short, friendly label. Backend type names can be assembly-qualified and
+// generic (e.g. "...ICollection`1[[System.String, System.Private.CoreLib, Version=8.0.0.0,
+// Culture=neutral, PublicKeyToken=…]], System.Private.CoreLib, …"). A naive "text after the last dot"
+// leaks fragments like "0, Culture=neutral, PublicKeyToken=…" into the UI, so parse the structure
+// instead: drop assembly qualifiers, shorten namespaces, and rebuild generics/arrays as
+// "ICollection<String>" / "Int32[]". Co-located with describeCollectionType, the other place that
+// decodes generic type-name syntax in this module.
+export function formatTypeName(typeName: string): string {
+  return parseClrTypeName(typeName?.trim() ?? "") || typeName;
+}
+
+function parseClrTypeName(text: string): string {
+  if (!text) return "";
+  const core = stripAssemblyQualifier(text);
+  if (!core) return "";
+
+  // Trailing "[]" pairs are always array markers — a generic's brackets are never empty — so a greedy
+  // match of them at the very end is safe even when the base type is itself generic (List`1[…][]).
+  const array = /^(.*)((?:\[\])+)$/.exec(core);
+  if (array) return `${parseClrTypeName(array[1])}${array[2]}`;
+
+  const backtick = core.indexOf("`");
+  if (backtick >= 0) {
+    const name = simpleTypeName(core.slice(0, backtick));
+    const args = parseGenericArguments(core.slice(backtick));
+    return args.length > 0 ? `${name}<${args.join(", ")}>` : name;
+  }
+
+  return simpleTypeName(core);
+}
+
+// Cut the assembly-qualified tail: the first comma at bracket depth 0 (", System.Private.CoreLib, …").
+function stripAssemblyQualifier(text: string): string {
+  let depth = 0;
+  for (let index = 0; index < text.length; index++) {
+    const char = text[index];
+    if (char === "[") depth++;
+    else if (char === "]") depth--;
+    else if (char === "," && depth === 0) return text.slice(0, index).trim();
+  }
+  return text.trim();
+}
+
+// "System.Collections.Generic.ICollection" -> "ICollection"; also drops nested-type "+" prefixes.
+function simpleTypeName(text: string): string {
+  const segment = text.split(".").filter(Boolean).at(-1) ?? text;
+  return segment.split("+").filter(Boolean).at(-1) ?? segment;
+}
+
+// Parse "`N[[Arg1, Asm…],[Arg2, Asm…]]" (or the short "`N[Arg1,Arg2]") into friendly argument labels.
+function parseGenericArguments(genericPart: string): string[] {
+  const open = genericPart.indexOf("[");
+  if (open < 0) return [];
+  const inner = innerBracketContent(genericPart, open);
+  if (inner == null) return [];
+  return splitTopLevel(inner)
+    .map(arg => {
+      const trimmed = arg.trim();
+      const unwrapped = trimmed.startsWith("[") ? innerBracketContent(trimmed, 0) ?? trimmed : trimmed;
+      return parseClrTypeName(unwrapped);
+    })
+    .filter(Boolean);
+}
+
+// Content between the bracket at `open` and its matching close, or null when unbalanced.
+function innerBracketContent(text: string, open: number): string | null {
+  let depth = 0;
+  for (let index = open; index < text.length; index++) {
+    if (text[index] === "[") depth++;
+    else if (text[index] === "]" && --depth === 0) return text.slice(open + 1, index);
+  }
+  return null;
+}
+
+// Split on commas at bracket depth 0 (keeps assembly-qualified args like "[String, Asm]" intact).
+function splitTopLevel(text: string): string[] {
+  const parts: string[] = [];
+  let depth = 0;
+  let start = 0;
+  for (let index = 0; index < text.length; index++) {
+    const char = text[index];
+    if (char === "[") depth++;
+    else if (char === "]") depth--;
+    else if (char === "," && depth === 0) {
+      parts.push(text.slice(start, index));
+      start = index + 1;
+    }
+  }
+  parts.push(text.slice(start));
+  return parts.map(part => part.trim()).filter(Boolean);
+}
+
+function parseRawGenericArguments(genericPart: string): string[] {
+  const open = genericPart.indexOf("[");
+  if (open < 0) return [];
+  const inner = innerBracketContent(genericPart, open);
+  if (inner == null) return [];
+  return splitTopLevel(inner).map(argument => {
+    const trimmed = argument.trim();
+    const unwrapped = trimmed.startsWith("[") ? innerBracketContent(trimmed, 0) : trimmed;
+    return stripAssemblyQualifier(unwrapped ?? trimmed);
+  });
+}
+
+function isClrStringType(typeName: string): boolean {
+  const normalized = stripAssemblyQualifier(typeName).trim().toLowerCase();
+  return normalized === "system.string" || normalized === "string";
+}

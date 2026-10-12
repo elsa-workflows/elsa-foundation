@@ -53,13 +53,13 @@ There is also spec drift to note: the spec 079 runtime contract names `ISecretRe
 
 | Area | State | Where |
 |---|---|---|
-| Secrets management UI | **Implemented.** List, detail, create, rotate, revoke, test. Password-type inputs with `autoComplete="new-password"`. "The current value is never shown." | `src/extensions/Elsa.Studio.Secrets/Client/src/` |
+| Secrets management UI | **Implemented.** List, detail, create, rotate, revoke, test. Password-type inputs with `autoComplete="new-password"`. "The current value is never shown." | `Extensions/Elsa.Studio.Secrets/Client/src/` |
 | Secret picker | **Implemented.** Expression editor for `syntax === "Secret"`. Emits an opaque reference, never a value. Handles an "unavailable reference" state. | `SecretPickerEditor.tsx`, `module.tsx:39-48` |
 | Connections UI, OAuth popup/redirect | **Absent.** | n/a |
 | Masked property editor | **Absent.** No built-in password editor, and `uiHint: "password"` is not handled. `SecretSettingEditor` exists only for FeatureManagement settings. | `propertyEditors.tsx`, `SettingEditors.tsx` |
 | `isSensitive` on descriptors | Partly wired: flows through `activityInputWire.ts`, "Protected value" shown in runtime views. **Missing from the SDK `StudioActivityInputDescriptor` type.** | `activityInputWire.ts:38` |
 | Tenant/workspace UI | **Absent.** Secrets have a free-text `scope` field. | n/a |
-| Extension model | Good. `api.propertyEditors.add(...)` and `api.expressionEditors.add(...)`. A new module needs a `StudioModule` feature and a package under `src/extensions/<Name>/`. | `registry.ts`, `sdk/index.ts` |
+| Extension model | Good. `api.propertyEditors.add(...)` and `api.expressionEditors.add(...)`. A new module needs a `StudioModule` feature and a package under `Extensions/<Name>/`. | `registry.ts`, `sdk/index.ts` |
 
 ### 1.3 Where the gaps hurt
 

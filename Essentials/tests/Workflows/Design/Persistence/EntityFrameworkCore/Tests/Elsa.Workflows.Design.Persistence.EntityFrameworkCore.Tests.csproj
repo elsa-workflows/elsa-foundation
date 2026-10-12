@@ -1,0 +1,29 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup><TargetFramework>net10.0</TargetFramework><IsTestProject>true</IsTestProject><IsPackable>false</IsPackable></PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="xunit" />
+    <PackageReference Include="xunit.runner.visualstudio" PrivateAssets="all" />
+    <PackageReference Include="coverlet.collector" PrivateAssets="all" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\..\..\..\src\Workflows\Design\Persistence\EntityFrameworkCore\Elsa.Workflows.Design.Persistence.EntityFrameworkCore.csproj" />
+    <ProjectReference Include="..\..\..\..\..\..\src\Workflows\Publishing\Elsa.Workflows.Publishing\Elsa.Workflows.Publishing.csproj" />
+    <ProjectReference Include="..\..\..\..\..\..\src\Tasks\Core\Elsa.Tasks.Core.csproj" />
+    <ProjectReference Include="..\..\..\..\..\..\src\Modularity\EntityFramework\Elsa.Modularity.EntityFramework.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <!-- Fails any unordered Skip or Take (EF warning 10102) in this suite. -->
+    <Compile Include="..\..\..\..\..\Persistence\EntityFramework\Tests\UnorderedRowLimitGuard.cs" Link="UnorderedRowLimitGuard.cs" />
+    <Compile Include="..\..\..\..\..\Persistence\EntityFramework\Tests\TemporarySqliteDatabase.cs" Link="TemporarySqliteDatabase.cs" />
+    <!-- Arranges and asserts a newer-schema row that must report skew, not corruption. -->
+    <Compile Include="..\..\..\..\..\Persistence\EntityFramework\Tests\EfSchemaVersionSkewTestSupport.cs" Link="EfSchemaVersionSkewTestSupport.cs" />
+    <!-- Injects provider failures, such as a deadlock wrapped by SQL Server's execution strategy. -->
+    <Compile Include="..\..\..\..\..\Persistence\EntityFramework\Tests\ProviderFailures.cs" Link="ProviderFailures.cs" />
+    <!-- Excludes the finalization tables every module maps from own-table assertions. -->
+    <Compile Include="..\..\..\..\..\Persistence\EntityFramework\Tests\EfSchemaFinalizationTestFilter.cs" Link="EfSchemaFinalizationTestFilter.cs" />
+    <!-- Updates and deletes rows whose LastModifiedAt is the concurrency token, shared with the native provider tests. -->
+    <Compile Include="..\..\..\Tests\Infrastructure\ConcurrencyTokenScenarios.cs" Link="ConcurrencyTokenScenarios.cs" />
+  </ItemGroup>
+</Project>

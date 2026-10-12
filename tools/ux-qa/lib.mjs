@@ -37,7 +37,7 @@ const foundationDir = state.FOUNDATION_DIR ?? path.resolve(here, "../..");
 
 /** Reads the Development admin credentials from the Workbench's shells.json seed settings. */
 function seededAdmin() {
-  const shells = readFileSync(path.join(foundationDir, "src/apps/Elsa.Workbench/shells.json"), "utf8");
+  const shells = readFileSync(path.join(foundationDir, "Essentials/apps/Elsa.Workbench/shells.json"), "utf8");
   /** Returns the first quoted value for a seed setting, or undefined when it is absent. */
   const value = key => shells.match(new RegExp(`"${key}"\\s*:\\s*"([^"]*)"`))?.[1];
   return { username: value("SeedAdminUserName"), password: value("SeedAdminPassword") };

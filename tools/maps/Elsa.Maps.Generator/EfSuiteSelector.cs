@@ -11,17 +11,15 @@ public static partial class EfSuiteSelector
 {
     private const string ManifestPath = "tools/ci/ef-suites.json";
     private const string IntegrationFilterPath = "Elsa.Server.Persistence.Integration.slnf";
-    private const string SeparateSecretsProject = "tests/essentials/Secrets/Persistence/EntityFrameworkCore/PostgreSql/Tests/Elsa.Secrets.Persistence.EntityFrameworkCore.PostgreSql.Tests.csproj";
+    private const string SeparateSecretsProject = "Essentials/tests/Secrets/Persistence/EntityFrameworkCore/PostgreSql/Tests/Elsa.Secrets.Persistence.EntityFrameworkCore.PostgreSql.Tests.csproj";
     private static readonly JsonSerializerOptions JsonOptions = new() { PropertyNameCaseInsensitive = true };
 
     /// <summary>Returns every manifest suite after validating coverage of the solution's Testcontainers roots.</summary>
     public static EfSuiteSelection Select(RepoContext repo)
     {
         var suites = ReadSuites(repo);
-        var allTestProjects = Directory.GetFiles(repo.Absolute("tests"), "*.csproj", SearchOption.AllDirectories)
-            .Concat(Directory.GetFiles(repo.Absolute("src"), "*.csproj", SearchOption.AllDirectories)
-                .Where(path => Normalize(path).Contains("/tests/", StringComparison.OrdinalIgnoreCase)))
-            .Select(path => Normalize(Path.GetRelativePath(repo.Root, path)))
+        var allTestProjects = repo.ListFiles(RepoLayout.ProjectPathspecs)
+            .Where(RepoLayout.IsTestProjectPath)
             .ToArray();
         ValidateCoverage(suites, SolutionFilterGenerator.GetRoots(repo, IntegrationFilterPath),
             allTestProjects, SolutionFilterGenerator.GetProjectReferences(repo).Keys.ToArray());
@@ -38,8 +36,7 @@ public static partial class EfSuiteSelector
                 suite.Suite is null || !SuitePattern().IsMatch(suite.Suite) ||
                 suite.Project is null || !ProjectPattern().IsMatch(suite.Project) ||
                 suite.Project.Split('/').Contains("..", StringComparer.Ordinal) ||
-                !suite.Project.StartsWith("tests/", StringComparison.Ordinal) &&
-                !suite.Project.StartsWith("src/extensions/", StringComparison.Ordinal) ||
+                !RepoLayout.IsTestProjectPath(suite.Project) ||
                 !File.Exists(repo.Absolute(suite.Project)) ||
                 suite.Require is null || !RequirePattern().IsMatch(suite.Require)))
             throw new InvalidOperationException("EF suite manifest contains an invalid entry");

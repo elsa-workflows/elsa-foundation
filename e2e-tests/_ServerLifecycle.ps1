@@ -16,7 +16,7 @@
     large solution's MSBuild graph on every relaunch (minutes).
 #>
 
-$script:WorkbenchProject = (Resolve-Path "$PSScriptRoot/../src/apps/Elsa.Workbench/Elsa.Workbench.csproj").Path
+$script:WorkbenchProject = (Resolve-Path "$PSScriptRoot/../Essentials/apps/Elsa.Workbench/Elsa.Workbench.csproj").Path
 $script:OwnedElsaServer  = $null   # the one launch this script run made: Process, BaseUrl, ContentRoot, Environment
 $script:ElsaServerLaunchCount = 0
 

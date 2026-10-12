@@ -1,0 +1,134 @@
+/*
+ * Graph-authoring arrangement: the palette-less workspace and the theme layouts.
+ *
+ * Imported by GraphAuthoringWorkbench, so it ships in the deferred designer chunk rather than the shared
+ * stylesheet on the landing paths (scripts/check-bundle-size.mjs budgets those). The workbench is the only
+ * surface these rules can apply to, so nothing outside the designer needs them.
+ */
+
+/*
+ * A resource with no left panel (the editorial layout's inline authoring) gives the palette's
+ * columns to the canvas. Structural, not theme-keyed: any host may omit the palette.
+ */
+.wf-editor-body.palette-absent {
+  grid-template-columns: 0 0 minmax(360px, 1fr) 10px var(--wf-inspector-width, 320px);
+}
+
+/* A stale "palette maximized" preference must not hide the canvas when there is no palette. */
+.wf-editor-body.palette-absent.palette-maximized .wf-canvas-shell {
+  display: flex;
+}
+
+.wf-editor-body.palette-absent.palette-maximized .wf-inspector {
+  display: flex;
+  grid-column: 5;
+}
+
+/*
+ * Theme layouts (docs/design-tokens.md, "Layouts"). Keyed on the host-published
+ * `data-theme-layout` attribute — an arrangement, not a theme — and styled only through tokens.
+ */
+
+/* Floating (Drift): palette and inspector float as islands over a full-bleed canvas. */
+html[data-theme-layout="floating"] .wf-editor-body > .wf-canvas-shell {
+  grid-row: 1;
+  grid-column: 1 / -1;
+}
+
+html[data-theme-layout="floating"] .wf-editor-body > .wf-palette,
+html[data-theme-layout="floating"] .wf-editor-body > .wf-inspector {
+  z-index: 3;
+  grid-row: 1;
+  margin: 12px;
+  border: 1px solid var(--wf-border);
+  border-radius: var(--wf-radius-xl);
+  box-shadow: var(--wf-shadow-overlay);
+}
+
+html[data-theme-layout="floating"] .wf-editor-body > .wf-side-resize-handle,
+html[data-theme-layout="floating"] .wf-editor-body > .wf-side-resize-spacer {
+  display: none;
+}
+
+/* The canvas's own chrome sits between the islands rather than underneath them. */
+html[data-theme-layout="floating"] .wf-editor-body:not(.palette-maximized):not(.inspector-maximized) > .wf-canvas-shell > :not(.wf-canvas) {
+  margin-right: calc(var(--wf-inspector-width, 320px) + 24px);
+  margin-left: calc(var(--wf-palette-width, 260px) + 24px);
+}
+
+html[data-theme-layout="floating"] .wf-editor-body.palette-absent > .wf-canvas-shell > :not(.wf-canvas) {
+  margin-left: 12px;
+}
+
+html[data-theme-layout="floating"] .wf-canvas-tabs,
+html[data-theme-layout="floating"] .wf-breadcrumb {
+  border-bottom: 0;
+}
+
+/* Workbench (Schematic): dense palette, drafting-grid canvas, mono panel labels. */
+html[data-theme-layout="workbench"] .wf-panel-title,
+html[data-theme-layout="workbench"] .wf-palette-category-toggle {
+  font-family: var(--studio-font-mono);
+  letter-spacing: 0.08em;
+}
+
+html[data-theme-layout="workbench"] .wf-palette-activity {
+  min-height: 28px;
+  padding-block: 2px;
+  font-size: 12.5px;
+}
+
+html[data-theme-layout="workbench"] .wf-palette-category-toggle {
+  height: 26px;
+}
+
+html[data-theme-layout="workbench"] .wf-canvas {
+  background-image:
+    linear-gradient(color-mix(in srgb, var(--wf-border) 55%, transparent) 1px, transparent 1px),
+    linear-gradient(90deg, color-mix(in srgb, var(--wf-border) 55%, transparent) 1px, transparent 1px);
+  background-size: 90px 90px;
+}
+
+/* Editorial (Atelier): steps are added inline — the connection "+" is always offered, delete on hover. */
+html[data-theme-layout="editorial"] .wf-edge-actions {
+  opacity: 1;
+}
+
+html[data-theme-layout="editorial"] .wf-edge-actions:not(.visible):not(:hover):not(:focus-within):not(.highlighted) .wf-edge-delete {
+  display: none;
+}
+
+.wf-add-step {
+  position: absolute;
+  bottom: 22px;
+  left: 50%;
+  z-index: 5;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  transform: translateX(-50%);
+  border: 1px solid var(--wf-accent);
+  border-radius: 999px;
+  background: var(--wf-accent);
+  box-shadow: var(--wf-shadow-menu);
+  color: var(--studio-accent-text);
+  cursor: pointer;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 650;
+  padding: 8px 16px;
+}
+
+.wf-add-step:hover {
+  background: color-mix(in srgb, var(--wf-accent) 88%, var(--wf-text));
+}
+
+.wf-add-step:focus-visible {
+  box-shadow: var(--wf-focus-ring);
+  outline: none;
+}
+
+.wf-add-step:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
