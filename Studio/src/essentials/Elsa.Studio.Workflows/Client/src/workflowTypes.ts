@@ -103,8 +103,12 @@ export interface IncidentStrategiesResponse {
   defaultStrategy: IncidentStrategyReference;
 }
 
+/** When a run's state is committed, and therefore what a crash costs. Unset means the host's default applies. */
+export type PersistenceMode = "Durable" | "Balanced" | "Ephemeral";
+
 export interface WorkflowStrategyOptions {
   incidentStrategy?: IncidentStrategyReference | null;
+  persistenceMode?: PersistenceMode | null;
   [key: string]: unknown;
 }
 

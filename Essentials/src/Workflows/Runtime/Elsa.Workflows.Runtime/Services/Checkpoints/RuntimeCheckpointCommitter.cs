@@ -215,7 +215,7 @@ public sealed class RuntimeCheckpointCommitter
         if (!StringComparer.Ordinal.Equals(pending.WorkflowExecutionId, commit.WorkflowExecutionId))
             return [];
 
-        // Coalesced mode owns durable queue advance through the overlay; do not fold a durable delete that would
+        // A folding session owns durable queue advance through the overlay; do not fold a durable delete that would
         // double-delete against RuntimeCoalescingSession.AdvanceInnerQueueAsync.
         if (_coalescingSessionAccessor?.Current is { } session && session.AppliesTo(commit.WorkflowExecutionId))
             return [];

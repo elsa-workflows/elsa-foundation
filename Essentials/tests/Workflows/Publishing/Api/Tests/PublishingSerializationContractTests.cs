@@ -119,7 +119,6 @@ public sealed class PublishingSerializationContractTests
         typeof(ValueRepresentation),
         typeof(VariableDefinition),
         typeof(VariableReference),
-        typeof(WorkflowCheckpointCadenceOptions),
         typeof(WorkflowStrategyOptions),
         typeof(JsonElement),
         typeof(PublicationActionView),

@@ -14,19 +14,23 @@ using ActivityTransitionKind = Elsa.Workflows.Runtime.Core.Models.ActivityTransi
 namespace Elsa.Activities.Http.IntegrationTests;
 
 /// <summary>
-/// Fault is a ReplaySafe leaf whose body always faults (#2581). Under Coalesced its attempt claim is not flushed before
-/// the body runs; it waits in the working set, and what makes that safe is the mandatory IncidentRecorded boundary,
-/// which commits the incident together with the claim. This runs the real Fault on the durable SQLite runtime and reads
-/// back what was committed.
+/// Fault is a ReplaySafe leaf whose body always faults. Under the folding modes its attempt claim is not flushed
+/// before the body runs; it waits in the working set, and what makes that safe is the mandatory IncidentRecorded
+/// boundary, which commits the incident together with the claim. That holds under Ephemeral even when the host keeps no
+/// record of runs that complete without one: a fault is always recorded. This runs the real Fault on the durable SQLite
+/// runtime and reads back what was committed.
 /// </summary>
-public sealed class CoalescedReplaySafeFaultTests
+public sealed class ReplaySafeFaultFlushTests
 {
     private const string FaultCode = "replay-safe.fault";
     private const string FaultMessage = "The replay-safe fault ran.";
 
-    /// <summary>Verifies that coalesced execution durably commits the fault incident and deferred leaf claims at the incident boundary.</summary>
-    [Fact]
-    public async Task A_ReplaySafe_Fault_commits_its_incident_together_with_the_deferred_claims()
+    /// <summary>Verifies that each folding mode durably commits the fault incident and deferred leaf claims at the incident boundary.</summary>
+    [Theory]
+    [InlineData(PersistenceMode.Balanced, true)]
+    [InlineData(PersistenceMode.Ephemeral, true)]
+    [InlineData(PersistenceMode.Ephemeral, false)]
+    public async Task A_ReplaySafe_Fault_commits_its_incident_together_with_the_deferred_claims(PersistenceMode mode, bool recordCompletion)
     {
         var fault = ReferenceWorkflows.Clr("fault", typeof(Fault), [("code", FaultCode), ("message", FaultMessage)]);
         Assert.Equal(SideEffectProfile.ReplaySafe, fault.ActivityContract!.SideEffectProfile);
@@ -34,7 +38,7 @@ public sealed class CoalescedReplaySafeFaultTests
             "replay-safe-fault",
             ReferenceWorkflows.Sequence("sequence", ReferenceWorkflows.Clr("write", typeof(WriteLine), [("text", "before the fault")]), fault));
 
-        await using var fixture = await HttpEndpointHostFixture.StartDurableSqliteAsync(CheckpointPersistenceMode.Coalesced, maxSegmentCheckpoints: 50);
+        await using var fixture = await HttpEndpointHostFixture.StartDurableSqliteAsync(mode, maxActivitiesPerCommit: 50, recordCompletion: recordCompletion);
         await fixture.PublishAsync(executable);
         var executionId = await fixture.StartWorkflowDirectlyAsync(executable.Identity.ArtifactId);
 

@@ -84,7 +84,6 @@ internal static class ResponseReplayPublicationHost
     private const string SetNodeId = "set-reference-text";
     private const string HttpResponsePath = "/workflows/http/";
     private const string ExternalPayloadCandidateRoutePath = "response-replay-external-input";
-    internal const int ExternalInputMaxSegmentCheckpoints = 2;
     private const string ShellWebRoutingPathKey = "CShells:Shells:default:Configuration:WebRouting:Path";
     private const string ReplayCorrelationHeader = "X-Response-Replay-Correlation";
     private static readonly HashSet<string> TransportHeaders = new(StringComparer.OrdinalIgnoreCase)
@@ -119,8 +118,7 @@ internal static class ResponseReplayPublicationHost
             SideEffectProfile.ReplaySafe,
             candidateRoutePath: ExternalPayloadCandidateRoutePath,
             externalBodyStorageProfile: ResponseReplayFileExternalPayloadStoreProfile.Name,
-            externalPayloadRoot: externalPayloadRoot,
-            maxSegmentCheckpoints: ExternalInputMaxSegmentCheckpoints);
+            externalPayloadRoot: externalPayloadRoot);
 
     private static async Task<PublicationProofResult> RunPublicationProofAsync(
         string closurePath,
@@ -130,7 +128,7 @@ internal static class ResponseReplayPublicationHost
         string? candidateRoutePath = null,
         string? externalBodyStorageProfile = null,
         string? externalPayloadRoot = null,
-        int maxSegmentCheckpoints = 50)
+        PersistenceMode persistenceMode = PersistenceMode.Balanced)
     {
         Directory.CreateDirectory(evidenceDirectory);
         var closureBytes = await File.ReadAllBytesAsync(closurePath);
@@ -139,7 +137,7 @@ internal static class ResponseReplayPublicationHost
         candidateRoutePath ??= baseline.RoutePath;
         await using var app = await StartHostAsync(
             databasePath, closurePath, evidenceDirectory,
-            maxSegmentCheckpoints: maxSegmentCheckpoints,
+            persistenceMode: persistenceMode,
             externalPayloadRoot: externalPayloadRoot);
         var shell = await app.Services.GetRequiredService<IShellRegistry>().GetOrActivateAsync(ShellName);
         EnsureReplaySafeFusionEnabled(shell.ServiceProvider, externalBodyStorageProfile is null);
@@ -495,7 +493,7 @@ internal static class ResponseReplayPublicationHost
             ReadStringVariable(restFrame, "referenceText"),
             candidateRoutePath,
             externalBodyStorageProfile,
-            maxSegmentCheckpoints.ToString(System.Globalization.CultureInfo.InvariantCulture));
+            persistenceMode.ToString());
     }
 
     public static async Task UnpublishCandidateForMeasurementAsync(
@@ -831,7 +829,7 @@ internal static class ResponseReplayPublicationHost
         await RunCrashStageCoreAsync(
             closurePath, databasePath, evidenceDirectory, pipeName,
             candidateArtifactId, candidateArtifactHash, requestCorrelationId,
-            routePath: null, maxSegmentCheckpoints: 50, externalPayloadRoot: null);
+            routePath: null, persistenceMode: PersistenceMode.Balanced, externalPayloadRoot: null);
 
     public static Task RunExternalInputCrashStageAsync(
         string closurePath,
@@ -845,7 +843,7 @@ internal static class ResponseReplayPublicationHost
         RunCrashStageCoreAsync(
             closurePath, databasePath, evidenceDirectory, pipeName,
             candidateArtifactId, candidateArtifactHash, requestCorrelationId,
-            ExternalPayloadCandidateRoutePath, ExternalInputMaxSegmentCheckpoints, externalPayloadRoot);
+            ExternalPayloadCandidateRoutePath, PersistenceMode.Balanced, externalPayloadRoot);
 
     private static async Task RunCrashStageCoreAsync(
         string closurePath,
@@ -856,7 +854,7 @@ internal static class ResponseReplayPublicationHost
         string candidateArtifactHash,
         string requestCorrelationId,
         string? routePath,
-        int maxSegmentCheckpoints,
+        PersistenceMode persistenceMode,
         string? externalPayloadRoot)
     {
         Directory.CreateDirectory(evidenceDirectory);
@@ -872,7 +870,7 @@ internal static class ResponseReplayPublicationHost
             GateAtResponseActivityStarted: externalPayloadRoot is not null);
         await using var app = await StartHostAsync(
             databasePath, closurePath, evidenceDirectory, gateOptions, includeHistoricalClosureReconciliation: false,
-            maxSegmentCheckpoints: maxSegmentCheckpoints, externalPayloadRoot: externalPayloadRoot);
+            persistenceMode: persistenceMode, externalPayloadRoot: externalPayloadRoot);
         var shell = await app.Services.GetRequiredService<IShellRegistry>().GetOrActivateAsync(ShellName);
         using (var scope = shell.ServiceProvider.CreateScope())
         {
@@ -941,7 +939,7 @@ internal static class ResponseReplayPublicationHost
         RunCrashResumeCoreAsync(
             closurePath, databasePath, evidenceDirectory, workflowExecutionId,
             candidateArtifactId, candidateArtifactHash, routePath: null,
-            maxSegmentCheckpoints: 50, externalPayloadRoot: null);
+            persistenceMode: PersistenceMode.Balanced, externalPayloadRoot: null);
 
     public static Task<RecoveryProofResult> RunExternalInputCrashResumeAsync(
         string closurePath,
@@ -954,7 +952,7 @@ internal static class ResponseReplayPublicationHost
         RunCrashResumeCoreAsync(
             closurePath, databasePath, evidenceDirectory, workflowExecutionId,
             candidateArtifactId, candidateArtifactHash, ExternalPayloadCandidateRoutePath,
-            ExternalInputMaxSegmentCheckpoints, externalPayloadRoot);
+            PersistenceMode.Balanced, externalPayloadRoot);
 
     private static async Task<RecoveryProofResult> RunCrashResumeCoreAsync(
         string closurePath,
@@ -964,7 +962,7 @@ internal static class ResponseReplayPublicationHost
         string candidateArtifactId,
         string candidateArtifactHash,
         string? routePath,
-        int maxSegmentCheckpoints,
+        PersistenceMode persistenceMode,
         string? externalPayloadRoot)
     {
         Directory.CreateDirectory(evidenceDirectory);
@@ -972,7 +970,7 @@ internal static class ResponseReplayPublicationHost
         routePath ??= baseline.RoutePath;
         await using var app = await StartHostAsync(
             databasePath, closurePath, evidenceDirectory, includeHistoricalClosureReconciliation: false,
-            maxSegmentCheckpoints: maxSegmentCheckpoints, externalPayloadRoot: externalPayloadRoot);
+            persistenceMode: persistenceMode, externalPayloadRoot: externalPayloadRoot);
         var shell = await app.Services.GetRequiredService<IShellRegistry>().GetOrActivateAsync(ShellName);
         using (var scope = shell.ServiceProvider.CreateScope())
         {
@@ -1061,7 +1059,7 @@ internal static class ResponseReplayPublicationHost
         ResponseReplayCommitGateOptions? gateOptions = null,
         bool includeHistoricalClosureReconciliation = true,
         ResponseReplayMeasurementOptions? observationOptions = null,
-        int maxSegmentCheckpoints = 50,
+        PersistenceMode persistenceMode = PersistenceMode.Balanced,
         string? externalPayloadRoot = null)
     {
         var connectionString = $"Data Source={databasePath};Pooling=False";
@@ -1069,8 +1067,7 @@ internal static class ResponseReplayPublicationHost
         {
             [ShellWebRoutingPathKey] = "",
             ["CShells:Shells:default:Features:ClrActivityReconciliation:Options:FolderPath"] = AppContext.BaseDirectory,
-            ["CShells:Shells:default:Features:WorkflowsRuntimeCheckpointPersistence:Mode"] = "Coalesced",
-            ["CShells:Shells:default:Features:WorkflowsRuntimeCheckpointPersistence:MaxSegmentCheckpoints"] = maxSegmentCheckpoints.ToString(System.Globalization.CultureInfo.InvariantCulture),
+            ["CShells:Shells:default:Features:WorkflowsRuntimeCheckpointPersistence:Mode"] = persistenceMode.ToString(),
             ["CShells:Shells:default:Features:WorkflowsRuntimeEntityFrameworkCore:Provider"] = "Sqlite",
             ["CShells:Shells:default:Features:WorkflowsRuntimeEntityFrameworkCore:ConnectionString"] = connectionString,
             ["CShells:Shells:default:Features:WorkflowsRuntimeEntityFrameworkCore:RecoveryContinuationSigningKey"] = "response-replay-publication-recovery-signing-key-32-bytes",
@@ -1663,7 +1660,7 @@ internal sealed record PublicationProofResult(
     string RestReferenceText,
     string CandidateRoutePath,
     string? CandidateBodyStorageProfile,
-    string CandidateCheckpointMaxSegmentCheckpoints);
+    string CandidatePersistenceMode);
 
 internal sealed record RecoveryProofResult(
     string ExecutionId,

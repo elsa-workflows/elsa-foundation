@@ -133,6 +133,10 @@
           "WorkflowsPublishing": {},
           "WorkflowsPublishingApi": {},
           "WorkflowsRuntimeApi": {},
+          "WorkflowsRuntimeCheckpointPersistence": {
+            "Mode": "Balanced",
+            "MaxActivitiesPerCommit": 50
+          },
           "WorkflowsRuntimeTracing": {},
           "WorkflowsRuntimeTriggers": {}
         },

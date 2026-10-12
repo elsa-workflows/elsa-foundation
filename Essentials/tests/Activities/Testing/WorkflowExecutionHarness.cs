@@ -17,6 +17,7 @@ using Elsa.Workflows.Runtime.Api.Coalescing;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Workflows.Runtime.Extensions;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 
@@ -489,7 +490,7 @@ public sealed class WorkflowExecutionHarness : IAsyncDisposable
             runtimeRequirements: null,
             storageDriverRequirements: null,
             incidentStrategy: IncidentStrategyBuiltIns.FaultReference,
-            checkpointCadence: null,
+            persistenceMode: null,
             workflowVariables: workflowVariables);
 
     /// <summary>Builds a leaf probe node that records execution and emits the given outcomes (default <c>Done</c>).</summary>
@@ -572,7 +573,7 @@ public sealed class WorkflowExecutionHarness : IAsyncDisposable
             runtimeRequirements: null,
             storageDriverRequirements: null,
             incidentStrategy: executable.IncidentStrategy,
-            checkpointCadence: executable.CheckpointCadence,
+            persistenceMode: executable.PersistenceMode,
             workflowVariables: executable.WorkflowVariables);
 
     private ExecutableNode PinClrActivityContract(ExecutableNode node)
@@ -886,18 +887,24 @@ public sealed class WorkflowExecutionHarness : IAsyncDisposable
         }
 
         /// <summary>
-        /// Drives the harness under the opt-in burst-coalescing checkpoint persistence policy
-        /// instead of the default Immediate cadence, so intra-drain checkpoints fold into one atomic commit at
-        /// quiescence — the mode a ReplaySafe hop-fusion pass engages inside. Applied after the
-        /// runtime feature registration (which the ctor seeds first), so the coalescing decorators capture the runtime
-        /// stores. Optionally caps the per-segment checkpoint count (models a mid-drain fold-and-flush).
+        /// Registers the persistence modes, so runs can fold checkpoints between commits, with
+        /// <paramref name="hostMode"/> as the default for workflows that choose none. Applied after the runtime feature
+        /// registration (which the ctor seeds first), so the folding decorators capture the runtime stores. Without this
+        /// the harness runs every workflow Durable. <paramref name="maxActivitiesPerCommit"/> lowers the cap to model an
+        /// intermediate commit mid-drain; <paramref name="recordCompletion"/> off lets an Ephemeral run that was never
+        /// committed finish without a record.
         /// </summary>
-        public Builder WithCoalescing(int? maxSegmentCheckpoints = null)
+        public Builder WithPersistenceMode(
+            PersistenceMode hostMode = PersistenceMode.Balanced,
+            int? maxActivitiesPerCommit = null,
+            bool recordCompletion = true)
         {
-            _featureConfigurators.Add(services => services.AddCoalescingRuntimeCheckpointPersistence(options =>
+            _featureConfigurators.Add(services => services.AddPersistenceModes(options =>
             {
-                if (maxSegmentCheckpoints is { } cap)
-                    options.MaxSegmentCheckpoints = cap;
+                options.Mode = hostMode;
+                options.RecordCompletion = recordCompletion;
+                if (maxActivitiesPerCommit is { } cap)
+                    options.MaxActivitiesPerCommit = cap;
             }));
             return this;
         }
@@ -949,6 +956,12 @@ public sealed class WorkflowExecutionHarness : IAsyncDisposable
 
             foreach (var configurator in _featureConfigurators)
                 configurator(services);
+
+            // Every drain runs in a persistence-mode session, so the stores are wrapped last, after anything a test
+            // registered. A harness that chose no mode runs every workflow Durable.
+            if (!services.Any(descriptor => descriptor.ServiceType == typeof(PersistenceModeOptions)))
+                services.AddPersistenceModeOptions(new PersistenceModeOptions { Mode = PersistenceMode.Durable });
+            services.AddPersistenceModes();
 
             var provider = services.BuildServiceProvider();
 

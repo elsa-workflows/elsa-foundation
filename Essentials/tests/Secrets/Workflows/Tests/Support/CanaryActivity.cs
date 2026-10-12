@@ -39,9 +39,9 @@ public sealed record CanaryWaitTrigger(bool Released);
 /// <remarks>
 /// <para>
 /// It is declared ReplaySafe, which it is (it records in memory and throws, suspends or completes the same way each
-/// time), so that under coalesced checkpoint persistence the runtime fuses its schedule, start and invoke stages
-/// (<see cref="Elsa.Secrets.Workflows.Tests.Support.CanaryStartMode.Fused"/>); under immediate persistence it runs each
-/// stage as its own dispatch, as any other activity does.
+/// time), so that the runtime fuses its schedule, start and invoke stages
+/// (<see cref="Elsa.Secrets.Workflows.Tests.Support.CanaryStartMode.Fused"/>); with fusion turned off it runs each
+/// stage as its own dispatch, as an activity that is not ReplaySafe does.
 /// </para>
 /// <para>
 /// It hands what it was hydrated with to <see cref="CanaryRecorder"/>, in memory, and puts the value it holds into

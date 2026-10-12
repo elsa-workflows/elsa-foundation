@@ -305,31 +305,25 @@ public sealed class WorkflowExecutableCompilerTests
     }
 
     [Fact]
-    public async Task Compiles_authored_checkpoint_cadence_onto_the_executable_and_into_the_behavioral_hash()
+    public async Task Compiles_the_chosen_persistence_mode_onto_the_executable_and_into_the_behavioral_hash()
     {
-        // The authored cadence flows design → publish → executable and is behavioral content — a cadence
-        // change is a distinct artifact identity, never a silent alias of the same graph.
+        // The chosen mode flows design → publish → executable and is behavioral content: a mode change is a distinct
+        // artifact identity, never a silent alias of the same graph.
         var now = new DateTimeOffset(2026, 7, 20, 12, 0, 0, TimeSpan.Zero);
         var node = Node("write-one", Text("hello"));
-        var unauthored = await Compiler(WorkflowVersion(node)).CompileAsync(NewRequest(now));
-        var coalesced = await Compiler(WorkflowVersionWithCadence(node, new WorkflowCheckpointCadenceOptions
-        {
-            Mode = "Coalesced",
-            MaxSegmentCheckpoints = 8
-        })).CompileAsync(NewRequest(now));
-        var immediate = await Compiler(WorkflowVersionWithCadence(node, new WorkflowCheckpointCadenceOptions
-        {
-            Mode = "Immediate"
-        })).CompileAsync(NewRequest(now));
+        var unchosen = await Compiler(WorkflowVersion(node)).CompileAsync(NewRequest(now));
+        var balanced = await Compiler(WorkflowVersionWithPersistenceMode(node, "Balanced")).CompileAsync(NewRequest(now));
+        var durable = await Compiler(WorkflowVersionWithPersistenceMode(node, "Durable")).CompileAsync(NewRequest(now));
+        var ephemeral = await Compiler(WorkflowVersionWithPersistenceMode(node, "Ephemeral")).CompileAsync(NewRequest(now));
 
-        Assert.Null(unauthored.CheckpointCadence);
-        Assert.Equal(new WorkflowExecutableCheckpointCadence("Coalesced", 8), coalesced.CheckpointCadence);
-        Assert.Equal(new WorkflowExecutableCheckpointCadence("Immediate"), immediate.CheckpointCadence);
+        Assert.Null(unchosen.PersistenceMode);
+        Assert.Equal(PersistenceMode.Balanced, balanced.PersistenceMode);
+        Assert.Equal(PersistenceMode.Durable, durable.PersistenceMode);
+        Assert.Equal(PersistenceMode.Ephemeral, ephemeral.PersistenceMode);
 
-        // Distinct behavior ⇒ distinct content hash; unauthored stays byte-identical to the pre-cadence payload.
-        Assert.NotEqual(unauthored.Identity.ArtifactHash, coalesced.Identity.ArtifactHash);
-        Assert.NotEqual(unauthored.Identity.ArtifactHash, immediate.Identity.ArtifactHash);
-        Assert.NotEqual(coalesced.Identity.ArtifactHash, immediate.Identity.ArtifactHash);
+        // Distinct behavior ⇒ distinct content hash; no choice stays byte-identical to the payload without the field.
+        var hashes = new[] { unchosen, balanced, durable, ephemeral }.Select(executable => executable.Identity.ArtifactHash).ToArray();
+        Assert.Equal(hashes.Length, hashes.Distinct(StringComparer.Ordinal).Count());
     }
 
     [Fact]
@@ -371,41 +365,36 @@ public sealed class WorkflowExecutableCompilerTests
         Assert.Contains("example.custom/42", exception.Message, StringComparison.Ordinal);
     }
 
-    [Fact]
-    public async Task Blank_authored_cadence_mode_compiles_as_unauthored()
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("  ")]
+    public async Task No_chosen_persistence_mode_compiles_to_the_host_default(string? persistenceMode)
     {
         var now = new DateTimeOffset(2026, 7, 20, 12, 0, 0, TimeSpan.Zero);
         var node = Node("write-one", Text("hello"));
-        var unauthored = await Compiler(WorkflowVersion(node)).CompileAsync(NewRequest(now));
-        var blank = await Compiler(WorkflowVersionWithCadence(node, new WorkflowCheckpointCadenceOptions()))
-            .CompileAsync(NewRequest(now));
+        var unchosen = await Compiler(WorkflowVersion(node)).CompileAsync(NewRequest(now));
+        var blank = await Compiler(WorkflowVersionWithPersistenceMode(node, persistenceMode)).CompileAsync(NewRequest(now));
 
-        Assert.Null(blank.CheckpointCadence);
-        Assert.Equal(unauthored.Identity.ArtifactHash, blank.Identity.ArtifactHash);
+        Assert.Null(blank.PersistenceMode);
+        Assert.Equal(unchosen.Identity.ArtifactHash, blank.Identity.ArtifactHash);
     }
 
-    [Fact]
-    public async Task Unrecognised_checkpoint_cadence_alias_fails_publication()
+    [Theory]
+    [InlineData("EveryOtherTuesday")]
+    [InlineData("balanced")]
+    [InlineData("ephemeral")]
+    [InlineData("1")]
+    [InlineData("Immediate")]
+    [InlineData("Coalesced")]
+    public async Task Unrecognised_persistence_mode_fails_publication(string persistenceMode)
     {
-        var compiler = Compiler(WorkflowVersionWithCadence(
-            Node("write-one", Text("hello")),
-            new WorkflowCheckpointCadenceOptions { Mode = "EveryOtherTuesday" }));
+        var compiler = Compiler(WorkflowVersionWithPersistenceMode(Node("write-one", Text("hello")), persistenceMode));
 
         var exception = await Assert.ThrowsAsync<WorkflowExecutableCompilationException>(
             () => compiler.CompileAsync(NewRequest(DateTimeOffset.UtcNow)).AsTask());
 
-        Assert.Contains("EveryOtherTuesday", exception.Message, StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public async Task Non_positive_authored_segment_cap_fails_publication()
-    {
-        var compiler = Compiler(WorkflowVersionWithCadence(
-            Node("write-one", Text("hello")),
-            new WorkflowCheckpointCadenceOptions { Mode = "Coalesced", MaxSegmentCheckpoints = 0 }));
-
-        await Assert.ThrowsAsync<WorkflowExecutableCompilationException>(
-            () => compiler.CompileAsync(NewRequest(DateTimeOffset.UtcNow)).AsTask());
+        Assert.Contains($"'{persistenceMode}'", exception.Message, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -2706,9 +2695,9 @@ public sealed class WorkflowExecutableCompilerTests
             _descriptors.TryGetValue(reference, out descriptor!);
     }
 
-    private static WorkflowDefinitionVersion WorkflowVersionWithCadence(
+    private static WorkflowDefinitionVersion WorkflowVersionWithPersistenceMode(
         ActivityNode? rootActivity,
-        WorkflowCheckpointCadenceOptions checkpointCadence) =>
+        string? persistenceMode) =>
         new("definition-1", "1.0.0")
         {
             Id = "version-1",
@@ -2718,7 +2707,7 @@ public sealed class WorkflowExecutableCompilerTests
                 rootActivity,
                 [],
                 [],
-                new WorkflowStrategyOptions { CheckpointCadence = checkpointCadence })
+                new WorkflowStrategyOptions { PersistenceMode = persistenceMode })
         };
 
     private static InputDefinition WorkflowInput(

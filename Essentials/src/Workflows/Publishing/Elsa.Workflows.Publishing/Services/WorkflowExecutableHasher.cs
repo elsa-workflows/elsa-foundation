@@ -22,14 +22,14 @@ public sealed class WorkflowExecutableHasher
         ExecutableNode rootActivity,
         WorkflowExecutableInputContract inputContract,
         IReadOnlyCollection<WorkflowExecutableDependency> dependencies,
-        WorkflowExecutableCheckpointCadence? checkpointCadence = null,
+        PersistenceMode? persistenceMode = null,
         IReadOnlyCollection<RuntimeVariableDeclaration>? workflowVariables = null,
         IncidentStrategyReference? incidentStrategy = null) =>
         _inner.ComputeHash(
             rootActivity,
             inputContract,
             dependencies,
-            checkpointCadence,
+            persistenceMode,
             workflowVariables,
             incidentStrategy);
 

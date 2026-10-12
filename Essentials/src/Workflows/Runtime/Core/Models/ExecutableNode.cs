@@ -316,8 +316,8 @@ public static class WorkflowIntrinsicInputKeys
 /// <c>IntrinsicCompleted</c> is not in <c>CoalescingRuntimeCheckpointPersistencePolicy.MandatoryFlushCheckpointNames</c>
 /// — so under coalescing a <c>SetOutput</c> already deferred and folded into the segment flush, with or without fusion.
 /// Fusion decides only <em>how many dispatches</em> the node costs. Excluding it therefore protected nothing about
-/// output visibility and bought only hops. A host that needs an output durable the instant it is written selects
-/// <c>Mode = Immediate</c>; that lever is unchanged here.
+/// output visibility and bought only hops. A workflow that needs an output durable the instant it is written selects
+/// the Durable persistence mode; that lever is unchanged here.
 /// </para>
 /// </remarks>
 public static class WorkflowIntrinsicFusion

@@ -1,28 +1,49 @@
 using Elsa.Workflows.Runtime.Contracts;
 using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Services.Coalescing;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 
-namespace Elsa.Workflows.Runtime.Api.Coalescing;
+namespace Elsa.Workflows.Runtime.Extensions;
 
 /// <summary>
-/// Opt-in wiring for the burst-coalescing checkpoint persistence policy. Call this after the workflows
-/// runtime services are registered to trade a bounded crash-replay window for Elsa-3-style single-write-per-burst
-/// durability on straight-line segments. The default runtime keeps the Immediate policy, so this is a deliberate,
-/// reversible selection; when it is not called every runtime store is a byte-for-byte pass-through as before.
+/// Registers what runs the persistence modes: the folding policy, the drain session, and wrappers around the runtime
+/// stores so a run's checkpoints are held in memory between commits. Every run drains through them: Durable commits
+/// once per activity, Balanced after up to the host's cap of activities, Ephemeral only at boundaries, so a host without
+/// them refuses to drain. Call this after the workflows runtime services and their persistence provider are registered,
+/// because it wraps the stores registered at that point; a store registered after it is not wrapped. Every shell that
+/// composes the runtime API gets these services once all of its features are registered.
 /// </summary>
-public static class CoalescingRuntimeCheckpointPersistenceExtensions
+public static class PersistenceModeServiceCollectionExtensions
 {
     /// <summary>
-    /// Replaces the Immediate checkpoint persistence policy with the coalescing policy and decorates the runtime
-    /// checkpoint/queue/outbox/state stores so intra-drain checkpoints fold into one atomic commit at quiescence.
+    /// Replaces the per-checkpoint persistence policy with the folding policy and wraps the runtime
+    /// checkpoint/queue/outbox/state stores so a run's checkpoints fold into atomic commits on its mode's schedule.
+    /// Safe to call more than once: the stores are wrapped on the first call only.
     /// </summary>
-    public static IServiceCollection AddCoalescingRuntimeCheckpointPersistence(
+    /// <param name="services">The service collection.</param>
+    /// <param name="configureOptions">
+    /// Sets the host's persistence-mode options, replacing any registered before. Without it the options already
+    /// registered (for example by the WorkflowsRuntimeCheckpointPersistence feature) stay, and a host that registered
+    /// none gets the defaults, so the order in which a shell's features add these services does not matter.
+    /// </param>
+    public static IServiceCollection AddPersistenceModes(
         this IServiceCollection services,
-        Action<CoalescingRuntimeCheckpointPersistenceOptions>? configureOptions = null)
+        Action<PersistenceModeOptions>? configureOptions = null)
     {
         ArgumentNullException.ThrowIfNull(services);
+
+        if (configureOptions is not null)
+        {
+            var options = new PersistenceModeOptions();
+            configureOptions(options);
+            services.AddPersistenceModeOptions(options);
+        }
+        else
+        {
+            services.TryAddSingleton(new PersistenceModeOptions());
+        }
 
         if (services.Any(descriptor => descriptor.ServiceType == typeof(CoalescingRegistrationMarker)))
             return services;
@@ -30,16 +51,10 @@ public static class CoalescingRuntimeCheckpointPersistenceExtensions
         var durableValueReuse = RuntimeCoalescingDurableValuePageReuseRegistration.CaptureBeforeDecoration(services);
         var decorations = new List<RuntimeCoalescingDurableValuePageReuseRegistration.ServiceDecoration>();
 
-        var options = new CoalescingRuntimeCheckpointPersistenceOptions();
-        configureOptions?.Invoke(options);
-
-        services.RemoveAll<CoalescingRuntimeCheckpointPersistenceOptions>();
-        services.AddSingleton(options);
-
         services.TryAddSingleton(TimeProvider.System);
         services.TryAddSingleton<IRuntimeCoalescingSessionAccessor, AsyncLocalRuntimeCoalescingSessionAccessor>();
 
-        // Select the coalescing policy in place of the Immediate default.
+        // Select the folding policy in place of the per-checkpoint default.
         services.RemoveAll<IRuntimeCheckpointPersistencePolicy>();
         services.AddSingleton<IRuntimeCheckpointPersistencePolicy, CoalescingRuntimeCheckpointPersistencePolicy>();
 
@@ -57,9 +72,8 @@ public static class CoalescingRuntimeCheckpointPersistenceExtensions
         decorations.Add(services.DecorateWithCoalescing<ISchedulerStateStore, CoalescingSchedulerStateStore>());
         decorations.Add(services.DecorateWithCoalescing<IActivityExecutionInspectionStore, CoalescingActivityExecutionInspectionStore>());
 
-        // The drain scope factory presence is what makes the drain orchestrator take its coalescing path: the
-        // orchestrator has one constructor and its DI factory resolves this factory with GetService, so registering it
-        // here is the whole selection mechanism.
+        // Every drain runs in a scope from this factory: the drain orchestrator's DI factory resolves it with GetService,
+        // and a host without it refuses to drain.
         services.TryAddScoped<IRuntimeCoalescingDrainScopeFactory, RuntimeCoalescingDrainScopeFactory>();
         var markerDescriptor = new ServiceDescriptor(
             typeof(CoalescingRegistrationMarker),
@@ -73,6 +87,27 @@ public static class CoalescingRuntimeCheckpointPersistenceExtensions
         return services;
     }
 
+    /// <summary>
+    /// Registers <paramref name="options"/> as the host's persistence-mode options, replacing any registered before. A
+    /// mode that is not defined or a cap below one is refused here, so a misconfigured host fails when it is composed
+    /// rather than when its first run drains.
+    /// </summary>
+    public static IServiceCollection AddPersistenceModeOptions(this IServiceCollection services, PersistenceModeOptions options)
+    {
+        ArgumentNullException.ThrowIfNull(services);
+        ArgumentNullException.ThrowIfNull(options);
+
+        if (!Enum.IsDefined(options.Mode))
+            throw new InvalidOperationException($"Persistence mode '{(int)options.Mode}' is not supported. Use one of: {string.Join(", ", Enum.GetNames<PersistenceMode>())}.");
+
+        if (options.MaxActivitiesPerCommit <= 0)
+            throw new InvalidOperationException($"{nameof(PersistenceModeOptions.MaxActivitiesPerCommit)} must be greater than zero.");
+
+        services.RemoveAll<PersistenceModeOptions>();
+        services.AddSingleton(options);
+        return services;
+    }
+
     // Captures the currently-registered (durable) implementation of TService as CoalescingInner<TService> and replaces
     // the TService registration with TDecorator. The decorator and the session reach the inner store via
     // CoalescingInner<TService> so resolving TService inside the decorator does not recurse.
@@ -82,13 +117,15 @@ public static class CoalescingRuntimeCheckpointPersistenceExtensions
     {
         var descriptor = services.LastOrDefault(d => d.ServiceType == typeof(TService))
             ?? throw new InvalidOperationException(
-                $"Cannot enable checkpoint coalescing: no registration found for '{typeof(TService)}'. Register the workflows runtime services before calling AddCoalescingRuntimeCheckpointPersistence.");
+                $"Cannot register the persistence modes: no registration found for '{typeof(TService)}'. Register the workflows runtime services before calling {nameof(AddPersistenceModes)}.");
 
         services.Remove(descriptor);
 
         var innerDescriptor = new ServiceDescriptor(
             typeof(CoalescingInner<TService>),
-            serviceProvider => new CoalescingInner<TService>((TService)InstantiateFromDescriptor(descriptor, serviceProvider)),
+            serviceProvider => new CoalescingInner<TService>(
+                (TService)InstantiateFromDescriptor(descriptor, serviceProvider),
+                ownsValue: descriptor.ImplementationInstance is null),
             descriptor.Lifetime);
         services.Add(innerDescriptor);
 

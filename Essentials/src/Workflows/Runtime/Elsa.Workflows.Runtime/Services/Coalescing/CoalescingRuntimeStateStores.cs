@@ -461,26 +461,32 @@ internal static class CoalescingRuntimeStorePageMerger
 }
 
 /// <summary>
-/// Coalescing-aware overlay for <see cref="IActivityExecutionInspectionStore"/>. Unlike its sibling overlays it never
-/// serves the session's buffered (unflushed) state: <see cref="FindAsync"/> memoizes the <b>durable baseline</b> per
-/// activity execution for the duration of a coalesced window, so the per-hop inspection-projection build stops paying
-/// a durable store read for every intermediate hop the fold discards, while every read stays byte-identical to a
-/// fresh durable read (serving buffered state would flip the accumulator's FromState/Merge branch and change the
-/// flushed projection document). The memo is invalidated at every durable flush; the single-writer ownership lease
-/// guarantees the durable rows cannot change between flushes. Disabled (per-hop pass-through) via
-/// <see cref="CoalescingRuntimeCheckpointPersistenceOptions.CoalesceInspectionReads"/>.
+/// Coalescing-aware overlay for <see cref="IActivityExecutionInspectionStore"/>. <see cref="FindAsync"/> serves the
+/// projection the session last recorded for an activity execution, so a later checkpoint in the segment merges onto it
+/// exactly as it would have merged onto a committed one. Building from the durable baseline instead would drop what the
+/// recorded projection holds, such as the outcome a completion carried, when the activity's later checkpoint folds
+/// into the same commit. Otherwise it memoizes the <b>durable baseline</b> per activity execution for the duration of
+/// a coalesced window, so the inspection-projection build stops paying a durable store read for every intermediate
+/// checkpoint the fold discards, while every such read stays byte-identical to a fresh durable read. The memo is
+/// invalidated at every durable flush; the single-writer ownership lease guarantees the durable rows cannot change
+/// between flushes. The memo is disabled via <see cref="PersistenceModeOptions.CoalesceInspectionReads"/>.
 /// </summary>
 public sealed class CoalescingActivityExecutionInspectionStore(
     CoalescingInner<IActivityExecutionInspectionStore> inner,
     IRuntimeCoalescingSessionAccessor sessionAccessor,
-    CoalescingRuntimeCheckpointPersistenceOptions options) : IActivityExecutionInspectionStore
+    PersistenceModeOptions options) : IActivityExecutionInspectionStore
 {
     private readonly IActivityExecutionInspectionStore _inner = inner.Value;
 
     public async ValueTask<ActivityExecutionInspectionProjection?> FindAsync(string workflowExecutionId, string activityExecutionId, CancellationToken cancellationToken = default)
     {
-        if (!options.CoalesceInspectionReads ||
-            sessionAccessor.Current is not { } session || !session.AppliesTo(workflowExecutionId))
+        if (sessionAccessor.Current is not { } session || !session.AppliesTo(workflowExecutionId))
+            return await _inner.FindAsync(workflowExecutionId, activityExecutionId, cancellationToken);
+
+        if (session.TryGetInspection(activityExecutionId, out var recorded))
+            return recorded;
+
+        if (!options.CoalesceInspectionReads)
             return await _inner.FindAsync(workflowExecutionId, activityExecutionId, cancellationToken);
 
         if (session.TryGetInspectionBaseline(activityExecutionId, out var baseline))

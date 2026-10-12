@@ -396,7 +396,7 @@ public sealed class WorkflowExecutableExportEndpointTests
                 rootActivity,
                 inputContract,
                 [],
-                checkpointCadence: null,
+                persistenceMode: null,
                 workflowVariables: [],
                 incidentStrategy: IncidentStrategyBuiltIns.FaultReference);
 
@@ -416,7 +416,7 @@ public sealed class WorkflowExecutableExportEndpointTests
                 runtimeRequirements: null,
                 storageDriverRequirements: null,
                 incidentStrategy: IncidentStrategyBuiltIns.FaultReference,
-                checkpointCadence: null,
+                persistenceMode: null,
                 workflowVariables: []);
         }
     }

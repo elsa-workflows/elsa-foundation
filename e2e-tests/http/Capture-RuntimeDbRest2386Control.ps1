@@ -183,12 +183,11 @@ function Format-ReportedValue {
     return [string]$Value
 }
 
-function Format-CadenceReadback {
+function Format-PersistenceModeReadback {
     param([AllowNull()] $Detail)
-    if ($null -eq $Detail) { return 'checkpointCadence=<unreported>; maxSegmentCheckpoints=<unreported>; inspectionGranularity=<unreported>' }
-    'checkpointCadence={0}; maxSegmentCheckpoints={1}; inspectionGranularity={2}' -f `
-        (Format-ReportedValue $Detail.checkpointCadence), `
-        (Format-ReportedValue $Detail.maxSegmentCheckpoints), `
+    if ($null -eq $Detail) { return 'persistenceMode=<unreported>; inspectionGranularity=<unreported>' }
+    'persistenceMode={0}; inspectionGranularity={1}' -f `
+        (Format-ReportedValue $Detail.persistenceMode), `
         (Format-ReportedValue $Detail.inspectionGranularity)
 }
 
@@ -222,7 +221,7 @@ function Write-RunReadback {
     $lastTraceId = if ($Readback.TraceIds.Count -gt 0) { $Readback.TraceIds[-1] } else { '<none>' }
     Write-Host ("[{0}-result] detailTraceId={1}; detailTraceIds={2}; detailHttpStatus={3}; executionStatus={4}; referenceText={5}; {6}" -f `
         $Label, $lastTraceId, ($Readback.TraceIds -join ','), $Readback.LastStatusCode, (Get-RunStatus $detail), `
-        (Format-ReportedValue $OutputValue), (Format-CadenceReadback $detail))
+        (Format-ReportedValue $OutputValue), (Format-PersistenceModeReadback $detail))
 }
 
 Write-Host '== #2386 REST-start source/workload control ==' -ForegroundColor Cyan

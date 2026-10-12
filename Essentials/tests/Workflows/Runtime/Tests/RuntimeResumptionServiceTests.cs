@@ -610,6 +610,7 @@ public sealed class RuntimeResumptionServiceTests
         var later = Now + leaseDuration + leaseDuration;
         var services = new ServiceCollection();
         services.AddWorkflowRuntime();
+        services.AddPersistenceModes();
         services.RemoveAll<TimeProvider>();
         services.AddSingleton<TimeProvider>(new FakeTimeProvider(later));
         await using var provider = services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });

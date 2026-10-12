@@ -10,40 +10,33 @@ using static Elsa.Workflows.Design.Tests.Infrastructure.UpdateDraftTestKit;
 namespace Elsa.Workflows.Design.Tests.Unit;
 
 /// <summary>
-/// Checkpoint cadence authoring carrier. The per-workflow checkpoint cadence rides
-/// <see cref="WorkflowStrategyOptions.CheckpointCadence"/> on the authored <see cref="WorkflowDefinitionState"/>, so it
-/// must round-trip faithfully through the full-state draft replace (serialize → persist → deserialize) and be
-/// carried wholesale onto the immutable version at promotion — the compile source the executable compiler reads.
-/// The design stores hydrate the authored <c>State</c> on read exactly as an application consumer sees it.
+/// Strategy options authoring carrier. The workflow's chosen persistence mode and incident strategy ride
+/// <see cref="WorkflowDefinitionState.StrategyOptions"/>, so they must round-trip faithfully through the full-state draft
+/// replace (serialize → persist → deserialize) and be carried wholesale onto the immutable version at promotion, the
+/// compile source the executable compiler reads. The design stores hydrate the authored <c>State</c> on read exactly as
+/// an application consumer sees it.
 /// </summary>
-public sealed class CheckpointCadenceDraftRoundTripTests
+public sealed class StrategyOptionsDraftRoundTripTests
 {
     [Fact]
-    public async Task Draft_replace_persists_and_reloads_the_authored_checkpoint_cadence()
+    public async Task Draft_replace_persists_and_reloads_the_chosen_persistence_mode()
     {
         using var host = await WorkflowsDesignTestHost.CreateAsync();
         var draftId = await SeedEmptyDraft(host);
 
-        await Update(host, draftId, StateWithCadence(new WorkflowCheckpointCadenceOptions
-        {
-            Mode = "Coalesced",
-            MaxSegmentCheckpoints = 8
-        }));
+        await Update(host, draftId, StateWithPersistenceMode("Balanced"));
 
         var draft = await host.GetDraftAsync(draftId);
         Assert.NotNull(draft);
-        var cadence = draft!.State.StrategyOptions?.CheckpointCadence;
-        Assert.NotNull(cadence);
-        Assert.Equal("Coalesced", cadence!.Mode);
-        Assert.Equal(8, cadence.MaxSegmentCheckpoints);
+        Assert.Equal("Balanced", draft!.State.StrategyOptions?.PersistenceMode);
     }
 
     [Fact]
-    public async Task Promotion_carries_the_authored_checkpoint_cadence_onto_the_immutable_version()
+    public async Task Promotion_carries_the_chosen_persistence_mode_onto_the_immutable_version()
     {
         using var host = await WorkflowsDesignTestHost.CreateAsync();
         var draftId = await SeedEmptyDraft(host);
-        await Update(host, draftId, StateWithCadence(new WorkflowCheckpointCadenceOptions { Mode = "Immediate" }));
+        await Update(host, draftId, StateWithPersistenceMode("Durable"));
 
         var stateHash = WorkflowDraftStateHash.Compute((await host.GetDraftAsync(draftId))!.StateSource);
         string versionId;
@@ -53,10 +46,7 @@ public sealed class CheckpointCadenceDraftRoundTripTests
 
         var version = await host.GetVersionAsync(versionId);
         Assert.NotNull(version);
-        var cadence = version!.State.StrategyOptions?.CheckpointCadence;
-        Assert.NotNull(cadence);
-        Assert.Equal("Immediate", cadence!.Mode);
-        Assert.Null(cadence.MaxSegmentCheckpoints);
+        Assert.Equal("Durable", version!.State.StrategyOptions?.PersistenceMode);
     }
 
     [Fact]
@@ -76,9 +66,9 @@ public sealed class CheckpointCadenceDraftRoundTripTests
         Assert.Equal(strategy, draft!.State.StrategyOptions!.IncidentStrategy);
     }
 
-    private static WorkflowDefinitionState StateWithCadence(WorkflowCheckpointCadenceOptions cadence) =>
+    private static WorkflowDefinitionState StateWithPersistenceMode(string persistenceMode) =>
         State(activities: [Node("a")]) with
         {
-            StrategyOptions = new WorkflowStrategyOptions { CheckpointCadence = cadence }
+            StrategyOptions = new WorkflowStrategyOptions { PersistenceMode = persistenceMode }
         };
 }

@@ -46,12 +46,13 @@ describe("workflow serialization", () => {
     }
   });
 
-  it("round-trips unresolved incident references and unknown strategy-option fields", () => {
+  it("round-trips unresolved incident references, the persistence mode and unknown strategy-option fields", () => {
     const original = draft();
     original.state.strategyOptions = {
       activationStrategyType: "Singleton",
       futureOption: { preserve: true },
-      incidentStrategy: { alias: "Acme.Missing", version: "legacy-v2" }
+      incidentStrategy: { alias: "Acme.Missing", version: "legacy-v2" },
+      persistenceMode: "Ephemeral"
     };
 
     const result = buildDraftFromJson(serializeDraftToJson(original), original);

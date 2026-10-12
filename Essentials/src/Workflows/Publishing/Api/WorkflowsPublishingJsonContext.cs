@@ -164,7 +164,6 @@ internal static class WorkflowsPublishingJsonOptions
 [JsonSerializable(typeof(ValueRepresentation))]
 [JsonSerializable(typeof(VariableDefinition))]
 [JsonSerializable(typeof(VariableReference))]
-[JsonSerializable(typeof(WorkflowCheckpointCadenceOptions))]
 [JsonSerializable(typeof(WorkflowStrategyOptions))]
 [JsonSerializable(typeof(JsonElement))]
 internal partial class WorkflowsPublishingJsonContext : JsonSerializerContext

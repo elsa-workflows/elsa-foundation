@@ -214,14 +214,14 @@ public sealed class WorkflowExecutableCompiler(
 
             var inputContract = BuildInputContract(state.Inputs);
             var dependencies = BuildDependencies(dependencyClaims);
-            var checkpointCadence = CompileCheckpointCadence(state.StrategyOptions);
+            var persistenceMode = CompilePersistenceMode(state.StrategyOptions);
             var workflowVariables = executableNodeCompiler.CompileWorkflowVariables(state.Variables);
             var incidentStrategy = ResolveIncidentStrategy(state.StrategyOptions, incidentStrategyCatalog);
             var artifactHash = hasher.ComputeHash(
                 compiledRoot,
                 inputContract,
                 dependencies,
-                checkpointCadence,
+                persistenceMode,
                 workflowVariables,
                 incidentStrategy);
             var artifactId = hasher.CreateArtifactId(request.ArtifactIdPrefix, artifactHash);
@@ -264,7 +264,7 @@ public sealed class WorkflowExecutableCompiler(
                 storageDriverRequirements: storageDriverRequirements,
                 inputContract: inputContract,
                 dependencies: dependencies,
-                checkpointCadence: checkpointCadence,
+                persistenceMode: persistenceMode,
                 workflowVariables: workflowVariables,
                 incidentStrategy: incidentStrategy);
             placementSidecars?.Set(source.DefinitionVersionId, placedLayoutSegments);
@@ -455,31 +455,22 @@ public sealed class WorkflowExecutableCompiler(
         }
     }
 
-    // Compile the authored per-workflow checkpoint cadence into the executable. The mode is a stable
-    // string alias validated here (fail-fast at publish, mirroring the contract gate discipline); an unauthored cadence
-    // compiles to null so the host default applies and the artifact hash is unchanged from before this field existed.
-    private static WorkflowExecutableCheckpointCadence? CompileCheckpointCadence(WorkflowStrategyOptions? strategyOptions)
+    // Compile the workflow's chosen persistence mode into the executable. The authored value is a mode name, matched
+    // exactly so a typo or a numeric string fails here at publish instead of running under a mode nobody chose. No
+    // choice compiles to null: the host default applies and the artifact hash is the same as for an executable compiled
+    // before the field existed.
+    private static PersistenceMode? CompilePersistenceMode(WorkflowStrategyOptions? strategyOptions)
     {
-        var authored = strategyOptions?.CheckpointCadence;
-        if (authored is null || string.IsNullOrWhiteSpace(authored.Mode))
+        var authored = strategyOptions?.PersistenceMode;
+        if (string.IsNullOrWhiteSpace(authored))
             return null;
 
-        if (StringComparer.Ordinal.Equals(authored.Mode, WorkflowExecutableCheckpointCadence.ImmediateMode))
-            return new WorkflowExecutableCheckpointCadence(WorkflowExecutableCheckpointCadence.ImmediateMode);
-
-        if (StringComparer.Ordinal.Equals(authored.Mode, WorkflowExecutableCheckpointCadence.CoalescedMode))
-        {
-            if (authored.MaxSegmentCheckpoints is { } maxSegmentCheckpoints && maxSegmentCheckpoints <= 0)
-                throw new ArgumentException(
-                    $"Authored checkpoint cadence 'MaxSegmentCheckpoints' must be greater than zero, but was {maxSegmentCheckpoints}.");
-
-            return new WorkflowExecutableCheckpointCadence(
-                WorkflowExecutableCheckpointCadence.CoalescedMode,
-                authored.MaxSegmentCheckpoints);
-        }
+        var names = Enum.GetNames<PersistenceMode>();
+        if (names.Contains(authored, StringComparer.Ordinal))
+            return Enum.Parse<PersistenceMode>(authored);
 
         throw new ArgumentException(
-            $"Authored checkpoint cadence mode '{authored.Mode}' is not a recognised alias. Use '{WorkflowExecutableCheckpointCadence.ImmediateMode}' or '{WorkflowExecutableCheckpointCadence.CoalescedMode}'.");
+            $"Persistence mode '{authored}' is not recognised. Use one of: {string.Join(", ", names.Select(name => $"'{name}'"))}.");
     }
 
     private static IncidentStrategyReference ResolveIncidentStrategy(

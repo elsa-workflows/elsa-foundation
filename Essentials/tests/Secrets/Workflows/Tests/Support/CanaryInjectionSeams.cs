@@ -200,12 +200,19 @@ public sealed class SecretsCanaryInjectionFeature : IShellFeature, IPostConfigur
 {
     public const string Name = "SecretsCanaryInjection";
 
+    /// <summary>
+    /// Whether the runtime fuses a ReplaySafe leaf's schedule, start and invoke stages into one dispatch. Off, every
+    /// stage is its own dispatch, as every stage of an activity that is not ReplaySafe is.
+    /// </summary>
+    public bool FuseReplaySafeStages { get; set; } = true;
+
     public void ConfigureServices(IServiceCollection services)
     {
     }
 
     public void PostConfigureServices(IServiceCollection services)
     {
+        services.Replace(ServiceDescriptor.Singleton(new RuntimeReplaySafeFusionOptions { Enabled = FuseReplaySafeStages }));
         Decorate<IRuntimeActivityInputMaterializer>(services, (provider, inner) => new CanaryInputMaterializer(inner, provider.GetRequiredService<CanaryInjections>()));
         Decorate<IRuntimePayloadCapturePolicy>(services, (provider, inner) => new CanaryPayloadCapturePolicy(inner, provider.GetRequiredService<CanaryInjections>()));
         services.Replace(ServiceDescriptor.Singleton<IRuntimeDiagnosticsSettingsAccessor>(provider =>

@@ -101,7 +101,7 @@ internal sealed class ResponseReplayCommitGateChannel(ResponseReplayCommitGateOp
 
 internal sealed class ResponseReplayCommitGateStore(
     IRuntimeCheckpointCommitStore inner,
-    IRuntimeCoalescingSessionAccessor sessionAccessor,
+    IRuntimeCoalescingSessionAccessor? sessionAccessor,
     ResponseReplayCommitGateChannel channel,
     ResponseReplayCommitGateOptions options,
     ResponseReplayCommitGateState gateState) : IRuntimeCheckpointCommitStore
@@ -113,6 +113,13 @@ internal sealed class ResponseReplayCommitGateStore(
         RuntimeCheckpointPersistenceDecision decision,
         CancellationToken cancellationToken = default)
     {
+        // Activity-count caps no longer guarantee a flush at ActivityStarted. For the external-input
+        // recovery proof, explicitly flush this checkpoint through the real persistence store before
+        // stopping the process. This isolates payload rehydration from cap-counting behaviour.
+        if (options.GateAtResponseActivityStarted && IsTargetResponseActivityStarted(commit, out _, out _))
+            decision = new RuntimeCheckpointPersistenceDecision(
+                RuntimeCheckpointPersistenceMode.Immediate, "Test-only external-input crash boundary.");
+
         var result = await inner.CommitAsync(commit, decision, cancellationToken);
 
         if (IsTargetEndpointClaim(commit, out var claim))
@@ -157,11 +164,10 @@ internal sealed class ResponseReplayCommitGateStore(
         if (options.GateAtResponseActivityStarted &&
             IsTargetResponseActivityStarted(commit, out var startedState, out var startedCorrelation))
         {
-            var session = sessionAccessor.Current
+            var session = sessionAccessor?.Current
                 ?? throw new InvalidOperationException("The external-input ActivityStarted commit returned without an ambient coalescing session.");
-            if (!session.IsActive || !session.AppliesTo(commit.WorkflowExecutionId) ||
-                session.MaxSegmentCheckpoints != ResponseReplayPublicationHost.ExternalInputMaxSegmentCheckpoints)
-                throw new InvalidOperationException("The external-input ActivityStarted commit did not return through the expected active cap-two coalescing session.");
+            if (session.IsActive || session.HasBufferedChanges)
+                throw new InvalidOperationException("The external-input ActivityStarted commit did not flush and end its persistence-mode session.");
 
             var bodyInput = startedState.InputSnapshot?.Values.GetValueOrDefault("Body")
                 ?? throw new InvalidOperationException("The external-input ActivityStarted state has no Body input snapshot.");
@@ -225,8 +231,7 @@ internal sealed class ResponseReplayCommitGateStore(
                 invokeCommandKind = invokeWorkItem.CommandKind.ToString(),
                 sessionActive = session.IsActive,
                 sessionAppliesToExecution = session.AppliesTo(commit.WorkflowExecutionId),
-                maxSegmentCheckpoints = session.MaxSegmentCheckpoints,
-                hopCount = session.HopCount,
+                activityCount = session.ActivityCount,
                 decision = decision.Mode.ToString()
             }, cancellationToken);
 
@@ -238,7 +243,7 @@ internal sealed class ResponseReplayCommitGateStore(
 
         if (IsTargetResponseCompletion(commit, out var responseState, out var correlation))
         {
-            var session = sessionAccessor.Current
+            var session = sessionAccessor?.Current
                 ?? throw new InvalidOperationException("The response completion returned without an ambient coalescing session.");
             if (!session.IsActive || !session.AppliesTo(commit.WorkflowExecutionId) || !session.HasBufferedChanges)
                 throw new InvalidOperationException("The response completion did not return into an active applicable session with buffered changes.");
@@ -285,7 +290,7 @@ internal sealed class ResponseReplayCommitGateStore(
                 sessionActive = session.IsActive,
                 sessionAppliesToExecution = session.AppliesTo(commit.WorkflowExecutionId),
                 hasBufferedChanges = session.HasBufferedChanges,
-                hopCount = session.HopCount,
+                activityCount = session.ActivityCount,
                 decision = decision.Mode.ToString(),
                 completionSha256 = Convert.ToHexString(SHA256.HashData(completionJson)).ToLowerInvariant(),
                 instruction = new
@@ -408,7 +413,7 @@ internal sealed class ResponseReplayCommitGateStore(
 [ShellFeature(
     name: "ResponseReplayCommitGate",
     DisplayName = "Response Replay Test Commit Gate",
-    Description = "Test-only process barrier around the registered Coalesced commit store.",
+    Description = "Test-only process barrier around the registered checkpoint commit store.",
     DependsOn = new object[] { "WorkflowsRuntimeCheckpointPersistence" })]
 public sealed class ResponseReplayCommitGateFeature : IShellFeature, IPostConfigureShellServices
 {
@@ -446,13 +451,11 @@ public sealed class ResponseReplayCommitGateFeature : IShellFeature, IPostConfig
             typeof(IRuntimeCheckpointCommitStore),
             serviceProvider =>
             {
-                var resolvedInner = ResponseReplayServiceDescriptorActivator.Instantiate(registered, serviceProvider);
-                if (resolvedInner is not CoalescingRuntimeCheckpointCommitStore inner)
-                    throw new InvalidOperationException($"The test gate expected the registered Coalesced store, found '{resolvedInner.GetType().FullName}'.");
+                var inner = (IRuntimeCheckpointCommitStore)ResponseReplayServiceDescriptorActivator.Instantiate(registered, serviceProvider);
 
                 return new ResponseReplayCommitGateStore(
                     inner,
-                    serviceProvider.GetRequiredService<IRuntimeCoalescingSessionAccessor>(),
+                    serviceProvider.GetService<IRuntimeCoalescingSessionAccessor>(),
                     serviceProvider.GetRequiredService<ResponseReplayCommitGateChannel>(),
                     serviceProvider.GetRequiredService<ResponseReplayCommitGateOptions>(),
                     serviceProvider.GetRequiredService<ResponseReplayCommitGateState>());

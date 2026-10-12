@@ -407,10 +407,15 @@ public sealed class BpmnRuntimeFixture : IAsyncDisposable
             loopCharacteristics: new BpmnLoopCharacteristics(isSequential: isSequential, cardinality: cardinality));
 
     /// <summary>The staged durable-first publish intents committed across the run: the sends that route post-commit. The harness composes <c>ActivitiesPrimitivesFeature</c>, so the staging buffer + handler are already wired.</summary>
+    // A commit carries an intent its own checkpoint decided, or, when a persistence mode folded earlier checkpoints
+    // into it, as an outbox item among its state changes. A later commit can carry the same outbox item again, with
+    // its delivery recorded.
     public IReadOnlyList<RuntimePostCommitIntent> PublishStimulusIntents() =>
         Provider.GetRequiredService<InMemoryRuntimeCheckpointCommitStore>().ListCommits()
-            .SelectMany(record => record.Commit.PostCommitIntents)
+            .SelectMany(record => record.Commit.PostCommitIntents
+                .Concat(record.Commit.StateChanges.PostCommitOutbox.Select(change => change.State.Intent)))
             .Where(intent => StringComparer.Ordinal.Equals(intent.Kind, PublishStimulusConstants.PublishStimulusIntentKind))
+            .DistinctBy(intent => intent.IntentId)
             .ToList();
 
     private static ExecutableNode NewClrNode(string nodeId, Type activityType, IReadOnlyDictionary<string, object?> literals) =>

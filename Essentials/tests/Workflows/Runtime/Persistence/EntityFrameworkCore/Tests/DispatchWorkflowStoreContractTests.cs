@@ -586,9 +586,14 @@ public abstract class DispatchWorkflowStoreContractTests : IAsyncLifetime
 
     private sealed class FailingRecordingOutboxStore(IRuntimePostCommitOutboxStore inner, ScriptedRecordingFailure failure) :
         IRuntimePostCommitOutboxStore,
+        IPostCommitOutboxLookupStore,
         IRuntimePostCommitOutboxClaimStore,
         IRuntimePostCommitOutboxClaimCompletionStore
     {
+        // The persistence modes wrap this store and reach the stored items through it to look one up.
+        public ValueTask<RuntimePostCommitOutboxItem?> FindAsync(string outboxItemId, CancellationToken cancellationToken = default) =>
+            ((IPostCommitOutboxLookupStore)inner).FindAsync(outboxItemId, cancellationToken);
+
         public ValueTask<IReadOnlyCollection<RuntimePostCommitOutboxItem>> GetDeliverableAsync(
             RuntimePostCommitOutboxQuery query,
             CancellationToken cancellationToken = default) =>

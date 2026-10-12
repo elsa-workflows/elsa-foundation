@@ -104,13 +104,15 @@ public sealed class HttpEndpointHostFixture : IAsyncDisposable
 
     /// <summary>
     /// Starts the production HTTP runtime against an isolated EF Core SQLite database and applies the requested
-    /// checkpoint persistence policy after the provider has replaced the in-memory runtime stores.
+    /// persistence mode after the provider has replaced the in-memory runtime stores.
     /// </summary>
-    /// <param name="configureServices">Adds to the host's services before the EF provider and checkpoint policy are applied.</param>
+    /// <param name="configureServices">Adds to the host's services before the EF provider and persistence mode are applied.</param>
+    /// <param name="recordCompletion">The host's RecordCompletion setting, which only Ephemeral reads.</param>
     public static Task<HttpEndpointHostFixture> StartDurableSqliteAsync(
-        CheckpointPersistenceMode checkpointPersistenceMode,
-        int maxSegmentCheckpoints,
-        Action<IServiceCollection>? configureServices = null)
+        PersistenceMode persistenceMode,
+        int maxActivitiesPerCommit,
+        Action<IServiceCollection>? configureServices = null,
+        bool recordCompletion = true)
     {
         var databaseDirectory = Path.Join(Path.GetTempPath(), $"elsa-http-runtime-ef-{Guid.NewGuid():N}");
         Directory.CreateDirectory(databaseDirectory);
@@ -120,7 +122,7 @@ public sealed class HttpEndpointHostFixture : IAsyncDisposable
             services =>
             {
                 configureServices?.Invoke(services);
-                AddDurableSqlite(services, databasePath, checkpointPersistenceMode, maxSegmentCheckpoints);
+                AddDurableSqlite(services, databasePath, persistenceMode, maxActivitiesPerCommit, recordCompletion);
             },
             databaseDirectory);
     }
@@ -135,7 +137,7 @@ public sealed class HttpEndpointHostFixture : IAsyncDisposable
         StartAsync(
             services =>
             {
-                AddDurableSqlite(services, databasePath, CheckpointPersistenceMode.Immediate, maxSegmentCheckpoints: 50);
+                AddDurableSqlite(services, databasePath, PersistenceMode.Durable, maxActivitiesPerCommit: 50, recordCompletion: true);
                 services.Configure<HttpEndpointRouteTableConvergenceOptions>(options => options.Interval = routeTableConvergenceInterval);
             },
             databaseDirectory: null);
@@ -143,8 +145,9 @@ public sealed class HttpEndpointHostFixture : IAsyncDisposable
     private static void AddDurableSqlite(
         IServiceCollection services,
         string databasePath,
-        CheckpointPersistenceMode checkpointPersistenceMode,
-        int maxSegmentCheckpoints)
+        PersistenceMode persistenceMode,
+        int maxActivitiesPerCommit,
+        bool recordCompletion)
     {
         // Durable composition refuses the ephemeral development signer, so the fixture supplies the
         // stable recovery-continuation key a real durable host configures.
@@ -157,11 +160,14 @@ public sealed class HttpEndpointHostFixture : IAsyncDisposable
         });
         services.AddEfModuleMigrations<RuntimeDbContext>("Sqlite");
 
+        // The settings feature registers the host's mode; the persistence-mode services are added once every store is
+        // registered, as a composed shell adds them.
         new WorkflowsRuntimeCheckpointPersistenceFeature
         {
-            Mode = checkpointPersistenceMode,
-            MaxSegmentCheckpoints = maxSegmentCheckpoints
-        }.PostConfigureServices(services);
+            Mode = persistenceMode,
+            MaxActivitiesPerCommit = maxActivitiesPerCommit,
+            RecordCompletion = recordCompletion
+        }.ConfigureServices(services);
     }
 
     private static async Task<HttpEndpointHostFixture> StartAsync(
@@ -248,6 +254,10 @@ public sealed class HttpEndpointHostFixture : IAsyncDisposable
                     // checkpoint decoration must happen after provider selection. This is the same ordering enforced
                     // by IPostConfigureShellServices in a composed shell.
                     configurePersistence?.Invoke(services);
+
+                    // What a composed shell does once every feature is registered: the runtime API feature adds the
+                    // persistence-mode services, which every run drains through, over the stores registered by then.
+                    new WorkflowsRuntimeApiFeature().PostConfigureServices(services);
                 });
                 webHost.Configure(app =>
                 {
