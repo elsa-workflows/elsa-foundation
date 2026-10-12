@@ -16,7 +16,7 @@ using Xunit;
 namespace Elsa.Activities.Design.Api.Tests;
 
 /// <summary>
-/// In phase 0 the credential declaration is reserved for <c>[ActivityInput(IsCredential = true)]</c> on a CLR activity,
+/// For now the credential declaration is reserved for <c>[ActivityInput(IsCredential = true)]</c> on a CLR activity,
 /// which CLR reconciliation checks can be bound to a secret reference. An activity definition or version added through
 /// the Activities Design API has no such check, so it may declare an input sensitive but not a credential.
 /// The commands are read from request JSON with the API's own wire options, so the wire name

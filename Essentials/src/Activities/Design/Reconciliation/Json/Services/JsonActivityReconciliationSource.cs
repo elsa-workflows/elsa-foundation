@@ -18,7 +18,7 @@ namespace Elsa.Activities.Design.Reconciliation.Json.Services;
 /// ordered <c>Files</c> list) and the required <c>SourceId</c> are validated by
 /// <see cref="JsonActivityReconciliationFeature"/> at registration, so this source can assume a valid
 /// configuration and simply read whichever was supplied. An entry whose input declares <c>isCredential</c> is refused:
-/// in phase 0 the credential declaration is reserved for
+/// for now the credential declaration is reserved for
 /// <c>[ActivityInput(IsCredential = true)]</c> on a CLR activity, which CLR reconciliation checks can be bound to a
 /// secret reference, and a JSON entry has no such check. The refusal, the shared
 /// <see cref="CredentialInputDeclaration"/> check, is made here rather than in the replaceable

@@ -254,7 +254,7 @@ public sealed class HttpEndpointMiddleware(
 
         // Per-endpoint RequestTimeout bounds dispatch (which drains inline on the in-process actor, so it can
         // genuinely take time); faults map to statuses via the endpoint fault handler seam.
-        // Non-positive values are rejected at publish (review C2); the > Zero guard here is defense in depth
+        // Non-positive values are rejected at publish; the > Zero guard here is defense in depth
         // against hand-seeded binding metadata — CancelAfter would throw on a negative TimeSpan.
         StimulusRoutingResult result;
         using var timeoutSource = endpointOptions.RequestTimeout is { } timeout && timeout > TimeSpan.Zero

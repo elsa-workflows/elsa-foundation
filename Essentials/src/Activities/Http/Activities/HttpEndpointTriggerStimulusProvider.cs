@@ -198,7 +198,7 @@ public sealed class HttpEndpointTriggerStimulusProvider : IActivityTriggerStimul
                 throw new ArgumentException(
                     $"HTTP endpoint trigger node '{node.ExecutableNodeId}' has a literal '{inputName}' that is not a TimeSpan.");
 
-            // Review C2: a non-positive timeout would arm CancelAfter with an invalid value at request time
+            // A non-positive timeout would arm CancelAfter with an invalid value at request time
             // (or cancel every request instantly) — an authoring error, so the publish fails here.
             if (parsed <= TimeSpan.Zero)
                 throw new ArgumentException(
@@ -221,7 +221,7 @@ public sealed class HttpEndpointTriggerStimulusProvider : IActivityTriggerStimul
                 throw new ArgumentException(
                     $"HTTP endpoint trigger node '{node.ExecutableNodeId}' has a literal '{inputName}' that is not an integer.");
 
-            // Review C2 (companion): a non-positive size limit is meaningless and would otherwise be silently
+            // Likewise, a non-positive size limit is meaningless and would otherwise be silently
             // dropped by the read side's strict parse — fail the publish where the authoring error is made.
             if (value <= 0)
                 throw new ArgumentException(

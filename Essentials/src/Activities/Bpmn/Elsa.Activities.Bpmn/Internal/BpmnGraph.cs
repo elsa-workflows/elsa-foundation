@@ -635,8 +635,8 @@ public sealed class BpmnGraph
             if (hasCollection && !declaredVariableNames.Contains(loop.CollectionVariable!))
                 throw new BpmnExecutionException($"BPMN multi-instance element '{element.ElementId}' names collection variable '{loop.CollectionVariable}', which is not a declared container-scoped variable of the process.");
 
-            // The item key must not collide with the reserved loopIndex key the iteration frame always seeds
-            // — a collision would silently overwrite one with the other.
+            // The item key must not collide with the reserved loopIndex key the iteration frame always seeds;
+            // a collision would silently overwrite one with the other.
             if (hasCollection && StringComparer.Ordinal.Equals(loop.ItemVariable, BpmnLoopCharacteristics.LoopIndexVariable))
                 throw new BpmnExecutionException($"BPMN multi-instance element '{element.ElementId}' uses item variable '{BpmnLoopCharacteristics.LoopIndexVariable}', which is reserved for the zero-based iteration index; choose a different item variable.");
         }

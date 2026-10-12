@@ -93,7 +93,7 @@ public sealed class JsonReconciliationTests : IDisposable
     [Fact]
     public async Task JsonSource_RefusesAnEntryThatDeclaresACredentialInput()
     {
-        // In phase 0 only [ActivityInput(IsCredential = true)] on a CLR activity declares a
+        // For now only [ActivityInput(IsCredential = true)] on a CLR activity declares a
         // credential, because only CLR reconciliation checks the input could be bound to a secret reference.
         var file = WriteTempJson("[" + WriteLineJson() + "," + SendEmailJson(DeclaredInputJson("isCredential")) + "]");
 

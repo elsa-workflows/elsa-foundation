@@ -13,7 +13,7 @@ namespace Elsa.Activities.Flowchart.Tests;
 /// The mechanism behind the dead-path join semantics, as opposed to the observable behaviour the conformance
 /// corpus pins. The corpus proves the two policies agree; these prove the dead-path policy agrees for the
 /// stated reason — that it really represents deadness rather than quietly falling back on the search — and
-/// that the absorption rules the ADR calls the subtle part actually hold.
+/// that the loop-boundary absorption rules, the subtle part, actually hold.
 /// </summary>
 public sealed class FlowchartDeadPathJoinTests
 {

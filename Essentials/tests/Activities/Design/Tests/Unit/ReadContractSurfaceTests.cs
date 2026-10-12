@@ -5,8 +5,7 @@ using Xunit;
 namespace Elsa.Activities.Design.Tests.Unit;
 
 /// <summary>
-/// Read-contract surface pinning. Under the Model X reconciliation policy (Unit C
-/// 2026-05-28), the parent <see cref="IActivityDefinition"/> exposes identity + creation
+/// Read-contract surface pinning. Under the Model X reconciliation policy, the parent <see cref="IActivityDefinition"/> exposes identity + creation
 /// provenance + display only; per-pass mutating reconciliation state (LastSeenAt, IsStale,
 /// RemovedAt, etc.) does NOT exist anywhere in the domain because reconciliation is one-shot
 /// at creation time. The Version's content hash lives on

@@ -78,7 +78,7 @@ public sealed class ReplaySafeFusionGuardrailTests
     }
 
     // Shape (b): a multi-outcome branch — one ReplaySafe node forking to two single-predecessor ReplaySafe tails.
-    // Every successor edge is provably single-predecessor, so the fused pump carries both branches inline (FIFO, exactly
+    // Every successor edge is provably single-predecessor, so the inline-cascade pump carries both branches inline (FIFO, exactly
     // the discrete order) and no edge is treated as a join.
     [Fact]
     public async Task MultiOutcomeBranch_EnabledVersusDisabled_IsByteIdentical_AndCascadePumpsInline()
@@ -105,7 +105,7 @@ public sealed class ReplaySafeFusionGuardrailTests
             $"Expected ON dispatches ({enabled.Dispatches}) < OFF dispatches ({disabled.Dispatches}).");
     }
 
-    // Shape (c): a fan-in join (diamond). The join node's ScheduleActivity has two inbound edges, so the fused pump MUST
+    // Shape (c): a fan-in join (diamond). The join node's ScheduleActivity has two inbound edges, so the inline-cascade pump MUST
     // hand it back to the discrete cascade — proven via the join-fallback counter — and the
     // committed durable state must still be byte-identical.
     [Fact]

@@ -19,8 +19,7 @@ using Microsoft.Extensions.Options;
 namespace Elsa.Activities.Design.Reconciliation.Services;
 
 /// <summary>
-/// Model X reconciliation policy (Unit C 2026-05-28; pending 2026-06-01 architecture
-/// review). For each candidate version contributed by source modules:
+/// Model X reconciliation policy (provisional, pending architecture review). For each candidate version contributed by source modules:
 ///
 /// 1. Find the parent definition by its surrogate Id or by the natural key
 ///    <c>(SourceKind, SourceId, ActivityTypeKey)</c>.

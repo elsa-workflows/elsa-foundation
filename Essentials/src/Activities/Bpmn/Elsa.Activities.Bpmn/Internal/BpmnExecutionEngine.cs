@@ -124,7 +124,7 @@ public sealed class BpmnExecutionEngine(
     /// <summary>The deterministic fault code raised when a collection-mode multi-instance host's collection variable holds a present, non-array value.</summary>
     public const string CollectionNotACollectionFaultCode = "bpmn.loop.collection-not-a-collection";
 
-    /// <summary>The deterministic fault code raised when a collection-mode multi-instance host's collection variable holds an externally-stored (non-inline) payload (stated cut).</summary>
+    /// <summary>The deterministic fault code raised when a collection-mode multi-instance host's collection variable holds an externally-stored (non-inline) payload; only inline collections are supported.</summary>
     public const string CollectionNotInlineFaultCode = "bpmn.loop.collection-not-inline";
 
     public ValueTask<RuntimeStructuralContinuation> StartAsync(IRuntimeActivityExecutionContext context)
@@ -573,7 +573,7 @@ public sealed class BpmnExecutionEngine(
     /// nothing to absorb — the host token is consumed and the error-catcher ladder is routed directly. The completing
     /// child's active-child record was already dropped by the caller. The ladder: (1) a host-attached error boundary
     /// mints an <c>Active</c> token at the boundary (inheriting the interrupt target's iteration key) and propagates;
-    /// (2) else the scope's error event subprocess activates interrupting (activation); (3) else the process
+    /// (2) else the scope's error event subprocess activates, interrupting the scope; (3) else the process
     /// faults deterministically with the per-outcome composite fault code. The interrupt target is the multi-instance
     /// loop coordinator when the completing token is an instance (the multi-instance cascade: firing a catcher interrupts every
     /// remaining instance), otherwise the completing host token itself. NO seam-B request is staged on this path.
@@ -932,7 +932,7 @@ public sealed class BpmnExecutionEngine(
     }
 
     /// <summary>
-    /// Fires a matched escalation boundary, with unchanged boundary semantics: a non-interrupting boundary
+    /// Fires a matched escalation boundary: a non-interrupting boundary
     /// fires (live or late) alongside the untouched host; an interrupting boundary cancels the host token (or its MI
     /// coordinator) and routes, unless the host had already terminalized (a late race no-ops with an
     /// <c>EscalationLate</c> diagnostic — interrupting it retroactively would double-route its outbound).

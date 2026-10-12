@@ -288,7 +288,7 @@ public sealed class HttpEndpointExecutionTests
     [Fact]
     public async Task DirectRun_CanStartTrue_Completes_ViaAuthoredRouteFallback()
     {
-        // Exception: a start-capable endpoint on a direct run (no trigger identity) keeps A's authored-route
+        // Exception: a start-capable endpoint on a direct run (no trigger identity) keeps the authored-route
         // fallback and completes.
         await using var harness = NewHarness();
 

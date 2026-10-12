@@ -163,7 +163,7 @@ public sealed class HttpEndpointSyncResponseEndToEndTests : IAsyncLifetime
     [Fact]
     public async Task MidFlowSyncEndpoint_ResumingRequestReceivesTheWorkflowsSubsequentWriteResponse_InTheSameExchange()
     {
-        // The whole reason mid-flow resume and synchronous responses compose. A workflow started DIRECTLY suspends at a
+        // This is why mid-flow resume and synchronous responses compose: a workflow started DIRECTLY suspends at a
         // mid-flow endpoint authored Sync; the RESUMING request drains the subsequent WriteHttpResponse INLINE on its
         // own fresh scope, so that request receives the workflow-authored response in the same exchange (fresh ambient
         // context on resume — the resume dispatch carries the resuming request's own RequestServices).

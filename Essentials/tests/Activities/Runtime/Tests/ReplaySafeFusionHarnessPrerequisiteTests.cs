@@ -12,8 +12,8 @@ using FlowchartActivity = Elsa.Activities.Flowchart.Activities.Flowchart;
 namespace Elsa.Activities.Runtime.Tests;
 
 /// <summary>
-/// Harness prerequisite gate: proves the two test-harness prerequisites the fusion guardrail depends on are real,
-/// independently of any fusion code — otherwise the fusion guardrail could pass vacuously.
+/// Harness prerequisite gate: proves the two test-harness prerequisites the fusion guardrail depends on hold on their
+/// own, asserting nothing about fusion itself; otherwise the fusion guardrail could pass vacuously.
 /// (P1) the harness can drive the SAME workflow coalesced (commits fold into a segment), and (P2) a
 /// <see cref="ReplaySafeProbeActivity"/> node actually resolves a <see cref="SideEffectProfile.ReplaySafe"/> contract
 /// while the unmarked <see cref="ProbeActivity"/> stays External.
