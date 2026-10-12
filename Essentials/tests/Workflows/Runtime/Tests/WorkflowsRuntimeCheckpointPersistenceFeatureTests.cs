@@ -153,7 +153,7 @@ public sealed class WorkflowsRuntimeCheckpointPersistenceFeatureTests
         using var provider = services.BuildServiceProvider();
         var hostOptions = provider.GetRequiredService<PersistenceModeOptions>();
         var factory = provider.GetRequiredService<IRuntimeCoalescingDrainScopeFactory>();
-        await using var scope = factory.Begin("wf-host-settings");
+        await using var scope = factory.Begin("wf-host-settings", new ResolvedPersistenceMode(PersistenceMode.Balanced, RunHasRecord: false));
 
         Assert.Equal(hostOptions.MaxActivitiesPerCommit, scope.Session.MaxActivitiesPerCommit);
         Assert.Equal(coalesceDurableValueReads, scope.Session.CoalesceDurableValueReads);

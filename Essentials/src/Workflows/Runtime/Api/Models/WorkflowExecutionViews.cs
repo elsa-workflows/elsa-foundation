@@ -88,7 +88,7 @@ public sealed record WorkflowInstanceSummaryView(
 
 /// <summary>
 /// Instance detail read model. Beyond the per-instance projections it also surfaces the run's
-/// <paramref name="PersistenceMode"/> (<c>Durable</c> or <c>Balanced</c>) and the
+/// <paramref name="PersistenceMode"/> (<c>Durable</c>, <c>Balanced</c> or <c>Ephemeral</c>) and the
 /// <paramref name="InspectionGranularity"/> that mode implies (<c>activity-level</c> vs <c>boundary-level</c>). They let
 /// an inspection consumer know whether per-activity evidence is exact or folded to a commit boundary, rather than
 /// assuming activity-level fidelity. See <see cref="Coalescing.RuntimePersistenceModeInspector"/>.

@@ -17,6 +17,7 @@ using Elsa.Workflows.Runtime.Services.Dispatch;
 using Elsa.Workflows.Runtime.Services.Executions;
 using Elsa.Workflows.Runtime.Services.Scheduler;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Xunit;
 using Xunit.Abstractions;
 
@@ -169,7 +170,7 @@ public sealed class RuntimeCheckpointCoalescingTests(ITestOutputHelper output)
             collection.AddSingleton<IWorkflowSchedulerWorkQueue>(new LegacySchedulerWorkQueue()));
         await using var provider = services.BuildServiceProvider();
         var factory = provider.GetRequiredService<IRuntimeCoalescingDrainScopeFactory>();
-        await using (var scope = factory.Begin("wfexec-legacy"))
+        await using (var scope = factory.Begin("wfexec-legacy", new ResolvedPersistenceMode(PersistenceMode.Balanced, RunHasRecord: true)))
         {
             Assert.False(scope.Session.IsActive);
             await provider.GetRequiredService<IRuntimeCheckpointCommitStore>().CommitAsync(
@@ -957,6 +958,303 @@ public sealed class RuntimeCheckpointCoalescingTests(ITestOutputHelper output)
 
         var commit = Assert.Single(provider.GetRequiredService<InMemoryRuntimeCheckpointCommitStore>().ListCommits());
         Assert.Equal(RuntimeCheckpointNames.BookmarkCreated, commit.Commit.Checkpoint.Name);
+    }
+
+    // ---- Ephemeral and the completion record ----------------------------------------------------------------------
+
+    [Fact]
+    public async Task Ephemeral_WithoutCompletionRecords_DropsTheCompletionOfARunThatWasNeverCommitted()
+    {
+        var outcome = await CompleteEphemeralRunAsync(runHasRecord: false, recordCompletion: false);
+
+        Assert.Equal(0, outcome.DurableCommits);
+        Assert.False(outcome.Session.IsActive);
+        Assert.False(outcome.Session.HasDurableRecord);
+    }
+
+    [Fact]
+    public async Task Ephemeral_WithCompletionRecords_CommitsTheCompletion()
+    {
+        var outcome = await CompleteEphemeralRunAsync(runHasRecord: false, recordCompletion: true);
+
+        Assert.Equal(1, outcome.DurableCommits);
+        Assert.True(outcome.Session.HasDurableRecord);
+    }
+
+    [Fact]
+    public async Task Ephemeral_WithoutCompletionRecords_CommitsTheCompletionOfARunThatAlreadyHasARecord()
+    {
+        // The record came from an earlier drain (the run suspended or faulted before). Dropping its completion would
+        // leave the stored run looking unfinished forever.
+        var outcome = await CompleteEphemeralRunAsync(runHasRecord: true, recordCompletion: false);
+
+        Assert.Equal(1, outcome.DurableCommits);
+    }
+
+    [Fact]
+    public async Task Ephemeral_WithoutCompletionRecords_CommitsTheCompletionOnceThisDrainCommittedAnything()
+    {
+        // A boundary earlier in the same drain (here an activity-attempt boundary, as before an activity that is not
+        // safe to repeat) gave the run a record, so its completion must be committed too.
+        var attemptBoundary = NewEmptyCommit(EphemeralRunId, 1, RuntimeCheckpointNames.ActivityAttemptClaimed);
+
+        var outcome = await CompleteEphemeralRunAsync(runHasRecord: false, recordCompletion: false, before: [(attemptBoundary, RuntimeCheckpointPersistenceMode.Immediate)]);
+
+        Assert.Equal(2, outcome.DurableCommits);
+        Assert.Equal(RuntimeCheckpointNames.WorkflowCompleted, outcome.LastCommitName);
+    }
+
+    [Fact]
+    public async Task Balanced_IgnoresRecordCompletion_AndCommitsTheCompletion()
+    {
+        var outcome = await CompleteEphemeralRunAsync(runHasRecord: false, recordCompletion: false, mode: PersistenceMode.Balanced);
+
+        Assert.Equal(1, outcome.DurableCommits);
+    }
+
+    [Fact]
+    public async Task Ephemeral_WithoutCompletionRecords_CommitsTheCompletionWhileBufferedWorkStillAwaitsDelivery()
+    {
+        // A continuation the segment staged but never delivered outlives the run's last checkpoint; dropping the record
+        // would drop that work with it.
+        var outcome = await CompleteEphemeralRunAsync(
+            runHasRecord: false,
+            recordCompletion: false,
+            before: [(NewContinuationIntentCommit(EphemeralRunId, 1), RuntimeCheckpointPersistenceMode.Deferred)]);
+
+        Assert.Equal(1, outcome.DurableCommits);
+        Assert.NotEmpty(outcome.LastCommit!.StateChanges.PostCommitOutbox);
+    }
+
+    public static TheoryData<string> CompletionContentsThatOutliveTheRun() =>
+        new() { "pending outbox item", "workflow dispatch", "bookmark", "incident" };
+
+    [Theory]
+    [MemberData(nameof(CompletionContentsThatOutliveTheRun))]
+    public async Task Ephemeral_WithoutCompletionRecords_CommitsACompletionThatCarriesSomethingThatOutlivesTheRun(string contents)
+    {
+        var outcome = await CompleteEphemeralRunAsync(
+            runHasRecord: false,
+            recordCompletion: false,
+            decorateCompletion: completion => WithContents(completion, contents));
+
+        Assert.Equal(1, outcome.DurableCommits);
+    }
+
+    [Fact]
+    public async Task Ephemeral_EndOfBurstWithoutCompletion_StillCommitsTheBufferedWork()
+    {
+        // A burst that ends without completing means the run stopped to wait. That is a suspension: its progress is
+        // committed whatever RecordCompletion says, or the queued work would replay it from the start.
+        var services = CreateCoalescingServices();
+        services.AddPersistenceModes(options => options.RecordCompletion = false);
+        await using var provider = services.BuildServiceProvider();
+        var factory = provider.GetRequiredService<IRuntimeCoalescingDrainScopeFactory>();
+        var store = provider.GetRequiredService<IRuntimeCheckpointCommitStore>();
+
+        await using (var scope = factory.Begin(EphemeralRunId, new ResolvedPersistenceMode(PersistenceMode.Ephemeral, RunHasRecord: false)))
+        {
+            Assert.Null(scope.Session.MaxActivitiesPerCommit);
+            for (var checkpoint = 1; checkpoint <= 3; checkpoint++)
+                await store.CommitAsync(EphemeralDeferred(checkpoint), new RuntimeCheckpointPersistenceDecision(RuntimeCheckpointPersistenceMode.Deferred));
+            Assert.Empty(provider.GetRequiredService<InMemoryRuntimeCheckpointCommitStore>().ListCommits());
+
+            await scope.FlushAtQuiescenceAsync();
+            Assert.True(scope.Session.HasDurableRecord);
+        }
+
+        var flush = Assert.Single(provider.GetRequiredService<InMemoryRuntimeCheckpointCommitStore>().ListCommits());
+        Assert.Equal(RuntimeCoalescingMetadataKeys.FlushCheckpointName, flush.Commit.Checkpoint.Name);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task TheDrainTellsTheSessionWhetherTheRunAlreadyHasARecord(bool runHasRecord)
+    {
+        // The drain reads the run's stored row once to resolve its mode; the same read tells the session whether the run
+        // already has a record, which is what keeps the completion of a stored run from being dropped.
+        var begun = new List<ResolvedPersistenceMode>();
+        var services = CreateCoalescingServices();
+        services.Replace(ServiceDescriptor.Scoped<IRuntimeCoalescingDrainScopeFactory>(serviceProvider =>
+            new RecordingDrainScopeFactory(ActivatorUtilities.CreateInstance<RuntimeCoalescingDrainScopeFactory>(serviceProvider), begun)));
+        using var provider = services.BuildServiceProvider();
+        await provider.GetRequiredService<IWorkflowExecutableStore>().SaveAsync(NewExecutableWithResumeTarget());
+        await provider.GetRequiredService<IActivityExecutionStateStore>().SaveAsync(NewRunningActivityState());
+        if (runHasRecord)
+            await provider.GetRequiredService<IWorkflowExecutionStateStore>().SaveAsync(NewWorkflowState("wfexec-1", WorkflowExecutionStatus.Running));
+
+        var agent = await provider.GetRequiredService<IWorkflowExecutionActorProvider>().GetAgentAsync(NewSchedulerWorkActivationRequest("wfexec-1"));
+        await agent.EnqueueAsync(NewCreateBookmarkEnvelope());
+
+        Assert.Equal(new ResolvedPersistenceMode(PersistenceMode.Balanced, runHasRecord), Assert.Single(begun));
+    }
+
+    private sealed class RecordingDrainScopeFactory(IRuntimeCoalescingDrainScopeFactory inner, List<ResolvedPersistenceMode> begun)
+        : IRuntimeCoalescingDrainScopeFactory
+    {
+        public IRuntimeCoalescingDrainScope Begin(string workflowExecutionId, ResolvedPersistenceMode mode)
+        {
+            begun.Add(mode);
+            return inner.Begin(workflowExecutionId, mode);
+        }
+    }
+
+    [Fact]
+    public async Task Ephemeral_HasNoIntermediateCommits()
+    {
+        var services = CreateCoalescingServices();
+        services.AddPersistenceModes(options => options.MaxActivitiesPerCommit = 1);
+        await using var provider = services.BuildServiceProvider();
+        var store = provider.GetRequiredService<IRuntimeCheckpointCommitStore>();
+
+        await using (var scope = provider.GetRequiredService<IRuntimeCoalescingDrainScopeFactory>()
+                         .Begin(EphemeralRunId, new ResolvedPersistenceMode(PersistenceMode.Ephemeral, RunHasRecord: false)))
+        {
+            for (var checkpoint = 1; checkpoint <= 10; checkpoint++)
+                await store.CommitAsync(EphemeralDeferred(checkpoint), new RuntimeCheckpointPersistenceDecision(RuntimeCheckpointPersistenceMode.Deferred));
+
+            Assert.Equal(10, scope.Session.ActivityCount);
+            Assert.Empty(provider.GetRequiredService<InMemoryRuntimeCheckpointCommitStore>().ListCommits());
+        }
+    }
+
+    private const string EphemeralRunId = "wfexec-ephemeral";
+
+    private sealed record EphemeralCompletionOutcome(
+        int DurableCommits,
+        RuntimeCoalescingSession Session,
+        RuntimeCheckpointCommit? LastCommit)
+    {
+        public string? LastCommitName => LastCommit?.Checkpoint.Name;
+    }
+
+    // Drives one folding session to a WorkflowCompleted boundary through the real decorated store and reports what
+    // reached the durable store.
+    private static async Task<EphemeralCompletionOutcome> CompleteEphemeralRunAsync(
+        bool runHasRecord,
+        bool recordCompletion,
+        PersistenceMode mode = PersistenceMode.Ephemeral,
+        IReadOnlyList<(RuntimeCheckpointCommit Commit, RuntimeCheckpointPersistenceMode Decision)>? before = null,
+        Func<RuntimeCheckpointCommit, RuntimeCheckpointCommit>? decorateCompletion = null)
+    {
+        var services = CreateCoalescingServices();
+        services.AddPersistenceModes(options => options.RecordCompletion = recordCompletion);
+        await using var provider = services.BuildServiceProvider();
+        await SeedAsync(provider);
+        var store = provider.GetRequiredService<IRuntimeCheckpointCommitStore>();
+        var inner = provider.GetRequiredService<InMemoryRuntimeCheckpointCommitStore>();
+
+        await using var scope = provider.GetRequiredService<IRuntimeCoalescingDrainScopeFactory>()
+            .Begin(EphemeralRunId, new ResolvedPersistenceMode(mode, runHasRecord));
+        foreach (var (commit, decision) in before ?? [])
+            await store.CommitAsync(commit, new RuntimeCheckpointPersistenceDecision(decision));
+
+        var completion = (decorateCompletion ?? (commit => commit))(NewCompletionCommit(EphemeralRunId, checkpoint: 99));
+        await store.CommitAsync(completion, new RuntimeCheckpointPersistenceDecision(RuntimeCheckpointPersistenceMode.Immediate));
+
+        var commits = inner.ListCommits();
+        return new EphemeralCompletionOutcome(commits.Count, scope.Session, commits.LastOrDefault()?.Commit);
+    }
+
+    private static RuntimeCheckpointCommit EphemeralDeferred(int checkpoint)
+    {
+        var commit = NewEmptyCommit(EphemeralRunId, checkpoint, RuntimeCheckpointNames.ActivityCompleted);
+        return commit with { Checkpoint = commit.Checkpoint with { ActivityExecutionIds = [$"actexec-ephemeral-{checkpoint}"] } };
+    }
+
+    private static WorkflowExecutionState NewWorkflowState(string workflowExecutionId, WorkflowExecutionStatus status) =>
+        new(
+            WorkflowExecutionId: workflowExecutionId,
+            PinnedExecutable: NewExecutable().Identity,
+            Status: status,
+            SubStatus: null,
+            CreatedAt: Now,
+            StartedAt: Now,
+            UpdatedAt: Now,
+            CompletedAt: status == WorkflowExecutionStatus.Completed ? Now : null,
+            CorrelationId: null,
+            ParentWorkflowExecutionId: null,
+            TenantId: null,
+            SystemMetadata: new Dictionary<string, string>());
+
+    private static RuntimeCheckpointCommit NewCompletionCommit(string workflowExecutionId, int checkpoint)
+    {
+        var commit = NewEmptyCommit(workflowExecutionId, checkpoint, RuntimeCheckpointNames.WorkflowCompleted);
+        var completed = NewWorkflowState(workflowExecutionId, WorkflowExecutionStatus.Completed);
+        return commit with
+        {
+            StateChanges = new RuntimeCheckpointStateChangeSet(
+                new RuntimeStateChange<WorkflowExecutionState>(workflowExecutionId, RuntimeStateChangeOperation.Upsert, completed, new Dictionary<string, string>()),
+                scheduler: null,
+                activityExecutions: [],
+                bookmarks: [],
+                durableValues: [],
+                incidents: [],
+                operational: [])
+        };
+    }
+
+    private static RuntimeCheckpointCommit WithContents(RuntimeCheckpointCommit completion, string contents)
+    {
+        var changes = completion.StateChanges;
+        return contents switch
+        {
+            "pending outbox item" => completion with
+            {
+                StateChanges = changes.WithPostCommitOutbox(NewContinuationIntentCommit(completion.WorkflowExecutionId, 98).StateChanges.PostCommitOutbox)
+            },
+            "workflow dispatch" => completion with
+            {
+                StateChanges = changes.WithWorkflowDispatches(NewDispatchBoundaryCommit().StateChanges.WorkflowDispatches)
+            },
+            "bookmark" => completion with
+            {
+                StateChanges = new RuntimeCheckpointStateChangeSet(
+                    changes.WorkflowExecution,
+                    changes.Scheduler,
+                    changes.ActivityExecutions,
+                    [
+                        new RuntimeStateChange<BookmarkState>(
+                            "bookmark-left",
+                            RuntimeStateChangeOperation.Delete,
+                            new BookmarkState("bookmark-left", completion.WorkflowExecutionId, "actexec-1", "node-wait", "node-wait", "stimulus", "stimulus-hash", null, new Dictionary<string, string>(), Now, null),
+                            new Dictionary<string, string>())
+                    ],
+                    changes.DurableValues,
+                    changes.Incidents,
+                    changes.Operational)
+            },
+            "incident" => completion with
+            {
+                StateChanges = new RuntimeCheckpointStateChangeSet(
+                    changes.WorkflowExecution,
+                    changes.Scheduler,
+                    changes.ActivityExecutions,
+                    changes.Bookmarks,
+                    changes.DurableValues,
+                    [
+                        new RuntimeStateChange<IncidentState>(
+                            "incident-1",
+                            RuntimeStateChangeOperation.Upsert,
+                            new IncidentState(
+                                incidentId: "incident-1",
+                                workflowExecutionId: completion.WorkflowExecutionId,
+                                activityExecutionId: "actexec-1",
+                                executableNodeId: "node-1",
+                                severity: IncidentSeverity.Warning,
+                                status: IncidentStatus.Open,
+                                resolutionOutcome: null,
+                                failureType: "TestFailure",
+                                message: "Recorded at completion.",
+                                createdAt: Now,
+                                resolvedAt: null),
+                            new Dictionary<string, string>())
+                    ],
+                    changes.Operational)
+            },
+            _ => throw new ArgumentOutOfRangeException(nameof(contents), contents, null)
+        };
     }
 
     [Fact]
@@ -1771,7 +2069,7 @@ public sealed class RuntimeCheckpointCoalescingTests(ITestOutputHelper output)
 
     private sealed class ExplicitCoalescingDrainScopeFactory : IRuntimeCoalescingDrainScopeFactory
     {
-        public IRuntimeCoalescingDrainScope Begin(string workflowExecutionId) =>
+        public IRuntimeCoalescingDrainScope Begin(string workflowExecutionId, ResolvedPersistenceMode mode) =>
             throw new NotSupportedException("The registration test does not begin a runtime drain.");
     }
 }

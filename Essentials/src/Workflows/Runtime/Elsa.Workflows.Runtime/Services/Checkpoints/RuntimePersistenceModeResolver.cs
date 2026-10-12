@@ -28,18 +28,20 @@ public sealed class RuntimePersistenceModeResolver(
 
         // Resume and continuation drains: the run recorded its mode at start. That record is authoritative, avoids an
         // executable load, and stays correct after the host default is reconfigured.
+        // The same read tells the drain whether the run already has a durable record.
         var state = await workflowExecutionStateStore.FindAsync(envelope.WorkflowExecutionId, cancellationToken);
+        var runHasRecord = state is not null;
         if (state is not null && TryReadRecordedMode(state, out var recorded))
-            return new(recorded);
+            return new(recorded, runHasRecord);
 
         // First drain (no state row yet): resolve from the pinned executable. The artifact id is on the start envelope
         // before any state row exists.
         var artifactId = TryGetArtifactId(envelope) ?? state?.PinnedExecutable.ArtifactId;
         if (artifactId is null)
-            return new(HostDefault());
+            return new(HostDefault(), runHasRecord);
 
         var executable = await PinnedExecutableRead.FindAsync(executableReader, executableStore, artifactId, cancellationToken);
-        return new(Resolve(executable));
+        return new(Resolve(executable), runHasRecord);
     }
 
     public PersistenceMode Resolve(WorkflowExecutable? executable) => executable?.PersistenceMode ?? HostDefault();

@@ -921,12 +921,13 @@ public sealed class CoalescingDurableValuePageReuseTests
         public bool SessionWasCreated { get; private set; }
         public RuntimeCoalescingSession? Session { get; private set; }
 
-        public IRuntimeCoalescingDrainScope Begin(string workflowExecutionId)
+        public IRuntimeCoalescingDrainScope Begin(string workflowExecutionId, ResolvedPersistenceMode mode)
         {
             var session = new RuntimeCoalescingSession(
                 workflowExecutionId,
                 new InMemoryWorkflowSchedulerWorkQueue(),
-                new PersistenceModeOptions());
+                new PersistenceModeOptions(),
+                mode: mode);
             SessionWasCreated = true;
             Session = session;
             return new CapturedDrainScope(session, sessionAccessor.Push(session));

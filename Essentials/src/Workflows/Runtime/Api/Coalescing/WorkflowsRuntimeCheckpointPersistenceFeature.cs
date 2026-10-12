@@ -7,7 +7,9 @@ namespace Elsa.Workflows.Runtime.Api.Coalescing;
 
 /// <summary>
 /// The shell's persistence-mode settings. Durable commits every checkpoint; Balanced folds checkpoints between commits
-/// and accepts that the activities since the last commit run again after a crash. The services that run each mode come
+/// and accepts that the activities since the last commit run again after a crash; Ephemeral commits only when a run
+/// suspends, faults or completes, and can skip the completion record of a run that never needed one. The services that
+/// run each mode come
 /// with the runtime API itself, so a shell that does not list this feature still runs Balanced with these defaults;
 /// list it to choose a different default or cap.
 /// </summary>
@@ -18,13 +20,13 @@ namespace Elsa.Workflows.Runtime.Api.Coalescing;
 [ShellFeature(
     name: "WorkflowsRuntimeCheckpointPersistence",
     DisplayName = "Workflows Runtime Checkpoint Persistence",
-    Description = "Sets the default persistence mode (Durable or Balanced) and how much work Balanced folds into one commit.",
+    Description = "Sets the default persistence mode (Durable, Balanced or Ephemeral), how much work Balanced folds into one commit, and whether Ephemeral records completions.",
     DependsOn = new object[] { "WorkflowsRuntimeApi" })]
 public sealed class WorkflowsRuntimeCheckpointPersistenceFeature : IShellFeature
 {
     [ManifestSetting(
         DisplayName = "Persistence mode",
-        Description = "The mode a run uses when its workflow does not choose one. Durable commits every checkpoint; Balanced folds checkpoints and commits at suspension, fault, completion, the end of each execution pass and after a bounded amount of work.",
+        Description = "The mode a run uses when its workflow does not choose one. Durable commits every checkpoint; Balanced folds checkpoints and commits at suspension, fault, completion, the end of each execution pass and after a bounded amount of work; Ephemeral commits only at suspension, fault and completion.",
         Category = "Runtime",
         DefaultValue = "Balanced")]
     public PersistenceMode Mode { get; set; } = PersistenceMode.Balanced;
@@ -35,6 +37,13 @@ public sealed class WorkflowsRuntimeCheckpointPersistenceFeature : IShellFeature
         Category = "Runtime",
         DefaultValue = "50")]
     public int MaxActivitiesPerCommit { get; set; } = 50;
+
+    [ManifestSetting(
+        DisplayName = "Record completion",
+        Description = "Under Ephemeral, whether a run that completes without ever having been committed writes a completion record. Off leaves no trace of such a run; a run that already has a record always gets its completion committed.",
+        Category = "Runtime",
+        DefaultValue = "true")]
+    public bool RecordCompletion { get; set; } = true;
 
     [ManifestSetting(
         DisplayName = "Coalesce durable-value reads",
@@ -67,6 +76,7 @@ public sealed class WorkflowsRuntimeCheckpointPersistenceFeature : IShellFeature
         {
             Mode = Mode,
             MaxActivitiesPerCommit = MaxActivitiesPerCommit,
+            RecordCompletion = RecordCompletion,
             CoalesceDurableValueReads = CoalesceDurableValueReads
         });
     }

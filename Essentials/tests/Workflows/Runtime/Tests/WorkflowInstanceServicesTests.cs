@@ -688,8 +688,10 @@ public sealed class WorkflowInstanceServicesTests
         Assert.Equal("activity-level", result!.InspectionGranularity);
     }
 
-    [Fact]
-    public async Task GetWorkflowInstance_ReportsARecordedBalancedRun_EvenOnAHostWithoutPersistenceModes()
+    [Theory]
+    [InlineData("Balanced")]
+    [InlineData("Ephemeral")]
+    public async Task GetWorkflowInstance_ReportsARecordedFoldingRun_EvenOnAHostWithoutPersistenceModes(string recordedMode)
     {
         await _workflowStore.SaveAsync(Workflow(
             "wf-1",
@@ -697,14 +699,14 @@ public sealed class WorkflowInstanceServicesTests
             "definition-1",
             systemMetadata: new Dictionary<string, string>
             {
-                [Elsa.Workflows.Runtime.Core.Constants.RuntimeMetadataKeys.PersistenceMode] = "Balanced"
+                [Elsa.Workflows.Runtime.Core.Constants.RuntimeMetadataKeys.PersistenceMode] = recordedMode
             }));
         var handler = NewGetInstanceHandler(HostWithoutPersistenceModes());
 
         var result = await handler.GetAsync(new GetWorkflowInstance("wf-1"), CancellationToken.None);
 
         Assert.NotNull(result);
-        Assert.Equal("Balanced", result!.PersistenceMode);
+        Assert.Equal(recordedMode, result!.PersistenceMode);
         Assert.Equal("boundary-level", result!.InspectionGranularity);
     }
 

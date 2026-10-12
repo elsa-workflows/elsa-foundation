@@ -10,12 +10,21 @@ public sealed class PersistenceModeOptions
     public PersistenceMode Mode { get; set; } = PersistenceMode.Balanced;
 
     /// <summary>
-    /// Maximum number of activities whose work Balanced folds into one commit. The checkpoint that would bring another
+    /// Maximum number of activities whose work Balanced folds into one commit. Ephemeral has no such limit: it commits
+    /// only at suspension, fault and completion, so a long run that does none of these holds its work in memory. The checkpoint that would bring another
     /// activity into a segment that already holds this many forces an intermediate commit, and the next segment starts
     /// empty, so a long loop keeps folding at one commit per window instead of degrading to per-checkpoint persistence.
     /// Bounds both the work a crash repeats and the memory a segment holds. Must be greater than zero. Default is 50.
     /// </summary>
     public int MaxActivitiesPerCommit { get; set; } = 50;
+
+    /// <summary>
+    /// Whether an Ephemeral run that completes without ever having been committed writes a completion record. When
+    /// off, such a run leaves no workflow, activity, inspection or value rows, and its queued start is removed. A run
+    /// that already has a record (it suspended, faulted, or ran an activity that is not safe to repeat) always gets its
+    /// completion committed. Has no effect on Durable or Balanced. Default is on.
+    /// </summary>
+    public bool RecordCompletion { get; set; } = true;
 
     /// <summary>
     /// When enabled (the default), equivalent durable-value page reads within an eligible folding session may

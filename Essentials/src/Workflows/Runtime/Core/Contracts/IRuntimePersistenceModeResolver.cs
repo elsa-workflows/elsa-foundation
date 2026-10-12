@@ -10,7 +10,8 @@ public interface IRuntimePersistenceModeResolver
 {
     /// <summary>
     /// Resolves the mode for the run the <paramref name="envelope"/> targets. Prefers the mode the run recorded when it
-    /// started; on the first drain resolves from the pinned executable.
+    /// started; on the first drain resolves from the pinned executable. Also reports whether the run already has a
+    /// durable record.
     /// </summary>
     ValueTask<ResolvedPersistenceMode> ResolveAsync(WorkflowExecutionCommandEnvelope envelope, CancellationToken cancellationToken = default);
 

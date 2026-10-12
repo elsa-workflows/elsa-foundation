@@ -890,13 +890,18 @@ public sealed class WorkflowExecutionHarness : IAsyncDisposable
         /// <paramref name="hostMode"/> as the default for workflows that choose none. Applied after the runtime feature
         /// registration (which the ctor seeds first), so the folding decorators capture the runtime stores. Without this
         /// the harness runs every workflow Durable. <paramref name="maxActivitiesPerCommit"/> lowers the cap to model an
-        /// intermediate commit mid-drain.
+        /// intermediate commit mid-drain; <paramref name="recordCompletion"/> off lets an Ephemeral run that was never
+        /// committed finish without a record.
         /// </summary>
-        public Builder WithPersistenceMode(PersistenceMode hostMode = PersistenceMode.Balanced, int? maxActivitiesPerCommit = null)
+        public Builder WithPersistenceMode(
+            PersistenceMode hostMode = PersistenceMode.Balanced,
+            int? maxActivitiesPerCommit = null,
+            bool recordCompletion = true)
         {
             _featureConfigurators.Add(services => services.AddPersistenceModes(options =>
             {
                 options.Mode = hostMode;
+                options.RecordCompletion = recordCompletion;
                 if (maxActivitiesPerCommit is { } cap)
                     options.MaxActivitiesPerCommit = cap;
             }));

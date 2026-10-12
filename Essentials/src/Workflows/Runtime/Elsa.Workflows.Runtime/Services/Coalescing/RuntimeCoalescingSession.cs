@@ -50,11 +50,20 @@ public sealed class RuntimeCoalescingSession
     private readonly IRuntimePostCommitOutboxStore? _innerOutboxStore;
     private readonly RuntimeCoalescingDurableValuePageMemo? _durableValuePageMemo;
 
+    /// <param name="workflowExecutionId">The run this session folds for.</param>
+    /// <param name="innerQueue">The durable scheduler queue the overlay is seeded from and advanced into.</param>
+    /// <param name="options">The host's persistence-mode settings.</param>
+    /// <param name="innerOutboxStore">The durable post-commit outbox store.</param>
+    /// <param name="mode">
+    /// The run's resolved mode. Without one the session folds as Balanced and assumes the run has a record, which never
+    /// drops a completion.
+    /// </param>
     public RuntimeCoalescingSession(
         string workflowExecutionId,
         IWorkflowSchedulerWorkQueue innerQueue,
         PersistenceModeOptions options,
-        IRuntimePostCommitOutboxStore? innerOutboxStore = null)
+        IRuntimePostCommitOutboxStore? innerOutboxStore = null,
+        ResolvedPersistenceMode? mode = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(workflowExecutionId);
         ArgumentNullException.ThrowIfNull(innerQueue);
@@ -63,10 +72,17 @@ public sealed class RuntimeCoalescingSession
         if (options.MaxActivitiesPerCommit <= 0)
             throw new ArgumentOutOfRangeException(nameof(options), "MaxActivitiesPerCommit must be greater than zero.");
 
+        mode ??= new ResolvedPersistenceMode(PersistenceMode.Balanced, RunHasRecord: true);
+        if (mode.Mode is not (PersistenceMode.Balanced or PersistenceMode.Ephemeral))
+            throw new ArgumentException($"A folding session runs Balanced or Ephemeral, not '{mode.Mode}'.", nameof(mode));
+
         WorkflowExecutionId = workflowExecutionId;
         _innerQueue = innerQueue;
         _innerOutboxStore = innerOutboxStore;
-        MaxActivitiesPerCommit = options.MaxActivitiesPerCommit;
+        Mode = mode.Mode;
+        HasDurableRecord = mode.RunHasRecord;
+        RecordCompletion = options.RecordCompletion;
+        MaxActivitiesPerCommit = Mode == PersistenceMode.Ephemeral ? null : options.MaxActivitiesPerCommit;
         CoalesceDurableValueReads = options.CoalesceDurableValueReads;
         CoalesceInspectionReads = options.CoalesceInspectionReads;
         _durableValuePageMemo = options.CoalesceDurableValueReads
@@ -75,8 +91,24 @@ public sealed class RuntimeCoalescingSession
     }
 
     public string WorkflowExecutionId { get; }
-    /// <summary>The most activities one segment folds before the next new activity forces an intermediate commit.</summary>
-    public int MaxActivitiesPerCommit { get; }
+
+    /// <summary>The run's mode: Balanced or Ephemeral.</summary>
+    public PersistenceMode Mode { get; }
+
+    /// <summary>
+    /// The most activities one segment folds before the next new activity forces an intermediate commit, or
+    /// <see langword="null"/> under Ephemeral, which has no intermediate commits.
+    /// </summary>
+    public int? MaxActivitiesPerCommit { get; }
+
+    /// <summary>The host's <see cref="PersistenceModeOptions.RecordCompletion"/> setting.</summary>
+    public bool RecordCompletion { get; }
+
+    /// <summary>
+    /// Whether the durable store holds a record of this run: it did when the drain began, or a commit through this
+    /// session has landed since. Once true it stays true, so the run's completion is always committed.
+    /// </summary>
+    public bool HasDurableRecord { get; private set; }
     public bool CoalesceDurableValueReads { get; }
     public bool CoalesceInspectionReads { get; }
     internal RuntimeCoalescingDurableValuePageMemo? DurableValuePageMemo => _durableValuePageMemo;
@@ -138,11 +170,48 @@ public sealed class RuntimeCoalescingSession
     public bool WouldExceedActivityCap(RuntimeCheckpointCommit commit)
     {
         ArgumentNullException.ThrowIfNull(commit);
-        if (!HasBufferedChanges)
+        if (MaxActivitiesPerCommit is not { } cap || !HasBufferedChanges)
             return false;
 
         var added = ActivityExecutionIdsOf(commit).Count(id => !_segmentActivityIds.Contains(id));
-        return ActivityCount + added > MaxActivitiesPerCommit;
+        return ActivityCount + added > cap;
+    }
+
+    /// <summary>Records that a commit for this run reached the durable store.</summary>
+    internal void MarkDurableRecord() => HasDurableRecord = true;
+
+    /// <summary>
+    /// Whether <paramref name="completion"/> may be dropped instead of committed: the one exception to committing a
+    /// completion. It holds only for an Ephemeral run on a host with <see cref="RecordCompletion"/> off that has never
+    /// been committed, and only when nothing in the folded segment outlives the run: no bookmark, incident, dispatch or
+    /// dispatch cancellation, alteration outcome, operational change, acknowledged queue item, and no outbox item still
+    /// waiting for delivery (a parent to resume, an event to publish). Anything else is committed as usual.
+    /// </summary>
+    public bool CanDiscardCompletion(
+        RuntimeCheckpointCommit completion,
+        IReadOnlyCollection<RuntimeStateChange<RuntimePostCommitOutboxItem>> remainingPendingOutbox)
+    {
+        ArgumentNullException.ThrowIfNull(completion);
+        ArgumentNullException.ThrowIfNull(remainingPendingOutbox);
+
+        if (Mode != PersistenceMode.Ephemeral || RecordCompletion || HasDurableRecord)
+            return false;
+
+        if (!StringComparer.Ordinal.Equals(completion.Checkpoint.Name, RuntimeCheckpointNames.WorkflowCompleted) ||
+            completion.StateChanges.WorkflowExecution?.State.Status != WorkflowExecutionStatus.Completed)
+            return false;
+
+        if (remainingPendingOutbox.Count > 0 || completion.StateChanges.PostCommitOutbox.Count > 0 || _durablyPersistedOutboxIds.Count > 0)
+            return false;
+
+        var folded = FoldBufferedStateChangesWith(completion.StateChanges);
+        return folded.Bookmarks.Count == 0 &&
+               folded.Incidents.Count == 0 &&
+               folded.Operational.Count == 0 &&
+               folded.WorkflowDispatches.Count == 0 &&
+               folded.WorkflowDispatchCancellations.Count == 0 &&
+               folded.AlterationJobTerminalChange is null &&
+               folded.ConsumedSchedulerWorkItems.Count == 0;
     }
 
     // An activity can appear on the checkpoint, in the activity states the commit writes, or both.

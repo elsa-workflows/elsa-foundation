@@ -314,15 +314,16 @@ public sealed class WorkflowExecutableCompilerTests
         var unchosen = await Compiler(WorkflowVersion(node)).CompileAsync(NewRequest(now));
         var balanced = await Compiler(WorkflowVersionWithPersistenceMode(node, "Balanced")).CompileAsync(NewRequest(now));
         var durable = await Compiler(WorkflowVersionWithPersistenceMode(node, "Durable")).CompileAsync(NewRequest(now));
+        var ephemeral = await Compiler(WorkflowVersionWithPersistenceMode(node, "Ephemeral")).CompileAsync(NewRequest(now));
 
         Assert.Null(unchosen.PersistenceMode);
         Assert.Equal(PersistenceMode.Balanced, balanced.PersistenceMode);
         Assert.Equal(PersistenceMode.Durable, durable.PersistenceMode);
+        Assert.Equal(PersistenceMode.Ephemeral, ephemeral.PersistenceMode);
 
         // Distinct behavior ⇒ distinct content hash; no choice stays byte-identical to the payload without the field.
-        Assert.NotEqual(unchosen.Identity.ArtifactHash, balanced.Identity.ArtifactHash);
-        Assert.NotEqual(unchosen.Identity.ArtifactHash, durable.Identity.ArtifactHash);
-        Assert.NotEqual(balanced.Identity.ArtifactHash, durable.Identity.ArtifactHash);
+        var hashes = new[] { unchosen, balanced, durable, ephemeral }.Select(executable => executable.Identity.ArtifactHash).ToArray();
+        Assert.Equal(hashes.Length, hashes.Distinct(StringComparer.Ordinal).Count());
     }
 
     [Fact]
@@ -382,6 +383,7 @@ public sealed class WorkflowExecutableCompilerTests
     [Theory]
     [InlineData("EveryOtherTuesday")]
     [InlineData("balanced")]
+    [InlineData("ephemeral")]
     [InlineData("1")]
     [InlineData("Immediate")]
     [InlineData("Coalesced")]

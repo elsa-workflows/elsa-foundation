@@ -107,10 +107,12 @@ public sealed class HttpEndpointHostFixture : IAsyncDisposable
     /// persistence mode after the provider has replaced the in-memory runtime stores.
     /// </summary>
     /// <param name="configureServices">Adds to the host's services before the EF provider and persistence mode are applied.</param>
+    /// <param name="recordCompletion">The host's RecordCompletion setting, which only Ephemeral reads.</param>
     public static Task<HttpEndpointHostFixture> StartDurableSqliteAsync(
         PersistenceMode persistenceMode,
         int maxActivitiesPerCommit,
-        Action<IServiceCollection>? configureServices = null)
+        Action<IServiceCollection>? configureServices = null,
+        bool recordCompletion = true)
     {
         var databaseDirectory = Path.Join(Path.GetTempPath(), $"elsa-http-runtime-ef-{Guid.NewGuid():N}");
         Directory.CreateDirectory(databaseDirectory);
@@ -120,7 +122,7 @@ public sealed class HttpEndpointHostFixture : IAsyncDisposable
             services =>
             {
                 configureServices?.Invoke(services);
-                AddDurableSqlite(services, databasePath, persistenceMode, maxActivitiesPerCommit);
+                AddDurableSqlite(services, databasePath, persistenceMode, maxActivitiesPerCommit, recordCompletion);
             },
             databaseDirectory);
     }
@@ -135,7 +137,7 @@ public sealed class HttpEndpointHostFixture : IAsyncDisposable
         StartAsync(
             services =>
             {
-                AddDurableSqlite(services, databasePath, PersistenceMode.Durable, maxActivitiesPerCommit: 50);
+                AddDurableSqlite(services, databasePath, PersistenceMode.Durable, maxActivitiesPerCommit: 50, recordCompletion: true);
                 services.Configure<HttpEndpointRouteTableConvergenceOptions>(options => options.Interval = routeTableConvergenceInterval);
             },
             databaseDirectory: null);
@@ -144,7 +146,8 @@ public sealed class HttpEndpointHostFixture : IAsyncDisposable
         IServiceCollection services,
         string databasePath,
         PersistenceMode persistenceMode,
-        int maxActivitiesPerCommit)
+        int maxActivitiesPerCommit,
+        bool recordCompletion)
     {
         // Durable composition refuses the ephemeral development signer, so the fixture supplies the
         // stable recovery-continuation key a real durable host configures.
@@ -162,7 +165,8 @@ public sealed class HttpEndpointHostFixture : IAsyncDisposable
         new WorkflowsRuntimeCheckpointPersistenceFeature
         {
             Mode = persistenceMode,
-            MaxActivitiesPerCommit = maxActivitiesPerCommit
+            MaxActivitiesPerCommit = maxActivitiesPerCommit,
+            RecordCompletion = recordCompletion
         }.ConfigureServices(services);
         new WorkflowsRuntimeApiFeature().PostConfigureServices(services);
     }

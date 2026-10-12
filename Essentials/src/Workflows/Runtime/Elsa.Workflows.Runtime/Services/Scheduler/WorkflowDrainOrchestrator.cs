@@ -332,10 +332,14 @@ public sealed class WorkflowDrainOrchestrator : IWorkflowDrainOrchestrator
         // The mode is resolved per execution: the mode the run recorded at start on later drains, otherwise the pinned
         // workflow's choice, otherwise the host default. A Durable run skips the session entirely so no checkpoint is
         // deferred for it, even on a host whose default is Balanced. Without a resolver the composition decides: with the
-        // folding services the host default is Balanced, without them Durable.
-        var mode = _persistenceModeResolver is not null
-            ? (await _persistenceModeResolver.ResolveAsync(envelope, cancellationToken)).Mode
-            : _coalescingScopeFactory is null ? PersistenceMode.Durable : PersistenceMode.Balanced;
+        // folding services the host default is Balanced, without them Durable; whether the run has a record is then
+        // unknown, and assuming it has one keeps its completion committed.
+        var resolved = _persistenceModeResolver is not null
+            ? await _persistenceModeResolver.ResolveAsync(envelope, cancellationToken)
+            : new ResolvedPersistenceMode(
+                _coalescingScopeFactory is null ? PersistenceMode.Durable : PersistenceMode.Balanced,
+                RunHasRecord: true);
+        var mode = resolved.Mode;
 
         if (mode == PersistenceMode.Durable)
             return await DrainImmediateAsync(envelope, request, cancellationToken);
@@ -353,7 +357,7 @@ public sealed class WorkflowDrainOrchestrator : IWorkflowDrainOrchestrator
         // quiescence. The flush runs inside the active ownership scope so single-writer fencing gates the single durable
         // write. If the drain throws, the flush is skipped and the scope is disposed with its buffer discarded, so a crash
         // mid-segment replays from the last flushed state plus durable scheduler-queue redelivery.
-        await using var scope = _coalescingScopeFactory.Begin(request.WorkflowExecutionId);
+        await using var scope = _coalescingScopeFactory.Begin(request.WorkflowExecutionId, resolved);
         scope.Session.BindDurableValuePageReuseCancellationToken(cancellationToken);
         // Drain cancellation also covers ownership-lease loss. This callback fences only the memo's synchronized state;
         // the existing overlay and session cancellation behavior remain on the normal drain path.

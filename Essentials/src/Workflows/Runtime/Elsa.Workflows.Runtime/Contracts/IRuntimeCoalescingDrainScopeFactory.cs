@@ -1,15 +1,19 @@
+using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Services.Coalescing;
 
 namespace Elsa.Workflows.Runtime.Contracts;
 
 /// <summary>
 /// Establishes a checkpoint-folding session for the duration of a single workflow-execution drain. Registered by
-/// <c>AddPersistenceModes</c>; when absent the drain coordinator runs every execution Durable.
+/// <c>AddPersistenceModes</c>; when absent the drain coordinator runs Durable executions and refuses the others.
 /// </summary>
 public interface IRuntimeCoalescingDrainScopeFactory
 {
-    /// <summary>Begins a folding session scope for the supplied workflow execution, using the host's settings.</summary>
-    IRuntimeCoalescingDrainScope Begin(string workflowExecutionId);
+    /// <summary>
+    /// Begins a folding session scope for the supplied workflow execution in its resolved mode (Balanced or Ephemeral),
+    /// using the host's settings.
+    /// </summary>
+    IRuntimeCoalescingDrainScope Begin(string workflowExecutionId, ResolvedPersistenceMode mode);
 }
 
 /// <summary>

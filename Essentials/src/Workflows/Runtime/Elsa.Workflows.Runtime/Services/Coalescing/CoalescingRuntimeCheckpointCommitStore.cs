@@ -10,7 +10,9 @@ namespace Elsa.Workflows.Runtime.Services.Coalescing;
 /// Coalescing decorator for <see cref="IRuntimeCheckpointCommitStore"/>. While a coalescing session owns
 /// the target workflow execution, deferred checkpoints are buffered into an in-memory working set and folded into a
 /// single atomic durable commit at a flush boundary (attempt activation, suspension/fault/cancellation/completion, an
-/// operational or bookmark write, the per-segment activity cap, or the end-of-drain quiescence flush). A durable attempt
+/// operational or bookmark write, the per-segment activity cap under Balanced, or the end-of-drain quiescence flush).
+/// The one boundary that may be dropped instead is the completion of an Ephemeral run that has no record, on a host
+/// that turned completion records off (see <see cref="RuntimeCoalescingSession.CanDiscardCompletion"/>). A durable attempt
 /// boundary and a cap-hit fold-and-flush each start another coalesced segment in the same drain; when no session is
 /// active (a Durable run), Deferred decisions are normalized to Immediate because there is no working set to flush
 /// later; any other decision is forwarded unchanged.
@@ -92,6 +94,25 @@ public sealed class CoalescingRuntimeCheckpointCommitStore(
         // advance the durable queue. A pre-activation attempt boundary starts a fresh segment so later replayable work
         // in the same drain can still coalesce without crossing the before-user-code durability guarantee.
         var remainingPendingOutbox = session.RemainingPendingOutboxChanges();
+
+        // The one completion that is not committed: an Ephemeral run, on a host that opted out of completion records,
+        // that was never committed and leaves nothing behind that outlives it. Nothing reaches the durable store, but
+        // the queued work the run consumed is still removed from it, so the finished run is not started again.
+        if (session.CanDiscardCompletion(commit, remainingPendingOutbox))
+        {
+            try
+            {
+                await session.AdvanceInnerQueueAsync(consumeInFlightClaims: true, cancellationToken);
+            }
+            finally
+            {
+                session.ClearBuffer();
+                session.Deactivate();
+            }
+
+            return OwnOutbox(commit);
+        }
+
         var continueAfterBoundary = capFold || CanContinueAfterBoundary(commit, remainingPendingOutbox.Count);
         if (session.HasBufferedChanges)
         {
@@ -189,12 +210,21 @@ public sealed class CoalescingRuntimeCheckpointCommitStore(
         RuntimeCheckpointPersistenceDecision decision,
         CancellationToken cancellationToken)
     {
+        RuntimeCheckpointCommitStoreResult result;
         if (session?.DurableValuePageMemo is not { } memo)
-            return await _inner.CommitAsync(commit, decision, cancellationToken);
+        {
+            result = await _inner.CommitAsync(commit, decision, cancellationToken);
+        }
+        else
+        {
+            using var write = memo.BeginWrite();
+            result = await _inner.CommitAsync(commit, decision, cancellationToken);
+            write.Succeed();
+        }
 
-        using var write = memo.BeginWrite();
-        var result = await _inner.CommitAsync(commit, decision, cancellationToken);
-        write.Succeed();
+        // From here the run has a durable record, so its completion is always committed.
+        if (session is not null && StringComparer.Ordinal.Equals(session.WorkflowExecutionId, commit.WorkflowExecutionId))
+            session.MarkDurableRecord();
         return result;
     }
 

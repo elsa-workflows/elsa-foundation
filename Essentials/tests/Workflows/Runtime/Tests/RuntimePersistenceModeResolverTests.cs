@@ -56,7 +56,7 @@ public sealed class RuntimePersistenceModeResolverTests
         await _executableStore.SaveAsync(Executable(chosen));
 
         Assert.Equal(chosen, Resolver(hostMode).Resolve(Executable(chosen)));
-        Assert.Equal(new ResolvedPersistenceMode(chosen), await Resolver(hostMode).ResolveAsync(Envelope(artifactIdMetadata: "artifact-1")));
+        Assert.Equal(new ResolvedPersistenceMode(chosen, RunHasRecord: false), await Resolver(hostMode).ResolveAsync(Envelope(artifactIdMetadata: "artifact-1")));
     }
 
     [Fact]
@@ -69,7 +69,7 @@ public sealed class RuntimePersistenceModeResolverTests
 
         var resolved = await Resolver(hostMode: PersistenceMode.Balanced).ResolveAsync(Envelope());
 
-        Assert.Equal(new ResolvedPersistenceMode(PersistenceMode.Durable), resolved);
+        Assert.Equal(new ResolvedPersistenceMode(PersistenceMode.Durable, RunHasRecord: true), resolved);
     }
 
     [Fact]
@@ -79,7 +79,7 @@ public sealed class RuntimePersistenceModeResolverTests
 
         var resolved = await Resolver(hostMode: PersistenceMode.Durable).ResolveAsync(Envelope());
 
-        Assert.Equal(new ResolvedPersistenceMode(PersistenceMode.Balanced), resolved);
+        Assert.Equal(new ResolvedPersistenceMode(PersistenceMode.Balanced, RunHasRecord: true), resolved);
     }
 
     [Fact]
@@ -91,7 +91,7 @@ public sealed class RuntimePersistenceModeResolverTests
 
         var resolved = await Resolver(hostMode: PersistenceMode.Balanced).ResolveAsync(Envelope(artifactIdMetadata: "artifact-1"));
 
-        Assert.Equal(new ResolvedPersistenceMode(PersistenceMode.Durable), resolved);
+        Assert.Equal(new ResolvedPersistenceMode(PersistenceMode.Durable, RunHasRecord: false), resolved);
     }
 
     [Fact]
@@ -102,7 +102,7 @@ public sealed class RuntimePersistenceModeResolverTests
 
         var resolved = await Resolver(hostMode: PersistenceMode.Balanced).ResolveAsync(Envelope());
 
-        Assert.Equal(new ResolvedPersistenceMode(PersistenceMode.Durable), resolved);
+        Assert.Equal(new ResolvedPersistenceMode(PersistenceMode.Durable, RunHasRecord: true), resolved);
     }
 
     [Fact]
@@ -110,7 +110,7 @@ public sealed class RuntimePersistenceModeResolverTests
     {
         var resolved = await Resolver(hostMode: PersistenceMode.Balanced).ResolveAsync(Envelope());
 
-        Assert.Equal(new ResolvedPersistenceMode(PersistenceMode.Balanced), resolved);
+        Assert.Equal(new ResolvedPersistenceMode(PersistenceMode.Balanced, RunHasRecord: false), resolved);
     }
 
     private static WorkflowExecutable Executable(PersistenceMode? persistenceMode)
