@@ -31,6 +31,7 @@ public sealed class RuntimeCoalescingSession
     private bool _queueSeeded;
 
     private readonly List<RuntimeCheckpointStateChangeSet> _bufferedChangeSets = [];
+    private readonly HashSet<string> _segmentActivityIds = new(StringComparer.Ordinal);
 
     private WorkflowExecutionState? _workflowExecution;
     private SchedulerState? _scheduler;
@@ -59,13 +60,13 @@ public sealed class RuntimeCoalescingSession
         ArgumentNullException.ThrowIfNull(innerQueue);
         ArgumentNullException.ThrowIfNull(options);
 
-        if (options.MaxSegmentCheckpoints <= 0)
-            throw new ArgumentOutOfRangeException(nameof(options), "MaxSegmentCheckpoints must be greater than zero.");
+        if (options.MaxActivitiesPerCommit <= 0)
+            throw new ArgumentOutOfRangeException(nameof(options), "MaxActivitiesPerCommit must be greater than zero.");
 
         WorkflowExecutionId = workflowExecutionId;
         _innerQueue = innerQueue;
         _innerOutboxStore = innerOutboxStore;
-        MaxSegmentCheckpoints = options.MaxSegmentCheckpoints;
+        MaxActivitiesPerCommit = options.MaxActivitiesPerCommit;
         CoalesceDurableValueReads = options.CoalesceDurableValueReads;
         CoalesceInspectionReads = options.CoalesceInspectionReads;
         _durableValuePageMemo = options.CoalesceDurableValueReads
@@ -74,7 +75,8 @@ public sealed class RuntimeCoalescingSession
     }
 
     public string WorkflowExecutionId { get; }
-    public int MaxSegmentCheckpoints { get; }
+    /// <summary>The most activities one segment folds before the next new activity forces an intermediate commit.</summary>
+    public int MaxActivitiesPerCommit { get; }
     public bool CoalesceDurableValueReads { get; }
     public bool CoalesceInspectionReads { get; }
     internal RuntimeCoalescingDurableValuePageMemo? DurableValuePageMemo => _durableValuePageMemo;
@@ -86,7 +88,8 @@ public sealed class RuntimeCoalescingSession
     /// </summary>
     public bool IsActive { get; private set; } = true;
 
-    public int HopCount { get; private set; }
+    /// <summary>How many distinct activity executions the current segment's buffered checkpoints touched.</summary>
+    public int ActivityCount => _segmentActivityIds.Count;
     public bool HasBufferedChanges => _bufferedChangeSets.Count > 0;
 
     public void Deactivate()
@@ -121,8 +124,32 @@ public sealed class RuntimeCoalescingSession
 
         ApplyToOverlay(commit.StateChanges, includeOutbox: true);
         _bufferedChangeSets.Add(commit.StateChanges);
-        HopCount++;
+        foreach (var activityExecutionId in ActivityExecutionIdsOf(commit))
+            _segmentActivityIds.Add(activityExecutionId);
     }
+
+    /// <summary>
+    /// Whether buffering <paramref name="commit"/> would make the segment hold more than
+    /// <see cref="MaxActivitiesPerCommit"/> activities. A checkpoint of an activity the segment already holds never trips
+    /// the cap, so the cap counts activities, not the several checkpoints each activity produces. An empty segment
+    /// always takes the commit, even one that touches more activities than the cap: a single commit is never split, and
+    /// the intermediate commit exists to flush work already buffered, not to write one checkpoint on its own.
+    /// </summary>
+    public bool WouldExceedActivityCap(RuntimeCheckpointCommit commit)
+    {
+        ArgumentNullException.ThrowIfNull(commit);
+        if (!HasBufferedChanges)
+            return false;
+
+        var added = ActivityExecutionIdsOf(commit).Count(id => !_segmentActivityIds.Contains(id));
+        return ActivityCount + added > MaxActivitiesPerCommit;
+    }
+
+    // An activity can appear on the checkpoint, in the activity states the commit writes, or both.
+    private static IEnumerable<string> ActivityExecutionIdsOf(RuntimeCheckpointCommit commit) =>
+        commit.Checkpoint.ActivityExecutionIds
+            .Concat(commit.StateChanges.ActivityExecutions.Select(change => change.StateId))
+            .Distinct(StringComparer.Ordinal);
 
     /// <summary>
     /// Advances the state overlay to a boundary that has already committed durably. Boundary-owned outbox items remain
@@ -802,7 +829,7 @@ public sealed class RuntimeCoalescingSession
     public void ClearBuffer()
     {
         _bufferedChangeSets.Clear();
-        HopCount = 0;
+        _segmentActivityIds.Clear();
     }
 
     /// <summary>

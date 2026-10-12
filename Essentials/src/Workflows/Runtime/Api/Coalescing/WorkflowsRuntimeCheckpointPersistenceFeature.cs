@@ -29,11 +29,11 @@ public sealed class WorkflowsRuntimeCheckpointPersistenceFeature : IShellFeature
     public PersistenceMode Mode { get; set; } = PersistenceMode.Durable;
 
     [ManifestSetting(
-        DisplayName = "Maximum segment checkpoints",
-        Description = "Maximum checkpoints Balanced folds before an intermediate commit. Must be greater than zero.",
+        DisplayName = "Maximum activities per commit",
+        Description = "The most activities Balanced folds into one commit before an intermediate commit. Must be greater than zero.",
         Category = "Runtime",
         DefaultValue = "50")]
-    public int MaxSegmentCheckpoints { get; set; } = 50;
+    public int MaxActivitiesPerCommit { get; set; } = 50;
 
     [ManifestSetting(
         DisplayName = "Coalesce durable-value reads",
@@ -60,16 +60,16 @@ public sealed class WorkflowsRuntimeCheckpointPersistenceFeature : IShellFeature
         if (Mode == PersistenceMode.Durable)
             return;
 
-        if (MaxSegmentCheckpoints <= 0)
+        if (MaxActivitiesPerCommit <= 0)
         {
             throw new InvalidOperationException(
-                $"{nameof(MaxSegmentCheckpoints)} must be greater than zero when the persistence mode is Balanced.");
+                $"{nameof(MaxActivitiesPerCommit)} must be greater than zero when the persistence mode is Balanced.");
         }
 
         services.AddPersistenceModes(options =>
         {
             options.Mode = Mode;
-            options.MaxSegmentCheckpoints = MaxSegmentCheckpoints;
+            options.MaxActivitiesPerCommit = MaxActivitiesPerCommit;
             options.CoalesceDurableValueReads = CoalesceDurableValueReads;
         });
     }

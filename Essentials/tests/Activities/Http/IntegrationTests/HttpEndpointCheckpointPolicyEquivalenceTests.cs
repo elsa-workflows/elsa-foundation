@@ -42,7 +42,7 @@ public sealed class HttpEndpointCheckpointPolicyEquivalenceTests
     {
         await using var fixture = await HttpEndpointHostFixture.StartDurableSqliteAsync(
             persistenceMode: mode,
-            maxSegmentCheckpoints: 50);
+            maxActivitiesPerCommit: 50);
         var policy = mode.ToString().ToLowerInvariant();
         var path = $"checkpoint-policy/{policy}";
         await fixture.PublishSyncEndpointWithWriteResponseWorkflowAsync(

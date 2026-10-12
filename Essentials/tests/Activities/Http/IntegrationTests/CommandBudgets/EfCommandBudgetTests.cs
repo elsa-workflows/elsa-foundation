@@ -34,7 +34,7 @@ public sealed class EfCommandBudgetTests(ITestOutputHelper output)
 {
     private const string BudgetFile = "ef-command-budgets.json";
     private const string BasePath = "/workflows/http/";
-    private const int MaxSegmentCheckpoints = 50;
+    private const int MaxActivitiesPerCommit = 50;
 
     /// <summary>
     /// What runs on a timer instead of because of the workflow: the execution lease, the scheduler work claim and the
@@ -94,7 +94,7 @@ public sealed class EfCommandBudgetTests(ITestOutputHelper output)
     private static async Task<int> MeasureAsync(string workflow, PersistenceMode mode)
     {
         var capture = new CommandCaptureInterceptor();
-        await using var fixture = await HttpEndpointHostFixture.StartDurableSqliteAsync(mode, MaxSegmentCheckpoints, services =>
+        await using var fixture = await HttpEndpointHostFixture.StartDurableSqliteAsync(mode, MaxActivitiesPerCommit, services =>
         {
             new ActivitiesControlFlowFeature().ConfigureServices(services);
             new JavaScriptFeature().ConfigureServices(services);

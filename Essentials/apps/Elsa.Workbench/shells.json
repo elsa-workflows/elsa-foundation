@@ -188,7 +188,7 @@
           "WorkflowsRuntimeHttp": {},
           "WorkflowsRuntimeCheckpointPersistence": {
             "Mode": "Balanced",
-            "MaxSegmentCheckpoints": 50
+            "MaxActivitiesPerCommit": 50
           },
           "WorkflowsRuntimeTracing": {},
           "WorkflowsRuntimeTriggers": {},

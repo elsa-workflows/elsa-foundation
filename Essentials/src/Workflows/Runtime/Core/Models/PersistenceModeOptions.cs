@@ -10,14 +10,12 @@ public sealed class PersistenceModeOptions
     public PersistenceMode Mode { get; set; } = PersistenceMode.Balanced;
 
     /// <summary>
-    /// Maximum number of checkpoints that may be folded into a single segment before an intermediate fold-and-flush is
-    /// forced. The flush starts a fresh segment (like a durable attempt boundary does), so a replayable hot loop longer
-    /// than the cap keeps folding at one durable commit per cap-sized window instead of degrading to per-checkpoint
-    /// persistence for the remainder of the drain. Bounds both the crash-replay window (a mid-segment crash re-drives at
-    /// most this many hops past the last flush) and the working-set memory a segment holds. Must be greater than zero.
-    /// Default is 50.
+    /// Maximum number of activities whose work Balanced folds into one commit. The checkpoint that would bring another
+    /// activity into a segment that already holds this many forces an intermediate commit, and the next segment starts
+    /// empty, so a long loop keeps folding at one commit per window instead of degrading to per-checkpoint persistence.
+    /// Bounds both the work a crash repeats and the memory a segment holds. Must be greater than zero. Default is 50.
     /// </summary>
-    public int MaxSegmentCheckpoints { get; set; } = 50;
+    public int MaxActivitiesPerCommit { get; set; } = 50;
 
     /// <summary>
     /// When enabled (the default), equivalent durable-value page reads within an eligible folding session may

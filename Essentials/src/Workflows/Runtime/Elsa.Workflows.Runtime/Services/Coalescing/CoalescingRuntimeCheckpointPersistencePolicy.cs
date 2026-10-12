@@ -12,7 +12,7 @@ namespace Elsa.Workflows.Runtime.Services.Coalescing;
 /// </summary>
 /// <remarks>
 /// The policy is stateless and only maps a checkpoint name to <c>Immediate</c>/<c>Deferred</c>. The per-segment
-/// hop cap (<see cref="PersistenceModeOptions.MaxSegmentCheckpoints"/>) and the actual buffering
+/// activity cap (<see cref="PersistenceModeOptions.MaxActivitiesPerCommit"/>) and the actual buffering
 /// live in the coalescing commit store, which owns the ambient session state.
 /// </remarks>
 public sealed class CoalescingRuntimeCheckpointPersistencePolicy : IRuntimeCheckpointPersistencePolicy

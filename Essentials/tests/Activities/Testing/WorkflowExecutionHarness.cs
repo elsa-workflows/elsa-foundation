@@ -886,18 +886,19 @@ public sealed class WorkflowExecutionHarness : IAsyncDisposable
         }
 
         /// <summary>
-        /// Drives the harness under the opt-in burst-coalescing checkpoint persistence policy
-        /// instead of the default Immediate cadence, so intra-drain checkpoints fold into one atomic commit at
-        /// quiescence — the mode a ReplaySafe hop-fusion pass engages inside. Applied after the
-        /// runtime feature registration (which the ctor seeds first), so the coalescing decorators capture the runtime
-        /// stores. Optionally caps the per-segment checkpoint count (models a mid-drain fold-and-flush).
+        /// Registers the persistence modes, so runs can fold checkpoints between commits, with
+        /// <paramref name="hostMode"/> as the default for workflows that choose none. Applied after the runtime feature
+        /// registration (which the ctor seeds first), so the folding decorators capture the runtime stores. Without this
+        /// the harness runs every workflow Durable. <paramref name="maxActivitiesPerCommit"/> lowers the cap to model an
+        /// intermediate commit mid-drain.
         /// </summary>
-        public Builder WithCoalescing(int? maxSegmentCheckpoints = null)
+        public Builder WithPersistenceMode(PersistenceMode hostMode = PersistenceMode.Balanced, int? maxActivitiesPerCommit = null)
         {
             _featureConfigurators.Add(services => services.AddPersistenceModes(options =>
             {
-                if (maxSegmentCheckpoints is { } cap)
-                    options.MaxSegmentCheckpoints = cap;
+                options.Mode = hostMode;
+                if (maxActivitiesPerCommit is { } cap)
+                    options.MaxActivitiesPerCommit = cap;
             }));
             return this;
         }

@@ -26,7 +26,7 @@ public sealed class WorkflowsRuntimeCheckpointPersistenceFeatureTests
         Assert.Contains("WorkflowsRuntimeApi", featureAttribute.DependsOn.Select(dependency => dependency?.ToString()));
         Assert.Contains(featureType.GetProperty(nameof(WorkflowsRuntimeCheckpointPersistenceFeature.Mode))!.CustomAttributes,
             attribute => attribute.AttributeType.Name == "ManifestSettingAttribute");
-        Assert.Contains(featureType.GetProperty(nameof(WorkflowsRuntimeCheckpointPersistenceFeature.MaxSegmentCheckpoints))!.CustomAttributes,
+        Assert.Contains(featureType.GetProperty(nameof(WorkflowsRuntimeCheckpointPersistenceFeature.MaxActivitiesPerCommit))!.CustomAttributes,
             attribute => attribute.AttributeType.Name == "ManifestSettingAttribute");
         var durableValueReadsSetting = featureType.GetProperty(nameof(WorkflowsRuntimeCheckpointPersistenceFeature.CoalesceDurableValueReads))!.CustomAttributes.Single(
             attribute => attribute.AttributeType.Name == "ManifestSettingAttribute");
@@ -40,7 +40,7 @@ public sealed class WorkflowsRuntimeCheckpointPersistenceFeatureTests
         var feature = new WorkflowsRuntimeCheckpointPersistenceFeature();
 
         Assert.Equal(PersistenceMode.Durable, feature.Mode);
-        Assert.Equal(50, feature.MaxSegmentCheckpoints);
+        Assert.Equal(50, feature.MaxActivitiesPerCommit);
         Assert.True(feature.CoalesceDurableValueReads);
         Assert.True(new PersistenceModeOptions().CoalesceDurableValueReads);
     }
@@ -69,7 +69,7 @@ public sealed class WorkflowsRuntimeCheckpointPersistenceFeatureTests
         var feature = new WorkflowsRuntimeCheckpointPersistenceFeature
         {
             Mode = PersistenceMode.Balanced,
-            MaxSegmentCheckpoints = 7,
+            MaxActivitiesPerCommit = 7,
             CoalesceDurableValueReads = coalesceDurableValueReads
         };
         feature.ConfigureServices(services);
@@ -79,7 +79,7 @@ public sealed class WorkflowsRuntimeCheckpointPersistenceFeatureTests
 
         using var provider = services.BuildServiceProvider();
         Assert.IsType<CoalescingRuntimeCheckpointPersistencePolicy>(provider.GetRequiredService<IRuntimeCheckpointPersistencePolicy>());
-        Assert.Equal(7, provider.GetRequiredService<PersistenceModeOptions>().MaxSegmentCheckpoints);
+        Assert.Equal(7, provider.GetRequiredService<PersistenceModeOptions>().MaxActivitiesPerCommit);
         Assert.Equal(coalesceDurableValueReads, provider.GetRequiredService<PersistenceModeOptions>().CoalesceDurableValueReads);
         Assert.Same(selectedProvider, provider.GetRequiredService<CoalescingInner<IRuntimeCheckpointCommitStore>>().Value);
     }
@@ -105,7 +105,7 @@ public sealed class WorkflowsRuntimeCheckpointPersistenceFeatureTests
         var factory = provider.GetRequiredService<IRuntimeCoalescingDrainScopeFactory>();
         await using var scope = factory.Begin("wf-host-settings");
 
-        Assert.Equal(hostOptions.MaxSegmentCheckpoints, scope.Session.MaxSegmentCheckpoints);
+        Assert.Equal(hostOptions.MaxActivitiesPerCommit, scope.Session.MaxActivitiesPerCommit);
         Assert.Equal(coalesceDurableValueReads, scope.Session.CoalesceDurableValueReads);
         Assert.Equal(coalesceInspectionReads, scope.Session.CoalesceInspectionReads);
         Assert.Equal(coalesceDurableValueReads, hostOptions.CoalesceDurableValueReads);
@@ -137,7 +137,7 @@ public sealed class WorkflowsRuntimeCheckpointPersistenceFeatureTests
         var feature = new WorkflowsRuntimeCheckpointPersistenceFeature
         {
             Mode = PersistenceMode.Balanced,
-            MaxSegmentCheckpoints = cap
+            MaxActivitiesPerCommit = cap
         };
 
         var exception = Assert.Throws<InvalidOperationException>(() =>
@@ -145,7 +145,7 @@ public sealed class WorkflowsRuntimeCheckpointPersistenceFeatureTests
             feature.PostConfigureServices(CreateRuntimeServices());
         });
 
-        Assert.Contains(nameof(WorkflowsRuntimeCheckpointPersistenceFeature.MaxSegmentCheckpoints), exception.Message);
+        Assert.Contains(nameof(WorkflowsRuntimeCheckpointPersistenceFeature.MaxActivitiesPerCommit), exception.Message);
         Assert.Contains("greater than zero", exception.Message);
     }
 

@@ -109,7 +109,7 @@ public sealed class HttpEndpointHostFixture : IAsyncDisposable
     /// <param name="configureServices">Adds to the host's services before the EF provider and persistence mode are applied.</param>
     public static Task<HttpEndpointHostFixture> StartDurableSqliteAsync(
         PersistenceMode persistenceMode,
-        int maxSegmentCheckpoints,
+        int maxActivitiesPerCommit,
         Action<IServiceCollection>? configureServices = null)
     {
         var databaseDirectory = Path.Join(Path.GetTempPath(), $"elsa-http-runtime-ef-{Guid.NewGuid():N}");
@@ -120,7 +120,7 @@ public sealed class HttpEndpointHostFixture : IAsyncDisposable
             services =>
             {
                 configureServices?.Invoke(services);
-                AddDurableSqlite(services, databasePath, persistenceMode, maxSegmentCheckpoints);
+                AddDurableSqlite(services, databasePath, persistenceMode, maxActivitiesPerCommit);
             },
             databaseDirectory);
     }
@@ -135,7 +135,7 @@ public sealed class HttpEndpointHostFixture : IAsyncDisposable
         StartAsync(
             services =>
             {
-                AddDurableSqlite(services, databasePath, PersistenceMode.Durable, maxSegmentCheckpoints: 50);
+                AddDurableSqlite(services, databasePath, PersistenceMode.Durable, maxActivitiesPerCommit: 50);
                 services.Configure<HttpEndpointRouteTableConvergenceOptions>(options => options.Interval = routeTableConvergenceInterval);
             },
             databaseDirectory: null);
@@ -144,7 +144,7 @@ public sealed class HttpEndpointHostFixture : IAsyncDisposable
         IServiceCollection services,
         string databasePath,
         PersistenceMode persistenceMode,
-        int maxSegmentCheckpoints)
+        int maxActivitiesPerCommit)
     {
         // Durable composition refuses the ephemeral development signer, so the fixture supplies the
         // stable recovery-continuation key a real durable host configures.
@@ -160,7 +160,7 @@ public sealed class HttpEndpointHostFixture : IAsyncDisposable
         new WorkflowsRuntimeCheckpointPersistenceFeature
         {
             Mode = persistenceMode,
-            MaxSegmentCheckpoints = maxSegmentCheckpoints
+            MaxActivitiesPerCommit = maxActivitiesPerCommit
         }.PostConfigureServices(services);
     }
 

@@ -117,7 +117,7 @@ public sealed class WorkbenchShellActivationTests
         // The stock shells run the burst-coalesced checkpoint policy and the bounded executable cache that the HTTP
         // workflow performance budget is measured against.
         AssertSetting(catalog, "WorkflowsRuntimeCheckpointPersistence", "Mode", "Balanced");
-        AssertSetting(catalog, "WorkflowsRuntimeCheckpointPersistence", "MaxSegmentCheckpoints", "50");
+        AssertSetting(catalog, "WorkflowsRuntimeCheckpointPersistence", "MaxActivitiesPerCommit", "50");
         AssertSetting(catalog, "WorkflowsRuntimeEntityFrameworkCore", "CacheWorkflowExecutables", "true");
         AssertSetting(catalog, "WorkflowsRuntimeEntityFrameworkCore", "WorkflowExecutableCacheCapacity", "256");
     }

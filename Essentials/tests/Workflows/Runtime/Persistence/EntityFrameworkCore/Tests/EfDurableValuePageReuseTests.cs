@@ -469,7 +469,7 @@ public sealed class EfDurableValuePageReuseTests
             [$"CShells:Shells:{ShellName}:Features:WorkflowsRuntimeEntityFrameworkCore:RecoveryContinuationSigningKey"] = RecoverySigningKey,
             [$"CShells:Shells:{ShellName}:Features:WorkflowsRuntimeEntityFrameworkCore:HierarchyCursorSigningKey"] = HierarchySigningKey,
             [$"CShells:Shells:{ShellName}:Features:WorkflowsRuntimeCheckpointPersistence:Mode"] = "Balanced",
-            [$"CShells:Shells:{ShellName}:Features:WorkflowsRuntimeCheckpointPersistence:MaxSegmentCheckpoints"] = "50",
+            [$"CShells:Shells:{ShellName}:Features:WorkflowsRuntimeCheckpointPersistence:MaxActivitiesPerCommit"] = "50",
             [$"CShells:Shells:{ShellName}:Features:WorkflowsRuntimeCheckpointPersistence:CoalesceDurableValueReads"] = coalesceDurableValueReads.ToString()
         };
         foreach (var id in SelectedFeatureIds)

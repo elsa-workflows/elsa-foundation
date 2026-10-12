@@ -50,7 +50,7 @@
           "WorkflowsRuntimeResumption": {},
           "WorkflowsRuntimeCheckpointPersistence": {
             "Mode": "Balanced",
-            "MaxSegmentCheckpoints": 50
+            "MaxActivitiesPerCommit": 50
           },
           "WorkflowsRuntimeTriggers": {},
           "WorkflowsRuntimeEntityFrameworkCore": {

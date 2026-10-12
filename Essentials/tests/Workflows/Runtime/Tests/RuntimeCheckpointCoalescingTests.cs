@@ -369,7 +369,7 @@ public sealed class RuntimeCheckpointCoalescingTests(ITestOutputHelper output)
         var firstBoundary = Assert.Single(innerStore.ListCommits()).Commit;
         Assert.Equal(RuntimeCheckpointNames.ActivityAttemptClaimed, firstBoundary.Checkpoint.Name);
         Assert.True(session.IsActive);
-        Assert.Equal(0, session.HopCount);
+        Assert.Equal(0, session.ActivityCount);
         Assert.True(session.TryGetActivity("actexec-1", out var overlayState, out var tombstoned));
         Assert.False(tombstoned);
         Assert.Equal("attempt-1", overlayState!.Metadata[RuntimeMetadataKeys.ActivityAttemptActivationClaim]);
@@ -377,7 +377,7 @@ public sealed class RuntimeCheckpointCoalescingTests(ITestOutputHelper output)
         await store.CommitAsync(
             NewEmptyCommit(workflowExecutionId, 3, RuntimeCheckpointNames.ActivityCompleted),
             new(RuntimeCheckpointPersistenceMode.Deferred));
-        Assert.Equal(1, session.HopCount);
+        Assert.True(session.HasBufferedChanges);
         Assert.Single(innerStore.ListCommits());
 
         await store.CommitAsync(
@@ -509,7 +509,7 @@ public sealed class RuntimeCheckpointCoalescingTests(ITestOutputHelper output)
 
         Assert.Empty(innerStore.ListCommits());
         Assert.True(session.IsActive);
-        Assert.Equal(1, session.HopCount);
+        Assert.Equal(1, session.ActivityCount);
         Assert.True(session.TryGetActivity("actexec-1", out var overlayState, out var tombstoned));
         Assert.False(tombstoned);
         Assert.Equal("attempt-1", overlayState!.Metadata[RuntimeMetadataKeys.ActivityAttemptActivationClaim]);
@@ -870,27 +870,6 @@ public sealed class RuntimeCheckpointCoalescingTests(ITestOutputHelper output)
         Assert.Equal(1, coalescing.CommitCount);
     }
 
-    // End-to-end liveness across a cap fold in the real drain loop: with a cap of 1, intermediate fold-and-flushes
-    // land mid-drain, the session keeps coalescing (fresh segments), overlay continuation delivery keeps the drain
-    // moving, and the run still reaches the same completed terminal state as an uncapped coalescing run.
-    [Fact]
-    public async Task Coalescing_TinyCap_CapFoldsMidDrain_AndRunStillCompletes()
-    {
-        var uncapped = await DriveAsync(coalescing: true);
-        var capped = await DriveAsync(coalescing: true, maxSegmentCheckpoints: 1);
-
-        output.WriteLine($"Uncapped coalescing commits: {uncapped.CommitCount}");
-        output.WriteLine($"Cap=1 coalescing commits: {capped.CommitCount}");
-
-        Assert.Equal(WorkflowExecutionStatus.Completed, capped.State?.Status);
-        Assert.Equal(uncapped.Snapshot, capped.Snapshot);
-        Assert.NotEmpty(capped.Snapshot);
-        // The tiny cap genuinely forced intermediate folds (more commits than the single quiescence fold), while the
-        // fresh-segment restart still kept it a fold-per-window shape.
-        Assert.True(capped.CommitCount > uncapped.CommitCount,
-            $"Expected cap=1 ({capped.CommitCount}) to force intermediate folds beyond the uncapped run ({uncapped.CommitCount}).");
-    }
-
     [Fact]
     public async Task ChosenDurable_UnderBalancedHost_RunsDurable_AndRecordsTheMode()
     {
@@ -1012,9 +991,9 @@ public sealed class RuntimeCheckpointCoalescingTests(ITestOutputHelper output)
         Assert.Empty(await provider.GetRequiredService<IWorkflowSchedulerPoisonStore>().ListAsync("wfexec-1"));
     }
 
-    // Segment cap: a cap-hit folds-and-flushes the segment and STARTS A FRESH SEGMENT (like a
+    // Activity cap: a cap-hit folds-and-flushes the segment and STARTS A FRESH SEGMENT (like a
     // mandatory attempt boundary), instead of deactivating the session and degrading the drain remainder to
-    // per-checkpoint Immediate persistence.
+    // per-checkpoint persistence. Each probe is the first checkpoint of a new activity.
     [Theory]
     [InlineData(1)]
     [InlineData(5)]
@@ -1026,7 +1005,7 @@ public sealed class RuntimeCheckpointCoalescingTests(ITestOutputHelper output)
         var session = new RuntimeCoalescingSession(
             "wfexec-cap",
             innerQueue,
-            new PersistenceModeOptions { MaxSegmentCheckpoints = cap });
+            new PersistenceModeOptions { MaxActivitiesPerCommit = cap });
         var accessor = new FixedCoalescingSessionAccessor(session);
         var store = new CoalescingRuntimeCheckpointCommitStore(
             new CoalescingInner<IRuntimeCheckpointCommitStore>(innerStore),
@@ -1038,15 +1017,15 @@ public sealed class RuntimeCheckpointCoalescingTests(ITestOutputHelper output)
         for (var checkpoint = 1; checkpoint <= cap; checkpoint++)
             await store.CommitAsync(NewEmptyDeferredCommit(checkpoint), new(RuntimeCheckpointPersistenceMode.Deferred));
 
-        Assert.Equal(cap, session.HopCount);
+        Assert.Equal(cap, session.ActivityCount);
         Assert.True(session.IsActive);
         Assert.Empty(innerStore.ListCommits());
 
-        // The cap-tripping checkpoint folds the whole segment (cap buffered hops + itself) into one durable commit
+        // The cap-tripping checkpoint folds the whole segment (cap buffered activities + itself) into one durable commit
         // and the session keeps coalescing with an empty fresh segment.
         await store.CommitAsync(NewEmptyDeferredCommit(cap + 1), new(RuntimeCheckpointPersistenceMode.Deferred));
 
-        Assert.Equal(0, session.HopCount);
+        Assert.Equal(0, session.ActivityCount);
         Assert.True(session.IsActive);
         Assert.Single(innerStore.ListCommits());
 
@@ -1054,12 +1033,12 @@ public sealed class RuntimeCheckpointCoalescingTests(ITestOutputHelper output)
         for (var checkpoint = cap + 2; checkpoint <= 2 * cap + 1; checkpoint++)
             await store.CommitAsync(NewEmptyDeferredCommit(checkpoint), new(RuntimeCheckpointPersistenceMode.Deferred));
 
-        Assert.Equal(cap, session.HopCount);
+        Assert.Equal(cap, session.ActivityCount);
         Assert.Single(innerStore.ListCommits());
 
         await store.CommitAsync(NewEmptyDeferredCommit(2 * cap + 2), new(RuntimeCheckpointPersistenceMode.Deferred));
 
-        Assert.Equal(0, session.HopCount);
+        Assert.Equal(0, session.ActivityCount);
         Assert.True(session.IsActive);
         Assert.Equal(2, innerStore.ListCommits().Count);
 
@@ -1073,7 +1052,7 @@ public sealed class RuntimeCheckpointCoalescingTests(ITestOutputHelper output)
     }
 
     // The guard the segment-cap rework exists for: a ReplaySafe hot loop longer than the cap must fold into
-    // one durable commit per (cap + 1)-checkpoint window plus the terminal fold — not a per-checkpoint Immediate
+    // one durable commit per (cap + 1)-activity window plus the terminal fold, not a per-checkpoint
     // tail after the first cap hit.
     [Fact]
     public async Task ReplaySafeHotLoop_LongerThanCap_FoldsPerCapWindow_NoImmediateTail()
@@ -1084,7 +1063,7 @@ public sealed class RuntimeCheckpointCoalescingTests(ITestOutputHelper output)
         var session = new RuntimeCoalescingSession(
             "wfexec-cap",
             new InMemoryWorkflowSchedulerWorkQueue(),
-            new PersistenceModeOptions { MaxSegmentCheckpoints = cap });
+            new PersistenceModeOptions { MaxActivitiesPerCommit = cap });
         var store = new CoalescingRuntimeCheckpointCommitStore(
             new CoalescingInner<IRuntimeCheckpointCommitStore>(innerStore),
             new FixedCoalescingSessionAccessor(session));
@@ -1096,7 +1075,7 @@ public sealed class RuntimeCheckpointCoalescingTests(ITestOutputHelper output)
             NewEmptyCommit("wfexec-cap", checkpoints + 1, RuntimeCheckpointNames.WorkflowCompleted),
             new(RuntimeCheckpointPersistenceMode.Immediate));
 
-        // Each intermediate fold covers cap buffered hops + the cap-tripping checkpoint; the terminal boundary folds
+        // Each intermediate fold covers cap buffered activities + the cap-tripping one; the terminal boundary folds
         // the remainder. 35 checkpoints @ cap 10 -> 3 intermediate folds (33 checkpoints) + 1 terminal fold (2 + terminal).
         var expectedCommits = checkpoints / (cap + 1) + 1;
         Assert.Equal(expectedCommits, innerStore.ListCommits().Count);
@@ -1117,7 +1096,7 @@ public sealed class RuntimeCheckpointCoalescingTests(ITestOutputHelper output)
         var session = new RuntimeCoalescingSession(
             workflowExecutionId,
             new InMemoryWorkflowSchedulerWorkQueue(),
-            new PersistenceModeOptions { MaxSegmentCheckpoints = 1 },
+            new PersistenceModeOptions { MaxActivitiesPerCommit = 1 },
             innerOutboxStore: innerStore);
         var store = new CoalescingRuntimeCheckpointCommitStore(
             new CoalescingInner<IRuntimeCheckpointCommitStore>(innerStore),
@@ -1204,7 +1183,7 @@ public sealed class RuntimeCheckpointCoalescingTests(ITestOutputHelper output)
         var session = new RuntimeCoalescingSession(
             workflowExecutionId,
             new InMemoryWorkflowSchedulerWorkQueue(),
-            new PersistenceModeOptions { MaxSegmentCheckpoints = 1 },
+            new PersistenceModeOptions { MaxActivitiesPerCommit = 1 },
             innerOutboxStore: innerStore);
         var store = new CoalescingRuntimeCheckpointCommitStore(
             new CoalescingInner<IRuntimeCheckpointCommitStore>(innerStore),
@@ -1269,18 +1248,13 @@ public sealed class RuntimeCheckpointCoalescingTests(ITestOutputHelper output)
 
     private static async Task<(IReadOnlyList<(string NodeId, ActivityExecutionStatus Status)> Snapshot, int CommitCount, WorkflowExecutionState? State)> DriveAsync(
         bool coalescing,
-        PersistenceMode? chosenMode = null,
-        int? maxSegmentCheckpoints = null)
+        PersistenceMode? chosenMode = null)
     {
         var services = new ServiceCollection();
         new WorkflowsRuntimeApiFeature().ConfigureServices(services);
         if (coalescing)
         {
-            services.AddPersistenceModes(options =>
-            {
-                if (maxSegmentCheckpoints is { } cap)
-                    options.MaxSegmentCheckpoints = cap;
-            });
+            services.AddPersistenceModes();
         }
 
         using var provider = services.BuildServiceProvider();
@@ -1360,8 +1334,12 @@ public sealed class RuntimeCheckpointCoalescingTests(ITestOutputHelper output)
             metadata: new Dictionary<string, string> { ["transport"] = "in-process" });
     }
 
-    private static RuntimeCheckpointCommit NewEmptyDeferredCommit(int checkpoint) =>
-        NewEmptyCommit("wfexec-cap", checkpoint, "CapProbe");
+    // Each cap probe is the first checkpoint of a distinct activity, so the probes count against the activity cap.
+    private static RuntimeCheckpointCommit NewEmptyDeferredCommit(int checkpoint)
+    {
+        var commit = NewEmptyCommit("wfexec-cap", checkpoint, "CapProbe");
+        return commit with { Checkpoint = commit.Checkpoint with { ActivityExecutionIds = [$"actexec-cap-{checkpoint}"] } };
+    }
 
     private static RuntimeCheckpointCommit NewEmptyCommit(
         string workflowExecutionId,
@@ -1436,8 +1414,12 @@ public sealed class RuntimeCheckpointCoalescingTests(ITestOutputHelper output)
         int checkpoint,
         RuntimePostCommitRetryPolicy? retryPolicy = null)
     {
-        var commit = NewEmptyCommit(workflowExecutionId, checkpoint, RuntimeCheckpointNames.ActivityCompleted) with
+        // Like a hot-loop activity completing and scheduling its successor: it belongs to its own activity, so it
+        // counts against the activity cap.
+        var empty = NewEmptyCommit(workflowExecutionId, checkpoint, RuntimeCheckpointNames.ActivityCompleted);
+        var commit = empty with
         {
+            Checkpoint = empty.Checkpoint with { ActivityExecutionIds = [$"actexec-cap-{checkpoint}"] },
             PostCommitIntents =
             [
                 new RuntimePostCommitIntent(

@@ -375,7 +375,7 @@ internal static class ResponseReplayHost
                 new WorkflowsRuntimeCheckpointPersistenceFeature
                 {
                     Mode = PersistenceMode.Balanced,
-                    MaxSegmentCheckpoints = 50
+                    MaxActivitiesPerCommit = 50
                 }.PostConfigureServices(services);
             });
             webHost.Configure(app =>

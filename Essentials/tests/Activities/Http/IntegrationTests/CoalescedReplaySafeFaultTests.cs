@@ -34,7 +34,7 @@ public sealed class CoalescedReplaySafeFaultTests
             "replay-safe-fault",
             ReferenceWorkflows.Sequence("sequence", ReferenceWorkflows.Clr("write", typeof(WriteLine), [("text", "before the fault")]), fault));
 
-        await using var fixture = await HttpEndpointHostFixture.StartDurableSqliteAsync(PersistenceMode.Balanced, maxSegmentCheckpoints: 50);
+        await using var fixture = await HttpEndpointHostFixture.StartDurableSqliteAsync(PersistenceMode.Balanced, maxActivitiesPerCommit: 50);
         await fixture.PublishAsync(executable);
         var executionId = await fixture.StartWorkflowDirectlyAsync(executable.Identity.ArtifactId);
 

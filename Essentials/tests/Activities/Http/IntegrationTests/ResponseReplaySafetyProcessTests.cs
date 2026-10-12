@@ -433,7 +433,7 @@ public sealed class ResponseReplaySafetyProcessTests
             {
                 Assert.Equal(ExternalPayloadRoutePath, publication.GetProperty("candidateRoutePath").GetString());
                 Assert.Equal(ExternalPayloadProfile, publication.GetProperty("candidateBodyStorageProfile").GetString());
-                Assert.Equal("2", publication.GetProperty("candidateCheckpointMaxSegmentCheckpoints").GetString());
+                Assert.Equal("Durable", publication.GetProperty("candidatePersistenceMode").GetString());
             }
 
             var existingCandidateExecutionIds = await ReadCandidateExecutionIdsAsync(databasePath, candidateArtifactId);
@@ -489,17 +489,18 @@ public sealed class ResponseReplaySafetyProcessTests
             var attemptId = AssertNonEmpty(claim.GetProperty("attemptId").GetString());
 
             var durableClaim = await ReadIndependentRuntimeStateAsync(databasePath, executionId);
-            AssertRecordedBalancedMode(durableClaim.Execution);
+            AssertRecordedMode(durableClaim.Execution, useExternalBodyPayload);
             var claimLease = AssertDurableRequestAndClaim(
                 durableClaim, candidateArtifactId, candidateArtifactHash, routePath, correlationId,
-                endpointActivityExecutionId, schedulerWorkItemId, commandId, attemptId, childOwnerId);
+                endpointActivityExecutionId, schedulerWorkItemId, commandId, attemptId, childOwnerId,
+                durableRun: useExternalBodyPayload);
             AssertOwnerLeaseLive(claimLease, DateTimeOffset.UtcNow);
             await SendGateCommandAsync(writer, "continue", gateEvidencePath);
 
             using var responseMessage = await ReadGateMessageAsync(reader, TimeSpan.FromMinutes(2), gateEvidencePath);
             var response = responseMessage.RootElement.GetProperty("payload");
             var durableWindow = await ReadIndependentRuntimeStateAsync(databasePath, executionId);
-            AssertRecordedBalancedMode(durableWindow.Execution);
+            AssertRecordedMode(durableWindow.Execution, useExternalBodyPayload);
 
             RuntimeExecutionLease windowLease;
             ExternalBodyReferenceSnapshot? externalBodyReference = null;
@@ -514,9 +515,7 @@ public sealed class ResponseReplaySafetyProcessTests
                 Assert.Equal(candidateArtifactHash, response.GetProperty("artifactHash").GetString());
                 Assert.Equal(ResponseNodeId, response.GetProperty("responseNodeId").GetString());
                 Assert.Equal("Running", response.GetProperty("responseStatus").GetString());
-                Assert.True(response.GetProperty("sessionActive").GetBoolean());
-                Assert.True(response.GetProperty("sessionAppliesToExecution").GetBoolean());
-                Assert.Equal(2, response.GetProperty("maxSegmentCheckpoints").GetInt32());
+                Assert.False(response.GetProperty("foldingSessionActive").GetBoolean());
                 Assert.Equal("InvokeActivity", response.GetProperty("invokeCommandKind").GetString());
 
                 AssertDurableRequestAndTrigger(durableWindow, candidateArtifactId, candidateArtifactHash, routePath, correlationId);
@@ -576,7 +575,7 @@ public sealed class ResponseReplaySafetyProcessTests
                 Assert.True(response.GetProperty("sessionActive").GetBoolean());
                 Assert.True(response.GetProperty("sessionAppliesToExecution").GetBoolean());
                 Assert.True(response.GetProperty("hasBufferedChanges").GetBoolean());
-                Assert.True(response.GetProperty("hopCount").GetInt32() > 0);
+                Assert.True(response.GetProperty("activityCount").GetInt32() > 0);
                 Assert.Equal("Deferred", response.GetProperty("decision").GetString());
                 AssertNonEmpty(response.GetProperty("responseActivityExecutionId").GetString());
                 Assert.Equal(200, response.GetProperty("instruction").GetProperty("statusCode").GetInt32());
@@ -602,7 +601,7 @@ public sealed class ResponseReplaySafetyProcessTests
             Assert.NotEqual(0, killedChild.ExitCode);
 
             var afterKill = await ReadIndependentRuntimeStateAsync(databasePath, executionId);
-            AssertRecordedBalancedMode(afterKill.Execution);
+            AssertRecordedMode(afterKill.Execution, useExternalBodyPayload);
             RuntimeExecutionLease killedOwnerLease;
             if (useExternalBodyPayload)
             {
@@ -637,7 +636,7 @@ public sealed class ResponseReplaySafetyProcessTests
                 await Task.Delay(waitForOwnerLease);
 
             var eligibleState = await ReadIndependentRuntimeStateAsync(databasePath, executionId);
-            AssertRecordedBalancedMode(eligibleState.Execution);
+            AssertRecordedMode(eligibleState.Execution, useExternalBodyPayload);
             RuntimeExecutionLease eligibleOwnerLease;
             if (useExternalBodyPayload)
             {
@@ -690,7 +689,7 @@ public sealed class ResponseReplaySafetyProcessTests
 
             var finalState = await ReadIndependentRuntimeStateAsync(databasePath, executionId);
             AssertDurableRequestAndTrigger(finalState, candidateArtifactId, candidateArtifactHash, routePath, correlationId);
-            AssertRecordedBalancedMode(finalState.Execution);
+            AssertRecordedMode(finalState.Execution, useExternalBodyPayload);
             Assert.Equal(WorkflowExecutionStatus.Completed, finalState.Execution.Status);
             Assert.Equal("Alice", ReadStringVariable(finalState.Execution.RootVariableFrame!, "content", "firstName"));
             Assert.Equal("Smith", ReadStringVariable(finalState.Execution.RootVariableFrame!, "content", "lastName"));
@@ -1363,8 +1362,11 @@ public sealed class ResponseReplaySafetyProcessTests
         await connection;
     }
 
-    private static void AssertRecordedBalancedMode(WorkflowExecutionState execution) =>
-        Assert.Equal(nameof(PersistenceMode.Balanced), execution.SystemMetadata[RuntimeMetadataKeys.PersistenceMode]);
+    // The external-input proof runs Durable: only a Durable run commits a started activity on its own.
+    private static void AssertRecordedMode(WorkflowExecutionState execution, bool useExternalBodyPayload) =>
+        Assert.Equal(
+            (useExternalBodyPayload ? PersistenceMode.Durable : PersistenceMode.Balanced).ToString(),
+            execution.SystemMetadata[RuntimeMetadataKeys.PersistenceMode]);
 
     private static ChildProcessSession StartChildProcess(
         string childDll,
@@ -1513,7 +1515,8 @@ public sealed class ResponseReplaySafetyProcessTests
         string schedulerWorkItemId,
         string commandId,
         string attemptId,
-        string expectedOwnerId)
+        string expectedOwnerId,
+        bool durableRun = false)
     {
         AssertDurableRequestAndTrigger(state, artifactId, artifactHash, routePath, correlationId);
 
@@ -1535,13 +1538,21 @@ public sealed class ResponseReplaySafetyProcessTests
         Assert.Equal(artifactId, payload.PinnedExecutable.ArtifactId);
         Assert.Equal(artifactHash, payload.PinnedExecutable.ArtifactHash);
         Assert.Equal(schedulerWorkItemId, EfRelationalIdentity.Decode(scheduler.Row.WorkItemId));
-        // Coalescing dispatches in memory; the durable invoke remains unclaimed as redrive work.
-        Assert.Null(scheduler.Row.ClaimOwnerId);
-        Assert.Equal(0, scheduler.Row.ClaimToken);
-        Assert.Null(scheduler.Row.ClaimedAtUtcTicks);
-        Assert.Null(scheduler.Row.ClaimedAtOffsetMinutes);
-        Assert.Null(scheduler.Row.VisibleAfterUtcTicks);
-        Assert.Null(scheduler.Row.VisibleAfterOffsetMinutes);
+        if (durableRun)
+        {
+            // A Durable run's drain claims the durable invoke itself.
+            Assert.NotNull(scheduler.Row.ClaimOwnerId);
+        }
+        else
+        {
+            // A folding session dispatches in memory; the durable invoke remains unclaimed as redrive work.
+            Assert.Null(scheduler.Row.ClaimOwnerId);
+            Assert.Equal(0, scheduler.Row.ClaimToken);
+            Assert.Null(scheduler.Row.ClaimedAtUtcTicks);
+            Assert.Null(scheduler.Row.ClaimedAtOffsetMinutes);
+            Assert.Null(scheduler.Row.VisibleAfterUtcTicks);
+            Assert.Null(scheduler.Row.VisibleAfterOffsetMinutes);
+        }
 
         return AssertOwnerLeaseIdentity(state, expectedOwnerId);
     }

@@ -10,7 +10,7 @@ namespace Elsa.Workflows.Runtime.Services.Coalescing;
 /// Coalescing decorator for <see cref="IRuntimeCheckpointCommitStore"/>. While a coalescing session owns
 /// the target workflow execution, deferred checkpoints are buffered into an in-memory working set and folded into a
 /// single atomic durable commit at a flush boundary (attempt activation, suspension/fault/cancellation/completion, an
-/// operational or bookmark write, the per-segment hop cap, or the end-of-drain quiescence flush). A durable attempt
+/// operational or bookmark write, the per-segment activity cap, or the end-of-drain quiescence flush). A durable attempt
 /// boundary and a cap-hit fold-and-flush each start another coalesced segment in the same drain; when no session is
 /// active (a Durable run), Deferred decisions are normalized to Immediate because there is no working set to flush
 /// later; any other decision is forwarded unchanged.
@@ -73,7 +73,7 @@ public sealed class CoalescingRuntimeCheckpointCommitStore(
 
         var forceImmediate = HasBoundaryState(commit);
         var deferrable = decision.Mode == RuntimeCheckpointPersistenceMode.Deferred && !forceImmediate;
-        var capReached = session.HopCount + 1 > session.MaxSegmentCheckpoints;
+        var capReached = session.WouldExceedActivityCap(commit);
 
         // Deferrable, non-boundary, under cap: buffer into the overlay working set and acknowledge this commit's own
         // outbox items so the committer's post-commit count assertion is satisfied without durably persisting anything.
