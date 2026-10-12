@@ -83,7 +83,7 @@ Studio:
 |---|---|---|
 | `Durable` | After every activity | Resumes at the last completed activity |
 | `Balanced` (default) | On suspend, fault, completion, end of burst, and every N activities | Activities since the last commit run again (at-least-once) |
-| `Ephemeral` | Only on suspend or fault, plus a completion record unless `RecordCompletion` is off | A run that never suspended leaves only its completion record, or no trace with `RecordCompletion` off |
+| `Ephemeral` | On suspend or fault, before an activity that is not ReplaySafe, at the end of a burst that does not complete the run, plus a completion record unless `RecordCompletion` is off | A run of ReplaySafe activities that completes in one burst leaves only its completion record, or no trace with `RecordCompletion` off |
 
 `Immediate`/`Coalesced` and `CommitStrategyType` are removed. Suspend, bookmark and fault checkpoints are flushed
 in every mode (ADR 0032). The completion checkpoint is flushed in every mode, with one opt-in exception: under
@@ -94,6 +94,14 @@ completion flushed, so no stored run is left looking suspended.
 ADR 0073 D7 is amended: **deterministic** budgets on EF command counts per reference workflow are correctness
 gates, not performance measurement, and run in CI. Wall-clock timing stays retired. The Runtime Throughput
 constraint against a default cadence flip is lifted.
+
+**Owner amendment, 12 October 2026:** three decisions taken while delivering D2
+([#2585](https://github.com/elsa-workflows/elsa-foundation/issues/2585)). `Durable` commits once per activity, not
+once per checkpoint: the checkpoints an activity produces are committed together, so the table's "after every
+activity" holds and the per-checkpoint drain is gone. `Ephemeral` keeps the attempt-claim commit before an activity
+that is not ReplaySafe (ADR 0032), so "no trace" applies only to runs whose activities are all ReplaySafe. The target
+of under 40 EF commands for ten WriteLine activities under `Balanced` moved to epic
+[#2564](https://github.com/elsa-workflows/elsa-foundation/issues/2564); the budgets in CI hold the measured counts.
 
 ### D3 — Internal by default
 

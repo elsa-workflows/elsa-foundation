@@ -3,8 +3,8 @@ import type { PersistenceMode } from "./workflowTypes";
 
 const descriptions: Record<PersistenceMode, string> = {
   Durable: "Commits after every activity. After a crash the run resumes at the last completed activity.",
-  Balanced: "Commits on suspend, fault, completion, the end of each burst and every N activities. After a crash, the activities since the last commit run again.",
-  Ephemeral: "Commits only on suspend or fault, plus a completion record unless the host turns it off. A run that never suspended leaves only its completion record, or no trace."
+  Balanced: "Commits on suspend, fault, completion, before an activity that is not safe to repeat, at the end of each pass and every N activities. After a crash, the activities since the last commit run again.",
+  Ephemeral: "Commits on suspend or fault, before an activity that is not safe to repeat, and when a pass ends without completing the run, plus a completion record unless the host turns it off. A run of activities that are all safe to repeat, completed in one pass, leaves only its completion record, or no trace."
 };
 
 const hostDefaultDescription = "Runs use the host's default mode.";
