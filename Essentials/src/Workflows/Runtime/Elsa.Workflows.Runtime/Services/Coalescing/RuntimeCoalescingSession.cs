@@ -73,8 +73,8 @@ public sealed class RuntimeCoalescingSession
             throw new ArgumentOutOfRangeException(nameof(options), "MaxActivitiesPerCommit must be greater than zero.");
 
         mode ??= new ResolvedPersistenceMode(PersistenceMode.Balanced, RunHasRecord: true);
-        if (mode.Mode is not (PersistenceMode.Balanced or PersistenceMode.Ephemeral))
-            throw new ArgumentException($"A folding session runs Balanced or Ephemeral, not '{mode.Mode}'.", nameof(mode));
+        if (!Enum.IsDefined(mode.Mode))
+            throw new ArgumentException($"Persistence mode '{(int)mode.Mode}' is not supported.", nameof(mode));
 
         WorkflowExecutionId = workflowExecutionId;
         _innerQueue = innerQueue;
@@ -82,7 +82,13 @@ public sealed class RuntimeCoalescingSession
         Mode = mode.Mode;
         HasDurableRecord = mode.RunHasRecord;
         RecordCompletion = options.RecordCompletion;
-        MaxActivitiesPerCommit = Mode == PersistenceMode.Ephemeral ? null : options.MaxActivitiesPerCommit;
+        // Durable commits once per activity whatever the host's Balanced cap is; Ephemeral has no intermediate commits.
+        MaxActivitiesPerCommit = Mode switch
+        {
+            PersistenceMode.Durable => 1,
+            PersistenceMode.Ephemeral => null,
+            _ => options.MaxActivitiesPerCommit
+        };
         CoalesceDurableValueReads = options.CoalesceDurableValueReads;
         CoalesceInspectionReads = options.CoalesceInspectionReads;
         _durableValuePageMemo = options.CoalesceDurableValueReads
@@ -92,12 +98,13 @@ public sealed class RuntimeCoalescingSession
 
     public string WorkflowExecutionId { get; }
 
-    /// <summary>The run's mode: Balanced or Ephemeral.</summary>
+    /// <summary>The run's mode.</summary>
     public PersistenceMode Mode { get; }
 
     /// <summary>
-    /// The most activities one segment folds before the next new activity forces an intermediate commit, or
-    /// <see langword="null"/> under Ephemeral, which has no intermediate commits.
+    /// The most activities one segment folds before the next new activity forces an intermediate commit: one under
+    /// Durable, the host's setting under Balanced, and <see langword="null"/> under Ephemeral, which has no
+    /// intermediate commits.
     /// </summary>
     public int? MaxActivitiesPerCommit { get; }
 

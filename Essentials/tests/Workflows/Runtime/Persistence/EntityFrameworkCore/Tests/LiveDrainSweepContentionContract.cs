@@ -264,6 +264,11 @@ internal static class LiveDrainSweepContentionContract
             {
                 services.AddLogging();
                 configureStore(services);
+                // A drain whose session folds delivers this continuation from its overlay, out of any other deliverer's
+                // reach. On a queue that cannot delete by identity the session cannot fold, so the drain commits each
+                // checkpoint and delivers its continuation through the outbox, as every drain does once a boundary has
+                // ended its session.
+                NonDeletingSchedulerWorkQueue.Decorate(services);
                 services.TryAddScoped<IRuntimeResumptionService, RuntimeResumptionService>();
                 if (waitLimit is { } limit)
                     services.Replace(ServiceDescriptor.Singleton(new WorkflowDrainOrchestratorOptions(continuationClaimWaitLimit: limit)));

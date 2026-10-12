@@ -5,20 +5,21 @@ using Elsa.Workflows.Runtime.Services.Coalescing;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 
-namespace Elsa.Workflows.Runtime.Api.Coalescing;
+namespace Elsa.Workflows.Runtime.Extensions;
 
 /// <summary>
-/// Registers the services that let a run use every persistence mode. Call this after the workflows runtime services
-/// and their persistence provider are registered, because it wraps the stores that are registered at that point. A run
-/// that resolves to Durable still takes the per-checkpoint path: without an active folding session every wrapped store
-/// passes through unchanged. Every shell that composes the runtime API gets these services, so only a host that composes
-/// the runtime directly can lack them, and such a host refuses to drain a run that needs them.
+/// Registers what runs the persistence modes: the folding policy, the drain session, and wrappers around the runtime
+/// stores so a run's checkpoints are held in memory between commits. Every run drains through them: Durable commits
+/// once per activity, Balanced after up to the host's cap of activities, Ephemeral only at boundaries, so a host without
+/// them refuses to drain. Call this after the workflows runtime services and their persistence provider are registered,
+/// because it wraps the stores registered at that point; a store registered after it is not wrapped. Every shell that
+/// composes the runtime API gets these services once all of its features are registered.
 /// </summary>
 public static class PersistenceModeServiceCollectionExtensions
 {
     /// <summary>
     /// Replaces the per-checkpoint persistence policy with the folding policy and wraps the runtime
-    /// checkpoint/queue/outbox/state stores so a Balanced run's checkpoints fold into one atomic commit at quiescence.
+    /// checkpoint/queue/outbox/state stores so a run's checkpoints fold into atomic commits on its mode's schedule.
     /// Safe to call more than once: the stores are wrapped on the first call only.
     /// </summary>
     /// <param name="services">The service collection.</param>
@@ -71,8 +72,8 @@ public static class PersistenceModeServiceCollectionExtensions
         decorations.Add(services.DecorateWithCoalescing<ISchedulerStateStore, CoalescingSchedulerStateStore>());
         decorations.Add(services.DecorateWithCoalescing<IActivityExecutionInspectionStore, CoalescingActivityExecutionInspectionStore>());
 
-        // The drain scope factory is what lets the drain orchestrator fold: its DI factory resolves this with GetService,
-        // and a run that resolves to Balanced on a host without it is refused rather than run Durable.
+        // Every drain runs in a scope from this factory: the drain orchestrator's DI factory resolves it with GetService,
+        // and a host without it refuses to drain.
         services.TryAddScoped<IRuntimeCoalescingDrainScopeFactory, RuntimeCoalescingDrainScopeFactory>();
         var markerDescriptor = new ServiceDescriptor(
             typeof(CoalescingRegistrationMarker),
@@ -122,7 +123,9 @@ public static class PersistenceModeServiceCollectionExtensions
 
         var innerDescriptor = new ServiceDescriptor(
             typeof(CoalescingInner<TService>),
-            serviceProvider => new CoalescingInner<TService>((TService)InstantiateFromDescriptor(descriptor, serviceProvider)),
+            serviceProvider => new CoalescingInner<TService>(
+                (TService)InstantiateFromDescriptor(descriptor, serviceProvider),
+                ownsValue: descriptor.ImplementationInstance is null),
             descriptor.Lifetime);
         services.Add(innerDescriptor);
 

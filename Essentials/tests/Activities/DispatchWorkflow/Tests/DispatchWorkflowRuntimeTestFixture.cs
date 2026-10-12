@@ -18,6 +18,7 @@ using Elsa.Workflows.Runtime.Api.Coalescing;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Workflows.Runtime.Extensions;
 using Elsa.Workflows.Runtime.Resumption;
 using Elsa.Workflows.Runtime.Services.Checkpoints;
 using Elsa.Workflows.Runtime.Services.Executions;
@@ -93,8 +94,7 @@ internal sealed class DispatchWorkflowRuntimeTestFixture : IAsyncDisposable
                 serviceProvider.GetRequiredService<InMemoryRuntimeCheckpointCommitStore>(),
                 serviceProvider.GetRequiredService<CheckpointRecorder>(),
                 failDispatchCommit)));
-        if (persistenceModes is not null)
-            services.AddPersistenceModes(persistenceModes);
+        services.AddPersistenceModes(persistenceModes ?? (options => options.Mode = PersistenceMode.Durable));
 
         RegisterActivityTypes(typeRegistry);
         var provider = services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
@@ -769,8 +769,15 @@ internal sealed class CheckpointRecorder
     internal RuntimeCheckpointCommit SingleIntentCommit(string intentKind)
     {
         lock (_gate)
-            return _commits.Single(commit => commit.PostCommitIntents.Any(intent => intent.Kind == intentKind));
+            return _commits.Single(commit => IntentsOf(commit).Any(intent => intent.Kind == intentKind));
     }
+
+    // A commit carries an intent its own checkpoint decided, or, when a persistence mode folded earlier checkpoints
+    // into it, as an outbox item among its state changes; a commit can carry the same intent both ways.
+    internal static IEnumerable<RuntimePostCommitIntent> IntentsOf(RuntimeCheckpointCommit commit) =>
+        commit.PostCommitIntents
+            .Concat(commit.StateChanges.PostCommitOutbox.Select(change => change.State.Intent))
+            .DistinctBy(intent => intent.IntentId);
 }
 
 internal sealed class RecordingRuntimeCheckpointCommitStore(

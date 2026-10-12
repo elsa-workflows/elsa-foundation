@@ -150,7 +150,7 @@ public sealed class DispatchWorkflowEndToEndTests
         }
 
         var resumeIntent = Assert.Single(
-            fixture.Checkpoints.SingleIntentCommit(DispatchWorkflowConstants.ResumeParentIntentKind).PostCommitIntents,
+            CheckpointRecorder.IntentsOf(fixture.Checkpoints.SingleIntentCommit(DispatchWorkflowConstants.ResumeParentIntentKind)),
             intent => intent.Kind == DispatchWorkflowConstants.ResumeParentIntentKind);
         await using (var scope = fixture.Services.CreateAsyncScope())
             await scope.ServiceProvider.GetRequiredService<ParentResumeExecutor>().HandleAsync(resumeIntent);
@@ -337,7 +337,7 @@ public sealed class DispatchWorkflowEndToEndTests
             await fixture.ReplayAsync(terminalCommit);
 
         var resumeIntent = Assert.Single(
-            terminalCommit.PostCommitIntents,
+            CheckpointRecorder.IntentsOf(terminalCommit),
             intent => intent.Kind == DispatchWorkflowConstants.ResumeParentIntentKind);
         await using (var scope = fixture.Services.CreateAsyncScope())
         {

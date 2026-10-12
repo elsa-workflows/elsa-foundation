@@ -192,8 +192,8 @@ public sealed class WorkflowDrainHeartbeatContextIsolationTests
                 ExpectedFence = lease.ToFence()
             };
             commandGate.ArmCheckpointCommitCapture(outerContext);
-            var checkpointStore = operation.ServiceProvider.GetRequiredService<IRuntimeCheckpointCommitStore>();
-            Assert.IsType<EfRuntimeCheckpointCommitStore>(checkpointStore);
+            // The EF store itself, under the persistence-mode wrapper every drain runs through.
+            var checkpointStore = operation.ServiceProvider.GetRequiredService<EfRuntimeCheckpointCommitStore>();
             await checkpointStore
                 .CommitAsync(checkpoint, new RuntimeCheckpointPersistenceDecision(RuntimeCheckpointPersistenceMode.Immediate));
             Assert.Equal(outerContext.ContextId.InstanceId, commandGate.FenceReadContextId);
@@ -461,6 +461,7 @@ public sealed class WorkflowDrainHeartbeatContextIsolationTests
                     serviceProvider.GetRequiredService<RuntimeDbContext>(),
                     serviceProvider.GetRequiredService<IPersistenceAccessContextAccessor>(),
                     heartbeatProbe));
+            services.AddPersistenceModes(options => options.Mode = PersistenceMode.Durable);
             return services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
         }
 

@@ -10,8 +10,9 @@ public sealed class PersistenceModeOptions
     public PersistenceMode Mode { get; set; } = PersistenceMode.Balanced;
 
     /// <summary>
-    /// Maximum number of activities whose work Balanced folds into one commit. Ephemeral has no such limit: it commits
-    /// only at suspension, fault and completion, so a long run that does none of these holds its work in memory. The checkpoint that would bring another
+    /// Maximum number of activities whose work Balanced folds into one commit. Durable commits once per activity
+    /// whatever this is. Ephemeral has no such limit: it commits only at suspension, fault and completion, so a long run
+    /// that does none of these holds its work in memory. The checkpoint that would bring another
     /// activity into a segment that already holds this many forces an intermediate commit, and the next segment starts
     /// empty, so a long loop keeps folding at one commit per window instead of degrading to per-checkpoint persistence.
     /// Bounds both the work a crash repeats and the memory a segment holds. Must be greater than zero. Default is 50.

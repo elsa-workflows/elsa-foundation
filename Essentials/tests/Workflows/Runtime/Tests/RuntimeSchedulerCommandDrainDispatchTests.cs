@@ -6,6 +6,7 @@ using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Workflows.Runtime.Extensions;
 using Elsa.Workflows.Runtime.Services.Checkpoints;
 using Elsa.Workflows.Runtime.Services.Executions;
 using Elsa.Workflows.Runtime.Services.Scheduler;
@@ -358,6 +359,7 @@ public sealed class RuntimeSchedulerCommandDrainDispatchTests
     {
         var services = new ServiceCollection();
         new WorkflowsRuntimeApiFeature().ConfigureServices(services);
+        services.AddPersistenceModes();
         await using var provider = services.BuildServiceProvider();
         var agentProvider = provider.GetRequiredService<IWorkflowExecutionActorProvider>();
         var queue = provider.GetRequiredService<IWorkflowSchedulerWorkQueue>();
@@ -378,6 +380,7 @@ public sealed class RuntimeSchedulerCommandDrainDispatchTests
         var services = new ServiceCollection();
         services.AddSingleton<IWorkflowSchedulerWorkHandler>(new AlwaysFaultingSchedulerWorkHandler(refusedByCheckpointRule));
         new WorkflowsRuntimeApiFeature().ConfigureServices(services);
+        services.AddPersistenceModes();
         await using var provider = services.BuildServiceProvider();
         var agentProvider = provider.GetRequiredService<IWorkflowExecutionActorProvider>();
         var poisonStore = provider.GetRequiredService<IWorkflowSchedulerPoisonStore>();
@@ -402,6 +405,7 @@ public sealed class RuntimeSchedulerCommandDrainDispatchTests
         var services = new ServiceCollection();
         services.AddSingleton<IWorkflowSchedulerDrainObserver>(observer);
         new WorkflowsRuntimeApiFeature().ConfigureServices(services);
+        services.AddPersistenceModes();
         await using var provider = services.BuildServiceProvider();
         var store = provider.GetRequiredService<IWorkflowExecutableStore>();
         var activityStateStore = provider.GetRequiredService<IActivityExecutionStateStore>();
@@ -555,7 +559,8 @@ public sealed class RuntimeSchedulerCommandDrainDispatchTests
                 outbox,
                 outbox,
                 new InMemoryWorkflowSchedulerWorkQueue(),
-                options),
+                options,
+                NonFoldingDrainScopeFactory.Instance),
             timeProvider);
     }
 

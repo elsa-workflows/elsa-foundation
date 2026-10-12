@@ -53,7 +53,9 @@ public static class RuntimeCoreServiceCollectionExtensions
 {
     /// <summary>
     /// Registers the host-agnostic workflow runtime composition root. Idempotent (all registrations use <c>TryAdd</c>),
-    /// so a host may register durable-provider overrides before or after calling this.
+    /// so a host may register durable-provider overrides before or after calling this. Runs drain only once
+    /// <see cref="PersistenceModeServiceCollectionExtensions.AddPersistenceModes"/> has been called after those overrides;
+    /// a shell that composes the runtime API calls it once all of its features are registered.
     /// </summary>
     public static IServiceCollection AddWorkflowRuntime(this IServiceCollection services)
     {
@@ -220,9 +222,9 @@ public static class RuntimeCoreServiceCollectionExtensions
         // Scoped transport shared by the same-scope drainer and checkpoint committer so a checkpoint
         // commit can fold the claimed work item's acknowledgement into its unit-of-work.
         services.TryAddScoped<IRuntimeConsumedSchedulerWorkClaimAccessor, RuntimeConsumedSchedulerWorkClaimAccessor>();
-        // Live-drain delivery marker. Always registered because Durable runs need it on any host: the drain
-        // orchestrator pushes a scope while it owns a Durable execution so the post-commit outbox processor delivers
-        // EnqueueSchedulerWork intents in-memory. The folding path never pushes a scope.
+        // Live-drain delivery marker. The drain orchestrator pushes a scope while it owns an execution, so once the drain's
+        // session stops folding the post-commit outbox processor delivers EnqueueSchedulerWork intents in-memory. While
+        // the session folds, its overlay delivers them and the scope does not engage.
         services.TryAddSingleton<IRuntimeLiveDrainDeliveryAccessor, AsyncLocalRuntimeLiveDrainDeliveryAccessor>();
         services.TryAddScoped<IRuntimeExecutionOwnershipService>(serviceProvider =>
             new RuntimeExecutionOwnershipService(

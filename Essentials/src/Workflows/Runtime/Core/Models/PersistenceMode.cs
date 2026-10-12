@@ -11,8 +11,8 @@ namespace Elsa.Workflows.Runtime.Core.Models;
 public enum PersistenceMode
 {
     /// <summary>
-    /// Commits every runtime checkpoint as soon as it is decided. After a crash the run resumes at the last completed
-    /// activity.
+    /// Holds an activity's checkpoints in memory and commits them together, once per activity. After a crash the run
+    /// resumes at the last completed activity.
     /// </summary>
     Durable,
 

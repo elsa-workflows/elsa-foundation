@@ -10,6 +10,7 @@ using Elsa.Workflows.Runtime.Api.Requests;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Workflows.Runtime.Extensions;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
@@ -158,6 +159,7 @@ public sealed class WorkflowOutputReadBackEndToEndExecutionTests
         new ExpressionsFeature().ConfigureServices(services);
         new WorkflowsRuntimeApiFeature().ConfigureServices(services);
         new ActivitiesRuntimeFeature().ConfigureServices(services);
+        services.AddPersistenceModes(options => options.Mode = PersistenceMode.Durable);
 
         var provider = services.BuildServiceProvider();
         RunStartupTasks(provider);

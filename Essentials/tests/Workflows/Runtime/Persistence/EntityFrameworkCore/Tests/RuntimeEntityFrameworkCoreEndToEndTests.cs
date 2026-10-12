@@ -116,8 +116,8 @@ public sealed class RuntimeEntityFrameworkCoreEndToEndTests : IDisposable
     private static async Task<WorkflowExecutionStatus?> WorkflowStatusAsync(WorkflowExecutionHarness harness)
     {
         await using var scope = harness.Services.CreateAsyncScope();
-        var store = scope.ServiceProvider.GetRequiredService<IWorkflowExecutionStateStore>();
-        Assert.IsType<EfWorkflowExecutionStateStore>(store);
+        // Read the EF store itself, under the persistence-mode wrapper every run drains through.
+        var store = scope.ServiceProvider.GetRequiredService<EfWorkflowExecutionStateStore>();
         return (await store.FindAsync(harness.ExecutionId))?.Status;
     }
 

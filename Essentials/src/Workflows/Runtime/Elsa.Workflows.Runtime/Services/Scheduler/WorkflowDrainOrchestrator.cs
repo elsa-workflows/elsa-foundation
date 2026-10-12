@@ -329,35 +329,34 @@ public sealed class WorkflowDrainOrchestrator : IWorkflowDrainOrchestrator
         RuntimeSchedulerDrainRequest request,
         CancellationToken cancellationToken)
     {
-        // The mode is resolved per execution: the mode the run recorded at start on later drains, otherwise the pinned
-        // workflow's choice, otherwise the host default. A Durable run skips the session entirely so no checkpoint is
-        // deferred for it, even on a host whose default is Balanced. Without a resolver the composition decides: with the
-        // folding services the host default is Balanced, without them Durable; whether the run has a record is then
-        // unknown, and assuming it has one keeps its completion committed.
-        var resolved = _persistenceModeResolver is not null
-            ? await _persistenceModeResolver.ResolveAsync(envelope, cancellationToken)
-            : new ResolvedPersistenceMode(
-                _coalescingScopeFactory is null ? PersistenceMode.Durable : PersistenceMode.Balanced,
-                RunHasRecord: true);
-        var mode = resolved.Mode;
-
-        if (mode == PersistenceMode.Durable)
-            return await DrainImmediateAsync(envelope, request, cancellationToken);
-
-        // Running a Balanced run Durable instead would look like success while committing on a different schedule than
-        // the workflow chose, so a host that cannot fold refuses the run before it executes anything.
+        // Every run drains in a session, whatever its mode, so a host composed without the persistence-mode services
+        // cannot run any of them. It refuses before anything runs.
         if (_coalescingScopeFactory is null)
         {
             throw new InvalidOperationException(
-                $"Workflow execution '{request.WorkflowExecutionId}' runs in persistence mode '{mode}', but this host has no persistence-mode services. " +
-                "Call AddPersistenceModes() after the workflows runtime and its persistence provider are registered, or compose the WorkflowsRuntimeApi feature, which adds them.");
+                $"Workflow execution '{request.WorkflowExecutionId}' cannot drain because this host has no persistence-mode services. " +
+                "Call AddPersistenceModes() after the workflows runtime and its persistence provider are registered.");
         }
 
-        // Folding path: establish the ambient session for the drain, then fold-and-flush the buffered segment at
-        // quiescence. The flush runs inside the active ownership scope so single-writer fencing gates the single durable
-        // write. If the drain throws, the flush is skipped and the scope is disposed with its buffer discarded, so a crash
-        // mid-segment replays from the last flushed state plus durable scheduler-queue redelivery.
+        // The mode is resolved per execution: the mode the run recorded at start on later drains, otherwise the pinned
+        // workflow's choice, otherwise the host default. Without a resolver the host default is Durable, and whether the
+        // run has a record is unknown, so assuming it has one keeps its completion committed.
+        var resolved = _persistenceModeResolver is not null
+            ? await _persistenceModeResolver.ResolveAsync(envelope, cancellationToken)
+            : new ResolvedPersistenceMode(PersistenceMode.Durable, RunHasRecord: true);
+
+        // The session folds the run's checkpoints between commits: one activity's into each commit under Durable, up to
+        // the host's cap under Balanced, and until a boundary under Ephemeral. Establish it for the drain, then
+        // fold-and-flush the buffered segment at quiescence. The flush runs inside the active ownership scope so
+        // single-writer fencing gates the single durable write. If the drain throws, the flush is skipped and the scope
+        // is disposed with its buffer discarded, so a crash mid-segment replays from the last flushed state plus durable
+        // scheduler-queue redelivery.
         await using var scope = _coalescingScopeFactory.Begin(request.WorkflowExecutionId, resolved);
+        // A session that stops folding part-way through the drain (at a boundary that ends it, or on a queue that cannot
+        // delete by identity) commits the rest of the drain checkpoint by checkpoint. This drain owns the execution, so
+        // those continuations are delivered in memory rather than through a durable claim; while the session folds, its
+        // overlay delivers them and the live-drain scope does not engage.
+        using var liveDrainScope = _liveDrainDeliveryAccessor?.Push(new RuntimeLiveDrainDeliveryScope(request.WorkflowExecutionId));
         scope.Session.BindDurableValuePageReuseCancellationToken(cancellationToken);
         // Drain cancellation also covers ownership-lease loss. This callback fences only the memo's synchronized state;
         // the existing overlay and session cancellation behavior remain on the normal drain path.
@@ -368,25 +367,6 @@ public sealed class WorkflowDrainOrchestrator : IWorkflowDrainOrchestrator
         await scope.FlushAtQuiescenceAsync(cancellationToken);
         await NotifyObserversAsync(envelope, drainResult, cancellationToken);
         return drainResult;
-    }
-
-    // Durable persistence for a single drain. While this live drain owns the execution (bounded by the
-    // single-writer lease), push a delivery scope so the post-commit outbox processor delivers EnqueueSchedulerWork
-    // intents in-memory (idempotent enqueue + direct Delivered mark) instead of taking the durable claim round-trip.
-    // Deliberately NOT used on the folding path: there the overlay session is authoritative and folds continuations
-    // itself. Reused both when no folding machinery is registered and when a run resolves to Durable on a host that
-    // has it.
-    private async ValueTask<RuntimeSchedulerDrainResult> DrainImmediateAsync(
-        WorkflowExecutionCommandEnvelope envelope,
-        RuntimeSchedulerDrainRequest request,
-        CancellationToken cancellationToken)
-    {
-        using var liveDrainScope = _liveDrainDeliveryAccessor is { } accessor
-            ? accessor.Push(new RuntimeLiveDrainDeliveryScope(request.WorkflowExecutionId))
-            : null;
-        var plainResult = await DrainSchedulerAndPostCommitWorkAsync(request, cancellationToken);
-        await NotifyObserversAsync(envelope, plainResult, cancellationToken);
-        return plainResult;
     }
 
     private async ValueTask<RuntimeSchedulerDrainResult> DrainSchedulerAndPostCommitWorkAsync(

@@ -9,6 +9,7 @@ using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Workflows.Runtime.Extensions;
 using Elsa.Workflows.Runtime.Services.ActivityExecutions;
 using Elsa.Workflows.Runtime.Services.Bookmarks;
 using Elsa.Workflows.Runtime.Services.Checkpoints;
@@ -23,10 +24,9 @@ using Xunit.Abstractions;
 
 namespace Elsa.Workflows.Runtime.Tests;
 
-// End-to-end coverage for the checkpoint-folding machinery behind the Balanced persistence mode.
-// A straight-line workflow is driven to completion through the in-process agent under the per-checkpoint (Durable)
-// policy and again with folding over the same in-memory durable substrate; the two runs must reach identical terminal
-// state while folding performs strictly fewer durable checkpoint commits (Elsa-3-style burst folding).
+// End-to-end coverage for the checkpoint-folding machinery every persistence mode drains through. A workflow is driven
+// to completion through the in-process agent over an in-memory durable substrate, and the drain's session is observed to
+// run in the mode the run resolved to.
 public sealed class RuntimeCheckpointCoalescingTests(ITestOutputHelper output)
 {
     private static readonly DateTimeOffset Now = new(2026, 7, 3, 12, 0, 0, TimeSpan.Zero);
@@ -835,7 +835,7 @@ public sealed class RuntimeCheckpointCoalescingTests(ITestOutputHelper output)
     }
 
     [Fact]
-    public void WithoutPersistenceModes_KeepsTheDurablePolicyAndUndecoratedStores()
+    public void WithoutPersistenceModes_TheStoresAreUndecoratedAndThereIsNoDrainScope()
     {
         var services = new ServiceCollection();
         new WorkflowsRuntimeApiFeature().ConfigureServices(services);
@@ -849,42 +849,33 @@ public sealed class RuntimeCheckpointCoalescingTests(ITestOutputHelper output)
     }
 
     [Fact]
-    public async Task Coalescing_ReachesSameTerminalStateWithFewerCommitsThanDurable()
+    public async Task Durable_and_Balanced_reach_the_same_terminal_state()
     {
-        var immediate = await DriveAsync(coalescing: false);
-        var coalescing = await DriveAsync(coalescing: true);
-
-        output.WriteLine($"Durable checkpoint commits: {immediate.CommitCount}");
-        output.WriteLine($"Coalescing durable checkpoint commits: {coalescing.CommitCount}");
+        var durable = await DriveAsync(hostMode: PersistenceMode.Durable);
+        var balanced = await DriveAsync(hostMode: PersistenceMode.Balanced);
 
         // Behavior parity: identical terminal activity-execution snapshot, and the run genuinely completed — a
         // dispatch fault would previously park silently in the poison store and leave both runs equally "identical"
         // while stuck in Running.
-        Assert.Equal(immediate.Snapshot, coalescing.Snapshot);
-        Assert.NotEmpty(coalescing.Snapshot);
-        Assert.Equal(WorkflowExecutionStatus.Completed, immediate.State?.Status);
-        Assert.Equal(WorkflowExecutionStatus.Completed, coalescing.State?.Status);
-
-        // Burst folding: coalescing performs strictly fewer durable commits, converging toward Elsa 3's one-per-burst.
-        Assert.True(coalescing.CommitCount < immediate.CommitCount,
-            $"Expected coalescing ({coalescing.CommitCount}) < immediate ({immediate.CommitCount}).");
-        Assert.Equal(1, coalescing.CommitCount);
+        Assert.Equal(durable.Snapshot, balanced.Snapshot);
+        Assert.NotEmpty(balanced.Snapshot);
+        Assert.Equal(WorkflowExecutionStatus.Completed, durable.State?.Status);
+        Assert.Equal(WorkflowExecutionStatus.Completed, balanced.State?.Status);
     }
 
     [Fact]
     public async Task ChosenDurable_UnderBalancedHost_RunsDurable_AndRecordsTheMode()
     {
-        // Precedence: a workflow that chose Durable runs Durable even though the host default is Balanced. The drain
-        // skips the folding session for this execution, so its durable commit count matches a Durable host, not the
-        // folded single-commit burst.
-        var durableHost = await DriveAsync(coalescing: false);
-        var chosenDurable = await DriveAsync(coalescing: true, chosenMode: PersistenceMode.Durable);
+        // Precedence: a workflow that chose Durable runs Durable even though the host default is Balanced. Its drain
+        // runs a Durable session, which commits once per activity whatever the host's cap is.
+        var durableHost = await DriveAsync(hostMode: PersistenceMode.Durable);
+        var chosenDurable = await DriveAsync(chosenMode: PersistenceMode.Durable);
 
         Assert.Equal(durableHost.Snapshot, chosenDurable.Snapshot);
         Assert.Equal(WorkflowExecutionStatus.Completed, chosenDurable.State?.Status);
         Assert.Equal(durableHost.CommitCount, chosenDurable.CommitCount);
-        Assert.True(chosenDurable.CommitCount > 1,
-            $"Expected the Durable run to perform per-checkpoint commits, but saw {chosenDurable.CommitCount}.");
+        Assert.All(chosenDurable.Sessions, session => Assert.Equal((PersistenceMode.Durable, (int?)1), session));
+        Assert.NotEmpty(chosenDurable.Sessions);
 
         // The run records the mode it executed under.
         Assert.Equal(nameof(PersistenceMode.Durable), chosenDurable.State!.SystemMetadata[RuntimeMetadataKeys.PersistenceMode]);
@@ -893,42 +884,50 @@ public sealed class RuntimeCheckpointCoalescingTests(ITestOutputHelper output)
     [Fact]
     public async Task NoChoice_UnderBalancedHost_UsesHostDefault_AndRecordsBalanced()
     {
-        var run = await DriveAsync(coalescing: true);
+        var run = await DriveAsync();
 
         Assert.Equal(WorkflowExecutionStatus.Completed, run.State?.Status);
         Assert.Equal(1, run.CommitCount);
+        Assert.All(run.Sessions, session => Assert.Equal(PersistenceMode.Balanced, session.Mode));
         Assert.Equal(nameof(PersistenceMode.Balanced), run.State!.SystemMetadata[RuntimeMetadataKeys.PersistenceMode]);
     }
 
     [Fact]
-    public async Task ChosenBalanced_UnderDurableHost_FoldsIntoOneCommit_AndRecordsBalanced()
+    public async Task ChosenBalanced_UnderDurableHost_FoldsAtTheHostCap_AndRecordsBalanced()
     {
         // The workflow's choice wins in both directions. A Durable host default must not turn a workflow that chose
-        // Balanced into per-checkpoint commits: that would look like a working run while ignoring the choice.
-        var durableHost = await DriveAsync(coalescing: true, hostMode: PersistenceMode.Durable);
-        var chosenBalanced = await DriveAsync(coalescing: true, chosenMode: PersistenceMode.Balanced, hostMode: PersistenceMode.Durable);
+        // Balanced into one commit per activity: that would look like a working run while ignoring the choice.
+        var durableHost = await DriveAsync(hostMode: PersistenceMode.Durable);
+        var chosenBalanced = await DriveAsync(chosenMode: PersistenceMode.Balanced, hostMode: PersistenceMode.Durable);
 
         Assert.Equal(nameof(PersistenceMode.Durable), durableHost.State!.SystemMetadata[RuntimeMetadataKeys.PersistenceMode]);
-        Assert.True(durableHost.CommitCount > 1, $"Expected the Durable host default to commit per checkpoint, but saw {durableHost.CommitCount}.");
+        Assert.All(durableHost.Sessions, session => Assert.Equal((PersistenceMode.Durable, (int?)1), session));
         Assert.Equal(durableHost.Snapshot, chosenBalanced.Snapshot);
         Assert.Equal(WorkflowExecutionStatus.Completed, chosenBalanced.State?.Status);
         Assert.Equal(1, chosenBalanced.CommitCount);
+        Assert.NotEmpty(chosenBalanced.Sessions);
+        Assert.All(chosenBalanced.Sessions, session => Assert.Equal(
+            (PersistenceMode.Balanced, (int?)new PersistenceModeOptions().MaxActivitiesPerCommit),
+            session));
         Assert.Equal(nameof(PersistenceMode.Balanced), chosenBalanced.State!.SystemMetadata[RuntimeMetadataKeys.PersistenceMode]);
     }
 
-    [Fact]
-    public async Task ChosenBalanced_OnAHostWithoutPersistenceModes_IsRefusedBeforeAnythingRuns()
+    [Theory]
+    [InlineData(null)]
+    [InlineData(PersistenceMode.Durable)]
+    [InlineData(PersistenceMode.Balanced)]
+    [InlineData(PersistenceMode.Ephemeral)]
+    public async Task A_host_without_persistence_modes_refuses_every_run_before_anything_runs(PersistenceMode? chosenMode)
     {
-        // A direct composition that never added the persistence-mode services cannot fold. Running the workflow Durable
-        // instead would hide that its choice was ignored, so the drain refuses it, naming the mode and the fix.
+        // Every run drains in a persistence-mode session, Durable included, so a direct composition that never added
+        // the persistence-mode services cannot run any of them. It refuses before anything runs, naming the fix.
         var services = new ServiceCollection();
         new WorkflowsRuntimeApiFeature().ConfigureServices(services);
         using var provider = services.BuildServiceProvider();
-        await SeedAsync(provider, PersistenceMode.Balanced);
+        await SeedAsync(provider, chosenMode);
 
         var refusal = await Assert.ThrowsAsync<InvalidOperationException>(async () => await EnqueueStartAsync(provider));
 
-        Assert.Contains("'Balanced'", refusal.Message, StringComparison.Ordinal);
         Assert.Contains("AddPersistenceModes()", refusal.Message, StringComparison.Ordinal);
         Assert.Empty(provider.GetRequiredService<InMemoryRuntimeCheckpointCommitStore>().ListCommits());
         Assert.Null(await provider.GetRequiredService<IWorkflowExecutionStateStore>().FindAsync("wfexec-1"));
@@ -1579,17 +1578,17 @@ public sealed class RuntimeCheckpointCoalescingTests(ITestOutputHelper output)
         Assert.False(session.IsActive);
     }
 
-    private static async Task<(IReadOnlyList<(string NodeId, ActivityExecutionStatus Status)> Snapshot, int CommitCount, WorkflowExecutionState? State)> DriveAsync(
-        bool coalescing,
+    private static async Task<(IReadOnlyList<(string NodeId, ActivityExecutionStatus Status)> Snapshot, int CommitCount, WorkflowExecutionState? State, IReadOnlyList<(PersistenceMode Mode, int? MaxActivitiesPerCommit)> Sessions)> DriveAsync(
         PersistenceMode? chosenMode = null,
         PersistenceMode hostMode = PersistenceMode.Balanced)
     {
         var services = new ServiceCollection();
         new WorkflowsRuntimeApiFeature().ConfigureServices(services);
-        if (coalescing)
-        {
-            services.AddPersistenceModes(options => options.Mode = hostMode);
-        }
+        services.AddPersistenceModes(options => options.Mode = hostMode);
+        var sessions = new List<(PersistenceMode Mode, int? MaxActivitiesPerCommit)>();
+        services.AddScoped<RuntimeCoalescingDrainScopeFactory>();
+        services.Replace(ServiceDescriptor.Scoped<IRuntimeCoalescingDrainScopeFactory>(serviceProvider =>
+            new SessionRecordingDrainScopeFactory(serviceProvider.GetRequiredService<RuntimeCoalescingDrainScopeFactory>(), sessions)));
 
         using var provider = services.BuildServiceProvider();
         await SeedAsync(provider, chosenMode);
@@ -1598,7 +1597,20 @@ public sealed class RuntimeCheckpointCoalescingTests(ITestOutputHelper output)
         var snapshot = await SnapshotAsync(provider);
         var commitCount = provider.GetRequiredService<InMemoryRuntimeCheckpointCommitStore>().ListCommits().Count;
         var state = await provider.GetRequiredService<IWorkflowExecutionStateStore>().FindAsync("wfexec-1");
-        return (snapshot, commitCount, state);
+        return (snapshot, commitCount, state, sessions);
+    }
+
+    // Records the mode and activity cap of every session a drain runs in.
+    private sealed class SessionRecordingDrainScopeFactory(
+        IRuntimeCoalescingDrainScopeFactory inner,
+        List<(PersistenceMode Mode, int? MaxActivitiesPerCommit)> sessions) : IRuntimeCoalescingDrainScopeFactory
+    {
+        public IRuntimeCoalescingDrainScope Begin(string workflowExecutionId, ResolvedPersistenceMode mode)
+        {
+            var scope = inner.Begin(workflowExecutionId, mode);
+            sessions.Add((scope.Session.Mode, scope.Session.MaxActivitiesPerCommit));
+            return scope;
+        }
     }
 
     private static async Task SeedAsync(ServiceProvider provider, PersistenceMode? chosenMode = null)

@@ -17,6 +17,7 @@ using Elsa.Workflows.Runtime.Api.Coalescing;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Workflows.Runtime.Extensions;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 
@@ -955,6 +956,12 @@ public sealed class WorkflowExecutionHarness : IAsyncDisposable
 
             foreach (var configurator in _featureConfigurators)
                 configurator(services);
+
+            // Every drain runs in a persistence-mode session, so the stores are wrapped last, after anything a test
+            // registered. A harness that chose no mode runs every workflow Durable.
+            if (!services.Any(descriptor => descriptor.ServiceType == typeof(PersistenceModeOptions)))
+                services.AddPersistenceModeOptions(new PersistenceModeOptions { Mode = PersistenceMode.Durable });
+            services.AddPersistenceModes();
 
             var provider = services.BuildServiceProvider();
 

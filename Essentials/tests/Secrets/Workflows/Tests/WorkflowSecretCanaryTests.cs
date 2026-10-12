@@ -554,7 +554,7 @@ public sealed class FusedCanaryHostFixture() : CanaryHostFixture(CanaryStartMode
 /// <summary>A discrete canary host that also composes the HTTP activities, behind the canary's local endpoint.</summary>
 public sealed class DiscreteHttpCanaryHostFixture() : CanaryHostFixture(CanaryStartMode.Discrete, withHttpActivities: true);
 
-/// <summary>The canary with each stage of a run its own dispatch and commit.</summary>
+/// <summary>The canary with each stage of a run its own dispatch.</summary>
 [Collection(CanaryHostCollection.Name)]
 public sealed class WorkflowSecretCanaryDiscreteTests(DiscreteCanaryHostFixture fixture, ITestOutputHelper output)
     : WorkflowSecretCanaryTests(fixture, output), IClassFixture<DiscreteCanaryHostFixture>

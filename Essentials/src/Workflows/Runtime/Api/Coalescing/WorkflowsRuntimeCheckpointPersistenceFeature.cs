@@ -1,12 +1,13 @@
 using CShells.Features;
 using Elsa.Specifications.PackageManifest.Generator.Hints;
 using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Workflows.Runtime.Extensions;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Elsa.Workflows.Runtime.Api.Coalescing;
 
 /// <summary>
-/// The shell's persistence-mode settings. Durable commits every checkpoint; Balanced folds checkpoints between commits
+/// The shell's persistence-mode settings. Durable commits once per activity; Balanced folds checkpoints between commits
 /// and accepts that the activities since the last commit run again after a crash; Ephemeral commits only when a run
 /// suspends, faults or completes, and can skip the completion record of a run that never needed one. The services that
 /// run each mode come
@@ -26,7 +27,7 @@ public sealed class WorkflowsRuntimeCheckpointPersistenceFeature : IShellFeature
 {
     [ManifestSetting(
         DisplayName = "Persistence mode",
-        Description = "The mode a run uses when its workflow does not choose one. Durable commits every checkpoint; Balanced folds checkpoints and commits at suspension, fault, completion, the end of each execution pass and after a bounded amount of work; Ephemeral commits only at suspension, fault and completion.",
+        Description = "The mode a run uses when its workflow does not choose one. Durable commits once per activity; Balanced folds checkpoints and commits at suspension, fault, completion, the end of each execution pass and after a bounded amount of work; Ephemeral commits only at suspension, fault and completion.",
         Category = "Runtime",
         DefaultValue = "Balanced")]
     public PersistenceMode Mode { get; set; } = PersistenceMode.Balanced;

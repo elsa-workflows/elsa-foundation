@@ -160,15 +160,14 @@ public sealed class HttpEndpointHostFixture : IAsyncDisposable
         });
         services.AddEfModuleMigrations<RuntimeDbContext>("Sqlite");
 
-        // The two steps a composed shell takes: the settings feature registers the host's mode, then the runtime API
-        // feature adds the persistence-mode services after every store is registered.
+        // The settings feature registers the host's mode; the persistence-mode services are added once every store is
+        // registered, as a composed shell adds them.
         new WorkflowsRuntimeCheckpointPersistenceFeature
         {
             Mode = persistenceMode,
             MaxActivitiesPerCommit = maxActivitiesPerCommit,
             RecordCompletion = recordCompletion
         }.ConfigureServices(services);
-        new WorkflowsRuntimeApiFeature().PostConfigureServices(services);
     }
 
     private static async Task<HttpEndpointHostFixture> StartAsync(
@@ -255,6 +254,10 @@ public sealed class HttpEndpointHostFixture : IAsyncDisposable
                     // checkpoint decoration must happen after provider selection. This is the same ordering enforced
                     // by IPostConfigureShellServices in a composed shell.
                     configurePersistence?.Invoke(services);
+
+                    // What a composed shell does once every feature is registered: the runtime API feature adds the
+                    // persistence-mode services, which every run drains through, over the stores registered by then.
+                    new WorkflowsRuntimeApiFeature().PostConfigureServices(services);
                 });
                 webHost.Configure(app =>
                 {
