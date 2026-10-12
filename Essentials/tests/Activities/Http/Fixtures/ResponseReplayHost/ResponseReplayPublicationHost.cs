@@ -83,6 +83,7 @@ internal static class ResponseReplayPublicationHost
     private const string HttpNodeId = "http-in";
     private const string SetNodeId = "set-reference-text";
     private const string HttpResponsePath = "/workflows/http/";
+    private const string ExternalPayloadCandidateRoutePath = "response-replay-external-input";
     private const string ShellWebRoutingPathKey = "CShells:Shells:default:Configuration:WebRouting:Path";
     private const string ReplayCorrelationHeader = "X-Response-Replay-Correlation";
     private static readonly HashSet<string> TransportHeaders = new(StringComparer.OrdinalIgnoreCase)
@@ -104,6 +105,20 @@ internal static class ResponseReplayPublicationHost
             databasePath,
             evidenceDirectory,
             ParseExpectedCandidateProfile(expectedCandidateProfile));
+
+    public static Task<PublicationProofResult> RunExternalInputPublicationProofAsync(
+        string closurePath,
+        string databasePath,
+        string evidenceDirectory,
+        string externalPayloadRoot) =>
+        RunPublicationProofAsync(
+            closurePath,
+            databasePath,
+            evidenceDirectory,
+            SideEffectProfile.ReplaySafe,
+            candidateRoutePath: ExternalPayloadCandidateRoutePath,
+            externalBodyStorageProfile: ResponseReplayFileExternalPayloadStoreProfile.Name,
+            externalPayloadRoot: externalPayloadRoot);
 
     private static async Task<PublicationProofResult> RunPublicationProofAsync(
         string closurePath,
@@ -685,7 +700,8 @@ internal static class ResponseReplayPublicationHost
             targetArtifactId,
             targetArtifactHash,
             HttpNodeId,
-            ResponseNodeId));
+            ResponseNodeId,
+            GateAtResponseActivityStarted: false));
         await using var ownedChannel = channel;
         using var pipeTimeout = new CancellationTokenSource(TimeSpan.FromSeconds(45));
         await channel.ConnectAsync(pipeTimeout.Token);
@@ -813,7 +829,21 @@ internal static class ResponseReplayPublicationHost
         await RunCrashStageCoreAsync(
             closurePath, databasePath, evidenceDirectory, pipeName,
             candidateArtifactId, candidateArtifactHash, requestCorrelationId,
-            routePath: null, PersistenceMode.Balanced, externalPayloadRoot: null);
+            routePath: null, persistenceMode: PersistenceMode.Balanced, externalPayloadRoot: null);
+
+    public static Task RunExternalInputCrashStageAsync(
+        string closurePath,
+        string databasePath,
+        string evidenceDirectory,
+        string pipeName,
+        string candidateArtifactId,
+        string candidateArtifactHash,
+        string requestCorrelationId,
+        string externalPayloadRoot) =>
+        RunCrashStageCoreAsync(
+            closurePath, databasePath, evidenceDirectory, pipeName,
+            candidateArtifactId, candidateArtifactHash, requestCorrelationId,
+            ExternalPayloadCandidateRoutePath, PersistenceMode.Balanced, externalPayloadRoot);
 
     private static async Task RunCrashStageCoreAsync(
         string closurePath,
@@ -836,7 +866,8 @@ internal static class ResponseReplayPublicationHost
             candidateArtifactId,
             candidateArtifactHash,
             HttpNodeId,
-            ResponseNodeId);
+            ResponseNodeId,
+            GateAtResponseActivityStarted: externalPayloadRoot is not null);
         await using var app = await StartHostAsync(
             databasePath, closurePath, evidenceDirectory, gateOptions, includeHistoricalClosureReconciliation: false,
             persistenceMode: persistenceMode, externalPayloadRoot: externalPayloadRoot);
@@ -908,7 +939,20 @@ internal static class ResponseReplayPublicationHost
         RunCrashResumeCoreAsync(
             closurePath, databasePath, evidenceDirectory, workflowExecutionId,
             candidateArtifactId, candidateArtifactHash, routePath: null,
-            PersistenceMode.Balanced, externalPayloadRoot: null);
+            persistenceMode: PersistenceMode.Balanced, externalPayloadRoot: null);
+
+    public static Task<RecoveryProofResult> RunExternalInputCrashResumeAsync(
+        string closurePath,
+        string databasePath,
+        string evidenceDirectory,
+        string workflowExecutionId,
+        string candidateArtifactId,
+        string candidateArtifactHash,
+        string externalPayloadRoot) =>
+        RunCrashResumeCoreAsync(
+            closurePath, databasePath, evidenceDirectory, workflowExecutionId,
+            candidateArtifactId, candidateArtifactHash, ExternalPayloadCandidateRoutePath,
+            PersistenceMode.Balanced, externalPayloadRoot);
 
     private static async Task<RecoveryProofResult> RunCrashResumeCoreAsync(
         string closurePath,
@@ -1076,6 +1120,8 @@ internal static class ResponseReplayPublicationHost
             values["CShells:Shells:default:Features:ResponseReplayCommitGate:TargetArtifactHash"] = gateOptions.TargetArtifactHash;
             values["CShells:Shells:default:Features:ResponseReplayCommitGate:EndpointNodeId"] = gateOptions.EndpointNodeId;
             values["CShells:Shells:default:Features:ResponseReplayCommitGate:ResponseNodeId"] = gateOptions.ResponseNodeId;
+            values["CShells:Shells:default:Features:ResponseReplayCommitGate:GateAtResponseActivityStarted"] =
+                gateOptions.GateAtResponseActivityStarted ? "true" : "false";
         }
         if (observationOptions is not null)
         {

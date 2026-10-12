@@ -75,6 +75,21 @@ if (args.Length == 5 && args[0] == "--measurement-publication-proof")
     }
 }
 
+if (args.Length == 5 && args[0] == "--external-input-publication-proof")
+{
+    try
+    {
+        var result = await ResponseReplayPublicationHost.RunExternalInputPublicationProofAsync(args[1], args[2], args[3], args[4]);
+        Console.WriteLine($"RESPONSE_REPLAY_PUBLICATION_RESULT={JsonSerializer.Serialize(result, new JsonSerializerOptions(JsonSerializerDefaults.Web))}");
+        return 0;
+    }
+    catch (Exception exception)
+    {
+        Console.Error.WriteLine(exception);
+        return 1;
+    }
+}
+
 if (args.Length == 8 && args[0] == "--crash-stage")
 {
     try
@@ -90,12 +105,43 @@ if (args.Length == 8 && args[0] == "--crash-stage")
     }
 }
 
+if (args.Length == 9 && args[0] == "--external-input-crash-stage")
+{
+    try
+    {
+        await ResponseReplayPublicationHost.RunExternalInputCrashStageAsync(
+            args[1], args[2], args[3], args[4], args[5], args[6], args[7], args[8]);
+        return 0;
+    }
+    catch (Exception exception)
+    {
+        Console.Error.WriteLine(exception);
+        return 1;
+    }
+}
+
 if (args.Length == 7 && args[0] == "--resume-recovery")
 {
     try
     {
         var result = await ResponseReplayPublicationHost.RunCrashResumeAsync(
             args[1], args[2], args[3], args[4], args[5], args[6]);
+        Console.WriteLine($"RESPONSE_REPLAY_RECOVERY_RESULT={JsonSerializer.Serialize(result, new JsonSerializerOptions(JsonSerializerDefaults.Web))}");
+        return 0;
+    }
+    catch (Exception exception)
+    {
+        Console.Error.WriteLine(exception);
+        return 1;
+    }
+}
+
+if (args.Length == 8 && args[0] == "--external-input-resume-recovery")
+{
+    try
+    {
+        var result = await ResponseReplayPublicationHost.RunExternalInputCrashResumeAsync(
+            args[1], args[2], args[3], args[4], args[5], args[6], args[7]);
         Console.WriteLine($"RESPONSE_REPLAY_RECOVERY_RESULT={JsonSerializer.Serialize(result, new JsonSerializerOptions(JsonSerializerDefaults.Web))}");
         return 0;
     }
@@ -154,7 +200,7 @@ if (args.Length == 14 && args[0] == "--measure")
 
 if (args.Length != 2)
 {
-    Console.Error.WriteLine("Usage: ResponseReplayHost <closure-path> <database-path> | --publication-proof <closure-path> <database-path> <evidence-directory> | --measurement-publication-proof <closure-path> <database-path> <evidence-directory> <expected-candidate-profile> | --crash-stage <closure-path> <database-path> <evidence-directory> <pipe-name> <artifact-id> <artifact-hash> <request-correlation-id> | --resume-recovery <closure-path> <database-path> <evidence-directory> <execution-id> <artifact-id> <artifact-hash> | --measurement-unpublish-candidate <closure-path> <database-path> <evidence-directory> <candidate-definition-id> <candidate-artifact-id> <candidate-artifact-hash> <expected-candidate-profile> | --measurement-reconcile-external <closure-path> <database-path> <evidence-directory> <baseline-artifact-id> <baseline-artifact-hash> <candidate-artifact-id> <candidate-artifact-hash> <expected-candidate-profile> | --measure <closure-path> <database-path> <evidence-directory> <pipe-name> <artifact-id> <artifact-hash> <profile> <request-correlation-id> <baseline-artifact-id> <baseline-artifact-hash> <candidate-artifact-id> <candidate-artifact-hash> <expected-candidate-profile>");
+    Console.Error.WriteLine("Usage: ResponseReplayHost <closure-path> <database-path> | --publication-proof <closure-path> <database-path> <evidence-directory> | --external-input-publication-proof <closure-path> <database-path> <evidence-directory> <payload-root> | --measurement-publication-proof <closure-path> <database-path> <evidence-directory> <expected-candidate-profile> | --crash-stage <closure-path> <database-path> <evidence-directory> <pipe-name> <artifact-id> <artifact-hash> <request-correlation-id> | --external-input-crash-stage <closure-path> <database-path> <evidence-directory> <pipe-name> <artifact-id> <artifact-hash> <request-correlation-id> <payload-root> | --resume-recovery <closure-path> <database-path> <evidence-directory> <execution-id> <artifact-id> <artifact-hash> | --external-input-resume-recovery <closure-path> <database-path> <evidence-directory> <execution-id> <artifact-id> <artifact-hash> <payload-root> | --measurement-unpublish-candidate <closure-path> <database-path> <evidence-directory> <candidate-definition-id> <candidate-artifact-id> <candidate-artifact-hash> <expected-candidate-profile> | --measurement-reconcile-external <closure-path> <database-path> <evidence-directory> <baseline-artifact-id> <baseline-artifact-hash> <candidate-artifact-id> <candidate-artifact-hash> <expected-candidate-profile> | --measure <closure-path> <database-path> <evidence-directory> <pipe-name> <artifact-id> <artifact-hash> <profile> <request-correlation-id> <baseline-artifact-id> <baseline-artifact-hash> <candidate-artifact-id> <candidate-artifact-hash> <expected-candidate-profile>");
     return 2;
 }
 
