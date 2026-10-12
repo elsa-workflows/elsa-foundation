@@ -65,12 +65,11 @@ public sealed class PermissionAuthorizationBoundaryTests
         Assert.True(scan.EndpointTypes >= 150, $"Only {scan.EndpointTypes} endpoint types were scanned.");
         Assert.True(scan.ClaimLookupsByType.Values.Sum() >= 20, $"Only {scan.ClaimLookupsByType.Values.Sum()} claim lookups were seen.");
 
-        // Permission keys count as permission values because the code declares them: in an attribute or catalog entry
-        // directly, or through a catalog helper's parameter.
-        Assert.True(scan.DeclaredPermissionKeys.Count >= 40, $"Only {scan.DeclaredPermissionKeys.Count} declared permission keys were found.");
-        Assert.Contains(Elsa.Workflows.Design.Api.Authorization.WorkflowDesignPermissions.Read, scan.DeclaredPermissionKeys);
-        Assert.Contains(DefaultIdentityPermissionKeys.IdentityUsersRead, scan.DeclaredPermissionKeys);
-        Assert.Contains(Elsa.Secrets.Core.Permissions.SecretsPermissions.Read, scan.DeclaredPermissionKeys);
+        // Permission keys count as permission values because a permission contributor adds them to the catalog.
+        Assert.True(scan.ContributedPermissionKeys.Count >= 40, $"Only {scan.ContributedPermissionKeys.Count} contributed permission keys were found.");
+        Assert.Contains(Elsa.Workflows.Design.Api.Authorization.WorkflowDesignPermissions.Read, scan.ContributedPermissionKeys);
+        Assert.Contains(DefaultIdentityPermissionKeys.IdentityUsersRead, scan.ContributedPermissionKeys);
+        Assert.Contains(Elsa.Secrets.Core.Permissions.SecretsPermissions.Read, scan.ContributedPermissionKeys);
         foreach (var (assembly, type) in AuthorizationContexts)
         {
             Assert.True(
@@ -110,6 +109,25 @@ public sealed class PermissionAuthorizationBoundaryTests
         var scan = ScanFixture(FixtureAssembly, LookalikeCases[caseName]);
 
         Assert.Empty(scan.Findings);
+    }
+
+    [Fact]
+    public void A_permission_contributor_the_scan_cannot_construct_fails_the_scan()
+    {
+        var exception = Assert.Throws<InvalidOperationException>(() => ScanFixture(FixtureAssembly, """
+            using System;
+            using System.Collections.Generic;
+            using Elsa.Foundation.Identity.Core.Authorization;
+
+            namespace Injected;
+
+            public sealed class ServiceBackedPermissionContributor(IServiceProvider services) : IPermissionContributor
+            {
+                public IEnumerable<Permission> Contribute() => [];
+            }
+            """));
+
+        Assert.Contains("Injected.ServiceBackedPermissionContributor", exception.Message, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -240,6 +258,10 @@ public sealed class PermissionAuthorizationBoundaryTests
         ["ClaimsIdentity HasClaim"] = DirectRead("return ((ClaimsIdentity)user.Identity!).HasClaim(IdentityClaimTypes.Permission, \"read\");"),
         ["Claims Any"] = DirectRead("return user.Claims.Any(claim => claim.Type == IdentityClaimTypes.Permission && claim.Value == \"read\");"),
         ["Claims Where"] = DirectRead("return user.Claims.Where(claim => claim.Type == IdentityClaimTypes.Permission).Select(claim => claim.Value).Contains(\"read\");"),
+        ["Claims Select Contains"] = DirectRead("return user.Claims.Select(claim => claim.Value).Contains(WorkflowPermissions.Read);",
+            declarations: ContributedKey),
+        ["Claims Select ToArray Contains"] = DirectRead("return user.Claims.Select(claim => claim.Value).ToArray().Contains(WorkflowPermissions.Read);",
+            declarations: ContributedKey),
         ["Claims ToList"] = DirectRead("""
             var claims = user.Claims.ToList();
             return claims.Any(claim => claim.Type == IdentityClaimTypes.Permission);
@@ -250,11 +272,13 @@ public sealed class PermissionAuthorizationBoundaryTests
             members: "private static IEnumerable<Claim> All(ClaimsPrincipal principal) => principal.Claims;"),
         ["Predicate helper inside a lambda"] = DirectRead("return user.Claims.Any(claim => IsPermission(claim));",
             members: "private static bool IsPermission(Claim claim) => claim.Type == IdentityClaimTypes.Permission;"),
+        ["Predicate helper with an alternative"] = DirectRead("return user.Claims.Any(claim => IsGrant(claim));",
+            members: "private static bool IsGrant(Claim claim) => claim.Type == IdentityClaimTypes.Permission || claim.Type == \"scope\";"),
         ["String receiver"] = DirectRead("return user.HasClaim(IdentityClaimTypes.Permission.ToLowerInvariant(), \"read\");"),
         ["Predicate factory"] = DirectRead("return user.Claims.Any(OfType(IdentityClaimTypes.Permission));",
             members: "private static Func<Claim, bool> OfType(string type) => claim => claim.Type == type;"),
-        ["Predicate factory with a declared key"] = DirectRead("return user.Claims.Any(HasValue(WorkflowPermissions.Read));",
-            declarations: CatalogDeclaredKey,
+        ["Predicate factory with a contributed key"] = DirectRead("return user.Claims.Any(HasValue(WorkflowPermissions.Read));",
+            declarations: ContributedKey,
             members: "private static Func<Claim, bool> HasValue(string value) => claim => claim.Value == value;"),
         ["Ref local"] = DirectRead("""
             var type = IdentityClaimTypes.Permission;
@@ -277,30 +301,22 @@ public sealed class PermissionAuthorizationBoundaryTests
             members: "private static string ClaimType() => IdentityClaimTypes.Permission;"),
         ["Provider permission constant"] = DirectRead("return user.HasClaim(IdentityClaimTypes.Permission, PermissionNames.WorkflowRead);",
             declarations: "public static class PermissionNames { public const string WorkflowRead = \"workflow.read\"; }"),
-        ["Catalog-declared key alone"] = DirectRead("return user.HasClaim(\"scope\", WorkflowPermissions.Read);",
-            declarations: CatalogDeclaredKey),
-        ["Catalog helper-declared key alone"] = DirectRead("return user.HasClaim(\"scope\", WorkflowPermissions.Read);",
+        ["Contributed key alone"] = DirectRead("return user.HasClaim(\"scope\", WorkflowPermissions.Read);",
+            declarations: ContributedKey),
+        ["Table-driven contributed key alone"] = DirectRead("return user.HasClaim(\"scope\", WorkflowPermissions.Write);",
             declarations: """
                 public static class WorkflowPermissions
                 {
                     public const string Read = "workflow.read";
-
-                    public static readonly Permission Entry = Owned(Read, "Read workflows");
-
-                    private static Permission Owned(string key, string displayName) => new(key, displayName, "Workflows", displayName);
+                    public const string Write = "workflow.write";
                 }
-                """),
-        ["Attribute-declared key alone"] = DirectRead("return user.HasClaim(\"scope\", WorkflowPermissions.Read);",
-            declarations: """
-                public sealed class RequirePermissionAttribute(string permission) : Attribute;
 
-                public static class WorkflowPermissions
+                public sealed class WorkflowPermissionContributor : IPermissionContributor
                 {
-                    public const string Read = "workflow.read";
-                }
+                    private static readonly (string Key, string Name)[] Table = [(WorkflowPermissions.Read, "Read"), (WorkflowPermissions.Write, "Write")];
 
-                [RequirePermission(WorkflowPermissions.Read)]
-                public sealed class ReadEndpoint;
+                    public IEnumerable<Permission> Contribute() => Table.Select(row => new Permission(row.Key, row.Name, "Workflows", row.Name));
+                }
                 """),
         ["Provider permission constant alone"] = DirectRead("return user.HasClaim(\"scope\", ProviderGrants.WorkflowReadPermission);",
             declarations: "public static class ProviderGrants { public const string WorkflowReadPermission = \"workflow.read\"; }"),
@@ -365,7 +381,7 @@ public sealed class PermissionAuthorizationBoundaryTests
             members: "private readonly string kind = \"role\"; private static bool Describe(IEnumerable<Claim> claims, bool isPermissionKind) => isPermissionKind;"),
         ["Permission length into a lookup"] = EndpointSource(
             "return user.FindFirst(\"sub\".PadLeft(IdentityClaimTypes.Permission.Length)) is not null;"),
-        // A permission-named type's owner id is not a permission key: only keys the code declares as permissions count.
+        // A permission-named type's owner id is not a permission key: only keys a contributor adds to the catalog count.
         ["Owner id of a permission-named type"] = EndpointSource(
             "return user.HasClaim(\"iss\", \"elsa.studio.preferences\");",
             declarations: """
@@ -373,8 +389,35 @@ public sealed class PermissionAuthorizationBoundaryTests
                 {
                     public const string OwnerId = "elsa.studio.preferences";
                     public const string Read = "studio.preferences.read";
-                    public static readonly Permission Entry = new(Read, "Read preferences", "Studio", "Reads preferences.");
                 }
+
+                public sealed class StudioPreferencesPermissionContributor : IPermissionContributor
+                {
+                    public IEnumerable<Permission> Contribute() => [new(StudioPreferencesPermissions.Read, "Read preferences", "Studio", "Reads preferences.")];
+                }
+                """),
+        // Claims filtered by a proper authorization decision are not a permission-claim read, even though the decision
+        // was made with a permission value.
+        ["Authorization result beside claims"] = EndpointSource(
+            "return VisibleClaimsAsync(user).GetAwaiter().GetResult().Count > 0;",
+            declarations: ContributedKey,
+            members: """
+                private readonly IPermissionAuthorizationService authorization = null!;
+
+                private async Task<List<string>> VisibleClaimsAsync(ClaimsPrincipal principal)
+                {
+                    var all = (await authorization.AuthorizeAsync(new PermissionEvaluationContext(principal, WorkflowPermissions.Read))).Succeeded;
+                    return principal.Claims.Where(claim => all || claim.Type == "sub").Select(claim => claim.Value).ToList();
+                }
+                """),
+        ["Authorization helper in a claims lambda"] = EndpointSource(
+            "return user.Claims.Where(claim => claim.Type == \"sub\" || CanSeeAll(user)).Any();",
+            declarations: ContributedKey,
+            members: """
+                private readonly IPermissionAuthorizationService authorization = null!;
+
+                private bool CanSeeAll(ClaimsPrincipal principal) =>
+                    authorization.AuthorizeAsync(new PermissionEvaluationContext(principal, WorkflowPermissions.Read)).AsTask().GetAwaiter().GetResult().Succeeded;
                 """),
         // A bare wildcard constant does not make every "*" literal a permission value.
         ["Wildcard literal"] = EndpointSource(
@@ -382,13 +425,16 @@ public sealed class PermissionAuthorizationBoundaryTests
             declarations: "public static class IdentitySeed { public const string AllAccessPermission = \"*\"; }")
     };
 
-    /// <summary>A permission key declared by a catalog entry, the way feature contributors declare theirs.</summary>
-    private const string CatalogDeclaredKey = """
+    /// <summary>A permission key a contributor adds to the catalog, the way feature contributors declare theirs.</summary>
+    private const string ContributedKey = """
         public static class WorkflowPermissions
         {
             public const string Read = "workflow.read";
+        }
 
-            public static readonly Permission Entry = new(Read, "Read workflows", "Workflows", "Reads workflows.");
+        public sealed class WorkflowPermissionContributor : IPermissionContributor
+        {
+            public IEnumerable<Permission> Contribute() => [new(WorkflowPermissions.Read, "Read workflows", "Workflows", "Reads workflows.")];
         }
         """;
 

@@ -84,22 +84,23 @@ a stable resource object and remain in `IPermissionResourceHandler` implementati
 The architecture suite's `PermissionAuthorizationBoundaryTests` checks this in the compiled IL of every
 packable runtime library. A method fails it when it passes a permission value to a claims lookup
 (`FindFirst`, `FindFirstValue`, `FindAll`, `HasClaim`, including static helpers of those names that take
-a principal or identity), hands a principal's claims (its `Claims`, its `Identities`, a `FindAll`
-result, or a list, array or helper result built from them) to a call together with a permission value,
-passes a permission value to a helper that does either with it, or calls a FastEndpoints
-`Permissions`/`PermissionsAll` helper. A permission value is the permission claim type, a permission key
-the code declares (in a catalog `Permission` entry, directly or through a catalog helper, or in a
-`RequirePermission`/`RequireAnyPermission` attribute or call), a namespaced constant whose own name
-contains `Permission`, a string, string-collection or delegate field so named, a static
-string-collection or delegate field of a permission-named type, or a string, string collection or
-delegate assigned from one or returned by a call that takes one. Other constants of a permission-named
-type, such as an owner id, and the bare `*` are not permission values. Only the methods on the reviewed
-list in that test may read permission claims: the claims evaluator, token issuance, the two session
-projections and the identity projection. `PermissionBypassScanner` lists what the scan does not follow
-(array, collection and tuple elements, claims enumerated by a loop or projected with `Select`, a claims
-collection handed to a helper, values passed through a `StringBuilder` or an async method's `Task`,
-`ref`/`out` write-backs, and calls through interfaces, virtual methods or delegates); review still
-covers those.
+a principal or identity), hands a principal's claims (its `Claims` or `Identities`, a `FindAll` result,
+a list, array or helper result built from them, or their values projected with
+`Select(claim => claim.Value)`) to a call together with a permission value, passes a permission value to
+a helper that does either with it, or calls a FastEndpoints `Permissions`/`PermissionsAll` helper. A
+permission value is the permission claim type, a key a permission contributor adds to the catalog (the
+test constructs every `IPermissionContributor` and reads what it contributes, and fails if one cannot be
+constructed), a namespaced constant whose own name contains `Permission`, a string, string-collection or
+delegate field so named, a static string-collection or delegate field of a permission-named type, or a
+string, string collection or delegate assigned from one or returned by a call that takes one. A claims
+lambda counts when it loads a permission value or compares a claim's own type, value or issuer with one;
+using the result of an `IPermissionAuthorizationService` decision does not. Other constants of a
+permission-named type, such as an owner id, and the bare `*` are not permission values. Only the methods
+on the reviewed list in that test may read permission claims: the claims evaluator, token issuance, the
+two session projections and the identity projection. `PermissionBypassScanner` lists what the scan does
+not follow (array, collection and tuple elements, claims enumerated by a loop, a claims collection
+handed to a helper, values passed through a `StringBuilder` or an async method's `Task`, `ref`/`out`
+write-backs, and calls through interfaces, virtual methods or delegates); review still covers those.
 
 The original synchronous context interfaces and their legacy adapters were removed by #2566 (ADR 0080
 D4); the async contexts are the only request authorization contexts.
