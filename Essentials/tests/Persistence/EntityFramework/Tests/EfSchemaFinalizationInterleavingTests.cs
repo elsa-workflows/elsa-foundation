@@ -9,7 +9,7 @@ using static Elsa.Persistence.EntityFramework.Tests.SchemaGate;
 namespace Elsa.Persistence.EntityFramework.Tests;
 
 /// <summary>
-/// Spec 181, SC-004 and User Story 5: an evaluator finalizing version 2 races a host that joins reading only version 1,
+/// An evaluator finalizing version 2 races a host that joins reading only version 1,
 /// through every interleaving of the evaluator's three steps (write the intent, read the fleet, commit or abandon) with
 /// the joiner's three (publish its report, read the record, act on it). Whatever the order, the outcome is never
 /// "version 2 finalized and the version-1 host active", and it is always one of the two safe outcomes: 2 finalized and

@@ -17,7 +17,7 @@ using Xunit;
 namespace Elsa.Persistence.EntityFrameworkCore.Migrations.Tests;
 
 /// <summary>
-/// The finalization gate through real modules (spec 181, FR-009, FR-012 and FR-015): a module's own migrator admits it
+/// The finalization gate through real modules: a module's own migrator admits it
 /// after its migrations, a module whose family is finalized at a version this build cannot read is refused there and
 /// writes nothing, and once admitted every store write passes the write check, which refuses the family's writes when a
 /// refresh finds a finalized version this build cannot read. And for every module of every engine, each stamped table
@@ -67,7 +67,7 @@ public sealed class ModuleFinalizationGateTests : IAsyncLifetime
     }
 
     /// <summary>
-    /// Spec 182, FR-014 and FR-022: the migrator gives the gate it registers a way to open its module's contexts, so the
+    /// The migrator gives the gate it registers a way to open its module's contexts, so the
     /// shared dormancy check can have the gate refresh, or read its status, when nothing else hands it a context.
     /// </summary>
     [Fact]
@@ -82,7 +82,7 @@ public sealed class ModuleFinalizationGateTests : IAsyncLifetime
     /// <summary>
     /// CShells resolves a shell's initializers in a scope it disposes once they have run (#2143). The migrator it
     /// initialized there outlives that scope, so its gate keeps refreshing: a family finalized afterwards at a version this
-    /// build cannot read refuses the module's writes with no restart (spec 181, FR-012). Disposed with that scope, the
+    /// build cannot read refuses the module's writes with no restart. Disposed with that scope, the
     /// gate stopped right after activation and the module kept writing a version the fleet had left behind, with nothing
     /// logged: the direction that looks like success.
     /// </summary>

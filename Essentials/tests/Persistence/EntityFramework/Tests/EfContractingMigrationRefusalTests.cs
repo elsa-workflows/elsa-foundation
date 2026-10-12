@@ -15,7 +15,7 @@ using static Elsa.Persistence.EntityFramework.Tests.ContractingSeedScenarios;
 namespace Elsa.Persistence.EntityFramework.Tests;
 
 /// <summary>
-/// Spec 185, FR-024 and User Story 5, SC-006: a pending contracting migration is refused, naming its family and the
+/// A pending contracting migration is refused, naming its family and the
 /// version it waits for, wherever a module's migrations are applied or validated — <see cref="EfModuleMigrator{TContext}"/>
 /// at Prepare under both policies, and <c>dotnet elsa persistence apply</c> and <c>validate</c> — while the family is
 /// finalized below that version in the target database, and applies once it reaches it. Every refusal is checked to have
@@ -39,7 +39,7 @@ public sealed class EfContractingMigrationRefusalTests : IAsyncLifetime
         await _database.DisposeAsync();
     }
 
-    // --- EfModuleMigrator at Prepare (User Story 5, scenarios 1, 3 and 5) ---------------------------------------------
+    // --- EfModuleMigrator at Prepare ----------------------------------------------------------------------------------
 
     [Fact]
     public async Task Under_automigrate_the_migrator_refuses_the_contracting_migration_until_its_family_is_finalized_and_then_applies_it()
@@ -134,7 +134,7 @@ public sealed class EfContractingMigrationRefusalTests : IAsyncLifetime
 
     /// <summary>
     /// The module is active in the host's readability report while its migrator runs its gate, and stops being once the
-    /// migrator stops, as a disposed shell's does (spec 183, FR-019, amended 2026-09-30).
+    /// migrator stops, as a disposed shell's does.
     /// </summary>
     [Fact]
     public async Task A_migrator_that_stops_ends_its_modules_activity_in_the_hosts_report()
@@ -603,7 +603,7 @@ public sealed class EfContractingMigrationRefusalTests : IAsyncLifetime
         await EfDatabaseMigrator.ApplyAsync(context, EfProviderNames.Sqlite);
     }
 
-    // --- What the family's record starts at once a contraction has applied (spec 181's record creation) -----------
+    // --- What the family's record starts at once a contraction has applied ----------------------------------------
 
     /// <summary>
     /// Three hosts and a database no host has run the module in. host-old runs the release before the family's change, so
@@ -676,7 +676,7 @@ public sealed class EfContractingMigrationRefusalTests : IAsyncLifetime
         Assert.Null(await RecordAsync(Provider, Connection));
     }
 
-    // --- dotnet elsa persistence (spec 171's apply and validate) -------------------------------------------------
+    // --- dotnet elsa persistence apply and validate --------------------------------------------------------------
 
     [Fact]
     public async Task Persistence_apply_refuses_the_batch_as_a_refusal_naming_the_family_and_version_and_applies_it_once_finalized()

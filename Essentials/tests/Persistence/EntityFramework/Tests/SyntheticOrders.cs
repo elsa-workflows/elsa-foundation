@@ -7,10 +7,10 @@ using static Elsa.Persistence.EntityFramework.Tests.SchemaChains;
 namespace Elsa.Persistence.EntityFramework.Tests;
 
 /// <summary>
-/// The synthetic family spec 180's store tests run on, whose rows have moved four times: version 2 added a currency, with
+/// The synthetic family the schema store tests run on, whose rows have moved four times: version 2 added a currency, with
 /// a projection column of its own; version 3 added order lines to the order document; version 4 moved the lines into
 /// a content column of their own, in one step over the whole row (#2144); and version 5 completes that move by dropping
-/// the order document's own copy of the lines, the removal half of FR-027's expand-only split. Its upcasters ship
+/// the order document's own copy of the lines, the removal half of an expand-only split. Its upcasters ship
 /// committed fixture pairs and are proven as a module's would be (<see cref="AddCurrencyProof"/>,
 /// <see cref="AddLinesProof"/>, <see cref="MoveLinesProof"/>, <see cref="RemoveLinesProof"/>).
 /// </summary>
@@ -65,7 +65,7 @@ public static class SyntheticOrders
     /// <summary>
     /// Version 4 moves the order's lines into a column of their own, in one step over the whole row: it reads them from
     /// the order document and writes them to the lines column, which every read from version 4 on takes them from. The
-    /// document keeps its copy: FR-027 adds the new member beside the old one and removes the old one only at a later
+    /// document keeps its copy: an expand-only change adds the new member beside the old one and removes the old one only at a later
     /// version, once no version the family can still finalize reads it, so version 3's format is still written by leaving
     /// the lines column unset, never by a reverse transform.
     /// </summary>
@@ -83,11 +83,11 @@ public static class SyntheticOrders
     /// <summary>
     /// Version 5 completes the move version 4 began: the order document's own copy of the lines, kept beside the new
     /// column so a version that still read the document directly was never broken, is dropped now that every read takes
-    /// the lines from their own column alone. This is FR-027's removal half of the expand-only split - the member is
-    /// removed only once no version the family can still finalize reads it from the document - and FR-022's old-format
+    /// the lines from their own column alone. This is the removal half of the expand-only split - the member is
+    /// removed only once no version the family can still finalize reads it from the document - and the upcaster proofs' old-format
     /// round trip still holds for it: writing the domain value back at version 4's format restores the document's copy,
     /// since a removal step introduces no member of its own for that proof to leave unset, and <see cref="FormatAt"/>
-    /// reconstructs every historical shape from the version alone, not by reversing this step (2026-09-29 note).
+    /// reconstructs every historical shape from the version alone, not by reversing this step.
     /// </summary>
     [EfSchemaUpcaster("4", "5")]
     public sealed class RemoveLines : IEfSchemaUpcaster
@@ -172,19 +172,19 @@ public static class SyntheticOrders
     }
 }
 
-/// <summary>FR-022's three proofs for <see cref="SyntheticOrders.AddCurrency"/>, through the synthetic store.</summary>
+/// <summary>The three upcaster proofs for <see cref="SyntheticOrders.AddCurrency"/>, through the synthetic store.</summary>
 public sealed class AddCurrencyProof() : EfSchemaUpcasterProof<SyntheticOrders.AddCurrency, SyntheticOrders.Order>(SyntheticOrders.Family, new SyntheticOrdersProofStore());
 
-/// <summary>FR-022's three proofs for <see cref="SyntheticOrders.AddLines"/>, through the synthetic store.</summary>
+/// <summary>The three upcaster proofs for <see cref="SyntheticOrders.AddLines"/>, through the synthetic store.</summary>
 public sealed class AddLinesProof() : EfSchemaUpcasterProof<SyntheticOrders.AddLines, SyntheticOrders.Order>(SyntheticOrders.Family, new SyntheticOrdersProofStore());
 
-/// <summary>FR-022's three proofs for <see cref="SyntheticOrders.MoveLines"/>, the step that moves data between two content columns.</summary>
+/// <summary>The three upcaster proofs for <see cref="SyntheticOrders.MoveLines"/>, the step that moves data between two content columns.</summary>
 public sealed class MoveLinesProof() : EfSchemaUpcasterProof<SyntheticOrders.MoveLines, SyntheticOrders.Order>(SyntheticOrders.Family, new SyntheticOrdersProofStore());
 
-/// <summary>FR-022's three proofs for <see cref="SyntheticOrders.RemoveLines"/>, the removal half of the move between two content columns.</summary>
+/// <summary>The three upcaster proofs for <see cref="SyntheticOrders.RemoveLines"/>, the removal half of the move between two content columns.</summary>
 public sealed class RemoveLinesProof() : EfSchemaUpcasterProof<SyntheticOrders.RemoveLines, SyntheticOrders.Order>(SyntheticOrders.Family, new SyntheticOrdersProofStore());
 
-/// <summary>The synthetic store's half of FR-022's proofs: each read puts the fixture's order row and reads it through the store.</summary>
+/// <summary>The synthetic store's half of the upcaster proofs: each read puts the fixture's order row and reads it through the store.</summary>
 internal sealed class SyntheticOrdersProofStore : IEfSchemaUpcasterProofStore<SyntheticOrders.Order>, IAsyncDisposable
 {
     private readonly SyntheticOrdersDatabase orders = new();
@@ -257,7 +257,7 @@ internal sealed class SyntheticOrdersDatabase : IAsyncDisposable
     private OrdersContext NewContext() => new(new DbContextOptionsBuilder<OrdersContext>().UseSqlite(database.ConnectionString).Options);
 
     /// <summary>
-    /// The read and write paths of spec 180 in their prescribed order: version check, integrity clauses for the stamped
+    /// A schema family's read and write paths in their prescribed order: version check, integrity clauses for the stamped
     /// version, the row's content columns upcast together, deserialize, current validation; and a write that checks the
     /// stored row, then stamps the current version on the current format of every content column.
     /// </summary>

@@ -22,8 +22,8 @@ using Microsoft.Extensions.Logging;
 namespace Elsa.Persistence.EntityFramework.Tests;
 
 /// <summary>
-/// A synthetic EF module whose history splits one change across two versions of its schema family (spec 185, User
-/// Story 5): <see cref="Initial"/> creates a stamped table with a <c>Legacy</c> column, <see cref="Expand"/> adds its
+/// A synthetic EF module whose history splits one change across two versions of its schema family:
+/// <see cref="Initial"/> creates a stamped table with a <c>Legacy</c> column, <see cref="Expand"/> adds its
 /// replacement beside it, <see cref="DropObsolete"/> drops a column of an unstamped table under an opt-out that is not
 /// contracting, and <see cref="Contract"/> drops <c>Legacy</c> under an opt-out naming the family and
 /// <see cref="CurrentVersion"/>, the version whose finalization makes that safe. Its migrations are written by hand and
@@ -111,7 +111,7 @@ internal static class ContractingModule
         return (await context.Database.GetAppliedMigrationsAsync()).ToArray();
     }
 
-    /// <summary>Spec 181, FR-002: the finalization record lands in a module's baseline, beside its history table.</summary>
+    /// <summary>The finalization record lands in a module's baseline, beside its history table.</summary>
     public static void CreateFinalizationTables(MigrationBuilder migrationBuilder, string historyModule, string keyPrefix)
     {
         migrationBuilder.CreateTable(

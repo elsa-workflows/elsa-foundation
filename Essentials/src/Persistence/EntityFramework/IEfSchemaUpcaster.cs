@@ -1,7 +1,7 @@
 namespace Elsa.Persistence.EntityFramework;
 
 /// <summary>
-/// Transforms one schema family's stored rows from one version to its immediate successor (spec 180, FR-003). The type
+/// Transforms one schema family's stored rows from one version to its immediate successor. The type
 /// carries <see cref="EfSchemaUpcasterAttribute"/> naming the two versions, and the family's
 /// <see cref="EfSchemaFamilyAttribute.Upcasters"/> lists it in chain order.
 /// </summary>
@@ -22,11 +22,11 @@ namespace Elsa.Persistence.EntityFramework;
 /// names another table.
 /// </para>
 /// <para>
-/// <see cref="Upcast"/> must be a pure, total function of its input over every valid row at the source version
-/// (FR-019): no clock, randomness, environment, culture, configuration, I/O or service, so two hosts upcasting the same
+/// <see cref="Upcast"/> must be a pure, total function of its input over every valid row at the source version:
+/// no clock, randomness, environment, culture, configuration, I/O or service, so two hosts upcasting the same
 /// stored row produce byte-identical output. It preserves every identity the row carries and every identity derived
-/// from its content (FR-020). It sees decoded content only (FR-012); a null value is a column the row stores as null. A
-/// throw, a null result, or a result that is not the same row's declared columns reports the row as corrupt (FR-009).
+/// from its content. It sees decoded content only; a null value is a column the row stores as null. A
+/// throw, a null result, or a result that is not the same row's declared columns reports the row as corrupt.
 /// </para>
 /// </remarks>
 public interface IEfSchemaUpcaster

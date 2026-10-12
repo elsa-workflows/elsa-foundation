@@ -7,7 +7,7 @@ using static Elsa.Persistence.EntityFramework.Tests.ContractingModule;
 namespace Elsa.Persistence.EntityFrameworkCore.Migrations.ProviderTests;
 
 /// <summary>
-/// Spec 185, FR-024 and SC-006 on each server engine: the finalization record is read through the engine's own catalog
+/// The contracting-migration refusal on each server engine: the finalization record is read through the engine's own catalog
 /// and the refusal leaves the contracting migration's column and the migrations history as they were, until the family
 /// is finalized at the version it names, when the same batch applies. On a database no host has admitted the module in,
 /// the migrator creates the family's record before the contraction, proved by the same scenarios the SQLite suite runs:

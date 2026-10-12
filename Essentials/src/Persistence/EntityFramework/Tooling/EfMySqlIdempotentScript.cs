@@ -26,7 +26,7 @@ namespace Elsa.Persistence.EntityFramework.Tooling;
 /// <para>
 /// The rewrite is a pure function of its arguments — no clock, no environment, no culture-sensitive
 /// formatting, LF only — because the artifact's per-file <c>sha256</c>, <c>script-check</c>'s byte
-/// comparison and spec 171 FR-043's determinism guarantee all read what comes out of it.
+/// comparison and the artifact's determinism guarantee all read what comes out of it.
 /// </para>
 /// <para>
 /// Public for the same reason <see cref="EfToolingLineEndings"/> and <see cref="EfToolingRedaction"/> are:
@@ -231,7 +231,7 @@ public static class EfMySqlIdempotentScript
     private static string ProcedureName(string module)
     {
         var name = ProcedurePrefix + EfMigrationPlan.Slug(module);
-        // Slug lower-cases and maps '.' to '-'; a third-party [EfModule] name (spec 171 User Story 6) can
+        // Slug lower-cases and maps '.' to '-'; a third-party [EfModule] name can
         // still carry anything else, including the backtick that quotes this identifier.
         if (name.Length > MaxIdentifierLength || !name.All(character => character is >= 'a' and <= 'z' or >= '0' and <= '9' or '-' or '_'))
         {

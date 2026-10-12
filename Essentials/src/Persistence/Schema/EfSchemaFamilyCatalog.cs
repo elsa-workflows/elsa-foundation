@@ -3,7 +3,7 @@ using System.Reflection;
 namespace Elsa.Persistence.Schema;
 
 /// <summary>
-/// The one place that reads <c>[EfSchemaFamily]</c> declarations off a set of assemblies (spec 180, FR-001). Every
+/// The one place that reads <c>[EfSchemaFamily]</c> declarations off a set of assemblies. Every
 /// family is discovered the same way, first-party and third-party alike.
 /// </summary>
 /// <remarks>
@@ -12,11 +12,11 @@ namespace Elsa.Persistence.Schema;
 /// never constructed. A package that Nuplane loads into a load context of its own can carry its own copy of
 /// <c>Elsa.Persistence.EntityFramework</c>, and so its own copy of the attribute type. Matching by type identity would
 /// skip exactly that package's families without a word, and a family missing from a host's readability report lets a
-/// version finalize that the host cannot read (spec 183, FR-020).
+/// version finalize that the host cannot read.
 /// </para>
 /// <para>
 /// It lives in <c>Elsa.Persistence.Schema</c>, which every host shares with every package it loads and which references
-/// no EF Core, so a host that carries no EF (ADR 0076) still reads every package's declarations (#2143). It therefore
+/// no EF Core, so a host that carries no EF still reads every package's declarations (#2143). It therefore
 /// names the attribute types it matches rather than referencing them: they stay in <c>Elsa.Persistence.EntityFramework</c>.
 /// Every name below is exercised by declarations built with those types - this assembly's own tests' and the EF
 /// persistence's - so a rename that left this reader matching nothing fails them.
@@ -38,10 +38,10 @@ public static class EfSchemaFamilyCatalog
     /// <summary>The family declaration's named argument listing the entity types whose rows stamp it.</summary>
     private const string EntitiesMember = "Entities";
 
-    /// <summary>The family declaration's named argument listing its content-addressed entity types (spec 186, FR-010b).</summary>
+    /// <summary>The family declaration's named argument listing its content-addressed entity types.</summary>
     private const string ContentAddressedMember = "ContentAddressed";
 
-    /// <summary>The family declaration's named argument naming its rewriter (spec 186, FR-004).</summary>
+    /// <summary>The family declaration's named argument naming its rewriter.</summary>
     private const string RewriterMember = "Rewriter";
 
     /// <summary>
@@ -58,7 +58,7 @@ public static class EfSchemaFamilyCatalog
     /// an integrity column no reason, or declares one column twice.
     /// </summary>
     /// <remarks>
-    /// A fault in a family's upcaster chain (spec 180, FR-005) does not refuse discovery: it is reported on the
+    /// A fault in a family's upcaster chain does not refuse discovery: it is reported on the
     /// descriptor's <see cref="EfSchemaFamilyDescriptor.Defects"/>, and its
     /// <see cref="EfSchemaFamilyDescriptor.ReadableVersions"/> never credits a version the fault leaves unreachable. The
     /// build and the family's registration at startup refuse it instead, so one family's broken chain cannot take every
@@ -228,7 +228,7 @@ public static class EfSchemaFamilyCatalog
     }
 
     /// <summary>
-    /// Why <paramref name="type"/> cannot be constructed and called as an upcaster (spec 180, FR-003), read without
+    /// Why <paramref name="type"/> cannot be constructed and called as an upcaster, read without
     /// constructing it; interfaces are matched by full name for the same reason attributes are.
     /// </summary>
     private static string? Refusal(Type type)

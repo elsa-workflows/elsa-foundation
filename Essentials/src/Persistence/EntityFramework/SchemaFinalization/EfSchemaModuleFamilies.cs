@@ -5,7 +5,7 @@ using Elsa.Persistence.Schema;
 namespace Elsa.Persistence.EntityFramework.SchemaFinalization;
 
 /// <summary>
-/// The schema families one EF module owns, as its assembly declares them (spec 180, FR-001), and which of them each of
+/// The schema families one EF module owns, as its assembly declares them, and which of them each of
 /// its stamped tables belongs to. The finalization gate finalizes these families, refuses the module when one of them
 /// is unreadable, and checks every write against the family its table belongs to.
 /// </summary>

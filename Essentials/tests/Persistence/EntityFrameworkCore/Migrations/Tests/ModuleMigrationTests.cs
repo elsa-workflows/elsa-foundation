@@ -160,7 +160,7 @@ public sealed class ModuleMigrationTests : IDisposable
         await Assert.ThrowsAsync<EfPendingMigrationsException>(() => provider.GetRequiredService<IShellInitializer>().InitializeAsync());
     }
 
-    // Kept beside the composition test (§2.23.1): ordering, migrations run in the Prepare phase, ahead of shell tasks.
+    // Kept beside the composition test: ordering, migrations run in the Prepare phase, ahead of shell tasks.
     [Fact]
     public void Migrations_are_registered_in_the_prepare_phase_ahead_of_shell_tasks()
     {

@@ -5,7 +5,7 @@ namespace Elsa.Persistence.EntityFramework;
 
 /// <summary>
 /// The one place a module's declared <see cref="EfModuleAttribute.PostMigration"/> types become
-/// <see cref="IEfPostMigrationAction"/> instances, and the one place a set of them is audited (ADR 0076 D8).
+/// <see cref="IEfPostMigrationAction"/> instances, and the one place a set of them is audited.
 /// Both the running host's <see cref="EfModuleMigrator{TContext}"/> and the out-of-process
 /// <c>Tooling.EfToolingHost</c> go through here, so a declaration that cannot be honoured is refused the same
 /// way in both, and neither can ever run an action the other would not.
@@ -94,7 +94,7 @@ public static class EfPostMigrationActions
 
     /// <summary>
     /// Audits <paramref name="actions"/> and fails closed — naming <see cref="Command"/> — when any reports
-    /// itself required (FR-056). The audit is what runs; the action never is.
+    /// itself required. The audit is what runs; the action never is.
     /// </summary>
     public static async Task EnsureNotRequiredAsync(
         DbContext context,

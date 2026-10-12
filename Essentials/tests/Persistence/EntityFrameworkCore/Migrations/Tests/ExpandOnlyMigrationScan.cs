@@ -8,9 +8,9 @@ using Microsoft.EntityFrameworkCore.Migrations;
 namespace Elsa.Persistence.EntityFrameworkCore.Migrations.Tests;
 
 /// <summary>
-/// Spec 185 RQ-001: per EF module and provider context, the migration ids #1976 freezes as that context's
-/// baseline. An entry present with an empty list means "no baseline recorded" (FR-002): every migration the
-/// context has is post-freeze. A missing entry is FR-020a's own failure — a supported provider context the
+/// Per EF module and provider context, the migration ids #1976 freezes as that context's
+/// baseline. An entry present with an empty list means "no baseline recorded": every migration the
+/// context has is post-freeze. A missing entry is a failure of its own — a supported provider context the
 /// manifest never mentions at all.
 /// </summary>
 internal sealed record FreezeManifest(IReadOnlyDictionary<(string Module, string Provider), IReadOnlyList<string>> Baselines)
@@ -28,22 +28,22 @@ internal sealed record FreezeManifest(IReadOnlyDictionary<(string Module, string
 }
 
 /// <summary>
-/// Spec 185 FR-003: the real scan fails when the freeze manifest is missing or unreadable, naming the path it
+/// The real scan fails when the freeze manifest is missing or unreadable, naming the path it
 /// expected. It never treats a missing manifest as "nothing is post-freeze".
 /// </summary>
 internal sealed class FreezeManifestMissingException(string message) : InvalidOperationException(message);
 
 /// <summary>
-/// Reads the freeze manifest #1976 adds (spec 185 RQ-001). #1976 has not happened yet (spec 185, "Current
-/// state"): nothing here writes that file, only reads it, and reading it today is expected to fail — proving
-/// FR-003 rather than working around it.
+/// Reads the freeze manifest #1976 adds. #1976 has not happened yet:
+/// nothing here writes that file, only reads it, and reading it today is expected to fail — proving
+/// that the scan requires the manifest rather than working around its absence.
 /// </summary>
 internal static class FreezeManifestReader
 {
     /// <summary>
-    /// Repo-relative path #1976 is expected to add its manifest at, beside the generator this spec's research
-    /// names as the tool that will grow an "add" mode for post-freeze migrations
-    /// (<c>tools/ef/generate-module-migrations.sh</c>). Not fixed by RQ-001; #1976 may choose otherwise, in
+    /// Repo-relative path #1976 is expected to add its manifest at, beside the generator expected to
+    /// grow an "add" mode for post-freeze migrations
+    /// (<c>tools/ef/generate-module-migrations.sh</c>). Not fixed yet; #1976 may choose otherwise, in
     /// which case only this constant moves.
     /// </summary>
     public const string ExpectedPath = "tools/ef/migration-baseline-manifest.json";
@@ -68,7 +68,7 @@ internal static class FreezeManifestReader
     }
 }
 
-/// <summary>What one run of <see cref="ExpandOnlyMigrationScanner"/> examined (spec 185 FR-018).</summary>
+/// <summary>What one run of <see cref="ExpandOnlyMigrationScanner"/> examined.</summary>
 internal sealed record ExpandOnlyMigrationScanReport(
     int Modules,
     int ProviderContextsExamined,
@@ -83,11 +83,11 @@ internal sealed record ExpandOnlyMigrationScanReport(
 }
 
 /// <summary>
-/// The real scan (spec 185 FR-001 to FR-002, FR-004 to FR-020b): every migration of every provider context of
+/// The real scan: every migration of every provider context of
 /// every module <paramref name="moduleAssemblies"/> declares, classified through
 /// <see cref="ExpandOnlyMigrationGuard"/> exactly as <see cref="ExpandOnlyMigrationGuardTests"/>'s fixtures are
-/// (FR-022) — the same <see cref="IMigrationsAssembly.CreateMigration"/> path
-/// <c>OrdinalCollationMigrationTests</c> already reads operations through (FR-004).
+/// — the same <see cref="IMigrationsAssembly.CreateMigration"/> path
+/// <c>OrdinalCollationMigrationTests</c> already reads operations through.
 /// </summary>
 internal static class ExpandOnlyMigrationScanner
 {
@@ -97,7 +97,7 @@ internal static class ExpandOnlyMigrationScanner
         "reads what it removes.";
 
     /// <summary>
-    /// Spec 185's shared enumeration seam: every (module, provider) pair of <paramref name="moduleAssemblies"/>'s
+    /// The shared enumeration seam: every (module, provider) pair of <paramref name="moduleAssemblies"/>'s
     /// declared modules crossed with <paramref name="providers"/>, with the declared provider context or
     /// <c>null</c> when the module marks that provider unsupported. <see cref="Scan"/> and any test building a
     /// manifest from today's real migrations enumerate through this one place, so they can never drift apart on
@@ -112,7 +112,7 @@ internal static class ExpandOnlyMigrationScanner
     }
 
     /// <summary>
-    /// FR-013, User Story 3: whether one post-freeze migration's opt-out is what let it pass — never recorded
+    /// Whether one post-freeze migration's opt-out is what let it pass — never recorded
     /// for a migration whose opt-out itself failed (an unlisted violation, or a stale entry), which belongs in
     /// the report's failures rather than in <see cref="ExpandOnlyMigrationScanReport.OptOutsHonoured"/>.
     /// </summary>
@@ -120,7 +120,7 @@ internal static class ExpandOnlyMigrationScanner
         optOut is not null && result.Passed;
 
     /// <summary>
-    /// FR-003: the scan itself owns loading the freeze manifest — not a caller that loads it first and only
+    /// The scan itself owns loading the freeze manifest — not a caller that loads it first and only
     /// then decides whether to run the scan — so a missing or unreadable manifest fails <em>inside</em> a real
     /// scan rather than before one ever starts, naming <paramref name="manifestRepoRelativePath"/>. Delegates to
     /// <see cref="FreezeManifestReader.Load"/> for the actual read and the <see cref="FreezeManifestMissingException"/>
@@ -144,14 +144,14 @@ internal static class ExpandOnlyMigrationScanner
         {
             if (contextType is null)
             {
-                // FR-001: a provider context the declaration marks unsupported is skipped and reported as skipped.
+                // A provider context the declaration marks unsupported is skipped and reported as skipped.
                 providerContextsSkipped++;
                 continue;
             }
 
             if (!manifest.HasEntry(descriptor.Name, provider))
             {
-                // FR-020a: every supported provider context must have a baseline entry. None at all is its own failure.
+                // Every supported provider context must have a baseline entry. None at all is its own failure.
                 failures.Add($"{descriptor.Name}/{provider}: no baseline entry in the freeze manifest.");
                 providerContextsExamined++;
                 continue;
@@ -164,7 +164,7 @@ internal static class ExpandOnlyMigrationScanner
             var assembly = context.GetService<IMigrationsAssembly>();
             var ordered = assembly.Migrations.OrderBy(migration => migration.Key, StringComparer.Ordinal).ToArray();
 
-            // FR-020b: a baseline id that names no migration this context actually has — a typo, or a
+            // A baseline id that names no migration this context actually has — a typo, or a
             // renamed or deleted baseline — never gets the chance to quietly stop counting as post-freeze.
             var orderedIds = ordered.Select(migration => migration.Key).ToHashSet(StringComparer.Ordinal);
             foreach (var staleId in baseline.Where(id => !orderedIds.Contains(id)))
@@ -173,13 +173,13 @@ internal static class ExpandOnlyMigrationScanner
 
             var postFreeze = ordered.Where(migration => !baseline.Contains(migration.Key, StringComparer.Ordinal)).ToArray();
 
-            // FR-020b: two manifest entries baselining the same migration id inflate baseline.Count without
+            // Two manifest entries baselining the same migration id inflate baseline.Count without
             // changing which migrations postFreeze excludes, which would otherwise make the floor below fail
             // for the wrong reason. Caught here by name instead.
             foreach (var duplicateId in baseline.GroupBy(id => id, StringComparer.Ordinal).Where(group => group.Count() > 1).Select(group => group.Key))
                 failures.Add($"{descriptor.Name}/{provider}: the freeze manifest's baseline lists migration '{duplicateId}' more than once.");
 
-            // FR-020b's independently-sourced floor: the post-freeze count must equal this context's migration
+            // The independently-sourced floor: the post-freeze count must equal this context's migration
             // count minus the manifest's baseline count for it — but the migration count comes from reading
             // [Migration]/[DbContext] attributes directly off the migrations assembly's types
             // (MigrationTypesDeclaredFor), not from IMigrationsAssembly.Migrations, which is also what `ordered`
@@ -202,10 +202,10 @@ internal static class ExpandOnlyMigrationScanner
                 ExpandOnlyMigrationFamilies before;
                 try
                 {
-                    // FR-004: what EF will execute, never source text. FR-005: Down is never read.
+                    // What EF will execute, never source text. Down is never read.
                     var providerName = EfRelationalProviderBinding.ExpectedProviderName(provider);
                     operations = assembly.CreateMigration(migrationType, providerName).UpOperations;
-                    // FR-023: which tables a stamped family covered before this migration is the previous migration's
+                    // Which tables a stamped family covered before this migration is the previous migration's
                     // target model, the schema this one runs against; a context's first migration has none before it.
                     var position = Array.FindIndex(ordered, migration => migration.Key == id);
                     before = ExpandOnlyMigrationFamilies.Before(
@@ -215,7 +215,7 @@ internal static class ExpandOnlyMigrationScanner
                 }
                 catch (Exception exception) when (exception is not OutOfMemoryException)
                 {
-                    // FR-017: a migration the guard cannot build fails the guard, naming it. Never skipped. A
+                    // A migration the guard cannot build fails the guard, naming it. Never skipped. A
                     // migration's Up() body is arbitrary user code reached only through reflection
                     // (CreateMigration), so this cannot be narrowed to a specific exception type without risking
                     // a legitimate build failure crashing the whole scan instead of being reported against the
@@ -229,7 +229,7 @@ internal static class ExpandOnlyMigrationScanner
                 var optOut = migrationType.GetCustomAttribute<ExpandOnlyMigrationOptOutAttribute>();
                 var result = ExpandOnlyMigrationGuard.Evaluate(operations, optOut, before);
 
-                // FR-015: a contracting opt-out also shows the family and version its application waits for (FR-023).
+                // A contracting opt-out also shows the family and version its application waits for.
                 if (ShouldRecordOptOutHonoured(optOut, result))
                     optOutsHonoured.Add($"{descriptor.Name}/{provider} {id}: {optOut!.ReviewReference} — {optOut.Reason}" +
                                         (optOut.SchemaFamily is { } family ? $" (applies once '{family}' is finalized at '{optOut.FinalizedVersion}')" : ""));
@@ -251,7 +251,7 @@ internal static class ExpandOnlyMigrationScanner
     }
 
     /// <summary>
-    /// The provider context bound as its own <c>[EfModule]</c> declares it, to a connection that is never opened (FR-004),
+    /// The provider context bound as its own <c>[EfModule]</c> declares it, to a connection that is never opened,
     /// so the scan reads any module the catalog discovers, first-party or synthetic, and not only the ones
     /// <see cref="ModuleContextCatalog"/> names by convention.
     /// </summary>
@@ -265,7 +265,7 @@ internal static class ExpandOnlyMigrationScanner
     }
 
     /// <summary>
-    /// FR-020b's independent source for a provider context's migration count: every type in
+    /// The independent source for a provider context's migration count: every type in
     /// <paramref name="contextType"/>'s own migrations assembly carrying both a <see cref="MigrationAttribute"/>
     /// and a <see cref="DbContextAttribute"/> naming <paramref name="contextType"/>, read directly off those
     /// attributes rather than through <see cref="IMigrationsAssembly.Migrations"/>. EF puts both attributes on

@@ -5,7 +5,7 @@ using Microsoft.Extensions.Logging;
 namespace Elsa.Persistence.EntityFramework.SchemaBackfill;
 
 /// <summary>
-/// The backfill's writes to a family's finish record (spec 186, FR-008, FR-014 and FR-018): the claim on the family, the
+/// The backfill's writes to a family's finish record: the claim on the family, the
 /// completion a verification pass proved, and its withdrawal when a row below it turns up. Each is a compare-and-set on
 /// the record, read afresh and decided again when it is lost, through <see cref="CompareAndSetAsync{T}"/>, and each names
 /// this worker, so the store refuses it while another worker's claim holds
@@ -32,7 +32,7 @@ internal sealed class EfSchemaBackfillFinish(
     private readonly Dictionary<string, (string Target, DateTimeOffset RenewedAt)> _held = new(StringComparer.Ordinal);
 
     /// <summary>
-    /// Whether this worker's member has concluded that it lapsed from the fleet (spec 183, FR-007): others may count it
+    /// Whether this worker's member has concluded that it lapsed from the fleet: others may count it
     /// expired and take its work over, so it takes none. A host that composes no fleet never lapses.
     /// </summary>
     public bool HasLapsed => fleet?.GetLocalStanding().HasLapsed == true;
@@ -42,7 +42,7 @@ internal sealed class EfSchemaBackfillFinish(
         scopes.WithScopeAsync(scope => new EfSchemaFinalizationStore(scope.Context, time).FindAsync(family, cancellationToken), cancellationToken);
 
     /// <summary>
-    /// Stops the run when <paramref name="record"/>, read just now, shows that this worker no longer owns it (FR-008): its
+    /// Stops the run when <paramref name="record"/>, read just now, shows that this worker no longer owns it: its
     /// member has lapsed, or another worker's claim holds. A pass calls it on the read it takes before each row, so a worker
     /// stalled past its claim's expiry rewrites no further row once another has taken the family over.
     /// </summary>
@@ -71,11 +71,11 @@ internal sealed class EfSchemaBackfillFinish(
     }
 
     /// <summary>
-    /// Records the family complete at the run's target (FR-014), unless a completion at or after it already stands, or a
+    /// Records the family complete at the run's target, unless a completion at or after it already stands, or a
     /// completion was withdrawn, by this worker or another, after the settle margin the verification pass followed began,
-    /// which only a pass after a new margin can answer (FR-012). Nor does a worker record whose member has lapsed, or while
-    /// another worker's claim holds, which the store refuses too: the run is that worker's now (FR-008). Then the gate reads
-    /// the record again, so this host's dormancy check answers from it at once (FR-017). Returns why nothing was recorded,
+    /// which only a pass after a new margin can answer. Nor does a worker record whose member has lapsed, or while
+    /// another worker's claim holds, which the store refuses too: the run is that worker's now. Then the gate reads
+    /// the record again, so this host's dormancy check answers from it at once. Returns why nothing was recorded,
     /// or null when the completion stands.
     /// </summary>
     public async Task<string?> RecordAsync(EfSchemaBackfillScopeRunner scopes, EfSchemaBackfillRun run, EfSchemaBackfillVerification verification, CancellationToken cancellationToken)
@@ -92,7 +92,7 @@ internal sealed class EfSchemaBackfillFinish(
             if (EfSchemaBackfillSettle.WithdrawnSince(record.FinishHistory, verification.HistoryMark))
             {
                 // A row below a completion turned up after the margin began, so the pass proved nothing. The withdrawal in the
-                // history starts the margin again on every worker's next settle check (FR-012).
+                // history starts the margin again on every worker's next settle check.
                 return Attempt<string?>.Done("A completion was withdrawn after the settle margin began, so only a verification pass after a new margin can prove it.");
             }
 
@@ -124,8 +124,8 @@ internal sealed class EfSchemaBackfillFinish(
     }
 
     /// <summary>
-    /// Withdraws the completion that stands when <paramref name="evidence"/>, read after it, finds rows below it (FR-018),
-    /// by compare-and-set with a history entry giving that evidence, leaving the finalized version where it is (FR-019), and
+    /// Withdraws the completion that stands when <paramref name="evidence"/>, read after it, finds rows below it,
+    /// by compare-and-set with a history entry giving that evidence, leaving the finalized version where it is, and
     /// reports it as critical. The evidence is read against the record it withdraws, so a completion recorded since the
     /// caller last looked is withdrawn only when rows below it remain, and never on stale evidence. Every host's Attention
     /// reads the withdrawal from the record; the gate reads the record again, so features that need completeness go dormant
@@ -142,7 +142,7 @@ internal sealed class EfSchemaBackfillFinish(
     /// </para>
     /// <para>
     /// Only the worker that holds the live claim withdraws, or any worker while no live claim stands, so a withdrawal never
-    /// moves another worker's claim onto itself (FR-008); the store refuses it otherwise. A worker refused for it, or whose
+    /// moves another worker's claim onto itself; the store refuses it otherwise. A worker refused for it, or whose
     /// member has lapsed, lets the gate read the record again and gives up: the run stops, and the worker that holds the
     /// claim finds the row.
     /// </para>
@@ -200,7 +200,7 @@ internal sealed class EfSchemaBackfillFinish(
     }
 
     /// <summary>
-    /// Claims the family for this worker before any pass reads its rows (FR-008): the survey, the upgrade pass, the settle
+    /// Claims the family for this worker before any pass reads its rows: the survey, the upgrade pass, the settle
     /// condition, the verification passes and the audit. The claim names <paramref name="target"/>, this host's write
     /// version, and is held on the completion that stands or, while none stands, on the withdrawal that ended it, so it can
     /// be taken after a withdrawal too. A claim this worker renewed less than a third of its period ago is kept without a
@@ -298,7 +298,7 @@ internal sealed class EfSchemaBackfillFinish(
 
     /// <summary>
     /// Between two batches of a pass, between two tables of a selection that runs outside a compare-and-set, and before each
-    /// phase of a run (FR-008): stops the run when this member has lapsed from the fleet; renews the claim once a third of
+    /// phase of a run: stops the run when this member has lapsed from the fleet; renews the claim once a third of
     /// its period has passed; and stops the run when another worker has taken it over since this one's claim lapsed, so
     /// this worker finishes nothing it no longer owns. The round releases what the stopped run held.
     /// </summary>
@@ -438,10 +438,10 @@ internal sealed class EfSchemaBackfillFinish(
     private readonly record struct Withdrawal(SchemaFinishRecord? Standing, Stop? Refused = null);
 }
 
-/// <summary>What a worker's attempt to claim a family found (spec 186, FR-008), and, when another worker holds it, that claim.</summary>
+/// <summary>What a worker's attempt to claim a family found, and, when another worker holds it, that claim.</summary>
 internal readonly record struct EfSchemaBackfillClaim(EfSchemaBackfillClaimOutcome Outcome, SchemaBackfillClaim? Holder = null);
 
-/// <summary>What a worker's attempt to claim a family found (spec 186, FR-008).</summary>
+/// <summary>What a worker's attempt to claim a family found.</summary>
 internal enum EfSchemaBackfillClaimOutcome
 {
     /// <summary>This worker holds the claim.</summary>

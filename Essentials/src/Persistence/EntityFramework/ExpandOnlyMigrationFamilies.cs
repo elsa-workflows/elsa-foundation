@@ -6,8 +6,8 @@ using Microsoft.EntityFrameworkCore.Metadata;
 namespace Elsa.Persistence.EntityFramework;
 
 /// <summary>
-/// What <see cref="ExpandOnlyMigrationGuard.Evaluate"/> needs to tell a contracting migration from any other (spec 185
-/// FR-023): which tables a stamped schema family covered before the migration runs, and the versions each of the
+/// What <see cref="ExpandOnlyMigrationGuard.Evaluate"/> needs to tell a contracting migration from any other:
+/// which tables a stamped schema family covered before the migration runs, and the versions each of the
 /// module's families reads in this build.
 /// </summary>
 /// <param name="StampedTables">

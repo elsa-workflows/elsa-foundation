@@ -12,9 +12,9 @@ using static Elsa.Persistence.EntityFramework.Tests.BackfillDatabase;
 namespace Elsa.Persistence.EntityFramework.Tests;
 
 /// <summary>
-/// The post-finalization backfill (spec 186) on the synthetic family at versions 1 and 2, on a file database every host
-/// of a test shares, with a fleet the test controls and a clock it moves. Every mechanism is checked in both directions
-/// (FR-024), and every "nothing happened" from the record and the rows themselves, since a backfill that recorded
+/// The post-finalization backfill on the synthetic family at versions 1 and 2, on a file database every host
+/// of a test shares, with a fleet the test controls and a clock it moves. Every mechanism is checked in both directions,
+/// and every "nothing happened" from the record and the rows themselves, since a backfill that recorded
 /// completion over a row it had not upgraded would look exactly like one that works.
 /// </summary>
 public sealed class EfSchemaBackfillTests : IAsyncLifetime
@@ -47,7 +47,7 @@ public sealed class EfSchemaBackfillTests : IAsyncLifetime
         }
     }
 
-    /// <summary>User Story 1, acceptance 1 and 2; SC-001 and FR-014.</summary>
+    /// <summary>A run upgrades every row below the finalized version, each reads back as before, and the run records completion.</summary>
     [Fact]
     public async Task A_run_upgrades_every_row_below_the_finalized_version_reads_each_back_unchanged_and_records_completion()
     {
@@ -71,7 +71,7 @@ public sealed class EfSchemaBackfillTests : IAsyncLifetime
         Assert.Equal("2", host.Gate.ObservedRecordOf(BackfillFamily.Family)!.Value.Record.Finish!.CompletionVersion);
     }
 
-    /// <summary>User Story 1, acceptance 3; FR-002: nothing is written at a version before this host observes it as finalized.</summary>
+    /// <summary>Nothing is written at a version before this host observes it as finalized.</summary>
     [Fact]
     public async Task Before_the_version_is_finalized_the_backfill_writes_nothing_and_once_it_is_it_upgrades()
     {
@@ -98,9 +98,9 @@ public sealed class EfSchemaBackfillTests : IAsyncLifetime
     }
 
     /// <summary>
-    /// FR-007, both ways: a row at the target is skipped, and a rerun, on this host or another, writes no row and leaves the
+    /// A rerun, both ways: a row at the target is skipped, and a rerun, on this host or another, writes no row and leaves the
     /// proof as it was. This host's rerun writes nothing at all; the other host's first round audits the completion under
-    /// its claim (FR-008), and its claim and the release of it, once the audit has found nothing, are all it writes.
+    /// its claim, and its claim and the release of it, once the audit has found nothing, are all it writes.
     /// </summary>
     [Fact]
     public async Task A_row_already_at_the_target_is_skipped_and_a_rerun_on_any_host_repeats_only_reads()
@@ -132,7 +132,7 @@ public sealed class EfSchemaBackfillTests : IAsyncLifetime
     }
 
     /// <summary>
-    /// FR-012, both ways: the upgrade pass runs at once, but verification waits until every counted member reports observing
+    /// The settle condition, both ways: the upgrade pass runs at once, but verification waits until every counted member reports observing
     /// the target, and then for the settle margin, and the member it waits for is named on the status.
     /// </summary>
     [Fact]
@@ -166,7 +166,7 @@ public sealed class EfSchemaBackfillTests : IAsyncLifetime
     }
 
     /// <summary>
-    /// FR-012: the configured settle margin may lengthen the fleet's, for a shell drain longer than the default, and never
+    /// The configured settle margin may lengthen the fleet's, for a shell drain longer than the default, and never
     /// shortens it: a member's deactivation reaches the report one heartbeat later and its shell's last writes can outlast
     /// the drain, so a shorter value is raised to what the fleet needs to see a member stop writing.
     /// </summary>
@@ -193,7 +193,7 @@ public sealed class EfSchemaBackfillTests : IAsyncLifetime
     }
 
     /// <summary>
-    /// FR-013 and FR-024, both ways: a row written below the target behind the upgrade pass is found by verification, which
+    /// Verification, both ways: a row written below the target behind the upgrade pass is found by verification, which
     /// records nothing and starts again; the pass after it, finding nothing, records completion.
     /// </summary>
     [Fact]
@@ -225,7 +225,7 @@ public sealed class EfSchemaBackfillTests : IAsyncLifetime
     }
 
     /// <summary>
-    /// User Story 4; SC-004, FR-018 and FR-019, both ways: an audit over a family with no row below its completion changes
+    /// The audit, both ways: an audit over a family with no row below its completion changes
     /// nothing of the proof, only the claim it ran under; a straggler written after completion by a writer still at 1 is
     /// rewritten, reported, and withdraws the completion but not the finalized version, until a new verification pass
     /// records it again.
@@ -265,7 +265,7 @@ public sealed class EfSchemaBackfillTests : IAsyncLifetime
         Assert.Equal("2", (await database.RecordAsync()).Finish!.CompletionVersion);
     }
 
-    /// <summary>User Story 5; SC-005, FR-010a, FR-011a and FR-011b, both ways.</summary>
+    /// <summary>Content-addressed rows are never rewritten, and the family completes only once none remains below the target, both ways.</summary>
     [Fact]
     public async Task Content_addressed_rows_are_never_rewritten_and_while_any_is_below_the_target_the_family_is_never_complete()
     {
@@ -283,11 +283,11 @@ public sealed class EfSchemaBackfillTests : IAsyncLifetime
         var blocker = Assert.Single(host.Status.Blockers);
         Assert.Equal((EfSchemaBackfillBlockerKind.ContentAddressed, BackfillFamily.ReceiptsTable, 2L), (blocker.Kind, blocker.Table, blocker.Count));
         Assert.True(host.Status.BlockedByContentAddressedRows);
-        // A blocked run leaves the family until it is surveyed again, so it lets go of its claim (FR-008).
+        // A blocked run leaves the family until it is surveyed again, so it lets go of its claim.
         Assert.Null((await database.RecordAsync()).BackfillRun);
 
         // A receipt a version-2 writer produced sits beside them: once the old ones are gone, the family completes when it
-        // is next surveyed, an audit interval on (FR-023).
+        // is next surveyed, an audit interval on.
         await using (var context = host.Context())
             await context.Receipts.Where(row => row.SchemaVersion == "1").ExecuteDeleteAsync();
         await database.SeedAsync(Receipt("hash-3", "2"));
@@ -297,7 +297,7 @@ public sealed class EfSchemaBackfillTests : IAsyncLifetime
         Assert.Equal("2", (await database.RecordAsync()).Finish!.CompletionVersion);
     }
 
-    /// <summary>FR-006, both ways: skew and corruption are reported, never rewritten or skipped silently, and block completion until resolved.</summary>
+    /// <summary>Skew and corruption, both ways: they are reported, never rewritten or skipped silently, and block completion until resolved.</summary>
     [Fact]
     public async Task Rows_with_a_missing_or_unreadable_stamp_and_rows_that_fail_to_upcast_are_reported_and_block_completion()
     {
@@ -312,7 +312,7 @@ public sealed class EfSchemaBackfillTests : IAsyncLifetime
         await host.RunOnceAsync();
 
         // The audit of the completion standing at 1 cannot place the unstamped and retired rows at or after it, so it
-        // withdraws it (FR-018); the run towards 2 is blocked by them.
+        // withdraws it; the run towards 2 is blocked by them.
         var record = await database.RecordAsync();
         Assert.Null(record.Finish);
         Assert.Contains($"table '{BackfillFamily.OrdersTable}': 2 (with a stamp this host cannot read)", record.FinishHistory[^1].Reason);
@@ -333,7 +333,7 @@ public sealed class EfSchemaBackfillTests : IAsyncLifetime
         Assert.Equal("2", (await database.RecordAsync()).Finish!.CompletionVersion);
     }
 
-    /// <summary>FR-004: a family whose rows are below the target but that names no rewriter says so, and is never recorded complete.</summary>
+    /// <summary>A family whose rows are below the target but that names no rewriter says so, and is never recorded complete.</summary>
     [Fact]
     public async Task A_family_that_names_no_rewriter_reports_it_and_is_never_recorded_complete()
     {
@@ -349,7 +349,7 @@ public sealed class EfSchemaBackfillTests : IAsyncLifetime
     }
 
     /// <summary>
-    /// FR-004: a rewriter the shell cannot construct, because a service it takes is not composed there, blocks completion
+    /// A rewriter the shell cannot construct, because a service it takes is not composed there, blocks completion
     /// and says why, rather than failing every round with nothing on the status.
     /// </summary>
     [Fact]
@@ -370,7 +370,7 @@ public sealed class EfSchemaBackfillTests : IAsyncLifetime
     }
 
     /// <summary>
-    /// User Story 3, acceptance 1; SC-002: a host killed within a batch, before or after a row's write, or between two
+    /// A host killed within a batch, before or after a row's write, or between two
     /// batches, loses nothing. Its claim keeps another host off only until it expires, and the other host finishes with the
     /// very table an uninterrupted run leaves.
     /// </summary>
@@ -422,7 +422,7 @@ public sealed class EfSchemaBackfillTests : IAsyncLifetime
     }
 
     /// <summary>
-    /// User Story 3, acceptance 2; FR-008: two hosts running at once with no claim to keep them apart, both reading the same
+    /// Two hosts running at once with no claim to keep them apart, both reading the same
     /// row before either writes it, write each row once, lose the compare-and-set harmlessly, and record completion once.
     /// </summary>
     [Fact]
@@ -455,7 +455,7 @@ public sealed class EfSchemaBackfillTests : IAsyncLifetime
         Assert.Single(record.FinishHistory, entry => entry is { Transition: SchemaFinishTransition.Completed, Version: "2" });
     }
 
-    /// <summary>FR-008: with its claim, a second host running at the same time leaves the run to the first, and reads nothing.</summary>
+    /// <summary>With its claim, a second host running at the same time leaves the run to the first, and reads nothing.</summary>
     [Fact]
     public async Task A_claimed_run_is_left_alone_by_a_second_host_until_the_claim_ends()
     {
@@ -477,7 +477,7 @@ public sealed class EfSchemaBackfillTests : IAsyncLifetime
     }
 
     /// <summary>
-    /// FR-008, both ways, the case a survey taken before the claim would hide: a worker that finds the family claimed
+    /// The claim, both ways, the case a survey taken before the claim would hide: a worker that finds the family claimed
     /// elsewhere, here while the claimant waits out its settle margin, sends nothing to the family's tables, neither a
     /// survey nor a verification pass nor its first audit, and sends nothing at all while the claim holds; once the claim
     /// has expired, it takes the family over and finishes it.
@@ -522,7 +522,7 @@ public sealed class EfSchemaBackfillTests : IAsyncLifetime
     }
 
     /// <summary>
-    /// FR-008 after FR-018, both ways, the case that cost N-way contention: the worker whose audit withdraws the completion
+    /// The claim after a withdrawal, both ways, the case that cost N-way contention: the worker whose audit withdraws the completion
     /// keeps its claim, now on the withdrawal, and goes on rewriting what it found, while every other worker that finds the
     /// withdrawal, its gate already showing no completion, leaves the family alone rather than rewrite the same rows. The
     /// claimant then records the completion again, which drops its claim.
@@ -572,7 +572,7 @@ public sealed class EfSchemaBackfillTests : IAsyncLifetime
     }
 
     /// <summary>
-    /// FR-008 after FR-018, the race: a completion withdrawn with no claim standing, found by several workers whose rounds
+    /// The claim after a withdrawal, the race: a completion withdrawn with no claim standing, found by several workers whose rounds
     /// all read the finalization record before any of them writes it. One wins the claim on the withdrawal and upgrades
     /// every row; the others lose the compare-and-set, find its claim, and read none of the rows.
     /// </summary>
@@ -581,7 +581,7 @@ public sealed class EfSchemaBackfillTests : IAsyncLifetime
         BackfillWithdrawalRace.RunAsync(database, clock, workers: 4);
 
     /// <summary>
-    /// FR-008 with FR-014, the case that looks like success: a worker whose claim lapsed while it verified, and that
+    /// The claim with the completion, the case that looks like success: a worker whose claim lapsed while it verified, and that
     /// another worker took over, records no completion although its own pass found nothing, so it finishes nothing it no
     /// longer owns; the claimant verifies after its own settle margin and records it.
     /// </summary>
@@ -621,7 +621,7 @@ public sealed class EfSchemaBackfillTests : IAsyncLifetime
     }
 
     /// <summary>
-    /// FR-008 with spec 183's FR-007, both ways, the case a claim that merely expires would hide: a member that lapses from
+    /// The claim with a member's lapse from the fleet, both ways, the case a claim that merely expires would hide: a member that lapses from
     /// the fleet mid-run stops before the next row it would rewrite, releases its claim, and reads nothing while it stays
     /// lapsed, so another member takes the family over at once rather than a claim period later.
     /// </summary>
@@ -656,7 +656,7 @@ public sealed class EfSchemaBackfillTests : IAsyncLifetime
     }
 
     /// <summary>
-    /// FR-008 with spec 183's FR-007, the way back: a member that lapsed and stopped mid-run, once it rejoins as a new
+    /// The claim with a member's lapse from the fleet, the way back: a member that lapsed and stopped mid-run, once it rejoins as a new
     /// incarnation, claims the family again and finishes the run, and records the completion under that incarnation.
     /// </summary>
     [Fact]
@@ -689,7 +689,7 @@ public sealed class EfSchemaBackfillTests : IAsyncLifetime
     }
 
     /// <summary>
-    /// FR-008, the release that cannot land: a member that lapses, and whose release loses its compare-and-set on every
+    /// The claim, the release that cannot land: a member that lapses, and whose release loses its compare-and-set on every
     /// attempt, fails that round with its claim still standing, and releases it the next round it is still lapsed. It is
     /// retried, not left to expire.
     /// </summary>
@@ -729,7 +729,7 @@ public sealed class EfSchemaBackfillTests : IAsyncLifetime
     }
 
     /// <summary>
-    /// FR-008, the case that held the family for good: a round that fails with something other than a stop, here the
+    /// The claim, the case that held the family for good: a round that fails with something other than a stop, here the
     /// database going away under a row's write, lets go of its claim before the failure goes on, so a worker whose rounds
     /// keep failing never holds the other workers off; and the module's other families still run that round, which then
     /// fails with that failure.
@@ -751,7 +751,7 @@ public sealed class EfSchemaBackfillTests : IAsyncLifetime
     }
 
     /// <summary>
-    /// FR-008 with the round's isolation, both families failing: each lets go of its claim, and the round fails with both
+    /// The claim with the round's isolation, both families failing: each lets go of its claim, and the round fails with both
     /// failures, neither hiding the other.
     /// </summary>
     [Fact]
@@ -773,7 +773,7 @@ public sealed class EfSchemaBackfillTests : IAsyncLifetime
     }
 
     /// <summary>
-    /// FR-008, the release that fails after a failed round: the round's own failure is the one it reports, and the release's
+    /// The claim, the release that fails after a failed round: the round's own failure is the one it reports, and the release's
     /// failure is logged as a warning rather than thrown over it; the claim then expires on its own.
     /// </summary>
     [Fact]
@@ -876,7 +876,7 @@ public sealed class EfSchemaBackfillTests : IAsyncLifetime
     }
 
     /// <summary>
-    /// FR-008, the early ways out of a round: a worker that kept its claim while its run settled, and whose host then comes
+    /// The claim, the early ways out of a round: a worker that kept its claim while its run settled, and whose host then comes
     /// to refuse every write to the family, since a version it cannot read was finalized elsewhere, lets go of the claim on
     /// that round rather than keep the family from the hosts that can still work on it.
     /// </summary>
@@ -905,7 +905,7 @@ public sealed class EfSchemaBackfillTests : IAsyncLifetime
     }
 
     /// <summary>
-    /// FR-008, the stop that held the family until its claim expired: a round cancelled mid-run, as a stopping shell
+    /// The claim, the stop that held the family until its claim expired: a round cancelled mid-run, as a stopping shell
     /// cancels it, still lets go of its claim, on a token of its own.
     /// </summary>
     [Fact]
@@ -923,7 +923,7 @@ public sealed class EfSchemaBackfillTests : IAsyncLifetime
     }
 
     /// <summary>
-    /// FR-008 with FR-018, the case a renewal inside the withdrawal's compare-and-set would lose: an audit whose evidence
+    /// The claim with a withdrawal, the case a renewal inside the withdrawal's compare-and-set would lose: an audit whose evidence
     /// takes longer than a third of the claim period, on every attempt, still withdraws the completion, since the claim is
     /// renewed before the compare-and-set and between its attempts, and never written inside one.
     /// </summary>
@@ -960,7 +960,7 @@ public sealed class EfSchemaBackfillTests : IAsyncLifetime
     }
 
     /// <summary>
-    /// FR-008, the case a stalled worker would hide: a worker whose claim lapses mid-batch, and that another worker takes
+    /// The claim, the case a stalled worker would hide: a worker whose claim lapses mid-batch, and that another worker takes
     /// over, rewrites no further row of that batch, since the read it takes before each row finds the other's claim.
     /// </summary>
     [Fact]
@@ -984,7 +984,7 @@ public sealed class EfSchemaBackfillTests : IAsyncLifetime
     }
 
     /// <summary>
-    /// FR-008 with FR-018, the case a long audit would hide: an audit whose selection outlasts its claim, which another
+    /// The claim with a withdrawal, the case a long audit would hide: an audit whose selection outlasts its claim, which another
     /// worker takes over meanwhile, stops at its next renewal, before it counts another table, and so neither withdraws the
     /// completion nor rewrites the straggler; the worker that holds the claim does that.
     /// </summary>
@@ -1027,7 +1027,7 @@ public sealed class EfSchemaBackfillTests : IAsyncLifetime
     }
 
     /// <summary>
-    /// FR-008 with FR-018, both ways: a worker running without a claim, as one whose claim duration is zero does, refuses to
+    /// The claim with a withdrawal, both ways: a worker running without a claim, as one whose claim duration is zero does, refuses to
     /// withdraw a completion while another worker's live claim stands, so it never moves that claim onto its withdrawal; it
     /// reads the record again and gives up, leaving the straggler to the claimant. Once that claim has expired, it withdraws.
     /// </summary>
@@ -1061,7 +1061,7 @@ public sealed class EfSchemaBackfillTests : IAsyncLifetime
     }
 
     /// <summary>
-    /// User Story 3, acceptance 3; FR-007: a live write between the backfill's read and its write wins the compare-and-set;
+    /// A live write between the backfill's read and its write wins the compare-and-set;
     /// the backfill reads the row again, finds it at 2, and leaves the live write as it is.
     /// </summary>
     [Fact]
@@ -1087,7 +1087,7 @@ public sealed class EfSchemaBackfillTests : IAsyncLifetime
         Assert.Equal("2", (await database.RecordAsync()).Finish!.CompletionVersion);
     }
 
-    /// <summary>FR-021: the status names the target and the progress while a run is going, and the members settle waits for.</summary>
+    /// <summary>The status names the target and the progress while a run is going, and the members settle waits for.</summary>
     [Fact]
     public async Task The_status_names_the_target_and_counts_the_rows_rewritten_while_the_run_goes()
     {
@@ -1110,7 +1110,7 @@ public sealed class EfSchemaBackfillTests : IAsyncLifetime
         Assert.Equal("2", status.Finish!.CompletionVersion);
     }
 
-    /// <summary>Edge case "Several versions finalized at once": one run upgrades every row below the newest, through the whole chain.</summary>
+    /// <summary>Several versions finalized at once: one run upgrades every row below the newest, through the whole chain.</summary>
     [Fact]
     public async Task When_several_versions_finalize_at_once_one_run_upgrades_every_row_through_the_whole_chain()
     {
@@ -1126,7 +1126,7 @@ public sealed class EfSchemaBackfillTests : IAsyncLifetime
     }
 
     /// <summary>
-    /// FR-003, Edge case "Finalization advances during a run": rows are written at this host's write version at the moment
+    /// Finalization advancing during a run: rows are written at this host's write version at the moment
     /// of each write, so the ones after the advance are at the newer version; the run completes for the target its
     /// verification proves, and the next run for the newer one.
     /// </summary>
@@ -1162,7 +1162,7 @@ public sealed class EfSchemaBackfillTests : IAsyncLifetime
     }
 
     /// <summary>
-    /// FR-018, both ways within one round: a host towards a newer finalized version whose audit meets a row below the
+    /// The audit, both ways within one round: a host towards a newer finalized version whose audit meets a row below the
     /// completion that stands withdraws it, naming the table and the count, before it records the newer one; the rows
     /// between the two versions are not stragglers and withdraw nothing.
     /// </summary>
@@ -1187,7 +1187,7 @@ public sealed class EfSchemaBackfillTests : IAsyncLifetime
     }
 
     /// <summary>
-    /// FR-018, the case a crash would hide: the audit, the upgrade pass and the verification pass each withdraw the
+    /// The withdrawal, the case a crash would hide: the audit, the upgrade pass and the verification pass each withdraw the
     /// completion before they rewrite the first row they find below it, so a host that dies before that rewrite leaves the
     /// straggler reported, not under a completion that still stands. The row itself is left for the next run.
     /// </summary>
@@ -1236,7 +1236,7 @@ public sealed class EfSchemaBackfillTests : IAsyncLifetime
     }
 
     /// <summary>
-    /// FR-013 and FR-014, the case that looks like success: a verification pass that finds nothing, but during which
+    /// Verification and completion, the case that looks like success: a verification pass that finds nothing, but during which
     /// another worker withdrew the completion over a straggler it found, records nothing, and the pass after it does. The
     /// other worker withdraws once this one's claim has lapsed, since no worker withdraws while another's claim holds.
     /// </summary>
@@ -1272,7 +1272,7 @@ public sealed class EfSchemaBackfillTests : IAsyncLifetime
     }
 
     /// <summary>
-    /// FR-018: a standing completion is audited on its interval even while this host's target is ahead of it, so a
+    /// A standing completion is audited on its interval even while this host's target is ahead of it, so a
     /// straggler below it is reported by a host whose own run cannot make progress, here for want of a rewriter.
     /// </summary>
     [Fact]
@@ -1297,7 +1297,7 @@ public sealed class EfSchemaBackfillTests : IAsyncLifetime
     }
 
     /// <summary>
-    /// FR-012 after FR-018: once a completion is withdrawn, verification waits a full settle margin again before it may
+    /// The settle margin after a withdrawal: once a completion is withdrawn, verification waits a full settle margin again before it may
     /// record one, however long ago the settle condition first held.
     /// </summary>
     [Fact]
@@ -1330,7 +1330,7 @@ public sealed class EfSchemaBackfillTests : IAsyncLifetime
     }
 
     /// <summary>
-    /// FR-012 after FR-018, across workers, the case a worker's own memory would hide: a worker whose settle condition has
+    /// The settle margin after a withdrawal, across workers, the case a worker's own memory would hide: a worker whose settle condition has
     /// held for longer than the margin, and that did not make the withdrawal, still waits a full margin after another
     /// worker withdraws the completion, since it finds the withdrawal in the finish history past where its margin began.
     /// </summary>
@@ -1339,7 +1339,7 @@ public sealed class EfSchemaBackfillTests : IAsyncLifetime
     {
         var margin = TimeSpan.FromSeconds(35);
         await SeedFamilyAsync();
-        // Without a claim, so both settle at once: the margin must restart whatever the claim does (FR-008).
+        // Without a claim, so both settle at once: the margin must restart whatever the claim does.
         var withdrawer = await HostAsync("host-a", margin: margin, claim: TimeSpan.Zero);
         var other = await HostAsync("host-b", margin: margin, claim: TimeSpan.Zero);
         await withdrawer.RunOnceAsync();
@@ -1401,7 +1401,7 @@ public sealed class EfSchemaBackfillTests : IAsyncLifetime
     }
 
     /// <summary>
-    /// FR-018, both ways across a race: an audit withdraws only a completion that rows below it contradict when it
+    /// The withdrawal, both ways across a race: an audit withdraws only a completion that rows below it contradict when it
     /// withdraws. Here another worker rewrote the straggler the audit counted and recorded the completion again before the
     /// audit's withdrawal landed, so that completion stands; the audit's own withdrawal of the one it examined is the
     /// other direction, proven above.
@@ -1449,7 +1449,7 @@ public sealed class EfSchemaBackfillTests : IAsyncLifetime
     }
 
     /// <summary>
-    /// FR-018, the case a read taken when the run began would hide: another worker records the completion while this
+    /// The withdrawal, the case a read taken when the run began would hide: another worker records the completion while this
     /// worker's run goes on, and then a writer still at 1 leaves a late row below it. This worker reads what stands before
     /// each row, so it withdraws that completion, naming the row's table, before it rewrites the row, rather than rewriting
     /// it silently under a completion that still stands; then it records the completion again.
@@ -1488,7 +1488,7 @@ public sealed class EfSchemaBackfillTests : IAsyncLifetime
     }
 
     /// <summary>
-    /// FR-018, the case logging and going on would hide: a withdrawal that loses its compare-and-set on every attempt stops
+    /// The withdrawal, the case logging and going on would hide: a withdrawal that loses its compare-and-set on every attempt stops
     /// the round rather than rewrite the straggler under a completion that still stands, so the next round finds it again.
     /// </summary>
     [Fact]
@@ -1515,7 +1515,7 @@ public sealed class EfSchemaBackfillTests : IAsyncLifetime
         var exhausted = await Assert.ThrowsAsync<InvalidOperationException>(() => host.RunOnceAsync());
 
         Assert.Contains("attempts to withdraw the completion", exhausted.Message);
-        // Three lost claims, after which the audit goes on unclaimed, since nothing correct depends on the claim (FR-008);
+        // Three lost claims, after which the audit goes on unclaimed, since nothing correct depends on the claim;
         // then three lost withdrawals, which stop it.
         Assert.Equal(6, lost);
         Assert.Equal(rows, await database.SnapshotAsync());
@@ -1526,7 +1526,7 @@ public sealed class EfSchemaBackfillTests : IAsyncLifetime
     }
 
     /// <summary>
-    /// FR-023: a family blocked by rows nothing may upgrade is surveyed again at the audit interval, not every round, so
+    /// A family blocked by rows nothing may upgrade is surveyed again at the audit interval, not every round, so
     /// a blocker that persists costs one selection by stamp per interval; a new target is surveyed at once.
     /// </summary>
     [Fact]
@@ -1555,7 +1555,7 @@ public sealed class EfSchemaBackfillTests : IAsyncLifetime
     }
 
     /// <summary>
-    /// FR-023 with FR-006, both ways: a family blocked by a row an operator repairs in place is surveyed again at the
+    /// The repairable interval, both ways: a family blocked by a row an operator repairs in place is surveyed again at the
     /// shorter repairable interval, not the audit interval, so a repair is seen within minutes; before that interval it is
     /// left alone.
     /// </summary>
@@ -1677,7 +1677,7 @@ public sealed class EfSchemaBackfillTests : IAsyncLifetime
 
     /// <summary>
     /// The proof <paramref name="after"/> carries is the one <paramref name="before"/> did: the finalized version, the
-    /// completion and both histories, whatever claim each was taken under (FR-008).
+    /// completion and both histories, whatever claim each was taken under.
     /// </summary>
     private static void AssertProofUnchanged(SchemaFinalizationRecord before, SchemaFinalizationRecord after)
     {
@@ -1758,7 +1758,7 @@ public sealed class EfSchemaBackfillTests : IAsyncLifetime
         VerificationPasses = verificationPasses
     };
 
-    /// <summary>What each order and line reads as through the family's read path: SC-001's "reads equal to its value before".</summary>
+    /// <summary>What each order and line reads as through the family's read path, which a run must leave unchanged.</summary>
     private static async Task<IReadOnlyList<object>> DomainValuesAsync(BackfillHost host)
     {
         await using var context = host.Context();

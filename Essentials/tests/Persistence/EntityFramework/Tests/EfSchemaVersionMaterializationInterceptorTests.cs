@@ -80,8 +80,8 @@ public sealed class EfSchemaVersionMaterializationInterceptorTests : IDisposable
 
     /// <summary>
     /// A value converter deserializes the content while EF materializes the row, before any upcaster could run, so the
-    /// interceptor accepts the current version alone even when the family's chain reaches further back (spec 180,
-    /// FR-006): a predecessor's row is refused as skew rather than read as if this build had written it. Its writes still
+    /// interceptor accepts the current version alone even when the family's chain reaches further back:
+    /// a predecessor's row is refused as skew rather than read as if this build had written it. Its writes still
     /// stamp the current version.
     /// </summary>
     [Fact]

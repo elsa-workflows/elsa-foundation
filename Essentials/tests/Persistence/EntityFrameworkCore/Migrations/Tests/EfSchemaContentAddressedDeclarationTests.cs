@@ -10,23 +10,24 @@ using Xunit;
 namespace Elsa.Persistence.EntityFrameworkCore.Migrations.Tests;
 
 /// <summary>
-/// The post-finalization backfill against the model every first-party module's context builds, on every provider (spec
-/// 186): every stamped table is marked <see cref="EfSchemaContentAddressedAttribute"/> exactly when its family names it
+/// The post-finalization backfill against the model every first-party module's context builds, on every provider:
+/// every stamped table is marked <see cref="EfSchemaContentAddressedAttribute"/> exactly when its family names it
 /// content-addressed, and the tables holding executables and executable activity templates are among them, so the
-/// backfill never rewrites them (FR-010a, FR-010b); and every stamped table of every family can be selected in batches that
-/// resume after the last key, which a key the database cannot order would make impossible (FR-005).
+/// backfill never rewrites them; and every stamped table of every family can be selected in batches that
+/// resume after the last key, which a key the database cannot order would make impossible.
 /// </summary>
 /// <remarks>
 /// The rule reads two explicit declarations, the entity's marker and its family's list, and fails when they disagree in
 /// either direction. It infers nothing from a table's name, so a renamed table keeps its declaration, and a table copied
 /// from a content-addressed one carries the marker into a family that must then name it. <see cref="ExecutableTables"/>
-/// pins the ones FR-010b names, and fails when one of them stops being a stamped table rather than passing on a stale name.
+/// pins the executable, executable activity template and template hash claim tables, and fails when one of them stops
+/// being a stamped table rather than passing on a stale name.
 /// </remarks>
 public sealed class EfSchemaContentAddressedDeclarationTests
 {
     /// <summary>
     /// The first-party stamped tables that hold executables and executable activity templates, and the claims keyed by a
-    /// template's hash (FR-010b; ADR 0038).
+    /// template's hash.
     /// </summary>
     private static readonly string[] ExecutableTables =
     [
@@ -178,7 +179,7 @@ public sealed class EfSchemaContentAddressedDeclarationTests
     private sealed class MarkedReceipt : UnmarkedReceipt;
 }
 
-/// <summary>FR-010b's rule over one model, so the detector can be pinned on a synthetic model.</summary>
+/// <summary>The content-addressed declaration rule over one model, so the detector can be pinned on a synthetic model.</summary>
 internal static class ContentAddressedRules
 {
     public static IEnumerable<string> Violations(IReadOnlyModel model, EfSchemaModuleFamilies families, string context)

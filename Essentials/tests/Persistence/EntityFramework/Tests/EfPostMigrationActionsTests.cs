@@ -4,7 +4,7 @@ using Xunit;
 namespace Elsa.Persistence.EntityFramework.Tests;
 
 /// <summary>
-/// The post-migration seam's own rules (ADR 0076 D8, FR-054/FR-056), away from any module: a declaration is
+/// The post-migration seam's own rules, away from any module: a declaration is
 /// either usable or refused by name, an audit reports without running, and a required action fails closed
 /// naming <c>dotnet elsa persistence post-migrate</c> rather than being run.
 /// </summary>

@@ -3,37 +3,36 @@ using Microsoft.EntityFrameworkCore.Migrations.Operations;
 namespace Elsa.Persistence.EntityFramework;
 
 /// <summary>
-/// Classifies one migration's <c>Up</c> operations as expand-only or not (elsa-workflows/elsa-foundation#2104,
-/// spec 185 "Expand-Only Migration Guard"). A migration added after a module's baseline freezes (#1976) may only
+/// Classifies one migration's <c>Up</c> operations as expand-only or not (elsa-workflows/elsa-foundation#2104).
+/// A migration added after a module's baseline freezes (#1976) may only
 /// add: nullable columns, tables and indexes, so hosts still on the previous release keep working against the
-/// migrated schema during a rolling upgrade (ADR 0077, ADR 0078's schema version gate).
+/// migrated schema during a rolling upgrade.
 /// </summary>
 /// <remarks>
 /// <para>
-/// Classification reads <see cref="MigrationOperation"/>s — what EF actually executes — never source text
-/// (spec 185 FR-004), against a closed allowed list (FR-006 to FR-011): anything not explicitly allowed is a
+/// Classification reads <see cref="MigrationOperation"/>s — what EF actually executes — never source text,
+/// against a closed allowed list: anything not explicitly allowed is a
 /// violation, including an operation type this guard has never seen. A violation's canonical name is
 /// <c>&lt;OperationName&gt; &lt;table&gt;[.&lt;column, index or constraint&gt;]</c>, the operation's CLR type name
-/// without its <c>Operation</c> suffix and without a schema — a schema belongs to a deployment, not a migration
-/// (FR-011).
+/// without its <c>Operation</c> suffix and without a schema — a schema belongs to a deployment, not a migration.
 /// </para>
 /// <para>
 /// This type and <see cref="ExpandOnlyMigrationOptOutAttribute"/> are public so a third-party EF module can run
-/// the same check from its own tests (spec 185, Out of Scope): this guard itself only runs over first-party
+/// the same check from its own tests: this guard itself only runs over first-party
 /// modules.
 /// </para>
 /// <para>
-/// This is the build-time guard. It also decides which opt-outs are contracting (FR-023): one whose migration
+/// This is the build-time guard. It also decides which opt-outs are contracting: one whose migration
 /// removes or renames something on a table a stamped schema family covers must name that family and the version
 /// whose finalization makes the removal safe, and no other opt-out may. Refusing to apply a contracting migration
-/// before that version is finalized (FR-024, FR-025) is
+/// before that version is finalized is
 /// <see cref="SchemaFinalization.EfContractingMigrationCheck"/>'s, at apply time (elsa-workflows/elsa-foundation#2136).
 /// </para>
 /// </remarks>
 public static class ExpandOnlyMigrationGuard
 {
     /// <summary>
-    /// Every operation in <paramref name="upOperations"/> that is not on the allowed list, in FR-011's canonical
+    /// Every operation in <paramref name="upOperations"/> that is not on the allowed list, in the canonical
     /// form, in encounter order. A table the same migration creates (a <see cref="CreateTableOperation"/> in the
     /// same list) makes every operation that targets it safe, because no older host's model knows that table yet.
     /// </summary>
@@ -52,15 +51,15 @@ public static class ExpandOnlyMigrationGuard
     }
 
     /// <summary>
-    /// Classifies <paramref name="upOperations"/> and matches the result against <paramref name="optOut"/>
-    /// (spec 185 FR-013, User Story 3). With no opt-out, the migration passes only when it has no violations.
+    /// Classifies <paramref name="upOperations"/> and matches the result against <paramref name="optOut"/>.
+    /// With no opt-out, the migration passes only when it has no violations.
     /// With one, it passes only when the migration's violations equal the opt-out's list exactly: a violation
     /// the opt-out omits fails, a listed violation that does not occur fails, and an opt-out on a migration with
     /// no violations fails too — an opt-out never becomes a blanket permission.
     /// </summary>
     /// <param name="families">
     /// The tables stamped schema families covered before this migration, and the versions each family reads in this
-    /// build: what tells a contracting opt-out from any other (FR-023). There is no overload without it, so a caller
+    /// build: what tells a contracting opt-out from any other. There is no overload without it, so a caller
     /// cannot skip that check by omission; <see cref="ExpandOnlyMigrationFamilies.None"/> states that no stamped table
     /// exists before the migration.
     /// </param>
@@ -85,7 +84,7 @@ public static class ExpandOnlyMigrationGuard
     }
 
     /// <summary>
-    /// FR-023: an opt-out whose migration removes or renames something on a table a stamped schema family covered before
+    /// An opt-out whose migration removes or renames something on a table a stamped schema family covered before
     /// it runs is contracting, and must name exactly that family and a version its chain reads in this build. Any other
     /// opt-out must name neither. One opt-out names one family, so a migration that contracts two families is refused
     /// rather than checked for only one of them at apply time.
@@ -178,7 +177,7 @@ public static class ExpandOnlyMigrationGuard
 
     private static bool IsAllowed(MigrationOperation operation, IReadOnlySet<string> createdTables) => operation switch
     {
-        // FR-007: a table the same migration creates — its columns, keys and constraints arrive nested inside
+        // A table the same migration creates — its columns, keys and constraints arrive nested inside
         // CreateTableOperation itself and never appear as separate operations, but an index or a constraint EF
         // emits as its own operation right after still targets a table no older host's model knows about.
         CreateTableOperation => true,
@@ -188,19 +187,19 @@ public static class ExpandOnlyMigrationGuard
         AddUniqueConstraintOperation unique => createdTables.Contains(unique.Table),
         AddCheckConstraintOperation check => createdTables.Contains(check.Table),
         InsertDataOperation insert => createdTables.Contains(insert.Table),
-        // FR-008: on a pre-existing table, only a nullable, non-computed column — every older insert and update
+        // On a pre-existing table, only a nullable, non-computed column — every older insert and update
         // leaves it unset — and a non-unique index, which changes no result.
         AddColumnOperation column => createdTables.Contains(column.Table) || (column.IsNullable && column.ComputedColumnSql is null),
-        // FR-009: neither belongs to any one table.
+        // Neither belongs to any one table.
         EnsureSchemaOperation => true,
         CreateSequenceOperation => true,
         _ => false
     };
 
     /// <summary>
-    /// FR-011's canonical violation name. Every arm below is reachable only for a disallowed operation.
+    /// The canonical violation name. Every arm below is reachable only for a disallowed operation.
     /// <i>2026-09-28:</i> an operation that carries no table — raw SQL, a database-level alteration, or a kind
-    /// this guard has never seen — is named by its operation kind alone (spec 185 Decisions, found while
+    /// this guard has never seen — is named by its operation kind alone (found while
     /// building #2104).
     /// </summary>
     private static string CanonicalName(MigrationOperation operation)
@@ -251,9 +250,9 @@ public static class ExpandOnlyMigrationGuard
 
 /// <summary>
 /// One migration's classification against the allowed list and, when it has one, its
-/// <see cref="ExpandOnlyMigrationOptOutAttribute"/> (spec 185 FR-013).
+/// <see cref="ExpandOnlyMigrationOptOutAttribute"/>.
 /// </summary>
-/// <param name="Violations">Every operation that is not on the allowed list, in FR-011's canonical form.</param>
+/// <param name="Violations">Every operation that is not on the allowed list, in the canonical form.</param>
 /// <param name="UnlistedViolations">
 /// Violations the opt-out does not list — or, with no opt-out, every violation. Non-empty fails the migration.
 /// </param>
@@ -266,7 +265,7 @@ public sealed record ExpandOnlyMigrationResult(
     bool HasOptOut)
 {
     /// <summary>
-    /// Why the opt-out's schema family and version do not fit what the migration removes (FR-023): missing on a
+    /// Why the opt-out's schema family and version do not fit what the migration removes: missing on a
     /// contracting migration, present on any other, naming another family, or naming a version the family does not
     /// read in this build. Non-empty fails the migration.
     /// </summary>
@@ -274,8 +273,8 @@ public sealed record ExpandOnlyMigrationResult(
 
     /// <summary>
     /// With no opt-out: no violations. With one: the migration's violations equal the opt-out's list exactly,
-    /// and that list is not empty — an opt-out on a migration with nothing to permit fails too (FR-013) — and
-    /// the opt-out names a schema family and version exactly when the migration is contracting (FR-023).
+    /// and that list is not empty — an opt-out on a migration with nothing to permit fails too — and
+    /// the opt-out names a schema family and version exactly when the migration is contracting.
     /// </summary>
     public bool Passed => HasOptOut
         ? Violations.Count > 0 && UnlistedViolations.Count == 0 && StaleOptOutEntries.Count == 0 && ContractionFaults.Count == 0

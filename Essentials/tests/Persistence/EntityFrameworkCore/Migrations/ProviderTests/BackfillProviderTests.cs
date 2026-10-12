@@ -9,7 +9,7 @@ using static Elsa.Persistence.EntityFramework.Tests.BackfillDatabase;
 namespace Elsa.Persistence.EntityFrameworkCore.Migrations.ProviderTests;
 
 /// <summary>
-/// The post-finalization backfill (spec 186) on each server engine, over the synthetic family the SQLite suite proves
+/// The post-finalization backfill on each server engine, over the synthetic family the SQLite suite proves
 /// every mechanism on: the keyset selection over a text key and a composite one, a row's compare-and-set lost to a live
 /// write, the finalization record's compare-and-set for the claim, the completion and its withdrawal, all depend on what
 /// the engine translates and reports, which SQLite cannot speak for.
@@ -29,7 +29,7 @@ public sealed class BackfillProviderTests
         RunAsync("MySql", (builder, connection) => builder.UseMySQL(connection));
 
     /// <summary>
-    /// FR-008 after FR-018 on PostgreSQL, where the claim on a withdrawal is a compare-and-set the engine's concurrency
+    /// The claim after a withdrawal on PostgreSQL, where the claim on a withdrawal is a compare-and-set the engine's concurrency
     /// check decides: several workers racing for it after a withdrawal give one upgrader.
     /// </summary>
     [SkippableFact]

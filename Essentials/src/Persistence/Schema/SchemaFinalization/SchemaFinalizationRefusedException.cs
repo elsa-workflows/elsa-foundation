@@ -25,7 +25,7 @@ public enum SchemaFinalizationRefusal
     /// <summary>The change would not move forward along the chain. A finalized version is never lowered or repeated.</summary>
     NotForward,
 
-    /// <summary>A hold on an already finalized version: the rollback boundary has been crossed (spec 181, FR-019).</summary>
+    /// <summary>A hold on an already finalized version: the rollback boundary has been crossed.</summary>
     RollbackBoundaryCrossed,
 
     /// <summary>A hold applies to the version the change would finalize.</summary>
@@ -43,7 +43,7 @@ public enum SchemaFinalizationRefusal
     /// <summary>No hold with that scope is in place to release.</summary>
     NoHold,
 
-    /// <summary>A completion version later than the finalized version (spec 186, FR-014).</summary>
+    /// <summary>A completion version later than the finalized version.</summary>
     CompletionBeyondFinalized,
 
     /// <summary>No completion stands to withdraw, or neither a completion nor a withdrawal of one stands to hold a backfill claim.</summary>
@@ -51,7 +51,7 @@ public enum SchemaFinalizationRefusal
 
     /// <summary>
     /// Another backfill worker holds a live claim on the family's run, or the run is not claimed by the worker that would
-    /// release it (spec 186, FR-008).
+    /// release it.
     /// </summary>
     BackfillClaimed
 }

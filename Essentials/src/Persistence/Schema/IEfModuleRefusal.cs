@@ -2,14 +2,14 @@ namespace Elsa.Persistence.Schema;
 
 /// <summary>
 /// What an EF module's refusal to activate says of itself, in types both a host and a feed-loaded module load from
-/// this shared assembly (ADR 0067, amended 2026-09-29). A package Nuplane loads carries a private copy of
+/// this shared assembly. A package Nuplane loads carries a private copy of
 /// <c>Elsa.Persistence.EntityFramework</c>, so a host that references none cannot name that copy's exception types, and
 /// matching them by full name would break with a rename. It asks for this interface instead.
 /// </summary>
 /// <remarks>
 /// Implemented by the exceptions that stop a module's shell from activating for a reason an operator resolves outside the
 /// host: pending migrations, a contracting migration that may not be applied yet, and the finalization gate's refusal.
-/// None of the members carries a connection string or any other restored secret (spec 171, FR-061).
+/// None of the members carries a connection string or any other restored secret.
 /// </remarks>
 public interface IEfModuleRefusal
 {

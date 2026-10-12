@@ -135,7 +135,7 @@ public sealed class EfMySqlIdempotentScriptTests
     }
 
     /// <summary>
-    /// Determinism (spec 171 FR-043) survives the rewrite: this runs before
+    /// Determinism survives the rewrite: this runs before
     /// <c>EfToolingLineEndings.Utf8Lf</c>, so it is handed CRLF on Windows and LF everywhere else and must
     /// produce the same text either way, not merely text that normalizes to the same thing later.
     /// </summary>
@@ -203,7 +203,7 @@ public sealed class EfMySqlIdempotentScriptTests
     }
 
     /// <summary>
-    /// First-party module names always slug into a MySQL identifier, but spec 171 User Story 6 admits
+    /// First-party module names always slug into a MySQL identifier, but the tool admits
     /// third-party ones, and nothing stops a third-party <c>[EfModule]</c> name from being too long for
     /// MySQL's 64 characters or from carrying the backtick that quotes the name. Refused while the artifact
     /// is still in memory rather than left for the server to reject — or, for the backtick, to obey.

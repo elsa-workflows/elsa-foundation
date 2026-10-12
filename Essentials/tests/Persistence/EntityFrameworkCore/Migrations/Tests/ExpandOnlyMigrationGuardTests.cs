@@ -10,11 +10,11 @@ using Xunit;
 namespace Elsa.Persistence.EntityFrameworkCore.Migrations.Tests;
 
 /// <summary>
-/// Spec 185 "Expand-Only Migration Guard" (elsa-workflows/elsa-foundation#2104, B8 of the cluster-safe schema
+/// The expand-only migration guard (elsa-workflows/elsa-foundation#2104, B8 of the cluster-safe schema
 /// rollout #2093): every fixture here proves <see cref="ExpandOnlyMigrationGuard"/> against operations built the
 /// same way a generated migration's own <c>Up</c> builds them — <see cref="MigrationBuilder"/>'s fluent calls —
 /// and runs through the exact classifier the real scan (<see cref="ExpandOnlyMigrationScanner"/>) calls, so a
-/// passing fixture proves the real scan's logic and not a copy of it (FR-022).
+/// passing fixture proves the real scan's logic and not a copy of it.
 /// </summary>
 public sealed class ExpandOnlyMigrationGuardTests
 {
@@ -27,7 +27,7 @@ public sealed class ExpandOnlyMigrationGuardTests
         return builder.Operations;
     }
 
-    // --- User Story 2: a destructive change fails, named in canonical form (#2104's acceptance) -----------
+    // --- A destructive change fails, named in canonical form (#2104's acceptance) -------------------------
 
     [Fact]
     public void A_dropped_column_is_named_DropColumn_table_dot_column()
@@ -70,7 +70,7 @@ public sealed class ExpandOnlyMigrationGuardTests
     [Fact]
     public void Every_kind_of_alter_column_is_a_violation_including_a_widening_that_is_safe_on_every_engine()
     {
-        // A longer varchar is still an AlterColumn (spec 185 Edge Cases): the guard does not carry per-engine
+        // A longer varchar is still an AlterColumn: the guard does not carry per-engine
         // rules about which alterations an older host survives.
         var operations = Build(migration => migration.AlterColumn<string>(name: "Name", table: Table, maxLength: 512, oldMaxLength: 128));
 
@@ -80,7 +80,7 @@ public sealed class ExpandOnlyMigrationGuardTests
     [Fact]
     public void A_non_nullable_added_column_is_a_violation_even_with_a_default()
     {
-        // Decisions: a default does not give "unset" for an older host's insert, so it stays a violation.
+        // A default does not give "unset" for an older host's insert, so it stays a violation.
         var operations = Build(migration => migration.AddColumn<string>(name: "Stamp", table: Table, nullable: false, defaultValue: "1.0.0"));
 
         Assert.Equal(["AddColumn elsa_example.Stamp"], ExpandOnlyMigrationGuard.Classify(operations));
@@ -97,7 +97,7 @@ public sealed class ExpandOnlyMigrationGuardTests
     [Fact]
     public void A_unique_index_on_a_pre_existing_table_is_a_violation()
     {
-        // Edge Cases: SQL Server treats NULLs as equal in a unique index, so even one on a brand-new nullable
+        // SQL Server treats NULLs as equal in a unique index, so even one on a brand-new nullable
         // column can refuse the second older-host insert.
         var operations = Build(migration => migration.CreateIndex(name: "IX_Example_Key", table: Table, column: "Key", unique: true));
 
@@ -132,7 +132,7 @@ public sealed class ExpandOnlyMigrationGuardTests
         Assert.Equal(["InsertData elsa_example"], ExpandOnlyMigrationGuard.Classify(operations));
     }
 
-    /// <summary>FR-006: an operation type this guard has never seen is a violation too, not silently allowed.</summary>
+    /// <summary>An operation type this guard has never seen is a violation too, not silently allowed.</summary>
     [Fact]
     public void An_operation_type_the_guard_does_not_know_is_a_violation()
     {
@@ -141,7 +141,7 @@ public sealed class ExpandOnlyMigrationGuardTests
         Assert.Equal(["UnknownFixture"], ExpandOnlyMigrationGuard.Classify(operations));
     }
 
-    // --- User Story 1: additive changes pass -----------------------------------------------------------------
+    // --- Additive changes pass -------------------------------------------------------------------------------
 
     [Fact]
     public void A_nullable_non_computed_added_column_passes()
@@ -200,7 +200,7 @@ public sealed class ExpandOnlyMigrationGuardTests
         Assert.Empty(ExpandOnlyMigrationGuard.Classify(operations));
     }
 
-    // --- User Story 3: an opt-out matches exactly, and nothing more -------------------------------------------
+    // --- An opt-out matches exactly, and nothing more ---------------------------------------------------------
 
     private static ExpandOnlyMigrationOptOutAttribute OptOut(params string[] violations) =>
         new(reason: "Removed after #1976 finalizes past the version that stops reading it.", reviewReference: "#2104", violations);
@@ -266,7 +266,7 @@ public sealed class ExpandOnlyMigrationGuardTests
         Assert.False(result.HasOptOut);
     }
 
-    // --- The opt-out attribute itself (FR-012) -----------------------------------------------------------------
+    // --- The opt-out attribute itself --------------------------------------------------------------------------
 
     [Fact]
     public void The_opt_out_attribute_refuses_a_blank_reason()
@@ -290,7 +290,7 @@ public sealed class ExpandOnlyMigrationGuardTests
         Assert.Throws<ArgumentException>(() => new ExpandOnlyMigrationOptOutAttribute("Reason.", "#2104"));
     }
 
-    // --- FR-023: a contracting opt-out names its schema family and version, and no other opt-out does ---------------
+    // --- A contracting opt-out names its schema family and version, and no other opt-out does -----------------------
 
     private const string Orders = "elsa_orders";
 
@@ -417,7 +417,7 @@ public sealed class ExpandOnlyMigrationGuardTests
 
     /// <summary>
     /// A reviewed alteration of a stamped table removes nothing, so its opt-out is not contracting: it names no family and
-    /// the apply-time check never holds it (spec 185, Decisions, "Every AlterColumn is a violation").
+    /// the apply-time check never holds it.
     /// </summary>
     [Fact]
     public void An_alteration_of_a_stamped_table_is_not_contracting()
@@ -492,5 +492,5 @@ public sealed class ExpandOnlyMigrationGuardTests
     private sealed class InvoiceRow;
 }
 
-/// <summary>A shape the guard has never classified, for FR-006's "unknown operation is still a violation".</summary>
+/// <summary>A shape the guard has never classified, proving an unknown operation is still a violation.</summary>
 internal sealed class UnknownFixtureOperation : MigrationOperation;

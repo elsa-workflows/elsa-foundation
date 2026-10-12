@@ -11,7 +11,7 @@ namespace Elsa.Persistence.EntityFrameworkCore.Migrations.Tests;
 
 /// <summary>
 /// The finalization record through every real module context of one provider, against the tables each module's own
-/// migrations created in one shared database (spec 181, FR-002). Shared by the SQLite suite and the container suites.
+/// migrations created in one shared database. Shared by the SQLite suite and the container suites.
 /// </summary>
 internal static class ModuleSchemaFinalizationScenario
 {
@@ -164,7 +164,7 @@ internal static class ModuleSchemaFinalizationScenario
 
     /// <summary>
     /// The enable-time guard finds each module's record table through the engine's own catalog, never the migrations
-    /// history (spec 171, FR-069): absent before the module's migrations run, present after, on every engine.
+    /// history: absent before the module's migrations run, present after, on every engine.
     /// </summary>
     public static async Task AssertRecordTablesAsync(string provider, string connectionString, bool expected, string? schema = null)
     {

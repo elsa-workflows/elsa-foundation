@@ -2,17 +2,17 @@ namespace Elsa.Persistence.Schema.SchemaFinalization;
 
 /// <summary>
 /// What this host has read from finalization records, per schema family, across every shell and database it serves:
-/// the source of the database identity and observed finalized version its readability report carries (spec 183,
-/// FR-019; spec 181, FR-001 and FR-010). One instance is shared by the whole host, so it is registered by instance on
+/// the source of the database identity and observed finalized version its readability report carries.
+/// One instance is shared by the whole host, so it is registered by instance on
 /// the host container.
 /// </summary>
 /// <remarks>
 /// <para>
 /// <b>An entry names a database only while that is the whole truth.</b> A report entry that names a database identity
-/// is counted only by evaluators of that database (spec 183, FR-023), so naming one while this host also serves the
+/// is counted only by evaluators of that database, so naming one while this host also serves the
 /// family in another database would let the other database finalize a version this host cannot read. So
 /// <see cref="Find"/> names an identity only when every record of the family this host has read carries that one
-/// identity, and no activation of the family is between publishing its report and reading its record (FR-013): an
+/// identity, and no activation of the family is between publishing its report and reading its record: an
 /// activation about to read a database it has not read before cannot yet name that database, so until it has, the
 /// entry names none, which counts for every database. A database whose last gate has stopped is forgotten, below; every
 /// other rule here can only delay finalization, never hasten it.
@@ -23,16 +23,15 @@ namespace Elsa.Persistence.Schema.SchemaFinalization;
 /// </para>
 /// <para>
 /// <b>An entry says whether the family's module is active</b>, per database, from a gate's admission until every gate
-/// that admitted it there has stopped (spec 183, FR-019; the rationale is on <c>ReadabilityEntry.ModuleActive</c>). The
-/// rules are stated once, in spec 186, "When a module is active in the report" (FR-012), and not restated here. An entry
+/// that admitted it there has stopped (the rationale is on <c>ReadabilityEntry.ModuleActive</c>). An entry
 /// that names no database is active while a gate for any database is: the conservative direction. Not modelled: one entry
 /// per database.
 /// </para>
 /// <para>
-/// <b>Stopping the last gate of a database forgets what this host read there</b> (spec 186, same section). The entry then
+/// <b>Stopping the last gate of a database forgets what this host read there</b>. The entry then
 /// names the databases whose gates remain, or none when none does, which counts for every database. A module activated
-/// there again reads its record afresh and refuses itself when the finalized version is not one it reads (spec 181,
-/// FR-013 to FR-015), so forgetting cannot let it write what a count left it out of.
+/// there again reads its record afresh and refuses itself when the finalized version is not one it reads,
+/// so forgetting cannot let it write what a count left it out of.
 /// </para>
 /// </remarks>
 public sealed class EfSchemaFinalizationObservations

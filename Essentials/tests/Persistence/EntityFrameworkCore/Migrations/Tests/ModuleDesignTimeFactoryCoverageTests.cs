@@ -5,7 +5,7 @@ using Xunit;
 namespace Elsa.Persistence.EntityFrameworkCore.Migrations.Tests;
 
 /// <summary>
-/// Spec 171 FR-019: every <see cref="ModuleDesignTimeFactory{TContext}"/> line in
+/// Every <see cref="ModuleDesignTimeFactory{TContext}"/> line in
 /// <c>tools/ef/Elsa.EntityFrameworkCore.Tooling/ModuleDesignTimeFactories.cs</c> must correspond to a
 /// provider context some <c>[EfModule]</c> declares, and every declared provider context must have a
 /// factory line, so the two lists cannot silently diverge. Review of #1871 found no slice's filed scope

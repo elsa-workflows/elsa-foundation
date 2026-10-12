@@ -6,7 +6,7 @@ namespace Elsa.Persistence.Schema.SchemaFinalization;
 /// The finalization gates of one container: a shell's, or a plain host's. A module's migrator registers its gate here
 /// once it has admitted the module, and the write check (<c>EfSchemaWriteGateInterceptor</c>) finds it here from any
 /// context of the module the container builds, so every write checks against the state the gate keeps. It is also where
-/// a consumer reads the gate's status (spec 181, FR-022).
+/// a consumer reads the gate's status.
 /// </summary>
 /// <remarks>
 /// <para>

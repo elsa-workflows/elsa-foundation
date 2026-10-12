@@ -5,7 +5,7 @@ using Xunit;
 
 namespace Elsa.Persistence.EntityFramework.Tests;
 
-/// <summary>The backfill's settings (spec 186, FR-009, FR-012, FR-018 and FR-023), from the container's configuration: defaults, overrides, refusals.</summary>
+/// <summary>The backfill's settings, from the container's configuration: defaults, overrides, refusals.</summary>
 public sealed class EfSchemaBackfillOptionsTests
 {
     [Fact]

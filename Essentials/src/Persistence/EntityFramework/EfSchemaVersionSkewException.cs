@@ -1,12 +1,12 @@
 namespace Elsa.Persistence.EntityFramework;
 
 /// <summary>
-/// A persisted row carries a schema version this build cannot read: one outside its family's readable set (spec 180,
-/// FR-007), whether newer than the build's current version, older than its upcaster chain reaches, below a gap in the
+/// A persisted row carries a schema version this build cannot read: one outside its family's readable set,
+/// whether newer than the build's current version, older than its upcaster chain reaches, below a gap in the
 /// chain, or missing altogether.
 /// </summary>
 /// <remarks>
-/// Distinct from the <see cref="InvalidDataException"/> the integrity checks raise, and deliberately so (ADR 0077). The
+/// Distinct from the <see cref="InvalidDataException"/> the integrity checks raise, and deliberately so. The
 /// two describe different events and call for different responses: a corrupt row means something damaged it and the
 /// store needs investigating, whereas an unreadable schema version means a build this host does not run has written
 /// here, which is a deployment-sequencing question. Reporting the second as the first sends an operator looking for data

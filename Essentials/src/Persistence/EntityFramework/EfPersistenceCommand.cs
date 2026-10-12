@@ -7,7 +7,7 @@ namespace Elsa.Persistence.EntityFramework;
 /// refuses so that every message that names one names one that runs: <c>--host</c> is required by the tool, so it is always
 /// there.
 /// </summary>
-/// <remarks>The connection is named by the variable it is read from, never its value (spec 171, D7).</remarks>
+/// <remarks>The connection is named by the variable it is read from, never its value.</remarks>
 public static class EfPersistenceCommand
 {
     /// <summary>The environment variable the commands read the connection from.</summary>

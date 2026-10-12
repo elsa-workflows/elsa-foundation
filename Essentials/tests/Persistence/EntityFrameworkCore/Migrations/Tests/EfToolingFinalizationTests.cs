@@ -15,7 +15,7 @@ using Xunit;
 namespace Elsa.Persistence.EntityFrameworkCore.Migrations.Tests;
 
 /// <summary>
-/// The persistence tool's <c>hold</c>, <c>release</c> and <c>status</c> (spec 181, FR-019, FR-020, FR-022 and SC-006),
+/// The persistence tool's <c>hold</c>, <c>release</c> and <c>status</c>,
 /// through the host's own tooling entry point against a real database: a hold can be placed before any gate-aware
 /// host has run, one on a finalized version is refused because the rollback boundary has been crossed, and no command
 /// finalizes or lowers a finalized version. Every refusal is checked to have changed nothing.
@@ -146,7 +146,7 @@ public sealed class EfToolingFinalizationTests : IAsyncLifetime
     }
 
     /// <summary>
-    /// Spec 186, FR-021: what the finish record holds, the status prints, since the tool runs where no backfill does: a
+    /// What the finish record holds, the status prints, since the tool runs where no backfill does: a
     /// backfill run a worker has claimed, on the completion or, once that is withdrawn, on the withdrawal, and a completion
     /// the audit withdrew with the tables and counts it found.
     /// </summary>
@@ -174,7 +174,7 @@ public sealed class EfToolingFinalizationTests : IAsyncLifetime
             await store.WithdrawCompletionAsync(SecretsEfModule.SchemaFamily, record.Revision, member, "table 'secrets': 1 (rewritten)", worker: "worker");
         }
 
-        // The claim still holds, so the withdrawal keeps it for the worker that goes on with the family (FR-008).
+        // The claim still holds, so the withdrawal keeps it for the worker that goes on with the family.
         var withdrawn = await StatusAsync();
         Assert.Equal(JsonValueKind.Null, withdrawn.GetProperty("completionVersion").ValueKind);
         Assert.Equal(("next", "host-a (a)"), (withdrawn.GetProperty("backfillRun").GetProperty("targetVersion").GetString(), withdrawn.GetProperty("backfillRun").GetProperty("member").GetString()));
@@ -189,7 +189,7 @@ public sealed class EfToolingFinalizationTests : IAsyncLifetime
     }
 
     /// <summary>
-    /// Spec 181, FR-022: each pending version names the counted members that cannot read it, from the fleet the tool read.
+    /// Each pending version names the counted members that cannot read it, from the fleet the tool read.
     /// No membership provider in the host's closure, or a table this database does not have, leaves the fleet unread, which
     /// the payload says by a null list, not by an empty one that would claim no member blocks the version.
     /// </summary>

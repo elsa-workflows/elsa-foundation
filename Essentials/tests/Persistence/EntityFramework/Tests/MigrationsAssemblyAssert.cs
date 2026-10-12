@@ -5,7 +5,7 @@ using Xunit;
 namespace Elsa.Persistence.EntityFramework.Tests;
 
 /// <summary>
-/// How a module's migrations assembly must be bound (spec 183, FR-021, amended 2026-09-29): by the assembly itself, never
+/// How a module's migrations assembly must be bound: by the assembly itself, never
 /// by a name as well. EF Core resolves a name before it looks at an assembly, and from its own load context, which after an
 /// in-place upgrade can reach the previous release under that name - it did while each EF module package carried EF Core
 /// in its own graph: the new release's context would find no migration of its own, and validation would pass over every

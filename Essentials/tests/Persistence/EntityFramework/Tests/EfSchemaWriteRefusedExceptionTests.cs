@@ -4,7 +4,7 @@ using Xunit;
 namespace Elsa.Persistence.EntityFramework.Tests;
 
 /// <summary>
-/// Spec 180, FR-016a: the write refusal is its own type, with a stable code, the family and both versions, and it can never
+/// The write refusal is its own type, with a stable code, the family and both versions, and it can never
 /// be caught by the filters that turn an exception into corruption or a 400.
 /// </summary>
 public sealed class EfSchemaWriteRefusedExceptionTests
@@ -53,7 +53,7 @@ public sealed class EfSchemaWriteRefusedExceptionTests
         Assert.Equal("schema-write-refused", SchemaWriteRefusedException.RefusalCode);
     }
 
-    /// <summary>Spec 182 extends the refusal with a feature and a reason; the extension keeps the code and the versions.</summary>
+    /// <summary>A derived refusal adds a feature and a reason; the extension keeps the code and the versions.</summary>
     [Fact]
     public void A_derived_refusal_states_its_own_reason_and_keeps_the_code()
     {

@@ -9,15 +9,15 @@ using Xunit;
 namespace Elsa.Persistence.EntityFrameworkCore.Migrations.Tests;
 
 /// <summary>
-/// Spec 185 (elsa-workflows/elsa-foundation#2104, B8) User Story 4: "the scan cannot pass by examining
-/// nothing". Everything here runs <see cref="ExpandOnlyMigrationScanner"/> over the real, first-party module
+/// The scan cannot pass by examining nothing (elsa-workflows/elsa-foundation#2104, B8).
+/// Everything here runs <see cref="ExpandOnlyMigrationScanner"/> over the real, first-party module
 /// set <see cref="ModuleContextCatalog"/> already carries, not a synthetic stand-in.
 /// </summary>
 public sealed class ExpandOnlyMigrationScanTests
 {
     /// <summary>
-    /// FR-003, SC-004, User Story 4 Acceptance Scenario 3. #1976 has not happened (spec 185, "Current state"):
-    /// no baseline is frozen and no freeze manifest exists, and ADR 0078 says this guard does not apply to a
+    /// #1976 has not happened:
+    /// no baseline is frozen and no freeze manifest exists, and this guard does not apply to a
     /// real database before then. This is that state, proven rather than assumed, over
     /// <see cref="ExpandOnlyMigrationScanner.Scan(IReadOnlyList{Assembly}, IReadOnlyList{string}, string)"/>
     /// itself — the overload that owns loading the manifest, not a caller that loads it first and hands
@@ -34,7 +34,7 @@ public sealed class ExpandOnlyMigrationScanTests
     }
 
     /// <summary>
-    /// FR-002's "no baseline recorded" fallback is what makes the guard switch on automatically: the moment
+    /// The "no baseline recorded" fallback is what makes the guard switch on automatically: the moment
     /// #1976 freezes a module and provider context's migrations at the time as its baseline, every migration
     /// recorded there stops being scanned, and only what ships afterwards is checked. This proves the whole
     /// pipeline end to end over every real module today, as if #1976 had just landed: every current migration,
@@ -57,8 +57,8 @@ public sealed class ExpandOnlyMigrationScanTests
     }
 
     /// <summary>
-    /// FR-020a: a supported provider context the manifest never mentions at all fails, distinctly from an entry
-    /// that is merely empty (FR-002).
+    /// A supported provider context the manifest never mentions at all fails, distinctly from an entry
+    /// that is merely empty.
     /// </summary>
     [Fact]
     public void A_supported_provider_context_missing_from_the_manifest_entirely_fails()
@@ -74,7 +74,7 @@ public sealed class ExpandOnlyMigrationScanTests
     }
 
     /// <summary>
-    /// FR-020b's independent floor: a baseline id that names no migration the context actually has — a typo, a
+    /// The independent floor: a baseline id that names no migration the context actually has — a typo, a
     /// rename, or a deletion — fails naming that id, rather than silently dropping out of the subtraction and
     /// leaving the migration it used to name mis-counted as baseline.
     /// </summary>
@@ -97,7 +97,7 @@ public sealed class ExpandOnlyMigrationScanTests
     }
 
     /// <summary>
-    /// FR-020b's floor (<see cref="ExpandOnlyMigrationScanner.MigrationTypesDeclaredFor"/> minus the manifest's
+    /// The floor (<see cref="ExpandOnlyMigrationScanner.MigrationTypesDeclaredFor"/> minus the manifest's
     /// baseline count) is only a floor at all if the manifest's baseline count means "how many distinct
     /// migrations are baselined". A baseline id repeated in the manifest inflates that count without excluding
     /// any more migrations from postFreeze, so it must fail, naming the repeated id, rather than being read as
@@ -123,14 +123,14 @@ public sealed class ExpandOnlyMigrationScanTests
 
     /// <summary>
     /// Today's answer to "Secrets already has incremental migrations such as SchemaVersionStamp — do they pass
-    /// the guard, or does the spec say why not?" (spec 185 Terms, "Baseline": "for Secrets the historical chain
-    /// it already keeps"). Scanned as post-freeze — the FR-002 fallback a manifest entry with no ids recorded
+    /// the guard, or does the spec say why not?" The baseline for Secrets is the historical chain
+    /// it already keeps. Scanned as post-freeze — the fallback a manifest entry with no ids recorded
     /// yet produces, exactly the shape #1976 leaves behind for a module or provider it has not reached —
     /// Secrets' pre-guard chain genuinely violates expand-only on every provider but SQLite:
     /// <c>SchemaVersionStamp</c> adds a non-nullable, defaulted column (a default does not give "unset" for an
     /// older host's write) on all four, and <c>WidenLookupKeys</c> and <c>OrdinalCollation</c> retype existing
     /// columns — OrdinalCollation's SQL Server migration also rebuilds the primary key — on SQL Server,
-    /// PostgreSQL and MySQL. Spec 185's own Terms is what makes this expected rather than a defect this guard
+    /// PostgreSQL and MySQL. That baseline definition is what makes this expected rather than a defect this guard
     /// needs to work around: #1976 folds this whole chain into Secrets' baseline, at which point none of it is
     /// scanned again, proved clean in that exact shape by the test above.
     /// </summary>
@@ -145,17 +145,17 @@ public sealed class ExpandOnlyMigrationScanTests
         var report = ExpandOnlyMigrationScanner.Scan([typeof(SecretsDbContext).Assembly], ModuleContextCatalog.Providers, manifest);
 
         Assert.NotEmpty(report.Failures);
-        // Every failure here is a genuine content violation (FR-016), never FR-020a's structural "no baseline
+        // Every failure here is a genuine content violation, never the structural "no baseline
         // entry at all" — this manifest gave every supported provider context an entry, just an empty one.
         Assert.DoesNotContain(report.Failures, failure => failure.Contains("no baseline entry", StringComparison.Ordinal));
         Assert.All(report.Failures, failure => Assert.Contains("violates expand-only", failure, StringComparison.Ordinal));
     }
 
     /// <summary>
-    /// FR-022 and FR-023 through the real scan, over a module whose migrations split one change across two versions of
+    /// Contracting opt-outs through the real scan, over a module whose migrations split one change across two versions of
     /// its family: the scan learns from the migration before each one which tables a stamped family covered, so it tells
     /// the contracting opt-out, which must name the family and version, from one that removes from an unstamped table,
-    /// which must not; and FR-015's output shows the version the contracting one waits for.
+    /// which must not; and the scan's output shows the version the contracting one waits for.
     /// </summary>
     [Fact]
     public void The_scan_tells_a_contracting_opt_out_from_any_other_and_shows_the_version_it_waits_for()

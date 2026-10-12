@@ -15,8 +15,8 @@ using Xunit;
 namespace Elsa.Persistence.EntityFrameworkCore.Migrations.Tests;
 
 /// <summary>
-/// The per-feature provider-agreement check and the <c>from-host</c> selection (spec 171 FR-035–FR-039,
-/// FR-028; ADR 0076 D4), driven through <see cref="EfToolingHost"/> against the real feature classes.
+/// The per-feature provider-agreement check and the <c>from-host</c> selection,
+/// driven through <see cref="EfToolingHost"/> against the real feature classes.
 /// </summary>
 /// <remarks>
 /// The comparison is per feature, never per module, and these tests are written to fail if that is ever
@@ -96,7 +96,7 @@ public sealed class EfProviderAgreementTests
         Assert.DoesNotContain("secret-canary", System.Text.Json.JsonSerializer.Serialize(prepared));
     }
 
-    /// <summary>User Story 1 scenario 5, and the first of the two disagreement edge cases.</summary>
+    /// <summary>One feature configured for another provider is refused by name, module and value: the first of the two disagreement edge cases.</summary>
     [Fact]
     public async Task One_feature_configured_for_another_provider_is_refused_by_name_module_and_value()
     {
@@ -113,8 +113,8 @@ public sealed class EfProviderAgreementTests
 
     /// <summary>
     /// The second edge case, and the one a per-module check gets wrong: the agreeing feature must not
-    /// speak for the module. An unset <c>Provider</c> on a feature that declares one is <c>Sqlite</c>
-    /// (FR-037), so it disagrees with <c>--provider PostgreSql</c> exactly as an explicit <c>Sqlite</c> does.
+    /// speak for the module. An unset <c>Provider</c> on a feature that declares one is <c>Sqlite</c>,
+    /// so it disagrees with <c>--provider PostgreSql</c> exactly as an explicit <c>Sqlite</c> does.
     /// </summary>
     [Fact]
     public async Task Agreement_by_one_feature_of_a_module_never_masks_disagreement_by_another()
@@ -249,7 +249,7 @@ public sealed class EfProviderAgreementTests
     }
 
     /// <summary>
-    /// The second offender source (spec 172 FR-004, ADR 0076 D4): the engine the host's package closure
+    /// The second offender source: the engine the host's package closure
     /// selects. <c>--provider</c> stays authoritative, so a selection that does not contain it is reported
     /// rather than taken for the provider.
     /// </summary>

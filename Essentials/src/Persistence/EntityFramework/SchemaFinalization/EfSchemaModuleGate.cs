@@ -6,7 +6,7 @@ using Elsa.Persistence.Schema.SchemaFinalization;
 namespace Elsa.Persistence.EntityFramework.SchemaFinalization;
 
 /// <summary>
-/// The finalization gate of one EF module in one shell, and so in one database (spec 181): it admits the module at
+/// The finalization gate of one EF module in one shell, and so in one database: it admits the module at
 /// activation, finalizes its families once every counted member reads a newer version, and holds what this host writes
 /// for each family to the finalized version it last observed.
 /// </summary>
@@ -17,22 +17,22 @@ namespace Elsa.Persistence.EntityFramework.SchemaFinalization;
 /// mechanisms, each tested on its own:
 /// </para>
 /// <list type="number">
-/// <item><b>Writers stamp only the finalized version</b> (FR-009). <see cref="StateOf"/> is the write version the
+/// <item><b>Writers stamp only the finalized version</b>. <see cref="StateOf"/> is the write version the
 /// write check (<see cref="EfSchemaWriteGateInterceptor"/>) holds every row to; it only ever takes a finalized version
 /// from the record.</item>
 /// <item><b>An intent, then a confirmation.</b> An evaluation writes the intent durably and only then reads the fleet
-/// fresh, committing by compare-and-set against the revision that carries the intent (FR-006, FR-007). An activation
-/// publishes this host's report first and only then reads the record (FR-013). With read-after-write consistency on
+/// fresh, committing by compare-and-set against the revision that carries the intent. An activation
+/// publishes this host's report first and only then reads the record. With read-after-write consistency on
 /// both stores, one side always sees the other: the evaluator counts the newcomer and abandons, or the newcomer sees
-/// the intent or the finalization and waits, or refuses (FR-014).</item>
-/// <item><b>Finalization only moves forward</b>, which the record's store enforces (FR-003).</item>
-/// <item><b>Activation refuses an unreadable finalized version</b> (FR-015), and an unreadable completion version. A
+/// the intent or the finalization and waits, or refuses.</item>
+/// <item><b>Finalization only moves forward</b>, which the record's store enforces.</item>
+/// <item><b>Activation refuses an unreadable finalized version</b>, and an unreadable completion version. A
 /// record it creates starts no lower than the version any contracting migration applied to the database names, since the
 /// schema serves nothing below that, and a version this host cannot place refuses the module
-/// (<see cref="EfContractingMigrationCheck.SeedVersionAsync"/>, spec 185 FR-023).</item>
-/// <item><b>Active hosts keep checking</b> (FR-010, FR-012): a refresh that finds a finalized version outside this
+/// (<see cref="EfContractingMigrationCheck.SeedVersionAsync"/>).</item>
+/// <item><b>Active hosts keep checking</b>: a refresh that finds a finalized version outside this
 /// host's readable set refuses every write to the family. A member that has lapsed, or has not been admitted under its
-/// current incarnation, keeps the write version it had and never adopts a newer one (FR-018).</item>
+/// current incarnation, keeps the write version it had and never adopts a newer one.</item>
 /// </list>
 /// <para>
 /// Without an <see cref="IEfSchemaFleet"/> the gate cannot count anyone, so it never finalizes a version past the one
@@ -116,8 +116,8 @@ public sealed class EfSchemaModuleGate : IEfSchemaModuleGate
 
     /// <summary>
     /// The record of <paramref name="family"/> as this host last read it, and when, or null before the module has been
-    /// admitted: the holds, intent and finish record behind the write version, so spec 182's shared dormancy check can say
-    /// why a version is not available yet without reading the record again (spec 182, FR-003; spec 186, FR-017).
+    /// admitted: the holds, intent and finish record behind the write version, so the shared dormancy check can say
+    /// why a version is not available yet without reading the record again.
     /// </summary>
     public (SchemaFinalizationRecord Record, DateTimeOffset At)? ObservedRecordOf(string family)
     {
@@ -160,8 +160,8 @@ public sealed class EfSchemaModuleGate : IEfSchemaModuleGate
     }
 
     /// <summary>
-    /// Makes this gate's status carry what <paramref name="source"/> reports of each family's post-finalization backfill
-    /// (spec 186, FR-021). The module's backfill supplies it when it is built over this gate; the gate knows the backfill
+    /// Makes this gate's status carry what <paramref name="source"/> reports of each family's post-finalization backfill.
+    /// The module's backfill supplies it when it is built over this gate; the gate knows the backfill
     /// through nothing else.
     /// </summary>
     internal void ReportBackfillFrom(IEfSchemaBackfillStatusSource source) =>
@@ -179,7 +179,7 @@ public sealed class EfSchemaModuleGate : IEfSchemaModuleGate
     }
 
     /// <summary>
-    /// Refreshes (FR-010) unless the last refresh was less than <paramref name="maxAge"/> ago, which is spec 182's FR-014:
+    /// Refreshes unless the last refresh was less than <paramref name="maxAge"/> ago:
     /// before a dormancy refusal, a host re-reads what may have finalized since. Concurrent callers share one refresh, so a
     /// burst of refused requests costs at most one read per <paramref name="maxAge"/>. Returns whether it read the records.
     /// Nothing is read before the module has been admitted, or when the gate has no way to open a context.
@@ -205,7 +205,7 @@ public sealed class EfSchemaModuleGate : IEfSchemaModuleGate
     }
 
     /// <summary>
-    /// Every family's status (FR-022), read now on a fresh context of the module, for a caller that has none. Empty when the
+    /// Every family's status, read now on a fresh context of the module, for a caller that has none. Empty when the
     /// gate has no way to open one.
     /// </summary>
     public async Task<IReadOnlyList<EfSchemaFamilyStatus>> ReadStatusAsync(CancellationToken cancellationToken = default)
@@ -218,7 +218,7 @@ public sealed class EfSchemaModuleGate : IEfSchemaModuleGate
     }
 
     /// <summary>
-    /// Admits the module (FR-013 to FR-015, FR-021): publishes this host's report, creates any missing record, refuses
+    /// Admits the module: publishes this host's report, creates any missing record, refuses
     /// a family whose finalized or completion version this host cannot read, waits out an intent to finalize a version
     /// it cannot read, and records what it observed. Then it evaluates, which finalizes at once on a host that is a
     /// cluster of one, and refreshes.
@@ -261,7 +261,7 @@ public sealed class EfSchemaModuleGate : IEfSchemaModuleGate
     }
 
     /// <summary>
-    /// Evaluates every family (FR-005 to FR-008): resolves an intent in flight by confirming it, or else records an
+    /// Evaluates every family: resolves an intent in flight by confirming it, or else records an
     /// intent for the newest version above the finalized one that no hold keeps and every counted member reads, reads
     /// the fleet again, and commits or abandons it. A member that is not counted right now, because it lapsed or has not
     /// been admitted under its incarnation, does not evaluate.
@@ -309,9 +309,9 @@ public sealed class EfSchemaModuleGate : IEfSchemaModuleGate
     }
 
     /// <summary>
-    /// Re-reads every family's record (FR-010) and adopts its finalized version as the write version, unless this member
-    /// may not adopt a newer one right now (FR-018). A finalized version outside the readable set refuses every write to
-    /// the family (FR-012). A member whose incarnation changed since it was admitted is admitted again first, publish
+    /// Re-reads every family's record and adopts its finalized version as the write version, unless this member
+    /// may not adopt a newer one right now. A finalized version outside the readable set refuses every write to
+    /// the family. A member whose incarnation changed since it was admitted is admitted again first, publish
     /// first; until that succeeds it adopts nothing newer.
     /// </summary>
     public async Task RefreshAsync(DbContext context, CancellationToken cancellationToken = default)
@@ -334,7 +334,7 @@ public sealed class EfSchemaModuleGate : IEfSchemaModuleGate
                     "activated. No surface removes a record; this host keeps writing what it last observed.", chain.Family, Module);
         }
 
-        // The readability report carries the version this host writes (spec 183, FR-019), so a change is published now
+        // The readability report carries the version this host writes, so a change is published now
         // rather than left to a provider that publishes only when asked.
         var changed = Adopt(identity, records, mayAdvance);
         lock (_lock)
@@ -345,7 +345,7 @@ public sealed class EfSchemaModuleGate : IEfSchemaModuleGate
 
     /// <summary>
     /// Re-reads <paramref name="chain"/>'s record because a row about to be rewritten is stamped later than the write
-    /// version (spec 180, FR-015), on the context doing the write, and returns the write version it leaves.
+    /// version, on the context doing the write, and returns the write version it leaves.
     /// </summary>
     internal async ValueTask<EfSchemaFamilyWriteState> ConfirmAsync(DbContext context, EfSchemaChain chain, bool synchronous, CancellationToken cancellationToken)
     {
@@ -356,7 +356,7 @@ public sealed class EfSchemaModuleGate : IEfSchemaModuleGate
         return StateOf(chain.Family) ?? throw new InvalidOperationException($"EF module '{Module}' has not been admitted by its finalization gate.");
     }
 
-    /// <summary>Every family's status in this database (FR-022), with the counted members that cannot read each pending version.</summary>
+    /// <summary>Every family's status in this database, with the counted members that cannot read each pending version.</summary>
     public async Task<IReadOnlyList<EfSchemaFamilyStatus>> ReadStatusAsync(DbContext context, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(context);
@@ -389,8 +389,8 @@ public sealed class EfSchemaModuleGate : IEfSchemaModuleGate
 
     /// <summary>
     /// Runs evaluation and refresh until <paramref name="stopping"/> fires: refresh every refresh interval, evaluation
-    /// every evaluation interval and whenever the fleet signals a change, each evaluation followed by a refresh
-    /// (FR-005, FR-010). A failed round is logged and the next one follows on schedule, whatever failed it, a cancellation
+    /// every evaluation interval and whenever the fleet signals a change, each evaluation followed by a refresh.
+    /// A failed round is logged and the next one follows on schedule, whatever failed it, a cancellation
     /// that is not <paramref name="stopping"/>'s included; only <paramref name="stopping"/> ends the loop.
     /// </summary>
     /// <param name="withContext">Runs its argument with a fresh context of the module, in a scope of its own.</param>
@@ -481,8 +481,8 @@ public sealed class EfSchemaModuleGate : IEfSchemaModuleGate
     /// <summary>
     /// Ends what <see cref="ActivateAsync"/> reported: the module is no longer active in this host, as its report says from
     /// the next publish, and this gate records nothing more it reads. Its migrator calls it once the gate's loops have
-    /// stopped, and <see cref="ActivateAsync"/> when it fails; a repeat changes nothing. The rules for when a module is active
-    /// are spec 186's, "When a module is active in the report".
+    /// stopped, and <see cref="ActivateAsync"/> when it fails; a repeat changes nothing. The rules for when a module is
+    /// active are on <c>ReadabilityEntry.ModuleActive</c>.
     /// </summary>
     internal void Deactivate()
     {
@@ -550,9 +550,9 @@ public sealed class EfSchemaModuleGate : IEfSchemaModuleGate
         SchemaFinalizationMember member,
         CancellationToken cancellationToken)
     {
-        // A database with no record: every row it holds carries the oldest version this host reads (spec 181, Edge Cases),
+        // A database with no record: every row it holds carries the oldest version this host reads,
         // and the record starts there, unless a contracting migration applied before any gate admitted the module left
-        // the schema serving only a later version, which it starts at instead (spec 185, FR-023; #2136).
+        // the schema serving only a later version, which it starts at instead (#2136).
         var record = await store.FindAsync(chain.Family, cancellationToken)
                      ?? await store.GetOrCreateAsync(
                          chain.Family,
@@ -568,8 +568,8 @@ public sealed class EfSchemaModuleGate : IEfSchemaModuleGate
             if (record.Intent is not { } intent || chain.IsReadable(intent.Version))
                 return record;
 
-            // FR-014: an intent to finalize a version this host cannot read. This host is a counted member that cannot
-            // read it, so resolving it abandons it (FR-008); if the evaluator commits first, the next read refuses.
+            // An intent to finalize a version this host cannot read. This host is a counted member that cannot
+            // read it, so resolving it abandons it; if the evaluator commits first, the next read refuses.
             await ResolveAsync(store, chain, record, identity, member, cancellationToken);
             var reread = await store.FindAsync(chain.Family, cancellationToken)
                          ?? throw new InvalidOperationException($"The finalization record of '{chain.Family}' vanished while EF module '{Module}' was activating.");
@@ -584,7 +584,7 @@ public sealed class EfSchemaModuleGate : IEfSchemaModuleGate
     }
 
     /// <summary>
-    /// Confirms the intent <paramref name="record"/> carries (FR-007, FR-008): the fleet is read fresh now, after the
+    /// Confirms the intent <paramref name="record"/> carries: the fleet is read fresh now, after the
     /// intent is durable, and the intent is committed only if every counted member reads its version and no hold applies,
     /// by compare-and-set against the revision that carries it. Otherwise it is abandoned. A lost compare-and-set means
     /// another member resolved it or the record moved, and is not an error.
@@ -722,7 +722,7 @@ public sealed class EfSchemaModuleGate : IEfSchemaModuleGate
     }
 
     /// <summary>
-    /// Whether this member may adopt a newer finalized version now (FR-018). A member whose incarnation changed since it
+    /// Whether this member may adopt a newer finalized version now. A member whose incarnation changed since it
     /// was admitted is admitted again, publish first; a refusal then refuses the family's writes rather than the module,
     /// which is already active.
     /// </summary>
@@ -749,7 +749,7 @@ public sealed class EfSchemaModuleGate : IEfSchemaModuleGate
         }
         catch (EfSchemaActivationRefusedException refusal)
         {
-            // Too late to refuse the module; refuse its writes to the family instead (FR-012). An unresolved intent or an
+            // Too late to refuse the module; refuse its writes to the family instead. An unresolved intent or an
             // unpublished report refuses nothing yet: the next refresh admits again.
             if (refusal.Refusal is EfSchemaActivationRefusal.FinalizedUnreadable && refusal.Version is { } finalized)
                 RefuseWrites(refusal.Family, finalized);
@@ -858,7 +858,7 @@ public sealed class EfSchemaModuleGate : IEfSchemaModuleGate
 
 /// <summary>
 /// What a host writes for one family: <see cref="WriteVersion"/>, the finalized version it last adopted, unless
-/// <see cref="UnreadableFinalizedVersion"/> is set, in which case it refuses every write to the family (FR-012).
+/// <see cref="UnreadableFinalizedVersion"/> is set, in which case it refuses every write to the family.
 /// </summary>
 public sealed record EfSchemaFamilyWriteState(string WriteVersion, string? UnreadableFinalizedVersion, IReadOnlyList<string> ReadableVersions)
 {

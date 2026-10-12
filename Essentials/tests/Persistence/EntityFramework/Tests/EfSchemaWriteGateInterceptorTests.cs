@@ -7,7 +7,7 @@ using static Elsa.Persistence.EntityFramework.Tests.SchemaGate;
 namespace Elsa.Persistence.EntityFramework.Tests;
 
 /// <summary>
-/// The write check every module context carries (spec 181, FR-009 and FR-012; spec 180, FR-013, FR-015 and FR-016):
+/// The write check every module context carries:
 /// every row a save writes carries its family's write version, a row stamped later is refused rather than written, a
 /// family whose finalized version this host cannot read accepts no write at all, and a row read at a later version is
 /// written only once the record confirms it. Each refusal is checked to have saved nothing, synchronously and not.

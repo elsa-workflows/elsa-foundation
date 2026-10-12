@@ -6,7 +6,7 @@ using Xunit;
 namespace Elsa.Persistence.EntityFrameworkCore.Migrations.Tests;
 
 /// <summary>
-/// Every first-party module's <c>[EfSchemaFamily]</c> declarations (spec 180, FR-001) are discoverable the way a host's
+/// Every first-party module's <c>[EfSchemaFamily]</c> declarations are discoverable the way a host's
 /// readability source discovers them: each family is declared once across the tree, and owned by an <c>[EfModule]</c>
 /// its own assembly declares. Each resolves to the chain its stores read through, which reads exactly what the host
 /// reports.
@@ -27,7 +27,7 @@ public sealed class EfSchemaFamilyDescriptorTests
     }
 
     /// <summary>
-    /// FR-005 and FR-010: every family's registration accepts its chain, and the chain its stores read through is the one
+    /// Every family's registration accepts its chain, and the chain its stores read through is the one
     /// its module class holds, reading exactly the versions the host reports for it.
     /// </summary>
     [Fact]
@@ -53,7 +53,7 @@ public sealed class EfSchemaFamilyDescriptorTests
     }
 
     /// <summary>
-    /// FR-023 at the one place every store's check now goes through: for every family, a stamp past the current version,
+    /// Skew at the one place every store's check now goes through: for every family, a stamp past the current version,
     /// one below the chain and none at all are skew, never corruption. Every first-party family has one version, so any
     /// other label is both past and below it.
     /// </summary>

@@ -21,15 +21,15 @@ namespace Elsa.Persistence.EntityFramework;
 /// </summary>
 /// <remarks>
 /// A pending contracting migration whose schema family is not yet finalized at the version its opt-out names refuses
-/// the whole pending batch here, under both policies, before any of it runs (spec 185, FR-024): that check is
+/// the whole pending batch here, under both policies, before any of it runs: that check is
 /// <see cref="EfDatabaseMigrator"/>'s, so the persistence tool's <c>apply</c> makes it too. On a database no host has
 /// admitted the module in, the migrator creates each contracted family's record first, naming this host's member.
-/// Once the schema is current and its post-migration actions audited, the module's finalization gate admits it
-/// (spec 181, FR-015): a family whose finalized version this host cannot read refuses the module here, under both
+/// Once the schema is current and its post-migration actions audited, the module's finalization gate admits it:
+/// a family whose finalized version this host cannot read refuses the module here, under both
 /// policies, before any shell task, seeder or store touches its tables, exactly as a pending migration under
 /// <see cref="EfMigratePolicy.Validate"/> does. The gate then keeps evaluating and refreshing in the background until
-/// the shell or host stops, so writers switch versions without a restart or a shell reload (FR-011). Beside it runs the
-/// module's post-finalization backfill (spec 186), which upgrades the rows below each family's finalized version and
+/// the shell or host stops, so writers switch versions without a restart or a shell reload. Beside it runs the
+/// module's post-finalization backfill, which upgrades the rows below each family's finalized version and
 /// records the family complete. It runs here, in the shell with the shell's services, and not as a post-migration action,
 /// whose audit at Prepare would refuse the very module finalization needs active.
 /// </remarks>
@@ -84,7 +84,7 @@ public sealed class EfModuleMigrator<TContext>(
             options.Value,
             services.GetService<IEfSchemaFleet>()?.GetLocalStanding().Member,
             cancellationToken);
-        // Under both policies (FR-056), and only ever after the schema is known to be current: an audit that
+        // Under both policies, and only ever after the schema is known to be current: an audit that
         // read a pre-migration schema would answer a question about a database that no longer exists. Under
         // Validate the line above has already thrown for a pending migration, so reaching here means current.
         await EfPostMigrationActions.EnsureNotRequiredAsync(
@@ -133,8 +133,7 @@ public sealed class EfModuleMigrator<TContext>(
                 throw new OperationCanceledException(_stopping.Token);
             }
 
-            // Before the gate is registered, so whatever finds it can have it refresh or read its status on demand
-            // (spec 182, FR-014 and FR-022).
+            // Before the gate is registered, so whatever finds it can have it refresh or read its status on demand.
             gate.UseContexts(WithContextAsync);
             services.GetService<EfSchemaFinalizationGates>()?.Register(typeof(TContext), gate);
             _gate = gate;
@@ -223,7 +222,7 @@ public sealed class StopEfModuleMigratorTerminator<TContext>(EfModuleMigrator<TC
 
 /// <summary>
 /// The provider a module context must be bound to before its migrations run, and what its
-/// <c>[EfModule]</c> declares for after they have (ADR 0076 D8). Resolved once, at registration, so a
+/// <c>[EfModule]</c> declares for after they have. Resolved once, at registration, so a
 /// declaration this build cannot honour is refused while a host is still wiring itself up rather than
 /// mid-migrate.
 /// </summary>
@@ -270,7 +269,7 @@ public static class EfModuleMigrationServiceCollectionExtensions
             .SingleOrDefault(candidate => candidate.ContextType == typeof(TContext));
         var module = descriptor?.Name ?? typeof(TContext).Name;
         // A schema family whose upcaster chain has a gap, a duplicate, a branch or a cycle, or that does not end at its
-        // current version, is refused here, while the host is wiring itself up (spec 180, FR-005).
+        // current version, is refused here, while the host is wiring itself up.
         EfSchemaChain.EnsureSound(typeof(TContext).Assembly, module);
         var migration = new EfModuleMigration<TContext>(
             EfRelationalProviderBinding.ExpectedProviderName(provider),

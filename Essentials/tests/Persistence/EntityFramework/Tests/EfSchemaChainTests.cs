@@ -6,7 +6,7 @@ using static Elsa.Persistence.EntityFramework.Tests.SchemaChains;
 namespace Elsa.Persistence.EntityFramework.Tests;
 
 /// <summary>
-/// Spec 180's chain rules (FR-004, FR-005, FR-007, FR-009, FR-021) on synthetic families, since every first-party family
+/// The schema chain rules on synthetic families, since every first-party family
 /// still has one version. The invariants under test: a read never returns data for a version it cannot upcast, the
 /// readable set a declaration reports is exactly the set a read accepts, and a row is either at its stamped version or
 /// wholly upcast to the current one - its columns are exactly its table's declared content columns before and after every
@@ -32,7 +32,7 @@ public sealed class EfSchemaChainTests
     public void A_row_one_version_behind_runs_only_the_last_step() =>
         Assert.Equal(["2->3"], Steps(Orders.Upcast("2", RowOf("""{"steps":[]}"""))));
 
-    /// <summary>FR-021: at the current version no upcaster runs, so the row comes back as the very same instance.</summary>
+    /// <summary>At the current version no upcaster runs, so the row comes back as the very same instance.</summary>
     [Fact]
     public void A_row_at_the_current_version_runs_no_upcaster()
     {
@@ -57,7 +57,7 @@ public sealed class EfSchemaChainTests
         Assert.Equal("hello", row[Notes]);
     }
 
-    /// <summary>FR-007 and US2: above the chain, below it and unstamped are all skew, and never corruption.</summary>
+    /// <summary>Above the chain, below it and unstamped are all skew, and never corruption.</summary>
     [Theory]
     [InlineData("4")]
     [InlineData("0")]
@@ -73,7 +73,7 @@ public sealed class EfSchemaChainTests
         Assert.False(Orders.IsReadable(stamp));
     }
 
-    /// <summary>FR-006: the stamp is settled before anything else about the row, so an unreadable stamp is skew even when the columns are wrong too.</summary>
+    /// <summary>The stamp is settled before anything else about the row, so an unreadable stamp is skew even when the columns are wrong too.</summary>
     [Fact]
     public void An_unreadable_stamp_is_skew_before_the_columns_are_judged() =>
         Assert.Throws<EfSchemaVersionSkewException>(() => Orders.Upcast("4", new EfSchemaRowContent(typeof(Row), (Content, "{}"))));
@@ -104,7 +104,7 @@ public sealed class EfSchemaChainTests
 
     /// <summary>
     /// #2144: a step returns exactly the row's declared content columns of the same table. One that adds a column, drops
-    /// one, answers for another table or returns nothing leaves the row untrustworthy, so the row is corrupt (FR-009) and
+    /// one, answers for another table or returns nothing leaves the row untrustworthy, so the row is corrupt and
     /// never returned half upgraded.
     /// </summary>
     [Theory]
@@ -130,7 +130,7 @@ public sealed class EfSchemaChainTests
     };
 
     /// <summary>
-    /// US2, scenario 2: a chain that skips 1 to 2 reads only what it reaches from the current version without the gap.
+    /// A chain that skips 1 to 2 reads only what it reaches from the current version without the gap.
     /// A row below the gap is skew; it is never bridged by applying the upcasters that do exist.
     /// </summary>
     [Fact]
@@ -145,7 +145,7 @@ public sealed class EfSchemaChainTests
         Assert.Equal(["2->3"], Steps(gapped.Upcast("2", RowOf("""{"steps":[]}"""))));
     }
 
-    /// <summary>FR-005: every malformed chain is refused where the family is registered, naming the family and the fault.</summary>
+    /// <summary>Every malformed chain is refused where the family is registered, naming the family and the fault.</summary>
     [Theory]
     [MemberData(nameof(MalformedChains))]
     public void A_malformed_chain_is_refused_at_registration(string name, EfSchemaFamilyDescriptor declaration, string[] readable, string fault)
@@ -187,7 +187,7 @@ public sealed class EfSchemaChainTests
         Assert.Throws<EfSchemaVersionSkewException>(() => chain.EnsureReadable("0"));
     }
 
-    /// <summary>FR-009: an upcaster that fails on a row whose stamp is readable reports the row as corrupt, not as skew.</summary>
+    /// <summary>An upcaster that fails on a row whose stamp is readable reports the row as corrupt, not as skew.</summary>
     [Fact]
     public void An_upcaster_that_fails_on_a_readable_row_reports_corruption()
     {
@@ -201,7 +201,7 @@ public sealed class EfSchemaChainTests
         Assert.IsType<FormatException>(corrupt.InnerException);
     }
 
-    /// <summary>FR-008: a projection introduced at a version applies to rows stamped at it or later, in chain order.</summary>
+    /// <summary>A projection introduced at a version applies to rows stamped at it or later, in chain order.</summary>
     [Fact]
     public void A_stamp_is_ordered_by_the_chain_not_by_its_label()
     {
@@ -228,7 +228,7 @@ public sealed class EfSchemaChainTests
         Assert.Equal(["1->2", "2->3"], Steps(results[0]));
     }
 
-    /// <summary>SC-007, within one process: two separately resolved chains produce byte-identical output.</summary>
+    /// <summary>Within one process, two separately resolved chains produce byte-identical output.</summary>
     [Fact]
     public void Two_resolutions_of_one_declaration_upcast_to_byte_identical_content()
     {
@@ -398,7 +398,7 @@ public sealed class EfSchemaRowContentTests
     public void A_column_named_twice_is_refused() =>
         Assert.Throws<ArgumentException>(() => new EfSchemaRowContent(typeof(Row), (Content, "a"), (Content, "b")));
 
-    /// <summary>FR-019: an upcaster that walks the columns sees them in one order, whatever order the reader built the row in.</summary>
+    /// <summary>An upcaster that walks the columns sees them in one order, whatever order the reader built the row in.</summary>
     [Fact]
     public void Columns_enumerate_in_ordinal_order_whatever_order_they_were_given_in() =>
         Assert.Equal(

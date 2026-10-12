@@ -10,7 +10,7 @@ namespace Elsa.Persistence.EntityFramework;
 /// choices through here, so they accept the same provider aliases and resolve connections in the same order.
 /// </summary>
 /// <remarks>
-/// The migrations assembly is the assembly itself, never its name (spec 183, FR-021, amended 2026-09-29): EF Core would
+/// The migrations assembly is the assembly itself, never its name: EF Core would
 /// resolve a name from its own load context, and where that context reaches the previous release of a package upgraded
 /// in place - as a package graph that carries its own EF Core does - the name finds the previous release's migrations,
 /// which the new release's context does not match, so none of the new release's pending migrations would be seen.
@@ -77,7 +77,7 @@ public sealed record EfModuleBinding(
         // nothing byte-identical to what it was: no extension, so no second model to cache.
         if (EfPayloadCompressionSettings.Resolve(services, Owner) is { } compression)
             builder.UseElsaPayloadCompression(compression);
-        // Every module context holds its writes to the write version its finalization gate keeps (spec 181, FR-009).
+        // Every module context holds its writes to the write version its finalization gate keeps.
         SchemaFinalization.EfSchemaWriteGateInterceptor.EnsureAdded(builder);
     }
 

@@ -31,7 +31,7 @@ internal sealed class EfSchemaBackfillRun(
     public IReadOnlyList<string> Below { get; } = BelowOf(chain, target);
 
     /// <summary>
-    /// The finish record standing as far as this run knows (FR-018): the one it examined, until a withdrawal leaves none, or
+    /// The finish record standing as far as this run knows: the one it examined, until a withdrawal leaves none, or
     /// a fresh read finds another standing in its place, such as one another worker recorded while this run went on. A row
     /// below it is a straggler.
     /// </summary>
@@ -64,9 +64,9 @@ internal sealed class EfSchemaBackfillRun(
         chain.ReadableVersions.Take(Math.Max(0, SchemaVersionChain.PositionOf(chain.ReadableVersions, version))).ToArray();
 }
 
-/// <summary>One verification pass (FR-013): when it began and ended, where the finish history stood when the settle margin it followed began, the rows it found below the target, and what blocks completion.</summary>
+/// <summary>One verification pass: when it began and ended, where the finish history stood when the settle margin it followed began, the rows it found below the target, and what blocks completion.</summary>
 /// <param name="HistoryMark">
-/// How many finish history entries stood when the settle margin the pass followed began (FR-012), so a withdrawal since,
+/// How many finish history entries stood when the settle margin the pass followed began, so a withdrawal since,
 /// before the pass or during it, is told apart by position, not by clock: two hosts' clocks, or one that has not moved,
 /// cannot order them.
 /// </param>
@@ -87,7 +87,7 @@ internal sealed class EfSchemaBackfillStoppedException(EfSchemaBackfillStop reas
     public EfSchemaBackfillStop Reason { get; } = reason;
 }
 
-/// <summary>Why a worker's run of a family stops before it is done (spec 186, FR-008; spec 183, FR-007).</summary>
+/// <summary>Why a worker's run of a family stops before it is done.</summary>
 internal enum EfSchemaBackfillStop
 {
     /// <summary>Another worker's claim holds, taken over since this worker's own lapsed.</summary>

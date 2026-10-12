@@ -2,7 +2,7 @@ namespace Elsa.Persistence.EntityFramework.Tooling;
 
 /// <summary>
 /// The one order every command reports and every artifact is numbered by: topological on
-/// <see cref="EfModuleDescriptor.DependsOn"/>, tie-broken by ordinal name (FR-041). Never input order,
+/// <see cref="EfModuleDescriptor.DependsOn"/>, tie-broken by ordinal name. Never input order,
 /// never discovery order — a DBA applies <c>NN-&lt;slug&gt;.sql</c> files in the order they are named, so
 /// the same selection must number the same way however it was typed.
 /// </summary>

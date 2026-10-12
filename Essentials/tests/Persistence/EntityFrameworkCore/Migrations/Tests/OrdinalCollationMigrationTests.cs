@@ -43,7 +43,7 @@ public sealed class OrdinalCollationMigrationTests
         ("ActivitiesDesign", "elsa_activity_definition_versions_v2", "DefinitionId"),
         ("ActivitiesDesign", "elsa_activity_definition_versions_v2", "DefinitionIdIdentityHash"),
         ("ActivitiesDesign", "elsa_activity_definition_versions_v2", "SemVerSortKey"),
-        // Host ids compare ordinally (spec 183, FR-003); a linguistic default would let two differing only in case
+        // Host ids compare ordinally; a linguistic default would let two differing only in case
         // share one current incarnation.
         ("ClusterMembership", "elsa_cluster_members", "HostId"),
         ("ClusterMembership", "elsa_cluster_members", "CurrentHostId"),

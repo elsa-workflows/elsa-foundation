@@ -16,14 +16,13 @@ public sealed record EfSchemaFamilyDescriptor(string Name, string? Module, strin
 
     /// <summary>
     /// The family's content columns, as its <c>[EfSchemaContent]</c> declarations name them: what every
-    /// read upcasts through the chain before deserializing, and every write that changes restamps (spec 180, FR-009 and
-    /// FR-014).
+    /// read upcasts through the chain before deserializing, and every write that changes restamps.
     /// </summary>
     public IReadOnlyList<EfSchemaColumn> ContentColumns { get; init; } = [];
 
     /// <summary>
     /// The family's document columns compared as stored bytes rather than upcast, as its
-    /// <c>[EfSchemaIntegrity]</c> declarations name them, each with the reason (spec 180, FR-008).
+    /// <c>[EfSchemaIntegrity]</c> declarations name them, each with the reason.
     /// </summary>
     public IReadOnlyList<EfSchemaIntegrityColumn> IntegrityColumns { get; init; } = [];
 
@@ -35,23 +34,23 @@ public sealed record EfSchemaFamilyDescriptor(string Name, string? Module, strin
 
     /// <summary>
     /// The entity types <c>[EfSchemaFamily(ContentAddressed = ...)]</c> names: the family's tables the
-    /// post-finalization backfill never rewrites (spec 186, FR-010a and FR-010b).
+    /// post-finalization backfill never rewrites.
     /// </summary>
     public IReadOnlyList<Type> ContentAddressed { get; init; } = [];
 
-    /// <summary>The family's rewriter, as <c>[EfSchemaFamily(Rewriter = ...)]</c> names it, or <see langword="null"/> (spec 186, FR-004).</summary>
+    /// <summary>The family's rewriter, as <c>[EfSchemaFamily(Rewriter = ...)]</c> names it, or <see langword="null"/>.</summary>
     public Type? Rewriter { get; init; }
 
     /// <summary>
-    /// The versions this declaration can read, as opaque labels in chain order ending at <see cref="CurrentVersion"/>
-    /// (spec 180, FR-004): the current version and every predecessor the chain reaches from it without a gap. A version
+    /// The versions this declaration can read, as opaque labels in chain order ending at <see cref="CurrentVersion"/>:
+    /// the current version and every predecessor the chain reaches from it without a gap. A version
     /// below a gap, or reached only through an upcaster that is malformed, is never in it. A store's read accepts
     /// exactly these versions (<c>EfSchemaChain</c>, in <c>Elsa.Persistence.EntityFramework</c>), and a host's readability report credits exactly these.
     /// </summary>
     public IReadOnlyList<string> ReadableVersions => EfSchemaChainRules.ReadableVersions(CurrentVersion, Upcasters);
 
     /// <summary>
-    /// What is wrong with the declared chain, one line per fault (spec 180, FR-005), or nothing when it is sound. A
+    /// What is wrong with the declared chain, one line per fault, or nothing when it is sound. A
     /// family with any fault fails the build and its registration at startup; <see cref="ReadableVersions"/> still
     /// never credits a version the fault leaves unreachable.
     /// </summary>
@@ -77,7 +76,7 @@ public sealed record EfSchemaUpcasterDescriptor(Type Type, string? From, string?
 }
 
 /// <summary>
-/// The chain rules of spec 180's FR-004 and FR-005 over a declared chain, in one place, so the readable set a host
+/// The readable-set and fault rules over a declared chain, in one place, so the readable set a host
 /// reports and the one its reads accept are computed by the same function.
 /// </summary>
 internal static class EfSchemaChainRules

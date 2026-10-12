@@ -8,7 +8,7 @@ namespace Elsa.Persistence.EntityFramework;
 /// that reads it.
 /// </summary>
 /// <remarks>
-/// Assembly-level and constant-argument-only by design (ADR 0076 D2): readable as metadata
+/// Assembly-level and constant-argument-only by design: readable as metadata
 /// (<see cref="System.Reflection.CustomAttributeData"/>) without running any module code, which is what
 /// a package loader needs to decide whether a module may activate before it loads. <see cref="AllowMultiple"/>
 /// covers the two assemblies that carry two contexts today (Identity, Runtime.Distributed). A <c>null</c>

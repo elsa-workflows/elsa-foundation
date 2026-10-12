@@ -1,7 +1,7 @@
 namespace Elsa.Persistence.EntityFramework.Tooling;
 
 /// <summary>
-/// The exit codes spec 171 assigns the persistence CLI. <see cref="EfToolingHost"/> reports one on every
+/// The persistence CLI's exit codes. <see cref="EfToolingHost"/> reports one on every
 /// response it writes, so the worker that launched it has a code to exit with without classifying anything
 /// itself, and so a refusal here can never acquire a second, parallel meaning there.
 /// </summary>
@@ -24,7 +24,7 @@ public static class EfToolingExitCode
 }
 
 /// <summary>
-/// A refusal carrying the exit code the spec assigns it, a stable machine-readable
+/// A refusal carrying the exit code the CLI assigns it, a stable machine-readable
 /// <see cref="Code"/>, and — for the refusals that must name every offender rather than the first one —
 /// one <see cref="Details"/> line per offender.
 /// </summary>
@@ -43,7 +43,7 @@ internal sealed class EfToolingRefusal(int exitCode, string code, string message
     public static EfToolingRefusal Resolution(string code, string message, IReadOnlyList<string>? details = null) =>
         new(EfToolingExitCode.ResolutionFailure, code, message, details);
 
-    /// <summary><c>validate</c> found a pending migration (FR-052): a negative result, not a refusal or a resolution failure.</summary>
+    /// <summary><c>validate</c> found a pending migration: a negative result, not a refusal or a resolution failure.</summary>
     public static EfToolingRefusal NegativeResult(string code, string message, IReadOnlyList<string>? details = null) =>
         new(EfToolingExitCode.NegativeResult, code, message, details);
 

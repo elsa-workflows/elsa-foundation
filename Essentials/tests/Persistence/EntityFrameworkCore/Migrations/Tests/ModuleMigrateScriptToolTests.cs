@@ -176,7 +176,7 @@ public sealed class ModuleMigrateScriptToolTests : IDisposable
     }
 
     /// <summary>
-    /// The interim fix an earlier slice made (#1876, FR-051) and this one keeps: <c>apply</c>/<c>validate</c>
+    /// The interim fix an earlier slice made (#1876) and this one keeps: <c>apply</c>/<c>validate</c>
     /// take no positional connection argument, converging on <c>--connection-env</c>/<c>--connection-stdin</c>
     /// the same way <c>dotnet elsa</c> itself does — because that is now literally what runs underneath.
     /// </summary>
@@ -196,7 +196,7 @@ public sealed class ModuleMigrateScriptToolTests : IDisposable
         Assert.DoesNotContain(sentinel, call, StringComparison.Ordinal);
     }
 
-    /// <summary>Defaults to <c>ELSA_EF_CONNECTION</c> (D7) when <c>--connection-env</c> is not given.</summary>
+    /// <summary>Defaults to <c>ELSA_EF_CONNECTION</c> when <c>--connection-env</c> is not given.</summary>
     [SkippableFact]
     public void Apply_defaults_the_connection_environment_variable_name()
     {
@@ -223,7 +223,7 @@ public sealed class ModuleMigrateScriptToolTests : IDisposable
         Assert.DoesNotContain("sentinel-stdin", call, StringComparison.Ordinal);
     }
 
-    /// <summary>There is no <c>--connection</c> flag (D7); a caller that passes one is told, and nothing runs.</summary>
+    /// <summary>There is no <c>--connection</c> flag; a caller that passes one is told, and nothing runs.</summary>
     [SkippableFact]
     public void A_connection_flag_is_rejected_and_nothing_runs()
     {

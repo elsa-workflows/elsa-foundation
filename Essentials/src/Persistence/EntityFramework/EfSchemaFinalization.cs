@@ -5,7 +5,7 @@ using Microsoft.EntityFrameworkCore;
 namespace Elsa.Persistence.EntityFramework;
 
 /// <summary>
-/// Where an EF module keeps the finalization record of its schema families (spec 181, FR-001 and FR-002): two tables
+/// Where an EF module keeps the finalization record of its schema families: two tables
 /// beside the module's own migrations-history table, created by the module's own baseline migration, so
 /// <see cref="EfMigratePolicy.Validate"/> refuses a module whose database lacks them. Every module context maps them
 /// with <see cref="MapSchemaFinalization"/>, whichever membership provider a host composes.
@@ -13,7 +13,7 @@ namespace Elsa.Persistence.EntityFramework;
 /// <remarks>
 /// <para>
 /// One table holds a row per schema family: the finalized version, the intent in flight, the holds, the finish record
-/// and their histories. The other holds one row, the opaque database identity (spec 181, Decisions, Q11). Both are
+/// and their histories. The other holds one row, the opaque database identity. Both are
 /// named after the module's history module, so modules that share a database never share them, and so the identity is
 /// per module and database: every family of one module in one database carries the same identity, and the same module
 /// in another database carries another.

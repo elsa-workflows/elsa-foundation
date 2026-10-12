@@ -11,8 +11,8 @@ using Xunit;
 namespace Elsa.Persistence.EntityFramework.Tests;
 
 /// <summary>
-/// The finalization record's own rules (spec 181, FR-001 to FR-004 and FR-019; spec 186, FR-014 to FR-016 and
-/// FR-018), on a file database so two stores can race through two connections. Every refusal is also checked to have
+/// The finalization record's own rules,
+/// on a file database so two stores can race through two connections. Every refusal is also checked to have
 /// written nothing, because a refused change that half-landed would look like a refusal and still move the record.
 /// </summary>
 public sealed class EfSchemaFinalizationStoreTests : IAsyncLifetime
@@ -96,7 +96,7 @@ public sealed class EfSchemaFinalizationStoreTests : IAsyncLifetime
     }
 
     /// <summary>
-    /// Spec 181, FR-003: the finalized version only moves forward. Recording an intent is the only way towards a new
+    /// The finalized version only moves forward. Recording an intent is the only way towards a new
     /// finalized version, so a store that let a backwards or repeated intent through would finalize it on commit.
     /// </summary>
     [Theory]
@@ -146,7 +146,7 @@ public sealed class EfSchemaFinalizationStoreTests : IAsyncLifetime
 
     /// <summary>
     /// A writer can only order versions its own chain names. One that cannot place the finalized version is exactly a
-    /// host that cannot read it (spec 181, FR-012), and it must not move the record.
+    /// host that cannot read it, and it must not move the record.
     /// </summary>
     [Fact]
     public async Task A_version_outside_the_writers_chain_is_refused()
@@ -289,7 +289,7 @@ public sealed class EfSchemaFinalizationStoreTests : IAsyncLifetime
     }
 
     /// <summary>
-    /// Spec 181, User Story 4, scenario 4: a hold placed while an intent is being confirmed abandons it. An evaluator
+    /// A hold placed while an intent is being confirmed abandons it. An evaluator
     /// whose confirming read began before the hold then loses its commit, so the hold cannot be overtaken by a
     /// finalization that looks legitimate. A hold that does not cover the intent leaves it to commit.
     /// </summary>
@@ -413,7 +413,7 @@ public sealed class EfSchemaFinalizationStoreTests : IAsyncLifetime
     }
 
     /// <summary>
-    /// Spec 181, Decisions, Q11: never derived from a connection string. The same connection string in front of a fresh
+    /// The database identity is never derived from a connection string. The same connection string in front of a fresh
     /// database is a different database, and gets a different identity.
     /// </summary>
     [Fact]
@@ -447,7 +447,7 @@ public sealed class EfSchemaFinalizationStoreTests : IAsyncLifetime
             () => Store().RecordCompletionAsync(Family, completed.Revision, "2", Now, Now, Chain, HostB, worker: null));
     }
 
-    /// <summary>Spec 186, FR-018 and FR-019: withdrawing completion is not unfinalizing, and the finish history keeps both.</summary>
+    /// <summary>Withdrawing completion is not unfinalizing, and the finish history keeps both.</summary>
     [Fact]
     public async Task Withdrawing_a_completion_leaves_the_finalized_version_and_appends_to_the_finish_history()
     {
@@ -466,7 +466,7 @@ public sealed class EfSchemaFinalizationStoreTests : IAsyncLifetime
     }
 
     /// <summary>
-    /// Spec 186, FR-008: a backfill run's claim sits in the finish record, keeps other workers off while it holds, is
+    /// A backfill run's claim sits in the finish record, keeps other workers off while it holds, is
     /// renewed by its own worker without moving when it was first claimed, is taken over once it expires, adds nothing to
     /// the finish history, and is dropped by the completion it leads to. A refused claim writes nothing.
     /// </summary>
@@ -494,7 +494,7 @@ public sealed class EfSchemaFinalizationStoreTests : IAsyncLifetime
     }
 
     /// <summary>
-    /// Spec 186, FR-008, both ways: a claim names a target at the standing completion, to audit it, or after it, to
+    /// The claim's target, both ways: a claim names a target at the standing completion, to audit it, or after it, to
     /// upgrade past it, and never one before it or past the finalized version. A refused claim writes nothing.
     /// </summary>
     [Fact]
@@ -517,7 +517,7 @@ public sealed class EfSchemaFinalizationStoreTests : IAsyncLifetime
     }
 
     /// <summary>
-    /// Spec 186, FR-008 after FR-018, the case a missing claim would hide: while no completion stands, a claim is held on
+    /// The claim after a withdrawal, the case a missing claim would hide: while no completion stands, a claim is held on
     /// the withdrawal that ended the last one, changing no transition of the history and adding no entry, and keeps other
     /// workers off as one on a completion does, so the workers that find the withdrawal do not all rewrite the same rows.
     /// The completion it leads to drops it, from the withdrawal too.
@@ -551,7 +551,7 @@ public sealed class EfSchemaFinalizationStoreTests : IAsyncLifetime
     }
 
     /// <summary>
-    /// Spec 186, FR-008 and FR-018, both ways: a withdrawal moves a claim that still holds onto itself, so the worker that
+    /// The claim after a withdrawal, both ways: a withdrawal moves a claim that still holds onto itself, so the worker that
     /// found the straggler goes on with the family and the others stay off it; a claim that has expired is not carried.
     /// </summary>
     [Theory]
@@ -569,7 +569,7 @@ public sealed class EfSchemaFinalizationStoreTests : IAsyncLifetime
     }
 
     /// <summary>
-    /// Spec 186, FR-008, both ways: a worker releases its own claim, held or expired, wherever it is held, so another may
+    /// The release, both ways: a worker releases its own claim, held or expired, wherever it is held, so another may
     /// take the family over at once; a worker cannot release a claim it does not hold, and that refusal writes nothing.
     /// </summary>
     [Fact]
@@ -595,7 +595,7 @@ public sealed class EfSchemaFinalizationStoreTests : IAsyncLifetime
     }
 
     /// <summary>
-    /// Spec 186, FR-008, both ways, in the store itself rather than in its callers' discipline: while another worker's
+    /// The claim, both ways, in the store itself rather than in its callers' discipline: while another worker's
     /// claim holds, neither a completion nor a withdrawal is written, whether the writer is a worker with a claim of its own
     /// or one that keeps none, and the refusal writes nothing. The worker that holds the claim withdraws, and keeps its
     /// claim on the withdrawal; once that claim has expired, a writer that keeps none records the completion.
@@ -628,7 +628,7 @@ public sealed class EfSchemaFinalizationStoreTests : IAsyncLifetime
     }
 
     /// <summary>
-    /// Spec 186, FR-008: the one rule every claim, completion and withdrawal is held to. A live claim keeps every other
+    /// The one rule every claim, completion and withdrawal is held to. A live claim keeps every other
     /// worker off, a worker that keeps none included, and never its own worker; an expired claim, or none, keeps no one off.
     /// </summary>
     [Fact]
@@ -645,7 +645,7 @@ public sealed class EfSchemaFinalizationStoreTests : IAsyncLifetime
     }
 
     /// <summary>
-    /// Spec 186, FR-008: the claim is an optional member of the finish record's JSON, absent while no run holds one, so a
+    /// The claim is an optional member of the finish record's JSON, absent while no run holds one, so a
     /// build that does not know it reads a claimed record unchanged, and one written before it existed reads with none.
     /// </summary>
     [Fact]
@@ -663,7 +663,7 @@ public sealed class EfSchemaFinalizationStoreTests : IAsyncLifetime
     }
 
     /// <summary>
-    /// Spec 186, FR-008: the claim a withdrawal holds is an optional member of that history entry's JSON, absent from every
+    /// The claim a withdrawal holds is an optional member of that history entry's JSON, absent from every
     /// entry no run has claimed, so a build that does not know it reads the claimed history unchanged.
     /// </summary>
     [Fact]

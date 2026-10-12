@@ -29,7 +29,7 @@ public readonly record struct EfToolingFamilyDatabase(string Family, string? Dat
 
 /// <summary>
 /// The fleet as one read shows it, and the answer to the question the finalization gate asks of it: which counted members
-/// cannot read a version of a family in a database (spec 181, FR-022; MR-007). The answer comes from the provider, which
+/// cannot read a version of a family in a database. The answer comes from the provider, which
 /// owns what "counted" and "can read" mean, so the tool repeats neither, and neither does whatever prints it.
 /// </summary>
 public sealed class EfToolingFleet(

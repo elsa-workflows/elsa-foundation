@@ -25,7 +25,7 @@ internal sealed class FakeMember(string hostId)
     public bool ReportUnknown { get; set; }
 
     /// <summary>
-    /// The finalized version this member reports having observed, per family, where a test states it (spec 186, MR-001);
+    /// The finalized version this member reports having observed, per family, where a test states it;
     /// otherwise what <see cref="Observations"/>, the member's own gates' record, says.
     /// </summary>
     public Dictionary<string, string?> Observed { get; } = new(StringComparer.Ordinal);
@@ -59,12 +59,12 @@ internal sealed class FakeFleetState
         return member;
     }
 
-    /// <summary>Whether every counted member reads <paramref name="version"/>, as spec 183's FR-023 counts them.</summary>
+    /// <summary>Whether every counted member reads <paramref name="version"/>.</summary>
     public EfSchemaFleetAnswer Count(string family, string version, string databaseIdentity) =>
         Answer(family, databaseIdentity, (member, readable) =>
             readable.Contains(version, StringComparer.Ordinal) ? null : $"{member} reads [{string.Join(", ", readable)}]");
 
-    /// <summary>The backfill's settle condition (spec 186, FR-012): every counted member reports an observed finalized version among <paramref name="versions"/>.</summary>
+    /// <summary>The backfill's settle condition: every counted member reports an observed finalized version among <paramref name="versions"/>.</summary>
     public EfSchemaFleetAnswer CountObserving(string family, IReadOnlyList<string> versions, string databaseIdentity) =>
         Answer(family, databaseIdentity, (member, _) =>
             member.ObservedVersionOf(family) is { } observed && versions.Contains(observed, StringComparer.Ordinal)

@@ -7,7 +7,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 namespace Elsa.Persistence.EntityFramework.SchemaBackfill;
 
 /// <summary>
-/// The post-finalization backfill of one EF module in one shell, and so in one database (spec 186): once a family's newer
+/// The post-finalization backfill of one EF module in one shell, and so in one database: once a family's newer
 /// version is finalized and this host has adopted it, it upgrades every row below it through the family's rewriter, waits
 /// until no counted member can still be writing below it, proves that none remains, and records the family complete in
 /// its finish record. While a completion stands it audits the family, and withdraws the completion when a row below it
@@ -19,22 +19,22 @@ namespace Elsa.Persistence.EntityFramework.SchemaBackfill;
 /// runtime has not reported. It holds through these mechanisms, each tested on its own:
 /// </para>
 /// <list type="number">
-/// <item><b>Nothing runs before finalization</b> (FR-002). The target of a run is this host's write version, which the
+/// <item><b>Nothing runs before finalization</b>. The target of a run is this host's write version, which the
 /// finalization gate only ever takes from a finalized version this host has adopted, and every row it writes is held to
 /// the write version by the gate's write check.</item>
-/// <item><b>The backfill is an ordinary writer</b> (FR-004). It asks the family's rewriter to read each row through the
+/// <item><b>The backfill is an ordinary writer</b>. It asks the family's rewriter to read each row through the
 /// family's read path and write it back through its write path, a compare-and-set on the row's revision; a lost one is
 /// asked again, and a row is written whole or not at all.</item>
-/// <item><b>Content-addressed rows are never rewritten</b> (FR-010a), and a family holding one below the target is never
-/// recorded complete at it (FR-011a).</item>
-/// <item><b>The settle condition comes before verification</b> (FR-012): every counted member reports observing the
+/// <item><b>Content-addressed rows are never rewritten</b>, and a family holding one below the target is never
+/// recorded complete at it.</item>
+/// <item><b>The settle condition comes before verification</b>: every counted member reports observing the
 /// target, and the settle margin has passed since this worker first saw that hold with no withdrawal in the finish
 /// history since, whichever worker wrote it.</item>
-/// <item><b>Completion is recorded only from a verification pass that found nothing</b> (FR-013, FR-014): a complete
+/// <item><b>Completion is recorded only from a verification pass that found nothing</b>: a complete
 /// pass over every table of the family, after the settle condition, that found no row below the target, no row it could
 /// not read and no content-addressed row below it, with no completion withdrawn since its settle margin began, written
 /// by compare-and-set.</item>
-/// <item><b>A straggler is reported before it is rewritten</b> (FR-018). While a completion stands the family is audited
+/// <item><b>A straggler is reported before it is rewritten</b>. While a completion stands the family is audited
 /// on its interval, whatever this host's target; and the audit, the upgrade pass and the verification pass each withdraw
 /// the completion, by compare-and-set against evidence read after the record they withdraw, before they rewrite the first
 /// row they find below it. A pass reads what stands afresh before each row, so a completion another worker records while
@@ -42,8 +42,7 @@ namespace Elsa.Persistence.EntityFramework.SchemaBackfill;
 /// </list>
 /// <para>
 /// It is not an <see cref="IEfPostMigrationAction"/>: an action audits at Prepare and refuses the module while it is
-/// required, but the backfill may run only after finalization, which needs the module active (spec 186, "Why this is not
-/// a post-migration action").
+/// required, but the backfill may run only after finalization, which needs the module active.
 /// </para>
 /// <para>
 /// Several workers may run it for one family and database at once, on several hosts or in several shells of one host.
@@ -54,7 +53,7 @@ namespace Elsa.Persistence.EntityFramework.SchemaBackfill;
 /// which keeps a claim that still holds, so after a withdrawal one worker goes on and the others wait. A worker that finds
 /// the family claimed elsewhere reads nothing of it until the claim expires, and defers its audit by an interval. The
 /// claimant keeps the claim only while its run goes on next round, settling or verifying again, and releases it on every
-/// other way out. Nothing correct depends on the claim (FR-008): a crashed worker's claim expires, and a claim lost to
+/// other way out. Nothing correct depends on the claim: a crashed worker's claim expires, and a claim lost to
 /// compare-and-set again and again leaves the run unclaimed. The claim only ever narrows who works: a worker renews it, or
 /// stops, between two batches, between two tables a selection counts and before each phase; it rewrites a row only after
 /// a read that shows no other worker's live claim; it withdraws and records a completion only while no other worker's
@@ -85,7 +84,7 @@ public sealed class EfSchemaBackfill
     private readonly Dictionary<string, IReadOnlyList<EfSchemaStampedTable>> _tables = new(StringComparer.Ordinal);
 
     /// <summary>
-    /// Builds the backfill of <paramref name="gate"/>'s module, whose status the gate then carries (FR-021): one backfill
+    /// Builds the backfill of <paramref name="gate"/>'s module, whose status the gate then carries: one backfill
     /// per gate.
     /// </summary>
     /// <param name="gate">The module's finalization gate, whose write versions and observed records the backfill reads.</param>
@@ -112,12 +111,12 @@ public sealed class EfSchemaBackfill
     /// <summary>The EF module whose families this backfill upgrades.</summary>
     public string Module => _gate.Module;
 
-    /// <summary>What this worker last saw of <paramref name="family"/>'s backfill (FR-021).</summary>
+    /// <summary>What this worker last saw of <paramref name="family"/>'s backfill.</summary>
     public EfSchemaBackfillStatus StatusOf(string family) => _status.StatusOf(family);
 
     /// <summary>
     /// Runs a round every <see cref="EfSchemaBackfillOptions.CheckInterval"/> until <paramref name="stopping"/> fires,
-    /// starting one interval after it is called, so the shell is running by then (spec 186, User Story 7). A failed round
+    /// starting one interval after it is called, so the shell is running by then. A failed round
     /// is logged and the next one follows on schedule; whatever it had not written is found again.
     /// </summary>
     /// <param name="withScope">Runs its argument in a fresh service scope of the shell, with a fresh context of the module.</param>
@@ -193,7 +192,7 @@ public sealed class EfSchemaBackfill
         if (_finish.HasLapsed)
         {
             // Before anything the gate observed decides otherwise: others may count this member expired and take its work
-            // over (spec 183, FR-007), so it takes none, and lets go of what it holds rather than keep the family from them.
+            // over, so it takes none, and lets go of what it holds rather than keep the family from them.
             await LetGoAsLapsedAsync(scopes, family, EfSchemaBackfillFinish.Lapsed);
             return;
         }
@@ -267,7 +266,7 @@ public sealed class EfSchemaBackfill
         var completionAt = completion is null ? -1 : SchemaVersionChain.PositionOf(readable, completion);
         if (completion is not null && completionAt < 0)
         {
-            // Activation refuses this (FR-020); a completion recorded since by a newer host lies after this host's chain.
+            // Activation refuses this; a completion recorded since by a newer host lies after this host's chain.
             _status.Update(family, status => status with
             {
                 State = EfSchemaBackfillState.Idle,
@@ -288,7 +287,7 @@ public sealed class EfSchemaBackfill
             return null;
         }
 
-        // FR-018: a standing completion is audited on its interval whatever this host's target, so a family whose run
+        // A standing completion is audited on its interval whatever this host's target, so a family whose run
         // towards a newer version is blocked still has its stragglers found.
         var now = _time.GetUtcNow();
         var auditDue = completion is not null && now >= NextAuditOf(family);
@@ -307,7 +306,7 @@ public sealed class EfSchemaBackfill
     private readonly record struct FamilyRound(string Target, string Identity, bool AuditDue, bool RunDue, bool Sole, DateTimeOffset Now);
 
     /// <summary>
-    /// FR-008: the claim comes before any read of the family's rows, so a worker that finds it held elsewhere surveys,
+    /// The claim comes before any read of the family's rows, so a worker that finds it held elsewhere surveys,
     /// settles, verifies and audits nothing. It waits out the claim, and leaves the audit due now to the holder, which
     /// audits on its own interval while it holds the family. The claim names this host's write target, whether it covers
     /// an audit, a run, or both. Returns whether the family's run goes on next round, and so keeps its claim.
@@ -346,8 +345,8 @@ public sealed class EfSchemaBackfill
     }
 
     /// <summary>
-    /// What a worker whose member has lapsed from the fleet does with a family, however it found the lapse (spec 183,
-    /// FR-007): it lets go of its claim at once, so another member takes the family over rather than wait for the claim to
+    /// What a worker whose member has lapsed from the fleet does with a family, however it found the lapse:
+    /// it lets go of its claim at once, so another member takes the family over rather than wait for the claim to
     /// expire, and says so.
     /// </summary>
     private async Task LetGoAsLapsedAsync(EfSchemaBackfillScopeRunner scopes, string family, string detail)
@@ -390,7 +389,7 @@ public sealed class EfSchemaBackfill
     private static LogLevel FailureLevel(Exception exception) => IsProviderDisposal(exception) ? LogLevel.Debug : LogLevel.Warning;
 
     /// <summary>
-    /// One run for <paramref name="chain"/>'s family to <paramref name="target"/> (FR-005 to FR-014), under this worker's
+    /// One run for <paramref name="chain"/>'s family to <paramref name="target"/>, under this worker's
     /// claim: a survey of what blocks completion, the upgrade pass, the settle condition, and verification passes until one
     /// finds nothing, which records completion. The claim is renewed between the tables a selection counts, between
     /// batches, before the settle condition and before each verification pass, so a worker that no longer owns the run
@@ -400,7 +399,7 @@ public sealed class EfSchemaBackfill
     {
         var family = chain.Family;
         // The record as it stands now, not as the gate last observed it: a completion another worker recorded since is the
-        // one a row below it straggles behind (FR-018), and one at the target already leaves nothing to do.
+        // one a row below it straggles behind, and one at the target already leaves nothing to do.
         var completion = (await _finish.ReadAsync(scopes, family, cancellationToken))?.Finish;
         if (completion is not null && SchemaVersionChain.PositionOf(chain.ReadableVersions, completion.CompletionVersion) >= SchemaVersionChain.PositionOf(chain.ReadableVersions, target))
         {
@@ -495,7 +494,7 @@ public sealed class EfSchemaBackfill
     }
 
     /// <summary>
-    /// The audit (FR-018): a selection by stamp of every table of the family for rows below the completion that stands. Any
+    /// The audit: a selection by stamp of every table of the family for rows below the completion that stands. Any
     /// such row, rewritable or not, withdraws the completion first; then the rewritable ones are rewritten. With
     /// <paramref name="sole"/> the completion is at this host's target, so the audit is all the family has to do and the
     /// status says the family is complete; otherwise the run that follows says what it is doing. An audit that fails is
@@ -534,7 +533,7 @@ public sealed class EfSchemaBackfill
 
     /// <summary>
     /// Records what blocks the family at <paramref name="target"/>, and leaves it until it is due to be surveyed again unless
-    /// the target moves (FR-023): a blocker persists until someone resolves it, and surveying the family every round would
+    /// the target moves: a blocker persists until someone resolves it, and surveying the family every round would
     /// cost a selection by stamp of every table every check interval. Rows an operator repairs in place, with a stamp this
     /// host cannot read or that fail to upcast, are surveyed again at <see cref="EfSchemaBackfillOptions.RepairableBlockerInterval"/>,
     /// so a repair is seen soon; any other blocker, content-addressed rows among them, at the audit interval.

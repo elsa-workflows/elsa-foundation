@@ -7,8 +7,8 @@ namespace Elsa.Persistence.EntityFramework.SchemaFinalization;
 
 /// <summary>
 /// Reads and writes the finalization records and the database identity a module context maps through
-/// <see cref="EfSchemaFinalization.MapSchemaFinalization"/> (spec 181, FR-001 to FR-004 and FR-019; spec 186, FR-008 and
-/// FR-014 to FR-018). It keeps the record's rules, not the gate's: it decides nothing about the fleet.
+/// <see cref="EfSchemaFinalization.MapSchemaFinalization"/>.
+/// It keeps the record's rules, not the gate's: it decides nothing about the fleet.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -120,7 +120,7 @@ public sealed class EfSchemaFinalizationStore
 
     /// <summary>
     /// <see cref="FindAsync"/> for a caller on a synchronous path, such as a synchronous <c>SaveChanges</c> that must
-    /// re-read a finalized version before it writes (spec 180, FR-015). It tracks nothing, so it leaves a context's
+    /// re-read a finalized version before it writes. It tracks nothing, so it leaves a context's
     /// pending changes as they were.
     /// </summary>
     public SchemaFinalizationRecord? Find(string family)
@@ -132,8 +132,8 @@ public sealed class EfSchemaFinalizationStore
 
     /// <summary>
     /// The family's record, created now if it has none: finalized at <paramref name="initialVersion"/>, with the
-    /// completion recorded at the same version (spec 181, Edge Cases, "A database with no record yet"; spec 186,
-    /// FR-016). A record that exists is returned as it is, whatever <paramref name="initialVersion"/> says.
+    /// completion recorded at the same version.
+    /// A record that exists is returned as it is, whatever <paramref name="initialVersion"/> says.
     /// </summary>
     /// <param name="initialVersion">
     /// The oldest version the creator reads, what every row already in the database carries; or a later version, when a
@@ -175,7 +175,7 @@ public sealed class EfSchemaFinalizationStore
                ?? throw new InvalidOperationException($"The record for '{family}' was inserted, yet no record can be read.");
     }
 
-    /// <summary>Pending to readable everywhere: records the durable intent to finalize <paramref name="version"/> (spec 181, FR-006).</summary>
+    /// <summary>Pending to readable everywhere: records the durable intent to finalize <paramref name="version"/>.</summary>
     /// <exception cref="SchemaFinalizationRefusedException">
     /// The version is not after the finalized one, an intent is already in flight, or a hold applies.
     /// </exception>
@@ -204,7 +204,7 @@ public sealed class EfSchemaFinalizationStore
     }
 
     /// <summary>
-    /// Readable everywhere to finalized: moves the finalized version to the intent in flight (spec 181, FR-007). The
+    /// Readable everywhere to finalized: moves the finalized version to the intent in flight. The
     /// writer names the revision it read before its confirming membership read, so an intent that changed since is
     /// never committed.
     /// </summary>
@@ -233,7 +233,7 @@ public sealed class EfSchemaFinalizationStore
         }, cancellationToken);
     }
 
-    /// <summary>Readable everywhere to pending: abandons the intent in flight (spec 181, FR-007 and FR-008).</summary>
+    /// <summary>Readable everywhere to pending: abandons the intent in flight.</summary>
     /// <exception cref="SchemaFinalizationRefusedException">No intent is in flight.</exception>
     public Task<SchemaFinalizationWrite> AbandonIntentAsync(
         string family,
@@ -255,8 +255,8 @@ public sealed class EfSchemaFinalizationStore
     }
 
     /// <summary>
-    /// Places an operator's hold on the family, or with <paramref name="version"/> on that version and every later one
-    /// (spec 181, FR-019). An intent in flight that the hold applies to is abandoned in the same write.
+    /// Places an operator's hold on the family, or with <paramref name="version"/> on that version and every later one.
+    /// An intent in flight that the hold applies to is abandoned in the same write.
     /// </summary>
     /// <exception cref="SchemaFinalizationRefusedException">
     /// The version is already finalized, so the rollback boundary has been crossed, or a hold with the same scope is in place.
@@ -297,7 +297,7 @@ public sealed class EfSchemaFinalizationStore
         }, cancellationToken);
     }
 
-    /// <summary>Releases the operator's hold with this scope: family-wide when <paramref name="version"/> is null (spec 181, FR-019).</summary>
+    /// <summary>Releases the operator's hold with this scope: family-wide when <paramref name="version"/> is null.</summary>
     /// <exception cref="SchemaFinalizationRefusedException">No hold with that scope is in place.</exception>
     public Task<SchemaFinalizationWrite> ReleaseHoldAsync(
         string family,
@@ -320,10 +320,10 @@ public sealed class EfSchemaFinalizationStore
     }
 
     /// <summary>
-    /// Records that a verification pass found no row of the family below <paramref name="version"/> (spec 186, FR-014).
+    /// Records that a verification pass found no row of the family below <paramref name="version"/>.
     /// A standing completion only moves forward, and never past the finalized version. It drops the backfill run's claim,
     /// wherever it was held. <paramref name="worker"/> is the backfill worker that records it, or null for a writer that
-    /// keeps no claim, and is refused while another worker's claim holds (FR-008).
+    /// keeps no claim, and is refused while another worker's claim holds.
     /// </summary>
     /// <exception cref="SchemaFinalizationRefusedException">
     /// The version is later than the finalized one, or not after the completion that stands, or another worker's claim
@@ -363,9 +363,9 @@ public sealed class EfSchemaFinalizationStore
     }
 
     /// <summary>
-    /// Withdraws the standing completion, for instance after an audit found a row below it (spec 186, FR-018). The
-    /// finalized version does not move (FR-019). <paramref name="worker"/> is the backfill worker that withdraws it, or null
-    /// for a writer that keeps no claim, and is refused while another worker's claim holds (FR-008), so a withdrawal only
+    /// Withdraws the standing completion, for instance after an audit found a row below it. The
+    /// finalized version does not move. <paramref name="worker"/> is the backfill worker that withdraws it, or null
+    /// for a writer that keeps no claim, and is refused while another worker's claim holds, so a withdrawal only
     /// ever moves its own worker's claim onto itself: a claim that still holds moves onto the withdrawal, so the worker that
     /// holds it goes on rewriting what the withdrawal found and the others leave the family alone.
     /// </summary>
@@ -399,7 +399,7 @@ public sealed class EfSchemaFinalizationStore
 
     /// <summary>
     /// Claims, or renews, the family's backfill run for <paramref name="worker"/> until <paramref name="duration"/> from
-    /// now (spec 186, FR-008): a run that upgrades the family to <paramref name="targetVersion"/>, or, at the standing
+    /// now: a run that upgrades the family to <paramref name="targetVersion"/>, or, at the standing
     /// completion's version, an audit of it. The claim is held on the completion that stands, or, while none stands, on the
     /// withdrawal that ended the last one (<see cref="SchemaFinalizationRecord.BackfillRun"/>); it adds no history entry,
     /// since it is not a transition of the proof. Nothing correct depends on it: it only keeps a second worker from
@@ -448,7 +448,7 @@ public sealed class EfSchemaFinalizationStore
     }
 
     /// <summary>
-    /// Releases <paramref name="worker"/>'s claim on the family's backfill run (spec 186, FR-008), held or lapsed, so
+    /// Releases <paramref name="worker"/>'s claim on the family's backfill run, held or lapsed, so
     /// another worker may take the run over at once rather than when the claim expires: what a worker whose member has
     /// lapsed from the fleet does with what it holds.
     /// </summary>
@@ -516,7 +516,7 @@ public sealed class EfSchemaFinalizationStore
 
     /// <summary>
     /// Refuses a claim, a completion or a withdrawal by <paramref name="worker"/> while another worker's claim holds the
-    /// family's backfill run (spec 186, FR-008), by <see cref="SchemaFinalizationRecord.ClaimKeepingOff"/>.
+    /// family's backfill run, by <see cref="SchemaFinalizationRecord.ClaimKeepingOff"/>.
     /// </summary>
     private static void EnsureNotKeptOff(SchemaFinalizationRecord record, string? worker, DateTimeOffset at)
     {
