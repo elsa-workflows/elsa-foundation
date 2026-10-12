@@ -1,7 +1,7 @@
 namespace Elsa.Serialization.SystemText;
 
 /// <summary>
-/// The single definition of the deterministic serializer's canonical ordering (spec 086 FR-001): ordinal by
+/// The single definition of the deterministic serializer's canonical ordering: ordinal by
 /// serialized name/key. Every site that emits a sorted member/entry sequence — the dictionary converters, the
 /// polymorphic converters, and the member-order resolver modifier — routes through here, so the comparer and
 /// tie-break live in one place. A divergence between sites would silently break byte-identity, which only a

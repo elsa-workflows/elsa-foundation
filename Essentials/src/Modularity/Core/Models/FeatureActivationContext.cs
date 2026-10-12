@@ -28,7 +28,7 @@ public sealed record FeatureActivationContext(ShellFeatureConfigurationSnapshot 
 /// <param name="Feature">The id of the feature the refusal is about, as the request spells it.</param>
 /// <param name="Reason">
 /// What to tell the operator, including what to do about it. Never a connection string or any other secret
-/// the request carries (FR-061).
+/// the request carries.
 /// </param>
 public sealed record FeatureActivationRefusal(string Feature, string Reason);
 

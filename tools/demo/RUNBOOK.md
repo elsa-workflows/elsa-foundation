@@ -982,7 +982,7 @@ success or failure. Act 3's designer steps are done with `addnote` (the fallback
 
 Nothing the audience is meant to see carries an internal requirement number. The one exception found is a host log line, which is why the host tabs stay off screen:
 
-- `Schema family SamplesNotes of EF module Samples.Notes is complete at 2.0.0: no row below it remains (spec 186, FR-014).` (host log, about 20 s after the version finalizes, in every act)
+- `Schema family SamplesNotes of EF module Samples.Notes is complete at 2.0.0: no row below it remains.` (host log, about 20 s after the version finalizes, in every act)
 
 The host logs are also very long (package resolution and catalog lines by the hundred per change); the answers in tab 1 and tab 2 tell the story. `rehearse.sh` reports these lines at
 the end of every run, so a new one shows up there. No personal path or name is on the audience's screen: the `reload` helper shows the `command` of the 409 relative to the repository (`--host "artifacts/demo/hosts/solo"`), the

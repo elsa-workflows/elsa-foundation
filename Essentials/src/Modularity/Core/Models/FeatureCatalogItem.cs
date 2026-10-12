@@ -25,7 +25,7 @@ public sealed record FeatureCatalogItem(
     IReadOnlyList<FeatureDependency> Dependencies)
 {
     /// <summary>
-    /// Whether an enabled feature is available or dormant, and why (spec 182, FR-009), or <see langword="null"/> for a
+    /// Whether an enabled feature is available or dormant, and why, or <see langword="null"/> for a
     /// feature that is not enabled: dormancy is reported only for enabled features. Distinct from <see cref="ReadError"/>,
     /// which means a manifest could not be read.
     /// </summary>
@@ -35,7 +35,7 @@ public sealed record FeatureCatalogItem(
 public sealed record FeatureDependency(string Id, bool Optional);
 
 /// <summary>
-/// An enabled feature's availability (spec 182, FR-008 and FR-009): <see cref="AvailableStatus"/>, or
+/// An enabled feature's availability: <see cref="AvailableStatus"/>, or
 /// <see cref="DormantStatus"/> with one reason per unmet dormancy requirement. A dormant feature is composed and running,
 /// and listed as enabled; only its operations that need data a newer schema version holds are refused until then.
 /// </summary>
@@ -52,7 +52,7 @@ public sealed record FeatureAvailability(string Status, IReadOnlyList<FeatureAva
 /// <summary>
 /// Why a dormant feature is not available yet, for one unmet requirement: the schema family and version it needs, the
 /// kind of wait (for instance <c>WaitingForHosts</c>, <c>Held</c> or <c>WaitingForCompleteness</c>), and the reason as an
-/// operator reads it, which may name the hosts that cannot read the version yet (FR-011).
+/// operator reads it, which may name the hosts that cannot read the version yet.
 /// </summary>
 public sealed record FeatureAvailabilityReason(string Family, string Version, string Kind, string Reason);
 
@@ -89,7 +89,7 @@ public sealed class FeatureCatalogItemBuilder
     /// </summary>
     public Type? FeatureType { get; set; }
 
-    /// <summary>The enabled feature's availability (spec 182, FR-009); see <see cref="FeatureCatalogItem.Availability"/>.</summary>
+    /// <summary>The enabled feature's availability; see <see cref="FeatureCatalogItem.Availability"/>.</summary>
     public FeatureAvailability? Availability { get; set; }
 
     public FeatureCatalogItem ToItem() =>
@@ -111,7 +111,7 @@ public sealed class FeatureCatalogItemBuilder
             Settings,
             Dependencies)
         {
-            // Dormancy is reported only for enabled features (spec 182, Edge Cases).
+            // Dormancy is reported only for enabled features.
             Availability = Enabled ? Availability : null
         };
 }

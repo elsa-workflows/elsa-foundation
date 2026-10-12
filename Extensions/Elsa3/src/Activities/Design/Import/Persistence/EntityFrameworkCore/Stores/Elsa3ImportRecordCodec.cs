@@ -11,7 +11,7 @@ namespace Elsa3.Activities.Design.Import.Persistence.EntityFrameworkCore.Stores;
 /// material: the canonical JSON must hash to the stored content hash, and every lookup projection must agree
 /// with the decoded residual and with the JSON. Any disagreement is corruption and fails closed.
 /// <para>
-/// A row's schema version is proved first and separately (ADR 0077). A version this build does not read is
+/// A row's schema version is proved first and separately. A version this build does not read is
 /// a deployment-sequencing problem rather than damaged data, so it is reported as skew, not as corruption.
 /// </para>
 /// </summary>

@@ -4,8 +4,7 @@ namespace Elsa.Versioning.Publisher.Tests;
 
 /// <summary>
 /// <c>.github/workflows/publish-repair.yml</c> stays a thin shell over the publisher's <c>repair</c> command, run from
-/// <c>main</c> only and joined to the same <c>publish-state</c> concurrency group every run from <c>main</c> shares
-/// (spec 150 FR-019, FR-020).
+/// <c>main</c> only and joined to the same <c>publish-state</c> concurrency group every run from <c>main</c> shares.
 /// </summary>
 public sealed class PublishRepairWorkflowTests
 {
@@ -20,7 +19,7 @@ public sealed class PublishRepairWorkflowTests
             .Where(step => step.ContainsKey("run"))
             .Select(step => (string)step["run"]);
 
-    /// <summary>FR-020: this run shares the group every run from main does, from its plan to its write-back, and is never cancelled.</summary>
+    /// <summary>This run shares the group every run from main does, from its plan to its write-back, and is never cancelled.</summary>
     [Fact]
     public void The_repair_joins_the_publish_state_group_without_cancelling_a_run_in_progress()
     {

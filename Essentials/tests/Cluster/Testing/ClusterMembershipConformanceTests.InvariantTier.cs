@@ -151,7 +151,7 @@ public abstract partial class ClusterMembershipConformanceTests
     }
 
     /// <summary>
-    /// Spec 184, FR-010: a placement query with runnability requirements returns only members one of whose runnability
+    /// A placement query with runnability requirements returns only members one of whose runnability
     /// entries satisfies every requirement, never places a member that publishes no section, an unknown report or a
     /// displaced incarnation, and fails a member whose entries each meet only part of the requirement.
     /// </summary>

@@ -5,7 +5,7 @@ namespace Elsa.Versioning.Calculator.Tests;
 
 /// <summary>
 /// The MSBuild file that carries a computation into a pack (#2080): each package's final version and its input
-/// fingerprint (FR-008, FR-018), and the commit they were computed for.
+/// fingerprint, and the commit they were computed for.
 /// </summary>
 /// <remarks>
 /// Each test starts from a publish of the baseline with main's label assigned: assigning it changed
@@ -21,7 +21,7 @@ public sealed class PackPropertiesTests : SyntheticHistory
 
     /// <summary>
     /// A package being published carries its computed version with main's label; one that is not keeps the version
-    /// its record names, the one on the feed, since the ranges of packages referencing it start there (SC-002).
+    /// its record names, the one on the feed, since the ranges of packages referencing it start there.
     /// </summary>
     [Fact]
     public void On_main_a_published_package_carries_mains_label_and_the_rest_keep_their_recorded_versions()
@@ -48,7 +48,7 @@ public sealed class PackPropertiesTests : SyntheticHistory
             Assert.Equal(package.Fingerprint, packages[Path.GetFileNameWithoutExtension(package.Path)].Fingerprint));
     }
 
-    /// <summary>US4 scenario 2: a branch build's packages carry its own label; what it does not publish stays as recorded.</summary>
+    /// <summary>A branch build's packages carry its own label; what it does not publish stays as recorded.</summary>
     [Fact]
     public void On_a_branch_a_published_package_carries_the_branch_label()
     {
@@ -60,7 +60,7 @@ public sealed class PackPropertiesTests : SyntheticHistory
         Assert.Equal("4.0.2-preview", packages["Elsa.Tasks.Schedules"].Version);
     }
 
-    /// <summary>FR-008: once <c>ElsaPrereleaseLabel</c> is empty, main's packages carry no label.</summary>
+    /// <summary>Once <c>ElsaPrereleaseLabel</c> is empty, main's packages carry no label.</summary>
     [Fact]
     public void Once_the_lines_are_released_main_packages_carry_no_label()
     {

@@ -12,23 +12,23 @@ namespace Elsa.Cluster.EntityFrameworkCore;
 
 /// <summary>
 /// The durable membership provider: members register, heartbeat and expire through one shared EF table, and the fleet
-/// view is read from it (spec 183, B2).
+/// view is read from it.
 /// </summary>
 /// <remarks>
 /// <para>
 /// <b>The invariant.</b> A fresh read never omits a member that may still read or write, and never credits one with
 /// more than it reported. Here that rests on four mechanisms. A publish commits before it returns and a fresh read is
 /// one query over the whole table, so a published member is in every later fresh read, and a read that cannot return
-/// every row fails instead of returning part (FR-011, FR-012). A member stamps its heartbeat from its own clock at the
+/// every row fails instead of returning part. A member stamps its heartbeat from its own clock at the
 /// start of the heartbeat it measures its lapse from, and readers add the skew allowance, so a member knows it lapsed no
-/// later than anyone counts it expired (FR-007, FR-008). A join never displaces a live incarnation: the displacement is
+/// later than anyone counts it expired. A join never displaces a live incarnation: the displacement is
 /// a compare-and-set on the revision the liveness judgement read, and a unique index allows one current incarnation per
-/// host id (FR-004a, FR-004b). And an entry this build cannot interpret is returned with an unknown report, never
-/// skipped (FR-012).
+/// host id. And an entry this build cannot interpret is returned with an unknown report, never
+/// skipped.
 /// </para>
 /// <para>
 /// A host shares one instance between its own container and every shell container built from copies of its
-/// registrations, so every shell sees the same member (FR-017). That is why this type is not disposable: a shell
+/// registrations, so every shell sees the same member. That is why this type is not disposable: a shell
 /// container disposing it would stop the host's member. <see cref="EfClusterMembershipLifecycle"/> drives it through the
 /// host's lifecycle: joining at start, heartbeating on a timer, draining as the host stops and leaving once it has.
 /// </para>
@@ -108,7 +108,7 @@ public sealed class EfClusterMembership : IClusterMembership
     /// Makes one attempt to join the fleet as this member's incarnation. A refusal because another incarnation of the host
     /// id is still live throws <see cref="ClusterMembershipJoinRefusedException"/>, and the caller retries it. Once this
     /// member has watched that incarnation renew, it throws <see cref="ClusterMembershipDuplicateHostIdException"/>
-    /// instead, and the caller must stop (FR-004b, FR-039).
+    /// instead, and the caller must stop.
     /// </summary>
     public async Task JoinAsync(CancellationToken cancellationToken = default)
     {
@@ -133,9 +133,9 @@ public sealed class EfClusterMembership : IClusterMembership
 
     /// <summary>
     /// Renews this member's entry from its own clock at the start of the heartbeat, republishes its report if it changed,
-    /// and refreshes the cached view (FR-027). A heartbeat the store refuses or cannot take is logged and not retried
+    /// and refreshes the cached view. A heartbeat the store refuses or cannot take is logged and not retried
     /// here: the next one comes one heartbeat interval later, never widened. A member that concluded it lapsed rejoins
-    /// as a new incarnation instead, unless it was displaced, which it never recovers from (FR-007).
+    /// as a new incarnation instead, unless it was displaced, which it never recovers from.
     /// </summary>
     public async Task HeartbeatAsync(CancellationToken cancellationToken = default)
     {
@@ -183,13 +183,13 @@ public sealed class EfClusterMembership : IClusterMembership
         }
     }
 
-    /// <summary>The host finished starting: joining becomes active (FR-005).</summary>
+    /// <summary>The host finished starting: joining becomes active.</summary>
     public Task ActivateAsync(CancellationToken cancellationToken = default) => MoveForwardAsync(MemberStatus.Active, cancellationToken);
 
-    /// <summary>The host began to stop: the member drains, and is still counted while it does (FR-030).</summary>
+    /// <summary>The host began to stop: the member drains, and is still counted while it does.</summary>
     public Task DrainAsync(CancellationToken cancellationToken = default) => MoveForwardAsync(MemberStatus.Draining, cancellationToken);
 
-    /// <summary>The host stopped: the member leaves, which a crash never writes (FR-030).</summary>
+    /// <summary>The host stopped: the member leaves, which a crash never writes.</summary>
     public Task LeaveAsync(CancellationToken cancellationToken = default) => MoveForwardAsync(MemberStatus.Left, cancellationToken);
 
     public async ValueTask<FleetView> ReadFleetAsync(FleetReadMode mode, CancellationToken cancellationToken = default)
@@ -198,7 +198,7 @@ public sealed class EfClusterMembership : IClusterMembership
         {
             lock (_gate)
             {
-                // A cached view lags by at most one heartbeat interval (FR-010); an older one is read afresh.
+                // A cached view lags by at most one heartbeat interval; an older one is read afresh.
                 if (_cached is { } cached && _clock.GetUtcNow() - cached.JudgedAt <= _heartbeatInterval)
                     return WithFailedFreshReadOnce(cached);
             }
@@ -261,7 +261,7 @@ public sealed class EfClusterMembership : IClusterMembership
 
     /// <summary>
     /// Deletes one batch of entries that have been left or expired for longer than the cleanup period, as this member's
-    /// clock judges it (FR-031). Any member may run it; a renewed entry is never deleted.
+    /// clock judges it. Any member may run it; a renewed entry is never deleted.
     /// </summary>
     public Task<int> CleanupAsync(CancellationToken cancellationToken = default) =>
         _store.CleanupAsync(_clock.GetUtcNow(), _cleanupPeriod, _skewAllowance, cancellationToken);
@@ -296,7 +296,7 @@ public sealed class EfClusterMembership : IClusterMembership
 
     /// <summary>
     /// A join refused because <paramref name="incumbent"/> is still live. The first refusal starts a watch on it; a later
-    /// one that finds it renewed since is a live duplicate, not a crash to wait out (FR-004b, FR-039).
+    /// one that finds it renewed since is a live duplicate, not a crash to wait out.
     /// </summary>
     private ClusterMembershipException Refuse(ClusterMemberIdentity joiner, StoredMember incumbent, DateTimeOffset now)
     {
@@ -327,7 +327,7 @@ public sealed class EfClusterMembership : IClusterMembership
     }
 
     /// <summary>
-    /// A lapsed member rejoins as a new incarnation, waiting out its own earlier entry like any other (FR-004, FR-007). A
+    /// A lapsed member rejoins as a new incarnation, waiting out its own earlier entry like any other. A
     /// member whose earlier incarnation was displaced meanwhile never rejoins, because another process now holds its host
     /// id: it learns so here, and stays lapsed. Nor does a member that is already stopping rejoin.
     /// </summary>
@@ -417,7 +417,7 @@ public sealed class EfClusterMembership : IClusterMembership
         }
     }
 
-    /// <summary>A write to this member's own row found it missing, displaced or left: the member lapsed (FR-007).</summary>
+    /// <summary>A write to this member's own row found it missing, displaced or left: the member lapsed.</summary>
     private void LapseFromOwnWrite(ClusterMemberIdentity identity, OwnWriteResult result)
     {
         lock (_gate)
@@ -429,7 +429,7 @@ public sealed class EfClusterMembership : IClusterMembership
     }
 
     /// <summary>Concludes a lapse once the expiry period has passed since the start of the last successful heartbeat, by
-    /// the larger of wall-clock and monotonic elapsed time (FR-007). Called with <see cref="_gate"/> held.</summary>
+    /// the larger of wall-clock and monotonic elapsed time. Called with <see cref="_gate"/> held.</summary>
     private void ConcludeExpiryLapse()
     {
         if (!_joined || _lapse is not null || _status == MemberStatus.Left)
@@ -438,7 +438,7 @@ public sealed class EfClusterMembership : IClusterMembership
             ConcludeLapse(MemberLapseReason.ExpiryPassed);
     }
 
-    /// <summary>Records and reports a lapse (FR-037, FR-038). Called with <see cref="_gate"/> held.</summary>
+    /// <summary>Records and reports a lapse. Called with <see cref="_gate"/> held.</summary>
     private void ConcludeLapse(MemberLapseReason reason)
     {
         if (_lapse is not null && (_lapse.Reason == reason || _lapse.Reason is MemberLapseReason.Displaced or MemberLapseReason.DuplicateHostId))
@@ -455,7 +455,7 @@ public sealed class EfClusterMembership : IClusterMembership
 
     /// <summary>
     /// Reads every entry and judges each one on this member's clock. A store failure, or an entry whose envelope cannot
-    /// even be judged, fails the whole read rather than returning the rest (FR-012, FR-042).
+    /// even be judged, fails the whole read rather than returning the rest.
     /// </summary>
     private async Task<FleetView> ReadFreshAsync(CancellationToken cancellationToken)
     {
@@ -494,8 +494,8 @@ public sealed class EfClusterMembership : IClusterMembership
         }
     }
 
-    /// <summary>One entry as this reader judges it at <paramref name="now"/>, with the conditions it observes about it
-    /// (FR-037 to FR-042). Called with <see cref="_gate"/> held.</summary>
+    /// <summary>One entry as this reader judges it at <paramref name="now"/>, with the conditions it observes about it.
+    /// Called with <see cref="_gate"/> held.</summary>
     private FleetMember Judge(StoredMember stored, DateTimeOffset now)
     {
         var member = stored.ToFleetMember(now, _skewAllowance);
@@ -519,8 +519,8 @@ public sealed class EfClusterMembership : IClusterMembership
 
     /// <summary>
     /// Compares a fresh view with the previous one, firing the change signal on any join, status change, new report,
-    /// lapse, displacement, departure or expiry (FR-013), and logs each condition the first time it is observed
-    /// (FR-040, FR-041). Called with <see cref="_gate"/> held.
+    /// lapse, displacement, departure or expiry, and logs each condition the first time it is observed.
+    /// Called with <see cref="_gate"/> held.
     /// </summary>
     private void Observe(FleetView view)
     {
@@ -544,7 +544,7 @@ public sealed class EfClusterMembership : IClusterMembership
         _reportedConditions = reported;
     }
 
-    /// <summary>A failed fresh read is reported once, on this member's own entry in the next view it returns (FR-042).
+    /// <summary>A failed fresh read is reported once, on this member's own entry in the next view it returns.
     /// Called with <see cref="_gate"/> held.</summary>
     private FleetView WithFailedFreshReadOnce(FleetView cached)
     {

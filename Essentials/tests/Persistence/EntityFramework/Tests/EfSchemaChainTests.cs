@@ -90,7 +90,7 @@ public sealed class EfSchemaChainTests
         foreach (var stamp in Orders.ReadableVersions)
         {
             var refusal = Assert.Throws<InvalidOperationException>(() => Orders.Upcast(stamp, row));
-            Assert.True(refusal.Message.Contains("'Orders'", StringComparison.Ordinal) && refusal.Message.Contains("#2144", StringComparison.Ordinal),
+            Assert.True(refusal.Message.Contains("'Orders'", StringComparison.Ordinal) && refusal.Message.Contains("so a row is never upcast in part", StringComparison.Ordinal),
                 $"{name} at '{stamp}': {refusal.Message}");
         }
     }

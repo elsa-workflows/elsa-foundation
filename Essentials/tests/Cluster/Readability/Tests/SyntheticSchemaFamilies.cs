@@ -12,7 +12,7 @@ namespace Elsa.Cluster.Readability.Tests;
 /// One <c>[EfSchemaFamily]</c> declaration to emit. A <see langword="null"/> <see cref="Module"/> emits the
 /// two-argument constructor - a family shared by no single EF module - rather than naming one. <see cref="Upcasters"/>,
 /// oldest first, become the declaration's chain; <see cref="ContentAddressed"/> and <see cref="Rewriter"/> name types the
-/// image defines, as the declaration's own named arguments (spec 186).
+/// image defines, as the declaration's own named arguments.
 /// </summary>
 internal sealed record SyntheticFamily(
     string Name,

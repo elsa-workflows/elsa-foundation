@@ -3,7 +3,7 @@ using Elsa.Cluster.Core.Models;
 namespace Elsa.Cluster.Core.Contracts;
 
 /// <summary>
-/// Produces one section of this host's member report (FR-014). Exactly one source may be registered per section:
+/// Produces one section of this host's member report. Exactly one source may be registered per section:
 /// a provider refuses to start when it finds two. A provider reads its sources each time it publishes, so a source
 /// reports what is true at that moment.
 /// </summary>

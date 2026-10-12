@@ -8,8 +8,8 @@ namespace Elsa.Cli.Worker;
 /// it would load, and hand the question to the host's own tooling entry point.
 /// </summary>
 /// <remarks>
-/// Everything this type adds to that entry point is the part the entry point deliberately cannot do
-/// (FR-049): it can observe neither a <c>.deps.json</c> nor a <c>.nupkg</c>, so a module's package id and
+/// Everything this type adds to that entry point is the part the entry point deliberately cannot do:
+/// it can observe neither a <c>.deps.json</c> nor a <c>.nupkg</c>, so a module's package id and
 /// version, the engine's, and where each was read from are established here and stated to it.
 /// </remarks>
 internal static class WorkerRunner
@@ -20,7 +20,7 @@ internal static class WorkerRunner
     private const string HostMigrationSettingsKey = "Elsa:Persistence:EntityFramework:Migrate:SqliteMigrationLockStaleAfter";
 
     /// <summary>
-    /// How a host whose modules arrive as packages gets its provider engine onto disk (spec 172 D6). Every
+    /// How a host whose modules arrive as packages gets its provider engine onto disk. Every
     /// EF module package declares the <c>ef-provider</c> capability in its <c>nuplane.json</c>, so the host
     /// picks one option and Nuplane acquires that package as a root of its own; naming the engine package
     /// explicitly in the closure still works, and still wins when both are present.
@@ -32,7 +32,7 @@ internal static class WorkerRunner
 
     /// <summary>
     /// The tool's own version, named only in the refusal that reports a host pinning a persistence build
-    /// too old to have an entry point. It never reaches an artifact (FR-043).
+    /// too old to have an entry point. It never reaches an artifact.
     /// </summary>
     private static string ToolVersion =>
         typeof(WorkerRunner).Assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion is { } version
@@ -195,7 +195,7 @@ internal static class WorkerRunner
         var deps = HostDepsFile.Read(request.DepsFile!);
         // Opt-in, and the only step in this worker that may write under the host's directories. It runs
         // before the set is read, because what it writes is exactly what the read then finds; without
-        // --restore it does nothing at all and no other flag sets it (ADR 0076 D10).
+        // --restore it does nothing at all and no other flag sets it.
         await HostPackageRestore.RunAsync(request, deps, cancellationToken);
         var packages = await NuplanePackageSet.LoadAsync(request.PackageRoots, request.HostDirectory!, cancellationToken);
         foreach (var failure in packages.Failures.OrderBy(entry => entry.Key, StringComparer.Ordinal))
@@ -236,7 +236,7 @@ internal static class WorkerRunner
 
         // The host's own engine selection, stated to the tooling entry point rather than acted on here: the
         // comparison with --provider belongs beside the per-feature one, in the one place that owns the
-        // provider-disagreement refusal (ADR 0076 D4, spec 172 FR-004).
+        // provider-disagreement refusal.
         var capabilitySelection = HostCapabilitySelection.Find(request, deps);
         if (capabilitySelection is not null && !tooling.SupportsCapabilitySelection)
         {
@@ -253,8 +253,8 @@ internal static class WorkerRunner
             return await Respond(tooling, ScriptRequest(request, provider, [], Unused(), capabilitySelection), cancellationToken);
 
         // `apply`, `validate` and `post-migrate` open the database directly and write no manifest, so none
-        // of them needs the provider engine's package facts `ResolveEngine` exists to establish (FR-053) —
-        // the host's own tooling entry point already refuses a provider engine it cannot bind (D4), the same
+        // of them needs the provider engine's package facts `ResolveEngine` exists to establish —
+        // the host's own tooling entry point already refuses a provider engine it cannot bind, the same
         // way it does for every other command.
         // `hold`, `release` and `status` carry what they act on besides; the field travels only with them, so a host
         // built before they existed still reads every other command's request exactly as it did.
@@ -510,7 +510,7 @@ internal static class WorkerRunner
 
     /// <summary>
     /// Establishes the provider engine's package facts, refusing before anything is written when the host
-    /// pins no such engine (FR-009). The message says where the tool looked, in the order it looked, and
+    /// pins no such engine. The message says where the tool looked, in the order it looked, and
     /// ends by stating that nothing else was substituted — the one thing an operator must be able to rule
     /// out when a deployment's SQL is for the wrong dialect.
     /// </summary>
@@ -557,7 +557,7 @@ internal static class WorkerRunner
     /// </summary>
     /// <remarks>
     /// Deliberately not raised where the set is loaded: an empty set is also the correct answer for a host
-    /// that carries every module in its own deps file (FR-007), and for <c>list</c> against a Nuplane host
+    /// that carries every module in its own deps file, and for <c>list</c> against a Nuplane host
     /// that has nothing installed yet — which reports zero modules rather than refusing. It is only once a
     /// command needs something out of that set, and the set is absent rather than merely empty, that the
     /// never-reconciled host is the thing to say.
@@ -672,7 +672,7 @@ internal static class WorkerRunner
         {
             name = request.HostName,
             // "checked" states that the per-feature comparison ran, which it does exactly when the host's
-            // shells configuration was found beside it (FR-039). Claiming it for a run that found none
+            // shells configuration was found beside it. Claiming it for a run that found none
             // would tell a reviewer a check ran that did not.
             providerAgreement = request.Shells is null ? "not-checked" : "checked",
             shell = request.Shell,
@@ -704,11 +704,11 @@ internal static class WorkerRunner
             : [.. request.Shells.Select(feature => new { shell = feature.Shell, feature = feature.Feature, provider = feature.Provider })];
 
     /// <summary>
-    /// Resolves the connection the database-opening commands pass to the host's tooling entry point (D7).
+    /// Resolves the connection the database-opening commands pass to the host's tooling entry point.
     /// <see cref="WorkerRequest.Connection"/> — read by the front end from its own stdin under
     /// <c>--connection-stdin</c> — takes precedence when given; otherwise <see cref="WorkerRequest.ConnectionEnv"/>
     /// names a variable this worker process reads from its own environment, which it has by ordinary process
-    /// inheritance from the front end that launched it (ADR 0076 D7) — the value itself was never placed on
+    /// inheritance from the front end that launched it — the value itself was never placed on
     /// either process's command line, and the front end never reads it out of its own environment either.
     /// </summary>
     private static string ResolveConnection(WorkerRequest request)

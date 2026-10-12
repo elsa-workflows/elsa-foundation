@@ -258,7 +258,7 @@ public sealed class HostOwnedServicesAreSharedWithShellsTests
     /// feature), and has run the validator of its own container, the host's checks copied into it included, by the time it
     /// is active.
     /// </summary>
-    // Kept beside the composition test (§2.23.1): ordering, startup validation runs ahead of every host initializer.
+    // Kept beside the composition test: ordering, startup validation runs ahead of every host initializer.
     [Theory]
     [InlineData("Elsa.Foundation.Host")]
     [InlineData("Elsa.Workbench")]
@@ -284,7 +284,7 @@ public sealed class HostOwnedServicesAreSharedWithShellsTests
     /// ahead of the vendor registration, is caught here and nowhere else: the policy's hosted service must be registered, and after
     /// the vendor initializer, which turns its own migration off for it and creates the demo store (#2196).
     /// </summary>
-    // Kept beside the composition test (§2.23.1): ordering, the migration policy registers after the vendor initializer.
+    // Kept beside the composition test: ordering, the migration policy registers after the vendor initializer.
     [Fact]
     public void Workbench_registers_the_openiddict_migration_policy_after_the_vendor_initializer()
     {
@@ -304,7 +304,7 @@ public sealed class HostOwnedServicesAreSharedWithShellsTests
     /// Nuplane calls observers in registration order, so each host registers CShells.Nuplane after its auto-loader. The
     /// coordinator is root-owned and the shell's borrowed observer resolves to that same object.
     /// </summary>
-    // Kept beside the composition test (§2.23.1): discovery follows the package auto-loader.
+    // Kept beside the composition test: discovery follows the package auto-loader.
     [Theory(DisplayName = "Both host compositions register and borrow one root-owned Nuplane coordinator")]
     [InlineData("Elsa.Foundation.Host")]
     [InlineData("Elsa.Workbench")]

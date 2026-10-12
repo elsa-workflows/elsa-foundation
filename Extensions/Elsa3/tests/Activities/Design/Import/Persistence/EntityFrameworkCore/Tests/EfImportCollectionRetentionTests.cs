@@ -87,8 +87,7 @@ public sealed class EfImportCollectionRetentionTests : IAsyncLifetime
 
     /// <summary>
     /// An apply that ends outside the outcomes its caller can continue from refuses the upload's content. An
-    /// <see cref="ArgumentException"/> stands in for such a refusal here; the credential-literal refusal of spec 188
-    /// is one.
+    /// <see cref="ArgumentException"/> stands in for such a refusal here; the credential-literal refusal is one.
     /// </summary>
     [Fact]
     public async Task A_refusal_of_the_uploads_content_deletes_the_upload_and_reaches_the_caller_unchanged()

@@ -3,13 +3,13 @@ using Elsa.Versioning.Calculator.Tests.Support;
 namespace Elsa.Versioning.Calculator.Tests;
 
 /// <summary>
-/// Moves, renames, deletions and re-adds (spec 150 FR-002, SC-010, SC-013). Change detection is keyed on the package id,
+/// Moves, renames, deletions and re-adds. Change detection is keyed on the package id,
 /// resolved to a path through each commit's own dependency map, so a move is found at both ends and never runs a
-/// version backwards, as the commit-height scheme did (ADR 0067, 2026-09-22 amendment).
+/// version backwards, as the commit-height scheme did.
 /// </summary>
 public sealed class MoveAndRenameTests : SyntheticHistory
 {
-    /// <summary>SC-010: a package moved with no content change publishes at exactly one past its last published version.</summary>
+    /// <summary>A package moved with no content change publishes at exactly one past its last published version.</summary>
     [Fact]
     public void A_package_moved_to_a_new_directory_advances_exactly_once()
     {
@@ -126,7 +126,7 @@ public sealed class MoveAndRenameTests : SyntheticHistory
         Assert.Same(recorded, Record.Find("Elsa.Http"));
     }
 
-    /// <summary>SC-013: a renamed-away package id that is later reused continues from its record rather than restarting.</summary>
+    /// <summary>A renamed-away package id that is later reused continues from its record rather than restarting.</summary>
     [Fact]
     public void A_reused_package_id_continues_from_its_record()
     {
@@ -142,7 +142,7 @@ public sealed class MoveAndRenameTests : SyntheticHistory
         Assert.Equal(["Elsa.Http"], computation.Affected);
     }
 
-    /// <summary>SC-013: a deleted package re-added with changes continues from its record rather than restarting at 0.</summary>
+    /// <summary>A deleted package re-added with changes continues from its record rather than restarting at 0.</summary>
     [Fact]
     public void A_deleted_package_readded_with_changes_continues_from_its_record()
     {

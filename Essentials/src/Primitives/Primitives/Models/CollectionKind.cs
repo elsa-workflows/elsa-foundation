@@ -4,7 +4,7 @@ namespace Elsa.Primitives.Models;
 
 /// <summary>
 /// The collection shape applied to an authored argument's element type. A missing/unset value is
-/// treated as <see cref="Single"/> (FR-002).
+/// treated as <see cref="Single"/>.
 /// </summary>
 [JsonConverter(typeof(JsonStringEnumConverter<CollectionKind>))]
 public enum CollectionKind

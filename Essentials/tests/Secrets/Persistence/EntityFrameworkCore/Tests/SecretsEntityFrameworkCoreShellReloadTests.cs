@@ -257,7 +257,7 @@ public sealed class SecretsEntityFrameworkCoreShellReloadTests
                 .WithAssemblies(typeof(SecretsEntityFrameworkCoreFeature).Assembly)
                 .AddShell(ShellName, shell => shell
                     // The host-wide key, on this shell's own Configuration node: the layer that survived the
-                    // retirement of the Secrets-only MigratePolicy setting (ADR 0076 D8).
+                    // retirement of the Secrets-only MigratePolicy setting.
                     .WithConfiguration($"{EfMigrateOptions.SectionName}:{nameof(EfMigrateOptions.Policy)}", policy.ToString())
                     .WithFeature<SecretsEntityFrameworkCoreFeature>(feature =>
                     {

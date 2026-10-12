@@ -31,13 +31,13 @@ public sealed class SharedAssemblyClosureGuardTests
     private static IReadOnlyDictionary<string, IReadOnlyList<string>> ElsaReferences { get; } = ProjectGraph.LoadElsaReferences(RepoRoot);
 
     /// <summary>
-    /// The host-composed shares (ADR 0067, amended 2026-09-29; #2143): the contracts of what a host composes once on its
-    /// own container rather than in a shell - cluster membership, its readability report and the dormancy check's source
-    /// (spec 183, FR-017; ADR 0078) - which a feed-loaded package reaches only if it sees the host's types. They are on
-    /// Line B, not Line A: they cross the host/package boundary for the persistence and cluster domains, not for every
-    /// domain. <c>Elsa.Persistence.Schema</c> is the EF-free half of the schema-family surface; an EF module package
-    /// carries its own copy of <c>Elsa.Persistence.EntityFramework</c>, and without this share its finalization gate
-    /// never finds the host's fleet and its dormancy source never finds its gate.
+    /// The host-composed shares (#2143): the contracts of what a host composes once on its own container rather than in
+    /// a shell - cluster membership, its readability report and the dormancy check's source - which a feed-loaded
+    /// package reaches only if it sees the host's types. They are on Line B, not Line A: they cross the host/package
+    /// boundary for the persistence and cluster domains, not for every domain. <c>Elsa.Persistence.Schema</c> is the
+    /// EF-free half of the schema-family surface; an EF module package carries its own copy of
+    /// <c>Elsa.Persistence.EntityFramework</c>, and without this share its finalization gate never finds the host's
+    /// fleet and its dormancy source never finds its gate.
     /// </summary>
     internal static readonly string[] HostComposedShares = ["Elsa.Cluster.Core", "Elsa.Persistence.Schema"];
 
@@ -65,8 +65,8 @@ public sealed class SharedAssemblyClosureGuardTests
 
         // Elsa.Foundation.Host shares Line A's ten contracts (#2126), the two host-composed ones (#2143) and the
         // Elsa.Persistence.EntityFramework its cluster membership provider carries (#2151), beside its three
-        // CShells.*.Abstractions ones and EF Core's own. Line A is closed under its own dependencies by definition (ADR
-        // 0067), the two host-composed ones reach nothing but Line A, and Elsa.Persistence.EntityFramework reaches only
+        // CShells.*.Abstractions ones and EF Core's own. Line A is closed under its own dependencies by definition,
+        // the two host-composed ones reach nothing but Line A, and Elsa.Persistence.EntityFramework reaches only
         // Elsa.Primitives and Elsa.Persistence.Schema, so the theory above holds with every one of the thirteen examined and
         // none of them reaching outside the set.
         var foundationHost = SharedAssemblies(ReadNuplane("Elsa.Foundation.Host"));
@@ -100,8 +100,8 @@ public sealed class SharedAssemblyClosureGuardTests
     }
 
     /// <summary>
-    /// What <c>Elsa.Foundation.Host</c> carries for its EF cluster membership provider alone (ADR 0076, amended 2026-09-29;
-    /// #2151). A feed-loaded EF module has to bind these as the host's copies: <c>dotnet elsa persistence</c> runs through the
+    /// What <c>Elsa.Foundation.Host</c> carries for its EF cluster membership provider alone (#2151).
+    /// A feed-loaded EF module has to bind these as the host's copies: <c>dotnet elsa persistence</c> runs through the
     /// host's own <c>Elsa.Persistence.EntityFramework</c> and finds a module only by that assembly's attribute types, and a
     /// second EF Core would bring a second engine closure into the process.
     /// </summary>

@@ -18,12 +18,12 @@ public sealed partial class ArchitectureGuardTests
         ("Elsa.Workflows.Runtime.JavaScript", "Elsa.Workflows.Design.Core")
     ];
 
-    // Documented exceptions to the §2.23.3 no-InternalsVisibleTo rule. Each entry needs a reason
+    // Documented exceptions to the no-InternalsVisibleTo rule. Each entry needs a reason
     // recorded at the declaration site (csproj comment) and here. Additions require architect review.
     private static readonly HashSet<(string Project, string Target)> AllowedInternalsVisibleTo =
     [
         // The Extension Builder subsystem is a host-private surface of ~80 interlocking internal types;
-        // publicizing it to satisfy §2.23.3 would promote host-only contracts into public API. It lives in
+        // publicizing it to satisfy that rule would promote host-only contracts into public API. It lives in
         // its own optional extension (Elsa.ExtensionBuilder.Api, #2294) which exposes those internals to
         // the extension's own test project (MD-3, Elsa 4 architecture review 2026-07).
         ("Elsa.ExtensionBuilder.Api", "Elsa.ExtensionBuilder.Api.Tests"),
@@ -119,7 +119,7 @@ public sealed partial class ArchitectureGuardTests
         var policy = Path.Combine(RepoRoot, "Essentials", "src", "Persistence", "EntityFramework");
         var project = XDocument.Load(Path.Join(policy, "Elsa.Persistence.EntityFramework.csproj"));
         // Its two project references are no feature assembly: Elsa.Primitives, the root of the Line A contract baseline,
-        // holds the write refusal's persistence-agnostic base that the domain APIs answer (spec 180, FR-016a), and
+        // holds the write refusal's persistence-agnostic base that the domain APIs answer, and
         // Elsa.Persistence.Schema is the EF-free half of the schema-family surface every host shares (#2143).
         Assert.Equal(
             new[] { @"..\..\Primitives\Primitives\Elsa.Primitives.csproj", @"..\Schema\Elsa.Persistence.Schema.csproj" },
@@ -350,7 +350,7 @@ public sealed partial class ArchitectureGuardTests
         Assert.True(features.ContainsKey("WorkflowsPublishing"));
     }
 
-    [Fact] // spec 006 T050 (SC-001) — no project in the activity-construction runtime path references any Design project.
+    [Fact] // No project in the activity-construction runtime path references any Design project.
     public void Activity_construction_runtime_path_has_no_design_reference() =>
         AssertNoForbiddenProjectReferences(
             [
@@ -390,7 +390,7 @@ public sealed partial class ArchitectureGuardTests
         Assert.DoesNotContain(PackageReferences(design), package => package.Contains("ServiceBus", StringComparison.OrdinalIgnoreCase));
     }
 
-    [Fact] // spec 006 T053 (SC-006) — the seam's feature projects do not reference one another (G4).
+    [Fact] // The seam's feature projects do not reference one another.
     public void Activity_construction_feature_projects_do_not_reference_each_other()
     {
         string[] featureProjects =
@@ -402,12 +402,12 @@ public sealed partial class ArchitectureGuardTests
         ];
         var featureSet = featureProjects.ToHashSet(StringComparer.Ordinal);
 
-        // Scoped to cross-references *among* the seam features (SC-006). A new seam feature must be added
+        // Scoped to cross-references *among* the seam features. A new seam feature must be added
         // to this list to be covered — the check under-covers silently as the seam grows.
         AssertNoForbiddenProjectReferences(featureProjects, reference => featureSet.Contains(reference.Name));
     }
 
-    // Shared skeleton for the two SC-001/SC-006 project-reference facts: verify every named project exists,
+    // Shared skeleton for the two project-reference facts above: verify every named project exists,
     // then assert none of them declares a <ProjectReference> the predicate forbids. Only DIRECT edges are
     // checked — transitive pulls are the reference graph's own concern (and, for the runtime side, are also
     // covered by Runtime_projects_do_not_add_design_references, which spans every runtime project).
@@ -720,7 +720,7 @@ public sealed partial class ArchitectureGuardTests
 }
 
 // Provider-neutral persistence contract projects must never gain a declared or transitive edge to a
-// concrete provider (EF Core or a database driver). Reviewed with spec 094; the resolved
+// concrete provider (EF Core or a database driver). The resolved
 // project.assets.json check that used to accompany it went away with the EF surface ratchet.
 internal static class PersistenceProviderNeutralityBoundary
 {

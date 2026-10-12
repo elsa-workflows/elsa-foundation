@@ -6,7 +6,7 @@ using static Elsa.Architecture.Tests.RepoPaths;
 namespace Elsa.Architecture.Tests;
 
 /// <summary>
-/// Migration ratchets for spec 095. Temporary allowlists may only shrink.
+/// Migration ratchets for value flow. Temporary allowlists may only shrink.
 /// </summary>
 public sealed class ValueFlowArchitectureTests(ITestOutputHelper output)
 {

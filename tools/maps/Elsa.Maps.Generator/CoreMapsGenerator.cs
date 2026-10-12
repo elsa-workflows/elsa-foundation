@@ -28,9 +28,15 @@ public static partial class CoreMapsGenerator
         var features = ReadFeatures(repo, projects);
         var specs = SpecScanner.Read(repo);
 
+        var sourceNames = projects
+            .Where(project => project.Kind == "source")
+            .Select(project => project.Name)
+            .ToHashSet(StringComparer.Ordinal);
+
         var testReferences = projects
             .Where(project => project.Kind == "test")
             .SelectMany(project => project.References)
+            .Where(sourceNames.Contains)
             .Distinct(StringComparer.Ordinal)
             .Order(StringComparer.Ordinal)
             .ToHashSet(StringComparer.Ordinal);

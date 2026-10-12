@@ -136,7 +136,7 @@ public sealed class DistributedRuntimeNode : IAsyncDisposable
         return await actor.EnqueueAsync(envelope);
     }
 
-    /// <summary>The recovery candidates this member's reclaims supplied to the recovery sweep (spec 184, FR-027).</summary>
+    /// <summary>The recovery candidates this member's reclaims supplied to the recovery sweep.</summary>
     public async ValueTask<IReadOnlyCollection<RuntimeRecoveryCandidate>> ReclaimedCandidatesAsync()
     {
         await using var scope = Services.CreateAsyncScope();
@@ -144,14 +144,14 @@ public sealed class DistributedRuntimeNode : IAsyncDisposable
         return await source.ListAsync(RuntimeStorePageRequest.MaximumLimit);
     }
 
-    /// <summary>The unplaceable work this member reports to Attention (spec 184, FR-017).</summary>
+    /// <summary>The unplaceable work this member reports to Attention.</summary>
     public async ValueTask<IReadOnlyCollection<UnplaceableWorkReport>> UnplaceableWorkAsync()
     {
         await using var scope = Services.CreateAsyncScope();
         return await scope.ServiceProvider.GetServices<IWorkflowRuntimePlacementAttention>().Single().ListUnplaceableWorkAsync();
     }
 
-    /// <summary>Stops the member's placement pump as the task runner does when the shell or host stops (FR-021).</summary>
+    /// <summary>Stops the member's placement pump as the task runner does when the shell or host stops.</summary>
     public Task StopAsync() => ((IRecurringTask)Pump).StopAsync(CancellationToken.None);
 
     public ValueTask DisposeAsync() => Services.DisposeAsync();

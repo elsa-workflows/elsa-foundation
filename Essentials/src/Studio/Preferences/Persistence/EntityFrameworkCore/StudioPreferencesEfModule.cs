@@ -13,7 +13,7 @@ public static class StudioPreferencesEfModule
     /// <summary>The schema family this module's rows belong to, checked against when a row is read.</summary>
     public const string SchemaFamily = "StudioPreferences";
     /// <summary>The family's one chain, from this assembly's declaration: what every reader of the family checks and
-    /// upcasts through (spec 180, FR-010).</summary>
+    /// upcasts through.</summary>
     public static readonly EfSchemaChain Chain = EfSchemaChain.Of(typeof(StudioPreferencesEfModule).Assembly, SchemaFamily);
     public const string DefaultConnectionName = EfConnectionDefaults.ConnectionName;
     public const string DefaultSqliteConnectionString = EfConnectionDefaults.SqliteConnectionString;

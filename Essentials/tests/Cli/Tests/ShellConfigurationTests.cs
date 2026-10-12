@@ -4,7 +4,7 @@ using Xunit;
 namespace Elsa.Cli.Tests;
 
 /// <summary>
-/// How the tool reads a host's shell configuration (spec 171 FR-035, FR-038). Every case here is one where
+/// How the tool reads a host's shell configuration. Every case here is one where
 /// reading the file wrongly would look like success: a shape the reader does not understand presents as
 /// "this shell enables nothing", and a check that compared nothing would still report itself as run.
 /// </summary>

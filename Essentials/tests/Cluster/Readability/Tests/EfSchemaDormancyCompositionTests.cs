@@ -6,7 +6,7 @@ using Microsoft.Extensions.DependencyInjection;
 namespace Elsa.Cluster.Readability.Tests;
 
 /// <summary>
-/// Spec 182, FR-003: a host that composes readability gets the shared dormancy check over its EF finalization gates, and
+/// A host that composes readability gets the shared dormancy check over its EF finalization gates, and
 /// a host that composes no membership can compose the check alone. Both are registered by type, so each shell container
 /// built from copies of the host's registrations reads its own gates.
 /// </summary>

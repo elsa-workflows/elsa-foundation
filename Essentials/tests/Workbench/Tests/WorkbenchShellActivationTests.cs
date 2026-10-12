@@ -47,7 +47,7 @@ public sealed class WorkbenchShellActivationTests
         // ActivitiesHttp depends on its route-table projection by feature name, and a name cannot make an assembly
         // that is absent from the host discoverable. A shell that does not list it gets it as a dependency.
         "WorkflowsRuntimeHttp",
-        // File-based workflow deployment (spec 147) is opt-in: it needs a source and a path to register.
+        // File-based workflow deployment is opt-in: it needs a source and a path to register.
         "JsonWorkflowReconciliation"
     ];
 

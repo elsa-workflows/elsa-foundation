@@ -4,7 +4,7 @@ using Xunit;
 
 namespace Elsa.Cluster.EntityFrameworkCore.ProviderTests;
 
-// The conformance kit and user stories 2 and 4 on each container engine (spec 183, User Story 5, scenario 2; FR-033).
+// The conformance kit and the membership scenarios on each container engine.
 
 [Collection(PostgreSqlMembershipDatabase.Collection)]
 public sealed class PostgreSqlEfClusterMembershipConformanceTests(PostgreSqlMembershipDatabase database)
@@ -27,7 +27,7 @@ public sealed class MySqlEfClusterMembershipConformanceTests(MySqlMembershipData
 [Collection(MySqlMembershipDatabase.Collection)]
 public sealed class MySqlEfClusterMembershipScenarioTests(MySqlMembershipDatabase database) : EfClusterMembershipScenarioTests(database.Store);
 
-// Spec 181's finalization gate over the EF provider on each container engine.
+// The finalization gate over the EF provider on each container engine.
 
 [Collection(PostgreSqlMembershipDatabase.Collection)]
 public sealed class PostgreSqlEfSchemaFinalizationClusterScenarioTests(PostgreSqlMembershipDatabase database) : EfSchemaFinalizationClusterScenarioTests(database.Store);

@@ -4,9 +4,9 @@ using Xunit;
 namespace Elsa.Cli.Tests;
 
 /// <summary>
-/// The engine-capability consumer end to end (spec 172, issue #1939): a host whose modules arrive as
+/// The engine-capability consumer end to end (issue #1939): a host whose modules arrive as
 /// packages selects its EF provider engine with one configuration key instead of naming the engine package
-/// in its closure, and <c>--provider</c> stays authoritative against that selection (ADR 0076 D4).
+/// in its closure, and <c>--provider</c> stays authoritative against that selection.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -67,9 +67,9 @@ public sealed class EngineCapabilityCliTests : IDisposable
 
     /// <summary>
     /// The selection changes where the engine comes from and nothing else. A second host names the same
-    /// engine package by hand — an explicit include pattern, the pre-spec-172 way — and the two artifacts
-    /// are compared byte for byte, migration plan included, so a difference in the engine's recorded package
-    /// facts would fail here.
+    /// engine package by hand — an explicit include pattern, as hosts did before they could select the engine by
+    /// capability — and the two artifacts are compared byte for byte, migration plan included, so a difference in the
+    /// engine's recorded package facts would fail here.
     /// </summary>
     [Fact]
     public void The_artifact_equals_the_one_a_host_that_names_the_engine_by_hand_produces()
@@ -94,7 +94,7 @@ public sealed class EngineCapabilityCliTests : IDisposable
     }
 
     /// <summary>
-    /// No selection and no explicit engine root is a refusal, never a guess (spec 172 FR-005). Nuplane
+    /// No selection and no explicit engine root is a refusal, never a guess. Nuplane
     /// refuses the declaring module with <c>capability-unselected</c>; the tool reports that as a refusal of
     /// its own naming the key and every declared option, rather than as "a package could not be installed",
     /// which is true and useless — the package is right there on the feed.
@@ -117,7 +117,7 @@ public sealed class EngineCapabilityCliTests : IDisposable
     }
 
     /// <summary>
-    /// The agreement rule (D4): the selection is compared with <c>--provider</c> and never taken for it.
+    /// The agreement rule: the selection is compared with <c>--provider</c> and never taken for it.
     /// <c>script --provider Sqlite</c> would ordinarily be refused on the command and the provider alone —
     /// EF cannot script SQLite idempotently — but a host whose closure selects PostgreSql was never a SQLite
     /// host, so the disagreement is what it is told about.
@@ -283,7 +283,10 @@ public sealed class EngineCapabilityCliTests : IDisposable
           }
         """;
 
-    /// <summary>The pre-spec-172 shape: the engine named by hand, as an explicit pinned root beside the modules.</summary>
+    /// <summary>
+    /// The shape hosts used before they could select the engine by capability: the engine named by hand, as an
+    /// explicit pinned root beside the modules.
+    /// </summary>
     private static string NamedEngineFeed =>
         $$"""
             "local-packages": {

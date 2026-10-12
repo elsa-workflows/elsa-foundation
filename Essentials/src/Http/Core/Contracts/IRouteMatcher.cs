@@ -18,7 +18,7 @@ public interface IRouteMatcher
     /// <summary>
     /// Matches a request path against a route table entry, reusing the entry's precompiled matcher
     /// (<see cref="HttpRouteData.CompiledMatcher"/>) when present so no per-request parse/allocation occurs
-    /// (spec 089 follow-up, issue #592 item 6). Falls back to parsing <see cref="HttpRouteData.Route"/> for a
+    /// (issue #592 item 6). Falls back to parsing <see cref="HttpRouteData.Route"/> for a
     /// bare entry with no precompiled matcher.
     /// </summary>
     RouteValueDictionary? Match(HttpRouteData routeData, string route);

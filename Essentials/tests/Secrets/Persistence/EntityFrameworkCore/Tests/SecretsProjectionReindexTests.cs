@@ -12,7 +12,7 @@ using Xunit;
 namespace Elsa.Secrets.Persistence.EntityFrameworkCore.Tests;
 
 /// <summary>
-/// Spec 171 User Story 5, end to end against a real SQLite database: a Secrets database with legacy
+/// The post-migration projection reindex, end to end against a real SQLite database: a Secrets database with legacy
 /// projection rows reports <see cref="SecretsProjectionReindex"/> as required after its migrations apply,
 /// <c>post-migrate</c> reindexes it, a subsequent audit reports nothing required, and a database with no
 /// legacy rows reports nothing required at all.

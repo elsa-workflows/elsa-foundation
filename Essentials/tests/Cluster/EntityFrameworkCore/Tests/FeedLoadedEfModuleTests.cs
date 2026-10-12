@@ -15,8 +15,8 @@ namespace Elsa.Cluster.EntityFrameworkCore.Tests;
 /// context of its own, and still reaches the membership its host composed on the host container, because both see the
 /// types of <c>Elsa.Persistence.Schema</c> and <c>Elsa.Cluster.Core</c>, which every host shares. On
 /// <c>Elsa.Foundation.Host</c> and on <c>Elsa.Workbench</c>, from each host's own share list: the module finalizes at
-/// activation as a single host (spec 181, FR-021), a feature that needs its new version leaves dormancy once it is
-/// finalized (spec 182, FR-019 and SC-003), and a durable provider composed on the host is the fleet the module counts.
+/// activation as a single host, a feature that needs its new version leaves dormancy once it is
+/// finalized, and a durable provider composed on the host is the fleet the module counts.
 /// </summary>
 /// <remarks>
 /// <para>

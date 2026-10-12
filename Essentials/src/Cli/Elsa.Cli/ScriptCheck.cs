@@ -27,8 +27,7 @@ public sealed record ScriptCheckFinding(string File, ScriptCheckFault Fault, str
 public sealed record ScriptCheckReport(int ExitCode, string Headline, IReadOnlyList<string> Lines);
 
 /// <summary>
-/// Compares a committed artifact against what the host regenerates from that artifact's own plan
-/// (FR-044–FR-046).
+/// Compares a committed artifact against what the host regenerates from that artifact's own plan.
 /// </summary>
 /// <remarks>
 /// <para>

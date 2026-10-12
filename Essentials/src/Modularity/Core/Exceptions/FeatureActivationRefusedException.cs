@@ -4,7 +4,7 @@ namespace Elsa.Modularity.Core.Exceptions;
 
 /// <summary>
 /// At least one <see cref="Contracts.IFeatureActivationGuard"/> refused the request, so nothing was saved,
-/// refreshed or reloaded (spec 171 FR-060, FR-067). Its own type — like
+/// refreshed or reloaded. Its own type — like
 /// <see cref="FeatureCatalogRevisionConflictException"/>, and ahead of that one's base
 /// <see cref="InvalidOperationException"/> in the API's fault ladder — so a refusal maps to an HTTP 409
 /// rather than being reported as a malformed request.

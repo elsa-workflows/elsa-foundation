@@ -58,10 +58,10 @@ public sealed class EfContractingMigrationRefusedException : EfPendingMigrations
         ArgumentNullException.ThrowIfNull(refusals);
         var remedy = refusals.Any(refusal => refusal.Reason is EfContractingMigrationRefusalReason.NotFinalized or EfContractingMigrationRefusalReason.NoRecord)
             ? "A contracting migration applies only once its family's finalized version in this database reaches the version " +
-              "it names (spec 185, FR-024): run every host on a release that reads that version until the finalization gate " +
+              "it names: run every host on a release that reads that version until the finalization gate " +
               "finalizes it, then apply the migrations again."
             : "Correct the migration's [ExpandOnlyMigrationOptOut] so it names a family this module declares and a version " +
-              "that family's chain reads (spec 185, FR-023).";
+              "that family's chain reads.";
         var head = applied is { Count: > 0 }
             ? $"EF module '{module}' was migrated only up to its first contracting migration: no host had admitted it in this " +
               $"database, so {string.Join(", ", applied)} were applied first, for its schema families' finalization records " +

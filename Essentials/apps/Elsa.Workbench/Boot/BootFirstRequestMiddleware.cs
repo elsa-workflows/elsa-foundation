@@ -1,7 +1,7 @@
 namespace Elsa.Workbench.Boot;
 
 /// <summary>
-/// Times the first HTTP request end-to-end and emits the boot phase table once it completes (spec 129). Placed at
+/// Times the first HTTP request end-to-end and emits the boot phase table once it completes. Placed at
 /// the front of the pipeline so the span wraps lazy shell activation triggered by that request. Registered only
 /// when the boot switch is on, so it is absent from the pipeline in a normal host.
 /// </summary>

@@ -13,7 +13,7 @@ public interface IPermissionCatalog
 /// <summary>
 /// Additive contribution seam for the permission catalog. A feature that owns a host-control (or any
 /// other) surface contributes its permissions through this interface instead of hard-coding them into
-/// the identity domain (per ADR 0037). Contributors are aggregated by <c>CompositePermissionCatalog</c>
+/// the identity domain. Contributors are aggregated by <c>CompositePermissionCatalog</c>
 /// (<c>Elsa.Foundation.Identity</c>).
 /// Register with <c>services.TryAddEnumerable(ServiceDescriptor.Singleton&lt;IPermissionContributor, MyContributor&gt;())</c>.
 /// </summary>

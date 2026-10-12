@@ -4,7 +4,7 @@ using Microsoft.Extensions.DependencyInjection;
 namespace Elsa.Cluster.Core.Extensions;
 
 /// <summary>
-/// How the source the shared dormancy check answers from is composed (spec 182, FR-003). It is a replacement contract:
+/// How the source the shared dormancy check answers from is composed. It is a replacement contract:
 /// composing the same source again is a no-op, and composing a different one beside it fails here, never resolved by
 /// last-write-wins. <c>Elsa.Cluster.InProcess</c>'s <c>TryAddSchemaDormancyCheck</c> composes the default check.
 /// </summary>

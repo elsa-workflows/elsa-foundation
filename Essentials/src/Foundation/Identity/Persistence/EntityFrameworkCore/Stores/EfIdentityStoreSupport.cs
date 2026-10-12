@@ -368,10 +368,10 @@ public static class EfIdentityStoreSupport
 
     /// <summary>
     /// The id-set content column <paramref name="column"/> of a user row, read from the row's content columns upcast
-    /// together from its stamp to the current version before any is parsed (spec 180, FR-009; #2144). Every read of an
+    /// together from its stamp to the current version before any is parsed (#2144). Every read of an
     /// Identity IAM content column goes through one of these overloads or <see cref="Content(UserEntity, EfSchemaChain?)"/>
     /// and its siblings, including a read of a row <see cref="Upgrade(UserEntity)"/> has already brought current, where the
-    /// chain runs nothing (FR-021).
+    /// chain runs nothing.
     /// </summary>
     public static IReadOnlySet<string> ReadSet(UserEntity user, string column) => DeserializeSet(Content(user)[column]);
 
@@ -386,7 +386,7 @@ public static class EfIdentityStoreSupport
 
     /// <summary>
     /// Every content column of a user row, upcast together through <paramref name="chain"/>, the family's own by default,
-    /// from the row's stamp to the current version (spec 180, FR-009; #2144).
+    /// from the row's stamp to the current version (#2144).
     /// </summary>
     public static EfSchemaRowContent Content(UserEntity user, EfSchemaChain? chain = null) =>
         (chain ?? IdentityIamEfModule.Chain).Upcast<UserEntity>(
@@ -423,10 +423,10 @@ public static class EfIdentityStoreSupport
 
     /// <summary>
     /// Brings a stored user row to the current version in place, before a write edits it or writes it back: every
-    /// content column is upcast from the row's stamp, then the row is stamped current (spec 180, FR-013 and FR-014). A
+    /// content column is upcast from the row's stamp, then the row is stamped current. A
     /// write that only stamped the row would leave the registries it does not rewrite in their old format under a stamp
     /// that claims the current one, and the next read would upcast them from the wrong version. At the current stamp it
-    /// changes nothing (FR-021).
+    /// changes nothing.
     /// </summary>
     public static void Upgrade(UserEntity user) => Upgrade(user, IdentityIamEfModule.Chain);
 
@@ -525,7 +525,7 @@ public static class EfIdentityStoreSupport
     /// <summary>
     /// The one wrapper every Identity failure ladder builds. Skew is not a persistence failure, and this wrapper is an
     /// <see cref="InvalidOperationException"/> that callers treat as one, so a skewed row leaves as itself whichever
-    /// ladder caught it (ADR 0077).
+    /// ladder caught it.
     /// </summary>
     public static IdentityEntityFrameworkPersistenceException Failure(string message, Exception exception)
     {

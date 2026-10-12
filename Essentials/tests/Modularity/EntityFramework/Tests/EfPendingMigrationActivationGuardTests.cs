@@ -9,7 +9,7 @@ using static Elsa.Modularity.EntityFramework.Tests.ActivationGuardHarness;
 namespace Elsa.Modularity.EntityFramework.Tests;
 
 /// <summary>
-/// Spec 171 User Story 3 and FR-067–FR-069: what the guard refuses, what it lets through, and what it
+/// What the guard refuses, what it lets through, and what it
 /// never says while doing either.
 /// </summary>
 public sealed class EfPendingMigrationActivationGuardTests : IDisposable
@@ -36,12 +36,12 @@ public sealed class EfPendingMigrationActivationGuardTests : IDisposable
         Assert.Equal(SecretsFeature, refusal.Feature);
         // Pinned whole rather than by keyword: this message is built only from the feature name, the module
         // name and fixed text, and an exact match is what keeps a later edit from interpolating a driver's
-        // message — the one realistic way a credential would reach an operator (FR-061).
+        // message — the one realistic way a credential would reach an operator.
         Assert.Equal(
             $"Feature '{SecretsFeature}' depends on EF module 'Secrets' which has migrations that are not applied " +
             "to its database, and this host runs 'Elsa:Persistence:EntityFramework:Migrate:Policy=Validate'. " +
             $"Nothing was saved. Apply them out of process, then enable the feature again:{Environment.NewLine}" +
-            // SQLite cannot be scripted idempotently (ADR 0076 D5), so `apply` is what the operator is told
+            // SQLite cannot be scripted idempotently, so `apply` is what the operator is told
             // to run there; a `script` command would name one that refuses.
             $"  dotnet elsa persistence apply --host \"<host directory>\" --modules Secrets --provider Sqlite --connection-env ELSA_EF_CONNECTION{Environment.NewLine}" +
             // Secrets declares a post-migration action, so the whole path is named, not only its first step.
@@ -60,7 +60,7 @@ public sealed class EfPendingMigrationActivationGuardTests : IDisposable
         Assert.True(decision.IsAllowed);
     }
 
-    /// <summary>User Story 3, scenario 3: the same request, retried after the operator applied the migrations.</summary>
+    /// <summary>The same request, retried after the operator applied the migrations.</summary>
     [Fact]
     public async Task Allows_the_same_feature_once_its_migrations_are_applied_out_of_process()
     {
@@ -75,7 +75,7 @@ public sealed class EfPendingMigrationActivationGuardTests : IDisposable
     }
 
     /// <summary>
-    /// User Story 3, scenario 5: an unreadable database fails closed, and says so in its own words — every
+    /// An unreadable database fails closed, and says so in its own words — every
     /// migration is treated as pending rather than the schema being assumed fine.
     /// </summary>
     [Fact]
@@ -118,7 +118,7 @@ public sealed class EfPendingMigrationActivationGuardTests : IDisposable
     }
 
     /// <summary>
-    /// FR-069 as narrowed by spec 181's FR-016 (Q10 on #2093): under AutoMigrate the guard now opens the database to read
+    /// Fail closed under AutoMigrate too (#2093): the guard now opens the database to read
     /// the finalization record, so the same unreadable database that refuses under Validate refuses under AutoMigrate
     /// too, fail closed, in words that name the record rather than pending migrations, and still never the connection.
     /// </summary>
@@ -139,7 +139,7 @@ public sealed class EfPendingMigrationActivationGuardTests : IDisposable
     }
 
     /// <summary>
-    /// Spec 181, FR-016 and SC-003: under both policies, a feature whose module's family is finalized at a version this
+    /// Under both policies, a feature whose module's family is finalized at a version this
     /// host cannot read is refused before anything is saved, naming the feature, the module, the family, the finalized
     /// version, the versions this host reads and the remedy; one it can read passes, so the refusal is not blanket.
     /// </summary>
@@ -176,7 +176,7 @@ public sealed class EfPendingMigrationActivationGuardTests : IDisposable
     }
 
     /// <summary>
-    /// Spec 181's FR-015 and FR-016 as amended for spec 186: a family complete only from a version this host cannot read
+    /// A family complete only from a version this host cannot read
     /// is refused as an unreadable finalized version is, although this host reads the finalized version itself.
     /// </summary>
     [Theory]
@@ -193,7 +193,7 @@ public sealed class EfPendingMigrationActivationGuardTests : IDisposable
     }
 
     /// <summary>
-    /// An engine this host cannot bind is a refusal whatever the policy is (FR-069) — the one thing
+    /// An engine this host cannot bind is a refusal whatever the policy is — the one thing
     /// AutoMigrate does not wave through. This test project references exactly one provider package, so
     /// SqlServer is genuinely unbindable here rather than mocked into being.
     /// </summary>
@@ -224,7 +224,7 @@ public sealed class EfPendingMigrationActivationGuardTests : IDisposable
     }
 
     /// <summary>
-    /// FR-065: the dashboard feature has no Provider or connection of its own, and neither of the features
+    /// The dashboard feature has no Provider or connection of its own, and neither of the features
     /// that register its two modules' migrations is enabled, so the guard passes and leaves the refusal to
     /// the feature's own startup check.
     /// </summary>
@@ -238,7 +238,7 @@ public sealed class EfPendingMigrationActivationGuardTests : IDisposable
     }
 
     /// <summary>
-    /// The other half of FR-065: with a registering feature enabled, that feature's configuration is what
+    /// The other half of the dashboard case: with a registering feature enabled, that feature's configuration is what
     /// the dashboard is evaluated through — and the refusal names both, so an operator can see why a
     /// feature carrying no connection settings was refused over a database.
     /// </summary>
@@ -320,7 +320,7 @@ public sealed class EfPendingMigrationActivationGuardTests : IDisposable
     /// <summary>
     /// Finding 1's other direction: a shell that declares Validate over a host running AutoMigrate must be
     /// refused here, rather than silently passing and falling back to the later, post-save Prepare-phase
-    /// refusal the spec treats as the worse path.
+    /// refusal, the worse path.
     /// </summary>
     [Fact]
     public async Task Refuses_a_shell_that_declares_validate_over_a_host_running_automigrate()

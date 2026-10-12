@@ -44,7 +44,7 @@ public sealed class NuGetLockFileTests
     }
 
     /// <summary>
-    /// The maps generator reads a packable project's pinned-transitive edges from its lock file (spec 149 FR-012), but
+    /// The maps generator reads a packable project's pinned-transitive edges from its lock file, but
     /// pack writes the nuspec from restore's <c>centralTransitiveDependencyGroups</c>. The two lists differ wherever a
     /// pinned package is reached only through a <c>PrivateAssets="all"</c> reference, which the generator reads from the
     /// project file to bridge. A reading that drifted from NuGet's would regenerate the same wrong map the maps check

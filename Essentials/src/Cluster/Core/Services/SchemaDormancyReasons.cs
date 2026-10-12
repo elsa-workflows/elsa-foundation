@@ -4,8 +4,8 @@ using Elsa.Cluster.Core.Models;
 namespace Elsa.Cluster.Core.Services;
 
 /// <summary>
-/// How a dormant feature says why (spec 182, FR-008), in the two forms FR-011 separates: a caller-neutral reason that a
-/// domain API may return to anyone, and an operator reason that adds the finalization gate's status (spec 181, FR-022),
+/// How a dormant feature says why, in two separate forms: a caller-neutral reason that a
+/// domain API may return to anyone, and an operator reason that adds the finalization gate's status,
 /// including the members that cannot read a version and the holds' own words, for the catalog, Attention and the CLI.
 /// </summary>
 public static class SchemaDormancyReasons
@@ -13,7 +13,7 @@ public static class SchemaDormancyReasons
     /// <summary>The caller-neutral reason for one unmet requirement. It names no host and no operator's words.</summary>
     /// <param name="completenessUnreachable">
     /// For <see cref="SchemaDormancyKind.WaitingForCompleteness"/>: the family keeps content-addressed rows below the
-    /// version, which nothing may upgrade, so it can never become complete (spec 186, FR-022).
+    /// version, which nothing may upgrade, so it can never become complete.
     /// </param>
     public static string ForCaller(SchemaVersionRequirement requirement, SchemaDormancyKind kind, bool completenessUnreachable = false)
     {
@@ -41,7 +41,7 @@ public static class SchemaDormancyReasons
 
     /// <summary>
     /// The operator reason for <paramref name="unmet"/>: its caller reason, then what the gate's status says about the
-    /// family (spec 181, FR-022). <paramref name="status"/> is the family's status from an operator read, with blockers,
+    /// family. <paramref name="status"/> is the family's status from an operator read, with blockers,
     /// or <see langword="null"/> when none could be read; the observation <paramref name="unmet"/> came from is used then.
     /// </summary>
     public static string ForOperator(UnmetSchemaRequirement unmet, SchemaFamilyObservation? status)
@@ -85,7 +85,7 @@ public static class SchemaDormancyReasons
         return string.Join(" ", parts);
     }
 
-    /// <summary>The backfill's part of an operator reason (spec 186, FR-021 and FR-022): its state, progress, and what it waits for or is blocked by.</summary>
+    /// <summary>The backfill's part of an operator reason: its state, progress, and what it waits for or is blocked by.</summary>
     private static string Describe(SchemaBackfillObservation backfill)
     {
         var parts = new List<string>

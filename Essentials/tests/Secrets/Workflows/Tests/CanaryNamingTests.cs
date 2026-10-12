@@ -9,7 +9,7 @@ using Xunit;
 namespace Elsa.Secrets.Workflows.Tests;
 
 /// <summary>
-/// No name the canary gives a value matches a name-based redactor (spec 188, T078, research R10): not the canary
+/// No name the canary gives a value matches a name-based redactor: not the canary
 /// activities' type names, which the catalog, the runtime and every inspection surface record, not their input names,
 /// under which the diagnostic snapshot factory captures a value, and not the secret reference names. A redactor that
 /// matched one would hide the value by its name, and a disabled protection would stay green for the wrong reason.

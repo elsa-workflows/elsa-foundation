@@ -12,8 +12,8 @@ using Microsoft.Extensions.Options;
 namespace Elsa.Cluster.EntityFrameworkCore.Tests;
 
 /// <summary>
-/// The EF provider is enabled only by configuration, and the default stays in-process (#2098, Acceptance; spec 183,
-/// FR-018a, FR-024). A configuration the host cannot act on as written is refused, never quietly defaulted.
+/// The EF provider is enabled only by configuration, and the default stays in-process (#2098, Acceptance).
+/// A configuration the host cannot act on as written is refused, never quietly defaulted.
 /// </summary>
 public sealed class ClusterMembershipConfigurationTests : IDisposable
 {
@@ -23,7 +23,7 @@ public sealed class ClusterMembershipConfigurationTests : IDisposable
 
     public void Dispose() => _store.Dispose();
 
-    // Kept beside the composition test (§2.23.1): conditional registration, nothing is registered unless configuration enables the provider.
+    // Kept beside the composition test: conditional registration, nothing is registered unless configuration enables the provider.
     [Theory]
     [InlineData(null)]
     [InlineData("false")]
@@ -98,7 +98,7 @@ public sealed class ClusterMembershipConfigurationTests : IDisposable
         await host.StopAsync();
     }
 
-    /// <summary>FR-003a through configuration: a durable provider without an explicit host id never starts.</summary>
+    /// <summary>The explicit host id, through configuration: a durable provider without one never starts.</summary>
     [Fact]
     public async Task An_enabled_provider_without_a_host_id_refuses_to_start()
     {

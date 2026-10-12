@@ -4,10 +4,10 @@ using Elsa.Versioning.Publisher.Tests.Support;
 namespace Elsa.Versioning.Publisher.Tests;
 
 /// <summary>
-/// The repair command (spec 150 FR-019): settles a genuine collision from the feed, refusing to lower an entry
-/// (FR-012), and resets <c>last_publish_commit</c> after a rewritten <c>main</c>, refusing a commit that is not on
+/// The repair command: settles a genuine collision from the feed, refusing to lower an entry,
+/// and resets <c>last_publish_commit</c> after a rewritten <c>main</c>, refusing a commit that is not on
 /// it. Besides a publish and the bootstrap, this is <c>publish-state</c>'s only other writer, and it writes onto the
-/// tip it read the same way (FR-017).
+/// tip it read the same way.
 /// </summary>
 public sealed class RepairTests : PublishingHistory
 {
@@ -49,7 +49,7 @@ public sealed class RepairTests : PublishingHistory
         Assert.Contains("4.0.1-preview", refused.Message, StringComparison.Ordinal);
     }
 
-    /// <summary>FR-012: a repair never lowers an entry, even one an operator names explicitly that the feed genuinely holds.</summary>
+    /// <summary>A repair never lowers an entry, even one an operator names explicitly that the feed genuinely holds.</summary>
     [Fact]
     public async Task Repair_refuses_to_lower_the_entry()
     {
@@ -76,7 +76,7 @@ public sealed class RepairTests : PublishingHistory
         Assert.True((await RunAsync()).Report!.Succeeded);
         Assert.Equal("4.0.1-preview", RecordedVersions[PackageId]);
 
-        // Simulate a lost record entry (spec 150, Edge Cases): Elsa.Tasks's own entry reverts to the bootstrap, while
+        // Simulate a lost record entry: Elsa.Tasks's own entry reverts to the bootstrap, while
         // the feed still holds what was actually pushed and last_publish_commit still names the real latest publish.
         SetRecordEntry(PackageId, "4.0.0-preview", bootstrapCommit);
 
@@ -146,8 +146,9 @@ public sealed class RepairTests : PublishingHistory
     }
 
     /// <summary>
-    /// FR-021's edge case: after main is rewritten, publishing refuses until last_publish_commit names a commit of the
-    /// new history; the repair resets it to one that does, naming the reason and who ran it, and publishing resumes.
+    /// The forward-only gate's edge case: after main is rewritten, publishing refuses until last_publish_commit names a
+    /// commit of the new history; the repair resets it to one that does, naming the reason and who ran it, and
+    /// publishing resumes.
     /// </summary>
     [Fact]
     public async Task A_repair_resets_last_publish_commit_after_a_rewritten_main_and_publishing_resumes()

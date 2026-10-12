@@ -10,7 +10,7 @@ using Xunit;
 
 namespace Elsa.Secrets.Workflows.Tests.Support;
 
-/// <summary>The eight surfaces of FR-013 the canary scans (spec 188, A14).</summary>
+/// <summary>The eight surfaces the canary scans.</summary>
 public enum CanarySurface
 {
     StoredDefinitions,
@@ -27,7 +27,7 @@ public enum CanarySurface
 /// One canary run and what its surfaces must show for it, so each surface's precondition can prove the surface holds
 /// the run before the scan counts.
 /// </summary>
-/// <param name="Scenario">The A15 scenario, named in every failure.</param>
+/// <param name="Scenario">The canary scenario, named in every failure.</param>
 /// <param name="NodeId">The scenario's canary node, an id no other scenario uses.</param>
 /// <param name="DefinitionId">The definition the run's version was published from; null for an imported artifact, which has none.</param>
 /// <param name="SubjectInput">The canary input the scenario binds or plants its value on.</param>
@@ -83,7 +83,7 @@ public sealed record CanaryReadOptions(
     IReadOnlySet<string>? ExcludedRuntimeTables = null,
     CanaryCaller InspectorCaller = CanaryCaller.Operator);
 
-/// <summary>The inspection granularity the instance view reports for each checkpoint cadence (ADR 0032 R3).</summary>
+/// <summary>The inspection granularity the instance view reports for each checkpoint cadence.</summary>
 public static class CanaryInspectionGranularity
 {
     public const string ActivityLevel = "activity-level";
@@ -94,7 +94,7 @@ public static class CanaryInspectionGranularity
 public sealed record CanarySurfaceRead(CanarySurface Surface, IReadOnlyList<CanaryContent> Contents, IReadOnlyList<string> FailedPreconditions);
 
 /// <summary>
-/// Reads the canary's surfaces (spec 188, T081, research R10). Each read checks that surface's precondition for every
+/// Reads the canary's surfaces. Each read checks that surface's precondition for every
 /// run, which proves the surface holds the run, and reports every precondition that does not hold beside the content
 /// it read, so a surface that does not hold the run is reported as such rather than passing its scan vacuously, and a
 /// leak the content shows is reported even when a precondition failed too.
@@ -108,7 +108,7 @@ public sealed class CanarySurfaces(SecretsCanaryWorkflowHost host)
 
     /// <summary>
     /// Reads each of <paramref name="surfaces"/>, asserting its precondition for every run first, and asserts that none of
-    /// <paramref name="values"/> occurs on it in any form the scanner searches for (SC-004). A leak is reported beside
+    /// <paramref name="values"/> occurs on it in any form the scanner searches for. A leak is reported beside
     /// every precondition that failed, so neither hides the other.
     /// </summary>
     public async Task AssertAbsentAsync(
@@ -330,8 +330,8 @@ public sealed class CanarySurfaces(SecretsCanaryWorkflowHost host)
             var subject = snapshots.Where(snapshot => snapshot.InputKey == run.SubjectInput).ToArray();
             if (!KeepsValueRecords(run, instance, failures))
             {
-                // Under coalesced checkpoints the runtime folds inspection evidence to the segment's durable boundary
-                // (ADR 0032 R3), which the instance view reports, so a run that completes in one segment leaves no value
+                // Under coalesced checkpoints the runtime folds inspection evidence to the segment's durable boundary,
+                // which the instance view reports, so a run that completes in one segment leaves no value
                 // record of the subject input, and the capture rules that protect one (P6, P7) have nothing to act on.
                 // That absence is asserted rather than assumed: a value record of the subject input there turns the
                 // canary red. Whatever the store does hold is scanned.

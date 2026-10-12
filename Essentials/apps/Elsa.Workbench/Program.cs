@@ -86,7 +86,7 @@ using Nuplane.Reconciliation;
 using Nuplane.Sources.Directory.Configuration;
 using System.Diagnostics;
 
-// Boot phase-timing stopwatch (spec 129). Started at process entry so the opt-in cold-start instrument can
+// Boot phase-timing stopwatch. Started at process entry so the opt-in cold-start instrument can
 // attribute host-build and first-request wall time. The Stopwatch itself is negligible; nothing is recorded
 // unless the Elsa:Boot:PhaseTiming:Enabled switch turns the timeline on below.
 var bootStopwatch = Stopwatch.StartNew();
@@ -139,7 +139,7 @@ builder.Services.AddWorkbenchOpenIddictMigrationPolicy(configuration);
 // Every access and refresh token is a row in that store, and nothing else deletes one: prune the expired and redeemed ones, on every node.
 builder.Services.AddWorkbenchOpenIddictPruning(configuration);
 
-// Opt-in cold-start phase instrument (spec 129). Null unless Elsa:Boot:PhaseTiming:Enabled is set, so the host
+// Opt-in cold-start phase instrument. Null unless Elsa:Boot:PhaseTiming:Enabled is set, so the host
 // registers no boot services and pays nothing when the switch is off. When on, the timeline is a root singleton
 // consumed by the first-request middleware, the shell-activation observer, and the ApplicationStarted hook.
 var bootTimeline = BootPhaseTimeline.CreateIfEnabled(configuration, bootStopwatch);
@@ -241,17 +241,17 @@ builder.Services.TryAddScoped<IModuleRegistryService, ModuleRegistryService>();
 builder.Services.TryAddScoped<IShellFeatureConfigurationStore, NullShellFeatureConfigurationStore>();
 builder.Services.TryAddScoped<IShellReloader, NullShellReloader>();
 // Composed on the host container, before AddCShellsAspNetCore, per the extension's own requirement: it must be
-// registered before any EF feature is enabled (ADR 0076 D9), which is why an EF feature cannot bring it itself.
+// registered before any EF feature is enabled, which is why an EF feature cannot bring it itself.
 builder.Services.AddEfPendingMigrationActivationGuard();
-// Membership is selected per host, never per shell (spec 183, Decisions, Q20), so this host's readability report is
+// Membership is selected per host, never per shell, so this host's readability report is
 // composed here, on the host container. It brings the in-process default, so an unclustered Workbench is a cluster of
 // one that reports the schema families it has loaded without any further configuration.
 builder.Services.AddEfSchemaReadability();
-// Beside it, on the same host container: what each shell's workflow runtime can activate (spec 184, FR-008), so the
+// Beside it, on the same host container: what each shell's workflow runtime can activate, so the
 // host's member report carries one runnability entry per shell that runs the distributed runtime.
 builder.Services.AddWorkflowRuntimeRunnabilityReport();
-// The durable EF provider replaces that default only when the Elsa:Cluster:Membership section enables it (ADR 0078;
-// spec 183, FR-024), and then requires an explicit Elsa:Cluster:Membership:HostId. It publishes the same report.
+// The durable EF provider replaces that default only when the Elsa:Cluster:Membership section enables it, and then
+// requires an explicit Elsa:Cluster:Membership:HostId. It publishes the same report.
 builder.Services.AddConfiguredClusterMembership(configuration);
 // The Data Protection key ring every shell protects its cookies and antiforgery tokens with, composed once per host as
 // membership is; the Elsa:DataProtection section names it and enables its shared key store (#2191).
@@ -326,7 +326,7 @@ builder.Services.AddCShellsAspNetCore(shells =>
             typeof(ActivitiesDesignReconciliationFeature).Assembly,
             typeof(ClrActivityReconciliationFeature).Assembly,
             // Reconciliation (Design side, workflows): the workflow-version pass + the JSON file source, so
-            // shells can deploy mounted workflow-definition files at startup (spec 147, #1157). Opt-in — not
+            // shells can deploy mounted workflow-definition files at startup (#1157). Opt-in — not
             // enabled in any default shell because the feature requires a SourceId and a file/folder path.
             typeof(WorkflowsDesignReconciliationFeature).Assembly,
             typeof(JsonWorkflowReconciliationFeature).Assembly,
@@ -342,7 +342,7 @@ builder.Services.AddCShellsAspNetCore(shells =>
             // composed; without it the shell fails to activate with a FeatureNotFoundException.
             typeof(WorkflowsRuntimeResumptionFeature).Assembly,
 
-            // Reference GC pump (ADR 0040). Opt-in like resumption; its assembly is in the catalog so the feature can
+            // Reference GC pump. Opt-in like resumption; its assembly is in the catalog so the feature can
             // be enabled to periodically prune expired/retired references and the artifacts no live reference points at.
             typeof(WorkflowsRuntimeReferenceGarbageCollectionFeature).Assembly,
 
@@ -410,7 +410,7 @@ builder.Services.AddCShellsAspNetCore(shells =>
 // Shared root-only execution for the independent eager and post-listen warmup profiles.
 builder.Services.AddShellActivationRunner();
 
-// Opt-in eager shell activation (spec 132, First-Request/Cold-Start Readiness unit 4). Default OFF. When
+// Opt-in eager shell activation. Default OFF. When
 // Elsa:Boot:EagerShellActivation:Enabled is set, a host-level IHostedService activates the configured shell(s)
 // at boot through the same IShellRegistry.GetOrActivateAsync path the first request would (byte-identical shell
 // state, just earlier), so the activation cliff — and the mid-activation contention tail — is paid before the
@@ -469,7 +469,7 @@ app.MapShells();
 app.UseAuthentication();
 app.UseAuthorization();
 
-// ADR 0037: CShells host-control remains server-to-server management-key traffic. It is not a Foundation
+// CShells host-control remains server-to-server management-key traffic. It is not a Foundation
 // user permission and the key is never exposed to browser clients.
 app.MapShellManagementApi("/_admin/shells")
     .WithHostOwner("Elsa.Workbench")
@@ -496,5 +496,5 @@ if (consoleLogStreamingEnabled)
     consoleLogEndpoints.MapConsoleLogStreaming();
 }
 // A host its cluster member stopped, because another process holds its host id, ends with exit code 1, so a supervisor
-// that restarts failed processes restarts it (spec 183, 2026-10-01 note).
+// that restarts failed processes restarts it.
 app.RunWithMembershipExitCode();

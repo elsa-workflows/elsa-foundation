@@ -5,7 +5,7 @@ namespace Elsa.Cluster.Testing;
 public abstract partial class ClusterMembershipConformanceTests
 {
     /// <summary>
-    /// FR-013's change token: it completes once, the next time the provider observes a fleet change. This one exercises
+    /// The change token: it completes once, the next time the provider observes a fleet change. This one exercises
     /// the in-process default too (its own publish), not only a durable provider's fleet.
     /// </summary>
     [SkippableFact]

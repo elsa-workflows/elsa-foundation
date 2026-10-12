@@ -9,7 +9,7 @@ using Xunit;
 namespace Elsa.Modularity.Tests;
 
 /// <summary>
-/// How the apply endpoint publishes each failure. Spec 171 FR-067: an activation guard's refusal is a 409,
+/// How the apply endpoint publishes each failure. An activation guard's refusal is a 409,
 /// like the revision conflict beside it, and not the 400 its
 /// <see cref="System.InvalidOperationException"/> base would otherwise give it.
 /// </summary>

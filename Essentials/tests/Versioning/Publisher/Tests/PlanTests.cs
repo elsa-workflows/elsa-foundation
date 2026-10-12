@@ -6,7 +6,7 @@ namespace Elsa.Versioning.Publisher.Tests;
 
 /// <summary>
 /// The pack job's plan: which mode a run takes, what it computes against, and what it hands packing and the publish
-/// job. Branch builds pack for CI artifacts and can never push (spec 150 FR-008).
+/// job. Branch builds pack for CI artifacts and can never push.
 /// </summary>
 public sealed class PlanTests : PublishingHistory
 {
@@ -36,7 +36,7 @@ public sealed class PlanTests : PublishingHistory
         Assert.IsType(expected, Xunit.Record.Exception(() => PublishPlan.Decide(reference, bootstrap, stateExists)));
 
     /// <summary>
-    /// US4 scenario 2: a branch build carries its branch's label and packs only what changed, and nothing it plans can be
+    /// A branch build carries its branch's label and packs only what changed, and nothing it plans can be
     /// pushed — not its own plan, and not a publish plan run on the branch.
     /// </summary>
     [Fact]

@@ -9,7 +9,7 @@ namespace Elsa.Cluster.Readability.Tests;
 
 /// <summary>
 /// #2099's acceptance through a host that composes nothing but <see cref="EfSchemaReadabilityServiceCollectionExtensions.AddEfSchemaReadability"/>:
-/// it is a cluster of one whose report carries the families it has loaded, so the counting query of spec 183's FR-023
+/// it is a cluster of one whose report carries the families it has loaded, so the membership's counting query
 /// answers "can every counted member read family F at version V?" from what the host actually loaded.
 /// </summary>
 public sealed class ReadabilityMembershipTests : IAsyncDisposable
@@ -86,7 +86,7 @@ public sealed class ReadabilityMembershipTests : IAsyncDisposable
     }
 
     /// <summary>
-    /// Spec 186, FR-012: the fleet a host composes gives the backfill's default settle margin, the membership expiry
+    /// The fleet a host composes gives the backfill's default settle margin, the membership expiry
     /// period plus the skew allowance, as the membership settings say when it is asked.
     /// </summary>
     [Fact]

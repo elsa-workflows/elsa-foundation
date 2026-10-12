@@ -7,7 +7,7 @@ using Microsoft.Extensions.Logging;
 namespace Elsa.Secrets.Workflows.Tests.Support;
 
 /// <summary>
-/// The canary's runtime-captured logs surface (spec 188, T079): a logger provider for every category at every level,
+/// The canary's runtime-captured logs surface: a logger provider for every category at every level,
 /// which keeps each line's rendered message, its state's names and values and the full text of any exception it
 /// carries, so a value that reaches a log line through any of them is found.
 /// </summary>
@@ -64,7 +64,7 @@ public sealed record CanarySpan(
 }
 
 /// <summary>
-/// The canary's runtime telemetry export surface (spec 188, T079): an <see cref="ActivityListener"/> on the runtime's
+/// The canary's runtime telemetry export surface: an <see cref="ActivityListener"/> on the runtime's
 /// engine activity source that records every finished span with its name, tags, events and status, as
 /// <c>RuntimeEngineTracingTests</c> does. A listener is process-wide, so it records the spans of every runtime in the
 /// process while it is attached; the canary scans them all and finds its own by their workflow execution id tag.

@@ -624,7 +624,7 @@ public sealed class EfCoreIdentityFrameworkContractTests
         Assert.Single(schemes, scheme => scheme.Name == AspNetCoreIdentityDefaults.CookieScheme);
     }
 
-    // Kept beside the composition test (§2.23.1): idempotence, an equivalent seeded composition registers one seeder.
+    // Kept beside the composition test: idempotence, an equivalent seeded composition registers one seeder.
     [Fact]
     public void Equivalent_seeded_composition_registers_one_seeder()
     {
@@ -936,7 +936,7 @@ public sealed class EfCoreIdentityFrameworkContractTests
             iterations: 10);
     }
 
-    // Kept beside the composition test (§2.23.1): conditional registration, no seed options without a configured seed, one authority marker.
+    // Kept beside the composition test: conditional registration, no seed options without a configured seed, one authority marker.
     [Fact]
     public void Feature_can_be_configured_without_adding_a_second_authority_marker()
     {

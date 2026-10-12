@@ -6,8 +6,8 @@ namespace Elsa.Cli.Worker;
 
 /// <summary>
 /// The one entry point the worker calls inside the host's closure: <c>Tooling.EfToolingHost.RunAsync(Stream,
-/// Stream)</c> in the host's own <c>Elsa.Persistence.EntityFramework</c> (FR-003), reached reflectively so
-/// this project references no persistence assembly of its own (FR-001, ADR 0076 D1).
+/// Stream)</c> in the host's own <c>Elsa.Persistence.EntityFramework</c>, reached reflectively so
+/// this project references no persistence assembly of its own.
 /// </summary>
 /// <remarks>
 /// The two-argument overload is deliberate: it discovers modules across every load context in the process,
@@ -71,7 +71,7 @@ public sealed class ToolingEntryPoint
     }
 
     /// <summary>
-    /// Whether this host's tooling contract carries the <c>capabilitySelection</c> field (spec 172 FR-004).
+    /// Whether this host's tooling contract carries the <c>capabilitySelection</c> field.
     /// </summary>
     /// <remarks>
     /// The contract refuses an unmapped request property on purpose, so sending the field to a build that
@@ -100,13 +100,12 @@ public sealed class ToolingEntryPoint
     public bool SupportsConfigurationContext => contextApi is not null;
 
     /// <summary>
-    /// Binds the entry point in <paramref name="persistence"/>, refusing when that build predates it
-    /// (FR-010).
+    /// Binds the entry point in <paramref name="persistence"/>, refusing when that build predates it.
     /// </summary>
     /// <remarks>
     /// The decision is made on the entry point's presence rather than on a version comparison, because a
     /// version string cannot say whether a build carries a type. The message still names both versions
-    /// FR-010 asks for: the one this host pins, read from its deps file, and a version known to carry the
+    /// an operator needs: the one this host pins, read from its deps file, and a version known to carry the
     /// entry point — this tool's own, since the front end, the worker and the persistence assembly are
     /// built and released from one repository together.
     /// </remarks>

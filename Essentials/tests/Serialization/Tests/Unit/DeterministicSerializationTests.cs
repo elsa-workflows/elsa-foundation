@@ -10,9 +10,9 @@ using Xunit;
 namespace Elsa.Serialization.Tests.Unit;
 
 /// <summary>
-/// Spec 086 (ADR 0034 D3/D8): the shared <see cref="IPayloadSerializer"/> must be deterministic — equal
+/// The shared <see cref="IPayloadSerializer"/> must be deterministic — equal
 /// object graphs serialize to byte-identical JSON regardless of dictionary insertion order or reflection
-/// member order, and remain round-trip lossless. These tests are the regression guard demanded by FR-006
+/// member order, and remain round-trip lossless. These tests are the regression guard for that
 /// (byte-identity for equal-but-differently-ordered inputs; stable digest across process runs/hosts).
 /// </summary>
 public sealed class DeterministicSerializationTests
@@ -21,8 +21,8 @@ public sealed class DeterministicSerializationTests
     /// Canonical SHA-256 (hex) of <see cref="BuildFixture"/>'s serialization. Because string hashing is
     /// seeded per process, any residual dependence on dictionary iteration order would change this digest
     /// from one run/host to the next — so its constancy across every CI run <em>is</em> the cross-process
-    /// determinism assertion (SC-002 / FR-003). If a deliberate wire-shape change lands, recompute it.
-    /// Re-based when open-object polymorphism was retired (ADR 0035 D2/D5/D7): the fixture's object-valued
+    /// determinism assertion. If a deliberate wire-shape change lands, recompute it.
+    /// Re-based when open-object polymorphism was retired: the fixture's object-valued
     /// dictionaries now serialize as plain sorted JSON with no <c>_type</c> discriminator.
     /// </summary>
     private const string CanonicalDigest = "84556e6ee376da433f4a1e86a322d0ec0cbd03c6f7fba066ac165035fe8fa383";
@@ -58,10 +58,10 @@ public sealed class DeterministicSerializationTests
     [Fact]
     public void ObjectValuedDictionary_EmitsNoTypeDiscriminator_AndIsDeterministic()
     {
-        // ADR 0035 D2/D5: open-object polymorphism is retired. A typed value boxed as an object value is no
+        // Open-object polymorphism is retired. A typed value boxed as an object value is no
         // longer wrapped with a "_type" discriminator — it serializes by its runtime type as plain JSON. Two
         // equal-but-differently-ordered maps still agree byte-for-byte (the deterministic dictionary converter
-        // now owns object-valued dictionaries too — FR-001/FR-002).
+        // now owns object-valued dictionaries too).
         var a = new Dictionary<string, object?> { ["b"] = "2", ["a"] = "1", ["map"] = Reverse(new Dictionary<string, string> { ["y"] = "1", ["x"] = "2" }) };
         var b = new Dictionary<string, object?> { ["a"] = "1", ["map"] = new Dictionary<string, string> { ["x"] = "2", ["y"] = "1" }, ["b"] = "2" };
 
@@ -76,10 +76,10 @@ public sealed class DeterministicSerializationTests
     public void ObjectValuedMembers_AreDeterministic_ForPocoAndNestedObjectDict()
     {
         // Object-valued dictionaries now serialize through DeterministicDictionaryConverter instead of the
-        // retired polymorphic converter (ADR 0035 D2). This pins that the two runtime shapes it must keep
+        // retired polymorphic converter. This pins that the two runtime shapes it must keep
         // deterministic — a POCO value and a nested object-valued dictionary — still get member/key order
         // normalized when reached via the converter's `Serialize<object>(value)` value path. The content hash
-        // (ADR 0034) depends on this; the CanonicalDigest fixture only exercises scalar + typed-dict members,
+        // depends on this; the CanonicalDigest fixture only exercises scalar + typed-dict members,
         // so this is the dedicated guard for object-valued POCO/nested-dict members.
         var graph = new Dictionary<string, object?>
         {
@@ -98,7 +98,7 @@ public sealed class DeterministicSerializationTests
     [Fact]
     public void TypedDictionary_RoundTripsLosslessly_ThroughTheSortingConverter()
     {
-        // The sorting rewrites byte order only, never semantics (FR-004): a typed dictionary serialized in
+        // The sorting rewrites byte order only, never semantics: a typed dictionary serialized in
         // sorted-key order deserializes back to an equal map.
         var original = Reverse(new Dictionary<string, string> { ["x"] = "1", ["y"] = "2", ["z"] = "3" });
         var json = _serializer.Serialize(original);
@@ -110,7 +110,7 @@ public sealed class DeterministicSerializationTests
     [Fact]
     public void ObjectGraph_RoundTripsLosslessly_AsOpaqueJson()
     {
-        // ADR 0035 D2: with open-object polymorphism retired, an untyped object graph round-trips as opaque
+        // With open-object polymorphism retired, an untyped object graph round-trips as opaque
         // JSON — reading it back through the shared serializer materializes a JsonElement (not an ExpandoObject
         // / IDictionary<string,object>), and object-valued dictionaries serialize deterministically (sorted).
         var nested = new Dictionary<string, object?> { ["y"] = "2", ["x"] = "1" };
@@ -140,7 +140,7 @@ public sealed class DeterministicSerializationTests
     [Fact]
     public void EmbeddedOpaqueJson_IsPreservedVerbatim_NotReordered()
     {
-        // ADR 0035 D3: opaque embedded JSON (e.g. ActivityNode.Structure.Payload, a JsonElement) is stored
+        // Opaque embedded JSON (e.g. ActivityNode.Structure.Payload, a JsonElement) is stored
         // verbatim and NEVER rewritten — a JsonElement re-emits in parse order with no hashing, so it is
         // already byte-stable across processes; reordering it would mutate the author's bytes. This pins that
         // decision so a future change can't silently re-introduce embedded-JSON canonicalization.

@@ -7,7 +7,7 @@ namespace Elsa.Cluster.Testing;
 public abstract partial class ClusterMembershipConformanceTests
 {
     /// <summary>
-    /// FR-037 to FR-042: the diagnostics a member reports about a fleet entry. The in-process default never meets any
+    /// The diagnostics a member reports about a fleet entry. The in-process default never meets any
     /// of them (its class comment says why), so every test here requires a multi-member fixture.
     /// </summary>
     [SkippableFact]
@@ -46,9 +46,9 @@ public abstract partial class ClusterMembershipConformanceTests
 
     /// <summary>
     /// The reference store's <c>Join</c> holds one lock across the liveness check and the displacement, so a live
-    /// incumbent is never silently displaced (FR-004b): this reference provider never produces a
+    /// incumbent is never silently displaced: this reference provider never produces a
     /// <see cref="FleetMember"/> whose <see cref="MemberCondition"/> is <see cref="MemberConditionKind.DuplicateHostId"/>.
-    /// FR-039 instead surfaces on the terminal <see cref="ClusterMembershipDuplicateHostIdException"/>, proven by
+    /// A duplicate host id instead surfaces on the terminal <see cref="ClusterMembershipDuplicateHostIdException"/>, proven by
     /// <see cref="ClusterMembershipConformanceTests.FR004b_a_live_duplicate_that_keeps_renewing_fails_startup_within_one_liveness_window"/>.
     /// </summary>
     [SkippableFact]

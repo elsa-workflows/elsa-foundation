@@ -7,8 +7,8 @@ namespace Elsa.Secrets.Workflows.Tests;
 
 /// <summary>
 /// The publishing compiler and the credential-literal rule each duplicate the Secrets module's <c>Secret</c> expression
-/// type name rather than reference that module (framework §2.17); this project, which references all three, pins that
-/// they agree (spec 188, T082). Were one to drift, a secret reference the Studio picker writes would compile as an
+/// type name rather than reference that module; this project, which references all three, pins that
+/// they agree. Were one to drift, a secret reference the Studio picker writes would compile as an
 /// expression, or be refused at save as a literal.
 /// </summary>
 public sealed class CanarySecretExpressionTypeAgreementTests

@@ -12,7 +12,7 @@ namespace Elsa.Cluster.EntityFrameworkCore.Tests;
 /// assembles itself, from its own shipped <c>appsettings.json</c> shares and its own <c>Program.cs</c>. With no membership
 /// configured, the host is a cluster of one on the in-process default. The same host is also upgraded in place, a release
 /// of the fixture dropped into its feed folder while it runs, which is where the previous release staying loaded in the
-/// load context Nuplane gave it, which it never unloads, shows (spec 183, FR-021, amended 2026-09-29). And #2150's: a
+/// load context Nuplane gave it, which it never unloads, shows. And #2150's: a
 /// package that carries its own copies of the assemblies the host shares binds the host's, because Nuplane binds,
 /// validates and matches those shipped shares itself.
 /// </summary>
@@ -46,8 +46,8 @@ public sealed class FoundationHostBootTests(FoundationHostFeed feed) : IAsyncLif
     public Task DisposeAsync() => StopHostAndDeleteDatabaseAsync(_host, _file);
 
     /// <summary>
-    /// The module finalizes its new version at activation as a single host (spec 181, FR-021) and its feature serves at
-    /// once (spec 182, FR-019): the record's finalized version moves from 1 to 2 with no operator and no restart.
+    /// The module finalizes its new version at activation as a single host and its feature serves at
+    /// once: the record's finalized version moves from 1 to 2 with no operator and no restart.
     /// </summary>
     [Fact]
     public async Task A_feed_loaded_ef_module_finalizes_its_new_version_at_activation_and_its_feature_serves()
@@ -148,7 +148,7 @@ public sealed class FoundationHostBootTests(FoundationHostFeed feed) : IAsyncLif
     }
 
     /// <summary>
-    /// Spec 183's FR-021, amended 2026-09-29: an EF module upgraded in place on a running host finalizes the version only
+    /// An EF module upgraded in place on a running host finalizes the version only
     /// its new release reads, and its feature serves that version, with no restart. Nuplane never unloads the load context
     /// it gave the previous release, so a report that kept reading every loaded declaration would intersect the two
     /// releases for the life of the process, [1] ∩ [1, 2], and the record would stay at 1 and the feature dormant for ever
@@ -201,7 +201,7 @@ public sealed class FoundationHostBootTests(FoundationHostFeed feed) : IAsyncLif
     }
 
     /// <summary>
-    /// Spec 183's FR-021, amended 2026-09-29, with eager activation turned off: an upgrade that lands before any shell was
+    /// With eager activation turned off, an upgrade that lands before any shell was
     /// ever built finds CShells' feature catalog not yet initialized, so the previous release keeps counting until the
     /// first request builds the shell. That build reads what Nuplane lists by then, so it composes the upgrade, which
     /// serves and finalizes its version on that first request, with no restart.

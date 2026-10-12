@@ -12,7 +12,7 @@ using static Elsa.Cluster.Readability.Tests.UpgradedPackage;
 namespace Elsa.Cluster.Readability.Tests;
 
 /// <summary>
-/// Spec 183's FR-021, amended 2026-09-29, through the pinned CShells itself: its registry builds, activates, reloads, drains
+/// Superseded package generations, through the pinned CShells itself: its registry builds, activates, reloads, drains
 /// and disposes the shell generations, from its own runtime feature catalog, over a feature assembly provider that hands
 /// it whichever generation of the package Nuplane has loaded, as <c>Elsa.Foundation.Host</c>'s does.
 /// </summary>

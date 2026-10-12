@@ -29,7 +29,7 @@ public sealed class ReusableActivityImportRegistrationTests
         services.AddScoped<IReusableActivityImportMaterializer, StubMaterializer>();
         services.AddScoped<IReusableActivityImportCommand, StubCommand>();
         services.AddScoped<IReusableActivityImportOperationStore, StubOperationStore>();
-        // Registered by WorkflowDesignValidations, on which the feature depends (spec 188, FR-008).
+        // Registered by WorkflowDesignValidations, on which the feature depends.
         services.AddScoped(_ => ReusableActivityImportFixtures.Validator());
 
         new Elsa3ImportActivitiesFeature().ConfigureServices(services);

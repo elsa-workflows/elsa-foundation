@@ -7,9 +7,9 @@ using System.Text.Json;
 namespace Elsa.Api.AspNetCore;
 
 /// <summary>
-/// How every first-party domain API answers a <see cref="SchemaWriteRefusedException"/> (spec 180, FR-016a): HTTP 409 in
+/// How every first-party domain API answers a <see cref="SchemaWriteRefusedException"/>: HTTP 409 in
 /// the API's own problem envelope, carrying the refusal's stable code, its family and both versions. Each API owns its
-/// envelope and its codes (#2093, Q17); this is the one place the refusal's part of every envelope is decided.
+/// envelope and its codes (#2093); this is the one place the refusal's part of every envelope is decided.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -33,7 +33,7 @@ public static class SchemaWriteRefusalProblem
     /// <summary>
     /// The refusal as a problem, its entries in this order: the message under <c>generalErrors</c>, so an envelope that
     /// shows only the first message shows it; then <c>code</c>, <c>family</c>, <c>writeVersion</c> and
-    /// <c>requiredVersion</c>, one value each. A dormancy refusal (spec 182, FR-013) adds its caller-neutral
+    /// <c>requiredVersion</c>, one value each. A dormancy refusal adds its caller-neutral
     /// <c>reason</c>, and its <c>feature</c> when it names one.
     /// </summary>
     public static EndpointProblem For(SchemaWriteRefusedException refusal)

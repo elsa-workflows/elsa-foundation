@@ -7,7 +7,7 @@ namespace Elsa.Cli.Worker;
 /// The host's own assemblies, loaded into this process the way the host itself would load them.
 /// </summary>
 /// <remarks>
-/// The worker runs on the host's runtimeconfig and deps file (FR-002), so every assembly the host pins is
+/// The worker runs on the host's runtimeconfig and deps file, so every assembly the host pins is
 /// already on this process's trusted platform list — but nothing is loaded until something asks for it, and
 /// module discovery reads declarations off <em>loaded</em> assemblies. Without this step an unscoped
 /// <c>list</c> against a packaged host would report nothing at all and look like a host with no modules,

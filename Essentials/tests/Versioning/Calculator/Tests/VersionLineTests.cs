@@ -2,12 +2,12 @@ using Elsa.Versioning.Calculator.Tests.Support;
 
 namespace Elsa.Versioning.Calculator.Tests;
 
-/// <summary>Spec 150 FR-001, FR-002 (Line A as a whole) and FR-010 (major and minor from the line properties).</summary>
+/// <summary>The version lines: Line A moving as a whole, and major and minor from the line properties.</summary>
 public sealed class VersionLineTests : SyntheticHistory
 {
     private static readonly string[] LineA = ["Elsa.Events.Core", "Elsa.Primitives"];
 
-    /// <summary>US1 scenario 3: a Line A change moves every Line A package to one new version and no Line B package.</summary>
+    /// <summary>A Line A change moves every Line A package to one new version and no Line B package.</summary>
     [Fact]
     public void A_line_a_change_moves_every_member_together_and_no_line_b_package()
     {
@@ -91,7 +91,7 @@ public sealed class VersionLineTests : SyntheticHistory
     }
 
     /// <summary>
-    /// FR-010: a Line B <c>major.minor</c> change starts every Line B package at patch 0 of the new line and leaves Line A,
+    /// A Line B <c>major.minor</c> change starts every Line B package at patch 0 of the new line and leaves Line A,
     /// whose version moves only when its own contract does, where it is.
     /// </summary>
     [Fact]
@@ -107,7 +107,7 @@ public sealed class VersionLineTests : SyntheticHistory
         Assert.Contains("line B is on 4.1; the last published version 4.0.7-preview is on 4.0", computation["Elsa.Tasks"].Reasons);
     }
 
-    /// <summary>FR-010: a Line A minor starts the line at patch 0; compatible dependents keep their published ranges (FR-006a).</summary>
+    /// <summary>A Line A minor starts the line at patch 0; compatible dependents keep their published ranges.</summary>
     [Fact]
     public void A_new_line_a_minor_moves_only_line_a()
     {
@@ -120,8 +120,8 @@ public sealed class VersionLineTests : SyntheticHistory
     }
 
     /// <summary>
-    /// A new Line A major falls outside every published range's upper bound (FR-007), so each package referencing a
-    /// Line A member moves with it (ADR 0067: only a major change propagates through the reverse closure).
+    /// A new Line A major falls outside every published range's upper bound, so each package referencing a
+    /// Line A member moves with it (only a major change propagates through the reverse closure).
     /// </summary>
     [Fact]
     public void A_new_line_a_major_moves_every_package_that_references_the_line()
@@ -138,8 +138,9 @@ public sealed class VersionLineTests : SyntheticHistory
     }
 
     /// <summary>
-    /// FR-007 / ADR 0067 also reaches a Line B package's own major advance, not only Line A's: when a package's last
-    /// published record sits on a major behind the line it is now on, its direct dependent moves with it.
+    /// The upper bound below the next major also reaches a Line B package's own major advance, not only Line A's: when
+    /// a package's last published record sits on a major behind the line it is now on, its direct dependent moves with
+    /// it.
     /// </summary>
     [Fact]
     public void A_stale_line_b_major_moves_every_package_that_references_it()
@@ -179,7 +180,7 @@ public sealed class VersionLineTests : SyntheticHistory
         Assert.Throws<InvalidOperationException>(() => Compute(commit));
     }
 
-    /// <summary>FR-010: the version is defined in one place, so a build file that sets a line property elsewhere is refused.</summary>
+    /// <summary>The version is defined in one place, so a build file that sets a line property elsewhere is refused.</summary>
     [Fact]
     public void A_line_property_set_outside_version_lines_is_refused()
     {

@@ -7,7 +7,7 @@ using Microsoft.Extensions.Primitives;
 namespace Elsa.Cluster.Testing;
 
 /// <summary>
-/// The registrations the invariant tier composes beside the provider under test (FR-001, FR-056): a second opt-in
+/// The registrations the invariant tier composes beside the provider under test: a second opt-in
 /// provider, a stand-in default, and a membership registered directly. None is ever asked for membership; only which
 /// one a host selects matters.
 /// </summary>

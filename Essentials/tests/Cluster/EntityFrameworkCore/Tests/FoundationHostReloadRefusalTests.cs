@@ -79,7 +79,7 @@ public sealed class FoundationHostReloadRefusalTests(FoundationHostFeed feed, Mi
     /// The newer release installed into a running host's feed: the host reconciles, loads it beside the release its shell
     /// runs, and reloads onto it, which the migration it adds refuses with a 409 while the release it replaces keeps
     /// serving; the real tool applies the migration, and the same process then reloads onto the new release. Its
-    /// migrations are the new release's own: the module hands EF Core its assembly (spec 183, FR-021, amended 2026-09-29).
+    /// migrations are the new release's own: the module hands EF Core its assembly.
     /// A name would reach the same release on this host, whose EF Core resolves it through Nuplane's resolution of the
     /// active package set, so the binding is pinned by <c>MigrationsAssemblyAssert</c> rather than here.
     /// </summary>

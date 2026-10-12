@@ -7,7 +7,7 @@ namespace Elsa.Cli.Tests;
 
 /// <summary>
 /// <c>persistence status</c> names the members that cannot read a pending version and lists the cluster's members through the
-/// host's own closure (spec 181, FR-022), as the two-host demo's presenter runs it: the real tool, a packaged host that carries
+/// host's own closure, as the two-host demo's presenter runs it: the real tool, a packaged host that carries
 /// the membership module and a module whose family the database's record has at 1 while this build reads 1 and 2, and a
 /// SQLite database whose membership rows the tests write as a running host's provider would.
 /// </summary>

@@ -2,8 +2,7 @@ namespace Elsa.Cluster.Core.Models;
 
 /// <summary>
 /// The member report section that says which persisted-schema versions this host can read: one entry for each schema
-/// family it has loaded (FR-019). Its source reads family declarations only, so no configuration can change it
-/// (FR-020, MR-002).
+/// family it has loaded. Its source reads family declarations only, so no configuration can change it.
 /// </summary>
 public sealed record ReadabilitySection : MemberReportSection
 {
@@ -21,7 +20,7 @@ public sealed record ReadabilitySection : MemberReportSection
 
     /// <summary>
     /// Whether <paramref name="member"/>'s report meets a schema requirement on <paramref name="family"/>, for the database
-    /// whose finalization record has <paramref name="databaseIdentity"/> (FR-015, FR-023): the entries that speak for the
+    /// whose finalization record has <paramref name="databaseIdentity"/>: the entries that speak for the
     /// database are those for the family that name its identity or name none, and each must satisfy
     /// <paramref name="meets"/>. A member with no such entry meets it vacuously when counted, and not for placement. A
     /// member whose report is unknown, or has no readability section, cannot say what it reads or writes, and never meets it.

@@ -11,7 +11,7 @@ public sealed record CanaryForm(string Name, byte[] Bytes);
 public sealed record CanaryHit(string Location, string Form, long Offset);
 
 /// <summary>
-/// The canary's encoded search (spec 188, T080, research R10). A value can reach a surface in a form a raw search does
+/// The canary's encoded search. A value can reach a surface in a form a raw search does
 /// not see: the EF runtime stores write every CLR string inside <c>ContentJson</c> as Base64 of its UTF-16LE code
 /// units, so a leaked fault message in the runtime database is invisible to a search for the value's text. The scanner
 /// therefore searches for every form of <see cref="FormsOf"/>: the raw UTF-8 and UTF-16LE bytes, the value as the

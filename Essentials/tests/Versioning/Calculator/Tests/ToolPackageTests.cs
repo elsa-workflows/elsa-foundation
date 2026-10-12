@@ -4,7 +4,8 @@ namespace Elsa.Versioning.Calculator.Tests;
 
 /// <summary>
 /// A tool package (<c>PackAsTool</c>) carries the builds of the projects it references instead of declaring ranges on
-/// them, so FR-006a's premise does not hold for it: whatever it carries is package-affecting for it.
+/// them, so the premise that a compatible dependent keeps its published range does not hold for it: whatever it carries
+/// is package-affecting for it.
 /// </summary>
 public sealed class ToolPackageTests : SyntheticHistory
 {
@@ -51,7 +52,7 @@ public sealed class ToolPackageTests : SyntheticHistory
         Assert.Equal(["carries Elsa.Primitives, which advances; a tool package holds the builds of what it references"], computation["dotnet-elsa"].Reasons);
     }
 
-    /// <summary>Without <c>PackAsTool</c> the same references are ordinary ranges, and FR-006a leaves the package alone.</summary>
+    /// <summary>Without <c>PackAsTool</c> the same references are ordinary ranges, and a compatible change leaves the package alone.</summary>
     [Fact]
     public void Without_pack_as_tool_a_referenced_change_does_not_repack_the_package()
     {

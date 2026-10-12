@@ -8,7 +8,7 @@ namespace Elsa.Secrets.Workflows.Features;
 /// <summary>
 /// Resolves workflow activity inputs bound to a secret reference through the Secrets module, each time the activity is
 /// activated, for the execution partition read at activation (on the background drain path, the host's persistence
-/// scope; see spec 188 research R2).
+/// scope).
 /// </summary>
 /// <remarks>
 /// Depends on <c>Secrets</c>, whose <c>ISecretValueResolver</c> the resolver reads through, and on

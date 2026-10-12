@@ -28,7 +28,7 @@ public sealed class SecretsEntityFrameworkCoreFeatureTests
             argument => argument.MemberName == "Secret" && argument.TypedValue.Value is true);
     }
 
-    // Kept beside the composition test (§2.23.1): forwarding and scope, one migrator serves as hosted service and initializer, the repository is scoped.
+    // Kept beside the composition test: forwarding and scope, one migrator serves as hosted service and initializer, the repository is scoped.
     [Fact]
     public void Feature_registers_the_repository_and_sqlite_context()
     {
@@ -76,7 +76,7 @@ public sealed class SecretsEntityFrameworkCoreFeatureTests
             .Single().Name);
     }
 
-    // Kept beside the composition test (§2.23.1): replacement-contract rejection, a prior foreign backend is refused.
+    // Kept beside the composition test: replacement-contract rejection, a prior foreign backend is refused.
     [Fact]
     public void Registration_refuses_a_prior_foreign_backend()
     {

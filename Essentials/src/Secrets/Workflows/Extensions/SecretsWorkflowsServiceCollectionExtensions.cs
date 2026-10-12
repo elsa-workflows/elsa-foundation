@@ -11,7 +11,7 @@ public static class SecretsWorkflowsServiceCollectionExtensions
     /// </summary>
     /// <remarks>
     /// <para>
-    /// <see cref="IRuntimeSecretResolver"/> is a replacement contract (framework constitution §2.6.2): a container has at
+    /// <see cref="IRuntimeSecretResolver"/> is a replacement contract: a container has at
     /// most one, and the runtime registers none. When another <see cref="IRuntimeSecretResolver"/> is already registered
     /// this throws, naming both, as an early diagnostic rather than adding a second registration. One registered after
     /// this one is not seen here; the activities runtime's startup check fails shell activation for it, naming both

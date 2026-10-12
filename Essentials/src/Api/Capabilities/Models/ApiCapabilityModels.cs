@@ -56,7 +56,7 @@ public sealed record ApiCapabilityDeclaration
     public string SourceFeatureId { get; init; }
 
     /// <summary>
-    /// Set while the feature that owns the capability is dormant (spec 182, FR-007): the capability is still advertised,
+    /// Set while the feature that owns the capability is dormant: the capability is still advertised,
     /// marked dormant with this caller-neutral reason, so a client can explain a disabled control rather than hide it. A
     /// typed <c>IApiCapabilitySource</c> sets it from the shared dormancy check's reason, which names no host; it is
     /// <see langword="null"/> while the capability is available.
@@ -86,7 +86,7 @@ public sealed record ApiCapabilityView(
     public const string DormantStatus = "dormant";
 
     /// <summary>
-    /// <see cref="DormantStatus"/> while the feature owning the capability is dormant (spec 182, FR-007 and SC-008), and
+    /// <see cref="DormantStatus"/> while the feature owning the capability is dormant, and
     /// omitted while it is available, so the document of a host with nothing dormant is unchanged.
     /// </summary>
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
