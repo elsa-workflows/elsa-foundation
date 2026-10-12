@@ -25,7 +25,8 @@ namespace Elsa.Workflows.Runtime.Services.Coalescing;
 /// </remarks>
 public sealed class CoalescingRuntimeCheckpointCommitStore(
     CoalescingInner<IRuntimeCheckpointCommitStore> inner,
-    IRuntimeCoalescingSessionAccessor sessionAccessor) : IRuntimeCheckpointCommitStore
+    IRuntimeCoalescingSessionAccessor sessionAccessor,
+    IRuntimeExecutionOwnershipService? ownershipService = null) : IRuntimeCheckpointCommitStore
 {
     private static readonly RuntimeCheckpointPersistenceDecision ImmediateDecision =
         new(RuntimeCheckpointPersistenceMode.Immediate, "Coalesced segment flush.");
@@ -102,6 +103,11 @@ public sealed class CoalescingRuntimeCheckpointCommitStore(
         {
             try
             {
+                // Every other path proves this node still owns the run when the durable store checks the commit's
+                // fence. Nothing reaches the store here, so check the fence before touching the durable queue: a node
+                // that lost the run must not remove the work its new owner is about to run.
+                if (commit.ExpectedFence is { } fence && ownershipService is not null)
+                    await ownershipService.EnsureCurrentAsync(commit.WorkflowExecutionId, fence.FencingToken, cancellationToken);
                 await session.AdvanceInnerQueueAsync(consumeInFlightClaims: true, cancellationToken);
             }
             finally
