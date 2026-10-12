@@ -331,9 +331,11 @@ Every run folds the named checkpoints above of a *drain segment* into one atomic
 a segment grows. Durable ends a segment at each activity, so it commits once per activity; Balanced ends one after the
 host's activity cap; Ephemeral only at boundaries and at the end of the pass. Every shell that composes the runtime API
 has the machinery for this (`AddPersistenceModes`, called by `WorkflowsRuntimeApiFeature` after every feature
-registered its stores); the run's mode, resolved once per drain from the mode it recorded at start, its workflow's
-choice or the host default, decides the segment size. A host composed without the machinery cannot run any mode, so it
-refuses the run before anything runs.
+registered its stores); the run's mode decides the segment size. It is decided once, when the run is started: the start
+dispatcher writes the workflow's choice, or the host default when it chose none, onto the start command, which the
+scheduler queue keeps until the run's first commit records the mode on the run. Every drain resolves the mode from that
+record, or before it from the start, so a run driven again before anything was committed keeps its mode. A host
+composed without the machinery cannot run any mode, so it refuses the run before anything runs.
 
 **Governing invariant — the durable scheduler queue never advances past the last flushed state.** Within a
 segment, checkpoints are buffered in an ambient in-memory working set (an overlay over the real state stores,
@@ -491,7 +493,7 @@ Two ambients remain **by deliberate design**, and neither is a drain-path servic
 - `IRuntimeExecutionOwnershipContextAccessor` — a runtime-internal AsyncLocal lease scope (RT-2/W5
   fencing) that carries the active lease from the drain coordinator to the single commit funnel.
 - `IRuntimeCoalescingSessionAccessor` (**W9**) — an **ambient session flag**, not service
-  location: it marks that a folding session is active for a Balanced or Ephemeral run so the decorators buffer
+  location: it marks the folding session every drain runs in, whatever the run's mode, so the decorators buffer
   intra-drain checkpoints into the in-memory working set. It is registered by `AddPersistenceModes`
   and its gating semantics are preserved exactly ("the durable scheduler queue never advances past the
   last flushed state"). It is a documented exception to "no AsyncLocal in the drain path", distinct in

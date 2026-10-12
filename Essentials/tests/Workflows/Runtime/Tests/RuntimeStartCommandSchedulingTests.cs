@@ -314,7 +314,7 @@ public sealed class RuntimeStartCommandSchedulingTests
                 durableValueStore,
                 new DefaultRuntimePayloadCapturePolicy(),
                 authorization,
-                new RuntimePersistenceModeInspector([]))
+                new RuntimePersistenceModeInspector([new PersistenceModeOptions()]))
             .GetAsync(new GetWorkflowInstance("wfexec-1"), CancellationToken.None);
         var summary = Assert.Single(list.Items);
         Assert.Equal("version-2", summary.DefinitionVersionId);
