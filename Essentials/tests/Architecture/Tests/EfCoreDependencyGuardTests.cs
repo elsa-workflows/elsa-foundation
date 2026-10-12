@@ -9,7 +9,7 @@ namespace Elsa.Architecture.Tests;
 /// EF Core is the destination persistence family, but each implementation still enters
 /// through an explicitly reviewed program issue. This ratchet therefore keeps the currently admitted
 /// surface at the vendor-owned OpenIddict host boundary plus the repository implementations explicitly
-/// admitted: the Secrets EF pilot and the admissions of Program #1665. It reads
+/// admitted by the reviewed records below. It reads
 /// each source project's evaluated Release and Debug restore graphs, so imported, conditional, transitive,
 /// and provider-only EF edges anywhere else under <c>src/</c> fail and name the offender. Each host exception also
 /// validates its exact resolved EF package set. Each replacement changes this guard deliberately with its own
@@ -836,8 +836,8 @@ public sealed class EfCoreDependencyGuardTests
     private sealed record Project(string Name, IReadOnlyDictionary<string, string[]> EfPackagesByConfiguration, bool IsAdmittedRepository);
 
     /// <summary>
-    /// The accepted, now-superseded Secrets EF pilot surface, preserved as the only currently
-    /// admitted first-party implementation while later Program #1665 replacements remain evidence-gated.
+    /// The Secrets EF pilot surface. The pilot's bounded policy is superseded, but its implementation stays
+    /// admitted as the reviewed starting surface while later Program #1665 replacements remain evidence-gated.
     /// <see cref="SecretsEfPersistencePilotArchitectureTests"/> owns the exact package and source inventory.
     /// </summary>
     internal static class Adr0072SecretsEfPilot
@@ -935,7 +935,10 @@ public sealed class EfCoreDependencyGuardTests
         ];
     }
 
-    /// <summary>Activities Design EF replacement admitted by the audited A01-A21 implementation slice.</summary>
+    /// <summary>
+    /// Activities Design EF replacement, admitted by its audited implementation slice: the provider-neutral
+    /// adapter plus its SQLite and provider test projects.
+    /// </summary>
     internal static class Adr0073ActivitiesDesignEf
     {
         public static readonly IReadOnlyDictionary<string, string[]> ExpectedEfPackagesByProject =

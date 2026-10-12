@@ -11,14 +11,13 @@ namespace Elsa.Architecture.Tests;
 /// A real restore and <c>dotnet pack</c>, through the real SDK and NuGet, of the premises the dependency map's
 /// pinned-transitive edges rest on: with <c>CentralPackageTransitivePinningEnabled</c>, pack writes into the nuspec
 /// exactly the packages restore lists under <c>centralTransitiveDependencyGroups</c> in <c>obj/project.assets.json</c>,
-/// at the pinned version;
-/// and the lock file lists those same packages as <c>CentralTransitive</c>, together with the pinned packages the project
-/// reaches only through a <c>PrivateAssets="all"</c> reference, which pack leaves out. The maps generator reads the lock
-/// file for the dependency map and leaves those out as pack does, and the calculator versions packages from the map; were
-/// NuGet to write something else, the map would stop describing the nuspecs, and this fails instead. The production
-/// reader, <see cref="PinnedTransitiveDependencies.Attach"/>, runs over the same fixture's committed lock file, so a
-/// reading that drifted from NuGet's own output would fail here too, not only against the live tree in
-/// <c>NuGetLockFileTests</c>.
+/// at the pinned version; and the lock file lists those same packages as <c>CentralTransitive</c>, together with the
+/// pinned packages the project reaches only through a <c>PrivateAssets="all"</c> reference, which pack leaves out. The
+/// maps generator reads the lock file for the dependency map and leaves those out as pack does, and the calculator
+/// versions packages from the map; were NuGet to write something else, the map would stop describing the nuspecs, and
+/// this fails instead. The production reader, <see cref="PinnedTransitiveDependencies.Attach"/>, runs over the same
+/// fixture's committed lock file, so a reading that drifted from NuGet's own output would fail here too, not only
+/// against the live tree in <c>NuGetLockFileTests</c>.
 /// </summary>
 /// <remarks>
 /// <c>Fixture.App</c> references <c>Fixture.Lib</c>, which references <c>Microsoft.Extensions.Options</c>, so App reaches

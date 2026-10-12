@@ -67,9 +67,9 @@ public sealed class EngineCapabilityCliTests : IDisposable
 
     /// <summary>
     /// The selection changes where the engine comes from and nothing else. A second host names the same
-    /// engine package by hand — an explicit include pattern, the way before the capability selection — and the two artifacts
-    /// are compared byte for byte, migration plan included, so a difference in the engine's recorded package
-    /// facts would fail here.
+    /// engine package by hand — an explicit include pattern, as hosts did before they could select the engine by
+    /// capability — and the two artifacts are compared byte for byte, migration plan included, so a difference in the
+    /// engine's recorded package facts would fail here.
     /// </summary>
     [Fact]
     public void The_artifact_equals_the_one_a_host_that_names_the_engine_by_hand_produces()
@@ -283,7 +283,10 @@ public sealed class EngineCapabilityCliTests : IDisposable
           }
         """;
 
-    /// <summary>The shape before the capability selection: the engine named by hand, as an explicit pinned root beside the modules.</summary>
+    /// <summary>
+    /// The shape hosts used before they could select the engine by capability: the engine named by hand, as an
+    /// explicit pinned root beside the modules.
+    /// </summary>
     private static string NamedEngineFeed =>
         $$"""
             "local-packages": {

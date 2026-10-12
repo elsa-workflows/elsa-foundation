@@ -78,8 +78,8 @@ public sealed class Elsa3ActivityToState(IActivityDefinitionLookup activityLooku
         // NOTE: Elsa3 per-activity designer position/size in
         // source.Metadata.Designer is no longer carried into ActivityNode — display metadata
         // now lives on WorkflowDefinitionVersionLayout sibling as DesignMetadataRecord.
-        // Wiring the importer to populate the layout sibling alongside the version is a
-        // separate task.
+        // Wiring the importer to populate the layout sibling alongside the version is not
+        // done yet, and no issue tracks it.
     }
 
     /// <summary>

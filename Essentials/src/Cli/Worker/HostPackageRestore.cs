@@ -91,8 +91,8 @@ internal sealed record RestoreOutcome(
 }
 
 /// <summary>
-/// The opt-in <c>--restore</c> pass, the exception to the rule that the tool never writes or downloads: everything that
-/// decides whether the tool may populate this host's package set, and every refusal that follows from what
+/// The opt-in <c>--restore</c> pass, the one exception to the rule that the tool never writes under the host's
+/// directories or reaches a feed: everything that decides whether the tool may populate this host's package set, and every refusal that follows from what
 /// the attempt reported.
 /// </summary>
 /// <remarks>

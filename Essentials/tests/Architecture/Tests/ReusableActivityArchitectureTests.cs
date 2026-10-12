@@ -37,7 +37,7 @@ public sealed class ReusableActivityArchitectureTests
 
     /// <summary>
     /// The EF counterpart commits the publication in order through the Activities Design and Runtime
-    /// EF modules' own staging seams, each in its own context. It also owns the A12/A13 activity-upgrade
+    /// EF modules' own staging seams, each in its own context. It also owns the activity-upgrade
     /// bridge, whose apply commits both Design catalogs as one act, so it reaches the Workflows Design EF lane
     /// as well — exactly three EF modules, and never another persistence family.
     /// </summary>

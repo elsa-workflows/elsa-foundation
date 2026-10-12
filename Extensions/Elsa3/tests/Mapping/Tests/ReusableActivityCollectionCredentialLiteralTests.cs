@@ -17,12 +17,12 @@ namespace Elsa3.Mapping.Tests;
 /// <summary>
 /// The credential-literal rule at the Elsa 3 collection import, composed as a host composes it: the apply judges every
 /// activity node the commit would store, in a workflow version and in a reusable activity's body alike, the nodes the
-/// mapping nests
-/// under containers included, down to the deepest nesting the import supports, before it commits anything. The apply is all or nothing, so a literal mapped
-/// onto an input the installed activity declares a credential refuses the whole apply with one 400 naming the rule, and
-/// the node and the input of every refused binding, never the value, and the commit port is never called. The Elsa 3
-/// property may spell the input's name in another case (<c>apiKey</c> for the declared <c>ApiKey</c>): the mapping stores
-/// the binding under the declared key, where the rule finds it.
+/// mapping nests under containers included, down to the deepest nesting the import supports, before it commits
+/// anything. The apply is all or nothing, so a literal mapped onto an input the installed activity declares a
+/// credential refuses the whole apply with one 400 naming the rule, and the node and the input of every refused
+/// binding, never the value, and the commit port is never called. The Elsa 3 property may spell the input's name in
+/// another case (<c>apiKey</c> for the declared <c>ApiKey</c>): the mapping stores the binding under the declared key,
+/// where the rule finds it.
 /// </summary>
 public sealed class ReusableActivityCollectionCredentialLiteralTests : IAsyncDisposable
 {

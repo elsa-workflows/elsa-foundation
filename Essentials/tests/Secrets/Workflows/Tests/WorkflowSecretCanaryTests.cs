@@ -24,7 +24,7 @@ namespace Elsa.Secrets.Workflows.Tests;
 /// after its precondition proved it holds the run (<see cref="CanarySurfaces"/>); in the fused class a run that completes
 /// in one segment (S1, S8, S8b, S8c, S10) keeps no value record of the subject input in the diagnostic snapshots or the
 /// inspector's activity views, and that absence is asserted in place of the precondition that a record shows the
-/// reference. The injection scenarios of A15 (S5 to S10) each remove an upstream protection through a test-only seam
+/// reference. The injection scenarios (S5 to S10) each remove an upstream protection through a test-only seam
 /// (<see cref="SecretsCanaryInjectionFeature"/>), so the protection under test is the only thing between a planted
 /// value and a surface; each asserts its own positive control and leaves out the surface its injection planted. Every
 /// scenario that runs a workflow runs once with runtime diagnostics at <c>DiagnosticSnapshot</c> and once at
@@ -151,7 +151,7 @@ public abstract class WorkflowSecretCanaryTests(CanaryHostFixture fixture, ITest
     }
 
     /// <summary>
-    /// S4b, the notifying variant of S4 (A15, M4): the structural parent's child-notification callback throws the value,
+    /// S4b, the notifying variant of S4: the structural parent's child-notification callback throws the value,
     /// so the parent-notification handler's fault boundary, not the completion handler's, is the one the run reaches.
     /// </summary>
     [Theory]
@@ -175,7 +175,7 @@ public abstract class WorkflowSecretCanaryTests(CanaryHostFixture fixture, ITest
         await AssertFaultMaskedAsync(run, scenario);
     }
 
-    // ---- A15 injection scenarios (S5 to S10) ---------------------------------------------------------------------
+    // ---- Injection scenarios (S5 to S10) -------------------------------------------------------------------------
 
     [Theory]
     [MemberData(nameof(Levels))]
@@ -285,7 +285,7 @@ public abstract class WorkflowSecretCanaryTests(CanaryHostFixture fixture, ITest
     }
 
     /// <summary>
-    /// S8c, the scenario that reaches P8 (A15 names S8, which cannot: execution evidence records root variables, activity
+    /// S8c, the scenario that reaches P8 (S8 cannot: execution evidence records root variables, activity
     /// facts and incident messages, never an activity's inputs, so a value planted on an input never reaches the
     /// enricher's sensitive-value rule). An imported artifact declares a workflow variable sensitive with the planted
     /// value as its initial value, so the root variable frame holds a present, sensitive value, and the enricher's
@@ -470,7 +470,7 @@ public abstract class WorkflowSecretCanaryTests(CanaryHostFixture fixture, ITest
         }
     }
 
-    /// <summary>The persisted input snapshot of the scenario's node holds <paramref name="inputKey"/> withheld as its reference, and no value (A03).</summary>
+    /// <summary>The persisted input snapshot of the scenario's node holds <paramref name="inputKey"/> withheld as its reference, and no value.</summary>
     protected async Task<ValueEnvelope> AssertSnapshotWithholdsAsync(string workflowExecutionId, CanaryScenario scenario, string inputKey)
     {
         var (activities, _) = await Host.ReadRunAsync(workflowExecutionId);
@@ -571,7 +571,7 @@ public sealed class WorkflowSecretCanaryFusedTests(FusedCanaryHostFixture fixtur
 }
 
 /// <summary>
-/// S7 (A15, P5): publish refuses a secret reference on a node that reads its inputs outside activation. A publish refusal
+/// S7 (P5): publish refuses a secret reference on a node that reads its inputs outside activation. A publish refusal
 /// runs no workflow, so it does not depend on the start mode, and runs once, on a discrete host.
 /// </summary>
 [Collection(CanaryHostCollection.Name)]

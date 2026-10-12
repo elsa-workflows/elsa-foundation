@@ -52,7 +52,10 @@ public sealed class EfContractingMigrationActivationGuardTests : IDisposable
         Assert.DoesNotContain(Contract, await AppliedAsync("Sqlite", connection));
     }
 
-    /// <summary>Scenario 3 under <c>AutoMigrate</c>: the retried request enables, and the migrator applies the batch at Prepare.</summary>
+    /// <summary>
+    /// A refused request retried after the family is finalized at the version it waited for, under <c>AutoMigrate</c>:
+    /// the retried request enables, and the migrator applies the batch at Prepare.
+    /// </summary>
     [Fact]
     public async Task Allows_the_same_request_under_automigrate_once_the_family_is_finalized_at_the_version()
     {
@@ -67,8 +70,8 @@ public sealed class EfContractingMigrationActivationGuardTests : IDisposable
     }
 
     /// <summary>
-    /// Scenario 3 under <c>Validate</c>: once finalized the batch is only pending, so the request is refused as any pending
-    /// migration is, pointing at <c>apply</c>, and enables once that has run.
+    /// The same request under <c>Validate</c>, once the family is finalized at that version: the batch is only pending,
+    /// so the request is refused as any pending migration is, pointing at <c>apply</c>, and enables once that has run.
     /// </summary>
     [Fact]
     public async Task Under_validate_once_finalized_the_request_waits_only_for_the_migrations_to_be_applied()

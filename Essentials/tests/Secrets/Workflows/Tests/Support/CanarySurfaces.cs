@@ -27,7 +27,7 @@ public enum CanarySurface
 /// One canary run and what its surfaces must show for it, so each surface's precondition can prove the surface holds
 /// the run before the scan counts.
 /// </summary>
-/// <param name="Scenario">The A15 scenario, named in every failure.</param>
+/// <param name="Scenario">The canary scenario, named in every failure.</param>
 /// <param name="NodeId">The scenario's canary node, an id no other scenario uses.</param>
 /// <param name="DefinitionId">The definition the run's version was published from; null for an imported artifact, which has none.</param>
 /// <param name="SubjectInput">The canary input the scenario binds or plants its value on.</param>

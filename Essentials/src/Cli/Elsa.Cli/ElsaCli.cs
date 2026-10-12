@@ -422,7 +422,7 @@ internal static class ElsaCli
 
     /// <summary>
     /// The one flag that lets this tool write under the host's directories and reach a feed, as an opt-in
-    /// exception. Off by default and implied by nothing: every other flag leaves the
+    /// exception to the rule that it never does either. Off by default and implied by nothing: every other flag leaves the
     /// "never downloads" rule exactly as it was, and this one only acts on a host that records no package
     /// set at all.
     /// </summary>

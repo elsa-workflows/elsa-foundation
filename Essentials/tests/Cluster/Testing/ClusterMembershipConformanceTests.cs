@@ -15,8 +15,7 @@ namespace Elsa.Cluster.Testing;
 /// <para>
 /// The membership tier proves the semantics of the fleet view. The invariant tier proves the membership invariants,
 /// starting from one active provider per host. Two of them, the commit fence and durable delivery of routed work, are
-/// proved over the distributed runtime composed on the provider; they join this suite when placement consumes
-/// membership (#2103).
+/// proved in the runtime tier, over the distributed runtime composed on the provider.
 /// </para>
 /// <para>
 /// A test that needs more than one member reports itself not applicable for a cluster of one.

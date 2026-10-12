@@ -357,7 +357,7 @@ internal sealed class RestoreHost : IDisposable
 
     /// <summary>
     /// Writes the host's own <c>appsettings.json</c>, carrying one or more feed declarations and, when given,
-    /// a <c>Nuplane:Capabilities</c> section (the shape defines) and a
+    /// a <c>Nuplane:Capabilities</c> section in the capability-selection shape and a
     /// <c>Nuplane:HostProvidedPackages</c> list — each written verbatim rather than through a helper, so a
     /// test reads as the operator's file.
     /// </summary>

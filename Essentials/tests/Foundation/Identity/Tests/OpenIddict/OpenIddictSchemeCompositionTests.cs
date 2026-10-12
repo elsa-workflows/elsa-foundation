@@ -19,7 +19,7 @@ using OpenIddict.Validation.AspNetCore;
 namespace Elsa.Foundation.Identity.Tests.OpenIddict;
 
 /// <summary>
-/// B2: scheme registration and composition — the validation handler and selector scheme are registered, the
+/// Scheme registration and composition — the validation handler and selector scheme are registered, the
 /// selector becomes the default authenticate/challenge scheme deterministically regardless of feature
 /// registration order relative to the OIDC module, and per-request scheme selection routes by request shape
 /// (local bearer / external bearer / cookie / anonymous).

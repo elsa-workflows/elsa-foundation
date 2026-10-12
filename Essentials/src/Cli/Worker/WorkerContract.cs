@@ -1223,9 +1223,9 @@ public static class WorkerContextSources
 }
 
 /// <summary>
-/// The CLI's exit codes, mirrored here so the front end can classify a failure of its
-/// own — a missing deps file, a worker that never started — with the same vocabulary the worker and the
-/// host's tooling entry point use.
+/// The CLI's exit codes, mirrored here from <c>EfToolingExitCode</c>, the codes the host's tooling entry point
+/// reports, so the front end can classify a failure of its own — a missing deps file, a worker that never
+/// started — with the same vocabulary the worker and that entry point use.
 /// </summary>
 public static class ToolExitCode
 {

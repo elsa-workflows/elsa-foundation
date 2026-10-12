@@ -101,10 +101,11 @@ public sealed record StoredMember(
         }
         catch (InvalidDataException)
         {
-            // For a membership report, a whole fleet view takes precedence over the usual corruption rule. That rule reports
-            // a readable row whose upcaster fails as corrupt, which would fail the whole membership read. A membership
-            // read must stay alive and never give a partial view, so the entry is uninterpretable instead: it is
-            // counted, reads as MemberReport.Unknown, and so conservatively counts as reading nothing.
+            // For a membership report, the rule that a fresh read never returns part of the fleet takes precedence over
+            // the usual corruption rule. That rule reports a readable row whose upcaster fails as corrupt, which would
+            // fail the whole membership read. A membership read must stay alive and never give a partial view, so the
+            // entry is uninterpretable instead: it is counted, reads as MemberReport.Unknown, and so conservatively
+            // counts as reading nothing.
             return null;
         }
 

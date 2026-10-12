@@ -31,13 +31,13 @@ public sealed class SharedAssemblyClosureGuardTests
     private static IReadOnlyDictionary<string, IReadOnlyList<string>> ElsaReferences { get; } = ProjectGraph.LoadElsaReferences(RepoRoot);
 
     /// <summary>
-    /// The host-composed shares (#2143): the contracts of what a host composes once on its
-    /// own container rather than in a shell - cluster membership, its readability report and the dormancy check's source
-    /// - which a feed-loaded package reaches only if it sees the host's types. They are on
-    /// Line B, not Line A: they cross the host/package boundary for the persistence and cluster domains, not for every
-    /// domain. <c>Elsa.Persistence.Schema</c> is the EF-free half of the schema-family surface; an EF module package
-    /// carries its own copy of <c>Elsa.Persistence.EntityFramework</c>, and without this share its finalization gate
-    /// never finds the host's fleet and its dormancy source never finds its gate.
+    /// The host-composed shares (#2143): the contracts of what a host composes once on its own container rather than in
+    /// a shell - cluster membership, its readability report and the dormancy check's source - which a feed-loaded
+    /// package reaches only if it sees the host's types. They are on Line B, not Line A: they cross the host/package
+    /// boundary for the persistence and cluster domains, not for every domain. <c>Elsa.Persistence.Schema</c> is the
+    /// EF-free half of the schema-family surface; an EF module package carries its own copy of
+    /// <c>Elsa.Persistence.EntityFramework</c>, and without this share its finalization gate never finds the host's
+    /// fleet and its dormancy source never finds its gate.
     /// </summary>
     internal static readonly string[] HostComposedShares = ["Elsa.Cluster.Core", "Elsa.Persistence.Schema"];
 

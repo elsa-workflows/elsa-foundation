@@ -84,10 +84,6 @@ public sealed class SchemaDormancyScenarioTests : IAsyncLifetime
             File.Delete(file);
     }
 
-    /// <summary>
-    /// While held, a request that sets a version 2 field is refused and saves nothing, one without it is saved at 1, and
-    /// after finalization the field is saved and reads back.
-    /// </summary>
     [Fact]
     public async Task While_held_a_request_that_sets_a_version_2_field_is_refused_and_saves_nothing_one_without_it_is_saved_at_1_and_after_finalization_the_field_is_saved_and_reads_back()
     {
@@ -281,7 +277,7 @@ public sealed class SchemaDormancyScenarioTests : IAsyncLifetime
         Assert.DoesNotContain(tables, table => table.Contains("cluster", StringComparison.OrdinalIgnoreCase) || table.Contains("member", StringComparison.OrdinalIgnoreCase));
     }
 
-    /// <summary>Edge case "A host that cannot read the finalized version": not dormancy, and never available.</summary>
+    /// <summary>A host that cannot read the finalized version: not dormancy, and never available.</summary>
     [Fact]
     public async Task A_family_finalized_at_a_version_this_build_cannot_read_is_reported_as_refusing_writes_and_its_requirement_stays_unmet()
     {

@@ -6,7 +6,7 @@ namespace Elsa.Architecture.Tests;
 
 /// <summary>
 /// No <c>.csproj</c> under <c>src/</c> may hand-edit a property that determines the package version.
-/// No <c>&lt;Version&gt;</c> element is hand-edited. In the .NET SDK, <c>Version</c>
+/// The rule names only the <c>&lt;Version&gt;</c> element, but in the .NET SDK <c>Version</c>
 /// defaults to <c>VersionPrefix[-VersionSuffix]</c>, and the <c>PackageVersion</c> property defaults
 /// to <c>Version</c>; a literal in any of those three is a hand-edited package version by another
 /// name, which is why they're covered too. A <c>&lt;PackageVersion Include="…"&gt;</c> item is central
@@ -29,8 +29,8 @@ namespace Elsa.Architecture.Tests;
 /// assembly version of every artifact those produce. #2076 removed the eighteen <c>&lt;Version&gt;</c>
 /// elements that had accumulated; like every other project, those projects now take the package version
 /// <c>PackageVersioning.props</c> derives, and the SDK's default assembly version outside a computed build.
-/// This guard keeps the count at zero. The rule's other clause, no global <c>/p:Version</c> from the packaging
-/// workflow, was met by #2082 and is guarded by <c>PackagesWorkflowTests</c> in the publisher's tests.
+/// This guard keeps the count at zero. The other half of the same requirement, no global <c>/p:Version</c> from
+/// the packaging workflow, was met by #2082 and is guarded by <c>PackagesWorkflowTests</c> in the publisher's tests.
 /// </para>
 /// </summary>
 public sealed class NoLiteralProjectVersionGuardTests
