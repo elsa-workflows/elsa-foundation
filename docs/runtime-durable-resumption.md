@@ -325,14 +325,15 @@ sweep, the pump is bounded on two axes:
 
 [Persistence modes](../website/docs/essentials/persistence-modes.md) is the user guide: what Durable, Balanced
 (the default) and Ephemeral commit, how to choose one per host or per workflow, and what a crash costs in each. This
-section covers the mechanics behind the two folding modes.
+section covers the mechanics behind them.
 
-A Durable run commits every named checkpoint the moment it is decided, which is everything above. A Balanced or
-Ephemeral run instead folds the checkpoints of a *drain segment* into one atomic commit. Every shell that composes the
-runtime API has the machinery for this (`AddPersistenceModes`, called by `WorkflowsRuntimeApiFeature` after every
-feature registered its stores); the run's mode, resolved once per drain from the mode it recorded at start, its
-workflow's choice or the host default, decides whether the drain uses it. A run's mode is never silently changed: a
-host composed without the machinery refuses a Balanced or Ephemeral run instead of running it Durable.
+Every run folds the named checkpoints above of a *drain segment* into one atomic commit; the modes differ in how large
+a segment grows. Durable ends a segment at each activity, so it commits once per activity; Balanced ends one after the
+host's activity cap; Ephemeral only at boundaries and at the end of the pass. Every shell that composes the runtime API
+has the machinery for this (`AddPersistenceModes`, called by `WorkflowsRuntimeApiFeature` after every feature
+registered its stores); the run's mode, resolved once per drain from the mode it recorded at start, its workflow's
+choice or the host default, decides the segment size. A host composed without the machinery cannot run any mode, so it
+refuses the run before anything runs.
 
 **Governing invariant — the durable scheduler queue never advances past the last flushed state.** Within a
 segment, checkpoints are buffered in an ambient in-memory working set (an overlay over the real state stores,
@@ -368,11 +369,13 @@ incident, dispatch or dispatch cancellation, alteration outcome, operational cha
 item still waiting for delivery. The durable queue is still advanced, after checking that this node still owns the
 run, so the finished run is not started again and a node that lost the run cannot remove its new owner's work.
 
-**Activity cap (Balanced only).** `MaxActivitiesPerCommit` (default 50) counts the distinct activity executions a
-segment touches, not checkpoints. A checkpoint that would bring another activity into a full segment forces an
-intermediate fold-and-flush and a **fresh segment starts** (like a durable attempt boundary), so a replayable hot loop
-longer than the cap keeps folding at one durable commit per window instead of degrading to per-checkpoint
-persistence. The cap bounds both replay cost (a crash re-runs at most one window past the last flush) and memory.
+**Activity cap (Durable and Balanced).** Durable's cap is one activity, whatever the host's setting; Balanced's is
+`MaxActivitiesPerCommit` (default 50). The cap counts the distinct activity executions a segment touches, not
+checkpoints, and a ReplaySafe activity's attempt claim never trips it: the claim is taken just before the claimed work
+runs, so the next checkpoint, which records what the work did, takes the fold instead. A checkpoint that would bring
+another activity into a full segment forces an intermediate fold-and-flush and a **fresh segment starts** (like a
+durable attempt boundary), so a replayable hot loop longer than the cap keeps folding at one durable commit per window
+instead of degrading to per-checkpoint persistence. The cap bounds both replay cost (a crash re-runs at most one window past the last flush) and memory.
 Continuation outbox items persisted durably by a cap flush keep delivering from the overlay for the next segment; the
 session writes their overlay outcome back to the durable outbox store at the next flush, so no durable `Pending`
 residue survives the drain to be redelivered by a later sweep. Ephemeral has no cap: a long run that never suspends,
@@ -383,8 +386,8 @@ checkpoints, but they are **replayable from the last flushed commit + durable qu
 recovery generation re-drives the segment-entry item and re-executes the whole buffered segment. This means
 **in-segment activity re-execution after a crash is expected**: the crashed generation persisted no checkpoint,
 so activities in the lost segment run again on recovery. This is the same at-least-once-after-persist guarantee
-the Durable path already gives on the enqueue side (§The idempotency / durability contract); folding simply
-widens the replay window from one checkpoint to one segment. External-facing outbox intents are still delivered
+the enqueue side gives (§The idempotency / durability contract); folding sets the replay window to one segment,
+which under Durable is one activity. External-facing outbox intents are still delivered
 **only post-flush**, so an activity's external effect is never delivered before its durable commit. Convergence
 and the absence of duplicate *terminal* effects are proven by
 `CoalescingCrashConvergenceTests.Coalescing_CrashMidSegment_QueueRetainsSegmentEntry_ThenHonestSweepConvergesWithoutDuplicateEffects`

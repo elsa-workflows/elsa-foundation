@@ -8,7 +8,7 @@ A persistence mode decides when a workflow run's state is committed to the runti
 | `Balanced` (default) | On suspend, fault, completion, end of burst, and every N activities | Activities since the last commit run again (at-least-once) |
 | `Ephemeral` | Only on suspend or fault, plus a completion record unless `RecordCompletion` is off | A run that never suspended leaves only its completion record, or no trace with `RecordCompletion` off |
 
-- **Durable** commits at every runtime checkpoint, which is at least once per activity. It costs the most database work and loses the least on a crash.
+- **Durable** keeps the checkpoints an activity produces in memory while it runs and commits them together, once per activity. It costs the most database work and loses the least on a crash.
 - **Balanced** keeps the checkpoints of a burst of work in memory and commits them together: when the run suspends, faults or completes, when the runtime finishes a pass over the run's queued work (the end of a burst), and after `MaxActivitiesPerCommit` activities (50 by default). It is the default for every workflow that does not choose a mode, on every host that does not configure one.
 - **Ephemeral** commits only when the run suspends or faults, and once when it completes. It has no intermediate commits, however long the run.
 
@@ -61,7 +61,7 @@ For a single workflow, choose **Persistence mode** in the workflow's settings in
 - The workflow's choice wins over the host default, in both directions.
 - The choice is part of the published workflow: changing it takes a new published version.
 - A run keeps the mode it started with, even if the host default changes while it waits.
-- A host that composes the runtime without the persistence modes runs every workflow Durable, and refuses a workflow that chose Balanced or Ephemeral with an error instead of running it in a different mode. Shell hosts always have them.
+- A host that composes the runtime without the persistence modes cannot run any workflow: every run drains through them, Durable included, so the run is refused with an error that names `AddPersistenceModes()`. Shell hosts always have them.
 
 ## What you see afterwards
 
