@@ -3,8 +3,6 @@ using NativeEndpoints;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
-using Microsoft.CodeAnalysis;
-using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.Extensions.DependencyInjection;
 using System.Runtime.CompilerServices;
 using System.Runtime.Loader;
@@ -93,40 +91,7 @@ public sealed class BinderCacheCollectibilityTests
             }
             """;
 
-        var syntaxTree = CSharpSyntaxTree.ParseText(source, new CSharpParseOptions(LanguageVersion.Latest));
-        var references = GetPlatformAssemblyPaths()
-            .Append(typeof(ApiEndpointBase).Assembly.Location)
-            .Where(File.Exists)
-            .Select(path => MetadataReference.CreateFromFile(path))
-            .ToArray();
-
-        var compilation = CSharpCompilation.Create(
-            assemblyName: "Elsa.BinderProbe.Template",
-            syntaxTrees: [syntaxTree],
-            references: references,
-            options: new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary,
-                optimizationLevel: OptimizationLevel.Release,
-                nullableContextOptions: NullableContextOptions.Enable));
-
-        using var output = new MemoryStream();
-        var result = compilation.Emit(output);
-        if (!result.Success)
-        {
-            var diagnostics = string.Join(Environment.NewLine,
-                result.Diagnostics.Where(static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error));
-            throw new InvalidOperationException($"The binder probe fixture failed to compile:{Environment.NewLine}{diagnostics}");
-        }
-
-        return output.ToArray();
-    }
-
-    private static IEnumerable<string> GetPlatformAssemblyPaths()
-    {
-        if (AppContext.GetData("TRUSTED_PLATFORM_ASSEMBLIES") is string trustedPlatformAssemblies)
-            return trustedPlatformAssemblies.Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries)
-                .Distinct(StringComparer.Ordinal);
-
-        return [typeof(object).Assembly.Location, typeof(Enumerable).Assembly.Location];
+        return FixtureCompiler.Compile("Elsa.BinderProbe.Template", source, [typeof(ApiEndpointBase).Assembly]);
     }
 
     private sealed class ProbeEndpointRouteBuilder(IServiceProvider serviceProvider) : IEndpointRouteBuilder

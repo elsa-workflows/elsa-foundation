@@ -6,8 +6,6 @@ using Microsoft.AspNetCore.Http.Metadata;
 using Microsoft.AspNetCore.OpenApi;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.AspNetCore.Routing.Patterns;
-using Microsoft.CodeAnalysis;
-using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.FileProviders;
 using Microsoft.Extensions.Hosting;
@@ -446,31 +444,7 @@ internal static class OpenApiLifetimeFixture
 
             public sealed record Contract(string Value);
             """;
-        var syntaxTree = CSharpSyntaxTree.ParseText(source, new CSharpParseOptions(LanguageVersion.Latest));
-        var references = ((string?)AppContext.GetData("TRUSTED_PLATFORM_ASSEMBLIES"))!
-            .Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries)
-            .Where(File.Exists)
-            .Select(static path => MetadataReference.CreateFromFile(path))
-            .ToArray();
-        var compilation = CSharpCompilation.Create(
-            "Elsa.OpenApi.Lifetime.Template",
-            [syntaxTree],
-            references,
-            new CSharpCompilationOptions(
-                OutputKind.DynamicallyLinkedLibrary,
-                optimizationLevel: OptimizationLevel.Release,
-                nullableContextOptions: NullableContextOptions.Enable));
-        using var output = new MemoryStream();
-        var result = compilation.Emit(output);
-        if (!result.Success)
-        {
-            var diagnostics = string.Join(
-                Environment.NewLine,
-                result.Diagnostics.Where(static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error));
-            throw new InvalidOperationException($"The OpenAPI lifetime fixture failed to compile:{Environment.NewLine}{diagnostics}");
-        }
-
-        return output.ToArray();
+        return FixtureCompiler.Compile("Elsa.OpenApi.Lifetime.Template", source);
     }
 
     private sealed class AcceptsMetadata(Type requestType) : IAcceptsMetadata

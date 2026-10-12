@@ -1,7 +1,6 @@
 using System.Runtime.Loader;
 using Elsa.Foundation.Identity.Core.Authorization;
 using Microsoft.CodeAnalysis;
-using Microsoft.CodeAnalysis.CSharp;
 using Xunit;
 
 namespace Elsa.Architecture.Tests;
@@ -10,28 +9,30 @@ namespace Elsa.Architecture.Tests;
 /// Guards Foundation Identity's permission authorization from being bypassed: first-party code decides permissions
 /// through <c>IPermissionAuthorizationService</c> and the policy metadata it evaluates, never through a FastEndpoints
 /// permission helper or by reading permission claims itself. <see cref="PermissionBypassScanner"/> inspects the IL of
-/// every packable runtime library, so the rule follows the compiled code wherever an endpoint or authorization
-/// context lives rather than a folder convention (framework constitution §2.23.2).
+/// every packable runtime library, so the rule is checked against the compiled code rather than source text, and
+/// follows that code wherever an endpoint or authorization context lives rather than a folder convention.
 /// </summary>
 public sealed class PermissionAuthorizationBoundaryTests
 {
     private const string FixtureAssembly = "Elsa.PermissionBypass.Fixture";
 
     /// <summary>
-    /// The only code allowed to read permission claims: the shared evaluator and the projections that copy the
-    /// normalized grants into a session or a token. Each entry must still exempt a read, so the list cannot outlive
-    /// the code it excuses.
+    /// The only methods allowed to read permission claims: the shared evaluator and the projections that copy the
+    /// normalized grants into a session, a token or an identity. Each entry must still exempt a read, so the list
+    /// cannot outlive the code it excuses.
     /// </summary>
     internal static readonly ReviewedPermissionClaimReader[] ReviewedReaders =
     [
-        new("Elsa.Foundation.Identity", "Elsa.Foundation.Identity.Authorization.ClaimsPermissionEvaluator", null,
+        new("Elsa.Foundation.Identity", "Elsa.Foundation.Identity.Authorization.ClaimsPermissionEvaluator", "EvaluateAsync",
             "The shared evaluator behind IPermissionAuthorizationService: matching granted permission claims is its job."),
         new("Elsa.Foundation.Identity.Api", "Elsa.Foundation.Identity.Api.FoundationIdentityApi", "HandleTokenAsync",
             "Token issuance copies the normalized principal's grants into the issued token."),
-        new("Elsa.Foundation.Identity.Api", "Elsa.Foundation.Identity.Api.Services.ClaimsAuthSessionService", null,
+        new("Elsa.Foundation.Identity.Api", "Elsa.Foundation.Identity.Api.Services.ClaimsAuthSessionService", "GetAsync",
             "Projects the normalized principal's grants into the session the client displays."),
-        new("Elsa.Foundation.Identity.AspNetCoreIdentity", "Elsa.Foundation.Identity.AspNetCoreIdentity.Services.DefaultAuthSessionService", null,
-            "Projects the normalized principal's grants into the session the client displays.")
+        new("Elsa.Foundation.Identity.AspNetCoreIdentity", "Elsa.Foundation.Identity.AspNetCoreIdentity.Services.DefaultAuthSessionService", "GetAsync",
+            "Projects the normalized principal's grants into the session the client displays."),
+        new("Elsa.Foundation.Identity.AspNetCoreIdentity", "Elsa.Foundation.Identity.AspNetCoreIdentity.Services.IdentityClaimsProjector", "ApplyUserClaimsAsync",
+            "Projects a user's grants onto the identity and checks for an existing permission claim before adding it.")
     ];
 
     /// <summary>The HTTP authorization contexts, which must ask the authorization service rather than read grants.</summary>
@@ -93,6 +94,15 @@ public sealed class PermissionAuthorizationBoundaryTests
         Assert.Equal(FixtureAssembly, finding.Assembly);
         Assert.Equal("Injected.Endpoint", finding.Type);
         Assert.Equal(method, finding.Method);
+    }
+
+    [Theory]
+    [MemberData(nameof(LookalikeCaseNames))]
+    public void A_value_that_only_looks_like_a_permission_is_not_reported(string caseName)
+    {
+        var scan = ScanFixture(FixtureAssembly, LookalikeCases[caseName]);
+
+        Assert.Empty(scan.Findings);
     }
 
     [Fact]
@@ -159,51 +169,24 @@ public sealed class PermissionAuthorizationBoundaryTests
             public sealed class ClaimsAuthSessionService : Endpoint<EmptyRequest, EmptyResponse>
             {
                 public override void Configure() => Permissions("identity.session.read");
+
+                public void GetAsync() => Permissions("identity.session.read");
             }
             """);
 
         Assert.Empty(scan.Exempted);
-        Assert.Equal(PermissionBypassScanner.FastEndpointsPermission, Assert.Single(scan.Findings).Code);
+        Assert.Equal(2, scan.Findings.Count);
+        Assert.All(scan.Findings, finding => Assert.Equal(PermissionBypassScanner.FastEndpointsPermission, finding.Code));
     }
 
     public static TheoryData<string> BypassCaseNames => [.. BypassCases.Keys];
 
+    public static TheoryData<string> LookalikeCaseNames => [.. LookalikeCases.Keys];
+
     private static readonly Dictionary<string, (string Source, string Code, string Method)> BypassCases = new()
     {
-        ["FastEndpoints Permissions"] = FastEndpointsHelper("""
-            namespace FastEndpoints
-            {
-                public abstract class Endpoint
-                {
-                    protected void Permissions(params string[] values) { }
-                }
-            }
-
-            namespace Injected
-            {
-                public sealed class Endpoint : FastEndpoints.Endpoint
-                {
-                    public void Configure() => Permissions("read");
-                }
-            }
-            """),
-        ["FastEndpoints PermissionsAll"] = FastEndpointsHelper("""
-            namespace FastEndpoints
-            {
-                public abstract class Endpoint
-                {
-                    protected void PermissionsAll(params string[] values) { }
-                }
-            }
-
-            namespace Injected
-            {
-                public sealed class Endpoint : FastEndpoints.Endpoint
-                {
-                    public void Configure() => PermissionsAll("read");
-                }
-            }
-            """),
+        ["FastEndpoints Permissions"] = StandInFastEndpointsHelper("Permissions"),
+        ["FastEndpoints PermissionsAll"] = StandInFastEndpointsHelper("PermissionsAll"),
         ["FastEndpoints package Permissions"] = FastEndpointsHelper("""
             using FastEndpoints;
 
@@ -238,12 +221,23 @@ public sealed class PermissionAuthorizationBoundaryTests
         ["FindFirstValue extension"] = DirectRead(
             "return ClaimExtensions.FindFirstValue(user, IdentityClaimTypes.Permission) is not null;",
             declarations: "public static class ClaimExtensions { public static string? FindFirstValue(this ClaimsPrincipal principal, string type) => null; }"),
+        ["IPrincipal extension"] = DirectRead(
+            "return PrincipalLookups.FindFirstValue(user, IdentityClaimTypes.Permission) is not null;",
+            declarations: "public static class PrincipalLookups { public static string? FindFirstValue(this IPrincipal principal, string type) => null; }"),
+        ["IIdentity extension"] = DirectRead(
+            "return IdentityLookups.HasClaim(user.Identity!, IdentityClaimTypes.Permission, \"read\");",
+            declarations: "public static class IdentityLookups { public static bool HasClaim(this IIdentity identity, string type, string value) => false; }"),
         ["FindAll"] = DirectRead("return user.FindAll(IdentityClaimTypes.Permission).Any();"),
         ["FindAll predicate"] = DirectRead("return user.FindAll(claim => claim.Type == IdentityClaimTypes.Permission).Any();"),
         ["HasClaim"] = DirectRead("return user.HasClaim(IdentityClaimTypes.Permission, \"read\");"),
         ["ClaimsIdentity HasClaim"] = DirectRead("return ((ClaimsIdentity)user.Identity!).HasClaim(IdentityClaimTypes.Permission, \"read\");"),
         ["Claims Any"] = DirectRead("return user.Claims.Any(claim => claim.Type == IdentityClaimTypes.Permission && claim.Value == \"read\");"),
         ["Claims Where"] = DirectRead("return user.Claims.Where(claim => claim.Type == IdentityClaimTypes.Permission).Select(claim => claim.Value).Contains(\"read\");"),
+        ["Predicate factory"] = DirectRead("return user.Claims.Any(OfType(IdentityClaimTypes.Permission));",
+            members: "private static Func<Claim, bool> OfType(string type) => claim => claim.Type == type;"),
+        ["Predicate factory with a permission constant"] = DirectRead("return user.Claims.Any(HasValue(PermissionNames.Read));",
+            declarations: "public static class PermissionNames { public const string Read = \"workflow.read\"; }",
+            members: "private static Func<Claim, bool> HasValue(string value) => claim => claim.Value == value;"),
         ["Local alias"] = DirectRead("""
             var permissionType = IdentityClaimTypes.Permission;
             return user.FindAll(permissionType).Any();
@@ -256,10 +250,27 @@ public sealed class PermissionAuthorizationBoundaryTests
             members: "private static readonly string ClaimType = IdentityClaimTypes.Permission;"),
         ["Auto-property alias"] = DirectRead("return user.FindFirst(ClaimType) is not null;",
             members: "private string ClaimType { get; } = IdentityClaimTypes.Permission;"),
+        ["Permission returned by a helper"] = DirectRead("return user.FindAll(ClaimType()).Any();",
+            members: "private static string ClaimType() => IdentityClaimTypes.Permission;"),
         ["Provider permission constant"] = DirectRead("return user.HasClaim(IdentityClaimTypes.Permission, PermissionNames.WorkflowRead);",
             declarations: "public static class PermissionNames { public const string WorkflowRead = \"workflow.read\"; }"),
         ["Provider permission constant alone"] = DirectRead("return user.HasClaim(\"scope\", ProviderGrants.WorkflowReadPermission);",
             declarations: "public static class ProviderGrants { public const string WorkflowReadPermission = \"workflow.read\"; }"),
+        ["Helper parameter"] = DirectRead("return Has(user, IdentityClaimTypes.Permission);",
+            members: "private static bool Has(ClaimsPrincipal principal, string type) => principal.HasClaim(type, \"read\");"),
+        ["Helper parameter through a closure"] = DirectRead("return Has(user, IdentityClaimTypes.Permission);",
+            members: "private static bool Has(ClaimsPrincipal principal, string type) => principal.Claims.Any(claim => claim.Type == type);"),
+        ["Async helper parameter"] = DirectRead("return HasAsync(user, IdentityClaimTypes.Permission).GetAwaiter().GetResult();",
+            members: "private static async Task<bool> HasAsync(ClaimsPrincipal principal, string type) { await Task.Yield(); return principal.HasClaim(type, \"read\"); }"),
+        ["Helper chain in another type"] = DirectRead("return ClaimChecks.Has(user, IdentityClaimTypes.Permission);",
+            declarations: """
+                public static class ClaimChecks
+                {
+                    public static bool Has(ClaimsPrincipal principal, string type) => Check(principal, type);
+
+                    private static bool Check(ClaimsPrincipal principal, string type) => principal.FindAll(type).Any();
+                }
+                """),
         ["Async method"] = ("""
             using System.Security.Claims;
             using System.Threading.Tasks;
@@ -278,18 +289,58 @@ public sealed class PermissionAuthorizationBoundaryTests
             """, PermissionBypassScanner.DirectPermissionClaim, "AuthorizeAsync")
     };
 
+    private static readonly Dictionary<string, string> LookalikeCases = new()
+    {
+        // The record's tenant is not a permission value just because the record's name contains "Permission".
+        ["Tenant of a permission-named record"] = EndpointSource(
+            "return TenantMatches(new PermissionEvaluationContext(user, \"workflow.read\", \"tenant-1\"));",
+            members: "private static bool TenantMatches(PermissionEvaluationContext context) => context.Principal.HasClaim(IdentityClaimTypes.TenantId, context.TenantId!);"),
+        // A permission-named service's settings are not permission values: only a string or delegate receiver passes
+        // its value on to a call's result.
+        ["Setting of a permission-named service"] = EndpointSource(
+            "return user.FindFirst(_permissionOptions.TenantClaimType) is not null;",
+            declarations: "public sealed class PermissionOptions { public string TenantClaimType { get; set; } = \"tenant\"; }",
+            members: "private readonly PermissionOptions _permissionOptions = new();"),
+        // A bare wildcard constant does not make every "*" literal a permission value.
+        ["Wildcard literal"] = EndpointSource(
+            "return user.Claims.Any(claim => claim.Value.EndsWith(\"*\"));",
+            declarations: "public static class IdentitySeed { public const string AllAccessPermission = \"*\"; }")
+    };
+
     /// <summary>A case whose <c>Injected.Endpoint.Configure</c> calls a FastEndpoints permission helper.</summary>
     private static (string Source, string Code, string Method) FastEndpointsHelper(string source) =>
         (source, PermissionBypassScanner.FastEndpointsPermission, "Configure");
 
+    /// <summary>A case whose helper is declared in a stand-in <c>FastEndpoints</c> namespace rather than the package.</summary>
+    private static (string Source, string Code, string Method) StandInFastEndpointsHelper(string helper) => FastEndpointsHelper($$"""
+        namespace FastEndpoints
+        {
+            public abstract class Endpoint
+            {
+                protected void {{helper}}(params string[] values) { }
+            }
+        }
+
+        namespace Injected
+        {
+            public sealed class Endpoint : FastEndpoints.Endpoint
+            {
+                public void Configure() => {{helper}}("read");
+            }
+        }
+        """);
+
     /// <summary>A case whose <c>Injected.Endpoint.Authorize</c> reads permission claims in <paramref name="body"/>.</summary>
     private static (string Source, string Code, string Method) DirectRead(string body, string declarations = "", string members = "") =>
-        (Authorize(body, declarations, members), PermissionBypassScanner.DirectPermissionClaim, "Authorize");
+        (EndpointSource(body, declarations, members), PermissionBypassScanner.DirectPermissionClaim, "Authorize");
 
     /// <summary>A fixture whose <c>Injected.Endpoint.Authorize</c> runs <paramref name="body"/> against <c>user</c>.</summary>
-    private static string Authorize(string body, string declarations = "", string members = "") => $$"""
+    private static string EndpointSource(string body, string declarations = "", string members = "") => $$"""
+        using System;
         using System.Linq;
         using System.Security.Claims;
+        using System.Security.Principal;
+        using System.Threading.Tasks;
         using Elsa.Foundation.Identity.Core.Authorization;
 
         namespace Injected;
@@ -322,23 +373,31 @@ public sealed class PermissionAuthorizationBoundaryTests
         }
         """;
 
-    /// <summary>Compiles <paramref name="source"/> to IL in memory, loads it into a collectible context and scans it.</summary>
+    /// <summary>
+    /// Compiles <paramref name="source"/> with and without optimization, scans each build's IL in a collectible
+    /// context, and asserts both scans agree, since the libraries the guard scans are built in either configuration.
+    /// </summary>
     private static PermissionBypassScan ScanFixture(string assemblyName, string source)
     {
-        var compilation = CSharpCompilation.Create(
-            assemblyName,
-            [CSharpSyntaxTree.ParseText(source, new CSharpParseOptions(LanguageVersion.Preview))],
-            FixtureReferences.Value,
-            new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, nullableContextOptions: NullableContextOptions.Enable));
-        using var image = new MemoryStream();
-        var emitted = compilation.Emit(image);
-        Assert.True(emitted.Success, string.Join(Environment.NewLine, emitted.Diagnostics.Where(diagnostic => diagnostic.Severity == DiagnosticSeverity.Error)));
+        var debug = ScanCompiled(assemblyName, source, OptimizationLevel.Debug);
+        var release = ScanCompiled(assemblyName, source, OptimizationLevel.Release);
 
-        image.Position = 0;
+        Assert.Equal(Outcome(debug), Outcome(release));
+        return release;
+    }
+
+    private static PermissionBypassScan ScanCompiled(string assemblyName, string source, OptimizationLevel optimization)
+    {
+        var image = FixtureCompiler.Compile(
+            assemblyName,
+            source,
+            [typeof(FastEndpoints.EmptyRequest).Assembly, typeof(IdentityClaimTypes).Assembly],
+            optimization);
         var context = new AssemblyLoadContext($"permission-bypass-{Guid.NewGuid():N}", isCollectible: true);
         try
         {
-            return PermissionBypassScanner.Scan([context.LoadFromStream(image)], ReviewedReaders);
+            using var stream = new MemoryStream(image, writable: false);
+            return PermissionBypassScanner.Scan([context.LoadFromStream(stream)], ReviewedReaders);
         }
         finally
         {
@@ -346,13 +405,11 @@ public sealed class PermissionAuthorizationBoundaryTests
         }
     }
 
-    private static readonly Lazy<MetadataReference[]> FixtureReferences = new(() =>
-    {
-        var platform = ((string)AppContext.GetData("TRUSTED_PLATFORM_ASSEMBLIES")!).Split(Path.PathSeparator);
-        var packages = new[] { typeof(FastEndpoints.EmptyRequest), typeof(IdentityClaimTypes) }.Select(type => type.Assembly.Location);
-        return [.. platform.Concat(packages)
-            .Where(File.Exists)
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .Select(path => MetadataReference.CreateFromFile(path))];
-    });
+    /// <summary>What a scan concluded, without the IL offsets that differ between optimized and unoptimized builds.</summary>
+    private static string Outcome(PermissionBypassScan scan) => string.Join(Environment.NewLine,
+    [
+        .. scan.Findings.Select(finding => $"finding {finding.Code} {finding.Type}.{finding.Method}: {finding.Message}").Order(StringComparer.Ordinal),
+        .. scan.Exempted.Select(entry => $"exempted {entry.Finding.Code} {entry.Finding.Type}.{entry.Finding.Method}: {entry.Finding.Message}").Order(StringComparer.Ordinal),
+        .. scan.ClaimLookupsByType.Select(entry => $"lookups {entry.Key} {entry.Value}").Order(StringComparer.Ordinal)
+    ]);
 }

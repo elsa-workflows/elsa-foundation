@@ -83,11 +83,17 @@ a stable resource object and remain in `IPermissionResourceHandler` implementati
 
 The architecture suite's `PermissionAuthorizationBoundaryTests` checks this in the compiled IL of every
 packable runtime library. A method fails it when it passes a permission value to a claims lookup
-(`FindFirst`, `FindFirstValue`, `FindAll`, `HasClaim`), hands a principal's `Claims` to a call together
-with a permission value, or calls a FastEndpoints `Permissions`/`PermissionsAll` helper. Only the
-reviewed list in that test may read permission claims: the claims evaluator, token issuance and the two
-session projections. `PermissionBypassScanner` documents what the IL scan does not follow, such as claim
-types held in arrays or claims enumerated by a loop; review still covers those.
+(`FindFirst`, `FindFirstValue`, `FindAll`, `HasClaim`, including static helpers of those names that take
+a principal or identity), hands a principal's `Claims` to a call together with a permission value,
+passes a permission value to a helper that does either with it, or calls a FastEndpoints
+`Permissions`/`PermissionsAll` helper. A permission value is the permission claim type, a
+permission-named constant whose value reads like a namespaced key (`workflow-design.read`; not the bare
+`*`), a permission-named field, or anything assigned from one or returned by a call that takes one. Only
+the methods on the reviewed list in that test may read permission claims: the claims evaluator, token
+issuance, the two session projections and the identity projection. `PermissionBypassScanner` lists what
+the scan does not follow (array and collection elements, claims enumerated by a loop, a claims
+collection handed to a helper, calls through interfaces, virtual methods or delegates); review still
+covers those.
 
 The original synchronous context interfaces and their legacy adapters were removed by #2566 (ADR 0080
 D4); the async contexts are the only request authorization contexts.
