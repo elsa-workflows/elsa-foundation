@@ -89,7 +89,7 @@ public sealed class RuntimeCheckpointCommitter
 
         if (activity is not null)
         {
-            activity.SetTag(WorkflowEngineTelemetry.CheckpointPersistenceModeTag, decision.Mode.ToString());
+            activity.SetTag(WorkflowEngineTelemetry.CheckpointPersistenceDecisionTag, decision.Mode.ToString());
             activity.SetTag(WorkflowEngineTelemetry.CheckpointMandatoryTag, IsMandatoryCheckpoint(commit.Checkpoint));
             activity.SetTag(WorkflowEngineTelemetry.CheckpointPostCommitIntentsTag, commit.PostCommitIntents.Count);
         }

@@ -65,11 +65,6 @@ export function readStoredPersistenceMode(strategyOptions: unknown): string | nu
   return typeof persistenceMode === "string" && persistenceMode.trim().length > 0 ? persistenceMode : null;
 }
 
-export function readPersistenceMode(strategyOptions: unknown): PersistenceMode | null {
-  const stored = readStoredPersistenceMode(strategyOptions);
-  return isPersistenceMode(stored) ? stored : null;
-}
-
 // Choosing the host default removes the field rather than storing null, so the workflow carries no choice at all.
 export function updatePersistenceMode(strategyOptions: unknown, mode: PersistenceMode | null): WorkflowStrategyOptions {
   const { persistenceMode: _previous, ...others } = isPlainRecord(strategyOptions) ? strategyOptions : {};

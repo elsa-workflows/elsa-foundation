@@ -64,7 +64,7 @@ the ingestion domain: nothing that could carry user payload or a security token 
 | `elsa.handler.name` | dispatch | The selected scheduler work handler's name. |
 | `elsa.outcome` | dispatch, activity.execute, checkpoint.commit | `completed` or `faulted`. |
 | `elsa.checkpoint.id` | checkpoint.commit | The committed checkpoint's id. |
-| `elsa.checkpoint.persistence_mode` | checkpoint.commit | The persistence mode the policy decided (e.g. `Persist`). |
+| `elsa.checkpoint.persistence_decision` | checkpoint.commit | What the persistence policy decided for the checkpoint: `Immediate`, `Deferred` or `Skip`. Not the run's persistence mode. |
 | `elsa.checkpoint.mandatory` | checkpoint.commit | Whether the checkpoint is mandatory. |
 | `elsa.checkpoint.post_commit_intents` | checkpoint.commit | Count of post-commit intents folded into the commit. |
 
