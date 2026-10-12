@@ -29,8 +29,11 @@ internal static class ReferenceWorkflows
     private static readonly ValueProtectionPolicy Inline = ValueProtectionPolicy.InstanceInline;
 
     /// <summary>A Sequence of ten WriteLine activities.</summary>
-    public static WorkflowExecutable WriteLineSequence() =>
-        Executable("writeline-sequence", Sequence("sequence", Enumerable.Range(1, 10)
+    public static WorkflowExecutable WriteLineSequence() => WriteLineSequence("writeline-sequence", lines: 10);
+
+    /// <summary>A Sequence of <paramref name="lines"/> WriteLine activities.</summary>
+    public static WorkflowExecutable WriteLineSequence(string artifactId, int lines) =>
+        Executable(artifactId, Sequence("sequence", Enumerable.Range(1, lines)
             .Select(line => Clr($"write-{line}", typeof(WriteLine), [("text", $"line {line}")]))
             .ToArray()));
 
