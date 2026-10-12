@@ -1,5 +1,5 @@
 #!/bin/bash
-# Prepares Claude Code cloud sessions (including the UX fix routine, docs/agents/ux-fix-routine.md) to build and test
+# Prepares Claude Code cloud sessions that start in Studio/ to build and test
 # Studio: installs a .NET 10 SDK and activates the pnpm version pinned in package.json. Idempotent; never blocks the
 # session: when a download fails it says why and exits 0.
 set -euo pipefail
