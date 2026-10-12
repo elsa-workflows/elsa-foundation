@@ -91,7 +91,7 @@ public sealed class EfDurableTimerStoreTests
 
         // A module version whose schema moved almost certainly moved the row shape with it, so the
         // revision this build recomputes is exactly what is most likely to disagree. Skew is the cause,
-        // so skew is what the operator is told - not corruption they would go looking for (ADR 0077, #1950).
+        // so skew is what the operator is told - not corruption they would go looking for (#1950).
         await fixture.Context.DurableTimers.ExecuteUpdateAsync(row => row
             .SetProperty(x => x.SchemaVersion, "2")
             .SetProperty(x => x.Revision, 0L));

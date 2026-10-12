@@ -3,7 +3,7 @@ using Elsa.Workflows.Runtime.Core.Models;
 namespace Elsa.Workflows.Runtime.Core.Contracts;
 
 /// <summary>
-/// A narrow trigger-serving-projection notification seam (spec 089 B). The trigger indexer invokes every
+/// A narrow trigger-serving-projection notification seam. The trigger indexer invokes every
 /// registered observer after it has replaced an artifact's bindings. Publication reconciliation also invokes
 /// observers after prepared bindings change authority. Observers exist so a projection derived from the trigger
 /// index (e.g. the per-shell HTTP route table) can be refreshed without either producer taking a dependency on

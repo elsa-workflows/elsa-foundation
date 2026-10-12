@@ -3,7 +3,7 @@ using Elsa.Workflows.Runtime.Core.Models;
 namespace Elsa.Workflows.Runtime.Core.Exceptions;
 
 /// <summary>
-/// Thrown when a dispatch is refused by the Source Reference gate (ADR 0040): the artifact exists, but no reference
+/// Thrown when a dispatch is refused by the Source Reference gate: the artifact exists, but no reference
 /// lets it be dispatched under the requested <see cref="WorkflowExecutableReferenceScope"/>. The <see cref="Reason"/>
 /// distinguishes "the artifact has no live reference of the required scope" from "the only matching reference has
 /// expired", so callers (and Studio) can tell an un-published/retired artifact apart from a lapsed test run.
@@ -44,7 +44,7 @@ public sealed class WorkflowExecutableReferenceRejectedException : Exception
         };
 }
 
-/// <summary>Why the Source Reference gate refused a dispatch (ADR 0040).</summary>
+/// <summary>Why the Source Reference gate refused a dispatch.</summary>
 public enum WorkflowExecutableReferenceRejectionReason
 {
     /// <summary>The artifact carries references, but none is a live (non-retired, non-expired) reference of the required scope.</summary>

@@ -19,7 +19,7 @@ public interface IWorkflowReconciliationSource
 
     /// <summary>
     /// When <see langword="true"/>, the source asks for the latest reconciled version of each
-    /// definition it contributes to be published after a successful pass (spec 147). The flag is
+    /// definition it contributes to be published after a successful pass. The flag is
     /// snapshotted per contribution onto <c>WorkflowVersionSourceClaim.PublishRequested</c>; the
     /// publish step itself lives on the Publishing side of the seam and only acts when a publishing
     /// feature subscribing to <c>WorkflowVersionsReconciled</c> is composed. Defaults to

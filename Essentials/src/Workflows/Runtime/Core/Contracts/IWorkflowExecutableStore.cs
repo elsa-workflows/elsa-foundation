@@ -3,7 +3,7 @@ using Elsa.Workflows.Runtime.Core.Models;
 namespace Elsa.Workflows.Runtime.Core.Contracts;
 
 /// <summary>
-/// The single content-addressed artifact store (ADR 0038/0040). Artifacts are immutable and one row per distinct
+/// The single content-addressed artifact store. Artifacts are immutable and one row per distinct
 /// behavior; scope, expiry and deletion are reference facts (see <see cref="IWorkflowExecutableSourceReferenceStore"/>),
 /// so this store keeps only the minimal artifact surface. Saving is idempotent by <c>ArtifactId</c>.
 /// </summary>

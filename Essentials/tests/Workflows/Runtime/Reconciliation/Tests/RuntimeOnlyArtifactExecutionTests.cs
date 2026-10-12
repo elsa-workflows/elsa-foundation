@@ -7,7 +7,7 @@ using Xunit;
 namespace Elsa.Workflows.Runtime.Reconciliation.Tests;
 
 /// <summary>
-/// US1's executable boundary: portable bytes are enough for a runtime-only engine to import, activate, and run a
+/// The executable boundary: portable bytes are enough for a runtime-only engine to import, activate, and run a
 /// workflow without composing the design catalog, publishing bridge, or compiler.
 /// </summary>
 public sealed class RuntimeOnlyArtifactExecutionTests : IDisposable

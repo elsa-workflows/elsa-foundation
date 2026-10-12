@@ -9,8 +9,7 @@ namespace Elsa.Workflows.Design.Reconciliation.Git.Services;
 
 /// <summary>
 /// Canonicalization helpers that make git's on-disk file a pure-whitespace rendering of the deterministic
-/// payload serialization, so content identity (a hash) is stable across the compact ↔ indented forms
-/// (ADR 0034 D3/D8; spec 085 R4).
+/// payload serialization, so content identity (a hash) is stable across the compact ↔ indented forms.
 ///
 /// The on-disk file is the <em>indented</em> canonical state; content identity is the SHA-256 of the
 /// <em>compact</em> canonical form. "Strip whitespace" is done by re-parsing to a <see cref="JsonNode"/>

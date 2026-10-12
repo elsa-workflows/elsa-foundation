@@ -60,5 +60,5 @@ public sealed class Handler(
             view.Y,
             view.Width,
             view.Height,
-            view.AdditionalProperties); // opaque JsonElement, kept verbatim (ADR 0035 D3)
+            view.AdditionalProperties); // opaque JsonElement, kept verbatim
 }

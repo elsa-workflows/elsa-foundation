@@ -13,8 +13,8 @@ namespace Elsa.Workflows.Design.Reconciliation;
 /// Workflow-design reconciliation base feature. Mirrors the Activities-side pattern: abstract
 /// base that registers the reconciler service, options, and the universal handler; concrete
 /// features extend by overriding <see cref="Sources"/> to bring their own
-/// <see cref="IWorkflowReconciliationSource"/> implementations. Per framework §2.5,
-/// inheritance is the sanctioned cross-feature structural coupling — source-variant features
+/// <see cref="IWorkflowReconciliationSource"/> implementations.
+/// Inheritance is the sanctioned cross-feature structural coupling — source-variant features
 /// (Elsa3 import, file-system, git, CRM pull, …) extend this base rather than ship as
 /// sibling sub-packages.
 /// </summary>
@@ -35,8 +35,7 @@ public abstract class WorkflowsDesignReconciliationFeature : IShellFeature
 
         // Arm the reconcile lifecycle: the startup task IS the trigger for a pass, so it belongs with
         // the reconciler registration. Registering it here (rather than per source-variant feature)
-        // means enabling ANY concrete reconciliation feature activates the previously-dormant lifecycle
-        // (spec 085 R3 / ADR 0034 Consequence 4).
+        // means enabling ANY concrete reconciliation feature activates the previously-dormant lifecycle.
         services.AddScoped<IStartupTask, WorkflowsVersionReconcilerStartupTask>();
 
         services.AddEventHandlersFrom(typeof(WorkflowsDesignReconciliationFeature).Assembly);

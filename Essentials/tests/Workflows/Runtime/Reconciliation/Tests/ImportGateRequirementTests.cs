@@ -8,7 +8,7 @@ using Xunit;
 namespace Elsa.Workflows.Runtime.Reconciliation.Tests;
 
 /// <summary>
-/// US2 scenarios 1 and 2, and the third gate axis that neither of FR-B-005a's two axes covers: an artifact this
+/// The requirements gate, including the third axis that neither of the two declared axes covers: an artifact this
 /// runtime cannot execute is refused <b>at import</b>, with a diagnostic that names what is missing.
 /// </summary>
 /// <remarks>
@@ -122,13 +122,13 @@ public sealed class ImportGateRequirementTests : IDisposable
     [Fact]
     public async Task An_artifact_whose_descriptor_carries_a_clr_type_name_instead_of_a_consumer_key_is_rejected_at_import()
     {
-        // The third axis (the gap found while writing T071). WorkflowExecutionHarness.NewProbeNode emits the
+        // The third axis. WorkflowExecutionHarness.NewProbeNode emits the
         // descriptor's *CLR type name* and relies on the harness rewriting it to the consumer key when it pins
         // contracts on save. The importer deliberately never rewrites a content-addressed artifact — the bytes are
         // the identity — so an envelope carrying the unpinned form parses, validates, hashes to its own id and
         // (before this gate) activated cleanly, only to fault at *first execution* with
-        // UnknownActivityConsumerException. That is precisely the production surprise US2 exists to prevent, on an
-        // axis FR-B-005a's two do not check. Building the node unpinned here is deliberate, not an oversight.
+        // UnknownActivityConsumerException. That is precisely the production surprise the gate exists to prevent, on an
+        // axis the two declared axes do not check. Building the node unpinned here is deliberate, not an oversight.
         await using var harness = ArtifactImportHarness.Build(_mount);
         var unpinned = WorkflowExecutionHarness.NewProbeNode("node-root");
         Assert.Equal(typeof(ClrActivityDescriptor).FullName, unpinned.DescriptorType);

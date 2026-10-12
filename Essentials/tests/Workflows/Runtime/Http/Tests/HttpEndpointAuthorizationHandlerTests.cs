@@ -11,8 +11,8 @@ using Xunit;
 namespace Elsa.Workflows.Runtime.Http.Tests;
 
 /// <summary>
-/// Unit coverage for the two shipped <c>IHttpEndpointAuthorizationHandler</c> implementations (spec 089 sub-unit
-/// C, T008). The <see cref="AuthenticationBasedHttpEndpointAuthorizationHandler"/> is exercised over both the
+/// Unit coverage for the two shipped <c>IHttpEndpointAuthorizationHandler</c> implementations.
+/// The <see cref="AuthenticationBasedHttpEndpointAuthorizationHandler"/> is exercised over both the
 /// "middleware already authenticated" path (pre-populated <see cref="HttpContext.User"/>) and the explicit
 /// per-shell <c>AuthenticateAsync</c> path (a fake <see cref="IAuthenticationService"/> in RequestServices),
 /// pinning the fail-closed contract on every failure mode.

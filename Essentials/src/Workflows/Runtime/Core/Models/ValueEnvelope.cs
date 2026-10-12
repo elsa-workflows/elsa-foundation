@@ -89,7 +89,7 @@ public sealed record ValueEnvelope
     }
 
     /// <summary>
-    /// The one predicate of spec 188, FR-010: true when this envelope holds a present value that phase 0 may not persist,
+    /// The one predicate for values that require encryption: true when this envelope holds a present value that phase 0 may not persist,
     /// because its own policy, or <paramref name="destinationPolicy"/> when one is given, requires encryption. Phase 0 has
     /// no encryption at rest, so the in-tree producers withhold such a value before storing it, a destination with no
     /// withheld form refuses it, and the checkpoint-commit backstop refuses a commit that still carries one as an inline
@@ -232,7 +232,7 @@ public sealed record ValueProtectionPolicy
     public IReadOnlyDictionary<string, string> Metadata { get; }
 
     /// <summary>
-    /// True when inspection must not show a value under this policy: it is sensitive or requires encryption (spec 188).
+    /// True when inspection must not show a value under this policy: it is sensitive or requires encryption.
     /// The declared policy type has the same rule as <c>ActivityValuePolicy.HidesValue</c>. Unlike
     /// <see cref="ValueEnvelope.HoldsValueRequiringEncryption"/>, it judges a policy alone, with no value present.
     /// </summary>

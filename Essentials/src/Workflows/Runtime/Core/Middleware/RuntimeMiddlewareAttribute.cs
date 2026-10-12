@@ -4,7 +4,7 @@ namespace Elsa.Workflows.Runtime.Core.Middleware;
 /// Declares the default pipeline placement for a runtime middleware type so it travels with the middleware rather than
 /// being restated at every registration site. A host can override the slot/order/name when it registers the middleware
 /// (see the <c>Add*RuntimeMiddleware</c> extensions). Ordering is declarative: middleware target a stable named slot and
-/// a coarse <see cref="Order"/> within it — never a concrete neighbouring middleware (ADR 0029).
+/// a coarse <see cref="Order"/> within it — never a concrete neighbouring middleware.
 /// </summary>
 [AttributeUsage(AttributeTargets.Class, AllowMultiple = false, Inherited = false)]
 public sealed class RuntimeMiddlewareAttribute : Attribute

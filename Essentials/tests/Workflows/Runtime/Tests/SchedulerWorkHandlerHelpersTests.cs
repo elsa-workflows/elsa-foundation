@@ -9,7 +9,7 @@ namespace Elsa.Workflows.Runtime.Tests;
 /// <summary>
 /// Characterization coverage for the shared scheduler work-handler helpers extracted in #412
 /// (items 1, 2, 4). These pin the exact, byte-for-byte observable output the per-handler copies
-/// produced today — wrapped-exception message text and the §E6-frozen persisted intent identifiers —
+/// produced today — wrapped-exception message text and the frozen persisted intent identifiers —
 /// so the DRY extraction is proven behavior-preserving. Bite: mutating any interpolated string in
 /// <see cref="SchedulerWorkHandlerHelpers"/> turns the matching assertion red.
 /// </summary>
@@ -149,7 +149,7 @@ public sealed class SchedulerWorkHandlerHelpersTests
         Assert.Same(inner, exception);
     }
 
-    // --- item 2: NewEnqueueSchedulerWorkIntent (§E6-frozen persisted identifiers) ---
+    // --- item 2: NewEnqueueSchedulerWorkIntent (frozen persisted identifiers) ---
 
     [Fact]
     public void NewEnqueueSchedulerWorkIntent_ProducesByteIdenticalPersistedIdentifiers()

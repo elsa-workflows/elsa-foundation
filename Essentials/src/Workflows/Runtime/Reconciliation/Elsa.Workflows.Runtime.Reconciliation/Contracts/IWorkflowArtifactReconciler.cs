@@ -4,7 +4,7 @@ namespace Elsa.Workflows.Runtime.Reconciliation.Contracts;
 
 /// <summary>
 /// Runs one reconciliation pass over every registered <c>IWorkflowArtifactReconciliationSource</c>, importing and
-/// activating the closures they offer (FR-B-002).
+/// activating the closures they offer.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -18,7 +18,7 @@ namespace Elsa.Workflows.Runtime.Reconciliation.Contracts;
 /// <b>It has no journal and needs none.</b> Its recovery unit is the next pass: every step is idempotent by
 /// content-addressed identity, and the coordinator compensates its own partial activations. Introducing
 /// importer-side bookkeeping would create a second record of what is live, which is the duplicated authority
-/// FR-B-006 exists to remove.
+/// the single activation coordinator exists to remove.
 /// </para>
 /// </remarks>
 public interface IWorkflowArtifactReconciler

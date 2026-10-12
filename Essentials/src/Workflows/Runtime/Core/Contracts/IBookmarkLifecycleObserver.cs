@@ -3,7 +3,7 @@ using Elsa.Workflows.Runtime.Core.Models;
 namespace Elsa.Workflows.Runtime.Core.Contracts;
 
 /// <summary>
-/// A narrow post-commit notification seam for bookmark lifecycle transitions (spec 089 D). The runtime invokes
+/// A narrow post-commit notification seam for bookmark lifecycle transitions. The runtime invokes
 /// every registered observer AFTER a bookmark's durable state change has committed: once with the created
 /// bookmark when a mid-flow suspension persists it (the bookmark-created checkpoint), and once with the consumed
 /// bookmark when a resume deletes it (the bookmark-consumed checkpoint). Observers exist so a projection derived

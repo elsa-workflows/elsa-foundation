@@ -35,7 +35,7 @@ public sealed class InMemoryWorkflowExecutableStore : IWorkflowExecutableStore
         lock (_gate)
         {
             // Idempotent by artifact id: artifacts are content-addressed and immutable, so an already-stored
-            // artifact is authoritative — a behaviorally identical republish must not overwrite it (ADR 0038).
+            // artifact is authoritative — a behaviorally identical republish must not overwrite it.
             foreach (var executable in executables)
                 _executables.TryAdd(executable.Identity.ArtifactId, executable);
         }

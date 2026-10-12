@@ -1,7 +1,7 @@
 namespace Elsa.Workflows.Runtime.Reconciliation.Core.Exceptions;
 
 /// <summary>
-/// Raised (§2.23.5) when one closure input cannot be turned into a <c>WorkflowArtifactClosure</c> at all: it is
+/// Raised when one closure input cannot be turned into a <c>WorkflowArtifactClosure</c> at all: it is
 /// unreadable, is not valid JSON, deserializes to nothing, or declares a format version this build does not know.
 /// </summary>
 /// <remarks>
@@ -28,7 +28,7 @@ public sealed class InvalidWorkflowArtifactClosureException(string origin, strin
 }
 
 /// <summary>
-/// Raised (§2.23.5) when a reconciliation pass cannot meaningfully proceed — a misconfiguration or an
+/// Raised when a reconciliation pass cannot meaningfully proceed — a misconfiguration or an
 /// infrastructure fault that makes the source's entire contribution unknowable rather than empty.
 /// </summary>
 /// <remarks>

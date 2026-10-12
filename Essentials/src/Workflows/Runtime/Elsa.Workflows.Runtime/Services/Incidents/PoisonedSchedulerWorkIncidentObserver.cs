@@ -125,7 +125,7 @@ public sealed class PoisonedSchedulerWorkIncidentObserver : IWorkflowSchedulerDr
     /// <summary>
     /// The deterministic incident id projected for a poisoned scheduler work item. The work-item id is folded into a
     /// fixed-length fingerprint (#923) so the id stays comfortably within the 128-char <c>by-incident-id</c>
-    /// projection column (GW-PHYSICAL-037, #922) regardless of how deep in the workflow the poisoned hop was. The
+    /// projection column (#922) regardless of how deep in the workflow the poisoned hop was. The
     /// derivation is deterministic, so the existing-incident dedupe below still recognizes an already-recorded (or
     /// operator-resolved) incident for the same work item. The human-readable work-item id is preserved in the
     /// incident message and metadata, not the id.

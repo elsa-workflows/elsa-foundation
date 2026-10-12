@@ -20,7 +20,7 @@ namespace Elsa.Workflows.Publishing.Api.Tests;
 /// <summary>
 /// A <c>Secret</c> binding compiles to a <see cref="RuntimeInputBindingSource.SecretRead"/> with a conversion plan
 /// from text, is refused where the input type cannot hold text, and is refused on activity kinds that read inputs
-/// outside CLR activation (spec 188, T010; research R11, R12).
+/// outside CLR activation.
 /// </summary>
 public sealed class SecretBindingCompilationTests
 {

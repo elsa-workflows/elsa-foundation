@@ -89,7 +89,7 @@ internal static class RuntimePlacementProviderSmoke
                 lease => Assert.Equal(upperCaseLease.WorkflowExecutionId, lease.WorkflowExecutionId),
                 lease => Assert.Equal(lowerCaseLease.WorkflowExecutionId, lease.WorkflowExecutionId));
 
-            // Spec 184, FR-014: renewal is a compare-and-set on the lease as held and never grants.
+            // Renewal is a compare-and-set on the lease as held and never grants.
             var renewed = await store.TryRenewAsync(granted.Lease, Now, Now.AddMinutes(5));
             Assert.NotNull(renewed);
             Assert.Equal(granted.Lease.PlacementToken + 1, renewed.PlacementToken);

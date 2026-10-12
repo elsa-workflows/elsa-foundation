@@ -54,7 +54,7 @@ public sealed class CoalescingRuntimeCheckpointPersistencePolicy : IRuntimeCheck
         if (MandatoryFlushCheckpointNames.Contains(checkpoint.Name))
             return ValueTask.FromResult(Immediate);
 
-        // ADR 0032 R2 / spec 107: the pre-activation attempt-claim boundary is no longer unconditionally
+        // The pre-activation attempt-claim boundary is no longer unconditionally
         // mandatory. It protects at-most-once attempt VISIBILITY (crash attribution, poison/retry accounting) —
         // diagnostic fidelity for a replay-safe activity, not correctness. An author-declared ReplaySafe profile
         // lets the claim defer (its state still enters the coalesced working set and folds forward atomically at

@@ -16,7 +16,7 @@ namespace Elsa.Workflows.Runtime.Services.Executables;
 /// </summary>
 /// <remarks>
 /// The canonical payload shape is wire-significant: any change here changes every artifact hash and id. The
-/// characterization goldens pin both. Per ADR 0038 the payload is <b>behavioral-only</b>: it covers the
+/// characterization goldens pin both. The payload is <b>behavioral-only</b>: it covers the
 /// canonical node tree (root node id plus the flattened, ordinally-ordered node renderings) and carries no
 /// source identity, so equal hash ⇔ equal behavior in both directions and executables are content-addressed.
 /// </remarks>
@@ -226,7 +226,7 @@ public sealed class WorkflowExecutableHasher : IWorkflowExecutableHasher
         writer.WriteString("version", incidentStrategy.Version);
         writer.WriteEndObject();
 
-        // Authored checkpoint cadence is behavioral content (ADR 0032 R5): it changes the artifact's durability
+        // Authored checkpoint cadence is behavioral content: it changes the artifact's durability
         // behavior, so equal-hash must imply equal cadence. Written only when authored, so a workflow that authors no
         // cadence hashes byte-identically to before this field existed — existing artifact ids and goldens are stable.
         if (checkpointCadence is not null)

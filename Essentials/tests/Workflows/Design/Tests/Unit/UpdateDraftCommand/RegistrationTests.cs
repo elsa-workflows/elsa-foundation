@@ -6,7 +6,7 @@ using Xunit;
 namespace Elsa.Workflows.Design.Tests.Unit.UpdateDraftCommand;
 
 /// <summary>
-/// T024 (SC-001, G27) — the collapsed command surface. The single
+/// The collapsed command surface. The single
 /// <see cref="IUpdateDraftCommand"/> resolves from DI; the 20 former granular mutation
 /// contracts no longer exist on the public surface of
 /// <c>Elsa.Workflows.Design.Persistence.Core.Contracts</c>; the 4 lifecycle contracts remain.

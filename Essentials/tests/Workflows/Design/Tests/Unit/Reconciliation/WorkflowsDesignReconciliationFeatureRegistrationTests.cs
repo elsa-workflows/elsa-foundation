@@ -20,13 +20,13 @@ using Xunit;
 namespace Elsa.Workflows.Design.Tests.Unit.Reconciliation;
 
 /// <summary>
-/// Framework §2.23.1 registration smoke for <see cref="WorkflowsDesignReconciliationFeature"/>.
+/// Registration smoke for <see cref="WorkflowsDesignReconciliationFeature"/>.
 /// Concrete features extend the abstract base and override <c>Sources</c>; here we instantiate
 /// a minimal subclass and verify every claimed service resolves from the built provider.
 /// </summary>
 public sealed class WorkflowsDesignReconciliationFeatureRegistrationTests
 {
-    // Kept beside the composition test (§2.23.1): the feature's configured sources register as the same instances.
+    // Kept beside the composition test: the feature's configured sources register as the same instances.
     [Fact]
     public void Sources_set_on_feature_register_as_singletons()
     {

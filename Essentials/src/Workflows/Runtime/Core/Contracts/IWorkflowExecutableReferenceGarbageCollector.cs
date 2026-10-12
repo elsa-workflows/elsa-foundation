@@ -3,7 +3,7 @@ using Elsa.Workflows.Runtime.Core.Models;
 namespace Elsa.Workflows.Runtime.Core.Contracts;
 
 /// <summary>
-/// The ADR 0040 reference garbage collector: a two-query sweep that first drops expired/retired
+/// The reference garbage collector: a two-query sweep that first drops expired/retired
 /// <see cref="WorkflowExecutableSourceReference"/> records, then deletes the content-addressed artifacts no live
 /// reference points at any more (dangling-image pruning). Artifact lifetime is derived, never stored — an artifact
 /// is retained precisely while a live reference points at it.

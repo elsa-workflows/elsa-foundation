@@ -54,7 +54,7 @@ internal static class ArtifactClosureFixture
 
     /// <summary>
     /// A CLR node in the correct <em>shape</em> — consumer-keyed descriptor, readable payload — whose declared
-    /// <c>TypeAlias</c> names an activity this runtime does not have. The US2 scenario-1 artifact.
+    /// <c>TypeAlias</c> names an activity this runtime does not have.
     /// </summary>
     /// <remarks>
     /// Built by hand rather than through <see cref="WorkflowExecutionHarness.NewPinnedClrNode"/>, which reflects
@@ -259,7 +259,7 @@ internal static class ArtifactClosureFixture
 /// Recognizes the fixture's probe nodes as start triggers.
 /// </summary>
 /// <remarks>
-/// A test-owned provider rather than a real one (HTTP, timer) on purpose: US1 scenario 2 is about the runtime
+/// A test-owned provider rather than a real one (HTTP, timer) on purpose: the scenario is about the runtime
 /// routing a stimulus to an imported artifact, and borrowing a transport activity would drag its host, middleware
 /// and clock into a test whose subject is the import→activation→routing chain. The provider is a first-class
 /// extension point, so supplying one is composition, not a stub.

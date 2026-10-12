@@ -7,7 +7,7 @@ namespace Elsa.Workflows.Runtime.Reconciliation.Services;
 /// The built-in <see cref="IArtifactForeignOwnerPolicy"/>: whoever owns the slot, skip and say so by name.
 /// </summary>
 /// <remarks>
-/// T118's default, unchanged and still the right one — a mount that loses a definition to an explicit publish is
+/// The default, and still the right one — a mount that loses a definition to an explicit publish is
 /// a tolerated condition, not a broken deploy, and the rest of the mounted set must still import. Named for what
 /// it does rather than for what it tolerates.
 /// </remarks>

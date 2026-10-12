@@ -4,7 +4,7 @@ namespace Elsa.Workflows.Runtime.Core.Exceptions;
 
 /// <summary>
 /// Stands in for an exception thrown while an activity was activated or ran, once a value resolved from a secret for
-/// that activity execution is registered with <see cref="IRuntimeSecretMask"/> (spec 188, FR-012). The activities
+/// that activity execution is registered with <see cref="IRuntimeSecretMask"/>. The activities
 /// runtime's fault boundaries hand this on instead of the original, so the message, stack trace and inner exception
 /// chain that the fault, the incident and a log line rendering the exception read are masked. The failure code and the
 /// type names are not masked (see the remarks).

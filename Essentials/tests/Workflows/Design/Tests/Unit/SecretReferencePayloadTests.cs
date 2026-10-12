@@ -6,7 +6,7 @@ namespace Elsa.Workflows.Design.Tests.Unit;
 
 /// <summary>
 /// <see cref="SecretReferencePayload.Read"/> returns exactly one of a reference and a defect, and nothing else can create
-/// a reading or a reference's members, so no caller can hold a "well-formed" reading without a name (spec 188, FR-009).
+/// a reading or a reference's members, so no caller can hold a "well-formed" reading without a name.
 /// The acceptance rows themselves are <see cref="CredentialInputBindingTests"/>'s.
 /// </summary>
 public sealed class SecretReferencePayloadTests

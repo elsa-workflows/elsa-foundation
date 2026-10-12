@@ -17,7 +17,7 @@ namespace Elsa.Workflows.Design.Tests.Infrastructure;
 /// Production wiring routes inline events synchronously and deferred events through the channel +
 /// worker. This stub captures every event synchronously regardless of face so test assertions can
 /// inspect captured events without timing concerns. Tests that exercise the event-sourcing seam
-/// (SC-012/SC-013) attach subscribers via <see cref="Subscribe{T}"/>; those honour each face's
+/// attach subscribers via <see cref="Subscribe{T}"/>; those honour each face's
 /// resilience contract — inline lets handler failures propagate to the publishing caller, deferred
 /// isolates them (mirroring the production <c>BackgroundEventPublisher</c> worker that catches +
 /// logs handler faults).

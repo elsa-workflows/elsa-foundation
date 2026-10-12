@@ -10,7 +10,7 @@ namespace Elsa.Workflows.Runtime.Services.Values;
 /// </summary>
 /// <remarks>
 /// This is the destination-storage decision for activity input materialization and intrinsic value writes. A present
-/// value whose policy requires encryption is withheld here (spec 188, FR-010), by <see cref="RuntimeEncryptionWithholding"/>
+/// value whose policy requires encryption is withheld here, by <see cref="RuntimeEncryptionWithholding"/>
 /// before anything else: phase 0 has no encryption at rest, so it becomes a
 /// <see cref="WithheldValueKind.PolicyRequiresEncryption"/> marker that holds no value, and is neither kept inline nor
 /// written to external payload storage. The value cannot be recovered; a reader that needs it refuses the marker with

@@ -54,7 +54,7 @@ public sealed class WorkflowTestRunRequestHandlerTests
         Assert.Equal("Accepted", view.CommandDispatchStatus);
         Assert.NotNull(view.WorkflowExecutionId);
         Assert.StartsWith("artifact-", view.ArtifactId, StringComparison.Ordinal);
-        // Under ADR 0040 there is a single content-addressed store; the test-run artifact now lives in it (scope/
+        // There is a single content-addressed store; the test-run artifact now lives in it (scope/
         // expiry are reference facts, no longer segregated by an artifact-level list filter).
         Assert.Equal(view.ArtifactId, Assert.Single(await _executableStore.ListAllAsync()).Identity.ArtifactId);
         Assert.NotNull(await _testRunStore.FindAsync(view.TestRunId));
@@ -242,7 +242,7 @@ public sealed class WorkflowTestRunRequestHandlerTests
         Assert.Equal("draft:snapshot-1", view.DefinitionVersionId);
         Assert.NotNull(view.WorkflowExecutionId);
         Assert.StartsWith("artifact-", view.ArtifactId, StringComparison.Ordinal);
-        // Single content-addressed store (ADR 0040): the draft test-run artifact is present. Reference-driven
+        // Single content-addressed store: the draft test-run artifact is present. Reference-driven
         // scope gating for dispatch (rejecting a test-run artifact from a normal runtime dispatch) is worker W3's
         // slice; the artifact-level dispatcher no longer rejects by scope.
         Assert.Equal(view.ArtifactId, Assert.Single(await _executableStore.ListAllAsync()).Identity.ArtifactId);
@@ -430,7 +430,7 @@ public sealed class WorkflowTestRunRequestHandlerTests
     [Fact]
     public async Task TestRunAppendsAnExpiringTestRunReferenceIntoTheSingleStore()
     {
-        // ADR 0040: the test run saves the artifact into the one content-addressed store and appends an expiring
+        // The test run saves the artifact into the one content-addressed store and appends an expiring
         // TestRun-scope source reference (scope/expiry are reference facts). The reference is what a dispatch gates on.
         var handler = Handler(WorkflowVersion(Node("write-one", Text("hello"))));
         var view = await handler.Handle(new StartWorkflowTestRun("version-1"), CancellationToken.None);
@@ -462,8 +462,8 @@ public sealed class WorkflowTestRunRequestHandlerTests
     [Fact]
     public async Task DraftTestRunResolvesToSameArtifactIdAsBehaviorallyIdenticalVersion()
     {
-        // Test (a) — the ADR 0040 equivalence signal. A draft snapshot and a durable version with identical behavior
-        // compile to the SAME artifact id because the hash is purely behavioral (ADR 0038) and the test-run flow now
+        // Test (a) — the equivalence signal. A draft snapshot and a durable version with identical behavior
+        // compile to the SAME artifact id because the hash is purely behavioral and the test-run flow now
         // shares the published artifact prefix (scope lives on the reference, not the id). Same id ⇒ Studio can report
         // "this draft is behaviorally identical to published vN" with no diffing.
         var identicalRoot = Node("write-one", Text("hello"));

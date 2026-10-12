@@ -27,7 +27,7 @@ public static class ValidationCategories
     public const string Faulted = "Validation/Faulted";
 
     /// <summary>
-    /// R3 reserved category (FR-033 2026-07-05 amendment) — emitted by
+    /// R3 reserved category — emitted by
     /// <c>UnknownActivityVersionValidator</c> when an activity node's <c>ActivityVersionId</c> does
     /// not resolve in the catalog.
     /// </summary>

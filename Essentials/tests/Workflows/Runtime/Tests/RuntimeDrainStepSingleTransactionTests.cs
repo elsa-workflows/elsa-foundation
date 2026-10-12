@@ -12,7 +12,7 @@ using Xunit;
 namespace Elsa.Workflows.Runtime.Tests;
 
 /// <summary>
-/// WU-1 / spec 105: the scheduler work-item acknowledgement is folded into the checkpoint commit's unit-of-work, so a
+/// The scheduler work-item acknowledgement is folded into the checkpoint commit's unit-of-work, so a
 /// claim-capable drain step performs one durable transaction and skips the separate <c>CompleteClaimAsync</c>.
 /// </summary>
 public sealed class RuntimeDrainStepSingleTransactionTests

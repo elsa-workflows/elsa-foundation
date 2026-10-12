@@ -16,14 +16,14 @@ namespace Elsa.Workflows.Design.Persistence.Core.Contracts;
 /// effects are observed through the persisted Draft and the published events.
 /// </para>
 /// <para>
-/// <b>Last-writer-wins (FR-022).</b> No optimistic-concurrency / version check. A desired
+/// <b>Last-writer-wins.</b> No optimistic-concurrency / version check. A desired
 /// state built on a stale read overwrites concurrent edits wholesale; the diff emits the
 /// resulting events. By design.
 /// </para>
 /// <para>
 /// The 4 lifecycle commands (<see cref="ICreateDraftCommand"/>,
 /// <see cref="ICloneDraftFromVersionCommand"/>, <see cref="IDiscardDraftCommand"/>,
-/// <see cref="IPromoteDraftToVersionCommand"/>) are NOT mutations and remain distinct (FR-003).
+/// <see cref="IPromoteDraftToVersionCommand"/>) are NOT mutations and remain distinct.
 /// </para>
 /// </remarks>
 public interface IUpdateDraftCommand

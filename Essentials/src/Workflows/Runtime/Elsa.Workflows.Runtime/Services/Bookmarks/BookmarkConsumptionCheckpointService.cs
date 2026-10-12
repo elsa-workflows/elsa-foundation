@@ -147,7 +147,7 @@ public sealed class BookmarkConsumptionCheckpointService : IBookmarkConsumptionC
 
         var result = await _checkpointCommitter.CommitAsync(commit, cancellationToken);
 
-        // Notify bookmark-lifecycle observers AFTER the durable commit deleted the bookmark (spec 089 D).
+        // Notify bookmark-lifecycle observers AFTER the durable commit deleted the bookmark.
         // Observer failures are caught and logged inside the notifier — they never fault this resumed run. Once
         // the commit lands, finish the whole notification batch even if the scheduler delivery token is cancelled.
         if (request.ConsumesBookmarks && _bookmarkLifecycleNotifier is not null)

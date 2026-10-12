@@ -5,11 +5,11 @@ using Xunit;
 namespace Elsa.Workflows.Design.Tests.Unit;
 
 /// <summary>
-/// SC-005 + Unit C FR-009: after the rename, zero occurrences of
+/// After the rename, zero occurrences of
 /// <c>ActivityNode.ReferenceKey</c> remains in the Workflows.Design model surface, and the
 /// provisional flowchart-specific <c>ActivityPortConnection</c> model is no longer in core.
 /// Argument-level <c>ReferenceKey</c>
-/// identifiers (per FR-010 — on <c>ArgumentDefinition</c>, <c>InputDefinition</c>,
+/// identifiers (on <c>ArgumentDefinition</c>, <c>InputDefinition</c>,
 /// <c>OutputDefinition</c>, <c>VariableDefinition</c>) are deliberately unchanged.
 /// </summary>
 public sealed class NodeIdRenameTests

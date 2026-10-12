@@ -455,7 +455,7 @@ public sealed class WorkflowExecutableCompiler(
         }
     }
 
-    // ADR 0032 R5: compile the authored per-workflow checkpoint cadence into the executable. The mode is a stable
+    // Compile the authored per-workflow checkpoint cadence into the executable. The mode is a stable
     // string alias validated here (fail-fast at publish, mirroring the contract gate discipline); an unauthored cadence
     // compiles to null so the host default applies and the artifact hash is unchanged from before this field existed.
     private static WorkflowExecutableCheckpointCadence? CompileCheckpointCadence(WorkflowStrategyOptions? strategyOptions)

@@ -6,10 +6,10 @@ namespace Elsa.Workflows.Runtime.Core.Models;
 /// Context passed through the workflow runtime execution pipeline for one drained work item.
 /// </summary>
 /// <remarks>
-/// The originating <see cref="WorkItem"/> is always present. The typed runtime state is optional in Move 1:
+/// The originating <see cref="WorkItem"/> is always present. The typed runtime state is optional:
 /// no full state is loaded at the scheduler dispatch point, some dispatches (e.g. workflow start) precede state
 /// creation, and populating <see cref="WorkflowExecution"/>/<see cref="Scheduler"/> is the <c>LoadState</c> slot's
-/// responsibility in Move 2. See ADR 0029 and specs/082-runtime-pipeline-execution-spine.
+/// responsibility.
 /// </remarks>
 public sealed record WorkflowRuntimePipelineContext(
     RuntimeSchedulerWorkItem WorkItem,

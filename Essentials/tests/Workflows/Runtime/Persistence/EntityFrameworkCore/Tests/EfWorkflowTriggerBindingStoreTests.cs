@@ -215,7 +215,7 @@ public sealed class EfWorkflowTriggerBindingStoreTests
         await store.SaveAsync(Binding("skew", null, "hash-skew"));
 
         // The composite identity this build recomputes from the row no longer matches it, which is what
-        // a shape change looks like from here. The version moved, so that is the diagnosis (ADR 0077, #1950).
+        // a shape change looks like from here. The version moved, so that is the diagnosis (#1950).
         var drifted = EfRelationalIdentity.Encode("drifted-binding");
         await context.WorkflowTriggerBindings.ExecuteUpdateAsync(row => row
             .SetProperty(x => x.SchemaVersion, "2")

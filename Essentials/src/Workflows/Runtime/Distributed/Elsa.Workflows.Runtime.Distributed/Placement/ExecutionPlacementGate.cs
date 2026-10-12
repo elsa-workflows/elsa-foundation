@@ -10,25 +10,25 @@ using Microsoft.Extensions.Logging.Abstractions;
 namespace Elsa.Workflows.Runtime.Distributed.Placement;
 
 /// <summary>
-/// Decides whether this member may claim or renew placement of an execution (spec 184, invariant 1). Both claim paths
+/// Decides whether this member may claim or renew placement of an execution. Both claim paths
 /// ask it before they claim: the actor provider's activation and the placement pump's backlog sweep, and the pump asks
 /// again before it renews.
 /// </summary>
 /// <remarks>
 /// <para>
-/// <b>The claimant checks itself</b> (FR-011, mechanism 1). The requirement is evaluated with
+/// <b>The claimant checks itself</b>. The requirement is evaluated with
 /// <see cref="IRuntimeRequirementChecker"/> against this shell's registries as they are at that moment: the evaluation
 /// the artifact reconciler and Publishing's preflight already use. The member's own published runnability entry is never
 /// consulted, so a report that lags can mislead a diagnostic but can never place work.
 /// </para>
 /// <para>
-/// <b>Standing</b> (FR-012). A member that is joining, draining or has left claims nothing, and neither does a shell
+/// <b>Standing</b>. A member that is joining, draining or has left claims nothing, and neither does a shell
 /// whose join sweep has not completed in this process. A lapsed member keeps claiming, subject to its own requirement
-/// check (FR-026): stopping it would turn a membership outage into an execution outage.
+/// check: stopping it would turn a membership outage into an execution outage.
 /// </para>
 /// <para>
-/// A member whose writes to a family of the Runtime EF module spec 181 refuses (its FR-012) claims and renews nothing
-/// either (FR-012), so the pump hands what it holds off: it cannot commit a checkpoint anyway.
+/// A member whose writes to a family of the Runtime EF module are refused claims and renews nothing
+/// either, so the pump hands what it holds off: it cannot commit a checkpoint anyway.
 /// </para>
 /// </remarks>
 public sealed class ExecutionPlacementGate
@@ -68,13 +68,13 @@ public sealed class ExecutionPlacementGate
 
     public DistributedRuntimeShell Shell => _shell;
 
-    /// <summary>The routing identity: the local member's host id (FR-001).</summary>
+    /// <summary>The routing identity: the local member's host id.</summary>
     public string HostId => _membership.GetLocalStanding().Identity.HostId;
 
-    /// <summary>Whether this shell's join sweep has completed in this process (FR-022).</summary>
+    /// <summary>Whether this shell's join sweep has completed in this process.</summary>
     public bool HasCompletedJoinSweep => _ledger.IsComplete(HostId, _shell.Name);
 
-    /// <summary>Why this member may not claim anything now, or <see langword="null"/> when its standing allows it (FR-012).</summary>
+    /// <summary>Why this member may not claim anything now, or <see langword="null"/> when its standing allows it.</summary>
     public PlacementDecision? CheckStanding()
     {
         var standing = _membership.GetLocalStanding();
@@ -91,7 +91,7 @@ public sealed class ExecutionPlacementGate
     /// Decides whether this member may claim or renew placement of <paramref name="workflowExecutionId"/> now, in the
     /// operation scope <paramref name="services"/>. <paramref name="inHand"/> is the command being dispatched, if any,
     /// and <paramref name="pending"/> reads the commands the transport holds for it: a start command among them supplies
-    /// the pin of an execution that has no durable state yet (FR-016).
+    /// the pin of an execution that has no durable state yet.
     /// </summary>
     public async ValueTask<PlacementDecision> DecideAsync(
         string workflowExecutionId,
@@ -108,7 +108,7 @@ public sealed class ExecutionPlacementGate
     }
 
     /// <summary>
-    /// Logs a refusal once per execution and reason, not on every sweep (FR-029): a claim refused for its requirement at
+    /// Logs a refusal once per execution and reason, not on every sweep: a claim refused for its requirement at
     /// information level with the execution id and what is unmet or unresolved, and a refusal for the member's standing
     /// at debug level, because it concerns every execution alike.
     /// </summary>
@@ -162,7 +162,7 @@ public sealed class ExecutionPlacementGate
             : PlacementDecision.Refused(PlacementRefusalKind.RequirementUnmet, Describe(check), requirements);
     }
 
-    /// <summary>What this shell's runtime lacks, in the words of the membership requirement kinds (FR-006).</summary>
+    /// <summary>What this shell's runtime lacks, in the words of the membership requirement kinds.</summary>
     private static string Describe(RuntimeRequirementCheckResult check)
     {
         var unmet = check.Requirements

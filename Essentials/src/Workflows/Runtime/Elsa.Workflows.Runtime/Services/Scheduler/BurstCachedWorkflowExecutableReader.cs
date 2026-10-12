@@ -4,7 +4,7 @@ using Elsa.Workflows.Runtime.Core.Models;
 namespace Elsa.Workflows.Runtime.Services.Scheduler;
 
 /// <summary>
-/// Burst-cached <see cref="IWorkflowExecutableReader"/> (ADR 0031 item b, spec 111). When a burst owns the current
+/// Burst-cached <see cref="IWorkflowExecutableReader"/>. When a burst owns the current
 /// drain (<see cref="IWorkflowBurstScopeAccessor.Current"/> is non-null) the pinned executable is served once per
 /// <c>ArtifactId</c> from the burst scope; every later drain-path read of the same immutable artifact is a memory hit.
 /// When no burst is active — no router established one, the kill switch is off, or this is a non-drain caller — the read

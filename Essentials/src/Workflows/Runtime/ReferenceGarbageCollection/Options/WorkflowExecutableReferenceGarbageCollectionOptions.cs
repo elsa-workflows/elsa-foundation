@@ -1,6 +1,6 @@
 namespace Elsa.Workflows.Runtime.ReferenceGarbageCollection.Options;
 
-/// <summary>Tuning for the periodic reference GC sweep (ADR 0040).</summary>
+/// <summary>Tuning for the periodic reference GC sweep.</summary>
 public sealed class WorkflowExecutableReferenceGarbageCollectionOptions
 {
     /// <summary>

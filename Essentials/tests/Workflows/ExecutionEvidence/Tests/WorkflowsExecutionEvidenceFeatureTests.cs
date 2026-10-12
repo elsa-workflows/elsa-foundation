@@ -11,7 +11,7 @@ public sealed class WorkflowsExecutionEvidenceFeatureTests : IDisposable
 
     public void Dispose() => _provider.Dispose();
 
-    // Kept beside the composition test (§2.23.1): lifetime, the in-memory evidence store is one instance across scopes.
+    // Kept beside the composition test: lifetime, the in-memory evidence store is one instance across scopes.
     [Fact]
     public void Feature_registers_the_in_memory_evidence_store_as_a_singleton()
     {

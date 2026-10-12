@@ -19,7 +19,7 @@ namespace Elsa.Workflows.Design.Tests.Infrastructure;
 /// Shared builders + drivers for the Unit 2 <c>IUpdateDraftCommand</c> diff tests. Keeps every
 /// diff test file terse: seed an empty Draft, then submit a complete desired
 /// <see cref="WorkflowDefinitionState"/> (+ optional layout) and assert on the published per-diff
-/// events / persisted state. Full-state-always (FR-001) — there is no patch API.
+/// events / persisted state. Full-state-always — there is no patch API.
 /// </summary>
 internal static class UpdateDraftTestKit
 {

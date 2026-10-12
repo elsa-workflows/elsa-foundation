@@ -11,9 +11,9 @@ using static Elsa.Workflows.Runtime.Distributed.Tests.Placement.PlacementCluster
 namespace Elsa.Workflows.Runtime.Distributed.Tests.Placement;
 
 /// <summary>
-/// Spec 184's two requirements on spec 181's gate: a member whose writes to a family of the Runtime EF module spec 181
-/// refuses claims nothing and hands off what it holds (FR-012), and a shell's runnability entry names the database its
-/// Runtime EF module read (FR-008), so a placement query about another database does not count it (FR-009).
+/// Placement's two requirements on the schema finalization gate: a member whose writes to a family of the Runtime EF
+/// module are refused claims nothing and hands off what it holds, and a shell's runnability entry names the database its
+/// Runtime EF module read, so a placement query about another database does not count it.
 /// </summary>
 public sealed class SchemaFinalizationPlacementTests : IAsyncDisposable
 {

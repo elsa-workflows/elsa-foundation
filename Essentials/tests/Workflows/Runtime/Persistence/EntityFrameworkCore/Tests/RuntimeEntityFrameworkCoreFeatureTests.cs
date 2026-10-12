@@ -64,7 +64,7 @@ public sealed class RuntimeEntityFrameworkCoreFeatureTests : IDisposable
         }
     }
 
-    // Kept beside the composition test (§2.23.1): the feature's settings flow into the registered options and migrator.
+    // Kept beside the composition test: the feature's settings flow into the registered options and migrator.
     [Fact]
     public void Feature_threads_its_settings_and_registers_the_runtime_migrator()
     {
@@ -84,7 +84,7 @@ public sealed class RuntimeEntityFrameworkCoreFeatureTests : IDisposable
     }
 
     /// <summary>
-    /// Spec 184, FR-008 and FR-012 through spec 181's gate: once the module's migrator has admitted it, the runtime reads
+    /// Placement's view of the schema finalization gate: once the module's migrator has admitted it, the runtime reads
     /// the database identity its gate read, and a refresh that finds a Runtime family finalized at a version this build
     /// cannot read refuses the runtime's writes, which placement acts on.
     /// </summary>

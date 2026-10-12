@@ -11,7 +11,7 @@ namespace Elsa.Workflows.Runtime.Distributed.Services;
 /// Clustered <see cref="IWorkflowExecutionActorProvider"/> that adds per-execution placement (routing) and durable
 /// cross-node command transport on top of the in-process actor subsystem. It composes an internal
 /// <see cref="InProcessWorkflowExecutionActorProvider"/> for local drains and replaces the single active provider
-/// registration (constitution S=2.6). Core runtime contracts gain no reference to this leaf (S=2.7).
+/// registration. Core runtime contracts gain no reference to this leaf.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -32,11 +32,11 @@ namespace Elsa.Workflows.Runtime.Distributed.Services;
 /// and adds only routing on top.
 /// </para>
 /// <para>
-/// Composed with an <see cref="ExecutionPlacementGate"/>, as the feature composes it, placement is version-aware
-/// (spec 184): the claim is decided when the command is enqueued, because a start command carries the pin of an
+/// Composed with an <see cref="ExecutionPlacementGate"/>, as the feature composes it, placement is version-aware:
+/// the claim is decided when the command is enqueued, because a start command carries the pin of an
 /// execution that has no durable state yet. The member claims only when the gate says its runtime can run the
-/// execution now (FR-011, FR-012); otherwise the command is forwarded to the durable transport with no other side
-/// effect, and the dispatch result says why it did not run here (FR-013).
+/// execution now; otherwise the command is forwarded to the durable transport with no other side
+/// effect, and the dispatch result says why it did not run here.
 /// </para>
 /// </remarks>
 public sealed class DistributedWorkflowExecutionActorProvider : IWorkflowExecutionActorProvider
@@ -60,7 +60,7 @@ public sealed class DistributedWorkflowExecutionActorProvider : IWorkflowExecuti
     {
     }
 
-    /// <summary>The composition the feature uses: placement gated by membership and this shell's registries (spec 184).</summary>
+    /// <summary>The composition the feature uses: placement gated by membership and this shell's registries.</summary>
     public DistributedWorkflowExecutionActorProvider(
         InProcessWorkflowExecutionActorProvider localProvider,
         IPersistenceOperationScopeFactory operationScopeFactory,
@@ -185,7 +185,7 @@ public sealed class DistributedWorkflowExecutionActorProvider : IWorkflowExecuti
 
     /// <summary>
     /// Passivates this member's local actor only, and releases nothing: for the placement pump, when a renewal found the
-    /// lease no longer as it held it (spec 184, FR-014). <see cref="PassivateAsync"/> releases whatever lease this host id
+    /// lease no longer as it held it. <see cref="PassivateAsync"/> releases whatever lease this host id
     /// holds now, which during a reload can be the one a newer generation of the shell just renewed.
     /// </summary>
     internal ValueTask PassivateLocalActorAsync(WorkflowExecutionActorPassivationRequest request, CancellationToken cancellationToken) =>
@@ -193,7 +193,7 @@ public sealed class DistributedWorkflowExecutionActorProvider : IWorkflowExecuti
 
     /// <summary>
     /// Decides placement for one command: the gate first, in an operation scope that is closed before the drain runs,
-    /// then the claim. Nothing is written when the gate refuses (FR-013).
+    /// then the claim. Nothing is written when the gate refuses.
     /// </summary>
     private async ValueTask<IWorkflowExecutionActor> DecideAsync(
         WorkflowExecutionActorActivationRequest request,

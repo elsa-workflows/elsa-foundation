@@ -57,7 +57,7 @@ public sealed class WorkflowDefinition : TenantEntity, IWorkflowDefinition
             Name = source.Name,
             Description = source.Description,
             // DeletedAt is on IWorkflowDefinition (a definition-level lifecycle metadatum), so a
-            // source-driven soft-delete propagates through the reconciler's create path (spec 085 FR-008).
+            // source-driven soft-delete propagates through the reconciler's create path.
             DeletedAt = source.DeletedAt,
         };
 

@@ -5,7 +5,7 @@ namespace Elsa.Workflows.Runtime.Http.Exceptions;
 
 /// <summary>
 /// Thrown at publish time when two authoritative publication slots claim the same HTTP endpoint
-/// <c>(template, method)</c> pair (spec 089 follow-up, issue #592 item 2). Raised by
+/// <c>(template, method)</c> pair (issue #592 item 2). Raised by
 /// <c>HttpEndpointRoutingUniquenessValidator</c> on the trigger indexer's pre-write validation seam
 /// (<c>IWorkflowTriggerIndexValidator</c>), so the <em>second</em> publish of a conflicting endpoint fails
 /// with the durable index untouched — rather than the collision persisting and only appearing as a

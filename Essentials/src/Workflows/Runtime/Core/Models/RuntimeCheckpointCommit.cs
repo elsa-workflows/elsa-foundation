@@ -144,7 +144,7 @@ public sealed class RuntimeCheckpointStateChangeSet
     public IReadOnlyCollection<WorkflowDispatchCancellationRequest> WorkflowDispatchCancellations { get; }
 
     /// <summary>
-    /// Claimed scheduler work items to delete inside this checkpoint's atomic unit-of-work (spec 105). Folding the
+    /// Claimed scheduler work items to delete inside this checkpoint's atomic unit-of-work. Folding the
     /// claimed item's fence-checked delete here replaces the drainer's separate post-dispatch acknowledgement, so a
     /// single-commit drain step performs one durable transaction instead of two. Deletion is owner+token fence-checked so
     /// a stale claimant's commit fails claim-lost rather than deleting successor-owned work.
@@ -401,7 +401,7 @@ public sealed class RuntimePostCommitIntent
         RuntimeModelMetadata.AreEqual(Metadata, other.Metadata);
 
     /// <summary>
-    /// In-process-only conduit (spec 109): the already-materialized <see cref="RuntimeSchedulerWorkItem"/> this
+    /// In-process-only conduit: the already-materialized <see cref="RuntimeSchedulerWorkItem"/> this
     /// <c>EnqueueSchedulerWork</c> intent's <see cref="Payload"/> was serialized from. Set by
     /// <c>SchedulerWorkHandlerHelpers.NewEnqueueSchedulerWorkIntent</c> so the checkpoint committer can hand it to the
     /// live drain's in-process-hop carrier without re-parsing. <b>Never serialized</b> (<see cref="JsonIgnoreAttribute"/>):

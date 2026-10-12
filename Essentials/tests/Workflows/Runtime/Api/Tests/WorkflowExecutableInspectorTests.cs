@@ -352,7 +352,7 @@ public sealed class WorkflowExecutableInspectorTests
     }
 
     /// <summary>
-    /// A secret reference is not a value (spec 188, T067), so the input-sources view shows a secret read's reference as its
+    /// A secret reference is not a value, so the input-sources view shows a secret read's reference as its
     /// summary and in <c>secret</c>, although its policy keeps every other source detail out. The structural detail view
     /// keeps every source detail out, the reference included.
     /// </summary>
@@ -388,7 +388,7 @@ public sealed class WorkflowExecutableInspectorTests
     public async Task InputSourcesSummarizeASecretReadWhosePolicyIsNotSensitiveByItsReference()
     {
         // Publication always compiles a secret read as sensitive; a hand-built or imported artifact can carry a lower
-        // policy (research R13). Its source details are then shown, and its summary is still the reference.
+        // policy. Its source details are then shown, and its summary is still the reference.
         var reference = new RuntimeSecretReference("payments.api-key");
         var binding = new RuntimeInputBinding(
             "api-key",
@@ -408,7 +408,7 @@ public sealed class WorkflowExecutableInspectorTests
 
     /// <summary>
     /// Studio prints a compiled binding's summary verbatim, so a binding whose policy marks its value sensitive or as
-    /// requiring encryption carries no value in it, nor anywhere else on the wire (spec 188, T070).
+    /// requiring encryption carries no value in it, nor anywhere else on the wire.
     /// </summary>
     [Theory]
     [InlineData(true, false)]
@@ -439,7 +439,7 @@ public sealed class WorkflowExecutableInspectorTests
 
     /// <summary>
     /// The authored record carries only the author's own sensitivity flag; an activity's declaration reaches the compiled
-    /// binding and the pinned contract (spec 188, found in slice 5). The authored-inputs view redacts by those too, and
+    /// binding and the pinned contract. The authored-inputs view redacts by those too, and
     /// redacts an input the executable holds neither for.
     /// </summary>
     [Theory]

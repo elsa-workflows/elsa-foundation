@@ -89,7 +89,7 @@ public sealed class RuntimeBookmarkResumeContractTests
     [Fact]
     public void BookmarkResumeResolver_ResolvesWhenPinnedExecutableSnapshotMatches()
     {
-        // Source provenance no longer lives on WorkflowExecutableIdentity (ADR 0038) — it moved to the source
+        // Source provenance no longer lives on WorkflowExecutableIdentity — it moved to the source
         // reference — so the pinned-snapshot check is purely over ArtifactId/DefinitionVersionId/ArtifactHash.
         var workflowExecution = NewWorkflowExecution(_identity);
         var executable = NewExecutable(_identity);

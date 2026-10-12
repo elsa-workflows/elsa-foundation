@@ -168,7 +168,7 @@ public sealed class EfExecutionPlacementStore(
                 return renewed;
 
             // Compare-and-set against the lease as the caller held it: a released, expired or re-owned lease is never
-            // renewed, so a renewal cannot take back what a reclaim or another member's claim already moved (FR-014).
+            // renewed, so a renewal cannot take back what a reclaim or another member's claim already moved.
             if (!IsLive(current, now) ||
                 !StringComparer.Ordinal.Equals(current.OwnerId, held.OwnerId) ||
                 current.PlacementToken != held.PlacementToken)

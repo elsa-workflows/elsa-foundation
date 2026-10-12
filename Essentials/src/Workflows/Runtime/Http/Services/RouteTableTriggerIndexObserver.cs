@@ -8,14 +8,14 @@ using Elsa.Workflows.Runtime.Http.Contracts;
 namespace Elsa.Workflows.Runtime.Http.Services;
 
 /// <summary>
-/// Keeps the per-shell HTTP <see cref="IRouteTable"/> in step with the trigger index (spec 089 B). Registered as
+/// Keeps the per-shell HTTP <see cref="IRouteTable"/> in step with the trigger index. Registered as
 /// an <see cref="IWorkflowTriggerIndexObserver"/>, it runs after the indexer has written an artifact's current
 /// bindings and, when that publish could change the HTTP route set, rebuilds the whole route table from the
 /// resolver.
 /// </summary>
 /// <remarks>
 /// <para>
-/// <b>HTTP-affecting publishes only (spec 089 efficiency #8).</b> The indexer notifies this observer on every
+/// <b>HTTP-affecting publishes only.</b> The indexer notifies this observer on every
 /// publish of <em>any</em> workflow, and a route-table refresh re-lists and deserializes every HTTP-endpoint
 /// binding in the durable index. The observer skips the refresh only when it is provably redundant. It decides
 /// this from the snapshot's own bindings (<see cref="WorkflowTriggerIndexSnapshot.Bindings"/>) — the
@@ -36,7 +36,7 @@ namespace Elsa.Workflows.Runtime.Http.Services;
 /// <para>
 /// <b>Lifetime.</b> The indexer is scoped to the publication operation. This observer is a singleton that delegates the read-then-swap
 /// to the shared <see cref="IHttpEndpointRouteTableSynchronizer"/>, which serializes every refresh (publish, run,
-/// startup) under one lock so a stale read can never clobber a newer swap (spec 089 D review fix). An exception
+/// startup) under one lock so a stale read can never clobber a newer swap. An exception
 /// propagates and fails the publish, matching the indexer's failure policy — and the known-non-HTTP set is
 /// mutated only <em>after</em> a successful refresh, so a failed refresh leaves no memory that could make the
 /// retried publish skip. The set is purely a skip hint: losing it on restart costs one extra refresh per

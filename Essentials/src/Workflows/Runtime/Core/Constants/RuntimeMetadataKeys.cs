@@ -9,7 +9,7 @@ public static class RuntimeMetadataKeys
     public const string CheckpointRequirementMandatory = "Mandatory";
     /// <summary>
     /// Transport for the resolved <c>SideEffectProfile</c> of the CLR activity a pre-activation attempt-claim
-    /// checkpoint belongs to (ADR 0032 R2). The contract is the source of truth; the claimer stamps the resolved
+    /// checkpoint belongs to. The contract is the source of truth; the claimer stamps the resolved
     /// value here so the coalescing persistence policy can decide whether the claim boundary may be deferred
     /// (<c>ReplaySafe</c>) or must flush immediately (<c>External</c> / absent). Its value is the profile name
     /// (<see cref="CheckpointSideEffectProfileReplaySafe"/> / <see cref="CheckpointSideEffectProfileExternal"/>).
@@ -117,8 +117,8 @@ public static class RuntimeMetadataKeys
     public const string InstanceName = "runtime.instanceName";
 
     /// <summary>
-    /// System-metadata key on a workflow execution recording the effective checkpoint cadence the run executes under
-    /// (ADR 0032 R5): the <see cref="Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableCheckpointCadence"/> mode
+    /// System-metadata key on a workflow execution recording the effective checkpoint cadence the run executes under:
+    /// the <see cref="Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableCheckpointCadence"/> mode
     /// alias (<c>"Immediate"</c> or <c>"Coalesced"</c>), resolved at start from the pinned executable's authored cadence
     /// over the host default. This per-run stamp is what the instance read model reports, so an instance shows the
     /// cadence it actually ran under even after the host default is later reconfigured. Absent for runs predating it.
@@ -127,17 +127,17 @@ public static class RuntimeMetadataKeys
 
     /// <summary>
     /// System-metadata key on a workflow execution recording the effective bounded segment cap for a
-    /// <c>"Coalesced"</c> <see cref="CheckpointCadence"/> stamp (ADR 0032 R5). Absent under an Immediate stamp.
+    /// <c>"Coalesced"</c> <see cref="CheckpointCadence"/> stamp. Absent under an Immediate stamp.
     /// </summary>
     public const string CheckpointMaxSegmentCheckpoints = "runtime.checkpointMaxSegmentCheckpoints";
 
     /// <summary>
     /// Metadata key on a durable value carrying a workflow identity slot (correlation id / instance name) for the
-    /// execution-time expression carrier (ADR 0030 identity), tagged with the slot name (<c>"correlationId"</c> or
+    /// execution-time expression carrier, tagged with the slot name (<c>"correlationId"</c> or
     /// <c>"instanceName"</c>). A <c>Correlate</c>/<c>SetName</c> leaf projects the assigned value into a durable
     /// value under a reserved <c>identity:</c> value id, so any activity invocation — including a concurrent sibling
     /// branch — re-lists it and populates <c>getCorrelationId()</c> / <c>getWorkflowInstanceName()</c> without a
-    /// per-invocation workflow-execution-state read (spec 083 review). Distinct from <see cref="InstanceName"/>,
+    /// per-invocation workflow-execution-state read. Distinct from <see cref="InstanceName"/>,
     /// which is the persisted system-metadata home read for querying; both are written in the same commit.
     /// </summary>
     public const string IdentityName = "runtime.identityName";
@@ -164,7 +164,7 @@ public static class RuntimeMetadataKeys
     /// </summary>
     public const string InputName = "runtime.inputName";
     /// <summary>
-    /// Metadata key on the durable value carrying the start stimulus payload (spec 089 A). Its value is the
+    /// Metadata key on the durable value carrying the start stimulus payload. Its value is the
     /// reserved slot name <c>RuntimeWorkflowStateSeed.StimulusInputSlotName</c>. This is a dedicated channel,
     /// deliberately distinct from <see cref="InputName"/>: the stimulus payload never shares the workflow-input
     /// namespace, so it cannot collide with an author-declared input and cannot be injected through the
@@ -174,7 +174,7 @@ public static class RuntimeMetadataKeys
     public const string StimulusInputName = "runtime.stimulusInputName";
     /// <summary>
     /// Metadata key on the durable value carrying the executable node id of the trigger that started this
-    /// execution (spec 089 D). Its value is the reserved slot name
+    /// execution. Its value is the reserved slot name
     /// <c>RuntimeWorkflowStateSeed.TriggerNodeIdSlotName</c>. Like <see cref="StimulusInputName"/> this is a
     /// dedicated, spoof-proof channel — deliberately distinct from <see cref="InputName"/>: the trigger-node
     /// identity never shares the workflow-input namespace, so it cannot collide with an author-declared input
@@ -185,8 +185,8 @@ public static class RuntimeMetadataKeys
     /// </summary>
     public const string TriggerNodeId = "runtime.triggerNodeId";
     /// <summary>
-    /// Metadata key on the durable value carrying the matched trigger binding's free-form metadata map
-    /// (spec 117 D4). Its value is the reserved slot name
+    /// Metadata key on the durable value carrying the matched trigger binding's free-form metadata map.
+    /// Its value is the reserved slot name
     /// <c>RuntimeWorkflowStateSeed.TriggerMetadataSlotName</c>. Like <see cref="TriggerNodeId"/> this is a
     /// dedicated, spoof-proof channel — deliberately distinct from <see cref="InputName"/>: the trigger
     /// metadata (e.g. a BPMN start element id) never shares the workflow-input namespace, so it cannot
@@ -229,14 +229,14 @@ public static class RuntimeMetadataKeys
 
     /// <summary>
     /// Metadata key on a container activity execution carrying the JSON snapshot of its
-    /// container-scoped variable values (ADR 0027, #210). The single source of truth for a concrete
+    /// container-scoped variable values (#210). The single source of truth for a concrete
     /// container execution's variable values: written when the scope mutates and read to rebuild the
     /// scope for descendant input evaluation and on resume.
     /// </summary>
     public const string ScopedVariableValues = "runtime.scopedVariableValues";
 
     /// <summary>
-    /// Set on a container activity execution's state when its scope has completed (ADR 0027, #210):
+    /// Set on a container activity execution's state when its scope has completed (#210):
     /// the scope's values are no longer live for runtime expressions, and the rebuilt
     /// <see cref="Elsa.Expressions.Core.Models.VariableScope"/> is marked completed.
     /// </summary>
@@ -245,7 +245,7 @@ public static class RuntimeMetadataKeys
     /// <summary>
     /// Set by a loop owner (<c>For</c>/<c>ForEach</c>/<c>While</c>/<c>Do</c>, #264–#267) in the body
     /// child's scheduling-provenance metadata: the loop owner's executable node id, used as the declaring
-    /// scope id of the per-iteration variable scope (#259, ADR 0028) the runtime layers onto the body.
+    /// scope id of the per-iteration variable scope (#259) the runtime layers onto the body.
     /// </summary>
     public const string LoopIterationOwnerNodeId = "runtime.loop.iterationOwnerNodeId";
 
@@ -264,7 +264,7 @@ public static class RuntimeMetadataKeys
     public const string ParentCompletionReason = "runtime.parentCompletionReason";
     public const string ParentCompletionSchedulerWorkItemId = "runtime.parentCompletionSchedulerWorkItemId";
 
-    // spec 126 seam C: provenance of a non-terminal child→parent notification evaluation.
+    // Provenance of a non-terminal child→parent notification evaluation.
     public const string NotifyParentSchedulerWorkItemId = "runtime.notifyParentSchedulerWorkItemId";
     public const string NotifyingChildActivityExecutionId = "runtime.notifyingChildActivityExecutionId";
     public const string ParentNotificationCode = "runtime.parentNotificationCode";
@@ -279,11 +279,11 @@ public static class RuntimeMetadataKeys
     public const string RetrySourceActivityExecutionId = "runtime.retrySourceActivityExecutionId";
     public const string RetryReason = "runtime.retryReason";
     public const string ScopeCancellationReason = "runtime.scopeCancellationReason";
-    /// <summary>Activity execution id of the structural parent that staged a child-subtree cancellation (spec 112).</summary>
+    /// <summary>Activity execution id of the structural parent that staged a child-subtree cancellation.</summary>
     public const string SubtreeCancellationRequestedBy = "runtime.subtreeCancellationRequestedBy";
-    /// <summary>Activity execution id of the structural parent that absorbed a child fault (spec 115).</summary>
+    /// <summary>Activity execution id of the structural parent that absorbed a child fault.</summary>
     public const string FaultAbsorbedBy = "runtime.faultAbsorbedBy";
-    /// <summary>Author-supplied reason a child fault was absorbed (spec 115).</summary>
+    /// <summary>Author-supplied reason a child fault was absorbed.</summary>
     public const string FaultAbsorptionReason = "runtime.faultAbsorptionReason";
     public const string Reason = "runtime.reason";
     public const string ResumeReason = "runtime.resumeReason";

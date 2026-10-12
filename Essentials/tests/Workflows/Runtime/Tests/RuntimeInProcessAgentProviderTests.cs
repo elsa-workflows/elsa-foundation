@@ -215,7 +215,7 @@ public sealed class RuntimeInProcessAgentProviderTests
         Assert.True(LifecycleLockCount(provider) <= 1);
     }
 
-    // ---- #542 / spec 128: terminal actor eviction ---------------------------------------------------------------
+    // ---- #542: terminal actor eviction --------------------------------------------------------------------------
 
     [Fact]
     public async Task EnqueueAsync_TerminalDrain_SurfacesTerminalMetadataOnAcceptedResult()

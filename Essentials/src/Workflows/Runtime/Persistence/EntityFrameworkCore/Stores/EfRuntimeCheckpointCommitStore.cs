@@ -362,7 +362,7 @@ public sealed class EfRuntimeCheckpointCommitStore(
 
     /// <summary>
     /// The content columns of the marker <paramref name="row"/>, upcast together from its stamp to the current version
-    /// (spec 180, FR-009; #2144). The id sets restate the content document's, and are compared with it and returned to a
+    /// (#2144). The id sets restate the content document's, and are compared with it and returned to a
     /// replay, so they are content too (#2140).
     /// </summary>
     private static EfSchemaRowContent Content(RuntimeCheckpointCommitEntity row) =>

@@ -422,7 +422,7 @@ public sealed class EfPromoteDraftToVersionCommand(WorkflowsDesignDbContext db, 
                         ?? throw EntityNotFoundException.ForEntity(typeof(WorkflowDefinitionDraft), draftId);
                     EfDesignSupport.EnsureExactIdentity(draftId, draft.Id, "workflow draft promotion lookup");
                     // Storage integrity, not a rule: promote only the content the caller read. The draft row has no
-                    // concurrency token, so its content hash is the compare-and-set operand (spec 188, research R7).
+                    // concurrency token, so its content hash is the compare-and-set operand.
                     if (!StringComparer.Ordinal.Equals(WorkflowDraftStateHash.Compute(draft.StateSource), expectedStateHash))
                         throw new WorkflowDraftChangedException(draftId);
                     draft = EfDesignSupport.MapDraft(serializer, draft);

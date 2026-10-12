@@ -9,10 +9,10 @@ using static Elsa.Workflows.Design.Tests.Unit.BaselineValidatorTests.ValidatorTe
 namespace Elsa.Workflows.Design.Tests.Unit.BaselineValidatorTests;
 
 /// <summary>
-/// SC-022(d) + SC-022(e) activity-level. Branch coverage — required input satisfied, missing, or
+/// Activity-level branch coverage — required input satisfied, missing, or
 /// present-but-empty; optional author-side result capture; recursion into ChildActivities; unknown
 /// version skipped (the unknown-version *error* is
-/// <see cref="UnknownActivityVersionValidator"/>'s concern per the FR-033 2026-07-05 amendment;
+/// <see cref="UnknownActivityVersionValidator"/>'s concern;
 /// this validator resolves via <c>CatalogVersionResolver</c> and skips the unresolvable node rather
 /// than double-reporting or faulting the gate).
 /// </summary>

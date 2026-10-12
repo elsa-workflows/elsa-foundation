@@ -8,10 +8,10 @@ namespace Elsa.Workflows.Runtime.Http.Services;
 /// <summary>
 /// A default fault handler that writes information about the fault to the <see cref="HttpResponse"/>. The
 /// fault → status mapping is owned by <see cref="HttpEndpointFaultMapping"/> so it stays identical to the
-/// middleware's inline fallback (spec 089 sub-unit C, follow-up #592 item 13).
+/// middleware's inline fallback (#592 item 13).
 /// </summary>
 /// <remarks>
-/// Public (like the shipped <c>IHttpEndpointAuthorizationHandler</c> implementations, spec 089 C T008) so the
+/// Public (like the shipped <c>IHttpEndpointAuthorizationHandler</c> implementations) so the
 /// integration fixture can register it explicitly — the fixture composes services directly rather than via the
 /// reflective feature loader, and this assembly exposes no <c>InternalsVisibleTo</c> to the test project.
 /// </remarks>

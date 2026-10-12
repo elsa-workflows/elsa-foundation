@@ -20,7 +20,7 @@ internal static class RuntimeProblemWriting
         ProblemAsync(context, new RuntimeProblemDetails("https://elsa.dev/problems/runtime-request", "Runtime request failed", status, detail, null));
 
     /// <summary>
-    /// A schema write refusal (spec 180, FR-016a) in the generic runtime problem: a 409 carrying the refusal's code, and
+    /// A schema write refusal in the generic runtime problem: a 409 carrying the refusal's code, and
     /// its entries, the family and both versions among them, as errors.
     /// </summary>
     public static Task SchemaWriteRefusedAsync(HttpContext context, SchemaWriteRefusedException refusal)

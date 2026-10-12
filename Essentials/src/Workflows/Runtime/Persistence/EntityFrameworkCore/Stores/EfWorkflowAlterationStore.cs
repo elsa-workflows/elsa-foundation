@@ -433,7 +433,7 @@ public sealed class EfWorkflowAlterationStore(
     }
     /// <summary>
     /// The plan row's content columns, its plan and its cleanup's safe failure, upcast together from its stamp to the
-    /// current version (spec 180, FR-009; #2144). Whether the safe failure is present is read from here too, since a step
+    /// current version (#2144). Whether the safe failure is present is read from here too, since a step
     /// may fill or clear a column.
     /// </summary>
     private static EfSchemaRowContent PlanContent(WorkflowAlterationPlanEntity row) =>
@@ -443,7 +443,7 @@ public sealed class EfWorkflowAlterationStore(
             (nameof(row.CleanupSafeFailureJson), row.CleanupSafeFailureJson));
     /// <summary>
     /// The row's cleanup intent, read from <paramref name="content"/> when the caller already upcast the row so the
-    /// chain runs once per read, or upcasting it itself otherwise (spec 180, FR-009; #2144).
+    /// chain runs once per read, or upcasting it itself otherwise (#2144).
     /// </summary>
     private static UnsealedCleanupIntent? ReadCleanup(WorkflowAlterationPlanEntity row, EfSchemaRowContent? content = null)
     {

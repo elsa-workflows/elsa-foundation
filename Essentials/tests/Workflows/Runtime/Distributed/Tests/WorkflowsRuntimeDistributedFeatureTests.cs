@@ -22,7 +22,7 @@ namespace Elsa.Workflows.Runtime.Distributed.Tests;
 
 public sealed class WorkflowsRuntimeDistributedFeatureTests
 {
-    // Kept beside the composition test (§2.23.1): replacement, the distributed actor provider replaces the in-process one.
+    // Kept beside the composition test: replacement, the distributed actor provider replaces the in-process one.
     [Fact]
     public void RegistersPlacementTransportPumpAndReplacesActorProvider()
     {
@@ -36,7 +36,7 @@ public sealed class WorkflowsRuntimeDistributedFeatureTests
         using var provider = services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
         using var scope = provider.CreateScope();
 
-        // S=2.6 single active provider: after the feature, the one IWorkflowExecutionActorProvider resolves to the
+        // Single active provider: after the feature, the one IWorkflowExecutionActorProvider resolves to the
         // distributed provider, not the in-process one it replaced.
         Assert.IsType<DistributedWorkflowExecutionActorProvider>(provider.GetRequiredService<IWorkflowExecutionActorProvider>());
         Assert.Single(services, d => d.ServiceType == typeof(IWorkflowExecutionActorProvider));
@@ -111,7 +111,7 @@ public sealed class WorkflowsRuntimeDistributedFeatureTests
         await pump.SweepOnceAsync();
         await pump.SweepOnceAsync();
 
-        // The first tick also opens one scope for the shell's join sweep (spec 184, FR-022), which runs once per process.
+        // The first tick also opens one scope for the shell's join sweep, which runs once per process.
         Assert.Equal(3, lifecycle.CreatedIds.Count);
         Assert.Equal(3, lifecycle.CreatedIds.Distinct().Count());
         Assert.Equal(
@@ -270,7 +270,7 @@ public sealed class WorkflowsRuntimeDistributedFeatureTests
         Assert.Equal(7, pump.TransportLeaseBatchSize);
     }
 
-    /// <summary>Spec 184, FR-001: one routing identity, the member's host id, for placement, transport and execution
+    /// <summary>One routing identity, the member's host id, for placement, transport and execution
     /// leases alike.</summary>
     [Fact]
     public void The_routing_identity_is_the_member_host_id_for_every_lease()
@@ -287,7 +287,7 @@ public sealed class WorkflowsRuntimeDistributedFeatureTests
     }
 
     /// <summary>
-    /// Spec 184, FR-003: a NodeId that differs from the host id refuses the shell with a diagnostic naming the host-id
+    /// A NodeId that differs from the host id refuses the shell with a diagnostic naming the host-id
     /// setting, at activation, through the startup task; one equal to the host id is accepted. The setting is kept and its
     /// setter does not throw, because CShells would silently drop a deleted key and swallow a setter's exception.
     /// </summary>

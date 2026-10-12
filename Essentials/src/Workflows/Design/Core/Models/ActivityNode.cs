@@ -9,15 +9,15 @@ namespace Elsa.Workflows.Design.Core.Models;
 /// <summary>
 /// The placed-activity node on the design canvas. Identified within its owning Version/Draft
 /// by <see cref="NodeId"/> (uniqueness scoped to the parent instance; carries across
-/// Draft → Version promotion as a copy per Unit C FR-009a). References the activity catalog
+/// Draft → Version promotion as a copy). References the activity catalog
 /// via <see cref="ActivityVersionId"/> — a single stable string identifier (Unit B's catalog
-/// row id), replacing the prior <c>(activityDefinitionId, version)</c> pair per Unit C FR-011.
+/// row id), replacing the prior <c>(activityDefinitionId, version)</c> pair.
 /// Per-node argument state lives on <see cref="Inputs"/> / <see cref="Outputs"/>.
 /// </summary>
 /// <remarks>
 /// Designer layout (position, size, canvas metadata) is NOT carried on the node — it lives
 /// on the parent's <c>WorkflowDefinitionVersionLayout</c> / <c>WorkflowDefinitionDraftLayout</c>
-/// sibling as a <c>DesignMetadataRecord</c> keyed by <see cref="NodeId"/> per Elsa §E2.9.2.
+/// sibling as a <c>DesignMetadataRecord</c> keyed by <see cref="NodeId"/>.
 /// Child activities and their relationships belong to <see cref="Structure"/> and are interpreted
 /// by the owning activity module. Generic design-time traversal is derived from structure through
 /// activity-specific projection handlers rather than stored directly on the node.

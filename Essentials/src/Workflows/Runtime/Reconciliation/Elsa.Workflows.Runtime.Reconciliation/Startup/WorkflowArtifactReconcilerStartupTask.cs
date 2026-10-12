@@ -27,8 +27,7 @@ namespace Elsa.Workflows.Runtime.Reconciliation.Startup;
 /// "Why the passes take turns" describes them.
 /// </para>
 /// <para>
-/// Re-reconciliation needs no new trigger: this is an <see cref="IStartupTask"/>, so a shell reload replays it
-/// (FR-B-008).
+/// Re-reconciliation needs no new trigger: this is an <see cref="IStartupTask"/>, so a shell reload replays it.
 /// </para>
 /// </remarks>
 [SingleNodeTask]
@@ -51,7 +50,7 @@ public sealed class WorkflowArtifactReconcilerStartupTask(
                 rejection.RejectionKind,
                 rejection.Diagnostic);
 
-        // T118. An ownership skip is not a rejection — the artifact imported cleanly — but it is the one non-
+        // An ownership skip is not a rejection — the artifact imported cleanly — but it is the one non-
         // rejection outcome an operator MUST be told about at boot: the mount is being ignored for that
         // definition, and every other surface looks healthy. Left to the pass result alone it would be a silent
         // skip, which is exactly the failure the rule was approved with a diagnostic attached to avoid.

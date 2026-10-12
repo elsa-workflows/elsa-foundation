@@ -3,7 +3,7 @@ using Elsa.Workflows.Runtime.Core.Models;
 namespace Elsa.Workflows.Runtime.Core.Contracts;
 
 /// <summary>
-/// Narrow activity-facing capability for staging one durable-first named-event publish (spec 135 D1). It mirrors
+/// Narrow activity-facing capability for staging one durable-first named-event publish. It mirrors
 /// <see cref="IWorkflowDispatchStager"/>'s layering exactly, but is <b>publish-typed</b>: the staging method takes the
 /// send's authored facets (event name, optional correlation id, optional payload), never a raw
 /// <see cref="RuntimePostCommitIntent"/>. The buffer/consumer builds the <c>PublishStimulusIntentKind</c> intent
@@ -16,7 +16,7 @@ public interface IPublishStimulusStager
 }
 
 /// <summary>
-/// Engine-facing side of the publish-stimulus staging seam (spec 135 D1). Requests are isolated by runtime invocation
+/// Engine-facing side of the publish-stimulus staging seam. Requests are isolated by runtime invocation
 /// identity because transient activities can be activated in child scopes. Supports multiple staged publishes per
 /// invocation, returned in staging (ordinal) order so their built intents carry stable, distinct deterministic ids.
 /// </summary>

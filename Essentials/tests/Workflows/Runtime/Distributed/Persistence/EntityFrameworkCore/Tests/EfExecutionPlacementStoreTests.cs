@@ -46,8 +46,8 @@ public sealed class EfExecutionPlacementStoreTests
     }
 
     /// <summary>
-    /// Spec 184, FR-014: renewal is a compare-and-set on the lease as held and never grants; a release reports whether it
-    /// released, so a reclaim can count what it did (FR-028).
+    /// Renewal is a compare-and-set on the lease as held and never grants; a release reports whether it
+    /// released, so a reclaim can count what it did.
     /// </summary>
     [Fact]
     public async Task Renewal_extends_only_the_live_lease_held_under_the_same_token_and_never_grants()

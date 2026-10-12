@@ -368,7 +368,7 @@ public sealed class EfBookmarkStateStore(
 
             // The payload and metadata columns restate parts of the content, and each is compared with it, so the row's
             // three content columns are upcast from its stamp together: the comparisons then hold between documents in
-            // one format (spec 180, FR-009; #2140, #2144). Whether metadata is present is read from the upcast row too,
+            // one format (#2140, #2144). Whether metadata is present is read from the upcast row too,
             // since a step may fill a column.
             var upcast = BookmarkStateEfModule.Chain.Upcast<BookmarkStateEntity>(
                 row.SchemaVersion,

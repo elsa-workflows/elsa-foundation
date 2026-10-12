@@ -10,7 +10,7 @@ using Xunit;
 namespace Elsa.Workflows.Runtime.Tests;
 
 /// <summary>
-/// Unit matrix for the per-execution checkpoint-cadence resolver (ADR 0032 R5). Precedence under test:
+/// Unit matrix for the per-execution checkpoint-cadence resolver. Precedence under test:
 /// per-run stamp &gt; per-workflow authored cadence (read off the pinned executable) &gt; host default; and the honest
 /// reachability boundary — authored Coalesced on an Immediate host clamps to Immediate because the coalescing
 /// machinery is not registered. The mandatory-boundary override lives in the commit layer and is covered by the

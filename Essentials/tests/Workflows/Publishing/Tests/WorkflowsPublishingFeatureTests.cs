@@ -10,7 +10,7 @@ using Xunit;
 namespace Elsa.Workflows.Publishing.Tests;
 
 /// <summary>
-/// §2.23.1 registration test for the endpoint-free publish engine (US1 / FR-008). Composing the
+/// Registration test for the endpoint-free publish engine. Composing the
 /// <see cref="WorkflowsPublishingFeature"/> alone must yield a fully wired workflow-publish + compile
 /// surface, and NOTHING from the transport boundary: no authorization context, no HTTP endpoints.
 /// This is what makes the engine reusable by a headless runtime node (the PR2 enabler).
@@ -49,25 +49,25 @@ public sealed class WorkflowsPublishingFeatureTests
         Assert.NotNull(PublishingPersistenceFamilyBackend.Find(hostProvided, PublishingPersistenceFamilyBackend.ActivityPublicationReceipts));
     }
 
-    // Kept beside the composition test (§2.23.1): asserts what the engine must not register, the transport's authorization context.
+    // Kept beside the composition test: asserts what the engine must not register, the transport's authorization context.
     [Fact]
     public void Does_not_register_the_transport_authorization_context()
     {
         var services = ComposeEngine();
 
-        // SC-002: the engine is authorization-free. No neutral default is introduced; the context is
+        // The engine is authorization-free. No neutral default is introduced; the context is
         // supplied only by the transport (Api) feature.
         Assert.DoesNotContain(services, descriptor =>
             descriptor.ServiceType.FullName == AuthorizationContextTypeName);
     }
 
-    // Kept beside the composition test (§2.23.1): asserts what the engine must not register, FastEndpoints transport types.
+    // Kept beside the composition test: asserts what the engine must not register, FastEndpoints transport types.
     [Fact]
     public void Does_not_register_any_FastEndpoints_publish_endpoints()
     {
         var services = ComposeEngine();
 
-        // SC-003: no transport is mounted by the engine. Nothing it registers originates in the
+        // No transport is mounted by the engine. Nothing it registers originates in the
         // FastEndpoints transport assembly.
         Assert.DoesNotContain(services, descriptor =>
             descriptor.ServiceType.Assembly.GetName().Name == FastEndpointsAssemblyName ||

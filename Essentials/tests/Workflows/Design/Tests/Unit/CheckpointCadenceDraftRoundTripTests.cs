@@ -10,7 +10,7 @@ using static Elsa.Workflows.Design.Tests.Infrastructure.UpdateDraftTestKit;
 namespace Elsa.Workflows.Design.Tests.Unit;
 
 /// <summary>
-/// ADR 0032 R5 authoring carrier. The per-workflow checkpoint cadence rides
+/// Checkpoint cadence authoring carrier. The per-workflow checkpoint cadence rides
 /// <see cref="WorkflowStrategyOptions.CheckpointCadence"/> on the authored <see cref="WorkflowDefinitionState"/>, so it
 /// must round-trip faithfully through the full-state draft replace (serialize → persist → deserialize) and be
 /// carried wholesale onto the immutable version at promotion — the compile source the executable compiler reads.

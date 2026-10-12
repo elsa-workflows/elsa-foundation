@@ -9,7 +9,7 @@ public sealed class UpdateRouteTableStartupTaskTests
     private readonly InMemoryWorkflowTriggerBindingStore _store = new();
     private readonly FakeRouteTable _routeTable = new();
 
-    // The startup task now delegates the read-then-swap to the shared synchronizer (spec 089 D review fix); build the
+    // The startup task now delegates the read-then-swap to the shared synchronizer; build the
     // real synchronizer over the real resolver + route table so the task still populates the table end-to-end.
     private UpdateRouteTableStartupTask Task() =>
         new(Synchronizers.Build(_store, _routeTable));

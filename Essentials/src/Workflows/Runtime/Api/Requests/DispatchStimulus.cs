@@ -13,7 +13,7 @@ namespace Elsa.Workflows.Runtime.Api.Requests;
 /// <param name="StimulusType">The stimulus type (e.g. the event trigger's <c>Event</c> type).</param>
 /// <param name="StimulusHash">The opaque stimulus hash the trigger index and bookmarks are keyed by.</param>
 /// <param name="Input">Optional JSON payload delivered to resumed instances as their resume input, and to newly
-/// started instances on the dedicated stimulus-input channel (spec 089 A) — never as a named workflow input.</param>
+/// started instances on the dedicated stimulus-input channel — never as a named workflow input.</param>
 /// <param name="CorrelationId">Optional passive correlation value that scopes the resume fan-in (Condition B).</param>
 /// <param name="Mode">Whether to start, resume, or both. Defaults to both.</param>
 /// <param name="IdempotencyKey">

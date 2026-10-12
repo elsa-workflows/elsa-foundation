@@ -8,7 +8,7 @@ namespace Elsa.Workflows.Runtime.Distributed.Tests.Placement;
 /// <summary>
 /// A fleet whose every fact a test sets directly: which members exist, their status, liveness and lapse, what each
 /// reports, what a cached read shows, and whether a fresh read fails. It stands in for a durable membership provider,
-/// so the placement tests can drive the exact fleet views spec 184 reasons about.
+/// so the placement tests can drive the exact fleet views placement reasons about.
 /// </summary>
 internal sealed class TestFleet(TimeProvider clock)
 {
@@ -94,7 +94,7 @@ internal sealed class TestMember(TestFleet fleet, TestFleet.Entry entry) : IClus
     /// <summary>Its entry is live again, as a member's is when a stalled heartbeat lands before a fresh read.</summary>
     public void Revive() => entry.IsLive = true;
 
-    /// <summary>It concludes that it lapsed, as it does when it cannot reach the membership store (FR-007).</summary>
+    /// <summary>It concludes that it lapsed, as it does when it cannot reach the membership store.</summary>
     public void Lapse(DateTimeOffset at) => entry.Lapse = new MemberLapse(MemberLapseReason.ExpiryPassed, at);
 
     public LocalMemberStanding GetLocalStanding() => new(entry.Identity, entry.Status, entry.Lapse);

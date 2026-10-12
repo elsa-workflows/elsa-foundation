@@ -416,7 +416,7 @@ public sealed class PoisonedSchedulerWorkIncidentObserverTests
     [Fact]
     public async Task OnDrainedAsync_WithInnerFaultOnRecord_ProjectsInnerFaultIntoIncident()
     {
-        // #1031: the root cause (GW-PHYSICAL-037) was nested one level under a checkpoint-writer wrapper exception
+        // #1031: the root cause (the projection-column overflow of #922) was nested one level under a checkpoint-writer wrapper exception
         // and was invisible on the projected incident. The inner fault carried on the poison record must surface in
         // both the incident message and the FaultInner* metadata keys (mirroring ActivityFaultIncidentRecorder).
         var innerFault = new RuntimeFaultInfo(
@@ -514,7 +514,7 @@ public sealed class PoisonedSchedulerWorkIncidentObserverTests
     [Fact]
     public async Task OnDrainedAsync_WhenIncidentPersistenceThrows_DoesNotPropagateAndContinues()
     {
-        // Reproduces GW-PHYSICAL-037 (#922): recording the incident fails during persistence. The observer must swallow
+        // Reproduces #922: recording the incident fails during persistence. The observer must swallow
         // the failure (logging it with the original poison record), leave the durable poison record intact, and keep
         // draining the remaining records — so the test-run / dispatch API call is not sunk by incident-recording.
         var throwingCommitIncidentStore = new ThrowingIncidentStateStore();
@@ -1022,7 +1022,7 @@ public sealed class PoisonedSchedulerWorkIncidentObserverTests
             inner.ListSummariesPageAsync(query, cancellationToken);
     }
 
-    /// <summary>Simulates a projection-column overflow (GW-PHYSICAL-037): every incident write throws.</summary>
+    /// <summary>Simulates a projection-column overflow (#922): every incident write throws.</summary>
     private sealed class ThrowingIncidentStateStore : IIncidentStateStore
     {
         public int SaveAttempts { get; private set; }

@@ -69,7 +69,7 @@ public sealed class GlobalBookmarkStimulusLookupTests
     [Fact]
     public async Task FindWaitingByType_ReturnsSnapshotsWithMetadata_AcrossHashesAndExecutions()
     {
-        // Spec 089 D (T004b): the type-scoped lookup returns waiting-bookmark SNAPSHOTS (incl. Metadata) for a
+        // The type-scoped lookup returns waiting-bookmark SNAPSHOTS (incl. Metadata) for a
         // stimulus type regardless of hash — the mid-flow HttpEndpoint route-table resolver / middleware read the
         // durable route template + endpoint options off the returned Metadata.
         var store = new InMemoryBookmarkStateStore();
@@ -101,7 +101,7 @@ public sealed class GlobalBookmarkStimulusLookupTests
     [Fact]
     public async Task InMemoryStore_ListByStimulusType_ReturnsEveryTypeMatch_RegardlessOfHash_AndIsUnfilteredByExpiry()
     {
-        // Spec 089 D (T004a): the raw index type-scan returns every bookmark of the type across hashes/executions,
+        // The raw index type-scan returns every bookmark of the type across hashes/executions,
         // WITHOUT expiry filtering (the documented raw-read contract — expiry lives in the lookup layer).
         var store = new InMemoryBookmarkStateStore();
         await store.SaveAsync(Bookmark("bk-a", executionId: "wfexec-1", stimulusType: "HttpEndpoint", stimulusHash: "h1"));

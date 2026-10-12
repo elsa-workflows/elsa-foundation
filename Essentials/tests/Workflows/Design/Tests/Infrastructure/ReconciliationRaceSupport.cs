@@ -37,7 +37,7 @@ internal sealed class HandlingPublisher<TEvent>(IEventHandler<TEvent> handler) :
 }
 
 /// <summary>
-/// The credential-literal rule (spec 188) of the passes these races run. Their states hold no activity, so the rule
+/// The credential-literal rule of the passes these races run. Their states hold no activity, so the rule
 /// has nothing to judge and this validator finds nothing, as the real one would; it refuses to judge a state that does
 /// hold one, which needs the real validator. The rule itself is tested where it is judged.
 /// </summary>

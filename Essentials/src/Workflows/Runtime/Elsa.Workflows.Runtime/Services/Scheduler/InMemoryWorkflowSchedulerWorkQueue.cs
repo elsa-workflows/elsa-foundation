@@ -222,7 +222,7 @@ public sealed class InMemoryWorkflowSchedulerWorkQueue : IWorkflowSchedulerWorkQ
     /// Returns the FIFO-earliest queued item whose id is not in <paramref name="skipWorkItemIds"/>, without claiming
     /// it — true insertion order, the same order <see cref="ClaimAsync"/> serves the head. Not part of
     /// <see cref="IWorkflowSchedulerWorkQueue"/>: it exists for the coalescing session's single-writer inline fused
-    /// pump (spec 123 D2), which reads past the drain loop's live head claim and removes dispatched items with
+    /// pump, which reads past the drain loop's live head claim and removes dispatched items with
     /// <see cref="DeleteAsync"/>. The strict-FIFO claim contract for concurrent drainers is unaffected.
     /// </summary>
     public ValueTask<RuntimeSchedulerWorkItem?> PeekFirstAvailableAsync(

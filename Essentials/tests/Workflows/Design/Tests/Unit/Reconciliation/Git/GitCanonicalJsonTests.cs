@@ -6,7 +6,7 @@ namespace Elsa.Workflows.Design.Tests.Unit.Reconciliation.Git;
 /// <summary>
 /// The canonicalizer must make the on-disk (indented) file a pure-whitespace rendering of the compact
 /// canonical form, so <c>hash(compact(indent(x))) == hash(x)</c> and reviewable diffs never change the
-/// content identity (ADR 0034 D3, spec 085 R4).
+/// content identity.
 /// </summary>
 public sealed class GitCanonicalJsonTests
 {

@@ -11,7 +11,7 @@ namespace Elsa.Workflows.Design.Persistence.Core.Contracts;
 /// </summary>
 /// <remarks>
 /// <para>
-/// <b>Promotion gate (Unit C FR-024).</b> The implementation MUST throw
+/// <b>Promotion gate.</b> The implementation MUST throw
 /// <see cref="DraftHasValidationErrorsException"/> when re-running the validators against the
 /// Draft in-lock yields a non-empty error set. Validation errors are derived state (not
 /// persisted): the gate re-runs the validators at promotion time rather than reading a persisted
@@ -20,13 +20,13 @@ namespace Elsa.Workflows.Design.Persistence.Core.Contracts;
 /// forbidden by domain contract.
 /// </para>
 /// <para>
-/// <b>Lock contract (Unit C FR-027b).</b> Promotion MUST acquire the same
+/// <b>Lock contract.</b> Promotion MUST acquire the same
 /// <c>workflow-draft:{DraftId}</c> distributed lock as mutation commands. Mutations arriving
 /// after a promotion completes are not part of the promoted Version — they exist on the Draft
 /// only and require a new (higher) Version to be included.
 /// </para>
 /// <para>
-/// <b>Content precondition (spec 188, research R7).</b> The caller passes the
+/// <b>Content precondition.</b> The caller passes the
 /// <see cref="WorkflowDraftStateHash"/> of the draft it read and checked. Inside the promotion lock, before anything is
 /// written, the implementation MUST compare it with the hash of the draft it reads there and throw
 /// <see cref="WorkflowDraftChangedException"/> when they differ, so a promotion writes exactly the content its caller

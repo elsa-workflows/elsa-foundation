@@ -4,7 +4,7 @@ using Microsoft.Extensions.DependencyInjection;
 namespace Elsa.Workflows.Runtime.Distributed.Placement;
 
 /// <summary>
-/// What the placement pump needs to make placement a membership query and to act on the fleet (spec 184): the gate it
+/// What the placement pump needs to make placement a membership query and to act on the fleet: the gate it
 /// asks before claiming or renewing, the reclaimer, the unplaceable-work report, this shell's runnability entry, and
 /// whether a newer generation of this shell has taken over.
 /// </summary>
@@ -24,10 +24,10 @@ public sealed class ExecutionPlacementMembership(
 
     public ShellRunnabilityRegistry Runnability { get; } = runnability ?? throw new ArgumentNullException(nameof(runnability));
 
-    /// <summary>Whether a newer generation of this shell is active, so a stop of this one is a reload (FR-021, FR-022).</summary>
+    /// <summary>Whether a newer generation of this shell is active, so a stop of this one is a reload.</summary>
     public ShellSuccession Succession { get; } = succession ?? throw new ArgumentNullException(nameof(succession));
 
-    /// <summary>Computes this shell's runnability entry from its registries now (FR-008).</summary>
+    /// <summary>Computes this shell's runnability entry from its registries now.</summary>
     public async ValueTask<RunnabilityEntry> ComputeRunnabilityAsync()
     {
         await using var scope = shellScopes.CreateAsyncScope();
@@ -35,7 +35,7 @@ public sealed class ExecutionPlacementMembership(
     }
 
     /// <summary>
-    /// The host ids a view shows departed (spec 184, Terms): no live incarnation, and a latest incarnation, the one not
+    /// The host ids a view shows departed: no live incarnation, and a latest incarnation, the one not
     /// displaced, that left or expired. A host id absent from the view, or with a live incarnation, is not departed, and
     /// neither is this member's own host id.
     /// </summary>

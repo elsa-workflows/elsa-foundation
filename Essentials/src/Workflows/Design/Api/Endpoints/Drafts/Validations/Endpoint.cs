@@ -12,7 +12,7 @@ using NativeEndpoints;
 namespace Elsa.Workflows.Design.Api.Endpoints.Drafts.Validations;
 
 /// <summary>
-/// Read path for the FR-024 validation error set. Loads the draft and derives its errors through the
+/// Read path for the draft's validation error set. Loads the draft and derives its errors through the
 /// single validation gate, using the shielded variant so a faulting validator surfaces as a
 /// <c>Validation/Faulted</c> entry rather than turning the read into a 500.
 /// </summary>

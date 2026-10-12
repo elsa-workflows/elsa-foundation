@@ -3,7 +3,7 @@ using Elsa.Workflows.Design.Reconciliation.Git.Options;
 namespace Elsa.Workflows.Design.Reconciliation.Git.Services;
 
 /// <summary>
-/// What a git command that reaches the remote carries to authenticate (FR-013): per-invocation <c>-c …</c> arguments,
+/// What a git command that reaches the remote carries to authenticate: per-invocation <c>-c …</c> arguments,
 /// and environment variables of that one git process. Nothing secret is on the command line or on disk.
 /// </summary>
 /// <remarks>

@@ -26,7 +26,7 @@ public sealed class ExecutionCommandTransportTests
         Assert.All(leased, i => Assert.Equal(1, i.DeliveryAttemptCount));
     }
 
-    /// <summary>Spec 184, FR-019 and FR-024: an early release is a holder- and token-matched compare-and-set; the item is
+    /// <summary>An early release is a holder- and token-matched compare-and-set; the item is
     /// visible at once, the released holder's ack is refused, and the next lease issues a greater token.</summary>
     [Fact]
     public async Task ReleaseLease_MakesTheItemVisibleAtOnce_RefusesTheOldAck_AndLeasesAgainUnderAGreaterToken()

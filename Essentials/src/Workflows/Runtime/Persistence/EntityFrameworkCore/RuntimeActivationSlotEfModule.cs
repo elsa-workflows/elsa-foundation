@@ -9,7 +9,7 @@ public static class RuntimeActivationSlotEfModule
     public const string SchemaVersion = "1.0.0";
     public const string SchemaFamily = "RuntimeActivationSlot";
     /// <summary>The family's one chain, from this assembly's declaration: what every reader of the family checks and
-    /// upcasts through (spec 180, FR-010).</summary>
+    /// upcasts through.</summary>
     public static readonly EfSchemaChain Chain = EfSchemaChain.Of(typeof(RuntimeActivationSlotEfModule).Assembly, SchemaFamily);
     // WorkflowActivationSlotIdentity formats two legal 128-code-unit identities into a
     // composite identity of 280 code units. Keep one defensive spare code unit for the

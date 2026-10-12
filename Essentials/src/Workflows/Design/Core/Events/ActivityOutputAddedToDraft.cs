@@ -5,7 +5,7 @@ namespace Elsa.Workflows.Design.Core.Events;
 
 /// <summary>
 /// Mutation event for an output added to a placed activity's <c>Outputs</c> bag. Published by
-/// <c>IAddActivityOutputToDraftCommand</c>. Per Unit C FR-018 â€” activity output full CRUD,
+/// <c>IAddActivityOutputToDraftCommand</c>. Activity output has full CRUD,
 /// symmetric with workflow-output CRUD.
 /// </summary>
 /// <remarks>

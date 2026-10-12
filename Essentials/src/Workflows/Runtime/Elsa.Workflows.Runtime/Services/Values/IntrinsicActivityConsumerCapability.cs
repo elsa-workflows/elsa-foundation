@@ -12,7 +12,7 @@ namespace Elsa.Workflows.Runtime.Services.Values;
 /// declares the runtime requirement <c>intrinsic</c> at its descriptor schema version. No activation strategy
 /// consumes that descriptor: <see cref="WorkflowIntrinsicExecutor"/> runs the node. The requirement still has to be
 /// answered, because <c>IRuntimeRequirementChecker</c> reads this registry and nothing else, and its verdict decides
-/// whether a member claims the execution (spec 184, FR-011), whether an artifact is admitted on import, and what
+/// whether a member claims the execution, whether an artifact is admitted on import, and what
 /// Publishing's preflight reports.
 /// </para>
 /// <para>

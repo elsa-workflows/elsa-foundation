@@ -10,8 +10,8 @@ namespace Elsa.Workflows.Runtime.Core.Contracts;
 /// <remarks>
 /// <para>
 /// The distributed runtime implements it with the executions whose execution lease or heartbeat was held under a host
-/// id it reclaimed, because that host id departed or because this process's predecessor held it (spec 184, FR-024 and
-/// FR-027). The contract lives here so the core gains no reference to that leaf (framework constitution §2.7).
+/// id it reclaimed, because that host id departed or because this process's predecessor held it.
+/// The contract lives here so the core gains no reference to that leaf.
 /// </para>
 /// <para>
 /// A candidate is an accelerator, never the record of what is owed: the execution lease is still what makes an

@@ -19,7 +19,7 @@ public sealed class WorkflowExecutionStartService(
         // Seed authored workflow variable defaults so `variables.*` input expressions resolve to their
         // declared values in production (Seam C, #254). The defaults are read from the compiled executable's
         // workflow-scope declarations, not the design document, keeping authored content separate from the
-        // runtime artifact (§E2.9). A missing executable is left to the dispatcher to reject with its own diagnostics.
+        // runtime artifact. A missing executable is left to the dispatcher to reject with its own diagnostics.
         var executable = await executableStore.FindAsync(request.ArtifactId, cancellationToken);
         var variables = executable is null
             ? EmptyVariables

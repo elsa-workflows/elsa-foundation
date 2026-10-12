@@ -3,8 +3,8 @@ using System.Diagnostics.CodeAnalysis;
 namespace Elsa.Workflows.Runtime.Core.Models;
 
 /// <summary>
-/// Marks that a live drain loop currently owns post-commit intent delivery for a single workflow execution
-/// (spec 105-runtime-live-drain-delivery). While this scope is ambient, the post-commit outbox processor
+/// Marks that a live drain loop currently owns post-commit intent delivery for a single workflow execution.
+/// While this scope is ambient, the post-commit outbox processor
 /// delivers <c>EnqueueSchedulerWork</c> intents for the owning execution IN-MEMORY: it enqueues the continuation
 /// work item through the queue's idempotent <c>EnqueueAsync</c> and marks the durable outbox item Delivered directly,
 /// WITHOUT the durable claim round-trip. The durable outbox item remains a crash backstop that the resumption sweep
@@ -23,7 +23,7 @@ namespace Elsa.Workflows.Runtime.Core.Models;
 /// owning deliverer's completion authoritative. Do not reintroduce an exclusivity assumption on top of this scope;
 /// drain liveness is ambient in-process state, and the sweep may not even be in this process.</para>
 ///
-/// <para><b>In-process-hop payload carrier (spec 109, ADR 0031 follow-up item (a)).</b> The scope also carries the
+/// <para><b>In-process-hop payload carrier.</b> The scope also carries the
 /// already-materialized continuation <see cref="RuntimeSchedulerWorkItem"/>s across the enqueue→dispatch hop in memory,
 /// keyed by post-commit intent id. The checkpoint committer publishes each continuation the moment its commit lands
 /// (<see cref="PublishHopWorkItem"/>); the scheduler post-commit intent dispatcher takes it back
@@ -36,7 +36,7 @@ namespace Elsa.Workflows.Runtime.Core.Models;
 /// </summary>
 public sealed class RuntimeLiveDrainDeliveryScope
 {
-    // Single-writer-per-execution (ADR 0031 decision (b)): only the owning live drain publishes and takes on this
+    // Single-writer-per-execution: only the owning live drain publishes and takes on this
     // scope, so no lock is needed. A plain dictionary keeps the carrier allocation-light on the hot path.
     private readonly Dictionary<string, RuntimeSchedulerWorkItem> _hopWorkItems = new(StringComparer.Ordinal);
 

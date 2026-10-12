@@ -1,8 +1,8 @@
 namespace Elsa.Workflows.Design.Reconciliation.Git.Contracts;
 
 /// <summary>
-/// Owns the local working clone of the configured repository and keeps it current per role (ADR 0034
-/// D11). Called lazily by the source and the exporter before they touch files, so a re-run picks up
+/// Owns the local working clone of the configured repository and keeps it current per role.
+/// Called lazily by the source and the exporter before they touch files, so a re-run picks up
 /// remote changes and a fresh catalog self-seeds at bootstrap.
 /// </summary>
 public interface IGitWorkspace
@@ -31,7 +31,7 @@ public interface IGitWorkspace
 
     /// <summary>
     /// Runs a git command that reaches the remote, such as a fetch or a push, in the clone with the configured
-    /// credentials (FR-013): per-invocation <c>-c …</c> arguments, and for a token an environment variable of that one
+    /// credentials: per-invocation <c>-c …</c> arguments, and for a token an environment variable of that one
     /// git process that a credential helper reads, so nothing secret rides the command line or is written to disk
     /// (#2197). The exporter fetches its export branch and pushes through it.
     /// </summary>

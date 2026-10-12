@@ -5,7 +5,7 @@ namespace Elsa.Workflows.Runtime.Http.Contracts;
 
 /// <summary>
 /// Projects the current HTTP-endpoint trigger bindings into the route templates that back the per-shell
-/// route table (spec 089 B).
+/// route table.
 /// </summary>
 /// <remarks>
 /// <para>

@@ -31,7 +31,7 @@ public sealed class WorkflowExecutableCoordinationEntity
 }
 
 /// <summary>
-/// One root-write lease on one workflow executable (spec 200). Each holder writes only its own row, so concurrent
+/// One root-write lease on one workflow executable. Each holder writes only its own row, so concurrent
 /// executions of one artifact never contend on a shared record; the coordination row keeps only the deletion guard.
 /// </summary>
 public sealed class WorkflowExecutableRootWriteLeaseEntity

@@ -12,7 +12,7 @@ public static class PublishingLedgerEfModule
     /// <summary>The schema family whose rows stamp <see cref="ContentSchemaVersion"/>, as its skew check names it.</summary>
     public const string SchemaFamily = "PublishingLedger";
     /// <summary>The family's one chain, from this assembly's declaration: what every reader of the family checks and
-    /// upcasts through (spec 180, FR-010).</summary>
+    /// upcasts through.</summary>
     public static readonly EfSchemaChain Chain = EfSchemaChain.Of(typeof(PublishingLedgerEfModule).Assembly, SchemaFamily);
 
     public const string PublicationRecordTableName = "elsa_publication_records";

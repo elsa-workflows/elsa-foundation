@@ -7,12 +7,12 @@ using static Elsa.Workflows.Design.Tests.Infrastructure.CredentialLiteralTestSup
 namespace Elsa.Workflows.Design.Tests.Unit.CredentialLiteral;
 
 /// <summary>
-/// Spec 188, FR-008 at the five Design API callers that take incoming state (draft save through Definitions/Add,
+/// The credential-literal rule at the five Design API callers that take incoming state (draft save through Definitions/Add,
 /// Drafts/Replace and Definitions/Update, then Versions/Add and Definitions/Submit), over the real EF store: a literal on
 /// a credential input is refused before the command runs, so no row is written and no stored state holds the literal;
 /// a secret reference, an empty literal and a literal on a sensitive input that is not a credential are stored. A literal
-/// on an activity the catalog does not hold cannot be judged and is stored (the residual, research R7), which publish
-/// then refuses (T112). The 400 the refusal maps to is pinned over HTTP in <c>CredentialLiteralEndpointTests</c>.
+/// on an activity the catalog does not hold cannot be judged and is stored (the residual), which publish
+/// then refuses. The 400 the refusal maps to is pinned over HTTP in <c>CredentialLiteralEndpointTests</c>.
 /// </summary>
 public sealed class CredentialLiteralStorageTests(CredentialLiteralStorageTests.SeededHost fixture)
     : IClassFixture<CredentialLiteralStorageTests.SeededHost>

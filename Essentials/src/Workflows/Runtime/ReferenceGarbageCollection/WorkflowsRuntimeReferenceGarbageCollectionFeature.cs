@@ -15,7 +15,7 @@ using Microsoft.Extensions.Options;
 namespace Elsa.Workflows.Runtime.ReferenceGarbageCollection;
 
 /// <summary>
-/// Opt-in host feature that schedules the ADR 0040 reference garbage collector. The GC service itself
+/// Opt-in host feature that schedules the reference garbage collector. The GC service itself
 /// (<see cref="IWorkflowExecutableReferenceGarbageCollector"/>) is part of the runtime composition root and can be
 /// invoked manually (e.g. from an admin endpoint or a test); this feature adds the periodic trigger — a recurring
 /// background pump that runs one two-query sweep per tick, dropping expired/retired references then pruning the

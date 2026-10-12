@@ -22,7 +22,7 @@ public sealed class PublishingApiContractCompatibilityTests
     [Fact]
     public void Every_contract_type_is_publicly_exported_by_the_api_assembly()
     {
-        // T117 moved slot reads to Runtime.Api, retiring the three publishing read contracts while
+        // Moving slot reads to Runtime.Api retired the three publishing read contracts while
         // keeping PublicationSlotView for the unpublish/restore lifecycle commands. #1625 then added
         // GetPublicationRecord, the request for the Publishing-owned read of one journal record, and #1659 added
         // PublicationSlotOwnerView, the nullable targetSlotOwner both workflow preflight views now carry.

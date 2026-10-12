@@ -4,8 +4,8 @@ using System.Text.Json.Serialization;
 namespace Elsa.Workflows.Runtime.Core.Models;
 
 /// <summary>
-/// Self-contained, per-publish record pointing at a content-addressed <see cref="WorkflowExecutable"/> artifact
-/// (ADR 0038/0039/0040). Behaviorally identical publishes produce distinct references to the same artifact
+/// Self-contained, per-publish record pointing at a content-addressed <see cref="WorkflowExecutable"/> artifact.
+/// Behaviorally identical publishes produce distinct references to the same artifact
 /// ("image-and-tags" in a container registry).
 /// </summary>
 /// <remarks>
@@ -13,8 +13,8 @@ namespace Elsa.Workflows.Runtime.Core.Models;
 /// artifact-version label, publish/creation timestamps, the reference scope and optional expiry, retirement
 /// facts, activation/slot provenance for Published references, and the embedded <b>Layout Sidecar</b>
 /// (<see cref="Layout"/>). TestRun references remain activation- and slot-less. The layout is a verbatim publish-time
-/// copy of the definition version's graph geometry (ADR 0035 discipline: opaque, never canonicalized) and
-/// NEVER contributes to the artifact hash — visual arrangement is not behavior (ADR 0039).
+/// copy of the definition version's graph geometry (opaque, never canonicalized) and
+/// NEVER contributes to the artifact hash — visual arrangement is not behavior.
 /// </remarks>
 [method: JsonConstructor]
 public sealed record WorkflowExecutableSourceReference(
@@ -286,7 +286,7 @@ public sealed record WorkflowExecutableSourceReference(
 }
 
 /// <summary>
-/// The scope a <see cref="WorkflowExecutableSourceReference"/> was created under (ADR 0040). Scope and expiry
+/// The scope a <see cref="WorkflowExecutableSourceReference"/> was created under. Scope and expiry
 /// are per-publish facts that live on the reference, not on the immutable artifact.
 /// </summary>
 public enum WorkflowExecutableReferenceScope
@@ -302,7 +302,7 @@ public enum WorkflowExecutableReferenceScope
 /// One node of the Layout Sidecar embedded on a <see cref="WorkflowExecutableSourceReference"/>: the verbatim,
 /// runtime-owned copy of a design-time <c>DesignMetadataRecord</c> made at publish time. Kept structurally
 /// identical to the Design record but declared in the runtime layer so the reference model does not depend on
-/// Design persistence; <c>AdditionalProperties</c> stays an opaque <see cref="JsonElement"/> (ADR 0035 D3),
+/// Design persistence; <c>AdditionalProperties</c> stays an opaque <see cref="JsonElement"/>,
 /// stored as-received and never canonicalized or hashed.
 /// </summary>
 public sealed record WorkflowExecutableLayoutRecord(

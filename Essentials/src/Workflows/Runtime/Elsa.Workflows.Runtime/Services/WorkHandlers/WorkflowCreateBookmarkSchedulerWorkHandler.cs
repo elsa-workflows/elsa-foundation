@@ -63,7 +63,7 @@ public sealed class WorkflowCreateBookmarkSchedulerWorkHandler : IWorkflowSchedu
 
         await _checkpointCommitter.CommitAsync(commit, cancellationToken);
 
-        // Notify bookmark-lifecycle observers AFTER the durable commit (spec 089 D). Observer failures are caught
+        // Notify bookmark-lifecycle observers AFTER the durable commit. Observer failures are caught
         // and logged inside the notifier — they never fault this run. The created bookmark rides the commit's
         // upsert state change, so we read it back rather than re-deriving it.
         await NotifyBookmarksCreatedAsync(commit);

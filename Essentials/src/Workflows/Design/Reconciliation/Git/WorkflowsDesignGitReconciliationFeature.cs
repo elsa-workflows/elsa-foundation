@@ -13,7 +13,7 @@ using Microsoft.Extensions.Options;
 namespace Elsa.Workflows.Design.Reconciliation.Git;
 
 /// <summary>
-/// GitOps for workflow definitions (ADR 0034 / spec 085): a concrete reconciliation feature that reads
+/// GitOps for workflow definitions: a concrete reconciliation feature that reads
 /// immutable version files from git into the operational catalog and — on a Writer node — mirrors the
 /// catalog's versions back to git. Extends <see cref="WorkflowsDesignReconciliationFeature"/> (so the
 /// reconciler + universal handler + import lifecycle are wired by the base) and contributes the git
@@ -28,7 +28,7 @@ namespace Elsa.Workflows.Design.Reconciliation.Git;
     name: "WorkflowsDesignGitReconciliation",
     DisplayName = "Workflow Design Git Reconciliation",
     Description = "Reconciles workflow-definition versions from a git repository into the catalog, and (Writer role) exports the catalog's versions back to git.",
-    // The reconciler admits each item, and the exporter each version, through the credential-literal rule (spec 188, FR-008).
+    // The reconciler admits each item, and the exporter each version, through the credential-literal rule.
     DependsOn = new object[] { "WorkflowDesignValidations" }
 )]
 public class WorkflowsDesignGitReconciliationFeature : WorkflowsDesignReconciliationFeature

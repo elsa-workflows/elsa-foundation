@@ -187,7 +187,7 @@ public sealed class WorkflowsVersionReconcilerTests
     [Fact]
     public async Task Older_incoming_entry_does_not_change_definition_metadata()
     {
-        // FR-008a: a stale/older version entry (persisted 2.0.0, incoming 1.0.0) with a rename must NOT
+        // A stale/older version entry (persisted 2.0.0, incoming 1.0.0) with a rename must NOT
         // overwrite current metadata — the metadata apply is gated behind the outdated-version skip.
         var incoming = BuildIncomingVersion(definitionId: "wf-stale", version: "1.0.0", name: "Stale Name", description: "Stale");
         var existingDef = new WorkflowDefinition { Id = "wf-stale", Name = "Current Name", Description = "Current" };
@@ -213,7 +213,7 @@ public sealed class WorkflowsVersionReconcilerTests
     [Fact]
     public async Task Incoming_deleted_soft_deletes_definition_without_deleting_versions()
     {
-        // R10/FR-008: definition.json marks a source-owned definition deleted → DeletedAt set; no version row removed.
+        // The definition.json marks a source-owned definition deleted → DeletedAt set; no version row removed.
         var incoming = BuildIncomingVersion(definitionId: "wf-del", version: "1.0.0", name: "Same", deleted: true);
         var existingDef = new WorkflowDefinition { Id = "wf-del", Name = "Same", IsSourceOwned = true }; // live
         var existingVersion = new WorkflowDefinitionVersion("wf-del", "1.0.0");
@@ -329,8 +329,8 @@ public sealed class WorkflowsVersionReconcilerTests
     [Fact]
     public async Task Same_id_version_different_content_logs_warning()
     {
-        // R13/FR-006: same (id, version) with different canonical state is a broken source — surfaced as
-        // a warning now (a throw arrives once FR-016a persists a hash). Under Skip, no throw, no add.
+        // Same (id, version) with different canonical state is a broken source — surfaced as
+        // a warning now (a throw arrives once the version persists a hash). Under Skip, no throw, no add.
         var incomingState = new WorkflowDefinitionState([], null, [], [], null);
         var storedState = new WorkflowDefinitionState([], null, [], [], null);
         var incoming = BuildIncomingVersion(definitionId: "wf-diff", version: "1.0.0", name: "Same", state: incomingState);
@@ -501,7 +501,7 @@ public sealed class WorkflowsVersionReconcilerTests
     [Fact]
     public async Task A_refused_item_is_left_out_of_the_pass_with_a_value_free_warning_while_the_others_are_reconciled()
     {
-        // Spec 188, FR-008: one refused item for a new definition, one for an existing definition whose metadata the
+        // One refused item for a new definition, one for an existing definition whose metadata the
         // item would change, and one valid item. The pass completes; nothing at all is written for either refused item.
         var refusedNew = BuildIncomingVersion("wf-refused-new", "1.0.0", state: CredentialLiteralTestSupport.CredentialBoundAs("Literal"));
         var refusedExisting = BuildIncomingVersion("wf-refused-existing", "2.0.0", name: "Renamed", state: CredentialLiteralTestSupport.CredentialBoundAs("Literal"));

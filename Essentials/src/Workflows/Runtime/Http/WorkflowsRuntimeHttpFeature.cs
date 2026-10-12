@@ -51,7 +51,7 @@ public class WorkflowsRuntimeHttpFeature : IShellFeature
 
         // The single serialization point for every route-table refresh (startup + publish observer + bookmark
         // observer): a singleton owning a SemaphoreSlim(1,1) that opens a fresh scope per refresh, so a stale read
-        // can never clobber a newer swap and drop a live route (spec 089 D review fix). TryAdd — a host may override.
+        // can never clobber a newer swap and drop a live route. TryAdd — a host may override.
         services.TryAddSingleton<IHttpEndpointRouteTableSynchronizer, HttpEndpointRouteTableSynchronizer>();
 
         // Rebuild the route table from the durable trigger index at startup, so a fresh host (or a restart)
@@ -74,7 +74,7 @@ public class WorkflowsRuntimeHttpFeature : IShellFeature
         // rewrites an artifact's bindings. Contribution seam (fan-in), so TryAddEnumerable.
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IWorkflowTriggerIndexObserver, RouteTableTriggerIndexObserver>());
 
-        // Keep the route table fresh as instances suspend on / resume from mid-flow endpoints (spec 089 D): the
+        // Keep the route table fresh as instances suspend on / resume from mid-flow endpoints: the
         // bookmark lifecycle notifier calls this observer after a bookmark create/consume commits, and it re-projects
         // the whole table (trigger bindings ∪ waiting bookmarks). Contribution seam (fan-in), so TryAddEnumerable.
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IBookmarkLifecycleObserver, RouteTableBookmarkObserver>());

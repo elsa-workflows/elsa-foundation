@@ -83,7 +83,7 @@ internal static class RuntimeCommandTransportProviderSmoke
             Assert.Equal(2, await transport.CountPendingAsync(executionId));
             Assert.Equal([executionId], await transport.ListPendingExecutionIdsAsync(Now, 10));
 
-            // Spec 184, FR-016, FR-019 and FR-024: peeking leases nothing, a holder's leases can be listed, and an early
+            // Peeking leases nothing, a holder's leases can be listed, and an early
             // release is a compare-and-set that leaves the item visible and the next lease under a greater token.
             Assert.Equal(2, (await transport.PeekAsync(executionId, Now, 10)).Count);
             Assert.Equal([executionId], await transport.ListPendingExecutionIdsAsync(Now, 10, skip: 0));

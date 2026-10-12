@@ -12,7 +12,7 @@ using Microsoft.Extensions.Logging;
 namespace Elsa.Workflows.Runtime.Http.Services;
 
 /// <summary>
-/// Default <see cref="IHttpEndpointRoutesResolver"/> (spec 089 B, extended for mid-flow resume in D). It unions
+/// Default <see cref="IHttpEndpointRoutesResolver"/> (extended for mid-flow resume). It unions
 /// two sources of endpoint-relative route templates into the per-shell route table:
 /// <list type="number">
 /// <item>every HTTP-endpoint <b>trigger binding</b> in the durable trigger index (start-capable endpoints), and</item>
@@ -36,8 +36,8 @@ namespace Elsa.Workflows.Runtime.Http.Services;
 /// <b>Bookmark expiry.</b> Waiting bookmarks are read through the expiry-aware
 /// <see cref="IGlobalBookmarkStimulusLookup.FindWaitingByTypeAsync"/> so an expired bookmark's template does not
 /// contribute a route — the lookup layer owns expiry filtering (the raw index scan is deliberately unfiltered).
-/// A bookmark whose route was already refreshed away but is not yet consumed simply 404s at dispatch (spec 089 D,
-/// D-D4 edge case), which is acceptable and self-heals on the next refresh.
+/// A bookmark whose route was already refreshed away but is not yet consumed simply 404s at dispatch,
+/// which is acceptable and self-heals on the next refresh.
 /// </para>
 /// <para>
 /// <b>Conflicts degrade here, they don't brick (issue #592 item 2).</b> Publish-time
@@ -49,7 +49,7 @@ namespace Elsa.Workflows.Runtime.Http.Services;
 /// one poisoned entry into a host-wide publish outage and a boot failure. The middleware's request-time 409
 /// ambiguity guard is the serving backstop for the conflicting endpoint itself. The uniqueness check is
 /// <b>trigger-binding-only</b>: a waiting mid-flow bookmark that shares a <c>(template, method)</c> with a
-/// published trigger is legal (it is instance-scoped, not a competing definition, spec 089 D-D5), so bookmarks are
+/// published trigger is legal (it is instance-scoped, not a competing definition), so bookmarks are
 /// deliberately exempt from the collision warning.
 /// </para>
 /// <para>

@@ -4,7 +4,7 @@ using Elsa.Workflows.Design.Validations.Core.Models;
 namespace Elsa.Workflows.Design.Validations.Core.Contracts;
 
 /// <summary>
-/// Contributor interface for Draft validation (Unit C FR-033/FR-034). A feature implements this
+/// Contributor interface for Draft validation. A feature implements this
 /// and registers it via DI; the single <c>ExecuteValidations</c> handler resolves
 /// <see cref="IEnumerable{IDraftValidator}"/>, runs each, and aggregates the returned errors onto
 /// the <c>DraftValidating</c> event. The interface — not the event — describes the intent.

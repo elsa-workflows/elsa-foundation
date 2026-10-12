@@ -7,7 +7,7 @@ using Xunit;
 namespace Elsa.Workflows.Design.Tests.Unit.Reconciliation.Git;
 
 /// <summary>
-/// US2 inbound source: version files authored in git surface as reconciliation models with correct
+/// Inbound source: version files authored in git surface as reconciliation models with correct
 /// SemVer, committer-date provenance, canonical content hash, and definition.json-sourced metadata; a
 /// malformed version file is skipped without sinking its siblings.
 /// </summary>

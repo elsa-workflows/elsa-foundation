@@ -10,7 +10,7 @@ using static Elsa.Workflows.Design.Tests.Infrastructure.UpdateDraftTestKit;
 namespace Elsa.Workflows.Design.Tests.Unit;
 
 /// <summary>
-/// SC-013 + SC-022 + Unit C FR-023. End-to-end exercise of the validation lifecycle, driven through
+/// End-to-end exercise of the validation lifecycle, driven through
 /// the single coarse <see cref="Persistence.Core.Contracts.IUpdateDraftCommand"/>. Errors are
 /// derived state (no persisted sibling): introducing a forbidden condition makes the derived error
 /// set (read on demand via the <see cref="DraftValidationGate"/>) carry the error; removing the

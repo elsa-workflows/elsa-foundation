@@ -20,14 +20,14 @@ namespace Elsa.Workflows.Design.Reconciliation.Services;
 /// <summary>
 /// Workflow-side reconciler. Each pass publishes <see cref="WorkflowVersionsReconciling"/>
 /// to gather candidate versions from source modules, then upserts the catalog. Mirrors the
-/// Activities-side reconciler pattern. Full Model X hash enforcement waits on FR-016a's persisted
-/// provenance/hash fields (Unit D's allocation); until they land, duplicate detection falls back to
+/// Activities-side reconciler pattern. Full content-hash enforcement waits on persisted
+/// provenance/hash fields; until they land, duplicate detection falls back to
 /// the configured <see cref="DuplicateHandling"/> mode, and a same-<c>(id, version)</c>-different-content
 /// case is <em>surfaced</em> by recomputing and comparing the canonical serialization of the incoming
 /// and stored state (logged now; a dedicated hash-mismatch throw arrives with the persisted hash).
 /// </summary>
 /// <remarks>
-/// Each item not skipped as outdated passes the credential-literal rule (spec 188, FR-008),
+/// Each item not skipped as outdated passes the credential-literal rule,
 /// <see cref="ICredentialLiteralValidator"/>, before anything is written for it. A refused item is treated like an outdated one: nothing is materialized for it, its claim
 /// does not reach <see cref="WorkflowVersionsReconciled"/>, and the pass logs a value-free warning and goes on, so a
 /// refusal never fails the pass or keeps the host from becoming ready.
@@ -73,7 +73,7 @@ public sealed class WorkflowsVersionReconciler(
                 reconciled.Add((version.DefinitionId, SemVer.ToSortKey(version.Version)));
         }
 
-        // FR-008a corollary: a version skipped as outdated was never reconciled, so its claim must not
+        // A version skipped as outdated was never reconciled, so its claim must not
         // travel on. Publish-on-reconcile picks the latest opted-in claim per definition and publishes
         // that version row; carrying a skipped v1 while the catalog already holds v2 would move the
         // active slot backward onto the older executable. Claims pair with their version by
@@ -91,7 +91,7 @@ public sealed class WorkflowsVersionReconciler(
     /// <summary>
     /// Reconciles one contributed version. Returns <c>true</c> when the version is authoritative for its
     /// definition — materialized here, or already present and verified as the current version — and
-    /// <c>false</c> when it was skipped as outdated (FR-008a) or refused by the credential-literal rule. The caller
+    /// <c>false</c> when it was skipped as outdated or refused by the credential-literal rule. The caller
     /// uses that to decide whether the version's provenance claim reaches <see cref="WorkflowVersionsReconciled"/>.
     /// </summary>
     private async Task<bool> ReconcileVersion(IWorkflowDefinitionVersion version, CancellationToken cancellationToken)
@@ -99,9 +99,9 @@ public sealed class WorkflowsVersionReconciler(
         var definitionId = version.DefinitionId;
         var candidateSortKey = SemVer.ToSortKey(version.Version);
 
-        // FR-008a: gate every catalog mutation — including the definition-metadata apply — behind the
+        // Gate every catalog mutation — including the definition-metadata apply — behind the
         // outdated-version skip. Passing this check guarantees `latest is null || candidate >= latest`,
-        // which IS the "apply metadata only from the newest version" gate (ADR 0034 D5 latest-wins). A
+        // which IS the "apply metadata only from the newest version" gate (latest-wins). A
         // stale/older git entry therefore reaches nothing below and cannot overwrite current metadata.
         var latestVersion = await versionStore.FindLatestVersionAsync(definitionId, cancellationToken);
         if (latestVersion is not null && string.CompareOrdinal(candidateSortKey, latestVersion.SemVerSortKey) < 0)
@@ -110,7 +110,7 @@ public sealed class WorkflowsVersionReconciler(
             return false;
         }
 
-        // Spec 188, FR-008: judged before anything is written for the item, so a refused item leaves no definition
+        // Judged before anything is written for the item, so a refused item leaves no definition
         // record, metadata update or version row behind.
         var refusals = await credentialLiterals.Validate(version.State, cancellationToken);
         if (refusals.Count > 0)
@@ -160,8 +160,8 @@ public sealed class WorkflowsVersionReconciler(
     /// <summary>
     /// Applies the incoming source's mutable definition-level metadata (name, description, soft-delete) to
     /// an already-persisted definition, and never touches any <see cref="WorkflowDefinitionVersion"/>: versions
-    /// are immutable and retention-authoritative, whereas name/description/<c>DeletedAt</c> are latest-wins per
-    /// ADR 0034 (D5). Idempotent per desired state: it writes only when a value actually changed, and each write
+    /// are immutable and retention-authoritative, whereas name/description/<c>DeletedAt</c> are latest-wins.
+    /// Idempotent per desired state: it writes only when a value actually changed, and each write
     /// gets a key no earlier write used (<see cref="WorkflowReconciliationOperationKeys.DefinitionMetadataWrite"/>),
     /// so any sequence of changes at one version, a change back included, converges (#2187). A write that loses a
     /// race to another writer reads the definition again and compares afresh, up to
@@ -169,7 +169,7 @@ public sealed class WorkflowsVersionReconciler(
     /// Latest-wins soft-delete is scoped to <see cref="WorkflowDefinition.IsSourceOwned"/> definitions:
     /// a source can never flip <c>DeletedAt</c> on a catalog-authored (Studio) definition.
     /// Runs for every <see cref="Contracts.IWorkflowReconciliationSource"/>, not only git, and only for the
-    /// authoritative (newest) version thanks to the caller's outdated-version gate (FR-008a).
+    /// authoritative (newest) version thanks to the caller's outdated-version gate.
     /// </summary>
     private async Task UpdateDefinitionMetadata(
         WorkflowDefinition persisted,
@@ -244,8 +244,8 @@ public sealed class WorkflowsVersionReconciler(
     }
 
     /// <summary>
-    /// Model X safety net (ADR 0034 D7 tripwire, spec 085 FR-006): a same-<c>(id, version)</c> whose
-    /// incoming canonical state differs from the stored one is a broken source. Until FR-016a persists a
+    /// Content-mismatch safety net: a same-<c>(id, version)</c> whose
+    /// incoming canonical state differs from the stored one is a broken source. Until the version persists a
     /// content hash to compare against, this recomputes the canonical serialization of both the incoming
     /// and stored state and <em>logs</em> a warning on divergence (a throw arrives with the persisted
     /// hash). Best-effort: a stored version whose state can't be loaded is skipped silently.
@@ -313,7 +313,7 @@ public sealed class WorkflowsVersionReconciler(
 
     private void LogContentMismatch(string definitionId, string version)
     {
-        // Warning, not throw: FR-016a has not yet given the version a persisted hash to enforce against.
+        // Warning, not throw: the version has no persisted hash yet to enforce against.
         logger.LogWarning(
             "Workflow definition '{def}' v{v} exists with different content than the incoming source entry — a broken source (same logical identity, different content). Reconciliation left the stored version unchanged.",
             definitionId, version);

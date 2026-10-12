@@ -43,7 +43,7 @@ public sealed class WorkflowRuntimeAttentionContributor(
     }
 
     /// <summary>
-    /// Spec 184, FR-017: a warning naming what the waiting executions need and how many wait, without naming a host.
+    /// A warning naming what the waiting executions need and how many wait, without naming a host.
     /// Its identity is the requirement, so the same condition keeps one item while its count moves.
     /// </summary>
     private static AttentionItem MapUnplaceable(UnplaceableWorkReport report)

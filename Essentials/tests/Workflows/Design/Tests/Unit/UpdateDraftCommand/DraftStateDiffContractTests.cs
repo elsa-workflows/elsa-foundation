@@ -5,7 +5,7 @@ using static Elsa.Workflows.Design.Tests.Infrastructure.UpdateDraftTestKit;
 namespace Elsa.Workflows.Design.Tests.Unit.UpdateDraftCommand;
 
 /// <summary>
-/// Provider-neutral conversion (T070) of the authored-state diff/event objectives that lived in the
+/// Provider-neutral conversion of the authored-state diff/event objectives that lived in the
 /// EF-referencing <c>ActivityDiffTests</c> and <c>MultiDimensionDiffTests</c>. The diff half drives the
 /// Core <see cref="Elsa.Workflows.Design.Persistence.Core.Services.DraftStateDiffEngine"/> directly and
 /// never touches a persistence provider — the persistence (state round-trip) half of those files is

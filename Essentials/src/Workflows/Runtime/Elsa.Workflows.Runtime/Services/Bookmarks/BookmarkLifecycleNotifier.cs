@@ -6,8 +6,8 @@ using Microsoft.Extensions.Logging.Abstractions;
 namespace Elsa.Workflows.Runtime.Services.Bookmarks;
 
 /// <summary>
-/// Fans a committed bookmark lifecycle transition out to every registered <see cref="IBookmarkLifecycleObserver"/>
-/// (spec 089 D). It exists so the two commit sites — the bookmark-created checkpoint
+/// Fans a committed bookmark lifecycle transition out to every registered <see cref="IBookmarkLifecycleObserver"/>.
+/// It exists so the two commit sites — the bookmark-created checkpoint
 /// (<see cref="WorkflowCreateBookmarkSchedulerWorkHandler"/>) and the bookmark-consumed checkpoint
 /// (<see cref="BookmarkConsumptionCheckpointService"/>) — share one notification path with one failure policy,
 /// rather than each re-implementing the catch-and-log loop.

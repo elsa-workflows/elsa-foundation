@@ -6,7 +6,7 @@ using Xunit;
 namespace Elsa.Workflows.Design.Tests.Unit;
 
 /// <summary>
-/// The acceptance predicate of the credential-literal rule (spec 188, FR-008, FR-009), one row of the contract's table
+/// The acceptance predicate of the credential-literal rule, one row of the contract's table
 /// (contracts/credential-literal-rule.md) per case: a credential input accepts no binding, a binding that carries no
 /// value, and a secret reference, which is a <c>Secret</c> binding whose payload is a well-formed reference or carries no
 /// value; it refuses every literal, object, default request, value read and expression, and a <c>Secret</c> binding with

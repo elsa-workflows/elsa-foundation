@@ -112,7 +112,7 @@ public sealed class RuntimeCoreCompositionRootTests : RuntimePipelineTestSupport
 
     // #2225: a continuation's retry policy is persisted on each outbox item at commit, so the registered numbers are the
     // behaviour: four attempts one second apart, with only the last failed attempt final.
-    // Kept beside the composition test (§2.23.1): asserts the retry policy the scheduler continuation contribution carries.
+    // Kept beside the composition test: asserts the retry policy the scheduler continuation contribution carries.
     [Fact]
     public void AddWorkflowRuntime_registers_the_scheduler_continuation_retry_policy()
     {
@@ -168,7 +168,7 @@ public sealed class RuntimeCoreCompositionRootTests : RuntimePipelineTestSupport
         Assert.IsType<AllowWorkflowExecutableStartPolicy>(provider.GetRequiredService<IWorkflowExecutableStartPolicy>());
     }
 
-    // Kept beside the composition test (§2.23.1): replacement, a policy registered before the default is honored.
+    // Kept beside the composition test: replacement, a policy registered before the default is honored.
     [Fact]
     public void AddWorkflowRuntime_HonorsPolicyRegisteredBeforeTheDefault()
     {
@@ -183,7 +183,7 @@ public sealed class RuntimeCoreCompositionRootTests : RuntimePipelineTestSupport
         Assert.NotNull(provider.GetRequiredService<IWorkflowStartDispatcher>());
     }
 
-    // Kept beside the composition test (§2.23.1): replacement-contract rejection, multiple start policies.
+    // Kept beside the composition test: replacement-contract rejection, multiple start policies.
     [Fact]
     public void AddWorkflowRuntime_RejectsMultipleStartPolicyRegistrations()
     {

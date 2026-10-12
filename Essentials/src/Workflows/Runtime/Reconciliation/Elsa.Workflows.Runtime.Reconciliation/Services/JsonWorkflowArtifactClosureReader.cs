@@ -21,7 +21,7 @@ namespace Elsa.Workflows.Runtime.Reconciliation.Services;
 /// guess would become that id's content permanently.
 /// </para>
 /// <para>
-/// §2.23.5: every <c>IOException</c> and <c>JsonException</c> is wrapped in an
+/// Every <c>IOException</c> and <c>JsonException</c> is wrapped in an
 /// <see cref="InvalidWorkflowArtifactClosureException"/> carrying the offending path, with the original preserved
 /// as the inner exception. This is the boundary that owns the file path, which is why the codec itself lets
 /// <c>JsonException</c> through rather than wrapping it identifier-less.

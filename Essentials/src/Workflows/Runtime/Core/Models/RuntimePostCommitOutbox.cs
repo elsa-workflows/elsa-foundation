@@ -137,7 +137,7 @@ public sealed class RuntimePostCommitOutboxItem
     /// </summary>
     /// <remarks>
     /// This answers "is this the same responsibility?", not "is this the same pending item?". Test-scope cleanup needs it:
-    /// concurrent and repeated cleanups must converge (spec 102 FR-014), and between two cleaners the cancellation item may
+    /// concurrent and repeated cleanups must converge, and between two cleaners the cancellation item may
     /// already have been claimed, delivered, or retried. Do not replace it with <see cref="IsEquivalentPendingItem"/>.
     /// </remarks>
     public bool CarriesResponsibilityFor(RuntimePostCommitIntent intent)

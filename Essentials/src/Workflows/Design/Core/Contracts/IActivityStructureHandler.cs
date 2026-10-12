@@ -15,7 +15,7 @@ public interface IActivityStructureHandler
 
     /// <summary>
     /// Whether this activity is a container scope that can own container-scoped variable
-    /// declarations (ADR 0027). Container activities (e.g. <c>Sequence</c>, <c>Flowchart</c>)
+    /// declarations. Container activities (e.g. <c>Sequence</c>, <c>Flowchart</c>)
     /// return <c>true</c>; ordinary activities use the default <c>false</c>.
     /// </summary>
     bool SupportsScopedVariables => false;

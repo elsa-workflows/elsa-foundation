@@ -24,7 +24,7 @@ public static class ValuePolicyCombiner
             StorageProfile: NullIfWhiteSpace(storageProfile));
 
     /// <summary>
-    /// Applies an activity input's sensitivity declaration (spec 188, FR-007) to its owner policy: a sensitive
+    /// Applies an activity input's sensitivity declaration to its owner policy: a sensitive
     /// declaration sets <see cref="ActivityValuePolicy.IsSensitive"/>, and a credential declaration sets it and
     /// <see cref="ActivityValuePolicy.RequiresEncryption"/>. The declaration only strengthens the owner policy.
     /// </summary>

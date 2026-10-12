@@ -11,13 +11,13 @@ using Microsoft.Extensions.Options;
 namespace Elsa.Workflows.Design.Validations.Validators;
 
 /// <summary>
-/// Baseline validator (Unit C FR-033). For every activity in the Draft (root + nested), scans
+/// Baseline validator. For every activity in the Draft (root + nested), scans
 /// every <see cref="ArgumentState"/> whose <see cref="ArgumentValue.ExpressionType"/> equals
-/// the exact string <c>"Variable"</c> (per research item R9). Asserts that
+/// the exact string <c>"Variable"</c>. Asserts that
 /// <see cref="ArgumentValue.Value"/> (a structured <see cref="VariableReference"/>) resolves to a
 /// variable that is visible from the referencing activity — either a workflow-scoped variable in
 /// <c>WorkflowDefinitionState.Variables</c> or a container-scoped variable declared by a visible
-/// ancestor container (ADR 0027).
+/// ancestor container.
 /// </summary>
 /// <remarks>
 /// Variable lookup is by <see cref="Elsa.Expressions.Core.Models.VariableDefinition.ReferenceKey"/>,

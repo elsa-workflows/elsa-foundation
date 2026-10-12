@@ -31,17 +31,17 @@ namespace Elsa.Workflows.Runtime.Distributed.Services;
 /// caught, logged, and never rethrown, and consecutive failures widen the schedule interval geometrically.
 /// </para>
 /// <para>
-/// Renewal is a compare-and-set on the lease as held, and never grants (spec 184, FR-014): a lease that was released
+/// Renewal is a compare-and-set on the lease as held, and never grants: a lease that was released
 /// or taken since is not taken back, and the execution is passivated locally instead.
 /// </para>
 /// <para>
-/// Composed with <see cref="ExecutionPlacementMembership"/>, as the feature composes it, placement is a membership query
-/// (spec 184). Before claiming anything, the pump runs the shell's join sweep once per process (FR-022). It claims and
-/// renews only what the gate says this shell can run now (FR-011, FR-012, FR-015, FR-016), and hands off, at the
-/// drain's next boundary, what it can no longer run or holds while its member drains (FR-019). An active member that
-/// sees a host id departed confirms it with a fresh read and reclaims that host id's leases within the sweep (FR-023).
-/// Work no active member can run stays in the transport and is reported (FR-017, FR-018). When the pump stops because
-/// the host stops or its shell is removed, it hands off everything it still holds (FR-021). A shell reload is not such a
+/// Composed with <see cref="ExecutionPlacementMembership"/>, as the feature composes it, placement is a membership query.
+/// Before claiming anything, the pump runs the shell's join sweep once per process. It claims and
+/// renews only what the gate says this shell can run now, and hands off, at the
+/// drain's next boundary, what it can no longer run or holds while its member drains. An active member that
+/// sees a host id departed confirms it with a fresh read and reclaims that host id's leases within the sweep.
+/// Work no active member can run stays in the transport and is reported. When the pump stops because
+/// the host stops or its shell is removed, it hands off everything it still holds. A shell reload is not such a
 /// stop: the newer generation of the shell already runs and renews those leases, so the old one hands off nothing, and a
 /// renewal that loses to the newer generation passivates the old generation's actor without releasing anything.
 /// </para>
@@ -71,7 +71,7 @@ public sealed class ExecutionPlacementPumpTask : BackoffSweepPumpTask, IRecurrin
     {
     }
 
-    /// <summary>The composition the feature uses: placement as a membership query (spec 184).</summary>
+    /// <summary>The composition the feature uses: placement as a membership query.</summary>
     [ActivatorUtilitiesConstructor]
     public ExecutionPlacementPumpTask(
         IWorkflowExecutionActorProvider actorProvider,
@@ -162,7 +162,7 @@ public sealed class ExecutionPlacementPumpTask : BackoffSweepPumpTask, IRecurrin
     }
 
     /// <summary>
-    /// Hands off every execution this member still holds, in every persistence scope (spec 184, FR-021): passivating each
+    /// Hands off every execution this member still holds, in every persistence scope: passivating each
     /// local actor, which waits for an in-flight drain to finish its turn, releasing its placement lease, and making its
     /// unacknowledged transport items visible. A drain that outlasts the lease duration is left as a crash would be; its
     /// leases are reclaimed once the host id is departed.
@@ -184,7 +184,7 @@ public sealed class ExecutionPlacementPumpTask : BackoffSweepPumpTask, IRecurrin
     }
 
     /// <summary>Runs the shell's join sweep and records its runnability entry as soon as the pump starts, so claims wait
-    /// for as short a time as they must (FR-022). A failure is logged and retried by the next sweep.</summary>
+    /// for as short a time as they must. A failure is logged and retried by the next sweep.</summary>
     async Task IRecurringTask.StartAsync(CancellationToken cancellationToken)
     {
         if (_membership is null || _scopeRunner is null)
@@ -202,9 +202,9 @@ public sealed class ExecutionPlacementPumpTask : BackoffSweepPumpTask, IRecurrin
     }
 
     /// <summary>
-    /// Hands off everything this member holds before it stops (FR-021), within one lease duration, and withdraws this
+    /// Hands off everything this member holds before it stops, within one lease duration, and withdraws this
     /// shell's runnability entry. A shell reload is not a stop: a newer generation of the shell is already active and its
-    /// pump renews the leases this generation held, so this one hands off nothing and passivates nothing (FR-022).
+    /// pump renews the leases this generation held, so this one hands off nothing and passivates nothing.
     /// </summary>
     async Task IRecurringTask.StopAsync(CancellationToken cancellationToken)
     {
@@ -236,7 +236,7 @@ public sealed class ExecutionPlacementPumpTask : BackoffSweepPumpTask, IRecurrin
             Logger.LogWarning("Could not hand off every workflow execution within the lease duration before stopping; the rest are reclaimed once this host id is departed, or expire.");
         }
         // The placement service and transport behind the hand-off are pluggable (EF, HTTP, etc.) and can throw
-        // provider-specific exceptions this method cannot enumerate; hand-off must not block shutdown (FR-021).
+        // provider-specific exceptions this method cannot enumerate; hand-off must not block shutdown.
         catch (Exception exception) when (exception is not OperationCanceledException)
         {
             Logger.LogWarning(exception, "Could not hand off every workflow execution before stopping; the rest are reclaimed once this host id is departed, or expire.");
@@ -256,10 +256,10 @@ public sealed class ExecutionPlacementPumpTask : BackoffSweepPumpTask, IRecurrin
         var gate = services is null ? null : _membership?.Gate;
         var standing = gate?.CheckStanding();
 
-        // A draining or departed member hands off everything it holds (FR-019, FR-021), and so does one whose writes to
-        // the Runtime EF module spec 181 refuses, which could not commit a checkpoint of them anyway (FR-012). A joining
+        // A draining or departed member hands off everything it holds, and so does one whose writes to
+        // the Runtime EF module are refused, which could not commit a checkpoint of them anyway. A joining
         // member, or one whose join sweep has not completed, neither renews nor hands off: a lease under its host id may
-        // still be its predecessor's, which only the join sweep may release (FR-022).
+        // still be its predecessor's, which only the join sweep may release.
         var handingOff = gate?.Membership.GetLocalStanding().Status is MemberStatus.Draining or MemberStatus.Left ||
                          standing?.Refusal is PlacementRefusalKind.RuntimeWritesRefused;
         var renewing = gate is null || standing is null;
@@ -298,7 +298,7 @@ public sealed class ExecutionPlacementPumpTask : BackoffSweepPumpTask, IRecurrin
         var waiting = new Dictionary<string, PlacementDecision>(StringComparer.Ordinal);
         if (standing is null)
         {
-            // Work that no member here may run stays pending (FR-018), so a gated pump rotates through the backlog
+            // Work that no member here may run stays pending, so a gated pump rotates through the backlog
             // rather than rereading the same first page, which could starve the runnable work behind it.
             var rotation = gate is null ? null : _rotations.TryGetValue(expectedPartition.Value, out var current) ? current : _rotations[expectedPartition.Value] = new BacklogRotation();
             var skip = rotation?.Offset ?? 0;
@@ -382,7 +382,7 @@ public sealed class ExecutionPlacementPumpTask : BackoffSweepPumpTask, IRecurrin
     }
 
     /// <summary>
-    /// Records, for FR-017, the pending work this member refused for its requirement that no active member satisfies
+    /// Records, for the unplaceable-work report, the pending work this member refused for its requirement that no active member satisfies
     /// either, as a cached placement-purpose query shows. Work some active member can run is not unplaceable: that
     /// member's pump claims it.
     /// </summary>
@@ -442,13 +442,13 @@ public sealed class ExecutionPlacementPumpTask : BackoffSweepPumpTask, IRecurrin
     }
 
     /// <summary>
-    /// The join sweep (FR-022): the first time this shell's distributed runtime activates in the process, it reclaims
+    /// The join sweep: the first time this shell's distributed runtime activates in the process, it reclaims
     /// every per-execution lease held under the process's host id, which can only be a predecessor's, before it claims
     /// anything. A shell reload or a rejoin after a lapse is not a first activation.
     /// </summary>
     private async ValueTask<ExecutionPlacementSweepResult> ActivateAsync(CancellationToken cancellationToken)
     {
-        // Only a member that has joined is guaranteed to be the one live process under its host id (spec 183, FR-004b):
+        // Only a member that has joined is guaranteed to be the one live process under its host id:
         // until its status is active, a lease under the host id may still be a live predecessor's.
         var gate = _membership!.Gate;
         if (gate.HasCompletedJoinSweep || gate.Membership.GetLocalStanding().Status != MemberStatus.Active)
@@ -462,7 +462,7 @@ public sealed class ExecutionPlacementPumpTask : BackoffSweepPumpTask, IRecurrin
     }
 
     /// <summary>
-    /// Departure-triggered reclaim (FR-023, FR-026): an active member that has not lapsed looks for departed host ids in
+    /// Departure-triggered reclaim: an active member that has not lapsed looks for departed host ids in
     /// a cached read, confirms each with a fresh read, and reclaims it in every persistence scope. Only positive evidence
     /// counts: a host id absent from the view, one with a live incarnation, and one departed only in the cached read are
     /// never reclaimed from.
@@ -546,7 +546,7 @@ public sealed class ExecutionPlacementPumpTask : BackoffSweepPumpTask, IRecurrin
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
         {
-            // The section is a diagnostic for other members; the next heartbeat or change publishes it (FR-008).
+            // The section is a diagnostic for other members; the next heartbeat or change publishes it.
             Logger.LogWarning(exception, "Could not publish this host's runnability report; it is published with the next change or heartbeat.");
         }
     }
@@ -569,7 +569,7 @@ public sealed class ExecutionPlacementPumpTask : BackoffSweepPumpTask, IRecurrin
     }
 
     /// <summary>
-    /// Hands one execution off (FR-019): passivates the local actor at the drain's next boundary, which releases the
+    /// Hands one execution off: passivates the local actor at the drain's next boundary, which releases the
     /// placement lease still held under this host id and its placement token, then makes visible every transport item
     /// this member leased for the execution and has not acknowledged, so an active member can claim and lease them.
     /// </summary>
@@ -596,7 +596,7 @@ public sealed class ExecutionPlacementPumpTask : BackoffSweepPumpTask, IRecurrin
     }
 
     /// <summary>A renewal that found the lease no longer as this pump held it passivates the local actor without releasing
-    /// anything (FR-014). The lease was released or taken, or renewed by a newer generation of this shell under the same
+    /// anything. The lease was released or taken, or renewed by a newer generation of this shell under the same
     /// host id, during a reload; the distributed provider's own passivation would release that generation's lease.</summary>
     private ValueTask PassivateLocallyAsync(string workflowExecutionId, WorkflowExecutionPartition partition, CancellationToken cancellationToken)
     {
@@ -661,10 +661,10 @@ public sealed record ExecutionPlacementSweepResult(int RenewedCount, int Claimed
 {
     public static ExecutionPlacementSweepResult Empty { get; } = new(0, 0, 0, 0);
 
-    /// <summary>Executions handed off because this member could no longer run them or was draining (spec 184, FR-019).</summary>
+    /// <summary>Executions handed off because this member could no longer run them or was draining.</summary>
     public int HandedOffCount { get; init; }
 
-    /// <summary>Leases of every kind this sweep reclaimed, by a join sweep or a departure (spec 184, FR-028).</summary>
+    /// <summary>Leases of every kind this sweep reclaimed, by a join sweep or a departure.</summary>
     public int ReclaimedCount { get; init; }
 
     public bool DidWork => ClaimedCount > 0 || DispatchedCommandCount > 0 || RenewedCount > 0 || HandedOffCount > 0 || ReclaimedCount > 0;

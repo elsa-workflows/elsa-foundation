@@ -12,7 +12,7 @@ namespace Elsa.Workflows.Design.Tests.Unit;
 
 public sealed class WorkflowsDesignApiFeatureRegistrationTests
 {
-    // Kept beside the composition test (§2.23.1): resolves without the validations feature, which the composition test never exercises.
+    // Kept beside the composition test: resolves without the validations feature, which the composition test never exercises.
     [Fact]
     public void Feature_registers_scoped_variable_authoring_independently_of_validation_feature()
     {
@@ -26,7 +26,7 @@ public sealed class WorkflowsDesignApiFeatureRegistrationTests
         Assert.NotNull(provider.GetRequiredService<ScopedVariableAuthoringContract>());
     }
 
-    // Kept beside the composition test (§2.23.1): resolves with and without the optional draft store, which the composition test exercises one way only.
+    // Kept beside the composition test: resolves with and without the optional draft store, which the composition test exercises one way only.
     [Theory]
     [InlineData(false)]
     [InlineData(true)]

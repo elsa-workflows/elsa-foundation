@@ -382,7 +382,7 @@ public sealed class EfExecutionCommandTransport(
 
     /// <remarks>
     /// No index covers the holder column: a hand-off narrows by execution through the stream index, and a reclaim runs
-    /// only when a host id departs or a process starts (spec 184, FR-030), so a scope-bounded scan is its accepted cost.
+    /// only when a host id departs or a process starts, so a scope-bounded scan is its accepted cost.
     /// </remarks>
     public async ValueTask<IReadOnlyList<ExecutionCommandTransportItem>> ListLeasedAsync(
         string ownerId,

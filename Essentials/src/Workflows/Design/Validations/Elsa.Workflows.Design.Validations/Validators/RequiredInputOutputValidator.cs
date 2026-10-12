@@ -9,9 +9,9 @@ using InputDefinition = Elsa.Activities.Design.Core.Models.InputDefinition;
 namespace Elsa.Workflows.Design.Validations.Validators;
 
 /// <summary>
-/// Baseline validator (Unit C FR-033). For every activity in the Draft (root + nested), looks
+/// Baseline validator. For every activity in the Draft (root + nested), looks
 /// up the catalog version via <see cref="CatalogVersionResolver"/> and reads
-/// <c>IsRequired</c> from each <see cref="InputDefinition"/> (per FR-036). Emits a
+/// <c>IsRequired</c> from each <see cref="InputDefinition"/>. Emits a
 /// <see cref="ValidationError"/> per required input where the corresponding
 /// <see cref="ArgumentState"/> on the activity is absent or carries an empty value. Activity
 /// outputs are optional author-side captures of results produced by the activity, so they are not
@@ -26,9 +26,9 @@ namespace Elsa.Workflows.Design.Validations.Validators;
 /// <para>
 /// Workflow-level <c>State.Inputs</c> / <c>State.Outputs</c> are declarations: the design-time
 /// data model carries no default value or internal binding to check against. The workflow-level
-/// branch of the FR-033 wording therefore has no actionable design-time semantic in Unit C's
-/// data shape; it is deliberately skipped here and flagged as a follow-up for a unit that adds
-/// the workflow-level binding surface (Unit D / E). Activity-level coverage is complete.
+/// branch of the required-input rule therefore has no actionable design-time semantic in today's
+/// data shape; it is deliberately skipped here and left as a follow-up for whatever adds
+/// the workflow-level binding surface. Activity-level coverage is complete.
 /// </para>
 /// </remarks>
 public sealed class RequiredInputOutputValidator(
@@ -51,7 +51,7 @@ public sealed class RequiredInputOutputValidator(
 
             // CatalogVersionResolver memoizes per pass and translates the store's throwing Get
             // contract to nullable. An unresolvable node is UnknownActivityVersionValidator's
-            // report (FR-033 2026-07-05 amendment) — skip it here rather than fault the gate.
+            // report — skip it here rather than fault the gate.
             var version = await catalogResolver.Find(node.ActivityVersionId, cancellationToken);
             if (version is null)
                 continue;

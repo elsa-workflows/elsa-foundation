@@ -5,8 +5,8 @@ using Xunit;
 namespace Elsa.Workflows.Design.Tests.Unit.LayoutEntityTests;
 
 /// <summary>
-/// SC-021 + Unit C FR-006a: <c>WorkflowDefinitionDraftLayout</c> mirrors the Draft's
-/// mutability — no write-once restrictions; standard mutable tracking. The R5 cascade
+/// <c>WorkflowDefinitionDraftLayout</c> mirrors the Draft's
+/// mutability — no write-once restrictions; standard mutable tracking. The cascade
 /// behaviour (OnDelete: Cascade) is configured in
 /// <c>WorkflowDefinitionDraftLayoutConfiguration</c>.
 /// </summary>

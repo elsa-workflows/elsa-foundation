@@ -8,7 +8,7 @@ using Microsoft.Extensions.DependencyInjection;
 namespace Elsa.Workflows.Runtime.Http.Services;
 
 /// <summary>
-/// The single serialization point for HTTP route-table refreshes (spec 089 D review fix). A singleton owning a
+/// The single serialization point for HTTP route-table refreshes. A singleton owning a
 /// <see cref="SemaphoreSlim"/>(1,1): every <see cref="RefreshAsync"/> acquires the lock, opens a FRESH scope,
 /// resolves the scoped <see cref="IHttpEndpointRoutesResolver"/> and <see cref="IRouteTable"/> inside it, does the
 /// full read (<see cref="IHttpEndpointRoutesResolver.ResolveRouteSetAsync"/>) + swap (<see cref="IRouteTable.Refresh(IEnumerable{Http.Core.Models.HttpRouteData})"/>),

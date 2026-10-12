@@ -83,7 +83,7 @@ internal static class RuntimeOperationalStateProviderSmoke
                 null,
                 null,
                 null));
-            // Spec 184, FR-024: reclaim lists what one owner holds; the owner predicate must translate on every engine.
+            // Reclaim lists what one owner holds; the owner predicate must translate on every engine.
             Assert.Equal("workflow-a", Assert.Single((await liveness.ListOwnedPageAsync("checkpoint-owner", new RuntimeStorePageRequest(10))).Items).WorkflowExecutionId);
             Assert.Empty((await liveness.ListOwnedPageAsync("another-owner", new RuntimeStorePageRequest(10))).Items);
             var nonemptyCheckpoint = new RuntimeCheckpointCommit(

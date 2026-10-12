@@ -289,7 +289,7 @@ public sealed class HttpEndpointRoutesResolverTests
         Assert.Equal("orders/{id}", route.Route);
     }
 
-    // ---- Mid-flow bookmark union (spec 089 D, T009 / D-D4) ----
+    // ---- Mid-flow bookmark union ----
 
     [Fact]
     public async Task UnionsWaitingBookmarkTemplates_WithTriggerBindingTemplates()

@@ -1,6 +1,6 @@
 namespace Elsa.Workflows.Runtime.Core.Models;
 
-/// <summary>What a single reference GC sweep removed (ADR 0040).</summary>
+/// <summary>What a single reference GC sweep removed.</summary>
 public sealed record WorkflowExecutableReferenceSweepResult(
     int DeletedReferenceCount,
     int DeletedArtifactCount,

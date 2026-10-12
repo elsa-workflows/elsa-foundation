@@ -16,13 +16,13 @@ public interface IWorkflowRuntimeAttentionQuery
 }
 
 /// <summary>
-/// Reports work that waits because no active member can run it (spec 184, FR-017). The distributed runtime implements
+/// Reports work that waits because no active member can run it. The distributed runtime implements
 /// it; <see cref="WorkflowRuntimeAttentionContributor"/> turns each report into a warning beside the runtime's other
 /// attention items, so the core gains no reference to that leaf.
 /// </summary>
 /// <remarks>
 /// A report names what the waiting executions need and how many there are, and never a host: no domain answer reveals
-/// the fleet's topology (spec 182, FR-011). Refusing such work is placement's decision, not a runtime fault, so it is
+/// the fleet's topology. Refusing such work is placement's decision, not a runtime fault, so it is
 /// never reported as an incident or a faulted run.
 /// </remarks>
 public interface IWorkflowRuntimePlacementAttention

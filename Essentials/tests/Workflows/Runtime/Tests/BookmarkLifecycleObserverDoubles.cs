@@ -3,7 +3,7 @@ using Elsa.Workflows.Runtime.Core.Models;
 
 namespace Elsa.Workflows.Runtime.Tests;
 
-/// <summary>Records the bookmarks it is notified about, shared by the create/consume observer tests (spec 089 D T005).</summary>
+/// <summary>Records the bookmarks it is notified about, shared by the create/consume observer tests.</summary>
 internal sealed class RecordingBookmarkLifecycleObserver : IBookmarkLifecycleObserver
 {
     public List<BookmarkState> Created { get; } = [];

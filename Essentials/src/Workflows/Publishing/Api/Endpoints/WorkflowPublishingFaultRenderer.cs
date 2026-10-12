@@ -119,7 +119,7 @@ internal sealed class WorkflowPublishingFaultRenderer : IEndpointFaultRenderer
 
         // Not scoped by endpoint metadata: every Publishing failure below carries a code (issue #1699), so it
         // renders here regardless of which endpoint raised it, ahead of WorkflowPublishingExceptionTranslator,
-        // which handles only the codeless arms (404, generic 400). A schema write refusal (spec 180, FR-016a) also
+        // which handles only the codeless arms (404, generic 400). A schema write refusal also
         // carries its family and both versions as errors.
         if (exception is SchemaWriteRefusedException refusal)
         {

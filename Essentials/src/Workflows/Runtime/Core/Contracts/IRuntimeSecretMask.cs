@@ -1,15 +1,14 @@
 namespace Elsa.Workflows.Runtime.Core.Contracts;
 
 /// <summary>
-/// Declares <see cref="IRuntimeSecretMask"/> as a single-implementation replacement contract (framework constitution
-/// §2.6.2).
+/// Declares <see cref="IRuntimeSecretMask"/> as a single-implementation replacement contract.
 /// </summary>
 [AttributeUsage(AttributeTargets.Interface, Inherited = false)]
 public sealed class RuntimeSecretMaskReplacementContractAttribute : Attribute;
 
 /// <summary>
 /// Holds the values resolved from secrets for the activity executions handled in one dependency scope, and replaces
-/// them in text produced for the execution that resolved them (spec 188, FR-012). The activities runtime's work
+/// them in text produced for the execution that resolved them. The activities runtime's work
 /// handlers mask with it the message, stack trace and inner exception chain of the exception a fault boundary records,
 /// the message of an <c>ActivityFault</c> the activity returned, and the disposal failures a cancellation arm reports
 /// with the cancellation, so those reach the execution's fault, incident and <c>runtime.fault*</c> metadata masked.
@@ -18,7 +17,7 @@ public sealed class RuntimeSecretMaskReplacementContractAttribute : Attribute;
 /// </summary>
 /// <remarks>
 /// <para>
-/// This is a <b>replacement contract</b> (framework constitution §2.6.2), declared by
+/// This is a <b>replacement contract</b>, declared by
 /// <see cref="RuntimeSecretMaskReplacementContractAttribute"/>: at most one implementation per container. The runtime
 /// registers a scoped default with <c>TryAdd</c>, so a host replaces it with <c>services.Replace(...)</c> or by
 /// registering its own first. A host that composes more than one does not start: the activities runtime's startup
@@ -31,7 +30,7 @@ public sealed class RuntimeSecretMaskReplacementContractAttribute : Attribute;
 /// <list type="bullet">
 /// <item><description>
 /// Registrations are kept per activity execution id. <see cref="Mask"/> applies only the values registered for the
-/// execution it is given, never another execution's, as FR-012 scopes masking to the execution that resolved them.
+/// execution it is given, never another execution's: masking is scoped to the execution that resolved the values.
 /// </description></item>
 /// <item><description>
 /// An empty value is ignored: it cannot be told apart in text, and registering it must not make every text "masked".

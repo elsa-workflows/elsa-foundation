@@ -84,7 +84,7 @@ public sealed class WorkflowExecutableCompilerTests
     }
 
     /// <summary>
-    /// Spec 188, FR-007: each row of the effective-policy table, compiled through publication. The binding and the pinned
+    /// Each row of the effective-policy table, compiled through publication. The binding and the pinned
     /// contract input take their policy from one function, so they agree; a secret reference adds its own minimum to the
     /// binding only. Columns: the input (<c>Label</c> undeclared, <c>Note</c> sensitive, <c>ApiKey</c> credential), the
     /// authored binding (null when unbound), the authored IsSensitive, then the contract's and the binding's
@@ -182,7 +182,7 @@ public sealed class WorkflowExecutableCompilerTests
     [MemberData(nameof(RefusedCredentialBindings))]
     public async Task A_literal_or_expression_on_a_credential_input_is_refused_by_the_credential_literal_rule_ahead_of_VF_ACT_011(ArgumentValue value)
     {
-        // T054 (spec 188, FR-008, FR-009): the credential rule judges the binding before VF-ACT-011 is reached.
+        // The credential rule judges the binding before VF-ACT-011 is reached.
         var exception = await SecretBindingCompilerFixture.AssertRefusedAsync(
             SecretBindingCompilerFixture.Node(typeof(DeclaredInputsActivity), new WorkflowArgumentState(nameof(DeclaredInputsActivity.ApiKey), value, null, null, null, null)),
             [typeof(DeclaredInputsActivity)]);
@@ -231,7 +231,7 @@ public sealed class WorkflowExecutableCompilerTests
     [Fact]
     public async Task An_undeclared_input_keeps_its_contract_fingerprint_and_artifact_hash()
     {
-        // These values were captured before the sensitivity declaration existed (spec 188, slice 5). #2515
+        // These values were captured before the sensitivity declaration existed. #2515
         // intentionally updates the structured artifact hashes to include the effective side-effect profile;
         // the contract fingerprint remains unchanged for both input variants.
         var unbound = await SecretBindingCompilerFixture.CompileAsync(SecretBindingCompilerFixture.Node(typeof(TestWriteLineActivity)), [typeof(TestWriteLineActivity)]);
@@ -307,7 +307,7 @@ public sealed class WorkflowExecutableCompilerTests
     [Fact]
     public async Task Compiles_authored_checkpoint_cadence_onto_the_executable_and_into_the_behavioral_hash()
     {
-        // ADR 0032 R5: the authored cadence flows design → publish → executable and is behavioral content — a cadence
+        // The authored cadence flows design → publish → executable and is behavioral content — a cadence
         // change is a distinct artifact identity, never a silent alias of the same graph.
         var now = new DateTimeOffset(2026, 7, 20, 12, 0, 0, TimeSpan.Zero);
         var node = Node("write-one", Text("hello"));
@@ -541,7 +541,7 @@ public sealed class WorkflowExecutableCompilerTests
     [Fact]
     public async Task Placed_reusable_activity_refuses_a_secret_reference_on_its_boundary_input()
     {
-        // Spec 188: a reusable boundary is activated by its template root, which here is not a CLR activity, so it
+        // A reusable boundary is activated by its template root, which here is not a CLR activity, so it
         // captures its inputs outside CLR activation. The input is text, so only this refusal stands in the way.
         var compiler = PlacedReusableCompiler(
             new WorkflowArgumentState(
@@ -562,7 +562,7 @@ public sealed class WorkflowExecutableCompilerTests
     [Fact]
     public async Task Placed_reusable_activity_refuses_a_secret_reference_before_an_earlier_input_fails_conversion()
     {
-        // Spec 188: the secret refusal runs once for the whole boundary before any input is compiled, so it wins over
+        // The secret refusal runs once for the whole boundary before any input is compiled, so it wins over
         // the conversion refusal of an input that sorts before the secret one.
         var compiler = PlacedReusableCompiler(
             SecretInput("value"),
@@ -777,7 +777,7 @@ public sealed class WorkflowExecutableCompilerTests
 
     /// <summary>
     /// Verifies that the compiler pins Flowchart's declared ReplaySafe profile and defaults the unmarked
-    /// Test.WriteLine activity to External (ADR 0032 R1 / spec 107). The shipped WriteLine is ReplaySafe
+    /// Test.WriteLine activity to External. The shipped WriteLine is ReplaySafe
     /// since #2581 and is not used here.
     /// </summary>
     [Fact]
@@ -2038,7 +2038,7 @@ public sealed class WorkflowExecutableCompilerTests
             ArtifactIdPrefix: "test-artifact-",
             CompatibilityMetadata: new Dictionary<string, string> { ["runtime.testRunId"] = "testrun-1" }));
 
-        // Scope/expiry are reference facts now (ADR 0040); the compiled artifact is pure behavior. The compile
+        // Scope/expiry are reference facts now; the compiled artifact is pure behavior. The compile
         // request still carries them (the publish/test-run handlers stamp them onto the reference), but the
         // executable itself only exposes behavior + compatibility metadata.
         Assert.StartsWith("test-artifact-", executable.Identity.ArtifactId, StringComparison.Ordinal);

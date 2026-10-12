@@ -9,7 +9,7 @@ using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores;
 namespace Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore.Services;
 
 /// <summary>
-/// Commits a source-owned catalog version and its Runtime execution material in the ADR 0066 order: the
+/// Commits a source-owned catalog version and its Runtime execution material in the publication order: the
 /// template and source reference in the Runtime context first, then the design rows in the Activities Design
 /// context, which is the linearization point. A source-owned publication has no receipt, so there is no third
 /// phase and nothing to converge on after the design commit.

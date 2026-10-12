@@ -104,7 +104,7 @@ public sealed class PublishWorkflowRequestHandlerTests
     [InlineData("JavaScript")]
     public async Task A_literal_or_expression_on_a_credential_input_is_refused_and_nothing_is_published(string expressionType)
     {
-        // T054 (spec 188, FR-008, FR-009): the credential rule refuses the binding, ahead of VF-ACT-011.
+        // The credential rule refuses the binding, ahead of VF-ACT-011.
         var workflowVersion = WorkflowVersion(Node("write-one", new WorkflowArgumentState("Text", new ArgumentValue("typed-in", expressionType), null, null, null, null)));
 
         var exception = await Assert.ThrowsAsync<WorkflowExecutableCompilationException>(() =>
@@ -119,7 +119,7 @@ public sealed class PublishWorkflowRequestHandlerTests
     [Fact]
     public async Task A_credential_literal_published_over_http_is_answered_with_400_naming_the_rule_node_and_input_and_never_the_value()
     {
-        // T062 (spec 188, FR-008): the publish route's 400 for the refusal rests on the translator's ArgumentException arm.
+        // The publish route's 400 for the refusal rests on the translator's ArgumentException arm.
         var literal = $"literal-value-{Guid.NewGuid():N}";
         var workflowVersion = WorkflowVersion(Node("write-one", new WorkflowArgumentState("Text", new ArgumentValue(literal, "Literal"), null, null, null, null)));
         var handler = Handler(workflowVersion, CredentialWriteLineActivity());
@@ -142,7 +142,7 @@ public sealed class PublishWorkflowRequestHandlerTests
     [Fact]
     public async Task An_activity_the_catalog_does_not_hold_is_refused_at_publish_and_once_installed_its_credential_literal_is_refused()
     {
-        // T112 (spec 188, FR-008 edge case, research R7 residual): the version holds a literal on the input the activity
+        // The residual case: the version holds a literal on the input the activity
         // declares a credential once installed, stored as add-version stores it, where nothing could judge the node.
         var workflowVersion = WorkflowVersion(SequenceNode("sequence", [Node("send", new WorkflowArgumentState("Text", new ArgumentValue("typed-in", "Literal"), null, null, null, null))]));
 
@@ -155,7 +155,7 @@ public sealed class PublishWorkflowRequestHandlerTests
         Assert.Empty(await _publicationStore.ListBySlotAsync(DefaultSlotId));
 
         // The activity is installed with a catalog version of the same id that declares the input a credential (written
-        // into the catalog directly: the Activities Design API refuses isCredential, T103).
+        // into the catalog directly: the Activities Design API refuses isCredential).
         var installed = await Assert.ThrowsAsync<WorkflowExecutableCompilationException>(() =>
             Handler(workflowVersion, _sequenceActivity, CredentialWriteLineActivity()).Handle(new PublishWorkflow(workflowVersion.Id), CancellationToken.None));
 
@@ -703,7 +703,7 @@ public sealed class PublishWorkflowRequestHandlerTests
     [Fact]
     public async Task PublishedReferenceCarriesLayoutRecordsCopiedFromDefinitionVersion()
     {
-        // Acceptance 3 (ADR 0039): the publication reference embeds the layout sidecar copied verbatim from the
+        // Acceptance 3: the publication reference embeds the layout sidecar copied verbatim from the
         // definition version's layout store.
         var version = WorkflowVersion(Node("write-one", Text("one")));
         var additional = JsonSerializer.SerializeToElement(new { color = "blue" });
@@ -753,7 +753,7 @@ public sealed class PublishWorkflowRequestHandlerTests
     }
 
     /// <summary>
-    /// The authored-inputs view over a real publish of nested nodes (spec 188, T070): each authored input of a container's
+    /// The authored-inputs view over a real publish of nested nodes: each authored input of a container's
     /// children is matched to its compiled node, so an ordinary literal is shown and a literal on an input the activity
     /// declares sensitive is redacted by its compiled policy, although its author did not mark it. Nothing else is
     /// redacted.
@@ -951,7 +951,7 @@ public sealed class PublishWorkflowRequestHandlerTests
             new InProcessWorkflowExecutionActorProvider(),
             new ShortRuntimeExecutionIdGenerator());
 
-        // The publish above appended a live Published source reference the dispatch gates on (ADR 0040).
+        // The publish above appended a live Published source reference the dispatch gates on.
         var result = await dispatcher.DispatchAsync(new WorkflowExecutionStartDispatchRequest(published.ArtifactId, "test"));
 
         Assert.Equal(published.ArtifactId, result.PinnedExecutable.ArtifactId);
@@ -1181,7 +1181,7 @@ public sealed class PublishWorkflowRequestHandlerTests
 
     private async Task InvokeSlotLifecycleHandlerAsync(string operation, string definitionId, string slotName)
     {
-        // The slot-lifecycle handlers stay in the Api assembly (spec 145); anchor on an Api type, since
+        // The slot-lifecycle handlers stay in the Api assembly; anchor on an Api type, since
         // PublishWorkflowRequestHandler itself has moved to the engine assembly.
         var assembly = typeof(WorkflowsPublishingApiFeature).Assembly;
         var handlerType = assembly.GetType($"Elsa.Workflows.Publishing.Api.Handlers.{operation}PublicationSlotRequestHandler");
@@ -1204,7 +1204,7 @@ public sealed class PublishWorkflowRequestHandlerTests
         var extractor = new WorkflowTriggerBindingExtractor([]);
         services.AddSingleton<IWorkflowTriggerBindingExtractor>(extractor);
         services.AddSingleton<IWorkflowTriggerIndexer>(new WorkflowTriggerIndexer(extractor, _bindingStore));
-        // spec 145: the publish engine (compiler, stores, the PublishWorkflow handler) moved to the
+        // The publish engine (compiler, stores, the PublishWorkflow handler) moved to the
         // WorkflowsPublishing engine feature; compose it explicitly alongside the transport feature.
         new WorkflowsPublishingFeature().ConfigureServices(services);
         new WorkflowsPublishingApiFeature().ConfigureServices(services);

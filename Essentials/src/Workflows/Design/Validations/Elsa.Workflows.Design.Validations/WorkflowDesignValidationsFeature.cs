@@ -16,13 +16,13 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 namespace Elsa.Workflows.Design.Validations;
 
 /// <summary>
-/// Activation unit for the workflow-design validations sub-domain (Unit C FR-032). Registers the
+/// Activation unit for the workflow-design validations sub-domain. Registers the
 /// single <see cref="ExecuteValidations"/> handler for <c>DraftValidating</c> plus the baseline
-/// universal validators (FR-033) — unknown-activity-version, unhandled-activity-structure,
+/// universal validators — unknown-activity-version, unhandled-activity-structure,
 /// missing root activity, variable-uniqueness, required-input/output,
 /// variable-expression-resolver, value-flow — as <see cref="IDraftValidator"/>
 /// implementations. The handler resolves every <see cref="IDraftValidator"/> and aggregates their
-/// errors. Activity-specific validators ship in their activity feature (FR-034) by registering
+/// errors. Activity-specific validators ship in their activity feature by registering
 /// their own <see cref="IDraftValidator"/>.
 /// </summary>
 [ManifestRuntimeKind(ElsaRuntimeKinds.Server)]
@@ -69,7 +69,7 @@ public class WorkflowDesignValidationsFeature : IShellFeature
         services.AddScoped<IExpressionDraftSemanticValidator, ExpressionDraftSemanticValidator>();
         services.AddScoped<IDraftValidator, ExpressionDraftValidator>();
 
-        // The credential-literal rule (spec 188, FR-008): one validator, which every admitting writer of workflow state
+        // The credential-literal rule: one validator, which every admitting writer of workflow state
         // (the Design API callers, the version reconciler, the git exporter, the Elsa 3 collection import) reaches as
         // ICredentialLiteralValidator, also contributed to DraftValidating so the validation panel reports it.
         // Publication does not take it: its compiler applies the same predicate, CredentialInputBinding.IsAccepted.

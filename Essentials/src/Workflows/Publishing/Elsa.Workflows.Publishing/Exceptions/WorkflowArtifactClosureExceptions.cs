@@ -3,7 +3,7 @@ using Elsa.Workflows.Runtime.Core.Models;
 namespace Elsa.Workflows.Publishing.Exceptions;
 
 /// <summary>
-/// Base for every reason <c>IWorkflowArtifactClosureFactory</c> refuses to produce a closure (§2.23.5).
+/// Base for every reason <c>IWorkflowArtifactClosureFactory</c> refuses to produce a closure.
 /// </summary>
 /// <remarks>
 /// The family exists so a caller can catch "export refused" in one place, while the derived types stay
@@ -39,7 +39,7 @@ public sealed class WorkflowArtifactClosureSourceNotFoundException(string defini
 }
 
 /// <summary>
-/// Raised when the definition version exists but carries no <c>Published</c>-scope source reference (FR-B-011) —
+/// Raised when the definition version exists but carries no <c>Published</c>-scope source reference —
 /// in practice, a version that only ever ran as a Test Run.
 /// </summary>
 /// <remarks>
@@ -159,7 +159,7 @@ public sealed class WorkflowArtifactClosureCycleException(string definitionVersi
 }
 
 /// <summary>
-/// Raised when a store the closure factory reads fails for an infrastructure reason (§2.23.5).
+/// Raised when a store the closure factory reads fails for an infrastructure reason.
 /// </summary>
 /// <remarks>
 /// The other members of this family are answers about the workflow — a caller maps them to a client error. This

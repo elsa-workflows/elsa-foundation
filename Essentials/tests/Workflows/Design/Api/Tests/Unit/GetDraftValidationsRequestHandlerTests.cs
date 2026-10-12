@@ -14,7 +14,7 @@ using ValidationsEndpoint = Elsa.Workflows.Design.Api.Endpoints.Drafts.Validatio
 namespace Elsa.Workflows.Design.Api.Tests.Unit;
 
 /// <summary>
-/// Pins the GET-validations read path (issue #927): the handler derives the FR-024 error set for the
+/// Pins the GET-validations read path (issue #927): the handler derives the validation error set for the
 /// current draft state through the validation gate and projects each <see cref="ValidationError"/>
 /// onto the client-facing view, decomposing the R2 path into a node pointer + member reference.
 /// </summary>

@@ -5,10 +5,10 @@ using Xunit;
 namespace Elsa.Workflows.Design.Tests.Unit;
 
 /// <summary>
-/// SC-006 + Unit C FR-011: after the collapse, zero occurrences of the old
+/// After the collapse, zero occurrences of the old
 /// <c>(activityDefinitionId : string, version : int)</c> pair remain on <c>ActivityNode</c>.
 /// A single <see cref="ActivityNode.ActivityVersionId"/> string replaces the pair —
-/// the stable catalog reference owned by Unit B (FR-011a — string typing is the seam;
+/// the stable catalog reference owned by the activity catalog (string typing is the seam;
 /// no shared contract type introduced).
 /// </summary>
 public sealed class ActivityVersionIdCollapseTests

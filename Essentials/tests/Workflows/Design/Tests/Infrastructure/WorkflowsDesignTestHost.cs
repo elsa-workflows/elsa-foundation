@@ -30,11 +30,11 @@ namespace Elsa.Workflows.Design.Tests.Infrastructure;
 /// then production store/command registrations),
 /// wired to an <see cref="InMemoryDistributedLockProvider"/> and a single
 /// <see cref="CapturingEventPublisher"/> (for the synchronous <c>DraftValidating</c> gate AND the
-/// FR-018/FR-018a lifecycle events + <c>DraftValidated</c>) so command behaviour can be asserted
+/// lifecycle events + <c>DraftValidated</c>) so command behaviour can be asserted
 /// end-to-end without Entity Framework.
 /// </summary>
 /// <remarks>
-/// Spec 093 T072 rehost: this host previously composed the workflows-design Entity Framework context
+/// Rehosted: this host previously composed the workflows-design Entity Framework context
 /// over an in-memory SQLite connection. It now composes the real EF Core store so the
 /// surviving provider-neutral behavioural tests exercise the shipping persistence path. Raw context
 /// reads are replaced by <see cref="GetDraftAsync"/>/<see cref="GetVersionAsync"/> over the public read
@@ -92,7 +92,7 @@ internal sealed class WorkflowsDesignTestHost : IDisposable
     /// The services every design host here starts from: the workflows-design EF lane on a SQLite file in
     /// <paramref name="directory"/>, the real events and validations features, and the activity catalog of
     /// <see cref="CredentialLiteralTestSupport"/>, which the validators, and the credential-literal admission they back,
-    /// read (spec 188). A host adds its lock provider, event publishers and structure service.
+    /// read. A host adds its lock provider, event publishers and structure service.
     /// </summary>
     internal static ServiceCollection DesignStoreServices(string directory)
     {

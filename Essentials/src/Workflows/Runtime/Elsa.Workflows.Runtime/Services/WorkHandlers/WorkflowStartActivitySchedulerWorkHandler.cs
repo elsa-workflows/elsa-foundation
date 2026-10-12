@@ -152,7 +152,7 @@ public sealed class WorkflowStartActivitySchedulerWorkHandler : IWorkflowSchedul
     }
 
     /// <summary>
-    /// Fused-mode start stage (spec 123 D1). Two fused shapes, distinguished by the returned
+    /// Fused-mode start stage. Two fused shapes, distinguished by the returned
     /// <see cref="FusedStartResult"/>:
     /// <list type="bullet">
     /// <item><b>Typed ReplaySafe leaf</b> — runs the same resolve → materialize → transition-to-Running →
@@ -369,7 +369,7 @@ public sealed class WorkflowStartActivitySchedulerWorkHandler : IWorkflowSchedul
     /// <summary>
     /// Discrete adapter: builds the fused-mode <c>ActivityStarted</c> commit core and re-attaches the
     /// <c>InvokeActivity</c> continuation intent, reproducing today's commit byte-for-byte. The commit builder and the
-    /// derived <c>InvokeActivity</c> work item are extracted into <see cref="BuildStartedCommitAsync"/> so the spec-123
+    /// derived <c>InvokeActivity</c> work item are extracted into <see cref="BuildStartedCommitAsync"/> so the
     /// fusion driver can commit the same stage without the continuation intent and dispatch the invoke handler inline.
     /// </summary>
     private async ValueTask<RuntimeCheckpointCommit> NewCommitAsync(
@@ -390,7 +390,7 @@ public sealed class WorkflowStartActivitySchedulerWorkHandler : IWorkflowSchedul
     }
 
     /// <summary>
-    /// The <c>ActivityStarted</c> stage core (spec 123 FR-002): produces the <c>ActivityStarted</c> checkpoint commit
+    /// The <c>ActivityStarted</c> stage core: produces the <c>ActivityStarted</c> checkpoint commit
     /// <b>without</b> its <c>InvokeActivity</c> post-commit intent, alongside the derived <c>InvokeActivity</c> work
     /// item and the checkpoint's occurrence time. The discrete handler re-attaches the intent
     /// (<see cref="NewCommitAsync"/>); the fused driver commits the intent-free commit and dispatches the returned work
@@ -459,7 +459,7 @@ public sealed class WorkflowStartActivitySchedulerWorkHandler : IWorkflowSchedul
 
     /// <summary>
     /// The intent-free <c>ActivityStarted</c> commit plus the derived <c>InvokeActivity</c> continuation work item and
-    /// the checkpoint's occurrence time (spec 123 FR-002).
+    /// the checkpoint's occurrence time.
     /// </summary>
     internal readonly record struct StartedCommitCore(
         RuntimeCheckpointCommit Commit,

@@ -2,7 +2,7 @@ namespace Elsa.Workflows.Runtime.Core.Models;
 
 /// <summary>
 /// The portable export/import unit: one workflow executable plus its complete transitive dependency closure,
-/// self-describing and self-contained (FR-B-001 / FR-B-010).
+/// self-describing and self-contained.
 /// </summary>
 /// <remarks>
 /// <para>

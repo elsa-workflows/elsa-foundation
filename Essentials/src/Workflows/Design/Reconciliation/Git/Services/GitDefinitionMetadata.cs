@@ -4,7 +4,7 @@ using System.Text.Json.Serialization;
 namespace Elsa.Workflows.Design.Reconciliation.Git.Services;
 
 /// <summary>
-/// The mutable, latest-wins <c>definition.json</c> shape (ADR 0034 D5): the sole authority for a
+/// The mutable, latest-wins <c>definition.json</c> shape: the sole authority for a
 /// definition's name/description/soft-delete. Kept separate from the immutable <c>versions/*.json</c>
 /// content so a rename never changes any version's content identity. Shared by the source (read) and
 /// the exporter (write).

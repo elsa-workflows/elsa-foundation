@@ -4,8 +4,7 @@ using Microsoft.Extensions.DependencyInjection;
 namespace Elsa.Workflows.Runtime.Distributed.Placement;
 
 /// <summary>
-/// Whether a newer generation of the shell a distributed runtime runs in is active: what tells a shell reload from a stop
-/// (spec 184, FR-021 and FR-022).
+/// Whether a newer generation of the shell a distributed runtime runs in is active: what tells a shell reload from a stop.
 /// </summary>
 /// <remarks>
 /// <para>

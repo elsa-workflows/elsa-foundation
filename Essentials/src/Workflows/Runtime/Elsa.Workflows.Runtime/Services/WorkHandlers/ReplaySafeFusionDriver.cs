@@ -11,26 +11,26 @@ using Microsoft.Extensions.DependencyInjection;
 namespace Elsa.Workflows.Runtime.Services.WorkHandlers;
 
 /// <summary>
-/// The fused-span driver (ADR 0047 D1+D2 / spec 123). Invoked from the <c>ScheduleActivity</c> handler's terminal
+/// The fused-span driver. Invoked from the <c>ScheduleActivity</c> handler's terminal
 /// continuation point when the target is a ReplaySafe leaf inside a live coalescing burst, it runs the <b>start</b> and
 /// <b>invoke</b> stages inline in the same dispatch instead of round-tripping their work items through the scheduler
-/// queue + drain loop (D1). The schedule handler has already committed the intent-free <c>ActivityScheduled</c>
+/// queue + drain loop. The schedule handler has already committed the intent-free <c>ActivityScheduled</c>
 /// checkpoint and hands over the <c>StartActivity</c> work item; the driver runs the extracted start stage core
 /// (committing the intent-free <c>ActivityStarted</c> checkpoint), then dispatches the retained <c>InvokeActivity</c>
 /// work item through the <b>existing, unchanged</b> invoke handler inline.
 ///
-/// <para>After the inline invoke, the top-level span pumps the completion cascade inline (D2): it delivers this
+/// <para>After the inline invoke, the top-level span pumps the completion cascade inline: it delivers this
 /// execution's pending <c>EnqueueSchedulerWork</c> outbox intents and claims + dispatches the resulting overlay work
 /// items through the same handlers, in the same FIFO order and with the same custom-before-fallback handler resolution
 /// the drain loop uses — eliding only the per-item drain hop. Because the pump reuses the drain loop's exact queue,
 /// outbox, and handler machinery on the same coalescing session, its commits are the discrete commits by construction;
 /// the byte-identical guardrail and crash-convergence suites are the gate. A fusable successor <c>ScheduleActivity</c>
-/// re-enters the D1 pass (the re-entered span is D1-only — the top pump owns the loop, keeping stack depth constant on
-/// long chains); anything the pump cannot prove fusable — join (fan-in) successor edges per ADR 0047 resolution #1,
+/// re-enters the fused pass (the re-entered span does not pump — the top pump owns the loop, keeping stack depth constant on
+/// long chains); anything the pump cannot prove fusable — join (fan-in) successor edges,
 /// child-fault evaluations, non-ReplaySafe parents, the workflow tail (<c>ContinuationScheduling</c>/<c>Checkpoint</c>),
 /// bookmark/cancel work — is released back to the overlay for the discrete drain loop. No new command kinds, no new
 /// crash-recovery mechanism: only the original <c>ScheduleActivity</c> is ever durably queued for a fused span, so
-/// crash redrive is identical to a mid-segment coalescing crash today (research §5, §8.1).</para>
+/// crash redrive is identical to a mid-segment coalescing crash today.</para>
 /// </summary>
 public sealed class ReplaySafeFusionDriver
 {
@@ -69,9 +69,9 @@ public sealed class ReplaySafeFusionDriver
     /// <summary>
     /// Whether a fresh <c>ScheduleActivity</c> targeting <paramref name="node"/> should fuse: the toggle is on, a live
     /// coalescing session owns this execution (fusion is a burst-only locality optimization; outside a burst the
-    /// spec-109 carrier / Immediate path stands and every hop is discrete), and the node is one of
+    /// in-process-hop carrier / Immediate path stands and every hop is discrete), and the node is one of
     /// <list type="bullet">
-    /// <item>a ReplaySafe typed CLR leaf (the original ADR 0047 D1 population), or</item>
+    /// <item>a ReplaySafe typed CLR leaf (the original population), or</item>
     /// <item>an engine intrinsic whose kind is fusable per <see cref="WorkflowIntrinsicFusion"/>. An intrinsic has no
     /// <c>ActivityContract</c> to carry a profile, so its replay-safety comes from the pinned
     /// <see cref="ExecutableNode.IntrinsicKind"/> instead. Intrinsics were previously excluded as a class; the
@@ -143,7 +143,7 @@ public sealed class ReplaySafeFusionDriver
         if (!startResult.Fused)
         {
             // Fallback: not a fresh Scheduled fusable node. Hand the StartActivity item to the overlay queue so the
-            // discrete StartActivity handler processes it — discrete-equivalent, nothing dropped (research §4).
+            // discrete StartActivity handler processes it — discrete-equivalent, nothing dropped.
             await _schedulerWorkQueue.EnqueueAsync(startWorkItem, cancellationToken);
             return false;
         }
@@ -154,7 +154,7 @@ public sealed class ReplaySafeFusionDriver
         // continuation rides the same post-commit intent the discrete path emits. Go straight to the D2 pump.
         if (startResult.InvokeWorkItem is { } invokeWorkItem)
         {
-            // Dispatch the invoke stage through the existing, unchanged handler inline (research §8.1). Its terminal
+            // Dispatch the invoke stage through the existing, unchanged handler inline. Its terminal
             // commit (completion + parent-completion intent, or suspension / fault / child-scheduling) flows via the
             // overlay outbox exactly as the discrete path.
             var invokeHandler = ResolveHandler(invokeWorkItem);
@@ -321,12 +321,12 @@ public sealed class ReplaySafeFusionDriver
 
             case SchedulerCompletionKind.ParentCompletionEvaluation:
             {
-                // Child-fault evaluations keep the discrete cascade (research §4: a fault terminal never fuses onward).
+                // Child-fault evaluations keep the discrete cascade (a fault terminal never fuses onward).
                 if (workItem.CommandMetadata.TryGetValue(RuntimeMetadataKeys.ChildFaulted, out var faulted) &&
                     bool.TryParse(faulted, out var isFaulted) && isFaulted)
                     return PumpDecision.Fallback;
 
-                // Only a ReplaySafe parent composite's evaluation runs inline; External parents fall back (research §4).
+                // Only a ReplaySafe parent composite's evaluation runs inline; External parents fall back.
                 var parentNode = await ResolveNodeAsync(payload.PinnedExecutable.ArtifactId, payload.ExecutableNodeId, cancellationToken);
                 return parentNode?.ActivityContract?.SideEffectProfile == SideEffectProfile.ReplaySafe
                     ? PumpDecision.Fusable
@@ -376,7 +376,7 @@ public sealed class ReplaySafeFusionDriver
         if (parentNode?.ActivityContract?.SideEffectProfile != SideEffectProfile.ReplaySafe)
             return PumpDecision.Fallback;
 
-        // ADR 0047 resolution #1: only a successor edge proven to have at most one inbound connection fuses; a fan-in
+        // Only a successor edge proven to have at most one inbound connection fuses; a fan-in
         // (join) edge — and any edge no probe can answer for — keeps the discrete cascade.
         foreach (var probe in _successorRoutingProbes)
         {
@@ -389,7 +389,7 @@ public sealed class ReplaySafeFusionDriver
 
     private async ValueTask<ExecutableNode?> ResolveNodeAsync(string artifactId, string executableNodeId, CancellationToken cancellationToken)
     {
-        // Burst-cached read (spec 111): inside the pump's live burst this resolves the same immutable pinned artifact
+        // Burst-cached read: inside the pump's live burst this resolves the same immutable pinned artifact
         // the handlers read, so classification adds no durable round-trips.
         var executable = await PinnedExecutableRead.FindAsync(_serviceProvider, artifactId, cancellationToken);
         return executable is not null && executable.NodesById.TryGetValue(executableNodeId, out var node) ? node : null;

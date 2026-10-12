@@ -24,13 +24,13 @@ public enum WorkflowArtifactSkipReason
 
     /// <summary>
     /// The slot already serves an artifact whose <c>ArtifactVersion</c> sorts at or above the candidate's, so
-    /// activating would move the definition <em>backward</em> (FR-B-007 latest-wins).
+    /// activating would move the definition <em>backward</em> (latest-wins).
     /// </summary>
     OlderVersion,
 
     /// <summary>
     /// A <em>different</em> activation source owns the definition's default slot, and reconciliation never
-    /// reclaims a slot it does not own (T118, amending FR-B-006).
+    /// reclaims a slot it does not own.
     /// </summary>
     /// <remarks>
     /// <para>
@@ -80,7 +80,7 @@ public enum WorkflowArtifactRejectionKind
 
     /// <summary>
     /// A member's recomputed canonical content hash disagrees with its declared identity hash — the artifact's
-    /// payload is not the payload its content-addressed id names (ADR 0038).
+    /// payload is not the payload its content-addressed id names.
     /// </summary>
     ContentHashMismatch,
 
@@ -89,7 +89,7 @@ public enum WorkflowArtifactRejectionKind
 
     /// <summary>
     /// A member's <c>ArtifactVersion</c> is not a semantic version, so latest-wins supersession cannot order it
-    /// against whatever the definition already serves (FR-B-007).
+    /// against whatever the definition already serves.
     /// </summary>
     UnorderableVersion,
 
@@ -193,7 +193,7 @@ public sealed record WorkflowArtifactImportEntry(
 /// </summary>
 /// <remarks>
 /// A <b>value</b>, not a throw. Rejections are entries here rather than exceptions precisely so that one broken
-/// closure unit cannot take the rest of the mounted set down with it (US2-3): the pass completes, every unit is
+/// closure unit cannot take the rest of the mounted set down with it: the pass completes, every unit is
 /// accounted for, and the operator sees all the problems at once instead of only the first.
 /// </remarks>
 public sealed record WorkflowArtifactReconciliationResult(IReadOnlyList<WorkflowArtifactImportEntry> Entries)
@@ -222,7 +222,7 @@ public sealed record WorkflowArtifactReconciliationResult(IReadOnlyList<Workflow
     /// Exposed beside <see cref="Rejections"/> rather than folded into it because it is not a rejection — nothing
     /// is wrong with the artifact, and the closure unit imported fine. It nonetheless has to reach the operator
     /// at boot for the same reason a rejection does: the mount is being ignored for that definition, and nothing
-    /// else on the engine says so (T118).
+    /// else on the engine says so.
     /// </remarks>
     public IEnumerable<WorkflowArtifactImportEntry> OwnershipSkips =>
         Entries.Where(entry => entry.SkipReason == WorkflowArtifactSkipReason.ForeignSlotOwner);

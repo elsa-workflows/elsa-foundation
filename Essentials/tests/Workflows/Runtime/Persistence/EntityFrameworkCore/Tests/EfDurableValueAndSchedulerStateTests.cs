@@ -237,7 +237,7 @@ public sealed class EfDurableValueAndSchedulerStateTests
     }
 
     /// <summary>
-    /// Spec 184, FR-024: reclaim lists the states a departed host id holds, by execution lease or by heartbeat, page by
+    /// Reclaim lists the states a departed host id holds, by execution lease or by heartbeat, page by
     /// page and only within the scope, whatever the lease's expiry.
     /// </summary>
     [Fact]

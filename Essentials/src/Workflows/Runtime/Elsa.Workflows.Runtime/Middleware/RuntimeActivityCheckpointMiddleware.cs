@@ -8,13 +8,13 @@ namespace Elsa.Workflows.Runtime.Middleware;
 
 /// <summary>
 /// The activity pipeline's <c>Checkpoint</c> slot: persists the checkpoint commits a handler assembled and staged on
-/// the dispatch workspace in the earlier <c>Invoke</c> slot (ADR 0029, Move 2). Mirrors
+/// the dispatch workspace in the earlier <c>Invoke</c> slot. Mirrors
 /// <see cref="RuntimeWorkflowCheckpointMiddleware"/>. Handlers that stage nothing leave the list empty and this slot is
 /// a no-op for them.
 /// </summary>
 /// <remarks>
-/// This slot is also where a bookmark-created checkpoint's lifecycle notification fires on the pipeline dispatch path
-/// (spec 089 D): the create handler stages its commit here rather than committing inline, so — unlike its direct
+/// This slot is also where a bookmark-created checkpoint's lifecycle notification fires on the pipeline dispatch path:
+/// the create handler stages its commit here rather than committing inline, so — unlike its direct
 /// <c>HandleAsync</c> path, which notifies right after its own inline commit — the post-commit
 /// <see cref="BookmarkLifecycleNotifier.NotifyCreatedAsync"/> must run here, after the staged commit lands. Consume
 /// notifications are unaffected: <c>BookmarkConsumptionCheckpointService</c> commits and notifies inline and never
@@ -41,9 +41,9 @@ public sealed class RuntimeActivityCheckpointMiddleware(
     }
 
     /// <summary>
-    /// Fires the bookmark-created lifecycle notification for a just-committed bookmark-created checkpoint (spec 089 D).
+    /// Fires the bookmark-created lifecycle notification for a just-committed bookmark-created checkpoint.
     /// This is the pipeline-path counterpart to <c>WorkflowCreateBookmarkSchedulerWorkHandler</c>'s direct-path
-    /// post-commit notify: a bookmark created through the ADR 0029 pipeline stages its commit for this slot, so the
+    /// post-commit notify: a bookmark created through the runtime execution pipeline stages its commit for this slot, so the
     /// notification must fire here (the drainer dispatches CreateBookmark through the pipeline, not the direct path).
     /// Gated on the checkpoint name so non-bookmark checkpoints cost only a string compare.
     /// </summary>

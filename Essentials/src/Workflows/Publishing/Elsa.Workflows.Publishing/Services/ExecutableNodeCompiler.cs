@@ -360,7 +360,7 @@ public sealed class ExecutableNodeCompiler(
             ResolveSideEffectProfile(activityType));
     }
 
-    // ADR 0032 R1 / spec 107: an unmarked activity is External (fail-safe); only an explicit
+    // An unmarked activity is External (fail-safe); only an explicit
     // [ActivitySideEffectProfile(ReplaySafe)] opts a pure/deterministic activity into a deferrable claim boundary.
     private static SideEffectProfile ResolveSideEffectProfile(Type activityType) =>
         activityType.GetCustomAttribute<ActivitySideEffectProfileAttribute>(inherit: true)?.Profile
@@ -405,7 +405,7 @@ public sealed class ExecutableNodeCompiler(
                     outcomes.Add(value);
         }
 
-        // spec 125: a BPMN transaction subprocess declares the additional "Cancelled" outcome (structure-dependent,
+        // A BPMN transaction subprocess declares the additional "Cancelled" outcome (structure-dependent,
         // the same FlowSwitch/VF-ACT-006 pattern as Switch case labels): a cancel end event inside the transaction
         // completes the nested process with "Cancelled" instead of "Done". A non-transaction BpmnProcess keeps only
         // its statically declared "Done" outcome, so the contract stays byte-identical for ordinary processes.
@@ -505,7 +505,7 @@ public sealed class ExecutableNodeCompiler(
     }
 
     /// <summary>
-    /// Publication guard against silently mis-compiling a composite. Spec 071 FR-008 keeps a
+    /// Publication guard against silently mis-compiling a composite. Publication keeps a
     /// structure of UNKNOWN kind opaque (copied through, no children projected) — but a kind the
     /// activity's own catalog design facets declare is not unknown: its handler ships with the
     /// feature that provides the activity, so a missing handler means that feature is disabled or
@@ -553,7 +553,7 @@ public sealed class ExecutableNodeCompiler(
     /// <summary>
     /// Publish-time backstop for the <c>IntrinsicVariableTargetValidator</c> draft guard (#972, PR #971
     /// two-guard pattern): every variable-writing intrinsic must target a variable visible from its scope
-    /// (workflow-scope <c>state.Variables</c> or a visible ancestor container's declarations, ADR 0027).
+    /// (workflow-scope <c>state.Variables</c> or a visible ancestor container's declarations).
     /// Compiling an invisible target would publish an executable that poisons at runtime
     /// ("Set intrinsic ... targets undeclared variable"); publication is refused instead.
     /// </summary>

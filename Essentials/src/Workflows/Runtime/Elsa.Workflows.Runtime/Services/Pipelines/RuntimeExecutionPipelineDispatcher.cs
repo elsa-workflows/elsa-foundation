@@ -6,8 +6,8 @@ namespace Elsa.Workflows.Runtime.Services.Pipelines;
 
 /// <summary>
 /// Dispatches a drained scheduler work item through the runtime execution pipeline for its kind, staging the selected
-/// work handler in the pipeline's <c>Invoke</c> slot so it runs before the later slots that apply its results (ADR 0029,
-/// Move 2). The pipeline terminal is a guard that fails loudly if the handler was never run. It also stages the
+/// work handler in the pipeline's <c>Invoke</c> slot so it runs before the later slots that apply its results.
+/// The pipeline terminal is a guard that fails loudly if the handler was never run. It also stages the
 /// partition of the DI scope it lives in, which is the command's partition, so a handler that creates its own scope
 /// works in the partition the work item belongs to rather than in the host's.
 /// </summary>
@@ -44,7 +44,7 @@ public sealed class RuntimeExecutionPipelineDispatcher : IRuntimeExecutionPipeli
         ArgumentNullException.ThrowIfNull(workItem);
         ArgumentNullException.ThrowIfNull(handler);
 
-        // Activity pipeline (ADR 0029, Move 2): stage the handler invocation for the Invoke slot to run before the
+        // Activity pipeline: stage the handler invocation for the Invoke slot to run before the
         // Checkpoint slot, mirroring the workflow path. Context-aware (migrated) handlers get the context explicitly and
         // stage their results; other handlers run their plain path unchanged. The terminal is a guard: reaching it with
         // the handler still staged means the Invoke slot was missing from the plan, so fail loudly.
@@ -68,7 +68,7 @@ public sealed class RuntimeExecutionPipelineDispatcher : IRuntimeExecutionPipeli
             });
         }
 
-        // Workflow pipeline (ADR 0029, Move 2): stage the handler invocation for the Invoke slot to run before the
+        // Workflow pipeline: stage the handler invocation for the Invoke slot to run before the
         // Checkpoint slot. Context-aware (migrated) handlers get the context explicitly and stage their results; other
         // handlers run their plain path unchanged. The terminal is a guard: if it is reached with the handler still
         // staged, the Invoke slot was missing from the plan and the handler would silently not run — so fail loudly.

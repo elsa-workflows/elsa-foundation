@@ -21,13 +21,13 @@ public sealed class RouteTableTriggerIndexObserverTests
         var services = new ServiceCollection();
         services.AddSingleton<IWorkflowTriggerBindingStore>(_store);
         services.AddSingleton<IRouteTable>(_routeTable);
-        // The resolver unions waiting-bookmark templates via the expiry-aware lookup (spec 089 D); an empty
+        // The resolver unions waiting-bookmark templates via the expiry-aware lookup; an empty
         // in-memory bookmark store keeps these trigger-index observer tests focused on the trigger path.
         services.AddSingleton<IBookmarkStimulusIndex>(new InMemoryBookmarkStateStore());
         services.AddSingleton<IGlobalBookmarkStimulusLookup, GlobalBookmarkStimulusLookup>();
         services.AddLogging();
         services.AddScoped<IHttpEndpointRoutesResolver, HttpEndpointRoutesResolver>();
-        // The observer now delegates the read-then-swap to the shared synchronizer (spec 089 D review fix); wire the
+        // The observer now delegates the read-then-swap to the shared synchronizer; wire the
         // real one so the refresh path (and the FailNextRefresh propagation) still runs through it.
         services.AddSingleton<IHttpEndpointRouteTableSynchronizer, HttpEndpointRouteTableSynchronizer>();
         _services = services.BuildServiceProvider();
@@ -87,7 +87,7 @@ public sealed class RouteTableTriggerIndexObserverTests
     [Fact]
     public async Task RepeatNonHttpPublish_SkipsTheRefresh_AfterOneRefreshEstablishedItContributesNothing()
     {
-        // Spec 089 efficiency #8: the FIRST no-HTTP publish of an unknown artifact refreshes (the observer cannot
+        // The FIRST no-HTTP publish of an unknown artifact refreshes (the observer cannot
         // know the artifact did not just drop its last HTTP route); once that refresh succeeded, the artifact is
         // positively known non-HTTP and repeat no-HTTP publishes — the common case — skip the re-projection.
         await NotifyWithAsync("a1", Bindings.Other("a1", "n1", stimulusType: "Event"));

@@ -18,7 +18,7 @@ namespace Elsa.Workflows.Design.Tests.Unit.BaselineValidatorTests;
 /// Pins that the <see cref="RequiredInputOutputValidator"/> derives errors against the CURRENT
 /// catalog state on every pass (errors are derived, never cached against the draft) and that it
 /// looks each distinct <c>ActivityVersionId</c> up exactly once per pass (memoized by
-/// <c>CatalogVersionResolver</c>). Per the FR-033 2026-07-05 amendment a missing catalog version is
+/// <c>CatalogVersionResolver</c>). A missing catalog version is
 /// NO LONGER fail-closed here: <c>CatalogVersionResolver</c> folds the store's
 /// <see cref="EntityNotFoundException"/> to null and this validator skips the unresolvable node, so
 /// removing a node's version neither faults the gate nor drops a spurious required-arg error — the
@@ -58,7 +58,7 @@ public sealed class RequiredInputOutputValidatorDerivationTests
     [Fact]
     public async Task Removing_the_version_is_skipped_not_faulted_on_the_write_gate()
     {
-        // FR-033 amendment: removing the version makes GetVersion throw, but CatalogVersionResolver
+        // Removing the version makes GetVersion throw, but CatalogVersionResolver
         // folds that to null and this validator skips the node. The unshielded write gate therefore
         // completes without faulting — the unresolvable-version report belongs to
         // UnknownActivityVersionValidator (not wired into this single-validator publisher).

@@ -4,7 +4,7 @@ namespace Elsa.Workflows.Runtime.Core.Models;
 
 /// <summary>
 /// Mechanical snapshot helper shared by the runtime models (and the engine assembly since the
-/// ADR 0033 split): produces an ordinal, read-only defensive copy of a metadata dictionary.
+/// Core/engine split): produces an ordinal, read-only defensive copy of a metadata dictionary.
 /// </summary>
 public static class RuntimeModelMetadata
 {

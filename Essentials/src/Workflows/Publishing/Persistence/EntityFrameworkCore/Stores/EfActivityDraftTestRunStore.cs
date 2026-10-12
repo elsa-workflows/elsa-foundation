@@ -189,7 +189,7 @@ public sealed class EfActivityDraftTestRunStore(
             TenantIdHash = EfPublishingStoreSupport.TenantHash(scope)
         };
         // CopyMutable sets SchemaVersion alongside Content, the row's only declared content column, so the stamp
-        // and the content it describes are always written together (spec 180, FR-014; #2144).
+        // and the content it describes are always written together (#2144).
         CopyMutable(row, receipt);
         return row;
     }

@@ -60,7 +60,7 @@ public sealed class DistributedWorkflowExecutionActorProviderTests
     [Fact]
     public async Task ForwardingActor_DropsDispatchOptions_SoAmbientServicesNeverCrossProcess()
     {
-        // Spec 089 E-D4 / FR-021 (never-cross-process guarantee): the forwarding actor's options overload delegates to
+        // Never-cross-process guarantee: the forwarding actor's options overload delegates to
         // the single-arg overload, so request-affine ambient services are dropped by construction at the transport
         // boundary. The command is durably enqueued for the owning node carrying only the envelope — no service
         // provider is (or structurally could be) persisted.
@@ -119,7 +119,7 @@ public sealed class DistributedWorkflowExecutionActorProviderTests
     [Fact]
     public async Task TerminalCommand_LocallyOwned_EvictsLocalMailbox_AndRedeliveryReactivatesSafely()
     {
-        // #542 / spec 128 distributed parity: the distributed provider inherits the terminal-eviction trigger through
+        // #542 distributed parity: the distributed provider inherits the terminal-eviction trigger through
         // its composed _localProvider.GetAgentAsync — a terminal drain on the owning node evicts the local mailbox, and a
         // redelivered command re-claims placement (still owned by this node) and re-activates a fresh mailbox safely.
         var store = new InMemoryExecutionPlacementStore();

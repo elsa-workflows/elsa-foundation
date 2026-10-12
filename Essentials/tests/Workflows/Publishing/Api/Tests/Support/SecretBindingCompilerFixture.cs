@@ -20,8 +20,8 @@ using WorkflowArgumentState = Elsa.Workflows.Design.Core.Models.ArgumentState;
 namespace Elsa.Workflows.Publishing.Api.Tests;
 
 /// <summary>
-/// Compiles a one-node workflow through the real executable compiler so the secret binding rules (spec 188, slices 2
-/// and 5) are exercised where publication applies them. Activity versions are reflected from CLR activity types the way
+/// Compiles a one-node workflow through the real executable compiler so the secret binding rules
+/// are exercised where publication applies them. Activity versions are reflected from CLR activity types the way
 /// the catalog scanner declares them: one input per <c>[ActivityInput]</c>, keyed, typed and declared sensitive or
 /// credential as the activity declares (a credential is sensitive too, and an undeclared flag stays null).
 /// </summary>

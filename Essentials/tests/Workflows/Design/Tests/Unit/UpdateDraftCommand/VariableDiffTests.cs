@@ -5,7 +5,7 @@ using static Elsa.Workflows.Design.Tests.Infrastructure.UpdateDraftTestKit;
 namespace Elsa.Workflows.Design.Tests.Unit.UpdateDraftCommand;
 
 /// <summary>
-/// T009 (FR-013, SC-010) — variable diff coverage, driving
+/// Variable diff coverage, driving
 /// <see cref="Elsa.Workflows.Design.Persistence.Core.Services.DraftStateDiffEngine"/> directly
 /// (per-diff mutation-event publication retired from the mutation command). Variables match by
 /// <c>ReferenceKey</c>: declare/update/remove → <c>VariableDeclaredInDraft</c> /

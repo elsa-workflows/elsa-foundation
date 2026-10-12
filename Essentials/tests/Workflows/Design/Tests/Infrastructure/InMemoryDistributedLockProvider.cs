@@ -6,7 +6,7 @@ namespace Elsa.Workflows.Design.Tests.Infrastructure;
 /// <summary>
 /// In-process <see cref="IDistributedLockProvider"/> backed by a <see cref="SemaphoreSlim"/>
 /// per lock name. Test-only; demonstrates per-name serialisation + cross-name parallelism
-/// for SC-016. Production deployments use the FileSystem/Redis adapters in
+/// for the lock-semantics tests. Production deployments use the FileSystem/Redis adapters in
 /// <c>Elsa.Locking.FileSystem</c> / future <c>Elsa.Locking.Redis</c>.
 /// </summary>
 public sealed class InMemoryDistributedLockProvider : IDistributedLockProvider
@@ -15,7 +15,7 @@ public sealed class InMemoryDistributedLockProvider : IDistributedLockProvider
 
     /// <summary>
     /// Per-name count of successful lock acquisitions. Lets tests assert the
-    /// "lock-once-per-call against <c>workflow-draft:{DraftId}</c>" contract (SC-003).
+    /// "lock-once-per-call against <c>workflow-draft:{DraftId}</c>" contract.
     /// </summary>
     public ConcurrentDictionary<string, int> AcquireCounts { get; } = new();
 

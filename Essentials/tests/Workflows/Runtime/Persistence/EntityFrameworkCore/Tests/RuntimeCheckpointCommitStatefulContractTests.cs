@@ -160,7 +160,7 @@ public sealed class RuntimeCheckpointCommitStatefulContractTests
     }
 
     /// <summary>
-    /// Spec 102 FR-011: a child that won admission before its scope began closing must still start, so cleanup can cancel
+    /// A child that won admission before its scope began closing must still start, so cleanup can cancel
     /// it. Only a root start and a new child dispatch require an open scope; a child's first checkpoint does not.
     /// </summary>
     [Theory]

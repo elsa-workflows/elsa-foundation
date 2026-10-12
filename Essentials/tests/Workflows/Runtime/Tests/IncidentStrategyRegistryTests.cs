@@ -54,7 +54,7 @@ public sealed class IncidentStrategyRegistryTests
         Assert.Equal(2, CountingStrategy.Constructions);
     }
 
-    // Kept beside the composition test (§2.23.1): the registration enforces exactly one scoped strategy service.
+    // Kept beside the composition test: the registration enforces exactly one scoped strategy service.
     [Fact]
     public void Registration_enforces_exactly_one_scoped_strategy_service()
     {
@@ -83,7 +83,7 @@ public sealed class IncidentStrategyRegistryTests
             Assert.Single(scopedServices, descriptor => descriptor.ServiceType == typeof(CountingStrategy)).Lifetime);
     }
 
-    // Kept beside the composition test (§2.23.1): attribute registration needs one direct attribute and humanizes its name.
+    // Kept beside the composition test: attribute registration needs one direct attribute and humanizes its name.
     [Fact]
     public void Attribute_registration_requires_one_direct_attribute_and_humanizes_its_display_name()
     {
@@ -97,7 +97,7 @@ public sealed class IncidentStrategyRegistryTests
         Assert.Equal("Attributed", descriptor.DisplayName);
     }
 
-    // Kept beside the composition test (§2.23.1): rejection, conflicting identity and unqualified alias.
+    // Kept beside the composition test: rejection, conflicting identity and unqualified alias.
     [Fact]
     public void Registration_rejects_conflicting_case_insensitive_identity_and_unqualified_custom_alias()
     {
@@ -110,7 +110,7 @@ public sealed class IncidentStrategyRegistryTests
             Descriptor("Unqualified", "1", "Unqualified")));
     }
 
-    // Kept beside the composition test (§2.23.1): rejection, reserved built-in aliases.
+    // Kept beside the composition test: rejection, reserved built-in aliases.
     [Theory]
     [InlineData("Fault")]
     [InlineData("ContinueWithIncidents")]
@@ -142,7 +142,7 @@ public sealed class IncidentStrategyRegistryTests
             new IncidentStrategySafeIntentDescriptor("Contoso.SchedulerControl")));
     }
 
-    // Kept beside the composition test (§2.23.1): idempotence, composing the runtime twice registers both built-ins once.
+    // Kept beside the composition test: idempotence, composing the runtime twice registers both built-ins once.
     [Fact]
     public void Runtime_composition_idempotently_registers_both_builtin_strategies()
     {
@@ -159,7 +159,7 @@ public sealed class IncidentStrategyRegistryTests
         Assert.Contains(IncidentStrategyBuiltIns.ContinueWithIncidentsReference, references);
     }
 
-    // Kept beside the composition test (§2.23.1): retry after a failed built-in registration completes it.
+    // Kept beside the composition test: retry after a failed built-in registration completes it.
     [Fact]
     public void Runtime_composition_retry_completes_builtin_registration_after_the_second_builtin_initially_fails()
     {

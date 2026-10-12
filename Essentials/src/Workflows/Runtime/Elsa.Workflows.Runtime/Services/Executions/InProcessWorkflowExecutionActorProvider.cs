@@ -21,7 +21,7 @@ public sealed class InProcessWorkflowExecutionActorProvider : IWorkflowExecution
     /// </summary>
     public const string WorkflowTerminatedMetadataKey = "runtime.dispatch.workflowTerminated";
 
-    /// <summary>Runtime self-instrumentation meter name (the runtime's first meter; see spec 128).</summary>
+    /// <summary>Runtime self-instrumentation meter name (the runtime's first meter).</summary>
     public const string MeterName = "Elsa.Workflows.Runtime";
 
     /// <summary>Observable gauge reporting the number of live in-process mailboxes currently registered.</summary>

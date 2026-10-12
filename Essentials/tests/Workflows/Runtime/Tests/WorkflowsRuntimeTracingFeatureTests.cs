@@ -18,7 +18,7 @@ namespace Elsa.Workflows.Runtime.Tests;
 /// </summary>
 public sealed class WorkflowsRuntimeTracingFeatureTests
 {
-    // Kept beside the composition test (§2.23.1): default behaviour, the no-op tracer returns no drain cycle.
+    // Kept beside the composition test: default behaviour, the no-op tracer returns no drain cycle.
     [Fact]
     public void RuntimeCore_RegistersNoOpTracer_ByDefault()
     {

@@ -332,7 +332,7 @@ public sealed class RuntimeCoalescingSession
     }
 
     // ---- Inspection durable-baseline memo --------------------------------------------------------------------------
-    // Store-read coalescing for IActivityExecutionInspectionStore.FindAsync (spec-110 family): the memo holds what the
+    // Store-read coalescing for IActivityExecutionInspectionStore.FindAsync: the memo holds what the
     // durable store returned (a cached null records a durable miss), never the buffered overlay state, so a memoized
     // read is byte-identical to a fresh durable read. Validity rests on the single-writer ownership lease: while the
     // session is active, the only path that can change durable inspection rows is this session's own flush, and every
@@ -726,10 +726,10 @@ public sealed class RuntimeCoalescingSession
         return result;
     }
 
-    // ---- Inline fused pump (spec 123 D2) ---------------------------------------------------------------------------
+    // ---- Inline fused pump ---------------------------------------------------------------------------
 
     /// <summary>
-    /// Returns the FIFO-earliest overlay item not currently claimed in flight (spec 123 D2). The drain loop's claim on
+    /// Returns the FIFO-earliest overlay item not currently claimed in flight. The drain loop's claim on
     /// the fused span's originating <c>ScheduleActivity</c> stays at the queue head for the whole span, so the inline
     /// completion pump reads past live claims in true insertion order — the exact order the drain loop would claim
     /// next. The item is not claimed: the session is single-writer and drain-confined, so the pump dispatches it inline
@@ -746,7 +746,7 @@ public sealed class RuntimeCoalescingSession
     }
 
     /// <summary>
-    /// Removes an inline-pumped item from the overlay after its dispatch completed (spec 123 D2). Flush accounting
+    /// Removes an inline-pumped item from the overlay after its dispatch completed. Flush accounting
     /// removes that exact durable identity only after its effect has committed, preserving active recovery anchors.
     /// </summary>
     public async ValueTask<bool> ConsumePumpedOverlayItemAsync(string workItemId, CancellationToken cancellationToken)

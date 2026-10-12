@@ -12,7 +12,7 @@ namespace Elsa.Workflows.Runtime.Http.Tests;
 
 /// <summary>
 /// Unit coverage for <see cref="HttpEndpointRouteTableSynchronizer"/> — the single serialization point every
-/// route-table refresh routes through (spec 089 D review fix). Proves that two concurrent refreshes never
+/// route-table refresh routes through. Proves that two concurrent refreshes never
 /// interleave (the second waits for the first to release the lock) and that a fresh scope is opened per refresh so
 /// the resolver reads the durable sources anew.
 /// </summary>

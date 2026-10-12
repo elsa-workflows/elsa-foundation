@@ -7,7 +7,7 @@ using static Elsa.Workflows.Design.Tests.Unit.BaselineValidatorTests.ValidatorTe
 namespace Elsa.Workflows.Design.Tests.Unit.BaselineValidatorTests;
 
 /// <summary>
-/// SC-022(f). Branch coverage — non-Variable expression, known variable, unknown variable,
+/// Branch coverage — non-Variable expression, known variable, unknown variable,
 /// null reference, recursion into ChildActivities.
 /// </summary>
 public sealed class VariableExpressionResolverValidatorTests

@@ -32,7 +32,7 @@ namespace Elsa.Workflows.Publishing.Api;
 /// The publishing surface bridges persisted Design metadata and canonical Runtime executable
 /// contracts. It compiles descriptors and role-owned bindings without constructing live activities.
 /// The feature is neither Design nor Runtime, which is why it may bridge their stable contracts
-/// without breaking §E2.2.
+/// without breaking the Design/Runtime split.
 /// </summary>
 [ManifestRuntimeKind(ElsaRuntimeKinds.Server)]
 [ManifestFeatureCategory("Workflows")]

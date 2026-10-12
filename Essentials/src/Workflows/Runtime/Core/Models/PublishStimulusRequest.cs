@@ -3,15 +3,15 @@ using System.Text.Json;
 namespace Elsa.Workflows.Runtime.Core.Models;
 
 /// <summary>
-/// A typed request an activity stages to publish a named-event stimulus durably-first (spec 135 D1). The staging
+/// A typed request an activity stages to publish a named-event stimulus durably-first. The staging
 /// buffer turns each request into a <c>PublishStimulusIntentKind</c> post-commit intent that, after the activity's
 /// own checkpoint commits, routes the stimulus in <see cref="StimulusRoutingMode.StartAndResume"/> mode.
 /// </summary>
 /// <remarks>
-/// Deliberately <b>not</b> a raw <see cref="RuntimePostCommitIntent"/> (control-room ruling on spec 135 tripwire 1):
+/// Deliberately <b>not</b> a raw <see cref="RuntimePostCommitIntent"/>:
 /// the request carries only the send's authored facets — the event name, an optional passive correlation id, and an
 /// optional payload — so the buffer/consumer owns the intent kind and stimulus identity. An activity therefore cannot
-/// forge an arbitrary post-commit intent kind through this seam (spoof resistance, the narrowest-seam / spec-123
+/// forge an arbitrary post-commit intent kind through this seam (spoof resistance, the narrowest-seam
 /// precedent). The stimulus <c>(type, hash)</c> pair is derived by the buffer, never supplied here.
 /// </remarks>
 public sealed class PublishStimulusRequest
@@ -47,7 +47,7 @@ public sealed class PublishStimulusRequest
     /// <summary>The event name whose stimulus is published (drives <c>EventStimulus.Hash</c>).</summary>
     public string EventName { get; }
 
-    /// <summary>An optional passive correlation id threaded into the dispatch request verbatim (spec 135 FR-5; broadcast until issue #1001).</summary>
+    /// <summary>An optional passive correlation id threaded into the dispatch request verbatim (broadcast until issue #1001).</summary>
     public string? CorrelationId { get; }
 
     /// <summary>An optional stimulus payload delivered to started/resumed instances as their input.</summary>

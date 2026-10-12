@@ -8,8 +8,7 @@ namespace Elsa.Workflows.Runtime.Services.Checkpoints;
 /// (#923). The previous scheme composed a successor id by concatenating the <b>full</b> parent id with a per-hop
 /// step (<c>{parentId}:{step}</c>). Because every parent id already embedded its own ancestry, ids grew
 /// quadratically with workflow progress — multi-KB after only two activities — which bloated storage, flooded the
-/// merged console stream, and overflowed the 128-char <c>by-incident-id</c> projection column (GW-PHYSICAL-037,
-/// #922).
+/// merged console stream, and overflowed the 128-char <c>by-incident-id</c> projection column (#922).
 ///
 /// <para>Instead of carrying the whole ancestry in the id, the parent id is folded into a fixed-length
 /// <see cref="Fingerprint(string)"/> and the readable per-hop <c>step</c> is appended: <c>{fingerprint}:{step}</c>.

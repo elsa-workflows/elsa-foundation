@@ -112,7 +112,7 @@ public sealed class WorkflowSchedulerCommandRouter : IWorkflowExecutionCommandEx
         if (options.AmbientServices is not null)
             drainRequest = drainRequest.WithAmbientServices(options.AmbientServices);
 
-        // Establish the burst-scoped reconstructible cache for this drain (ADR 0031 item b, spec 111). One command
+        // Establish the burst-scoped reconstructible cache for this drain. One command
         // envelope drives one drain-to-quiescence = one burst, spanning every drain cycle and both cadence branches
         // (Immediate/Coalesced) inside the orchestrator; two sequential drains of the same execution get separate
         // scopes, so cache entries never leak across drains. When the kill switch is off (or no accessor is wired) no

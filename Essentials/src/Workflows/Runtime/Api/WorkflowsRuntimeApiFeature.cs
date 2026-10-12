@@ -112,7 +112,7 @@ public class WorkflowsRuntimeApiFeature : IWebShellFeature
 
         services.TryAddScoped<IActivityInspectionContextAsync>(sp => sp.GetRequiredService<HttpContextActivityExecutionInspectionAuthorizationContext>());
         services.EnsureReplacementContract<IActivityInspectionContextAsync, HttpContextActivityExecutionInspectionAuthorizationContext>();
-        // Resolves the host's effective checkpoint cadence for the instance detail view (ADR 0032 R3). Reads the
+        // Resolves the host's effective checkpoint cadence for the instance detail view. Reads the
         // coalescing options optionally (via IEnumerable), so it is Immediate unless the persistence feature enabled Coalesced.
         services.TryAddScoped<RuntimeCheckpointCadenceInspector>();
         services.TryAddScoped<ActivityExecutionHierarchyReader>();

@@ -5,7 +5,7 @@ namespace Elsa.Workflows.Runtime.Http.Contracts;
 /// from the durable sources (trigger bindings ∪ waiting bookmarks). Every route-table refresh — publish-time (the
 /// trigger-index observer), run-time (the bookmark lifecycle observer), startup, and the convergence check that picks up
 /// changes made on other nodes — routes through this seam so the read-then-swap can never interleave across actor
-/// threads (spec 089 D review fix).
+/// threads.
 /// </summary>
 /// <remarks>
 /// The route table's read-then-swap is not itself atomic across the resolver read and the table swap, so two

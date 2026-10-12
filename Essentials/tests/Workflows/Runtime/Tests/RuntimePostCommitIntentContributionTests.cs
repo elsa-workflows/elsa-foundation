@@ -29,7 +29,7 @@ public sealed class RuntimePostCommitIntentContributionTests
         Assert.Single(services.Where(descriptor => descriptor.ServiceType == typeof(FirstMarkerHandler)));
     }
 
-    // Kept beside the composition test (§2.23.1): idempotence and conflict rejection of the policy-bearing registration.
+    // Kept beside the composition test: idempotence and conflict rejection of the policy-bearing registration.
     [Fact]
     public void PolicyBearingRegistration_IsIdempotentAndRejectsPolicyConflict()
     {
@@ -81,7 +81,7 @@ public sealed class RuntimePostCommitIntentContributionTests
             exception.Message.IndexOf(typeof(SecondMarkerHandler).FullName!, StringComparison.Ordinal));
     }
 
-    // Kept beside the composition test (§2.23.1): rejection, blank intent kinds.
+    // Kept beside the composition test: rejection, blank intent kinds.
     [Fact]
     public void RegistrationOwnsIntentKindAndRejectsBlankKinds()
     {

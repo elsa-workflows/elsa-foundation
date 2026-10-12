@@ -154,10 +154,10 @@ public sealed class StimulusRouter : IStimulusRouter
                     ? KeyedWorkflowStartIdentity.ForOccurrence(request.IdempotencyKey)
                     : KeyedWorkflowStartIdentity.For(request.IdempotencyKey, binding.ArtifactId);
 
-            // Spec 089 FR-001: the stimulus payload reaches started instances through the dedicated
+            // The stimulus payload reaches started instances through the dedicated
             // stimulus-input channel — the start-side counterpart of the resume path's
             // BookmarkResumeDispatchRequest.Input. Never the workflow-inputs bag (collision/spoof-proof).
-            // Spec 089 D: the matched binding's executable node id rides its own reserved channel so a
+            // The matched binding's executable node id rides its own reserved channel so a
             // mid-flow-capable activity (e.g. HttpEndpoint) can tell whether it is the node that triggered
             // this run — again never the workflow-inputs bag.
             var startRequest = new WorkflowExecutionStartDispatchRequest(
@@ -172,15 +172,15 @@ public sealed class StimulusRouter : IStimulusRouter
                 sourceSelection: binding.ActivationId is null && binding.SlotId is null
                     ? null
                     : new WorkflowExecutableSourceSelection(activationId: binding.ActivationId, slotId: binding.SlotId),
-                // Spec 117 D4: forward the matched binding's metadata (e.g. a BPMN start element id) on its own
+                // Forward the matched binding's metadata (e.g. a BPMN start element id) on its own
                 // reserved channel so a structural trigger activity can read per-descriptor routing facets. Never
                 // the workflow-inputs bag (collision/spoof-proof), mirroring the trigger-node identity above.
                 triggerMetadata: binding.Metadata);
 
-            // Forward the request-affine dispatch options (spec 089 FR-019) so an in-process inline drain of this
+            // Forward the request-affine dispatch options so an in-process inline drain of this
             // start can build activity execution contexts from the caller's ambient scope. Live reference only —
             // never persisted (see StimulusDispatchRequest.DispatchOptions), dropped by construction across process
-            // boundaries. Stimulus-triggered starts are published dispatches (default reference scope, ADR 0040).
+            // boundaries. Stimulus-triggered starts are published dispatches (default reference scope).
             var result = await _startDispatcher.DispatchAsync(startRequest, dispatchOptions: request.DispatchOptions, cancellationToken: cancellationToken);
             // A shed start wrote nothing and left its key unconsumed (#2548). Reporting it as started hands every caller an
             // execution id that will never exist: an HTTP 202, a settled recurring occurrence, a delivered publish.
@@ -215,7 +215,7 @@ public sealed class StimulusRouter : IStimulusRouter
                 payloadType: request.PayloadType,
                 providerId: request.ProviderId);
 
-            // Same request scope serves every outcome of one HTTP request (spec 089 FR-019 / scenario 5.5): a resume
+            // Same request scope serves every outcome of one HTTP request: a resume
             // driven by a synchronous-mode endpoint gets the caller's ambient services so its subsequent live write
             // lands on the same exchange. Live reference only — never persisted, dropped across process boundaries.
             var result = await _resumeDispatcher.DispatchAsync(resumeRequest, request.DispatchOptions, cancellationToken);

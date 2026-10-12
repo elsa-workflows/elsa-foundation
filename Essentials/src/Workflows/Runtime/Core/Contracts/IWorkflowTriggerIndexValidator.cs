@@ -3,7 +3,7 @@ using Elsa.Workflows.Runtime.Core.Models;
 namespace Elsa.Workflows.Runtime.Core.Contracts;
 
 /// <summary>
-/// A narrow pre-write validation seam on the trigger indexer (spec 089 follow-up, issue #592 item 2). The
+/// A narrow pre-write validation seam on the trigger indexer (issue #592 item 2). The
 /// indexer invokes every registered validator with the artifact's extracted binding set AFTER extraction and
 /// BEFORE it deletes/writes anything, so a validator that throws fails the publish cleanly — the durable index
 /// is untouched, exactly like an unroutable trigger failing in the extractor. Validators exist so a stimulus

@@ -224,7 +224,7 @@ public sealed class RuntimeEntityFrameworkCoreStandaloneTests
         await Assert.ThrowsAsync<InvalidOperationException>(() => provider.GetRequiredService<WorkflowActivationSwitchCompositionValidator>().InitializeAsync());
     }
 
-    // Kept beside the composition test (§2.23.1): options validation, an invalid capacity is refused before anything registers.
+    // Kept beside the composition test: options validation, an invalid capacity is refused before anything registers.
     [Fact]
     public void An_invalid_cache_capacity_is_rejected_before_anything_is_registered()
     {

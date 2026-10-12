@@ -186,7 +186,7 @@ public sealed class WorkflowExecutableInspector(
 
     /// <summary>
     /// An authored input's own sensitivity flag is only the author's choice: an activity's input declaration reaches the
-    /// compiled policy, not the authored record (spec 188, FR-007). So an authored value is shown only when its own flag,
+    /// compiled policy, not the authored record. So an authored value is shown only when its own flag,
     /// and every compiled binding and pinned input contract the executable holds for that input, allow it. A record's
     /// node id is the authored node id the publish sidecar records. The compiler keeps that id as the executable node id
     /// of an authored node, including a container's children (proved for a sequence by a publish test), so a node is
@@ -412,7 +412,7 @@ public sealed class WorkflowExecutableInspector(
 
     /// <summary>
     /// Projects one compiled binding. Source details stay out unless <paramref name="includeSourceDetails"/> allows them.
-    /// A secret reference is not a value (spec 188), so where <paramref name="includeSecretReference"/> allows it a
+    /// A secret reference is not a value, so where <paramref name="includeSecretReference"/> allows it a
     /// secret read shows its reference, as its summary and in <see cref="WorkflowExecutableInputBindingView.Secret"/>,
     /// even though its policy keeps every other source detail out.
     /// </summary>

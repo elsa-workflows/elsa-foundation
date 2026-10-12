@@ -5,7 +5,7 @@ namespace Elsa.Workflows.Design.Core.Events;
 
 /// <summary>
 /// Mutation event for an input added to a placed activity's <c>Inputs</c> bag. Published by
-/// <c>IAddActivityInputToDraftCommand</c>. Per Unit C FR-018 â€” activity input full CRUD,
+/// <c>IAddActivityInputToDraftCommand</c>. Activity input has full CRUD,
 /// symmetric with workflow-input CRUD and variable CRUD.
 /// </summary>
 /// <remarks>

@@ -23,7 +23,7 @@ public sealed class WorkflowStrategyOptions
     public string? CommitStrategyType { get; set; }
 
     /// <summary>
-    /// The authored per-workflow checkpoint-persistence cadence (ADR 0032 R5). Null means the workflow authors no
+    /// The authored per-workflow checkpoint-persistence cadence. Null means the workflow authors no
     /// cadence and the host default applies. When set, it is compiled into the executable and overrides the host
     /// default at runtime; the mandatory-boundary set is never relaxable by any cadence.
     /// </summary>

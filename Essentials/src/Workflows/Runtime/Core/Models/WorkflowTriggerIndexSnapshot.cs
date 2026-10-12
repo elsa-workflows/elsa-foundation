@@ -1,7 +1,7 @@
 namespace Elsa.Workflows.Runtime.Core.Models;
 
 /// <summary>
-/// A single artifact's current trigger binding set as the indexer processes a publish (spec 089 B). It is
+/// A single artifact's current trigger binding set as the indexer processes a publish. It is
 /// handed to every <see cref="Contracts.IWorkflowTriggerIndexValidator"/> BEFORE any write (the extracted,
 /// about-to-be-written set — a validator throw fails the publish with the store untouched) and to every
 /// <see cref="Contracts.IWorkflowTriggerIndexObserver"/> AFTER the artifact's prior bindings were deleted and

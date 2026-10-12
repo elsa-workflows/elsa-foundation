@@ -5,7 +5,7 @@ using Elsa.Workflows.Runtime.Services.Coalescing;
 namespace Elsa.Workflows.Runtime.Api.Coalescing;
 
 /// <summary>
-/// Resolves the effective checkpoint-persistence cadence for projection onto instance read models (ADR 0032 R3/R5).
+/// Resolves the effective checkpoint-persistence cadence for projection onto instance read models.
 /// Prefers the run's own per-run cadence stamp on <see cref="WorkflowExecutionState.SystemMetadata"/>
 /// (<see cref="RuntimeMetadataKeys.CheckpointCadence"/>), written at start from the pinned executable's authored cadence
 /// over the host default (WU-config surface). Falls back to the host projection for instances predating the stamp: the

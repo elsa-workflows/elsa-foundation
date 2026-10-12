@@ -8,7 +8,7 @@ namespace Elsa.Workflows.Design.Api.Endpoints.Definitions.Update;
 /// gate. It carries the complete desired Draft <see cref="State"/> (and optional <see cref="Layout"/>) for the
 /// definition's current Draft; the handler resolves the owning Draft and forwards to the single coarse
 /// <c>IUpdateDraftCommand</c>, which diffs the desired state against stored state and emits the per-concept
-/// mutation events. There is no partial/patch mode (full-state-always, FR-001).
+/// mutation events. There is no partial/patch mode (full-state-always).
 /// </summary>
 public sealed record UpdateDefinition(
     string? OperationKey,

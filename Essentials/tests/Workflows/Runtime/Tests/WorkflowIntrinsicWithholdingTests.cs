@@ -14,7 +14,7 @@ using Xunit;
 namespace Elsa.Workflows.Runtime.Tests;
 
 /// <summary>
-/// The intrinsics that receive a withheld value from producer withholding (spec 188, FR-010, T066 and T069). Publication
+/// The intrinsics that receive a withheld value from producer withholding. Publication
 /// refuses every binding that could hand an intrinsic a value whose policy requires encryption, so only an artifact that
 /// skipped publication reaches these paths. <c>Set</c> and <c>Return</c> keep the marker, which holds no value; the
 /// intrinsics that read the value, <c>Control</c>, the identity intrinsics and <c>SetOutput</c>, refuse it with

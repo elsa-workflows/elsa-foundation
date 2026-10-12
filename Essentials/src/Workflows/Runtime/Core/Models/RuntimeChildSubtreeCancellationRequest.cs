@@ -1,7 +1,7 @@
 namespace Elsa.Workflows.Runtime.Core.Models;
 
 /// <summary>
-/// Activity-owned request to cancel one scheduled child's activity-execution subtree (spec 112).
+/// Activity-owned request to cancel one scheduled child's activity-execution subtree.
 /// Staged during a structural child-completion/child-fault evaluation and applied atomically in the
 /// same checkpoint commit as the parent's continuation.
 /// </summary>

@@ -18,8 +18,7 @@ namespace Elsa.Workflows.Publishing.Api.Tests;
 /// <summary>
 /// Publication refuses a <c>Secret</c> binding (<c>VF-ACT-012</c>) on every input an activity persists, returns,
 /// copies into a fault or needs as a literal at publish, before the input's conversion plan is resolved, so the
-/// refusal names the reason even where the input's type would also refuse text (spec 188, T099 and T110; research
-/// R3a IP14 to IP22).
+/// refusal names the reason even where the input's type would also refuse text.
 /// </summary>
 public sealed class SecretBindingInputPathRefusalTests
 {

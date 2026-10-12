@@ -244,7 +244,7 @@ public sealed class PublishWorkflowTriggerIndexingTests
     /// <summary>
     /// Publication refuses a secret reference on these inputs before any reader runs (their activities declare them);
     /// this backstop keeps an artifact that skipped publication from reading a secret as unauthored or as a generic
-    /// non-literal (spec 188, T099).
+    /// non-literal.
     /// </summary>
     [Theory]
     [MemberData(nameof(SecretReadBackstops))]

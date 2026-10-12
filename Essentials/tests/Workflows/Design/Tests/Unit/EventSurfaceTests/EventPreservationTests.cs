@@ -7,14 +7,14 @@ using static Elsa.Workflows.Design.Tests.Infrastructure.UpdateDraftTestKit;
 namespace Elsa.Workflows.Design.Tests.Unit.EventSurfaceTests;
 
 /// <summary>
-/// T029 (SC-004, SC-008 partial) — the collapse of the 20 granular mutation commands into the
+/// The collapse of the 20 granular mutation commands into the
 /// single <see cref="Persistence.Core.Contracts.IUpdateDraftCommand"/> preserves the event
 /// surface one-for-one, minus graph connection events now owned by a future Flowchart module.
 /// All 18 core mutation event types still exist in
 /// <c>Elsa.Workflows.Design.Core/Events</c>, each is an <see cref="IEvent"/>, and none was
 /// deleted alongside its former command. The 2 lifecycle events
 /// (<see cref="DraftCreated"/>, <see cref="DraftDiscarded"/>) are NOT among the events
-/// <c>IUpdateDraftCommand</c> emits — they remain bound to their lifecycle commands (FR-003).
+/// <c>IUpdateDraftCommand</c> emits — they remain bound to their lifecycle commands.
 /// </summary>
 public sealed class EventPreservationTests
 {
@@ -79,7 +79,7 @@ public sealed class EventPreservationTests
     [Fact]
     public async Task IUpdateDraftCommand_emits_no_lifecycle_events()
     {
-        // SC-008 (partial): the lifecycle events stay bound to Create/Clone/Discard — an Update
+        // The lifecycle events stay bound to Create/Clone/Discard — an Update
         // that produces several diffs must publish none of them.
         using var host = await WorkflowsDesignTestHost.CreateAsync();
         var draftId = await SeedEmptyDraft(host); // emits DraftCreated (a lifecycle event) — pre-skip.

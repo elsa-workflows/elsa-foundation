@@ -111,7 +111,7 @@ public sealed class SimpleActivityExecutionContext(
     public IReadOnlyCollection<RuntimeLiveChildActivity> GetLiveChildActivities() => _liveChildActivities;
 
     // The visible name→committed-envelope projection the runtime built for an IRuntimeScopedVariableReader
-    // activity (spec 123 D1). Null for every non-marker activity and for any handler path that did not populate
+    // activity. Null for every non-marker activity and for any handler path that did not populate
     // it, so a read there always returns false — no throw-on-unpopulated.
     private readonly IReadOnlyDictionary<string, ValueEnvelope>? _scopedVariableEnvelopes = scopedVariableEnvelopes;
 
@@ -171,8 +171,8 @@ public sealed class SimpleActivityExecutionContext(
             TriggerNodeId);
 
     /// <summary>
-    /// The visible container-scope chain threaded by the runtime for this concrete activity execution
-    /// (ADR 0027). Null when the activity has no enclosing container scope.
+    /// The visible container-scope chain threaded by the runtime for this concrete activity execution.
+    /// Null when the activity has no enclosing container scope.
     /// </summary>
     public VariableScope? VariableScope { get; } = variableScope;
 

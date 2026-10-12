@@ -8,7 +8,7 @@ namespace Elsa.Workflows.Runtime.Middleware;
 /// <summary>
 /// The activity pipeline's <c>Invoke</c> slot: runs the work item's selected handler (staged by the dispatcher) in the
 /// before-<c>next</c> direction, so a handler's phase results are available to the later slots (`Checkpoint`,
-/// `PostCommit`) that apply them (ADR 0029, Move 2). Mirrors <see cref="RuntimeWorkflowInvokeMiddleware"/>. When no
+/// `PostCommit`) that apply them. Mirrors <see cref="RuntimeWorkflowInvokeMiddleware"/>. When no
 /// handler is staged this slot is a no-op.
 /// </summary>
 public sealed class RuntimeActivityInvokeMiddleware(IWorkflowEngineTracer? tracer = null) : IActivityRuntimeMiddleware

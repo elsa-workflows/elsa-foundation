@@ -19,7 +19,7 @@ namespace Elsa.Workflows.Runtime.Core.Contracts;
 /// fails the publish rather than persisting an unroutable trigger. A recognized node may yield more than one
 /// descriptor (e.g. an HTTP endpoint that reacts to several methods produces one descriptor per method); the
 /// extractor turns each into its own <see cref="WorkflowTriggerBinding"/>. A recognized node may also yield
-/// <em>zero</em> descriptors when it declares itself a non-start (spec 089 D: a mid-flow <c>HttpEndpoint</c>
+/// <em>zero</em> descriptors when it declares itself a non-start (a mid-flow <c>HttpEndpoint</c>
 /// with <c>CanStartWorkflow = false</c>) — that produces no trigger bindings and, crucially, does not fail the
 /// publish, which a bare empty collection could not express (it was indistinguishable from "not mine").
 /// </remarks>

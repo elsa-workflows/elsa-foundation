@@ -10,7 +10,7 @@ public static class RuntimePostCommitOutboxEfModule
     public const string SchemaVersion = "1.0.0";
     public const string SchemaFamily = "RuntimePostCommitOutbox";
     /// <summary>The family's one chain, from this assembly's declaration: what every reader of the family checks and
-    /// upcasts through (spec 180, FR-010).</summary>
+    /// upcasts through.</summary>
     public static readonly EfSchemaChain Chain = EfSchemaChain.Of(typeof(RuntimePostCommitOutboxEfModule).Assembly, SchemaFamily);
     public const int PhysicalIdentityMaximumLength = RuntimePostCommitOutboxIdentity.MaximumProjectionLength;
     // Workflow-execution auxiliary projection only; the unbounded logical OutboxItemId uses its full ordinal

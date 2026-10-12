@@ -12,7 +12,7 @@ using System.Linq;
 namespace Elsa.Workflows.Publishing.Handlers;
 
 /// <summary>
-/// Publish-on-reconcile (spec 147, #1157): an independent subscriber on the Design-side
+/// Publish-on-reconcile (#1157): an independent subscriber on the Design-side
 /// <see cref="WorkflowVersionsReconciled"/> completion event that publishes the latest reconciled
 /// version of each definition whose source opted in (<c>PublishOnReconcile</c> →
 /// <see cref="WorkflowVersionSourceClaim.PublishRequested"/>), via the in-process

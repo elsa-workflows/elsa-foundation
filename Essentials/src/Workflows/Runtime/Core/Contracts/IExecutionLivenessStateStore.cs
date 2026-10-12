@@ -49,7 +49,7 @@ public interface IExecutionLivenessStateStore
     /// <summary>
     /// Returns one finite page of the current storage scope's states whose execution lease or heartbeat is held by
     /// <paramref name="ownerId"/>, in the order of <see cref="ListAllPageAsync"/>. The distributed runtime reads it when
-    /// it reclaims a departed host id's leases (spec 184, FR-024), which happens only when a host id departs or a
+    /// it reclaims a departed host id's leases, which happens only when a host id departs or a
     /// process starts, so a store may answer it without an owner index.
     /// </summary>
     ValueTask<RuntimeStorePage<ExecutionLivenessState>> ListOwnedPageAsync(

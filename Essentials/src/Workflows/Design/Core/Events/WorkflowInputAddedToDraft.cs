@@ -8,7 +8,7 @@ namespace Elsa.Workflows.Design.Core.Events;
 /// Distinct from <c>ActivityPropertyChangedInDraft</c> (per-activity) â€” workflow-level
 /// inputs only get bound as activity-shaped inputs at compile time when the workflow is
 /// composed as an activity inside another workflow. Published by
-/// <c>IAddWorkflowInputToDraftCommand</c>. Per Unit C FR-018 workflow-inputs bullet.
+/// <c>IAddWorkflowInputToDraftCommand</c>.
 /// </summary>
 public sealed class WorkflowInputAddedToDraft(string draftId, InputDefinition input) : IEvent
 {

@@ -109,7 +109,7 @@ public sealed class EfRuntimeArtifactRegistrationTests
         Assert.Throws<InvalidOperationException>(() => provider.GetServices<IStartupTask>().ToArray());
     }
 
-    // Kept beside the composition test (§2.23.1): the feature's registration entry point can be extended without replacing it.
+    // Kept beside the composition test: the feature's registration entry point can be extended without replacing it.
     [Fact]
     public void Feature_can_be_extended_without_replacing_its_registration_contract()
     {
@@ -125,7 +125,7 @@ public sealed class EfRuntimeArtifactRegistrationTests
         Assert.IsAssignableFrom<RuntimeArtifactsEntityFrameworkCoreFeature>(feature);
     }
 
-    // Kept beside the composition test (§2.23.1): replacement-contract rejection, instance-owned contracts.
+    // Kept beside the composition test: replacement-contract rejection, instance-owned contracts.
     [Fact]
     public void Artifact_registration_rejects_instance_owned_contracts()
     {
@@ -135,7 +135,7 @@ public sealed class EfRuntimeArtifactRegistrationTests
         Assert.Throws<InvalidOperationException>(() => services.AddRuntimeArtifactsEntityFrameworkCore(new()));
     }
 
-    // Kept beside the composition test (§2.23.1): replacement-contract rejection without partial mutation.
+    // Kept beside the composition test: replacement-contract rejection without partial mutation.
     [Fact]
     public void Artifact_registration_rejects_unowned_reader_writer_and_concrete_registrations()
     {
@@ -150,7 +150,7 @@ public sealed class EfRuntimeArtifactRegistrationTests
         Assert.Equal(before, services);
     }
 
-    // Kept beside the composition test (§2.23.1): replacement-contract rejection, a reader factory registered before the runtime.
+    // Kept beside the composition test: replacement-contract rejection, a reader factory registered before the runtime.
     [Fact]
     public void Runtime_default_backend_does_not_claim_a_reader_factory_registered_before_runtime()
     {
@@ -161,7 +161,7 @@ public sealed class EfRuntimeArtifactRegistrationTests
         Assert.Throws<InvalidOperationException>(() => services.AddRuntimeArtifactsEntityFrameworkCore(new()));
     }
 
-    // Kept beside the composition test (§2.23.1): replacement-contract rejection without partial mutation.
+    // Kept beside the composition test: replacement-contract rejection without partial mutation.
     [Fact]
     public void Artifact_registration_rejects_instance_and_factory_owned_contracts_hidden_behind_object()
     {
@@ -175,7 +175,7 @@ public sealed class EfRuntimeArtifactRegistrationTests
         Assert.Equal(before, services);
     }
 
-    // Kept beside the composition test (§2.23.1): rejection restores every descriptor.
+    // Kept beside the composition test: rejection restores every descriptor.
     [Fact]
     public void Artifact_registration_restores_all_descriptors_when_context_validation_fails()
     {
@@ -191,7 +191,7 @@ public sealed class EfRuntimeArtifactRegistrationTests
         Assert.IsType<InMemoryWorkflowExecutableStore>(provider.GetRequiredService<IWorkflowExecutableStore>());
     }
 
-    // Kept beside the composition test (§2.23.1): replacement-contract rejection, an unowned provider context.
+    // Kept beside the composition test: replacement-contract rejection, an unowned provider context.
     [Fact]
     public void Artifact_registration_rejects_an_unowned_provider_context()
     {
@@ -201,7 +201,7 @@ public sealed class EfRuntimeArtifactRegistrationTests
         Assert.Throws<InvalidOperationException>(() => services.AddRuntimeArtifactsEntityFrameworkCore(new()));
     }
 
-    // Kept beside the composition test (§2.23.1): idempotence only for equivalent options.
+    // Kept beside the composition test: idempotence only for equivalent options.
     [Fact]
     public void Artifact_registration_is_idempotent_only_for_equivalent_options()
     {
@@ -237,7 +237,7 @@ public sealed class EfRuntimeArtifactRegistrationTests
             }));
     }
 
-    // Kept beside the composition test (§2.23.1): rejection, post-registration surface contamination.
+    // Kept beside the composition test: rejection, post-registration surface contamination.
     [Fact]
     public void Equivalent_registration_rejects_post_registration_surface_contamination()
     {
@@ -255,7 +255,7 @@ public sealed class EfRuntimeArtifactRegistrationTests
         Assert.Equal(before, services);
     }
 
-    // Kept beside the composition test (§2.23.1): rejection, post-registration context contamination.
+    // Kept beside the composition test: rejection, post-registration context contamination.
     [Theory]
     [InlineData("context-type")]
     [InlineData("context-instance")]
@@ -304,7 +304,7 @@ public sealed class EfRuntimeArtifactRegistrationTests
         }
     }
 
-    // Kept beside the composition test (§2.23.1): forwarding, one EF store behind each reader and writer contract.
+    // Kept beside the composition test: forwarding, one EF store behind each reader and writer contract.
     [Fact]
     public void Artifact_registration_resolves_the_owned_context_and_every_store_projection_in_scope()
     {
@@ -337,7 +337,7 @@ public sealed class EfRuntimeArtifactRegistrationTests
         Assert.IsType<EfWorkflowExecutableSourceReferenceStore>(sourceReferenceStore);
     }
 
-    // Kept beside the composition test (§2.23.1): the feature's registration entry point can be extended without replacing it.
+    // Kept beside the composition test: the feature's registration entry point can be extended without replacing it.
     [Fact]
     public void Bookmark_feature_can_be_extended_without_replacing_its_registration_contract()
     {

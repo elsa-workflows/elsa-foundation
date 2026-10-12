@@ -18,15 +18,15 @@ using Xunit;
 namespace Elsa.Workflows.Design.Tests.Unit;
 
 /// <summary>
-/// Framework §2.23.1 + Unit C SC-021. Activates <see cref="WorkflowDesignValidationsFeature"/>
+/// Activates <see cref="WorkflowDesignValidationsFeature"/>
 /// against a real <see cref="IServiceCollection"/>, builds the provider, and asserts every
-/// baseline validator (FR-033) resolves as an <see cref="IDraftValidator"/> and that the feature
+/// baseline validator resolves as an <see cref="IDraftValidator"/> and that the feature
 /// registers exactly one <c>IEventHandler&lt;DraftValidating&gt;</c> — the aggregating
 /// <see cref="ExecuteValidations"/> handler.
 /// </summary>
 public sealed class ValidationsFeatureRegistrationTests
 {
-    // Kept beside the composition test (§2.23.1): asserts the retired orphan validator stays unregistered.
+    // Kept beside the composition test: asserts the retired orphan validator stays unregistered.
     [Fact]
     public void Feature_registers_all_five_baseline_validators()
     {
@@ -42,7 +42,7 @@ public sealed class ValidationsFeatureRegistrationTests
         Assert.DoesNotContain(validatorTypes, type => type.Name.Contains("Orphan", StringComparison.OrdinalIgnoreCase));
     }
 
-    // Kept beside the composition test (§2.23.1): uniqueness, exactly one DraftValidating handler.
+    // Kept beside the composition test: uniqueness, exactly one DraftValidating handler.
     [Fact]
     public void Feature_registers_exactly_one_DraftValidating_handler()
     {
@@ -73,7 +73,7 @@ public sealed class ValidationsFeatureRegistrationTests
         Assert.Equal(7, options.MaxRecursionDepth);
     }
 
-    // Kept beside the composition test (§2.23.1): forwarding, one credential literal validator instance behind both contracts.
+    // Kept beside the composition test: forwarding, one credential literal validator instance behind both contracts.
     [Fact]
     public void Feature_registers_the_credential_literal_validator_once_as_its_contract_and_as_a_draft_validator()
     {
@@ -97,7 +97,7 @@ public sealed class ValidationsFeatureRegistrationTests
         Assert.Null(await Record.ExceptionAsync(() => InitializeShellAsync(provider)));
     }
 
-    // Kept beside the composition test (§2.23.1): ordering, a second validator fails activation in either registration order.
+    // Kept beside the composition test: ordering, a second validator fails activation in either registration order.
     [Theory]
     [InlineData(true)]
     [InlineData(false)]
@@ -112,7 +112,7 @@ public sealed class ValidationsFeatureRegistrationTests
         Assert.Contains("a factory registration", failure.Implementations);
     }
 
-    // Kept beside the composition test (§2.23.1): replacement, a host replacing the default after the feature registers.
+    // Kept beside the composition test: replacement, a host replacing the default after the feature registers.
     [Fact]
     public async Task A_host_that_replaces_the_default_after_the_feature_registers_starts_and_resolves_its_replacement()
     {

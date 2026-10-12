@@ -5,7 +5,7 @@ using Xunit;
 namespace Elsa.Workflows.Design.Tests.Unit.Reconciliation.Git;
 
 /// <summary>
-/// Token credentials (FR-013, #2197): the token reaches git through the environment of the commands that talk to the
+/// Token credentials (#2197): the token reaches git through the environment of the commands that talk to the
 /// remote, never through their arguments or a file, and the helper that reads it answers for the remote's host alone.
 /// </summary>
 public sealed class GitCredentialsTests : GitExportTest

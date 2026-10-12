@@ -53,7 +53,7 @@ public sealed class RuntimeSchedulerWorkQueueTests
     [Fact]
     public async Task EnqueueAsync_ReEnqueuingANonHeadItem_KeepsQueueContentsAndOrderUnchanged()
     {
-        // ADR 0031: redelivery de-duplication is a mandated queue-provider contract — re-enqueueing an
+        // Redelivery de-duplication is a mandated queue-provider contract — re-enqueueing an
         // item already present for a workflow execution must add no duplicate and must not reorder the FIFO.
         var queue = new InMemoryWorkflowSchedulerWorkQueue();
         await queue.EnqueueAsync(NewWorkItem(1));

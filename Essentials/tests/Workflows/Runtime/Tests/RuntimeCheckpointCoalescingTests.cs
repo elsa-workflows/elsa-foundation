@@ -53,7 +53,7 @@ public sealed class RuntimeCheckpointCoalescingTests(ITestOutputHelper output)
         Assert.NotNull(provider.GetRequiredService<IRuntimeCoalescingDrainScopeFactory>());
     }
 
-    // Kept beside the composition test (§2.23.1): idempotence, repeated registration keeps the explicit lifetime.
+    // Kept beside the composition test: idempotence, repeated registration keeps the explicit lifetime.
     [Theory]
     [InlineData(ServiceLifetime.Singleton)]
     [InlineData(ServiceLifetime.Scoped)]
@@ -475,7 +475,7 @@ public sealed class RuntimeCheckpointCoalescingTests(ITestOutputHelper output)
         Assert.Empty(innerStore.ListCommits());
     }
 
-    // ADR 0032 R2 / spec 107: a ReplaySafe attempt-claim arrives as a Deferred decision (the coalescing policy
+    // A ReplaySafe attempt-claim arrives as a Deferred decision (the coalescing policy
     // decided so from the checkpoint's profile metadata). Unlike the External/Immediate case above, it must NOT
     // flush before activation — it buffers into the overlay working set and folds forward into the next flushed
     // commit, so a hot loop of ReplaySafe activities collapses to one coalesced commit.
@@ -894,7 +894,7 @@ public sealed class RuntimeCheckpointCoalescingTests(ITestOutputHelper output)
     [Fact]
     public async Task AuthoredImmediateCadence_UnderCoalescedHost_RunsImmediate_AndStampsTheRun()
     {
-        // ADR 0032 R5 precedence: a workflow that authored Immediate must run Immediate even though the host default is
+        // Cadence precedence: a workflow that authored Immediate must run Immediate even though the host default is
         // Coalesced — the drain skips the coalescing session for this execution, so its durable commit count matches an
         // Immediate host, not the folded single-commit burst.
         var immediateHost = await DriveAsync(coalescing: false);
@@ -946,7 +946,7 @@ public sealed class RuntimeCheckpointCoalescingTests(ITestOutputHelper output)
     [Fact]
     public async Task AuthoredCoalescedCadence_MandatoryBookmarkBoundary_StillFlushesImmediately()
     {
-        // Precedence guardrail (ADR 0032 R5): the mandatory-boundary set is never relaxable by any authored cadence.
+        // Precedence guardrail: the mandatory-boundary set is never relaxable by any authored cadence.
         // Even with the most relaxed authored cadence, a BookmarkCreated suspend boundary must land durably within the
         // segment, exactly as on a host-default coalesced run.
         var services = new ServiceCollection();
@@ -1037,7 +1037,7 @@ public sealed class RuntimeCheckpointCoalescingTests(ITestOutputHelper output)
         Assert.Empty(await provider.GetRequiredService<IWorkflowSchedulerPoisonStore>().ListAsync("wfexec-1"));
     }
 
-    // ADR 0032 segment-cap follow-up: a cap-hit folds-and-flushes the segment and STARTS A FRESH SEGMENT (like a
+    // Segment cap: a cap-hit folds-and-flushes the segment and STARTS A FRESH SEGMENT (like a
     // mandatory attempt boundary), instead of deactivating the session and degrading the drain remainder to
     // per-checkpoint Immediate persistence.
     [Theory]
@@ -1370,7 +1370,7 @@ public sealed class RuntimeCheckpointCoalescingTests(ITestOutputHelper output)
             {
                 ["source"] = "test",
                 // Mirrors WorkflowStartDispatcher.CreateDispatchMetadata: the artifact-id breadcrumb the per-execution
-                // cadence resolver reads on the first drain, before any WorkflowExecutionState row exists (ADR 0032 R5).
+                // cadence resolver reads on the first drain, before any WorkflowExecutionState row exists.
                 ["runtime.artifactId"] = pinnedExecutable.ArtifactId
             });
 

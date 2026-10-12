@@ -21,7 +21,7 @@ namespace Elsa.Workflows.Runtime.Distributed;
 /// <summary>
 /// Opt-in host feature that makes the workflow-execution actor subsystem clustered. It replaces the single active
 /// <see cref="IWorkflowExecutionActorProvider"/> with <see cref="DistributedWorkflowExecutionActorProvider"/> (a single
-/// active provider per app, constitution S=2.6), registers shared in-memory placement/transport defaults,
+/// active provider per app), registers shared in-memory placement/transport defaults,
 /// and runs the placement pump that renews leases and re-drives cross-node backlog.
 /// </summary>
 /// <remarks>
@@ -45,8 +45,8 @@ public sealed class WorkflowsRuntimeDistributedFeature : IShellFeature
     private int _transportLeaseBatchSize = 100;
 
     /// <summary>
-    /// No longer a source of identity: the routing identity is this member's cluster host id (spec 184, FR-001). A value
-    /// that differs from the host id refuses the shell (FR-003); a value equal to it is accepted. The setting is kept,
+    /// No longer a source of identity: the routing identity is this member's cluster host id. A value
+    /// that differs from the host id refuses the shell; a value equal to it is accepted. The setting is kept,
     /// rather than deleted or made to throw in its setter, because CShells silently ignores an unknown key and swallows
     /// a setter's exception, and either would accept a configuration that still names a different id.
     /// </summary>
@@ -86,7 +86,7 @@ public sealed class WorkflowsRuntimeDistributedFeature : IShellFeature
         services.AddPersistenceCore();
 
         // One routing identity, the member's host id, for the placement lease, the transport item lease and the
-        // execution lease alike (spec 184, FR-001), so one departure verdict reclaims all three.
+        // execution lease alike, so one departure verdict reclaims all three.
         services.AddShellRunnabilitySource();
         services.AddOptions<ExecutionPlacementOptions>()
             .Configure<IClusterMembership>((options, membership) =>
@@ -150,16 +150,16 @@ public sealed class WorkflowsRuntimeDistributedFeature : IShellFeature
         services.TryAddSingleton<IWorkflowExecutionLeaseFencingCapability>(ProcessLocalLeaseFencingCapability.Instance);
 
         // Compose the in-process provider as the local-drain engine, then replace the single active actor provider
-        // registration with the distributed one (S=2.6 single active provider). Keeping the in-process provider as a
+        // registration with the distributed one (a single active provider). Keeping the in-process provider as a
         // concrete registration avoids a self-referential resolution of IWorkflowExecutionActorProvider. The composed
-        // local provider inherits the same terminal-eviction options (#542 / spec 128); driving a local drain through
+        // local provider inherits the same terminal-eviction options (#542); driving a local drain through
         // the distributed provider still bounds the local mailbox registry, and the distributed PassivateAsync releases
         // the placement lease when the resumption reaper collects a lingering terminal execution.
         services.TryAddSingleton<RuntimeActorEvictionOptions>();
         services.TryAddSingleton(sp => new InProcessWorkflowExecutionActorProvider(
             sp.GetRequiredService<IWorkflowExecutionCommandExecutor>(),
             sp.GetRequiredService<RuntimeActorEvictionOptions>()));
-        // Placement as a membership query (spec 184): the gate both claim paths ask, what the pump reclaims and reports,
+        // Placement as a membership query: the gate both claim paths ask, what the pump reclaims and reports,
         // and the contracts through which the runtime's core and Attention consume them without referencing this leaf.
         services.TryAddSingleton(JoinSweepLedger.Process);
         services.TryAddSingleton(DistributedRuntimeShell.From);

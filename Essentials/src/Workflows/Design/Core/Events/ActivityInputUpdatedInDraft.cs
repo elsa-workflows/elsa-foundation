@@ -6,7 +6,7 @@ namespace Elsa.Workflows.Design.Core.Events;
 /// <summary>
 /// Mutation event for an input updated on a placed activity. Published by
 /// <c>IUpdateActivityInputInDraftCommand</c>. <see cref="InputReferenceKey"/> is the stable
-/// identity per Unit C FR-010 (argument-level <c>ReferenceKey</c> is unchanged in Unit C).
+/// identity (the argument-level <c>ReferenceKey</c> is unchanged).
 /// </summary>
 public sealed class ActivityInputUpdatedInDraft(
     string draftId,

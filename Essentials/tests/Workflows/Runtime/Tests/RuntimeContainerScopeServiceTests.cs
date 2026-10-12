@@ -219,7 +219,7 @@ public sealed class RuntimeContainerScopeServiceTests
         Assert.Equal(closed.VariableFrame, closedAgain.VariableFrame);
     }
 
-    // ---- spec 123: runtime scoped-variable read seam ----
+    // ---- runtime scoped-variable read seam ----
 
     [Fact]
     public void Scoped_variable_envelopes_project_by_name_innermost_scope_wins()

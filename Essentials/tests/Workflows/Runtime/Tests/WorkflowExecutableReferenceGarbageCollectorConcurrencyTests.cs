@@ -11,7 +11,7 @@ using Microsoft.Extensions.Time.Testing;
 namespace Elsa.Workflows.Runtime.Tests;
 
 /// <summary>
-/// Concurrency contract for spec 092's artifact staging grace and provider-backed deletion guard.
+/// Concurrency contract for the collector's artifact staging grace and provider-backed deletion guard.
 /// </summary>
 public sealed class WorkflowExecutableReferenceGarbageCollectorConcurrencyTests
 {

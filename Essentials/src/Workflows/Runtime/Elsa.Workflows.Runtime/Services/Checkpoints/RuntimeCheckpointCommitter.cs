@@ -114,7 +114,7 @@ public sealed class RuntimeCheckpointCommitter
         // the rest of the checkpoint through its uniform apply path, then verify the provider acknowledged them.
         var postCommitOutbox = RuntimePostCommitOutboxItems.CreatePendingChanges(commit, _intentHandlerContributions);
 
-        // spec 105: fold the claimed scheduler work item's fence-checked delete into this same commit so the
+        // Fold the claimed scheduler work item's fence-checked delete into this same commit so the
         // drainer can skip its separate acknowledgement. Suppressed while a coalescing session owns the execution — the
         // session's overlay queue + AdvanceInnerQueueAsync stay authoritative on durable queue advance in that mode.
         var consumedWorkItems = ResolveConsumedWorkItems(commit);
@@ -162,7 +162,7 @@ public sealed class RuntimeCheckpointCommitter
                 _consumedWorkClaimAccessor?.MarkConsumedDurably(workItemId);
         }
 
-        // spec 109 (ADR 0031 follow-up (a)): the durable outbox item is now committed and authoritative. If a
+        // The durable outbox item is now committed and authoritative. If a
         // live drain owns this execution's delivery, hand the still-materialized continuation work items to its
         // drain-scoped carrier so the scheduler intent dispatcher can enqueue them without re-deserializing the payload
         // we just persisted. Runs only after the commit succeeds, so a rolled-back commit publishes nothing.
@@ -174,7 +174,7 @@ public sealed class RuntimeCheckpointCommitter
     // Publishes each committed EnqueueSchedulerWork continuation's materialized work item onto the owning live drain's
     // in-process-hop carrier. Guards (all must hold): the fast path is enabled; a live-drain delivery scope owns THIS
     // execution (so the dispatcher will look here rather than deserialize); and no coalescing session owns the execution
-    // (the coalescing overlay is authoritative on continuation delivery, mirroring spec 106 FR-003). When any guard
+    // (the coalescing overlay is authoritative on continuation delivery). When any guard
     // fails the carrier stays empty and delivery deserializes the durable payload — byte-identical result either way.
     private void PublishInProcessHopWorkItems(RuntimeCheckpointCommit commit)
     {

@@ -8,7 +8,7 @@ using Microsoft.Extensions.Options;
 namespace Elsa.Workflows.Runtime.Services.Executables;
 
 /// <summary>
-/// The ADR 0040 reference garbage collector:
+/// The reference garbage collector:
 /// <list type="number">
 /// <item>hard-delete every <see cref="WorkflowExecutableSourceReference"/> that is retired or past its expiry;</item>
 /// <item>select artifacts outside staging grace that no known retention root protects;</item>

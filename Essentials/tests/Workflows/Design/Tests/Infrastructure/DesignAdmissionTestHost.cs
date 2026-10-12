@@ -30,8 +30,8 @@ namespace Elsa.Workflows.Design.Tests.Infrastructure;
 
 /// <summary>
 /// The Design API callers that write workflow state, over the real EF design store on SQLite and the real
-/// credential-literal admission, with the catalog of <see cref="CredentialLiteralTestSupport"/> (spec 188, T051, T052,
-/// T113). A caller is built in a fresh request scope and called as the endpoint framework calls it.
+/// credential-literal admission, with the catalog of <see cref="CredentialLiteralTestSupport"/>.
+/// A caller is built in a fresh request scope and called as the endpoint framework calls it.
 /// </summary>
 /// <remarks>
 /// By default the host composes the real inline event publisher, so the promotion command's in-lock validation gate runs

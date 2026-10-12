@@ -32,11 +32,11 @@ namespace Elsa.Workflows.Runtime.Reconciliation.Services;
 /// <para>
 /// <b>Activation is one call.</b> The importer never takes a lease, writes a projection, notifies an observer or
 /// compensates — <see cref="IWorkflowActivationCoordinator"/> owns that entire sequence for every path, and a
-/// second copy of it here would be exactly the duplicated authority FR-B-006 exists to remove. The importer's
+/// second copy of it here would be exactly the duplicated authority the coordinator exists to remove. The importer's
 /// recovery unit is the next reconcile pass.
 /// </para>
 /// <para>
-/// <b>Reconciliation is a seed, not an enforcer (T118).</b> It requests activation with no takeover intent, so a
+/// <b>Reconciliation is a seed, not an enforcer.</b> It requests activation with no takeover intent, so a
 /// definition whose slot a different source owns is refused and skipped — permanently, pass after pass. This is
 /// deliberately <em>not</em> the usual declarative-controller precedence: a controller that re-asserts over
 /// imperative drift runs continuously, whereas this runs at boot and shell reload, so re-asserting would mean the
@@ -217,8 +217,8 @@ public sealed class WorkflowArtifactReconciler(
             }
         }
 
-        // Gate 3 — the executability gate (FR-B-005a). Every member must be runnable by *this* engine before any
-        // member of the unit is written: this is the whole reason US2 exists, and running it after a sibling had
+        // Gate 3 — the executability gate. Every member must be runnable by *this* engine before any
+        // member of the unit is written: this is the whole reason the gate exists, and running it after a sibling had
         // been persisted would leave the store holding artifacts for a unit that never activates.
         foreach (var member in plan.Members)
         {
@@ -471,7 +471,7 @@ public sealed class WorkflowArtifactReconciler(
         string? transitionDiagnostic,
         CancellationToken cancellationToken)
     {
-        // T118: another activation source owns the slot, and reconciliation never takes it back. The coordinator
+        // Another activation source owns the slot, and reconciliation never takes it back. The coordinator
         // has already refused this transition, whether the refusal was the deliberate pre-ordering ownership check
         // or a race discovered after the initial read, so this method only turns that refusal into the report entry.
         var incumbent = slot.Source;
@@ -482,7 +482,7 @@ public sealed class WorkflowArtifactReconciler(
             + "so this mounted artifact is ignored for this definition until that source releases the slot. "
             + $"{transitionDiagnostic}".TrimEnd();
 
-        // T124 — the policy chooses how loudly the refusal is reported, never whether the slot is taken. A slot
+        // The policy chooses how loudly the refusal is reported, never whether the slot is taken. A slot
         // conflict with no owner recorded is an authority defect rather than a question for a policy, so it takes
         // the safe default without asking.
         var decision = incumbent is null
@@ -544,7 +544,7 @@ public sealed class WorkflowArtifactReconciler(
     /// Turns an <see cref="IArtifactForeignOwnerPolicy"/> answer into the pass entry that reports it.
     /// </summary>
     /// <remarks>
-    /// <b><see langword="static"/> on purpose, and load-bearing (T124).</b> A static method cannot touch this
+    /// <b><see langword="static"/> on purpose, and load-bearing.</b> A static method cannot touch this
     /// class's injected <c>IWorkflowActivationCoordinator</c> or <c>IWorkflowActivationAuthority</c>, so the whole
     /// route from "a host's policy answered" to "something got activated" is one the compiler refuses rather than
     /// one a comment discourages. Both answers produce an entry that did not activate; the slot is already
@@ -599,7 +599,7 @@ public sealed class WorkflowArtifactReconciler(
     }
 
     /// <summary>
-    /// Latest-wins (FR-B-007). Returns <see langword="null"/> when the candidate should be handed to the
+    /// Latest-wins. Returns <see langword="null"/> when the candidate should be handed to the
     /// coordinator, a <c>None</c>-kind verdict when it must be skipped as not-newer, and a rejection kind when the
     /// two sides claim one logical version with different content.
     /// </summary>
@@ -874,7 +874,7 @@ public sealed class WorkflowArtifactReconciler(
     }
 
     /// <summary>
-    /// The import gate (FR-B-005a): can <em>this</em> engine actually run this artifact? Returns one diagnostic
+    /// The import gate: can <em>this</em> engine actually run this artifact? Returns one diagnostic
     /// naming everything that is missing, or <see langword="null"/> when the artifact is executable here.
     /// </summary>
     /// <remarks>
@@ -941,7 +941,7 @@ public sealed class WorkflowArtifactReconciler(
     /// This closes a gap the two declared axes do not: a node whose <c>DescriptorType</c> carries the descriptor's
     /// <em>CLR type name</em> instead of the consumer key (<c>elsa.clr-activity</c>) parses, validates, hashes to
     /// its own content-addressed id, activates cleanly — and then faults on first execution with
-    /// <c>UnknownActivityConsumerException</c>, exactly the production-time surprise US2 exists to prevent. The
+    /// <c>UnknownActivityConsumerException</c>, exactly the production-time surprise the executability gate exists to prevent. The
     /// importer cannot repair it either: a content-addressed artifact is never rewritten, because the bytes are
     /// the identity.
     /// </para>

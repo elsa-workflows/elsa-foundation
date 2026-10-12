@@ -4,14 +4,13 @@ using Elsa.Workflows.Design.Validations.Core.Models;
 namespace Elsa.Workflows.Design.Validations.Core.Contracts;
 
 /// <summary>
-/// Declares <see cref="ICredentialLiteralValidator"/> as a single-implementation replacement contract (framework
-/// constitution §2.6.2).
+/// Declares <see cref="ICredentialLiteralValidator"/> as a single-implementation replacement contract.
 /// </summary>
 [AttributeUsage(AttributeTargets.Interface, Inherited = false)]
 public sealed class CredentialLiteralValidatorReplacementContractAttribute : Attribute;
 
 /// <summary>
-/// Finds the bindings of a workflow definition state that the credential-literal rule (spec 188, FR-008) refuses: a
+/// Finds the bindings of a workflow definition state that the credential-literal rule refuses: a
 /// literal, an object, a default request, a value read, an expression, or a <c>Secret</c> binding whose bound payload is
 /// not a well-formed secret reference, on an input its activity declares a credential.
 /// The application-layer writers of workflow state the architecture suite's coverage guard knows of take it: one that
@@ -19,7 +18,7 @@ public sealed class CredentialLiteralValidatorReplacementContractAttribute : Att
 /// that refuses a single item of many, or judges many states before refusing a whole request, reads the findings here.
 /// </summary>
 /// <remarks>
-/// This is a <b>replacement contract</b> (framework constitution §2.6.2), declared by
+/// This is a <b>replacement contract</b>, declared by
 /// <see cref="CredentialLiteralValidatorReplacementContractAttribute"/>: at most one implementation is meaningful per
 /// container. <c>WorkflowDesignValidations</c> registers the default, and a host that composes a second one does not
 /// start: shell activation fails with <see cref="Exceptions.MultipleCredentialLiteralValidatorsException"/>, naming every

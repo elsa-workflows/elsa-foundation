@@ -38,7 +38,7 @@ public sealed class ImportGateEdgeCaseTests : IDisposable
     [Fact]
     public async Task A_missing_child_dependency_rejects_the_parent()
     {
-        // FR-B-010: the closure is self-contained by contract. The child is validated against the *envelope*, never
+        // The closure is self-contained by contract. The child is validated against the *envelope*, never
         // against the store — an envelope that only resolves because the target engine happens to already hold the
         // child would import on the machine it was tested on and fail on the one it ships to.
         await using var harness = ArtifactImportHarness.Build(_mount);
@@ -64,7 +64,7 @@ public sealed class ImportGateEdgeCaseTests : IDisposable
     [Fact]
     public async Task A_truncated_envelope_is_a_clear_diagnostic_and_no_partial_import()
     {
-        // §2.23.5: the JsonException is wrapped by the reader, which owns the file path, and surfaces as a
+        // The JsonException is wrapped by the reader, which owns the file path, and surfaces as a
         // diagnostic on the pass result — never as an exception escaping the reconciler.
         await using var harness = ArtifactImportHarness.Build(_mount);
         var executable = ArtifactClosureFixture.Executable(ArtifactClosureFixture.ProbeNode("node-root"), "definition-truncated");
@@ -138,7 +138,7 @@ public sealed class ImportGateEdgeCaseTests : IDisposable
     [Fact]
     public async Task An_artifact_whose_payload_does_not_hash_to_its_declared_id_is_rejected_before_persistence()
     {
-        // ADR 0038's content-addressing invariant: equal hash ⇔ equal behaviour. Persisting an unverified payload
+        // The content-addressing invariant: equal hash ⇔ equal behaviour. Persisting an unverified payload
         // under a claimed id would let a corrupted file *become* that id's content on a fresh engine, permanently.
         await using var harness = ArtifactImportHarness.Build(_mount);
         var honest = ArtifactClosureFixture.Executable(ArtifactClosureFixture.ProbeNode("node-root"), "definition-corrupt");

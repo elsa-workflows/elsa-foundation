@@ -537,7 +537,7 @@ public sealed class EfActivityUpgradePlanStore(
         var stamped = EfWorkflowDraftRevision.Next(observed, now);
         // The read entity is only the source of the compare-and-swap operands; the conditional update below
         // is the write, so it must not linger in the tracker with stale values. A bulk update bypasses the
-        // context's own stamping, so it stamps the row with the state it writes (spec 180, FR-014; #2140).
+        // context's own stamping, so it stamps the row with the state it writes (#2140).
         lane.Workflows.Entry(draft).State = EntityState.Detached;
         var affected = await WorkflowDraftRow(lane, draft.Id, draft.TenantId)
             .Where(x => x.LastModifiedAt == observed)

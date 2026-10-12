@@ -9,7 +9,7 @@ using Xunit;
 namespace Elsa.Workflows.Design.Tests.Unit.LayoutEntityTests;
 
 /// <summary>
-/// Spec 088 / ADR 0035 D3 (extended beyond StateSource): a layout record's
+/// Like StateSource, a layout record's
 /// <see cref="DesignMetadataRecord.AdditionalProperties"/> is opaque, Studio-authored metadata held as a
 /// verbatim <see cref="JsonElement"/>. It MUST survive serialization byte-for-byte in the author's key order —
 /// never key-sorted/canonicalized, never round-tripped through a CLR <c>Dictionary&lt;string,object&gt;</c> —
@@ -21,7 +21,7 @@ public sealed class LayoutMetadataOpaqueTests
     // it to "a","m","z"; verbatim preservation keeps it as authored.
     private const string UnsortedBagJson = """{"z":1,"a":2,"m":3,"nested":{"y":true,"x":false}}""";
 
-    // The deterministic payload serializer (spec 086) — the one that sorts every string-keyed dictionary,
+    // The deterministic payload serializer — the one that sorts every string-keyed dictionary,
     // including object-valued ones. A JsonElement is the only shape it leaves verbatim, which is exactly why
     // the opaque bag is stored as a JsonElement rather than a Dictionary.
     private readonly JsonPayloadSerializer _serializer = CreateSerializer();
@@ -66,7 +66,7 @@ public sealed class LayoutMetadataOpaqueTests
     {
         // Documents *why* the bag must be a JsonElement: routed through the same deterministic serializer, an
         // equivalent CLR dictionary IS key-sorted to "a","m","z". Storing the bag opaquely is what avoids
-        // mutating the author's bytes (ADR 0035 D3).
+        // mutating the author's bytes.
         var dictionaryBag = new Dictionary<string, object?> { ["z"] = 1, ["a"] = 2, ["m"] = 3 };
 
         var json = _serializer.Serialize(dictionaryBag);

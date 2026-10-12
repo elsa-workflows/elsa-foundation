@@ -4,7 +4,7 @@ namespace Elsa.Workflows.Design.Validations.Core.Exceptions;
 
 /// <summary>
 /// A host composes more than one <see cref="ICredentialLiteralValidator"/>, a replacement contract with at most one
-/// implementation per container (framework constitution §2.6.2). Thrown at shell activation, so the host does not start
+/// implementation per container. Thrown at shell activation, so the host does not start
 /// rather than judging credential literals through whichever registration came last.
 /// </summary>
 public sealed class MultipleCredentialLiteralValidatorsException(IReadOnlyList<string> implementations)

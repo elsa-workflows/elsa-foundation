@@ -9,7 +9,7 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores;
 
 /// <summary>
 /// The Runtime half of a reusable-activity publication: the executable activity template and the source
-/// reference that retains it, committed together in one Runtime-context transaction (ADR 0066, phase one).
+/// reference that retains it, committed together in one Runtime-context transaction (phase one).
 /// </summary>
 /// <remarks>
 /// The two are idempotent in different ways, and the difference is what keeps an interrupted publication

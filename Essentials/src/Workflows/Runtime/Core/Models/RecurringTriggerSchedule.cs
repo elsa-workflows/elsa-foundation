@@ -81,7 +81,7 @@ public sealed record RecurringTriggerSchedule(
     }
 
     /// <summary>
-    /// Builds a schedule id disambiguated by stimulus hash (spec 117), for a trigger node that fans out several
+    /// Builds a schedule id disambiguated by stimulus hash, for a trigger node that fans out several
     /// recurring schedules (a BPMN process with more than one timer start event). Single-schedule triggers keep
     /// the plain <see cref="BuildId(string,string)"/> id so their schedule identity is unchanged.
     /// </summary>
@@ -91,7 +91,7 @@ public sealed record RecurringTriggerSchedule(
         return $"{BuildId(artifactId, executableNodeId)}:{Escape(stimulusHash)}";
     }
 
-    /// <summary>Activation-scoped, stimulus-hash-disambiguated schedule id (spec 117 fan-out).</summary>
+    /// <summary>Activation-scoped, stimulus-hash-disambiguated schedule id for a trigger that fans out.</summary>
     public static string BuildFanOutId(string activationId, string artifactId, string executableNodeId, string stimulusHash)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(activationId);

@@ -3,7 +3,7 @@ using System.Collections.Concurrent;
 namespace Elsa.Workflows.Runtime.Distributed.Placement;
 
 /// <summary>
-/// The process's record of which shells have completed their join sweep (spec 184, FR-022), so the sweep runs only the
+/// The process's record of which shells have completed their join sweep, so the sweep runs only the
 /// first time a shell's distributed runtime activates in the process, and never on a shell reload or a rejoin after a
 /// lapse: the leases under the host id are then the process's own.
 /// </summary>

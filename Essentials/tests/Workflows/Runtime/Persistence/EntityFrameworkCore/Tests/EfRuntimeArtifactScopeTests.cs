@@ -1122,7 +1122,7 @@ public sealed class EfRuntimeArtifactScopeTests
 
         await using var current = database.Open("tenant-a");
         WorkflowExecutableRootWriteLease? newer = null;
-        // Release is one statement on its own lease row (spec 200), so the newer lease commits just before that statement.
+        // Release is one statement on its own lease row, so the newer lease commits just before that statement.
         var interleaving = new RecreateBeforeFirstCommandInterceptor(async () =>
         {
             newer = await current.Executable.TryAcquireRootWriteLeaseAsync("release-contention", "newer", now.AddMinutes(5), now);
@@ -1531,7 +1531,7 @@ public sealed class EfRuntimeArtifactScopeTests
 
         // The artifact hash this build insists on is a property of the shape this build writes, and a
         // module whose schema version moved need not still write it. The row is skewed, not damaged
-        // (ADR 0077, #1950).
+        // (#1950).
         await fixture.Context.WorkflowExecutables
             .Where(x => x.ArtifactId == Elsa.Persistence.EntityFramework.EfRelationalIdentity.Encode("artifact-skew"))
             .ExecuteUpdateAsync(row => row
@@ -1650,7 +1650,7 @@ public sealed class EfRuntimeArtifactScopeTests
             .TryAcquireRootWriteLeaseAsync("orphan", "lease", now.AddMinutes(5), now).AsTask());
         await Assert.ThrowsAsync<InvalidDataException>(() => fixture.Executable
             .TryBeginDeletionAsync("orphan", "operation", now.AddMinutes(5), now).AsTask());
-        // Renewal and release touch only the holder's own lease row and never read the pair (spec 200, FR-002), so an
+        // Renewal and release touch only the holder's own lease row and never read the pair, so an
         // orphan pair cannot be treated as leased: there is no lease to renew, and nothing to release.
         Assert.False(await fixture.Executable.RenewRootWriteLeaseAsync(new("orphan", "lease", "token"), now.AddMinutes(5), now));
         await fixture.Executable.ReleaseRootWriteLeaseAsync(new("orphan", "lease", "token"));

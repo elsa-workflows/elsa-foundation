@@ -134,7 +134,7 @@ public sealed class ExecutionEvidenceCheckpointEnricher(
         if (envelope.WithheldValue is { } withheld)
             return CaptureWithheld(withheld);
 
-        // A present value whose policy requires encryption is never capturable (spec 188, FR-010), whatever
+        // A present value whose policy requires encryption is never capturable, whatever
         // RedactSensitiveValues says, so it is recorded as a value withheld for encryption. Producer withholding keeps one
         // out of runtime state and the commit backstop refuses a commit that carries one, but enrichers run before that
         // backstop.

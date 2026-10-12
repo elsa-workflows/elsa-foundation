@@ -8,7 +8,7 @@ namespace Elsa.Workflows.Runtime.Services.Values;
 
 /// <summary>
 /// Captures a completing container's final container-scoped variable values as inspection evidence
-/// (ADR 0027, #210). Each value is routed through the configured <see cref="IRuntimePayloadCapturePolicy"/>
+/// (#210). Each value is routed through the configured <see cref="IRuntimePayloadCapturePolicy"/>
 /// so that completed-scope evidence is retained in inspection/history only as the retention/redaction
 /// policy allows — the snapshot is always recorded, but its payload is captured only when the policy
 /// permits. Shared by the activity-completion handlers so both the empty-container path and the

@@ -14,7 +14,7 @@ namespace Elsa.Workflows.Runtime.Tests;
 
 /// <summary>
 /// The runtime value model of a secret binding: a <see cref="RuntimeInputBindingSource.SecretRead"/> binding and the
-/// withheld envelope that stands in for its value in persisted state (spec 188, T004).
+/// withheld envelope that stands in for its value in persisted state.
 /// </summary>
 public sealed class RuntimeSecretBindingModelTests
 {

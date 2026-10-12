@@ -5,7 +5,7 @@ using Xunit;
 namespace Elsa.Workflows.Design.Tests.Unit.EventSurfaceTests;
 
 /// <summary>
-/// SC-011 + Unit C FR-018 + FR-018a: all core events declared in <c>Elsa.Workflows.Design.Core</c>
+/// All core events declared in <c>Elsa.Workflows.Design.Core</c>
 /// exist with verbatim names. Plus the discipline assertion that no event uses the bare
 /// <c>Input</c>/<c>Output</c> names — the <c>WorkflowInput</c>/<c>WorkflowOutput</c> prefix
 /// is mandatory because workflow-level inputs/outputs are distinct from per-activity
@@ -74,7 +74,7 @@ public sealed class EventNamingTests
         var actual = GetWorkflowDesignCoreEventNames();
 
         // Bare names that Sipke item 11's earlier draft used (InputChangedInDraft / OutputChangedInDraft)
-        // would conflate workflow-level with per-activity per FR-018 naming discipline.
+        // would conflate workflow-level with per-activity events.
         Assert.DoesNotContain("InputAddedToDraft", actual);
         Assert.DoesNotContain("InputChangedInDraft", actual);
         Assert.DoesNotContain("InputUpdatedInDraft", actual);
@@ -88,9 +88,9 @@ public sealed class EventNamingTests
     [Fact]
     public void Workflows_Design_Core_publishes_exactly_20_events()
     {
-        // 19 FR-018 core mutation events (1 origination + 3 activity general [Added/Removed/Moved] +
+        // 19 core mutation events (1 origination + 3 activity general [Added/Removed/Moved] +
         // 3 activity input CRUD + 3 activity output CRUD + 3 variable CRUD +
-        // 3 wf-input CRUD + 3 wf-output CRUD = 19) plus 1 FR-018a lifecycle (DraftDiscarded) = 20.
+        // 3 wf-input CRUD + 3 wf-output CRUD = 19) plus 1 lifecycle (DraftDiscarded) = 20.
         // Graph connection events are Flowchart-module concerns, not Workflows.Design.Core events.
         // DraftClonedFromVersion was dropped — both creation routes share the provider's
         // origination lifecycle path, so a cloned Draft emits the single DraftCreated event.
@@ -104,7 +104,7 @@ public sealed class EventNamingTests
 
     private static IReadOnlyList<string> GetWorkflowDesignCoreEventNames()
     {
-        // After Unit 1's event unification, the FR-018 / FR-018a events in this .Core all
+        // After Unit 1's event unification, the draft events in this .Core all
         // implement the single IEvent marker. Scan for it so future additions are picked up.
         // The scan is scoped to the draft-event namespace: the same assembly also carries the
         // workflow-version reconciliation events, which are not part of the draft surface.

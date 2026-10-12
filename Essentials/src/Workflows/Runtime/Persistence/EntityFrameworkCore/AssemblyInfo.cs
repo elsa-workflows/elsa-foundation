@@ -3,7 +3,7 @@ using Elsa.Specifications.PackageManifest.Generator.Hints;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Entities;
 
-// The single, discoverable declaration of this module (ADR 0076 D2). EfModuleCatalog.Discover reads this,
+// The single, discoverable declaration of this module. EfModuleCatalog.Discover reads this,
 // and EfModuleBinding.For derives the registration class's binding from it (#1872).
 [assembly: EfModule(
     "Workflows.Runtime",
@@ -15,18 +15,17 @@ using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Entities;
     MySql = typeof(RuntimeMySqlDbContext),
     DisplayName = "Runtime")]
 
-// Mirrors the [EfModule] name above into elsa-package.json's extensions.efModules (spec 171 slice 11,
-// #1881); EfModuleDescriptorTests guards that the two never drift apart.
+// Mirrors the [EfModule] name above into elsa-package.json's extensions.efModules (#1881);
+// EfModuleDescriptorTests guards that the two never drift apart.
 [assembly: ManifestExtension("efModules", "Workflows.Runtime")]
 
-// The schema families this module owns (spec 180, FR-001), each at the version its skew check reads. A host's
-// readability report is derived from these alone (spec 183, FR-020); every family the stores check must be declared
+// The schema families this module owns, each at the version its skew check reads. A host's
+// readability report is derived from these alone; every family the stores check must be declared
 // here, at the version they read; that holds by review until #2606 restores a compiled check. Each names the tables
-// whose rows it stamps, so the finalization gate holds every write to its own family's write version (spec 181, FR-009).
-// RuntimeArtifact names its content-addressed tables, each marked [EfSchemaContentAddressed] with its reason (ADR 0038):
+// whose rows it stamps, so the finalization gate holds every write to its own family's write version.
+// RuntimeArtifact names its content-addressed tables, each marked [EfSchemaContentAddressed] with its reason:
 // executables and executable activity templates, whose identity is their content hash, and the template hash claims,
-// keyed by that hash, which bind it to one template. The post-finalization backfill never rewrites them (spec 186,
-// FR-010a and FR-010b).
+// keyed by that hash, which bind it to one template. The post-finalization backfill never rewrites them.
 [assembly: EfSchemaFamily(BookmarkStateEfModule.SchemaFamily, "Workflows.Runtime", BookmarkStateEfModule.SchemaVersion, Entities = [typeof(BookmarkStateEntity)])]
 [assembly: EfSchemaFamily(RuntimeActivationSlotEfModule.SchemaFamily, "Workflows.Runtime", RuntimeActivationSlotEfModule.SchemaVersion, Entities = [typeof(WorkflowActivationSlotEntity)])]
 [assembly: EfSchemaFamily(RuntimeActivityExecutionEfModule.SchemaFamily, "Workflows.Runtime", RuntimeActivityExecutionEfModule.SchemaVersion, Entities = [typeof(ActivityExecutionStateEntity), typeof(ActivityExecutionInspectionEntity), typeof(ActivityExecutionHierarchyEntity)])]
@@ -40,8 +39,7 @@ using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Entities;
 [assembly: EfSchemaFamily(RuntimeWorkflowExecutionEfModule.SchemaFamily, "Workflows.Runtime", RuntimeWorkflowExecutionEfModule.SchemaVersion, Entities = [typeof(WorkflowExecutionStateEntity)])]
 [assembly: EfSchemaFamily(RuntimeWorkflowTestScopeEfModule.SchemaFamily, "Workflows.Runtime", RuntimeWorkflowTestScopeEfModule.SchemaVersion, Entities = [typeof(WorkflowTestScopeEntity)])]
 
-// Content and integrity columns: see Essentials/src/Persistence/EntityFramework/EXTENSION_POINTS.md, "Content and integrity columns" (spec 180, FR-008, FR-009
-// and FR-014).
+// Content and integrity columns: see Essentials/src/Persistence/EntityFramework/EXTENSION_POINTS.md, "Content and integrity columns".
 // BookmarkState's payload and metadata, and the checkpoint marker's and the recurring-schedule projection's id sets,
 // restate parts of the row's content document, but each is deserialized and returned or compared with the upcast
 // content, so each is content too (#2140).

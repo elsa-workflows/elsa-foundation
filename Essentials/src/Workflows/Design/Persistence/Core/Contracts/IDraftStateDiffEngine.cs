@@ -10,7 +10,7 @@ namespace Elsa.Workflows.Design.Persistence.Core.Contracts;
 /// </summary>
 /// <remarks>
 /// Currently NOT invoked by any mutation command and NOT registered in DI: per-diff mutation-event
-/// publication is retired until a consumer (the FR-017/FR-018 event-sourcing slot) exists — the events
+/// publication is retired until a consumer (the event-sourcing slot) exists — the events
 /// had no subscriber. This engine and the event records it produces remain in place as the tested
 /// contract to re-wire at that point.
 /// </remarks>

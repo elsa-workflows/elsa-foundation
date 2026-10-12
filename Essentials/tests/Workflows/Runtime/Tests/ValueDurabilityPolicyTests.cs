@@ -26,7 +26,7 @@ public sealed class ValueDurabilityPolicyTests
     [Fact]
     public async Task Snapshot_materialization_preserves_external_sensitive_and_redacted_policy_without_argument_wrappers()
     {
-        // A policy that also requires encryption is withheld instead (spec 188, RuntimeExternalEnvelopeStorageWithholdingTests).
+        // A policy that also requires encryption is withheld instead (RuntimeExternalEnvelopeStorageWithholdingTests).
         var policy = new ValueProtectionPolicy(
             DurableValueLifecycle.Instance,
             DurableValueStorage.External,
@@ -811,7 +811,7 @@ public sealed class ValueDurabilityPolicyTests
     }
 
     /// <summary>
-    /// The effective-policy table of spec 188 (FR-007): an input's declaration (none, sensitive, credential) combined with
+    /// The effective-policy table: an input's declaration (none, sensitive, credential) combined with
     /// the author's per-binding choice (none, or an explicit true or false). The secret-binding row is publication's
     /// minimum, tested where the compiler applies it.
     /// </summary>
@@ -943,7 +943,7 @@ public sealed class ValueDurabilityPolicyTests
     }
 
     // Sensitive, not encryption-requiring: an external value that requires encryption is withheld instead of being
-    // referenced or written again (spec 188, RuntimeExternalEnvelopeStorageWithholdingTests).
+    // referenced or written again (RuntimeExternalEnvelopeStorageWithholdingTests).
     private static ValueProtectionPolicy SensitiveExternalPolicy() => new(
         DurableValueLifecycle.Instance,
         DurableValueStorage.External,

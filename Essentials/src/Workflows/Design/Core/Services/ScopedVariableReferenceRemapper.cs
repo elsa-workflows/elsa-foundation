@@ -6,7 +6,7 @@ using Elsa.Workflows.Design.Core.Models;
 namespace Elsa.Workflows.Design.Core.Services;
 
 /// <summary>
-/// Rewrites scoped variable references when a container subtree is copied or imported (ADR 0027).
+/// Rewrites scoped variable references when a container subtree is copied or imported.
 /// Given a map of old → new authored node identities for the nodes being copied, it reassigns each
 /// node's identity and remaps every <em>internal</em> scoped reference (one whose declaring scope is
 /// a node inside the copied subtree) to the copied node identity, while preserving reference keys.

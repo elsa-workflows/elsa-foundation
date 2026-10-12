@@ -11,7 +11,7 @@ namespace Elsa.Workflows.Design.Core.Models;
 /// </summary>
 /// <remarks>
 /// <para>
-/// <b>Scope (Elsa constitution §E2.9).</b> State carries <b>authored content only</b>:
+/// <b>Scope.</b> State carries <b>authored content only</b>:
 /// the structured representation of what the author drew, declared, and configured.
 /// Today's members — <c>Variables</c>, <c>RootActivity</c>, <c>Inputs</c>,
 /// <c>Outputs</c>, and <c>StrategyOptions</c> — are clean
@@ -19,7 +19,7 @@ namespace Elsa.Workflows.Design.Core.Models;
 /// connections or Sequence children.
 /// </para>
 /// <para>
-/// <b>Out of State (§E2.9.2 — never add to this record):</b>
+/// <b>Out of State (never add to this record):</b>
 /// instance/runtime/operational state · executable/build metadata · publication/deployment
 /// state · search/listing-projection types · security/ownership types · designer layout
 /// metadata (owned by <c>WorkflowDefinitionVersionLayout</c> / <c>WorkflowDefinitionDraftLayout</c>
@@ -27,16 +27,16 @@ namespace Elsa.Workflows.Design.Core.Models;
 /// the in-lock validation gate; not persisted).
 /// </para>
 /// <para>
-/// <b>Architectural triplet (§E2.9.3).</b> <c>WorkflowDefinitionState</c> ↔ read
+/// <b>Architectural triplet.</b> <c>WorkflowDefinitionState</c> ↔ read
 /// models/projections ↔ <c>WorkflowExecutable</c> — authoring, reading, executing — at
-/// separate scopes; never merged. Conflation collapses §E2.2 (Design ↔ Runtime split)
-/// or §E2.6 (artifact-only runtime).
+/// separate scopes; never merged. Conflation collapses the Design ↔ Runtime split
+/// or the artifact-only runtime.
 /// </para>
 /// <para>
-/// <b>Enforcement (§E2.9.4).</b> This documentation header + PR review discipline against
-/// §E2.9. A property newly proposed for State whose category is genuinely ambiguous between
+/// <b>Enforcement.</b> This documentation header + PR review discipline against
+/// this scope. A property newly proposed for State whose category is genuinely ambiguous between
 /// authored content and an out-of-State category surfaces as an architecture-meeting
-/// escalation; resolution is constitutional (amend §E2.9), not silent. Automated
+/// escalation; resolution is constitutional, not silent. Automated
 /// compile-/build-time enforcement is deferred to a future <i>Code Analysers</i> epic.
 /// </para>
 /// </remarks>

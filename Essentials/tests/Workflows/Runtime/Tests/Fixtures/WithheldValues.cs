@@ -4,7 +4,7 @@ using Elsa.Workflows.Runtime.Core.Models;
 namespace Elsa.Workflows.Runtime.Tests.Fixtures;
 
 /// <summary>
-/// A withheld envelope as a secret read leaves it in runtime state (spec 188), for the readers that must refuse it or
+/// A withheld envelope as a secret read leaves it in runtime state, for the readers that must refuse it or
 /// render it without a value.
 /// </summary>
 internal static class WithheldValues

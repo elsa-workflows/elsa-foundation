@@ -11,7 +11,7 @@ public interface IRuntimeCoalescingDrainScopeFactory
 {
     /// <summary>
     /// Begins a coalescing session scope for the supplied workflow execution. When <paramref name="maxSegmentCheckpoints"/>
-    /// is supplied it overrides the host-configured segment cap for this run (ADR 0032 R5 per-workflow authored cadence);
+    /// is supplied it overrides the host-configured segment cap for this run (per-workflow authored cadence);
     /// when null the host default applies.
     /// </summary>
     IRuntimeCoalescingDrainScope Begin(string workflowExecutionId, int? maxSegmentCheckpoints = null);

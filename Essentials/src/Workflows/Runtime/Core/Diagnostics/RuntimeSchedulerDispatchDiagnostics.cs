@@ -1,7 +1,7 @@
 namespace Elsa.Workflows.Runtime.Core.Diagnostics;
 
 /// <summary>
-/// Process-wide, deterministic dispatch/fusion counters (spec 123 FR-008). Independent of wall time, so the A/B
+/// Process-wide, deterministic dispatch/fusion counters. Independent of wall time, so the A/B
 /// hop-count claim (~7 dispatches per ReplaySafe leaf edge → ~1–2 fused) is provable under fleet load. A singleton
 /// so it survives the per-command drain scopes; the drainer records one dispatch per
 /// <c>WorkflowSchedulerDrainer.DispatchAsync</c>, and the ReplaySafe fusion driver records one fused span per engaged
@@ -20,12 +20,12 @@ public sealed class RuntimeSchedulerDispatchDiagnostics
     /// <summary>Total ReplaySafe fused spans engaged (one per fused schedule→start→invoke pass).</summary>
     public long FusedSpans => Interlocked.Read(ref _fusedSpans);
 
-    /// <summary>Total completion-cascade work items the D2 fused pump dispatched inline (spec 123 D2).</summary>
+    /// <summary>Total completion-cascade work items the fused completion pump dispatched inline.</summary>
     public long InlineCascadeDispatches => Interlocked.Read(ref _inlineCascadeDispatches);
 
     /// <summary>
-    /// Total successor <c>ScheduleActivity</c> items the D2 pump left to the discrete drain loop because the successor
-    /// edge could not be proven single-predecessor (fan-in/join fallback, ADR 0047 resolution #1).
+    /// Total successor <c>ScheduleActivity</c> items the fused pump left to the discrete drain loop because the successor
+    /// edge could not be proven single-predecessor (fan-in/join fallback).
     /// </summary>
     public long CascadeJoinFallbacks => Interlocked.Read(ref _cascadeJoinFallbacks);
 

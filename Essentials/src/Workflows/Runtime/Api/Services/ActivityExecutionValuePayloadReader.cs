@@ -59,7 +59,7 @@ public sealed class ActivityExecutionValuePayloadReader(
             await AuditAsync("denied", workflowExecutionId, activityExecutionId, evidenceId, authorizationSnapshot, cancellationToken);
             return ActivityExecutionValuePayloadReadResult.Denied();
         }
-        // A withheld record (spec 188) has no value to release, whatever it carries beside its marker.
+        // A withheld record has no value to release, whatever it carries beside its marker.
         if (ActivityExecutionInspectionDisclosure.WithheldKind(snapshot) is not null ||
             snapshot.Payload is null ||
             snapshot.CaptureMode is not (RuntimePayloadCaptureMode.DiagnosticSnapshot or RuntimePayloadCaptureMode.Payload))

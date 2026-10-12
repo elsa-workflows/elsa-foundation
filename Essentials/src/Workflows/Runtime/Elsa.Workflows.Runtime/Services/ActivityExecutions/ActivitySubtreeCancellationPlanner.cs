@@ -5,7 +5,7 @@ using Elsa.Workflows.Runtime.Core.Models;
 namespace Elsa.Workflows.Runtime.Services.ActivityExecutions;
 
 /// <summary>
-/// Shared planning core for cancelling one activity-execution subtree (spec 112): traverses the
+/// Shared planning core for cancelling one activity-execution subtree: traverses the
 /// subtree rooted at one execution, terminalizes its cancellable members, captures the resource
 /// cleanup (bookmarks, durable timers, queued scheduler work), and suppresses the subtree's
 /// non-terminal incidents. Planning is side-effect free; callers own the atomic checkpoint commit
@@ -125,7 +125,7 @@ public sealed class ActivitySubtreeCancellationPlanner(
 /// One subtree-cancellation's exact state effects; applied by the caller in one atomic checkpoint
 /// commit. <see cref="IncidentChanges"/> holds the incident upserts the plan carries — the planner
 /// emits suppressions for the subtree's non-terminal incidents, and a caller may amend the list
-/// (e.g. spec 115 swaps the absorbed incident's suppression for a resolution).
+/// (e.g. swaps the absorbed incident's suppression for a resolution).
 /// </summary>
 public sealed record ActivitySubtreeCancellationPlan(
     string RootActivityExecutionId,

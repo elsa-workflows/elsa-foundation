@@ -6,7 +6,7 @@ using Xunit;
 namespace Elsa.Workflows.Runtime.Tests;
 
 /// <summary>
-/// Locks the fan-in notifier's run-path failure policy (spec 089 D T005): every observer is invoked, and a throw
+/// Locks the fan-in notifier's run-path failure policy: every observer is invoked, and a throw
 /// is caught and logged rather than propagated, so one bad observer neither faults the run nor starves the others.
 /// </summary>
 public sealed class BookmarkLifecycleNotifierTests

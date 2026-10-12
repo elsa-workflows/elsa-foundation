@@ -8,7 +8,7 @@ namespace Elsa.Workflows.Design.Tests.Infrastructure;
 
 /// <summary>
 /// This project's part of the credential-literal fixture the Design test project owns (linked from there, with its
-/// <c>StubActivityCatalog</c>; spec 188, FR-008).
+/// <c>StubActivityCatalog</c>).
 /// </summary>
 internal static partial class CredentialLiteralTestSupport
 {

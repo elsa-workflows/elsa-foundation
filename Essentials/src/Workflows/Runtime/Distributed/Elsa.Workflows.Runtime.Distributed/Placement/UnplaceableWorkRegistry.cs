@@ -9,13 +9,13 @@ namespace Elsa.Workflows.Runtime.Distributed.Placement;
 
 /// <summary>
 /// The work this shell's placement pump found waiting because no active member satisfies its placement requirement, or
-/// because the requirement could not be resolved (spec 184, FR-017), per persistence scope. The pump refreshes it every
+/// because the requirement could not be resolved, per persistence scope. The pump refreshes it every
 /// sweep, so an execution that is claimed, or no longer pending, leaves it at the next one.
 /// </summary>
 /// <remarks>
 /// A newly unplaceable execution is logged once, as a warning naming what it needs and never a host. The registry is a
 /// report, never the record of what is owed: the work stays in the durable transport, and the first capable member to
-/// become active claims it (FR-018).
+/// become active claims it.
 /// </remarks>
 public sealed class UnplaceableWorkRegistry(TimeProvider timeProvider, ILogger<UnplaceableWorkRegistry>? logger = null)
 {
@@ -67,7 +67,7 @@ public sealed class UnplaceableWorkRegistry(TimeProvider timeProvider, ILogger<U
     private sealed record Entry(string Requirement, DateTimeOffset FirstObservedAt, DateTimeOffset LastObservedAt);
 }
 
-/// <summary>The distributed runtime's report of unplaceable work to the runtime's Attention contributor (spec 184, FR-017).</summary>
+/// <summary>The distributed runtime's report of unplaceable work to the runtime's Attention contributor.</summary>
 public sealed class UnplaceableWorkAttention(
     UnplaceableWorkRegistry registry,
     IPersistenceAccessContextAccessor accessContextAccessor) : IWorkflowRuntimePlacementAttention

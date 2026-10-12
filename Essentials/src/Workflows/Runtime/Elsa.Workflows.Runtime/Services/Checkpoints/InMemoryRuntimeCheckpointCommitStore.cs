@@ -166,7 +166,7 @@ public sealed class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheckpointCom
         await ExecuteWithWorkflowExecutionRootWriteLeaseAsync(commit, async ct =>
         {
             // Fence-checked consume first: a claim-lost outcome throws before any other state is mutated, so a stale
-            // claimant's commit persists nothing (spec 105).
+            // claimant's commit persists nothing.
             await ApplyConsumedSchedulerWorkItemsAsync(commit.StateChanges.ConsumedSchedulerWorkItems, ct);
             await ApplyWorkflowExecutionStateChangeAsync(commit.StateChanges.WorkflowExecution, ct);
             await ApplySchedulerStateChangeAsync(commit.StateChanges.Scheduler, ct);
@@ -297,7 +297,7 @@ public sealed class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheckpointCom
         }
     }
 
-    /// <summary>Test seam: seeds a pending outbox item directly, bypassing the commit path (§2.23.3).</summary>
+    /// <summary>Test seam: seeds a pending outbox item directly, bypassing the commit path.</summary>
     public ValueTask AddPendingForTestingAsync(RuntimePostCommitOutboxItem item, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(item);

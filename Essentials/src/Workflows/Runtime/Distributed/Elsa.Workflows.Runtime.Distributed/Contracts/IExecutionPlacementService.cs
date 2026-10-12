@@ -24,7 +24,7 @@ public interface IExecutionPlacementService
 
     /// <summary>
     /// Renews a placement lease this node still holds under exactly <paramref name="lease"/>'s placement token, as a
-    /// compare-and-set that never grants (spec 184, FR-014). Returns the renewed lease, or <see langword="null"/> when
+    /// compare-and-set that never grants. Returns the renewed lease, or <see langword="null"/> when
     /// the lease expired, was released or was taken by another member since.
     /// </summary>
     ValueTask<ExecutionPlacementLease?> TryRenewAsync(ExecutionPlacementLease lease, CancellationToken cancellationToken = default);
