@@ -63,7 +63,6 @@ You **MUST** consider the user input before proceeding (if not empty).
    - Evaluate gates (ERROR if violations unjustified)
    - Phase 0: Generate research.md (resolve all NEEDS CLARIFICATION)
    - Phase 1: Generate data-model.md, contracts/, quickstart.md
-   - Phase 1: Update agent context by running the agent script
    - Re-evaluate Constitution Check post-design
 
 ## Mandatory Post-Execution Hooks
@@ -153,7 +152,7 @@ Command ends after Phase 2 planning. Report branch, IMPL_PLAN path, and generate
 
 4. **Agent context**: no update. `AGENTS.md` no longer carries SPECKIT markers (#2578); the plan is reached through `specs/`.
 
-**Output**: data-model.md, /contracts/*, quickstart.md, updated agent context file
+**Output**: data-model.md, /contracts/*, quickstart.md
 
 ## Key rules
 

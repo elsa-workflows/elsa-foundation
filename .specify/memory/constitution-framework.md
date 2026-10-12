@@ -25,9 +25,9 @@ Gates with an automated check (tests in `tests/essentials/Architecture/Tests/`).
 | §2.1 | A `.Core` references no implementation or helper project | `ArchitectureGuardTests.Core_projects_do_not_reference_implementation_projects` |
 | §2.1 | A `.Core` takes no heavy package | `ArchitectureGuardTests.Core_projects_do_not_reference_heavy_packages` |
 | §2.1 | A `.Core` holds no implementation-shaped type | `ArchitectureGuardTests.Core_projects_contain_no_implementation_shaped_types` |
-| §2.2 | No layer-marker folders; paths follow the domain tree | `ArchitectureGuardTests.Solution_has_no_global_layer_marker_folders`, `.Project_paths_match_domain_tree_convention` |
+| §2.2 | No `/core/` or `/modules/` solution folder; project paths follow the domain tree (other naming rules: review) | `ArchitectureGuardTests.Solution_has_no_global_layer_marker_folders`, `.Project_paths_match_domain_tree_convention` |
 | §2.3 | `<App>.Primitives` has no external package | `ArchitectureGuardTests.Elsa_primitives_has_no_external_package_references` |
-| §2.5, §2.23.1 | Every feature composes and its services resolve | `FeatureCompositionTests.Every_feature_composes_and_each_service_it_registers_resolves` |
+| §2.5, §2.23.1 | Every feature composes and its services resolve (virtual `ConfigureServices` and inheritance shape: review) | `FeatureCompositionTests.Every_feature_composes_and_each_service_it_registers_resolves` |
 | §2.9 | Persistence contracts take no concrete provider | `ArchitectureGuardTests.In_scope_persistence_contract_projects_remain_free_of_concrete_provider_dependencies` |
 | §2.20 | Only admitted projects resolve EF Core packages | `EfCoreDependencyGuardTests` |
 | §2.23.3 | Internal implementations; tracked public surface | Realigned per domain by #2591. Until then `ArchitectureGuardTests.InternalsVisibleTo_occurrences_are_limited_to_documented_exceptions` holds the pre-5.0 allow-list and `PublicApiFilesGuardTests` covers Line A only. |
@@ -147,7 +147,7 @@ An external-system integration and each consumption-shape adapting it (an activi
 
 Before grouping features into a module or moving a type between layers, weigh the cost of undoing it: preserve NuGet identity wherever possible, justify any identity change against every consumer's break, and prefer the finer-grained split when in doubt.
 
-**§2.16.1 Minimum-viable-project guidance.** No minimum size. A *new* Layer-3 project under about **100 lines** records one sentence on why it earns its own identity, unless it is a (1) contracts-only `.Core` seam, (2) primitives or constants project, (3) provider leaf, (4) migration or compatibility boundary, (5) Layer-2 helper or adapter, or (6) independently composable feature unit or cross-domain contribution seam ([detail](../../docs/reference/framework-examples.md#minimum-viable-project-exemption-classes)). Merging one that fits none stays discretionary.
+**§2.16.1 Minimum-viable-project guidance.** No minimum size. A *new* Layer-3 project under about **100 lines** records one sentence on why it earns its own identity, unless merging it away would (a) violate another gate or (b) collapse a real capability boundary. The enumerated cases of (a) and (b) are a (1) contracts-only `.Core` seam, (2) primitives or constants project, (3) provider leaf, (4) migration or compatibility boundary, (5) Layer-2 helper or adapter, or (6) independently composable feature unit or cross-domain contribution seam ([detail](../../docs/reference/framework-examples.md#minimum-viable-project-exemption-classes)). Merging one that fits none stays discretionary.
 
 ### §2.17 Duplication beats dependency
 
@@ -179,7 +179,7 @@ For greenfield code, TDD, test-after or no automated tests is an application-lev
 
 Every feature MUST document the event handlers it registers and the events they handle, the contributor interfaces it implements and the fan-in event each feeds, and the tasks it registers with their cadence. The medium is application-defined.
 
-**§2.22.1 Domain-level extension-points catalog.** A domain whose `.Core` exposes extension points ships `EXTENSION_POINTS.md` at its composition-root feature project (its `.Core` when there is none), with **Overridable contracts**, **Implementable contributor interfaces** (with Known implementations) and **Events**. Each event records at least its name, delivery strategy, one-line meaning, payload, contributor interface (fan-in only) and publication site; other fields are optional (D3). Entry spec: [framework-examples](../../docs/reference/framework-examples.md#extension-points-catalog).
+**§2.22.1 Domain-level extension-points catalog.** A domain whose `.Core` exposes extension points ships `EXTENSION_POINTS.md` at its composition-root feature project (its `.Core` when there is none), with **Overridable contracts**, **Implementable contributor interfaces** (with Known implementations) and **Events**. Each event records at least its name, delivery strategy, one-line meaning, payload, contributor interface (fan-in only) and publication site; other fields are optional (D3). Each overridable contract records its layer badge, default implementation and owning project, signature, when to override and what depends on it. Each contributor interface records its name, kind, layer badge, signature, registration call, the single aggregating handler and Known implementations tagged intra- or cross-domain. Entry spec: [framework-examples](../../docs/reference/framework-examples.md#extension-points-catalog).
 
 **Maintenance obligation (MANDATORY).** The catalog changes in the same unit of work as: (a) a new contract, contributor interface or event; (b) a new contributor implementation anywhere, tagged intra- or cross-domain, with a **Cross-domain contributions** note in the implementer's README; (c) a rename or removal, also MAJOR (§4); (d) a new aggregating handler or changed consumption; (e) a new feature or `.Core` with extension points, which ships its catalog before merge. Drift is caught at review; a test MUST NOT assert on catalog text.
 
@@ -209,7 +209,7 @@ A periodic review (cadence set by the architects; quarterly suggested) is a norm
 
 ## §3 Runtime composition — Nuplane Strategy
 
-Nuplane, or software meeting the same intent, loads and replaces modules at runtime. The default is **Strategy B**: the host pins its baseline contract packages and Nuplane loads implementations, helpers and optional features. A domain's `.Core` is not host-pinned; Nuplane promotes it to a shared assembly within the domain's subtree when the domain is installed, first- and third-party alike. Strategy A (atomic replacement of a prevalidated runtime) remains a deliberate deployment choice. Replacing a host-pinned `.Core` needs a restart; the application documents its hot-reload boundary.
+Nuplane, or software meeting the same intent, loads and replaces modules at runtime. The default is **Strategy B**: the host pins its baseline contract packages and Nuplane loads implementations, helpers and optional features. Strategy A (atomic replacement of a prevalidated runtime) remains a deliberate deployment choice. Replacing a host-pinned `.Core` needs a restart; the application documents its hot-reload boundary.
 
 ## §4 Versioning
 

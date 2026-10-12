@@ -26,7 +26,7 @@ The constitution gates that no test or analyzer checks. A reviewer, or a plan's 
 - **§2.14** An integration and its consumption-shapes are separate modules; a two-system unit is its own module.
 - **§2.16, §2.16.1** NuGet identity is preserved; a new Layer-3 project under about 100 lines is justified or fits an exemption class.
 - **§2.17** No shared helper that adds a dependency for fewer than three consumers; `.Core` implementations are thin.
-- **§2.18** A new domain's purpose fits one verb-led sentence.
+- **§2.18.1–§2.18.3** A new domain's purpose fits one verb-led sentence; a contract another domain or feature would plausibly consume is in the `.Core`; a feature duplicated across domains is promoted to one `.Core`.
 - **§2.19** Feature names are stable and unique; a rename is a new feature plus retirement.
 - **§2.20** No premature provider umbrella; specific provider sub-packages; no feature depends on a concrete provider unless provider-suffixed (EF Core admission is automated).
 - **§2.21.1** Tests describing valid behaviour still pass; a rewritten or deleted test names its reason.
@@ -35,7 +35,8 @@ The constitution gates that no test or analyzer checks. A reviewer, or a plan's 
 - **§2.23.4** Exposed hidden coupling is lifted to a contract, not reproduced in a stub.
 - **§2.23.5** Infrastructure exceptions are wrapped in domain exceptions at the boundary.
 - **§2.24 (draft)** The change uses a catalogued pattern or raises a new one.
-- **§2.25.3** A removal is backed by build or test evidence, not a census.
+- **§2.25.2, §2.25.3** Only a consolidation review retires artifacts (terminal spec status, superseded guard tests, stale catalog entries, generators without consumers); a removal is backed by build or test evidence, not a census.
+- **§4.1, §4.2** The version bump matches the SemVer class of the package's surface change: a removed or renamed member or event, changed signature, required interface member or feature rename is a major.
 
 ## Elsa
 
@@ -43,6 +44,6 @@ The constitution gates that no test or analyzer checks. A reviewer, or a plan's 
 - **§E2.5** `ElsaDbContextBase` stays opt-in; no contract requires it.
 - **§E2.6** A published artifact always runs; the runtime needs no design-side data.
 - **§E2.8** The picker reads only the activity catalog.
-- **§E2.9 (provisional)** `WorkflowDefinitionState` gains no out-of-scope member; draft mutation stays one diff-based command.
-- **§E5** One version line until GA; `Elsa.Server` stays reserved.
+- **§E2.9 (provisional)** `WorkflowDefinitionState` gains no out-of-scope member; `ActivityNode` gets no generic child collection, connection list, start-child member or executable mirror (§E2.9.1); State, read models and `WorkflowExecutable` stay separate (§E2.9.3); draft mutation stays one diff-based command.
+- **§E5** One version line until GA; `Elsa.Server` stays reserved; Nuplane promotes a domain's `.Core` within its subtree, never host-pinned.
 - **§E6** New or renamed Elsa-owned types follow R1–R8.

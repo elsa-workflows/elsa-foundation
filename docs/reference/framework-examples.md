@@ -58,7 +58,7 @@ Features extend a domain by **registering a handler (`IEventHandler<T>`) for one
 - **Intent.** Internal technical communication between features within the application.
 - **Scope.** Cross-feature contribution **and** intra-domain specialization. Events are valid not only across unrelated domains but also within an inheritance/implementation chain — e.g. a domain-specific event like `EntitySaving(DbContext, EntityEntry)` is consumed only by features that already specialize an EF-Core-aware implementation. The mechanism is the same; the audience is narrower.
 - **Delivery coupling follows the publisher-owned strategy.** Cross-domain coupling exists at the **contract level** (the event's shape). The publisher owns the delivery strategy because only the publisher knows whether its caller needs handlers to have completed, whether it will read contributions back, and whether the transition has already been persisted. A publisher whose dispatch is purely informational (audit, event-sourcing stream, telemetry, UI-push) SHOULD publish Background so a subscriber failure cannot break a transition that has already been persisted. A publisher that reads contributions back MUST publish Sequential.
-- **Handler-loop failure policy is publisher-owned.** The publisher owns the failure policy for the dispatch loop because only the publisher knows whether one failing handler should stop dispatch immediately, whether every handler should still get a chance to run before an aggregate failure is thrown, or whether failures should be logged/handled without breaking the publisher. The built-in baseline policies are **Throw immediately**, **Run all then throw aggregate**, and **Log/handle gracefully and continue**.
+- **Handler-loop failure policy is publisher-owned.** The publisher owns the failure policy for the dispatch loop because only the publisher knows whether one failing handler should stop dispatch immediately, whether every handler should still get a chance to run before an aggregate failure is thrown, or whether failures should be logged/handled without breaking the publisher. The baseline policies are **Throw immediately**, **Run all then throw aggregate**, and **Log/handle gracefully and continue**. Only two are built: Sequential throws immediately, and Background logs per handler and continues. Run all then throw aggregate is not available until a publisher needs it (§2.6.6).
 - **Failure meaning is subscriber-owned classification.** A handler/subscriber owns the meaning of its own failure: business-critical, optional telemetry, retryable, ignorable, report-only, dead-letter-worthy, or escalated. That classification operates **inside the publisher-owned delivery and dispatcher-failure boundary**. A subscriber MAY declare its failure classification where the event substrate supports handler-level metadata, but it MUST NOT silently strengthen the publisher's delivery contract. If a subscriber must be able to fail the publisher, the domain needs a Sequential gate/contribution event or a separate phase; it is a modeling error to attach such a subscriber only to a Background notification.
 - **Completeness under Sequential.** Every registered handler is dispatched in order; the publisher does not skip handlers or return early. Because the default does not shield, the first throwing handler halts the chain — that is the intended fail-fast behaviour, not a completeness violation. Background completeness is FIFO across the channel and isolated per subscriber.
 - **Handler independence.** Handlers MUST NOT depend on each other. Each handler reacts to the event for its own purpose; observed handler ordering or side effects of one handler MUST NOT be relied upon by another. A handler that depends on another handler's prior side effect is already in violation of §2.6 (no tight logic coupling between implementations).
@@ -124,7 +124,7 @@ The adapter pattern is a **design default** whenever a feature contains function
 
 ## Extension-points catalog
 
-Supports framework §2.22.1. Moved verbatim from framework constitution v5.0.1. Owner decision D3 (#2578) makes six per-event fields required (event class name, delivery strategy, one-line semantic description, payload signature, contributor interface for fan-in events, publication site); dispatcher failure policy, subscriber failure classifications, expected handler audiences, ordering guarantees and cross-references below are optional.
+Supports framework §2.22.1. Moved from framework constitution v5.0.1. Owner decision D3 (#2578) makes six per-event fields required and the rest optional; the field lists below are split accordingly.
 
 **Two axes of extension the catalog distinguishes.**
 
@@ -140,16 +140,19 @@ The catalog has three sections: **Overridable contracts**, **Implementable contr
 
 A domain may publish events of either strategy, or have a present-participle gate with a past-tense outcome sibling (e.g. `DraftValidating` = Sequential "validation is happening, contribute"; `DraftValidated` = Background "validation completed, here's the outcome"). The catalog documents whichever events the domain ships; the recorded strategy pins the dispatch contract for each.
 
-**Minimum required content per event in the catalog:**
+**Required content per event in the catalog (D3):**
 
 - **Event class name** (e.g. `DraftCreated`).
 - **Delivery strategy** — Sequential (contribution / gate) or Background (notification). Implied by section heading if the catalog groups them.
-- **Dispatcher failure policy** — whether handler failures throw immediately, are collected and thrown as an aggregate after all handlers run, or are logged/handled gracefully while dispatch continues.
-- **Subscriber failure classifications** — which classifications are expected or permitted for handlers of this event, especially whether business-critical subscribers are allowed or should instead use a separate Sequential gate event.
 - **One-line semantic description** — what just happened in the domain (notification) or what gate has opened (contribution).
 - **Payload signature** — the directly-accessible `ICollection<T>` (or rich context) the contribution sink exposes (per the §2.6.1 contribution sub-rule) and payload types handlers receive.
 - **Contributor interface** *(fan-in / contribution events only)* — the `I<X>Source` / `I<X>Contributor` (or `IDraftValidator`-style) interface features implement, its method signature, whether it **returns** (Source) or **receives a context and acts** (Contributor), and the note "implement + register via DI; the single `<Action>Handler` aggregates."
 - **Publication site** — which command, pipeline step, or lifecycle hook fires the event.
+
+**Optional content per event:**
+
+- **Dispatcher failure policy** — whether handler failures throw immediately, are collected and thrown as an aggregate after all handlers run, or are logged/handled gracefully while dispatch continues.
+- **Subscriber failure classifications** — which classifications are expected or permitted for handlers of this event, especially whether business-critical subscribers are allowed or should instead use a separate Sequential gate event.
 - **Expected handler audiences** — for fan-in events, the single aggregating handler plus the contributor-interface implementors; for notifications, typical subscribers (built-in feature, optional features, cross-domain consumers).
 - **Ordering guarantees** if any — e.g., "fires after the materialised snapshot is updated but before the persistence flush."
 - **Cross-references** to other domains' catalogs that consumers should be aware of.
