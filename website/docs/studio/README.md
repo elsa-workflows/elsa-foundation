@@ -6,13 +6,13 @@ Studio's client source is maintained in the [Elsa Foundation Studio repository](
 
 ## What Studio looks like
 
-![Studio designer with activity palette, Flowchart canvas and inspector panel](../assets/elsa4/elsa4-04-designer_studio-7cb2f2c2_act-4.0.4-preview.png)
+<img src="../assets/elsa4/elsa4-04-designer_studio-7cb2f2c2_act-4.0.5-preview.png" alt="Studio designer with activity palette, Flowchart canvas and inspector panel" width="800">
 
-*The workflow designer (Studio rev `7cb2f2c2`, activities `4.0.4-preview`.)*
+*The workflow designer (Studio rev `7cb2f2c2`; Write Line `4.0.5-preview`, Flowchart `4.0.3-preview`.)*
 
-![Studio run view with a completed Write Line activity and execution timeline](../assets/elsa4/elsa4-07-run-timeline_studio-7cb2f2c2_act-4.0.4-preview.png)
+<img src="../assets/elsa4/elsa4-07-run-timeline_studio-7cb2f2c2_act-4.0.5-preview.png" alt="Studio run view with a completed Write Line activity and execution timeline" width="800">
 
-*Inspecting a completed run (Studio rev `7cb2f2c2`, activities `4.0.4-preview`.)*
+*Inspecting completed run `14J7GJS3fOg` (Studio rev `7cb2f2c2`; Write Line `4.0.5-preview`, Flowchart `4.0.3-preview`.)*
 
 ---
 
