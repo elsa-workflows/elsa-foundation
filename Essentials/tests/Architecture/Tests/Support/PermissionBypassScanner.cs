@@ -20,8 +20,8 @@ internal sealed record PermissionBypassFinding(string Code, string Assembly, str
 
 /// <summary>
 /// A reviewed exception to the direct permission-claim rule: one source-level method that legitimately reads
-/// permission claims, because it is the shared evaluator itself or projects the normalized grants into a session,
-/// a token or an identity.
+/// permission claims, because it is the shared evaluator itself, strips incoming internal claims, or projects the
+/// normalized grants into a session, a token or an identity.
 /// </summary>
 internal sealed record ReviewedPermissionClaimReader(string Assembly, string Type, string Method, string Reason)
 {
@@ -82,8 +82,9 @@ internal sealed record PermissionBypassScan(
 /// input, receiver included, when the result's type can hold a permission value (a string, a string collection, a
 /// delegate, <see cref="object"/> or a generic parameter); and out of a scanned method that returns it. A delegate
 /// carries a permission value when its target method loads one, or decides on one: compares a claim's own type, value
-/// or issuer with a permission value (equality, <c>StartsWith</c>, <c>Contains</c> and the like), or calls a scanned
-/// method that returns such a decision or branches on one. A result computed from a permission value by any other call,
+/// or issuer with a permission value (equality, <c>StartsWith</c>, <c>Contains</c> and the like), passes a claim member
+/// to a scanned method that compares that parameter with one, or calls a scanned method that returns such a decision
+/// or branches on one. A result computed from a permission value by any other call,
 /// such as an <c>IPermissionAuthorizationService</c> decision, is not one.
 /// </para>
 /// <para>
@@ -103,6 +104,8 @@ internal sealed record PermissionBypassScan(
 /// </summary>
 /// <remarks>
 /// Not followed: values carried in array, collection or tuple elements; a claim taken out of the collection by a loop;
+/// a lookup or grouping built with an element selector, such as <c>ToLookup(claim =&gt; claim.Type, claim =&gt;
+/// claim.Value)</c>, whose element type is no longer a claim;
 /// a claims collection that a helper receives as a parameter rather than reading it from a principal itself; values
 /// that pass through a type that cannot hold them by the rules above, such as a <c>StringBuilder</c>, a tuple or the
 /// <c>Task</c> an async method returns; values written back through <c>ref</c> or <c>out</c> parameters; calls made
@@ -444,6 +447,7 @@ internal static class PermissionBypassScanner
         private readonly HashSet<MemberKey> _permissionLoadingMethods = [];
         private readonly Dictionary<MemberKey, Taint> _returned = [];
         private readonly Dictionary<MemberKey, ulong> _sinkParameters = [];
+        private readonly Dictionary<MemberKey, ulong> _comparedParameters = [];
         private readonly HashSet<MemberKey> _sinkFields = [];
         private readonly Dictionary<MemberKey, ImmutableHashSet<MemberKey>> _capturedFieldsRead = [];
 
@@ -496,19 +500,25 @@ internal static class PermissionBypassScanner
         /// <summary>Records that <paramref name="flow"/>'s sources, in <paramref name="method"/>, reach a claims read.</summary>
         public void Sink(MethodBase method, Flow flow)
         {
-            if (flow.Parameters != 0)
-            {
-                var key = MemberKey.Of(method);
-                var current = _sinkParameters.GetValueOrDefault(key);
-                if ((current | flow.Parameters) != current)
-                {
-                    _sinkParameters[key] = current | flow.Parameters;
-                    Changed = true;
-                }
-            }
-
+            AddParameters(_sinkParameters, method, flow.Parameters);
             foreach (var field in flow.Fields ?? [])
                 Add(_sinkFields, field);
+        }
+
+        /// <summary>The parameters of <paramref name="method"/> it compares with a permission value, directly or through a scanned method.</summary>
+        public ulong ComparedParameters(MethodBase method) => _comparedParameters.GetValueOrDefault(MemberKey.Of(method));
+
+        public void Compared(MethodBase method, Flow flow) => AddParameters(_comparedParameters, method, flow.Parameters);
+
+        private void AddParameters(Dictionary<MemberKey, ulong> map, MethodBase method, ulong parameters)
+        {
+            var key = MemberKey.Of(method);
+            var current = map.GetValueOrDefault(key);
+            if ((current | parameters) == current)
+                return;
+
+            map[key] = current | parameters;
+            Changed = true;
         }
 
         public ImmutableHashSet<MemberKey>? CapturedFieldsRead(MethodBase method) => _capturedFieldsRead.GetValueOrDefault(MemberKey.Of(method));
@@ -818,13 +828,23 @@ internal static class PermissionBypassScanner
             var own = isNewObject ? Taint.None : ResultTaint(callee);
             var result = arguments.Aggregate(new Flow(own), (all, argument) => all | argument).Into(resultType);
 
-            // A decision comes only from comparing a claim member with a permission value, or from a scanned method
-            // that returns one; an authorization result computed from a permission value is not a decision on a claim.
-            if ((own & Taint.Derived) != 0 ||
-                (ComparisonNames.Contains(callee.Name) && arguments.Any(argument => argument.HasClaimMember) && arguments.Any(argument => argument.HasPermission)))
+            // A decision comes only from comparing a claim member with a permission value, from passing a claim member to
+            // a scanned method that compares that parameter with one, or from a scanned method that returns a decision;
+            // an authorization result computed from a permission value is not a decision on a claim.
+            var comparison = ComparisonNames.Contains(callee.Name) && arguments.Any(argument => argument.HasPermission);
+            var decides = (own & Taint.Derived) != 0 || (comparison && arguments.Any(argument => argument.HasClaimMember));
+            var compared = state.ComparedParameters(callee);
+            for (var index = 0; index < count; index++)
             {
-                result |= new Flow(Taint.Derived);
+                if (comparison || (compared & (1UL << (index + (isNewObject ? 1 : 0)))) != 0)
+                {
+                    state.Compared(method, arguments[index]);
+                    decides |= !comparison && arguments[index].HasClaimMember;
+                }
             }
+
+            if (decides)
+                result |= new Flow(Taint.Derived);
 
             // Projecting claims onto their members, claims.Select(claim => claim.Value), yields values that still hold claims.
             if (arguments.Any(argument => argument.Taint.HasFlag(Taint.ClaimsCollection)) &&

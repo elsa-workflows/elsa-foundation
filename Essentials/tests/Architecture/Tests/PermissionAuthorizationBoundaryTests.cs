@@ -17,14 +17,16 @@ public sealed class PermissionAuthorizationBoundaryTests
     private const string FixtureAssembly = "Elsa.PermissionBypass.Fixture";
 
     /// <summary>
-    /// The only methods allowed to read permission claims: the shared evaluator and the projections that copy the
-    /// normalized grants into a session, a token or an identity. Each entry must still exempt a read, so the list
+    /// The only methods allowed to read permission claims: the shared evaluator, the normalizer that strips incoming
+    /// internal claims, and the projections that copy the normalized grants into a session, a token or an identity. Each entry must still exempt a read, so the list
     /// cannot outlive the code it excuses.
     /// </summary>
     internal static readonly ReviewedPermissionClaimReader[] ReviewedReaders =
     [
         new("Elsa.Foundation.Identity", "Elsa.Foundation.Identity.Authorization.ClaimsPermissionEvaluator", "EvaluateAsync",
             "The shared evaluator behind IPermissionAuthorizationService: matching granted permission claims is its job."),
+        new("Elsa.Foundation.Identity", "Elsa.Foundation.Identity.Authorization.DefaultClaimsNormalizer", "NormalizeAsync",
+            "Strips internal claims, permission claims among them, from the provider's principal so incoming grants cannot self-authorize."),
         new("Elsa.Foundation.Identity.Api", "Elsa.Foundation.Identity.Api.FoundationIdentityApi", "HandleTokenAsync",
             "Token issuance copies the normalized principal's grants into the issued token."),
         new("Elsa.Foundation.Identity.Api", "Elsa.Foundation.Identity.Api.Services.ClaimsAuthSessionService", "GetAsync",
@@ -272,6 +274,8 @@ public sealed class PermissionAuthorizationBoundaryTests
             members: "private static IEnumerable<Claim> All(ClaimsPrincipal principal) => principal.Claims;"),
         ["Predicate helper inside a lambda"] = DirectRead("return user.Claims.Any(claim => IsPermission(claim));",
             members: "private static bool IsPermission(Claim claim) => claim.Type == IdentityClaimTypes.Permission;"),
+        ["Claim member passed to a comparing helper"] = DirectRead("return user.Claims.Where(claim => IsPermissionClaimType(claim.Type)).Any();",
+            members: "private static bool IsPermissionClaimType(string type) => string.Equals(type, IdentityClaimTypes.Permission, StringComparison.Ordinal);"),
         ["Predicate helper with an alternative"] = DirectRead("return user.Claims.Any(claim => IsGrant(claim));",
             members: "private static bool IsGrant(Claim claim) => claim.Type == IdentityClaimTypes.Permission || claim.Type == \"scope\";"),
         ["String receiver"] = DirectRead("return user.HasClaim(IdentityClaimTypes.Permission.ToLowerInvariant(), \"read\");"),
