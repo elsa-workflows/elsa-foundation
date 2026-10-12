@@ -1,7 +1,7 @@
 namespace Elsa.Persistence.EntityFramework;
 
 /// <summary>
-/// Declares that a shell feature class depends on an EF module (spec 171 FR-064): the module whose
+/// Declares that a shell feature class depends on an EF module: the module whose
 /// migrations it registers with <c>AddEfModuleMigrations&lt;TContext&gt;</c>, or whose
 /// <see cref="Microsoft.EntityFrameworkCore.DbContext"/> it reads without registering one of its own. It is
 /// the only mapping from a CShells feature name to a canonical <see cref="EfModuleAttribute.Name"/>, and
@@ -17,8 +17,8 @@ namespace Elsa.Persistence.EntityFramework;
 /// so a module's feature set is never assumed to be its own project's.
 /// </para>
 /// <para>
-/// Constant-argument-only and type-free, the same discipline <see cref="EfModuleAttribute"/> keeps (ADR
-/// 0076 D2): it names the module by its canonical string, so it can be read as metadata without loading the
+/// Constant-argument-only and type-free, the same discipline <see cref="EfModuleAttribute"/> keeps:
+/// it names the module by its canonical string, so it can be read as metadata without loading the
 /// module's context type, which is what a package loader deciding whether a module may activate needs.
 /// </para>
 /// </remarks>

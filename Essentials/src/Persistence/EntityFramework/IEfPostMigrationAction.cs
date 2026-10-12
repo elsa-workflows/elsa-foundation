@@ -3,8 +3,8 @@ using Microsoft.EntityFrameworkCore;
 namespace Elsa.Persistence.EntityFramework;
 
 /// <summary>
-/// A named, audited, never-auto-run unit of work a module declares for after its migrations apply (ADR 0076
-/// D8, FR-054): the data step a schema migration cannot express, such as rewriting rows a changed projection
+/// A named, audited, never-auto-run unit of work a module declares for after its migrations apply:
+/// the data step a schema migration cannot express, such as rewriting rows a changed projection
 /// algorithm left stale.
 /// </summary>
 /// <remarks>
@@ -27,7 +27,7 @@ public interface IEfPostMigrationAction
     /// <summary>The stable identifier the manifest, the audit refusal and <c>post-migrate</c>'s report all name this action by.</summary>
     string Id { get; }
 
-    /// <summary>What kind of work this is — <c>projection-reindex</c>, say — as <c>migration-plan.json</c>'s <c>kind</c> records it (FR-048).</summary>
+    /// <summary>What kind of work this is — <c>projection-reindex</c>, say — as <c>migration-plan.json</c>'s <c>kind</c> records it.</summary>
     string Kind { get; }
 
     /// <summary>The condition that makes this action required, as the manifest's <c>requiredWhen</c> records it.</summary>

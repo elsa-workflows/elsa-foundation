@@ -5,7 +5,7 @@ using Xunit;
 namespace Elsa.Persistence.EntityFrameworkCore.Migrations.Tests;
 
 /// <summary>
-/// Spec 181, FR-002: every EF module keeps the finalization record in its own database, beside its own
+/// Every EF module keeps the finalization record in its own database, beside its own
 /// migrations-history table, created by its own migrations, whichever membership provider a host composes.
 /// </summary>
 public sealed class ModuleSchemaFinalizationTests : IDisposable

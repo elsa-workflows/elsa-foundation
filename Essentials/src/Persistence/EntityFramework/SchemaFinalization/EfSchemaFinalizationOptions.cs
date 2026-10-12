@@ -3,7 +3,7 @@ using Microsoft.Extensions.Options;
 namespace Elsa.Persistence.EntityFramework.SchemaFinalization;
 
 /// <summary>
-/// The finalization gate's timings (spec 181, FR-005, FR-010 and FR-014; Decisions, Q12), bound from
+/// The finalization gate's timings, bound from
 /// <see cref="SectionName"/> in the configuration of the container a module's migrator runs in.
 /// </summary>
 public sealed class EfSchemaFinalizationOptions
@@ -11,15 +11,15 @@ public sealed class EfSchemaFinalizationOptions
     /// <summary>The section the timings are read from: <c>Elsa:Persistence:EntityFramework:Finalization</c>.</summary>
     public const string SectionName = "Elsa:Persistence:EntityFramework:Finalization";
 
-    /// <summary>How often an active module evaluates its families when nothing else prompts it (FR-005): 30 seconds.</summary>
+    /// <summary>How often an active module evaluates its families when nothing else prompts it: 30 seconds.</summary>
     public TimeSpan EvaluationInterval { get; set; } = TimeSpan.FromSeconds(30);
 
-    /// <summary>How often an active module re-reads the finalized versions it writes (FR-010): 15 seconds.</summary>
+    /// <summary>How often an active module re-reads the finalized versions it writes: 15 seconds.</summary>
     public TimeSpan RefreshInterval { get; set; } = TimeSpan.FromSeconds(15);
 
     /// <summary>
     /// How long an activating module waits for an intent to finalize a version it cannot read to resolve, and for its
-    /// readability report to be published, before it refuses (FR-013, FR-014): 2 minutes.
+    /// readability report to be published, before it refuses: 2 minutes.
     /// </summary>
     public TimeSpan IntentWaitBound { get; set; } = TimeSpan.FromMinutes(2);
 

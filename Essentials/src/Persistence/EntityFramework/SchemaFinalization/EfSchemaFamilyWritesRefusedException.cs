@@ -2,12 +2,12 @@ namespace Elsa.Persistence.EntityFramework.SchemaFinalization;
 
 /// <summary>
 /// Every write to a schema family is refused because this host found, after its module activated, that the family's
-/// finalized version is one it cannot read (spec 181, FR-012): the host was partitioned or counted as expired while
+/// finalized version is one it cannot read: the host was partitioned or counted as expired while
 /// the version finalized, or a cluster was misconfigured. It does not keep writing at its old version, since rows at
 /// the finalized version may exist and it cannot read them.
 /// </summary>
 /// <remarks>
-/// A write refusal (spec 180, FR-016a), so it is unassignable to the types store catch filters and API fault ladders
+/// A write refusal, so it is unassignable to the types store catch filters and API fault ladders
 /// turn into corruption or a 400, and it carries the same stable code. <see cref="EfSchemaWriteRefusedException.WriteVersion"/>
 /// is the version this host last wrote, <see cref="EfSchemaWriteRefusedException.RequiredVersion"/> the finalized
 /// version it cannot read.

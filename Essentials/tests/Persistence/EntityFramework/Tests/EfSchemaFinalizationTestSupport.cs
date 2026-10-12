@@ -7,7 +7,7 @@ using Xunit;
 namespace Elsa.Persistence.EntityFramework.Tests;
 
 /// <summary>
-/// Stages what another build did to a database's finalization record (spec 181), so a test can put a family at a version
+/// Stages what another build did to a database's finalization record, so a test can put a family at a version
 /// its own build has not finalized. Each test project that stages one compiles this file in, the same way EF module test
 /// projects compile in <c>UnorderedRowLimitGuard</c>.
 /// </summary>

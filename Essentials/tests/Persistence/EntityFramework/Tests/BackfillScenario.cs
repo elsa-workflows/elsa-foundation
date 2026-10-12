@@ -14,7 +14,7 @@ using Microsoft.Extensions.Logging;
 namespace Elsa.Persistence.EntityFramework.Tests;
 
 /// <summary>
-/// The synthetic family spec 186's backfill is proven on, since every real family is still at 1.0.0: one family of
+/// The synthetic family the post-finalization backfill is proven on, since every real family is still at 1.0.0: one family of
 /// three tables at versions 1 and 2, and 3 where a test needs finalization to move past a completion. Orders gain a
 /// currency at 2, in their content and in a projection column only version 2 and later fill, and a note at 3; order
 /// lines, keyed by order and number, gain a unit at 2; receipts are content-addressed, so the backfill never rewrites
@@ -177,7 +177,7 @@ public sealed class BackfillContext(DbContextOptions<BackfillContext> options) :
 }
 
 /// <summary>
-/// The family's read and write paths as spec 180 prescribes them, and its rewriter over them (spec 186, FR-004): the
+/// The family's read and write paths, and its rewriter over them: the
 /// version check first, the projection's integrity clause for the stamped version, every content column upcast
 /// together, then a write at the host's write version that fills the projection, writes every content column and
 /// restamps the row, by compare-and-set on its revision.

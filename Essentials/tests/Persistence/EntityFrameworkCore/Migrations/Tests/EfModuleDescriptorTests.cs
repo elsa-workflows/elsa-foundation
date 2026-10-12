@@ -23,8 +23,8 @@ using Xunit;
 namespace Elsa.Persistence.EntityFrameworkCore.Migrations.Tests;
 
 /// <summary>
-/// Guards the single <c>[EfModule]</c> declaration every module assembly now carries (ADR 0076 D2, spec
-/// 171 slice 1). <see cref="EfModuleCatalog.Discover"/> must find all 15 first-party modules with the
+/// Guards the single <c>[EfModule]</c> declaration every module assembly now carries.
+/// <see cref="EfModuleCatalog.Discover"/> must find all 15 first-party modules with the
 /// names, base contexts and frozen history names the vocabulary table pins, and a descriptor's
 /// <c>HistoryModule</c> must never drift from the module's own frozen
 /// <c>&lt;Module&gt;EfModule.HistoryModuleName</c> constant — the exact mismatch already latent between
@@ -114,7 +114,7 @@ public sealed class EfModuleDescriptorTests
             .ToArray();
 
     /// <summary>
-    /// Spec 171 slice 11 (#1881, ADR 0076 D2): each module assembly also carries one
+    /// Since #1881, each module assembly also carries one
     /// <c>[ManifestExtension("efModules", "&lt;Name&gt;")]</c> per <c>[EfModule]</c> declaration, so the pack-time
     /// generator mirrors the descriptor's name(s) into <c>elsa-package.json</c>'s <c>extensions.efModules</c>. The
     /// name is written twice — once on each attribute — so this test, not a third shared constant, is what keeps
@@ -153,7 +153,7 @@ public sealed class EfModuleDescriptorTests
             .Select(attribute => (string)attribute.ConstructorArguments[1].Value!)
             .ToHashSet(StringComparer.Ordinal);
 
-    // One project directory per module assembly (ADR 0076 D2: thirteen module projects carry fifteen
+    // One project directory per module assembly (thirteen module projects carry fifteen
     // [EfModule] declarations; Identity and Workflows.Runtime.Distributed each carry two in one project).
     // Repo-relative, not derived from the assembly's bin/obj output path, for the same reason
     // SecretsEfPersistencePilotArchitectureTests reads project files from the repo rather than from disk
@@ -176,7 +176,7 @@ public sealed class EfModuleDescriptorTests
     ];
 
     /// <summary>
-    /// Spec 172 D1, D2 (#1938, child of #1936): every EF module package declares capability <c>ef-provider</c> in a
+    /// Since #1938 (child of #1936), every EF module package declares capability <c>ef-provider</c> in a
     /// package-root <c>nuplane.json</c> (schema 2), one option per non-null <c>[EfModule]</c> provider property, so
     /// a package-hosted host can select its engine instead of naming it by hand in the closure. This guard reads
     /// the truth from the three places it already lives — <c>[EfModule]</c> (via <see cref="Discover"/>),

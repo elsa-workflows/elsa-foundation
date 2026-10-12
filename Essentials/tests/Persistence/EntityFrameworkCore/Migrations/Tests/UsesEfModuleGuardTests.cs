@@ -12,7 +12,7 @@ using Xunit;
 namespace Elsa.Persistence.EntityFrameworkCore.Migrations.Tests;
 
 /// <summary>
-/// Spec 171 FR-066: the research.md inventory must not be able to grow a feature that depends on an EF
+/// The feature inventory must not be able to grow a feature that depends on an EF
 /// module without saying so. Every feature that registers a module's migrations, or that reads a module's
 /// context the way <see cref="WorkflowsDashboardEntityFrameworkCoreFeature"/> does, carries a matching
 /// <see cref="UsesEfModuleAttribute"/> — and the guard is proved to fire by fixtures that break the rule in
@@ -33,9 +33,9 @@ public sealed class UsesEfModuleGuardTests
     ];
 
     /// <summary>
-    /// research.md's inventory, pinned: every feature the provider-agreement check and the activation guard
+    /// The feature inventory, pinned: every feature the provider-agreement check and the activation guard
     /// must recognise, the module(s) it maps to, and whether it declares a <c>Provider</c> setting of its
-    /// own — the distinction FR-036 and FR-037 turn on. The dashboard feature is the one row with no
+    /// own — the distinction the agreement rules turn on. The dashboard feature is the one row with no
     /// <c>Provider</c>; it is skipped by the comparison rather than defaulted to Sqlite.
     /// </summary>
     private static readonly (string Feature, string[] Modules, bool DeclaresProvider)[] Inventory =
@@ -94,7 +94,7 @@ public sealed class UsesEfModuleGuardTests
 
     /// <summary>
     /// Eight features, one module, each with its own <c>Provider</c>: the exact shape a per-module check
-    /// would collapse into one answer and so let one feature mask another (FR-036, ADR 0076 D4).
+    /// would collapse into one answer and so let one feature mask another.
     /// </summary>
     [Fact]
     public void Workflows_runtime_is_backed_by_eight_separately_configured_features()

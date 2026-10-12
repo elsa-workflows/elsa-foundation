@@ -3,9 +3,9 @@ using System.Text.Json.Serialization;
 namespace Elsa.Persistence.Schema.SchemaFinalization;
 
 /// <summary>
-/// One schema family's finalization record in one database (spec 181, FR-001): the opaque database identity, the
+/// One schema family's finalization record in one database: the opaque database identity, the
 /// finalized version, at most one intent in flight, the active holds and the append-only history of transitions, and
-/// the finish record spec 186 keeps inside it with its own append-only history.
+/// the finish record the post-finalization backfill keeps inside it with its own append-only history.
 /// </summary>
 /// <param name="Revision">
 /// Raised by one on every change. Every write names the revision it read, and is refused as a conflict if the record
@@ -23,7 +23,7 @@ public sealed record SchemaFinalizationRecord(
     IReadOnlyList<SchemaFinishHistoryEntry> FinishHistory)
 {
     /// <summary>
-    /// The state of <paramref name="version"/> (spec 181, FR-004): finalized when it is at or before the finalized
+    /// The state of <paramref name="version"/>: finalized when it is at or before the finalized
     /// version along <paramref name="chain"/>; readable everywhere when an intent to finalize it, or a later version, is
     /// in flight and no hold applies to it; pending otherwise.
     /// </summary>
@@ -48,22 +48,22 @@ public sealed record SchemaFinalizationRecord(
     public bool IsHeld(string version, IReadOnlyList<string> chain) => Holds.Any(hold => hold.AppliesTo(version, chain));
 
     /// <summary>
-    /// The finish history entry that withdrew the family's completion, while no completion has been recorded since (spec
-    /// 186, FR-018): what stands in the completion's place, which every host reports, and which holds the backfill run's
+    /// The finish history entry that withdrew the family's completion, while no completion has been recorded since:
+    /// what stands in the completion's place, which every host reports, and which holds the backfill run's
     /// claim meanwhile.
     /// </summary>
     public SchemaFinishHistoryEntry? StandingWithdrawal =>
         Finish is null && FinishHistory.Count > 0 && FinishHistory[^1] is { Transition: SchemaFinishTransition.Withdrawn } withdrawn ? withdrawn : null;
 
     /// <summary>
-    /// The claim on the family's backfill run (spec 186, FR-008), wherever it is held: on the completion that stands, or,
+    /// The claim on the family's backfill run, wherever it is held: on the completion that stands, or,
     /// while none stands, on the withdrawal that ended the last one. Null when no worker has claimed the run.
     /// </summary>
     public SchemaBackfillClaim? BackfillRun => Finish is { } finish ? finish.Run : StandingWithdrawal?.Run;
 
     /// <summary>
     /// The live claim of a worker other than <paramref name="worker"/> at <paramref name="at"/>, or null when none keeps it
-    /// off the family (spec 186, FR-008): the one rule every claim, withdrawal and completion is held to. A worker with no
+    /// off the family: the one rule every claim, withdrawal and completion is held to. A worker with no
     /// claim, <paramref name="worker"/> null, is kept off by any live claim and by nothing else, so a worker that runs
     /// unclaimed still acts while no claim holds.
     /// </summary>
@@ -86,7 +86,7 @@ public sealed record SchemaFinalizationRecord(
     }
 }
 
-/// <summary>The state of one version above a family's finalized version (spec 181, FR-004). A hold keeps a version pending.</summary>
+/// <summary>The state of one version above a family's finalized version. A hold keeps a version pending.</summary>
 public enum SchemaFinalizationState
 {
     /// <summary>Some counted member cannot read it, or a hold applies.</summary>
@@ -142,10 +142,10 @@ public sealed record SchemaFinalizationActor
     public override string ToString() => Member?.ToString() ?? $"operator {Operator}";
 }
 
-/// <summary>A durable "about to finalize <paramref name="Version"/>", written before the confirming membership read (spec 181, FR-006).</summary>
+/// <summary>A durable "about to finalize <paramref name="Version"/>", written before the confirming membership read.</summary>
 public sealed record SchemaFinalizationIntent(string Version, SchemaFinalizationMember Member, DateTimeOffset At);
 
-/// <summary>An operator's durable instruction that a family must not finalize, or, with a version, must not finalize it (spec 181, FR-019).</summary>
+/// <summary>An operator's durable instruction that a family must not finalize, or, with a version, must not finalize it.</summary>
 public sealed record SchemaFinalizationHold(string? Version, string Reason, string PlacedBy, DateTimeOffset PlacedAt)
 {
     /// <summary>
@@ -183,13 +183,12 @@ public sealed record SchemaFinalizationHistoryEntry(
     string? Reason = null);
 
 /// <summary>
-/// Spec 186's completeness proof, inside the finalization record: no row of the family below
+/// The backfill's completeness proof, inside the finalization record: no row of the family below
 /// <paramref name="CompletionVersion"/> remains in the database. The verification instants are null for the completion
-/// recorded when the record was created, which no verification pass proved because no older row can exist (spec 186,
-/// FR-016).
+/// recorded when the record was created, which no verification pass proved because no older row can exist.
 /// </summary>
 /// <param name="Run">
-/// The claim on the family's backfill run while this completion stands, if a worker holds one (spec 186, FR-008): a run
+/// The claim on the family's backfill run while this completion stands, if a worker holds one: a run
 /// upgrading the family past <paramref name="CompletionVersion"/>, or an audit of it. It only spares duplicate work:
 /// nothing correct depends on it, so it is absent from the JSON of a record no run has claimed, a build that does not
 /// know it reads the record unchanged, a completion drops it, and a withdrawal moves a claim that still holds onto the
@@ -204,7 +203,7 @@ public sealed record SchemaFinishRecord(
     SchemaBackfillClaim? Run = null);
 
 /// <summary>
-/// A backfill worker's claim on a family's run in one database (spec 186, FR-008): the member and the worker that holds
+/// A backfill worker's claim on a family's run in one database: the member and the worker that holds
 /// it, the claimant host's write version, which its run upgrades to and which is the standing completion's when the
 /// claim covers only an audit of it, and until when it holds it. It
 /// covers every pass that reads the family's rows: the survey, the upgrade pass, the settle condition, the verification
@@ -233,18 +232,18 @@ public enum SchemaFinishTransition
 }
 
 /// <summary>
-/// One entry in a record's finish history (spec 186, FR-014 and FR-018). The history is append-only: no entry is
+/// One entry in a record's finish history. The history is append-only: no entry is
 /// removed, reordered or has its transition, version, actor, instant or reason changed.
 /// </summary>
 /// <remarks>
 /// Adding <paramref name="Run"/> changed the primary constructor from five parameters to six. Source that calls it with
 /// five still compiles, but an assembly compiled against the five-parameter constructor fails with a missing method when
-/// it runs against this one. That is an accepted break before 1.0 (spec 186, 2026-10-01 note): nothing outside the
+/// it runs against this one. That is an accepted break before 1.0: nothing outside the
 /// finalization store constructs an entry, and this package has no public API tracking.
 /// </remarks>
 /// <param name="Run">
 /// On the newest entry alone, while it is a withdrawal no completion has followed: the claim on the family's backfill
-/// run (spec 186, FR-008), which a withdrawn completion leaves no finish record to hold. It is advisory, as the finish
+/// run, which a withdrawn completion leaves no finish record to hold. It is advisory, as the finish
 /// record's own claim is: absent from the JSON of an entry no run has claimed, read past by a build that does not know
 /// it and dropped when that build next rewrites the record, and cleared when a completion is recorded.
 /// </param>
@@ -264,7 +263,7 @@ public sealed record SchemaFinishHistoryEntry(
 public sealed record SchemaFinalizationWrite(bool Applied, SchemaFinalizationRecord Record);
 
 /// <summary>
-/// Positions of opaque version labels along a family's chain, which alone orders them (spec 180, FR-004). Public because
+/// Positions of opaque version labels along a family's chain, which alone orders them. Public because
 /// the finalization record's rules and the EF stores that enforce them live in different assemblies (issue 2143).
 /// </summary>
 public static class SchemaVersionChain

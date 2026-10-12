@@ -3,8 +3,8 @@ using Elsa.Persistence.Schema;
 namespace Elsa.Persistence.EntityFramework;
 
 /// <summary>
-/// Declares a document column of one of a schema family's tables as an <em>integrity</em> column rather than content
-/// (spec 180, FR-008): a projection or integrity datum that is compared as the bytes it was stored with, never upcast
+/// Declares a document column of one of a schema family's tables as an <em>integrity</em> column rather than content:
+/// a projection or integrity datum that is compared as the bytes it was stored with, never upcast
 /// and never deserialized into a current type, so a read that uses it needs no chain and a write that derives it needs
 /// no stamp of its own beyond the row's.
 /// </summary>

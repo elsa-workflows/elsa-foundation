@@ -8,8 +8,8 @@ using Elsa.Persistence.Schema.SchemaFinalization;
 namespace Elsa.Persistence.EntityFramework.SchemaFinalization;
 
 /// <summary>
-/// Holds every write of an EF module's context to the write version its finalization gate keeps (spec 181, FR-009 and
-/// FR-012; spec 180, FR-013, FR-015 and FR-016). Every module context carries the one <see cref="Instance"/>, added by
+/// Holds every write of an EF module's context to the write version its finalization gate keeps.
+/// Every module context carries the one <see cref="Instance"/>, added by
 /// <see cref="EfModuleBinding.Apply"/>, so no store can save a row without passing it.
 /// </summary>
 /// <remarks>
@@ -18,11 +18,11 @@ namespace Elsa.Persistence.EntityFramework.SchemaFinalization;
 /// table belongs to (<see cref="EfSchemaModuleFamilies.FamilyOf"/>):
 /// </para>
 /// <list type="bullet">
-/// <item>A family whose writes the gate refuses (FR-012) refuses the save, deletes included.</item>
+/// <item>A family whose writes the gate refuses refuses the save, deletes included.</item>
 /// <item>A row read at a version later than the write version makes the gate re-read the record first, on the saving
-/// context, and the save is refused if the record does not confirm that version (spec 180, FR-015).</item>
+/// context, and the save is refused if the record does not confirm that version.</item>
 /// <item>An inserted or updated row must carry exactly the write version. A later one is a version that is not
-/// finalized, and is refused with the write refusal naming it (spec 180, FR-013 and FR-016), never restamped: the row's
+/// finalized, and is refused with the write refusal naming it, never restamped: the row's
 /// content is in the format the store wrote, and only the store can write an older one.</item>
 /// </list>
 /// <para>
@@ -90,7 +90,7 @@ public sealed class EfSchemaWriteGateInterceptor : SaveChangesInterceptor
             return;
 
         // One write version per family for the whole save, so every row of a family this save writes carries the same
-        // stamp (spec 180, FR-017).
+        // stamp.
         var versions = new Dictionary<string, EfSchemaFamilyWriteState>(StringComparer.Ordinal);
         foreach (var entry in writes)
         {
@@ -109,7 +109,7 @@ public sealed class EfSchemaWriteGateInterceptor : SaveChangesInterceptor
             var stamp = entry.Property(EfSchemaVersion.ColumnName);
             if (entry.State is EntityState.Modified && stamp.OriginalValue is string stored && Later(chain, stored, state.WriteVersion))
             {
-                // Spec 180, FR-015: a row at a later version exists only once that version is finalized, so the record
+                // A row at a later version exists only once that version is finalized, so the record
                 // is read again before the row is written, and the save is refused if it does not confirm it.
                 state = versions[chain.Family] = await gate.ConfirmAsync(context, chain, synchronous, cancellationToken);
                 if (state.WritesRefused)

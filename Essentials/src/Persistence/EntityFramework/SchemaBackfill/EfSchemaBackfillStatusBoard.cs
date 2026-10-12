@@ -5,7 +5,7 @@ using Microsoft.Extensions.Logging;
 namespace Elsa.Persistence.EntityFramework.SchemaBackfill;
 
 /// <summary>
-/// Each family's backfill status as this worker last saw it (spec 186, FR-021), and the one place a blocker is logged:
+/// Each family's backfill status as this worker last saw it, and the one place a blocker is logged:
 /// when it first appears or changes, since every round meets a persistent blocker again. The module's gate reads it
 /// through <see cref="IEfSchemaBackfillStatusSource"/>.
 /// </summary>

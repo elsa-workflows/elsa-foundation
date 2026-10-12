@@ -9,16 +9,16 @@ namespace Elsa.Persistence.EntityFramework;
 /// <remarks>
 /// Every EF store checks a row's integrity before trusting it: identity hashes, order keys, revision, and the family's
 /// schema version. Those checks were fused into one compound condition, so a row written by a build this host does not
-/// run was reported as corrupt. ADR 0077 separates them, because they are different events with different operator
+/// run was reported as corrupt. They are now separate, because they are different events with different operator
 /// responses.
 /// <para>
-/// A call site checks the version <em>before</em> anything else reads the row (spec 180, FR-006): the schema version
+/// A call site checks the version <em>before</em> anything else reads the row: the schema version
 /// answers "can this build read this row at all", which has to be settled before "is this row internally consistent"
 /// means anything, since a row from a version whose shape differs may legitimately fail an integrity check that only
 /// describes the shape this build writes. Every call site evaluates its <see cref="Readable"/>,
 /// <see cref="NotReadable"/> or <see cref="EnsureReadable"/> term first, and an architecture guard fails the build when
 /// one does not. No call site states the versions it accepts: they come from the family's declaration, so the set a
-/// read accepts is the set the host reports (spec 183, FR-020).
+/// read accepts is the set the host reports.
 /// </para>
 /// </remarks>
 public static class EfSchemaVersion

@@ -3,15 +3,15 @@ using Elsa.Persistence.Schema;
 namespace Elsa.Persistence.EntityFramework.SchemaFinalization;
 
 /// <summary>
-/// The finalization gate's refusal to activate an EF module (spec 181, FR-014, FR-015 and FR-017): a family of the
+/// The finalization gate's refusal to activate an EF module: a family of the
 /// module has a finalized version, a completion version or an unresolved intent this host cannot read, or has no record
-/// yet in a schema a contracting migration left at a version this host cannot place (spec 185, FR-023), so activating
+/// yet in a schema a contracting migration left at a version this host cannot place, so activating
 /// the module could misread or rewrite rows. Thrown where a pending migration under <c>Validate</c> is, so the shell
 /// does not activate and nothing touches the module's tables.
 /// </summary>
 /// <remarks>
 /// It names the module, the family, the version and the versions this host reads, and gives the remedy. It never
-/// carries a connection string or any other restored secret (spec 171, FR-061): none of its parts is taken from
+/// carries a connection string or any other restored secret: none of its parts is taken from
 /// configuration.
 /// </remarks>
 public sealed class EfSchemaActivationRefusedException : InvalidOperationException, IEfModuleRefusal
@@ -94,21 +94,21 @@ public sealed class EfSchemaActivationRefusedException : InvalidOperationExcepti
 /// <summary>Why the gate refused to activate an EF module.</summary>
 public enum EfSchemaActivationRefusal
 {
-    /// <summary>A family's finalized version is outside this host's readable set (FR-015).</summary>
+    /// <summary>A family's finalized version is outside this host's readable set.</summary>
     FinalizedUnreadable,
 
-    /// <summary>A family's completion version is outside this host's readable set (FR-015, amended; spec 186, FR-020).</summary>
+    /// <summary>A family's completion version is outside this host's readable set.</summary>
     CompletionUnreadable,
 
-    /// <summary>An intent to finalize a version this host cannot read did not resolve within the bound (FR-014).</summary>
+    /// <summary>An intent to finalize a version this host cannot read did not resolve within the bound.</summary>
     IntentUnresolved,
 
-    /// <summary>This host's readability report could not be published before the record was read (FR-013).</summary>
+    /// <summary>This host's readability report could not be published before the record was read.</summary>
     ReportNotPublished,
 
     /// <summary>
     /// A family has no record yet, and a contracting migration already applied names a version outside this host's
-    /// readable set, or none, so the version its record would start at cannot be placed (spec 185, FR-023).
+    /// readable set, or none, so the version its record would start at cannot be placed.
     /// </summary>
     ContractedUnreadable
 }

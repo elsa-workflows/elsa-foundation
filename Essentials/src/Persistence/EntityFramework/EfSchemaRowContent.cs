@@ -2,7 +2,7 @@ namespace Elsa.Persistence.EntityFramework;
 
 /// <summary>
 /// One stored row's content, as <see cref="EfSchemaChain"/> upcasts it and <see cref="IEfSchemaUpcaster.Upcast"/>
-/// receives it (spec 180, FR-009; #2144): the row's table, and the decoded value of every content column the family
+/// receives it (#2144): the row's table, and the decoded value of every content column the family
 /// declares for that table, by property name.
 /// </summary>
 /// <remarks>
@@ -14,7 +14,7 @@ namespace Elsa.Persistence.EntityFramework;
 /// </para>
 /// <para>
 /// Immutable. <see cref="Columns"/> enumerates in ordinal order of the column names, whatever order the row was built
-/// in, so an upcaster that walks it is as deterministic as one that names its columns (FR-019).
+/// in, so an upcaster that walks it is as deterministic as one that names its columns.
 /// </para>
 /// </remarks>
 public sealed class EfSchemaRowContent

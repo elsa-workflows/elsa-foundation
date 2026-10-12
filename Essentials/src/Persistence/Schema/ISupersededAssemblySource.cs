@@ -4,8 +4,8 @@ using System.Runtime.Loader;
 namespace Elsa.Persistence.Schema;
 
 /// <summary>
-/// The assemblies loaded in this process that an earlier generation of a package left behind (spec 183, FR-021, amended
-/// 2026-09-29). A load context a package runtime cannot unload keeps an old generation's assemblies in
+/// The assemblies loaded in this process that an earlier generation of a package left behind.
+/// A load context a package runtime cannot unload keeps an old generation's assemblies in
 /// <see cref="AssemblyLoadContext.All"/> for the life of the process, so a reader of every loaded declaration would keep
 /// reading them after the host moved on: its readability report would never credit a version only the new generation
 /// reads, and the EF module catalog would see one module declared twice.

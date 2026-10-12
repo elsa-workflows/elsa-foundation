@@ -1,11 +1,11 @@
 namespace Elsa.Persistence.EntityFramework.SchemaBackfill;
 
 /// <summary>
-/// A schema family's rewriter (spec 186, FR-004): it reads one row through the family's read path, so the version check,
-/// the integrity clauses for the stamped version and the chain all apply (spec 180, FR-006 to FR-012), and writes it back
+/// A schema family's rewriter: it reads one row through the family's read path, so the version check,
+/// the integrity clauses for the stamped version and the chain all apply, and writes it back
 /// through the family's write path, so projections a newer version introduced are computed, the stamp is the host's
-/// write version, every declared content column is written, and the write is a compare-and-set on the row's revision
-/// (spec 180, FR-013 to FR-018). It lives in the family's own EF module assembly, beside its store code, and the family's
+/// write version, every declared content column is written, and the write is a compare-and-set on the row's revision.
+/// It lives in the family's own EF module assembly, beside its store code, and the family's
 /// <see cref="EfSchemaFamilyAttribute.Rewriter"/> names it.
 /// </summary>
 /// <remarks>
@@ -13,17 +13,17 @@ namespace Elsa.Persistence.EntityFramework.SchemaBackfill;
 /// The post-finalization backfill constructs it in a fresh service scope of the shell for every row, so unlike an
 /// upcaster it may take injected services: the stores, serializers and payload codec the family's own write path uses.
 /// A generic row copier would bypass the projections and integrity clauses a new version introduces, which are exactly
-/// what a feature querying the new data reads (spec 186, Decisions).
+/// what a feature querying the new data reads.
 /// </para>
 /// <para>
 /// A row is rewritten whole or not at all: one save writes every content column and the stamp together. A read that
 /// meets a stamp outside the readable set throws <see cref="EfSchemaVersionSkewException"/>, and one whose upcaster
-/// fails throws <see cref="InvalidDataException"/>; the backfill reports both and never skips them silently (FR-006). A
+/// fails throws <see cref="InvalidDataException"/>; the backfill reports both and never skips them silently. A
 /// lost compare-and-set is <see cref="EfSchemaRewriteOutcome.Conflict"/>, or the save's own concurrency exception, and
-/// the backfill asks again, so the rewriter reads the row afresh and decides again (FR-007).
+/// the backfill asks again, so the rewriter reads the row afresh and decides again.
 /// </para>
 /// <para>
-/// It never rewrites a content-addressed row: the backfill never asks it to (FR-010a).
+/// It never rewrites a content-addressed row: the backfill never asks it to.
 /// </para>
 /// </remarks>
 public interface IEfSchemaRowRewriter
@@ -41,8 +41,7 @@ public interface IEfSchemaRowRewriter
 /// </param>
 /// <param name="TargetVersion">
 /// The version the row must reach: one read at it or after it is left alone (<see cref="EfSchemaRewriteOutcome.AlreadyCurrent"/>).
-/// A row the rewriter does write carries the host's write version at the moment of the write, which is never before it
-/// (spec 186, FR-003).
+/// A row the rewriter does write carries the host's write version at the moment of the write, which is never before it.
 /// </param>
 public sealed record EfSchemaRowToRewrite(Type Entity, IReadOnlyList<object?> Key, string? Stamp, string TargetVersion);
 

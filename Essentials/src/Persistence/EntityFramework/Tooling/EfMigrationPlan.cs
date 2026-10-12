@@ -68,7 +68,7 @@ public static class EfToolingLineEndings
 }
 
 /// <summary>
-/// Defense in depth against the one value this build must never surface (D7): whatever an underlying
+/// Defense in depth against the one value this build must never surface: whatever an underlying
 /// exception's message says — a driver's own error can legitimately echo part of a connection string —
 /// every occurrence of <paramref name="connection"/> itself is replaced before the text reaches a refusal,
 /// a response, or anywhere else an operator or a log could read it. The exact-match replacement alone only
@@ -99,7 +99,7 @@ public static class EfToolingRedaction
 
 /// <summary>
 /// The deterministic artifact <c>script</c> writes: flat <c>NN-&lt;slug&gt;.sql</c> files plus one
-/// <c>migration-plan.json</c> (D6, FR-040, FR-047–FR-049). Determinism is the deliverable here, not a
+/// <c>migration-plan.json</c>. Determinism is the deliverable here, not a
 /// nicety — LF endings, UTF-8 without a byte-order mark, a fixed JSON key order, and no timestamp,
 /// absolute path, tool version or connection string anywhere — so every byte an operator commits is
 /// produced through this one type.
@@ -119,7 +119,7 @@ internal static class EfMigrationPlan
 
     public static string Sha256(byte[] content) => Convert.ToHexStringLower(SHA256.HashData(content));
 
-    /// <summary>Renders the manifest in the fixed key order FR-047 and FR-048 name, in the same encoding as the SQL beside it.</summary>
+    /// <summary>Renders the manifest in its fixed key order, in the same encoding as the SQL beside it.</summary>
     public static byte[] Render(EfMigrationPlanFacts facts, IReadOnlyList<EfModuleArtifact> modules)
     {
         var buffer = new ArrayBufferWriter<byte>();
@@ -187,7 +187,7 @@ internal static class EfMigrationPlan
 
     /// <summary>
     /// Writes the artifact, once every file exists in memory. Whether a stale <c>.sql</c> file already sits
-    /// in the output directory is <c>script-check</c>'s call to make (FR-045), not this command's: nothing
+    /// in the output directory is <c>script-check</c>'s call to make, not this command's: nothing
     /// already in the directory is ever deleted or refused here.
     /// </summary>
     public static void Write(string output, IReadOnlyList<EfModuleArtifact> modules, byte[] manifest)
@@ -213,7 +213,7 @@ internal static class EfMigrationPlan
     /// <see cref="File.WriteAllBytes(string,byte[])"/>, where it would either escape <paramref name="name"/>'s
     /// intended output directory or fail deep inside the write with an opaque <c>internal-error</c>. First-party
     /// module names can never trigger this — <see cref="ScriptFileName"/> always prefixes an ordinal and
-    /// <see cref="Slug"/> maps every <c>.</c> to <c>-</c> — but spec 171 User Story 6 admits third-party
+    /// <see cref="Slug"/> maps every <c>.</c> to <c>-</c> — but the tool admits third-party
     /// modules, and nothing stops a third-party <c>[EfModule]</c> name from containing a directory separator.
     /// </summary>
     private static void ValidateBareFileName(string module, string name)
@@ -253,7 +253,7 @@ internal static class EfMigrationPlan
         foreach (var dependency in entry.DependsOn)
             writer.WriteStringValue(dependency);
         writer.WriteEndArray();
-        // FR-048's {id, kind, requiredWhen, audit, run}. An empty array here means the module genuinely
+        // Each action's {id, kind, requiredWhen, audit, run}. An empty array here means the module genuinely
         // declares nothing — a module that declares an action this build cannot describe is refused before
         // generation rather than recorded as having nothing left to run.
         writer.WriteStartArray("postMigration");

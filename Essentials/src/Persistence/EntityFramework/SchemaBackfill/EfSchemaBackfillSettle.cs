@@ -4,9 +4,9 @@ using Microsoft.Extensions.Logging;
 namespace Elsa.Persistence.EntityFramework.SchemaBackfill;
 
 /// <summary>
-/// The settle condition (spec 186, FR-012): every counted member reports observing the target or later, and the settle
+/// The settle condition: every counted member reports observing the target or later, and the settle
 /// margin has passed since this worker first saw that hold, which is no earlier than when the last of them began to report
-/// it. A withdrawal starts the margin again on every worker, whichever of them withdrew (FR-012, FR-018): a worker notes
+/// it. A withdrawal starts the margin again on every worker, whichever of them withdrew: a worker notes
 /// where the family's finish history stood when its margin began, and a withdrawal entry past that position restarts it.
 /// The check is by position in the history, not by time, since two hosts' clocks cannot order a withdrawal against a
 /// margin.
@@ -110,7 +110,7 @@ internal sealed class EfSchemaBackfillSettle(
     /// <summary>
     /// The margin the condition waits: the configured one, never less than the fleet's own (<see cref="IEfSchemaFleet.SettleMargin"/>).
     /// The floor bounds writes begun before the writer observed the finalized version, which can still be in flight when
-    /// the member reports observing it (spec 186, FR-012, "The settle margin has a floor"). It is not about a member's
+    /// the member reports observing it. It is not about a member's
     /// shell drain: a shell's module is deactivated only after the drain has ended, and the margin starts only once the
     /// report shows the member inactive. The setting can lengthen the margin; a shorter one is raised to the fleet's and
     /// said once, not refused, so a host does not fail to start over a timing.

@@ -33,7 +33,7 @@ public sealed record EfModuleDescriptor(
 
     /// <summary>
     /// The provider-derived context <paramref name="provider"/> selects. A <c>null</c> provider property on the
-    /// descriptor means that provider is unsupported for this module (FR-016), so this throws a clear
+    /// descriptor means that provider is unsupported for this module, so this throws a clear
     /// <see cref="NotSupportedException"/> naming the module and the provider rather than handing back <c>null</c>.
     /// </summary>
     public Type RequireProviderContext(string provider) =>

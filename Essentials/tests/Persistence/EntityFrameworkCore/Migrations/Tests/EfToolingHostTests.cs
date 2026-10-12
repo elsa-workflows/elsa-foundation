@@ -27,7 +27,7 @@ namespace Elsa.Persistence.EntityFrameworkCore.Migrations.Tests;
 
 /// <summary>
 /// The frozen <see cref="EfToolingHost"/> contract, exercised the way the CLI worker will: versioned JSON
-/// in, versioned JSON out, and an artifact on disk. Determinism is the deliverable (spec 171 FR-043), so
+/// in, versioned JSON out, and an artifact on disk. Determinism is the deliverable, so
 /// the artifact assertions compare bytes rather than parsed structures.
 /// </summary>
 public sealed class EfToolingHostTests : IDisposable
@@ -379,7 +379,7 @@ public sealed class EfToolingHostTests : IDisposable
             Assert.DoesNotContain(DateTime.UtcNow.ToString("yyyy-MM-dd"), text, StringComparison.Ordinal);
             // The placeholder connection the contexts were configured with never reaches the artifact.
             Assert.DoesNotContain("elsa_design_time", text, StringComparison.Ordinal);
-            // Nor does the tool's own build stamp (FR-043); the versions in the manifest are EF's and the caller's. The stamp is
+            // Nor does the tool's own build stamp; the versions in the manifest are EF's and the caller's. The stamp is
             // the "+<source revision>" the build appends to the informational version. Without one the version is a bare
             // "1.0.0", which is no stamp: a migration's DEFAULT '1.0.0' legitimately carries the same text.
             // A build that embeds no source revision has no build-specific stamp to leak, so there is nothing to assert.
@@ -389,7 +389,7 @@ public sealed class EfToolingHostTests : IDisposable
     }
 
     /// <summary>
-    /// The normalizer that makes Windows output byte-identical to Linux output (spec 171 FR-043):
+    /// The normalizer that makes Windows output byte-identical to Linux output:
     /// <c>EfToolingLineEndings.Utf8Lf</c> must fold both CRLF and a lone CR down to LF, add exactly one
     /// trailing newline, and leave the line structure otherwise untouched. This is the direct, non-vacuous
     /// counterpart to <see cref="Script_output_carries_no_cr_no_bom_no_absolute_path_and_no_timestamp"/>,
@@ -536,7 +536,7 @@ public sealed class EfToolingHostTests : IDisposable
         Assert.Equal("__EFMigrationsHistory_ElsaSecrets", module.GetProperty("historyTable").GetString());
         Assert.Equal("0", module.GetProperty("migrations").GetProperty("from").GetString());
         Assert.Empty(module.GetProperty("dependsOn").EnumerateArray());
-        // FR-048: the declared action, not the empty array a build that could not describe one had to refuse.
+        // The declared action, not the empty array a build that could not describe one had to refuse.
         var action = Assert.Single(module.GetProperty("postMigration").EnumerateArray());
         Assert.Equal(["id", "kind", "requiredWhen", "audit", "run"], Keys(action));
         Assert.Equal("SecretsProjectionReindex", action.GetProperty("id").GetString());
@@ -657,7 +657,7 @@ public sealed class EfToolingHostTests : IDisposable
 
     /// <summary>
     /// <c>connection</c> (#1876) is a real field now, but only <c>apply</c>, <c>validate</c> and
-    /// <c>post-migrate</c> open a database (D7); <c>list</c>, <c>plan</c> and <c>script</c> refuse it rather
+    /// <c>post-migrate</c> open a database; <c>list</c>, <c>plan</c> and <c>script</c> refuse it rather
     /// than silently ignoring it, and the refusal names the field, never the value.
     /// </summary>
     [Fact]
@@ -704,7 +704,7 @@ public sealed class EfToolingHostTests : IDisposable
     }
 
     /// <summary>
-    /// <c>validate</c> fails closed (exit 1) on a pending migration and applies nothing (FR-052) — proved
+    /// <c>validate</c> fails closed (exit 1) on a pending migration and applies nothing — proved
     /// here by reading the database back, not merely by the exit code: no table exists at all, because
     /// <see cref="EfMigratePolicy.Validate"/> never calls <c>MigrateAsync</c>.
     /// </summary>
@@ -747,7 +747,7 @@ public sealed class EfToolingHostTests : IDisposable
     }
 
     /// <summary>
-    /// D7's promise extends past the process boundary: the connection string must not appear in a
+    /// The connection-string promise extends past the process boundary: the connection string must not appear in a
     /// refusal's message, even when the underlying failure is a real database one. A sentinel embedded in
     /// a connection string an unreachable path forces proves it, rather than trusting that no driver ever
     /// echoes one back.
@@ -848,7 +848,7 @@ public sealed class EfToolingHostTests : IDisposable
 
     /// <summary>
     /// Nothing already in the output directory is ever deleted, even a leftover this selection does not
-    /// produce: whether that leftover is stale is <c>script-check</c>'s call to make (FR-045), not
+    /// produce: whether that leftover is stale is <c>script-check</c>'s call to make, not
     /// <c>script</c>'s.
     /// </summary>
     [Fact]
@@ -995,7 +995,7 @@ public sealed class EfToolingHostTests : IDisposable
     }
 
     /// <summary>
-    /// A third-party <c>[EfModule]</c> name is never slugged (spec 171 User Story 6): a name containing a
+    /// A third-party <c>[EfModule]</c> name is never slugged: a name containing a
     /// directory separator would otherwise reach <c>File.WriteAllBytes</c> as a rooted-looking path segment
     /// and fail deep inside the write, surfacing as an opaque <c>internal-error</c> instead of a named
     /// refusal.
@@ -1082,7 +1082,7 @@ public sealed class EfToolingHostTests : IDisposable
     }
 
     /// <summary>
-    /// The two-argument overload is the exact signature FR-003 freezes and the one #1874's worker invokes
+    /// The two-argument overload is the exact frozen signature and the one #1874's worker invokes
     /// reflectively; every other test in this file goes through the four-argument overload with an explicit
     /// assembly list instead. This exercises the real module-discovery path — <c>AssemblyLoadContext.All</c>
     /// over every assembly already loaded into this process — end to end over real streams. Scoped with a
@@ -1114,7 +1114,7 @@ public sealed class EfToolingHostTests : IDisposable
     }
 
     /// <summary>
-    /// The exact reflective call FR-003 promises the worker: locate the method by name and its two
+    /// The exact reflective call the contract promises the worker: locate the method by name and its two
     /// <see cref="Stream"/> parameters, invoke it, and await the returned value as a plain <see cref="Task"/>.
     /// </summary>
     [Fact]

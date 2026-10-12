@@ -6,8 +6,8 @@ namespace Elsa.Persistence.EntityFramework.SchemaBackfill;
 public sealed record EfSchemaBackfillScope(IServiceProvider Services, DbContext Context);
 
 /// <summary>
-/// Runs <paramref name="action"/> once, in a fresh service scope of the shell with a fresh context of the module (spec 186,
-/// FR-004 and FR-009): what the module's migrator gives the backfill, and what a test gives it in its place. A runner that
+/// Runs <paramref name="action"/> once, in a fresh service scope of the shell with a fresh context of the module:
+/// what the module's migrator gives the backfill, and what a test gives it in its place. A runner that
 /// cannot open such a scope throws; it never returns without running the action.
 /// </summary>
 public delegate Task EfSchemaBackfillScopeRunner(Func<EfSchemaBackfillScope, Task> action, CancellationToken cancellationToken);

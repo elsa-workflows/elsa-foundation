@@ -3,10 +3,10 @@ using Xunit;
 namespace Elsa.Persistence.EntityFramework.Tests;
 
 /// <summary>
-/// ADR 0077 separates two conditions that were reported identically: a corrupt row, and a row written by a build this
+/// Two conditions that were once reported identically are kept separate: a corrupt row, and a row written by a build this
 /// host does not run. They call for different operator responses, so the point of these tests is that the distinction
-/// cannot silently collapse back into one. Spec 180's FR-007 widens "a version this build reads" from one version to a
-/// family's readable set, and keeps every other part of the rule.
+/// cannot silently collapse back into one. "A version this build reads" means a family's whole
+/// readable set rather than one version, and every other part of the rule stands.
 /// </summary>
 public sealed class EfSchemaVersionTests
 {
@@ -24,7 +24,7 @@ public sealed class EfSchemaVersionTests
     /// <summary>
     /// The EF stores wrap their read paths in type-filtered catch blocks. Skew must not be assignable to
     /// any type those filters name, or the store would catch it and re-report it as corruption or as a
-    /// provider failure — the exact behavior ADR 0077 removes.
+    /// provider failure — the exact behavior the separation removes.
     /// </summary>
     /// <remarks>
     /// <c>InvalidDataException</c> is deliberately absent from this list: it is sealed, so an assertion
@@ -48,7 +48,7 @@ public sealed class EfSchemaVersionTests
     }
 
     /// <summary>
-    /// FR-007: the diagnostic names the family, the version found and the readable set, and its remedy describes the
+    /// The diagnostic names the family, the version found and the readable set, and its remedy describes the
     /// gate rather than saying the versions cannot run alongside each other.
     /// </summary>
     [Fact]

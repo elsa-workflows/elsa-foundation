@@ -1,8 +1,8 @@
 namespace Elsa.Persistence.EntityFramework;
 
 /// <summary>
-/// Marks an entity type whose rows are content-addressed (spec 186, FR-010a and FR-010b): its key is derived from a hash
-/// of content the row stores, as a workflow executable's and an executable activity template's are (ADR 0038), so
+/// Marks an entity type whose rows are content-addressed: its key is derived from a hash
+/// of content the row stores, as a workflow executable's and an executable activity template's are, so
 /// rewriting a row could change or forge its identity. <paramref name="reason"/> says how the key follows from the
 /// content, since that is what a later version must not quietly undo.
 /// </summary>

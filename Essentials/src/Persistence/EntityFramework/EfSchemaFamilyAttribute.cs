@@ -3,20 +3,20 @@ using Elsa.Persistence.Schema;
 namespace Elsa.Persistence.EntityFramework;
 
 /// <summary>
-/// The one declaration of a schema family (spec 180, FR-001): the tables whose rows stamp one persisted-schema version,
+/// The one declaration of a schema family: the tables whose rows stamp one persisted-schema version,
 /// the EF module that owns them, and the version this build stamps and reads. <see cref="EfSchemaFamilyCatalog.Discover"/>
-/// is the one place that reads it, and a host's readability report (spec 183, FR-020) is derived from it alone.
+/// is the one place that reads it, and a host's readability report is derived from it alone.
 /// </summary>
 /// <remarks>
 /// <para>
-/// Assembly-level and constant-argument-only, as <see cref="EfModuleAttribute"/> is (ADR 0076 D2), so it is read as
+/// Assembly-level and constant-argument-only, as <see cref="EfModuleAttribute"/> is, so it is read as
 /// metadata without composing a shell or a container. It sits in the owning module's assembly, and <see cref="Module"/>
 /// names an <see cref="EfModuleAttribute"/> that same assembly declares - or, for a family shared by no single module
 /// (see below), it sits in an assembly with no <see cref="EfModuleAttribute"/> of its own, and <see cref="Module"/> is
 /// <see langword="null"/>.
 /// </para>
 /// <para>
-/// <see cref="Upcasters"/> is the family's ordered chain (spec 180, FR-001 and FR-004): the build reads its
+/// <see cref="Upcasters"/> is the family's ordered chain: the build reads its
 /// <see cref="CurrentVersion"/> and every predecessor the chain reaches without a gap, which is what
 /// <see cref="EfSchemaFamilyDescriptor.ReadableVersions"/> reports and what every store's read accepts.
 /// </para>
@@ -69,7 +69,7 @@ public sealed class EfSchemaFamilyAttribute : Attribute
     /// </summary>
     /// <remarks>
     /// A chain with a gap, a duplicate version, a branch or a cycle, or one that does not end at the current version,
-    /// fails the family's registration at startup (FR-005); a build-time check is pending #2606.
+    /// fails the family's registration at startup; a build-time check is pending #2606.
     /// A read never bridges a gap: a row stamped below one is skew.
     /// </remarks>
     public Type[] Upcasters { get; set; } = [];
@@ -78,23 +78,23 @@ public sealed class EfSchemaFamilyAttribute : Attribute
     /// The entity types whose rows stamp this family, for an EF module that owns more than one family. A module that
     /// owns one family leaves it empty: every stamped table of its context belongs to that family. The finalization
     /// gate's write check (<c>EfSchemaWriteGateInterceptor</c>) reads it to know which family's write version a row
-    /// must carry (spec 181, FR-009), and <c>ModuleFinalizationGateTests</c> fails the build when a stamped table of
+    /// must carry, and <c>ModuleFinalizationGateTests</c> fails the build when a stamped table of
     /// a module maps to no family, or to more than one.
     /// </summary>
     public Type[] Entities { get; set; } = [];
 
     /// <summary>
-    /// The entity types of the family whose rows are content-addressed (spec 186, FR-010b): their identity is derived
+    /// The entity types of the family whose rows are content-addressed: their identity is derived
     /// from their stored content, so rewriting one would change or forge it, as with a workflow executable or an
-    /// executable activity template (ADR 0038). The post-finalization backfill never rewrites them (FR-010a), and a family
-    /// that holds any below a version is never recorded complete at it (FR-011a). Each is marked
+    /// executable activity template. The post-finalization backfill never rewrites them, and a family
+    /// that holds any below a version is never recorded complete at it. Each is marked
     /// <see cref="EfSchemaContentAddressedAttribute"/> with its reason too, and <c>EfSchemaContentAddressedDeclarationTests</c>
     /// fails the build when a first-party stamped table is named here but not marked, or marked but not named here.
     /// </summary>
     public Type[] ContentAddressed { get; set; } = [];
 
     /// <summary>
-    /// The family's rewriter (spec 186, FR-004): a concrete <see cref="SchemaBackfill.IEfSchemaRowRewriter"/> in this
+    /// The family's rewriter: a concrete <see cref="SchemaBackfill.IEfSchemaRowRewriter"/> in this
     /// assembly, beside the family's store code, that reads one row through the family's read path and writes it back
     /// through its write path. Unlike an upcaster it is constructed in the shell with the shell's services, since the
     /// post-finalization backfill runs there. A family that has only ever had one version needs none; one whose chain is

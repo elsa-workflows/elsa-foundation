@@ -9,8 +9,8 @@ using Xunit;
 namespace Elsa.Persistence.EntityFrameworkCore.Migrations.Tests;
 
 /// <summary>
-/// Every schema family's content declaration (<c>[EfSchemaContent]</c>, <c>[EfSchemaIntegrity]</c>; spec 180, FR-009
-/// and FR-008) against the model its module's context actually builds, on every provider: a declared column is a column
+/// Every schema family's content declaration (<c>[EfSchemaContent]</c>, <c>[EfSchemaIntegrity]</c>)
+/// against the model its module's context actually builds, on every provider: a declared column is a column
 /// of a stamped table in that model, and every document column of a stamped table is declared, content or integrity, by
 /// one family of the module that maps it. Nothing falls through, so the declaration names every column that needs a
 /// chain on read and a stamp on write.

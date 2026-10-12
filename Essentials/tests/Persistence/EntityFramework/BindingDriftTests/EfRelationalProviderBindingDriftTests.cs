@@ -8,7 +8,7 @@ using Xunit;
 namespace Elsa.Persistence.EntityFramework.BindingDriftTests;
 
 /// <summary>
-/// ADR 0073 keeps the shared EF policy package engine-free, so <see cref="EfRelationalProviderBinding"/> reaches each
+/// The shared EF policy package is kept engine-free, so <see cref="EfRelationalProviderBinding"/> reaches each
 /// provider's <c>Use*</c> extension by type and method name. No compile then notices when a provider upgrade renames,
 /// moves, or reshapes that extension: the binding would first fail in a host, when a context is configured. This
 /// project references all four engines at the versions <c>Directory.Packages.props</c> pins and binds against them,
@@ -48,7 +48,7 @@ public sealed class EfRelationalProviderBindingDriftTests
     }
 
     /// <summary>
-    /// The path every module binding takes (spec 183, FR-021, amended 2026-09-29): the options builder's
+    /// The path every module binding takes: the options builder's
     /// <c>MigrationsAssembly(Assembly)</c> overload, which a provider upgrade could drop or reshape exactly as it could the
     /// name overload.
     /// </summary>

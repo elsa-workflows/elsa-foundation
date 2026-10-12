@@ -12,7 +12,7 @@ namespace Elsa.Persistence.EntityFramework;
 /// <remarks>
 /// <para>
 /// Not sealed for one reason: <see cref="SchemaFinalization.EfContractingMigrationRefusedException"/> is a pending batch
-/// that also may not be applied yet (spec 185, FR-024), so every caller that already treats pending migrations as a
+/// that also may not be applied yet, so every caller that already treats pending migrations as a
 /// negative result rather than a database failure does the same for it without a change.
 /// </para>
 /// <para>

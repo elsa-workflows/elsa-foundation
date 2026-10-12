@@ -8,7 +8,7 @@ using Microsoft.Extensions.DependencyInjection;
 namespace Elsa.Persistence.EntityFramework.SchemaFinalization;
 
 /// <summary>
-/// The apply-time half of the expand-only migration guard (spec 185, FR-024 and FR-025, User Story 5): a pending
+/// The apply-time half of the expand-only migration guard: a pending
 /// contracting migration, one whose <see cref="ExpandOnlyMigrationOptOutAttribute"/> names a schema family and a
 /// version, is not applied until the family's finalized version in the target database is that version or a later one.
 /// The build guard decides what may merge; this decides what may run, wherever a module's migrations are applied or
@@ -19,8 +19,8 @@ namespace Elsa.Persistence.EntityFramework.SchemaFinalization;
 /// <para>
 /// <b>The invariant.</b> No operation of a contracting migration that <see cref="EfDatabaseMigrator"/> applies runs
 /// until the family's finalization record in the target database exists at the version the migration names or later.
-/// Since a finalized version only moves forward (spec 181, FR-003) and a gate refuses a host that cannot read it
-/// (FR-015), every host that reads only versions before that one is refused from then on, whichever order hosts start
+/// Since a finalized version only moves forward and a gate refuses a host that cannot read it,
+/// every host that reads only versions before that one is refused from then on, whichever order hosts start
 /// in. Two paths make it hold, chosen by whether a gate-aware host has admitted the module in the database, which a
 /// family's record there shows, unless every record is the migrator's own seed of the pending batch, cut short before its
 /// last family's record and untouched since:
@@ -61,7 +61,7 @@ namespace Elsa.Persistence.EntityFramework.SchemaFinalization;
 public static class EfContractingMigrationCheck
 {
     /// <summary>
-    /// How the host id of the member that creates a record on a migrator's behalf begins (spec 181, 2026-09-29 note):
+    /// How the host id of the member that creates a record on a migrator's behalf begins:
     /// <c>migrator:</c> and then the host's id in the fleet, or the machine name where the host composes none or the
     /// persistence tool applies.
     /// </summary>
@@ -122,7 +122,7 @@ public static class EfContractingMigrationCheck
 
     /// <summary>
     /// The version the module's gate creates <paramref name="chain"/>'s family's record at in <paramref name="context"/>'s
-    /// database (spec 181, Edge Cases, "A database with no record yet"): the oldest version this host reads, or, when a
+    /// database: the oldest version this host reads, or, when a
     /// contracting migration of the family has been applied there, the latest version any such migration names, if that
     /// is later. The schema serves no version before it. The migrations-history table is read only when the module has a
     /// contracting migration that names the family or names no family.

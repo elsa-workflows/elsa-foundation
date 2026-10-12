@@ -9,7 +9,7 @@ namespace Elsa.Persistence.EntityFramework.Tooling;
 /// <c>Provider</c> setting of its own.
 /// </summary>
 /// <remarks>
-/// <see cref="DeclaresProvider"/> is the distinction FR-036 and FR-037 turn on, and the two rules look
+/// <see cref="DeclaresProvider"/> is the distinction two rules turn on, and the two rules look
 /// alike without being alike: a feature that declares the setting and leaves it unset is compared, as
 /// <c>Sqlite</c>; a feature that declares no such setting at all is skipped entirely, because the provider
 /// of the contexts it reads is decided by whichever features register those contexts' migrations.
@@ -34,8 +34,8 @@ public sealed record EfProviderDisagreement(string Shell, string Feature, IReadO
 /// The engine selection the host's package closure makes, when it does not contain the requested provider.
 /// </summary>
 /// <remarks>
-/// Not a feature and not a module: a second, independent offender source for the same refusal (spec 172
-/// FR-004). The per-feature offenders say which features would bind the wrong dialect; this one says the
+/// Not a feature and not a module: a second, independent offender source for the same refusal.
+/// The per-feature offenders say which features would bind the wrong dialect; this one says the
 /// host would not have the requested engine on disk at all.
 /// </remarks>
 public sealed record EfCapabilitySelectionDisagreement(IReadOnlyList<string> Options)
@@ -50,7 +50,7 @@ public sealed record EfCapabilitySelectionDisagreement(IReadOnlyList<string> Opt
 }
 
 /// <summary>
-/// The per-feature provider-agreement check (spec 171 FR-035–FR-037, ADR 0076 D4): every shell feature
+/// The per-feature provider-agreement check: every shell feature
 /// that is enabled, maps through <see cref="UsesEfModuleAttribute"/> to a selected module, and declares a
 /// <c>Provider</c> setting of its own must be configured for the provider the command asked for.
 /// </summary>
@@ -65,17 +65,17 @@ public sealed record EfCapabilitySelectionDisagreement(IReadOnlyList<string> Opt
 /// </para>
 /// <para>
 /// Nothing here instantiates a feature: the feature's own default for an unset setting is taken from
-/// FR-037's rule (<c>Sqlite</c>) rather than by constructing the class, which would run module code purely
+/// the fixed rule (<c>Sqlite</c>) rather than by constructing the class, which would run module code purely
 /// to read a default.
 /// </para>
 /// </remarks>
 public static class EfProviderAgreement
 {
-    /// <summary>What an unset <c>Provider</c> setting resolves to on a feature that declares one (FR-037).</summary>
+    /// <summary>What an unset <c>Provider</c> setting resolves to on a feature that declares one.</summary>
     public const string UnsetProvider = "Sqlite";
 
     /// <summary>
-    /// The one configuration key a package-hosted host selects its EF provider engine with (spec 172 D3),
+    /// The one configuration key a package-hosted host selects its EF provider engine with,
     /// re-exported from <see cref="EfRelationalProviderBinding.CapabilitySelectionKey"/> so the check and
     /// the binding failure that points at it can never name two different keys.
     /// </summary>
@@ -151,7 +151,7 @@ public static class EfProviderAgreement
     /// <summary>
     /// The host's engine selection as an offender, or <c>null</c> when it contains
     /// <paramref name="provider"/> — including a multi-engine selection, where containing the requested
-    /// engine is the whole of the agreement (spec 172 FR-004, ADR 0076 D4).
+    /// engine is the whole of the agreement.
     /// </summary>
     /// <remarks>
     /// <c>--provider</c> stays authoritative: a disagreement is reported, never resolved by taking the

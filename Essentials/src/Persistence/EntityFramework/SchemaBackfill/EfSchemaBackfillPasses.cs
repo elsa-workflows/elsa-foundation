@@ -8,19 +8,19 @@ using Microsoft.Extensions.Logging;
 namespace Elsa.Persistence.EntityFramework.SchemaBackfill;
 
 /// <summary>
-/// The backfill's passes over a family's rows (spec 186, FR-005 to FR-013 and FR-018): the survey of what blocks
+/// The backfill's passes over a family's rows: the survey of what blocks
 /// completion, the upgrade pass, the verification pass, and the audit's selection of rows below a standing completion,
 /// each a selection by stamp in bounded batches, and every rewrite asked of the family's rewriter in a fresh scope.
 /// </summary>
 /// <remarks>
 /// <para>
-/// A pass that meets a row below the completion standing withdraws that completion before it rewrites the row (FR-018),
+/// A pass that meets a row below the completion standing withdraws that completion before it rewrites the row,
 /// so a pass that dies midway never leaves a known straggler under a standing completion. What stands is read afresh
 /// before each row, and so whenever a batch starts, unless the run already knows of a completion at or after its target:
 /// another worker may record one while the run goes on.
 /// </para>
 /// <para>
-/// Every pass works under its worker's claim (FR-008): the claim is renewed, or the pass stopped, between two batches and
+/// Every pass works under its worker's claim: the claim is renewed, or the pass stopped, between two batches and
 /// before each table a selection counts, the same cadence throughout, and the read taken before each row stops the pass
 /// once another worker has taken the family over. A selection that runs inside a compare-and-set, the evidence of a
 /// withdrawal, writes no renewal, which would lose that compare-and-set; between its tables it only checks that no other
@@ -38,7 +38,7 @@ internal sealed class EfSchemaBackfillPasses(
     private const int ReportedRowsPerTable = 5;
 
     /// <summary>
-    /// The survey: what blocks completion whatever the upgrade pass does (FR-006, FR-011a), and how many rows of the
+    /// The survey: what blocks completion whatever the upgrade pass does, and how many rows of the
     /// family's rewritable tables are below the target.
     /// </summary>
     public Task<(List<EfSchemaBackfillBlocker> Blockers, long ToUpgrade)> SurveyAsync(EfSchemaBackfillScopeRunner scopes, EfSchemaBackfillRun run, CancellationToken cancellationToken) =>
@@ -57,7 +57,7 @@ internal sealed class EfSchemaBackfillPasses(
             return (blockers, toUpgrade);
         }, cancellationToken);
 
-    /// <summary>The upgrade pass (FR-005): every row of every table the run rewrites, below its target.</summary>
+    /// <summary>The upgrade pass: every row of every table the run rewrites, below its target.</summary>
     public async Task UpgradeAsync(EfSchemaBackfillScopeRunner scopes, EfSchemaBackfillRun run, List<EfSchemaBackfillBlocker> blockers, CancellationToken cancellationToken)
     {
         foreach (var table in run.Tables.Where(run.Rewrites))
@@ -65,7 +65,7 @@ internal sealed class EfSchemaBackfillPasses(
     }
 
     /// <summary>
-    /// The verification pass (FR-013): after the settle condition, a complete pass over every table of the family. A
+    /// The verification pass: after the settle condition, a complete pass over every table of the family. A
     /// rewritable row below the target is rewritten and counted as found, so the pass must run again; a row with an
     /// unreadable stamp, a row that fails to upcast and a content-addressed row below the target each block completion.
     /// </summary>
@@ -98,11 +98,11 @@ internal sealed class EfSchemaBackfillPasses(
     }
 
     /// <summary>
-    /// Why <paramref name="standing"/> does not hold, read now in <paramref name="context"/> (FR-018), or null when no row
+    /// Why <paramref name="standing"/> does not hold, read now in <paramref name="context"/>, or null when no row
     /// below it remains: per table, the rows below its completion version, and for an audit every such row and every row
     /// with a stamp this host cannot read, whatever the table; for a pass only the rows it rewrites. It names the table,
     /// the count, and what becomes of them. It runs inside the withdrawal's compare-and-set, so it writes no renewal; before
-    /// each table it checks that no other worker has taken the family over, and stops the audit if one has (FR-008).
+    /// each table it checks that no other worker has taken the family over, and stops the audit if one has.
     /// </summary>
     public async Task<string?> StragglersAsync(
         EfSchemaBackfillScopeRunner scopes,
@@ -134,7 +134,7 @@ internal sealed class EfSchemaBackfillPasses(
     /// <summary>
     /// Rewrites every row of <paramref name="table"/> below the run's target, in batches ordered by key, each batch
     /// resuming after the last key of the one before it; returns how many rows it found below the target that still
-    /// existed. A row below the completion that stands withdraws it before it is rewritten (FR-018).
+    /// existed. A row below the completion that stands withdraws it before it is rewritten.
     /// </summary>
     public async Task<long> RewriteAsync(
         EfSchemaBackfillScopeRunner scopes,
@@ -201,11 +201,11 @@ internal sealed class EfSchemaBackfillPasses(
     }
 
     /// <summary>
-    /// Withdraws the completion that stands over <paramref name="row"/> before the row is rewritten (FR-018). While the run
+    /// Withdraws the completion that stands over <paramref name="row"/> before the row is rewritten. While the run
     /// knows of no completion at or after its target, it reads the finish record afresh first: a completion another worker
     /// recorded since the run began, or since this batch was selected, covers the row, and a row rewritten under it
-    /// unreported would hide a straggler. The same read stops the pass when another worker has taken the family over
-    /// (FR-008). A completion at or after the target covers every row a pass selects, which only a worker with no claim can
+    /// unreported would hide a straggler. The same read stops the pass when another worker has taken the family over.
+    /// A completion at or after the target covers every row a pass selects, which only a worker with no claim can
     /// have recorded while this run held one, and the withdrawal reads the record afresh itself.
     /// </summary>
     private async Task WithdrawOverAsync(EfSchemaBackfillScopeRunner scopes, EfSchemaBackfillRun run, EfSchemaStampedRow row, CancellationToken cancellationToken)
@@ -222,7 +222,7 @@ internal sealed class EfSchemaBackfillPasses(
     }
 
     /// <summary>
-    /// What blocks completion in <paramref name="table"/> whatever a rewrite does (FR-006, FR-011a): rows whose stamp is
+    /// What blocks completion in <paramref name="table"/> whatever a rewrite does: rows whose stamp is
     /// missing or outside this host's readable set, and, in a content-addressed table, rows below the target.
     /// </summary>
     private static async Task<IReadOnlyList<EfSchemaBackfillBlocker>> BlockersAsync(DbContext context, EfSchemaBackfillRun run, EfSchemaStampedTable table, CancellationToken cancellationToken)
@@ -242,7 +242,7 @@ internal sealed class EfSchemaBackfillPasses(
     }
 
     /// <summary>
-    /// Asks the family's rewriter to rewrite one row, in a fresh scope each time (FR-007): a lost compare-and-set is asked
+    /// Asks the family's rewriter to rewrite one row, in a fresh scope each time: a lost compare-and-set is asked
     /// again, so the rewriter reads the row afresh; a row still contended after a few attempts is left for the verification
     /// pass. Skew and corruption are reported and never retried.
     /// </summary>
@@ -270,7 +270,7 @@ internal sealed class EfSchemaBackfillPasses(
             }
             catch (EfSchemaVersionSkewException exception)
             {
-                // Reported with its table's blocker, which is logged as an error when it first appears (FR-006).
+                // Reported with its table's blocker, which is logged as an error when it first appears.
                 logger.LogDebug(exception, "The backfill of schema family {Family} met a row of table {Table} ({Row}) at a stamp this host cannot read; it is not rewritten.",
                     run.Family, table.Name, table.Describe(row.Key));
                 return RowOutcome.Skew;
@@ -289,7 +289,7 @@ internal sealed class EfSchemaBackfillPasses(
             }
             catch (EfSchemaFamilyWritesRefusedException)
             {
-                // This host can no longer write the family at all (spec 181, FR-012): the run stops.
+                // This host can no longer write the family at all: the run stops.
                 throw;
             }
             catch (SchemaWriteRefusedException exception)

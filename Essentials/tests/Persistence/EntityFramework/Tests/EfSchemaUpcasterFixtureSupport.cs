@@ -6,7 +6,7 @@ using Xunit;
 namespace Elsa.Persistence.EntityFramework.Tests;
 
 /// <summary>
-/// One of an upcaster's committed fixture pairs (spec 180, FR-022; #2144): one row of one table - every content column
+/// One of an upcaster's committed fixture pairs (#2144): one row of one table - every content column
 /// the family declares for it - captured at the upcaster's source version, and the same row as the target version stores
 /// it. It lives at <c>Fixtures/SchemaUpcasters/&lt;family&gt;/&lt;from&gt;-to-&lt;to&gt;/&lt;table&gt;.source.json</c> and
 /// <c>.expected.json</c> in the owning module's test project, which copies it to its output; the table is named by the
@@ -15,7 +15,7 @@ namespace Elsa.Persistence.EntityFramework.Tests;
 public sealed record EfSchemaUpcasterFixture(string Family, string From, string To, Type Entity, EfSchemaRowContent Source, EfSchemaRowContent Expected);
 
 /// <summary>
-/// The store's half of FR-022's proofs for one family: the chain it reads through, how a fixture row becomes a stored row
+/// The store's half of the upcaster proofs for one family: the chain it reads through, how a fixture row becomes a stored row
 /// read through the store's own read path, and how a value is written in an older version's format.
 /// </summary>
 public interface IEfSchemaUpcasterProofStore<TValue>
@@ -38,8 +38,8 @@ public interface IEfSchemaUpcasterProofStore<TValue>
 }
 
 /// <summary>
-/// FR-022's three proofs for one upcaster, run over every fixture pair committed for its step: the upcast, the
-/// old-format round trip that enforces expand-only content (FR-027), and the read through the store. A module's test
+/// The three proofs for one upcaster, run over every fixture pair committed for its step: the upcast, the
+/// old-format round trip that enforces expand-only content, and the read through the store. A module's test
 /// project proves each upcaster it ships by deriving a concrete class from this one directly, naming the upcaster, the
 /// value its store reads, and the family:
 /// <c>public sealed class OrdersAddLinesProof() : EfSchemaUpcasterProof&lt;AddLines, Order&gt;(OrdersEfModule.SchemaFamily, new OrdersProofStore());</c>
@@ -106,7 +106,7 @@ public abstract class EfSchemaUpcasterProof<TUpcaster, TValue>(string family, IE
 }
 
 /// <summary>
-/// The mechanics of FR-022's proofs, for any module's test project to compile in, as it compiles in
+/// The mechanics of the upcaster proofs, for any module's test project to compile in, as it compiles in
 /// <see cref="EfSchemaVersionSkewTestSupport"/>. A fixture is frozen once its version ships:
 /// it is never edited or deleted, and is recorded when committed; review holds that until #2606 restores a compiled check.
 /// </summary>

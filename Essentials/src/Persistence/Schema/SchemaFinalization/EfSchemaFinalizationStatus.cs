@@ -1,20 +1,20 @@
 namespace Elsa.Persistence.Schema.SchemaFinalization;
 
 /// <summary>
-/// One schema family's finalization status in one database (spec 181, FR-022): the finalized version, each version
+/// One schema family's finalization status in one database: the finalized version, each version
 /// this host reads above it with why it is pending, any intent in flight and the holds, and what this host writes.
-/// Spec 182 carries it to the feature catalog and Attention; the CLI's <c>status</c> prints it.
+/// It reaches the feature catalog and Attention; the CLI's <c>status</c> prints it.
 /// </summary>
 /// <param name="WriteVersion">The version this host writes, or null where no host is asking (the CLI).</param>
-/// <param name="WritesRefused">True when this host refuses every write to the family (FR-012).</param>
+/// <param name="WritesRefused">True when this host refuses every write to the family.</param>
 /// <param name="ObservedAt">
 /// When this host last read the family's record, or null before it has, or where no host is asking (the CLI).
 /// </param>
 /// <param name="Withdrawal">
 /// The finish history entry that withdrew the family's completion, while no completion has been recorded since: the
-/// straggler spec 186's audit found, which Attention reports as critical on every host (FR-018).
+/// straggler the backfill's audit found, which Attention reports as critical on every host.
 /// </param>
-/// <param name="Backfill">This host's post-finalization backfill of the family, or null where none runs (spec 186, FR-021).</param>
+/// <param name="Backfill">This host's post-finalization backfill of the family, or null where none runs.</param>
 public sealed record EfSchemaFamilyStatus(
     string Family,
     string? Module,

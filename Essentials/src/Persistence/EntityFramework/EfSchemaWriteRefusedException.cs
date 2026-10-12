@@ -3,9 +3,9 @@ using Elsa.Primitives.Exceptions;
 namespace Elsa.Persistence.EntityFramework;
 
 /// <summary>
-/// The write refusal of spec 180 (FR-016a): a write whose value needs a schema version later than the version this host
+/// The schema write refusal: a write whose value needs a schema version later than the version this host
 /// may write for the family. Nothing is saved, and nothing is dropped to make the value fit: a value carrying data in a
-/// member its write version cannot hold is refused whole (FR-016).
+/// member its write version cannot hold is refused whole.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -18,9 +18,9 @@ namespace Elsa.Persistence.EntityFramework;
 /// <c>SchemaWriteRefusalProblem</c>.
 /// </para>
 /// <para>
-/// A store raises it with the family and the two versions alone. Spec 182 reuses it for a write that needs a dormant
+/// A store raises it with the family and the two versions alone. The dormant-feature refusal reuses it for a write that needs a dormant
 /// feature's data, adding a feature id and an operator-facing reason in a derived type, which is why it is not sealed.
-/// Nothing raises it while a host's write version is its current version, which is the case until spec 181's gate lets a
+/// Nothing raises it while a host's write version is its current version, which is the case until the finalization gate lets a
 /// host write an older finalized version.
 /// </para>
 /// </remarks>
@@ -33,7 +33,7 @@ public class EfSchemaWriteRefusedException : SchemaWriteRefusedException
     {
     }
 
-    /// <summary>For a derived refusal that states its own reason, such as spec 182's dormant-feature refusal.</summary>
+    /// <summary>For a derived refusal that states its own reason, such as the dormant-feature refusal.</summary>
     protected EfSchemaWriteRefusedException(string family, string writeVersion, string requiredVersion, string message)
         : base(family, writeVersion, requiredVersion, message)
     {

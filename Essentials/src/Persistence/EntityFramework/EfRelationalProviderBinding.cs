@@ -15,8 +15,8 @@ namespace Elsa.Persistence.EntityFramework;
 public static class EfRelationalProviderBinding
 {
     /// <summary>
-    /// The one configuration key a host whose modules arrive as packages selects its engine with (spec 172
-    /// D3). Nuplane's own key, not an Elsa one: every EF module package declares the <c>ef-provider</c>
+    /// The one configuration key a host whose modules arrive as packages selects its engine with.
+    /// Nuplane's own key, not an Elsa one: every EF module package declares the <c>ef-provider</c>
     /// capability in its <c>nuplane.json</c>, and Nuplane is what turns the selection into a root package.
     /// Defined here because this is the type that owns the engine vocabulary the options are named in.
     /// </summary>
@@ -94,8 +94,8 @@ public static class EfRelationalProviderBinding
     /// are loaded - a package upgraded in place - and EF Core is bound from the previous release's load context, as it was
     /// while each EF module package carried EF Core in its own graph, the name reaches the previous release, whose
     /// migrations are keyed to the previous release's context type: the new context would see none, so <c>Validate</c>
-    /// would pass over every migration it has pending and <c>AutoMigrate</c> would apply nothing (spec 183, FR-021, amended
-    /// 2026-09-29). Given the assembly, EF Core reads exactly the generation the module was bound with, wherever it runs.
+    /// would pass over every migration it has pending and <c>AutoMigrate</c> would apply nothing.
+    /// Given the assembly, EF Core reads exactly the generation the module was bound with, wherever it runs.
     /// </remarks>
     public static void UseMigrationsFrom(
         DbContextOptionsBuilder builder,
@@ -333,7 +333,7 @@ public static class EfRelationalProviderBinding
     /// <summary>
     /// The two shapes a host can have, and the one sentence each needs. A compiled-in host adds the package
     /// reference; a host whose modules arrive as packages selects the engine with one key and every EF module
-    /// package's <c>nuplane.json</c> turns that into a root (spec 172 D6) — naming the engine as an explicit
+    /// package's <c>nuplane.json</c> turns that into a root — naming the engine as an explicit
     /// root still works and still wins. Both are stated, because this message is thrown from inside a
     /// closure that cannot tell which host it is in.
     /// </summary>

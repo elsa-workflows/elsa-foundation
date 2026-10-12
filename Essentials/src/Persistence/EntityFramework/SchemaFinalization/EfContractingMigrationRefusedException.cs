@@ -4,7 +4,7 @@ namespace Elsa.Persistence.EntityFramework.SchemaFinalization;
 
 /// <summary>
 /// A module context's pending migrations include a contracting migration whose schema family is not yet finalized at
-/// the version its opt-out names (spec 185, FR-024 and FR-025), so the whole pending batch is withheld: a context's
+/// the version its opt-out names, so the whole pending batch is withheld: a context's
 /// pending migrations apply as one <c>MigrateAsync</c>, which cannot apply some and hold back others. No operation of
 /// any of them has run when this is thrown. On a database no host had admitted the module in, the migrations before the
 /// first contracting one ran first, so its family's record could be created before it (#2136); <see cref="Applied"/>
@@ -18,7 +18,7 @@ namespace Elsa.Persistence.EntityFramework.SchemaFinalization;
 /// </para>
 /// <para>
 /// Its message is built from the module's name, migration ids, family names and version labels, never from
-/// configuration, so it carries no connection string or other restored secret (spec 171, FR-061).
+/// configuration, so it carries no connection string or other restored secret.
 /// </para>
 /// </remarks>
 public sealed class EfContractingMigrationRefusedException : EfPendingMigrationsException
@@ -72,7 +72,7 @@ public sealed class EfContractingMigrationRefusedException : EfPendingMigrations
     }
 }
 
-/// <summary>One pending contracting migration that may not be applied yet (spec 185, FR-024).</summary>
+/// <summary>One pending contracting migration that may not be applied yet.</summary>
 /// <param name="Migration">The migration's id.</param>
 /// <param name="Family">The schema family its opt-out names, if any.</param>
 /// <param name="RequiredVersion">The version its opt-out names, if any.</param>

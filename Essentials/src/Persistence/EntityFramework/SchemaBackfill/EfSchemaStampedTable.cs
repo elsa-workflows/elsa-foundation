@@ -10,8 +10,8 @@ using Microsoft.EntityFrameworkCore.Metadata;
 namespace Elsa.Persistence.EntityFramework.SchemaBackfill;
 
 /// <summary>
-/// One stamped table of a schema family, as the post-finalization backfill selects from it by stamp (spec 186, FR-005,
-/// FR-023 and FR-025): in bounded batches ordered by the primary key, each resuming after the last key the one before it
+/// One stamped table of a schema family, as the post-finalization backfill selects from it by stamp:
+/// in bounded batches ordered by the primary key, each resuming after the last key the one before it
 /// returned, so a row the backfill cannot rewrite is passed over rather than selected again; and matching stamps as
 /// opaque labels, by equality with the labels the family's declaration names, never by order.
 /// </summary>
@@ -47,7 +47,7 @@ internal sealed class EfSchemaStampedTable
     /// <summary>The table's name, with its schema when it has one: how the backfill's reports name it.</summary>
     public string Name { get; }
 
-    /// <summary>Whether the table is content-addressed, so the backfill never rewrites its rows (FR-010a): see <see cref="IsContentAddressed"/>.</summary>
+    /// <summary>Whether the table is content-addressed, so the backfill never rewrites its rows: see <see cref="IsContentAddressed"/>.</summary>
     public bool ContentAddressed { get; }
 
     /// <summary>
@@ -70,7 +70,7 @@ internal sealed class EfSchemaStampedTable
 
     /// <summary>
     /// Whether <paramref name="declaration"/>'s family names <paramref name="entity"/> content-addressed, or the entity is
-    /// marked <see cref="EfSchemaContentAddressedAttribute"/>: either keeps its rows from ever being rewritten (FR-010a).
+    /// marked <see cref="EfSchemaContentAddressedAttribute"/>: either keeps its rows from ever being rewritten.
     /// </summary>
     public static bool IsContentAddressed(EfSchemaFamilyDescriptor declaration, Type entity) =>
         declaration.ContentAddressed.Any(type => type.IsAssignableFrom(entity)) || entity.IsDefined(typeof(EfSchemaContentAddressedAttribute), inherit: false);
@@ -217,7 +217,7 @@ internal sealed class EfSchemaStampedTable
 internal sealed record EfSchemaStampedRow(object?[] Key, string? Stamp);
 
 /// <summary>
-/// Which stamps a selection matches, as opaque labels (spec 180, FR-004): exactly <see cref="Versions"/>, or anything
+/// Which stamps a selection matches, as opaque labels: exactly <see cref="Versions"/>, or anything
 /// else, a missing stamp included.
 /// </summary>
 internal sealed record EfSchemaStampFilter(bool Excluding, IReadOnlyList<string> Versions)

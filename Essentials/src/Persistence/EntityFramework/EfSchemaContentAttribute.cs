@@ -3,7 +3,7 @@ using Elsa.Persistence.Schema;
 namespace Elsa.Persistence.EntityFramework;
 
 /// <summary>
-/// Declares columns of one of a schema family's tables as the family's <em>content</em> (spec 180, FR-009 and FR-014):
+/// Declares columns of one of a schema family's tables as the family's <em>content</em>:
 /// documents stored in the format of the version the row is stamped with, which a read upcasts through the family's
 /// chain before it deserializes them, and which a write that changes them stamps the row with the version it wrote them
 /// in.

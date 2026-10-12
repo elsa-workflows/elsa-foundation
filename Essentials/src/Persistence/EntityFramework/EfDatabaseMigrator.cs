@@ -16,7 +16,7 @@ namespace Elsa.Persistence.EntityFramework;
 /// <para>
 /// Under both policies a pending contracting migration whose schema family is not yet finalized at the version its
 /// opt-out names refuses the context's whole pending batch before anything runs, with
-/// <see cref="EfContractingMigrationRefusedException"/> (spec 185, FR-024): <see cref="DatabaseFacade.MigrateAsync"/>
+/// <see cref="EfContractingMigrationRefusedException"/>: <see cref="DatabaseFacade.MigrateAsync"/>
 /// cannot apply some of a context's pending migrations and withhold others. Every host's module migrator and the
 /// persistence tool's <c>apply</c> and <c>validate</c> come through here, so none of them can skip the check.
 /// </para>

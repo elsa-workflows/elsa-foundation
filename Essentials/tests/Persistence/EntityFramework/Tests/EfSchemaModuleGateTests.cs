@@ -9,7 +9,7 @@ using static Elsa.Persistence.EntityFramework.Tests.SchemaGate;
 namespace Elsa.Persistence.EntityFramework.Tests;
 
 /// <summary>
-/// The finalization gate of one module (spec 181): admission, evaluation, refresh and what it lets a host write, on a
+/// The finalization gate of one module: admission, evaluation, refresh and what it lets a host write, on a
 /// file database shared by every member a test runs, with a fleet the test controls. Each finalization is checked from
 /// the record itself, and each refusal to have changed nothing, since a gate that reported "pending" while the record
 /// said otherwise would look exactly like one that works.
@@ -160,7 +160,7 @@ public sealed class EfSchemaModuleGateTests : IAsyncLifetime
     }
 
     /// <summary>
-    /// Spec 186, User Story 6, acceptance 2; SC-006: once the backfill has recorded the family complete past the version a
+    /// Once the backfill has recorded the family complete past the version a
     /// release retired, that release activates. The test above is the other direction.
     /// </summary>
     [Fact]
@@ -257,7 +257,7 @@ public sealed class EfSchemaModuleGateTests : IAsyncLifetime
         await upgraded.EvaluateAsync(Context());
         Assert.Equal("2", (await RecordAsync()).FinalizedVersion);
 
-        // SC-008: the partitioned host finds out at its next refresh and refuses every write to the family.
+        // The partitioned host finds out at its next refresh and refuses every write to the family.
         await old.RefreshAsync(Context());
         var state = old.StateOf(Family)!;
         Assert.True(state.WritesRefused);
@@ -335,9 +335,9 @@ public sealed class EfSchemaModuleGateTests : IAsyncLifetime
     }
 
     /// <summary>
-    /// Spec 183's FR-019, amended 2026-09-30: the module is active in the report from admission until its gate stops, and a
+    /// The module is active in the report from admission until its gate stops, and a
     /// gate that is refused, or has not yet admitted, never made it so. It is the fact the backfill's settle condition
-    /// counts on (spec 186, FR-012). Stopping forgets what was read, since no gate of the host writes there any more.
+    /// counts on. Stopping forgets what was read, since no gate of the host writes there any more.
     /// </summary>
     [Fact]
     public async Task The_family_is_active_from_the_moment_its_gate_admits_the_module_until_the_gate_stops()

@@ -3,8 +3,8 @@ using System.Reflection;
 namespace Elsa.Persistence.EntityFramework;
 
 /// <summary>
-/// The one place that reads <see cref="EfModuleAttribute"/> declarations off a set of assemblies (ADR
-/// 0076 D2). Every module is discovered the same way, first-party and third-party alike; there is no
+/// The one place that reads <see cref="EfModuleAttribute"/> declarations off a set of assemblies.
+/// Every module is discovered the same way, first-party and third-party alike; there is no
 /// first-party-only special case.
 /// </summary>
 public static class EfModuleCatalog

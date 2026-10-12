@@ -6,12 +6,12 @@ using static Elsa.Persistence.EntityFramework.Tests.SyntheticOrders;
 namespace Elsa.Persistence.EntityFramework.Tests;
 
 /// <summary>
-/// Spec 180's read and write paths end to end, through a store written the way every first-party store now is, over the
+/// A schema family's read and write paths end to end, through a store written the way every first-party store now is, over the
 /// <see cref="SyntheticOrders"/> family. A row stamped 1 is read through the chain, left untouched by the read, and
 /// upgraded when it is next written; rows the chain cannot place are skew, and a readable row whose content is damaged
 /// is corruption. A row's two content columns are upcast together, so the step that moves the lines from the order
 /// document into their own column, and the later step that removes the document's now-redundant copy, are each seen by
-/// every read of an older row (#2144). FR-022's fixture proofs for the four upcasters are
+/// every read of an older row (#2144). The fixture proofs for the four upcasters are
 /// <see cref="AddCurrencyProof"/>, <see cref="AddLinesProof"/>, <see cref="MoveLinesProof"/> and
 /// <see cref="RemoveLinesProof"/>.
 /// </summary>
@@ -21,7 +21,7 @@ public sealed class EfSchemaChainStoreTests : IAsyncDisposable
 
     private readonly SyntheticOrdersDatabase orders = new();
 
-    /// <summary>US1, scenario 1: a version-1 row reads as the domain value the version-4 row of the same order does.</summary>
+    /// <summary>A version-1 row reads as the domain value the version-4 row of the same order does.</summary>
     [Fact]
     public async Task A_row_three_versions_behind_reads_as_the_current_version_would()
     {
@@ -60,7 +60,7 @@ public sealed class EfSchemaChainStoreTests : IAsyncDisposable
         await Assert.ThrowsAsync<InvalidDataException>(() => orders.Store().ReadAsync("order-5"));
     }
 
-    /// <summary>US1, scenario 2: a read never rewrites a row, so its stamp and its stored content stay exactly as they were.</summary>
+    /// <summary>A read never rewrites a row, so its stamp and its stored content stay exactly as they were.</summary>
     [Fact]
     public async Task Reading_an_older_row_leaves_its_stamp_and_bytes_unchanged()
     {
@@ -73,7 +73,7 @@ public sealed class EfSchemaChainStoreTests : IAsyncDisposable
     }
 
     /// <summary>
-    /// FR-013 and FR-014: the next write stamps the current version and writes the current format of every content column,
+    /// The next write stamps the current version and writes the current format of every content column,
     /// which is how a row moves forward; the row then reads without any upcaster running. The current format's document
     /// no longer restates the lines version 5 moved into their own column (#2144), so a write never puts them back there.
     /// </summary>
@@ -102,7 +102,7 @@ public sealed class EfSchemaChainStoreTests : IAsyncDisposable
         Assert.Equal(calls, observation.Snapshot());
     }
 
-    /// <summary>US1, scenario 3 and FR-021: a row at the current version is read without running any upcaster.</summary>
+    /// <summary>A row at the current version is read without running any upcaster.</summary>
     [Fact]
     public async Task A_row_at_the_current_version_runs_no_upcaster()
     {
@@ -168,7 +168,7 @@ public sealed class EfSchemaChainStoreTests : IAsyncDisposable
         }
     }
 
-    /// <summary>US2, scenarios 1 and 3: above the chain, below it and unstamped are skew, and never reported as corruption.</summary>
+    /// <summary>Above the chain, below it and unstamped are skew, and never reported as corruption.</summary>
     [Theory]
     [InlineData("6")]
     [InlineData("0")]
@@ -184,7 +184,7 @@ public sealed class EfSchemaChainStoreTests : IAsyncDisposable
         Assert.Equal(["1", "2", "3", "4", "5"], skew.ReadableVersions);
     }
 
-    /// <summary>US2, scenario 2 at read time: below a gap is skew, whatever upcasters the chain declares further down.</summary>
+    /// <summary>At read time, below a gap is skew, whatever upcasters the chain declares further down.</summary>
     [Fact]
     public async Task A_row_below_a_gap_is_skew_while_one_above_it_still_reads()
     {
@@ -196,7 +196,7 @@ public sealed class EfSchemaChainStoreTests : IAsyncDisposable
         Assert.Equal(Expected with { Id = "order-2" }, await orders.Store(gapped).ReadAsync("order-2"));
     }
 
-    /// <summary>US2, scenario 4: a readable version whose content is not that version's shape is a damaged row.</summary>
+    /// <summary>A readable version whose content is not that version's shape is a damaged row.</summary>
     [Fact]
     public async Task A_readable_row_whose_content_is_damaged_is_corruption()
     {
@@ -206,7 +206,7 @@ public sealed class EfSchemaChainStoreTests : IAsyncDisposable
     }
 
     /// <summary>
-    /// FR-008: the currency projection exists from version 2 on. A version-1 row carries none and passes; a version-1 row
+    /// The currency projection exists from version 2 on. A version-1 row carries none and passes; a version-1 row
     /// that carries one, or a version-2 row that lacks it, fails the integrity clause for its own stamped version.
     /// </summary>
     [Theory]
@@ -219,7 +219,7 @@ public sealed class EfSchemaChainStoreTests : IAsyncDisposable
         await Assert.ThrowsAsync<InvalidDataException>(() => orders.Store().ReadAsync("order-1"));
     }
 
-    /// <summary>FR-018: a write never overwrites a row whose stamp it cannot read, so a newer row's content is never lost.</summary>
+    /// <summary>A write never overwrites a row whose stamp it cannot read, so a newer row's content is never lost.</summary>
     [Fact]
     public async Task A_write_refuses_to_replace_a_row_it_cannot_read()
     {

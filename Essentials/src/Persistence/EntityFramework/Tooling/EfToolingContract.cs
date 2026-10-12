@@ -4,8 +4,8 @@ using System.Text.Json.Serialization;
 namespace Elsa.Persistence.EntityFramework.Tooling;
 
 /// <summary>
-/// The versioned JSON <see cref="EfToolingHost.RunAsync(Stream,Stream)"/> exchanges with the CLI worker
-/// (spec 171 FR-003). Frozen: the worker runs out of process, so anything ambiguous here becomes a bug
+/// The versioned JSON <see cref="EfToolingHost.RunAsync(Stream,Stream)"/> exchanges with the CLI worker.
+/// Frozen: the worker runs out of process, so anything ambiguous here becomes a bug
 /// there. The schema is closed in both directions — an unknown command, an unknown request property, or an
 /// unknown enumerated value is a usage error, never a silent no-op.
 /// </summary>
@@ -14,8 +14,7 @@ namespace Elsa.Persistence.EntityFramework.Tooling;
 /// <para>
 /// Frozen means closed, not unchanging: an additive optional field does not move <see cref="Version"/>. A request field is
 /// sent only to a host build that declares it, as the worker does for <see cref="EfToolingRequest.CapabilitySelection"/>,
-/// <see cref="EfToolingRequest.SkewAllowance"/> and <see cref="EfToolingRequest.SqliteMigrationLockStaleAfter"/>. The rule, and why it does not contradict "do not add optional fields to the
-/// closed version-1 DTOs", is the 2026-09-29 note in <c>specs/173-shared-persistence/contracts/tooling.md</c>. The 2026-09-29
+/// <see cref="EfToolingRequest.SkewAllowance"/> and <see cref="EfToolingRequest.SqliteMigrationLockStaleAfter"/>. The 2026-09-29
 /// additions, all optional and all on <c>status</c>: the request's <c>skewAllowance</c>, the response's
 /// <c>finalization.cluster</c> (with its <c>availability</c> marker) and each pending version's <c>waitsFor</c>.
 /// </para>
@@ -47,16 +46,16 @@ public static class EfToolingCommands
     public const string Apply = "apply";
     public const string Validate = "validate";
 
-    /// <summary>The one command that ever calls <see cref="IEfPostMigrationAction.RunAsync"/> (ADR 0076 D8).</summary>
+    /// <summary>The one command that ever calls <see cref="IEfPostMigrationAction.RunAsync"/>.</summary>
     public const string PostMigrate = "post-migrate";
 
-    /// <summary>Places an operator's hold on a schema family's finalization (spec 181, FR-019 and FR-020).</summary>
+    /// <summary>Places an operator's hold on a schema family's finalization.</summary>
     public const string Hold = "hold";
 
-    /// <summary>Releases an operator's hold (spec 181, FR-019 and FR-020).</summary>
+    /// <summary>Releases an operator's hold.</summary>
     public const string Release = "release";
 
-    /// <summary>Reports each schema family's finalization status (spec 181, FR-020 and FR-022).</summary>
+    /// <summary>Reports each schema family's finalization status.</summary>
     public const string Status = "status";
 
     public static readonly string[] All = [List, Plan, Script, Apply, Validate, PostMigrate, Hold, Release, Status];
@@ -66,7 +65,7 @@ public static class EfToolingCommands
 }
 
 /// <summary>
-/// Where a package id and version were determined from (FR-049), so a reader of
+/// Where a package id and version were determined from, so a reader of
 /// <c>migration-plan.json</c> can tell a package-derived fact from an assembly-metadata-derived one.
 /// <see cref="EfToolingHost"/> can observe neither, so the worker states it and this build only checks it.
 /// </summary>
@@ -81,7 +80,7 @@ public static class EfToolingPackageSource
     public static readonly string[] All = [HostDepsFile, ResolvedNupkg];
 }
 
-/// <summary>What the per-feature provider-agreement check (FR-039) reports about a run.</summary>
+/// <summary>What the per-feature provider-agreement check reports about a run.</summary>
 public static class EfToolingProviderAgreement
 {
     public const string Checked = "checked";
@@ -90,8 +89,8 @@ public static class EfToolingProviderAgreement
     public static readonly string[] All = [Checked, NotChecked];
 
     /// <summary>
-    /// What <c>providerAgreement</c> does <i>not</i> cover, stated in every manifest because FR-039 requires
-    /// the artifact itself to say it: the check reads files, and a running host also reads its process
+    /// What <c>providerAgreement</c> does <i>not</i> cover, stated in every manifest because
+    /// the artifact itself must say it: the check reads files, and a running host also reads its process
     /// environment, so a live host's effective provider can differ from the one verified here.
     /// </summary>
     public const string Note =
@@ -112,7 +111,7 @@ public sealed class EfToolingRequest
     /// <summary>Required for <c>plan</c> and <c>script</c>; optional for <c>list</c>, which defaults to every discovered module.</summary>
     public EfToolingSelection? Selection { get; init; }
 
-    /// <summary>Required for <c>plan</c> and <c>script</c>, authoritative (D4), and refused on <c>list</c>, which needs no engine.</summary>
+    /// <summary>Required for <c>plan</c> and <c>script</c>, authoritative, and refused on <c>list</c>, which needs no engine.</summary>
     public string? Provider { get; init; }
 
     /// <summary>The schema the artifact targets, resolved through <see cref="EfSchema.Normalize"/>. Refused on <c>list</c>.</summary>
@@ -132,18 +131,18 @@ public sealed class EfToolingRequest
 
     /// <summary>
     /// The host's enabled shell features, as the CLI read them from <c>shells.json</c> plus its
-    /// <c>--environment</c> overlay (FR-035). Present — even empty — exactly when that configuration was
+    /// <c>--environment</c> overlay. Present — even empty — exactly when that configuration was
     /// found, which is what <c>providerAgreement: checked</c> means; absent when none was found at all.
     /// Required by selection kind <c>from-host</c>, which has nothing to select from without it. Carries
     /// each feature's <c>Provider</c> setting and nothing else: no other shell setting travels here, so no
-    /// connection string can (D7).
+    /// connection string can.
     /// </summary>
     public IReadOnlyList<EfToolingShellFeature>? Shells { get; init; }
 
     /// <summary>
     /// The engine option(s) the host's own <c>appsettings.json</c> selects under
-    /// <see cref="EfProviderAgreement.CapabilityKey"/>, as the CLI worker read them (spec 172 FR-004, ADR
-    /// 0076 D4). Present only when that key is set, and refused on <c>list</c>, which asks for no provider
+    /// <see cref="EfProviderAgreement.CapabilityKey"/>, as the CLI worker read them.
+    /// Present only when that key is set, and refused on <c>list</c>, which asks for no provider
     /// and therefore has nothing to compare. Absent means the host selects no engine that way, not that the
     /// selection agrees.
     /// </summary>
@@ -154,7 +153,7 @@ public sealed class EfToolingRequest
     public IReadOnlyList<string>? CapabilitySelection { get; init; }
 
     /// <summary>
-    /// What <c>hold</c>, <c>release</c> and <c>status</c> act on (spec 181, FR-020). Required by <c>hold</c> and
+    /// What <c>hold</c>, <c>release</c> and <c>status</c> act on. Required by <c>hold</c> and
     /// <c>release</c>, optional for <c>status</c>, and refused by every other command.
     /// </summary>
     public EfToolingFinalizationRequest? Finalization { get; init; }
@@ -179,13 +178,13 @@ public sealed class EfToolingRequest
     /// <summary>
     /// The connection string <c>apply</c>, <c>validate</c> and <c>post-migrate</c> run against. Required for
     /// those three commands, refused otherwise — <c>list</c>, <c>plan</c> and <c>script</c> never open a
-    /// database (D7). This is the one field this build never echoes back: not in a response, a refusal
+    /// database. This is the one field this build never echoes back: not in a response, a refusal
     /// detail, or an exception message.
     /// </summary>
     public string? Connection { get; init; }
 }
 
-/// <summary>The schema family, version, reason and operator a finalization command names (spec 181, FR-019).</summary>
+/// <summary>The schema family, version, reason and operator a finalization command names.</summary>
 public sealed class EfToolingFinalizationRequest
 {
     /// <summary>The schema family. Required by <c>hold</c> and <c>release</c>; narrows <c>status</c> to one family.</summary>
@@ -213,7 +212,7 @@ public sealed class EfToolingSelection
     public const string AllKind = "all";
     public const string ModulesKind = "modules";
 
-    /// <summary>Every module the host's enabled shell features map to through <c>[UsesEfModule]</c> (FR-028).</summary>
+    /// <summary>Every module the host's enabled shell features map to through <c>[UsesEfModule]</c>.</summary>
     public const string FromHostKind = "from-host";
 }
 
@@ -222,7 +221,7 @@ public sealed class EfToolingSelection
 /// the CShells feature name it was enabled under, and its configured <c>Provider</c> setting.
 /// </summary>
 /// <remarks>
-/// A feature the shell disables never reaches this list — an unenabled feature is ignored (FR-036) — and no
+/// A feature the shell disables never reaches this list — an unenabled feature is ignored — and no
 /// setting other than <c>Provider</c> is carried, deliberately: shell configuration holds connection
 /// strings, and the narrowest possible projection of it is the one that cannot leak one into a request, a
 /// response, or a refusal.
@@ -235,11 +234,11 @@ public sealed class EfToolingShellFeature
     /// <summary>The CShells feature name, matched case-insensitively against <c>[ShellFeature]</c>.</summary>
     public string? Feature { get; init; }
 
-    /// <summary>The configured <c>Provider</c> value, or <c>null</c> when the shell sets none (FR-037).</summary>
+    /// <summary>The configured <c>Provider</c> value, or <c>null</c> when the shell sets none.</summary>
     public string? Provider { get; init; }
 }
 
-/// <summary>The <c>host</c> block of <c>migration-plan.json</c> (FR-047).</summary>
+/// <summary>The <c>host</c> block of <c>migration-plan.json</c>.</summary>
 public sealed class EfToolingHostFacts
 {
     public string? Name { get; init; }
@@ -249,7 +248,7 @@ public sealed class EfToolingHostFacts
 
     public string? Shell { get; init; }
 
-    /// <summary>The <c>--environment</c> value the provider-agreement check used. The CLI owns its <c>Production</c> default (FR-038), so it is stated here rather than defaulted twice.</summary>
+    /// <summary>The <c>--environment</c> value the provider-agreement check used. The CLI owns its <c>Production</c> default, so it is stated here rather than defaulted twice.</summary>
     public string? Environment { get; init; }
 }
 
@@ -378,7 +377,7 @@ public sealed class EfToolingScriptFile
     public string Sha256 { get; init; } = "";
 }
 
-/// <summary>What <c>apply</c> applied against the selected database, per module (FR-053).</summary>
+/// <summary>What <c>apply</c> applied against the selected database, per module.</summary>
 public sealed class EfToolingApplyPayload
 {
     public string Provider { get; init; } = "";
@@ -397,7 +396,7 @@ public sealed class EfToolingApplyEntry
     public IReadOnlyList<string> Applied { get; init; } = [];
 }
 
-/// <summary>What <c>validate</c> found against the selected database, per module (FR-052). Present only on success — a pending migration is refused instead.</summary>
+/// <summary>What <c>validate</c> found against the selected database, per module. Present only on success — a pending migration is refused instead.</summary>
 public sealed class EfToolingValidatePayload
 {
     public string Provider { get; init; } = "";
@@ -413,7 +412,7 @@ public sealed class EfToolingValidateEntry
     public string HistoryTable { get; init; } = "";
 }
 
-/// <summary>What <c>post-migrate</c> did, per module (ADR 0076 D8). The one command that runs an action at all.</summary>
+/// <summary>What <c>post-migrate</c> did, per module. The one command that runs an action at all.</summary>
 public sealed class EfToolingPostMigratePayload
 {
     public string Provider { get; init; } = "";
@@ -435,8 +434,8 @@ public sealed class EfToolingPostMigrateEntry
 }
 
 /// <summary>
-/// Each selected module's schema families as <c>hold</c>, <c>release</c> or <c>status</c> leaves them (spec 181,
-/// FR-022). <c>hold</c> and <c>release</c> report the one family they changed.
+/// Each selected module's schema families as <c>hold</c>, <c>release</c> or <c>status</c> leaves them.
+/// <c>hold</c> and <c>release</c> report the one family they changed.
 /// </summary>
 public sealed class EfToolingFinalizationPayload
 {
@@ -472,16 +471,16 @@ public sealed class EfToolingFinalizationFamily
     /// <summary>Each version this host reads above the finalized one, and why it is not finalized.</summary>
     public IReadOnlyList<EfToolingPendingVersion> Pending { get; init; } = [];
 
-    /// <summary>The finish record's completion version (spec 186), or null when none stands.</summary>
+    /// <summary>The finish record's completion version, or null when none stands.</summary>
     public string? CompletionVersion { get; init; }
 
     /// <summary>
-    /// The backfill run a worker has claimed in the finish record (spec 186, FR-008 and FR-021), on the completion that
+    /// The backfill run a worker has claimed in the finish record, on the completion that
     /// stands or, while none stands, on its withdrawal; or null when none is.
     /// </summary>
     public EfToolingBackfillRun? BackfillRun { get; init; }
 
-    /// <summary>The withdrawal of the family's completion while none has been recorded since (spec 186, FR-018), or null.</summary>
+    /// <summary>The withdrawal of the family's completion while none has been recorded since, or null.</summary>
     public EfToolingCompletionWithdrawal? CompletionWithdrawn { get; init; }
 }
 
@@ -529,7 +528,7 @@ public sealed class EfToolingPendingVersion
     public IReadOnlyList<string> HeldBy { get; init; } = [];
 
     /// <summary>
-    /// The counted members that cannot read it yet, each with the versions it reads (spec 181, FR-022): empty when none
+    /// The counted members that cannot read it yet, each with the versions it reads: empty when none
     /// blocks it, and null when the fleet was not read (a <c>status</c> run whose closure carries no membership provider,
     /// a membership table not created in this database, and every <c>hold</c> and <c>release</c>).
     /// </summary>

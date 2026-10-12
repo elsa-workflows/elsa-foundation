@@ -5,7 +5,7 @@ using Elsa.Persistence.Schema;
 namespace Elsa.Persistence.EntityFramework;
 
 /// <summary>
-/// A schema family's one chain (spec 180, FR-010), resolved from its <see cref="EfSchemaFamilyAttribute"/> declaration:
+/// A schema family's one chain, resolved from its <see cref="EfSchemaFamilyAttribute"/> declaration:
 /// the versions every reader of the family accepts, the upcasters that carry a row from its stamp to the current
 /// version, and the version a write stamps. Every store, and every reader outside the owning module, checks and
 /// upcasts through the same instance.
@@ -20,14 +20,13 @@ namespace Elsa.Persistence.EntityFramework;
 /// <see cref="EfSchemaVersionSkewException"/> and never bridged.
 /// </para>
 /// <para>
-/// <b>Resolved once per process</b> (FR-025): <see cref="Of"/> caches one instance per declaring assembly and family, and
+/// <b>Resolved once per process</b>: <see cref="Of"/> caches one instance per declaring assembly and family, and
 /// constructs each upcaster once. A row at the current version costs one membership test and one comparison of its
-/// content columns with the declared ones, and runs no upcaster (FR-021); an older row costs one in-memory transform of
-/// the whole row per step, on every read until it is next written, which stamps the current version and so upgrades it
-/// (FR-014).
+/// content columns with the declared ones, and runs no upcaster; an older row costs one in-memory transform of
+/// the whole row per step, on every read until it is next written, which stamps the current version and so upgrades it.
 /// </para>
 /// <para>
-/// A fault in the chain (FR-005) does not stop a read: it only shrinks the readable set to what the chain still reaches.
+/// A fault in the chain does not stop a read: it only shrinks the readable set to what the chain still reaches.
 /// <see cref="EnsureSound"/> refuses it where the family is registered, at startup, and the build refuses it before
 /// that.
 /// </para>
@@ -68,10 +67,10 @@ public sealed class EfSchemaChain
     /// <summary>The version this build writes: every write stamps it, and it is the last of <see cref="ReadableVersions"/>.</summary>
     public string CurrentVersion { get; }
 
-    /// <summary>The versions a read accepts, oldest first, ending at <see cref="CurrentVersion"/> (FR-004).</summary>
+    /// <summary>The versions a read accepts, oldest first, ending at <see cref="CurrentVersion"/>.</summary>
     public IReadOnlyList<string> ReadableVersions { get; }
 
-    /// <summary>The faults in the declared chain (FR-005); empty when it is sound.</summary>
+    /// <summary>The faults in the declared chain; empty when it is sound.</summary>
     public IReadOnlyList<string> Defects { get; }
 
     /// <summary>
@@ -83,7 +82,7 @@ public sealed class EfSchemaChain
     /// <summary>
     /// The chain <paramref name="assembly"/> declares for <paramref name="family"/>, resolved on first use and shared by
     /// every caller after. A family's module class holds it in a static field, so the family's identity is one declared
-    /// value every call site references (FR-002).
+    /// value every call site references.
     /// </summary>
     /// <exception cref="InvalidOperationException">
     /// <paramref name="assembly"/> declares no such family, or one of the chain's upcasters cannot be constructed: both are
@@ -105,7 +104,7 @@ public sealed class EfSchemaChain
 
     /// <summary>
     /// Refuses the registration of every family <paramref name="module"/>'s assembly declares for it, and of every shared
-    /// family this package declares, which every module's context maps, when its chain has a fault (FR-005). Called by
+    /// family this package declares, which every module's context maps, when its chain has a fault. Called by
     /// <c>AddEfModuleMigrations</c>, the one place every EF module passes through while a host wires itself up.
     /// </summary>
     public static void EnsureSound(Assembly assembly, string module)
@@ -135,7 +134,7 @@ public sealed class EfSchemaChain
     /// <summary>
     /// True when a row stamped <paramref name="stamp"/> was written at <paramref name="version"/> or later, in chain
     /// order. An integrity clause for a projection column introduced at <paramref name="version"/> applies only to such
-    /// rows (FR-008), since an older writer left the column unset.
+    /// rows, since an older writer left the column unset.
     /// </summary>
     /// <exception cref="EfSchemaVersionSkewException"><paramref name="stamp"/> is not readable.</exception>
     /// <exception cref="ArgumentOutOfRangeException"><paramref name="version"/> is not one of <see cref="ReadableVersions"/>.</exception>
@@ -150,8 +149,8 @@ public sealed class EfSchemaChain
     /// <summary>
     /// Returns <paramref name="row"/>, the decoded content of a row stamped <paramref name="stamp"/>, as the current
     /// version stores it: every declared content column upcast together, one step at a time from the stamp to
-    /// <see cref="CurrentVersion"/> (FR-009; #2144). Returns the very same instance, running no upcaster, when the row is
-    /// at the current version (FR-021). Call it after the row's integrity clauses, which describe the stamped version, and
+    /// <see cref="CurrentVersion"/> (#2144). Returns the very same instance, running no upcaster, when the row is
+    /// at the current version. Call it after the row's integrity clauses, which describe the stamped version, and
     /// before deserializing.
     /// </summary>
     /// <remarks>
@@ -206,7 +205,7 @@ public sealed class EfSchemaChain
             {
                 next = _upcasters[step].Upcast(value);
             }
-            // An upcaster is arbitrary module code (FR-009): whatever it throws means this row cannot be trusted, so it
+            // An upcaster is arbitrary module code: whatever it throws means this row cannot be trusted, so it
             // becomes corruption rather than propagating. Only OutOfMemoryException is let through, since it is not the
             // upcaster's data that is unsound.
             catch (Exception exception) when (exception is not OutOfMemoryException)

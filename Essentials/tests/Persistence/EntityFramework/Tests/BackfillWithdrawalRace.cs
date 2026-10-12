@@ -7,7 +7,7 @@ using static Elsa.Persistence.EntityFramework.Tests.BackfillDatabase;
 namespace Elsa.Persistence.EntityFramework.Tests;
 
 /// <summary>
-/// Spec 186, FR-008 after FR-018, a race every engine must settle the same way, so the provider tests compile it in: the
+/// The claim after a withdrawal, a race every engine must settle the same way, so the provider tests compile it in: the
 /// family's completion withdrawn with no claim standing, and several hosts that all find the withdrawal and read the
 /// finalization record before any of them writes it. Exactly one wins the claim on the withdrawal, upgrades every row and
 /// records the completion; the others lose the compare-and-set and read none of the rows, having found its claim, or,

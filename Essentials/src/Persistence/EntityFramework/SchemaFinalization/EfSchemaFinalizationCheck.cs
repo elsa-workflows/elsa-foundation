@@ -7,7 +7,7 @@ using Elsa.Persistence.Schema.SchemaFinalization;
 namespace Elsa.Persistence.EntityFramework.SchemaFinalization;
 
 /// <summary>
-/// The read-only half of the finalization gate's activation check (spec 181, FR-015 and FR-016): whether a family's
+/// The read-only half of the finalization gate's activation check: whether a family's
 /// record names a finalized or completion version this host cannot read. The gate applies it at Prepare, and the
 /// enable-time guard applies it before anything is saved, so the two refuse exactly the same modules.
 /// </summary>
@@ -16,7 +16,7 @@ public static class EfSchemaFinalizationCheck
     /// <summary>
     /// The refusal <paramref name="record"/> forces on a host whose build reads <paramref name="chain"/>'s versions, or
     /// null when the host can read everything the record says may be in the database. An intent is not judged here:
-    /// only an activation, which can wait for it, can (FR-014).
+    /// only an activation, which can wait for it, can.
     /// </summary>
     public static EfSchemaActivationRefusedException? Refusal(string module, EfSchemaChain chain, SchemaFinalizationRecord record)
     {
@@ -59,7 +59,7 @@ public static class EfSchemaFinalizationCheck
     /// <summary>
     /// Whether <paramref name="context"/>'s database holds the module's finalization record table, found through the
     /// engine's own catalog rather than the migrations-history table, which a host under <c>AutoMigrate</c> never reads
-    /// before Prepare (spec 171, FR-069). A database that does not exist is not created by asking.
+    /// before Prepare. A database that does not exist is not created by asking.
     /// </summary>
     public static async Task<bool> RecordTableExistsAsync(DbContext context, CancellationToken cancellationToken = default)
     {

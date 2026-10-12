@@ -42,8 +42,8 @@ public sealed class CliAcceptanceLegTests
     /// The Workbench shell feature keys that back <see cref="Modules"/> above, read from
     /// <c>Essentials/apps/Elsa.Workbench/shells.json</c>: every enabled feature there whose name contains
     /// <c>EntityFrameworkCore</c> except <c>WorkflowsDashboardEntityFrameworkCore</c>, which declares no
-    /// <c>Provider</c> setting of its own and is skipped by the provider-agreement comparison the same way
-    /// (spec 171, research.md). Two keys -- <c>FoundationIdentityAspNetCoreIdentityEntityFrameworkCore</c>
+    /// <c>Provider</c> setting of its own and is skipped by the provider-agreement comparison the same way.
+    /// Two keys -- <c>FoundationIdentityAspNetCoreIdentityEntityFrameworkCore</c>
     /// and <c>IdentityIamEntityFrameworkCore</c> -- back the same <c>Identity.Iam</c> module and context, so
     /// both must point at the same database or the host refuses to start on their disagreement, not on a
     /// pending migration.
