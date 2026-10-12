@@ -38,7 +38,8 @@ internal sealed record PermissionBypassScan(
     int Assemblies,
     int MethodBodies,
     int EndpointTypes,
-    IReadOnlyDictionary<string, int> ClaimLookupsByType)
+    IReadOnlyDictionary<string, int> ClaimLookupsByType,
+    IReadOnlyCollection<string> DeclaredPermissionKeys)
 {
     /// <summary>The key <see cref="ClaimLookupsByType"/> uses for a type.</summary>
     internal static string TypeKey(string assembly, string type) => $"{assembly}|{type}";
@@ -58,38 +59,51 @@ internal sealed record PermissionBypassScan(
 /// <c>FindAll</c> or <c>HasClaim</c>, as an instance method of a <c>ClaimsPrincipal</c>, a <c>ClaimsIdentity</c> or
 /// another <c>System.Security.Claims.Claims*</c> type, or as a static method whose first parameter can take a principal
 /// or an identity: <c>IPrincipal</c>, <c>IIdentity</c>, <c>object</c> or a claims type) is passed a permission value
-/// in any argument but the principal. A principal's or identity's <c>Claims</c> collection, or a <c>FindAll</c>
-/// result, is handed to a call together with a permission value. Or a scanned method is passed a permission value in a
-/// parameter that the method, or a method it calls, uses in one of those two ways. Only
-/// <see cref="ReviewedPermissionClaimReader"/> methods are exempt.
+/// in any argument but the principal. A claims collection (see below) is handed to a call together with a permission
+/// value. Or a scanned method is passed a permission value in a parameter that the method, or a method it calls, uses
+/// in one of those two ways. Only <see cref="ReviewedPermissionClaimReader"/> methods are exempt.
 /// </description></item>
 /// </list>
 /// <para>
-/// A permission value is the <see cref="IdentityClaimTypes.Permission"/> claim type, or the value of a constant that is
-/// permission-named (see below) and reads like a namespaced key, with letters and a <c>.</c>, <c>:</c> or <c>-</c>.
-/// Constants are folded into their use sites at compile time, which is why they are matched by value; the bare wildcard
-/// <c>*</c> and plain words are left out because the same literals appear in unrelated code. A field is
-/// permission-named when its source-level name contains "Permission" (the property name for an auto-property backing
-/// field, the variable name for a closure or state-machine field), or when it is a static string, string-collection or
-/// delegate field of a type whose name contains "Permission"; other fields of such a type, record and auto-property
-/// state included, are not. A permission value also flows: through locals, arguments, fields and properties it is
-/// assigned to anywhere in the scanned code; into the result of any call or object creation that takes it as an
-/// argument (the receiver counts only for <see cref="string"/> and delegate methods); out of a scanned method that
-/// returns it; and into a delegate whose target method loads one.
+/// A permission value is the <see cref="IdentityClaimTypes.Permission"/> claim type, a permission key the scanned code
+/// declares (the key of a catalog <see cref="Permission"/> entry, passed directly or through a catalog helper's
+/// parameter, or an argument to a <c>RequirePermission</c> or <c>RequireAnyPermission</c> attribute or call), or the
+/// value of a constant whose source-level name contains "Permission". Constants are folded into their use sites at
+/// compile time, which is why they are matched by value, and only values that read like a namespaced key (letters and
+/// a <c>.</c>, <c>:</c> or <c>-</c>) count, so the bare wildcard <c>*</c> and plain words, which also appear in
+/// unrelated code, do not. A field holds permission values when
+/// its source-level name contains "Permission" (the property name for an auto-property backing field, the variable or
+/// parameter name for a closure, iterator or async state-machine field) and its type can hold one, or when it is a
+/// static string-collection or delegate field of a type whose name contains "Permission". Other constants and fields of
+/// such a type, an owner id or a category among them, are not permission values.
+/// </para>
+/// <para>
+/// A permission value flows through locals, arguments (including <c>in</c> and <c>ref</c> reads), fields and properties
+/// it is assigned to anywhere in the scanned code; into the result of a call or object creation that takes it as an
+/// input, receiver included, when the result's type can hold a permission value (a string, a string collection, a
+/// delegate, <see cref="object"/> or a generic parameter); out of a scanned method that returns it; and into a delegate
+/// whose target method uses one, directly or through a value a scanned method computed from one. A claims collection
+/// (a principal's <c>Claims</c> or <c>Identities</c>, a <c>FindAll</c> result) flows the same way into results whose type
+/// can hold claims or identities (<c>IEnumerable&lt;Claim&gt;</c> and its implementations, arrays, lists, lookups and
+/// dictionaries of them), so <c>ToList()</c>, <c>AsEnumerable()</c>, <c>SelectMany</c> over identities and helpers that
+/// return claims keep the mark.
 /// </para>
 /// <para>
 /// Each method's parameters are summarized: a parameter is a sink when its value reaches a claims read inside the
-/// method, directly, through a closure or async state machine, or through another summarized method it calls. A call
-/// that passes a permission value into a sink parameter is reported at the call site. The scan simulates the evaluation
-/// stack in forward passes over each method, which IL's own rules make exact without a control-flow graph, and repeats
-/// every method until no alias, return or summary is learned.
+/// method, directly, through a closure, iterator or async state machine, or through another summarized method it calls.
+/// A call that passes a permission value into a sink parameter is reported at the call site. The scan simulates the
+/// evaluation stack in forward passes over each method, which IL's own rules make exact without a control-flow graph,
+/// and repeats every method until no alias, declared key, return or summary is learned.
 /// </para>
 /// </summary>
 /// <remarks>
-/// Not followed: values carried in array or collection elements; a claim taken out of the collection by a loop; a
-/// claims collection that a helper receives as a parameter rather than reading it from a principal itself; calls made
-/// through an interface, a virtual or abstract method, or a delegate, which are not resolved to their
-/// implementations; and code outside the scanned assemblies.
+/// Not followed: values carried in array, collection or tuple elements; a claim taken out of the collection by a loop,
+/// or a value projected out of the claims (<c>Select(claim =&gt; claim.Type)</c>); a claims collection that a helper
+/// receives as a parameter rather than reading it from a principal itself; values that pass through a type that cannot
+/// hold them by the rule above, such as a <c>StringBuilder</c>, a tuple or the <c>Task</c> an async method returns;
+/// values written back through <c>ref</c> or <c>out</c> parameters; permission keys declared through a local or field
+/// rather than as a constant or a helper's parameter; calls made through an interface, a virtual or abstract method,
+/// or a delegate, which are not resolved to their implementations; and code outside the scanned assemblies.
 /// </remarks>
 internal static class PermissionBypassScanner
 {
@@ -111,7 +125,7 @@ internal static class PermissionBypassScanner
             .SelectMany(type => type.GetMethods(Declared).Cast<MethodBase>().Concat(type.GetConstructors(Declared)).Select(method => (Type: type, Method: method)))
             .Where(entry => entry.Method.GetMethodBody()?.GetILAsByteArray() is { Length: > 0 })
             .ToArray();
-        var state = new ScanState(PermissionConstantValues(types));
+        var state = new ScanState(NamedPermissionConstants(types), AttributeDeclaredKeys(types));
 
         // What one method learns (an alias, a returned permission value, a sink parameter) can change what an earlier
         // method passes, so sweep until nothing new is learned; the findings of the last sweep, which saw it all, are
@@ -144,15 +158,17 @@ internal static class PermissionBypassScanner
             assemblies.Count,
             methods.Length,
             types.Count(IsEndpointType),
-            lookups);
+            lookups,
+            state.DeclaredKeys);
     }
 
-    private static HashSet<string> PermissionConstantValues(IEnumerable<Type> types)
+    /// <summary>The claim type and the namespaced values of constants whose source-level name contains "Permission".</summary>
+    private static HashSet<string> NamedPermissionConstants(IEnumerable<Type> types)
     {
         var values = new HashSet<string>(StringComparer.Ordinal) { IdentityClaimTypes.Permission };
         foreach (var field in types.SelectMany(type => type.GetFields(Declared)))
         {
-            if (field is { IsLiteral: true } && field.FieldType == typeof(string) && IsPermissionNamed(field) &&
+            if (field is { IsLiteral: true } && field.FieldType == typeof(string) && HasPermissionName(field) &&
                 field.GetRawConstantValue() is string value && IsNamespacedKey(value))
             {
                 values.Add(value);
@@ -162,28 +178,78 @@ internal static class PermissionBypassScanner
         return values;
     }
 
+    /// <summary>The permission keys named by <c>RequirePermission</c> and <c>RequireAnyPermission</c> attributes on scanned types and methods.</summary>
+    private static IEnumerable<string> AttributeDeclaredKeys(IEnumerable<Type> types) =>
+        types.SelectMany(type => type.GetMethods(Declared).Cast<MemberInfo>().Prepend(type))
+            .SelectMany(member => member.GetCustomAttributesData())
+            .Where(attribute => IsPermissionRequirement(attribute.AttributeType.Name))
+            .SelectMany(attribute => attribute.ConstructorArguments)
+            .SelectMany(argument => argument.Value switch
+            {
+                string key => [key],
+                IEnumerable<CustomAttributeTypedArgument> keys => keys.Select(key => key.Value).OfType<string>(),
+                _ => []
+            });
+
+    private static bool IsPermissionRequirement(string name) =>
+        name.StartsWith("RequirePermission", StringComparison.Ordinal) ||
+        name.StartsWith("RequireAnyPermission", StringComparison.Ordinal);
+
     /// <summary>Letters and a <c>.</c>, <c>:</c> or <c>-</c>, the shape of a permission key such as <c>workflow-design.read</c>.</summary>
     private static bool IsNamespacedKey(string value) =>
         value.Any(char.IsLetter) && value.IndexOfAny(['.', ':', '-']) >= 0;
 
-    private static bool IsPermissionNamed(FieldInfo field) =>
-        FieldSourceName(field).Contains("Permission", StringComparison.OrdinalIgnoreCase) ||
+    /// <summary>Whether <paramref name="field"/> holds permission values, by its own name or as a collection or delegate on a permission-named type.</summary>
+    private static bool IsPermissionField(FieldInfo field) =>
+        (HasPermissionName(field) && CanHoldPermissionValue(field.FieldType)) ||
         (field.IsStatic &&
          field.DeclaringType is { } declaringType &&
          !IsCompilerGenerated(declaringType) &&
          !field.Name.StartsWith('<') &&
          declaringType.Name.Contains("Permission", StringComparison.OrdinalIgnoreCase) &&
-         CanHoldPermissionValues(field.FieldType));
+         field.FieldType != typeof(string) &&
+         (typeof(IEnumerable<string>).IsAssignableFrom(field.FieldType) || typeof(Delegate).IsAssignableFrom(field.FieldType)));
 
-    private static bool CanHoldPermissionValues(Type type) =>
-        type == typeof(string) || typeof(IEnumerable<string>).IsAssignableFrom(type) || typeof(Delegate).IsAssignableFrom(type);
+    private static bool HasPermissionName(FieldInfo field) =>
+        FieldSourceName(field).Contains("Permission", StringComparison.OrdinalIgnoreCase);
 
-    /// <summary>The source-level name of a field: the property behind a backing field, the variable behind a hoisted or captured one.</summary>
-    private static string FieldSourceName(FieldInfo field) => SourceName(field.Name) ?? field.Name;
+    /// <summary>A type a permission value can be stored in or returned as: a string, a string collection, a delegate, <see cref="object"/> or a generic parameter.</summary>
+    private static bool CanHoldPermissionValue(Type type) =>
+        type == typeof(string) || type == typeof(object) || type.IsGenericParameter ||
+        typeof(IEnumerable<string>).IsAssignableFrom(type) || typeof(Delegate).IsAssignableFrom(type);
+
+    /// <summary>
+    /// A type a claims collection can be stored in or returned as: one whose element or type arguments are claims,
+    /// identities or principals, at any depth (arrays, lists, lookups, dictionaries), or <see cref="object"/> or a generic
+    /// parameter. A single principal, identity or claim is not a collection, and a predicate over claims holds none.
+    /// </summary>
+    private static bool CanHoldClaims(Type type) =>
+        type == typeof(object) || type.IsGenericParameter || (!typeof(Delegate).IsAssignableFrom(type) && ContainsClaims(type, depth: 0));
+
+    private static bool ContainsClaims(Type type, int depth) =>
+        depth < 4 &&
+        (type.IsArray
+            ? ContainsClaims(type.GetElementType()!, depth + 1)
+            : type.IsGenericType
+                ? type.GetGenericArguments().Any(argument => ContainsClaims(argument, depth + 1))
+                : depth > 0 && (type == typeof(Claim) || IsClaimsType(type)));
+
+    /// <summary>
+    /// The source-level name of a field: the property behind a backing field, the variable behind a hoisted or captured
+    /// one, the parameter behind an iterator's copy of it.
+    /// </summary>
+    private static string FieldSourceName(FieldInfo field) =>
+        field.Name.StartsWith(IteratorParameterPrefix, StringComparison.Ordinal)
+            ? field.Name[IteratorParameterPrefix.Length..]
+            : SourceName(field.Name) ?? field.Name;
+
+    /// <summary>The prefix of the field an iterator keeps its parameter in until <c>GetEnumerator</c> copies it.</summary>
+    private const string IteratorParameterPrefix = "<>3__";
 
     /// <summary>A field of a closure or state machine that carries a captured variable or parameter, not the compiler's own bookkeeping.</summary>
     private static bool IsCapturedVariable(FieldInfo field) =>
-        field.DeclaringType is { } declaringType && IsCompilerGenerated(declaringType) && !field.Name.Contains("<>", StringComparison.Ordinal);
+        field.DeclaringType is { } declaringType && IsCompilerGenerated(declaringType) &&
+        (!field.Name.Contains("<>", StringComparison.Ordinal) || field.Name.StartsWith(IteratorParameterPrefix, StringComparison.Ordinal));
 
     /// <summary>A first-party endpoint class, or any type in an <c>Endpoints</c> namespace: the surface the deleted scan covered by folder.</summary>
     private static bool IsEndpointType(Type type) =>
@@ -258,8 +324,18 @@ internal static class PermissionBypassScanner
     private enum Taint : byte
     {
         None = 0,
+
+        /// <summary>The value is, or carries, a permission value.</summary>
         Permission = 1,
-        ClaimsCollection = 2
+
+        /// <summary>The value is a collection of claims, or of identities that hold them.</summary>
+        ClaimsCollection = 2,
+
+        /// <summary>
+        /// The value was computed from a permission value but cannot hold one, such as the result of comparing a claim
+        /// type with it. It marks a delegate whose target decides on a permission value, and nothing else.
+        /// </summary>
+        Derived = 4
     }
 
     private readonly record struct MemberKey(Module Module, int Token)
@@ -271,7 +347,7 @@ internal static class PermissionBypassScanner
     /// A value on the simulated stack: what it carries, and where in the current method it came from, as the
     /// parameters and captured-variable fields it was computed from.
     /// </summary>
-    private readonly record struct Flow(Taint Taint, ulong Parameters = 0, ImmutableHashSet<MemberKey>? Fields = null)
+    private readonly record struct Flow(Taint Taint, ulong Parameters = 0, ImmutableHashSet<MemberKey>? Fields = null, string? Constant = null)
     {
         public static readonly Flow None = new(Taint.None);
 
@@ -279,11 +355,28 @@ internal static class PermissionBypassScanner
 
         public bool IsClaimsCollection => Taint.HasFlag(Taint.ClaimsCollection);
 
-        public static Flow operator |(Flow left, Flow right) =>
-            new(left.Taint | right.Taint, left.Parameters | right.Parameters, Union(left.Fields, right.Fields));
+        /// <summary>Whether a permission value went into this value, whether or not the value can hold one.</summary>
+        public bool InvolvesPermission => (Taint & (Taint.Permission | Taint.Derived)) != 0;
 
-        /// <summary>Everything but the claims-collection mark, which describes the value itself rather than what it was computed from.</summary>
-        public Flow Derived => this with { Taint = Taint & Taint.Permission };
+        public static Flow operator |(Flow left, Flow right) =>
+            new(left.Taint | right.Taint,
+                left.Parameters | right.Parameters,
+                Union(left.Fields, right.Fields),
+                left.Constant == right.Constant ? left.Constant : null);
+
+        /// <summary>
+        /// The flow of a value of <paramref name="type"/> computed from this one: the permission value and its sources only
+        /// if the type can hold one, the claims-collection mark only if the type can hold claims.
+        /// </summary>
+        public Flow Into(Type type)
+        {
+            var taint = InvolvesPermission ? Taint.Derived : Taint.None;
+            if (IsClaimsCollection && CanHoldClaims(type))
+                taint |= Taint.ClaimsCollection;
+            return CanHoldPermissionValue(type)
+                ? new Flow(taint | (Taint & Taint.Permission), Parameters, Fields)
+                : new Flow(taint);
+        }
 
         public bool Covers(Flow other) =>
             (Taint | other.Taint) == Taint &&
@@ -295,22 +388,34 @@ internal static class PermissionBypassScanner
     }
 
     /// <summary>What every sweep learns about members, shared across methods and assemblies.</summary>
-    private sealed class ScanState(HashSet<string> permissionConstants)
+    private sealed class ScanState(HashSet<string> namedConstants, IEnumerable<string> attributeDeclaredKeys)
     {
+        private readonly HashSet<string> _declaredKeys = new(attributeDeclaredKeys.Where(IsNamespacedKey), StringComparer.Ordinal);
         private readonly Dictionary<MemberKey, Taint> _fields = [];
         private readonly Dictionary<(MemberKey Type, string Property), Taint> _properties = [];
         private readonly HashSet<MemberKey> _permissionLoadingMethods = [];
-        private readonly HashSet<MemberKey> _permissionReturningMethods = [];
+        private readonly Dictionary<MemberKey, Taint> _returned = [];
         private readonly Dictionary<MemberKey, ulong> _sinkParameters = [];
+        private readonly Dictionary<MemberKey, ulong> _keyParameters = [];
         private readonly HashSet<MemberKey> _sinkFields = [];
         private readonly Dictionary<MemberKey, ImmutableHashSet<MemberKey>> _capturedFieldsRead = [];
 
         public bool Changed { get; set; }
 
-        public Taint String(string value) => permissionConstants.Contains(value) ? Taint.Permission : Taint.None;
+        public IReadOnlyCollection<string> DeclaredKeys => _declaredKeys;
+
+        public Taint String(string value) =>
+            namedConstants.Contains(value) || _declaredKeys.Contains(value) ? Taint.Permission : Taint.None;
+
+        /// <summary>Records a key the scanned code declares as a permission.</summary>
+        public void DeclareKey(string key)
+        {
+            if (IsNamespacedKey(key) && _declaredKeys.Add(key))
+                Changed = true;
+        }
 
         public Taint Field(FieldInfo field) =>
-            (IsPermissionNamed(field) ? Taint.Permission : Taint.None) | _fields.GetValueOrDefault(MemberKey.Of(field));
+            (IsPermissionField(field) ? Taint.Permission : Taint.None) | _fields.GetValueOrDefault(MemberKey.Of(field));
 
         public void AssignField(FieldInfo field, Taint value) => Merge(_fields, MemberKey.Of(field), value);
 
@@ -338,14 +443,33 @@ internal static class PermissionBypassScanner
 
         public void MethodLoadsPermission(MethodBase method) => Add(_permissionLoadingMethods, MemberKey.Of(method));
 
-        public Taint Returned(MethodBase method) =>
-            _permissionReturningMethods.Contains(MemberKey.Of(method)) ? Taint.Permission : Taint.None;
+        public Taint Returned(MethodBase method) => _returned.GetValueOrDefault(MemberKey.Of(method));
 
-        public void MethodReturnsPermission(MethodBase method) => Add(_permissionReturningMethods, MemberKey.Of(method));
+        public void MethodReturns(MethodBase method, Taint taint) => Merge(_returned, MemberKey.Of(method), taint);
 
         public ulong SinkParameters(MethodBase method) => _sinkParameters.GetValueOrDefault(MemberKey.Of(method));
 
         public bool IsSinkField(FieldInfo field) => _sinkFields.Contains(MemberKey.Of(field));
+
+        /// <summary>The parameters of <paramref name="method"/> whose value it declares as a permission key.</summary>
+        public ulong KeyParameters(MethodBase method) => _keyParameters.GetValueOrDefault(MemberKey.Of(method));
+
+        /// <summary>Records that a value declared as a permission key in <paramref name="method"/> came from <paramref name="flow"/>.</summary>
+        public void Declare(MethodBase method, Flow flow)
+        {
+            if (flow.Constant is { } key)
+                DeclareKey(key);
+            if (flow.Parameters == 0)
+                return;
+
+            var methodKey = MemberKey.Of(method);
+            var current = _keyParameters.GetValueOrDefault(methodKey);
+            if ((current | flow.Parameters) != current)
+            {
+                _keyParameters[methodKey] = current | flow.Parameters;
+                Changed = true;
+            }
+        }
 
         /// <summary>Records that <paramref name="flow"/>'s sources, in <paramref name="method"/>, reach a claims read.</summary>
         public void Sink(MethodBase method, Flow flow)
@@ -412,7 +536,7 @@ internal static class PermissionBypassScanner
         private ImmutableHashSet<MemberKey> _capturedFieldsRead = [];
         private bool _localsChanged;
         private bool _loadsPermission;
-        private bool _returnsPermission;
+        private Taint _returned;
 
         public void Run()
         {
@@ -436,8 +560,8 @@ internal static class PermissionBypassScanner
                 lookups[key] = lookups.GetValueOrDefault(key) + count;
             if (_loadsPermission)
                 state.MethodLoadsPermission(method);
-            if (_returnsPermission)
-                state.MethodReturnsPermission(method);
+            if (_returned != Taint.None)
+                state.MethodReturns(method, _returned);
             state.RecordCapturedFieldsRead(method, _capturedFieldsRead);
         }
 
@@ -487,7 +611,8 @@ internal static class PermissionBypassScanner
             switch (name)
             {
                 case "ldstr":
-                    Push(stack, new Flow(state.String(method.Module.ResolveString(instruction.Operand))));
+                    var literal = method.Module.ResolveString(instruction.Operand);
+                    Push(stack, new Flow(state.String(literal), Constant: literal));
                     return;
                 case "ldsfld" or "ldsflda":
                     Push(stack, Load(ResolveField(instruction)));
@@ -526,12 +651,22 @@ internal static class PermissionBypassScanner
                     CallIndirect(instruction, stack);
                     return;
                 case "ret":
-                    if (method is MethodInfo { ReturnType: var returnType } && returnType != typeof(void) && Pop(stack, instruction).HasPermission)
-                        _returnsPermission = true;
+                    if (method is MethodInfo { ReturnType: var returnType } && returnType != typeof(void))
+                        _returned |= Pop(stack, instruction).Taint;
+                    return;
+                case "ldobj":
+                    // An in, ref or out parameter, or a ref local, read through its address carries the value stored there.
+                    Push(stack, Pop(stack, instruction));
                     return;
                 case "leave" or "leave.s" or "endfinally":
                     stack.Clear();
                     return;
+            }
+
+            if (name.StartsWith("ldind.", StringComparison.Ordinal))
+            {
+                Push(stack, Pop(stack, instruction));
+                return;
             }
 
             if (name.StartsWith("ldloc", StringComparison.Ordinal))
@@ -594,6 +729,8 @@ internal static class PermissionBypassScanner
             for (var index = count - 1; index >= 0; index--)
                 arguments[index] = Pop(stack, instruction);
 
+            DeclareKeys(callee, isNewObject, arguments);
+
             var reported = ReportFastEndpointsHelper(callee, instruction);
             if (IsClaimLookup(callee))
             {
@@ -645,21 +782,41 @@ internal static class PermissionBypassScanner
             if (callee.IsSpecialName && callee.Name.StartsWith("set_", StringComparison.Ordinal) && count > 0)
                 state.AssignProperty(callee, arguments[^1].Taint);
 
-            if (!isNewObject && (callee is not MethodInfo info || info.ReturnType == typeof(void)))
+            var resultType = isNewObject ? callee.DeclaringType : (callee as MethodInfo)?.ReturnType;
+            if (resultType is null || resultType == typeof(void))
                 return;
 
-            // A result is computed from its arguments. An object's own state is not its argument, so the receiver counts
-            // only where it is the value being transformed: a string, or a delegate being invoked.
-            var inputs = hasThis && callee.DeclaringType is { } declaring && declaring != typeof(string) && !typeof(Delegate).IsAssignableFrom(declaring)
-                ? arguments.Skip(1)
-                : arguments;
-            var result = inputs.Aggregate(Flow.None, (all, argument) => all | argument.Derived);
-            Push(stack, result | new Flow(isNewObject ? Taint.None : ResultTaint(callee)));
+            // A result is computed from every input, the receiver included, but keeps only what its type can hold.
+            var inputs = arguments.Aggregate(new Flow(isNewObject ? Taint.None : ResultTaint(callee)), (all, argument) => all | argument);
+            Push(stack, inputs.Into(resultType));
+        }
+
+        /// <summary>
+        /// Records the keys a call declares as permissions: the key of a catalog <see cref="Permission"/> entry, an
+        /// argument to a <c>RequirePermission</c> or <c>RequireAnyPermission</c> call, or an argument to a scanned method
+        /// that declares its parameter as one, as catalog helpers such as <c>Owned(key, ...)</c> do.
+        /// </summary>
+        private void DeclareKeys(MethodBase callee, bool isNewObject, Flow[] arguments)
+        {
+            if (isNewObject && callee.DeclaringType == typeof(Permission) && arguments.Length > 0)
+                state.Declare(method, arguments[0]);
+            else if (IsPermissionRequirement(callee.Name))
+            {
+                foreach (var argument in arguments)
+                    state.Declare(method, argument);
+            }
+
+            var keys = state.KeyParameters(callee);
+            for (var index = 0; keys != 0 && index < arguments.Length; index++)
+            {
+                if ((keys & (1UL << (index + (isNewObject ? 1 : 0)))) != 0)
+                    state.Declare(method, arguments[index]);
+            }
         }
 
         private Taint ResultTaint(MethodBase callee)
         {
-            if (IsClaimsType(callee.DeclaringType) && callee.Name is ("get_Claims" or "FindAll"))
+            if (IsClaimsType(callee.DeclaringType) && callee.Name is ("get_Claims" or "get_Identities" or "FindAll"))
                 return Taint.ClaimsCollection;
 
             var property = callee.IsSpecialName && callee.Name.StartsWith("get_", StringComparison.Ordinal)
@@ -706,7 +863,7 @@ internal static class PermissionBypassScanner
 
         private void Push(List<Flow> stack, Flow flow)
         {
-            if (flow.HasPermission)
+            if (flow.InvolvesPermission)
                 _loadsPermission = true;
             stack.Add(flow);
         }
