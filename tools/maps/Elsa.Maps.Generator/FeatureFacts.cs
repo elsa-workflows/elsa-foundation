@@ -57,7 +57,7 @@ public static partial class FeatureScanner
     {
         var sourceProjects = projects.Where(project => project.Kind == "source").ToArray();
 
-        return repo.ListFiles(RepoLayout.SourceFilePathspecs)
+        return RepoLayout.SourceFiles(repo)
             .SelectMany(relativePath => ScanFile(repo, sourceProjects, relativePath))
             .OrderBy(feature => feature.Domain, StringComparer.Ordinal)
             .ThenBy(feature => feature.Project, StringComparer.Ordinal)

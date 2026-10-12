@@ -1,0 +1,544 @@
+.agent-launcher {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  border: 1px solid var(--studio-border);
+  border-radius: var(--studio-radius-sm);
+  background: var(--studio-surface);
+  color: var(--studio-text);
+  min-height: 2rem;
+  padding: 0 0.75rem;
+  font: inherit;
+  font-size: 0.8125rem;
+  cursor: pointer;
+}
+
+.topbar-actions > .agent-launcher {
+  display: inline-flex;
+  width: auto;
+  min-width: 0;
+  height: 36px;
+  padding: 0 0.75rem 0 0.65rem;
+  white-space: nowrap;
+  font-size: 0.8125rem;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.agent-launcher svg {
+  flex: 0 0 auto;
+}
+
+.agent-session-indicator {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  min-width: 0;
+  margin-left: 0.15rem;
+  color: var(--studio-text-muted);
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+
+.agent-session-indicator > span {
+  display: inline-flex;
+  align-items: center;
+  min-height: 1.1rem;
+  border: 1px solid var(--studio-border);
+  border-radius: 999px;
+  background: var(--studio-surface-muted);
+  padding: 0 0.35rem;
+  white-space: nowrap;
+}
+
+.agent-session-indicator > span:first-child {
+  border-color: var(--studio-accent);
+  color: var(--studio-accent);
+}
+
+.agent-session-indicator > span[data-state="blocked"],
+.agent-session-indicator > span[data-state="failed"] {
+  border-color: var(--studio-danger);
+  color: var(--studio-danger);
+}
+
+.agent-session-indicator > span[data-state="waiting"] {
+  border-color: var(--studio-warning);
+  color: var(--studio-warning);
+}
+
+.agent-launcher:hover:not(:disabled),
+.agent-launcher:focus-visible {
+  border-color: var(--studio-accent);
+  color: var(--studio-accent);
+}
+
+.agent-panel {
+  position: fixed;
+  inset: 4.5rem 1.25rem 1.25rem auto;
+  z-index: 40;
+  display: grid;
+  grid-template-rows: auto auto auto auto 1fr auto auto auto;
+  width: min(28rem, calc(100vw - 2rem));
+  border: 1px solid var(--studio-border);
+  border-radius: var(--studio-radius-lg);
+  background: var(--studio-surface);
+  box-shadow: var(--studio-shadow-sm);
+  overflow: hidden;
+}
+
+.agent-panel-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.9rem 1rem;
+  border-bottom: 1px solid var(--studio-border);
+}
+
+.agent-panel-header span {
+  display: block;
+  color: var(--studio-text-muted);
+  font-size: 0.72rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.agent-panel-header strong {
+  display: block;
+  font-size: 0.95rem;
+}
+
+.agent-panel-header button,
+.agent-feedback button,
+.agent-composer button,
+.agent-proposal footer button,
+.agent-workflow-batch footer button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  border: 1px solid var(--studio-border);
+  border-radius: var(--studio-radius-sm);
+  background: var(--studio-surface);
+  color: var(--studio-text);
+  min-height: 1.9rem;
+  padding: 0 0.55rem;
+  cursor: pointer;
+}
+
+.agent-panel-header button:hover:not(:disabled),
+.agent-feedback button:hover:not(:disabled),
+.agent-composer button:hover:not(:disabled),
+.agent-proposal footer button:hover:not(:disabled),
+.agent-workflow-batch footer button:hover:not(:disabled) {
+  border-color: var(--studio-accent);
+}
+
+.agent-banner {
+  margin: 0.75rem 1rem 0;
+  border: 1px solid var(--studio-border);
+  border-radius: var(--studio-radius-sm);
+  padding: 0.65rem 0.75rem;
+  font-size: 0.8125rem;
+}
+
+.agent-banner[data-tone="warning"] {
+  border-color: var(--studio-warning);
+}
+
+.agent-banner[data-tone="danger"] {
+  border-color: var(--studio-danger);
+}
+
+.agent-provider-status {
+  display: grid;
+  gap: 0.25rem;
+  margin: 0.75rem 1rem 0;
+  border: 1px solid var(--studio-border);
+  border-radius: var(--studio-radius-sm);
+  background: var(--studio-surface-muted);
+  padding: 0.55rem 0.7rem;
+  font-size: 0.78rem;
+}
+
+.agent-provider-status span {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-weight: 700;
+}
+
+.agent-provider-status small {
+  color: var(--studio-text-muted);
+  overflow-wrap: anywhere;
+}
+
+.agent-provider-status[data-tone="success"] {
+  border-color: var(--studio-success);
+}
+
+.agent-context-chips,
+.agent-prompt-starters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  padding: 0.75rem 1rem 0;
+}
+
+.agent-context-chip,
+.agent-prompt-starters button,
+.agent-proposal-risk {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  border: 1px solid var(--studio-border);
+  border-radius: 999px;
+  background: var(--studio-surface-muted);
+  color: var(--studio-text-muted);
+  padding: 0.25rem 0.55rem;
+  font-size: 0.75rem;
+}
+
+/*
+ * Weaver risk chip — tone by severity.
+ *
+ * `data-risk` is set on the parent `.agent-proposal` article; the actual values are the
+ * StudioAgentRisk levels (`review-required` | `destructive` | `admin`). We also accept the
+ * generic low/medium/high/critical aliases in case a provider emits those. Text uses the
+ * WCAG-AA `--studio-*-fg` foreground tokens (same fix as the status chip: the saturated
+ * tone colour fails AA as small text on its own tint).
+ */
+.agent-proposal[data-risk="review-required"] .agent-proposal-risk,
+.agent-proposal[data-risk="medium"] .agent-proposal-risk {
+  border-color: color-mix(in srgb, var(--studio-warning) 48%, var(--studio-border));
+  background: color-mix(in srgb, var(--studio-warning) 13%, var(--studio-surface));
+  color: var(--studio-warning-fg);
+}
+
+.agent-proposal[data-risk="destructive"] .agent-proposal-risk,
+.agent-proposal[data-risk="high"] .agent-proposal-risk {
+  border-color: color-mix(in srgb, var(--studio-danger) 48%, var(--studio-border));
+  background: color-mix(in srgb, var(--studio-danger) 10%, var(--studio-surface));
+  color: var(--studio-danger-fg);
+}
+
+/* Admin/critical: strongest emphasis — solid danger fill with its AA foreground. */
+.agent-proposal[data-risk="admin"] .agent-proposal-risk,
+.agent-proposal[data-risk="critical"] .agent-proposal-risk {
+  border-color: var(--studio-danger);
+  background: color-mix(in srgb, var(--studio-danger) 18%, var(--studio-surface));
+  color: var(--studio-danger-fg);
+  font-weight: 700;
+}
+
+/* Low risk stays neutral-informational using the success tone. */
+.agent-proposal[data-risk="low"] .agent-proposal-risk {
+  border-color: color-mix(in srgb, var(--studio-success) 42%, var(--studio-border));
+  background: color-mix(in srgb, var(--studio-success) 12%, var(--studio-surface));
+  color: var(--studio-success-fg);
+}
+
+.agent-context-chip em {
+  color: var(--studio-warning);
+  font-style: normal;
+}
+
+.agent-prompt-starters button {
+  cursor: pointer;
+}
+
+.agent-message-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  margin: 0;
+  min-height: 0;
+  overflow: auto;
+  padding: 1rem;
+}
+
+.agent-message {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0.55rem;
+}
+
+.agent-message-avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.75rem;
+  height: 1.75rem;
+  border-radius: 999px;
+  background: var(--studio-surface-muted);
+  color: var(--studio-text-muted);
+}
+
+.agent-message-body {
+  border: 1px solid var(--studio-border);
+  border-radius: var(--studio-radius-md);
+  background: var(--studio-surface);
+  padding: 0.65rem 0.75rem;
+  font-size: 0.85rem;
+  line-height: 1.45;
+}
+
+.agent-message-body p {
+  margin: 0;
+}
+
+.agent-feedback {
+  display: flex;
+  gap: 0.35rem;
+  margin-top: 0.5rem;
+}
+
+.agent-empty-state {
+  display: grid;
+  place-items: center;
+  gap: 0.5rem;
+  color: var(--studio-text-muted);
+  min-height: 10rem;
+  padding: 1rem;
+  text-align: center;
+}
+
+.agent-composer {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 0.5rem;
+  border-top: 1px solid var(--studio-border);
+  padding: 0.85rem 1rem;
+}
+
+.agent-composer textarea {
+  resize: none;
+  border: 1px solid var(--studio-border);
+  border-radius: var(--studio-radius-sm);
+  background: var(--studio-surface);
+  color: var(--studio-text);
+  padding: 0.55rem 0.65rem;
+  font: inherit;
+  font-size: 0.85rem;
+}
+
+.agent-proposals,
+.agent-workflow-batches {
+  display: grid;
+  gap: 0.75rem;
+  max-height: 16rem;
+  overflow: auto;
+  padding: 0 1rem 1rem;
+}
+
+.agent-proposal,
+.agent-workflow-batch {
+  border: 1px solid var(--studio-border);
+  border-radius: var(--studio-radius-md);
+  background: var(--studio-surface);
+  padding: 0.75rem;
+}
+
+.agent-proposal header,
+.agent-workflow-batch header {
+  display: grid;
+  gap: 0.4rem;
+}
+
+.agent-proposal-kicker {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  color: var(--studio-text-muted);
+  font-size: 0.72rem;
+  text-transform: uppercase;
+}
+
+.agent-proposal p {
+  color: var(--studio-text-muted);
+  font-size: 0.8125rem;
+}
+
+.agent-proposal-details {
+  display: grid;
+  gap: 0.35rem;
+  margin: 0.65rem 0;
+  font-size: 0.78rem;
+}
+
+.agent-proposal-details div {
+  display: grid;
+  grid-template-columns: 4.5rem 1fr;
+  gap: 0.5rem;
+}
+
+.agent-proposal-details dt {
+  color: var(--studio-text-muted);
+}
+
+.agent-proposal-details dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.agent-proposal-error,
+.agent-proposal-disabled,
+.agent-proposal-loading {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.agent-proposal-error {
+  color: var(--studio-danger-fg);
+}
+
+.agent-proposal-disabled {
+  color: var(--studio-text-muted);
+}
+
+.agent-proposal-result {
+  display: grid;
+  gap: 0.4rem;
+  margin: 0.65rem 0;
+  border: 1px solid var(--studio-border);
+  border-radius: var(--studio-radius-sm);
+  background: var(--studio-surface-muted);
+  padding: 0.55rem;
+  font-size: 0.78rem;
+}
+
+.agent-proposal-result > span {
+  color: var(--studio-text-muted);
+  font-size: 0.72rem;
+  text-transform: uppercase;
+}
+
+.agent-proposal-result pre {
+  margin: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  color: var(--studio-text);
+  font: inherit;
+}
+
+.agent-proposal footer,
+.agent-workflow-batch footer {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+}
+
+.agent-workflow-batch header span {
+  color: var(--studio-text-muted);
+  font-size: 0.72rem;
+  text-transform: uppercase;
+}
+
+.agent-workflow-batch dl {
+  display: grid;
+  gap: 0.35rem;
+  margin: 0.65rem 0;
+  font-size: 0.78rem;
+}
+
+.agent-workflow-batch dl div {
+  display: grid;
+  grid-template-columns: 5rem 1fr;
+  gap: 0.5rem;
+}
+
+.agent-workflow-batch dt {
+  color: var(--studio-text-muted);
+}
+
+.agent-workflow-batch dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.agent-workflow-operation-groups {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.agent-workflow-operation-groups span {
+  border: 1px solid var(--studio-border);
+  border-radius: 999px;
+  background: var(--studio-surface-muted);
+  padding: 0.2rem 0.5rem;
+  color: var(--studio-text-muted);
+  font-size: 0.72rem;
+}
+
+.agent-workflow-apply-result {
+  display: grid;
+  gap: 0.35rem;
+  margin-top: 0.6rem;
+  border: 1px solid var(--studio-success);
+  border-radius: var(--studio-radius-sm);
+  padding: 0.5rem;
+  font-size: 0.76rem;
+}
+
+.agent-workflow-apply-result ul {
+  display: grid;
+  gap: 0.25rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.agent-workflow-apply-result li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 0.45rem;
+}
+
+.agent-workflow-batch-error {
+  display: block;
+  margin-top: 0.55rem;
+  color: var(--studio-danger);
+}
+
+html[data-theme-material] .agent-launcher,
+html[data-theme-material] .agent-panel {
+  border-color: var(--studio-material-edge);
+  background: var(--studio-material-panel-bg-strong);
+  background-size: var(--studio-material-panel-bg-size);
+  box-shadow: var(--studio-material-shadow-strong);
+}
+
+html[data-theme-material] .agent-launcher:hover:not(:disabled),
+html[data-theme-material] .agent-launcher:focus-visible {
+  border-color: var(--studio-material-edge-strong);
+  color: var(--studio-accent);
+  box-shadow: var(--studio-material-shadow-strong);
+}
+
+html[data-theme-material] .agent-context-chip,
+html[data-theme-material] .agent-prompt-starters button,
+html[data-theme-material] .agent-message-body,
+html[data-theme-material] .agent-provider-status,
+html[data-theme-material] .agent-proposal-result,
+html[data-theme-material] .agent-workflow-operation-groups span,
+html[data-theme-material] .agent-composer textarea,
+html[data-theme-material] .agent-panel-header button,
+html[data-theme-material] .agent-composer button,
+html[data-theme-material] .agent-proposal footer button,
+html[data-theme-material] .agent-workflow-batch footer button {
+  border-color: var(--studio-material-edge);
+  background: var(--studio-material-control-bg);
+  background-size: var(--studio-material-panel-bg-size);
+  box-shadow: var(--studio-material-inset-low);
+}
+
+html[data-theme-material] .agent-proposal,
+html[data-theme-material] .agent-workflow-batch {
+  border-color: var(--studio-material-edge);
+  background: var(--studio-material-panel-bg);
+  background-size: var(--studio-material-panel-bg-size);
+  box-shadow: var(--studio-material-shadow);
+}

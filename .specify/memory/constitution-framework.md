@@ -18,7 +18,7 @@ Approval: Sipke Schoorstra, 2026-10-12 (#2578), on his authority alone; open to 
 
 ## Gate index
 
-Gates with an automated check (tests in `tests/essentials/Architecture/Tests/`). Every other gate is checked at review against [docs/contributing/review-checklist.md](../../docs/contributing/review-checklist.md).
+Gates with an automated check (tests in `Essentials/tests/Architecture/Tests/`). Every other gate is checked at review against [docs/contributing/review-checklist.md](../../docs/contributing/review-checklist.md).
 
 | § | Gate | Check |
 |---|---|---|

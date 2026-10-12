@@ -1,0 +1,2798 @@
+{
+  "schema_version": 1,
+  "foundation_source": "0e0c1ff6fa101282cef65e1eabf030b72de32acf",
+  "studio_source": "3eef8fa788bfe2ebd4686df0e9a116532c9b0dc9",
+  "scope": "Pinned migration inventory; update deliberately when qualifying a new source baseline. Not a permanent feature backlog.",
+  "projects": [
+    {
+      "product": "foundation",
+      "source": "docs/reports/repros/openapi-collectible-contract-retention/Contract/Contract.csproj",
+      "target": "docs/reports/repros/openapi-collectible-contract-retention/Contract/Contract.csproj",
+      "project_name": "Contract",
+      "package_id": "Contract",
+      "assembly_name": "OpenApiRetention.Contract",
+      "explicit_is_packable": null
+    },
+    {
+      "product": "foundation",
+      "source": "docs/reports/repros/openapi-collectible-contract-retention/Repro.csproj",
+      "target": "docs/reports/repros/openapi-collectible-contract-retention/Repro.csproj",
+      "project_name": "Repro",
+      "package_id": "Repro",
+      "assembly_name": "Repro",
+      "explicit_is_packable": null
+    },
+    {
+      "product": "foundation",
+      "source": "samples/Elsa.Samples.Nuplane.Activities/Elsa.Samples.Nuplane.Activities.csproj",
+      "target": "samples/Elsa.Samples.Nuplane.Activities/Elsa.Samples.Nuplane.Activities.csproj",
+      "project_name": "Elsa.Samples.Nuplane.Activities",
+      "package_id": "Elsa.Samples.Nuplane.Activities",
+      "assembly_name": "Elsa.Samples.Nuplane.Activities",
+      "explicit_is_packable": "true"
+    },
+    {
+      "product": "foundation",
+      "source": "samples/Elsa.Samples.Nuplane.Notes.Activities/Elsa.Samples.Nuplane.Notes.Activities.csproj",
+      "target": "samples/Elsa.Samples.Nuplane.Notes.Activities/Elsa.Samples.Nuplane.Notes.Activities.csproj",
+      "project_name": "Elsa.Samples.Nuplane.Notes.Activities",
+      "package_id": "Elsa.Samples.Nuplane.Notes.Activities",
+      "assembly_name": "Elsa.Samples.Nuplane.Notes.Activities",
+      "explicit_is_packable": "true"
+    },
+    {
+      "product": "foundation",
+      "source": "samples/Elsa.Samples.Nuplane.Notes/Elsa.Samples.Nuplane.Notes.csproj",
+      "target": "samples/Elsa.Samples.Nuplane.Notes/Elsa.Samples.Nuplane.Notes.csproj",
+      "project_name": "Elsa.Samples.Nuplane.Notes",
+      "package_id": "Elsa.Samples.Nuplane.Notes",
+      "assembly_name": "Elsa.Samples.Nuplane.Notes",
+      "explicit_is_packable": "true"
+    },
+    {
+      "product": "foundation",
+      "source": "src/apps/Elsa.Foundation.Host/Elsa.Foundation.Host.csproj",
+      "target": "Essentials/apps/Elsa.Foundation.Host/Elsa.Foundation.Host.csproj",
+      "project_name": "Elsa.Foundation.Host",
+      "package_id": "Elsa.Foundation.Host",
+      "assembly_name": "Elsa.Foundation.Host",
+      "explicit_is_packable": "false"
+    },
+    {
+      "product": "foundation",
+      "source": "src/apps/Elsa.Workbench/Elsa.Workbench.csproj",
+      "target": "Essentials/apps/Elsa.Workbench/Elsa.Workbench.csproj",
+      "project_name": "Elsa.Workbench",
+      "package_id": "Elsa.Workbench",
+      "assembly_name": "Elsa.Workbench",
+      "explicit_is_packable": "false"
+    },
+    {
+      "product": "foundation",
+      "source": "src/essentials/Activities/Bpmn/Elsa.Activities.Bpmn/Elsa.Activities.Bpmn.csproj",
+      "target": "Essentials/src/Activities/Bpmn/Elsa.Activities.Bpmn/Elsa.Activities.Bpmn.csproj",
+      "project_name": "Elsa.Activities.Bpmn",
+      "package_id": "Elsa.Activities.Bpmn",
+      "assembly_name": "Elsa.Activities.Bpmn",
+      "explicit_is_packable": null
+    },
+    {
+      "product": "foundation",
+      "source": "src/essentials/Activities/Bpmn/Interchange/Elsa.Activities.Bpmn.Interchange.csproj",
+      "target": "Essentials/src/Activities/Bpmn/Interchange/Elsa.Activities.Bpmn.Interchange.csproj",
+      "project_name": "Elsa.Activities.Bpmn.Interchange",
+      "package_id": "Elsa.Activities.Bpmn.Interchange",
+      "assembly_name": "Elsa.Activities.Bpmn.Interchange",
+      "explicit_is_packable": null
+    },
+    {
+      "product": "foundation",
+      "source": "src/essentials/Activities/ControlFlow/Elsa.Activities.ControlFlow.csproj",
+      "target": "Essentials/src/Activities/ControlFlow/Elsa.Activities.ControlFlow.csproj",
+      "project_name": "Elsa.Activities.ControlFlow",
+      "package_id": "Elsa.Activities.ControlFlow",
+      "assembly_name": "Elsa.Activities.ControlFlow",
+      "explicit_is_packable": null
+    },
+    {
+      "product": "foundation",
+      "source": "src/essentials/Activities/Design/Api/Elsa.Activities.Design.Api.csproj",
+      "target": "Essentials/src/Activities/Design/Api/Elsa.Activities.Design.Api.csproj",
+      "project_name": "Elsa.Activities.Design.Api",
+      "package_id": "Elsa.Activities.Design.Api",
+      "assembly_name": "Elsa.Activities.Design.Api",
+      "explicit_is_packable": null
+    },
+    {
+      "product": "foundation",
+      "source": "src/essentials/Activities/Design/Core/Elsa.Activities.Design.Core.csproj",
+      "target": "Essentials/src/Activities/Design/Core/Elsa.Activities.Design.Core.csproj",
+      "project_name": "Elsa.Activities.Design.Core",
+      "package_id": "Elsa.Activities.Design.Core",
+      "assembly_name": "Elsa.Activities.Design.Core",
+      "explicit_is_packable": null
+    },
+    {
+      "product": "foundation",
+      "source": "src/essentials/Activities/Design/Persistence/Core/Elsa.Activities.Design.Persistence.Core.csproj",
+      "target": "Essentials/src/Activities/Design/Persistence/Core/Elsa.Activities.Design.Persistence.Core.csproj",
+      "project_name": "Elsa.Activities.Design.Persistence.Core",
+      "package_id": "Elsa.Activities.Design.Persistence.Core",
+      "assembly_name": "Elsa.Activities.Design.Persistence.Core",
+      "explicit_is_packable": null
+    },
+    {
+      "product": "foundation",
+      "source": "src/essentials/Activities/Design/Persistence/EntityFrameworkCore/Elsa.Activities.Design.Persistence.EntityFrameworkCore.csproj",
+      "target": "Essentials/src/Activities/Design/Persistence/EntityFrameworkCore/Elsa.Activities.Design.Persistence.EntityFrameworkCore.csproj",
+      "project_name": "Elsa.Activities.Design.Persistence.EntityFrameworkCore",
+      "package_id": "Elsa.Activities.Design.Persistence.EntityFrameworkCore",
+      "assembly_name": "Elsa.Activities.Design.Persistence.EntityFrameworkCore",
+      "explicit_is_packable": null
+    },
+    {
+      "product": "foundation",
+      "source": "src/essentials/Activities/Design/Reconciliation/Clr/Elsa.Activities.Design.Reconciliation.Clr.csproj",
+      "target": "Essentials/src/Activities/Design/Reconciliation/Clr/Elsa.Activities.Design.Reconciliation.Clr.csproj",
+      "project_name": "Elsa.Activities.Design.Reconciliation.Clr",
+      "package_id": "Elsa.Activities.Design.Reconciliation.Clr",
+      "assembly_name": "Elsa.Activities.Design.Reconciliation.Clr",
+      "explicit_is_packable": null
+    },
+    {
+      "product": "foundation",
+      "source": "src/essentials/Activities/Design/Reconciliation/Elsa.Activities.Design.Reconciliation/Elsa.Activities.Design.Reconciliation.csproj",
+      "target": "Essentials/src/Activities/Design/Reconciliation/Elsa.Activities.Design.Reconciliation/Elsa.Activities.Design.Reconciliation.csproj",
+      "project_name": "Elsa.Activities.Design.Reconciliation",
+      "package_id": "Elsa.Activities.Design.Reconciliation",
+      "assembly_name": "Elsa.Activities.Design.Reconciliation",
+      "explicit_is_packable": null
+    },
+    {
+      "product": "foundation",
+      "source": "src/essentials/Activities/Design/Reconciliation/Json/Elsa.Activities.Design.Reconciliation.Json.csproj",
+      "target": "Essentials/src/Activities/Design/Reconciliation/Json/Elsa.Activities.Design.Reconciliation.Json.csproj",
+      "project_name": "Elsa.Activities.Design.Reconciliation.Json",
+      "package_id": "Elsa.Activities.Design.Reconciliation.Json",
+      "assembly_name": "Elsa.Activities.Design.Reconciliation.Json",
+      "explicit_is_packable": null
+    },
+    {
+      "product": "foundation",
+      "source": "src/essentials/Activities/DispatchWorkflow/Design/Elsa.Activities.DispatchWorkflow.Design.csproj",
+      "target": "Essentials/src/Activities/DispatchWorkflow/Design/Elsa.Activities.DispatchWorkflow.Design.csproj",
+      "project_name": "Elsa.Activities.DispatchWorkflow.Design",
+      "package_id": "Elsa.Activities.DispatchWorkflow.Design",
+      "assembly_name": "Elsa.Activities.DispatchWorkflow.Design",
+      "explicit_is_packable": null
+    },
+    {
+      "product": "foundation",
+      "source": "src/essentials/Activities/DispatchWorkflow/Runtime/Elsa.Activities.DispatchWorkflow.Runtime.csproj",
+      "target": "Essentials/src/Activities/DispatchWorkflow/Runtime/Elsa.Activities.DispatchWorkflow.Runtime.csproj",
+      "project_name": "Elsa.Activities.DispatchWorkflow.Runtime",
+      "package_id": "Elsa.Activities.DispatchWorkflow.Runtime",
+      "assembly_name": "Elsa.Activities.DispatchWorkflow.Runtime",
+      "explicit_is_packable": null
+    },
+    {
+      "product": "foundation",
+      "source": "src/essentials/Activities/Flowchart/Elsa.Activities.Flowchart.csproj",
+      "target": "Essentials/src/Activities/Flowchart/Elsa.Activities.Flowchart.csproj",
+      "project_name": "Elsa.Activities.Flowchart",
+      "package_id": "Elsa.Activities.Flowchart",
+      "assembly_name": "Elsa.Activities.Flowchart",
+      "explicit_is_packable": null
+    },
+    {
+      "product": "foundation",
+      "source": "src/essentials/Activities/Graph/Design/Elsa.Activities.Graph.Design.csproj",
+      "target": "Essentials/src/Activities/Graph/Design/Elsa.Activities.Graph.Design.csproj",
+      "project_name": "Elsa.Activities.Graph.Design",
+      "package_id": "Elsa.Activities.Graph.Design",
+      "assembly_name": "Elsa.Activities.Graph.Design",
+      "explicit_is_packable": null
+    },
+    {
+      "product": "foundation",
+      "source": "src/essentials/Activities/Graph/Runtime/Elsa.Activities.Graph.Runtime.csproj",
+      "target": "Essentials/src/Activities/Graph/Runtime/Elsa.Activities.Graph.Runtime.csproj",
+      "project_name": "Elsa.Activities.Graph.Runtime",
+      "package_id": "Elsa.Activities.Graph.Runtime",
+      "assembly_name": "Elsa.Activities.Graph.Runtime",
+      "explicit_is_packable": null
+    },
+    {
+      "product": "foundation",
+      "source": "src/essentials/Activities/Http/Elsa.Activities.Http.csproj",
+      "target": "Essentials/src/Activities/Http/Elsa.Activities.Http.csproj",
+      "project_name": "Elsa.Activities.Http",
+      "package_id": "Elsa.Activities.Http",
+      "assembly_name": "Elsa.Activities.Http",
+      "explicit_is_packable": null
+    },
+    {
+      "product": "foundation",
+      "source": "src/essentials/Activities/Primitives/Elsa.Activities.Primitives.csproj",
+      "target": "Essentials/src/Activities/Primitives/Elsa.Activities.Primitives.csproj",
+      "project_name": "Elsa.Activities.Primitives",
+      "package_id": "Elsa.Activities.Primitives",
+      "assembly_name": "Elsa.Activities.Primitives",
+      "explicit_is_packable": null
+    },
+    {
+      "product": "foundation",
+      "source": "src/essentials/Activities/Runtime/Core/Elsa.Activities.Runtime.Core.csproj",
+      "target": "Essentials/src/Activities/Runtime/Core/Elsa.Activities.Runtime.Core.csproj",
+      "project_name": "Elsa.Activities.Runtime.Core",
+      "package_id": "Elsa.Activities.Runtime.Core",
+      "assembly_name": "Elsa.Activities.Runtime.Core",
+      "explicit_is_packable": null
+    },
+    {
+      "product": "foundation",
+      "source": "src/essentials/Activities/Runtime/Elsa.Activities.Runtime/Elsa.Activities.Runtime.csproj",
+      "target": "Essentials/src/Activities/Runtime/Elsa.Activities.Runtime/Elsa.Activities.Runtime.csproj",
+      "project_name": "Elsa.Activities.Runtime",
+      "package_id": "Elsa.Activities.Runtime",
+      "assembly_name": "Elsa.Activities.Runtime",
+      "explicit_is_packable": null
+    },
+    {
+      "product": "foundation",
+      "source": "src/essentials/Activities/Scheduling/Elsa.Activities.Scheduling.csproj",
+      "target": "Essentials/src/Activities/Scheduling/Elsa.Activities.Scheduling.csproj",
+      "project_name": "Elsa.Activities.Scheduling",
+      "package_id": "Elsa.Activities.Scheduling",
+      "assembly_name": "Elsa.Activities.Scheduling",
+      "explicit_is_packable": null
+    },
+    {
+      "product": "foundation",
+      "source": "src/essentials/Activities/Scripting/Elsa.Activities.Scripting.csproj",
+      "target": "Essentials/src/Activities/Scripting/Elsa.Activities.Scripting.csproj",
+      "project_name": "Elsa.Activities.Scripting",
+      "package_id": "Elsa.Activities.Scripting",
+      "assembly_name": "Elsa.Activities.Scripting",
+      "explicit_is_packable": null
+    },
+    {
+      "product": "foundation",
+      "source": "src/essentials/Activities/Sequence/Elsa.Activities.Sequence.csproj",
+      "target": "Essentials/src/Activities/Sequence/Elsa.Activities.Sequence.csproj",
+      "project_name": "Elsa.Activities.Sequence",
+      "package_id": "Elsa.Activities.Sequence",
+      "assembly_name": "Elsa.Activities.Sequence",
+      "explicit_is_packable": null
+    },
+    {
+      "product": "foundation",
+      "source": "src/essentials/Api/AspNetCore/Elsa.Api.AspNetCore.csproj",
+      "target": "Essentials/src/Api/AspNetCore/Elsa.Api.AspNetCore.csproj",
+      "project_name": "Elsa.Api.AspNetCore",
+      "package_id": "Elsa.Api.AspNetCore",
+      "assembly_name": "Elsa.Api.AspNetCore",
+      "explicit_is_packable": null
+    },
+    {
+      "product": "foundation",
+      "source": "src/essentials/Api/Capabilities/Elsa.Api.Capabilities.csproj",
+      "target": "Essentials/src/Api/Capabilities/Elsa.Api.Capabilities.csproj",
+      "project_name": "Elsa.Api.Capabilities",
+      "package_id": "Elsa.Api.Capabilities",
+      "assembly_name": "Elsa.Api.Capabilities",
+      "explicit_is_packable": null
+    },
+    {
+      "product": "foundation",
+      "source": "src/essentials/Attention/Api/Elsa.Attention.Api.csproj",
+      "target": "Essentials/src/Attention/Api/Elsa.Attention.Api.csproj",
+      "project_name": "Elsa.Attention.Api",
+      "package_id": "Elsa.Attention.Api",
+      "assembly_name": "Elsa.Attention.Api",
+      "explicit_is_packable": null
+    },
+    {
+      "product": "foundation",
+      "source": "src/essentials/Attention/Core/Elsa.Attention.Core.csproj",
+      "target": "Essentials/src/Attention/Core/Elsa.Attention.Core.csproj",
+      "project_name": "Elsa.Attention.Core",
+      "package_id": "Elsa.Attention.Core",
+      "assembly_name": "Elsa.Attention.Core",
+      "explicit_is_packable": null
+    },
+    {
+      "product": "foundation",
+      "source": "src/essentials/Caching/Core/Elsa.Caching.Core.csproj",
+      "target": "Essentials/src/Caching/Core/Elsa.Caching.Core.csproj",
+      "project_name": "Elsa.Caching.Core",
+      "package_id": "Elsa.Caching.Core",
+      "assembly_name": "Elsa.Caching.Core",
+      "explicit_is_packable": null
+    },
+    {
+      "product": "foundation",
+      "source": "src/essentials/Caching/Memory/Elsa.Caching.Memory.csproj",
+      "target": "Essentials/src/Caching/Memory/Elsa.Caching.Memory.csproj",
+      "project_name": "Elsa.Caching.Memory",
+      "package_id": "Elsa.Caching.Memory",
+      "assembly_name": "Elsa.Caching.Memory",
+      "explicit_is_packable": null
+    },
+    {
+      "product": "foundation",
+      "source": "src/essentials/Cli/Elsa.Cli/Elsa.Cli.csproj",
+      "target": "Essentials/src/Cli/Elsa.Cli/Elsa.Cli.csproj",
+      "project_name": "Elsa.Cli",
+      "package_id": "dotnet-elsa",
+      "assembly_name": "Elsa.Cli",
+      "explicit_is_packable": null
+    },
+    {
+      "product": "foundation",
+      "source": "src/essentials/Cli/Worker/Elsa.Cli.Worker.csproj",
+      "target": "Essentials/src/Cli/Worker/Elsa.Cli.Worker.csproj",
+      "project_name": "Elsa.Cli.Worker",
+      "package_id": "Elsa.Cli.Worker",
+      "assembly_name": "Elsa.Cli.Worker",
+      "explicit_is_packable": "false"
+    },
+    {
+      "product": "foundation",
+      "source": "src/essentials/Cluster/Core/Elsa.Cluster.Core.csproj",
+      "target": "Essentials/src/Cluster/Core/Elsa.Cluster.Core.csproj",
+      "project_name": "Elsa.Cluster.Core",
+      "package_id": "Elsa.Cluster.Core",
+      "assembly_name": "Elsa.Cluster.Core",
+      "explicit_is_packable": null
+    },
+    {
+      "product": "foundation",
+      "source": "src/essentials/Cluster/EntityFrameworkCore/Elsa.Cluster.EntityFrameworkCore.csproj",
+      "target": "Essentials/src/Cluster/EntityFrameworkCore/Elsa.Cluster.EntityFrameworkCore.csproj",
+      "project_name": "Elsa.Cluster.EntityFrameworkCore",
+      "package_id": "Elsa.Cluster.EntityFrameworkCore",
+      "assembly_name": "Elsa.Cluster.EntityFrameworkCore",
+      "explicit_is_packable": null
+    },
+    {
+      "product": "foundation",
+      "source": "src/essentials/Cluster/InProcess/Elsa.Cluster.InProcess.csproj",
+      "target": "Essentials/src/Cluster/InProcess/Elsa.Cluster.InProcess.csproj",
+      "project_name": "Elsa.Cluster.InProcess",
+      "package_id": "Elsa.Cluster.InProcess",
+      "assembly_name": "Elsa.Cluster.InProcess",
+      "explicit_is_packable": null
+    },
+    {
+      "product": "foundation",
+      "source": "src/essentials/Cluster/Readability/Elsa.Cluster.Readability.csproj",
+      "target": "Essentials/src/Cluster/Readability/Elsa.Cluster.Readability.csproj",
+      "project_name": "Elsa.Cluster.Readability",
+      "package_id": "Elsa.Cluster.Readability",
+      "assembly_name": "Elsa.Cluster.Readability",
+      "explicit_is_packable": null
+    },
+    {
+      "product": "foundation",
+      "source": "src/essentials/Diagnostics/ConsoleLogStreaming/Elsa.Diagnostics.ConsoleLogStreaming.csproj",
+      "target": "Essentials/src/Diagnostics/ConsoleLogStreaming/Elsa.Diagnostics.ConsoleLogStreaming.csproj",
+      "project_name": "Elsa.Diagnostics.ConsoleLogStreaming",
+      "package_id": "Elsa.Diagnostics.ConsoleLogStreaming",
+      "assembly_name": "Elsa.Diagnostics.ConsoleLogStreaming",
+      "explicit_is_packable": null
+    },
+    {
+      "product": "foundation",
+      "source": "src/essentials/Diagnostics/OpenTelemetry/Core/Elsa.Diagnostics.OpenTelemetry.Core.csproj",
+      "target": "Essentials/src/Diagnostics/OpenTelemetry/Core/Elsa.Diagnostics.OpenTelemetry.Core.csproj",
+      "project_name": "Elsa.Diagnostics.OpenTelemetry.Core",
+      "package_id": "Elsa.Diagnostics.OpenTelemetry.Core",
+      "assembly_name": "Elsa.Diagnostics.OpenTelemetry.Core",
+      "explicit_is_packable": null
+    },
+    {
+      "product": "foundation",
+      "source": "src/essentials/Diagnostics/OpenTelemetry/Elsa.Diagnostics.OpenTelemetry/Elsa.Diagnostics.OpenTelemetry.csproj",
+      "target": "Essentials/src/Diagnostics/OpenTelemetry/Elsa.Diagnostics.OpenTelemetry/Elsa.Diagnostics.OpenTelemetry.csproj",
+      "project_name": "Elsa.Diagnostics.OpenTelemetry",
+      "package_id": "Elsa.Diagnostics.OpenTelemetry",
+      "assembly_name": "Elsa.Diagnostics.OpenTelemetry",
+      "explicit_is_packable": null
+    },
+    {
+      "product": "foundation",
+      "source": "src/essentials/Diagnostics/OpenTelemetry/Persistence/EntityFrameworkCore/Elsa.Diagnostics.OpenTelemetry.Persistence.EntityFrameworkCore.csproj",
+      "target": "Essentials/src/Diagnostics/OpenTelemetry/Persistence/EntityFrameworkCore/Elsa.Diagnostics.OpenTelemetry.Persistence.EntityFrameworkCore.csproj",
+      "project_name": "Elsa.Diagnostics.OpenTelemetry.Persistence.EntityFrameworkCore",
+      "package_id": "Elsa.Diagnostics.OpenTelemetry.Persistence.EntityFrameworkCore",
+      "assembly_name": "Elsa.Diagnostics.OpenTelemetry.Persistence.EntityFrameworkCore",
+      "explicit_is_packable": null
+    },
+    {
+      "product": "foundation",
+      "source": "src/essentials/Diagnostics/Persistence/Elsa.Diagnostics.Persistence.csproj",
+      "target": "Essentials/src/Diagnostics/Persistence/Elsa.Diagnostics.Persistence.csproj",
+      "project_name": "Elsa.Diagnostics.Persistence",
+      "package_id": "Elsa.Diagnostics.Persistence",
+      "assembly_name": "Elsa.Diagnostics.Persistence",
+      "explicit_is_packable": null
+    },
+    {
+      "product": "foundation",
+      "source": "src/essentials/Diagnostics/StructuredLogs/Core/Elsa.Diagnostics.StructuredLogs.Core.csproj",
+      "target": "Essentials/src/Diagnostics/StructuredLogs/Core/Elsa.Diagnostics.StructuredLogs.Core.csproj",
+      "project_name": "Elsa.Diagnostics.StructuredLogs.Core",
+      "package_id": "Elsa.Diagnostics.StructuredLogs.Core",
+      "assembly_name": "Elsa.Diagnostics.StructuredLogs.Core",
+      "explicit_is_packable": null
+    },
+    {
+      "product": "foundation",
+      "source": "src/essentials/Diagnostics/StructuredLogs/Elsa.Diagnostics.StructuredLogs/Elsa.Diagnostics.StructuredLogs.csproj",
+      "target": "Essentials/src/Diagnostics/StructuredLogs/Elsa.Diagnostics.StructuredLogs/Elsa.Diagnostics.StructuredLogs.csproj",
+      "project_name": "Elsa.Diagnostics.StructuredLogs",
+      "package_id": "Elsa.Diagnostics.StructuredLogs",
+      "assembly_name": "Elsa.Diagnostics.StructuredLogs",
+      "explicit_is_packable": null
+    },
+    {
+      "product": "foundation",
+      "source": "src/essentials/Diagnostics/StructuredLogs/Persistence/EntityFrameworkCore/Elsa.Diagnostics.StructuredLogs.Persistence.EntityFrameworkCore.csproj",
+      "target": "Essentials/src/Diagnostics/StructuredLogs/Persistence/EntityFrameworkCore/Elsa.Diagnostics.StructuredLogs.Persistence.EntityFrameworkCore.csproj",
+      "project_name": "Elsa.Diagnostics.StructuredLogs.Persistence.EntityFrameworkCore",
+      "package_id": "Elsa.Diagnostics.StructuredLogs.Persistence.EntityFrameworkCore",
+      "assembly_name": "Elsa.Diagnostics.StructuredLogs.Persistence.EntityFrameworkCore",
+      "explicit_is_packable": null
+    },
+    {
+      "product": "foundation",
+      "source": "src/essentials/Events/Core/Elsa.Events.Core.csproj",
+      "target": "Essentials/src/Events/Core/Elsa.Events.Core.csproj",
+      "project_name": "Elsa.Events.Core",
+      "package_id": "Elsa.Events.Core",
+      "assembly_name": "Elsa.Events.Core",
+      "explicit_is_packable": null
+    },
+    {
+      "product": "foundation",
+      "source": "src/essentials/Events/Elsa.Events/Elsa.Events.csproj",
+      "target": "Essentials/src/Events/Elsa.Events/Elsa.Events.csproj",
+      "project_name": "Elsa.Events",
+      "package_id": "Elsa.Events",
+      "assembly_name": "Elsa.Events",
+      "explicit_is_packable": null
+    },
+    {
+      "product": "foundation",
+      "source": "src/essentials/Events/Strategies/Elsa.Events.Strategies.csproj",
+      "target": "Essentials/src/Events/Strategies/Elsa.Events.Strategies.csproj",
+      "project_name": "Elsa.Events.Strategies",
+      "package_id": "Elsa.Events.Strategies",
+      "assembly_name": "Elsa.Events.Strategies",
+      "explicit_is_packable": null
+    },
+    {
+      "product": "foundation",
+      "source": "src/essentials/Expressions/Api/Elsa.Expressions.Api.csproj",
+      "target": "Essentials/src/Expressions/Api/Elsa.Expressions.Api.csproj",
+      "project_name": "Elsa.Expressions.Api",
+      "package_id": "Elsa.Expressions.Api",
+      "assembly_name": "Elsa.Expressions.Api",
+      "explicit_is_packable": null
+    },
+    {
+      "product": "foundation",
+      "source": "src/essentials/Expressions/Core/Elsa.Expressions.Core.csproj",
+      "target": "Essentials/src/Expressions/Core/Elsa.Expressions.Core.csproj",
+      "project_name": "Elsa.Expressions.Core",
+      "package_id": "Elsa.Expressions.Core",
+      "assembly_name": "Elsa.Expressions.Core",
+      "explicit_is_packable": null
+    },
+    {
+      "product": "foundation",
+      "source": "src/essentials/Expressions/Elsa.Expressions/Elsa.Expressions.csproj",
+      "target": "Essentials/src/Expressions/Elsa.Expressions/Elsa.Expressions.csproj",
+      "project_name": "Elsa.Expressions",
+      "package_id": "Elsa.Expressions",
+      "assembly_name": "Elsa.Expressions",
+      "explicit_is_packable": null
+    },
+    {
+      "product": "foundation",
+      "source": "src/essentials/Expressions/JavaScript/Core/Elsa.Expressions.JavaScript.Core.csproj",
+      "target": "Essentials/src/Expressions/JavaScript/Core/Elsa.Expressions.JavaScript.Core.csproj",
+      "project_name": "Elsa.Expressions.JavaScript.Core",
+      "package_id": "Elsa.Expressions.JavaScript.Core",
+      "assembly_name": "Elsa.Expressions.JavaScript.Core",
+      "explicit_is_packable": null
+    },
+    {
+      "product": "foundation",
+      "source": "src/essentials/Expressions/JavaScript/Elsa.Expressions.JavaScript/Elsa.Expressions.JavaScript.csproj",
+      "target": "Essentials/src/Expressions/JavaScript/Elsa.Expressions.JavaScript/Elsa.Expressions.JavaScript.csproj",
+      "project_name": "Elsa.Expressions.JavaScript",
+      "package_id": "Elsa.Expressions.JavaScript",
+      "assembly_name": "Elsa.Expressions.JavaScript",
+      "explicit_is_packable": null
+    },
+    {
+      "product": "foundation",
+      "source": "src/essentials/Expressions/JavaScript/Jint/Elsa.Expressions.JavaScript.Jint.csproj",
+      "target": "Essentials/src/Expressions/JavaScript/Jint/Elsa.Expressions.JavaScript.Jint.csproj",
+      "project_name": "Elsa.Expressions.JavaScript.Jint",
+      "package_id": "Elsa.Expressions.JavaScript.Jint",
+      "assembly_name": "Elsa.Expressions.JavaScript.Jint",
+      "explicit_is_packable": null
+    },
+    {
+      "product": "foundation",
+      "source": "src/essentials/Expressions/JavaScript/Rendering/Core/Elsa.Expressions.JavaScript.Rendering.Core.csproj",
+      "target": "Essentials/src/Expressions/JavaScript/Rendering/Core/Elsa.Expressions.JavaScript.Rendering.Core.csproj",
+      "project_name": "Elsa.Expressions.JavaScript.Rendering.Core",
+      "package_id": "Elsa.Expressions.JavaScript.Rendering.Core",
+      "assembly_name": "Elsa.Expressions.JavaScript.Rendering.Core",
+      "explicit_is_packable": null
+    },
+    {
+      "product": "foundation",
+      "source": "src/essentials/Expressions/JavaScript/Rendering/Elsa.Expressions.JavaScript.Rendering/Elsa.Expressions.JavaScript.Rendering.csproj",
+      "target": "Essentials/src/Expressions/JavaScript/Rendering/Elsa.Expressions.JavaScript.Rendering/Elsa.Expressions.JavaScript.Rendering.csproj",
+      "project_name": "Elsa.Expressions.JavaScript.Rendering",
+      "package_id": "Elsa.Expressions.JavaScript.Rendering",
+      "assembly_name": "Elsa.Expressions.JavaScript.Rendering",
+      "explicit_is_packable": null
+    },
+    {
+      "product": "foundation",
+      "source": "src/essentials/Expressions/Liquid/Elsa.Expressions.Liquid.csproj",
+      "target": "Essentials/src/Expressions/Liquid/Elsa.Expressions.Liquid.csproj",
+      "project_name": "Elsa.Expressions.Liquid",
+      "package_id": "Elsa.Expressions.Liquid",
+      "assembly_name": "Elsa.Expressions.Liquid",
+      "explicit_is_packable": null
+    },
+    {
+      "product": "foundation",
+      "source": "src/essentials/Foundation/DataProtection/EntityFrameworkCore/Elsa.Foundation.DataProtection.EntityFrameworkCore.csproj",
+      "target": "Essentials/src/Foundation/DataProtection/EntityFrameworkCore/Elsa.Foundation.DataProtection.EntityFrameworkCore.csproj",
+      "project_name": "Elsa.Foundation.DataProtection.EntityFrameworkCore",
+      "package_id": "Elsa.Foundation.DataProtection.EntityFrameworkCore",
+      "assembly_name": "Elsa.Foundation.DataProtection.EntityFrameworkCore",
+      "explicit_is_packable": null
+    },
+    {
+      "product": "foundation",
+      "source": "src/essentials/Foundation/Identity/Api/Elsa.Foundation.Identity.Api.csproj",
+      "target": "Essentials/src/Foundation/Identity/Api/Elsa.Foundation.Identity.Api.csproj",
+      "project_name": "Elsa.Foundation.Identity.Api",
+      "package_id": "Elsa.Foundation.Identity.Api",
+      "assembly_name": "Elsa.Foundation.Identity.Api",
+      "explicit_is_packable": null
+    },
+    {
+      "product": "foundation",
+      "source": "src/essentials/Foundation/Identity/AspNetCoreIdentity/Elsa.Foundation.Identity.AspNetCoreIdentity/Elsa.Foundation.Identity.AspNetCoreIdentity.csproj",
+      "target": "Essentials/src/Foundation/Identity/AspNetCoreIdentity/Elsa.Foundation.Identity.AspNetCoreIdentity/Elsa.Foundation.Identity.AspNetCoreIdentity.csproj",
+      "project_name": "Elsa.Foundation.Identity.AspNetCoreIdentity",
+      "package_id": "Elsa.Foundation.Identity.AspNetCoreIdentity",
+      "assembly_name": "Elsa.Foundation.Identity.AspNetCoreIdentity",
+      "explicit_is_packable": null
+    },
+    {
+      "product": "foundation",
+      "source": "src/essentials/Foundation/Identity/AspNetCoreIdentity/EntityFrameworkCore/Elsa.Foundation.Identity.AspNetCoreIdentity.EntityFrameworkCore.csproj",
+      "target": "Essentials/src/Foundation/Identity/AspNetCoreIdentity/EntityFrameworkCore/Elsa.Foundation.Identity.AspNetCoreIdentity.EntityFrameworkCore.csproj",
+      "project_name": "Elsa.Foundation.Identity.AspNetCoreIdentity.EntityFrameworkCore",
+      "package_id": "Elsa.Foundation.Identity.AspNetCoreIdentity.EntityFrameworkCore",
+      "assembly_name": "Elsa.Foundation.Identity.AspNetCoreIdentity.EntityFrameworkCore",
+      "explicit_is_packable": null
+    },
+    {
+      "product": "foundation",
+      "source": "src/essentials/Foundation/Identity/Core/Elsa.Foundation.Identity.Core.csproj",
+      "target": "Essentials/src/Foundation/Identity/Core/Elsa.Foundation.Identity.Core.csproj",
+      "project_name": "Elsa.Foundation.Identity.Core",
+      "package_id": "Elsa.Foundation.Identity.Core",
+      "assembly_name": "Elsa.Foundation.Identity.Core",
+      "explicit_is_packable": null
+    },
+    {
+      "product": "foundation",
+      "source": "src/essentials/Foundation/Identity/Elsa.Foundation.Identity/Elsa.Foundation.Identity.csproj",
+      "target": "Essentials/src/Foundation/Identity/Elsa.Foundation.Identity/Elsa.Foundation.Identity.csproj",
+      "project_name": "Elsa.Foundation.Identity",
+      "package_id": "Elsa.Foundation.Identity",
+      "assembly_name": "Elsa.Foundation.Identity",
+      "explicit_is_packable": null
+    },
+    {
+      "product": "foundation",
+      "source": "src/essentials/Foundation/Identity/Oidc/Elsa.Foundation.Identity.Oidc.csproj",
+      "target": "Essentials/src/Foundation/Identity/Oidc/Elsa.Foundation.Identity.Oidc.csproj",
+      "project_name": "Elsa.Foundation.Identity.Oidc",
+      "package_id": "Elsa.Foundation.Identity.Oidc",
+      "assembly_name": "Elsa.Foundation.Identity.Oidc",
+      "explicit_is_packable": null
+    },
+    {
+      "product": "foundation",
+      "source": "src/essentials/Foundation/Identity/OpenIddict/Behavior/Elsa.Foundation.Identity.OpenIddict.Behavior.csproj",
+      "target": "Essentials/src/Foundation/Identity/OpenIddict/Behavior/Elsa.Foundation.Identity.OpenIddict.Behavior.csproj",
+      "project_name": "Elsa.Foundation.Identity.OpenIddict.Behavior",
+      "package_id": "Elsa.Foundation.Identity.OpenIddict.Behavior",
+      "assembly_name": "Elsa.Foundation.Identity.OpenIddict.Behavior",
+      "explicit_is_packable": null
+    },
+    {
+      "product": "foundation",
+      "source": "src/essentials/Foundation/Identity/OpenIddict/Elsa.Foundation.Identity.OpenIddict/Elsa.Foundation.Identity.OpenIddict.csproj",
+      "target": "Essentials/src/Foundation/Identity/OpenIddict/Elsa.Foundation.Identity.OpenIddict/Elsa.Foundation.Identity.OpenIddict.csproj",
+      "project_name": "Elsa.Foundation.Identity.OpenIddict",
+      "package_id": "Elsa.Foundation.Identity.OpenIddict",
+      "assembly_name": "Elsa.Foundation.Identity.OpenIddict",
+      "explicit_is_packable": null
+    },
+    {
+      "product": "foundation",
+      "source": "src/essentials/Foundation/Identity/Persistence/EntityFrameworkCore/Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.csproj",
+      "target": "Essentials/src/Foundation/Identity/Persistence/EntityFrameworkCore/Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.csproj",
+      "project_name": "Elsa.Foundation.Identity.Persistence.EntityFrameworkCore",
+      "package_id": "Elsa.Foundation.Identity.Persistence.EntityFrameworkCore",
+      "assembly_name": "Elsa.Foundation.Identity.Persistence.EntityFrameworkCore",
+      "explicit_is_packable": null
+    },
+    {
+      "product": "foundation",
+      "source": "src/essentials/Git/Elsa.Git.csproj",
+      "target": "Essentials/src/Git/Elsa.Git.csproj",
+      "project_name": "Elsa.Git",
+      "package_id": "Elsa.Git",
+      "assembly_name": "Elsa.Git",
+      "explicit_is_packable": null
+    },
+    {
+      "product": "foundation",
+      "source": "src/essentials/Http/Core/Elsa.Http.Core.csproj",
+      "target": "Essentials/src/Http/Core/Elsa.Http.Core.csproj",
+      "project_name": "Elsa.Http.Core",
+      "package_id": "Elsa.Http.Core",
+      "assembly_name": "Elsa.Http.Core",
+      "explicit_is_packable": null
+    },
+    {
+      "product": "foundation",
+      "source": "src/essentials/Http/Elsa.Http/Elsa.Http.csproj",
+      "target": "Essentials/src/Http/Elsa.Http/Elsa.Http.csproj",
+      "project_name": "Elsa.Http",
+      "package_id": "Elsa.Http",
+      "assembly_name": "Elsa.Http",
+      "explicit_is_packable": null
+    },
+    {
+      "product": "foundation",
+      "source": "src/essentials/Http/JavaScript/Elsa.Http.JavaScript.csproj",
+      "target": "Essentials/src/Http/JavaScript/Elsa.Http.JavaScript.csproj",
+      "project_name": "Elsa.Http.JavaScript",
+      "package_id": "Elsa.Http.JavaScript",
+      "assembly_name": "Elsa.Http.JavaScript",
+      "explicit_is_packable": null
+    },
+    {
+      "product": "foundation",
+      "source": "src/essentials/Locking/Core/Elsa.Locking.Core.csproj",
+      "target": "Essentials/src/Locking/Core/Elsa.Locking.Core.csproj",
+      "project_name": "Elsa.Locking.Core",
+      "package_id": "Elsa.Locking.Core",
+      "assembly_name": "Elsa.Locking.Core",
+      "explicit_is_packable": null
+    },
+    {
+      "product": "foundation",
+      "source": "src/essentials/Locking/Database/Elsa.Locking.Database.csproj",
+      "target": "Essentials/src/Locking/Database/Elsa.Locking.Database.csproj",
+      "project_name": "Elsa.Locking.Database",
+      "package_id": "Elsa.Locking.Database",
+      "assembly_name": "Elsa.Locking.Database",
+      "explicit_is_packable": null
+    },
+    {
+      "product": "foundation",
+      "source": "src/essentials/Locking/FileSystem/Elsa.Locking.FileSystem.csproj",
+      "target": "Essentials/src/Locking/FileSystem/Elsa.Locking.FileSystem.csproj",
+      "project_name": "Elsa.Locking.FileSystem",
+      "package_id": "Elsa.Locking.FileSystem",
+      "assembly_name": "Elsa.Locking.FileSystem",
+      "explicit_is_packable": null
+    },
+    {
+      "product": "foundation",
+      "source": "src/essentials/Mediator/Core/Elsa.Mediator.Core.csproj",
+      "target": "Essentials/src/Mediator/Core/Elsa.Mediator.Core.csproj",
+      "project_name": "Elsa.Mediator.Core",
+      "package_id": "Elsa.Mediator.Core",
+      "assembly_name": "Elsa.Mediator.Core",
+      "explicit_is_packable": null
+    },
+    {
+      "product": "foundation",
+      "source": "src/essentials/Mediator/Elsa.Mediator/Elsa.Mediator.csproj",
+      "target": "Essentials/src/Mediator/Elsa.Mediator/Elsa.Mediator.csproj",
+      "project_name": "Elsa.Mediator",
+      "package_id": "Elsa.Mediator",
+      "assembly_name": "Elsa.Mediator",
+      "explicit_is_packable": null
+    },
+    {
+      "product": "foundation",
+      "source": "src/essentials/Modularity/Api/Elsa.Modularity.Api.csproj",
+      "target": "Essentials/src/Modularity/Api/Elsa.Modularity.Api.csproj",
+      "project_name": "Elsa.Modularity.Api",
+      "package_id": "Elsa.Modularity.Api",
+      "assembly_name": "Elsa.Modularity.Api",
+      "explicit_is_packable": null
+    },
+    {
+      "product": "foundation",
+      "source": "src/essentials/Modularity/Core/Elsa.Modularity.Core.csproj",
+      "target": "Essentials/src/Modularity/Core/Elsa.Modularity.Core.csproj",
+      "project_name": "Elsa.Modularity.Core",
+      "package_id": "Elsa.Modularity.Core",
+      "assembly_name": "Elsa.Modularity.Core",
+      "explicit_is_packable": null
+    },
+    {
+      "product": "foundation",
+      "source": "src/essentials/Modularity/EntityFramework/Elsa.Modularity.EntityFramework.csproj",
+      "target": "Essentials/src/Modularity/EntityFramework/Elsa.Modularity.EntityFramework.csproj",
+      "project_name": "Elsa.Modularity.EntityFramework",
+      "package_id": "Elsa.Modularity.EntityFramework",
+      "assembly_name": "Elsa.Modularity.EntityFramework",
+      "explicit_is_packable": null
+    },
+    {
+      "product": "foundation",
+      "source": "src/essentials/Modularity/Nuplane/Elsa.Modularity.Nuplane.csproj",
+      "target": "Essentials/src/Modularity/Nuplane/Elsa.Modularity.Nuplane.csproj",
+      "project_name": "Elsa.Modularity.Nuplane",
+      "package_id": "Elsa.Modularity.Nuplane",
+      "assembly_name": "Elsa.Modularity.Nuplane",
+      "explicit_is_packable": null
+    },
+    {
+      "product": "foundation",
+      "source": "src/essentials/Modularity/Planning/Elsa.Modularity.Planning.csproj",
+      "target": "Essentials/src/Modularity/Planning/Elsa.Modularity.Planning.csproj",
+      "project_name": "Elsa.Modularity.Planning",
+      "package_id": "Elsa.Modularity.Planning",
+      "assembly_name": "Elsa.Modularity.Planning",
+      "explicit_is_packable": null
+    },
+    {
+      "product": "foundation",
+      "source": "src/essentials/Persistence/EntityFramework/Elsa.Persistence.EntityFramework.csproj",
+      "target": "Essentials/src/Persistence/EntityFramework/Elsa.Persistence.EntityFramework.csproj",
+      "project_name": "Elsa.Persistence.EntityFramework",
+      "package_id": "Elsa.Persistence.EntityFramework",
+      "assembly_name": "Elsa.Persistence.EntityFramework",
+      "explicit_is_packable": null
+    },
+    {
+      "product": "foundation",
+      "source": "src/essentials/Persistence/Schema/Elsa.Persistence.Schema.csproj",
+      "target": "Essentials/src/Persistence/Schema/Elsa.Persistence.Schema.csproj",
+      "project_name": "Elsa.Persistence.Schema",
+      "package_id": "Elsa.Persistence.Schema",
+      "assembly_name": "Elsa.Persistence.Schema",
+      "explicit_is_packable": null
+    },
+    {
+      "product": "foundation",
+      "source": "src/essentials/Pipelines/Core/Elsa.Pipelines.Core.csproj",
+      "target": "Essentials/src/Pipelines/Core/Elsa.Pipelines.Core.csproj",
+      "project_name": "Elsa.Pipelines.Core",
+      "package_id": "Elsa.Pipelines.Core",
+      "assembly_name": "Elsa.Pipelines.Core",
+      "explicit_is_packable": null
+    },
+    {
+      "product": "foundation",
+      "source": "src/essentials/Primitives/Hosting/Elsa.Primitives.Hosting.csproj",
+      "target": "Essentials/src/Primitives/Hosting/Elsa.Primitives.Hosting.csproj",
+      "project_name": "Elsa.Primitives.Hosting",
+      "package_id": "Elsa.Primitives.Hosting",
+      "assembly_name": "Elsa.Primitives.Hosting",
+      "explicit_is_packable": null
+    },
+    {
+      "product": "foundation",
+      "source": "src/essentials/Primitives/Primitives/Elsa.Primitives.csproj",
+      "target": "Essentials/src/Primitives/Primitives/Elsa.Primitives.csproj",
+      "project_name": "Elsa.Primitives",
+      "package_id": "Elsa.Primitives",
+      "assembly_name": "Elsa.Primitives",
+      "explicit_is_packable": null
+    },
+    {
+      "product": "foundation",
+      "source": "src/essentials/Secrets/Api/Elsa.Secrets.Api.csproj",
+      "target": "Essentials/src/Secrets/Api/Elsa.Secrets.Api.csproj",
+      "project_name": "Elsa.Secrets.Api",
+      "package_id": "Elsa.Secrets.Api",
+      "assembly_name": "Elsa.Secrets.Api",
+      "explicit_is_packable": null
+    },
+    {
+      "product": "foundation",
+      "source": "src/essentials/Secrets/Core/Elsa.Secrets.Core.csproj",
+      "target": "Essentials/src/Secrets/Core/Elsa.Secrets.Core.csproj",
+      "project_name": "Elsa.Secrets.Core",
+      "package_id": "Elsa.Secrets.Core",
+      "assembly_name": "Elsa.Secrets.Core",
+      "explicit_is_packable": null
+    },
+    {
+      "product": "foundation",
+      "source": "src/essentials/Secrets/Elsa.Secrets/Elsa.Secrets.csproj",
+      "target": "Essentials/src/Secrets/Elsa.Secrets/Elsa.Secrets.csproj",
+      "project_name": "Elsa.Secrets",
+      "package_id": "Elsa.Secrets",
+      "assembly_name": "Elsa.Secrets",
+      "explicit_is_packable": null
+    },
+    {
+      "product": "foundation",
+      "source": "src/essentials/Secrets/Nuplane/Elsa.Secrets.Nuplane.csproj",
+      "target": "Essentials/src/Secrets/Nuplane/Elsa.Secrets.Nuplane.csproj",
+      "project_name": "Elsa.Secrets.Nuplane",
+      "package_id": "Elsa.Secrets.Nuplane",
+      "assembly_name": "Elsa.Secrets.Nuplane",
+      "explicit_is_packable": null
+    },
+    {
+      "product": "foundation",
+      "source": "src/essentials/Secrets/Persistence/EntityFrameworkCore/Elsa.Secrets.Persistence.EntityFrameworkCore.csproj",
+      "target": "Essentials/src/Secrets/Persistence/EntityFrameworkCore/Elsa.Secrets.Persistence.EntityFrameworkCore.csproj",
+      "project_name": "Elsa.Secrets.Persistence.EntityFrameworkCore",
+      "package_id": "Elsa.Secrets.Persistence.EntityFrameworkCore",
+      "assembly_name": "Elsa.Secrets.Persistence.EntityFrameworkCore",
+      "explicit_is_packable": null
+    },
+    {
+      "product": "foundation",
+      "source": "src/essentials/Secrets/Workflows/Elsa.Secrets.Workflows.csproj",
+      "target": "Essentials/src/Secrets/Workflows/Elsa.Secrets.Workflows.csproj",
+      "project_name": "Elsa.Secrets.Workflows",
+      "package_id": "Elsa.Secrets.Workflows",
+      "assembly_name": "Elsa.Secrets.Workflows",
+      "explicit_is_packable": null
+    },
+    {
+      "product": "foundation",
+      "source": "src/essentials/Serialization/Core/Elsa.Serialization.Core.csproj",
+      "target": "Essentials/src/Serialization/Core/Elsa.Serialization.Core.csproj",
+      "project_name": "Elsa.Serialization.Core",
+      "package_id": "Elsa.Serialization.Core",
+      "assembly_name": "Elsa.Serialization.Core",
+      "explicit_is_packable": null
+    },
+    {
+      "product": "foundation",
+      "source": "src/essentials/Serialization/Newtonsoft/Elsa.Serialization.Newtonsoft.csproj",
+      "target": "Essentials/src/Serialization/Newtonsoft/Elsa.Serialization.Newtonsoft.csproj",
+      "project_name": "Elsa.Serialization.Newtonsoft",
+      "package_id": "Elsa.Serialization.Newtonsoft",
+      "assembly_name": "Elsa.Serialization.Newtonsoft",
+      "explicit_is_packable": null
+    },
+    {
+      "product": "foundation",
+      "source": "src/essentials/Serialization/SystemText/Elsa.Serialization.SystemText.csproj",
+      "target": "Essentials/src/Serialization/SystemText/Elsa.Serialization.SystemText.csproj",
+      "project_name": "Elsa.Serialization.SystemText",
+      "package_id": "Elsa.Serialization.SystemText",
+      "assembly_name": "Elsa.Serialization.SystemText",
+      "explicit_is_packable": null
+    },
+    {
+      "product": "foundation",
+      "source": "src/essentials/Studio/Preferences/Api/Elsa.Studio.Preferences.Api.csproj",
+      "target": "Essentials/src/Studio/Preferences/Api/Elsa.Studio.Preferences.Api.csproj",
+      "project_name": "Elsa.Studio.Preferences.Api",
+      "package_id": "Elsa.Studio.Preferences.Api",
+      "assembly_name": "Elsa.Studio.Preferences.Api",
+      "explicit_is_packable": null
+    },
+    {
+      "product": "foundation",
+      "source": "src/essentials/Studio/Preferences/Core/Elsa.Studio.Preferences.Core.csproj",
+      "target": "Essentials/src/Studio/Preferences/Core/Elsa.Studio.Preferences.Core.csproj",
+      "project_name": "Elsa.Studio.Preferences.Core",
+      "package_id": "Elsa.Studio.Preferences.Core",
+      "assembly_name": "Elsa.Studio.Preferences.Core",
+      "explicit_is_packable": null
+    },
+    {
+      "product": "foundation",
+      "source": "src/essentials/Studio/Preferences/Persistence/EntityFrameworkCore/Elsa.Studio.Preferences.Persistence.EntityFrameworkCore.csproj",
+      "target": "Essentials/src/Studio/Preferences/Persistence/EntityFrameworkCore/Elsa.Studio.Preferences.Persistence.EntityFrameworkCore.csproj",
+      "project_name": "Elsa.Studio.Preferences.Persistence.EntityFrameworkCore",
+      "package_id": "Elsa.Studio.Preferences.Persistence.EntityFrameworkCore",
+      "assembly_name": "Elsa.Studio.Preferences.Persistence.EntityFrameworkCore",
+      "explicit_is_packable": null
+    },
+    {
+      "product": "foundation",
+      "source": "src/essentials/Tasks/Core/Elsa.Tasks.Core.csproj",
+      "target": "Essentials/src/Tasks/Core/Elsa.Tasks.Core.csproj",
+      "project_name": "Elsa.Tasks.Core",
+      "package_id": "Elsa.Tasks.Core",
+      "assembly_name": "Elsa.Tasks.Core",
+      "explicit_is_packable": null
+    },
+    {
+      "product": "foundation",
+      "source": "src/essentials/Tasks/Elsa.Tasks/Elsa.Tasks.csproj",
+      "target": "Essentials/src/Tasks/Elsa.Tasks/Elsa.Tasks.csproj",
+      "project_name": "Elsa.Tasks",
+      "package_id": "Elsa.Tasks",
+      "assembly_name": "Elsa.Tasks",
+      "explicit_is_packable": null
+    },
+    {
+      "product": "foundation",
+      "source": "src/essentials/Tasks/Schedules/Elsa.Tasks.Schedules.csproj",
+      "target": "Essentials/src/Tasks/Schedules/Elsa.Tasks.Schedules.csproj",
+      "project_name": "Elsa.Tasks.Schedules",
+      "package_id": "Elsa.Tasks.Schedules",
+      "assembly_name": "Elsa.Tasks.Schedules",
+      "explicit_is_packable": null
+    },
+    {
+      "product": "foundation",
+      "source": "src/essentials/Workflows/Dashboard/Elsa.Workflows.Dashboard/Elsa.Workflows.Dashboard.csproj",
+      "target": "Essentials/src/Workflows/Dashboard/Elsa.Workflows.Dashboard/Elsa.Workflows.Dashboard.csproj",
+      "project_name": "Elsa.Workflows.Dashboard",
+      "package_id": "Elsa.Workflows.Dashboard",
+      "assembly_name": "Elsa.Workflows.Dashboard",
+      "explicit_is_packable": null
+    },
+    {
+      "product": "foundation",
+      "source": "src/essentials/Workflows/Dashboard/Persistence/EntityFrameworkCore/Elsa.Workflows.Dashboard.Persistence.EntityFrameworkCore.csproj",
+      "target": "Essentials/src/Workflows/Dashboard/Persistence/EntityFrameworkCore/Elsa.Workflows.Dashboard.Persistence.EntityFrameworkCore.csproj",
+      "project_name": "Elsa.Workflows.Dashboard.Persistence.EntityFrameworkCore",
+      "package_id": "Elsa.Workflows.Dashboard.Persistence.EntityFrameworkCore",
+      "assembly_name": "Elsa.Workflows.Dashboard.Persistence.EntityFrameworkCore",
+      "explicit_is_packable": null
+    },
+    {
+      "product": "foundation",
+      "source": "src/essentials/Workflows/Design/Api/Elsa.Workflows.Design.Api.csproj",
+      "target": "Essentials/src/Workflows/Design/Api/Elsa.Workflows.Design.Api.csproj",
+      "project_name": "Elsa.Workflows.Design.Api",
+      "package_id": "Elsa.Workflows.Design.Api",
+      "assembly_name": "Elsa.Workflows.Design.Api",
+      "explicit_is_packable": null
+    },
+    {
+      "product": "foundation",
+      "source": "src/essentials/Workflows/Design/CodeGeneration/Elsa.Workflows.Design.CodeGeneration.csproj",
+      "target": "Essentials/src/Workflows/Design/CodeGeneration/Elsa.Workflows.Design.CodeGeneration.csproj",
+      "project_name": "Elsa.Workflows.Design.CodeGeneration",
+      "package_id": "Elsa.Workflows.Design.CodeGeneration",
+      "assembly_name": "Elsa.Workflows.Design.CodeGeneration",
+      "explicit_is_packable": null
+    },
+    {
+      "product": "foundation",
+      "source": "src/essentials/Workflows/Design/Core/Elsa.Workflows.Design.Core.csproj",
+      "target": "Essentials/src/Workflows/Design/Core/Elsa.Workflows.Design.Core.csproj",
+      "project_name": "Elsa.Workflows.Design.Core",
+      "package_id": "Elsa.Workflows.Design.Core",
+      "assembly_name": "Elsa.Workflows.Design.Core",
+      "explicit_is_packable": null
+    },
+    {
+      "product": "foundation",
+      "source": "src/essentials/Workflows/Design/JavaScript/Elsa.Workflows.Design.JavaScript.csproj",
+      "target": "Essentials/src/Workflows/Design/JavaScript/Elsa.Workflows.Design.JavaScript.csproj",
+      "project_name": "Elsa.Workflows.Design.JavaScript",
+      "package_id": "Elsa.Workflows.Design.JavaScript",
+      "assembly_name": "Elsa.Workflows.Design.JavaScript",
+      "explicit_is_packable": null
+    },
+    {
+      "product": "foundation",
+      "source": "src/essentials/Workflows/Design/Persistence/Core/Elsa.Workflows.Design.Persistence.Core.csproj",
+      "target": "Essentials/src/Workflows/Design/Persistence/Core/Elsa.Workflows.Design.Persistence.Core.csproj",
+      "project_name": "Elsa.Workflows.Design.Persistence.Core",
+      "package_id": "Elsa.Workflows.Design.Persistence.Core",
+      "assembly_name": "Elsa.Workflows.Design.Persistence.Core",
+      "explicit_is_packable": null
+    },
+    {
+      "product": "foundation",
+      "source": "src/essentials/Workflows/Design/Persistence/EntityFrameworkCore/Elsa.Workflows.Design.Persistence.EntityFrameworkCore.csproj",
+      "target": "Essentials/src/Workflows/Design/Persistence/EntityFrameworkCore/Elsa.Workflows.Design.Persistence.EntityFrameworkCore.csproj",
+      "project_name": "Elsa.Workflows.Design.Persistence.EntityFrameworkCore",
+      "package_id": "Elsa.Workflows.Design.Persistence.EntityFrameworkCore",
+      "assembly_name": "Elsa.Workflows.Design.Persistence.EntityFrameworkCore",
+      "explicit_is_packable": null
+    },
+    {
+      "product": "foundation",
+      "source": "src/essentials/Workflows/Design/Reconciliation/Elsa.Workflows.Design.Reconciliation/Elsa.Workflows.Design.Reconciliation.csproj",
+      "target": "Essentials/src/Workflows/Design/Reconciliation/Elsa.Workflows.Design.Reconciliation/Elsa.Workflows.Design.Reconciliation.csproj",
+      "project_name": "Elsa.Workflows.Design.Reconciliation",
+      "package_id": "Elsa.Workflows.Design.Reconciliation",
+      "assembly_name": "Elsa.Workflows.Design.Reconciliation",
+      "explicit_is_packable": null
+    },
+    {
+      "product": "foundation",
+      "source": "src/essentials/Workflows/Design/Reconciliation/Git/Elsa.Workflows.Design.Reconciliation.Git.csproj",
+      "target": "Essentials/src/Workflows/Design/Reconciliation/Git/Elsa.Workflows.Design.Reconciliation.Git.csproj",
+      "project_name": "Elsa.Workflows.Design.Reconciliation.Git",
+      "package_id": "Elsa.Workflows.Design.Reconciliation.Git",
+      "assembly_name": "Elsa.Workflows.Design.Reconciliation.Git",
+      "explicit_is_packable": null
+    },
+    {
+      "product": "foundation",
+      "source": "src/essentials/Workflows/Design/Reconciliation/Json/Elsa.Workflows.Design.Reconciliation.Json.csproj",
+      "target": "Essentials/src/Workflows/Design/Reconciliation/Json/Elsa.Workflows.Design.Reconciliation.Json.csproj",
+      "project_name": "Elsa.Workflows.Design.Reconciliation.Json",
+      "package_id": "Elsa.Workflows.Design.Reconciliation.Json",
+      "assembly_name": "Elsa.Workflows.Design.Reconciliation.Json",
+      "explicit_is_packable": null
+    },
+    {
+      "product": "foundation",
+      "source": "src/essentials/Workflows/Design/Validations/Core/Elsa.Workflows.Design.Validations.Core.csproj",
+      "target": "Essentials/src/Workflows/Design/Validations/Core/Elsa.Workflows.Design.Validations.Core.csproj",
+      "project_name": "Elsa.Workflows.Design.Validations.Core",
+      "package_id": "Elsa.Workflows.Design.Validations.Core",
+      "assembly_name": "Elsa.Workflows.Design.Validations.Core",
+      "explicit_is_packable": null
+    },
+    {
+      "product": "foundation",
+      "source": "src/essentials/Workflows/Design/Validations/Elsa.Workflows.Design.Validations/Elsa.Workflows.Design.Validations.csproj",
+      "target": "Essentials/src/Workflows/Design/Validations/Elsa.Workflows.Design.Validations/Elsa.Workflows.Design.Validations.csproj",
+      "project_name": "Elsa.Workflows.Design.Validations",
+      "package_id": "Elsa.Workflows.Design.Validations",
+      "assembly_name": "Elsa.Workflows.Design.Validations",
+      "explicit_is_packable": null
+    },
+    {
+      "product": "foundation",
+      "source": "src/essentials/Workflows/ExecutionEvidence/Elsa.Workflows.ExecutionEvidence.csproj",
+      "target": "Essentials/src/Workflows/ExecutionEvidence/Elsa.Workflows.ExecutionEvidence.csproj",
+      "project_name": "Elsa.Workflows.ExecutionEvidence",
+      "package_id": "Elsa.Workflows.ExecutionEvidence",
+      "assembly_name": "Elsa.Workflows.ExecutionEvidence",
+      "explicit_is_packable": null
+    },
+    {
+      "product": "foundation",
+      "source": "src/essentials/Workflows/Publishing/Api/Elsa.Workflows.Publishing.Api.csproj",
+      "target": "Essentials/src/Workflows/Publishing/Api/Elsa.Workflows.Publishing.Api.csproj",
+      "project_name": "Elsa.Workflows.Publishing.Api",
+      "package_id": "Elsa.Workflows.Publishing.Api",
+      "assembly_name": "Elsa.Workflows.Publishing.Api",
+      "explicit_is_packable": null
+    },
+    {
+      "product": "foundation",
+      "source": "src/essentials/Workflows/Publishing/Core/Elsa.Workflows.Publishing.Core.csproj",
+      "target": "Essentials/src/Workflows/Publishing/Core/Elsa.Workflows.Publishing.Core.csproj",
+      "project_name": "Elsa.Workflows.Publishing.Core",
+      "package_id": "Elsa.Workflows.Publishing.Core",
+      "assembly_name": "Elsa.Workflows.Publishing.Core",
+      "explicit_is_packable": null
+    },
+    {
+      "product": "foundation",
+      "source": "src/essentials/Workflows/Publishing/Elsa.Workflows.Publishing/Elsa.Workflows.Publishing.csproj",
+      "target": "Essentials/src/Workflows/Publishing/Elsa.Workflows.Publishing/Elsa.Workflows.Publishing.csproj",
+      "project_name": "Elsa.Workflows.Publishing",
+      "package_id": "Elsa.Workflows.Publishing",
+      "assembly_name": "Elsa.Workflows.Publishing",
+      "explicit_is_packable": null
+    },
+    {
+      "product": "foundation",
+      "source": "src/essentials/Workflows/Publishing/Persistence/EntityFrameworkCore/Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore.csproj",
+      "target": "Essentials/src/Workflows/Publishing/Persistence/EntityFrameworkCore/Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore.csproj",
+      "project_name": "Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore",
+      "package_id": "Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore",
+      "assembly_name": "Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore",
+      "explicit_is_packable": null
+    },
+    {
+      "product": "foundation",
+      "source": "src/essentials/Workflows/Runtime/Api/Elsa.Workflows.Runtime.Api.csproj",
+      "target": "Essentials/src/Workflows/Runtime/Api/Elsa.Workflows.Runtime.Api.csproj",
+      "project_name": "Elsa.Workflows.Runtime.Api",
+      "package_id": "Elsa.Workflows.Runtime.Api",
+      "assembly_name": "Elsa.Workflows.Runtime.Api",
+      "explicit_is_packable": null
+    },
+    {
+      "product": "foundation",
+      "source": "src/essentials/Workflows/Runtime/Core/Elsa.Workflows.Runtime.Core.csproj",
+      "target": "Essentials/src/Workflows/Runtime/Core/Elsa.Workflows.Runtime.Core.csproj",
+      "project_name": "Elsa.Workflows.Runtime.Core",
+      "package_id": "Elsa.Workflows.Runtime.Core",
+      "assembly_name": "Elsa.Workflows.Runtime.Core",
+      "explicit_is_packable": null
+    },
+    {
+      "product": "foundation",
+      "source": "src/essentials/Workflows/Runtime/Distributed/Elsa.Workflows.Runtime.Distributed/Elsa.Workflows.Runtime.Distributed.csproj",
+      "target": "Essentials/src/Workflows/Runtime/Distributed/Elsa.Workflows.Runtime.Distributed/Elsa.Workflows.Runtime.Distributed.csproj",
+      "project_name": "Elsa.Workflows.Runtime.Distributed",
+      "package_id": "Elsa.Workflows.Runtime.Distributed",
+      "assembly_name": "Elsa.Workflows.Runtime.Distributed",
+      "explicit_is_packable": null
+    },
+    {
+      "product": "foundation",
+      "source": "src/essentials/Workflows/Runtime/Distributed/Persistence/EntityFrameworkCore/Elsa.Workflows.Runtime.Distributed.Persistence.EntityFrameworkCore.csproj",
+      "target": "Essentials/src/Workflows/Runtime/Distributed/Persistence/EntityFrameworkCore/Elsa.Workflows.Runtime.Distributed.Persistence.EntityFrameworkCore.csproj",
+      "project_name": "Elsa.Workflows.Runtime.Distributed.Persistence.EntityFrameworkCore",
+      "package_id": "Elsa.Workflows.Runtime.Distributed.Persistence.EntityFrameworkCore",
+      "assembly_name": "Elsa.Workflows.Runtime.Distributed.Persistence.EntityFrameworkCore",
+      "explicit_is_packable": null
+    },
+    {
+      "product": "foundation",
+      "source": "src/essentials/Workflows/Runtime/Elsa.Workflows.Runtime/Elsa.Workflows.Runtime.csproj",
+      "target": "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Elsa.Workflows.Runtime.csproj",
+      "project_name": "Elsa.Workflows.Runtime",
+      "package_id": "Elsa.Workflows.Runtime",
+      "assembly_name": "Elsa.Workflows.Runtime",
+      "explicit_is_packable": null
+    },
+    {
+      "product": "foundation",
+      "source": "src/essentials/Workflows/Runtime/Http/Elsa.Workflows.Runtime.Http.csproj",
+      "target": "Essentials/src/Workflows/Runtime/Http/Elsa.Workflows.Runtime.Http.csproj",
+      "project_name": "Elsa.Workflows.Runtime.Http",
+      "package_id": "Elsa.Workflows.Runtime.Http",
+      "assembly_name": "Elsa.Workflows.Runtime.Http",
+      "explicit_is_packable": null
+    },
+    {
+      "product": "foundation",
+      "source": "src/essentials/Workflows/Runtime/JavaScript/Elsa.Workflows.Runtime.JavaScript.csproj",
+      "target": "Essentials/src/Workflows/Runtime/JavaScript/Elsa.Workflows.Runtime.JavaScript.csproj",
+      "project_name": "Elsa.Workflows.Runtime.JavaScript",
+      "package_id": "Elsa.Workflows.Runtime.JavaScript",
+      "assembly_name": "Elsa.Workflows.Runtime.JavaScript",
+      "explicit_is_packable": null
+    },
+    {
+      "product": "foundation",
+      "source": "src/essentials/Workflows/Runtime/Persistence/EntityFrameworkCore/Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.csproj",
+      "target": "Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.csproj",
+      "project_name": "Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore",
+      "package_id": "Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore",
+      "assembly_name": "Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore",
+      "explicit_is_packable": null
+    },
+    {
+      "product": "foundation",
+      "source": "src/essentials/Workflows/Runtime/Reconciliation/Core/Elsa.Workflows.Runtime.Reconciliation.Core.csproj",
+      "target": "Essentials/src/Workflows/Runtime/Reconciliation/Core/Elsa.Workflows.Runtime.Reconciliation.Core.csproj",
+      "project_name": "Elsa.Workflows.Runtime.Reconciliation.Core",
+      "package_id": "Elsa.Workflows.Runtime.Reconciliation.Core",
+      "assembly_name": "Elsa.Workflows.Runtime.Reconciliation.Core",
+      "explicit_is_packable": null
+    },
+    {
+      "product": "foundation",
+      "source": "src/essentials/Workflows/Runtime/Reconciliation/Elsa.Workflows.Runtime.Reconciliation/Elsa.Workflows.Runtime.Reconciliation.csproj",
+      "target": "Essentials/src/Workflows/Runtime/Reconciliation/Elsa.Workflows.Runtime.Reconciliation/Elsa.Workflows.Runtime.Reconciliation.csproj",
+      "project_name": "Elsa.Workflows.Runtime.Reconciliation",
+      "package_id": "Elsa.Workflows.Runtime.Reconciliation",
+      "assembly_name": "Elsa.Workflows.Runtime.Reconciliation",
+      "explicit_is_packable": null
+    },
+    {
+      "product": "foundation",
+      "source": "src/essentials/Workflows/Runtime/ReferenceGarbageCollection/Elsa.Workflows.Runtime.ReferenceGarbageCollection.csproj",
+      "target": "Essentials/src/Workflows/Runtime/ReferenceGarbageCollection/Elsa.Workflows.Runtime.ReferenceGarbageCollection.csproj",
+      "project_name": "Elsa.Workflows.Runtime.ReferenceGarbageCollection",
+      "package_id": "Elsa.Workflows.Runtime.ReferenceGarbageCollection",
+      "assembly_name": "Elsa.Workflows.Runtime.ReferenceGarbageCollection",
+      "explicit_is_packable": null
+    },
+    {
+      "product": "foundation",
+      "source": "src/essentials/Workflows/Runtime/Resumption/Elsa.Workflows.Runtime.Resumption.csproj",
+      "target": "Essentials/src/Workflows/Runtime/Resumption/Elsa.Workflows.Runtime.Resumption.csproj",
+      "project_name": "Elsa.Workflows.Runtime.Resumption",
+      "package_id": "Elsa.Workflows.Runtime.Resumption",
+      "assembly_name": "Elsa.Workflows.Runtime.Resumption",
+      "explicit_is_packable": null
+    },
+    {
+      "product": "foundation",
+      "source": "src/essentials/Workflows/Runtime/Scheduling/Elsa.Workflows.Runtime.Scheduling.csproj",
+      "target": "Essentials/src/Workflows/Runtime/Scheduling/Elsa.Workflows.Runtime.Scheduling.csproj",
+      "project_name": "Elsa.Workflows.Runtime.Scheduling",
+      "package_id": "Elsa.Workflows.Runtime.Scheduling",
+      "assembly_name": "Elsa.Workflows.Runtime.Scheduling",
+      "explicit_is_packable": null
+    },
+    {
+      "product": "foundation",
+      "source": "src/extensions/Agent/src/Anthropic/Elsa.Agent.Anthropic.csproj",
+      "target": "Extensions/Agent/src/Anthropic/Elsa.Agent.Anthropic.csproj",
+      "project_name": "Elsa.Agent.Anthropic",
+      "package_id": "Elsa.Agent.Anthropic",
+      "assembly_name": "Elsa.Agent.Anthropic",
+      "explicit_is_packable": null
+    },
+    {
+      "product": "foundation",
+      "source": "src/extensions/Agent/src/Api/Elsa.Agent.Api.csproj",
+      "target": "Extensions/Agent/src/Api/Elsa.Agent.Api.csproj",
+      "project_name": "Elsa.Agent.Api",
+      "package_id": "Elsa.Agent.Api",
+      "assembly_name": "Elsa.Agent.Api",
+      "explicit_is_packable": null
+    },
+    {
+      "product": "foundation",
+      "source": "src/extensions/Agent/src/Core/Elsa.Agent.Core.csproj",
+      "target": "Extensions/Agent/src/Core/Elsa.Agent.Core.csproj",
+      "project_name": "Elsa.Agent.Core",
+      "package_id": "Elsa.Agent.Core",
+      "assembly_name": "Elsa.Agent.Core",
+      "explicit_is_packable": null
+    },
+    {
+      "product": "foundation",
+      "source": "src/extensions/Agent/src/GitHubCopilot/Elsa.Agent.GitHubCopilot.csproj",
+      "target": "Extensions/Agent/src/GitHubCopilot/Elsa.Agent.GitHubCopilot.csproj",
+      "project_name": "Elsa.Agent.GitHubCopilot",
+      "package_id": "Elsa.Agent.GitHubCopilot",
+      "assembly_name": "Elsa.Agent.GitHubCopilot",
+      "explicit_is_packable": null
+    },
+    {
+      "product": "foundation",
+      "source": "src/extensions/Agent/src/Workflows/Elsa.Agent.Workflows.csproj",
+      "target": "Extensions/Agent/src/Workflows/Elsa.Agent.Workflows.csproj",
+      "project_name": "Elsa.Agent.Workflows",
+      "package_id": "Elsa.Agent.Workflows",
+      "assembly_name": "Elsa.Agent.Workflows",
+      "explicit_is_packable": null
+    },
+    {
+      "product": "foundation",
+      "source": "src/extensions/Agent/tests/Tests/Elsa.Agent.Tests.csproj",
+      "target": "Extensions/Agent/tests/Tests/Elsa.Agent.Tests.csproj",
+      "project_name": "Elsa.Agent.Tests",
+      "package_id": "Elsa.Agent.Tests",
+      "assembly_name": "Elsa.Agent.Tests",
+      "explicit_is_packable": null
+    },
+    {
+      "product": "foundation",
+      "source": "src/extensions/Elsa3/src/Activities/Design/Import/Elsa3.Activities.Design.Import/Elsa3.Activities.Design.Import.csproj",
+      "target": "Extensions/Elsa3/src/Activities/Design/Import/Elsa3.Activities.Design.Import/Elsa3.Activities.Design.Import.csproj",
+      "project_name": "Elsa3.Activities.Design.Import",
+      "package_id": "Elsa3.Activities.Design.Import",
+      "assembly_name": "Elsa3.Activities.Design.Import",
+      "explicit_is_packable": null
+    },
+    {
+      "product": "foundation",
+      "source": "src/extensions/Elsa3/src/Activities/Design/Import/Persistence/EntityFrameworkCore/Elsa3.Activities.Design.Import.Persistence.EntityFrameworkCore.csproj",
+      "target": "Extensions/Elsa3/src/Activities/Design/Import/Persistence/EntityFrameworkCore/Elsa3.Activities.Design.Import.Persistence.EntityFrameworkCore.csproj",
+      "project_name": "Elsa3.Activities.Design.Import.Persistence.EntityFrameworkCore",
+      "package_id": "Elsa3.Activities.Design.Import.Persistence.EntityFrameworkCore",
+      "assembly_name": "Elsa3.Activities.Design.Import.Persistence.EntityFrameworkCore",
+      "explicit_is_packable": null
+    },
+    {
+      "product": "foundation",
+      "source": "src/extensions/Elsa3/src/Mapping/Elsa3.Mapping.csproj",
+      "target": "Extensions/Elsa3/src/Mapping/Elsa3.Mapping.csproj",
+      "project_name": "Elsa3.Mapping",
+      "package_id": "Elsa3.Mapping",
+      "assembly_name": "Elsa3.Mapping",
+      "explicit_is_packable": null
+    },
+    {
+      "product": "foundation",
+      "source": "src/extensions/Elsa3/src/Models/Elsa3.Models.csproj",
+      "target": "Extensions/Elsa3/src/Models/Elsa3.Models.csproj",
+      "project_name": "Elsa3.Models",
+      "package_id": "Elsa3.Models",
+      "assembly_name": "Elsa3.Models",
+      "explicit_is_packable": null
+    },
+    {
+      "product": "foundation",
+      "source": "src/extensions/Elsa3/tests/Activities/Design/Import/Persistence/EntityFrameworkCore/ProviderTests/Elsa3.Activities.Design.Import.Persistence.EntityFrameworkCore.ProviderTests.csproj",
+      "target": "Extensions/Elsa3/tests/Activities/Design/Import/Persistence/EntityFrameworkCore/ProviderTests/Elsa3.Activities.Design.Import.Persistence.EntityFrameworkCore.ProviderTests.csproj",
+      "project_name": "Elsa3.Activities.Design.Import.Persistence.EntityFrameworkCore.ProviderTests",
+      "package_id": "Elsa3.Activities.Design.Import.Persistence.EntityFrameworkCore.ProviderTests",
+      "assembly_name": "Elsa3.Activities.Design.Import.Persistence.EntityFrameworkCore.ProviderTests",
+      "explicit_is_packable": null
+    },
+    {
+      "product": "foundation",
+      "source": "src/extensions/Elsa3/tests/Activities/Design/Import/Persistence/EntityFrameworkCore/Tests/Elsa3.Activities.Design.Import.Persistence.EntityFrameworkCore.Tests.csproj",
+      "target": "Extensions/Elsa3/tests/Activities/Design/Import/Persistence/EntityFrameworkCore/Tests/Elsa3.Activities.Design.Import.Persistence.EntityFrameworkCore.Tests.csproj",
+      "project_name": "Elsa3.Activities.Design.Import.Persistence.EntityFrameworkCore.Tests",
+      "package_id": "Elsa3.Activities.Design.Import.Persistence.EntityFrameworkCore.Tests",
+      "assembly_name": "Elsa3.Activities.Design.Import.Persistence.EntityFrameworkCore.Tests",
+      "explicit_is_packable": null
+    },
+    {
+      "product": "foundation",
+      "source": "src/extensions/Elsa3/tests/Mapping/Tests/Elsa3.Mapping.Tests.csproj",
+      "target": "Extensions/Elsa3/tests/Mapping/Tests/Elsa3.Mapping.Tests.csproj",
+      "project_name": "Elsa3.Mapping.Tests",
+      "package_id": "Elsa3.Mapping.Tests",
+      "assembly_name": "Elsa3.Mapping.Tests",
+      "explicit_is_packable": null
+    },
+    {
+      "product": "foundation",
+      "source": "src/extensions/ExtensionBuilder/src/Api/Elsa.ExtensionBuilder.Api.csproj",
+      "target": "Extensions/ExtensionBuilder/src/Api/Elsa.ExtensionBuilder.Api.csproj",
+      "project_name": "Elsa.ExtensionBuilder.Api",
+      "package_id": "Elsa.ExtensionBuilder.Api",
+      "assembly_name": "Elsa.ExtensionBuilder.Api",
+      "explicit_is_packable": null
+    },
+    {
+      "product": "foundation",
+      "source": "src/extensions/ExtensionBuilder/tests/Api/Tests/Elsa.ExtensionBuilder.Api.Tests.csproj",
+      "target": "Extensions/ExtensionBuilder/tests/Api/Tests/Elsa.ExtensionBuilder.Api.Tests.csproj",
+      "project_name": "Elsa.ExtensionBuilder.Api.Tests",
+      "package_id": "Elsa.ExtensionBuilder.Api.Tests",
+      "assembly_name": "Elsa.ExtensionBuilder.Api.Tests",
+      "explicit_is_packable": null
+    },
+    {
+      "product": "foundation",
+      "source": "tests/essentials/Activities/Behavioral/Tests/Elsa.Activities.Behavioral.Tests.csproj",
+      "target": "Essentials/tests/Activities/Behavioral/Tests/Elsa.Activities.Behavioral.Tests.csproj",
+      "project_name": "Elsa.Activities.Behavioral.Tests",
+      "package_id": "Elsa.Activities.Behavioral.Tests",
+      "assembly_name": "Elsa.Activities.Behavioral.Tests",
+      "explicit_is_packable": null
+    },
+    {
+      "product": "foundation",
+      "source": "tests/essentials/Activities/Bpmn/Interchange/Tests/Elsa.Activities.Bpmn.Interchange.Tests.csproj",
+      "target": "Essentials/tests/Activities/Bpmn/Interchange/Tests/Elsa.Activities.Bpmn.Interchange.Tests.csproj",
+      "project_name": "Elsa.Activities.Bpmn.Interchange.Tests",
+      "package_id": "Elsa.Activities.Bpmn.Interchange.Tests",
+      "assembly_name": "Elsa.Activities.Bpmn.Interchange.Tests",
+      "explicit_is_packable": null
+    },
+    {
+      "product": "foundation",
+      "source": "tests/essentials/Activities/Bpmn/Tests/Elsa.Activities.Bpmn.Tests.csproj",
+      "target": "Essentials/tests/Activities/Bpmn/Tests/Elsa.Activities.Bpmn.Tests.csproj",
+      "project_name": "Elsa.Activities.Bpmn.Tests",
+      "package_id": "Elsa.Activities.Bpmn.Tests",
+      "assembly_name": "Elsa.Activities.Bpmn.Tests",
+      "explicit_is_packable": null
+    },
+    {
+      "product": "foundation",
+      "source": "tests/essentials/Activities/ControlFlow/Tests/Elsa.Activities.ControlFlow.Tests.csproj",
+      "target": "Essentials/tests/Activities/ControlFlow/Tests/Elsa.Activities.ControlFlow.Tests.csproj",
+      "project_name": "Elsa.Activities.ControlFlow.Tests",
+      "package_id": "Elsa.Activities.ControlFlow.Tests",
+      "assembly_name": "Elsa.Activities.ControlFlow.Tests",
+      "explicit_is_packable": null
+    },
+    {
+      "product": "foundation",
+      "source": "tests/essentials/Activities/Design/Api/Tests/Elsa.Activities.Design.Api.Tests.csproj",
+      "target": "Essentials/tests/Activities/Design/Api/Tests/Elsa.Activities.Design.Api.Tests.csproj",
+      "project_name": "Elsa.Activities.Design.Api.Tests",
+      "package_id": "Elsa.Activities.Design.Api.Tests",
+      "assembly_name": "Elsa.Activities.Design.Api.Tests",
+      "explicit_is_packable": null
+    },
+    {
+      "product": "foundation",
+      "source": "tests/essentials/Activities/Design/Fixtures/ClrFixture/Elsa.Activities.Design.Tests.ClrFixture.csproj",
+      "target": "Essentials/tests/Activities/Design/Fixtures/ClrFixture/Elsa.Activities.Design.Tests.ClrFixture.csproj",
+      "project_name": "Elsa.Activities.Design.Tests.ClrFixture",
+      "package_id": "Elsa.Activities.Design.Tests.ClrFixture",
+      "assembly_name": "Elsa.Activities.Design.Tests.ClrFixture",
+      "explicit_is_packable": null
+    },
+    {
+      "product": "foundation",
+      "source": "tests/essentials/Activities/Design/Persistence/EntityFrameworkCore/ProviderTests/Elsa.Activities.Design.Persistence.EntityFrameworkCore.ProviderTests.csproj",
+      "target": "Essentials/tests/Activities/Design/Persistence/EntityFrameworkCore/ProviderTests/Elsa.Activities.Design.Persistence.EntityFrameworkCore.ProviderTests.csproj",
+      "project_name": "Elsa.Activities.Design.Persistence.EntityFrameworkCore.ProviderTests",
+      "package_id": "Elsa.Activities.Design.Persistence.EntityFrameworkCore.ProviderTests",
+      "assembly_name": "Elsa.Activities.Design.Persistence.EntityFrameworkCore.ProviderTests",
+      "explicit_is_packable": "false"
+    },
+    {
+      "product": "foundation",
+      "source": "tests/essentials/Activities/Design/Persistence/EntityFrameworkCore/Tests/Elsa.Activities.Design.Persistence.EntityFrameworkCore.Tests.csproj",
+      "target": "Essentials/tests/Activities/Design/Persistence/EntityFrameworkCore/Tests/Elsa.Activities.Design.Persistence.EntityFrameworkCore.Tests.csproj",
+      "project_name": "Elsa.Activities.Design.Persistence.EntityFrameworkCore.Tests",
+      "package_id": "Elsa.Activities.Design.Persistence.EntityFrameworkCore.Tests",
+      "assembly_name": "Elsa.Activities.Design.Persistence.EntityFrameworkCore.Tests",
+      "explicit_is_packable": null
+    },
+    {
+      "product": "foundation",
+      "source": "tests/essentials/Activities/Design/Tests/Elsa.Activities.Design.Tests.csproj",
+      "target": "Essentials/tests/Activities/Design/Tests/Elsa.Activities.Design.Tests.csproj",
+      "project_name": "Elsa.Activities.Design.Tests",
+      "package_id": "Elsa.Activities.Design.Tests",
+      "assembly_name": "Elsa.Activities.Design.Tests",
+      "explicit_is_packable": null
+    },
+    {
+      "product": "foundation",
+      "source": "tests/essentials/Activities/DispatchWorkflow/Tests/Elsa.Activities.DispatchWorkflow.Tests.csproj",
+      "target": "Essentials/tests/Activities/DispatchWorkflow/Tests/Elsa.Activities.DispatchWorkflow.Tests.csproj",
+      "project_name": "Elsa.Activities.DispatchWorkflow.Tests",
+      "package_id": "Elsa.Activities.DispatchWorkflow.Tests",
+      "assembly_name": "Elsa.Activities.DispatchWorkflow.Tests",
+      "explicit_is_packable": null
+    },
+    {
+      "product": "foundation",
+      "source": "tests/essentials/Activities/Flowchart/Tests/Elsa.Activities.Flowchart.Tests.csproj",
+      "target": "Essentials/tests/Activities/Flowchart/Tests/Elsa.Activities.Flowchart.Tests.csproj",
+      "project_name": "Elsa.Activities.Flowchart.Tests",
+      "package_id": "Elsa.Activities.Flowchart.Tests",
+      "assembly_name": "Elsa.Activities.Flowchart.Tests",
+      "explicit_is_packable": null
+    },
+    {
+      "product": "foundation",
+      "source": "tests/essentials/Activities/Graph/Tests/Elsa.Activities.Graph.Tests.csproj",
+      "target": "Essentials/tests/Activities/Graph/Tests/Elsa.Activities.Graph.Tests.csproj",
+      "project_name": "Elsa.Activities.Graph.Tests",
+      "package_id": "Elsa.Activities.Graph.Tests",
+      "assembly_name": "Elsa.Activities.Graph.Tests",
+      "explicit_is_packable": null
+    },
+    {
+      "product": "foundation",
+      "source": "tests/essentials/Activities/Http/Fixtures/ResponseReplayHost/ResponseReplayHost.csproj",
+      "target": "Essentials/tests/Activities/Http/Fixtures/ResponseReplayHost/ResponseReplayHost.csproj",
+      "project_name": "ResponseReplayHost",
+      "package_id": "ResponseReplayHost",
+      "assembly_name": "ResponseReplayHost",
+      "explicit_is_packable": null
+    },
+    {
+      "product": "foundation",
+      "source": "tests/essentials/Activities/Http/IntegrationTests/Elsa.Activities.Http.IntegrationTests.csproj",
+      "target": "Essentials/tests/Activities/Http/IntegrationTests/Elsa.Activities.Http.IntegrationTests.csproj",
+      "project_name": "Elsa.Activities.Http.IntegrationTests",
+      "package_id": "Elsa.Activities.Http.IntegrationTests",
+      "assembly_name": "Elsa.Activities.Http.IntegrationTests",
+      "explicit_is_packable": null
+    },
+    {
+      "product": "foundation",
+      "source": "tests/essentials/Activities/Http/Tests/Elsa.Activities.Http.Tests.csproj",
+      "target": "Essentials/tests/Activities/Http/Tests/Elsa.Activities.Http.Tests.csproj",
+      "project_name": "Elsa.Activities.Http.Tests",
+      "package_id": "Elsa.Activities.Http.Tests",
+      "assembly_name": "Elsa.Activities.Http.Tests",
+      "explicit_is_packable": null
+    },
+    {
+      "product": "foundation",
+      "source": "tests/essentials/Activities/Runtime/Tests/Elsa.Activities.Runtime.Tests.csproj",
+      "target": "Essentials/tests/Activities/Runtime/Tests/Elsa.Activities.Runtime.Tests.csproj",
+      "project_name": "Elsa.Activities.Runtime.Tests",
+      "package_id": "Elsa.Activities.Runtime.Tests",
+      "assembly_name": "Elsa.Activities.Runtime.Tests",
+      "explicit_is_packable": null
+    },
+    {
+      "product": "foundation",
+      "source": "tests/essentials/Activities/Scheduling/Tests/Elsa.Activities.Scheduling.Tests.csproj",
+      "target": "Essentials/tests/Activities/Scheduling/Tests/Elsa.Activities.Scheduling.Tests.csproj",
+      "project_name": "Elsa.Activities.Scheduling.Tests",
+      "package_id": "Elsa.Activities.Scheduling.Tests",
+      "assembly_name": "Elsa.Activities.Scheduling.Tests",
+      "explicit_is_packable": null
+    },
+    {
+      "product": "foundation",
+      "source": "tests/essentials/Activities/Scripting/Tests/Elsa.Activities.Scripting.Tests.csproj",
+      "target": "Essentials/tests/Activities/Scripting/Tests/Elsa.Activities.Scripting.Tests.csproj",
+      "project_name": "Elsa.Activities.Scripting.Tests",
+      "package_id": "Elsa.Activities.Scripting.Tests",
+      "assembly_name": "Elsa.Activities.Scripting.Tests",
+      "explicit_is_packable": null
+    },
+    {
+      "product": "foundation",
+      "source": "tests/essentials/Activities/Sequence/Tests/Elsa.Activities.Sequence.Tests.csproj",
+      "target": "Essentials/tests/Activities/Sequence/Tests/Elsa.Activities.Sequence.Tests.csproj",
+      "project_name": "Elsa.Activities.Sequence.Tests",
+      "package_id": "Elsa.Activities.Sequence.Tests",
+      "assembly_name": "Elsa.Activities.Sequence.Tests",
+      "explicit_is_packable": null
+    },
+    {
+      "product": "foundation",
+      "source": "tests/essentials/Activities/Testing/Elsa.Activities.Testing.csproj",
+      "target": "Essentials/tests/Activities/Testing/Elsa.Activities.Testing.csproj",
+      "project_name": "Elsa.Activities.Testing",
+      "package_id": "Elsa.Activities.Testing",
+      "assembly_name": "Elsa.Activities.Testing",
+      "explicit_is_packable": null
+    },
+    {
+      "product": "foundation",
+      "source": "tests/essentials/Api/Capabilities/Tests/Elsa.Api.Capabilities.Tests.csproj",
+      "target": "Essentials/tests/Api/Capabilities/Tests/Elsa.Api.Capabilities.Tests.csproj",
+      "project_name": "Elsa.Api.Capabilities.Tests",
+      "package_id": "Elsa.Api.Capabilities.Tests",
+      "assembly_name": "Elsa.Api.Capabilities.Tests",
+      "explicit_is_packable": null
+    },
+    {
+      "product": "foundation",
+      "source": "tests/essentials/Api/Compatibility/Testing/Elsa.Api.Compatibility.Testing.csproj",
+      "target": "Essentials/tests/Api/Compatibility/Testing/Elsa.Api.Compatibility.Testing.csproj",
+      "project_name": "Elsa.Api.Compatibility.Testing",
+      "package_id": "Elsa.Api.Compatibility.Testing",
+      "assembly_name": "Elsa.Api.Compatibility.Testing",
+      "explicit_is_packable": "false"
+    },
+    {
+      "product": "foundation",
+      "source": "tests/essentials/Api/Compatibility/Tests/Elsa.Api.Compatibility.Testing.Tests.csproj",
+      "target": "Essentials/tests/Api/Compatibility/Tests/Elsa.Api.Compatibility.Testing.Tests.csproj",
+      "project_name": "Elsa.Api.Compatibility.Testing.Tests",
+      "package_id": "Elsa.Api.Compatibility.Testing.Tests",
+      "assembly_name": "Elsa.Api.Compatibility.Testing.Tests",
+      "explicit_is_packable": null
+    },
+    {
+      "product": "foundation",
+      "source": "tests/essentials/Architecture/ExtensionBoundary/Tests/Elsa.Architecture.ExtensionBoundary.Tests.csproj",
+      "target": "Essentials/tests/Architecture/ExtensionBoundary/Tests/Elsa.Architecture.ExtensionBoundary.Tests.csproj",
+      "project_name": "Elsa.Architecture.ExtensionBoundary.Tests",
+      "package_id": "Elsa.Architecture.ExtensionBoundary.Tests",
+      "assembly_name": "Elsa.Architecture.ExtensionBoundary.Tests",
+      "explicit_is_packable": null
+    },
+    {
+      "product": "foundation",
+      "source": "tests/essentials/Architecture/Tests/Elsa.Architecture.Tests.csproj",
+      "target": "Essentials/tests/Architecture/Tests/Elsa.Architecture.Tests.csproj",
+      "project_name": "Elsa.Architecture.Tests",
+      "package_id": "Elsa.Architecture.Tests",
+      "assembly_name": "Elsa.Architecture.Tests",
+      "explicit_is_packable": null
+    },
+    {
+      "product": "foundation",
+      "source": "tests/essentials/Attention/Api/Tests/Elsa.Attention.Api.Tests.csproj",
+      "target": "Essentials/tests/Attention/Api/Tests/Elsa.Attention.Api.Tests.csproj",
+      "project_name": "Elsa.Attention.Api.Tests",
+      "package_id": "Elsa.Attention.Api.Tests",
+      "assembly_name": "Elsa.Attention.Api.Tests",
+      "explicit_is_packable": null
+    },
+    {
+      "product": "foundation",
+      "source": "tests/essentials/Attention/Core/Tests/Elsa.Attention.Core.Tests.csproj",
+      "target": "Essentials/tests/Attention/Core/Tests/Elsa.Attention.Core.Tests.csproj",
+      "project_name": "Elsa.Attention.Core.Tests",
+      "package_id": "Elsa.Attention.Core.Tests",
+      "assembly_name": "Elsa.Attention.Core.Tests",
+      "explicit_is_packable": null
+    },
+    {
+      "product": "foundation",
+      "source": "tests/essentials/Caching/Tests/Elsa.Caching.Tests.csproj",
+      "target": "Essentials/tests/Caching/Tests/Elsa.Caching.Tests.csproj",
+      "project_name": "Elsa.Caching.Tests",
+      "package_id": "Elsa.Caching.Tests",
+      "assembly_name": "Elsa.Caching.Tests",
+      "explicit_is_packable": null
+    },
+    {
+      "product": "foundation",
+      "source": "tests/essentials/Cli/Fixtures/ClusterHost/Elsa.Cli.Fixtures.ClusterHost.csproj",
+      "target": "Essentials/tests/Cli/Fixtures/ClusterHost/Elsa.Cli.Fixtures.ClusterHost.csproj",
+      "project_name": "Elsa.Cli.Fixtures.ClusterHost",
+      "package_id": "Elsa.Cli.Fixtures.ClusterHost",
+      "assembly_name": "Elsa.Cli.Fixtures.ClusterHost",
+      "explicit_is_packable": "false"
+    },
+    {
+      "product": "foundation",
+      "source": "tests/essentials/Cli/Fixtures/Collision/Acme.Widgets.Collision.csproj",
+      "target": "Essentials/tests/Cli/Fixtures/Collision/Acme.Widgets.Collision.csproj",
+      "project_name": "Acme.Widgets.Collision",
+      "package_id": "Acme.Widgets.Collision",
+      "assembly_name": "Acme.Widgets.Collision",
+      "explicit_is_packable": "false"
+    },
+    {
+      "product": "foundation",
+      "source": "tests/essentials/Cli/Fixtures/CollisionHost/Elsa.Cli.Fixtures.CollisionHost.csproj",
+      "target": "Essentials/tests/Cli/Fixtures/CollisionHost/Elsa.Cli.Fixtures.CollisionHost.csproj",
+      "project_name": "Elsa.Cli.Fixtures.CollisionHost",
+      "package_id": "Elsa.Cli.Fixtures.CollisionHost",
+      "assembly_name": "Elsa.Cli.Fixtures.CollisionHost",
+      "explicit_is_packable": "false"
+    },
+    {
+      "product": "foundation",
+      "source": "tests/essentials/Cli/Fixtures/Host/Elsa.Cli.Fixtures.Host.csproj",
+      "target": "Essentials/tests/Cli/Fixtures/Host/Elsa.Cli.Fixtures.Host.csproj",
+      "project_name": "Elsa.Cli.Fixtures.Host",
+      "package_id": "Elsa.Cli.Fixtures.Host",
+      "assembly_name": "Elsa.Cli.Fixtures.Host",
+      "explicit_is_packable": "false"
+    },
+    {
+      "product": "foundation",
+      "source": "tests/essentials/Cli/Fixtures/LegacyHost/Elsa.Cli.Fixtures.LegacyHost.csproj",
+      "target": "Essentials/tests/Cli/Fixtures/LegacyHost/Elsa.Cli.Fixtures.LegacyHost.csproj",
+      "project_name": "Elsa.Cli.Fixtures.LegacyHost",
+      "package_id": "Elsa.Cli.Fixtures.LegacyHost",
+      "assembly_name": "Elsa.Cli.Fixtures.LegacyHost",
+      "explicit_is_packable": "false"
+    },
+    {
+      "product": "foundation",
+      "source": "tests/essentials/Cli/Fixtures/LegacyPersistence/Elsa.Cli.Fixtures.LegacyPersistence.csproj",
+      "target": "Essentials/tests/Cli/Fixtures/LegacyPersistence/Elsa.Cli.Fixtures.LegacyPersistence.csproj",
+      "project_name": "Elsa.Cli.Fixtures.LegacyPersistence",
+      "package_id": "Elsa.Cli.Fixtures.LegacyPersistence",
+      "assembly_name": "Elsa.Persistence.EntityFramework",
+      "explicit_is_packable": "false"
+    },
+    {
+      "product": "foundation",
+      "source": "tests/essentials/Cli/Fixtures/MinimalHost/Elsa.Cli.Fixtures.MinimalHost.csproj",
+      "target": "Essentials/tests/Cli/Fixtures/MinimalHost/Elsa.Cli.Fixtures.MinimalHost.csproj",
+      "project_name": "Elsa.Cli.Fixtures.MinimalHost",
+      "package_id": "Elsa.Cli.Fixtures.MinimalHost",
+      "assembly_name": "Elsa.Cli.Fixtures.MinimalHost",
+      "explicit_is_packable": "false"
+    },
+    {
+      "product": "foundation",
+      "source": "tests/essentials/Cli/Fixtures/NuplaneCapabilityHost/Elsa.Cli.Fixtures.NuplaneCapabilityHost.csproj",
+      "target": "Essentials/tests/Cli/Fixtures/NuplaneCapabilityHost/Elsa.Cli.Fixtures.NuplaneCapabilityHost.csproj",
+      "project_name": "Elsa.Cli.Fixtures.NuplaneCapabilityHost",
+      "package_id": "Elsa.Cli.Fixtures.NuplaneCapabilityHost",
+      "assembly_name": "Elsa.Cli.Fixtures.NuplaneCapabilityHost",
+      "explicit_is_packable": "false"
+    },
+    {
+      "product": "foundation",
+      "source": "tests/essentials/Cli/Fixtures/NuplaneHost/Elsa.Cli.Fixtures.NuplaneHost.csproj",
+      "target": "Essentials/tests/Cli/Fixtures/NuplaneHost/Elsa.Cli.Fixtures.NuplaneHost.csproj",
+      "project_name": "Elsa.Cli.Fixtures.NuplaneHost",
+      "package_id": "Elsa.Cli.Fixtures.NuplaneHost",
+      "assembly_name": "Elsa.Cli.Fixtures.NuplaneHost",
+      "explicit_is_packable": "false"
+    },
+    {
+      "product": "foundation",
+      "source": "tests/essentials/Cli/Fixtures/PartialContextHost/Elsa.Cli.Fixtures.PartialContextHost.csproj",
+      "target": "Essentials/tests/Cli/Fixtures/PartialContextHost/Elsa.Cli.Fixtures.PartialContextHost.csproj",
+      "project_name": "Elsa.Cli.Fixtures.PartialContextHost",
+      "package_id": "Elsa.Cli.Fixtures.PartialContextHost",
+      "assembly_name": "Elsa.Cli.Fixtures.PartialContextHost",
+      "explicit_is_packable": "false"
+    },
+    {
+      "product": "foundation",
+      "source": "tests/essentials/Cli/Fixtures/PartialContextPersistence/Elsa.Cli.Fixtures.PartialContextPersistence.csproj",
+      "target": "Essentials/tests/Cli/Fixtures/PartialContextPersistence/Elsa.Cli.Fixtures.PartialContextPersistence.csproj",
+      "project_name": "Elsa.Cli.Fixtures.PartialContextPersistence",
+      "package_id": "Elsa.Cli.Fixtures.PartialContextPersistence",
+      "assembly_name": "Elsa.Persistence.EntityFramework",
+      "explicit_is_packable": "false"
+    },
+    {
+      "product": "foundation",
+      "source": "tests/essentials/Cli/Fixtures/ResourceAwareLiveHost/Elsa.Cli.Fixtures.ResourceAwareLiveHost.csproj",
+      "target": "Essentials/tests/Cli/Fixtures/ResourceAwareLiveHost/Elsa.Cli.Fixtures.ResourceAwareLiveHost.csproj",
+      "project_name": "Elsa.Cli.Fixtures.ResourceAwareLiveHost",
+      "package_id": "Elsa.Cli.Fixtures.ResourceAwareLiveHost",
+      "assembly_name": "Elsa.Cli.Fixtures.ResourceAwareLiveHost",
+      "explicit_is_packable": "false"
+    },
+    {
+      "product": "foundation",
+      "source": "tests/essentials/Cli/Fixtures/ShellsHost/Elsa.Cli.Fixtures.ShellsHost.csproj",
+      "target": "Essentials/tests/Cli/Fixtures/ShellsHost/Elsa.Cli.Fixtures.ShellsHost.csproj",
+      "project_name": "Elsa.Cli.Fixtures.ShellsHost",
+      "package_id": "Elsa.Cli.Fixtures.ShellsHost",
+      "assembly_name": "Elsa.Cli.Fixtures.ShellsHost",
+      "explicit_is_packable": "false"
+    },
+    {
+      "product": "foundation",
+      "source": "tests/essentials/Cli/Fixtures/UnsupportedContextHost/Elsa.Cli.Fixtures.UnsupportedContextHost.csproj",
+      "target": "Essentials/tests/Cli/Fixtures/UnsupportedContextHost/Elsa.Cli.Fixtures.UnsupportedContextHost.csproj",
+      "project_name": "Elsa.Cli.Fixtures.UnsupportedContextHost",
+      "package_id": "Elsa.Cli.Fixtures.UnsupportedContextHost",
+      "assembly_name": "Elsa.Cli.Fixtures.UnsupportedContextHost",
+      "explicit_is_packable": "false"
+    },
+    {
+      "product": "foundation",
+      "source": "tests/essentials/Cli/Fixtures/UnsupportedContextPersistence/Elsa.Cli.Fixtures.UnsupportedContextPersistence.csproj",
+      "target": "Essentials/tests/Cli/Fixtures/UnsupportedContextPersistence/Elsa.Cli.Fixtures.UnsupportedContextPersistence.csproj",
+      "project_name": "Elsa.Cli.Fixtures.UnsupportedContextPersistence",
+      "package_id": "Elsa.Cli.Fixtures.UnsupportedContextPersistence",
+      "assembly_name": "Elsa.Persistence.EntityFramework",
+      "explicit_is_packable": "false"
+    },
+    {
+      "product": "foundation",
+      "source": "tests/essentials/Cli/Fixtures/Widgets/Acme.Widgets.csproj",
+      "target": "Essentials/tests/Cli/Fixtures/Widgets/Acme.Widgets.csproj",
+      "project_name": "Acme.Widgets",
+      "package_id": "Acme.Widgets",
+      "assembly_name": "Acme.Widgets",
+      "explicit_is_packable": "false"
+    },
+    {
+      "product": "foundation",
+      "source": "tests/essentials/Cli/Fixtures/WorkerContextHost/Elsa.Cli.Fixtures.WorkerContextHost.csproj",
+      "target": "Essentials/tests/Cli/Fixtures/WorkerContextHost/Elsa.Cli.Fixtures.WorkerContextHost.csproj",
+      "project_name": "Elsa.Cli.Fixtures.WorkerContextHost",
+      "package_id": "Elsa.Cli.Fixtures.WorkerContextHost",
+      "assembly_name": "Elsa.Cli.Fixtures.WorkerContextHost",
+      "explicit_is_packable": "false"
+    },
+    {
+      "product": "foundation",
+      "source": "tests/essentials/Cli/Tests/Elsa.Cli.Tests.csproj",
+      "target": "Essentials/tests/Cli/Tests/Elsa.Cli.Tests.csproj",
+      "project_name": "Elsa.Cli.Tests",
+      "package_id": "Elsa.Cli.Tests",
+      "assembly_name": "Elsa.Cli.Tests",
+      "explicit_is_packable": "false"
+    },
+    {
+      "product": "foundation",
+      "source": "tests/essentials/Cluster/EntityFrameworkCore/ProviderTests/Elsa.Cluster.EntityFrameworkCore.ProviderTests.csproj",
+      "target": "Essentials/tests/Cluster/EntityFrameworkCore/ProviderTests/Elsa.Cluster.EntityFrameworkCore.ProviderTests.csproj",
+      "project_name": "Elsa.Cluster.EntityFrameworkCore.ProviderTests",
+      "package_id": "Elsa.Cluster.EntityFrameworkCore.ProviderTests",
+      "assembly_name": "Elsa.Cluster.EntityFrameworkCore.ProviderTests",
+      "explicit_is_packable": "false"
+    },
+    {
+      "product": "foundation",
+      "source": "tests/essentials/Cluster/EntityFrameworkCore/Testing/Elsa.Cluster.EntityFrameworkCore.Testing.csproj",
+      "target": "Essentials/tests/Cluster/EntityFrameworkCore/Testing/Elsa.Cluster.EntityFrameworkCore.Testing.csproj",
+      "project_name": "Elsa.Cluster.EntityFrameworkCore.Testing",
+      "package_id": "Elsa.Cluster.EntityFrameworkCore.Testing",
+      "assembly_name": "Elsa.Cluster.EntityFrameworkCore.Testing",
+      "explicit_is_packable": null
+    },
+    {
+      "product": "foundation",
+      "source": "tests/essentials/Cluster/EntityFrameworkCore/Tests/Elsa.Cluster.EntityFrameworkCore.Tests.csproj",
+      "target": "Essentials/tests/Cluster/EntityFrameworkCore/Tests/Elsa.Cluster.EntityFrameworkCore.Tests.csproj",
+      "project_name": "Elsa.Cluster.EntityFrameworkCore.Tests",
+      "package_id": "Elsa.Cluster.EntityFrameworkCore.Tests",
+      "assembly_name": "Elsa.Cluster.EntityFrameworkCore.Tests",
+      "explicit_is_packable": null
+    },
+    {
+      "product": "foundation",
+      "source": "tests/essentials/Cluster/Fixtures/FeedModule/Elsa.Cluster.Fixtures.FeedModule.csproj",
+      "target": "Essentials/tests/Cluster/Fixtures/FeedModule/Elsa.Cluster.Fixtures.FeedModule.csproj",
+      "project_name": "Elsa.Cluster.Fixtures.FeedModule",
+      "package_id": "Elsa.Cluster.Fixtures.FeedModule",
+      "assembly_name": "Elsa.Cluster.Fixtures.FeedModule",
+      "explicit_is_packable": null
+    },
+    {
+      "product": "foundation",
+      "source": "tests/essentials/Cluster/Fixtures/MigratingModule/Elsa.Cluster.Fixtures.MigratingModule.csproj",
+      "target": "Essentials/tests/Cluster/Fixtures/MigratingModule/Elsa.Cluster.Fixtures.MigratingModule.csproj",
+      "project_name": "Elsa.Cluster.Fixtures.MigratingModule",
+      "package_id": "Elsa.Cluster.Fixtures.MigratingModule",
+      "assembly_name": "Elsa.Cluster.Fixtures.MigratingModule",
+      "explicit_is_packable": null
+    },
+    {
+      "product": "foundation",
+      "source": "tests/essentials/Cluster/Readability/Tests/Elsa.Cluster.Readability.Tests.csproj",
+      "target": "Essentials/tests/Cluster/Readability/Tests/Elsa.Cluster.Readability.Tests.csproj",
+      "project_name": "Elsa.Cluster.Readability.Tests",
+      "package_id": "Elsa.Cluster.Readability.Tests",
+      "assembly_name": "Elsa.Cluster.Readability.Tests",
+      "explicit_is_packable": null
+    },
+    {
+      "product": "foundation",
+      "source": "tests/essentials/Cluster/Testing/Elsa.Cluster.Testing.csproj",
+      "target": "Essentials/tests/Cluster/Testing/Elsa.Cluster.Testing.csproj",
+      "project_name": "Elsa.Cluster.Testing",
+      "package_id": "Elsa.Cluster.Testing",
+      "assembly_name": "Elsa.Cluster.Testing",
+      "explicit_is_packable": null
+    },
+    {
+      "product": "foundation",
+      "source": "tests/essentials/Cluster/Tests/Elsa.Cluster.Tests.csproj",
+      "target": "Essentials/tests/Cluster/Tests/Elsa.Cluster.Tests.csproj",
+      "project_name": "Elsa.Cluster.Tests",
+      "package_id": "Elsa.Cluster.Tests",
+      "assembly_name": "Elsa.Cluster.Tests",
+      "explicit_is_packable": null
+    },
+    {
+      "product": "foundation",
+      "source": "tests/essentials/Diagnostics/ConsoleLogStreaming/Tests/Elsa.Diagnostics.ConsoleLogStreaming.Tests.csproj",
+      "target": "Essentials/tests/Diagnostics/ConsoleLogStreaming/Tests/Elsa.Diagnostics.ConsoleLogStreaming.Tests.csproj",
+      "project_name": "Elsa.Diagnostics.ConsoleLogStreaming.Tests",
+      "package_id": "Elsa.Diagnostics.ConsoleLogStreaming.Tests",
+      "assembly_name": "Elsa.Diagnostics.ConsoleLogStreaming.Tests",
+      "explicit_is_packable": null
+    },
+    {
+      "product": "foundation",
+      "source": "tests/essentials/Diagnostics/OpenTelemetry/Persistence/EntityFrameworkCore/ProviderTests/Elsa.Diagnostics.OpenTelemetry.Persistence.EntityFrameworkCore.ProviderTests.csproj",
+      "target": "Essentials/tests/Diagnostics/OpenTelemetry/Persistence/EntityFrameworkCore/ProviderTests/Elsa.Diagnostics.OpenTelemetry.Persistence.EntityFrameworkCore.ProviderTests.csproj",
+      "project_name": "Elsa.Diagnostics.OpenTelemetry.Persistence.EntityFrameworkCore.ProviderTests",
+      "package_id": "Elsa.Diagnostics.OpenTelemetry.Persistence.EntityFrameworkCore.ProviderTests",
+      "assembly_name": "Elsa.Diagnostics.OpenTelemetry.Persistence.EntityFrameworkCore.ProviderTests",
+      "explicit_is_packable": "false"
+    },
+    {
+      "product": "foundation",
+      "source": "tests/essentials/Diagnostics/OpenTelemetry/Persistence/EntityFrameworkCore/Tests/Elsa.Diagnostics.OpenTelemetry.Persistence.EntityFrameworkCore.Tests.csproj",
+      "target": "Essentials/tests/Diagnostics/OpenTelemetry/Persistence/EntityFrameworkCore/Tests/Elsa.Diagnostics.OpenTelemetry.Persistence.EntityFrameworkCore.Tests.csproj",
+      "project_name": "Elsa.Diagnostics.OpenTelemetry.Persistence.EntityFrameworkCore.Tests",
+      "package_id": "Elsa.Diagnostics.OpenTelemetry.Persistence.EntityFrameworkCore.Tests",
+      "assembly_name": "Elsa.Diagnostics.OpenTelemetry.Persistence.EntityFrameworkCore.Tests",
+      "explicit_is_packable": "false"
+    },
+    {
+      "product": "foundation",
+      "source": "tests/essentials/Diagnostics/OpenTelemetry/Tests/Elsa.Diagnostics.OpenTelemetry.Tests.csproj",
+      "target": "Essentials/tests/Diagnostics/OpenTelemetry/Tests/Elsa.Diagnostics.OpenTelemetry.Tests.csproj",
+      "project_name": "Elsa.Diagnostics.OpenTelemetry.Tests",
+      "package_id": "Elsa.Diagnostics.OpenTelemetry.Tests",
+      "assembly_name": "Elsa.Diagnostics.OpenTelemetry.Tests",
+      "explicit_is_packable": null
+    },
+    {
+      "product": "foundation",
+      "source": "tests/essentials/Diagnostics/Persistence/Tests/Elsa.Diagnostics.Persistence.Tests.csproj",
+      "target": "Essentials/tests/Diagnostics/Persistence/Tests/Elsa.Diagnostics.Persistence.Tests.csproj",
+      "project_name": "Elsa.Diagnostics.Persistence.Tests",
+      "package_id": "Elsa.Diagnostics.Persistence.Tests",
+      "assembly_name": "Elsa.Diagnostics.Persistence.Tests",
+      "explicit_is_packable": null
+    },
+    {
+      "product": "foundation",
+      "source": "tests/essentials/Diagnostics/StructuredLogs/Persistence/EntityFrameworkCore/ProviderTests/Elsa.Diagnostics.StructuredLogs.Persistence.EntityFrameworkCore.ProviderTests.csproj",
+      "target": "Essentials/tests/Diagnostics/StructuredLogs/Persistence/EntityFrameworkCore/ProviderTests/Elsa.Diagnostics.StructuredLogs.Persistence.EntityFrameworkCore.ProviderTests.csproj",
+      "project_name": "Elsa.Diagnostics.StructuredLogs.Persistence.EntityFrameworkCore.ProviderTests",
+      "package_id": "Elsa.Diagnostics.StructuredLogs.Persistence.EntityFrameworkCore.ProviderTests",
+      "assembly_name": "Elsa.Diagnostics.StructuredLogs.Persistence.EntityFrameworkCore.ProviderTests",
+      "explicit_is_packable": "false"
+    },
+    {
+      "product": "foundation",
+      "source": "tests/essentials/Diagnostics/StructuredLogs/Persistence/EntityFrameworkCore/Tests/Elsa.Diagnostics.StructuredLogs.Persistence.EntityFrameworkCore.Tests.csproj",
+      "target": "Essentials/tests/Diagnostics/StructuredLogs/Persistence/EntityFrameworkCore/Tests/Elsa.Diagnostics.StructuredLogs.Persistence.EntityFrameworkCore.Tests.csproj",
+      "project_name": "Elsa.Diagnostics.StructuredLogs.Persistence.EntityFrameworkCore.Tests",
+      "package_id": "Elsa.Diagnostics.StructuredLogs.Persistence.EntityFrameworkCore.Tests",
+      "assembly_name": "Elsa.Diagnostics.StructuredLogs.Persistence.EntityFrameworkCore.Tests",
+      "explicit_is_packable": "false"
+    },
+    {
+      "product": "foundation",
+      "source": "tests/essentials/Diagnostics/StructuredLogs/Tests/Elsa.Diagnostics.StructuredLogs.Tests.csproj",
+      "target": "Essentials/tests/Diagnostics/StructuredLogs/Tests/Elsa.Diagnostics.StructuredLogs.Tests.csproj",
+      "project_name": "Elsa.Diagnostics.StructuredLogs.Tests",
+      "package_id": "Elsa.Diagnostics.StructuredLogs.Tests",
+      "assembly_name": "Elsa.Diagnostics.StructuredLogs.Tests",
+      "explicit_is_packable": null
+    },
+    {
+      "product": "foundation",
+      "source": "tests/essentials/Events/Tests/Elsa.Events.Tests.csproj",
+      "target": "Essentials/tests/Events/Tests/Elsa.Events.Tests.csproj",
+      "project_name": "Elsa.Events.Tests",
+      "package_id": "Elsa.Events.Tests",
+      "assembly_name": "Elsa.Events.Tests",
+      "explicit_is_packable": null
+    },
+    {
+      "product": "foundation",
+      "source": "tests/essentials/Expressions/Api/Tests/Elsa.Expressions.Api.Tests.csproj",
+      "target": "Essentials/tests/Expressions/Api/Tests/Elsa.Expressions.Api.Tests.csproj",
+      "project_name": "Elsa.Expressions.Api.Tests",
+      "package_id": "Elsa.Expressions.Api.Tests",
+      "assembly_name": "Elsa.Expressions.Api.Tests",
+      "explicit_is_packable": null
+    },
+    {
+      "product": "foundation",
+      "source": "tests/essentials/Expressions/JavaScript/Jint/Tests/Elsa.Expressions.JavaScript.Jint.Tests.csproj",
+      "target": "Essentials/tests/Expressions/JavaScript/Jint/Tests/Elsa.Expressions.JavaScript.Jint.Tests.csproj",
+      "project_name": "Elsa.Expressions.JavaScript.Jint.Tests",
+      "package_id": "Elsa.Expressions.JavaScript.Jint.Tests",
+      "assembly_name": "Elsa.Expressions.JavaScript.Jint.Tests",
+      "explicit_is_packable": null
+    },
+    {
+      "product": "foundation",
+      "source": "tests/essentials/Expressions/Tests/Elsa.Expressions.Tests.csproj",
+      "target": "Essentials/tests/Expressions/Tests/Elsa.Expressions.Tests.csproj",
+      "project_name": "Elsa.Expressions.Tests",
+      "package_id": "Elsa.Expressions.Tests",
+      "assembly_name": "Elsa.Expressions.Tests",
+      "explicit_is_packable": null
+    },
+    {
+      "product": "foundation",
+      "source": "tests/essentials/Foundation/DataProtection/EntityFrameworkCore/ProviderTests/Elsa.Foundation.DataProtection.EntityFrameworkCore.ProviderTests.csproj",
+      "target": "Essentials/tests/Foundation/DataProtection/EntityFrameworkCore/ProviderTests/Elsa.Foundation.DataProtection.EntityFrameworkCore.ProviderTests.csproj",
+      "project_name": "Elsa.Foundation.DataProtection.EntityFrameworkCore.ProviderTests",
+      "package_id": "Elsa.Foundation.DataProtection.EntityFrameworkCore.ProviderTests",
+      "assembly_name": "Elsa.Foundation.DataProtection.EntityFrameworkCore.ProviderTests",
+      "explicit_is_packable": "false"
+    },
+    {
+      "product": "foundation",
+      "source": "tests/essentials/Foundation/DataProtection/EntityFrameworkCore/Tests/Elsa.Foundation.DataProtection.EntityFrameworkCore.Tests.csproj",
+      "target": "Essentials/tests/Foundation/DataProtection/EntityFrameworkCore/Tests/Elsa.Foundation.DataProtection.EntityFrameworkCore.Tests.csproj",
+      "project_name": "Elsa.Foundation.DataProtection.EntityFrameworkCore.Tests",
+      "package_id": "Elsa.Foundation.DataProtection.EntityFrameworkCore.Tests",
+      "assembly_name": "Elsa.Foundation.DataProtection.EntityFrameworkCore.Tests",
+      "explicit_is_packable": null
+    },
+    {
+      "product": "foundation",
+      "source": "tests/essentials/Foundation/Identity/AspNetCoreIdentity/EntityFrameworkCore/Tests/Elsa.Foundation.Identity.AspNetCoreIdentity.EntityFrameworkCore.Tests.csproj",
+      "target": "Essentials/tests/Foundation/Identity/AspNetCoreIdentity/EntityFrameworkCore/Tests/Elsa.Foundation.Identity.AspNetCoreIdentity.EntityFrameworkCore.Tests.csproj",
+      "project_name": "Elsa.Foundation.Identity.AspNetCoreIdentity.EntityFrameworkCore.Tests",
+      "package_id": "Elsa.Foundation.Identity.AspNetCoreIdentity.EntityFrameworkCore.Tests",
+      "assembly_name": "Elsa.Foundation.Identity.AspNetCoreIdentity.EntityFrameworkCore.Tests",
+      "explicit_is_packable": "false"
+    },
+    {
+      "product": "foundation",
+      "source": "tests/essentials/Foundation/Identity/Persistence/EntityFrameworkCore/ProviderTests/Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.ProviderTests.csproj",
+      "target": "Essentials/tests/Foundation/Identity/Persistence/EntityFrameworkCore/ProviderTests/Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.ProviderTests.csproj",
+      "project_name": "Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.ProviderTests",
+      "package_id": "Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.ProviderTests",
+      "assembly_name": "Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.ProviderTests",
+      "explicit_is_packable": "false"
+    },
+    {
+      "product": "foundation",
+      "source": "tests/essentials/Foundation/Identity/Persistence/EntityFrameworkCore/Tests/Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Tests.csproj",
+      "target": "Essentials/tests/Foundation/Identity/Persistence/EntityFrameworkCore/Tests/Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Tests.csproj",
+      "project_name": "Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Tests",
+      "package_id": "Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Tests",
+      "assembly_name": "Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Tests",
+      "explicit_is_packable": "false"
+    },
+    {
+      "product": "foundation",
+      "source": "tests/essentials/Foundation/Identity/Tests/Elsa.Foundation.Identity.Tests.csproj",
+      "target": "Essentials/tests/Foundation/Identity/Tests/Elsa.Foundation.Identity.Tests.csproj",
+      "project_name": "Elsa.Foundation.Identity.Tests",
+      "package_id": "Elsa.Foundation.Identity.Tests",
+      "assembly_name": "Elsa.Foundation.Identity.Tests",
+      "explicit_is_packable": null
+    },
+    {
+      "product": "foundation",
+      "source": "tests/essentials/Http/Tests/Elsa.Http.Tests.csproj",
+      "target": "Essentials/tests/Http/Tests/Elsa.Http.Tests.csproj",
+      "project_name": "Elsa.Http.Tests",
+      "package_id": "Elsa.Http.Tests",
+      "assembly_name": "Elsa.Http.Tests",
+      "explicit_is_packable": null
+    },
+    {
+      "product": "foundation",
+      "source": "tests/essentials/Locking/Database/ProviderTests/Elsa.Locking.Database.ProviderTests.csproj",
+      "target": "Essentials/tests/Locking/Database/ProviderTests/Elsa.Locking.Database.ProviderTests.csproj",
+      "project_name": "Elsa.Locking.Database.ProviderTests",
+      "package_id": "Elsa.Locking.Database.ProviderTests",
+      "assembly_name": "Elsa.Locking.Database.ProviderTests",
+      "explicit_is_packable": "false"
+    },
+    {
+      "product": "foundation",
+      "source": "tests/essentials/Locking/Tests/Elsa.Locking.Tests.csproj",
+      "target": "Essentials/tests/Locking/Tests/Elsa.Locking.Tests.csproj",
+      "project_name": "Elsa.Locking.Tests",
+      "package_id": "Elsa.Locking.Tests",
+      "assembly_name": "Elsa.Locking.Tests",
+      "explicit_is_packable": null
+    },
+    {
+      "product": "foundation",
+      "source": "tests/essentials/Mediator/Tests/Elsa.Mediator.Tests.csproj",
+      "target": "Essentials/tests/Mediator/Tests/Elsa.Mediator.Tests.csproj",
+      "project_name": "Elsa.Mediator.Tests",
+      "package_id": "Elsa.Mediator.Tests",
+      "assembly_name": "Elsa.Mediator.Tests",
+      "explicit_is_packable": null
+    },
+    {
+      "product": "foundation",
+      "source": "tests/essentials/Modularity/EntityFramework/Tests/Elsa.Modularity.EntityFramework.Tests.csproj",
+      "target": "Essentials/tests/Modularity/EntityFramework/Tests/Elsa.Modularity.EntityFramework.Tests.csproj",
+      "project_name": "Elsa.Modularity.EntityFramework.Tests",
+      "package_id": "Elsa.Modularity.EntityFramework.Tests",
+      "assembly_name": "Elsa.Modularity.EntityFramework.Tests",
+      "explicit_is_packable": "false"
+    },
+    {
+      "product": "foundation",
+      "source": "tests/essentials/Modularity/Planning/Tests/Elsa.Modularity.Planning.Tests.csproj",
+      "target": "Essentials/tests/Modularity/Planning/Tests/Elsa.Modularity.Planning.Tests.csproj",
+      "project_name": "Elsa.Modularity.Planning.Tests",
+      "package_id": "Elsa.Modularity.Planning.Tests",
+      "assembly_name": "Elsa.Modularity.Planning.Tests",
+      "explicit_is_packable": null
+    },
+    {
+      "product": "foundation",
+      "source": "tests/essentials/Modularity/ProviderTests/Elsa.Modularity.ProviderTests.csproj",
+      "target": "Essentials/tests/Modularity/ProviderTests/Elsa.Modularity.ProviderTests.csproj",
+      "project_name": "Elsa.Modularity.ProviderTests",
+      "package_id": "Elsa.Modularity.ProviderTests",
+      "assembly_name": "Elsa.Modularity.ProviderTests",
+      "explicit_is_packable": "false"
+    },
+    {
+      "product": "foundation",
+      "source": "tests/essentials/Modularity/Tests/Elsa.Modularity.Tests.csproj",
+      "target": "Essentials/tests/Modularity/Tests/Elsa.Modularity.Tests.csproj",
+      "project_name": "Elsa.Modularity.Tests",
+      "package_id": "Elsa.Modularity.Tests",
+      "assembly_name": "Elsa.Modularity.Tests",
+      "explicit_is_packable": null
+    },
+    {
+      "product": "foundation",
+      "source": "tests/essentials/Persistence/EntityFramework/BindingDriftTests/Elsa.Persistence.EntityFramework.BindingDriftTests.csproj",
+      "target": "Essentials/tests/Persistence/EntityFramework/BindingDriftTests/Elsa.Persistence.EntityFramework.BindingDriftTests.csproj",
+      "project_name": "Elsa.Persistence.EntityFramework.BindingDriftTests",
+      "package_id": "Elsa.Persistence.EntityFramework.BindingDriftTests",
+      "assembly_name": "Elsa.Persistence.EntityFramework.BindingDriftTests",
+      "explicit_is_packable": "false"
+    },
+    {
+      "product": "foundation",
+      "source": "tests/essentials/Persistence/EntityFramework/Tests/Elsa.Persistence.EntityFramework.Tests.csproj",
+      "target": "Essentials/tests/Persistence/EntityFramework/Tests/Elsa.Persistence.EntityFramework.Tests.csproj",
+      "project_name": "Elsa.Persistence.EntityFramework.Tests",
+      "package_id": "Elsa.Persistence.EntityFramework.Tests",
+      "assembly_name": "Elsa.Persistence.EntityFramework.Tests",
+      "explicit_is_packable": null
+    },
+    {
+      "product": "foundation",
+      "source": "tests/essentials/Persistence/EntityFrameworkCore/CliAcceptance/ProviderTests/Elsa.Persistence.EntityFrameworkCore.CliAcceptance.ProviderTests.csproj",
+      "target": "Essentials/tests/Persistence/EntityFrameworkCore/CliAcceptance/ProviderTests/Elsa.Persistence.EntityFrameworkCore.CliAcceptance.ProviderTests.csproj",
+      "project_name": "Elsa.Persistence.EntityFrameworkCore.CliAcceptance.ProviderTests",
+      "package_id": "Elsa.Persistence.EntityFrameworkCore.CliAcceptance.ProviderTests",
+      "assembly_name": "Elsa.Persistence.EntityFrameworkCore.CliAcceptance.ProviderTests",
+      "explicit_is_packable": "false"
+    },
+    {
+      "product": "foundation",
+      "source": "tests/essentials/Persistence/EntityFrameworkCore/Migrations/ProviderTests/Elsa.Persistence.EntityFrameworkCore.Migrations.ProviderTests.csproj",
+      "target": "Essentials/tests/Persistence/EntityFrameworkCore/Migrations/ProviderTests/Elsa.Persistence.EntityFrameworkCore.Migrations.ProviderTests.csproj",
+      "project_name": "Elsa.Persistence.EntityFrameworkCore.Migrations.ProviderTests",
+      "package_id": "Elsa.Persistence.EntityFrameworkCore.Migrations.ProviderTests",
+      "assembly_name": "Elsa.Persistence.EntityFrameworkCore.Migrations.ProviderTests",
+      "explicit_is_packable": "false"
+    },
+    {
+      "product": "foundation",
+      "source": "tests/essentials/Persistence/EntityFrameworkCore/Migrations/Tests/Elsa.Persistence.EntityFrameworkCore.Migrations.Tests.csproj",
+      "target": "Essentials/tests/Persistence/EntityFrameworkCore/Migrations/Tests/Elsa.Persistence.EntityFrameworkCore.Migrations.Tests.csproj",
+      "project_name": "Elsa.Persistence.EntityFrameworkCore.Migrations.Tests",
+      "package_id": "Elsa.Persistence.EntityFrameworkCore.Migrations.Tests",
+      "assembly_name": "Elsa.Persistence.EntityFrameworkCore.Migrations.Tests",
+      "explicit_is_packable": "false"
+    },
+    {
+      "product": "foundation",
+      "source": "tests/essentials/Persistence/EntityFrameworkCore/MySql/FeasibilityTests/Elsa.Persistence.EntityFrameworkCore.MySql.FeasibilityTests.csproj",
+      "target": "Essentials/tests/Persistence/EntityFrameworkCore/MySql/FeasibilityTests/Elsa.Persistence.EntityFrameworkCore.MySql.FeasibilityTests.csproj",
+      "project_name": "Elsa.Persistence.EntityFrameworkCore.MySql.FeasibilityTests",
+      "package_id": "Elsa.Persistence.EntityFrameworkCore.MySql.FeasibilityTests",
+      "assembly_name": "Elsa.Persistence.EntityFrameworkCore.MySql.FeasibilityTests",
+      "explicit_is_packable": null
+    },
+    {
+      "product": "foundation",
+      "source": "tests/essentials/Persistence/EntityFrameworkCore/SharedResources/Tests/Elsa.Persistence.EntityFrameworkCore.SharedResources.Tests.csproj",
+      "target": "Essentials/tests/Persistence/EntityFrameworkCore/SharedResources/Tests/Elsa.Persistence.EntityFrameworkCore.SharedResources.Tests.csproj",
+      "project_name": "Elsa.Persistence.EntityFrameworkCore.SharedResources.Tests",
+      "package_id": "Elsa.Persistence.EntityFrameworkCore.SharedResources.Tests",
+      "assembly_name": "Elsa.Persistence.EntityFrameworkCore.SharedResources.Tests",
+      "explicit_is_packable": "false"
+    },
+    {
+      "product": "foundation",
+      "source": "tests/essentials/Persistence/EntityFrameworkCore/TransactionTopology/Tests/Elsa.Persistence.EntityFrameworkCore.TransactionTopology.Tests.csproj",
+      "target": "Essentials/tests/Persistence/EntityFrameworkCore/TransactionTopology/Tests/Elsa.Persistence.EntityFrameworkCore.TransactionTopology.Tests.csproj",
+      "project_name": "Elsa.Persistence.EntityFrameworkCore.TransactionTopology.Tests",
+      "package_id": "Elsa.Persistence.EntityFrameworkCore.TransactionTopology.Tests",
+      "assembly_name": "Elsa.Persistence.EntityFrameworkCore.TransactionTopology.Tests",
+      "explicit_is_packable": "false"
+    },
+    {
+      "product": "foundation",
+      "source": "tests/essentials/Primitives/Hosting/Tests/Elsa.Primitives.Hosting.Tests.csproj",
+      "target": "Essentials/tests/Primitives/Hosting/Tests/Elsa.Primitives.Hosting.Tests.csproj",
+      "project_name": "Elsa.Primitives.Hosting.Tests",
+      "package_id": "Elsa.Primitives.Hosting.Tests",
+      "assembly_name": "Elsa.Primitives.Hosting.Tests",
+      "explicit_is_packable": null
+    },
+    {
+      "product": "foundation",
+      "source": "tests/essentials/Primitives/Tests/Elsa.Primitives.Tests.csproj",
+      "target": "Essentials/tests/Primitives/Tests/Elsa.Primitives.Tests.csproj",
+      "project_name": "Elsa.Primitives.Tests",
+      "package_id": "Elsa.Primitives.Tests",
+      "assembly_name": "Elsa.Primitives.Tests",
+      "explicit_is_packable": null
+    },
+    {
+      "product": "foundation",
+      "source": "tests/essentials/Samples/Nuplane/Activities/Tests/Elsa.Samples.Nuplane.Activities.Tests.csproj",
+      "target": "Essentials/tests/Samples/Nuplane/Activities/Tests/Elsa.Samples.Nuplane.Activities.Tests.csproj",
+      "project_name": "Elsa.Samples.Nuplane.Activities.Tests",
+      "package_id": "Elsa.Samples.Nuplane.Activities.Tests",
+      "assembly_name": "Elsa.Samples.Nuplane.Activities.Tests",
+      "explicit_is_packable": null
+    },
+    {
+      "product": "foundation",
+      "source": "tests/essentials/Samples/Nuplane/Notes/Activities/Tests/Elsa.Samples.Nuplane.Notes.Activities.Tests.csproj",
+      "target": "Essentials/tests/Samples/Nuplane/Notes/Activities/Tests/Elsa.Samples.Nuplane.Notes.Activities.Tests.csproj",
+      "project_name": "Elsa.Samples.Nuplane.Notes.Activities.Tests",
+      "package_id": "Elsa.Samples.Nuplane.Notes.Activities.Tests",
+      "assembly_name": "Elsa.Samples.Nuplane.Notes.Activities.Tests",
+      "explicit_is_packable": null
+    },
+    {
+      "product": "foundation",
+      "source": "tests/essentials/Samples/Nuplane/Notes/Tests/Elsa.Samples.Nuplane.Notes.Tests.csproj",
+      "target": "Essentials/tests/Samples/Nuplane/Notes/Tests/Elsa.Samples.Nuplane.Notes.Tests.csproj",
+      "project_name": "Elsa.Samples.Nuplane.Notes.Tests",
+      "package_id": "Elsa.Samples.Nuplane.Notes.Tests",
+      "assembly_name": "Elsa.Samples.Nuplane.Notes.Tests",
+      "explicit_is_packable": null
+    },
+    {
+      "product": "foundation",
+      "source": "tests/essentials/Secrets/Nuplane/Tests/Elsa.Secrets.Nuplane.Tests.csproj",
+      "target": "Essentials/tests/Secrets/Nuplane/Tests/Elsa.Secrets.Nuplane.Tests.csproj",
+      "project_name": "Elsa.Secrets.Nuplane.Tests",
+      "package_id": "Elsa.Secrets.Nuplane.Tests",
+      "assembly_name": "Elsa.Secrets.Nuplane.Tests",
+      "explicit_is_packable": "false"
+    },
+    {
+      "product": "foundation",
+      "source": "tests/essentials/Secrets/Persistence/EntityFrameworkCore/MySql/Tests/Elsa.Secrets.Persistence.EntityFrameworkCore.MySql.Tests.csproj",
+      "target": "Essentials/tests/Secrets/Persistence/EntityFrameworkCore/MySql/Tests/Elsa.Secrets.Persistence.EntityFrameworkCore.MySql.Tests.csproj",
+      "project_name": "Elsa.Secrets.Persistence.EntityFrameworkCore.MySql.Tests",
+      "package_id": "Elsa.Secrets.Persistence.EntityFrameworkCore.MySql.Tests",
+      "assembly_name": "Elsa.Secrets.Persistence.EntityFrameworkCore.MySql.Tests",
+      "explicit_is_packable": null
+    },
+    {
+      "product": "foundation",
+      "source": "tests/essentials/Secrets/Persistence/EntityFrameworkCore/PostgreSql/PackageFeedProbe/Elsa.Secrets.Persistence.EntityFrameworkCore.PostgreSql.PackageFeedProbe.csproj",
+      "target": "Essentials/tests/Secrets/Persistence/EntityFrameworkCore/PostgreSql/PackageFeedProbe/Elsa.Secrets.Persistence.EntityFrameworkCore.PostgreSql.PackageFeedProbe.csproj",
+      "project_name": "Elsa.Secrets.Persistence.EntityFrameworkCore.PostgreSql.PackageFeedProbe",
+      "package_id": "Elsa.Secrets.Persistence.EntityFrameworkCore.PostgreSql.PackageFeedProbe",
+      "assembly_name": "Elsa.Secrets.Persistence.EntityFrameworkCore.PostgreSql.PackageFeedProbe",
+      "explicit_is_packable": null
+    },
+    {
+      "product": "foundation",
+      "source": "tests/essentials/Secrets/Persistence/EntityFrameworkCore/PostgreSql/Tests/Elsa.Secrets.Persistence.EntityFrameworkCore.PostgreSql.Tests.csproj",
+      "target": "Essentials/tests/Secrets/Persistence/EntityFrameworkCore/PostgreSql/Tests/Elsa.Secrets.Persistence.EntityFrameworkCore.PostgreSql.Tests.csproj",
+      "project_name": "Elsa.Secrets.Persistence.EntityFrameworkCore.PostgreSql.Tests",
+      "package_id": "Elsa.Secrets.Persistence.EntityFrameworkCore.PostgreSql.Tests",
+      "assembly_name": "Elsa.Secrets.Persistence.EntityFrameworkCore.PostgreSql.Tests",
+      "explicit_is_packable": null
+    },
+    {
+      "product": "foundation",
+      "source": "tests/essentials/Secrets/Persistence/EntityFrameworkCore/SqlServer/Tests/Elsa.Secrets.Persistence.EntityFrameworkCore.SqlServer.Tests.csproj",
+      "target": "Essentials/tests/Secrets/Persistence/EntityFrameworkCore/SqlServer/Tests/Elsa.Secrets.Persistence.EntityFrameworkCore.SqlServer.Tests.csproj",
+      "project_name": "Elsa.Secrets.Persistence.EntityFrameworkCore.SqlServer.Tests",
+      "package_id": "Elsa.Secrets.Persistence.EntityFrameworkCore.SqlServer.Tests",
+      "assembly_name": "Elsa.Secrets.Persistence.EntityFrameworkCore.SqlServer.Tests",
+      "explicit_is_packable": null
+    },
+    {
+      "product": "foundation",
+      "source": "tests/essentials/Secrets/Persistence/EntityFrameworkCore/Tests/Elsa.Secrets.Persistence.EntityFrameworkCore.Tests.csproj",
+      "target": "Essentials/tests/Secrets/Persistence/EntityFrameworkCore/Tests/Elsa.Secrets.Persistence.EntityFrameworkCore.Tests.csproj",
+      "project_name": "Elsa.Secrets.Persistence.EntityFrameworkCore.Tests",
+      "package_id": "Elsa.Secrets.Persistence.EntityFrameworkCore.Tests",
+      "assembly_name": "Elsa.Secrets.Persistence.EntityFrameworkCore.Tests",
+      "explicit_is_packable": null
+    },
+    {
+      "product": "foundation",
+      "source": "tests/essentials/Secrets/Tests/Elsa.Secrets.Tests.csproj",
+      "target": "Essentials/tests/Secrets/Tests/Elsa.Secrets.Tests.csproj",
+      "project_name": "Elsa.Secrets.Tests",
+      "package_id": "Elsa.Secrets.Tests",
+      "assembly_name": "Elsa.Secrets.Tests",
+      "explicit_is_packable": null
+    },
+    {
+      "product": "foundation",
+      "source": "tests/essentials/Secrets/Workflows/Tests/Elsa.Secrets.Workflows.Tests.csproj",
+      "target": "Essentials/tests/Secrets/Workflows/Tests/Elsa.Secrets.Workflows.Tests.csproj",
+      "project_name": "Elsa.Secrets.Workflows.Tests",
+      "package_id": "Elsa.Secrets.Workflows.Tests",
+      "assembly_name": "Elsa.Secrets.Workflows.Tests",
+      "explicit_is_packable": "false"
+    },
+    {
+      "product": "foundation",
+      "source": "tests/essentials/Serialization/Tests/Elsa.Serialization.Tests.csproj",
+      "target": "Essentials/tests/Serialization/Tests/Elsa.Serialization.Tests.csproj",
+      "project_name": "Elsa.Serialization.Tests",
+      "package_id": "Elsa.Serialization.Tests",
+      "assembly_name": "Elsa.Serialization.Tests",
+      "explicit_is_packable": null
+    },
+    {
+      "product": "foundation",
+      "source": "tests/essentials/Studio/Preferences/Persistence/EntityFrameworkCore/ProviderTests/Elsa.Studio.Preferences.Persistence.EntityFrameworkCore.ProviderTests.csproj",
+      "target": "Essentials/tests/Studio/Preferences/Persistence/EntityFrameworkCore/ProviderTests/Elsa.Studio.Preferences.Persistence.EntityFrameworkCore.ProviderTests.csproj",
+      "project_name": "Elsa.Studio.Preferences.Persistence.EntityFrameworkCore.ProviderTests",
+      "package_id": "Elsa.Studio.Preferences.Persistence.EntityFrameworkCore.ProviderTests",
+      "assembly_name": "Elsa.Studio.Preferences.Persistence.EntityFrameworkCore.ProviderTests",
+      "explicit_is_packable": "false"
+    },
+    {
+      "product": "foundation",
+      "source": "tests/essentials/Studio/Preferences/Persistence/EntityFrameworkCore/Tests/Elsa.Studio.Preferences.Persistence.EntityFrameworkCore.Tests.csproj",
+      "target": "Essentials/tests/Studio/Preferences/Persistence/EntityFrameworkCore/Tests/Elsa.Studio.Preferences.Persistence.EntityFrameworkCore.Tests.csproj",
+      "project_name": "Elsa.Studio.Preferences.Persistence.EntityFrameworkCore.Tests",
+      "package_id": "Elsa.Studio.Preferences.Persistence.EntityFrameworkCore.Tests",
+      "assembly_name": "Elsa.Studio.Preferences.Persistence.EntityFrameworkCore.Tests",
+      "explicit_is_packable": "false"
+    },
+    {
+      "product": "foundation",
+      "source": "tests/essentials/Studio/Preferences/Tests/Elsa.Studio.Preferences.Tests.csproj",
+      "target": "Essentials/tests/Studio/Preferences/Tests/Elsa.Studio.Preferences.Tests.csproj",
+      "project_name": "Elsa.Studio.Preferences.Tests",
+      "package_id": "Elsa.Studio.Preferences.Tests",
+      "assembly_name": "Elsa.Studio.Preferences.Tests",
+      "explicit_is_packable": null
+    },
+    {
+      "product": "foundation",
+      "source": "tests/essentials/Tasks/Tests/Elsa.Tasks.Tests.csproj",
+      "target": "Essentials/tests/Tasks/Tests/Elsa.Tasks.Tests.csproj",
+      "project_name": "Elsa.Tasks.Tests",
+      "package_id": "Elsa.Tasks.Tests",
+      "assembly_name": "Elsa.Tasks.Tests",
+      "explicit_is_packable": null
+    },
+    {
+      "product": "foundation",
+      "source": "tests/essentials/Testing/Elsa.Testing.csproj",
+      "target": "Essentials/tests/Testing/Elsa.Testing.csproj",
+      "project_name": "Elsa.Testing",
+      "package_id": "Elsa.Testing",
+      "assembly_name": "Elsa.Testing",
+      "explicit_is_packable": null
+    },
+    {
+      "product": "foundation",
+      "source": "tests/essentials/Versioning/Calculator/Tests/Elsa.Versioning.Calculator.Tests.csproj",
+      "target": "Essentials/tests/Versioning/Calculator/Tests/Elsa.Versioning.Calculator.Tests.csproj",
+      "project_name": "Elsa.Versioning.Calculator.Tests",
+      "package_id": "Elsa.Versioning.Calculator.Tests",
+      "assembly_name": "Elsa.Versioning.Calculator.Tests",
+      "explicit_is_packable": null
+    },
+    {
+      "product": "foundation",
+      "source": "tests/essentials/Versioning/Publisher/Tests/Elsa.Versioning.Publisher.Tests.csproj",
+      "target": "Essentials/tests/Versioning/Publisher/Tests/Elsa.Versioning.Publisher.Tests.csproj",
+      "project_name": "Elsa.Versioning.Publisher.Tests",
+      "package_id": "Elsa.Versioning.Publisher.Tests",
+      "assembly_name": "Elsa.Versioning.Publisher.Tests",
+      "explicit_is_packable": null
+    },
+    {
+      "product": "foundation",
+      "source": "tests/essentials/Workbench/Tests/Elsa.Workbench.Tests.csproj",
+      "target": "Essentials/tests/Workbench/Tests/Elsa.Workbench.Tests.csproj",
+      "project_name": "Elsa.Workbench.Tests",
+      "package_id": "Elsa.Workbench.Tests",
+      "assembly_name": "Elsa.Workbench.Tests",
+      "explicit_is_packable": null
+    },
+    {
+      "product": "foundation",
+      "source": "tests/essentials/Workflows/Dashboard/Persistence/EntityFrameworkCore/ProviderTests/Elsa.Workflows.Dashboard.Persistence.EntityFrameworkCore.ProviderTests.csproj",
+      "target": "Essentials/tests/Workflows/Dashboard/Persistence/EntityFrameworkCore/ProviderTests/Elsa.Workflows.Dashboard.Persistence.EntityFrameworkCore.ProviderTests.csproj",
+      "project_name": "Elsa.Workflows.Dashboard.Persistence.EntityFrameworkCore.ProviderTests",
+      "package_id": "Elsa.Workflows.Dashboard.Persistence.EntityFrameworkCore.ProviderTests",
+      "assembly_name": "Elsa.Workflows.Dashboard.Persistence.EntityFrameworkCore.ProviderTests",
+      "explicit_is_packable": "false"
+    },
+    {
+      "product": "foundation",
+      "source": "tests/essentials/Workflows/Dashboard/Persistence/EntityFrameworkCore/Tests/Elsa.Workflows.Dashboard.Persistence.EntityFrameworkCore.Tests.csproj",
+      "target": "Essentials/tests/Workflows/Dashboard/Persistence/EntityFrameworkCore/Tests/Elsa.Workflows.Dashboard.Persistence.EntityFrameworkCore.Tests.csproj",
+      "project_name": "Elsa.Workflows.Dashboard.Persistence.EntityFrameworkCore.Tests",
+      "package_id": "Elsa.Workflows.Dashboard.Persistence.EntityFrameworkCore.Tests",
+      "assembly_name": "Elsa.Workflows.Dashboard.Persistence.EntityFrameworkCore.Tests",
+      "explicit_is_packable": "false"
+    },
+    {
+      "product": "foundation",
+      "source": "tests/essentials/Workflows/Dashboard/Tests/Elsa.Workflows.Dashboard.Tests.csproj",
+      "target": "Essentials/tests/Workflows/Dashboard/Tests/Elsa.Workflows.Dashboard.Tests.csproj",
+      "project_name": "Elsa.Workflows.Dashboard.Tests",
+      "package_id": "Elsa.Workflows.Dashboard.Tests",
+      "assembly_name": "Elsa.Workflows.Dashboard.Tests",
+      "explicit_is_packable": null
+    },
+    {
+      "product": "foundation",
+      "source": "tests/essentials/Workflows/Design/Api/Tests/Elsa.Workflows.Design.Api.Tests.csproj",
+      "target": "Essentials/tests/Workflows/Design/Api/Tests/Elsa.Workflows.Design.Api.Tests.csproj",
+      "project_name": "Elsa.Workflows.Design.Api.Tests",
+      "package_id": "Elsa.Workflows.Design.Api.Tests",
+      "assembly_name": "Elsa.Workflows.Design.Api.Tests",
+      "explicit_is_packable": null
+    },
+    {
+      "product": "foundation",
+      "source": "tests/essentials/Workflows/Design/CodeGeneration/Tests/Elsa.Workflows.Design.CodeGeneration.Tests.csproj",
+      "target": "Essentials/tests/Workflows/Design/CodeGeneration/Tests/Elsa.Workflows.Design.CodeGeneration.Tests.csproj",
+      "project_name": "Elsa.Workflows.Design.CodeGeneration.Tests",
+      "package_id": "Elsa.Workflows.Design.CodeGeneration.Tests",
+      "assembly_name": "Elsa.Workflows.Design.CodeGeneration.Tests",
+      "explicit_is_packable": null
+    },
+    {
+      "product": "foundation",
+      "source": "tests/essentials/Workflows/Design/Persistence/EntityFrameworkCore/ProviderTests/Elsa.Workflows.Design.Persistence.EntityFrameworkCore.ProviderTests.csproj",
+      "target": "Essentials/tests/Workflows/Design/Persistence/EntityFrameworkCore/ProviderTests/Elsa.Workflows.Design.Persistence.EntityFrameworkCore.ProviderTests.csproj",
+      "project_name": "Elsa.Workflows.Design.Persistence.EntityFrameworkCore.ProviderTests",
+      "package_id": "Elsa.Workflows.Design.Persistence.EntityFrameworkCore.ProviderTests",
+      "assembly_name": "Elsa.Workflows.Design.Persistence.EntityFrameworkCore.ProviderTests",
+      "explicit_is_packable": "false"
+    },
+    {
+      "product": "foundation",
+      "source": "tests/essentials/Workflows/Design/Persistence/EntityFrameworkCore/Tests/Elsa.Workflows.Design.Persistence.EntityFrameworkCore.Tests.csproj",
+      "target": "Essentials/tests/Workflows/Design/Persistence/EntityFrameworkCore/Tests/Elsa.Workflows.Design.Persistence.EntityFrameworkCore.Tests.csproj",
+      "project_name": "Elsa.Workflows.Design.Persistence.EntityFrameworkCore.Tests",
+      "package_id": "Elsa.Workflows.Design.Persistence.EntityFrameworkCore.Tests",
+      "assembly_name": "Elsa.Workflows.Design.Persistence.EntityFrameworkCore.Tests",
+      "explicit_is_packable": "false"
+    },
+    {
+      "product": "foundation",
+      "source": "tests/essentials/Workflows/Design/Tests/Elsa.Workflows.Design.Tests.csproj",
+      "target": "Essentials/tests/Workflows/Design/Tests/Elsa.Workflows.Design.Tests.csproj",
+      "project_name": "Elsa.Workflows.Design.Tests",
+      "package_id": "Elsa.Workflows.Design.Tests",
+      "assembly_name": "Elsa.Workflows.Design.Tests",
+      "explicit_is_packable": null
+    },
+    {
+      "product": "foundation",
+      "source": "tests/essentials/Workflows/ExecutionEvidence/Tests/Elsa.Workflows.ExecutionEvidence.Tests.csproj",
+      "target": "Essentials/tests/Workflows/ExecutionEvidence/Tests/Elsa.Workflows.ExecutionEvidence.Tests.csproj",
+      "project_name": "Elsa.Workflows.ExecutionEvidence.Tests",
+      "package_id": "Elsa.Workflows.ExecutionEvidence.Tests",
+      "assembly_name": "Elsa.Workflows.ExecutionEvidence.Tests",
+      "explicit_is_packable": null
+    },
+    {
+      "product": "foundation",
+      "source": "tests/essentials/Workflows/Publishing/Api/Tests/Elsa.Workflows.Publishing.Api.Tests.csproj",
+      "target": "Essentials/tests/Workflows/Publishing/Api/Tests/Elsa.Workflows.Publishing.Api.Tests.csproj",
+      "project_name": "Elsa.Workflows.Publishing.Api.Tests",
+      "package_id": "Elsa.Workflows.Publishing.Api.Tests",
+      "assembly_name": "Elsa.Workflows.Publishing.Api.Tests",
+      "explicit_is_packable": null
+    },
+    {
+      "product": "foundation",
+      "source": "tests/essentials/Workflows/Publishing/Persistence/EntityFrameworkCore/Tests/Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore.Tests.csproj",
+      "target": "Essentials/tests/Workflows/Publishing/Persistence/EntityFrameworkCore/Tests/Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore.Tests.csproj",
+      "project_name": "Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore.Tests",
+      "package_id": "Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore.Tests",
+      "assembly_name": "Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore.Tests",
+      "explicit_is_packable": "false"
+    },
+    {
+      "product": "foundation",
+      "source": "tests/essentials/Workflows/Publishing/Tests/Elsa.Workflows.Publishing.Tests.csproj",
+      "target": "Essentials/tests/Workflows/Publishing/Tests/Elsa.Workflows.Publishing.Tests.csproj",
+      "project_name": "Elsa.Workflows.Publishing.Tests",
+      "package_id": "Elsa.Workflows.Publishing.Tests",
+      "assembly_name": "Elsa.Workflows.Publishing.Tests",
+      "explicit_is_packable": null
+    },
+    {
+      "product": "foundation",
+      "source": "tests/essentials/Workflows/Runtime/Api/Tests/Elsa.Workflows.Runtime.Api.Tests.csproj",
+      "target": "Essentials/tests/Workflows/Runtime/Api/Tests/Elsa.Workflows.Runtime.Api.Tests.csproj",
+      "project_name": "Elsa.Workflows.Runtime.Api.Tests",
+      "package_id": "Elsa.Workflows.Runtime.Api.Tests",
+      "assembly_name": "Elsa.Workflows.Runtime.Api.Tests",
+      "explicit_is_packable": null
+    },
+    {
+      "product": "foundation",
+      "source": "tests/essentials/Workflows/Runtime/Distributed/Persistence/EntityFrameworkCore/ProviderTests/Elsa.Workflows.Runtime.Distributed.Persistence.EntityFrameworkCore.ProviderTests.csproj",
+      "target": "Essentials/tests/Workflows/Runtime/Distributed/Persistence/EntityFrameworkCore/ProviderTests/Elsa.Workflows.Runtime.Distributed.Persistence.EntityFrameworkCore.ProviderTests.csproj",
+      "project_name": "Elsa.Workflows.Runtime.Distributed.Persistence.EntityFrameworkCore.ProviderTests",
+      "package_id": "Elsa.Workflows.Runtime.Distributed.Persistence.EntityFrameworkCore.ProviderTests",
+      "assembly_name": "Elsa.Workflows.Runtime.Distributed.Persistence.EntityFrameworkCore.ProviderTests",
+      "explicit_is_packable": "false"
+    },
+    {
+      "product": "foundation",
+      "source": "tests/essentials/Workflows/Runtime/Distributed/Persistence/EntityFrameworkCore/Tests/Elsa.Workflows.Runtime.Distributed.Persistence.EntityFrameworkCore.Tests.csproj",
+      "target": "Essentials/tests/Workflows/Runtime/Distributed/Persistence/EntityFrameworkCore/Tests/Elsa.Workflows.Runtime.Distributed.Persistence.EntityFrameworkCore.Tests.csproj",
+      "project_name": "Elsa.Workflows.Runtime.Distributed.Persistence.EntityFrameworkCore.Tests",
+      "package_id": "Elsa.Workflows.Runtime.Distributed.Persistence.EntityFrameworkCore.Tests",
+      "assembly_name": "Elsa.Workflows.Runtime.Distributed.Persistence.EntityFrameworkCore.Tests",
+      "explicit_is_packable": "false"
+    },
+    {
+      "product": "foundation",
+      "source": "tests/essentials/Workflows/Runtime/Distributed/Tests/Elsa.Workflows.Runtime.Distributed.Tests.csproj",
+      "target": "Essentials/tests/Workflows/Runtime/Distributed/Tests/Elsa.Workflows.Runtime.Distributed.Tests.csproj",
+      "project_name": "Elsa.Workflows.Runtime.Distributed.Tests",
+      "package_id": "Elsa.Workflows.Runtime.Distributed.Tests",
+      "assembly_name": "Elsa.Workflows.Runtime.Distributed.Tests",
+      "explicit_is_packable": null
+    },
+    {
+      "product": "foundation",
+      "source": "tests/essentials/Workflows/Runtime/Http/Tests/Elsa.Workflows.Runtime.Http.Tests.csproj",
+      "target": "Essentials/tests/Workflows/Runtime/Http/Tests/Elsa.Workflows.Runtime.Http.Tests.csproj",
+      "project_name": "Elsa.Workflows.Runtime.Http.Tests",
+      "package_id": "Elsa.Workflows.Runtime.Http.Tests",
+      "assembly_name": "Elsa.Workflows.Runtime.Http.Tests",
+      "explicit_is_packable": null
+    },
+    {
+      "product": "foundation",
+      "source": "tests/essentials/Workflows/Runtime/Persistence/EntityFrameworkCore/Fixtures/WorkerOidcHost/WorkerOidcHost.csproj",
+      "target": "Essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/Fixtures/WorkerOidcHost/WorkerOidcHost.csproj",
+      "project_name": "WorkerOidcHost",
+      "package_id": "WorkerOidcHost",
+      "assembly_name": "WorkerOidcHost",
+      "explicit_is_packable": "false"
+    },
+    {
+      "product": "foundation",
+      "source": "tests/essentials/Workflows/Runtime/Persistence/EntityFrameworkCore/ProviderTests/Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.csproj",
+      "target": "Essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/ProviderTests/Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.csproj",
+      "project_name": "Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests",
+      "package_id": "Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests",
+      "assembly_name": "Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests",
+      "explicit_is_packable": "false"
+    },
+    {
+      "product": "foundation",
+      "source": "tests/essentials/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.csproj",
+      "target": "Essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.csproj",
+      "project_name": "Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests",
+      "package_id": "Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests",
+      "assembly_name": "Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests",
+      "explicit_is_packable": "false"
+    },
+    {
+      "product": "foundation",
+      "source": "tests/essentials/Workflows/Runtime/Reconciliation/ExecutionProbe/Elsa.Workflows.Runtime.Reconciliation.ExecutionProbe.csproj",
+      "target": "Essentials/tests/Workflows/Runtime/Reconciliation/ExecutionProbe/Elsa.Workflows.Runtime.Reconciliation.ExecutionProbe.csproj",
+      "project_name": "Elsa.Workflows.Runtime.Reconciliation.ExecutionProbe",
+      "package_id": "Elsa.Workflows.Runtime.Reconciliation.ExecutionProbe",
+      "assembly_name": "Elsa.Workflows.Runtime.Reconciliation.ExecutionProbe",
+      "explicit_is_packable": null
+    },
+    {
+      "product": "foundation",
+      "source": "tests/essentials/Workflows/Runtime/Reconciliation/Tests/Elsa.Workflows.Runtime.Reconciliation.Tests.csproj",
+      "target": "Essentials/tests/Workflows/Runtime/Reconciliation/Tests/Elsa.Workflows.Runtime.Reconciliation.Tests.csproj",
+      "project_name": "Elsa.Workflows.Runtime.Reconciliation.Tests",
+      "package_id": "Elsa.Workflows.Runtime.Reconciliation.Tests",
+      "assembly_name": "Elsa.Workflows.Runtime.Reconciliation.Tests",
+      "explicit_is_packable": null
+    },
+    {
+      "product": "foundation",
+      "source": "tests/essentials/Workflows/Runtime/Resumption/Tests/Elsa.Workflows.Runtime.Resumption.Tests.csproj",
+      "target": "Essentials/tests/Workflows/Runtime/Resumption/Tests/Elsa.Workflows.Runtime.Resumption.Tests.csproj",
+      "project_name": "Elsa.Workflows.Runtime.Resumption.Tests",
+      "package_id": "Elsa.Workflows.Runtime.Resumption.Tests",
+      "assembly_name": "Elsa.Workflows.Runtime.Resumption.Tests",
+      "explicit_is_packable": null
+    },
+    {
+      "product": "foundation",
+      "source": "tests/essentials/Workflows/Runtime/Scheduling/Tests/Elsa.Workflows.Runtime.Scheduling.Tests.csproj",
+      "target": "Essentials/tests/Workflows/Runtime/Scheduling/Tests/Elsa.Workflows.Runtime.Scheduling.Tests.csproj",
+      "project_name": "Elsa.Workflows.Runtime.Scheduling.Tests",
+      "package_id": "Elsa.Workflows.Runtime.Scheduling.Tests",
+      "assembly_name": "Elsa.Workflows.Runtime.Scheduling.Tests",
+      "explicit_is_packable": null
+    },
+    {
+      "product": "foundation",
+      "source": "tests/essentials/Workflows/Runtime/Tests/Elsa.Workflows.Runtime.Tests.csproj",
+      "target": "Essentials/tests/Workflows/Runtime/Tests/Elsa.Workflows.Runtime.Tests.csproj",
+      "project_name": "Elsa.Workflows.Runtime.Tests",
+      "package_id": "Elsa.Workflows.Runtime.Tests",
+      "assembly_name": "Elsa.Workflows.Runtime.Tests",
+      "explicit_is_packable": null
+    },
+    {
+      "product": "foundation",
+      "source": "tools/demo/Elsa.Samples.Nuplane.Notes.Tooling/Elsa.Samples.Nuplane.Notes.Tooling.csproj",
+      "target": "tools/demo/Elsa.Samples.Nuplane.Notes.Tooling/Elsa.Samples.Nuplane.Notes.Tooling.csproj",
+      "project_name": "Elsa.Samples.Nuplane.Notes.Tooling",
+      "package_id": "Elsa.Samples.Nuplane.Notes.Tooling",
+      "assembly_name": "Elsa.Samples.Nuplane.Notes.Tooling",
+      "explicit_is_packable": "false"
+    },
+    {
+      "product": "foundation",
+      "source": "tools/ef/Elsa.EntityFrameworkCore.Tooling/Elsa.EntityFrameworkCore.Tooling.csproj",
+      "target": "tools/ef/Elsa.EntityFrameworkCore.Tooling/Elsa.EntityFrameworkCore.Tooling.csproj",
+      "project_name": "Elsa.EntityFrameworkCore.Tooling",
+      "package_id": "Elsa.EntityFrameworkCore.Tooling",
+      "assembly_name": "Elsa.EntityFrameworkCore.Tooling",
+      "explicit_is_packable": "false"
+    },
+    {
+      "product": "foundation",
+      "source": "tools/maps/Elsa.Maps.Generator/Elsa.Maps.Generator.csproj",
+      "target": "tools/maps/Elsa.Maps.Generator/Elsa.Maps.Generator.csproj",
+      "project_name": "Elsa.Maps.Generator",
+      "package_id": "Elsa.Maps.Generator",
+      "assembly_name": "Elsa.Maps.Generator",
+      "explicit_is_packable": null
+    },
+    {
+      "product": "foundation",
+      "source": "tools/versioning/Elsa.Versioning.Calculator/Elsa.Versioning.Calculator.csproj",
+      "target": "tools/versioning/Elsa.Versioning.Calculator/Elsa.Versioning.Calculator.csproj",
+      "project_name": "Elsa.Versioning.Calculator",
+      "package_id": "Elsa.Versioning.Calculator",
+      "assembly_name": "Elsa.Versioning.Calculator",
+      "explicit_is_packable": "false"
+    },
+    {
+      "product": "foundation",
+      "source": "tools/versioning/Elsa.Versioning.Publisher/Elsa.Versioning.Publisher.csproj",
+      "target": "tools/versioning/Elsa.Versioning.Publisher/Elsa.Versioning.Publisher.csproj",
+      "project_name": "Elsa.Versioning.Publisher",
+      "package_id": "Elsa.Versioning.Publisher",
+      "assembly_name": "Elsa.Versioning.Publisher",
+      "explicit_is_packable": "false"
+    },
+    {
+      "product": "studio",
+      "source": "src/apps/Elsa.Studio.Web/Elsa.Studio.Web.csproj",
+      "target": "Studio/src/apps/Elsa.Studio.Web/Elsa.Studio.Web.csproj",
+      "project_name": "Elsa.Studio.Web",
+      "package_id": "Elsa.Studio.Web",
+      "assembly_name": "Elsa.Studio.Web",
+      "explicit_is_packable": "false"
+    },
+    {
+      "product": "studio",
+      "source": "src/essentials/Elsa.Studio.Api/Elsa.Studio.Api.csproj",
+      "target": "Studio/src/essentials/Elsa.Studio.Api/Elsa.Studio.Api.csproj",
+      "project_name": "Elsa.Studio.Api",
+      "package_id": "Elsa.Studio.Api",
+      "assembly_name": "Elsa.Studio.Api",
+      "explicit_is_packable": null
+    },
+    {
+      "product": "studio",
+      "source": "src/essentials/Elsa.Studio.Core/Elsa.Studio.Core.csproj",
+      "target": "Studio/src/essentials/Elsa.Studio.Core/Elsa.Studio.Core.csproj",
+      "project_name": "Elsa.Studio.Core",
+      "package_id": "Elsa.Studio.Core",
+      "assembly_name": "Elsa.Studio.Core",
+      "explicit_is_packable": null
+    },
+    {
+      "product": "studio",
+      "source": "src/essentials/Elsa.Studio.Dashboard/Elsa.Studio.Dashboard.csproj",
+      "target": "Studio/src/essentials/Elsa.Studio.Dashboard/Elsa.Studio.Dashboard.csproj",
+      "project_name": "Elsa.Studio.Dashboard",
+      "package_id": "Elsa.Studio.Dashboard",
+      "assembly_name": "Elsa.Studio.Dashboard",
+      "explicit_is_packable": null
+    },
+    {
+      "product": "studio",
+      "source": "src/essentials/Elsa.Studio.Workflows/Elsa.Studio.Workflows.csproj",
+      "target": "Studio/src/essentials/Elsa.Studio.Workflows/Elsa.Studio.Workflows.csproj",
+      "project_name": "Elsa.Studio.Workflows",
+      "package_id": "Elsa.Studio.Workflows",
+      "assembly_name": "Elsa.Studio.Workflows",
+      "explicit_is_packable": null
+    },
+    {
+      "product": "studio",
+      "source": "src/extensions/Elsa.Studio.Attention/Elsa.Studio.Attention.csproj",
+      "target": "Extensions/Attention/studio/Elsa.Studio.Attention/Elsa.Studio.Attention.csproj",
+      "project_name": "Elsa.Studio.Attention",
+      "package_id": "Elsa.Studio.Attention",
+      "assembly_name": "Elsa.Studio.Attention",
+      "explicit_is_packable": null
+    },
+    {
+      "product": "studio",
+      "source": "src/extensions/Elsa.Studio.ConsoleStream/Elsa.Studio.ConsoleStream.csproj",
+      "target": "Extensions/ConsoleStream/studio/Elsa.Studio.ConsoleStream/Elsa.Studio.ConsoleStream.csproj",
+      "project_name": "Elsa.Studio.ConsoleStream",
+      "package_id": "Elsa.Studio.ConsoleStream",
+      "assembly_name": "Elsa.Studio.ConsoleStream",
+      "explicit_is_packable": null
+    },
+    {
+      "product": "studio",
+      "source": "src/extensions/Elsa.Studio.Diagnostics.OpenTelemetry/Elsa.Studio.Diagnostics.OpenTelemetry.csproj",
+      "target": "Extensions/Diagnostics.OpenTelemetry/studio/Elsa.Studio.Diagnostics.OpenTelemetry/Elsa.Studio.Diagnostics.OpenTelemetry.csproj",
+      "project_name": "Elsa.Studio.Diagnostics.OpenTelemetry",
+      "package_id": "Elsa.Studio.Diagnostics.OpenTelemetry",
+      "assembly_name": "Elsa.Studio.Diagnostics.OpenTelemetry",
+      "explicit_is_packable": null
+    },
+    {
+      "product": "studio",
+      "source": "src/extensions/Elsa.Studio.Diagnostics.StructuredLogs/Elsa.Studio.Diagnostics.StructuredLogs.csproj",
+      "target": "Extensions/Diagnostics.StructuredLogs/studio/Elsa.Studio.Diagnostics.StructuredLogs/Elsa.Studio.Diagnostics.StructuredLogs.csproj",
+      "project_name": "Elsa.Studio.Diagnostics.StructuredLogs",
+      "package_id": "Elsa.Studio.Diagnostics.StructuredLogs",
+      "assembly_name": "Elsa.Studio.Diagnostics.StructuredLogs",
+      "explicit_is_packable": null
+    },
+    {
+      "product": "studio",
+      "source": "src/extensions/Elsa.Studio.ExpressionEditors.JavaScript/Elsa.Studio.ExpressionEditors.JavaScript.csproj",
+      "target": "Extensions/ExpressionEditors.JavaScript/studio/Elsa.Studio.ExpressionEditors.JavaScript/Elsa.Studio.ExpressionEditors.JavaScript.csproj",
+      "project_name": "Elsa.Studio.ExpressionEditors.JavaScript",
+      "package_id": "Elsa.Studio.ExpressionEditors.JavaScript",
+      "assembly_name": "Elsa.Studio.ExpressionEditors.JavaScript",
+      "explicit_is_packable": null
+    },
+    {
+      "product": "studio",
+      "source": "src/extensions/Elsa.Studio.ExpressionEditors.Liquid/Elsa.Studio.ExpressionEditors.Liquid.csproj",
+      "target": "Extensions/ExpressionEditors.Liquid/studio/Elsa.Studio.ExpressionEditors.Liquid/Elsa.Studio.ExpressionEditors.Liquid.csproj",
+      "project_name": "Elsa.Studio.ExpressionEditors.Liquid",
+      "package_id": "Elsa.Studio.ExpressionEditors.Liquid",
+      "assembly_name": "Elsa.Studio.ExpressionEditors.Liquid",
+      "explicit_is_packable": null
+    },
+    {
+      "product": "studio",
+      "source": "src/extensions/Elsa.Studio.ExtensionBuilder/Elsa.Studio.ExtensionBuilder.csproj",
+      "target": "Extensions/ExtensionBuilder/studio/Elsa.Studio.ExtensionBuilder/Elsa.Studio.ExtensionBuilder.csproj",
+      "project_name": "Elsa.Studio.ExtensionBuilder",
+      "package_id": "Elsa.Studio.ExtensionBuilder",
+      "assembly_name": "Elsa.Studio.ExtensionBuilder",
+      "explicit_is_packable": null
+    },
+    {
+      "product": "studio",
+      "source": "src/extensions/Elsa.Studio.FeatureManagement/Elsa.Studio.FeatureManagement.csproj",
+      "target": "Extensions/FeatureManagement/studio/Elsa.Studio.FeatureManagement/Elsa.Studio.FeatureManagement.csproj",
+      "project_name": "Elsa.Studio.FeatureManagement",
+      "package_id": "Elsa.Studio.FeatureManagement",
+      "assembly_name": "Elsa.Studio.FeatureManagement",
+      "explicit_is_packable": null
+    },
+    {
+      "product": "studio",
+      "source": "src/extensions/Elsa.Studio.Samples.WeatherForecast/Elsa.Studio.Samples.WeatherForecast.csproj",
+      "target": "Extensions/Samples.WeatherForecast/studio/Elsa.Studio.Samples.WeatherForecast/Elsa.Studio.Samples.WeatherForecast.csproj",
+      "project_name": "Elsa.Studio.Samples.WeatherForecast",
+      "package_id": "Elsa.Studio.Samples.WeatherForecast",
+      "assembly_name": "Elsa.Studio.Samples.WeatherForecast",
+      "explicit_is_packable": null
+    },
+    {
+      "product": "studio",
+      "source": "src/extensions/Elsa.Studio.Secrets/Elsa.Studio.Secrets.csproj",
+      "target": "Extensions/Secrets/studio/Elsa.Studio.Secrets/Elsa.Studio.Secrets.csproj",
+      "project_name": "Elsa.Studio.Secrets",
+      "package_id": "Elsa.Studio.Secrets",
+      "assembly_name": "Elsa.Studio.Secrets",
+      "explicit_is_packable": null
+    },
+    {
+      "product": "studio",
+      "source": "src/extensions/Elsa.Studio.Weaver.Core/Elsa.Studio.Weaver.Core.csproj",
+      "target": "Extensions/Weaver/studio/Elsa.Studio.Weaver.Core/Elsa.Studio.Weaver.Core.csproj",
+      "project_name": "Elsa.Studio.Weaver.Core",
+      "package_id": "Elsa.Studio.Weaver.Core",
+      "assembly_name": "Elsa.Studio.Weaver.Core",
+      "explicit_is_packable": null
+    },
+    {
+      "product": "studio",
+      "source": "src/extensions/Elsa.Studio.Weaver.Workflows/Elsa.Studio.Weaver.Workflows.csproj",
+      "target": "Extensions/Weaver/studio/Elsa.Studio.Weaver.Workflows/Elsa.Studio.Weaver.Workflows.csproj",
+      "project_name": "Elsa.Studio.Weaver.Workflows",
+      "package_id": "Elsa.Studio.Weaver.Workflows",
+      "assembly_name": "Elsa.Studio.Weaver.Workflows",
+      "explicit_is_packable": null
+    },
+    {
+      "product": "studio",
+      "source": "src/extensions/Elsa.Studio.Workflows.Dashboard/Elsa.Studio.Workflows.Dashboard.csproj",
+      "target": "Extensions/Workflows.Dashboard/studio/Elsa.Studio.Workflows.Dashboard/Elsa.Studio.Workflows.Dashboard.csproj",
+      "project_name": "Elsa.Studio.Workflows.Dashboard",
+      "package_id": "Elsa.Studio.Workflows.Dashboard",
+      "assembly_name": "Elsa.Studio.Workflows.Dashboard",
+      "explicit_is_packable": null
+    },
+    {
+      "product": "studio",
+      "source": "tests/Elsa.Studio.Tests/Elsa.Studio.Tests.csproj",
+      "target": "Studio/tests/Elsa.Studio.Tests/Elsa.Studio.Tests.csproj",
+      "project_name": "Elsa.Studio.Tests",
+      "package_id": "Elsa.Studio.Tests",
+      "assembly_name": "Elsa.Studio.Tests",
+      "explicit_is_packable": "false"
+    }
+  ]
+}

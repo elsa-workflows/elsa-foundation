@@ -8,7 +8,7 @@ For development and deeper operational guidance:
 - [Build and run the backend from source](https://github.com/elsa-workflows/elsa-foundation/blob/main/docs/contributing/backend-source-quickstart.md).
 - [Take the architecture tour](https://github.com/elsa-workflows/elsa-foundation/blob/main/docs/architecture-tour.md), then [follow a workflow execution](https://github.com/elsa-workflows/elsa-foundation/blob/main/docs/how-a-workflow-executes.md).
 
-The reference host is one composition of Elsa features. A custom host may compose a different set. Module-level notes and API details remain beside their projects in the [Foundation source tree](https://github.com/elsa-workflows/elsa-foundation/tree/main/src/essentials); check the package version you deploy before applying guidance from the development branch.
+The reference host is one composition of Elsa features. A custom host may compose a different set. Module-level notes and API details remain beside their projects in the [Foundation source tree](https://github.com/elsa-workflows/elsa-foundation/tree/main/Essentials/src); check the package version you deploy before applying guidance from the development branch.
 
 ---
 

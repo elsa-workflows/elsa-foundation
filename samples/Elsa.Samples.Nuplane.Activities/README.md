@@ -7,7 +7,7 @@ Sample package-loaded shell feature for `Elsa.Workbench`.
 ```bash
 dotnet pack samples/Elsa.Samples.Nuplane.Activities/Elsa.Samples.Nuplane.Activities.csproj \
   -c Release \
-  -o src/apps/Elsa.Workbench/packages
+  -o Essentials/apps/Elsa.Workbench/packages
 ```
 
 Enable the feature on a shell by adding it to the shell's `Features` section. The stock Workbench `shells.json` does

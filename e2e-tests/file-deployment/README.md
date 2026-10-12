@@ -31,7 +31,7 @@ No repo file is edited, and the variables are set for the owned server only, not
 - The suite starts, restarts and stops its own server, and only that process. It never stops a server you
   started, so it can run while yours is up. If you pass `-BaseUrl` and that port is held by another process,
   the suite fails with the port and the pid in the message instead of stopping it (issue #2329).
-- Requires a built Workbench (`dotnet build src/apps/Elsa.Workbench/Elsa.Workbench.csproj`); the EF modules
+- Requires a built Workbench (`dotnet build Essentials/apps/Elsa.Workbench/Elsa.Workbench.csproj`); the EF modules
   migrate on shell activation. See [`../README.md`](../README.md).
 - Definition ids/names are timestamped per run. They land in the SQLite files of the temporary content root,
   which is removed after a passing run and kept, with the server logs, after a failing one.

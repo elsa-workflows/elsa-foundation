@@ -17,7 +17,7 @@ Approval: Sipke Schoorstra, 2026-10-12 (#2578), on his authority alone; open to 
 
 ## Gate index
 
-The framework Gate index applies. Elsa-specific gates with an automated check (tests in `tests/essentials/Architecture/Tests/`); every other gate is on [docs/contributing/review-checklist.md](../../docs/contributing/review-checklist.md).
+The framework Gate index applies. Elsa-specific gates with an automated check (tests in `Essentials/tests/Architecture/Tests/`); every other gate is on [docs/contributing/review-checklist.md](../../docs/contributing/review-checklist.md).
 
 | § | Gate | Check |
 |---|---|---|
@@ -87,7 +87,7 @@ Every activity the design-time picker can show is a persisted `ActivityDefinitio
 
 ## §E5 Elsa packaging and versioning
 
-**framework §2.13 — Elsa specialization.** `src/apps/Elsa.Workbench` is a development and demo host, not the product; it publishes as `elsaworkflows/elsa-workbench`. A clean product host is a product specification, and the `Elsa.Server` name and `elsaworkflows/elsa-server` image are reserved for it.
+**framework §2.13 — Elsa specialization.** `Essentials/apps/Elsa.Workbench` is a development and demo host, not the product; it publishes as `elsaworkflows/elsa-workbench`. A clean product host is a product specification, and the `Elsa.Server` name and `elsaworkflows/elsa-server` image are reserved for it.
 
 **One version line until GA** ([ADR 0080 D4](../../docs/adr/0080-elsa-4-simplification-decisions.md#d4--pre-ga-cleanup)): every package shares one version line until 4.0 GA; post-GA versioning is revisited once #2576 retires Line A. **Versions are computed, not authored:** no project hand-maintains `<Version>`, `VersionPrefix`, `VersionSuffix` or `PackageVersion`; `PackageVersioning.props` derives each package's version. **Dependency ranges on this repository's own packages carry an upper bound at the next major**. **Version magnitude** is to be enforced mechanically against the last released baseline: a bump smaller than the detected API delta fails (not yet built; ApiCompat is a separate issue). **Nuplane:** Strategy B per framework §3; a domain's `.Core` is not host-pinned, because a clean host carries no domains, and Nuplane promotes it to a shared assembly within that domain's subtree when the domain is installed, first- and third-party alike. Strategy A is not the default but not excluded. Small-project audit and reversibility notes: [elsa-worked-examples](../../docs/reference/elsa-worked-examples.md#elsa-packaging).
 

@@ -1,0 +1,500 @@
+using ConsoleLogStreaming.AspNetCore.DependencyInjection;
+using ConsoleLogStreaming.Core.DependencyInjection;
+using CShells.AspNetCore.Configuration;
+using CShells.AspNetCore.Extensions;
+using CShells.DependencyInjection;
+using CShells.Lifecycle;
+using CShells.Management.Api;
+using CShells.Nuplane;
+using Elsa.Activities.Design.Api;
+using Elsa.Activities.Design.Core.Options;
+using Elsa.Activities.Design.Reconciliation;
+using Elsa.Activities.Design.Reconciliation.Clr;
+using Elsa.Activities.Flowchart;
+using Elsa.Activities.Graph.Design;
+using Elsa.Activities.Graph.Runtime;
+using Elsa.Activities.Http;
+using Elsa.Activities.Primitives;
+using Elsa.Activities.Runtime;
+using Elsa.Activities.Sequence;
+using Elsa.Agent.Api;
+using Elsa.Agent.Core;
+using Elsa.Agent.GitHubCopilot;
+using Elsa.Agent.Workflows;
+using Elsa.Api.AspNetCore;
+using Elsa.Api.Capabilities;
+using Elsa.Attention.Api;
+using Elsa.Caching.Memory;
+using Elsa.Cluster.Hosting;
+using Elsa.Cluster.Readability;
+using Elsa.Diagnostics.ConsoleLogStreaming;
+using Elsa.Diagnostics.OpenTelemetry;
+using Elsa.Diagnostics.StructuredLogs;
+using Elsa.Events;
+using Elsa.Expressions;
+using Elsa.Expressions.Api;
+using Elsa.Foundation.DataProtection;
+using Elsa.ExtensionBuilder.Api;
+using Elsa.ExtensionBuilder.Api.Extensions;
+using Elsa.Foundation.Identity;
+using Elsa.Foundation.Identity.Api;
+using Elsa.Foundation.Identity.AspNetCoreIdentity;
+using Elsa.Foundation.Identity.Oidc;
+using Elsa.Foundation.Identity.OpenIddict;
+using Elsa.Locking.Database;
+using Elsa.Locking.FileSystem;
+using Elsa.Mediator;
+using Elsa.Modularity.Api;
+using Elsa.Modularity.Api.Attention;
+using Elsa.Modularity.Core.Contracts;
+using Elsa.Modularity.EntityFramework.Extensions;
+using Elsa.Modularity.Nuplane.Extensions;
+using Elsa.Modularity.Nuplane.Services;
+using Elsa.Primitives.Hosting;
+using Elsa.Secrets.Attention;
+using Elsa.Serialization.Newtonsoft;
+using Elsa.Serialization.SystemText;
+using Elsa.Studio.Preferences.Api;
+using Elsa.Studio.Preferences.Core;
+using Elsa.Tasks;
+using Elsa.Workbench;
+using Elsa.Workbench.Boot;
+using Elsa.Workbench.Composition;
+using Elsa.Workbench.Readiness;
+using Elsa.Workflows.Dashboard;
+using Elsa.Workflows.Design.Api;
+using Elsa.Workflows.Design.Reconciliation;
+using Elsa.Workflows.Design.Reconciliation.Json;
+using Elsa.Workflows.ExecutionEvidence;
+using Elsa.Workflows.Publishing.Api;
+using Elsa.Workflows.Runtime.Api;
+using Elsa.Workflows.Runtime.Attention;
+using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Workflows.Runtime.Distributed;
+using Elsa.Workflows.Runtime.Distributed.Placement;
+using Elsa.Workflows.Runtime.Http;
+using Elsa.Workflows.Runtime.ReferenceGarbageCollection;
+using Elsa.Workflows.Runtime.Resumption;
+using Elsa.Workflows.Runtime.Tracing;
+using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Options;
+using NativeEndpoints;
+using Nuplane;
+using Nuplane.Admin;
+using Nuplane.Loading.Hosting.Builder;
+using Nuplane.Reconciliation;
+using Nuplane.Sources.Directory.Configuration;
+using System.Diagnostics;
+
+// Boot phase-timing stopwatch (spec 129). Started at process entry so the opt-in cold-start instrument can
+// attribute host-build and first-request wall time. The Stopwatch itself is negligible; nothing is recorded
+// unless the Elsa:Boot:PhaseTiming:Enabled switch turns the timeline on below.
+var bootStopwatch = Stopwatch.StartNew();
+
+ConsoleLogStreamingSetup.InstallConsoleStreamHookIfEnabled(args);
+
+var builder = WebApplication.CreateBuilder(args);
+builder.Configuration.AddJsonFile("shells.json", optional: true, reloadOnChange: true);
+// Environment overlay (e.g. shells.Production.json), layered on top of the dev/demo defaults in shells.json.
+// This keeps `git clone && dotnet run` (Development) working out of the box on ephemeral identity keys, committed
+// demo-only runtime keys (the durable runtime refuses ephemeral ones) and a seeded well-known admin, while
+// Production blanks those demo values and hardens to durable identity stores, persistent keys (secrets), and a
+// configured initial admin (password supplied as a secret — never committed).
+builder.Configuration.AddJsonFile($"shells.{builder.Environment.EnvironmentName}.json", optional: true, reloadOnChange: true);
+// WebApplication.CreateBuilder adds environment variables before these shell files. Re-add the environment and
+// command-line providers after the shell layers so container environment variables override shells.json, while
+// explicit command-line arguments retain the highest precedence.
+builder.Configuration
+    .AddEnvironmentVariables()
+    .AddCommandLine(args);
+// Experimental retained-artifact proof (#2072). The opt-in lane opens and verifies the declared
+// source bytes before any explicit Elsa root registration. The normal Workbench lane stays live.
+WorkbenchStartupArtifactContext? startupArtifact = null;
+if (Environment.GetEnvironmentVariable("ELSA_WORKBENCH_STARTUP_ARTIFACT_PROBE") == "1")
+{
+    if (!WorkbenchStartupArtifactContext.TryCapture(builder.Environment.ContentRootPath, builder.Environment.EnvironmentName,
+            args, out startupArtifact, out var refusalCode))
+    {
+        Console.Error.WriteLine(refusalCode);
+        Environment.ExitCode = 1;
+        return;
+    }
+
+    builder.Services.AddSingleton(startupArtifact!);
+}
+
+var configuration = startupArtifact?.Configuration ?? builder.Configuration;
+
+// OpenIddict's protocol behavior is composed by the shell feature, but its vendor EF store is host-owned. Bind the
+// default shell's persistence settings at the root so the host-level initializer and every copied shell service
+// provider select the same demo in-memory store or durable SQLite store. The behavior composite deliberately does not
+// register a DbContext, an EF store, or an initializer; this is the Workbench's explicit vendor choice.
+builder.Services.AddWorkbenchOpenIddictVendor(configuration);
+// The engine under that store, SQLite unless the default shell's OpenIddict settings name another. A token issued on one node is
+// valid on another only when every node reads one store, so a multi-node deployment selects a shared engine here.
+builder.Services.AddWorkbenchOpenIddictStoreProvider(configuration);
+// Elsa's migration policy for that store, kept out of the vendor sources: it migrates the durable store and reports a SQLite
+// migration lock a killed process left behind instead of hanging the start (#2196).
+builder.Services.AddWorkbenchOpenIddictMigrationPolicy(configuration);
+// Every access and refresh token is a row in that store, and nothing else deletes one: prune the expired and redeemed ones, on every node.
+builder.Services.AddWorkbenchOpenIddictPruning(configuration);
+
+// Opt-in cold-start phase instrument (spec 129). Null unless Elsa:Boot:PhaseTiming:Enabled is set, so the host
+// registers no boot services and pays nothing when the switch is off. When on, the timeline is a root singleton
+// consumed by the first-request middleware, the shell-activation observer, and the ApplicationStarted hook.
+var bootTimeline = BootPhaseTimeline.CreateIfEnabled(configuration, bootStopwatch);
+if (bootTimeline is not null)
+{
+    bootTimeline.Mark("config-ready");
+    builder.Services.AddSingleton(bootTimeline);
+}
+
+// Console log streaming is a process-global, host-level diagnostic (not a shell feature): capture is a static tee on
+// Console.Out and the live stream is a long-lived SignalR connection, so it is composed once on the application root
+// rather than per-shell — a shell-hosted hub captures the shell container's IServiceScopeFactory and throws
+// ObjectDisposedException on disconnect when that shell is recycled. The host owns the whole stack (console hook,
+// capture options, recent/sources HTTP endpoints, hub), gated by the Elsa:Diagnostics:ConsoleLogStreaming:Enabled
+// config switch (defaults to off). Because this is composed once at startup, toggling it takes effect only after a
+// restart. The enabled check + hook install are done once here and reused.
+var consoleLogStreamingEnabled = ConsoleLogStreamingSetup.IsEnabled(configuration);
+if (consoleLogStreamingEnabled)
+{
+    ConsoleLogStreamingSetup.InstallConsoleStreamHook();
+    builder.Services.AddConsoleLogStreamingHost(ConsoleLogStreamingSetup.ConfigureHost);
+    builder.Services.AddConsoleLogStreamingAspNetCore(ConsoleLogStreamingSetup.ConfigureEndpoints);
+}
+var nuplaneConfiguration = configuration.GetSection("Nuplane");
+
+const string studioCorsPolicy = "ElsaStudio";
+
+var studioCorsOrigins = configuration.GetSection("Cors:AllowedOrigins").Get<string[]>();
+if (studioCorsOrigins is null || studioCorsOrigins.Length == 0)
+{
+    studioCorsOrigins =
+    [
+        "https://localhost:7030",
+        "http://localhost:5089",
+        "http://localhost:5092"
+    ];
+}
+
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy(studioCorsPolicy, policy => policy
+        .WithOrigins(studioCorsOrigins)
+        .AllowAnyHeader()
+        .AllowAnyMethod()
+        .AllowCredentials()
+        // AllowAnyHeader covers request headers only. Content-Disposition is not one of the seven
+        // CORS-safelisted response headers, so without exposing it a cross-origin Studio cannot read the
+        // download name the executable-artifact export sets on the wire -- it silently falls back to
+        // rebuilding the name, leaving the server not actually the authority on a name it owns (#1794).
+        .WithExposedHeaders("Content-Disposition"));
+});
+
+builder.Services.AddNuplaneAdmin();
+builder.Services.Configure<ActivityAvailabilityOptions>(configuration.GetSection(ActivityAvailabilityOptions.SectionName));
+builder.Services
+    .AddOptions<ShellReadinessOptions>()
+    .Bind(configuration.GetSection(ShellReadinessOptions.SectionName))
+    .Validate(options => !string.IsNullOrWhiteSpace(options.DefaultShellName), "A non-empty default shell name is required.")
+    .ValidateOnStart();
+builder.Services.AddSingleton(new ShellReadinessState(TimeProvider.System));
+builder.Services.AddSingleton<DefaultShellWarmup>();
+builder.Services.AddHostedService(services => services.GetRequiredService<DefaultShellWarmup>());
+
+// Extension Builder is an optional extension (#2294) and a root-hosted subsystem: root singletons, a background build
+// worker and management endpoints mapped on the root route builder below, none of which can live in a shell container.
+// Both the composition here and the mapping (MapElsaExtensionBuilderApi below) honor the switch, so a host that leaves
+// it off has no trace of the subsystem; a change takes effect on the next startup.
+var extensionBuilderEnabled = ExtensionBuilderServiceCollectionExtensions.IsEnabled(configuration);
+if (extensionBuilderEnabled)
+    builder.Services.AddElsaExtensionBuilder(configuration);
+
+builder.Services.AddNuplane(nuplaneConfiguration, nuplane =>
+{
+    // The content root, which is where this host's own appsettings.json was just read from. A relative
+    // configured DirectoryPath resolves against NuplaneBuilder.BasePath when something sets one, and against
+    // the process's current directory otherwise — so without this line a Workbench whose content root is set
+    // independently of where it was launched reads "DirectoryPath": "packages" out of one directory and
+    // looks for that folder under another. See Essentials/apps/Elsa.Foundation.Host/Program.cs for the longer note.
+    nuplane.UseBasePath(builder.Environment.ContentRootPath);
+    nuplane.AddDirectoryFeedsFromConfiguration(nuplaneConfiguration);
+    nuplane.AutoloadPackages(nuplaneConfiguration.GetSection("Loading"));
+});
+builder.Services.ConfigureOptions<NuplaneIntegrationOptionsSetup>();
+builder.Services.AddSingleton<IOptionsChangeTokenSource<NuplaneIntegrationOptions>>(
+    new ConfigurationChangeTokenSource<NuplaneIntegrationOptions>(Options.DefaultName, configuration.GetSection("Elsa:Shells")));
+// Nuplane registers its trigger ingress, reconcile coordinator and admin operations by type or by factory, so every shell
+// container CShells builds from copies of these registrations would hold second instances of them, and a reconcile enqueued
+// on a shell's copy of the queue is read by no dispatcher (#2159). Shells, among them the shell-scoped package catalog
+// contributor, resolve the host's own instead.
+builder.Services
+    .ShareWithShells<IReconciliationTriggerIngress>()
+    .ShareWithShells<ManualReconcileCoordinator>()
+    .ShareWithShells<INuplaneAdminOperations>();
+// This host explicitly enrolls the shared EF resource preparers. Without a selected resource,
+// both preparers leave the legacy shell composition and feature editor behavior unchanged.
+builder.Services.AddEfPersistenceResources(configuration, typeof(WorkbenchEfToolingShellDefaults).Assembly);
+builder.Services.AddNuplaneFeatureCatalog();
+builder.Services.TryAddScoped<IModuleRegistryService, ModuleRegistryService>();
+builder.Services.TryAddScoped<IShellFeatureConfigurationStore, NullShellFeatureConfigurationStore>();
+builder.Services.TryAddScoped<IShellReloader, NullShellReloader>();
+// Composed on the host container, before AddCShellsAspNetCore, per the extension's own requirement: it must be
+// registered before any EF feature is enabled (ADR 0076 D9), which is why an EF feature cannot bring it itself.
+builder.Services.AddEfPendingMigrationActivationGuard();
+// Membership is selected per host, never per shell (spec 183, Decisions, Q20), so this host's readability report is
+// composed here, on the host container. It brings the in-process default, so an unclustered Workbench is a cluster of
+// one that reports the schema families it has loaded without any further configuration.
+builder.Services.AddEfSchemaReadability();
+// Beside it, on the same host container: what each shell's workflow runtime can activate (spec 184, FR-008), so the
+// host's member report carries one runnability entry per shell that runs the distributed runtime.
+builder.Services.AddWorkflowRuntimeRunnabilityReport();
+// The durable EF provider replaces that default only when the Elsa:Cluster:Membership section enables it (ADR 0078;
+// spec 183, FR-024), and then requires an explicit Elsa:Cluster:Membership:HostId. It publishes the same report.
+builder.Services.AddConfiguredClusterMembership(configuration);
+// The Data Protection key ring every shell protects its cookies and antiforgery tokens with, composed once per host as
+// membership is; the Elsa:DataProtection section names it and enables its shared key store (#2191).
+builder.Services.AddConfiguredDataProtection(configuration);
+builder.Services.AddDynamicEndpointApiExplorerRefresh();
+// A shell runs the ValidateOnStart checks of its own container as it activates, and a failing one refuses the
+// activation: the generic host runs them for the host container alone, and CShells runs none (#2331).
+builder.Services.AddShellStartupValidation();
+
+builder.Services.AddCShellsAspNetCore(shells =>
+{
+    shells
+        .WithHostAssemblies()
+        .WithAssemblies(
+            typeof(ActivitiesHttpFeature).Assembly,
+            typeof(WorkflowsRuntimeHttpFeature).Assembly)
+        .WithNuplaneFeatureDiscovery()
+
+        // Delegates authentication-scheme and authorization-policy resolution to the shell scope at
+        // request time, so each shell's Identity composition (schemes, permission policies) is honored
+        // by the root UseAuthentication/UseAuthorization middleware.
+        .WithAuthenticationAndAuthorization()
+
+        .WithAssemblies(
+            typeof(PrimitivesFeature).Assembly,
+            typeof(FileSystemLockingFeature).Assembly,
+            // The lock a clustered Workbench composes in place of the file-system one, whose default folder is node-local (#2192).
+            typeof(DatabaseLockingFeature).Assembly,
+            typeof(SerializationFeature).Assembly,
+            typeof(NewtonsoftSerializationFeature).Assembly,
+            typeof(TasksFeature).Assembly,
+            typeof(MemoryCacheFeature).Assembly,
+            typeof(MediatorFeature).Assembly,
+            typeof(EventsFeature).Assembly,
+            typeof(ExpressionsFeature).Assembly,
+            typeof(ApiCapabilitiesFeature).Assembly,
+            typeof(ExpressionsApiFeature).Assembly,
+
+            // JavaScript expression + activity feature assemblies. Listing them here makes their features
+            // discoverable by the runtime feature catalog (so they surface as "available" in the modularity UI)
+            // and enablable via shell configuration.
+            typeof(Elsa.Expressions.JavaScript.JavaScriptFeature).Assembly,
+            typeof(Elsa.Expressions.JavaScript.Jint.JintFeature).Assembly,
+            typeof(Elsa.Expressions.JavaScript.Rendering.JavaScriptRenderingFeature).Assembly,
+            typeof(Elsa.Http.JavaScript.HttpJavaScriptFeature).Assembly,
+            typeof(Elsa.Workflows.Design.JavaScript.JavaScriptWorkflowsDesignFeature).Assembly,
+            typeof(Elsa.Workflows.Runtime.JavaScript.JavaScriptActivitiesFeature).Assembly,
+
+            // The persistence modules the shells select are discovered from this host's project
+            // references by WithHostAssemblies(); only assemblies with no reference edge are listed here.
+            typeof(WorkflowsRuntimeDistributedFeature).Assembly,
+            typeof(WorkflowsDesignApiFeature).Assembly,
+            typeof(ActivitiesDesignApiFeature).Assembly,
+
+            // Construction seam (Runtime side): the dispatch factory and stable CLR/graph consumers.
+            typeof(ActivitiesRuntimeFeature).Assembly,
+            typeof(ActivitiesPrimitivesFeature).Assembly,
+            typeof(ActivitiesSequenceFeature).Assembly,
+            typeof(ActivitiesFlowchartFeature).Assembly,
+            // Design-side graph provider. Kept separate from Graph Runtime so authoring-only and runtime-only
+            // custom hosts can compose exactly the plane they need.
+            typeof(GraphActivitiesDesignFeature).Assembly,
+            typeof(GraphActivitiesRuntimeFeature).Assembly,
+            // HTTP endpoint authoring + serving. ActivitiesHttp mounts the inbound middleware and depends on
+            // WorkflowsRuntimeHttp, whose route-table projection keeps published and waiting endpoints reachable.
+            // Both assemblies are explicit because the dependency is feature-name based; it cannot make an assembly
+            // absent from a clean host deployment discoverable.
+            typeof(ActivitiesHttpFeature).Assembly,
+            typeof(WorkflowsRuntimeHttpFeature).Assembly,
+            // Reconciliation (Design side): the universal pass + the CLR assembly scanner source, which
+            // publish source-owned CLR activity definitions through the stable provider/runtime seam.
+            typeof(ActivitiesDesignReconciliationFeature).Assembly,
+            typeof(ClrActivityReconciliationFeature).Assembly,
+            // Reconciliation (Design side, workflows): the workflow-version pass + the JSON file source, so
+            // shells can deploy mounted workflow-definition files at startup (spec 147, #1157). Opt-in — not
+            // enabled in any default shell because the feature requires a SourceId and a file/folder path.
+            typeof(WorkflowsDesignReconciliationFeature).Assembly,
+            typeof(JsonWorkflowReconciliationFeature).Assembly,
+
+            // The bridge: publishing endpoints that construct a live activity from a catalog row.
+            typeof(WorkflowsPublishingApiFeature).Assembly,
+
+            // Runtime vertical slice: execute published WorkflowExecutable artifacts.
+            typeof(WorkflowsRuntimeApiFeature).Assembly,
+
+            // Durable-resumption pump. Every EF Core persistence provider DependsOn this feature, so
+            // its assembly must be in the catalog for CShells to auto-enable it when a durable store is
+            // composed; without it the shell fails to activate with a FeatureNotFoundException.
+            typeof(WorkflowsRuntimeResumptionFeature).Assembly,
+
+            // Reference GC pump (ADR 0040). Opt-in like resumption; its assembly is in the catalog so the feature can
+            // be enabled to periodically prune expired/retired references and the artifacts no live reference points at.
+            typeof(WorkflowsRuntimeReferenceGarbageCollectionFeature).Assembly,
+
+            // Agent surface: provider-neutral endpoints, workflow context/proposals, and provider facade.
+            typeof(FoundationAgentAbstractionsFeature).Assembly,
+            typeof(FoundationAgentApiFeature).Assembly,
+            typeof(FoundationWorkflowsAgentFeature).Assembly,
+            typeof(GitHubCopilotAgentFeature).Assembly,
+
+            // Identity surface. The authentication stack secures the API: FoundationIdentityAbstractions
+            // (provider-agnostic auth/IAM contracts) plus the OIDC authentication provider module, which
+            // registers the external JWT bearer scheme, and — now that Workstream D is landed — the
+            // first-party token stack: the identity API endpoints (login/session/token exchange), the
+            // ASP.NET Core Identity substrate (cookie sign-in, EF Core stores, dev seeding), and the OpenIddict
+            // token service (JWT issuance + local bearer validation). Together their composite scheme
+            // selector becomes the default authenticate/challenge scheme, so an unauthenticated call is
+            // rejected with 401. All of these are enabled in the default shell (see shells.json) with
+            // IsDevelopmentOrDemo set for local dev (in-memory stores, ephemeral keys, seeded admin).
+            // Note (resolved): the earlier guard kept the token-issuance endpoints out of the default
+            // shell because enabling them without an ITokenService would fault endpoint registration. The
+            // OpenIddict module now supplies that service, so the fault condition no longer exists and the
+            // features are enabled.
+            typeof(FoundationIdentityAbstractionsFeature).Assembly,
+            typeof(FoundationIdentityApiFeature).Assembly,
+            typeof(OidcAuthenticationFeature).Assembly,
+            typeof(AspNetCoreIdentityFeature).Assembly,
+
+            typeof(OpenIddictIdentityFeature).Assembly,
+            typeof(AttentionApiFeature).Assembly,
+            typeof(StudioPreferencesFeature).Assembly,
+            typeof(StudioPreferencesApiFeature).Assembly,
+            typeof(WorkflowsDashboardFeature).Assembly,
+            // WorkflowsDashboard DependsOn WorkflowDesignValidations — its assembly must be in the catalog or the
+            // dependency resolver fails shell activation with FeatureNotFoundException.
+            typeof(Elsa.Workflows.Design.Validations.WorkflowDesignValidationsFeature).Assembly,
+
+            typeof(ModularityApiFeature).Assembly,
+            typeof(ModularityAttentionFeature).Assembly,
+            typeof(SecretsAttentionFeature).Assembly,
+            typeof(WorkflowsRuntimeAttentionFeature).Assembly,
+            typeof(StructuredLogsFeature).Assembly,
+            typeof(OpenTelemetryFeature).Assembly,
+
+            // Engine self-instrumentation: puts the WorkflowsRuntimeTracing feature in the catalog so it can be
+            // enabled via shells.json, replacing the no-op tracer with the ActivitySource-backed one. The host-local
+            // OpenTelemetryEngineTracingBridge feature (below, in WithHostAssemblies) subscribes that source and forwards
+            // the spans into the OpenTelemetry ingestion store so Studio's timing view is populated.
+            typeof(WorkflowsRuntimeTracingFeature).Assembly,
+
+            // Test-host execution evidence: puts the WorkflowsExecutionEvidence feature in the catalog so an automated
+            // test suite can query what a workflow actually did over HTTP. Process-local and non-durable by design.
+            typeof(WorkflowsExecutionEvidenceFeature).Assembly
+        )
+
+        .WithConfigurationProvider(configuration)
+        .WithWebRouting(options =>
+        {
+            options.EnablePathRouting = true;
+            // Host observation must not activate the default shell merely by reading its state.
+            options.ExcludePaths = ["/health/live", "/health/ready", "/_admin/composition/default-shell"];
+        })
+        .ConfigureAllShells(shell => new WorkbenchEfToolingShellDefaults().Configure(shell, configuration));
+});
+
+// Shared root-only execution for the independent eager and post-listen warmup profiles.
+builder.Services.AddShellActivationRunner();
+
+// Opt-in eager shell activation (spec 132, First-Request/Cold-Start Readiness unit 4). Default OFF. When
+// Elsa:Boot:EagerShellActivation:Enabled is set, a host-level IHostedService activates the configured shell(s)
+// at boot through the same IShellRegistry.GetOrActivateAsync path the first request would (byte-identical shell
+// state, just earlier), so the activation cliff — and the mid-activation contention tail — is paid before the
+// first user request instead of during it. The trigger lives at the host level because CShells does not run
+// shell-scoped hosted services and the eager trigger must sit outside any shell (it activates the shells).
+// Registered only when the switch is on, so an unset host constructs nothing and pays nothing.
+if (EagerShellActivationOptions.IsEnabled(configuration))
+    builder.Services.AddHostedService<EagerShellActivationHostedService>();
+
+// Root authentication/authorization services. Registered after AddCShellsAspNetCore so the shell
+// delegating scheme/policy providers (WithAuthenticationAndAuthorization) stay in place — both
+// AddAuthentication and AddAuthorization use TryAdd semantics for those services.
+builder.Services.AddAuthentication();
+builder.Services.AddAuthorization();
+
+var app = builder.Build();
+
+if (bootTimeline is not null)
+{
+    // Phase A: everything from process entry to a built host — feature catalog discovery, Nuplane package-ALC
+    // loads and DI container construction.
+    bootTimeline.Measure("host-build", 0d, "CreateBuilder → Build (feature catalog + package ALC + DI)");
+    var hostBuiltMs = bootTimeline.ElapsedMs;
+
+    // Phase B: Kestrel accepting connections. Shell activation is still lazy at this point.
+    app.Lifetime.ApplicationStarted.Register(() =>
+    {
+        bootTimeline.Measure("kestrel-startup", hostBuiltMs, "Build → listening");
+        bootTimeline.Mark("kestrel-ready");
+    });
+
+    // Phase B/C: observe the lazy shell-activation cliff (Initializing→Active wall) via the one host-observable
+    // CShells seam. Per-initializer attribution is not host-observable — see BootShellActivationObserver.
+    app.Services.GetService<IShellRegistry>()?.Subscribe(new BootShellActivationObserver(bootTimeline));
+
+    // Time the first request end-to-end (it triggers activation) and print the phase table when it completes.
+    app.UseMiddleware<BootFirstRequestMiddleware>();
+}
+
+app.UseCors(studioCorsPolicy);
+
+app.MapGet("/", () => Results.Ok(new { status = "Healthy", service = "elsa-workbench" }))
+    .WithHostOwner("Elsa.Workbench")
+    .WithAuthoringModel(EndpointAuthoringModels.MinimalApi)
+    .AllowPublic("health", "Reports whether the Workbench root host is responding.");
+app.MapShellReadiness();
+app.MapElsaModuleManagementApi();
+if (extensionBuilderEnabled)
+    app.MapElsaExtensionBuilderApi();
+app.MapShells();
+
+// Explicit auth middleware placed after MapShells: ShellMiddleware (added by MapShells) swaps
+// HttpContext.RequestServices to the shell scope first, so authentication/authorization resolve
+// each shell's schemes and permission policies. Explicit calls also suppress WebApplication's
+// automatic insertion of these middleware earlier in the pipeline.
+app.UseAuthentication();
+app.UseAuthorization();
+
+// ADR 0037: CShells host-control remains server-to-server management-key traffic. It is not a Foundation
+// user permission and the key is never exposed to browser clients.
+app.MapShellManagementApi("/_admin/shells")
+    .WithHostOwner("Elsa.Workbench")
+    .WithAuthoringModel(EndpointAuthoringModels.MinimalApi)
+    .WithSecurityDisposition(EndpointSecurityDispositionMetadata.HostCredential(
+        ManagementApiKeyAuthentication.HeaderName,
+        "Elsa.Workbench"))
+    .WithHostCredentialEnforcement(ManagementApiKeyAuthentication.HeaderName, "Elsa.Workbench")
+    .AddEndpointFilter(ManagementApiKeyAuthentication.RequireAsync);
+app.MapCompositionActivationObservation();
+
+// Root-hosted console log streaming: recent/sources HTTP endpoints + the live SignalR hub (see the registration
+// note above). Mapped after UseCors so the Studio cross-origin policy applies, and behind RequireAuthorization so
+// the captured console output is not readable anonymously — these are root-mapped endpoints that bypass the
+// per-shell endpoint pipeline, so they must carry their own authorization. The empty-prefix group keeps the absolute
+// routes and applies the convention to every endpoint the mapper adds, including the hub.
+if (consoleLogStreamingEnabled)
+{
+    var consoleLogEndpoints = app.MapGroup("");
+    consoleLogEndpoints.RequireAuthorization();
+    consoleLogEndpoints.WithHostOwner("Elsa.Workbench")
+        .WithAuthoringModel(EndpointAuthoringModels.MinimalApi)
+        .WithSecurityDisposition(EndpointSecurityDispositionMetadata.NamedPolicy("Default", "Elsa.Workbench"));
+    consoleLogEndpoints.MapConsoleLogStreaming();
+}
+// A host its cluster member stopped, because another process holds its host id, ends with exit code 1, so a supervisor
+// that restarts failed processes restarts it (spec 183, 2026-10-01 note).
+app.RunWithMembershipExitCode();

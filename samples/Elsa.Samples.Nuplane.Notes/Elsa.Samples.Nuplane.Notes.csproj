@@ -53,8 +53,8 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\src\essentials\Persistence\EntityFramework\Elsa.Persistence.EntityFramework.csproj" />
-    <ProjectReference Include="..\..\src\essentials\Cluster\Core\Elsa.Cluster.Core.csproj" />
+    <ProjectReference Include="..\..\Essentials\src\Persistence\EntityFramework\Elsa.Persistence.EntityFramework.csproj" />
+    <ProjectReference Include="..\..\Essentials\src\Cluster\Core\Elsa.Cluster.Core.csproj" />
   </ItemGroup>
 
 </Project>

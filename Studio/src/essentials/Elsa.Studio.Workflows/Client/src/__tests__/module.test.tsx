@@ -1,0 +1,5498 @@
+import React from "react";
+import { flushSync } from "react-dom";
+import { createRoot } from "react-dom/client";
+import { describe, expect, it, onTestFinished, vi } from "vitest";
+import { authSessionEndedEvent, type StudioRuntimeIdentity } from "@elsa-workflows/studio-sdk";
+import { register, type WorkflowDesignerPanelContext } from "../module";
+import { activationSlotReadsUnavailableReason, type Publication } from "../api/publishing";
+import type { WorkflowActivationSlot } from "../api/runtime";
+import { activationSlot, deactivatedActivationSlot, importedActivationSlot, publicationRecord } from "./fixtures/publicationSlots";
+import { createEnumWorkflowRunInputEditorContribution } from "../workflowRunInputEditorContributions";
+import { isConnectEndOverExistingWorkflowNode, resolveConnectEndSource } from "../workflow-editor/connectEndHelpers";
+import { createDraftSnapshotId, insertSequenceNodeAfter } from "../workflow-editor/editorHelpers";
+import { ValidationPanel } from "../workflow-editor/editorPanels";
+import { WorkflowLazyBoundary } from "../WorkflowLazyBoundary";
+import { setDialogs } from "../workflow-editor/dialogs";
+import { WorkflowFolderNavigation, type WorkflowFolderSelection } from "../workflow-editor/WorkflowFolderNavigation";
+import { createActivityDefinitionRecoveryStore } from "../activityDefinitionRecovery";
+import { capabilityDocument, definition, renderRegisteredRoute, response, runJavaScriptTypeKey, testApi } from "./routeRenderingHelpers";
+
+// Per-test teardown lives in the shared afterEach in routeRenderingHelpers.tsx.
+
+describe("workflows module", () => {
+  it("renders a draft without validationErrors as valid", () => {
+    const draft = workflowDraft();
+    delete (draft as { validationErrors?: unknown }).validationErrors;
+    const container = document.createElement("div");
+    const root = createRoot(container);
+
+    try {
+      flushSync(() => root.render(<ValidationPanel draft={draft} onRepair={vi.fn()} />));
+      expect(container.textContent).toContain("No validation errors");
+    } finally {
+      flushSync(() => root.unmount());
+    }
+  });
+
+  it("treats a connect-end captured by the source handle as an empty-canvas release when the pointer is over the pane", () => {
+    const sourceHandle = document.createElement("div");
+    sourceHandle.className = "react-flow__handle";
+    const pane = document.createElement("div");
+    pane.className = "react-flow__pane";
+    const elementFromPoint = Object.getOwnPropertyDescriptor(document, "elementFromPoint");
+    Object.defineProperty(document, "elementFromPoint", { configurable: true, value: vi.fn(() => pane) });
+
+    try {
+      const event = new MouseEvent("mouseup", { bubbles: true, clientX: 300, clientY: 240 });
+      sourceHandle.dispatchEvent(event);
+
+      expect(isConnectEndOverExistingWorkflowNode(event)).toBe(false);
+    } finally {
+      if (elementFromPoint) Object.defineProperty(document, "elementFromPoint", elementFromPoint);
+      else Reflect.deleteProperty(document, "elementFromPoint");
+    }
+  });
+
+  it("resolves a connect-end source from React Flow connection state when the start ref is empty", () => {
+    expect(resolveConnectEndSource(null, {
+      fromNode: { id: "write-line-1" },
+      fromHandle: { id: "Done" }
+    })).toEqual({ nodeId: "write-line-1", handleId: "Done" });
+  });
+
+  it("inserts a picked Sequence activity immediately after the connection source", () => {
+    const nodes = [
+      { id: "a", position: { x: 40, y: 0 }, data: {} },
+      { id: "b", position: { x: 320, y: 0 }, data: {} },
+      { id: "c", position: { x: 600, y: 0 }, data: {} }
+    ];
+
+    const result = insertSequenceNodeAfter(nodes, "b", {
+      id: "new",
+      position: { x: 0, y: 0 },
+      data: {}
+    });
+
+    expect(result.map(node => node.id)).toEqual(["a", "b", "new", "c"]);
+    expect(result.map(node => node.position.x)).toEqual([40, 320, 600, 880]);
+    expect(nodes[2].position.x).toBe(600);
+  });
+
+  it("registers Runs navigation while preserving instance routes", () => {
+    const api = testApi();
+
+    register(api);
+
+    expect(api.featureAreas.list()).toEqual([
+      expect.objectContaining({ id: "workflows", title: "Workflows", ownedPaths: ["/workflows"], required: true, defaultEnabled: true })
+    ]);
+    expect(api.navigation.list()).toEqual([
+      expect.objectContaining({ id: "workflows", path: "/workflows/definitions", activePathPrefix: "/workflows" }),
+      expect.objectContaining({ id: "workflows-definitions", label: "Workflow Definitions", path: "/workflows/definitions", parentId: "workflows" }),
+      expect.objectContaining({ id: "workflows-activity-definitions", label: "Activity Definitions", path: "/workflows/activity-definitions", parentId: "workflows" }),
+      expect.objectContaining({ id: "workflows-executables", path: "/workflows/executables", parentId: "workflows" }),
+      expect.objectContaining({ id: "workflows-runs", label: "Runs", path: "/workflows/instances", parentId: "workflows" }),
+      expect.objectContaining({ id: "workflows-runtime diagnostics", label: "Runtime Diagnostics", path: "/workflows/runtime-diagnostics", parentId: "workflows" }),
+      expect.objectContaining({ id: "workflows-activity availability", label: "Activity Availability", path: "/workflows/activity-availability", parentId: "workflows" })
+    ]);
+    expect(api.routes.list()).toEqual([
+      expect.objectContaining({ id: "workflows-elsa3-import", path: "/workflows/activity-definitions/import-elsa3" }),
+      expect.objectContaining({ id: "workflows-activity-upgrades", path: "/workflows/activity-definitions/upgrades" }),
+      expect.objectContaining({ id: "workflows-activity-definitions", path: "/workflows/activity-definitions" }),
+      expect.objectContaining({ id: "workflows-definitions", path: "/workflows/definitions" }),
+      expect.objectContaining({ id: "workflows-executables", path: "/workflows/executables" }),
+      expect.objectContaining({ id: "workflows-executable-inspector", label: "Executable Inspector", path: "/workflows/executables/:artifactId" }),
+      expect.objectContaining({ id: "workflows-instances", label: "Workflow runs", path: "/workflows/instances" }),
+      expect.objectContaining({ id: "workflows-instance-detail", label: "Workflow run", path: "/workflows/instances/:workflowExecutionId" }),
+      expect.objectContaining({ id: "workflows-activity-availability", label: "Activity availability", path: "/workflows/activity-availability" }),
+      expect.objectContaining({ id: "workflows-runtime-diagnostics", label: "Runtime diagnostics", path: "/workflows/runtime-diagnostics" })
+    ]);
+    expect(api.expressionEditors.list()).toEqual([
+      expect.objectContaining({ id: "studio.workflows.variable-reference", createDefaultValue: expect.any(Function) }),
+      expect.objectContaining({ id: "elsa.object-expression-editor", createDefaultValue: expect.any(Function) }),
+      expect.objectContaining({ id: "studio.workflows.input-reference", createDefaultValue: expect.any(Function) })
+    ]);
+  });
+
+  it("clears Activity Definition recovery on logout without mounting the editor route", () => {
+    const { api } = apiWithRecoveryDraft({ tenantId: "tenant-1", subject: "author-1" });
+
+    register(api);
+    expect(window.localStorage.length).toBe(1);
+    window.dispatchEvent(new Event(authSessionEndedEvent));
+
+    expect(window.localStorage.length).toBe(0);
+  });
+
+  it("reacts on behalf of only the latest registration when register() runs more than once, instead of stacking a listener per call", () => {
+    const { api: firstApi, store: firstStore } = apiWithRecoveryDraft({ tenantId: "tenant-1", subject: "author-1" });
+    const { api: secondApi, store: secondStore } = apiWithRecoveryDraft({ tenantId: "tenant-2", subject: "author-2" });
+
+    register(firstApi);
+    register(secondApi);
+    expect(window.localStorage.length).toBe(2);
+    window.dispatchEvent(new Event(authSessionEndedEvent));
+
+    // A listener stacked per register() call would also react on firstApi's now-stale closure and
+    // clear its recovery entry too. Only one listener should be live, bound to the latest registration.
+    expect(secondStore.read(activityDefinitionRecoveryDraft())).toBeNull();
+    expect(firstStore.read(activityDefinitionRecoveryDraft())).not.toBeNull();
+  });
+
+  it("tears down a route host its test never unmounted before the next test starts", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => response({ items: [] })));
+    const { container } = await renderRegisteredRoute();
+
+    // Stands in for a test that fails before its own `await unmount()`.
+    // Relies on vitest 2.1.9 running `onTestFinished` callbacks after `afterEach` hooks
+    // (@vitest/runner's `runTest`); if a future vitest reorders that, this canary would
+    // pass vacuously or fail without explanation.
+    onTestFinished(() => expect(container.isConnected).toBe(false));
+  });
+
+  it("offers an accessible recovery action when a deferred workflow surface fails", () => {
+    const container = document.createElement("div");
+    const root = createRoot(container);
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const BrokenSurface = () => { throw new Error("chunk unavailable"); };
+
+    try {
+      flushSync(() => root.render(
+        <WorkflowLazyBoundary label="workflow designer">
+          <BrokenSurface />
+        </WorkflowLazyBoundary>
+      ));
+
+      const alert = container.querySelector("[role='alert']");
+      expect(alert?.textContent).toContain("Unable to load workflow designer");
+      expect(alert?.textContent).toContain("unexpected error");
+      expect(alert?.textContent).not.toContain("updated while this page was open");
+      expect(buttonByText(container, "Reload page")).toBeTruthy();
+    } finally {
+      flushSync(() => root.unmount());
+      consoleError.mockRestore();
+    }
+  });
+
+  it("passes late module run-input contributions through every routed run surface", () => {
+    const api = testApi();
+    register(api);
+    const editor = createEnumWorkflowRunInputEditorContribution({
+      id: "contoso.order-status",
+      supports: input => input.type.alias === "Contoso.OrderStatus",
+      options: [{ value: "pending", label: "Pending" }]
+    });
+    api.workflowRunInputEditors!.add(editor);
+
+    for (const routeId of ["workflows-definitions", "workflows-executables", "workflows-executable-inspector"]) {
+      const route = api.routes.list().find(candidate => candidate.id === routeId);
+      const renderRoute = route?.component as (props: { navigate(path: string): void }) => React.ReactElement<{ children: React.ReactNode }>;
+      const boundary = renderRoute({ navigate: vi.fn() });
+      const surface = React.Children.only(boundary.props.children) as React.ReactElement<{ runInputEditors: unknown[] }>;
+      expect(surface.props.runInputEditors).toEqual([editor]);
+    }
+  });
+
+  it("keeps the JSON fallback when hosted by a pre-slot SDK registry", () => {
+    const { workflowRunInputEditors: _unsupportedSlot, ...api } = testApi();
+
+    expect(() => register(api)).not.toThrow();
+    const route = api.routes.list().find(candidate => candidate.id === "workflows-definitions")!;
+    const renderRoute = route.component as (props: { navigate(path: string): void }) => React.ReactElement<{ children: React.ReactNode }>;
+    const boundary = renderRoute({ navigate: vi.fn() });
+    const surface = React.Children.only(boundary.props.children) as React.ReactElement<{ runInputEditors: unknown[] }>;
+
+    expect(surface.props.runInputEditors).toEqual([]);
+  });
+
+  it("renders active definition actions and soft-deletes with confirmation", async () => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (init?.method === "DELETE") return response(null, 204);
+      expect(url).toContain("state=active");
+      return response({ items: [definition()] });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const { api, container, unmount } = await renderRegisteredRoute();
+
+    await waitForText(container, "Latest version");
+
+    expect(container.textContent).toContain("Latest version");
+    expect(container.textContent).toContain("Open");
+    expect(container.textContent).toContain("Artifacts");
+    expect(container.textContent).toContain("Delete");
+
+    await click(buttonByText(container, "Delete"));
+    await flushPromises();
+
+    expect(api.dialogs.confirm).toHaveBeenCalledWith(expect.objectContaining({ message: expect.stringContaining("Delete workflow definition") }));
+    expect(fetchMock).toHaveBeenCalledWith(
+      "https://server.example/design/workflows/definitions/definition-1",
+      expect.objectContaining({ method: "DELETE" })
+    );
+
+    await unmount();
+  });
+
+  it("renders deleted definition actions and calls restore and permanent delete endpoints", async () => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (init?.method === "POST" || init?.method === "DELETE") return response(null, 204);
+      return response({ items: url.includes("state=deleted") ? [definition({ deletedAt: "2026-06-18T01:00:00Z" })] : [] });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const { api, container, unmount } = await renderRegisteredRoute();
+
+    await waitForText(container, "No active workflow definitions");
+    await click(buttonByText(container, "Deleted"));
+    await waitForText(container, "Delete permanently");
+
+    expect(container.textContent).toContain("Restore");
+    expect(container.textContent).toContain("Delete permanently");
+
+    await click(buttonByText(container, "Restore"));
+    await flushPromises();
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "https://server.example/design/workflows/definitions/definition-1/restore",
+      expect.objectContaining({ method: "POST" })
+    );
+
+    await click(buttonByText(container, "Delete permanently"));
+    await flushPromises();
+
+    expect(api.dialogs.confirm).toHaveBeenCalledWith(expect.objectContaining({ message: expect.stringContaining("Permanently delete workflow definition") }));
+    expect(fetchMock).toHaveBeenCalledWith(
+      "https://server.example/design/workflows/definitions/definition-1/permanent",
+      expect.objectContaining({ method: "DELETE" })
+    );
+
+    await unmount();
+  });
+
+  it("shows lifecycle-correct actions for mixed rows in All states", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => response({
+      items: [
+        definition({ id: "definition-active", name: "Active workflow", deletedAt: null }),
+        definition({ id: "definition-deleted", name: "Deleted workflow", deletedAt: "2026-06-18T01:00:00Z" })
+      ]
+    })));
+    const { container, unmount } = await renderRegisteredRoute("/workflows/definitions?state=all");
+
+    await waitForText(container, "Active workflow");
+    const activeRow = rowByLabel(container, "Open workflow definition Active workflow");
+    const deletedRow = rowByLabel(container, "Open workflow definition Deleted workflow");
+
+    expect(activeRow?.textContent).toContain("Open");
+    expect(activeRow?.textContent).toContain("Delete");
+    expect(activeRow?.textContent).not.toContain("Restore");
+    expect(deletedRow?.textContent).toContain("Restore");
+    expect(deletedRow?.textContent).toContain("Delete permanently");
+    expect(deletedRow?.textContent).not.toContain("Artifacts");
+    expect(container.querySelector(".wf-grid-head")?.textContent).toContain("State");
+    await unmount();
+  });
+
+  it("keeps paging the legacy definition collection without probing the page relation", async () => {
+    const fetchMock = vi.fn(async (_input: RequestInfo | URL) => response({
+      items: [definition(), ...Array.from({ length: 9 }, (_, index) => definition({ id: `definition-${index + 2}`, name: `Workflow ${index + 2}` })), definition({ id: "definition-11", name: "Second page" })]
+    }));
+    vi.stubGlobal("fetch", fetchMock);
+    const { container, unmount } = await renderRegisteredRoute();
+
+    await waitForText(container, "Page 1 of 2");
+    await click(buttonByText(container, "Next"));
+    await waitForText(container, "Second page");
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(fetchMock.mock.calls.map(([url]) => String(url))).toEqual([
+      "https://server.example/design/workflows/definitions?state=active",
+      "https://server.example/design/workflows/definitions?state=active"
+    ]);
+    expect(fetchMock.mock.calls.map(([url]) => String(url))).not.toContain(expect.stringContaining("definition-pages"));
+
+    await unmount();
+  });
+
+  it("pages workflow definitions through the advertised capability relation", async () => {
+    let secondPageRequests = 0;
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes("continuationToken=opaque-refreshed-third")) {
+        return response({ items: [definition({ id: "definition-3", name: "Refreshed third page" })], nextContinuationToken: null });
+      }
+      if (url.includes("continuationToken=opaque-stale-third")) {
+        return response({ items: [definition({ id: "definition-3", name: "Third page" })], nextContinuationToken: null });
+      }
+      if (url.includes("continuationToken=opaque-second")) {
+        secondPageRequests += 1;
+        return response({
+          items: [definition({ id: "definition-2", name: "Second page" })],
+          nextContinuationToken: secondPageRequests === 1 ? "opaque-stale-third" : "opaque-refreshed-third"
+        });
+      }
+      if (url.includes("definition-pages")) {
+        return response({ items: [definition()], nextContinuationToken: "opaque-second" });
+      }
+      throw new Error(`Unexpected request ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const capabilities = capabilityDocument();
+    capabilities.capabilities[0].links.push({ rel: "workflow-definitions-page", href: "design/workflows/definition-pages" });
+    const { container, unmount } = await renderRegisteredRoute("/workflows/definitions", undefined, false, capabilities);
+
+    await waitForText(container, "Page 1");
+    expect(container.textContent).not.toContain("Page 1 of");
+    await click(buttonByText(container, "Next"));
+    await waitForText(container, "Second page");
+    await click(buttonByText(container, "Next"));
+    await waitForText(container, "Third page");
+    await click(buttonByText(container, "Previous"));
+    await waitForText(container, "Second page");
+    await click(buttonByText(container, "Next"));
+    await waitForText(container, "Refreshed third page");
+
+    expect(fetchMock.mock.calls.map(([url]) => String(url))).toEqual([
+      "https://server.example/design/workflows/definition-pages?state=active&pageSize=10",
+      "https://server.example/design/workflows/definition-pages?state=active&pageSize=10&continuationToken=opaque-second",
+      "https://server.example/design/workflows/definition-pages?state=active&pageSize=10&continuationToken=opaque-stale-third",
+      "https://server.example/design/workflows/definition-pages?state=active&pageSize=10&continuationToken=opaque-second",
+      "https://server.example/design/workflows/definition-pages?state=active&pageSize=10&continuationToken=opaque-refreshed-third"
+    ]);
+
+    await unmount();
+  });
+
+  it("restarts a failed continuation from page one without losing browse context", async () => {
+    let firstPageRequests = 0;
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes("continuationToken=expired-token")) {
+        return response("The continuation token is no longer valid.", 409);
+      }
+      if (url.includes("definition-pages")) {
+        firstPageRequests += 1;
+        return response({
+          items: [definition({ name: firstPageRequests === 1 ? "Original first page" : "Restarted first page" })],
+          nextContinuationToken: "expired-token"
+        });
+      }
+      throw new Error(`Unexpected request ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const capabilities = capabilityDocument();
+    capabilities.capabilities[0].links.push({ rel: "workflow-definitions-page", href: "design/workflows/definition-pages" });
+    const { container, unmount } = await renderRegisteredRoute(
+      "/workflows/definitions?state=all&search=approval",
+      undefined,
+      false,
+      capabilities
+    );
+
+    await waitForText(container, "Original first page");
+    await click(buttonByText(container, "Next"));
+    await waitForText(container, "The continuation token is no longer valid.");
+    await click(buttonByText(container, "Restart from first page"));
+    await waitForText(container, "Restarted first page");
+
+    expect(firstPageRequests).toBe(2);
+    expect(new URLSearchParams(window.location.search).get("state")).toBe("all");
+    expect(new URLSearchParams(window.location.search).get("search")).toBe("approval");
+    expect(fetchMock.mock.calls.map(([url]) => String(url)).at(-1)).not.toContain("continuationToken");
+    await unmount();
+  });
+
+  it("returns from a cursor page emptied by concurrent changes without losing browse context", async () => {
+    let firstPageRequests = 0;
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes("continuationToken=live-second-page")) {
+        return response({ items: [], nextContinuationToken: null });
+      }
+      if (url.includes("definition-pages")) {
+        firstPageRequests += 1;
+        return response({
+          items: [definition({ name: firstPageRequests === 1 ? "Original first page" : "Recovered first page" })],
+          nextContinuationToken: "live-second-page"
+        });
+      }
+      throw new Error(`Unexpected request ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const capabilities = capabilityDocument();
+    capabilities.capabilities[0].links.push({ rel: "workflow-definitions-page", href: "design/workflows/definition-pages" });
+    const { container, unmount } = await renderRegisteredRoute(
+      "/workflows/definitions?state=all&search=approval",
+      undefined,
+      false,
+      capabilities
+    );
+
+    await waitForText(container, "Original first page");
+    await click(buttonByText(container, "Next"));
+    await waitForText(container, "No workflows match “approval”");
+    expect(buttonByText(container, "Previous")).not.toBeNull();
+    await click(buttonByText(container, "Previous"));
+    await waitForText(container, "Recovered first page");
+
+    expect(new URLSearchParams(window.location.search).get("state")).toBe("all");
+    expect(new URLSearchParams(window.location.search).get("search")).toBe("approval");
+    expect(fetchMock.mock.calls.map(([url]) => String(url)).at(-1)).toBe(
+      "https://server.example/design/workflows/definition-pages?state=all&search=approval&pageSize=10"
+    );
+    await unmount();
+  });
+
+  it("preserves paged selection across search and page-size changes but resets it for lifecycle changes", async () => {
+    const fetchMock = vi.fn(async (_input: RequestInfo | URL) => response({
+      items: [definition()],
+      nextContinuationToken: null
+    }));
+    vi.stubGlobal("fetch", fetchMock);
+    const capabilities = capabilityDocument();
+    capabilities.capabilities[0].links.push({ rel: "workflow-definitions-page", href: "design/workflows/definition-pages" });
+    const { container, unmount } = await renderRegisteredRoute("/workflows/definitions", undefined, false, capabilities);
+
+    await waitForText(container, "Hello World");
+    await click(checkboxByLabel(container, "Select workflow definition Hello World"));
+    await waitForText(container, "1 selected");
+
+    await fill(container.querySelector<HTMLInputElement>('input[placeholder="Search definitions"]'), "Hello");
+    await vi.waitFor(() => expect(fetchMock.mock.calls.some(([url]) => String(url).includes("search=Hello"))).toBe(true));
+    expect(container.textContent).toContain("1 selected");
+    expect(checkboxByLabel(container, "Select workflow definition Hello World")?.checked).toBe(true);
+
+    await select(container.querySelector<HTMLSelectElement>(".wf-page-size select"), "25");
+    await vi.waitFor(() => expect(fetchMock.mock.calls.some(([url]) => String(url).includes("pageSize=25"))).toBe(true));
+    expect(container.textContent).toContain("1 selected");
+    expect(checkboxByLabel(container, "Select workflow definition Hello World")?.checked).toBe(true);
+
+    await click(buttonByText(container, "Deleted"));
+    await vi.waitFor(() => expect(fetchMock.mock.calls.some(([url]) => String(url).includes("state=deleted"))).toBe(true));
+    expect(container.textContent).not.toContain("1 selected");
+    expect(checkboxByLabel(container, "Select workflow definition Hello World")?.checked).toBe(false);
+
+    await unmount();
+  });
+
+  it("opens the workflow editor when a definition row is clicked", async () => {
+    vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      const slotResponse = publicationSlotResponse(url, [publishedSlot("artifact-current")]);
+      if (slotResponse) return slotResponse;
+      if (url.includes("/activities")) return response({ activities: [] });
+      if (url.includes("/definitions/definition-1")) return response({ definition: definition(), draft: null, versions: [] });
+      return response({ items: [definition()] });
+    }));
+    const { container, unmount } = await renderRegisteredRoute();
+
+    await waitForText(container, "Hello World");
+    await click(rowByLabel(container, "Open workflow definition Hello World"));
+
+    expect(window.location.pathname).toBe("/workflows/definitions");
+    expect(new URLSearchParams(window.location.search).get("definition")).toBe("definition-1");
+
+    await unmount();
+  });
+
+  it("preserves definition browse context while opening a workflow", async () => {
+    vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      const slotResponse = publicationSlotResponse(url, [publishedSlot("artifact-current")]);
+      if (slotResponse) return slotResponse;
+      if (url.includes("/activities")) return response({ activities: [] });
+      if (url.includes("/definitions/definition-1")) return response({ definition: definition(), draft: null, versions: [] });
+      return response({ items: [definition()] });
+    }));
+    const { container, unmount } = await renderRegisteredRoute(
+      "/workflows/definitions?folderId=folder%2Fopaque&state=all&search=hello"
+    );
+
+    await waitForText(container, "Hello World");
+    await click(rowByLabel(container, "Open workflow definition Hello World"));
+
+    const parameters = new URLSearchParams(window.location.search);
+    expect(Object.fromEntries(parameters)).toEqual({
+      folderId: "folder/opaque",
+      state: "all",
+      search: "hello",
+      definition: "definition-1"
+    });
+
+    await unmount();
+  });
+
+  it("enables workflow editor autosave by default when not configured", async () => {
+    stubWorkflowEditorFetch();
+
+    const { container, unmount } = await renderRegisteredRoute("/workflows/definitions?definition=definition-1");
+
+    await waitForText(container, "Review & publish");
+    await click(container.querySelector<HTMLButtonElement>('[aria-label="More workflow actions"]')!);
+    expect(document.querySelector('[role="menuitemcheckbox"]')?.getAttribute("aria-checked")).toBe("true");
+
+    await unmount();
+  }, 15_000);
+
+  it("uses the configured workflow editor autosave default", async () => {
+    stubWorkflowEditorFetch();
+
+    const { container, unmount } = await renderRegisteredRoute("/workflows/definitions?definition=definition-1", api => {
+      api.runtime.workflows = { autosaveEnabledByDefault: false };
+    });
+
+    await waitForText(container, "Review & publish");
+    await click(container.querySelector<HTMLButtonElement>('[aria-label="More workflow actions"]')!);
+    expect(document.querySelector('[role="menuitemcheckbox"]')?.getAttribute("aria-checked")).toBe("false");
+
+    await unmount();
+  });
+
+  it("renders the activity palette as a category tree with activity descriptions", async () => {
+    vi.stubGlobal("ResizeObserver", class {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    });
+    vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes("/activities")) return response({ activities: [
+        activity({
+          activityVersionId: "write-line-v1",
+          activityTypeKey: "Elsa.Activities.Primitives.Activities.WriteLine",
+          category: "Primitives",
+          displayName: "Write Line",
+          description: "Writes a line to the console."
+        }),
+        activity({
+          activityVersionId: "flowchart-v1",
+          activityTypeKey: "Elsa.Activities.Flowchart.Activities.Flowchart",
+          category: "Composition",
+          displayName: "Flowchart",
+          description: "Runs activities as a graph."
+        })
+      ] });
+      if (url.includes("/definitions/definition-1")) return response({ definition: definition(), draft: workflowDraft(), versions: [] });
+      return response({ items: [definition()] });
+    }));
+    const { container, unmount } = await renderRegisteredRoute("/workflows/definitions?definition=definition-1");
+
+    await waitForText(container, "Write Line");
+
+    const tree = container.querySelector("[role='tree'][aria-label='Available activities']");
+    expect(tree).toBeTruthy();
+    expect(tree?.textContent).toContain("Composition");
+    expect(tree?.textContent).toContain("Primitives");
+    expect(tree?.textContent).toContain("Write Line");
+    expect(tree?.textContent).not.toContain("Elsa.Activities.Primitives.Activities.WriteLine");
+
+    const writeLine = Array.from(container.querySelectorAll<HTMLButtonElement>(".wf-palette-activity"))
+      .find(button => button.textContent?.includes("Write Line"));
+    expect(writeLine?.getAttribute("role")).toBe("treeitem");
+    expect(writeLine?.getAttribute("title")).toBe(
+      "Writes a line to the console. — Exact version 1.0.0");
+    expect(writeLine?.textContent).toContain("Writes a line to the console.");
+    expect(writeLine?.querySelector(".wf-activity-icon")).toBeTruthy();
+    expect(writeLine?.querySelector(".wf-palette-activity-grip")).toBeTruthy();
+
+    const primitives = Array.from(container.querySelectorAll<HTMLButtonElement>(".wf-palette-category-toggle"))
+      .find(button => button.textContent?.includes("Primitives"));
+    expect(primitives?.getAttribute("aria-expanded")).toBe("true");
+    await click(primitives ?? null);
+
+    expect(primitives?.getAttribute("aria-expanded")).toBe("false");
+    expect(tree?.textContent).not.toContain("Write Line");
+
+    await unmount();
+  });
+
+  it("exposes canvas nodes as named controls, synchronizes keyboard selection, and focuses palette insertions", async () => {
+    vi.stubGlobal("ResizeObserver", class {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    });
+    vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes("/activities")) return response({ activities: [
+        activity({
+          activityVersionId: "write-line-v1",
+          activityTypeKey: "Elsa.Activities.Primitives.Activities.WriteLine",
+          category: "Primitives",
+          displayName: "Write Line",
+          executionType: "Action"
+        })
+      ] });
+      if (url.includes("/definitions/definition-1")) return response({
+        definition: definition(),
+        draft: draftWithFlowchartRoot([
+          { nodeId: "write-line-1", activityVersionId: "write-line-v1", inputs: [], outputs: [], structure: null },
+          { nodeId: "write-line-2", activityVersionId: "write-line-v1", inputs: [], outputs: [], structure: null }
+        ]),
+        versions: []
+      });
+      return response({ items: [definition()] });
+    }));
+    const { container, unmount } = await renderRegisteredRoute("/workflows/definitions?definition=definition-1");
+
+    await waitForCanvasNode(container, "Write Line");
+    const first = container.querySelector<HTMLElement>(".wf-canvas .react-flow__node[data-id='write-line-1']")!;
+    expect(first.getAttribute("role")).toBe("button");
+    expect(first.getAttribute("aria-label")).toContain("Activity type: Elsa.Activities.Primitives.Activities.WriteLine");
+    expect(first.getAttribute("aria-label")).toContain("State: authoring");
+    expect(first.getAttribute("aria-pressed")).toBe("false");
+    const descriptionId = first.getAttribute("aria-describedby")!;
+    expect(document.getElementById(descriptionId)?.textContent).toContain("Press Tab to move between canvas items");
+
+    first.focus();
+    flushSync(() => first.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true })));
+    await flushPromises();
+    expect(first.getAttribute("aria-pressed")).toBe("true");
+    expect(container.querySelector(".wf-inspector")?.textContent).toContain("write-line-1");
+
+    const second = container.querySelector<HTMLElement>(".wf-canvas .react-flow__node[data-id='write-line-2']")!;
+    second.focus();
+    flushSync(() => second.dispatchEvent(new KeyboardEvent("keydown", { key: " ", bubbles: true })));
+    await flushPromises();
+    expect(second.getAttribute("aria-pressed")).toBe("true");
+    expect(container.querySelector(".wf-inspector")?.textContent).toContain("write-line-2");
+
+    const paletteActivity = container.querySelector<HTMLButtonElement>(".wf-palette-activity")!;
+    await click(paletteActivity);
+    for (let attempt = 0; attempt < 20 && container.querySelectorAll(".wf-canvas .react-flow__node").length < 3; attempt += 1) {
+      await flushPromises();
+    }
+    await new Promise<void>(resolve => requestAnimationFrame(() => resolve()));
+    const focused = document.activeElement as HTMLElement;
+    expect(focused.classList.contains("react-flow__node")).toBe(true);
+    expect(focused.getAttribute("aria-pressed")).toBe("true");
+
+    await unmount();
+  });
+
+  it("supports resizing, collapsing, and maximizing workflow side panels", async () => {
+    vi.stubGlobal("ResizeObserver", class {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    });
+    vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes("/activities")) return response({ activities: [
+        activity({
+          activityVersionId: "write-line-v1",
+          activityTypeKey: "Elsa.Activities.Primitives.Activities.WriteLine",
+          category: "Primitives",
+          displayName: "Write Line"
+        })
+      ] });
+      if (url.includes("/definitions/definition-1")) return response({ definition: definition(), draft: workflowDraft(), versions: [] });
+      return response({ items: [definition()] });
+    }));
+    const { container, unmount } = await renderRegisteredRoute("/workflows/definitions?definition=definition-1");
+
+    await waitForText(container, "Write Line");
+
+    const editor = container.querySelector(".wf-editor-body");
+    expect(editor).toBeTruthy();
+    expect(container.querySelectorAll(".wf-side-resize-handle")).toHaveLength(2);
+    expect(buttonByLabel(container, "Collapse activities panel")).toBeTruthy();
+    expect(buttonByLabel(container, "Maximize inspector panel")).toBeTruthy();
+
+    await click(buttonByLabel(container, "Collapse activities panel"));
+    expect(editor?.className).toContain("palette-collapsed");
+    expect(buttonByLabel(container, "Expand activities panel")).toBeTruthy();
+
+    await click(buttonByLabel(container, "Expand activities panel"));
+    expect(editor?.className).not.toContain("palette-collapsed");
+
+    await click(buttonByLabel(container, "Maximize inspector panel"));
+    expect(editor?.className).toContain("inspector-maximized");
+    expect(buttonByLabel(container, "Restore inspector panel")).toBeTruthy();
+
+    await click(buttonByLabel(container, "Restore inspector panel"));
+    expect(editor?.className).not.toContain("inspector-maximized");
+
+    const inspectorSeparator = container.querySelector<HTMLElement>("[aria-label='Resize inspector panel']");
+    inspectorSeparator?.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowLeft", bubbles: true }));
+    await flushPromises();
+    flushSync(() => {});
+    expect(inspectorSeparator?.getAttribute("aria-valuenow")).toBe("336");
+
+    await unmount();
+  });
+
+  it("hosts module-contributed workflow side panel tabs", async () => {
+    vi.stubGlobal("ResizeObserver", class {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    });
+    vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes("/activities")) return response({ activities: [
+        activity({
+          activityVersionId: "write-line-v1",
+          activityTypeKey: "Elsa.Activities.Primitives.Activities.WriteLine",
+          category: "Primitives",
+          displayName: "Write Line"
+        })
+      ] });
+      if (url.includes("/definitions/definition-1")) return response({
+        definition: definition(),
+        draft: draftWithFlowchartRoot(),
+        versions: []
+      });
+      return response({ items: [definition()] });
+    }));
+    const captured = capturingPanel();
+    const { container, unmount } = await renderRegisteredRoute("/workflows/definitions?definition=definition-1", api => {
+      api.workflowDesigner.panels.add({
+        id: "custom.left",
+        title: "Library",
+        side: "left",
+        order: 50,
+        component: () => <div className="custom-left-panel">Module left panel</div>
+      });
+      api.workflowDesigner.panels.add({
+        id: "custom.right",
+        title: "Audit",
+        side: "right",
+        order: 50,
+        component: captured.component
+      });
+    });
+
+    await waitForText(container, "Write Line");
+    expect(container.querySelector("[role='tablist'][aria-label='Activities panel tabs']")?.textContent).toContain("Library");
+    expect(container.querySelector("[role='tablist'][aria-label='Inspector panel tabs']")?.textContent).toContain("Audit");
+
+    await click(buttonByText(container, "Library"));
+    expect(container.textContent).toContain("Module left panel");
+
+    // With nothing selected the panel context mirrors the inspector's owner fallback: the inspected
+    // activity is the root scope owner while selectedActivity stays null.
+    await click(buttonByText(container, "Audit"));
+    expect(container.textContent).toContain("Module right panel");
+    expect(captured.context?.inspectedIsScopeOwner).toBe(true);
+    expect(captured.context?.inspectedActivity?.nodeId).toBe("root");
+    expect(captured.context?.inspectedActivitySlots).toHaveLength(1);
+    expect(captured.context?.selectedActivity).toBeNull();
+    expect(captured.context?.currentScopeOwner?.nodeId).toBe("root");
+
+    await unmount();
+  });
+
+  it("provides a null inspected context to contributed panels when the draft has no root", async () => {
+    vi.stubGlobal("ResizeObserver", class {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    });
+    vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes("/activities")) return response({ activities: [] });
+      if (url.includes("/definitions/definition-1")) return response({ definition: definition(), draft: workflowDraft(), versions: [] });
+      return response({ items: [definition()] });
+    }));
+    const captured = capturingPanel();
+    const { container, unmount } = await renderRegisteredRoute("/workflows/definitions?definition=definition-1", api => {
+      api.workflowDesigner.panels.add({ id: "custom.right", title: "Audit", side: "right", order: 50, component: captured.component });
+    });
+
+    await waitForText(container, "Audit");
+    await click(buttonByText(container, "Audit"));
+
+    // No root activity: there is no scope owner to fall back to, so the panel still mounts and the
+    // inspected view is empty rather than crashing.
+    expect(container.textContent).toContain("Module right panel");
+    expect(captured.context?.inspectedActivity).toBeNull();
+    expect(captured.context?.inspectedIsScopeOwner).toBe(false);
+    expect(captured.context?.inspectedActivitySlots).toHaveLength(0);
+    expect(captured.context?.selectedActivity).toBeNull();
+
+    await unmount();
+  });
+
+  it("shows current workflow artifacts in the designer right panel", async () => {
+    vi.stubGlobal("ResizeObserver", class {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    });
+    const writeText = vi.fn(async () => undefined);
+    const clipboardDescriptor = Object.getOwnPropertyDescriptor(navigator, "clipboard");
+    Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText } });
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (init?.method === "POST" && url.endsWith("/executables/artifact-current/execute")) {
+        return response({ workflowExecutionId: "wfexec-artifacts-1" });
+      }
+      if (url.includes("/design/workflows/versions/version-1")) {
+        const version = workflowDefinitionVersionDetails();
+        return response({ ...version, state: { ...version.state, inputs: [workflowInput()] } });
+      }
+      const slotResponse = publicationSlotResponse(url, [
+        publishedSlot("artifact-current"),
+        publishedSlot("artifact-no-live", "canary")
+      ]);
+      if (slotResponse) return slotResponse;
+      if (url.includes("/runtime/workflows/executables")) return response([
+        executable({
+          artifactId: "artifact-current",
+          definitionId: "definition-1",
+          artifactVersion: "2.0.0",
+          references: [executableReference({
+            sourceReferenceId: "reference-current",
+            artifactId: "artifact-current",
+            definitionVersionId: "version-1"
+          })]
+        }),
+        executable({ artifactId: "artifact-no-live", definitionId: "definition-1", references: [] }),
+        executable({ artifactId: "artifact-other", definitionId: "definition-2", sourceId: "definition-2" })
+      ]);
+      if (url.includes("/activities")) return response({ activities: [
+        activity({
+          activityVersionId: "write-line-v1",
+          activityTypeKey: "Elsa.Activities.Primitives.Activities.WriteLine",
+          category: "Primitives",
+          displayName: "Write Line"
+        })
+      ] });
+      if (url.includes("/definitions/definition-1")) return response({ definition: definition(), draft: workflowDraft(), versions: [] });
+      return response({ items: [definition()] });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const { container, unmount } = await renderRegisteredRoute("/workflows/definitions?definition=definition-1");
+
+    try {
+      await waitForText(container, "Write Line");
+      await click(buttonByText(container, "Artifacts"));
+      await waitForText(container, "artifact-current");
+
+      expect(container.textContent).toContain("Version 2.0.0");
+      expect(container.textContent).not.toContain("artifact-other");
+      const unavailableRun = buttonByLabel(container, "Run executable artifact-no-live") as HTMLButtonElement;
+      expect(unavailableRun.disabled).toBe(true);
+      expect(unavailableRun.title).toContain("No live published reference");
+
+      await click(buttonByLabel(container, "Copy artifact ID artifact-current"));
+      expect(writeText).toHaveBeenCalledWith("artifact-current");
+      expect(container.textContent).toContain("Copied artifact ID");
+
+      await click(buttonByLabel(container, "Run executable artifact-current"));
+      await waitForText(container, "Provide the workflow inputs for this run.");
+      await fill(inputByLabel(container, "Greeting"), "Hello from artifacts");
+      await click(buttonByText(container, "Run workflow"));
+      await waitForText(container, "Open Run wfexec-artifacts-1");
+      expect(fetchMock.mock.calls.map(([url]) => String(url))).toContain(
+        "https://server.example/design/workflows/versions/version-1"
+      );
+      const executeCall = fetchMock.mock.calls.find(([url, init]) => String(url).endsWith("/executables/artifact-current/execute") && init?.method === "POST");
+      expect(JSON.parse(String(executeCall?.[1]?.body))).toEqual({
+        inputs: { Greeting: "Hello from artifacts" },
+        sourceReferenceId: "reference-current"
+      });
+
+      await click(buttonByText(container, "Open list"));
+      expect(window.location.pathname).toBe("/workflows/executables");
+      expect(window.location.search).toBe("?definition=definition-1");
+    } finally {
+      await unmount();
+      if (clipboardDescriptor) Object.defineProperty(navigator, "clipboard", clipboardDescriptor);
+      else Reflect.deleteProperty(navigator, "clipboard");
+    }
+  });
+
+  it("opens the canvas activity picker and inserts an activity into an empty flowchart", async () => {
+    vi.stubGlobal("ResizeObserver", class {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    });
+    vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes("/activities")) return response({ activities: [
+        activity({
+          activityVersionId: "write-line-v1",
+          activityTypeKey: "Elsa.Activities.Primitives.Activities.WriteLine",
+          category: "Primitives",
+          displayName: "Write Line",
+          description: "Writes a line to the console."
+        })
+      ] });
+      if (url.includes("/definitions/definition-1")) return response({
+        definition: definition(),
+        draft: draftWithFlowchartRoot(),
+        versions: []
+      });
+      return response({ items: [definition()] });
+    }));
+    const { container, unmount } = await renderRegisteredRoute("/workflows/definitions?definition=definition-1");
+
+    await waitForText(container, "Add activity");
+    await click(buttonByText(container, "Add activity"));
+    expect(inputByLabel(container, "Search activities")).toBeTruthy();
+    await click(optionByText(container, "Write Line"));
+    await flushPromises();
+
+    expect(container.querySelector(".wf-node")?.textContent).toContain("Write Line");
+
+    await unmount();
+  });
+
+  it("makes Sequence output handles available for drag-to-add gestures", async () => {
+    vi.stubGlobal("ResizeObserver", class {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    });
+    vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes("/activities")) return response({ activities: [
+        activity({
+          activityVersionId: "sequence-v1",
+          activityTypeKey: "Elsa.Activities.Sequence.Activities.Sequence",
+          category: "Composition",
+          displayName: "Sequence",
+          designFacets: [{
+            kind: "elsa.sequence.structure",
+            schemaVersion: "1.0.0",
+            payload: {
+              mode: "sequence",
+              supportsScopedVariables: true,
+              slots: [{ name: "Sequence.Activities", property: "activities", displayName: "Activities", cardinality: "many" }],
+              initialPayload: { activities: [] }
+            }
+          }]
+        }),
+        activity({
+          activityVersionId: "write-line-v1",
+          activityTypeKey: "Elsa.Activities.Primitives.Activities.WriteLine",
+          category: "Primitives",
+          displayName: "Write Line"
+        })
+      ] });
+      if (url.includes("/definitions/definition-1")) return response({
+        definition: definition(),
+        draft: workflowDraft({
+          state: {
+            variables: [],
+            rootActivity: sequenceRoot([{
+              nodeId: "write-line-1",
+              activityVersionId: "write-line-v1",
+              inputs: [],
+              outputs: []
+            }]),
+            inputs: [],
+            outputs: []
+          }
+        }),
+        versions: []
+      });
+      return response({ items: [definition()] });
+    }));
+    const { container, unmount } = await renderRegisteredRoute("/workflows/definitions?definition=definition-1");
+
+    await waitForCanvasNode(container, "Write Line");
+
+    const outputHandle = container.querySelector(".wf-canvas .react-flow__handle.source");
+    expect(outputHandle?.classList.contains("connectablestart")).toBe(true);
+
+    await unmount();
+  });
+
+  it("adds one activity for one palette drag onto the canvas", async () => {
+    vi.stubGlobal("ResizeObserver", class {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    });
+    vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes("/activities")) return response({ activities: [
+        activity({
+          activityVersionId: "write-line-v1",
+          activityTypeKey: "Elsa.Activities.Primitives.Activities.WriteLine",
+          category: "Primitives",
+          displayName: "Write Line",
+          description: "Writes a line to the console."
+        })
+      ] });
+      if (url.includes("/definitions/definition-1")) return response({
+        definition: definition(),
+        draft: draftWithFlowchartRoot(),
+        versions: []
+      });
+      return response({ items: [definition()] });
+    }));
+    const { container, unmount } = await renderRegisteredRoute("/workflows/definitions?definition=definition-1");
+
+    await waitForText(container, "Write Line");
+    const paletteActivity = container.querySelector(".wf-palette-activity");
+    const canvas = container.querySelector<HTMLElement>(".wf-canvas");
+    const reactFlow = container.querySelector<HTMLElement>(".react-flow");
+    if (!canvas || !reactFlow) throw new Error("Canvas not found");
+    stubRect(canvas, { left: 100, top: 100, right: 900, bottom: 700, width: 800, height: 600 });
+    stubRect(reactFlow, { left: 100, top: 100, right: 900, bottom: 700, width: 800, height: 600 });
+    const restoreElementFromPoint = stubElementFromPoint(reactFlow);
+
+    try {
+      const dataTransfer = dragDataTransfer();
+      dispatchDragEvent(paletteActivity, "dragstart", { dataTransfer, clientX: 220, clientY: 220 });
+      dispatchDragEvent(reactFlow, "drop", { dataTransfer, clientX: 360, clientY: 300 });
+      dispatchDragEvent(paletteActivity, "dragend", { dataTransfer, clientX: 360, clientY: 300 });
+      await flushPromises();
+      flushSync(() => {});
+
+      expect(container.querySelectorAll(".wf-canvas .wf-node")).toHaveLength(1);
+    } finally {
+      restoreElementFromPoint();
+      await unmount();
+    }
+  });
+
+  it("renders an unsupported root activity as a fixed selectable node without flow ports", async () => {
+    vi.stubGlobal("ResizeObserver", class {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    });
+    vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes("/activities")) return response({ activities: [
+        activity({
+          activityVersionId: "write-line-v1",
+          activityTypeKey: "Elsa.Activities.Primitives.Activities.NativeWriteLine",
+          category: "Primitives",
+          displayName: "Write Line",
+          description: "Writes a line to the console."
+        })
+      ] });
+      if (url.includes("/definitions/definition-1")) return response({
+        definition: definition(),
+        draft: workflowDraft({
+          state: {
+            variables: [],
+            rootActivity: {
+              nodeId: "write-line-root",
+              activityVersionId: "write-line-v1",
+              inputs: [],
+              outputs: [],
+              structure: null
+            },
+            inputs: [],
+            outputs: []
+          }
+        }),
+        versions: []
+      });
+      return response({ items: [definition()] });
+    }));
+    const { container, unmount } = await renderRegisteredRoute("/workflows/definitions?definition=definition-1");
+
+    await waitForCanvasNode(container, "Write Line");
+
+    const activityNodes = container.querySelectorAll(".wf-canvas .wf-node");
+    expect(activityNodes).toHaveLength(1);
+    expect(activityNodes[0].textContent).toContain("Write Line");
+    // With no authored input to summarize, the subtitle falls back to the bare kind and keeps
+    // `category · kind` in its tooltip (#468).
+    const subtitle = activityNodes[0].querySelector(".wf-node-copy small");
+    expect(subtitle?.textContent).toBe("Action");
+    expect(subtitle?.getAttribute("title")).toBe("Primitives · Action");
+    expect(activityNodes[0].textContent).not.toContain("Elsa.Activities.Primitives.Activities.WriteLine");
+    expect(activityNodes[0].getAttribute("data-icon")).toBe("terminal");
+    expect(container.querySelectorAll(".wf-canvas .react-flow__handle")).toHaveLength(0);
+    expect(buttonByText(container, "Add activity")).toBeNull();
+
+    await click(container.querySelector(".wf-canvas .react-flow__node"));
+
+    expect(container.querySelector(".wf-inspector")?.textContent).toContain("write-line-root");
+    expect(container.querySelector(".wf-inspector")?.textContent).toContain("write-line-v1");
+    expect(container.querySelector(".wf-inspector")?.textContent).toContain("Elsa.Activities.Primitives.Activities.NativeWriteLine");
+
+    await unmount();
+  });
+
+  it("keeps a sensitive input's stored value out of the canvas node subtitle and its tooltip", async () => {
+    vi.stubGlobal("ResizeObserver", class {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    });
+    const storedValue = "stored-value-words";
+    vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes("/activities")) return response({ activities: [
+        activity({
+          activityVersionId: "send-v1",
+          activityTypeKey: "Elsa.Activities.Send",
+          category: "Primitives",
+          displayName: "Send",
+          inputs: [{ name: "Token", referenceKey: "token", typeName: "System.String", isWrapped: true, isSensitive: true }]
+        })
+      ] });
+      if (url.includes("/definitions/definition-1")) return response({
+        definition: definition(),
+        draft: draftWithFlowchartRoot([{
+          nodeId: "send-1",
+          activityVersionId: "send-v1",
+          inputs: [{ referenceKey: "token", value: { value: storedValue, expressionType: "Literal" } }],
+          outputs: [],
+          structure: null
+        }]),
+        versions: []
+      });
+      return response({ items: [definition()] });
+    }));
+    const { container, unmount } = await renderRegisteredRoute("/workflows/definitions?definition=definition-1");
+
+    await waitForCanvasNode(container, "Send");
+    const subtitle = container.querySelector(".wf-canvas .react-flow__node[data-id='send-1'] .wf-node-copy small");
+    expect(subtitle?.textContent).toBe("Protected value");
+    expect(subtitle?.getAttribute("title")).toBe("Protected value — Primitives · Action");
+    expect(container.querySelector(".wf-canvas")?.innerHTML).not.toContain(storedValue);
+
+    await unmount();
+  });
+
+  it("renders descriptor-driven properties and saves wrapped input edits", async () => {
+    vi.stubGlobal("ResizeObserver", class {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    });
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (init?.method === "PUT") return response({ ...workflowDraft(JSON.parse(String(init.body))), validationErrors: [] });
+      if (url.includes("/design/activities/catalog")) return response({ activities: [catalogActivity(writeLineDescriptor())] });
+      if (url.includes("/expressions/descriptors")) return response({ items: [
+        { type: "Literal", displayName: "Literal", editingMode: "literal" },
+        { type: "JavaScript", displayName: "JavaScript", editingMode: "text" }
+      ] });
+      if (url.includes("/activities")) return response({ activities: [
+        activity({
+          activityVersionId: "write-line-v1",
+          activityTypeKey: "Elsa.Activities.Primitives.Activities.WriteLine",
+          category: "Primitives",
+          displayName: "Write Line",
+          description: "Writes a line to the console."
+        })
+      ] });
+      if (url.includes("/definitions/definition-1")) return response({
+        definition: definition(),
+        draft: workflowDraft({
+          state: {
+            variables: [],
+            rootActivity: {
+              nodeId: "write-line-root",
+              activityVersionId: "write-line-v1",
+              inputs: [],
+              outputs: [],
+              structure: null
+            },
+            inputs: [],
+            outputs: []
+          }
+        }),
+        versions: []
+      });
+      return response({ items: [definition()] });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const { container, unmount } = await renderRegisteredRoute("/workflows/definitions?definition=definition-1");
+
+    await waitForCanvasNode(container, "Write Line");
+    await click(container.querySelector(".wf-canvas .react-flow__node"));
+    const writeLineNode = Array.from(container.querySelectorAll(".react-flow__node"))
+      .find(node => node.textContent?.includes("Write Line")) ?? null;
+    await click(writeLineNode);
+    await waitForText(container, "Text");
+    expect(container.querySelector("select.wf-property-syntax")).toBeNull();
+    expect(container.querySelector(".wf-expression-field .wf-syntax-picker.inline")).toBeTruthy();
+    expect(container.querySelector(".wf-property-row > .wf-syntax-picker:not(.inline)")).toBeNull();
+
+    await click(container.querySelector(".wf-syntax-picker-trigger"));
+    expect(document.body.querySelector(".wf-syntax-picker-menu")?.textContent).toContain("Literal");
+    expect(document.body.querySelector(".wf-syntax-picker-menu")?.textContent).toContain("JavaScript");
+
+    await fill(container.querySelector<HTMLInputElement>(".wf-property-row input[type='text']"), "Hello from properties");
+    await click(buttonByLabel(container, "Open expanded Text editor"));
+    expect(container.querySelector("[role='dialog']")?.textContent).toContain("Property editor");
+    await fill(textareaByLabel(container, "Text expanded value"), "Hello from expanded editor\nwith more room");
+    await click(buttonByText(container, "Close"));
+
+    await click(buttonByText(container, "Save"));
+
+    const putCall = fetchMock.mock.calls.find(([url, init]) => String(url).includes("/drafts/draft-1") && init?.method === "PUT");
+    expect(putCall).toBeTruthy();
+    const savedRoot = JSON.parse(String(putCall?.[1]?.body)).state.rootActivity;
+    // The wire payload carries the authored value in the canonical `inputs` array (ArgumentState),
+    // not as a top-level `text` property — that mismatch is what made WriteLine print blank lines.
+    expect(savedRoot.text).toBeUndefined();
+    expect(savedRoot.inputs).toEqual([
+      {
+        referenceKey: "text",
+        value: { value: "Hello from expanded editor\nwith more room", expressionType: "Literal" }
+      }
+    ]);
+
+    await unmount();
+  });
+
+  it("renders a collection input as a repeater and saves the authored list", async () => {
+    vi.stubGlobal("ResizeObserver", class {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    });
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (init?.method === "PUT") return response({ ...workflowDraft(JSON.parse(String(init.body))), validationErrors: [] });
+      if (url.includes("/design/activities/catalog")) return response({ activities: [catalogActivity(writeLinesDescriptor())] });
+      if (url.includes("/expressions/descriptors")) return response({ items: [
+        { type: "Literal", displayName: "Literal", editingMode: "literal" },
+        { type: "JavaScript", displayName: "JavaScript", editingMode: "text" }
+      ] });
+      if (url.includes("/activities")) return response({ activities: [
+        activity({
+          activityVersionId: "write-lines-v1",
+          activityTypeKey: "Elsa.Activities.Primitives.Activities.WriteLines",
+          category: "Primitives",
+          displayName: "Write Lines"
+        })
+      ] });
+      if (url.includes("/definitions/definition-1")) return response({
+        definition: definition(),
+        draft: workflowDraft({
+          state: {
+            variables: [],
+            rootActivity: {
+              nodeId: "write-lines-root",
+              activityVersionId: "write-lines-v1",
+              inputs: [],
+              outputs: [],
+              structure: null
+            },
+            inputs: [],
+            outputs: []
+          }
+        }),
+        versions: []
+      });
+      return response({ items: [definition()] });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const { container, unmount } = await renderRegisteredRoute("/workflows/definitions?definition=definition-1");
+
+    await waitForCanvasNode(container, "Write Lines");
+    await click(Array.from(container.querySelectorAll(".react-flow__node"))
+      .find(node => node.textContent?.includes("Write Lines")) ?? null);
+    await waitForText(container, "Lines");
+
+    // The type badge shows a friendly label for the assembly-qualified generic collection type rather
+    // than leaking an assembly-qualifier fragment ("0, Culture=neutral, PublicKeyToken=…").
+    const typeBadge = container.querySelector(".wf-property-row-header span");
+    expect(typeBadge?.textContent).toBe("ICollection<String>");
+
+    // The collection input renders the repeater (not a single text box) and starts empty.
+    const repeater = container.querySelector(".wf-collection-editor");
+    expect(repeater).toBeTruthy();
+    expect(repeater?.querySelector(".wf-collection-empty")).toBeTruthy();
+
+    // Despite the "singleline" hint, the collection does NOT get wrapped in the inline expression-field
+    // chrome (whose overlaid picker would stretch over the list and hide the reorder controls). It gets a
+    // block syntax picker above the list instead.
+    expect(container.querySelector(".wf-expression-field")).toBeNull();
+    const syntaxPicker = container.querySelector(".wf-syntax-picker");
+    expect(syntaxPicker).toBeTruthy();
+    expect(syntaxPicker?.classList.contains("inline")).toBe(false);
+
+    const addButton = buttonByText(container, "Add item");
+    await click(addButton);
+    await click(buttonByText(container, "Add item"));
+    const rows = container.querySelectorAll<HTMLInputElement>(".wf-collection-item input[type='text']");
+    expect(rows.length).toBe(2);
+    await fill(rows[0], "First line");
+    await fill(container.querySelectorAll<HTMLInputElement>(".wf-collection-item input[type='text']")[1], "Second line");
+
+    await click(buttonByText(container, "Save"));
+
+    const putCall = fetchMock.mock.calls.find(([url, init]) => String(url).includes("/drafts/draft-1") && init?.method === "PUT");
+    expect(putCall).toBeTruthy();
+    const savedRoot = JSON.parse(String(putCall?.[1]?.body)).state.rootActivity;
+    // The authored list reaches the wire as a JSON array string (the backend's ArgumentValue.Value is a
+    // string) under the "Object" expression type, so the backend JSON-deserializes it into ICollection<T>
+    // rather than failing to convert a scalar literal — and `toLiteralCollection` parses it back into rows
+    // on load.
+    expect(savedRoot.inputs).toEqual([
+      {
+        referenceKey: "Lines",
+        value: { value: '["First line","Second line"]', expressionType: "Object" }
+      }
+    ]);
+    expect(savedRoot.lines).toBeUndefined();
+
+    await unmount();
+  });
+
+  it("reorders collection items via drag and drop", async () => {
+    vi.stubGlobal("ResizeObserver", class {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    });
+    vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (init?.method === "PUT") return response({ ...workflowDraft(JSON.parse(String(init.body))), validationErrors: [] });
+      if (url.includes("/design/activities/catalog")) return response({ activities: [catalogActivity(writeLinesDescriptor())] });
+      if (url.includes("/expressions/descriptors")) return response({ items: [{ type: "Literal", displayName: "Literal", editingMode: "literal" }] });
+      if (url.includes("/activities")) return response({ activities: [
+        activity({ activityVersionId: "write-lines-v1", activityTypeKey: "Elsa.Activities.Primitives.Activities.WriteLines", category: "Primitives", displayName: "Write Lines" })
+      ] });
+      if (url.includes("/definitions/definition-1")) return response({
+        definition: definition(),
+        draft: workflowDraft({
+          state: {
+            variables: [],
+            rootActivity: { nodeId: "write-lines-root", activityVersionId: "write-lines-v1", inputs: [], outputs: [], structure: null },
+            inputs: [],
+            outputs: []
+          }
+        }),
+        versions: []
+      });
+      return response({ items: [definition()] });
+    }));
+    const { container, unmount } = await renderRegisteredRoute("/workflows/definitions?definition=definition-1");
+
+    await waitForCanvasNode(container, "Write Lines");
+    await click(Array.from(container.querySelectorAll(".react-flow__node")).find(node => node.textContent?.includes("Write Lines")) ?? null);
+    await waitForText(container, "Lines");
+
+    const rowInputs = () => Array.from(container.querySelectorAll<HTMLInputElement>(".wf-collection-item input[type='text']"));
+    await click(buttonByText(container, "Add item"));
+    await click(buttonByText(container, "Add item"));
+    await click(buttonByText(container, "Add item"));
+    await fill(rowInputs()[0], "A");
+    await fill(rowInputs()[1], "B");
+    await fill(rowInputs()[2], "C");
+
+    // Drag the first row's handle onto the third row; the list reorders A,B,C -> B,C,A.
+    const handles = container.querySelectorAll(".wf-collection-item-handle");
+    const rows = container.querySelectorAll(".wf-collection-item");
+    const transfer = makeDataTransfer();
+    await fireDrag(handles[0], "dragstart", transfer);
+    await fireDrag(rows[2], "dragover", transfer);
+    await fireDrag(rows[2], "drop", transfer);
+
+    expect(rowInputs().map(row => row.value)).toEqual(["B", "C", "A"]);
+
+    await unmount();
+  });
+
+  it("filters the canvas activity picker with keyboard search", async () => {
+    vi.stubGlobal("ResizeObserver", class {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    });
+    vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes("/activities")) return response({ activities: [
+        activity({ activityVersionId: "write-line-v1", activityTypeKey: "Elsa.Activities.WriteLine", category: "Primitives", displayName: "Write Line" }),
+        activity({ activityVersionId: "send-email-v1", activityTypeKey: "Elsa.Activities.SendEmail", category: "Email", displayName: "Send Email" })
+      ] });
+      if (url.includes("/definitions/definition-1")) return response({
+        definition: definition(),
+        draft: draftWithFlowchartRoot(),
+        versions: []
+      });
+      return response({ items: [definition()] });
+    }));
+    const { container, unmount } = await renderRegisteredRoute("/workflows/definitions?definition=definition-1");
+
+    await waitForText(container, "Add activity");
+    await click(buttonByText(container, "Add activity"));
+    await fill(inputByLabel(container, "Search activities"), "email");
+
+    expect(container.querySelector(".wf-connect-menu")?.textContent).toContain("Send Email");
+    expect(container.querySelector(".wf-connect-menu")?.textContent).not.toContain("Write Line");
+
+    await unmount();
+  });
+
+  it("opens a filtered executable artifacts view for a definition", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => response({ items: [definition()] })));
+    const { container, unmount } = await renderRegisteredRoute();
+
+    await waitForText(container, "Hello World");
+    await click(buttonByText(container, "Artifacts"));
+
+    expect(window.location.pathname).toBe("/workflows/executables");
+    expect(new URLSearchParams(window.location.search).get("definition")).toBe("definition-1");
+
+    await unmount();
+  });
+
+  it("scopes an artifact delete to the definition when deleting from the editor's artifacts panel", async () => {
+    const { api, container, fetchMock, unmount } = await renderArtifactsPanel(
+      [publishedSlot("artifact-current")],
+      publicationSlotLifecycleCapabilities());
+
+    await waitForText(container, "artifact-current");
+    await click(buttonByLabel(container, "Unpublish publication slot default"));
+    await flushPromises();
+
+    expect(api.dialogs.confirm).toHaveBeenCalledWith(expect.objectContaining({ message: expect.stringContaining("Existing workflow runs keep their pinned executable") }));
+    expect(fetchMock).toHaveBeenCalledWith(
+      "https://server.example/publishing/workflows/definition-1/slots/default",
+      expect.objectContaining({ method: "DELETE" })
+    );
+
+    await unmount();
+  });
+
+  it("restores an inactive publication slot through the advertised restore relation", async () => {
+    const { container, fetchMock, unmount } = await renderArtifactsPanel(
+      [{ view: deactivatedActivationSlot("default") }],
+      publicationSlotLifecycleCapabilities());
+
+    await waitForText(container, "No active publication");
+    expect(container.textContent).toContain("inactive");
+    await click(buttonByLabel(container, "Restore publication slot default"));
+    await flushPromises();
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "https://server.example/publishing/workflows/definition-1/slots/default/restore",
+      expect.objectContaining({ method: "POST" })
+    );
+
+    await unmount();
+  });
+
+  it("surfaces the backend's 404 when a deactivated slot has no retired publication to restore", async () => {
+    const { container, fetchMock, unmount } = await renderArtifactsPanel(
+      [{ view: deactivatedActivationSlot("default") }],
+      publicationSlotLifecycleCapabilities());
+
+    await waitForText(container, "No active publication");
+    fetchMock.mockImplementationOnce(async () => response(
+      { title: "No retired publication", detail: "Slot 'default' has no retired publication to restore.", status: 404 },
+      404
+    ));
+    await click(buttonByLabel(container, "Restore publication slot default"));
+    await flushPromises();
+
+    await waitForText(container, "Slot 'default' has no retired publication to restore.");
+    expect(container.textContent).not.toContain("Restored default");
+
+    await unmount();
+  });
+
+  it("shows slot lifecycle commands as unavailable when the backend does not advertise them", async () => {
+    const { container, fetchMock, unmount } = await renderArtifactsPanel([
+      publishedSlot("artifact-current"),
+      { view: activationSlot("canary") }
+    ]);
+
+    await waitForText(container, "does not advertise the publication slot unpublish and restore commands");
+    const unpublish = buttonByLabel(container, "Unpublish publication slot default") as HTMLButtonElement;
+    const restore = buttonByLabel(container, "Restore publication slot canary") as HTMLButtonElement;
+    expect(unpublish.disabled).toBe(true);
+    expect(restore.disabled).toBe(true);
+
+    await click(unpublish);
+    await click(restore);
+
+    expect(fetchMock.mock.calls.some(([url, init]) =>
+      String(url).includes("/slots/") && (init?.method === "DELETE" || init?.method === "POST"))).toBe(false);
+
+    await unmount();
+  });
+
+  it("labels a slot occupied by another activation source without inventing a publication", async () => {
+    const { container, fetchMock, unmount } = await renderArtifactsPanel(
+      [{ view: importedActivationSlot() }],
+      publicationSlotLifecycleCapabilities());
+
+    await waitForText(container, "Occupied by artifact-reconciliation (orders-bundle), not by a Studio publication");
+    expect(buttonByLabel(container, "Unpublish publication slot imported")).toBeNull();
+    expect(buttonByLabel(container, "Restore publication slot imported")).toBeNull();
+    expect(fetchMock.mock.calls.some(([url]) => String(url).includes("/publishing/publications/"))).toBe(false);
+
+    await unmount();
+  });
+
+  it("explains that publication slots are unavailable instead of claiming nothing was published", async () => {
+    const capabilities = capabilityDocument();
+    const runtime = capabilities.capabilities.find(capability => capability.id === "elsa.api.runtime")!;
+    runtime.links = runtime.links.filter(link => !link.rel.startsWith("workflow-activation-slot"));
+    const { container, fetchMock, unmount } = await renderArtifactsPanel([publishedSlot("artifact-current")], capabilities);
+
+    await waitForText(container, activationSlotReadsUnavailableReason);
+    expect(container.textContent).not.toContain("No published artifacts for this workflow yet.");
+    expect(fetchMock.mock.calls.some(([url]) => String(url).includes("/activation-slots/"))).toBe(false);
+
+    await unmount();
+  });
+
+  it("creates a workflow definition from catalog-authored initial state without rootKind", async () => {
+    let createBody: unknown;
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (init?.method === "POST" && url.endsWith("/design/workflows/definitions")) {
+        createBody = JSON.parse(String(init.body));
+        return response({ definition: definition({ id: "created-definition", name: "Customer onboarding" }), draft: null, versions: [] });
+      }
+      if (url.includes("/activities")) return response({ activities: [
+        activity({ activityVersionId: "flowchart-v1", activityTypeKey: "Elsa.Activities.Flowchart", category: "Composition", displayName: "Flowchart", authoringTemplate: { nodeId: "activity", activityVersionId: "flowchart-v1", inputs: {}, outputs: {}, structure: { kind: "elsa.flowchart.structure", schemaVersion: "1.0.0", payload: { activities: [], connections: [] } } } }),
+        activity({ activityVersionId: "sequence-v1", activityTypeKey: "Elsa.Activities.Sequence", category: "Composition", displayName: "Sequence", authoringTemplate: { nodeId: "activity", activityVersionId: "sequence-v1", inputs: {}, outputs: {}, structure: { kind: "elsa.sequence.structure", schemaVersion: "1.0.0", payload: { activities: [] } } } })
+      ] });
+      if (url.includes("/definitions/created-definition")) return response({ definition: definition({ id: "created-definition", name: "Customer onboarding" }), draft: null, versions: [] });
+      return response({ items: [definition()] });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const { container, unmount } = await renderRegisteredRoute();
+
+    await waitForText(container, "Hello World");
+    await click(buttonByText(container, "Create"));
+    await waitForText(container, "Create Workflow");
+    const rootCards = dialog(container).querySelectorAll(".wf-root-card");
+    expect(rootCards).toHaveLength(3);
+    expect(Array.from(rootCards).map(card => card.querySelector(".wf-root-card-title")?.textContent)).toEqual(["Flowchart", "Sequence", "BPMN"]);
+
+    await fill(inputByLabel(container, "Display name"), "Customer onboarding");
+    await fill(textareaByLabel(container, "Description"), "Creates the first customer workflow.");
+    await click(inputByLabel(container, "Sequence"));
+    await click(buttonByText(dialog(container), "Create"));
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "https://server.example/design/workflows/definitions",
+      expect.objectContaining({ method: "POST" })
+    );
+    await waitForUrlParam("definition", "created-definition");
+    expect(createBody).toEqual({
+      name: "Customer onboarding",
+      description: "Creates the first customer workflow.",
+      initialState: {
+        rootActivity: {
+          nodeId: expect.stringMatching(/^sequence-/),
+          activityVersionId: "sequence-v1",
+          inputs: [],
+          outputs: [],
+          structure: { kind: "elsa.sequence.structure", schemaVersion: "1.0.0", payload: { activities: [] } }
+        }
+      }
+    });
+
+    await unmount();
+  });
+
+  it("opens a newly created workflow when the draft omits validationErrors", async () => {
+    const createdDefinition = definition({ id: "created-definition", name: "Customer onboarding" });
+    const createdDraft = { ...draftWithFlowchartRoot(), definitionId: "created-definition" };
+    delete (createdDraft as { validationErrors?: unknown }).validationErrors;
+    vi.stubGlobal("ResizeObserver", class {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    });
+    vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (init?.method === "POST" && url.endsWith("/design/workflows/definitions")) {
+        return response({ definition: createdDefinition, draft: createdDraft, versions: [] });
+      }
+      if (url.includes("/activities")) return response({ activities: [
+        activity({
+          activityVersionId: "flowchart-v1",
+          activityTypeKey: "Elsa.Activities.Flowchart",
+          category: "Composition",
+          displayName: "Flowchart",
+          authoringTemplate: {
+            nodeId: "activity",
+            activityVersionId: "flowchart-v1",
+            inputs: {},
+            outputs: {},
+            structure: { kind: "elsa.flowchart.structure", schemaVersion: "1.0.0", payload: { activities: [], connections: [] } }
+          }
+        })
+      ] });
+      if (url.includes("/definitions/created-definition")) {
+        return response({ definition: createdDefinition, draft: createdDraft, versions: [] });
+      }
+      return response({ items: [definition()] });
+    }));
+    const { container, unmount } = await renderRegisteredRoute();
+
+    await waitForText(container, "Hello World");
+    await click(buttonByText(container, "Create"));
+    await waitForText(container, "Create Workflow");
+    await fill(inputByLabel(container, "Display name"), "Customer onboarding");
+    await click(buttonByText(dialog(container), "Create"));
+
+    await waitForText(container, "Review & publish");
+    expect(container.textContent).toContain("No validation errors");
+
+    await unmount();
+  });
+
+  it("reveals an intent box, requests a metadata suggestion, and applies it to the form", async () => {
+    const { container, unmount, publishSuggestion } = await openCreateDialogWithSuggest();
+    await fill(textareaByLabel(container, "Workflow intent"), "Approve large orders");
+    await click(buttonByText(dialog(container), "Generate"));
+
+    await publishSuggestion({ text: "Sure!\n```json\n{\"name\": \"Order Approval\", \"description\": \"Routes large orders to approvers.\"}\n```" });
+
+    // Non-autopilot result surfaces an Apply button rather than auto-filling.
+    await click(buttonByText(dialog(container), "Apply"));
+
+    expect(inputByLabel(container, "Display name")?.value).toBe("Order Approval");
+    expect(textareaByLabel(container, "Description")?.value).toBe("Routes large orders to approvers.");
+
+    await unmount();
+  });
+
+  it("auto-fills the create form from an Autopilot suggestion without an Apply step", async () => {
+    const { container, unmount, publishSuggestion } = await openCreateDialogWithSuggest();
+    await click(buttonByText(dialog(container), "Generate"));
+
+    await publishSuggestion({ autoApply: true, text: "{\"name\": \"Auto Workflow\", \"description\": \"Created by Autopilot.\"}" });
+
+    expect(inputByLabel(container, "Display name")?.value).toBe("Auto Workflow");
+    expect(buttonByText(dialog(container), "Apply")).toBeNull();
+
+    await unmount();
+  });
+
+  it("selects multiple workflow definition rows and clears selection", async () => {
+    const fetchMock = vi.fn(async () => response({
+      items: [
+        definition(),
+        definition({ id: "definition-2", name: "Second workflow" })
+      ],
+      page: 1,
+      pageSize: 10,
+      totalCount: 2
+    }));
+    vi.stubGlobal("fetch", fetchMock);
+    const { container, unmount } = await renderRegisteredRoute();
+
+    await waitForText(container, "Second workflow");
+
+    await click(checkboxByLabel(container, "Select workflow definition Hello World"));
+    await waitForText(container, "1 selected");
+
+    await click(checkboxByLabel(container, "Select workflow definition Second workflow"));
+    await waitForText(container, "2 selected");
+
+    await click(buttonByText(container, "Clear selection"));
+    await waitForTextToDisappear(container, "2 selected");
+
+    await click(checkboxByLabel(container, "Select visible workflow definitions"));
+    await waitForText(container, "2 selected");
+
+    await unmount();
+  });
+
+  it("runs a published executable and opens its exact pinned multi-node canvas", async () => {
+    vi.stubGlobal("ResizeObserver", class {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    });
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (init?.method === "POST") return response({ workflowExecutionId: "wfexec-published-1" });
+      if (url.startsWith("https://server.example/runtime/workflows/instances/wfexec-published-1")) {
+        return response(workflowInstanceDetails({
+          instance: workflowInstance({ workflowExecutionId: "wfexec-published-1", sourceReferenceId: "ref-new", activityCount: 3 }),
+          activities: [
+            activityExecution({
+              activityExecutionId: "root-execution",
+              executableNodeId: "exec-root",
+              authoredActivityId: "root",
+              activityType: "Elsa.Activities.Flowchart.Activities.Flowchart"
+            }),
+            activityExecution(),
+            activityExecution({
+              activityExecutionId: "write-line-2-execution",
+              executableNodeId: "exec-write-line-2",
+              authoredActivityId: "write-line-2"
+            })
+          ]
+        }));
+      }
+      if (url.startsWith("https://server.example/runtime/workflows/executables/artifact-1?ref=ref-new")) {
+        return response(executableDetail({
+          rootActivityType: "Elsa.Activities.Flowchart.Activities.Flowchart",
+          rootActivity: executableWireNode({
+            executableNodeId: "exec-root",
+            authoredActivityId: "root",
+            activityType: "Elsa.Activities.Flowchart.Activities.Flowchart",
+            structureKind: "elsa.flowchart.structure",
+            childSlots: [{ name: "Flowchart.Activities", activities: [
+              executableWireNode(),
+              executableWireNode({ executableNodeId: "exec-write-line-2", authoredActivityId: "write-line-2" })
+            ] }],
+            connections: [{ source: { nodeId: "write-line-1", port: "Done" }, target: { nodeId: "write-line-2" } }]
+          }),
+          chosenReference: {
+            sourceReferenceId: "ref-new",
+            selection: "requested",
+            layout: [{ nodeId: "write-line-1", x: 120, y: 100 }, { nodeId: "write-line-2", x: 480, y: 100 }]
+          }
+        }));
+      }
+      if (url.startsWith("https://server.example/design/workflows/versions/version-1")) {
+        const version = workflowDefinitionVersionDetails();
+        return response({
+          ...version,
+          state: { ...version.state, inputs: [workflowInput()] }
+        });
+      }
+      if (url.startsWith("https://server.example/design/activities/catalog")) {
+        return response({ activities: [activity({
+          activityVersionId: "write-line-v1",
+          activityTypeKey: "Elsa.Activities.Primitives.Activities.WriteLine",
+          category: "Primitives",
+          displayName: "Write Line"
+        })] });
+      }
+      expect(url).toBe("https://server.example/runtime/workflows/executables?scope=Published");
+      return response({ executables: [executable({
+        rootActivityType: "Elsa.Activities.Flowchart.Activities.Flowchart",
+        sourceKind: "WorkflowDefinitionVersion",
+        sourceId: "version-1",
+        references: [
+          executableReference({ sourceReferenceId: "ref-old", definitionVersionId: "version-0", publishedAt: "2026-06-17T01:00:00Z" }),
+          executableReference({ sourceReferenceId: "ref-new", definitionVersionId: "version-1", publishedAt: "2026-06-18T01:00:00Z" })
+        ]
+      })] });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const { container, unmount } = await renderRegisteredRoute("/workflows/executables", undefined, true);
+
+    await waitForText(container, "artifact-1");
+    expect(container.textContent).toContain("Executables");
+    expect(container.querySelector("nav[aria-label='Workflow views']")).toBeNull();
+    expect(container.textContent).toContain("Flowchart");
+    expect(container.textContent).toContain("Definition version");
+    expect(container.textContent).not.toContain("WorkflowDefinitionVersion / version-1 / 1.0.0");
+    expect(container.textContent).not.toContain("Elsa.Activities.Flowchart.Activities.Flowchart");
+
+    await click(buttonByText(container, "Run"));
+    await waitForText(container, "Provide the workflow inputs for this run.");
+    await click(buttonByText(container, "Cancel"));
+    expect(fetchMock.mock.calls.some(([, init]) => init?.method === "POST")).toBe(false);
+    await click(buttonByText(container, "Run"));
+    await waitForText(container, "Provide the workflow inputs for this run.");
+    await fill(inputByLabel(container, "Greeting"), "Hello from published run");
+    await click(buttonByText(container, "Run workflow"));
+    await waitForText(container, "Open Run wfexec-published-1");
+    await click(buttonByText(container, "Open Run wfexec-published-1"));
+    await waitForText(container, "Pinned Runtime executable");
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "https://server.example/runtime/workflows/executables/artifact-1/execute",
+      expect.objectContaining({ method: "POST" })
+    );
+    expect(fetchMock.mock.calls.map(([url]) => String(url))).toContain(
+      "https://server.example/design/workflows/versions/version-1"
+    );
+    const executeCall = fetchMock.mock.calls.find(([url, init]) => String(url).endsWith("/executables/artifact-1/execute") && init?.method === "POST");
+    expect(JSON.parse(String(executeCall?.[1]?.body))).toEqual({
+      inputs: { Greeting: "Hello from published run" },
+      sourceReferenceId: "ref-new"
+    });
+    expect(window.location.pathname).toBe("/workflows/instances/wfexec-published-1");
+    expect(container.querySelectorAll(".wf-instance-canvas .react-flow__node")).toHaveLength(2);
+    expect(fetchMock.mock.calls.map(([url]) => String(url))).toContain(
+      "https://server.example/runtime/workflows/executables/artifact-1?ref=ref-new"
+    );
+
+    await unmount();
+  });
+
+  it("opens the source definition from the executables grid", async () => {
+    vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes("/runtime/workflows/executables")) return response([executable()]);
+      if (url.includes("/definitions/definition-1")) return response({ definition: definition(), draft: workflowDraft(), versions: [] });
+      return response({ items: [definition()] });
+    }));
+    const { container, unmount } = await renderRegisteredRoute("/workflows/executables");
+
+    await waitForText(container, "artifact-1");
+    await click(buttonByLabel(container, "Open source definition definition-1"));
+
+    expect(window.location.pathname).toBe("/workflows/definitions");
+    expect(window.location.search).toBe("?definition=definition-1");
+
+    await unmount();
+  });
+
+  it("disables executable-list runs without a live Published reference", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => response({ executables: [executable({ references: [] })] })));
+    const { container, unmount } = await renderRegisteredRoute("/workflows/executables");
+
+    await waitForText(container, "artifact-1");
+
+    const run = buttonByText(container, "Run") as HTMLButtonElement;
+    expect(run.disabled).toBe(true);
+    expect(run.title).toContain("No live published reference");
+
+    await unmount();
+  });
+
+  it("shows an empty executable state when executable endpoints are unavailable", async () => {
+    const fetchMock = vi.fn(async (_input: RequestInfo | URL) => response(null, 404));
+    vi.stubGlobal("fetch", fetchMock);
+    const { container, unmount } = await renderRegisteredRoute("/workflows/executables");
+
+    await waitForText(container, "Request failed with 404");
+
+    expect(container.textContent).toContain("Something went wrong");
+    expect(fetchMock.mock.calls.map(([url]) => String(url))).toEqual([
+      "https://server.example/runtime/workflows/executables?scope=Published"
+    ]);
+
+    await unmount();
+  });
+
+  it("expands an artifact row into its source references", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => response({ executables: [executable({
+      references: [
+        executableReference(),
+        executableReference({
+          sourceReferenceId: "ref-test",
+          artifactVersion: "1.0.0",
+          scope: "TestRun",
+          publishedAt: null,
+          expiresAt: "2026-01-01T00:00:00Z"
+        })
+      ]
+    })] })));
+    const { container, unmount } = await renderRegisteredRoute("/workflows/executables");
+
+    await waitForText(container, "artifact-1");
+    expect(container.querySelector(".wf-reference-list")).toBeNull();
+
+    await click(buttonByLabel(container, "Show references of artifact-1"));
+
+    const referenceList = container.querySelector(".wf-reference-list");
+    expect(referenceList?.textContent).toContain("Version 2.0.0");
+    expect(referenceList?.textContent).toContain("Published");
+    expect(referenceList?.textContent).toContain("Test run");
+    expect(referenceList?.textContent).toContain("Expired");
+    expect(referenceList?.textContent).toContain("Expires");
+
+    await unmount();
+  });
+
+  it("requests the reference scope filter and retired references", async () => {
+    const fetchMock = vi.fn(async (_input: RequestInfo | URL) => response({ executables: [executable({ deletedAt: "2026-06-19T01:00:00Z" })] }));
+    vi.stubGlobal("fetch", fetchMock);
+    const { container, unmount } = await renderRegisteredRoute("/workflows/executables");
+
+    await waitForText(container, "artifact-1");
+    expect(String(fetchMock.mock.calls[0]?.[0])).toBe("https://server.example/runtime/workflows/executables?scope=Published");
+
+    await select(selectByLabel(container, "Executable reference scope"), "test-runs");
+    await waitForText(container, "artifact-1");
+    expect(String(fetchMock.mock.calls.at(-1)?.[0])).toContain("/executables?scope=TestRuns");
+
+    await click(checkboxByLabel(container, "Include retired references"));
+    await waitForText(container, "Retired");
+    expect(String(fetchMock.mock.calls.at(-1)?.[0])).toContain("/executables?scope=TestRuns&includeRetired=true");
+
+    // Runtime artifacts are read-only; lifecycle actions belong to Publishing slots.
+    expect(container.textContent).toContain("Retained for inspection");
+    expect(buttonByLabel(container, "Delete executable artifact-1")).toBeNull();
+
+    await unmount();
+  });
+
+  it("opens the Executable Inspector from an executables row", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => response({ executables: [executable()] })));
+    const { container, unmount } = await renderRegisteredRoute("/workflows/executables");
+
+    await waitForText(container, "artifact-1");
+    await click(buttonByLabel(container, "Inspect executable artifact-1"));
+
+    expect(window.location.pathname).toBe("/workflows/executables/artifact-1");
+
+    await unmount();
+  });
+
+  it("keeps the Runtime executable table read-only", async () => {
+    const fetchMock = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) => response({ executables: [executable()] }));
+    vi.stubGlobal("fetch", fetchMock);
+    const { api, container, unmount } = await renderRegisteredRoute("/workflows/executables");
+
+    await waitForText(container, "artifact-1");
+    expect(buttonByLabel(container, "Delete executable artifact-1")).toBeNull();
+    expect(api.dialogs.confirm).not.toHaveBeenCalled();
+    expect(fetchMock.mock.calls.some(([, init]) => init?.method === "DELETE")).toBe(false);
+
+    await unmount();
+  });
+
+  it("surfaces the structured 409 reference-gate reason when a run is rejected", async () => {
+    vi.stubGlobal("fetch", vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+      if (init?.method === "POST") {
+        return response({ error: "Workflow executable artifact 'artifact-1' has no live Published reference: the matching reference has expired." }, 409);
+      }
+      return response({ executables: [executable({ references: [executableReference()] })] });
+    }));
+    const { container, unmount } = await renderRegisteredRoute("/workflows/executables");
+
+    await waitForText(container, "artifact-1");
+    await click(buttonByText(container, "Run"));
+    await waitForText(container, "has no live Published reference");
+
+    expect(container.textContent).toContain("the matching reference has expired");
+    expect(container.textContent).toContain("Start a new test run from the definition editor");
+
+    await unmount();
+  });
+
+  it("renders the Executable Inspector with sidecar layout, ghost nodes and reference selection", async () => {
+    vi.stubGlobal("ResizeObserver", class {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    });
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes("/executables/artifact-1")) {
+        return url.includes("ref=ref-0")
+          ? response(executableDetail({ chosenReference: { sourceReferenceId: "ref-0", selection: "requested", layout: [] } }))
+          : response(executableDetail({
+              chosenReference: {
+                sourceReferenceId: "ref-1",
+                selection: "newest-live",
+                layout: [{ nodeId: "write-line-1", x: 40, y: 20 }, { nodeId: "send-email-1", x: 320, y: 20 }],
+                activityPresentation: [{
+                  executableNodeId: "exec-write-line-1",
+                  displayName: "Log greeting",
+                  description: "Writes the user-facing greeting to the console."
+                }]
+              }
+            }));
+      }
+      if (url.includes("/activities")) return response({ activities: [
+        activity({ activityVersionId: "sequence-v1", activityTypeKey: "Elsa.Activities.Sequence.Activities.Sequence", displayName: "Sequence" }),
+        activity({ activityVersionId: "write-line-v1", activityTypeKey: "Elsa.Activities.Primitives.Activities.WriteLine", displayName: "Write Line" })
+      ] });
+      if (url.includes("/definitions/definition-1")) return response({ definition: definition({ latestVersionId: "version-2", latestVersion: "2.0.0" }), draft: null, versions: [] });
+      return response(null, 404);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const { container, unmount } = await renderRegisteredRoute("/workflows/executables/artifact-1");
+
+    await waitForText(container, "Showing newest live reference ref-1");
+
+    // Identity panel: artifact id, hash, node/resume-target counts.
+    expect(container.textContent).toContain("sha256:abc");
+    expect(container.textContent).toContain("Resume targets");
+    expect(container.textContent).toContain("Executable Inspector");
+
+    // Canvas: catalog hit renders its display name; the catalog miss is an honest ghost.
+    await waitForText(container, "Log greeting");
+    await waitForText(container, "Not available in this environment");
+    const ghost = container.querySelector(".wf-node-ghost");
+    expect(ghost?.textContent).toContain("SendEmail");
+    const namedNode = [...container.querySelectorAll<HTMLElement>(".react-flow__node")]
+      .find(node => node.textContent?.includes("Log greeting"));
+    expect(namedNode).toBeTruthy();
+    await click(namedNode!);
+    expect(container.textContent).toContain("Writes the user-facing greeting to the console.");
+
+    // The reference is current with the definition's latest version: no drift caption, source link enabled.
+    expect(container.textContent).not.toContain("the definition's latest is");
+    await vi.waitFor(() => expect(buttonByText(container, "Open source definition")?.disabled).toBe(false));
+
+    // Selecting another reference updates the routed selection. Runtime remains the executable source.
+    await click(buttonByText(container, "References (2)"));
+    await click(buttonByLabel(container, "Show reference ref-0"));
+    await waitForText(container, "Showing requested reference ref-0");
+
+    expect(new URLSearchParams(window.location.search).get("ref")).toBe("ref-0");
+    expect(fetchMock.mock.calls.map(([url]) => String(url))).toContain("https://server.example/runtime/workflows/executables/artifact-1");
+
+    await unmount();
+  });
+
+  it("collects workflow inputs before running from the Executable Inspector", async () => {
+    vi.stubGlobal("ResizeObserver", class {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    });
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (init?.method === "POST" && url.endsWith("/executables/artifact-1/execute")) {
+        return response({ workflowExecutionId: "wfexec-inspector-1" });
+      }
+      if (url.includes("/design/workflows/versions/version-2")) {
+        const version = workflowDefinitionVersionDetails({ id: "version-2", version: "2.0.0" });
+        return response({ ...version, state: { ...version.state, inputs: [workflowInput()] } });
+      }
+      if (url.includes("/executables/artifact-1")) return response(executableDetail({
+        chosenReference: { sourceReferenceId: "ref-test", selection: "requested", layout: [] },
+        references: [
+          executableReference(),
+          executableReference({
+            sourceReferenceId: "ref-test",
+            scope: "TestRun",
+            definitionVersionId: "draft:snapshot-1",
+            artifactVersion: "draft",
+            publishedAt: null
+          })
+        ]
+      }));
+      if (url.includes("/activities")) return response({ activities: [] });
+      if (url.includes("/definitions/definition-1")) return response({ definition: definition(), draft: null, versions: [] });
+      return response(null, 404);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const { container, unmount } = await renderRegisteredRoute("/workflows/executables/artifact-1");
+
+    await click(await waitForButtonByText(container, "Run"));
+    await waitForText(container, "Provide the workflow inputs for this run.");
+    await fill(inputByLabel(container, "Greeting"), "Hello from inspector");
+    await click(buttonByText(container, "Run workflow"));
+    await waitForText(container, "Open Run wfexec-inspector-1");
+
+    const executeCall = fetchMock.mock.calls.find(([url, init]) => String(url).endsWith("/executables/artifact-1/execute") && init?.method === "POST");
+    expect(JSON.parse(String(executeCall?.[1]?.body))).toEqual({
+      inputs: { Greeting: "Hello from inspector" },
+      sourceReferenceId: "ref-1"
+    });
+    expect(fetchMock.mock.calls.map(([url]) => String(url))).toContain(
+      "https://server.example/design/workflows/versions/version-2"
+    );
+    expect(fetchMock.mock.calls.map(([url]) => String(url))).not.toContain(
+      "https://server.example/design/workflows/versions/draft%3Asnapshot-1"
+    );
+
+    await unmount();
+  });
+
+  it("disables inspector execution when no live Published reference exists", async () => {
+    vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes("/executables/artifact-1")) return response(executableDetail({
+        chosenReference: { sourceReferenceId: "ref-test", selection: "requested", layout: [] },
+        references: [
+          executableReference({ sourceReferenceId: "ref-retired", deletedAt: "2026-06-19T01:00:00Z" }),
+          executableReference({ sourceReferenceId: "ref-test", scope: "TestRun", publishedAt: null })
+        ]
+      }));
+      if (url.includes("/activities")) return response({ activities: [] });
+      if (url.includes("/definitions/definition-1")) return response({ definition: definition(), draft: null, versions: [] });
+      return response(null, 404);
+    }));
+    const { container, unmount } = await renderRegisteredRoute("/workflows/executables/artifact-1?ref=ref-test");
+
+    const run = await waitForButtonByText(container, "Run");
+    expect(run.disabled).toBe(true);
+    expect(run.title).toContain("No live published reference");
+
+    await unmount();
+  });
+
+  it("never dispatches a published run when its selected source version inputs cannot be loaded", async () => {
+    vi.stubGlobal("ResizeObserver", class {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    });
+    const scenarios = [
+      { surface: "list", route: "/workflows/executables", artifactId: "artifact-1", versionId: "version-1" },
+      { surface: "artifacts", route: "/workflows/definitions?definition=definition-1", artifactId: "artifact-current", versionId: "version-1" },
+      { surface: "inspector", route: "/workflows/executables/artifact-1", artifactId: "artifact-1", versionId: "version-2" }
+    ] as const;
+
+    for (const scenario of scenarios) {
+      const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = String(input);
+        if (url.includes(`/design/workflows/versions/${scenario.versionId}`)) {
+          return response({ error: "Workflow input definitions unavailable." }, 503);
+        }
+        if (scenario.surface === "inspector" && url.includes("/runtime/workflows/executables/artifact-1")) {
+          return response(executableDetail());
+        }
+        const slotResponse = publicationSlotResponse(url, [publishedSlot("artifact-current")]);
+        if (slotResponse) return slotResponse;
+        if (url.includes("/runtime/workflows/executables")) {
+          return response([executable({
+            artifactId: scenario.artifactId,
+            references: [executableReference({
+              artifactId: scenario.artifactId,
+              definitionVersionId: scenario.versionId
+            })]
+          })]);
+        }
+        if (url.includes("/activities")) return response({ activities: [] });
+        if (url.includes("/definitions/definition-1")) {
+          return response({ definition: definition(), draft: workflowDraft(), versions: [] });
+        }
+        if (init?.method === "POST") return response({ workflowExecutionId: "must-not-dispatch" });
+        return response({ items: [definition()] });
+      });
+      vi.stubGlobal("fetch", fetchMock);
+      const { container, unmount } = await renderRegisteredRoute(scenario.route);
+
+      try {
+        if (scenario.surface === "artifacts") {
+          await waitForText(container, "Review & publish");
+          await click(buttonByText(container, "Artifacts"));
+        }
+        await waitForText(container, scenario.surface === "inspector" ? "Executable Inspector" : scenario.artifactId);
+        await click(scenario.surface === "artifacts"
+          ? await waitForButtonByLabel(container, `Run executable ${scenario.artifactId}`)
+          : await waitForButtonByText(container, "Run"));
+        await waitForText(container, "Workflow input definitions unavailable.");
+
+        expect(fetchMock.mock.calls.map(([url]) => String(url))).toContain(
+          `https://server.example/design/workflows/versions/${scenario.versionId}`
+        );
+        expect(fetchMock.mock.calls.some(([url, init]) =>
+          init?.method === "POST" && String(url).endsWith(`/executables/${scenario.artifactId}/execute`)
+        )).toBe(false);
+      } finally {
+        await unmount();
+      }
+    }
+  });
+
+  it("captions source drift when the inspected reference is behind the definition's latest version", async () => {
+    vi.stubGlobal("ResizeObserver", class {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    });
+    vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes("/executables/artifact-1")) return response(executableDetail({
+        references: [
+          executableReference(),
+          executableReference({
+            sourceReferenceId: "stale-test-run-ref",
+            definitionVersionId: "draft:draft-1-stalehash",
+            publishedAt: null,
+            scope: "TestRun"
+          })
+        ]
+      }));
+      if (url.includes("/activities")) return response({ activities: [] });
+      if (url.includes("/definitions/definition-1")) return response({
+        definition: definition({ latestVersionId: "version-9", latestVersion: "9.0.0" }),
+        draft: workflowDraft(),
+        versions: []
+      });
+      return response(null, 404);
+    }));
+    const { container, unmount } = await renderRegisteredRoute("/workflows/executables/artifact-1");
+
+    await waitForText(container, "the definition's latest is 9.0.0");
+
+    expect(container.textContent).toContain("published from version 2.0.0");
+    expect((buttonByText(container, "Open source definition") as HTMLButtonElement).disabled).toBe(false);
+
+    await unmount();
+  });
+
+  it("replaces source drift with draft equivalence when the current draft test run produced the inspected artifact", async () => {
+    vi.stubGlobal("ResizeObserver", class {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    });
+    const draft = workflowDraft();
+    const currentDraftVersionId = `draft:${createDraftSnapshotId(draft)}`;
+    vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes("/executables/artifact-1")) return response(executableDetail({
+        references: [
+          executableReference(),
+          executableReference({
+            sourceReferenceId: "test-run-ref",
+            definitionVersionId: currentDraftVersionId,
+            publishedAt: null,
+            scope: "TestRun"
+          })
+        ]
+      }));
+      if (url.includes("/activities")) return response({ activities: [] });
+      if (url.includes("/definitions/definition-1")) return response({
+        definition: definition({ latestVersionId: "version-9", latestVersion: "9.0.0" }),
+        draft,
+        versions: []
+      });
+      return response(null, 404);
+    }));
+    const { container, unmount } = await renderRegisteredRoute("/workflows/executables/artifact-1");
+
+    await waitForText(container, "Current draft is behaviorally identical to this artifact");
+
+    expect(container.querySelector(".wf-executable-equivalent")?.textContent)
+      .toContain("Current draft is behaviorally identical to this artifact");
+    expect(container.textContent).not.toContain("the definition's latest is 9.0.0");
+
+    await unmount();
+  });
+
+  it("disables the source link with a reason when the definition is absent in this environment", async () => {
+    vi.stubGlobal("ResizeObserver", class {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    });
+    vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes("/executables/artifact-1")) return response(executableDetail());
+      if (url.includes("/activities")) return response({ activities: [] });
+      return response(null, 404);
+    }));
+    const { container, unmount } = await renderRegisteredRoute("/workflows/executables/artifact-1");
+
+    await waitForText(container, "This workflow definition is not available in this environment.");
+
+    const openSource = buttonByText(container, "Open source definition") as HTMLButtonElement;
+    expect(openSource.disabled).toBe(true);
+    expect(openSource.title).toContain("not available in this environment");
+
+    await unmount();
+  });
+
+  it("renders activity availability rows with compact types and helpful descriptions", async () => {
+    stubActivityAvailabilityFetch({
+      items: [
+        availabilityDiagnosticEntry({ displayName: "Activity" }),
+        availabilityDiagnosticEntry({
+          activityDefinitionId: "send-email-v1",
+          activityTypeKey: "Elsa.Activities.Email.SendEmail",
+          displayName: "Send Email",
+          description: null,
+          category: "Messaging",
+          state: "BlockedByHostBaseline",
+          layer: "HostBaseline",
+          referenceName: "Elsa.Activities.Email.SendEmail",
+          reason: "Disabled by the host baseline."
+        })
+      ]
+    });
+
+    const { container, unmount } = await renderRegisteredRoute("/workflows/activity-availability");
+
+    await waitForText(container, "Run JavaScript");
+    await waitForText(container, "Disabled by the host baseline.");
+
+    const list = container.querySelector(".availability-activity-list");
+    expect(list?.textContent).toContain("RunJavaScript.Activity");
+    expect(list?.textContent).toContain("Runs JavaScript code inside a workflow.");
+    expect(list?.textContent).not.toContain(runJavaScriptTypeKey);
+    expect(list?.textContent).not.toContain("Catalog activity is available.");
+
+    // Rows are grouped under category headers instead of repeating a category badge per row.
+    const groupTitles = Array.from(container.querySelectorAll(".availability-group-title")).map(title => title.textContent);
+    expect(groupTitles).toEqual(["Messaging1", "Scripting1"]);
+
+    // Switches express effective availability: in AllExcept mode an unlisted activity is ON,
+    // and a host-blocked activity is forced off and not editable.
+    const runJavaScriptSwitch = checkboxByLabel(container, "Run JavaScript available in new workflows");
+    const sendEmailSwitch = checkboxByLabel(container, "Send Email available in new workflows");
+    expect(runJavaScriptSwitch?.checked).toBe(true);
+    expect(sendEmailSwitch?.checked).toBe(false);
+    expect(sendEmailSwitch?.disabled).toBe(true);
+
+    // The "Hidden only" quick filter narrows the list to activities that are not effectively available.
+    await click(buttonByText(container, "Hidden only"));
+    expect(list?.textContent).toContain("Send Email");
+    expect(list?.textContent).not.toContain("Run JavaScript");
+    await click(buttonByText(container, "Hidden only"));
+    expect(list?.textContent).toContain("Run JavaScript");
+
+    await unmount();
+  });
+
+  it("renders activity availability rows from live camel-case enum values", async () => {
+    stubActivityAvailabilityFetch({
+      settings: { scope: "host-default", mode: "allExcept", rules: { activityTypes: [], sets: [] } },
+      items: [
+        {
+          ...availabilityDiagnosticEntry(),
+          state: "available",
+          layer: "catalog",
+          referenceKind: "activityType"
+        },
+        {
+          ...availabilityDiagnosticEntry({
+            activityDefinitionId: "send-email-v1",
+            activityTypeKey: "Elsa.Activities.Email.SendEmail",
+            displayName: "Send Email",
+            category: "Messaging",
+            reason: "Disabled by the host baseline."
+          }),
+          state: "blockedByHostBaseline",
+          layer: "hostBaseline",
+          referenceKind: "activityType"
+        }
+      ]
+    });
+
+    const { container, unmount } = await renderRegisteredRoute("/workflows/activity-availability");
+
+    await waitForText(container, "Run JavaScript");
+    await waitForText(container, "Send Email");
+    expect(container.querySelector(".availability-counts")?.textContent).toContain("1 host blocked");
+    expect(checkboxByLabel(container, "Run JavaScript available in new workflows")?.checked).toBe(true);
+    expect(checkboxByLabel(container, "Send Email available in new workflows")?.disabled).toBe(true);
+    expect(container.querySelector(".availability-mode button.active strong")?.textContent).toBe("All except");
+
+    await unmount();
+  });
+
+  it("sanitizes activity availability load errors and offers a retry", async () => {
+    const rawServerError = [
+      "System.InvalidOperationException: Failed to bind the request.",
+      "Authorization: Bearer secret-token",
+      "Cookie: antiforgery=secret-cookie",
+      "at Contoso.ActivityAvailabilityEndpoint.Invoke(HttpContext context)"
+    ].join("\n");
+    let diagnosticsAttempts = 0;
+    vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes("/activities/availability/settings")) {
+        return response({ scope: "host-default", mode: "AllExcept", rules: { activityTypes: [], sets: [] } });
+      }
+      if (url.includes("/activities/availability/diagnostics")) {
+        diagnosticsAttempts += 1;
+        return diagnosticsAttempts === 1
+          ? response(rawServerError, 500)
+          : response({ items: [], sets: [] });
+      }
+      if (url.includes("/design/activities/catalog")) return response({ activities: [] });
+      return response(null, 404);
+    }));
+
+    const { container, unmount } = await renderRegisteredRoute("/workflows/activity-availability");
+
+    await waitForText(container, "Activity availability could not be loaded.");
+    const alert = container.querySelector("[role='alert']");
+    expect(alert?.textContent).toContain("Check the server logs for technical details.");
+    expect(alert?.textContent).not.toContain("InvalidOperationException");
+    expect(alert?.textContent).not.toContain("Authorization");
+    expect(alert?.textContent).not.toContain("secret-token");
+    expect(alert?.textContent).not.toContain("Cookie");
+    expect(alert?.textContent?.length).toBeLessThan(160);
+
+    await click(buttonByText(container, "Retry"));
+    await waitForText(container, "No availability diagnostics reported.");
+    expect(container.querySelector("[role='alert']")).toBeNull();
+    expect(diagnosticsAttempts).toBe(2);
+
+    await unmount();
+  });
+
+  it("saves mode-aware availability toggles and inspects activity metadata in the details panel", async () => {
+    let savedBody: { mode: number; rules: { activityTypes: string[]; sets: string[] } } | null = null;
+    stubActivityAvailabilityFetch({
+      items: [availabilityDiagnosticEntry()],
+      sets: [{ name: "Scripting Tools", activityTypeKeys: [runJavaScriptTypeKey] }],
+      activities: [{
+        activityVersionId: "run-javascript-v1",
+        activityTypeKey: runJavaScriptTypeKey,
+        version: "1.0.0",
+        category: "Scripting",
+        displayName: "Run JavaScript",
+        description: "Runs JavaScript code inside a workflow.",
+        executionType: "Task",
+        inputs: [{ name: "script", displayName: "Script", type: { typeName: "String" }, description: "The code to run." }],
+        outputs: [],
+        designFacets: []
+      }],
+      onSave: body => { savedBody = body; }
+    });
+
+    const { container, unmount } = await renderRegisteredRoute("/workflows/activity-availability");
+    await waitForText(container, "Run JavaScript");
+
+    // Clicking the row opens the details inspector with catalog metadata and the raw payload.
+    await click(container.querySelector("button[title='Show activity details']"));
+    const details = container.querySelector(".availability-details");
+    expect(details?.textContent).toContain(runJavaScriptTypeKey);
+    expect(details?.textContent).toContain("1.0.0");
+    expect(details?.textContent).toContain("Script");
+    expect(details?.textContent).toContain("Raw metadata");
+
+    // Excluding a set locks its members' switches: an individual rule can't override the set rule.
+    const setSwitch = checkboxByLabel(container, "Activities in the Scripting Tools set available in new workflows");
+    expect(setSwitch?.checked).toBe(true);
+    await click(setSwitch);
+    const lockedSwitch = checkboxByLabel(container, "Run JavaScript available in new workflows");
+    expect(lockedSwitch?.checked).toBe(false);
+    expect(lockedSwitch?.disabled).toBe(true);
+    expect(lockedSwitch?.title).toBe('Controlled by the "Scripting Tools" set rule');
+    await click(checkboxByLabel(container, "Activities in the Scripting Tools set available in new workflows"));
+
+    // Turning the switch off marks the draft dirty; saving stores the AllExcept exclusion list.
+    const saveButton = buttonByText(container, "Save");
+    expect(saveButton?.disabled).toBe(true);
+    await click(checkboxByLabel(container, "Run JavaScript available in new workflows"));
+    expect(container.textContent).toContain("Unsaved changes");
+    await click(buttonByText(container, "Save"));
+    await waitForText(container, "Activity availability saved.");
+    expect(savedBody).toEqual({ scope: "host-default", mode: 0, rules: { activityTypes: [runJavaScriptTypeKey], sets: [] } });
+    expect(container.textContent).not.toContain("Unsaved changes");
+
+    await unmount();
+  });
+
+  it("copies executable identifiers from the grid", async () => {
+    const writeText = vi.fn(async () => undefined);
+    const clipboardDescriptor = Object.getOwnPropertyDescriptor(navigator, "clipboard");
+    Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText } });
+    vi.stubGlobal("fetch", vi.fn(async () => response([executable()])));
+
+    const { container, unmount } = await renderRegisteredRoute("/workflows/executables");
+
+    try {
+      await waitForText(container, "artifact-1");
+      await click(buttonByLabel(container, "Copy artifact ID artifact-1"));
+
+      expect(writeText).toHaveBeenCalledWith("artifact-1");
+      expect(container.textContent).toContain("Copied artifact ID");
+    } finally {
+      await unmount();
+      if (clipboardDescriptor) Object.defineProperty(navigator, "clipboard", clipboardDescriptor);
+      else Reflect.deleteProperty(navigator, "clipboard");
+    }
+  });
+
+  it("dispatches executable Explain actions to Weaver", async () => {
+    const fetchMock = vi.fn(async () => response([executable()]));
+    const dispatchPrompt = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    const { container, unmount } = await renderRegisteredRoute("/workflows/executables", api => {
+      api.ai.promptActions.add({
+        id: "weaver.workflows.explain-executable",
+        label: "Explain executable",
+        placement: "selection",
+        contextKind: "workflow-executable",
+        createPrompt: context => ({
+          message: "Explain this workflow executable.",
+          mode: "enqueue",
+          attachments: [{ kind: "workflow-executable", referenceId: (context as { artifactId: string }).artifactId }]
+        })
+      });
+      api.ai.dispatchPrompt = dispatchPrompt;
+    });
+
+    await waitForText(container, "artifact-1");
+    await click(buttonByText(container, "Explain"));
+
+    expect(dispatchPrompt).toHaveBeenCalledWith(expect.objectContaining({
+      message: "Explain this workflow executable.",
+      attachments: [expect.objectContaining({ kind: "workflow-executable", referenceId: "artifact-1" })]
+    }));
+    expect(container.textContent).toContain("Sent artifact-1 to Weaver");
+
+    await unmount();
+  });
+
+  it("sends the current designer draft snapshot to the transient test-run endpoint", async () => {
+    vi.stubGlobal("ResizeObserver", class {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    });
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (init?.method === "POST" && urlPath(url) === "/publishing/workflows/drafts/test-runs") return response(testRunView());
+      if (init?.method === "POST" && urlPath(url) === "/_elsa/publishing/workflows/drafts/test-runs") return response(null, 404);
+      if (init?.method === "POST" && url.includes("/drafts/draft-1/promote")) throw new Error("Designer Run must not promote drafts.");
+      if (init?.method === "POST" && url.includes("/versions/")) throw new Error("Designer Run must not publish versions.");
+      if (init?.method === "POST" && url.includes("/executables/")) throw new Error("Designer Run must not call durable executable run.");
+      if (url.includes("/activities")) return response({ activities: [
+        activity({ activityVersionId: "flowchart-v1", activityTypeKey: "Elsa.Activities.Flowchart", category: "Composition", displayName: "Flowchart" }),
+        activity({ activityVersionId: "write-line-v1", activityTypeKey: "Elsa.Activities.WriteLine", category: "Primitives", displayName: "Write Line" })
+      ] });
+      if (url.includes("/definitions/definition-1")) return response({
+        definition: definition(),
+        draft: draftWithFlowchartRoot([], [workflowInput()]),
+        versions: []
+      });
+      return response({ items: [definition()] });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const { container, unmount } = await renderRegisteredRoute("/workflows/definitions?definition=definition-1");
+
+    await waitForText(container, "Add activity");
+    await click(buttonByText(container, "Add activity"));
+    await click(optionByText(container, "Write Line"));
+    await click(Array.from(container.querySelectorAll<HTMLButtonElement>(".wf-palette-activity"))
+      .find(button => button.textContent?.includes("Write Line")) ?? null);
+    await click(buttonByText(container, "Run"));
+    await waitForText(container, "Provide the workflow inputs for this run.");
+    expect(fetchMock.mock.calls.some(([url, init]) => init?.method === "POST" && urlPath(String(url)) === "/publishing/workflows/drafts/test-runs")).toBe(false);
+    await fill(inputByLabel(container, "Greeting"), "Hello from test run");
+    await click(buttonByText(container, "Run workflow"));
+    await waitForText(container, "Test run dispatched");
+
+    const calls = fetchMock.mock.calls.map(([url, init]) => ({ url: String(url), method: init?.method ?? "GET", body: String(init?.body ?? "") }));
+    const testRunCall = calls.find(call => call.method === "POST" && urlPath(call.url) === "/publishing/workflows/drafts/test-runs");
+    expect(testRunCall).toBeTruthy();
+    const requestBody = JSON.parse(testRunCall?.body ?? "{}");
+    expect(requestBody.definitionId).toBe("definition-1");
+    expect(requestBody.snapshotId).toMatch(/^draft-1-[0-9a-f]{8}$/);
+    expect(requestBody.inputs).toEqual({ Greeting: "Hello from test run" });
+    expect(requestBody.state.rootActivity).toMatchObject({
+      nodeId: "root",
+      activityVersionId: "flowchart-v1",
+      structure: {
+        kind: "elsa.flowchart.structure",
+        payload: {
+          activities: [
+            expect.objectContaining({ activityVersionId: "write-line-v1" }),
+            expect.objectContaining({ activityVersionId: "write-line-v1" })
+          ]
+        }
+      }
+    });
+    expect(requestBody.state.rootActivity.structure.payload.startNodeId)
+      .toBe(requestBody.state.rootActivity.structure.payload.activities[0].nodeId);
+    expect(calls.some(call => call.method === "POST" && urlPath(call.url) === "/_elsa/publishing/workflows/drafts/test-runs")).toBe(false);
+    expect(calls.some(call => call.url.includes("/drafts/draft-1/promote") && call.method === "POST")).toBe(false);
+    expect(calls.some(call => call.url.includes("/versions/") && call.method === "POST")).toBe(false);
+    expect(calls.some(call => call.url.includes("/executables/") && call.method === "POST")).toBe(false);
+    expect(container.querySelector(".wf-test-run-capsule")).toBeNull();
+    expect(container.querySelector(".wf-test-run-popover")).toBeNull();
+    expect(container.querySelector("[aria-label='Inspector panel tabs'] [role='tab'][aria-selected='true']")?.textContent).toContain("Runtime");
+    await click(buttonByText(container, "Test run dispatched"));
+    await waitForText(container, "test-run-1");
+    expect(container.textContent).toContain("Runtime");
+    expect(container.textContent).toContain("Ephemeral - not saved, promoted, or published.");
+    expect(container.textContent).toContain("artifact-transient-1");
+    expect(container.textContent).toContain("wfexec-1");
+    expect(container.textContent).toContain("1 activity");
+    expect(container.textContent).toContain("0 incidents");
+
+    await unmount();
+  });
+
+  it("requires explicit confirmation before retrying a Test Run with unavailable expression validation", async () => {
+    vi.stubGlobal("ResizeObserver", class {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    });
+    let testRunAttempts = 0;
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (init?.method === "POST" && urlPath(url) === "/publishing/workflows/drafts/test-runs") {
+        testRunAttempts++;
+        return response(testRunAttempts === 1
+          ? testRunView({
+              status: "Rejected",
+              reason: "Expression validation is unavailable. Set acknowledgeUnavailableExpressionValidation to proceed with this test run."
+            })
+          : testRunView());
+      }
+      if (url.includes("/activities")) return response({ activities: [
+        activity({ activityVersionId: "flowchart-v1", activityTypeKey: "Elsa.Activities.Flowchart", category: "Composition", displayName: "Flowchart" })
+      ] });
+      if (url.includes("/definitions/definition-1")) return response({
+        definition: definition(),
+        draft: draftWithFlowchartRoot([], []),
+        versions: []
+      });
+      return response({ items: [definition()] });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const { container, unmount } = await renderRegisteredRoute("/workflows/definitions?definition=definition-1");
+
+    await waitForText(container, "Run");
+    await click(buttonByText(container, "Run"));
+    await waitForText(container, "Expression validation is unavailable");
+    expect(testRunAttempts).toBe(1);
+    await click(buttonByText(container, "Proceed with Test Run"));
+    await waitForText(container, "Test run dispatched");
+
+    const requests = fetchMock.mock.calls
+      .filter(([url, init]) => init?.method === "POST" && urlPath(String(url)) === "/publishing/workflows/drafts/test-runs")
+      .map(([, init]) => JSON.parse(String(init?.body)));
+    expect(requests).toHaveLength(2);
+    expect(requests[0].acknowledgeUnavailableExpressionValidation).toBe(false);
+    expect(requests[1].acknowledgeUnavailableExpressionValidation).toBe(true);
+    await unmount();
+  });
+
+  it("hides stale designer test-run metadata after the draft changes", async () => {
+    vi.stubGlobal("ResizeObserver", class {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    });
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (init?.method === "POST" && urlPath(url) === "/publishing/workflows/drafts/test-runs") return response(testRunView());
+      if (init?.method === "POST" && urlPath(url) === "/_elsa/publishing/workflows/drafts/test-runs") return response(null, 404);
+      if (url.includes("/design/activities/catalog")) return response({ activities: [catalogActivity(writeLineDescriptor())] });
+      if (url.includes("/expressions/descriptors")) return response({ items: [
+        { type: "Literal", displayName: "Literal", editingMode: "literal" },
+        { type: "JavaScript", displayName: "JavaScript", editingMode: "text" }
+      ] });
+      if (url.includes("/activities")) return response({ activities: [
+        activity({
+          activityVersionId: "write-line-v1",
+          activityTypeKey: "Elsa.Activities.Primitives.Activities.WriteLine",
+          category: "Primitives",
+          displayName: "Write Line"
+        })
+      ] });
+      if (url.includes("/definitions/definition-1")) return response({
+        definition: definition(),
+        draft: workflowDraft({
+          state: {
+            variables: [],
+            rootActivity: {
+              nodeId: "write-line-root",
+              activityVersionId: "write-line-v1",
+              inputs: [],
+              outputs: [],
+              structure: null
+            },
+            inputs: [],
+            outputs: []
+          }
+        }),
+        versions: []
+      });
+      return response({ items: [definition()] });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const { container, unmount } = await renderRegisteredRoute("/workflows/definitions?definition=definition-1");
+
+    await waitForText(container, "Run");
+    await click(buttonByText(container, "Run"));
+    await waitForText(container, "Test run dispatched");
+    expect(container.querySelector("[aria-label='Inspector panel tabs'] [role='tab'][aria-selected='true']")?.textContent).toContain("Runtime");
+    await waitForText(container, "test-run-1");
+    expect(container.textContent).toContain("artifact-transient-1");
+    expect(container.textContent).toContain("wfexec-1");
+
+    await click(buttonByText(container, "Inspector"));
+    await click(container.querySelector(".wf-canvas .react-flow__node"));
+    await waitForText(container, "Text");
+    await fill(container.querySelector<HTMLInputElement>(".wf-property-row input[type='text']"), "Stale capsule clearing");
+
+    await waitForTextToDisappear(container, "test-run-1");
+    expect(container.textContent).not.toContain("artifact-transient-1");
+    expect(container.textContent).not.toContain("wfexec-1");
+
+    await unmount();
+  });
+
+  it("shows compile rejection reasons for designer test runs", async () => {
+    vi.stubGlobal("ResizeObserver", class {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    });
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (init?.method === "POST" && urlPath(url) === "/publishing/workflows/drafts/test-runs") return response(testRunView({
+        artifactId: null,
+        workflowExecutionId: null,
+        status: "Rejected",
+        commandDispatchStatus: null,
+        reason: "Workflow version has no root activity to publish.",
+        expiresAt: null
+      }), 400);
+      if (init?.method === "POST" && urlPath(url) === "/_elsa/publishing/workflows/drafts/test-runs") return response(null, 404);
+      if (init?.method === "POST" && url.includes("/drafts/draft-1/promote")) throw new Error("Designer Run must not promote drafts.");
+      if (url.includes("/activities")) return response({ activities: [
+        activity({ activityVersionId: "flowchart-v1", activityTypeKey: "Elsa.Activities.Flowchart", category: "Composition", displayName: "Flowchart" })
+      ] });
+      if (url.includes("/definitions/definition-1")) return response({
+        definition: definition(),
+        draft: draftWithFlowchartRoot(),
+        versions: []
+      });
+      return response({ items: [definition()] });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const { container, unmount } = await renderRegisteredRoute("/workflows/definitions?definition=definition-1");
+
+    await waitForText(container, "Run");
+    await click(buttonByText(container, "Run"));
+    await waitForText(container, "Test run rejected");
+    expect(container.querySelector("[aria-label='Inspector panel tabs'] [role='tab'][aria-selected='true']")?.textContent).toContain("Runtime");
+    await waitForText(container, "Workflow version has no root activity to publish.");
+
+    expect(container.textContent).toContain("Test run rejected");
+    expect(container.textContent).toContain("Ephemeral - not saved, promoted, or published.");
+    expect(fetchMock.mock.calls.some(([url, init]) => init?.method === "POST" && String(url).includes("/drafts/draft-1/promote"))).toBe(false);
+
+    await unmount();
+  });
+
+  it("filters workflow executables by definition query parameter", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => response([
+      executable({ artifactId: "artifact-visible", definitionId: "definition-1" }),
+      executable({ artifactId: "artifact-hidden", definitionId: "definition-2", definitionVersionId: "version-2", sourceId: "definition-2" })
+    ])));
+    const { container, unmount } = await renderRegisteredRoute("/workflows/executables?definition=definition-1");
+
+    await waitForText(container, "artifact-visible");
+    const filterInput = inputByLabel(container, "Filter executables by workflow definition");
+    expect(filterInput?.value).toBe("definition-1");
+    expect(container.textContent).not.toContain("artifact-hidden");
+
+    await fill(filterInput, "version-2");
+    await waitForText(container, "artifact-hidden");
+    expect(window.location.search).toBe("?definition=version-2");
+    expect(container.textContent).not.toContain("artifact-visible");
+
+    await fill(inputByLabel(container, "Filter executables by workflow definition"), "");
+    await waitForText(container, "artifact-visible");
+    expect(window.location.search).toBe("");
+
+    await unmount();
+  });
+
+  it("navigates from workflow runs to the compatible instance detail route", async () => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.startsWith("https://server.example/runtime/workflows/instances")) {
+        if (url.includes("runKind=TestRun")) {
+          return response([workflowInstance({
+            workflowExecutionId: "wfexec-test",
+            artifactId: "artifact-test",
+            runKind: "TestRun",
+            activityCount: 2,
+            incidentCount: 1
+          })]);
+        }
+        return response([workflowInstance({ runKind: "PublishedRun" })]);
+      }
+
+      throw new Error(`Unexpected request ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const { container, unmount } = await renderRegisteredRoute("/workflows/instances");
+
+    await waitForText(container, "wfexec-1");
+    expect(container.textContent).toContain("Runs");
+    expect(container.textContent).toContain("Published Run");
+    expect(container.querySelector("nav[aria-label='Workflow views']")).toBeNull();
+    await select(selectByLabel(container, "Run Kind"), "TestRun");
+    await click(buttonByText(container, "Apply filters"));
+    await waitForText(container, "wfexec-test");
+    expect(container.textContent).toContain("Test Run");
+    expect(container.textContent).toContain("2 activities");
+    expect(container.textContent).toContain("1 incidents");
+    await click(rowByLabel(container, "Inspect workflow run wfexec-test · Completed · Current health unavailable"));
+
+    expect(window.location.pathname).toBe("/workflows/instances/wfexec-test");
+    expect(fetchMock).toHaveBeenCalledWith(
+      "https://server.example/runtime/workflows/instances?take=25",
+      expect.any(Object)
+    );
+    expect(fetchMock).toHaveBeenCalledWith(
+      "https://server.example/runtime/workflows/instances?runKind=TestRun&take=25",
+      expect.any(Object)
+    );
+
+    await unmount();
+  });
+
+  it("renders direct workflow instance details from the pinned Runtime executable", async () => {
+    vi.stubGlobal("ResizeObserver", class {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    });
+    const { bookmarkIds: _bookmarkIds, incidentIds: _incidentIds, ...activityWithoutCollectionCounts } = activityExecution();
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.startsWith("https://server.example/runtime/workflows/instances/wfexec-1")) {
+        return response(workflowInstanceDetails({
+          instance: workflowInstance({ sourceReferenceId: "reference-pinned" }),
+          activities: [activityWithoutCollectionCounts]
+        }));
+      }
+
+      if (url.startsWith("https://server.example/runtime/workflows/executables/artifact-1")) {
+        return response(executableDetail());
+      }
+
+      if (url.startsWith("https://server.example/design/activities/catalog")) {
+        return response({ activities: [activity({
+          activityVersionId: "write-line-v1",
+          activityTypeKey: "Elsa.Activities.Primitives.Activities.WriteLine",
+          category: "Primitives",
+          displayName: "Write Line"
+        })] });
+      }
+
+      throw new Error(`Unexpected request ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const { container, unmount } = await renderRegisteredRoute("/workflows/instances/wfexec-1");
+
+    await waitForText(container, "Pinned Runtime executable");
+    expect(container.textContent).toContain("Run");
+    expect(container.textContent).toContain("Workflow Instance ID");
+    expect(container.querySelector(".wf-page-header .wf-page-context")?.textContent).toContain("wfexec-1");
+    const runInspector = container.querySelector(".wf-instance-inspector");
+    expect(runInspector).not.toBeNull();
+    expect(runInspector?.textContent).not.toContain("Workflow Instance ID");
+    expect([...runInspector!.querySelectorAll("button")].filter(button => button.textContent?.includes("Explain"))).toHaveLength(0);
+    await click(buttonByText(container, "Designer"));
+    expect(window.location.pathname).toBe("/workflows/definitions");
+    expect(new URLSearchParams(window.location.search).get("definition")).toBe("definition-1");
+    window.history.replaceState({}, "", "/workflows/instances/wfexec-1");
+    // Timeline is the default instance tab and lists executed activities.
+    expect(container.textContent).toContain("Timeline");
+    expect(container.textContent).toContain("WriteLine");
+    expect(buttonByLabel(container, "Collapse run details panel")).toBeTruthy();
+    expect(buttonByLabel(container, "Maximize run details panel")).toBeTruthy();
+    expect(container.querySelector("[aria-label='Resize run details panel']")).toBeTruthy();
+    await click(buttonByLabel(container, "Collapse run details panel"));
+    expect(buttonByLabel(container, "Expand run details panel")).toBeTruthy();
+    expect(container.textContent).not.toContain("WriteLine");
+    await click(buttonByLabel(container, "Expand run details panel"));
+    expect(container.textContent).toContain("WriteLine");
+    await click(container.querySelector(".wf-timeline-entry"));
+    expect(container.querySelector("[data-tab-id='activity']")?.getAttribute("aria-selected")).toBe("true");
+    expect(container.textContent).toContain("Activity Execution ID");
+    expect(container.textContent).toContain("activity-execution-1");
+    expect(container.textContent).toContain("BookmarksUnavailable");
+    expect(container.textContent).toContain("IncidentsUnavailable");
+    await click(buttonByLabel(container, "Maximize run details panel"));
+    expect(buttonByLabel(container, "Restore run details panel")).toBeTruthy();
+    await click(buttonByLabel(container, "Restore run details panel"));
+    // Run metadata moved to the Details tab.
+    await click(buttonByText(container, "Details"));
+    expect(container.textContent).toContain("Published Run");
+    // Incidents live under the Issues tab.
+    await click(buttonByText(container, "Issues"));
+    expect(container.textContent).toContain("No incidents recorded.");
+    expect(fetchMock).toHaveBeenCalledWith(
+      "https://server.example/runtime/workflows/instances/wfexec-1",
+      expect.any(Object)
+    );
+    expect(fetchMock).toHaveBeenCalledWith(
+      "https://server.example/runtime/workflows/executables/artifact-1?ref=reference-pinned",
+      expect.any(Object)
+    );
+
+    await unmount();
+  });
+
+  it("uses the host router from every run tab and preserves browser history", async () => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes("/runtime/workflows/instances/wfexec-1")) return response(workflowInstanceDetails());
+      if (url.includes("/runtime/workflows/executables/artifact-1")) return response(executableDetail());
+      if (url.includes("/design/workflows/definitions/definition-1")) {
+        return response({ definition: definition(), draft: workflowDraft(), versions: [] });
+      }
+      if (url.includes("/design/activities/catalog")) return response({ activities: [] });
+      return response(null, 404);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const { container, unmount } = await renderRegisteredRoute("/workflows/instances/wfexec-1", undefined, true);
+
+    await waitForText(container, "Pinned Runtime executable");
+    await click(buttonByText(container, "Designer"));
+    await waitForText(container, "Hello World");
+
+    expect(window.location.pathname).toBe("/workflows/definitions");
+    expect(new URLSearchParams(window.location.search).get("definition")).toBe("definition-1");
+    expect(container.querySelector(".wf-editor")).toBeTruthy();
+    expect(container.querySelector(".wf-instance-detail-workbench")).toBeNull();
+
+    window.history.back();
+    await waitForText(container, "Pinned Runtime executable");
+    expect(window.location.pathname).toBe("/workflows/instances/wfexec-1");
+    expect(container.querySelector(".wf-instance-detail-workbench")).toBeTruthy();
+
+    window.history.forward();
+    await waitForText(container, "Hello World");
+    expect(window.location.pathname).toBe("/workflows/definitions");
+    expect(container.querySelector(".wf-editor")).toBeTruthy();
+
+    window.history.back();
+    await waitForText(container, "Pinned Runtime executable");
+
+    const openTab = async (tab: "Activity" | "Issues" | "Details") => {
+      if (tab === "Activity") {
+        await click(container.querySelector(".wf-timeline-entry"));
+      } else {
+        await click(buttonByText(container, tab));
+      }
+      expect(container.querySelector(`[data-tab-id='${tab.toLowerCase()}']`)?.getAttribute("aria-selected")).toBe("true");
+    };
+
+    for (const tab of ["Activity", "Issues", "Details"] as const) {
+      await openTab(tab);
+      await click(buttonByText(container, "Designer"));
+      await waitForText(container, "Hello World");
+      expect(window.location.pathname).toBe("/workflows/definitions");
+      expect(container.querySelector(".wf-editor")).toBeTruthy();
+      expect(container.querySelector(".wf-instance-detail-workbench")).toBeNull();
+
+      window.history.back();
+      await waitForText(container, "Pinned Runtime executable");
+    }
+
+    await unmount();
+  });
+
+  it("renders a published workflow run canvas from its pinned Runtime executable graph", async () => {
+    vi.stubGlobal("ResizeObserver", class {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    });
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.startsWith("https://server.example/runtime/workflows/instances/wfexec-1")) {
+        return response(workflowInstanceDetails({
+          instance: workflowInstance({ sourceReferenceId: "reference-published", activityCount: 3 }),
+          activities: [
+            activityExecution({
+              activityExecutionId: "root-execution",
+              executableNodeId: "exec-root",
+              authoredActivityId: "root",
+              activityType: "Elsa.Activities.Flowchart.Activities.Flowchart"
+            }),
+            activityExecution(),
+            activityExecution({
+              activityExecutionId: "write-line-2-execution",
+              executableNodeId: "exec-write-line-2",
+              authoredActivityId: "write-line-2"
+            })
+          ]
+        }));
+      }
+
+      if (url.startsWith("https://server.example/runtime/workflows/executables/artifact-1")) {
+        return response(executableDetail({
+          rootActivityType: "Elsa.Activities.Flowchart.Activities.Flowchart",
+          rootActivity: executableWireNode({
+            executableNodeId: "exec-root",
+            authoredActivityId: "root",
+            activityType: "Elsa.Activities.Flowchart.Activities.Flowchart",
+            structureKind: "elsa.flowchart.structure",
+            childSlots: [{ name: "Flowchart.Activities", activities: [
+              executableWireNode(),
+              executableWireNode({
+                executableNodeId: "exec-write-line-2",
+                authoredActivityId: "write-line-2"
+              })
+            ]}],
+            connections: [{
+              source: { nodeId: "write-line-1", port: "Done" },
+              target: { nodeId: "write-line-2" }
+            }]
+          }),
+          chosenReference: {
+            sourceReferenceId: "reference-published",
+            selection: "requested",
+            layout: [
+              { nodeId: "write-line-1", x: 180, y: 120 },
+              { nodeId: "write-line-2", x: 520, y: 120 }
+            ]
+          }
+        }));
+      }
+
+      if (url.startsWith("https://server.example/design/activities/catalog")) {
+        return response({ activities: [
+          activity({
+            activityVersionId: "activity-flowchart-v1",
+            activityTypeKey: "Elsa.Activities.Flowchart.Activities.Flowchart",
+            category: "Flowchart",
+            displayName: "Flowchart",
+            designFacets: [{
+              kind: "elsa.flowchart.structure",
+              schemaVersion: "1.0.0",
+              payload: {
+                mode: "flowchart",
+                supportsScopedVariables: true,
+                slots: [{ name: "Flowchart.Activities", property: "activities", displayName: "Activities", cardinality: "many" }],
+                initialPayload: { activities: [], connections: [], startNodeId: null }
+              }
+            }]
+          }),
+          activity({
+            activityVersionId: "write-line-v1",
+            activityTypeKey: "Elsa.Activities.Primitives.Activities.WriteLine",
+            category: "Primitives",
+            displayName: "Write Line"
+          })
+        ] });
+      }
+
+      throw new Error(`Unexpected request ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const { container, unmount } = await renderRegisteredRoute("/workflows/instances/wfexec-1");
+
+    await waitForText(container, "Pinned Runtime executable");
+    const canvasHeader = container.querySelector(".wf-instance-canvas-shell > header");
+    expect(canvasHeader?.textContent).toContain("Pinned Runtime executable");
+    expect(canvasHeader?.querySelector("small")?.textContent).toBe("1.0.0");
+    const canvasText = () => container.querySelector(".wf-instance-canvas")?.textContent ?? "";
+    expect(canvasText()).toContain("Write Line");
+    expect(canvasText()).not.toContain("No workflow activities are available");
+    const nodes = container.querySelectorAll(".wf-instance-canvas .react-flow__node");
+    expect(nodes).toHaveLength(2);
+    expect(container.textContent).toContain("Flowchart");
+    expect(container.textContent).toContain("WriteLine");
+    expect(fetchMock.mock.calls.map(([url]) => String(url))).toContain(
+      "https://server.example/runtime/workflows/executables/artifact-1?ref=reference-published"
+    );
+
+    await unmount();
+  });
+
+  it("copies incidents and hides normal root runtime evidence from the issues tab", async () => {
+    vi.stubGlobal("ResizeObserver", class {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    });
+    const writeText = vi.fn(async () => undefined);
+    const clipboardDescriptor = Object.getOwnPropertyDescriptor(navigator, "clipboard");
+    Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText } });
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.startsWith("https://server.example/runtime/workflows/instances/wfexec-1")) {
+        return response(workflowInstanceDetails({
+          instance: workflowInstance({ status: "Failed", incidentCount: 1 }),
+          activities: [
+            activityExecution({
+              activityExecutionId: "root-execution",
+              executableNodeId: "root",
+              authoredActivityId: "root",
+              activityType: "Elsa.Activities.Flowchart.Activities.Flowchart",
+              status: "Faulted",
+              subStatus: "InputMaterializationFailed",
+              incidentIds: ["incident-1"],
+              faultCount: 1
+            }),
+            activityExecution()
+          ],
+          incidents: [incidentState({
+            incidentId: "incident-1",
+            activityExecutionId: "root-execution",
+            executableNodeId: null,
+            failureType: "InputMaterializationFailed",
+            message: "Input 'Collection' failed to evaluate its JavaScript expression."
+          })]
+        }));
+      }
+
+      if (url.startsWith("https://server.example/runtime/workflows/executables/artifact-1")) {
+        return response(executableDetail());
+      }
+
+      if (url.startsWith("https://server.example/design/activities/catalog")) {
+        return response({ activities: [
+          activity({
+            activityVersionId: "flowchart-v1",
+            activityTypeKey: "Elsa.Activities.Flowchart.Activities.Flowchart",
+            category: "Flowchart",
+            displayName: "Flowchart"
+          }),
+          activity({
+            activityVersionId: "write-line-v1",
+            activityTypeKey: "Elsa.Activities.Primitives.Activities.WriteLine",
+            category: "Primitives",
+            displayName: "Write Line"
+          })
+        ] });
+      }
+
+      throw new Error(`Unexpected request ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const { container, unmount } = await renderRegisteredRoute("/workflows/instances/wfexec-1");
+
+    try {
+      await waitForText(container, "Pinned Runtime executable");
+      await click(buttonByText(container, "Issues (1)"));
+
+      expect(container.textContent).toContain("InputMaterializationFailed");
+      expect(container.textContent).toContain("Input 'Collection' failed to evaluate");
+      expect(container.textContent).not.toContain("Unmatched runtime evidence");
+
+      await click(buttonByLabel(container, "Copy incident InputMaterializationFailed"));
+
+      expect(writeText).toHaveBeenCalledWith(expect.stringContaining("Incident: InputMaterializationFailed"));
+      expect(writeText).toHaveBeenCalledWith(expect.stringContaining("Input 'Collection' failed to evaluate its JavaScript expression."));
+      expect(container.textContent).toContain("Copied incident");
+    } finally {
+      await unmount();
+      if (clipboardDescriptor) Object.defineProperty(navigator, "clipboard", clipboardDescriptor);
+      else Reflect.deleteProperty(navigator, "clipboard");
+    }
+  });
+
+  it("shows a not-found state only when the run record is absent", async () => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.startsWith("https://server.example/runtime/workflows/instances/wfexec-missing")) {
+        return response({ error: "Workflow run was not found." }, 404);
+      }
+
+      throw new Error(`Unexpected request ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const { container, unmount } = await renderRegisteredRoute("/workflows/instances/wfexec-missing");
+
+    await waitForText(container, "Run wfexec-missing was not found.");
+    expect(container.textContent).not.toContain("Definition graph unavailable");
+
+    await unmount();
+  });
+
+  it("renders transient workflow instance details from its pinned Runtime executable", async () => {
+    vi.stubGlobal("ResizeObserver", class {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    });
+    const draftVersionId = "draft:01KVWDKVN8HDDM9WPCGCK8QXJ4-2fead0b1";
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.startsWith("https://server.example/runtime/workflows/instances/wfexec-1")) {
+        return response(workflowInstanceDetails({
+          instance: workflowInstance({
+            definitionVersionId: draftVersionId,
+            artifactId: "test-artifact-46792146fbed",
+            artifactVersion: "draft",
+            status: "Running",
+            completedAt: null
+          })
+        }));
+      }
+
+      if (url.startsWith("https://server.example/runtime/workflows/executables/test-artifact-46792146fbed")) {
+        return response(executableDetail({ artifactId: "test-artifact-46792146fbed" }));
+      }
+
+      if (url.startsWith("https://server.example/design/activities/catalog")) {
+        return response({ activities: [activity({
+          activityVersionId: "write-line-v1",
+          activityTypeKey: "Elsa.Activities.Primitives.Activities.WriteLine",
+          category: "Primitives",
+          displayName: "Write Line"
+        })] });
+      }
+
+      throw new Error(`Unexpected request ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const { container, unmount } = await renderRegisteredRoute("/workflows/instances/wfexec-1");
+
+    await waitForText(container, "Pinned Runtime executable");
+    // Timeline is the default tab and renders the executed activity.
+    expect(container.textContent).toContain("Timeline");
+    expect(container.textContent).toContain("WriteLine");
+    expect(fetchMock.mock.calls.map(([url]) => String(url)).some(url => url.includes(encodeURIComponent(draftVersionId)))).toBe(false);
+    // Artifact metadata lives under the Details tab.
+    await click(buttonByText(container, "Details"));
+    expect(container.textContent).toContain("test-artifact-46792146fbed");
+
+    await unmount();
+  });
+  it("keeps the flat paged inventory and never probes folders when the capability is absent", async () => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes("definition-pages")) return response({ items: [definition()], nextContinuationToken: null });
+      throw new Error(`Unexpected request ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const capabilities = capabilityDocument();
+    capabilities.capabilities[0].links.push({ rel: "workflow-definitions-page", href: "design/workflows/definition-pages" });
+    const { container, unmount } = await renderRegisteredRoute("/workflows/definitions", undefined, false, capabilities);
+
+    await waitForText(container, "Hello World");
+    expect(container.querySelector("[role='tree']")).toBeNull();
+    expect(fetchMock.mock.calls.map(([url]) => String(url)).some(url => url.includes("/folders"))).toBe(false);
+    await unmount();
+  });
+
+  it("keeps the flat inventory when folders are advertised without bounded definition browsing", async () => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes("/definitions?")) return response({ items: [definition({ name: "Legacy flat workflow" })] });
+      throw new Error(`Unexpected request ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const capabilities = capabilityDocument();
+    capabilities.capabilities[0].links.push({ rel: "workflow-folders", href: "design/workflows/folders" });
+    const { container, unmount } = await renderRegisteredRoute(
+      "/workflows/definitions?folderId=requested-folder",
+      undefined,
+      false,
+      capabilities
+    );
+
+    await waitForText(container, "Legacy flat workflow");
+    expect(container.querySelector("[role='tree']")).toBeNull();
+    expect(container.querySelector("[role='status']")?.textContent).toContain(
+      "Workflow folders are unavailable. Showing all workflows while preserving the requested folder context."
+    );
+    expect(container.querySelector<HTMLInputElement>(".wf-search input")?.getAttribute("aria-label")).toBe("Search all workflows");
+    expect(buttonByText(container, "Search all workflows")).toBeNull();
+    expect(fetchMock.mock.calls.map(([url]) => String(url)).some(url => url.includes("/folders"))).toBe(false);
+    await unmount();
+  });
+
+  it("does not leave definitions suspended when workflow capability discovery fails", async () => {
+    vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
+      throw new Error(`Unexpected request ${String(input)}`);
+    }));
+    const { container, unmount } = await renderRegisteredRoute(
+      "/workflows/definitions?folderId=requested-folder",
+      undefined,
+      false,
+      { capabilities: [] }
+    );
+
+    await waitForText(container, "Couldn't inspect workflow folder support.");
+    await waitForText(container, "Couldn't load workflow definitions");
+    expect(container.querySelector(".wf-grid[aria-busy='true']")).toBeNull();
+    await unmount();
+  });
+
+  it("preserves requested folder context while explaining the capability-unavailable flat fallback", async () => {
+    const definitionRequests: string[] = [];
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes("definition-pages")) {
+        definitionRequests.push(url);
+        return response({ items: [definition({ name: "Flat fallback workflow" })], nextContinuationToken: null });
+      }
+      throw new Error(`Unexpected request ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const capabilities = capabilityDocument();
+    capabilities.capabilities[0].links.push({ rel: "workflow-definitions-page", href: "design/workflows/definition-pages" });
+    const { container, unmount } = await renderRegisteredRoute(
+      "/workflows/definitions?folderId=opaque-folder&search=approval",
+      undefined,
+      false,
+      capabilities
+    );
+
+    await waitForText(container, "Flat fallback workflow");
+    expect(container.querySelector("[role='status']")?.textContent).toContain(
+      "Workflow folders are unavailable. Showing all workflows while preserving the requested folder context."
+    );
+    expect(new URLSearchParams(window.location.search).get("folderId")).toBe("opaque-folder");
+    expect(definitionRequests).toEqual([
+      "https://server.example/design/workflows/definition-pages?state=active&search=approval&pageSize=10"
+    ]);
+    expect(fetchMock.mock.calls.map(([url]) => String(url)).some(url => url.includes("/folders"))).toBe(false);
+    await unmount();
+  });
+
+  it("retries the exact failed scoped query without changing URL or tree context", async () => {
+    const folder = workflowFolder("folder-retry", "Retry folder");
+    const definitionRequests: string[] = [];
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes("/folders/folder-retry")) return response({ folder, ancestors: [] });
+      if (url.includes("/folders?pageSize=100")) return response({ items: [folder], nextContinuationToken: null });
+      if (url.includes("definition-pages")) {
+        definitionRequests.push(url);
+        return definitionRequests.length === 1
+          ? response("Temporary definition failure.", 503)
+          : response({ items: [definition({ name: "Recovered workflow" })], nextContinuationToken: null });
+      }
+      throw new Error(`Unexpected request ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const capabilities = capabilityDocument();
+    capabilities.capabilities[0].links.push(
+      { rel: "workflow-definitions-page", href: "design/workflows/definition-pages" },
+      { rel: "workflow-folders", href: "design/workflows/folders" }
+    );
+    const { container, unmount } = await renderRegisteredRoute(
+      "/workflows/definitions?folderId=folder-retry&state=deleted&search=approval",
+      undefined,
+      false,
+      capabilities
+    );
+
+    await waitForText(container, "Temporary definition failure.");
+    await click(buttonByText(container, "Refresh"));
+    await waitForText(container, "Recovered workflow");
+
+    expect(definitionRequests).toEqual([
+      "https://server.example/design/workflows/definition-pages?state=deleted&search=approval&pageSize=10&folderId=folder-retry",
+      "https://server.example/design/workflows/definition-pages?state=deleted&search=approval&pageSize=10&folderId=folder-retry"
+    ]);
+    expect(container.querySelector(".wf-folder-breadcrumb")?.textContent).toContain("Retry folder");
+    expect(window.location.search).toBe("?folderId=folder-retry&state=deleted&search=approval");
+    await unmount();
+  });
+
+  it("restores folder, lifecycle, and search from the URL before the first scoped request", async () => {
+    const folder = workflowFolder("folder/opaque", "Operations");
+    const definitionPageRequests: string[] = [];
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes("/folders/folder%2Fopaque")) return response({ folder, ancestors: [] });
+      if (url.includes("/folders?pageSize=100")) return response({ items: [folder], nextContinuationToken: null });
+      if (url.includes("definition-pages")) {
+        definitionPageRequests.push(url);
+        return response({ items: [definition({ name: "Restored workflow" })], nextContinuationToken: null });
+      }
+      throw new Error(`Unexpected request ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const capabilities = capabilityDocument();
+    capabilities.capabilities[0].links.push(
+      { rel: "workflow-definitions-page", href: "design/workflows/definition-pages" },
+      { rel: "workflow-folders", href: "design/workflows/folders" }
+    );
+
+    const { container, unmount } = await renderRegisteredRoute(
+      "/workflows/definitions?folderId=folder%2Fopaque&state=all&search=invoice+approval",
+      undefined,
+      false,
+      capabilities
+    );
+
+    await waitForText(container, "Restored workflow");
+    expect(definitionPageRequests).toEqual([
+      "https://server.example/design/workflows/definition-pages?state=all&search=invoice+approval&pageSize=10&folderId=folder%2Fopaque"
+    ]);
+    expect(container.querySelector<HTMLInputElement>(".wf-search input")?.value).toBe("invoice approval");
+    expect(buttonByText(container, "All states")?.getAttribute("aria-selected")).toBe("true");
+    expect(container.querySelector(".wf-folder-breadcrumb")?.textContent).toContain("Operations");
+    await unmount();
+  });
+
+  it("navigates from a global result breadcrumb by opaque folder ID without opening the workflow", async () => {
+    const rootFolder = workflowFolder("folder-root", "Platform");
+    const leafFolder = workflowFolder("folder/leaf", "Operations", rootFolder.id);
+    const definitionPageRequests: string[] = [];
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes("/folders/folder%2Fleaf")) return response({ folder: leafFolder, ancestors: [rootFolder] });
+      if (url.includes("/folders?pageSize=100")) return response({ items: [rootFolder], nextContinuationToken: null });
+      if (url.includes("definition-pages")) {
+        definitionPageRequests.push(url);
+        return response({
+          items: [definition({
+            name: url.includes("folderId=folder%2Fleaf") ? "Scoped workflow" : "Global workflow",
+            folderId: leafFolder.id,
+            folderBreadcrumb: [
+              { id: rootFolder.id, name: rootFolder.name },
+              { id: leafFolder.id, name: leafFolder.name }
+            ]
+          })],
+          nextContinuationToken: null
+        });
+      }
+      throw new Error(`Unexpected request ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const capabilities = capabilityDocument();
+    capabilities.capabilities[0].links.push(
+      { rel: "workflow-definitions-page", href: "design/workflows/definition-pages" },
+      { rel: "workflow-folders", href: "design/workflows/folders" }
+    );
+    const { container, unmount } = await renderRegisteredRoute(
+      "/workflows/definitions?state=all&search=approval",
+      undefined,
+      false,
+      capabilities
+    );
+
+    await waitForText(container, "Global workflow");
+    const breadcrumb = container.querySelector<HTMLElement>('[aria-label="Folder for Global workflow"]');
+    expect(breadcrumb?.textContent).toContain("Platform");
+    expect(breadcrumb?.textContent).toContain("Operations");
+    const leaf = Array.from(breadcrumb?.querySelectorAll("button") ?? [])
+      .find(button => button.textContent === "Operations");
+    leaf?.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+    await click(leaf ?? null);
+
+    await waitForText(container, "Scoped workflow");
+    expect(new URLSearchParams(window.location.search).get("folderId")).toBe("folder/leaf");
+    expect(new URLSearchParams(window.location.search).get("state")).toBe("all");
+    expect(new URLSearchParams(window.location.search).get("search")).toBe("approval");
+    expect(new URLSearchParams(window.location.search).has("definition")).toBe(false);
+    expect(definitionPageRequests.at(-1)).toContain("folderId=folder%2Fleaf");
+    await unmount();
+  });
+
+  it("navigates explicit Unfiled results and omits missing older-server breadcrumbs", async () => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes("/folders?pageSize=100")) return response({ items: [], nextContinuationToken: null });
+      if (url.includes("definition-pages")) {
+        return response({
+          items: url.includes("unfiled=true")
+            ? [definition({ name: "Scoped Unfiled workflow", folderId: null, folderBreadcrumb: [] })]
+            : [
+              definition({ name: "Unfiled workflow", folderId: null, folderBreadcrumb: [] }),
+              definition({ id: "definition-older", name: "Older workflow", folderId: "opaque-older" })
+            ],
+          nextContinuationToken: null
+        });
+      }
+      throw new Error(`Unexpected request ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const capabilities = capabilityDocument();
+    capabilities.capabilities[0].links.push(
+      { rel: "workflow-definitions-page", href: "design/workflows/definition-pages" },
+      { rel: "workflow-folders", href: "design/workflows/folders" }
+    );
+    const { container, unmount } = await renderRegisteredRoute("/workflows/definitions", undefined, false, capabilities);
+
+    await waitForText(container, "Unfiled workflow");
+    expect(container.querySelector('[aria-label="Folder for Older workflow"]')).toBeNull();
+    await click(container.querySelector('[aria-label="Folder for Unfiled workflow"] button'));
+    await waitForText(container, "Scoped Unfiled workflow");
+    expect(new URLSearchParams(window.location.search).get("unfiled")).toBe("true");
+    expect(new URLSearchParams(window.location.search).has("folderId")).toBe(false);
+    await unmount();
+  });
+
+  it("switches an existing scoped search to All workflows without losing lifecycle or text", async () => {
+    const folder = workflowFolder("folder-operations", "Operations");
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes("/folders/folder-operations")) return response({ folder, ancestors: [] });
+      if (url.includes("/folders?pageSize=100")) return response({ items: [folder], nextContinuationToken: null });
+      if (url.includes("definition-pages")) {
+        return response({
+          items: [definition({ name: url.includes("folderId=") ? "Scoped approval" : "Global approval" })],
+          nextContinuationToken: null
+        });
+      }
+      throw new Error(`Unexpected request ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const capabilities = capabilityDocument();
+    capabilities.capabilities[0].links.push(
+      { rel: "workflow-definitions-page", href: "design/workflows/definition-pages" },
+      { rel: "workflow-folders", href: "design/workflows/folders" }
+    );
+    const { container, unmount } = await renderRegisteredRoute(
+      "/workflows/definitions?folderId=folder-operations&state=deleted&search=approval",
+      undefined,
+      false,
+      capabilities
+    );
+
+    await waitForText(container, "Scoped approval");
+    expect(container.querySelector<HTMLInputElement>(".wf-search input")?.getAttribute("aria-label")).toBe("Search selected folder");
+    await click(buttonByText(container, "Search all workflows"));
+    await waitForText(container, "Global approval");
+
+    const parameters = new URLSearchParams(window.location.search);
+    expect(parameters.has("folderId")).toBe(false);
+    expect(parameters.has("unfiled")).toBe(false);
+    expect(parameters.get("state")).toBe("deleted");
+    expect(parameters.get("search")).toBe("approval");
+    expect(container.querySelector<HTMLInputElement>(".wf-search input")?.getAttribute("aria-label")).toBe("Search all workflows");
+    await unmount();
+  });
+
+  it("describes an empty result using its URL-backed search, lifecycle, and Unfiled scope", async () => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes("/folders?pageSize=100")) return response({ items: [], nextContinuationToken: null });
+      if (url.includes("definition-pages")) return response({ items: [], nextContinuationToken: null });
+      throw new Error(`Unexpected request ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const capabilities = capabilityDocument();
+    capabilities.capabilities[0].links.push(
+      { rel: "workflow-definitions-page", href: "design/workflows/definition-pages" },
+      { rel: "workflow-folders", href: "design/workflows/folders" }
+    );
+    const { container, unmount } = await renderRegisteredRoute(
+      "/workflows/definitions?unfiled=true&state=all&search=missing",
+      undefined,
+      false,
+      capabilities
+    );
+
+    await waitForText(container, "No workflows match “missing”");
+    expect(container.textContent).toContain("No workflow definitions in any lifecycle state in Unfiled match this search.");
+    expect(container.querySelector<HTMLInputElement>(".wf-search input")?.getAttribute("aria-label")).toBe("Search Unfiled");
+    await unmount();
+  });
+
+  it("moves selected definitions through the advertised relation, deduplicates submission, and announces success", async () => {
+    const folder = { id: "folder-root", parentId: null, name: "Operations", normalizedName: "operations", createdAt: "", lastModifiedAt: "" };
+    let moveRequest: unknown;
+    let resolveMove: ((value: Response) => void) | undefined;
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url.includes("folder-inventory?pageSize=100")) return response({ items: [folder], nextContinuationToken: null });
+      if (url.endsWith("/placement/bulk") && init?.method === "POST") {
+        moveRequest = JSON.parse(String(init.body));
+        return new Promise<Response>(resolve => { resolveMove = resolve; });
+      }
+      if (url.includes("definition-pages")) return response({ items: [definition(), definition({ id: "definition-2", name: "Second workflow" })], nextContinuationToken: null });
+      throw new Error(`Unexpected request ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const capabilities = capabilityDocument();
+    capabilities.capabilities[0].links.push(
+      { rel: "workflow-definitions-page", href: "design/workflows/definition-pages" },
+      { rel: "workflow-folders", href: "inventory/folder-inventory" },
+      { rel: "workflow-definition-folder-move", href: "placement/bulk" });
+    const { container, unmount } = await renderRegisteredRoute("/workflows/definitions", undefined, false, capabilities);
+
+    await waitForText(container, "Hello World");
+    await click(checkboxByLabel(container, "Select workflow definition Hello World"));
+    await click(checkboxByLabel(container, "Select workflow definition Second workflow"));
+    const move = buttonByText(container, "Move to folder");
+    expect(move).not.toBeNull();
+    move?.focus();
+    await click(move);
+    const moveDialog = await waitForDialog(container);
+    await waitForText(moveDialog, "Operations");
+    expect(moveDialog.textContent).toContain("Unfiled");
+    expect(moveDialog.textContent).not.toContain("All workflows");
+    expect(moveDialog.querySelector("[role='tree']")).toBeNull();
+    await click(moveDialog.querySelector<HTMLInputElement>("input[data-folder-id='folder-root']"));
+    const submit = buttonByText(moveDialog, "Move");
+    await click(submit);
+    await click(submit);
+    await vi.waitFor(() => expect(moveRequest).toEqual({ definitionIds: ["definition-1", "definition-2"], folderId: "folder-root" }));
+    expect(fetchMock.mock.calls.filter(([url, init]) => String(url).endsWith("/placement/bulk") && (init as RequestInit)?.method === "POST")).toHaveLength(1);
+
+    resolveMove?.(new Response(null, { status: 204 }));
+    await vi.waitFor(() => expect(container.querySelector(".wf-dialog")).toBeNull());
+    await waitForText(container, "Moved 2 workflow definitions");
+    expect(container.querySelector("[role='status']")?.textContent).toContain("Moved 2 workflow definitions");
+    await vi.waitFor(() => expect(container.querySelector(".wf-selection-bar")).toBeNull());
+    expect(document.activeElement).toBe(buttonByText(container, "Refresh"));
+    await unmount();
+  });
+
+  it("keeps the move dialog, chosen destination, and selection after a rejected move", async () => {
+    const folder = { id: "folder-root", parentId: null, name: "Operations", normalizedName: "operations", createdAt: "", lastModifiedAt: "" };
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url.includes("/folders?pageSize=100")) return response({ items: [folder], nextContinuationToken: null });
+      if (url.endsWith("/definition-placement") && init?.method === "POST") return response("You cannot move this definition.", 403);
+      if (url.includes("definition-pages")) return response({ items: [definition()], nextContinuationToken: null });
+      throw new Error(`Unexpected request ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const capabilities = capabilityDocument();
+    capabilities.capabilities[0].links.push(
+      { rel: "workflow-definitions-page", href: "design/workflows/definition-pages" },
+      { rel: "workflow-folders", href: "design/workflows/folders" },
+      { rel: "workflow-definition-folder-move", href: "design/workflows/definition-placement" });
+    const { container, unmount } = await renderRegisteredRoute("/workflows/definitions", undefined, false, capabilities);
+
+    await waitForText(container, "Hello World");
+    await click(checkboxByLabel(container, "Select workflow definition Hello World"));
+    await click(buttonByText(container, "Move to folder"));
+    const moveDialog = await waitForDialog(container);
+    await waitForText(moveDialog, "Operations");
+    const destination = moveDialog.querySelector<HTMLInputElement>("input[data-folder-id='folder-root']");
+    await click(destination);
+    await click(buttonByText(moveDialog, "Move"));
+    await waitForText(moveDialog, "Couldn't move the selected workflow definitions");
+    expect(destination?.checked).toBe(true);
+    expect(container.querySelector(".wf-selection-bar")?.textContent).toContain("1 selected");
+    expect(dialog(container)).not.toBeNull();
+    await unmount();
+  });
+
+  it.each([400, 404, 409])("keeps move state actionable after a %i placement response", async status => {
+    const folder = { id: "folder-root", parentId: null, name: "Operations", normalizedName: "operations", createdAt: "", lastModifiedAt: "" };
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url.includes("/folders?pageSize=100")) return response({ items: [folder], nextContinuationToken: null });
+      if (url.endsWith("/definition-placement") && init?.method === "POST") return response(`Move rejected with ${status}.`, status);
+      if (url.includes("definition-pages")) return response({ items: [definition()], nextContinuationToken: null });
+      throw new Error(`Unexpected request ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const capabilities = capabilityDocument();
+    capabilities.capabilities[0].links.push(
+      { rel: "workflow-definitions-page", href: "design/workflows/definition-pages" },
+      { rel: "workflow-folders", href: "design/workflows/folders" },
+      { rel: "workflow-definition-folder-move", href: "design/workflows/definition-placement" });
+    const { container, unmount } = await renderRegisteredRoute("/workflows/definitions", undefined, false, capabilities);
+
+    await waitForText(container, "Hello World");
+    await click(checkboxByLabel(container, "Select workflow definition Hello World"));
+    await click(buttonByText(container, "Move to folder"));
+    const moveDialog = await waitForDialog(container);
+    await waitForText(moveDialog, "Operations");
+    const destination = moveDialog.querySelector<HTMLInputElement>("input[data-folder-id='folder-root']");
+    await click(destination);
+    await click(buttonByText(moveDialog, "Move"));
+    await waitForText(moveDialog, `Move rejected with ${status}.`);
+    expect(destination?.checked).toBe(true);
+    expect(container.querySelector(".wf-selection-bar")?.textContent).toContain("1 selected");
+    await unmount();
+  });
+
+  it("moves one selected definition to Unfiled with an explicit null folder ID", async () => {
+    let moveRequest: unknown;
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url.endsWith("/definition-placement") && init?.method === "POST") {
+        moveRequest = JSON.parse(String(init.body));
+        return new Response(null, { status: 204 });
+      }
+      if (url.includes("definition-pages")) return response({ items: [definition()], nextContinuationToken: null });
+      throw new Error(`Unexpected request ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const capabilities = capabilityDocument();
+    capabilities.capabilities[0].links.push(
+      { rel: "workflow-definitions-page", href: "design/workflows/definition-pages" },
+      { rel: "workflow-definition-folder-move", href: "design/workflows/definition-placement" });
+    const { container, unmount } = await renderRegisteredRoute("/workflows/definitions", undefined, false, capabilities);
+
+    await waitForText(container, "Hello World");
+    await click(checkboxByLabel(container, "Select workflow definition Hello World"));
+    await click(buttonByText(container, "Move to folder"));
+    const moveDialog = await waitForDialog(container);
+    await waitForText(moveDialog, "Unfiled");
+    expect(moveDialog.querySelector<HTMLInputElement>("input[data-destination='unfiled']")?.checked).toBe(true);
+    await click(buttonByText(moveDialog, "Move"));
+    await vi.waitFor(() => expect(moveRequest).toEqual({ definitionIds: ["definition-1"], folderId: null }));
+    expect(fetchMock.mock.calls.map(([url]) => String(url)).some(url => url.includes("/folders"))).toBe(false);
+    await waitForText(container, "Moved 1 workflow definition");
+    await unmount();
+  });
+
+  it("loads move destinations lazily and retries a failed child page without selecting an unavailable folder", async () => {
+    const rootFolder = { id: "folder-root", parentId: null, name: "Operations", normalizedName: "operations", createdAt: "", lastModifiedAt: "" };
+    const childFolder = { id: "folder-child", parentId: "folder-root", name: "Support", normalizedName: "support", createdAt: "", lastModifiedAt: "" };
+    let childAttempts = 0;
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes("/folders?pageSize=100&parentId=folder-root")) {
+        childAttempts += 1;
+        return childAttempts === 1 ? response("Temporary folder outage", 500) : response({ items: [childFolder], nextContinuationToken: null });
+      }
+      if (url.includes("/folders?pageSize=100")) return response({ items: [rootFolder], nextContinuationToken: null });
+      if (url.includes("definition-pages")) return response({ items: [definition()], nextContinuationToken: null });
+      throw new Error(`Unexpected request ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const capabilities = capabilityDocument();
+    capabilities.capabilities[0].links.push(
+      { rel: "workflow-definitions-page", href: "design/workflows/definition-pages" },
+      { rel: "workflow-folders", href: "design/workflows/folders" },
+      { rel: "workflow-definition-folder-move", href: "design/workflows/definition-placement" });
+    const { container, unmount } = await renderRegisteredRoute("/workflows/definitions", undefined, false, capabilities);
+
+    await waitForText(container, "Hello World");
+    await click(checkboxByLabel(container, "Select workflow definition Hello World"));
+    await click(buttonByText(container, "Move to folder"));
+    const moveDialog = await waitForDialog(container);
+    await waitForText(moveDialog, "Operations");
+    expect(moveDialog.querySelector("input[data-folder-id='folder-child']")).toBeNull();
+    await click(buttonByLabel(moveDialog, "Expand Operations"));
+    await waitForText(moveDialog, "Retry loading folders");
+    expect(moveDialog.querySelector("input[data-folder-id='folder-child']")).toBeNull();
+    await click(buttonByText(moveDialog, "Retry loading folders"));
+    await waitForText(moveDialog, "Support");
+    expect(childAttempts).toBe(2);
+    await unmount();
+  });
+
+  it("does not expose or probe the move endpoint when its advertised relation is absent", async () => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes("definition-pages")) return response({ items: [definition()], nextContinuationToken: null });
+      throw new Error(`Unexpected request ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const capabilities = capabilityDocument();
+    capabilities.capabilities[0].links.push({ rel: "workflow-definitions-page", href: "design/workflows/definition-pages" });
+    const { container, unmount } = await renderRegisteredRoute("/workflows/definitions", undefined, false, capabilities);
+
+    await waitForText(container, "Hello World");
+    await click(checkboxByLabel(container, "Select workflow definition Hello World"));
+    expect(buttonByText(container, "Move to folder")).toBeNull();
+    expect(fetchMock.mock.calls.map(([url]) => String(url)).some(url => url.includes("placement"))).toBe(false);
+    await unmount();
+  });
+
+  it("browses paged folder children through the capability root and appends the next child page", async () => {
+    const rootFolder = { id: "folder-root", parentId: null, name: "Operations", normalizedName: "operations", createdAt: "", lastModifiedAt: "" };
+    const firstChild = { id: "folder-child-1", parentId: "folder-root", name: "Support", normalizedName: "support", createdAt: "", lastModifiedAt: "" };
+    const secondChild = { id: "folder-child-2", parentId: "folder-root", name: "Billing", normalizedName: "billing", createdAt: "", lastModifiedAt: "" };
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes("/folders/folder-child-1")) return response({ folder: firstChild, ancestors: [rootFolder] });
+      if (url.includes("/folders/folder-root")) return response({ folder: rootFolder, ancestors: [] });
+      if (url.includes("/folders?pageSize=100&parentId=folder-root&continuationToken=next-child")) return response({ items: [secondChild], nextContinuationToken: null });
+      if (url.includes("/folders?pageSize=100&parentId=folder-root")) return response({ items: [firstChild], nextContinuationToken: "next-child" });
+      if (url.includes("/folders?pageSize=100")) return response({ items: [rootFolder], nextContinuationToken: null });
+      if (url.includes("definition-pages")) return response({ items: [definition({ name: url.includes("folderId=folder-child-1") ? "Support workflow" : url.includes("folderId=folder-root") ? "Operations workflow" : url.includes("unfiled=true") ? "Unfiled workflow" : "All workflow" })], nextContinuationToken: null });
+      throw new Error(`Unexpected request ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const capabilities = capabilityDocument();
+    capabilities.capabilities[0].links.push(
+      { rel: "workflow-definitions-page", href: "design/workflows/definition-pages" },
+      { rel: "workflow-folders", href: "design/workflows/folders" });
+    const { container, unmount } = await renderRegisteredRoute("/workflows/definitions", undefined, false, capabilities);
+
+    await waitForText(container, "Operations");
+    const tree = container.querySelector<HTMLElement>("[role='tree']");
+    expect(tree).not.toBeNull();
+    expect(Array.from(tree!.querySelectorAll<HTMLElement>("[role='treeitem']")).filter(item => item.tabIndex === 0)).toHaveLength(1);
+    expect(tree!.querySelector<HTMLElement>("[data-selection='all']")?.tabIndex).toBe(0);
+    expect(tree!.querySelector<HTMLElement>("[data-selection='unfiled']")?.tabIndex).toBe(-1);
+    const expandOperations = buttonByLabel(container, "Expand Operations");
+    expect(expandOperations?.tabIndex).toBe(-1);
+    await click(expandOperations);
+    await waitForText(container, "Support");
+    const rootTreeItem = container.querySelector<HTMLElement>(".wf-folder-tree-item[data-folder-id='folder-root']");
+    rootTreeItem?.focus();
+    await flushPromises();
+    expect(rootTreeItem?.tabIndex).toBe(0);
+    expect(tree!.querySelector<HTMLElement>("[data-selection='all']")?.tabIndex).toBe(-1);
+    rootTreeItem?.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowLeft", bubbles: true }));
+    await vi.waitFor(() => expect(container.textContent).not.toContain("Support"));
+    rootTreeItem?.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true }));
+    await waitForText(container, "Support");
+    rootTreeItem?.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true }));
+    expect(document.activeElement?.getAttribute("data-folder-id")).toBe("folder-child-1");
+    (document.activeElement as HTMLElement).dispatchEvent(new KeyboardEvent("keydown", { key: "Home", bubbles: true }));
+    expect(document.activeElement?.textContent).toContain("All workflows");
+    const loadMoreFolders = buttonByText(container, "Load more folders");
+    expect(loadMoreFolders?.getAttribute("role")).toBe("treeitem");
+    await click(loadMoreFolders);
+    await waitForText(container, "Billing");
+    expect(container.textContent).toContain("Support");
+    await vi.waitFor(() => expect(document.activeElement?.getAttribute("data-folder-id")).toBe("folder-root"));
+
+    const childTreeItem = container.querySelector<HTMLElement>("[role='treeitem'][data-folder-id='folder-child-1']");
+    await click(childTreeItem?.querySelector(".wf-folder-tree-row") ?? null);
+    await waitForText(container, "Support workflow");
+    expect(childTreeItem?.getAttribute("aria-selected")).toBe("true");
+    expect(rootTreeItem?.getAttribute("aria-selected")).toBe("false");
+    expect(childTreeItem?.tabIndex).toBe(0);
+    expect(document.activeElement).toBe(childTreeItem);
+
+    const unfiledItem = container.querySelector<HTMLElement>("[role='treeitem'][data-selection='unfiled']");
+    unfiledItem?.focus();
+    unfiledItem?.dispatchEvent(new KeyboardEvent("keydown", { key: " ", bubbles: true }));
+    await waitForText(container, "Unfiled workflow");
+    rootTreeItem?.focus();
+    rootTreeItem?.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+    await waitForText(container, "Operations workflow");
+    expect(fetchMock.mock.calls.map(([url]) => String(url))).toContain("https://server.example/design/workflows/definition-pages?state=active&pageSize=10&folderId=folder-root");
+    expect(fetchMock.mock.calls.map(([url]) => String(url))).toContain("https://server.example/design/workflows/definition-pages?state=active&pageSize=10&unfiled=true");
+    expect(container.querySelector(".wf-folder-breadcrumb")?.textContent).toContain("Operations");
+    await click(container.querySelector<HTMLButtonElement>(".wf-folder-breadcrumb button"));
+    await waitForText(container, "All workflow");
+    await click(buttonByText(container, "Folders"));
+    await vi.waitFor(() => expect(container.querySelector(".wf-folder-drawer [role='tree']")).not.toBeNull());
+    expect(container.querySelector(".wf-folder-drawer button[aria-label='Create folder']")).not.toBeNull();
+    await click(container.querySelector(".wf-folder-drawer button[aria-label='Close folder picker']"));
+    expect(container.querySelector(".wf-folder-drawer")).toBeNull();
+    await unmount();
+  });
+
+  it("creates a folder and places a created workflow in the selected persisted folder", async () => {
+    const folder = { id: "folder-root", parentId: null, name: "Operations", normalizedName: "operations", createdAt: "", lastModifiedAt: "" };
+    let definitionPost: unknown;
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (init?.method === "POST" && url.endsWith("/folders")) return response({ folder: { ...folder, id: "folder-created", name: "Created" } });
+      if (init?.method === "POST" && url.endsWith("/definitions")) { definitionPost = JSON.parse(String(init.body)); return response({ definition: definition({ id: "new-definition" }), draft: null, versions: [] }); }
+      if (url.includes("/folders/folder-root")) return response({ folder, ancestors: [] });
+      if (url.includes("/folders?pageSize=100")) return response({ items: [folder], nextContinuationToken: null });
+      if (url.includes("/activities")) return response({ activities: [] });
+      if (url.includes("definition-pages")) return response({ items: [definition()], nextContinuationToken: null });
+      throw new Error(`Unexpected request ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const capabilities = capabilityDocument();
+    capabilities.capabilities[0].links.push({ rel: "workflow-definitions-page", href: "design/workflows/definition-pages" }, { rel: "workflow-folders", href: "design/workflows/folders" });
+    const { api, container, unmount } = await renderRegisteredRoute("/workflows/definitions", api => { api.dialogs.prompt = vi.fn(async () => "Created"); }, false, capabilities);
+
+    await waitForText(container, "Operations");
+    await click(container.querySelector<HTMLElement>(".wf-folder-tree-item[data-folder-id='folder-root']"));
+    await click(buttonByLabel(container, "Create folder"));
+    await vi.waitFor(() => expect(api.dialogs.prompt).toHaveBeenCalled());
+    await vi.waitFor(() => expect(fetchMock.mock.calls.some(([url, init]) => String(url).endsWith("/folders") && (init as RequestInit)?.method === "POST")).toBe(true));
+    await click(buttonByText(container, "Create"));
+    await waitForText(container, "Create Workflow");
+    await fill(inputByLabel(container, "Display name"), "Placed workflow");
+    await click(buttonByText(dialog(container), "Create"));
+    await vi.waitFor(() => expect(definitionPost).toMatchObject({ name: "Placed workflow", folderId: "folder-root" }));
+    expect(api.dialogs.prompt).toHaveBeenCalled();
+    await unmount();
+  });
+
+  it("reports child folder failures, retries accessibly, and deduplicates the in-flight retry", async () => {
+    const folder = { id: "folder-root", parentId: null, name: "Operations", normalizedName: "operations", createdAt: "", lastModifiedAt: "" };
+    const child = { id: "folder-child", parentId: "folder-root", name: "Recovered child", normalizedName: "recovered child", createdAt: "", lastModifiedAt: "" };
+    let childAttempts = 0;
+    let resolveFirstAttempt: ((value: Response) => void) | undefined;
+    let resolveRetry: ((value: Response) => void) | undefined;
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes("/folders?pageSize=100&parentId=folder-root")) {
+        childAttempts += 1;
+        if (childAttempts === 1) return new Promise<Response>(resolve => { resolveFirstAttempt = resolve; });
+        return new Promise<Response>(resolve => { resolveRetry = resolve; });
+      }
+      if (url.includes("/folders?pageSize=100")) return response({ items: [folder], nextContinuationToken: null });
+      if (url.includes("definition-pages")) return response({ items: [definition()], nextContinuationToken: null });
+      throw new Error(`Unexpected request ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const capabilities = capabilityDocument();
+    capabilities.capabilities[0].links.push(
+      { rel: "workflow-definitions-page", href: "design/workflows/definition-pages" },
+      { rel: "workflow-folders", href: "design/workflows/folders" });
+    const { container, unmount } = await renderRegisteredRoute("/workflows/definitions", undefined, false, capabilities);
+
+    await waitForText(container, "Operations");
+    await click(buttonByLabel(container, "Expand Operations"));
+    const childGroup = container.querySelector<HTMLElement>("[data-folder-id='folder-root'] > [role='group']");
+    await vi.waitFor(() => expect(childGroup?.getAttribute("aria-busy")).toBe("true"));
+    expect(Array.from(childGroup!.children).every(childNode => childNode.getAttribute("role") === "treeitem")).toBe(true);
+    expect(childGroup?.querySelector("[data-kind='status'] [role='status']")?.textContent).toContain("Loading folders");
+    const rootTreeItem = container.querySelector<HTMLElement>("[role='treeitem'][data-folder-id='folder-root']");
+    expect(document.activeElement).toBe(rootTreeItem);
+    rootTreeItem?.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true }));
+    expect(document.activeElement).toBe(rootTreeItem);
+    resolveFirstAttempt?.(response("Temporary child failure", 500));
+    await waitForText(container, "Retry loading folders");
+    expect(container.querySelector("[role='alert']")?.textContent).toContain("Temporary child failure");
+    expect(Array.from(childGroup!.children).every(childNode => childNode.getAttribute("role") === "treeitem")).toBe(true);
+    const retry = container.querySelector<HTMLButtonElement>("[role='treeitem'][data-kind='retry']");
+    retry?.click();
+    retry?.click();
+    await vi.waitFor(() => expect(childAttempts).toBe(2));
+    expect(retry?.getAttribute("role")).toBe("treeitem");
+    await vi.waitFor(() => expect(document.activeElement?.getAttribute("data-folder-id")).toBe("folder-root"));
+    resolveRetry?.(response({ items: [child], nextContinuationToken: null }));
+    await waitForText(container, "Recovered child");
+    expect(container.textContent).not.toContain("Retry loading folders");
+    expect(document.activeElement?.getAttribute("data-folder-id")).toBe("folder-root");
+    await unmount();
+  });
+
+  it("hands keyboard focus to an asynchronously loaded child only while focus remains on its expanded parent", async () => {
+    const folderA = workflowFolder("folder-a", "Folder A");
+    const folderB = workflowFolder("folder-b", "Folder B");
+    const childA = workflowFolder("child-a", "Child A", folderA.id);
+    const childB = workflowFolder("child-b", "Child B", folderB.id);
+    let resolveChildrenA: ((value: Response) => void) | undefined;
+    let resolveChildrenB: ((value: Response) => void) | undefined;
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes(`parentId=${folderA.id}`)) return new Promise<Response>(resolve => { resolveChildrenA = resolve; });
+      if (url.includes(`parentId=${folderB.id}`)) return new Promise<Response>(resolve => { resolveChildrenB = resolve; });
+      if (url.includes("/folders?pageSize=100")) return response({ items: [folderA, folderB], nextContinuationToken: null });
+      if (url.includes("definition-pages")) return response({ items: [definition()], nextContinuationToken: null });
+      throw new Error(`Unexpected request ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const capabilities = capabilityDocument();
+    capabilities.capabilities[0].links.push(
+      { rel: "workflow-definitions-page", href: "design/workflows/definition-pages" },
+      { rel: "workflow-folders", href: "design/workflows/folders" });
+    const { container, unmount } = await renderRegisteredRoute("/workflows/definitions", undefined, false, capabilities);
+
+    await waitForText(container, folderA.name);
+    const itemA = container.querySelector<HTMLElement>(`[data-folder-id="${folderA.id}"]`);
+    itemA?.focus();
+    itemA?.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true }));
+    itemA?.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true }));
+    await vi.waitFor(() => expect(resolveChildrenA).toBeTypeOf("function"));
+    expect(document.activeElement).toBe(itemA);
+    resolveChildrenA?.(response({ items: [childA], nextContinuationToken: null }));
+    await vi.waitFor(() => expect(document.activeElement?.getAttribute("data-folder-id")).toBe(childA.id));
+
+    const itemB = container.querySelector<HTMLElement>(`[data-folder-id="${folderB.id}"]`);
+    itemB?.focus();
+    itemB?.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true }));
+    itemB?.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true }));
+    await vi.waitFor(() => expect(resolveChildrenB).toBeTypeOf("function"));
+    const all = container.querySelector<HTMLElement>("[data-selection='all']");
+    all?.dispatchEvent(new Event("pointerdown", { bubbles: true }));
+    all?.focus();
+    resolveChildrenB?.(response({ items: [childB], nextContinuationToken: null }));
+    await waitForText(container, childB.name);
+    expect(document.activeElement).toBe(all);
+    await unmount();
+  });
+
+  it("keeps breadcrumb projection on the latest selected opaque folder when details resolve out of order", async () => {
+    const folderA = { id: "folder-a", parentId: null, name: "Folder A", normalizedName: "folder a", createdAt: "", lastModifiedAt: "" };
+    const folderB = { id: "folder-b", parentId: null, name: "Folder B", normalizedName: "folder b", createdAt: "", lastModifiedAt: "" };
+    let resolveA: ((value: Response) => void) | undefined;
+    let resolveB: ((value: Response) => void) | undefined;
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes("/folders/folder-a")) return new Promise<Response>(resolve => { resolveA = resolve; });
+      if (url.includes("/folders/folder-b")) return new Promise<Response>(resolve => { resolveB = resolve; });
+      if (url.includes("/folders?pageSize=100")) return response({ items: [folderA, folderB], nextContinuationToken: null });
+      if (url.includes("definition-pages")) return response({ items: [definition()], nextContinuationToken: null });
+      throw new Error(`Unexpected request ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const capabilities = capabilityDocument();
+    capabilities.capabilities[0].links.push(
+      { rel: "workflow-definitions-page", href: "design/workflows/definition-pages" },
+      { rel: "workflow-folders", href: "design/workflows/folders" });
+    const { container, unmount } = await renderRegisteredRoute("/workflows/definitions", undefined, false, capabilities);
+
+    await waitForText(container, "Folder A");
+    await click(container.querySelector<HTMLElement>("[data-folder-id='folder-a']"));
+    await click(container.querySelector<HTMLElement>("[data-folder-id='folder-b']"));
+    resolveB?.(response({ folder: folderB, ancestors: [] }));
+    await vi.waitFor(() => expect(container.querySelector(".wf-folder-breadcrumb")?.textContent).toContain("Folder B"));
+    resolveA?.(response({ folder: folderA, ancestors: [] }));
+    await flushPromises();
+    expect(container.querySelector(".wf-folder-breadcrumb")?.textContent).toContain("Folder B");
+    expect(container.querySelector(".wf-folder-breadcrumb")?.textContent).not.toContain("Folder A");
+    await unmount();
+  });
+
+  it("clears stale breadcrumbs while the next opaque folder path is loading or fails", async () => {
+    const folderA = { id: "folder-a", parentId: null, name: "Folder A", normalizedName: "folder a", createdAt: "", lastModifiedAt: "" };
+    const folderB = { id: "folder-b", parentId: null, name: "Folder B", normalizedName: "folder b", createdAt: "", lastModifiedAt: "" };
+    let resolveA: ((value: Response) => void) | undefined;
+    let resolveB: ((value: Response) => void) | undefined;
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes("/folders/folder-a")) return new Promise<Response>(resolve => { resolveA = resolve; });
+      if (url.includes("/folders/folder-b")) return new Promise<Response>(resolve => { resolveB = resolve; });
+      if (url.includes("/folders?pageSize=100")) return response({ items: [folderA, folderB], nextContinuationToken: null });
+      if (url.includes("definition-pages")) return response({ items: [definition()], nextContinuationToken: null });
+      throw new Error(`Unexpected request ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const capabilities = capabilityDocument();
+    capabilities.capabilities[0].links.push(
+      { rel: "workflow-definitions-page", href: "design/workflows/definition-pages" },
+      { rel: "workflow-folders", href: "design/workflows/folders" });
+    const { container, unmount } = await renderRegisteredRoute("/workflows/definitions", undefined, false, capabilities);
+
+    await waitForText(container, "Folder A");
+    await click(container.querySelector<HTMLElement>("[data-folder-id='folder-a']"));
+    resolveA?.(response({ folder: folderA, ancestors: [] }));
+    await vi.waitFor(() => expect(container.querySelector(".wf-folder-breadcrumb")?.textContent).toContain("Folder A"));
+    await click(container.querySelector<HTMLElement>("[data-folder-id='folder-b']"));
+    expect(container.querySelector(".wf-folder-breadcrumb")?.getAttribute("aria-busy")).toBe("true");
+    expect(container.querySelector(".wf-folder-breadcrumb")?.textContent).not.toContain("Folder A");
+    resolveB?.(response("Folder detail failed", 500));
+    await vi.waitFor(() => expect(container.querySelector(".wf-folder-breadcrumb [role='alert']")?.textContent).toContain("Couldn't load this folder's path"));
+    expect(container.querySelector(".wf-folder-breadcrumb")?.textContent).not.toContain("Folder A");
+    await unmount();
+  });
+
+  it("keeps definitions, cursor state, and errors on the latest folder when older page requests finish later", async () => {
+    const folderA = { id: "folder-a", parentId: null, name: "Folder A", normalizedName: "folder a", createdAt: "", lastModifiedAt: "" };
+    const folderB = { id: "folder-b", parentId: null, name: "Folder B", normalizedName: "folder b", createdAt: "", lastModifiedAt: "" };
+    let aRequestCount = 0;
+    let bRequestCount = 0;
+    let resolveA1: ((value: Response) => void) | undefined;
+    let resolveB1: ((value: Response) => void) | undefined;
+    let resolveA2: ((value: Response) => void) | undefined;
+    let resolveB2: ((value: Response) => void) | undefined;
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes("/folders/folder-a")) return response({ folder: folderA, ancestors: [] });
+      if (url.includes("/folders/folder-b")) return response({ folder: folderB, ancestors: [] });
+      if (url.includes("/folders?pageSize=100")) return response({ items: [folderA, folderB], nextContinuationToken: null });
+      if (url.includes("definition-pages") && url.includes("folderId=folder-a")) {
+        aRequestCount += 1;
+        return new Promise<Response>(resolve => {
+          if (aRequestCount === 1) resolveA1 = resolve;
+          else resolveA2 = resolve;
+        });
+      }
+      if (url.includes("definition-pages") && url.includes("folderId=folder-b")) {
+        bRequestCount += 1;
+        return new Promise<Response>(resolve => {
+          if (bRequestCount === 1) resolveB1 = resolve;
+          else resolveB2 = resolve;
+        });
+      }
+      if (url.includes("definition-pages")) return response({ items: [definition({ name: "All workflow" })], nextContinuationToken: null });
+      throw new Error(`Unexpected request ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const capabilities = capabilityDocument();
+    capabilities.capabilities[0].links.push(
+      { rel: "workflow-definitions-page", href: "design/workflows/definition-pages" },
+      { rel: "workflow-folders", href: "design/workflows/folders" });
+    const { container, unmount } = await renderRegisteredRoute("/workflows/definitions", undefined, false, capabilities);
+
+    await waitForText(container, "Folder A");
+    await click(container.querySelector<HTMLElement>("[data-folder-id='folder-a']"));
+    await click(container.querySelector<HTMLElement>("[data-folder-id='folder-b']"));
+    await vi.waitFor(() => expect(resolveA1).toBeTypeOf("function"));
+    await vi.waitFor(() => expect(resolveB1).toBeTypeOf("function"));
+    resolveB1?.(response({ items: [definition({ name: "Newest B workflow" })], nextContinuationToken: null }));
+    await waitForText(container, "Newest B workflow");
+    expect(buttonByText(container, "Next")?.hasAttribute("disabled")).toBe(true);
+    resolveA1?.(response({ items: [definition({ name: "Stale A workflow" })], nextContinuationToken: "stale-a-next" }));
+    await flushPromises();
+    expect(container.textContent).toContain("Newest B workflow");
+    expect(container.textContent).not.toContain("Stale A workflow");
+    expect(buttonByText(container, "Next")?.hasAttribute("disabled")).toBe(true);
+
+    await click(container.querySelector<HTMLElement>("[data-folder-id='folder-a']"));
+    await click(container.querySelector<HTMLElement>("[data-folder-id='folder-b']"));
+    await vi.waitFor(() => expect(resolveA2).toBeTypeOf("function"));
+    await vi.waitFor(() => expect(resolveB2).toBeTypeOf("function"));
+    resolveB2?.(response({ items: [definition({ name: "Latest B workflow" })], nextContinuationToken: null }));
+    await waitForText(container, "Latest B workflow");
+    resolveA2?.(response("Stale A failure", 500));
+    await flushPromises();
+    expect(container.textContent).toContain("Latest B workflow");
+    expect(container.textContent).not.toContain("Stale A failure");
+    expect(container.textContent).not.toContain("Couldn't load workflow definitions");
+    expect(buttonByText(container, "Next")?.hasAttribute("disabled")).toBe(true);
+    await unmount();
+  });
+
+  it("restores the complete browse location on popstate and ignores the older table response", async () => {
+    const folderA = workflowFolder("folder-a", "Folder A");
+    const folderB = workflowFolder("folder-b", "Folder B");
+    let resolveA: ((value: Response) => void) | undefined;
+    let resolveB: ((value: Response) => void) | undefined;
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes("/folders/folder-a")) return response({ folder: folderA, ancestors: [] });
+      if (url.includes("/folders/folder-b")) return response({ folder: folderB, ancestors: [] });
+      if (url.includes("/folders?pageSize=100")) return response({ items: [folderA, folderB], nextContinuationToken: null });
+      if (url.includes("definition-pages") && url.includes("folderId=folder-a")) {
+        return new Promise<Response>(resolve => { resolveA = resolve; });
+      }
+      if (url.includes("definition-pages") && url.includes("folderId=folder-b")) {
+        return new Promise<Response>(resolve => { resolveB = resolve; });
+      }
+      if (url.includes("definition-pages")) return response({ items: [definition({ name: "All workflow" })], nextContinuationToken: null });
+      throw new Error(`Unexpected request ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const capabilities = capabilityDocument();
+    capabilities.capabilities[0].links.push(
+      { rel: "workflow-definitions-page", href: "design/workflows/definition-pages" },
+      { rel: "workflow-folders", href: "design/workflows/folders" }
+    );
+    const { container, unmount } = await renderRegisteredRoute("/workflows/definitions", undefined, false, capabilities);
+
+    await waitForText(container, "All workflow");
+    window.history.pushState({}, "", "/workflows/definitions?folderId=folder-a&state=deleted&search=old");
+    window.dispatchEvent(new PopStateEvent("popstate"));
+    await vi.waitFor(() => expect(resolveA).toBeTypeOf("function"));
+    window.history.pushState({}, "", "/workflows/definitions?folderId=folder-b&state=all&search=current");
+    window.dispatchEvent(new PopStateEvent("popstate"));
+    await vi.waitFor(() => expect(resolveB).toBeTypeOf("function"));
+
+    resolveB?.(response({ items: [definition({ name: "Current B workflow" })], nextContinuationToken: null }));
+    await waitForText(container, "Current B workflow");
+    resolveA?.(response({ items: [definition({ name: "Stale A workflow" })], nextContinuationToken: "stale-token" }));
+    await flushPromises();
+
+    expect(container.textContent).toContain("Current B workflow");
+    expect(container.textContent).not.toContain("Stale A workflow");
+    expect(container.querySelector<HTMLInputElement>(".wf-search input")?.value).toBe("current");
+    expect(buttonByText(container, "All states")?.getAttribute("aria-selected")).toBe("true");
+    expect(new URLSearchParams(window.location.search).get("folderId")).toBe("folder-b");
+    await unmount();
+  });
+
+  it("rebases definitions once when deleting the selected folder chooses its survivor", async () => {
+    const folder = workflowFolder("folder-delete", "Delete me");
+    let globalDefinitionRequests = 0;
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url.endsWith("/folders/folder-delete") && init?.method === "DELETE") {
+        return new Response(null, { status: 204 });
+      }
+      if (url.includes("/folders/folder-delete")) return response({ folder, ancestors: [] });
+      if (url.includes("/folders?pageSize=100")) return response({ items: [folder], nextContinuationToken: null });
+      if (url.includes("definition-pages")) {
+        if (!url.includes("folderId=")) globalDefinitionRequests += 1;
+        return response({
+          items: [definition({ name: url.includes("folderId=") ? "Folder workflow" : "All workflow" })],
+          nextContinuationToken: null
+        });
+      }
+      throw new Error(`Unexpected request ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const { container, unmount } = await renderRegisteredRoute(
+      "/workflows/definitions",
+      undefined,
+      false,
+      workflowFolderMutationCapabilities()
+    );
+
+    await waitForText(container, "Delete me");
+    await click(container.querySelector<HTMLElement>("[data-folder-id='folder-delete']"));
+    await waitForText(container, "Folder workflow");
+    await click(buttonByText(container, "Delete"));
+    await waitForText(container, "Deleted folder Delete me");
+    await waitForText(container, "All workflow");
+
+    expect(globalDefinitionRequests).toBe(2);
+    expect(new URLSearchParams(window.location.search).has("folderId")).toBe(false);
+    await unmount();
+  });
+
+  it("renames a selected folder without refetching its unchanged expanded child projection", async () => {
+    let folder = { id: "folder-edit", parentId: null, name: "Operations", normalizedName: "operations", createdAt: "", lastModifiedAt: "" };
+    const staleChild = { id: "folder-stale", parentId: folder.id, name: "Stale child", normalizedName: "stale child", createdAt: "", lastModifiedAt: "" };
+    let childRequestCount = 0;
+    let resolveStaleChildren: ((value: Response) => void) | undefined;
+    let renameRequest: unknown;
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url.endsWith("/folders/folder-edit/rename") && init?.method === "POST") {
+        renameRequest = JSON.parse(String(init.body));
+        folder = { ...folder, name: "Platform operations", normalizedName: "platform operations" };
+        return new Response(null, { status: 204 });
+      }
+      if (url.includes("/folders?pageSize=100&parentId=folder-edit")) {
+        childRequestCount += 1;
+        return new Promise<Response>(resolve => { resolveStaleChildren = resolve; });
+      }
+      if (url.includes("/folders/folder-edit")) return response({ folder, ancestors: [] });
+      if (url.includes("/folders?pageSize=100")) return response({ items: [folder], nextContinuationToken: null });
+      if (url.includes("definition-pages")) return response({ items: [definition({ name: "Operations workflow" })], nextContinuationToken: null });
+      throw new Error(`Unexpected request ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const capabilities = workflowFolderMutationCapabilities();
+    const { container, unmount } = await renderRegisteredRoute("/workflows/definitions", undefined, false, capabilities);
+
+    await waitForText(container, "Operations");
+    await click(container.querySelector<HTMLElement>("[data-folder-id='folder-edit']"));
+    await click(buttonByLabel(container, "Expand Operations"));
+    await vi.waitFor(() => expect(childRequestCount).toBe(1));
+    const rename = buttonByText(container, "Rename");
+    rename?.focus();
+    await click(rename);
+    const name = inputByLabel(dialog(container), "Folder name");
+    await fill(name, "Platform operations");
+    await click(buttonByText(dialog(container), "Rename"));
+
+    await vi.waitFor(() => expect(renameRequest).toEqual({ name: "Platform operations" }));
+    await vi.waitFor(() => expect(container.querySelector(".wf-dialog")).toBeNull());
+    expect(container.querySelector("[data-folder-id='folder-edit']")?.getAttribute("aria-selected")).toBe("true");
+    await vi.waitFor(() => expect(container.querySelector(".wf-folder-breadcrumb")?.textContent).toContain("Platform operations"));
+    expect(document.activeElement).toBe(rename);
+
+    resolveStaleChildren?.(response({ items: [staleChild], nextContinuationToken: null }));
+    await waitForText(container, "Stale child");
+    expect(childRequestCount).toBe(1);
+    expect(fetchMock.mock.calls.filter(([url, init]) => String(url).endsWith("/folders/folder-edit/rename") && (init as RequestInit)?.method === "POST")).toHaveLength(1);
+    await unmount();
+  });
+
+  it("invalidates a loaded collapsed child page after a structural mutation and reloads it on expansion", async () => {
+    const parent = workflowFolder("folder-parent", "Platform");
+    let child = workflowFolder("folder-child", "Operations", parent.id);
+    let childPageRequests = 0;
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url.endsWith("/folders/folder-child/rename") && init?.method === "POST") {
+        const request = JSON.parse(String(init.body)) as { name: string };
+        child = { ...child, name: request.name, normalizedName: request.name.toLocaleLowerCase() };
+        return new Response(null, { status: 204 });
+      }
+      if (url.includes("/folders?pageSize=100&parentId=folder-parent")) {
+        childPageRequests += 1;
+        return response({ items: [child], nextContinuationToken: null });
+      }
+      if (url.includes("/folders/folder-child")) return response({ folder: child, ancestors: [parent] });
+      if (url.includes("/folders/folder-parent")) return response({ folder: parent, ancestors: [] });
+      if (url.includes("/folders?pageSize=100")) return response({ items: [parent], nextContinuationToken: null });
+      if (url.includes("definition-pages")) return response({ items: [definition({ name: "Operations workflow" })], nextContinuationToken: null });
+      throw new Error(`Unexpected request ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const { container, unmount } = await renderRegisteredRoute("/workflows/definitions", undefined, false, workflowFolderMutationCapabilities());
+
+    await waitForText(container, parent.name);
+    await click(buttonByLabel(container, `Expand ${parent.name}`));
+    await waitForText(folderTree(container), child.name);
+    await click([...container.querySelectorAll<HTMLElement>("[data-folder-id]")].find(item => item.dataset.folderId === child.id) ?? null);
+    await click(buttonByLabel(container, `Collapse ${parent.name}`));
+    await click(buttonByText(container, "Rename"));
+    await fill(inputByLabel(dialog(container), "Folder name"), "Platform operations");
+    await click(buttonByText(dialog(container), "Rename"));
+
+    await waitForText(container, "Folder renamed");
+    expect(childPageRequests).toBe(1);
+    expect(folderTree(container).textContent).not.toContain("Platform operations");
+    await click(buttonByLabel(container, `Expand ${parent.name}`));
+    await waitForText(folderTree(container), "Platform operations");
+    expect(childPageRequests).toBe(2);
+    await unmount();
+  });
+
+  it.each([400, 403, 404, 409])("preserves the selected folder and rename value after a %i response", async status => {
+    const folder = workflowFolder("folder-edit", "Operations");
+    const { container, unmount } = await renderFolderMutationScenario({
+      folders: [folder],
+      definitionsByFolder: { [folder.id]: "Operations workflow" },
+      onMutation: (url, init) => url.endsWith("/folders/folder-edit/rename") && init?.method === "POST"
+        ? response(`Rename rejected with ${status}.`, status)
+        : null
+    });
+
+    await click(container.querySelector<HTMLElement>("[data-folder-id='folder-edit']"));
+    await click(buttonByText(container, "Rename"));
+    const name = inputByLabel(dialog(container), "Folder name");
+    await fill(name, "Platform operations");
+    await click(buttonByText(dialog(container), "Rename"));
+
+    await waitForText(dialog(container), `Rename rejected with ${status}.`);
+    expect(name?.value).toBe("Platform operations");
+    expect(container.querySelector("[data-folder-id='folder-edit']")?.getAttribute("aria-selected")).toBe("true");
+    expect(container.textContent).toContain("Operations workflow");
+    await unmount();
+  });
+
+  it("excludes the selected subtree by hierarchy without per-destination detail requests, then moves by stable ID", async () => {
+    const ancestor = workflowFolder("folder-ancestor", "Company");
+    let selected = workflowFolder("folder-edit", "Operations", ancestor.id);
+    const destination = { id: "folder-destination", parentId: null, name: "Platform", normalizedName: "platform", createdAt: "", lastModifiedAt: "" };
+    const descendant = { id: "folder-descendant", parentId: selected.id, name: "Private descendant", normalizedName: "private descendant", createdAt: "", lastModifiedAt: "" };
+    let moveRequest: unknown;
+    let detailRequests = 0;
+    let resolveAncestorChildren: (() => void) | null = null;
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url.endsWith("/folders/folder-edit/move") && init?.method === "POST") {
+        moveRequest = JSON.parse(String(init.body));
+        selected = { ...selected, parentId: destination.id };
+        return new Response(null, { status: 204 });
+      }
+      if (url.includes("/folders/") && init?.method !== "POST") {
+        detailRequests += 1;
+        if (url.includes("/folders/folder-edit")) return response({ folder: selected, ancestors: selected.parentId === destination.id ? [destination] : [ancestor] });
+        if (url.includes("/folders/folder-ancestor")) return response({ folder: ancestor, ancestors: [] });
+        if (url.includes("/folders/folder-destination")) return response({ folder: destination, ancestors: [] });
+        if (url.includes("/folders/folder-descendant")) return response({ folder: descendant, ancestors: [ancestor, selected] });
+      }
+      if (url.includes("/folders?pageSize=100&parentId=folder-ancestor")) {
+        const items = selected.parentId === ancestor.id ? [selected] : [];
+        // Held pending on the first call only, until the test resolves it explicitly below. That lets
+        // the test prove the ambiguity a scoped wait guards against is real: the definitions table's
+        // "Operations workflow" row (which renders independently of the folder tree) is on the page
+        // well before this folder row is. A wait that isn't scoped to the folder tree would match that
+        // row and let the click below run before the folder row exists.
+        if (!resolveAncestorChildren) {
+          return new Promise<Response>(resolve => {
+            resolveAncestorChildren = () => resolve(response({ items, nextContinuationToken: null }));
+          });
+        }
+        return response({ items, nextContinuationToken: null });
+      }
+      if (url.includes("/folders?pageSize=100&parentId=folder-destination")) return response({ items: selected.parentId === destination.id ? [selected] : [], nextContinuationToken: null });
+      if (url.includes("/folders?pageSize=100")) return response({
+        items: [ancestor, destination],
+        nextContinuationToken: null
+      });
+      if (url.includes("definition-pages")) return response({ items: [definition({ name: "Operations workflow" })], nextContinuationToken: null });
+      throw new Error(`Unexpected request ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const { container, unmount } = await renderRegisteredRoute("/workflows/definitions", undefined, false, workflowFolderMutationCapabilities());
+
+    await waitForText(container, ancestor.name);
+    await waitForText(container, "Operations workflow");
+    await click(buttonByLabel(container, `Expand ${ancestor.name}`));
+    await vi.waitFor(() => expect(resolveAncestorChildren).not.toBeNull());
+    // The ambiguity a scoped wait guards against, made concrete: "Operations" (selected.name) is
+    // already on the page via the definitions table row, while the folder tree itself has no such
+    // row yet because its children request is still pending.
+    expect(container.textContent).toContain(selected.name);
+    expect(folderTree(container).textContent).not.toContain(selected.name);
+    resolveAncestorChildren!();
+    await waitForText(folderTree(container), selected.name);
+    await click([...container.querySelectorAll<HTMLElement>("[data-folder-id]")].find(item => item.dataset.folderId === selected.id) ?? null);
+    await vi.waitFor(() => expect(container.querySelector(".wf-folder-breadcrumb")?.textContent).toContain(selected.name));
+    const detailRequestsBeforeDialog = detailRequests;
+    const move = buttonByText(container, "Move");
+    move?.focus();
+    await click(move);
+    await waitForText(dialog(container), "Platform");
+    await click(buttonByLabel(dialog(container), `Expand ${ancestor.name}`));
+    await flushPromises();
+    expect(dialog(container).textContent).not.toContain("Private descendant");
+    expect(dialog(container).querySelector("input[value='folder-edit']")).toBeNull();
+    expect(detailRequests).toBe(detailRequestsBeforeDialog);
+    expect(fetchMock.mock.calls.map(([request]) => String(request)).some(request => new URL(request).searchParams.get("parentId") === descendant.parentId)).toBe(false);
+    const destinationRadio = dialog(container).querySelector<HTMLInputElement>("input[value='folder-destination']");
+    await click(destinationRadio);
+    await click(buttonByText(dialog(container), "Move"));
+
+    await vi.waitFor(() => expect(moveRequest).toEqual({ parentId: "folder-destination" }));
+    await vi.waitFor(() => expect(container.querySelector(".wf-dialog")).toBeNull());
+    await vi.waitFor(() => expect(container.querySelector(".wf-folder-breadcrumb")?.textContent).toContain("Platform"));
+    expect(container.querySelector(".wf-folder-breadcrumb")?.textContent).toContain("Operations");
+    expect(document.activeElement).toBe(move);
+    await unmount();
+  });
+
+  it.each([400, 403, 404, 409])("keeps the move destination and navigation context after a %i response", async status => {
+    const selected = workflowFolder("folder-edit", "Operations");
+    const destination = workflowFolder("folder-destination", "Platform");
+    const { container, unmount } = await renderFolderMutationScenario({
+      folders: [selected, destination],
+      definitionsByFolder: { [selected.id]: "Operations workflow" },
+      onMutation: (url, init) => url.endsWith("/folders/folder-edit/move") && init?.method === "POST"
+        ? response(`Move rejected with ${status}.`, status)
+        : null
+    });
+
+    await click(container.querySelector<HTMLElement>("[data-folder-id='folder-edit']"));
+    await click(buttonByText(container, "Move"));
+    await waitForText(dialog(container), "Platform");
+    const destinationRadio = dialog(container).querySelector<HTMLInputElement>("input[value='folder-destination']");
+    await vi.waitFor(() => expect(destinationRadio?.disabled).toBe(false));
+    await click(destinationRadio);
+    await click(buttonByText(dialog(container), "Move"));
+
+    await waitForText(dialog(container), `Move rejected with ${status}.`);
+    expect(destinationRadio?.checked).toBe(true);
+    expect(container.querySelector("[data-folder-id='folder-edit']")?.getAttribute("aria-selected")).toBe("true");
+    expect(container.textContent).toContain("Operations workflow");
+    await unmount();
+  });
+
+  it("confirms empty-folder deletion, selects the known parent, refreshes direct members, and restores tree focus", async () => {
+    const parent = { id: "folder-parent", parentId: null, name: "Platform", normalizedName: "platform", createdAt: "", lastModifiedAt: "" };
+    const child = { id: "folder-child", parentId: parent.id, name: "Operations", normalizedName: "operations", createdAt: "", lastModifiedAt: "" };
+    let deleted = false;
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url.endsWith("/folders/folder-child") && init?.method === "DELETE") {
+        deleted = true;
+        return new Response(null, { status: 204 });
+      }
+      if (url.includes("/folders/folder-child")) return response({ folder: child, ancestors: [parent] });
+      if (url.includes("/folders/folder-parent")) return response({ folder: parent, ancestors: [] });
+      if (url.includes("/folders?pageSize=100&parentId=folder-parent")) return response({ items: deleted ? [] : [child], nextContinuationToken: null });
+      if (url.includes("/folders?pageSize=100")) return response({ items: [parent], nextContinuationToken: null });
+      if (url.includes("definition-pages")) {
+        const name = url.includes("folderId=folder-parent") ? "Parent workflow" : url.includes("folderId=folder-child") ? "Child workflow" : "All workflow";
+        return response({ items: [definition({ name })], nextContinuationToken: null });
+      }
+      throw new Error(`Unexpected request ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const capabilities = workflowFolderMutationCapabilities();
+    const { api, container, unmount } = await renderRegisteredRoute("/workflows/definitions", undefined, false, capabilities);
+
+    await waitForText(container, "Platform");
+    await click(buttonByLabel(container, "Expand Platform"));
+    await waitForText(container, "Operations");
+    await click(container.querySelector<HTMLElement>("[data-folder-id='folder-child']"));
+    await waitForText(container, "Child workflow");
+    await click(buttonByText(container, "Delete"));
+
+    await vi.waitFor(() => expect(api.dialogs.confirm).toHaveBeenCalledWith(expect.objectContaining({
+      message: expect.stringContaining('Delete empty folder "Operations"'),
+      tone: "danger"
+    })));
+    await waitForText(container, "Parent workflow");
+    expect(container.textContent).not.toContain("Child workflow");
+    expect(container.querySelector("[data-folder-id='folder-parent']")?.getAttribute("aria-selected")).toBe("true");
+    await vi.waitFor(() => expect(document.activeElement?.getAttribute("data-folder-id")).toBe("folder-parent"));
+    await unmount();
+  });
+
+  it("restores delete-focus within the navigation that performed the delete, not the first .wf-folder-nav in the document", async () => {
+    const parent = { id: "folder-parent", parentId: null, name: "Platform", normalizedName: "platform", createdAt: "", lastModifiedAt: "" };
+    const child = { id: "folder-child", parentId: parent.id, name: "Operations", normalizedName: "operations", createdAt: "", lastModifiedAt: "" };
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url.includes("/capabilities")) return response(workflowFolderMutationCapabilities());
+      if (url.endsWith("/folders/folder-child") && init?.method === "DELETE") {
+        return new Response(null, { status: 204 });
+      }
+      if (url.includes("/folders/folder-child")) return response({ folder: child, ancestors: [parent] });
+      if (url.includes("/folders/folder-parent")) return response({ folder: parent, ancestors: [] });
+      if (url.includes("/folders?pageSize=100")) return response({ items: [parent], nextContinuationToken: null });
+      throw new Error(`Unexpected request ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    setDialogs({ confirm: vi.fn(async () => true), prompt: vi.fn(async () => null), alert: vi.fn(async () => undefined) });
+    const context = testApi().backend;
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    const root = createRoot(container);
+
+    // Second navigation is the one performing the delete. Old code targeted `document.querySelector(".wf-folder-nav")`,
+    // which always resolves to the first navigation in DOM order regardless of which one is acting. Each
+    // navigation is wrapped in its own host div so its tree and action bar (siblings, not nested) can be
+    // queried together without ambiguity against the other navigation's identical folder markup.
+    function TwoNavigations() {
+      const [secondSelection, setSecondSelection] = React.useState<WorkflowFolderSelection>({ id: child.id });
+      return <>
+        <div data-testid="first-host"><WorkflowFolderNavigation context={context} selection="all" onSelect={() => {}} onAvailable={() => {}} /></div>
+        <div data-testid="second-host"><WorkflowFolderNavigation context={context} selection={secondSelection} onSelect={setSecondSelection} onAvailable={() => {}} /></div>
+      </>;
+    }
+
+    try {
+      flushSync(() => root.render(<TwoNavigations />));
+      await waitForText(container, "Platform");
+      const firstHost = container.querySelector<HTMLElement>('[data-testid="first-host"]')!;
+      const secondHost = container.querySelector<HTMLElement>('[data-testid="second-host"]')!;
+      expect(container.querySelectorAll(".wf-folder-nav")).toHaveLength(2);
+
+      await waitForButtonByText(secondHost, "Delete");
+      await click(buttonByText(secondHost, "Delete"));
+
+      await vi.waitFor(() => expect(document.activeElement?.getAttribute("data-folder-id")).toBe(parent.id));
+      expect(secondHost.contains(document.activeElement)).toBe(true);
+      expect(firstHost.contains(document.activeElement)).toBe(false);
+    } finally {
+      flushSync(() => root.unmount());
+      container.remove();
+    }
+  });
+
+  it("keeps opaque folder IDs out of selectors and ARIA IDs through paging, focus, and delete recovery", async () => {
+    const parent = workflowFolder('folder:"parent] \\#? with space', "Opaque parent");
+    const firstChild = workflowFolder("folder:first", "First child", parent.id);
+    const deletedChild = workflowFolder('folder:"delete] \\#? with space', "Delete child", parent.id);
+    let deleted = false;
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = new URL(String(input));
+      if (url.pathname.includes("/definition-pages")) {
+        const folderId = url.searchParams.get("folderId");
+        return response({ items: [definition({ name: folderId === deletedChild.id ? "Delete child workflow" : "All workflow" })], nextContinuationToken: null });
+      }
+      if (url.pathname.endsWith("/folders")) {
+        const parentId = url.searchParams.get("parentId");
+        const token = url.searchParams.get("continuationToken");
+        if (parentId === parent.id && token === "opaque-next") {
+          return response({ items: deleted ? [] : [deletedChild], nextContinuationToken: null });
+        }
+        if (parentId === parent.id) return response({ items: [firstChild], nextContinuationToken: "opaque-next" });
+        return response({ items: [parent], nextContinuationToken: null });
+      }
+      const folderId = decodeURIComponent(url.pathname.split("/folders/")[1]?.split("/")[0] ?? "");
+      if (folderId === deletedChild.id && init?.method === "DELETE") {
+        deleted = true;
+        return new Response(null, { status: 204 });
+      }
+      if (folderId === parent.id) return response({ folder: parent, ancestors: [] });
+      if (folderId === firstChild.id) return response({ folder: firstChild, ancestors: [parent] });
+      if (folderId === deletedChild.id) return response({ folder: deletedChild, ancestors: [parent] });
+      throw new Error(`Unexpected request ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const { container, unmount } = await renderRegisteredRoute("/workflows/definitions", undefined, false, workflowFolderMutationCapabilities());
+    const folderItem = (id: string) => [...container.querySelectorAll<HTMLElement>("[data-folder-id]")]
+      .find(item => item.dataset.folderId === id);
+
+    await waitForText(container, parent.name);
+    const parentItem = folderItem(parent.id);
+    const childGroupId = parentItem?.getAttribute("aria-controls") ?? "";
+    expect(childGroupId).not.toContain(parent.id);
+    await click(buttonByLabel(container, `Expand ${parent.name}`));
+    await waitForText(container, firstChild.name);
+    expect(document.getElementById(childGroupId)).not.toBeNull();
+
+    await click(buttonByText(container, "Load more folders"));
+    await waitForText(container, deletedChild.name);
+    await vi.waitFor(() => expect(document.activeElement?.getAttribute("data-folder-id")).toBe(parent.id));
+    await click(folderItem(deletedChild.id) ?? null);
+    await waitForText(container, "Delete child workflow");
+    await click(buttonByText(container, "Delete"));
+
+    await waitForText(container, `Deleted folder ${deletedChild.name}`);
+    expect(folderItem(deletedChild.id)).toBeUndefined();
+    expect(container.textContent).toContain(firstChild.name);
+    await vi.waitFor(() => expect(document.activeElement?.getAttribute("data-folder-id")).toBe(parent.id));
+    await unmount();
+  });
+
+  it("keeps reserved object and root-like folder IDs distinct through expansion, paging, and mutation refresh", async () => {
+    const parent = workflowFolder("root", "Root-like folder");
+    const expandableChild = workflowFolder("constructor", "Constructor folder", parent.id);
+    const deletedChild = workflowFolder("__proto__", "Prototype folder", parent.id);
+    const grandchild = workflowFolder("safe-leaf", "Nested workflow folder", expandableChild.id);
+    let deleted = false;
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = new URL(String(input));
+      if (url.pathname.includes("/definition-pages")) {
+        const folderId = url.searchParams.get("folderId");
+        return response({ items: [definition({ name: folderId === deletedChild.id ? "Prototype workflow" : "All workflow" })], nextContinuationToken: null });
+      }
+      if (url.pathname.endsWith("/folders")) {
+        const parentId = url.searchParams.get("parentId");
+        const token = url.searchParams.get("continuationToken");
+        if (parentId === parent.id && token === "reserved-next") {
+          return response({ items: deleted ? [] : [deletedChild], nextContinuationToken: null });
+        }
+        if (parentId === parent.id) return response({ items: [expandableChild], nextContinuationToken: "reserved-next" });
+        if (parentId === expandableChild.id) return response({ items: [grandchild], nextContinuationToken: null });
+        return response({ items: [parent], nextContinuationToken: null });
+      }
+      const folderId = decodeURIComponent(url.pathname.split("/folders/")[1]?.split("/")[0] ?? "");
+      if (folderId === deletedChild.id && init?.method === "DELETE") {
+        deleted = true;
+        return new Response(null, { status: 204 });
+      }
+      if (folderId === parent.id) return response({ folder: parent, ancestors: [] });
+      if (folderId === expandableChild.id) return response({ folder: expandableChild, ancestors: [parent] });
+      if (folderId === deletedChild.id) return response({ folder: deletedChild, ancestors: [parent] });
+      throw new Error(`Unexpected request ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const { container, unmount } = await renderRegisteredRoute("/workflows/definitions", undefined, false, workflowFolderMutationCapabilities());
+    const folderItem = (id: string) => [...container.querySelectorAll<HTMLElement>("[data-folder-id]")]
+      .find(item => item.dataset.folderId === id);
+
+    await waitForText(container, parent.name);
+    await click(buttonByLabel(container, `Expand ${parent.name}`));
+    await waitForText(container, expandableChild.name);
+    await click(buttonByText(container, "Load more folders"));
+    await waitForText(container, deletedChild.name);
+    await click(buttonByLabel(container, `Expand ${expandableChild.name}`));
+    await waitForText(container, grandchild.name);
+
+    await click(folderItem(deletedChild.id) ?? null);
+    await waitForText(container, "Prototype workflow");
+    await click(buttonByText(container, "Delete"));
+
+    await waitForText(container, `Deleted folder ${deletedChild.name}`);
+    expect(folderItem(deletedChild.id)).toBeUndefined();
+    expect(folderItem(expandableChild.id)?.getAttribute("aria-expanded")).toBe("true");
+    expect(container.textContent).toContain(grandchild.name);
+    await vi.waitFor(() => expect(document.activeElement?.getAttribute("data-folder-id")).toBe(parent.id));
+    await unmount();
+  });
+
+  it("keeps the selected folder, expanded tree, direct-member table, and action focus after rejected deletion", async () => {
+    const parent = workflowFolder("folder-parent", "Platform");
+    const child = workflowFolder("folder-child", "Operations", parent.id);
+    const { container, unmount } = await renderFolderMutationScenario({
+      folders: [parent, child],
+      definitionsByFolder: { [child.id]: "Child workflow" },
+      onMutation: (url, init) => url.endsWith("/folders/folder-child") && init?.method === "DELETE"
+        ? response("Folder contains workflow definitions.", 409)
+        : null
+    });
+
+    await click(buttonByLabel(container, "Expand Platform"));
+    await waitForText(container, "Operations");
+    await click(container.querySelector<HTMLElement>("[data-folder-id='folder-child']"));
+    await waitForText(container, "Child workflow");
+    const remove = buttonByText(container, "Delete");
+    remove?.focus();
+    await click(remove);
+
+    await waitForText(container, "Folder contains workflow definitions.");
+    expect(container.querySelector("[data-folder-id='folder-child']")?.getAttribute("aria-selected")).toBe("true");
+    expect(container.querySelector("[data-folder-id='folder-parent']")?.getAttribute("aria-expanded")).toBe("true");
+    expect(container.textContent).toContain("Child workflow");
+    expect(document.activeElement).toBe(remove);
+    await unmount();
+  });
+
+  it("keeps folder mutation actions absent when their relations are not advertised", async () => {
+    const folder = { id: "folder-edit", parentId: null, name: "Operations", normalizedName: "operations", createdAt: "", lastModifiedAt: "" };
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes("/folders/folder-edit")) return response({ folder, ancestors: [] });
+      if (url.includes("/folders?pageSize=100")) return response({ items: [folder], nextContinuationToken: null });
+      if (url.includes("definition-pages")) return response({ items: [definition()], nextContinuationToken: null });
+      throw new Error(`Unexpected request ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const capabilities = capabilityDocument();
+    capabilities.capabilities[0].links.push(
+      { rel: "workflow-definitions-page", href: "design/workflows/definition-pages" },
+      { rel: "workflow-folders", href: "design/workflows/folders" }
+    );
+    const { container, unmount } = await renderRegisteredRoute("/workflows/definitions", undefined, false, capabilities);
+
+    await waitForText(container, "Operations");
+    await click(container.querySelector<HTMLElement>("[data-folder-id='folder-edit']"));
+    expect(container.querySelector(".wf-folder-actions")).toBeNull();
+    expect(fetchMock.mock.calls.map(([url]) => String(url))).not.toContain("rename");
+    expect(fetchMock.mock.calls.map(([url]) => String(url))).not.toContain("move");
+    await unmount();
+  });
+});
+
+// Renders the definitions list with a stub suggest-metadata action, opens the Create dialog, and reveals
+// the intent box — the shared arrange for the metadata-suggestion tests. publishSuggestion() feeds a
+// Weaver reply back through the real onPromptResult bus using the requestId the dialog dispatched.
+async function openCreateDialogWithSuggest() {
+  vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) =>
+    String(input).includes("/activities") ? response({ activities: [] }) : response({ items: [definition()] })));
+
+  const captured: { requestId?: string } = {};
+  const rendered = await renderRegisteredRoute("/workflows/definitions", api => {
+    api.ai.promptActions.add({
+      id: "weaver.workflows.suggest-create-metadata",
+      label: "Suggest name and description",
+      placement: "field-adornment",
+      contextKind: "workflow-create-draft",
+      createPrompt: () => ({ message: "suggest", mode: "enqueue", attachments: [] })
+    });
+    api.ai.dispatchPrompt = request => { captured.requestId = request.requestId; };
+  });
+
+  await waitForText(rendered.container, "Hello World");
+  await click(buttonByText(rendered.container, "Create"));
+  await waitForText(rendered.container, "Create Workflow");
+  // The button reveals the intent field rather than firing a context-free prompt.
+  await click(buttonByText(dialog(rendered.container), "Suggest name and description"));
+
+  const publishSuggestion = async (result: { text: string; status?: "completed" | "cancelled" | "failed"; autoApply?: boolean }) => {
+    expect(captured.requestId).toBeTruthy();
+    flushSync(() => rendered.api.ai.publishPromptResult({ requestId: captured.requestId!, status: "completed", ...result }));
+    await flushPromises();
+  };
+
+  return { ...rendered, captured, publishSuggestion };
+}
+
+function stubWorkflowEditorFetch() {
+  vi.stubGlobal("ResizeObserver", class {
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+  });
+  vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
+    const url = String(input);
+    if (url.includes("/activities/availability/diagnostics")) return response({ items: [], sets: [] });
+    if (url.includes("/activities")) return response({ activities: [] });
+    if (url.includes("/definitions/definition-1")) return response({ definition: definition(), draft: workflowDraft(), versions: [] });
+    return response(null, 404);
+  }));
+}
+
+function workflowFolderMutationCapabilities() {
+  const document = capabilityDocument();
+  document.capabilities[0].links.push(
+    { rel: "workflow-definitions-page", href: "design/workflows/definition-pages" },
+    { rel: "workflow-folders", href: "design/workflows/folders" },
+    { rel: "workflow-folder-rename", href: "design/workflows/folders/{folderId}/rename", templated: true },
+    { rel: "workflow-folder-move", href: "design/workflows/folders/{folderId}/move", templated: true },
+    { rel: "workflow-folder-delete-empty", href: "design/workflows/folders/{folderId}", templated: true }
+  );
+  return document;
+}
+
+function workflowFolder(id: string, name: string, parentId: string | null = null) {
+  return { id, parentId, name, normalizedName: name.toLocaleLowerCase(), createdAt: "", lastModifiedAt: "" };
+}
+
+async function renderFolderMutationScenario(options: {
+  folders: ReturnType<typeof workflowFolder>[];
+  definitionsByFolder?: Record<string, string>;
+  onMutation?(url: string, init?: RequestInit): Response | null | Promise<Response | null>;
+}) {
+  const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = String(input);
+    const mutationResponse = await options.onMutation?.(url, init);
+    if (mutationResponse) return mutationResponse;
+    if (url.includes("/folders?pageSize=100")) {
+      const parentId = new URL(url).searchParams.get("parentId");
+      return response({ items: options.folders.filter(folder => folder.parentId === parentId), nextContinuationToken: null });
+    }
+    if (url.includes("/folders/")) {
+      const folderId = decodeURIComponent(new URL(url).pathname.split("/folders/")[1]);
+      const folder = options.folders.find(candidate => candidate.id === folderId);
+      if (!folder) return response("Folder not found.", 404);
+      const ancestors: typeof options.folders = [];
+      let parentId = folder.parentId;
+      while (parentId) {
+        const parent = options.folders.find(candidate => candidate.id === parentId);
+        if (!parent) break;
+        ancestors.unshift(parent);
+        parentId = parent.parentId;
+      }
+      return response({ folder, ancestors });
+    }
+    if (url.includes("definition-pages")) {
+      const folderId = new URL(url).searchParams.get("folderId") ?? "all";
+      const name = options.definitionsByFolder?.[folderId] ?? "All workflow";
+      return response({ items: [definition({ name })], nextContinuationToken: null });
+    }
+    throw new Error(`Unexpected request ${url}`);
+  });
+  vi.stubGlobal("fetch", fetchMock);
+  const rendered = await renderRegisteredRoute("/workflows/definitions", undefined, false, workflowFolderMutationCapabilities());
+  const firstRoot = options.folders.find(folder => folder.parentId === null);
+  if (firstRoot) await waitForText(rendered.container, firstRoot.name);
+  return { ...rendered, fetchMock };
+}
+
+function executable(overrides: Partial<Record<string, unknown>> = {}) {
+  return {
+    artifactId: "artifact-1",
+    artifactVersion: "1.0.0",
+    artifactHash: "sha256:abc",
+    definitionId: "definition-1",
+    definitionVersionId: "version-1",
+    createdAt: "2026-06-18T01:00:00Z",
+    publishedAt: "2026-06-18T01:10:00Z",
+    sourceKind: "definition",
+    sourceId: "definition-1",
+    sourceVersion: "1.0.0",
+    rootActivityType: "Sequence",
+    rootActivityVersion: "1.0.0",
+    nodeCount: 3,
+    resumeTargetCount: 0,
+    ...overrides
+  };
+}
+
+interface ActivationSlotFixture {
+  view: WorkflowActivationSlot;
+  record?: Publication;
+}
+
+/** A Runtime slot occupied by a publication of design version-1, plus the publication record it joins to. */
+function publishedSlot(artifactId: string, slotName = "default"): ActivationSlotFixture {
+  const record = publicationRecord(slotName, { artifactId, versionId: "version-1", sourceReferenceId: "reference-1" });
+  return { view: activationSlot(slotName, { activeActivationId: record.publicationId, sourceKind: "publishing" }), record };
+}
+
+/** The current capability document plus the slot lifecycle relations proposed in elsa-foundation#1637. */
+function publicationSlotLifecycleCapabilities() {
+  const capabilities = capabilityDocument();
+  capabilities.capabilities.find(capability => capability.id === "elsa.api.publishing")!.links.push(
+    { rel: "publication-slot-unpublish", href: "publishing/workflows/{definitionId}/slots/{slotName}", templated: true },
+    { rel: "publication-slot-restore", href: "publishing/workflows/{definitionId}/slots/{slotName}/restore", templated: true }
+  );
+  return capabilities;
+}
+
+async function renderArtifactsPanel(slots: ActivationSlotFixture[], capabilities = capabilityDocument()) {
+  vi.stubGlobal("ResizeObserver", class {
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+  });
+  const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = String(input);
+    if (init?.method === "DELETE" || init?.method === "POST") return response(null, 204);
+    const slotResponse = publicationSlotResponse(url, slots);
+    if (slotResponse) return slotResponse;
+    if (url.includes("/runtime/workflows/executables")) return response([
+      executable({ artifactId: "artifact-current", definitionId: "definition-1" })
+    ]);
+    if (url.includes("/activities")) return response({ activities: [] });
+    if (url.includes("/definitions/definition-1")) return response({ definition: definition(), draft: workflowDraft(), versions: [] });
+    return response({ items: [definition()] });
+  });
+  vi.stubGlobal("fetch", fetchMock);
+  const rendered = await renderRegisteredRoute("/workflows/definitions?definition=definition-1", undefined, false, capabilities);
+  await waitForText(rendered.container, "Review & publish");
+  await click(buttonByText(rendered.container, "Artifacts"));
+  return { ...rendered, fetchMock };
+}
+
+/** Serves the Runtime slot list and the publication records it joins to; null for every other URL. */
+function publicationSlotResponse(url: string, slots: ActivationSlotFixture[]) {
+  if (url.includes("/runtime/workflows/activation-slots/definition-1")) return response({ items: slots.map(slot => slot.view) });
+  const record = slots.find(slot => slot.record && url.endsWith(`/publishing/publications/${slot.record.publicationId}`))?.record;
+  return record ? response(record) : null;
+}
+
+function executableReference(overrides: Partial<Record<string, unknown>> = {}) {
+  return {
+    sourceReferenceId: "ref-1",
+    artifactId: "artifact-1",
+    sourceKind: "definition",
+    sourceId: "definition-1",
+    sourceVersion: "2.0.0",
+    definitionId: "definition-1",
+    definitionVersionId: "version-2",
+    artifactVersion: "2.0.0",
+    createdAt: "2026-06-18T01:00:00Z",
+    publishedAt: "2026-06-18T01:10:00Z",
+    scope: "Published",
+    expiresAt: null,
+    deletedAt: null,
+    deletedReason: null,
+    ...overrides
+  };
+}
+
+function executableWireNode(overrides: Partial<Record<string, unknown>> = {}) {
+  return {
+    executableNodeId: "exec-write-line-1",
+    authoredActivityId: "write-line-1",
+    activityType: "Elsa.Activities.Primitives.Activities.WriteLine",
+    activityTypeVersion: "1.0.0",
+    structureKind: null,
+    inputBindings: [],
+    childSlots: [],
+    ...overrides
+  };
+}
+
+function executableDetail(overrides: Partial<Record<string, unknown>> = {}) {
+  return {
+    artifactId: "artifact-1",
+    artifactHash: "sha256:abc",
+    createdAt: "2026-06-18T01:00:00Z",
+    rootActivityType: "Elsa.Activities.Sequence.Activities.Sequence",
+    rootActivityVersion: "1.0.0",
+    nodeCount: 3,
+    resumeTargetCount: 1,
+    rootActivity: executableWireNode({
+      executableNodeId: "exec-root",
+      authoredActivityId: "root",
+      activityType: "Elsa.Activities.Sequence.Activities.Sequence",
+      structureKind: "elsa.sequence.structure",
+      childSlots: [{
+        name: "Sequence.Activities",
+        activities: [
+          executableWireNode({ inputBindings: [{ inputName: "Text", source: "Literal", summary: "\"Hello\"" }] }),
+          executableWireNode({ executableNodeId: "exec-send-email-1", authoredActivityId: "send-email-1", activityType: "Elsa.Activities.Email.SendEmail" })
+        ]
+      }]
+    }),
+    chosenReference: {
+      sourceReferenceId: "ref-1",
+      selection: "newest-live",
+      layout: [{ nodeId: "write-line-1", x: 40, y: 20 }, { nodeId: "send-email-1", x: 320, y: 20 }]
+    },
+    references: [
+      executableReference(),
+      executableReference({ sourceReferenceId: "ref-0", artifactVersion: "1.0.0", sourceVersion: "1.0.0", definitionVersionId: "version-1", publishedAt: "2026-06-17T01:00:00Z" })
+    ],
+    ...overrides
+  };
+}
+
+function testRunView(overrides: Partial<Record<string, unknown>> = {}) {
+  return {
+    testRunId: "test-run-1",
+    definitionId: "definition-1",
+    definitionVersionId: "draft:draft-1-abcdef12",
+    artifactId: "artifact-transient-1",
+    workflowExecutionId: "wfexec-1",
+    status: "DispatchAccepted",
+    commandDispatchStatus: "Accepted",
+    activityCount: 1,
+    incidentCount: 0,
+    reason: null,
+    expiresAt: "2026-06-24T12:00:00Z",
+    ...overrides
+  };
+}
+
+function workflowInstance(overrides: Partial<Record<string, unknown>> = {}) {
+  return {
+    workflowExecutionId: "wfexec-1",
+    artifactId: "artifact-1",
+    artifactVersion: "1.0.0",
+    definitionId: "definition-1",
+    definitionVersionId: "version-1",
+    runKind: "PublishedRun",
+    status: "Completed",
+    subStatus: null,
+    correlationId: "correlation-1",
+    parentWorkflowExecutionId: null,
+    tenantId: null,
+    activityCount: 1,
+    incidentCount: 0,
+    createdAt: "2026-06-18T01:00:00Z",
+    startedAt: "2026-06-18T01:00:01Z",
+    completedAt: "2026-06-18T01:00:03Z",
+    updatedAt: "2026-06-18T01:00:03Z",
+    ...overrides
+  };
+}
+
+function workflowInstanceDetails(overrides: Partial<Record<string, unknown>> = {}) {
+  return {
+    instance: workflowInstance(),
+    activities: [activityExecution()],
+    incidents: [],
+    ...overrides
+  };
+}
+
+function activityExecution(overrides: Partial<Record<string, unknown>> = {}) {
+  return {
+    activityExecutionId: "activity-execution-1",
+    workflowExecutionId: "wfexec-1",
+    executableNodeId: "write-line-1",
+    authoredActivityId: "write-line-1",
+    activityType: "Elsa.Activities.Primitives.Activities.WriteLine",
+    activityTypeVersion: "1.0.0",
+    status: "Completed",
+    subStatus: null,
+    scheduledAt: "2026-06-18T01:00:01Z",
+    startedAt: "2026-06-18T01:00:01Z",
+    completedAt: "2026-06-18T01:00:03Z",
+    schedulingActivityExecutionId: null,
+    parentActivityExecutionId: null,
+    branchId: null,
+    iterationId: null,
+    callStackDepth: 0,
+    bookmarkIds: [],
+    incidentIds: [],
+    faultCount: 0,
+    aggregateFaultCount: 0,
+    metadata: {},
+    ...overrides
+  };
+}
+
+function incidentState(overrides: Partial<Record<string, unknown>> = {}) {
+  return {
+    incidentId: "incident-1",
+    workflowExecutionId: "wfexec-1",
+    activityExecutionId: "activity-execution-1",
+    executableNodeId: "write-line-1",
+    severity: "Error",
+    status: "Blocking",
+    resolutionAction: "None",
+    failureType: "InputMaterializationFailed",
+    message: "Input failed.",
+    createdAt: "2026-06-18T01:00:02Z",
+    resolvedAt: null,
+    isBlocking: true,
+    metadata: {},
+    ...overrides
+  };
+}
+
+function workflowDefinitionVersionDetails(overrides: Partial<Record<string, unknown>> = {}) {
+  return {
+    id: "version-1",
+    version: "1.0.0",
+    definition: {
+      id: "definition-1",
+      name: "Hello World",
+      description: "Writes text.",
+      createdAt: "2026-06-18T01:00:00Z",
+      lastModifiedAt: "2026-06-18T01:10:00Z"
+    },
+    state: {
+      variables: [],
+      rootActivity: flowchartRoot([{
+        nodeId: "write-line-1",
+        activityVersionId: "write-line-v1",
+        inputs: [],
+        outputs: [],
+        structure: null
+      }]),
+      inputs: [],
+      outputs: []
+    },
+    layout: [{ nodeId: "write-line-1", x: 180, y: 120 }],
+    ...overrides
+  };
+}
+
+function workflowDraft(overrides: Partial<Record<string, unknown>> = {}) {
+  return {
+    id: "draft-1",
+    definitionId: "definition-1",
+    sourceVersionId: null,
+    state: {
+      variables: [],
+      rootActivity: null,
+      inputs: [],
+      outputs: []
+    },
+    layout: [],
+    validationErrors: [],
+    ...overrides
+  };
+}
+
+function activityDefinitionRecoveryDraft() {
+  return {
+    draftId: "draft-1",
+    definitionId: "definition-1",
+    tenantId: "tenant-1",
+    revision: 2,
+    sourceVersionId: null,
+    status: "active",
+    contract: { contractSchemaVersion: "1", inputs: [], outputs: [], outcomes: [] },
+    provider: { providerKey: "elsa.activity-graph", schemaVersion: "1", manifestFingerprint: "sha256:test", payload: { local: true } },
+    layout: [],
+    validation: null,
+    createdAt: "2026-07-17T10:00:00Z",
+    updatedAt: "2026-07-17T10:00:00Z",
+    presentationLabel: null
+  };
+}
+
+function apiWithRecoveryDraft(identity: StudioRuntimeIdentity) {
+  const api = testApi();
+  api.runtime.identity = identity;
+  const store = createActivityDefinitionRecoveryStore({ enabled: true }, identity)!;
+  store.write(activityDefinitionRecoveryDraft());
+  return { api, store };
+}
+
+function draftWithFlowchartRoot(activities: unknown[] = [], inputs: unknown[] = []) {
+  return workflowDraft({ state: { variables: [], rootActivity: flowchartRoot(activities), inputs, outputs: [] } });
+}
+
+function workflowInput(overrides: Partial<Record<string, unknown>> = {}) {
+  return {
+    referenceKey: "greeting",
+    name: "Greeting",
+    displayName: "Greeting",
+    description: "Greeting to use for this run.",
+    category: "General",
+    uiHint: "",
+    storageDriverType: null,
+    type: { alias: "String", collectionKind: "Single" },
+    isRequired: true,
+    ...overrides
+  };
+}
+
+// Contributed-panel double that records the latest designer panel context so tests can assert on its
+// fields directly instead of round-tripping values through rendered text.
+function capturingPanel() {
+  const captured = {
+    context: null as WorkflowDesignerPanelContext | null,
+    component: ({ context }: { context: unknown }) => {
+      captured.context = context as WorkflowDesignerPanelContext;
+      return <div className="custom-right-panel">Module right panel</div>;
+    }
+  };
+  return captured;
+}
+
+function flowchartRoot(activities: unknown[]) {
+  return {
+    nodeId: "root",
+    activityVersionId: "flowchart-v1",
+    inputs: [],
+    outputs: [],
+    structure: {
+      kind: "elsa.flowchart.structure",
+      schemaVersion: "1.0.0",
+      payload: {
+        activities,
+        connections: [],
+        startNodeId: null,
+        nodeMetadata: {},
+        connectionMetadata: {}
+      }
+    }
+  };
+}
+
+function sequenceRoot(activities: unknown[]) {
+  return {
+    nodeId: "root",
+    activityVersionId: "sequence-v1",
+    inputs: [],
+    outputs: [],
+    structure: {
+      kind: "elsa.sequence.structure",
+      schemaVersion: "1.0.0",
+      payload: { activities }
+    }
+  };
+}
+
+function activity(overrides: Partial<Record<string, unknown>> = {}) {
+  return {
+    activityVersionId: "activity-1",
+    activityTypeKey: "Elsa.Activities.Activity",
+    version: "1.0.0",
+    category: "General",
+    displayName: "Activity",
+    description: null,
+    executionType: "Action",
+    inputs: [],
+    outputs: [],
+    designFacets: [],
+    ...overrides
+  };
+}
+
+function catalogActivity(descriptor: ReturnType<typeof writeLineDescriptor>) {
+  const activityVersionId = `${descriptor.name.replace(/([a-z])([A-Z])/g, "$1-$2").toLowerCase()}-v1`;
+  return activity({
+    activityVersionId,
+    activityTypeKey: descriptor.typeName,
+    version: String(descriptor.version),
+    category: descriptor.category,
+    displayName: descriptor.displayName,
+    description: null,
+    executionType: descriptor.kind,
+    inputs: descriptor.inputs,
+    outputs: descriptor.outputs,
+    ports: descriptor.ports ?? [],
+    available: true,
+    authoringTemplate: {
+      nodeId: "activity",
+      activityVersionId,
+      inputs: {},
+      outputs: {},
+      structure: null
+    }
+  });
+}
+
+function writeLineDescriptor() {
+  return {
+    typeName: "Elsa.Activities.Primitives.Activities.WriteLine",
+    namespace: "Elsa.Activities.Primitives",
+    name: "WriteLine",
+    version: 1,
+    category: "Primitives",
+    displayName: "Write Line",
+    kind: "Action",
+    inputs: [{
+      // Mirrors the real backend catalog: WriteLine declares [ActivityInput(Key = "text")], so the
+      // stable referenceKey is lowercase and deliberately differs from the PascalCase display name.
+      referenceKey: "text",
+      name: "Text",
+      typeName: "System.String",
+      displayName: "Text",
+      description: "Text to write.",
+      order: 0,
+      category: "General",
+      isBrowsable: true,
+      uiHint: "singleline",
+      isWrapped: true,
+      defaultSyntax: "Literal"
+    }],
+    outputs: [],
+    ports: []
+  };
+}
+
+function writeLinesDescriptor() {
+  return {
+    typeName: "Elsa.Activities.Primitives.Activities.WriteLines",
+    namespace: "Elsa.Activities.Primitives",
+    name: "WriteLines",
+    version: 1,
+    category: "Primitives",
+    displayName: "Write Lines",
+    kind: "Action",
+    inputs: [{
+      // WriteLines has no explicit key, so its referenceKey defaults to the PascalCase property name —
+      // the verbatim contract must preserve that casing too.
+      referenceKey: "Lines",
+      name: "Lines",
+      typeName: "System.Collections.Generic.ICollection`1[[System.String, System.Private.CoreLib]], System.Private.CoreLib",
+      displayName: "Lines",
+      description: "Lines to write.",
+      order: 0,
+      category: "General",
+      isBrowsable: true,
+      // Collection list inputs commonly carry a "singleline" hint; the repeater must still win over the
+      // single-line inline chrome (regression: the inline picker used to stretch over the whole list).
+      uiHint: "singleline",
+      isWrapped: true,
+      defaultSyntax: "Literal"
+    }],
+    outputs: [],
+    ports: []
+  };
+}
+
+function availabilityDiagnosticEntry(overrides: Record<string, unknown> = {}) {
+  return {
+    activityDefinitionId: "run-javascript-v1",
+    activityTypeKey: runJavaScriptTypeKey,
+    displayName: "Run JavaScript",
+    description: "Runs JavaScript code inside a workflow.",
+    category: "Scripting",
+    state: "Available",
+    layer: "Catalog",
+    referenceKind: "ActivityType",
+    referenceName: runJavaScriptTypeKey,
+    reason: "Catalog activity is available.",
+    ...overrides
+  };
+}
+
+// Shared fetch stub for the activity availability page: settings GET/PUT, diagnostics, and catalog.
+function stubActivityAvailabilityFetch(options: {
+  items?: unknown[];
+  sets?: unknown[];
+  activities?: unknown[];
+  settings?: unknown;
+  onSave?: (body: { scope?: string; mode: number; rules: { activityTypes: string[]; sets: string[] } }) => void;
+} = {}) {
+  vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = String(input);
+    if (url.includes("/activities/availability/settings")) {
+      if (init?.method === "PUT") {
+        const body = JSON.parse(String(init.body));
+        options.onSave?.(body);
+        return response({ scope: "host-default", mode: body.mode, rules: body.rules });
+      }
+      return response(options.settings ?? { scope: "host-default", mode: "AllExcept", rules: { activityTypes: [], sets: [] } });
+    }
+    if (url.includes("/activities/availability/diagnostics")) return response({ items: options.items ?? [], sets: options.sets ?? [] });
+    if (url.includes("/design/activities/catalog")) return response({ activities: options.activities ?? [] });
+    return response(null, 404);
+  }));
+}
+
+async function click(element: Element | null) {
+  if (!(element instanceof HTMLElement)) throw new Error("Element not found");
+  element.click();
+  await flushPromises();
+  flushSync(() => {});
+}
+
+// jsdom doesn't implement DataTransfer; a minimal stand-in is enough for the drag handlers, which only
+// set effectAllowed/dropEffect and a text payload.
+function makeDataTransfer() {
+  const store: Record<string, string> = {};
+  return {
+    effectAllowed: "",
+    dropEffect: "",
+    setData: (format: string, value: string) => { store[format] = value; },
+    getData: (format: string) => store[format] ?? ""
+  };
+}
+
+async function fireDrag(element: Element | null, type: "dragstart" | "dragover" | "drop", dataTransfer: ReturnType<typeof makeDataTransfer>) {
+  if (!(element instanceof HTMLElement)) throw new Error("Drag target not found");
+  const event = new Event(type, { bubbles: true, cancelable: true });
+  Object.defineProperty(event, "dataTransfer", { value: dataTransfer });
+  element.dispatchEvent(event);
+  await flushPromises();
+  flushSync(() => {});
+}
+
+function buttonByText(container: HTMLElement, text: string) {
+  return Array.from(container.querySelectorAll("button"))
+    .find(button => button.textContent?.trim() === text) ?? null;
+}
+
+// Folder names are read from the tree alone: the definitions table (e.g. "Operations workflow") and
+// the selected folder's breadcrumb, which can refresh to a new name after a rename, render them too.
+function folderTree(container: HTMLElement) {
+  return container.querySelector<HTMLElement>(".wf-folder-nav")!;
+}
+
+function buttonByLabel(container: HTMLElement, label: string) {
+  return Array.from(container.querySelectorAll("button"))
+    .find(button => button.getAttribute("aria-label") === label) ?? null;
+}
+
+function checkboxByLabel(container: HTMLElement, label: string) {
+  return Array.from(container.querySelectorAll<HTMLInputElement>("input[type='checkbox']"))
+    .find(input => input.getAttribute("aria-label") === label) ?? null;
+}
+
+function inputByLabel(container: HTMLElement, label: string) {
+  return Array.from(container.querySelectorAll<HTMLInputElement>("input"))
+    .find(input => input.getAttribute("aria-label") === label) ?? null;
+}
+
+function textareaByLabel(container: HTMLElement, label: string) {
+  return Array.from(container.querySelectorAll<HTMLTextAreaElement>("textarea"))
+    .find(input => input.getAttribute("aria-label") === label) ?? null;
+}
+function selectByLabel(container: HTMLElement, label: string) {
+  return Array.from(container.querySelectorAll<HTMLSelectElement>("select"))
+    .find(input => input.getAttribute("aria-label") === label) ?? null;
+}
+
+function dialog(container: HTMLElement) {
+  const element = container.querySelector<HTMLElement>(".wf-dialog");
+  if (!element) throw new Error("Dialog not found");
+  return element;
+}
+
+async function waitForDialog(container: HTMLElement) {
+  await vi.waitFor(() => expect(container.querySelector(".wf-dialog")).not.toBeNull());
+  return dialog(container);
+}
+
+function optionByText(container: HTMLElement, text: string) {
+  return Array.from(container.querySelectorAll<HTMLElement>("[role='option']"))
+    .find(option => option.textContent?.includes(text)) ?? null;
+}
+
+function rowByLabel(container: HTMLElement, label: string) {
+  return Array.from(container.querySelectorAll<HTMLElement>("[role='row']"))
+    .find(row => row.getAttribute("aria-label") === label) ?? null;
+}
+
+function urlPath(url: string) {
+  return new URL(url).pathname;
+}
+
+async function fill(element: HTMLInputElement | HTMLTextAreaElement | null, value: string) {
+  if (!element) throw new Error("Input not found");
+  const prototype = element instanceof HTMLTextAreaElement ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
+  const valueSetter = Object.getOwnPropertyDescriptor(prototype, "value")?.set;
+  valueSetter?.call(element, value);
+  element.dispatchEvent(new Event("input", { bubbles: true }));
+  await flushPromises();
+  flushSync(() => {});
+}
+
+async function select(element: HTMLSelectElement | null, value: string) {
+  if (!element) throw new Error("Select not found");
+  const valueSetter = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, "value")?.set;
+  valueSetter?.call(element, value);
+  element.dispatchEvent(new Event("change", { bubbles: true }));
+  await flushPromises();
+  flushSync(() => {});
+}
+
+function dragDataTransfer() {
+  const values = new Map<string, string>();
+  return {
+    dropEffect: "none",
+    effectAllowed: "all",
+    setData: vi.fn((type: string, value: string) => {
+      values.set(type, value);
+    }),
+    getData: vi.fn((type: string) => values.get(type) ?? ""),
+    clearData: vi.fn((type?: string) => {
+      if (type) values.delete(type);
+      else values.clear();
+    })
+  };
+}
+
+function dispatchDragEvent(
+  element: Element | null,
+  type: string,
+  options: { dataTransfer: ReturnType<typeof dragDataTransfer>; clientX: number; clientY: number }
+) {
+  if (!(element instanceof HTMLElement)) throw new Error(`Drag target not found: ${type}`);
+  const event = new Event(type, { bubbles: true, cancelable: true });
+  Object.defineProperties(event, {
+    dataTransfer: { value: options.dataTransfer },
+    clientX: { value: options.clientX },
+    clientY: { value: options.clientY }
+  });
+  element.dispatchEvent(event);
+}
+
+function stubRect(element: HTMLElement, rect: Partial<DOMRect>) {
+  element.getBoundingClientRect = () => ({
+    x: rect.left ?? 0,
+    y: rect.top ?? 0,
+    left: rect.left ?? 0,
+    top: rect.top ?? 0,
+    right: rect.right ?? 0,
+    bottom: rect.bottom ?? 0,
+    width: rect.width ?? 0,
+    height: rect.height ?? 0,
+    toJSON: () => ({})
+  } as DOMRect);
+}
+
+function stubElementFromPoint(element: HTMLElement) {
+  const descriptor = Object.getOwnPropertyDescriptor(document, "elementFromPoint");
+  Object.defineProperty(document, "elementFromPoint", { configurable: true, value: vi.fn(() => element) });
+
+  return () => {
+    if (descriptor) {
+      Object.defineProperty(document, "elementFromPoint", descriptor);
+      return;
+    }
+
+    Reflect.deleteProperty(document, "elementFromPoint");
+  };
+}
+
+async function flushPromises() {
+  await new Promise(resolve => setTimeout(resolve, 0));
+}
+
+async function waitForText(container: HTMLElement, text: string) {
+  await vi.waitFor(() => {
+    if (!container.textContent?.includes(text)) {
+      throw new Error(`Timed out waiting for text: ${text}. Rendered: ${container.textContent}`);
+    }
+  }, { timeout: 5_000, interval: 20 });
+}
+
+async function waitForButtonByText(container: HTMLElement, text: string) {
+  return vi.waitFor(() => {
+    const button = buttonByText(container, text);
+    if (!button) throw new Error(`Timed out waiting for button: ${text}`);
+    return button;
+  }, { timeout: 5_000, interval: 20 });
+}
+
+async function waitForButtonByLabel(container: HTMLElement, label: string) {
+  return vi.waitFor(() => {
+    const button = buttonByLabel(container, label);
+    if (!button) throw new Error(`Timed out waiting for button: ${label}`);
+    return button;
+  }, { timeout: 5_000, interval: 20 });
+}
+
+// Waits for a CANVAS node containing `text`. waitForText alone is not enough before interacting with
+// the canvas: the inspector shows the scope owner as soon as the draft loads, so the activity's name
+// can appear in the panel a flush before React Flow commits the node elements.
+async function waitForCanvasNode(container: HTMLElement, text: string) {
+  return vi.waitFor(() => {
+    const node = Array.from(container.querySelectorAll(".wf-canvas .wf-node"))
+      .find(candidate => candidate.textContent?.includes(text));
+    if (!node) throw new Error(`Timed out waiting for canvas node: ${text}`);
+    return node;
+  }, { timeout: 5_000, interval: 20 });
+}
+
+async function waitForTextToDisappear(container: HTMLElement, text: string) {
+  for (let attempt = 0; attempt < 20; attempt += 1) {
+    await flushPromises();
+    if (!container.textContent?.includes(text)) return;
+  }
+
+  throw new Error(`Timed out waiting for text to disappear: ${text}`);
+}
+
+async function waitForUrlParam(name: string, value: string) {
+  for (let attempt = 0; attempt < 20; attempt += 1) {
+    await flushPromises();
+    if (new URLSearchParams(window.location.search).get(name) === value) return;
+  }
+
+  throw new Error(`Timed out waiting for URL parameter: ${name}=${value}`);
+}

@@ -170,7 +170,7 @@ public static class ProjectGraph
     /// <remarks>
     /// A reference that cannot be resolved fails generation rather than being recorded under a guessed identity:
     /// publishing reads these edges, so a dangling one would be wrong versions rather than a stale document.
-    /// A target outside <c>src/</c> and <c>tests/</c> (a tool or a sample) is still internal, but has no node.
+    /// A target outside the backend Essentials and Extensions roots (a tool or a sample) is still internal, but has no node.
     /// </remarks>
     private static IEnumerable<InternalEdge> InternalEdges(RepoContext repo, ProjectFile file, IReadOnlyDictionary<string, ProjectFile> byPath) =>
         file.Items("ProjectReference")
