@@ -109,23 +109,16 @@ internal static class ResponseReplayPublicationHost
         string closurePath,
         string databasePath,
         string evidenceDirectory,
-        SideEffectProfile expectedCandidateProfile,
-        string? candidateRoutePath = null,
-        string? externalBodyStorageProfile = null,
-        string? externalPayloadRoot = null,
-        PersistenceMode persistenceMode = PersistenceMode.Balanced)
+        SideEffectProfile expectedCandidateProfile)
     {
         Directory.CreateDirectory(evidenceDirectory);
         var closureBytes = await File.ReadAllBytesAsync(closurePath);
         var baselineHash = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(closureBytes)).ToLowerInvariant();
         var baseline = ReadBaseline(closureBytes);
-        candidateRoutePath ??= baseline.RoutePath;
-        await using var app = await StartHostAsync(
-            databasePath, closurePath, evidenceDirectory,
-            persistenceMode: persistenceMode,
-            externalPayloadRoot: externalPayloadRoot);
+        var candidateRoutePath = baseline.RoutePath;
+        await using var app = await StartHostAsync(databasePath, closurePath, evidenceDirectory);
         var shell = await app.Services.GetRequiredService<IShellRegistry>().GetOrActivateAsync(ShellName);
-        EnsureReplaySafeFusionEnabled(shell.ServiceProvider, externalBodyStorageProfile is null);
+        EnsureReplaySafeFusionEnabled(shell.ServiceProvider);
         var rootSchemeProvider = app.Services.GetRequiredService<IAuthenticationSchemeProvider>();
         Ensure(rootSchemeProvider is CShells.AspNetCore.Authentication.ShellAuthenticationSchemeProvider,
             $"The root authentication middleware resolved '{rootSchemeProvider.GetType().FullName}' instead of the shell-aware scheme provider.");
@@ -249,27 +242,24 @@ internal static class ResponseReplayPublicationHost
                ReadStringVariable(baselineFrame, "referenceText") == "Alice Smith",
             "The baseline did not retain the parsed request fields and computed referenceText in its committed variable frame.");
 
-        if (StringComparer.Ordinal.Equals(candidateRoutePath, baseline.RoutePath))
-        {
-            // When both artifacts use the captured route, retract the imported source-owned baseline through the
-            // normal coordinator so the candidate can take the exclusive route without rewriting bindings.
-            var baselineSlot = (await provider.GetRequiredService<IWorkflowActivationAuthority>()
-                    .ListByDefinitionAsync(baseline.DefinitionId, CancellationToken.None))
-                .Single(slot => slot.ActiveActivationId is not null);
-            var baselineOwner = baselineSlot.Source
-                ?? throw new InvalidOperationException("The baseline activation slot has no recorded owner.");
-            var deactivation = await provider.GetRequiredService<IWorkflowActivationCoordinator>().DeactivateAsync(
-                new WorkflowDeactivationCommand(
-                    baselineExecutable,
-                    baselineSlot.SlotName,
-                    baselineOwner,
-                    baselineSlot.Revision),
-                CancellationToken.None);
-            Ensure(deactivation.Succeeded && deactivation.Outcome == WorkflowActivationOutcome.Deactivated,
-                $"The baseline route did not deactivate through the coordinator: {deactivation.Outcome} ({deactivation.Diagnostic}).");
-            Ensure((await executableStore.FindAsync(baseline.ArtifactId, CancellationToken.None))?.Identity.ArtifactHash == baseline.ArtifactHash,
-                "Deactivation removed or changed the captured baseline artifact.");
-        }
+        // Both artifacts use the captured route: retract the imported source-owned baseline through the normal
+        // coordinator so the candidate can take the exclusive route without rewriting bindings.
+        var baselineSlot = (await provider.GetRequiredService<IWorkflowActivationAuthority>()
+                .ListByDefinitionAsync(baseline.DefinitionId, CancellationToken.None))
+            .Single(slot => slot.ActiveActivationId is not null);
+        var baselineOwner = baselineSlot.Source
+            ?? throw new InvalidOperationException("The baseline activation slot has no recorded owner.");
+        var deactivation = await provider.GetRequiredService<IWorkflowActivationCoordinator>().DeactivateAsync(
+            new WorkflowDeactivationCommand(
+                baselineExecutable,
+                baselineSlot.SlotName,
+                baselineOwner,
+                baselineSlot.Revision),
+            CancellationToken.None);
+        Ensure(deactivation.Succeeded && deactivation.Outcome == WorkflowActivationOutcome.Deactivated,
+            $"The baseline route did not deactivate through the coordinator: {deactivation.Outcome} ({deactivation.Diagnostic}).");
+        Ensure((await executableStore.FindAsync(baseline.ArtifactId, CancellationToken.None))?.Identity.ArtifactHash == baseline.ArtifactHash,
+            "Deactivation removed or changed the captured baseline artifact.");
 
         var versionIds = new Dictionary<string, string>(StringComparer.Ordinal)
         {
@@ -279,7 +269,7 @@ internal static class ResponseReplayPublicationHost
         };
         var submitted = await SubmitWorkflowAsync(client,
             $"ResponseReplayCandidate-{Guid.NewGuid():N}",
-            BuildHttpWorkflowState(versionIds, candidateRoutePath, externalBodyStorageProfile));
+            BuildHttpWorkflowState(versionIds, candidateRoutePath));
         var candidatePublication = await PublishWorkflowAsync(client, submitted.VersionId);
         var candidate = await executableStore.FindAsync(candidatePublication.ArtifactId, CancellationToken.None)
             ?? throw new InvalidOperationException("The normal publishing API returned an artifact that is absent from the executable store.");
@@ -292,13 +282,6 @@ internal static class ResponseReplayPublicationHost
             ?? throw new InvalidOperationException("The candidate response node has no pinned activity contract.");
         Ensure(candidateResponseContract.SideEffectProfile == expectedCandidateProfile,
             $"The normal publisher compiled the candidate WriteHttpResponse profile as '{candidateResponseContract.SideEffectProfile}', expected '{expectedCandidateProfile}'.");
-        if (externalBodyStorageProfile is not null)
-        {
-            Ensure(candidateResponseContract.Inputs.TryGetValue("Body", out var bodyContract) &&
-                   bodyContract.Policy.Storage == ActivityValueStorage.External &&
-                   StringComparer.Ordinal.Equals(bodyContract.Policy.StorageProfile, externalBodyStorageProfile),
-                $"The normal publisher did not retain the Body External storage profile '{externalBodyStorageProfile}'.");
-        }
         Ensure(candidateResponseContract.Inputs.TryGetValue("StatusCode", out var statusCodeContract) &&
                statusCodeContract.HasDefault && statusCodeContract.DefaultValue is { } statusDefault &&
                statusDefault.ValueKind == JsonValueKind.Number && statusDefault.GetInt32() == 200,
@@ -340,25 +323,6 @@ internal static class ResponseReplayPublicationHost
         var candidateHttpExecution = candidateExecutions.Single(state => state.PinnedExecutable.ArtifactId == candidatePublication.ArtifactId);
         Ensure(candidateHttpExecution.Status == WorkflowExecutionStatus.Completed,
             $"The candidate HTTP run ended in {candidateHttpExecution.Status}.");
-        if (externalBodyStorageProfile is not null)
-        {
-            var candidateResponseState = (await provider.GetRequiredService<IActivityExecutionStateStore>()
-                    .ListAllAsync(candidateHttpExecution.WorkflowExecutionId))
-                .Single(state => state.Execution.AuthoredActivityId == ResponseNodeId);
-            var bodyEnvelope = candidateResponseState.InputSnapshot?.Values.GetValueOrDefault("Body")
-                ?? throw new InvalidOperationException("The normally executed candidate has no durable Body input snapshot.");
-            var externalReference = bodyEnvelope.ExternalReference
-                ?? throw new InvalidOperationException("The normally executed candidate Body snapshot has no external reference.");
-            Ensure(bodyEnvelope.Presence == ValuePresence.Present && bodyEnvelope.InlineValue is null &&
-                   StringComparer.Ordinal.Equals(externalReference.StorageProfile, externalBodyStorageProfile),
-                "The normally executed candidate Body snapshot was not stored through the configured External profile.");
-            var payloadPath = Path.Combine(externalPayloadRoot!, externalReference.Locator);
-            var payloadBytes = await File.ReadAllBytesAsync(payloadPath);
-            var payloadHash = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(payloadBytes)).ToLowerInvariant();
-            Ensure(externalReference.Metadata.TryGetValue("payloadSha256", out var recordedHash) &&
-                   StringComparer.Ordinal.Equals(recordedHash, payloadHash),
-                "The normal candidate execution did not retain the file-backed Body payload referenced by its snapshot.");
-        }
         var candidateHttpInstruction = await ReadResponseInstructionAsync(provider, candidateHttpExecution.WorkflowExecutionId, ResponseNodeId);
         Ensure(candidateHttpInstruction.GetProperty("statusCode").GetInt32() == (int)candidateHttp.StatusCode,
             "The candidate's committed status instruction differs from the synchronous HTTP result.");
@@ -475,10 +439,7 @@ internal static class ResponseReplayPublicationHost
             restInstruction.GetProperty("headers").EnumerateObject().Count(),
             ReadStringVariable(restFrame, "content", "firstName"),
             ReadStringVariable(restFrame, "content", "lastName"),
-            ReadStringVariable(restFrame, "referenceText"),
-            candidateRoutePath,
-            externalBodyStorageProfile,
-            persistenceMode.ToString());
+            ReadStringVariable(restFrame, "referenceText"));
     }
 
     public static async Task UnpublishCandidateForMeasurementAsync(
@@ -812,8 +773,7 @@ internal static class ResponseReplayPublicationHost
         string requestCorrelationId) =>
         await RunCrashStageCoreAsync(
             closurePath, databasePath, evidenceDirectory, pipeName,
-            candidateArtifactId, candidateArtifactHash, requestCorrelationId,
-            routePath: null, PersistenceMode.Balanced, externalPayloadRoot: null);
+            candidateArtifactId, candidateArtifactHash, requestCorrelationId);
 
     private static async Task RunCrashStageCoreAsync(
         string closurePath,
@@ -822,15 +782,12 @@ internal static class ResponseReplayPublicationHost
         string pipeName,
         string candidateArtifactId,
         string candidateArtifactHash,
-        string requestCorrelationId,
-        string? routePath,
-        PersistenceMode persistenceMode,
-        string? externalPayloadRoot)
+        string requestCorrelationId)
     {
         Directory.CreateDirectory(evidenceDirectory);
         var closureBytes = await File.ReadAllBytesAsync(closurePath);
         var baseline = ReadBaseline(closureBytes);
-        routePath ??= baseline.RoutePath;
+        var routePath = baseline.RoutePath;
         var gateOptions = new ResponseReplayCommitGateOptions(
             pipeName,
             candidateArtifactId,
@@ -838,8 +795,7 @@ internal static class ResponseReplayPublicationHost
             HttpNodeId,
             ResponseNodeId);
         await using var app = await StartHostAsync(
-            databasePath, closurePath, evidenceDirectory, gateOptions, includeHistoricalClosureReconciliation: false,
-            persistenceMode: persistenceMode, externalPayloadRoot: externalPayloadRoot);
+            databasePath, closurePath, evidenceDirectory, gateOptions, includeHistoricalClosureReconciliation: false);
         var shell = await app.Services.GetRequiredService<IShellRegistry>().GetOrActivateAsync(ShellName);
         using (var scope = shell.ServiceProvider.CreateScope())
         {
@@ -853,7 +809,7 @@ internal static class ResponseReplayPublicationHost
 
         using var runtimeScope = shell.ServiceProvider.CreateScope();
         var providerForRuntime = runtimeScope.ServiceProvider;
-        EnsureReplaySafeFusionEnabled(providerForRuntime, externalPayloadRoot is null);
+        EnsureReplaySafeFusionEnabled(providerForRuntime);
         await EnsureHistoricalExternalArtifactPreservedAsync(providerForRuntime, baseline);
         var executable = await providerForRuntime.GetRequiredService<IWorkflowExecutableStore>()
             .FindAsync(candidateArtifactId, CancellationToken.None)
@@ -866,8 +822,6 @@ internal static class ResponseReplayPublicationHost
         Ensure(executable.Nodes.Single(node => node.AuthoredActivityId == HttpNodeId)
                    .ActivityContract?.SideEffectProfile == SideEffectProfile.External,
             "The crash-stage runtime changed HttpEndpoint from its External profile.");
-        if (externalPayloadRoot is not null)
-            EnsureExternalBodyContract(executable);
 
         var activeBindings = await ReadActiveHttpBindingsAsync(providerForRuntime.GetRequiredService<IWorkflowTriggerBindingStore>());
         var servingBindings = activeBindings
@@ -907,8 +861,7 @@ internal static class ResponseReplayPublicationHost
         string candidateArtifactHash) =>
         RunCrashResumeCoreAsync(
             closurePath, databasePath, evidenceDirectory, workflowExecutionId,
-            candidateArtifactId, candidateArtifactHash, routePath: null,
-            PersistenceMode.Balanced, externalPayloadRoot: null);
+            candidateArtifactId, candidateArtifactHash);
 
     private static async Task<RecoveryProofResult> RunCrashResumeCoreAsync(
         string closurePath,
@@ -916,17 +869,13 @@ internal static class ResponseReplayPublicationHost
         string evidenceDirectory,
         string workflowExecutionId,
         string candidateArtifactId,
-        string candidateArtifactHash,
-        string? routePath,
-        PersistenceMode persistenceMode,
-        string? externalPayloadRoot)
+        string candidateArtifactHash)
     {
         Directory.CreateDirectory(evidenceDirectory);
         var baseline = ReadBaseline(await File.ReadAllBytesAsync(closurePath));
-        routePath ??= baseline.RoutePath;
+        var routePath = baseline.RoutePath;
         await using var app = await StartHostAsync(
-            databasePath, closurePath, evidenceDirectory, includeHistoricalClosureReconciliation: false,
-            persistenceMode: persistenceMode, externalPayloadRoot: externalPayloadRoot);
+            databasePath, closurePath, evidenceDirectory, includeHistoricalClosureReconciliation: false);
         var shell = await app.Services.GetRequiredService<IShellRegistry>().GetOrActivateAsync(ShellName);
         using (var scope = shell.ServiceProvider.CreateScope())
         {
@@ -940,7 +889,7 @@ internal static class ResponseReplayPublicationHost
 
         using var runtimeScope = shell.ServiceProvider.CreateScope();
         var providerForRuntime = runtimeScope.ServiceProvider;
-        EnsureReplaySafeFusionEnabled(providerForRuntime, externalPayloadRoot is null);
+        EnsureReplaySafeFusionEnabled(providerForRuntime);
         await EnsureHistoricalExternalArtifactPreservedAsync(providerForRuntime, baseline);
         var executable = await providerForRuntime.GetRequiredService<IWorkflowExecutableStore>()
             .FindAsync(candidateArtifactId, CancellationToken.None)
@@ -953,8 +902,6 @@ internal static class ResponseReplayPublicationHost
         Ensure(executable.Nodes.Single(node => node.AuthoredActivityId == HttpNodeId)
                    .ActivityContract?.SideEffectProfile == SideEffectProfile.External,
             "The recovery host changed HttpEndpoint from its External profile.");
-        if (externalPayloadRoot is not null)
-            EnsureExternalBodyContract(executable);
 
         var activeBindings = await ReadActiveHttpBindingsAsync(providerForRuntime.GetRequiredService<IWorkflowTriggerBindingStore>());
         var servingBindings = activeBindings
@@ -1014,16 +961,14 @@ internal static class ResponseReplayPublicationHost
         string evidenceDirectory,
         ResponseReplayCommitGateOptions? gateOptions = null,
         bool includeHistoricalClosureReconciliation = true,
-        ResponseReplayMeasurementOptions? observationOptions = null,
-        PersistenceMode persistenceMode = PersistenceMode.Balanced,
-        string? externalPayloadRoot = null)
+        ResponseReplayMeasurementOptions? observationOptions = null)
     {
         var connectionString = $"Data Source={databasePath};Pooling=False";
         var values = new Dictionary<string, string?>(StringComparer.Ordinal)
         {
             [ShellWebRoutingPathKey] = "",
             ["CShells:Shells:default:Features:ClrActivityReconciliation:Options:FolderPath"] = AppContext.BaseDirectory,
-            ["CShells:Shells:default:Features:WorkflowsRuntimeCheckpointPersistence:Mode"] = persistenceMode.ToString(),
+            ["CShells:Shells:default:Features:WorkflowsRuntimeCheckpointPersistence:Mode"] = nameof(PersistenceMode.Balanced),
             ["CShells:Shells:default:Features:WorkflowsRuntimeEntityFrameworkCore:Provider"] = "Sqlite",
             ["CShells:Shells:default:Features:WorkflowsRuntimeEntityFrameworkCore:ConnectionString"] = connectionString,
             ["CShells:Shells:default:Features:WorkflowsRuntimeEntityFrameworkCore:RecoveryContinuationSigningKey"] = "response-replay-publication-recovery-signing-key-32-bytes",
@@ -1047,8 +992,7 @@ internal static class ResponseReplayPublicationHost
             "ActivitiesDesignEntityFrameworkCore", "ActivitiesDesignReconciliation", "ClrActivityReconciliation",
             "WorkflowDesignValidations", "WorkflowsDesignApi", "WorkflowsDesignEntityFrameworkCore", "WorkflowsPublishing",
             "WorkflowsPublishingApi", "WorkflowsPublishingEntityFrameworkCore", "FileSystemDistributedLocking",
-            "ResponseReplayTestAuthentication", "ResponseReplayFileExternalPayloadStore",
-            "ResponseReplayDiscreteSchedulerHops"
+            "ResponseReplayTestAuthentication"
         };
         foreach (var featureId in featureIds)
             values[$"CShells:Shells:default:Features:{featureId}"] = null;
@@ -1062,12 +1006,6 @@ internal static class ResponseReplayPublicationHost
         {
             values["CShells:Shells:default:Features:JsonWorkflowArtifactReconciliation"] = "false";
         }
-        values["CShells:Shells:default:Features:ResponseReplayFileExternalPayloadStore"] =
-            externalPayloadRoot is null ? "false" : null;
-        values["CShells:Shells:default:Features:ResponseReplayDiscreteSchedulerHops"] =
-            externalPayloadRoot is null ? "false" : null;
-        if (externalPayloadRoot is not null)
-            values["CShells:Shells:default:Features:ResponseReplayFileExternalPayloadStore:RootPath"] = externalPayloadRoot;
         if (gateOptions is not null)
         {
             values["CShells:Shells:default:Features:ResponseReplayCommitGate"] = null;
@@ -1230,8 +1168,7 @@ internal static class ResponseReplayPublicationHost
 
     private static object BuildHttpWorkflowState(
         IReadOnlyDictionary<string, string> versions,
-        string routePath,
-        string? externalBodyStorageProfile = null)
+        string routePath)
     {
         var httpEndpoint = new
         {
@@ -1252,7 +1189,7 @@ internal static class ResponseReplayPublicationHost
             }
         };
         var setReferenceText = BuildSetReferenceTextNode();
-        var response = BuildWriteHttpResponseNode(versions["writeResponse"], externalBodyStorageProfile);
+        var response = BuildWriteHttpResponseNode(versions["writeResponse"]);
         return new
         {
             variables = new object[]
@@ -1364,7 +1301,7 @@ internal static class ResponseReplayPublicationHost
         }
     };
 
-    private static object BuildWriteHttpResponseNode(string activityVersionId, string? externalBodyStorageProfile = null) => new
+    private static object BuildWriteHttpResponseNode(string activityVersionId) => new
     {
         nodeId = ResponseNodeId,
         activityVersionId,
@@ -1372,10 +1309,7 @@ internal static class ResponseReplayPublicationHost
         inputs = new object[]
         {
             Literal("StatusCode", 200),
-            Argument(
-                "Body",
-                new { value = "getVariable('referenceText')", expressionType = "JavaScript" },
-                externalBodyStorageProfile),
+            Argument("Body", new { value = "getVariable('referenceText')", expressionType = "JavaScript" }),
             Literal("ContentType", "text/plain")
         }
     };
@@ -1394,13 +1328,13 @@ internal static class ResponseReplayPublicationHost
     private static object VariableOutput(string key, string variableKey) => Argument(key,
         new { value = new { referenceKey = variableKey }, expressionType = "Variable" });
 
-    private static object Argument(string key, object value, string? storageDriverType = null) => new
+    private static object Argument(string key, object value) => new
     {
         referenceKey = key,
         value,
         autoEvaluate = (bool?)null,
         evaluatorType = (string?)null,
-        storageDriverType,
+        storageDriverType = (string?)null,
         isSensitive = (bool?)null
     };
 
@@ -1486,22 +1420,9 @@ internal static class ResponseReplayPublicationHost
         Ensure(!provider.GetServices<IStartupTask>().OfType<WorkflowArtifactReconcilerStartupTask>().Any(),
             "The restart host registered the historical JSON artifact reconciliation startup task.");
 
-    private static void EnsureExternalBodyContract(WorkflowExecutable executable)
-    {
-        var body = executable.Nodes.Single(node => node.AuthoredActivityId == ResponseNodeId)
-            .ActivityContract?.Inputs.GetValueOrDefault("Body")
-            ?? throw new InvalidOperationException("The response activity has no pinned Body input contract.");
-        Ensure(body.Policy.Storage == ActivityValueStorage.External &&
-               StringComparer.Ordinal.Equals(body.Policy.StorageProfile, ResponseReplayFileExternalPayloadStoreProfile.Name),
-            "The crash/recovery executable does not pin the file-backed External Body storage profile.");
-    }
-
-    private static void EnsureReplaySafeFusionEnabled(IServiceProvider provider, bool expectedEnabled)
-    {
-        var actual = provider.GetRequiredService<RuntimeReplaySafeFusionOptions>().Enabled;
-        Ensure(actual == expectedEnabled,
-            $"The test host resolved ReplaySafe fusion Enabled={actual}, expected {expectedEnabled}.");
-    }
+    private static void EnsureReplaySafeFusionEnabled(IServiceProvider provider) =>
+        Ensure(provider.GetRequiredService<RuntimeReplaySafeFusionOptions>().Enabled,
+            "The test host resolved ReplaySafe fusion disabled.");
 
     private static SideEffectProfile ParseExpectedCandidateProfile(string profile) => profile switch
     {
@@ -1611,10 +1532,7 @@ internal sealed record PublicationProofResult(
     int RestCommittedHeaderCount,
     string RestPersistedFirstName,
     string RestPersistedLastName,
-    string RestReferenceText,
-    string CandidateRoutePath,
-    string? CandidateBodyStorageProfile,
-    string CandidatePersistenceMode);
+    string RestReferenceText);
 
 internal sealed record RecoveryProofResult(
     string ExecutionId,
