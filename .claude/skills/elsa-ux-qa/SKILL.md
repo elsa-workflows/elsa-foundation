@@ -24,7 +24,7 @@ $ARGUMENTS
 4. Run `node tools/ux-qa/golden-path.mjs`; a failing step is the run's first defect.
 5. Derive the area and lens from the catalog's rotation (counted from Tuesday 2026-10-13; area `k mod 8`, lens `k mod 5`) unless the user input names them. Pick a persona and a goal, then explore the common path and at least one uncommon scenario with journey scripts under `/tmp`, looking at every screenshot.
 6. Sort candidates into defects and proposals. Have a fresh subagent rerun and try to refute each one, and drop those that do not survive.
-7. Check for duplicates here and in the old elsa-foundation-studio history. File at most three defects and two proposals in elsa-foundation, using the catalog's labels and body; a defect gets `ready-for-agent` only when it passes every condition in the catalog's gate.
+7. Check for duplicates here and in the old elsa-foundation-studio history, counting issues only (not pull requests). File at most three defects and two proposals in elsa-foundation, using the catalog's labels and body; a defect gets `ready-for-agent` only when it passes every condition in the catalog's gate.
 8. Comment the run on the `ux-qa-ledger` issue, then run `bash tools/ux-qa/teardown.sh`.
 
 Edit no repository files, push no branches and open no pull requests. Report the area, lens, golden-path result, what worked well, issues filed, and candidates dropped.
