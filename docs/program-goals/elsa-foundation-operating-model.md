@@ -12,7 +12,7 @@ Steward(s): Joey plus active architects/agents.
 
 Turn `elsa-foundation` into the transitional Elsa foundation workspace: an AI-provider-neutral, navigable, amendable workspace that carries the main Elsa domain core libraries, foundation implementations, Speckit specs, maps, glossary, skills, reports, and architecture knowledge needed to guide the modular refactor.
 
-This goal does not mean every session must repeat the full program overview. Use the drift guard in [AGENTS.md](../../AGENTS.md#program-goals-and-drift-guard) only when a trigger is present.
+This goal does not mean every session must repeat the full program overview. Use the [drift guard](../contributing/program-goals-and-drift-guard.md) only when a trigger is present.
 
 ## In Scope
 

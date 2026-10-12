@@ -4,7 +4,7 @@ Use this matrix to choose focused checks while iterating. It summarizes existing
 
 ## Existing merge gates
 
-- **Foundation:** the [Merge Gate](../skills/catalog.md#merge-gate) still requires the solution build, affected whole test projects, architecture guard, generated-maps check, diff review, green required checks on the PR head, and a PR evidence comment. A behavioral claim also requires the gate's red-then-green bite-proof. Follow the applicable [rebuilt-server E2E guidance](../../AGENTS.md#backend-e2e-tests).
+- **Foundation:** the [Merge Gate](../skills/catalog.md#merge-gate) still requires the solution build, affected whole test projects, architecture guard, generated-maps check, diff review, green required checks on the PR head, and a PR evidence comment. A behavioral claim also requires the gate's red-then-green bite-proof. Follow the applicable [rebuilt-server E2E guidance](task-paths.md#backend-e2e-tests).
 - **Studio:** use the [Studio contribution guide](https://github.com/elsa-workflows/elsa-foundation-studio/blob/main/CONTRIBUTING.md#local-checks-and-hosted-checks) and current PR branch rules. Its CI and Docker PR jobs are described there; the Packages workflow does not run on pull requests.
 
 ## By change area
@@ -17,7 +17,7 @@ Use this matrix to choose focused checks while iterating. It summarizes existing
 ### Backend behavior
 
 - **Inner loop:** build and test the affected project or an appropriate [solution filter](../reference/developer-solution-filters.md). For Workbench startup and its REST smoke test, use the [backend source quickstart](backend-source-quickstart.md); use the [E2E guide](../../e2e-tests/README.md) to select other suites and their process-ownership rules.
-- **Evidence:** Foundation PR CI builds the full solution and runs its configured test jobs, including selected EF suites. When changing design, publishing, runtime, activity, stimulus, or scheduling behavior, run the relevant E2E suite against a rebuilt server as described in [AGENTS.md](../../AGENTS.md#backend-e2e-tests). Record the affected suites and the required bite-proof; Actions only supplies jobs already configured for the PR.
+- **Evidence:** Foundation PR CI builds the full solution and runs its configured test jobs, including selected EF suites. When changing design, publishing, runtime, activity, stimulus, or scheduling behavior, run the relevant E2E suite against a rebuilt server as described in [Backend e2e tests](task-paths.md#backend-e2e-tests). Record the affected suites and the required bite-proof; Actions only supplies jobs already configured for the PR.
 
 ### Studio UI
 

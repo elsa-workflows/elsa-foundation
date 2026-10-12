@@ -9,7 +9,7 @@
     ".specify/scripts/powershell/setup-plan.ps1": "c13ec3f33330e74aa088979c69bf35fe641301aaa50b2c1203c10ce94bcad338",
     ".specify/templates/checklist-template.md": "c37695297e5d3153d64f82c21223509940b13932046c7961c42d1d669516130c",
     ".specify/templates/constitution-template.md": "ce7549540fa45543cca797a150201d868e64495fdff39dc38246fb17bd4024b3",
-    ".specify/templates/plan-template.md": "cc7f7979cf8d8836ec26492785affd80791d3422a2b745062ec695be8c985ef7",
+    ".specify/templates/plan-template.md": "001a1efd7eb7497ffbf42cef153dfbf1c3be6779b0cb336264eaff2fb747e5d4",
     ".specify/templates/spec-template.md": "3945437fc35cd30a5b2bf7beea680337c3516826d3efa5a6b92c4a7eca1ba28e",
     ".specify/templates/tasks-template.md": "1aa9905f9f86e4b9acc62d1ab789e1e7350d70716d963c1a17e59ee26080e2d9",
     ".specify/scripts/bash/common.sh": "21cc21dd88c36e632fd052eca435c0e7ab262acaff632667dec87ff8b794ef43",

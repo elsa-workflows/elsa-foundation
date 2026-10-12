@@ -2,13 +2,16 @@
 
 Reference docs preserve worked examples, historical case studies, and explanatory walkthroughs that support the constitutions without being the enforceable gate surface.
 
-Use the constitution files in `.specify/memory/` for gates, allowed exceptions, draft/provisional state, ratification metadata, and governance. Use these reference docs when a gate points to an example or when a future session needs the longer reasoning trail.
+Use the constitution files in `.specify/memory/` for gates, allowed exceptions, draft/provisional state, ratification metadata, and governance. Review-only gates are listed in [docs/contributing/review-checklist.md](../contributing/review-checklist.md). Use these reference docs when a gate points to an example or when a future session needs the longer reasoning trail.
 
 ## Contents
 
-- [Elsa worked examples](elsa-worked-examples.md) - Elsa-specific examples formerly held in `constitution.md` sections `§E1` and `§E3`.
+- [Elsa worked examples](elsa-worked-examples.md) - Elsa-specific examples, the elsa-core case study, and the long form of Elsa §E2.2-§E2.9 and §E5 moved out of `constitution.md` by #2578.
 - [Framework examples](framework-examples.md) - synthetic and application-instance examples formerly embedded in `constitution-framework.md`.
 - [Architecture rationale](architecture-rationale.md) - explanatory context, rejected alternatives, and decision rationale moved out of the constitutions.
+- [Refactoring methodology](refactoring-methodology.md) - the three-step method behind framework §2.18.
+- [Elsa domain tree](elsa-domain-tree.md) - the purpose of each root-level Elsa domain pinned in Elsa §E2.1.
+- [Elsa type naming](elsa-naming.md) - the full text, senses and origins of the Elsa §E6 naming rules R1-R8.
 - [Agent preferences](agent-preferences.md) - committed catalog of local agent preference file rules and templates; personal selections belong in `.agent-prefs/`.
 - [Git operating models](git-operating-models.md) - maintainer organization-branch and contributor fork workflows; no publication-time model selection is required.
 - [Spec lifecycle](spec-lifecycle.md) - how specs under `specs/` are numbered, the closed status vocabulary, when a spec reaches a terminal status, and why specs are never moved or deleted.

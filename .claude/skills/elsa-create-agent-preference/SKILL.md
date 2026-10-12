@@ -18,7 +18,7 @@ $ARGUMENTS
 
 ## Outline
 
-1. Read `AGENTS.md#personal-operating-preferences`.
+1. Read `docs/contributing/agent-preferences.md`.
 2. Read `docs/skills/catalog.md#create-agent-preference`.
 3. Read `docs/reference/agent-preferences.md`.
 4. Classify the request as a personal selection, reusable preference catalog/template, or shared repo rule.

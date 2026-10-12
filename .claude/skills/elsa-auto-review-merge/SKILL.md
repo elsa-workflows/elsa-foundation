@@ -18,7 +18,7 @@ $ARGUMENTS
 
 ## Outline
 
-1. Read `docs/skills/catalog.md#auto-review-loop-then-merge` and `docs/skills/catalog.md#merge-gate`, plus `AGENTS.md#program-bookkeeping` for the merge rules.
+1. Read `docs/skills/catalog.md#auto-review-loop-then-merge` and `docs/skills/catalog.md#merge-gate`, plus `docs/contributing/merging.md#program-bookkeeping` for the merge rules.
 2. Scope the diff first: use the PR base from `gh pr view --json number,url,baseRefName,headRefName,isDraft`, else the merge base with `main`. For a stacked PR, review only the commits this PR adds on top of its base, and state which base was used.
 3. Run independent reviewers over that diff, one per lens, without shared context: correctness, repo-standards conformance against `AGENTS.md` and both files under `.specify/memory/`, and spec/issue conformance where the branch names one.
 4. Verify each finding adversarially against the code before acting: discard any claim without a specific line and a concrete failure scenario, and mutation-test a guard before trusting it.

@@ -18,7 +18,7 @@ $ARGUMENTS
 
 ## Outline
 
-1. Read `AGENTS.md` for source-of-truth layers and the program goals / drift guard.
+1. Read `AGENTS.md` for source-of-truth layers and `docs/contributing/program-goals-and-drift-guard.md` for the drift guard.
 2. Read `docs/skills/catalog.md#work-unit-planner` and `docs/skills/catalog.md#promote-finding-to-work-unit`.
 3. Inspect `docs/program-goals/` and identify whether the work belongs in a named bucket or should remain `none/free-flow`.
 4. Read the source report/spec/constitution section behind the finding.

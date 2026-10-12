@@ -1,7 +1,7 @@
 using Elsa.Maps.Generator;
 
 // Replaces the paired PowerShell/bash generators under tools/maps. The scripts remain as thin shims so
-// every documented invocation in AGENTS.md, docs/maps/README.md and the spec tasks.md files keeps working.
+// every documented invocation in docs/contributing/generated-maps.md, docs/maps/README.md and the spec tasks.md files keeps working.
 //
 // Usage: dotnet run --project tools/maps/Elsa.Maps.Generator -- <layer> [<layer> ...]
 //   dependency-map | maps | domain | extension-points | architecture-reference | feature-dependency | all | check

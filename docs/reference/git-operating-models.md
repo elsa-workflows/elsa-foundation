@@ -1,6 +1,6 @@
 # Git Operating Models
 
-This reference describes the publication paths defined in [AGENTS.md](../../AGENTS.md#personal-operating-preferences). They apply to engineers and agents using any tool; no personal Git preference file or workflow selection is required before publication.
+This reference describes the publication paths defined in [personal operating preferences](../contributing/agent-preferences.md). They apply to engineers and agents using any tool; no personal Git preference file or workflow selection is required before publication.
 
 ## Maintainers - Organization Branch
 

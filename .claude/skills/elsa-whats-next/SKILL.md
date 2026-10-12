@@ -18,7 +18,7 @@ $ARGUMENTS
 
 ## Outline
 
-1. Read `AGENTS.md`, especially source-of-truth layers and the program goals / drift guard.
+1. Read `AGENTS.md` (source-of-truth layers) and `docs/contributing/program-goals-and-drift-guard.md`.
 2. Read `docs/skills/catalog.md#whats-next--unfinished-work`.
 3. Inspect `docs/program-goals/` to identify the current program-goal state when it affects ranking or is unclear: a named bucket, `none/free-flow`, or temporarily `unknown/not-assessed`.
 4. Read `.agent-prefs/session-execution-model.md` if it exists.
