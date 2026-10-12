@@ -177,7 +177,7 @@ public sealed class DispatchWorkflowDesignTests
         services.AddSingleton<IWorkflowExecutableSourceReferenceStore>(sourceStore);
         services.AddSingleton<TimeProvider>(new FakeTimeProvider(Now));
         new EventsFeature().ConfigureServices(services);
-        // spec 145: the executable compiler + the ExecutableCompilationCollecting handler moved to the
+        // The executable compiler + the ExecutableCompilationCollecting handler moved to the
         // endpoint-free WorkflowsPublishing engine feature, which the Api feature pulls in via DependsOn at
         // shell composition. This test invokes ConfigureServices directly (bypassing DependsOn), so it composes
         // the engine feature too — otherwise the compiler and the compilation fan-in handler are unregistered.
@@ -231,7 +231,7 @@ public sealed class DispatchWorkflowDesignTests
     public async Task Pin_contribution_refuses_a_secret_read_target_with_the_fixed_publish_code()
     {
         // Publication refuses the binding first (DispatchWorkflow declares the input); this backstop keeps an artifact
-        // that skipped publication from reading a secret as a generic non-literal target (spec 188, T099).
+        // that skipped publication from reading a secret as a generic non-literal target.
         var node = DispatchNode("dispatch-node", "child-definition");
         var bindings = node.InputBindings.ToDictionary(item => item.Key, item => item.Value, StringComparer.Ordinal);
         bindings["WorkflowDefinitionId"] = SecretBindingTestSupport.SecretRead("WorkflowDefinitionId");

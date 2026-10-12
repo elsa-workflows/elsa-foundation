@@ -5,7 +5,7 @@ using Xunit;
 namespace Elsa.Activities.Http.Tests;
 
 /// <summary>
-/// Unit coverage for <see cref="HttpEndpointStimulus"/> (spec 089 B): the <c>(template, method)</c> hash identity,
+/// Unit coverage for <see cref="HttpEndpointStimulus"/>: the <c>(template, method)</c> hash identity,
 /// template normalization (case- and slash-insensitive, including parameter names), method case-insensitivity and
 /// dedupe, and the per-method descriptor set with its routing metadata. The load-bearing property is symmetry:
 /// the descriptor a publish emits and the hash a request derives must agree for the same (template, method).
@@ -192,8 +192,8 @@ public sealed class HttpEndpointStimulusTests
     [Fact]
     public void Describe_StampsResponseMode_Sync_OnEveryMethodDescriptor()
     {
-        // Spec 089 E-D1: the response mode rides the binding/bookmark metadata (via Describe folding ToMetadata),
-        // so a resumed endpoint's mode is available for free (scenario 5.5). Pinned here on the describe side.
+        // The response mode rides the binding/bookmark metadata (via Describe folding ToMetadata),
+        // so a resumed endpoint's mode is available for free. Pinned here on the describe side.
         var options = new HttpEndpointStimulusOptions(ResponseMode: ResponseMode.Sync);
 
         var descriptors = HttpEndpointStimulus.Describe("orders/{id}", ["GET", "POST"], options);
@@ -219,7 +219,7 @@ public sealed class HttpEndpointStimulusTests
     public void Describe_ResponseMode_IsNonIdentity_HashUnchanged()
     {
         // The response mode is non-identity: two endpoints differing only in mode share a routing key, so a
-        // sync request and its async sibling resolve to the same identity (E-D1, E-D6).
+        // sync request and its async sibling resolve to the same identity.
         var sync = Assert.Single(HttpEndpointStimulus.Describe("orders/{id}", ["GET"], new HttpEndpointStimulusOptions(ResponseMode: ResponseMode.Sync)));
         var async = Assert.Single(HttpEndpointStimulus.Describe("orders/{id}", ["GET"], new HttpEndpointStimulusOptions(ResponseMode: ResponseMode.Async)));
 

@@ -12,10 +12,10 @@ using Xunit;
 namespace Elsa.Activities.Runtime.Tests;
 
 /// <summary>
-/// The output evidence record of an activity whose result policy requires encryption (spec 188, FR-010), end to end from
+/// The output evidence record of an activity whose result policy requires encryption, end to end from
 /// completion to the inspection projection. Nothing scans that record at commit, so it is flagged sensitive where it is
 /// built and the payload capture policy captures nothing for it; a hand-built or imported contract can declare such a
-/// policy (research R13).
+/// policy.
 /// </summary>
 public sealed class ActivityOutputEvidenceSensitivityTests : IAsyncDisposable
 {

@@ -7,7 +7,7 @@ using System.Reflection;
 namespace Elsa.Activities.Design.Reconciliation.Clr.Services;
 
 /// <summary>
-/// Resolves a CLR activity's author-controlled SemVer 2.0.0 version (FR-020). Pure decision
+/// Resolves a CLR activity's author-controlled SemVer 2.0.0 version. Pure decision
 /// function over already-extracted metadata so it is exhaustively unit-testable without loading
 /// assemblies; the <see cref="ClrAssemblyScanner"/> does the reflection-only reading and feeds
 /// the raw values in.

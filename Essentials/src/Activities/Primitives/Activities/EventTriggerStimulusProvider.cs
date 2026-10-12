@@ -30,7 +30,7 @@ public sealed class EventTriggerStimulusProvider : IActivityTriggerStimulusProvi
         if (!StringComparer.Ordinal.Equals(node.ActivityType, Event.ActivityType))
             return ActivityTriggerStimulusResult.NotRecognized;
 
-        // A mid-flow wait node (CanStartWorkflow authored false, spec 116) is recognized but declares itself a
+        // A mid-flow wait node (CanStartWorkflow authored false) is recognized but declares itself a
         // non-start: no bindings, no publish failure — the HttpEndpoint provider pattern. Unlike HttpEndpoint,
         // starting is the default here (unauthored counts as true), preserving the activity's start-first identity.
         if (ReadLiteralBool(node, CanStartWorkflowInput) is false)

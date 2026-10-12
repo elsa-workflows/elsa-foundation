@@ -9,7 +9,7 @@ using BpmnProcessActivity = Elsa.Activities.Bpmn.Activities.BpmnProcess;
 namespace Elsa.Activities.Bpmn.Tests;
 
 /// <summary>
-/// Spec 124 D1 validation: a valid compensation graph (boundary + handler + throw) builds cleanly, and every
+/// Compensation validation: a valid compensation graph (boundary + handler + throw) builds cleanly, and every
 /// compensation rule rejects deterministically with the offending element named — compensation-boundary shape
 /// (existing handler, no child, zero outbound, non-multi-instance host), handler shape (task-family/subprocess,
 /// binds a child, zero flows, no loop characteristics, hosts no boundary, referenced by exactly one boundary,

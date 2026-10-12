@@ -119,7 +119,7 @@ public sealed class ActivityFaultIncidentRecorder
     /// The deterministic incident id for a fault. Exposed so callers that schedule fault-propagation work
     /// (child-fault parent evaluation) can reference the same incident id before the incident is committed.
     /// The work-item and activity-execution ids are folded into fixed-length fingerprints (#923) so the id
-    /// stays within the 128-char <c>by-incident-id</c> projection column (GW-PHYSICAL-037) regardless of how
+    /// stays within the 128-char <c>by-incident-id</c> projection column regardless of how
     /// long those ids are — dispatched executions embed <c>dispatch:v1:&lt;sha-256&gt;</c> shapes in both
     /// (#1031). The human-readable ids are preserved in the incident metadata, not the id.
     /// </summary>

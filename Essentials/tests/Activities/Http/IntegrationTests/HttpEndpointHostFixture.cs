@@ -40,7 +40,7 @@ using SequenceActivity = Elsa.Activities.Sequence.Activities.Sequence;
 namespace Elsa.Activities.Http.IntegrationTests;
 
 /// <summary>
-/// Host-level integration fixture for spec 089 sub-unit A (HTTP endpoint parity, async/202 baseline). It
+/// Host-level integration fixture for HTTP endpoint parity (async/202 baseline). It
 /// self-hosts a real ASP.NET Core request pipeline over <see cref="TestServer"/> and composes the real Elsa
 /// runtime feature set — serialization, expressions, the workflow runtime API spine, the activity-construction
 /// runtime, the primitives' <c>ClrActivityConstructor</c>, the triggers/stimulus-routing feature, and the HTTP
@@ -187,13 +187,13 @@ public sealed class HttpEndpointHostFixture : IAsyncDisposable
                     new WorkflowsRuntimeTriggersFeature().ConfigureServices(services);
                     new ActivitiesRuntimeFeature().ConfigureServices(services);
                     new ActivitiesPrimitivesFeature().ConfigureServices(services);
-                    // The Sequence composite (spec 089 D scenario 2 sequences two endpoints in one workflow). Its
+                    // The Sequence composite (sequences two endpoints in one workflow). Its
                     // feature only registers the structure handler; construction goes through the primitives'
                     // ClrActivityConstructor, so the primitives feature must precede it (already does).
                     new ActivitiesSequenceFeature().ConfigureServices(services);
                     new ActivitiesHttpFeature().ConfigureServices(services);
 
-                    // The real route-table stack (spec 089 B). The REAL resolver, route-table startup task, and
+                    // The real route-table stack. The REAL resolver, route-table startup task, and
                     // publish-time index observer from Elsa.Workflows.Runtime.Http are registered directly — the
                     // same services WorkflowsRuntimeHttpFeature contributes, but registered explicitly because that
                     // feature (like HttpFeature) resolves its defaults reflectively via Type.GetType(simpleName),
@@ -206,7 +206,7 @@ public sealed class HttpEndpointHostFixture : IAsyncDisposable
                     services.AddSingleton<Elsa.Http.Core.Contracts.IRouteTable, FakeRouteTable>();
                     services.AddScoped<Elsa.Workflows.Runtime.Http.Contracts.IHttpEndpointRoutesResolver, Elsa.Workflows.Runtime.Http.Services.HttpEndpointRoutesResolver>();
                     // The single serialization point every route-table refresh (startup task + both observers)
-                    // delegates to (spec 089 D review fix) — the same singleton WorkflowsRuntimeHttpFeature contributes.
+                    // delegates to — the same singleton WorkflowsRuntimeHttpFeature contributes.
                     services.TryAddSingleton<Elsa.Workflows.Runtime.Http.Contracts.IHttpEndpointRouteTableSynchronizer, Elsa.Workflows.Runtime.Http.Services.HttpEndpointRouteTableSynchronizer>();
                     services.AddScoped<IStartupTask, Elsa.Workflows.Runtime.Http.Tasks.UpdateRouteTableStartupTask>();
                     services.TryAddEnumerable(ServiceDescriptor.Singleton<IWorkflowTriggerIndexObserver, Elsa.Workflows.Runtime.Http.Services.RouteTableTriggerIndexObserver>());
@@ -215,7 +215,7 @@ public sealed class HttpEndpointHostFixture : IAsyncDisposable
                     // item 2) — the same validator WorkflowsRuntimeHttpFeature contributes.
                     services.TryAddEnumerable(ServiceDescriptor.Singleton<IWorkflowTriggerIndexValidator, Elsa.Workflows.Runtime.Http.Services.HttpEndpointRoutingUniquenessValidator>());
 
-                    // Spec 089 sub-unit D (T010). The bookmark-lifecycle observer that keeps the route table in step
+                    // The bookmark-lifecycle observer that keeps the route table in step
                     // with waiting mid-flow bookmarks — registered exactly like the publish-side trigger observer
                     // above (the reflective feature loader can't resolve this out-of-assembly type). The
                     // BookmarkLifecycleNotifier that fans into it is already registered by WorkflowsRuntimeApiFeature.
@@ -226,7 +226,7 @@ public sealed class HttpEndpointHostFixture : IAsyncDisposable
                     // HostBuilder runs no recurring tasks; StartRouteTableConvergence schedules it the way Tasks does.
                     services.TryAddEnumerable(ServiceDescriptor.Singleton<IRecurringTask, HttpEndpointRouteTableConvergencePumpTask>());
 
-                    // Spec 089 sub-unit C (T010). The endpoint-policy seam services the middleware resolves from
+                    // The endpoint-policy seam services the middleware resolves from
                     // RequestServices: the REAL authorization + fault handlers from Elsa.Workflows.Runtime.Http and
                     // the REAL request-body parser from Elsa.Http (again registered explicitly rather than via the
                     // reflective feature loader, which can't resolve out-of-assembly types).
@@ -284,7 +284,7 @@ public sealed class HttpEndpointHostFixture : IAsyncDisposable
 
     /// <summary>
     /// Publishes a workflow whose single start-trigger node is an <see cref="HttpEndpoint"/> on
-    /// <paramref name="path"/> accepting <paramref name="methods"/> (routing-significant — spec 089 B), indexing
+    /// <paramref name="path"/> accepting <paramref name="methods"/> (routing-significant), indexing
     /// its trigger binding the way the publish flow does. The node captures the endpoint's <c>Result</c> output
     /// into the durable value store under the durable value id <paramref name="resultValueId"/> so the live
     /// request the run observed (including its extracted RouteData) can be read back.
@@ -294,7 +294,7 @@ public sealed class HttpEndpointHostFixture : IAsyncDisposable
 
     /// <summary>
     /// As <see cref="PublishHttpEndpointWorkflowAsync(string,string,string,string[])"/>, additionally authoring the
-    /// spec 089 C endpoint-option literals — <see cref="HttpEndpoint.Authorize"/>, <see cref="HttpEndpoint.Policy"/>,
+    /// endpoint-option literals — <see cref="HttpEndpoint.Authorize"/>, <see cref="HttpEndpoint.Policy"/>,
     /// <see cref="HttpEndpoint.RequestSizeLimit"/> — so their values ride the trigger-binding metadata the middleware
     /// enforces. Null inputs are omitted (the option defaults apply).
     /// </summary>
@@ -392,8 +392,8 @@ public sealed class HttpEndpointHostFixture : IAsyncDisposable
 
     /// <summary>
     /// Publishes a workflow whose single node is a <b>mid-flow</b> <see cref="HttpEndpoint"/> on
-    /// <paramref name="path"/>/<paramref name="method"/> with <see cref="HttpEndpoint.CanStartWorkflow"/> = false
-    /// (spec 089 D). Because the node can never start a workflow it is NOT a trigger node and is not indexed — the
+    /// <paramref name="path"/>/<paramref name="method"/> with <see cref="HttpEndpoint.CanStartWorkflow"/> = false.
+    /// Because the node can never start a workflow it is NOT a trigger node and is not indexed — the
     /// run is started directly via <see cref="StartWorkflowDirectlyAsync"/>, the endpoint suspends on a bookmark,
     /// and a matching request resumes it. The fixture gives the node a stable test-only result key so its immutable
     /// committed result can be selected without introducing a second output store.
@@ -412,12 +412,12 @@ public sealed class HttpEndpointHostFixture : IAsyncDisposable
             incidentStrategy: IncidentStrategyBuiltIns.FaultReference);
 
         // Only stored (never indexed): a CanStartWorkflow = false node produces no trigger bindings, so a direct
-        // start is the only way in — exactly the spec 089 D US4 independent test's shape.
+        // start is the only way in — exactly the shape the mid-flow resume tests need.
         await SaveExecutableAsync(executable);
     }
 
     /// <summary>
-    /// Publishes a workflow that sequences two <see cref="HttpEndpoint"/>s (spec 089 D scenario 2): a start-trigger
+    /// Publishes a workflow that sequences two <see cref="HttpEndpoint"/>s: a start-trigger
     /// endpoint on <paramref name="startPath"/> (indexed, starts the run) followed by a mid-flow endpoint on
     /// <paramref name="callbackPath"/> (<see cref="HttpEndpoint.CanStartWorkflow"/> = false, suspends). An HTTP
     /// request to the start template runs the first endpoint and suspends on the second; a request to the callback
@@ -475,16 +475,16 @@ public sealed class HttpEndpointHostFixture : IAsyncDisposable
         await PublishAsync(executable);
     }
 
-    // ---- Spec 089 sub-unit E (synchronous responses) publish helpers ----
+    // ---- Synchronous response publish helpers ----
 
     /// <summary>
-    /// Publishes a synchronous (spec 089 E) endpoint workflow: a start-trigger <see cref="HttpEndpoint"/> on
+    /// Publishes a synchronous endpoint workflow: a start-trigger <see cref="HttpEndpoint"/> on
     /// <paramref name="path"/>/<paramref name="method"/> authored <see cref="ResponseMode.Sync"/>, sequenced before a
     /// <see cref="WriteHttpResponse"/> authoring <paramref name="statusCode"/>/<paramref name="body"/>/
     /// <paramref name="contentType"/> (and one custom header). An HTTP request runs the endpoint then the
     /// WriteHttpResponse INLINE on the caller's flow, so the middleware returns the workflow-authored response in the
-    /// same exchange (scenario 5.1). Pass <paramref name="responseMode"/> = <see cref="ResponseMode.Async"/> for the
-    /// async baseline variant (scenario 5.4): the same graph, but the middleware never populates the sink, so the
+    /// same exchange. Pass <paramref name="responseMode"/> = <see cref="ResponseMode.Async"/> for the
+    /// async baseline variant: the same graph, but the middleware never populates the sink, so the
     /// response is the 202 baseline and the WriteHttpResponse only records the durable artifact.
     /// </summary>
     public Task PublishSyncEndpointWithWriteResponseWorkflowAsync(
@@ -506,7 +506,7 @@ public sealed class HttpEndpointHostFixture : IAsyncDisposable
     }
 
     /// <summary>
-    /// Publishes a synchronous (spec 089 E) endpoint that suspends BEFORE any WriteHttpResponse (scenario 5.2): a
+    /// Publishes a synchronous endpoint that suspends BEFORE any WriteHttpResponse: a
     /// start-trigger <see cref="HttpEndpoint"/> (Sync) sequenced before a mid-flow <see cref="HttpEndpoint"/>
     /// (<see cref="HttpEndpoint.CanStartWorkflow"/> = false — it suspends) and then a <see cref="WriteHttpResponse"/>
     /// that is never reached in the starting exchange. The starting request therefore writes no live response and the
@@ -532,8 +532,8 @@ public sealed class HttpEndpointHostFixture : IAsyncDisposable
     }
 
     /// <summary>
-    /// Publishes a synchronous (spec 089 E) endpoint with a short per-endpoint <paramref name="requestTimeout"/> and a
-    /// <see cref="StallingActivity"/> that outlasts it (scenario 5.3): the inline drain stalls on the timeout token,
+    /// Publishes a synchronous endpoint with a short per-endpoint <paramref name="requestTimeout"/> and a
+    /// <see cref="StallingActivity"/> that outlasts it: the inline drain stalls on the timeout token,
     /// the stall throws <see cref="OperationCanceledException"/>, and the middleware maps it to <c>408</c>. A
     /// <see cref="WriteHttpResponse"/> follows the stall but is never reached.
     /// </summary>
@@ -554,12 +554,12 @@ public sealed class HttpEndpointHostFixture : IAsyncDisposable
     }
 
     /// <summary>
-    /// Publishes a MID-FLOW synchronous (spec 089 E, scenario 5.5) endpoint workflow: a mid-flow
+    /// Publishes a MID-FLOW synchronous endpoint workflow: a mid-flow
     /// <see cref="HttpEndpoint"/> (<see cref="HttpEndpoint.CanStartWorkflow"/> = false, authored
     /// <see cref="ResponseMode.Sync"/>) sequenced before a <see cref="WriteHttpResponse"/>. The run is started
     /// directly and suspends at the endpoint; the RESUMING request drains the WriteHttpResponse inline on its own
     /// fresh scope, so that request receives the workflow-authored response in the same exchange — the whole point of
-    /// the D+E composition. Because the node cannot start a workflow it is not a trigger and is not indexed; the run
+    /// composing mid-flow resume with synchronous responses. Because the node cannot start a workflow it is not a trigger and is not indexed; the run
     /// is started via <see cref="StartWorkflowDirectlyAsync"/> and its bookmark route goes live for the resume.
     /// </summary>
     public async Task PublishMidFlowSyncWriteResponseWorkflowAsync(
@@ -692,7 +692,7 @@ public sealed class HttpEndpointHostFixture : IAsyncDisposable
             activityContract: contract);
     }
 
-    /// <summary>Builds a <see cref="StallingActivity"/> node that stalls the inline drain for <paramref name="duration"/> (scenario 5.3 timeout).</summary>
+    /// <summary>Builds a <see cref="StallingActivity"/> node that stalls the inline drain for <paramref name="duration"/> (the timeout scenario).</summary>
     private ExecutableNode NewStallingNode(string nodeId, TimeSpan duration)
     {
         const string durationKey = "duration";
@@ -742,7 +742,7 @@ public sealed class HttpEndpointHostFixture : IAsyncDisposable
 
     /// <summary>
     /// Starts a run of a previously-published artifact directly through the runtime API — no HTTP stimulus, no
-    /// trigger identity (spec 089 D US4 independent test). The in-process agent drains synchronously, so a mid-flow
+    /// trigger identity. The in-process agent drains synchronously, so a mid-flow
     /// endpoint has already suspended (and its route is live) by the time this returns. Returns the started
     /// workflow execution id.
     /// </summary>
@@ -753,12 +753,12 @@ public sealed class HttpEndpointHostFixture : IAsyncDisposable
         return result.WorkflowExecutionId;
     }
 
-    /// <summary>Reads all waiting bookmarks for a run (spec 089 D — inspect the mid-flow suspension).</summary>
+    /// <summary>Reads all waiting bookmarks for a run (to inspect the mid-flow suspension).</summary>
     public async Task<IReadOnlyCollection<BookmarkState>> ListBookmarksAsync(string workflowExecutionId) =>
         await Services.GetRequiredService<IBookmarkStateStore>().ListAllBookmarkStatesAsync(workflowExecutionId);
 
     /// <summary>
-    /// Upserts a bookmark state (spec 089 D scenario 4.3 — overwrite a waiting bookmark with a past
+    /// Upserts a bookmark state (overwrite a waiting bookmark with a past
     /// <c>ExpiresAt</c> so the expiry-aware lookup excludes it), then refreshes the route table so the resolver's
     /// union no longer projects the now-expired template.
     /// </summary>
@@ -941,7 +941,7 @@ public sealed class HttpEndpointHostFixture : IAsyncDisposable
     /// Builds one HttpEndpoint executable node. <paramref name="isTriggerNode"/> stamps the trigger execution-type
     /// metadata (so a standalone start-trigger endpoint is indexed as a start node); a mid-flow endpoint inside a
     /// composite leaves it off (the composite root carries the trigger marker instead).
-    /// <paramref name="canStartWorkflow"/> authors the D-D1 literal (null = leave the default false unauthored).
+    /// <paramref name="canStartWorkflow"/> authors the <c>CanStartWorkflow</c> literal (null = leave the default false unauthored).
     /// </summary>
     private ExecutableNode NewHttpEndpointNode(
         string artifactId,

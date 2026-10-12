@@ -5,7 +5,7 @@ using Xunit;
 
 namespace Elsa.Activities.Runtime.Tests;
 
-// ADR 0032 R1 / spec 107: the side-effect profile is part of the pinned, fingerprinted contract.
+// The side-effect profile is part of the pinned, fingerprinted contract.
 public sealed class SideEffectProfileContractTests
 {
     private static readonly ValueTypeDescriptor StringType = new("String");

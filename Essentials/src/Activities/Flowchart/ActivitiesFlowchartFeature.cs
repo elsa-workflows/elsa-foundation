@@ -38,13 +38,13 @@ public class ActivitiesFlowchartFeature : IShellFeature
         services.AddSingleton<IFlowchartPolicy, InclusiveJoinFlowchartPolicy>();
         services.AddSingleton<IFlowchartPolicy, FirstWinsFlowchartPolicy>();
         services.AddSingleton<IFlowchartPolicy, MergeFlowchartPolicy>();
-        // ADR 0064: both join semantics stay registered so the A/B is FlowchartOptions.JoinPolicyKind rather
+        // Both join semantics stay registered so the A/B is FlowchartOptions.JoinPolicyKind rather
         // than a fork of the engine, and the reachability walk stays available for validation after the flip.
         services.AddSingleton<IFlowchartPolicy, ReachabilityJoinFlowchartPolicy>();
         services.AddSingleton<IFlowchartPolicy, DeadPathJoinFlowchartPolicy>();
         services.AddSingleton<IFlowchartPolicyRegistry, FlowchartPolicyRegistry>();
-        // spec 123 D2 (ADR 0047 resolution #1): lets the ReplaySafe fused completion pump prove a flowchart
-        // successor edge single-predecessor via the spec-119 routing memo; fan-in/join edges keep the discrete cascade.
+        // Lets the ReplaySafe fused completion pump prove a flowchart
+        // successor edge single-predecessor via the routing memo; fan-in/join edges keep the discrete cascade.
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IReplaySafeSuccessorRoutingProbe, FlowchartReplaySafeSuccessorRoutingProbe>());
     }
 }

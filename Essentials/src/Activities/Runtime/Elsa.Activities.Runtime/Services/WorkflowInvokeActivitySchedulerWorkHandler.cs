@@ -53,7 +53,7 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : RuntimeSchedule
         var activityExecutionStateStore = serviceProvider.GetRequiredService<IActivityExecutionStateStore>();
         var schedulerWorkQueue = serviceProvider.GetRequiredService<IWorkflowSchedulerWorkQueue>();
 
-        // spec 111: burst-cached pinned-executable read (immutable artifact ⇒ one durable read per burst, not per hop).
+        // Burst-cached pinned-executable read (immutable artifact ⇒ one durable read per burst, not per hop).
         var executable = await PinnedExecutableRead.FindAsync(serviceProvider, invokePayload.PinnedExecutable.ArtifactId, cancellationToken);
         if (executable is null)
             throw new WorkflowExecutableNotFoundException(invokePayload.PinnedExecutable.ArtifactId);
@@ -85,7 +85,7 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : RuntimeSchedule
         var activityFaultIncidentRecorder = serviceProvider.GetRequiredService<ActivityFaultIncidentRecorder>();
         var inspectionAccumulator = serviceProvider.GetService<IRuntimeActivityExecutionInspectionAccumulator>();
         var payloadCapturePolicy = serviceProvider.GetService<IRuntimePayloadCapturePolicy>() ?? new DefaultRuntimePayloadCapturePolicy();
-        // Released once the outcome is recorded, after every fault boundary below has masked its text (spec 188, FR-012).
+        // Released once the outcome is recorded, after every fault boundary below has masked its text.
         using var faultMasking = ActivityFaultMasking.For(serviceProvider, invokePayload.ActivityExecutionId);
         await InvokeActivityAsync(serviceProvider, activityExecutionStateStore, schedulerWorkQueue, durableValueStateStore, checkpointCommitter, activityFaultIncidentRecorder, inspectionAccumulator, payloadCapturePolicy, faultMasking, workItem, invokePayload, executable, executableNode, state, cancellationToken);
     }
@@ -109,7 +109,7 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : RuntimeSchedule
     {
         var workflowDispatchStaging = serviceProvider.GetService<IWorkflowDispatchStagingAccessor>();
         workflowDispatchStaging?.Reset(workItem.WorkflowExecutionId, invokePayload.ActivityExecutionId);
-        // spec 135 D1: the PublishEvent send surface stages durable-first publish intents on this same invocation-keyed
+        // The PublishEvent send surface stages durable-first publish intents on this same invocation-keyed
         // seam, mirroring the dispatch stager one-for-one (reset here, drain at the clean exits, reset on fault below).
         var publishStimulusStaging = serviceProvider.GetService<IPublishStimulusStagingAccessor>();
         publishStimulusStaging?.Reset(workItem.WorkflowExecutionId, invokePayload.ActivityExecutionId);
@@ -125,8 +125,8 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : RuntimeSchedule
         IReadOnlyDictionary<string, RuntimeDurableValueEncoding> workflowVariableWrites =
             RuntimeOutputCaptureProjection.Empty.WorkflowVariableWrites;
 
-        // Carrier identity (ADR 0030: correlation id / instance name) is projected from the IdentityName-tagged durable
-        // values this invocation already re-lists (spec 083 review), so a plain activity populates the carrier without
+        // Carrier identity (correlation id / instance name) is projected from the IdentityName-tagged durable
+        // values this invocation already re-lists, so a plain activity populates the carrier without
         // a per-invocation workflow-execution-state read. A Correlate/SetName leaf writes the new value as a durable
         // value (see the identity fold below), which every activity invocation — including a concurrent sibling
         // branch — re-lists, so cross-branch visibility holds. The control-leaf state change below is the only path
@@ -203,7 +203,7 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : RuntimeSchedule
                         .Append(valueFlowAttempt)
                         .ToArray()
                 };
-            // spec 123 D1: a structural activity that reads its enclosing container-scoped variable values (the
+            // A structural activity that reads its enclosing container-scoped variable values (the
             // BpmnProcess) gets a committed name→envelope projection of its own visible frame chain; marker-gated,
             // so a non-consumer activity pays nothing and reads always return false.
             var scopedVariableEnvelopes = await scopeService.ProjectScopedVariablesForReaderAsync(
@@ -298,7 +298,7 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : RuntimeSchedule
             if (context.GetChildFaultAbsorptionRequests().Count > 0)
                 throw new InvalidOperationException("An initial structural execution cannot absorb child faults; absorption requests are only valid during a child-fault evaluation (spec 115).");
 
-            // spec 126 seam C: a non-root structural child may notify its own parent during its initial
+            // Seam C: a non-root structural child may notify its own parent during its initial
             // structural execution. Harvest the staged notifications now so a root staging or a Fault/Cancel
             // continuation with staged notifications faults the evaluation inside this callback boundary; the
             // built work items ride the same Defer/Complete commit below.
@@ -409,7 +409,7 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : RuntimeSchedule
 
                 // A completing container's scope is no longer live for runtime expressions; its
                 // final variable values are retained as inspection evidence only through the
-                // configured capture/retention policy (ADR 0027, #210).
+                // configured capture/retention policy (#210).
                 if (structuralContinuation?.IsComplete == true)
                 {
                     var containerVariableSnapshots = RuntimeContainerVariableEvidence.Capture(
@@ -441,7 +441,7 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : RuntimeSchedule
                 }
             }
 
-            // spec 135 D1: drain the invocation's staged publish intents at the same clean exit the dispatch stager is
+            // Drain the invocation's staged publish intents at the same clean exit the dispatch stager is
             // drained. They fold onto PostCommitIntents only (no dispatch record), so a fire-and-continue send rides the
             // activity's own commit and delivers post-commit. Staging is valid only with a completion or suspension
             // transition (a leaf PublishEvent completes; a suspending publisher is future-proofed).
@@ -1015,12 +1015,12 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : RuntimeSchedule
     }
 
     /// <summary>
-    /// Discrete completion commit (spec 123 D2 seam): builds the intent-free <c>ActivityCompleted</c> commit core and
+    /// Discrete completion commit: builds the intent-free <c>ActivityCompleted</c> commit core and
     /// re-attaches the <c>CompleteActivity</c> continuation post-commit intent (ahead of any staged workflow-dispatch
     /// start intent, preserving today's ordering), reproducing the commit byte-for-byte. The commit builder and the
     /// derived <c>CompleteActivity</c> work item are extracted into <see cref="BuildCompletedCommitAsync"/> so a future
-    /// fused-completion driver (D2) can commit the same stage without the completion enqueue intent and run the parent
-    /// completion cascade inline instead of enqueuing it. This is the only invoke-handler surgery in spec 123 and is
+    /// fused-completion driver can commit the same stage without the completion enqueue intent and run the parent
+    /// completion cascade inline instead of enqueuing it. This is the only invoke-handler surgery fused completion needs and is
     /// strictly behavior-preserving.
     /// </summary>
     private async ValueTask CommitCompletedActivityAsync(
@@ -1054,12 +1054,12 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : RuntimeSchedule
 
         var completionIntent = SchedulerWorkHandlerHelpers.NewEnqueueSchedulerWorkIntent(
             invokeWorkItem, invokePayload.ActivityExecutionId, core.CompletionWorkItem, occurredAt);
-        // spec 126 seam C: a structural child completing on its initial execution may also notify its parent;
+        // Seam C: a structural child completing on its initial execution may also notify its parent;
         // the notification intents ride behind the completion cascade intent and ahead of any staged dispatch.
         var notificationIntents = parentNotifications
             .Select(workItem => SchedulerWorkHandlerHelpers.NewEnqueueSchedulerWorkIntent(invokeWorkItem, invokePayload.ActivityExecutionId, workItem, occurredAt))
             .ToArray();
-        // spec 135 D1: staged publish intents ride behind the completion cascade + notification intents and ahead of any
+        // Staged publish intents ride behind the completion cascade + notification intents and ahead of any
         // staged dispatch start intent (on core.Commit.PostCommitIntents), folding onto PostCommitIntents only.
         var commit = core.Commit with
         {
@@ -1070,7 +1070,7 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : RuntimeSchedule
     }
 
     /// <summary>
-    /// The <c>ActivityCompleted</c> stage core (spec 123 D2 seam): produces the <c>ActivityCompleted</c> checkpoint
+    /// The <c>ActivityCompleted</c> stage core: produces the <c>ActivityCompleted</c> checkpoint
     /// commit <b>without</b> its <c>CompleteActivity</c> continuation post-commit intent, alongside the derived
     /// <c>CompleteActivity</c> work item and the checkpoint's occurrence time. Any staged workflow-dispatch start intent
     /// remains on the commit (it is a separate dispatch, not the completion cascade). The discrete handler re-attaches
@@ -1171,7 +1171,7 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : RuntimeSchedule
 
     /// <summary>
     /// The intent-free <c>ActivityCompleted</c> commit plus the derived <c>CompleteActivity</c> continuation work item
-    /// and the checkpoint's occurrence time (spec 123 D2 seam).
+    /// and the checkpoint's occurrence time.
     /// </summary>
     private readonly record struct CompletedCommitCore(
         RuntimeCheckpointCommit Commit,

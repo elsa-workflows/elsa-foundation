@@ -9,8 +9,8 @@ using Elsa.Workflows.Runtime.Services.Checkpoints;
 namespace Elsa.Activities.Primitives.Services;
 
 /// <summary>
-/// Invocation-keyed hand-off between transient <see cref="PublishEvent"/> activations and runtime checkpoint owners
-/// (spec 135 D1). It mirrors <c>WorkflowDispatchStagingBuffer</c>'s shape, but is publish-typed: it accepts the send's
+/// Invocation-keyed hand-off between transient <see cref="PublishEvent"/> activations and runtime checkpoint owners.
+/// It mirrors <c>WorkflowDispatchStagingBuffer</c>'s shape, but is publish-typed: it accepts the send's
 /// authored facets and builds the <c>PublishStimulusIntentKind</c> post-commit intent itself — deriving the shared
 /// <c>Event</c> stimulus routing pair via <see cref="EventStimulus"/> and a bounded deterministic intent id/idempotency
 /// key from <c>(activityExecutionId, ordinal)</c> — so a redelivered outbox item is idempotent and multiple publishes

@@ -17,7 +17,7 @@ public static class ActivitiesDesignEfModule
     /// </summary>
     public const string SchemaFamily = "ActivitiesDesign";
     /// <summary>The family's one chain, from this assembly's declaration: what every reader of the family checks and
-    /// upcasts through (spec 180, FR-010).</summary>
+    /// upcasts through.</summary>
     public static readonly EfSchemaChain Chain = EfSchemaChain.Of(typeof(ActivitiesDesignEfModule).Assembly, SchemaFamily);
 
     public static string HistoryTableName => EfMigrationsHistory.TableName(HistoryModuleName);

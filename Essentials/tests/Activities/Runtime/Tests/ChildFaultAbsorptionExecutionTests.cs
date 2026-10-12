@@ -12,7 +12,7 @@ using Xunit;
 namespace Elsa.Activities.Runtime.Tests;
 
 /// <summary>
-/// Spec 115: a structural parent absorbs a child fault during the child-fault evaluation — the
+/// A structural parent absorbs a child fault during the child-fault evaluation — the
 /// incident resolves and the faulted child's leftover subtree is reclaimed in the same checkpoint
 /// commit as the parent's continuation.
 /// </summary>
@@ -161,7 +161,7 @@ public sealed class ChildFaultAbsorptionExecutionTests
         Assert.Equal("actexec-parent", incident.Metadata[RuntimeMetadataKeys.FaultAbsorbedBy]);
     }
 
-    // #989 FR-2 hygiene pin: a work item derived (scheduled) from a fault evaluation carries none of the three
+    // #989 hygiene pin: a work item derived (scheduled) from a fault evaluation carries none of the three
     // fault-scoped metadata keys. Pins the fix shape directly, independent of the downstream misclassification.
     [Fact]
     public async Task ChildScheduleDerivedFromFaultEvaluation_CarriesNoFaultScopedMetadata()
@@ -303,7 +303,7 @@ public sealed class ChildFaultAbsorptionExecutionTests
         }
     }
 
-    /// <summary>Illegally stages a fault absorption during initial structural execution (spec 115 FR-2).</summary>
+    /// <summary>Illegally stages a fault absorption during initial structural execution.</summary>
     public sealed class InitialAbsorptionStructuralActivity(FaultAbsorptionDirective directive) : StructuralActivity,
         IRuntimeStructuralActivity,
         IRuntimeActivityChildCompletionHandler
@@ -350,7 +350,7 @@ public sealed class ChildFaultAbsorptionExecutionTests
             ValueTask.FromResult(RuntimeStructuralContinuation.Complete());
     }
 
-    /// <summary>Records whether a fault-handling parent's single child arrived as a completion or a fault (spec 132 grandparent chain).</summary>
+    /// <summary>Records whether a fault-handling parent's single child arrived as a completion or a fault (grandparent chain).</summary>
     public sealed class ChildOutcomeRecorder
     {
         private readonly List<string> _outcomes = [];

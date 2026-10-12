@@ -7,7 +7,7 @@ using Elsa.Workflows.Runtime.Core.Models;
 namespace Elsa.Activities.Primitives.Services;
 
 /// <summary>
-/// Delivers a committed <see cref="PublishEvent"/> publish intent (spec 135 D1): after the activity's own checkpoint
+/// Delivers a committed <see cref="PublishEvent"/> publish intent: after the activity's own checkpoint
 /// commits, it routes the carried named-event stimulus through the existing <see cref="IStimulusRouter"/> in
 /// <see cref="StimulusRoutingMode.StartAndResume"/> mode — starting every published message-start workflow that listens
 /// on the name AND resuming every parked same-name catch, in one delivery. The router is <b>never</b> called during the

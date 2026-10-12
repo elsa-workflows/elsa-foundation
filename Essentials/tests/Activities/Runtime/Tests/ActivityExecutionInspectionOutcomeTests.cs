@@ -103,10 +103,10 @@ public sealed class ActivityExecutionInspectionOutcomeTests
     }
 
     /// <summary>
-    /// The inspection snapshot is built on the invoke path before activation (spec 188, T012), so a withheld secret
+    /// The inspection snapshot is built on the invoke path before activation, so a withheld secret
     /// input must render there as a sensitive marker naming its reference, with no value and without throwing. It
     /// renders as sensitive even when its own policy is not. This host composes no secret resolver, so the activation
-    /// that follows parks the activity with an activation-failure incident instead of faulting it (T020, A06).
+    /// that follows parks the activity with an activation-failure incident instead of faulting it.
     /// </summary>
     [Theory]
     [InlineData(true)]

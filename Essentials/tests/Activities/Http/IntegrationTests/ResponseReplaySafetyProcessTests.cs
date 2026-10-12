@@ -595,7 +595,7 @@ public sealed class ResponseReplaySafetyProcessTests
             AssertOwnerLeaseLive(windowLease, DateTimeOffset.UtcNow);
             AssertSameOwnerLease(claimLease, windowLease);
 
-            // T009 never receives an acknowledgement; T019's acknowledgement only confirms the parent read the
+            // The inline-body case never receives an acknowledgement; the external-body case's acknowledgement only confirms the parent read the
             // durable ActivityStarted/outbox/reference window. Both barriers remain held until this process kill.
             Assert.False(crashChild.HasExited, "The child left the response barrier before the parent could kill it.");
             var killedChild = await crashChild.KillAndWaitAsync();

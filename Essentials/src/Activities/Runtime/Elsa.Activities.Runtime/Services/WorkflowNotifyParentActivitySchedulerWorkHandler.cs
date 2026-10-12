@@ -15,7 +15,7 @@ using Microsoft.Extensions.DependencyInjection;
 namespace Elsa.Activities.Runtime.Services;
 
 /// <summary>
-/// Handles a non-terminal child→parent structural notification (spec 126, seam C). Reactivates the target
+/// Handles a non-terminal child→parent structural notification (seam C). Reactivates the target
 /// parent — the notifying child's committed parent — from its pinned snapshot and dispatches
 /// <see cref="IRuntimeActivityChildNotificationHandler.OnChildNotifiedAsync"/>, applying the returned
 /// continuation (and any seam-A subtree cancellations / child schedules / further parent notifications it
@@ -26,7 +26,7 @@ namespace Elsa.Activities.Runtime.Services;
 /// </summary>
 public sealed class WorkflowNotifyParentActivitySchedulerWorkHandler : RuntimeSchedulerWorkHandlerBase<RuntimeNotifyParentCommandPayload>
 {
-    // FROZEN wire value (spec 126 D2): the drainer's poison path persists this HandlerName verbatim and matches
+    // FROZEN wire value: the drainer's poison path persists this HandlerName verbatim and matches
     // it on recovery. Do not rename the type or this constant.
     public const string HandlerName = nameof(WorkflowNotifyParentActivitySchedulerWorkHandler);
 
@@ -71,7 +71,7 @@ public sealed class WorkflowNotifyParentActivitySchedulerWorkHandler : RuntimeSc
 
         parentState.EnsureValueFlowCompatible();
 
-        // spec 126 FR-4: a parent that is no longer running acks the notification away (late-absorption, mirroring
+        // A parent that is no longer running acks the notification away (late-absorption, mirroring
         // the completion path). The notifying child's own status is NOT a delivery gate — a child that completed
         // or faulted after staging still delivers here.
         if (parentState.Status != ActivityExecutionStatus.Running)
@@ -84,7 +84,7 @@ public sealed class WorkflowNotifyParentActivitySchedulerWorkHandler : RuntimeSc
         var inspectionAccumulator = serviceProvider.GetService<IRuntimeActivityExecutionInspectionAccumulator>();
         var activityFaultIncidentRecorder = serviceProvider.GetRequiredService<ActivityFaultIncidentRecorder>();
         var payloadCapturePolicy = serviceProvider.GetService<IRuntimePayloadCapturePolicy>() ?? new DefaultRuntimePayloadCapturePolicy();
-        // Released once the outcome is recorded, after every fault boundary below has masked its text (spec 188, FR-012).
+        // Released once the outcome is recorded, after every fault boundary below has masked its text.
         using var faultMasking = ActivityFaultMasking.For(serviceProvider, payload.ActivityExecutionId);
         var scopeService = new RuntimeContainerScopeService(
             activityExecutionStateStore,
@@ -126,7 +126,7 @@ public sealed class WorkflowNotifyParentActivitySchedulerWorkHandler : RuntimeSc
                 TimeProvider.GetUtcNow());
             var parentActivity = constructedParent.Activity;
 
-            // spec 126 D3: the seam is opt-in by interface. A parent that does not implement the notification
+            // The seam is opt-in by interface. A parent that does not implement the notification
             // handler acks the notification without invoking any callback and without fault — end the attempt the
             // claim opened and return the parent to its prior deferred state.
             if (parentActivity is not IRuntimeActivityChildNotificationHandler notificationHandler)
@@ -169,7 +169,7 @@ public sealed class WorkflowNotifyParentActivitySchedulerWorkHandler : RuntimeSc
                 if (!continuation.IsDeferred && scheduledChildren.Count > 0)
                     throw new InvalidOperationException("A terminal structural decision cannot also schedule child activities in the same child-notification evaluation.");
 
-                // spec 126 FR-5: seam-B fault absorption stays a child-fault-evaluation-only power.
+                // Seam-B fault absorption stays a child-fault-evaluation-only power.
                 if (context.GetChildFaultAbsorptionRequests().Count > 0)
                     throw new InvalidOperationException("A child-fault absorption is only valid in a child-fault evaluation.");
 

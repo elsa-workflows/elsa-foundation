@@ -53,7 +53,7 @@ public sealed class DispatchWorkflowContractTests
         Assert.Throws<ArgumentOutOfRangeException>(() => feature.ConfigureServices(new ServiceCollection()));
     }
 
-    // Kept beside the composition test (§2.23.1): asserts the retry policy each intent handler contribution carries.
+    // Kept beside the composition test: asserts the retry policy each intent handler contribution carries.
     [Fact]
     public async Task Runtime_feature_registers_resolvable_handlers_enricher_and_retry_policy()
     {
@@ -112,7 +112,7 @@ public sealed class DispatchWorkflowContractTests
         Assert.Throws<ArgumentOutOfRangeException>(() => feature.ChildStartRetryDelaySeconds = 0);
     }
 
-    // Kept beside the composition test (§2.23.1): replacement-contract rejection in either registration order.
+    // Kept beside the composition test: replacement-contract rejection in either registration order.
     [Theory]
     [InlineData(true)]
     [InlineData(false)]

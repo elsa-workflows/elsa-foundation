@@ -4,7 +4,7 @@ namespace Elsa.Activities.Flowchart.Contracts;
 
 /// <summary>
 /// Decides Flowchart's <b>implicit</b> joins — the inference that is the whole of Flowchart's difficulty,
-/// since the author declares no gateways (ADR 0064).
+/// since the author declares no gateways.
 /// <para>
 /// A join policy is an ordinary <see cref="IFlowchartPolicy"/> and lives in the same registry, so the two
 /// semantics ship side by side and choosing between them is a configuration flip

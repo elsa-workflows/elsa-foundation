@@ -11,7 +11,7 @@ using BpmnProcessActivity = Elsa.Activities.Bpmn.Activities.BpmnProcess;
 namespace Elsa.Activities.Bpmn.Interchange.Tests;
 
 /// <summary>
-/// Spec 120 D6 — interchange for boundary events: a timer/message/error boundary attached to a bound host
+/// Interchange for boundary events: a timer/message/error boundary attached to a bound host
 /// (an embedded subprocess) imports with a synthesized listener child (or, for error, none) and round-trips
 /// through export→import with attachedToRef/cancelActivity fidelity. A boundary attached to a childless host
 /// is dropped (validate-representable: the importer never emits a boundary the graph validator rejects).

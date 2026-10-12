@@ -3,7 +3,7 @@ using System.Text.Json;
 namespace Elsa.Activities.Runtime.Core.Models;
 
 /// <summary>
-/// Runtime callback payload for a non-terminal child→parent structural notification (spec 126, seam C).
+/// Runtime callback payload for a non-terminal child→parent structural notification (seam C).
 /// Carries the notifying child's identity and the opaque code/payload it raised, so the parent composite can
 /// decide how to route the signal (e.g. an interrupting escalation tears the child down via a seam-A subtree
 /// cancellation; a non-interrupting one keeps routing). The notifying child keeps running regardless of how

@@ -40,7 +40,7 @@ public class ActivitiesPrimitivesFeature : IShellFeature
         // can recognize published Event nodes and index them. Enumerable so other activity features add their own.
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IActivityTriggerStimulusProvider, EventTriggerStimulusProvider>());
 
-        // The PublishEvent durable-first send surface (spec 135 D1). The invocation-keyed staging buffer mirrors the
+        // The PublishEvent durable-first send surface. The invocation-keyed staging buffer mirrors the
         // DispatchWorkflow stager's layering (registered as both the activity-facing stager and the engine-facing
         // accessor the invoke handler drains); the post-commit handler routes the staged stimulus in StartAndResume
         // mode. Registered additively per the AddRuntimePostCommitIntentHandler pattern (a distinct intent kind).

@@ -90,7 +90,7 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
         var durableValueStateStore = serviceProvider.GetRequiredService<IDurableValueStateStore>();
         var payloadCapturePolicy = serviceProvider.GetService<IRuntimePayloadCapturePolicy>() ?? new DefaultRuntimePayloadCapturePolicy();
 
-        // spec 111: burst-cached pinned-executable read.
+        // Burst-cached pinned-executable read.
         var executable = await PinnedExecutableRead.FindAsync(serviceProvider, resumePayload.PinnedExecutable.ArtifactId, cancellationToken);
         if (executable is null)
             throw new WorkflowExecutableNotFoundException(resumePayload.PinnedExecutable.ArtifactId);
@@ -178,7 +178,7 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
         ActivityAttempt? claimedAttempt,
         CancellationToken cancellationToken)
     {
-        // Released once the outcome is recorded, after every fault boundary below has masked its text (spec 188, FR-012).
+        // Released once the outcome is recorded, after every fault boundary below has masked its text.
         using var faultMasking = ActivityFaultMasking.For(serviceProvider, resumePayload.ActivityExecutionId);
         ActivityExecutionState executionState = state;
         ActivityAttempt resumeAttempt;
@@ -264,7 +264,7 @@ public sealed class WorkflowResumeBookmarkSchedulerWorkHandler : IWorkflowSchedu
                 cancellationToken);
             activity = activationLease.Activity;
 
-            // spec 123 D1: populate the scoped-variable read seam for a marker consumer (the BpmnProcess) from
+            // Populate the scoped-variable read seam for a marker consumer (the BpmnProcess) from
             // committed frame state, so a bookmark-resume evaluation that reaches a collection-mode loop-start
             // element reads the collection variable through the same committed-basis projection as the other paths.
             var scopeService = new RuntimeContainerScopeService(

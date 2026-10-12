@@ -9,8 +9,8 @@ using Elsa.Workflows.Runtime.Core.Models;
 namespace Elsa.Activities.Http.IntegrationTests;
 
 /// <summary>
-/// Acceptance for spec 089 sub-unit D (mid-flow <see cref="HttpEndpoint"/> resume) — User Story 4 and its edge
-/// cases — proven at the host level over the real ASP.NET Core pipeline (see <see cref="HttpEndpointHostFixture"/>).
+/// Acceptance for mid-flow <see cref="HttpEndpoint"/> resume, and its edge
+/// cases, proven at the host level over the real ASP.NET Core pipeline (see <see cref="HttpEndpointHostFixture"/>).
 /// These are the first tests to exercise the WHOLE mid-flow chain end to end with no fakes: an activity suspends and
 /// creates a bookmark → the bookmark-created checkpoint commits → the <c>BookmarkLifecycleNotifier</c> fires the
 /// <c>RouteTableBookmarkObserver</c> → the resolver's union projects the waiting template into the live route table
@@ -31,10 +31,10 @@ public sealed class HttpEndpointMidFlowResumeEndToEndTests : IAsyncLifetime
     [Fact]
     public async Task DirectlyStartedWorkflow_SuspendsAtMidFlowEndpoint_MatchingRequestResumesItWithTheLiveRequest()
     {
-        // Spec US4 independent test: a workflow started DIRECTLY (no HTTP stimulus) suspends at a
+        // Independent test: a workflow started DIRECTLY (no HTTP stimulus) suspends at a
         // CanStartWorkflow=false endpoint; a matching request resumes it and the run's durable Result/RouteData
-        // reflect the resume request. (ParsedContent is derived at the activity from Body + the Content-Type header
-        // per spec 089 #9 — its derivation is unit-covered in HttpEndpointExecutionTests; here the delivered Body on
+        // reflect the resume request. (ParsedContent is derived at the activity from Body + the Content-Type header;
+        // its derivation is unit-covered in HttpEndpointExecutionTests; here the delivered Body on
         // the durable Result is the whole-chain evidence.)
         const string path = "callbacks/{id}";
         const string resultValueId = "midflow-result";
@@ -67,7 +67,7 @@ public sealed class HttpEndpointMidFlowResumeEndToEndTests : IAsyncLifetime
     [Fact]
     public async Task HttpStart_ThenMidFlowSuspend_CallbackResumes_BothRequestsLandOnTheirOwnEndpoint()
     {
-        // Spec US4: one workflow sequences a start-trigger endpoint (template A) and a mid-flow endpoint (template B).
+        // One workflow sequences a start-trigger endpoint (template A) and a mid-flow endpoint (template B).
         // A request to A starts the run, which reaches B and suspends; a request to B resumes and completes. Assert
         // both requests' payloads landed on their respective endpoint's durable Result.
         await _fixture.PublishSequencedHttpEndpointsWorkflowAsync(
@@ -109,7 +109,7 @@ public sealed class HttpEndpointMidFlowResumeEndToEndTests : IAsyncLifetime
     [Fact]
     public async Task StartTriggerAndWaitingInstanceOnSameRoute_OneRequest_StartsOneAndResumesTheOther_NoSelfResume()
     {
-        // Spec scenario 4.2: a published start trigger AND a suspended instance share the SAME (template, method).
+        // A published start trigger AND a suspended instance share the SAME (template, method).
         // One request starts a NEW instance AND resumes the pre-existing waiting one — and the freshly started
         // instance does NOT self-resume (StartAndResume's snapshot-before-start guard). Exactly one resume, of the
         // pre-existing instance; the 202 body carries both started[] and resumed[].
@@ -146,7 +146,7 @@ public sealed class HttpEndpointMidFlowResumeEndToEndTests : IAsyncLifetime
     [Fact]
     public async Task ExpiredBookmark_DoesNotResume_RepliesNotFound()
     {
-        // Spec scenario 4.3: a suspended instance whose bookmark has expired must not resume. Seed a suspended
+        // A suspended instance whose bookmark has expired must not resume. Seed a suspended
         // instance, overwrite its bookmark with a past ExpiresAt (via the store upsert), refresh the route table,
         // then send the matching request → 404 (no dispatched resume, no start).
         const string path = "expiring/{id}";

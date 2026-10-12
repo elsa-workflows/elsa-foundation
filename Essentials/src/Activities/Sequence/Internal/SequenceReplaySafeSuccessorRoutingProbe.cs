@@ -5,7 +5,7 @@ using SequenceActivity = Elsa.Activities.Sequence.Activities.Sequence;
 namespace Elsa.Activities.Sequence.Internal;
 
 /// <summary>
-/// Sequence implementation of the spec-123 D2 single-predecessor probe (ADR 0047 resolution #1). A sequence is a
+/// Sequence implementation of the single-predecessor probe. A sequence is a
 /// linear chain — every child has at most one predecessor by construction — so any recognized successor answers with
 /// its intrinsic inbound count: zero for the first child (the entry edge), one for every other child.
 /// </summary>

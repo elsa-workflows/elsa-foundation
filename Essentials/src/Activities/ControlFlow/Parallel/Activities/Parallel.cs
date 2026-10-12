@@ -22,7 +22,7 @@ namespace Elsa.Activities.Parallel.Activities;
 /// </summary>
 /// <remarks>
 /// <para>
-/// <b>Single-threaded fork (D11).</b> True parallel OS threading is deferred: the scheduler is
+/// <b>Single-threaded fork.</b> True parallel OS threading is deferred: the scheduler is
 /// single-threaded. "Concurrent" here means all branch <c>ActivityExecution</c>s are scheduled together
 /// at fork time and progress independently through the scheduler, not that they run on separate threads.
 /// </para>
@@ -55,7 +55,7 @@ namespace Elsa.Activities.Parallel.Activities;
 /// </para>
 /// <para>
 /// The runtime activity class references only the runtime contract surface; the design-side
-/// <c>ParallelStructureHandler</c> references <c>Elsa.Workflows.Design.Core</c> (Elsa §E2.2).
+/// <c>ParallelStructureHandler</c> references <c>Elsa.Workflows.Design.Core</c>.
 /// </para>
 /// </remarks>
 [ActivityStructure("elsa.parallel.structure", "1.0.0")]

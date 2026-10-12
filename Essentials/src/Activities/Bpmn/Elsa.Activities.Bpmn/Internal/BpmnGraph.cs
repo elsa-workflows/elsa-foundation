@@ -11,7 +11,7 @@ namespace Elsa.Activities.Bpmn.Internal;
 /// resolution. Construction validates the structural invariants of this engine slice (unique ids,
 /// resolvable references, ≥1 none start event, event/gateway binding rules, single default flow per
 /// element) so the engine can navigate without re-checking, and precomputes the backward (loop-back) flow
-/// set so the engine can mint loop-iteration keys (spec 122). Cyclic graphs are executable; the structural
+/// set so the engine can mint loop-iteration keys. Cyclic graphs are executable; the structural
 /// rules still forbid a loop-back into a start event, a boundary event, or an event-gateway-armed catch.
 /// </summary>
 public sealed class BpmnGraph
@@ -60,10 +60,10 @@ public sealed class BpmnGraph
     public IReadOnlyCollection<BpmnSequenceFlow> SequenceFlows { get; }
     public IReadOnlyCollection<BpmnElement> StartEvents { get; }
 
-    /// <summary>Whether this process is a transaction (spec 125): its scope may be cancelled from within by a cancel end event.</summary>
+    /// <summary>Whether this process is a transaction: its scope may be cancelled from within by a cancel end event.</summary>
     public bool IsTransaction { get; }
 
-    /// <summary>The loop-closing (backward) sequence flow ids (spec 122); a token that traverses one mints a fresh iteration key.</summary>
+    /// <summary>The loop-closing (backward) sequence flow ids; a token that traverses one mints a fresh iteration key.</summary>
     public IReadOnlyCollection<string> BackwardFlowIds => _backwardFlowIds;
 
     public static BpmnGraph From(ExecutableNode executableNode)
@@ -121,60 +121,60 @@ public sealed class BpmnGraph
     public IReadOnlyCollection<BpmnSequenceFlow> InboundFlows(string elementId) =>
         _inboundByTarget[elementId].ToArray();
 
-    /// <summary>The timer/message/signal catch boundary events attached to <paramref name="hostElementId"/> (spec 120); these arm a suspending listener child when the host is scheduled. Error, escalation, compensation, and cancel boundaries arm nothing (spec 120/124/125/127).</summary>
+    /// <summary>The timer/message/signal catch boundary events attached to <paramref name="hostElementId"/>; these arm a suspending listener child when the host is scheduled. Error, escalation, compensation, and cancel boundaries arm nothing.</summary>
     public IReadOnlyCollection<BpmnElement> AttachedCatchBoundaries(string hostElementId) =>
         _boundariesByHost[hostElementId]
             .Where(boundary => !BpmnElementFamilies.IsErrorBoundary(boundary) && !BpmnElementFamilies.IsEscalationBoundary(boundary) && !BpmnElementFamilies.IsCompensationBoundary(boundary) && !BpmnElementFamilies.IsCancelBoundary(boundary))
             .ToArray();
 
-    /// <summary>The escalation boundary events attached to <paramref name="hostElementId"/> (spec 127), in element order; dormant and notification-driven. A host may carry several with distinct codes plus at most one code-less catch-all.</summary>
+    /// <summary>The escalation boundary events attached to <paramref name="hostElementId"/>, in element order; dormant and notification-driven. A host may carry several with distinct codes plus at most one code-less catch-all.</summary>
     public IReadOnlyCollection<BpmnElement> AttachedEscalationBoundaries(string hostElementId) =>
         _boundariesByHost[hostElementId]
             .Where(BpmnElementFamilies.IsEscalationBoundary)
             .ToArray();
 
-    /// <summary>The single error boundary attached to <paramref name="hostElementId"/> (spec 120), or <c>null</c> when the host has none; validation caps a host at one error boundary.</summary>
+    /// <summary>The single error boundary attached to <paramref name="hostElementId"/>, or <c>null</c> when the host has none; validation caps a host at one error boundary.</summary>
     public BpmnElement? AttachedErrorBoundary(string hostElementId) =>
         _boundariesByHost[hostElementId].FirstOrDefault(BpmnElementFamilies.IsErrorBoundary);
 
-    /// <summary>The single compensation boundary attached to <paramref name="hostElementId"/> (spec 124), or <c>null</c> when the host has none; validation caps a host at one compensation boundary.</summary>
+    /// <summary>The single compensation boundary attached to <paramref name="hostElementId"/>, or <c>null</c> when the host has none; validation caps a host at one compensation boundary.</summary>
     public BpmnElement? AttachedCompensationBoundary(string hostElementId) =>
         _boundariesByHost[hostElementId].FirstOrDefault(BpmnElementFamilies.IsCompensationBoundary);
 
-    /// <summary>The single cancel boundary attached to <paramref name="hostElementId"/> (spec 125), or <c>null</c> when the transaction host has none; validation caps a transaction host at one cancel boundary.</summary>
+    /// <summary>The single cancel boundary attached to <paramref name="hostElementId"/>, or <c>null</c> when the transaction host has none; validation caps a transaction host at one cancel boundary.</summary>
     public BpmnElement? AttachedCancelBoundary(string hostElementId) =>
         _boundariesByHost[hostElementId].FirstOrDefault(BpmnElementFamilies.IsCancelBoundary);
 
-    /// <summary>The event subprocesses of this scope (spec 128/134): flow-less <c>TriggeredByEvent</c> subprocesses indexed by their body start-event trigger (kind + code), graph-derived.</summary>
+    /// <summary>The event subprocesses of this scope: flow-less <c>TriggeredByEvent</c> subprocesses indexed by their body start-event trigger (kind + code), graph-derived.</summary>
     public IReadOnlyList<BpmnEventSubprocessCatcher> EventSubprocesses => _eventSubprocesses;
 
-    /// <summary>The scope's external-trigger (message/signal/timer) event subprocesses (spec 134), in deterministic element-id ordinal order; each is armed as a scope listener at scope start.</summary>
+    /// <summary>The scope's external-trigger (message/signal/timer) event subprocesses, in deterministic element-id ordinal order; each is armed as a scope listener at scope start.</summary>
     public IReadOnlyList<BpmnEventSubprocessCatcher> ExternalTriggerEventSubprocesses =>
         _eventSubprocesses
             .Where(catcher => catcher.IsExternalTrigger)
             .OrderBy(catcher => catcher.ElementId, StringComparer.Ordinal)
             .ToArray();
 
-    /// <summary>The event subprocess bound to <paramref name="elementId"/> (spec 134), or <c>null</c>; each <c>TriggeredByEvent</c> element is exactly one catcher.</summary>
+    /// <summary>The event subprocess bound to <paramref name="elementId"/>, or <c>null</c>; each <c>TriggeredByEvent</c> element is exactly one catcher.</summary>
     public BpmnEventSubprocessCatcher? EventSubprocessByElementId(string elementId) =>
         _eventSubprocesses.FirstOrDefault(catcher => StringComparer.Ordinal.Equals(catcher.ElementId, elementId));
 
-    /// <summary>The escalation event subprocess matching <paramref name="escalationCode"/> (spec 128): an exact code match wins; else the code-less catch-all; else <c>null</c>.</summary>
+    /// <summary>The escalation event subprocess matching <paramref name="escalationCode"/>: an exact code match wins; else the code-less catch-all; else <c>null</c>.</summary>
     public BpmnEventSubprocessCatcher? EscalationEventSubprocess(string escalationCode) =>
         EscalationEventSubprocessExact(escalationCode) ?? EscalationCatchAllEventSubprocess();
 
-    /// <summary>The escalation event subprocess with the exact code <paramref name="escalationCode"/> (spec 128), or <c>null</c>.</summary>
+    /// <summary>The escalation event subprocess with the exact code <paramref name="escalationCode"/>, or <c>null</c>.</summary>
     public BpmnEventSubprocessCatcher? EscalationEventSubprocessExact(string escalationCode) =>
         _eventSubprocesses.FirstOrDefault(catcher =>
             catcher.TriggerKind == BpmnEventSubprocessTriggerKind.Escalation &&
             catcher.Code is not null && StringComparer.Ordinal.Equals(catcher.Code, escalationCode));
 
-    /// <summary>The code-less catch-all escalation event subprocess (spec 128), or <c>null</c>.</summary>
+    /// <summary>The code-less catch-all escalation event subprocess, or <c>null</c>.</summary>
     public BpmnEventSubprocessCatcher? EscalationCatchAllEventSubprocess() =>
         _eventSubprocesses.FirstOrDefault(catcher =>
             catcher.TriggerKind == BpmnEventSubprocessTriggerKind.Escalation && catcher.Code is null);
 
-    /// <summary>The scope's single error event subprocess (spec 128), or <c>null</c> when it has none; validation caps a scope at one.</summary>
+    /// <summary>The scope's single error event subprocess, or <c>null</c> when it has none; validation caps a scope at one.</summary>
     public BpmnEventSubprocessCatcher? ErrorEventSubprocess() =>
         _eventSubprocesses.FirstOrDefault(catcher => catcher.TriggerKind == BpmnEventSubprocessTriggerKind.Error);
 
@@ -213,7 +213,7 @@ public sealed class BpmnGraph
     }
 
     /// <summary>
-    /// Whether <paramref name="flowId"/> is a backward (loop-back) sequence flow (spec 122): a token that
+    /// Whether <paramref name="flowId"/> is a backward (loop-back) sequence flow: a token that
     /// traverses it mints a fresh loop-iteration key rather than inheriting the emitting token's. The set is
     /// precomputed at construction (<see cref="ComputeBackwardFlowIds"/>) and is a deterministic function of
     /// the element/flow/start-event sets.
@@ -225,7 +225,7 @@ public sealed class BpmnGraph
     }
 
     /// <summary>
-    /// Classifies the graph's backward (loop-closing) sequence flows once at construction (spec 122). A
+    /// Classifies the graph's backward (loop-closing) sequence flows once at construction. A
     /// backward edge is the standard compiler back edge: during a depth-first traversal from the start-event
     /// roots, an edge <c>u → v</c> is backward iff <c>v</c> is GRAY — on the current DFS stack, an ancestor of
     /// <c>u</c> — when the edge is examined. This marks exactly the loop-closing edge of each loop and never a
@@ -334,7 +334,7 @@ public sealed class BpmnGraph
                     throw new BpmnExecutionException($"BPMN child activity node '{element.ChildNodeId}' is bound by more than one element.");
             }
 
-            // spec 134: a scope-listener node is a second bound-child channel — a node is bound EITHER as some
+            // A scope-listener node is a second bound-child channel — a node is bound EITHER as some
             // element's ChildNodeId OR as some element's ListenerNodeId, never both, never twice.
             if (element.ListenerNodeId is not null)
             {
@@ -369,7 +369,7 @@ public sealed class BpmnGraph
                     break;
                 case BpmnElementFamilies.IntermediateThrowEventMessage:
                 case BpmnElementFamilies.EndEventMessage:
-                    // spec 135: a message throw/end is a bound-child send — it binds a synthesized PublishEvent child.
+                    // A message throw/end is a bound-child send — it binds a synthesized PublishEvent child.
                     if (element.ChildNodeId is null)
                         throw new BpmnExecutionException($"BPMN message {(StringComparer.Ordinal.Equals(element.ElementType, BpmnElementTypes.EndEvent) ? "end" : "throw")} event '{element.ElementId}' requires a bound child activity (a PublishEvent send).");
                     break;
@@ -431,7 +431,7 @@ public sealed class BpmnGraph
 
         var eventSubprocesses = ValidateEventSubprocesses(elements, flows, childrenByNodeId);
 
-        // Cyclic sequence flows are executable (spec 122): loop-back edges become loop-iteration keys. The
+        // Cyclic sequence flows are executable: loop-back edges become loop-iteration keys. The
         // structural rules above still constrain where a loop-back may land — a loop-back into a start event
         // (no inbound), a boundary event (no inbound), or an event-gateway-armed catch (exactly-one-inbound)
         // is rejected by those rules — so no acyclicity check remains.
@@ -440,14 +440,14 @@ public sealed class BpmnGraph
     }
 
     /// <summary>
-    /// Event subprocess rules (spec 128/134 D1). A <c>TriggeredByEvent</c> element is a flow-less <c>subProcess</c>
+    /// Event subprocess rules. A <c>TriggeredByEvent</c> element is a flow-less <c>subProcess</c>
     /// binding a body: it participates in no sequence flows, carries no loop characteristics, hosts no attached
     /// boundary, is not a compensation handler, not referenced as one, and is neither a compensation handler nor a
     /// transaction (the compensation-handler rule family, mirrored). Its body must declare exactly one start event
     /// carrying exactly one supported trigger definition — escalation (with optional code; code-less = catch-all),
     /// error (catch-all only), or a message/signal (with a <c>name</c>) / timer (with an <c>interval</c>) — with no
     /// nested <c>TriggeredByEvent</c> inside the body (rejected this slice). A message/signal/timer event subprocess
-    /// (spec 134) declares a required <see cref="BpmnElement.ListenerNodeId"/> (the armed scope listener) that
+    /// declares a required <see cref="BpmnElement.ListenerNodeId"/> (the armed scope listener) that
     /// escalation/error must NOT declare (dormant catchers). The body start event's interrupting flag (its
     /// <see cref="BpmnElement.CancelActivity"/>, the BPMN <c>isInterrupting</c> default-true convention) must be
     /// interrupting for an error trigger. Per scope: escalation codes are distinct with at most one code-less
@@ -523,7 +523,7 @@ public sealed class BpmnGraph
 
             if (StringComparer.Ordinal.Equals(definitionType, BpmnEventDefinitionTypes.Escalation))
             {
-                // spec 134: escalation/error are dormant catchers — they must NOT declare a scope listener.
+                // Escalation/error are dormant catchers — they must NOT declare a scope listener.
                 if (element.ListenerNodeId is not null)
                     throw new BpmnExecutionException($"BPMN escalation event subprocess '{element.ElementId}' declares a scope-listener node, but escalation event subprocesses are dormant (activated by a signal, not an armed listener); only message/signal/timer event subprocesses may declare a listener.");
 
@@ -543,7 +543,7 @@ public sealed class BpmnGraph
             }
             else if (StringComparer.Ordinal.Equals(definitionType, BpmnEventDefinitionTypes.Error))
             {
-                // spec 132: an error-triggered event subprocess absorbs the host's child fault via seam B and then
+                // An error-triggered event subprocess absorbs the host's child fault via seam B and then
                 // schedules its body — a deferred seam-B fault absorption, executable since the runtime metadata-leak
                 // fix (#989) landed. Interrupting only (per BPMN) and catch-all (no error-code matching this slice); a
                 // scope carries at most one.
@@ -559,11 +559,11 @@ public sealed class BpmnGraph
             }
             else if (ExternalTriggerKind(definitionType) is { } externalTriggerKind)
             {
-                // spec 134: a message/signal/timer-triggered event subprocess needs an armed scope listener — a
+                // A message/signal/timer-triggered event subprocess needs an armed scope listener — a
                 // required ListenerNodeId referencing the synthesized suspending child (Event for message/signal,
                 // Delay for timer; not type-validated — the callActivity precedent). Its binding was accounted for in
                 // the exactly-one-binding loop. The body start's stimulus facts (message/signal name; timer interval)
-                // are validated non-empty; cron/timeCycle timers are not supported for event subprocesses (D5).
+                // are validated non-empty; cron/timeCycle timers are not supported for event subprocesses.
                 if (element.ListenerNodeId is null)
                     throw new BpmnExecutionException($"BPMN {definitionType} event subprocess '{element.ElementId}' requires a scope-listener node (a message/signal/timer event subprocess arms a suspending listener at scope start); none is bound.");
 
@@ -579,7 +579,7 @@ public sealed class BpmnGraph
         return catchers;
     }
 
-    /// <summary>The external-trigger (spec 134) event-subprocess kind of a body-start definition type, or <c>null</c> for a non-external type.</summary>
+    /// <summary>The external-trigger event-subprocess kind of a body-start definition type, or <c>null</c> for a non-external type.</summary>
     private static BpmnEventSubprocessTriggerKind? ExternalTriggerKind(string definitionType) =>
         StringComparer.Ordinal.Equals(definitionType, BpmnEventDefinitionTypes.Message) ? BpmnEventSubprocessTriggerKind.Message
         : StringComparer.Ordinal.Equals(definitionType, BpmnEventDefinitionTypes.Signal) ? BpmnEventSubprocessTriggerKind.Signal
@@ -587,9 +587,9 @@ public sealed class BpmnGraph
         : null;
 
     /// <summary>
-    /// Validates a message/signal/timer event-subprocess body start's stimulus facts (spec 134 D1): message/signal
+    /// Validates a message/signal/timer event-subprocess body start's stimulus facts: message/signal
     /// declare a non-empty <c>name</c>; a timer declares a non-empty <c>interval</c> (<c>timeDuration</c>-shaped) and
-    /// no <c>cron</c> (cron/timeCycle timers are not supported for event subprocesses — the module-wide cut, D5).
+    /// no <c>cron</c> (cron/timeCycle timers are not supported for event subprocesses — the module-wide cut).
     /// </summary>
     private static void ValidateExternalTriggerDefinition(BpmnElement element, BpmnElement bodyStart, string definitionType)
     {
@@ -608,10 +608,10 @@ public sealed class BpmnGraph
     }
 
     /// <summary>
-    /// Multi-instance loop rules (spec 121 D1): loop characteristics are valid only on a task-family or
+    /// Multi-instance loop rules: loop characteristics are valid only on a task-family or
     /// <c>subProcess</c> host that binds a child; exactly one of cardinality (≥ 1) XOR collection variable is
     /// set; a collection variable must name a declared container-scoped variable, and the item variable must not
-    /// shadow the reserved <c>loopIndex</c> key (spec 123 D2 — collection mode is executable since the
+    /// shadow the reserved <c>loopIndex</c> key (collection mode is executable since the
     /// scoped-variable read seam landed).
     /// </summary>
     private static void ValidateMultiInstance(IReadOnlyCollection<BpmnElement> elements, IReadOnlySet<string> declaredVariableNames)
@@ -635,15 +635,15 @@ public sealed class BpmnGraph
             if (hasCollection && !declaredVariableNames.Contains(loop.CollectionVariable!))
                 throw new BpmnExecutionException($"BPMN multi-instance element '{element.ElementId}' names collection variable '{loop.CollectionVariable}', which is not a declared container-scoped variable of the process.");
 
-            // The item key must not collide with the reserved loopIndex key the iteration frame always seeds
-            // (spec 123 D2) — a collision would silently overwrite one with the other.
+            // The item key must not collide with the reserved loopIndex key the iteration frame always seeds;
+            // a collision would silently overwrite one with the other.
             if (hasCollection && StringComparer.Ordinal.Equals(loop.ItemVariable, BpmnLoopCharacteristics.LoopIndexVariable))
                 throw new BpmnExecutionException($"BPMN multi-instance element '{element.ElementId}' uses item variable '{BpmnLoopCharacteristics.LoopIndexVariable}', which is reserved for the zero-based iteration index; choose a different item variable.");
         }
     }
 
     /// <summary>
-    /// Boundary event rules (spec 120 D2): the <c>attachedToRef</c> host must exist, be a task-family or
+    /// Boundary event rules: the <c>attachedToRef</c> host must exist, be a task-family or
     /// subprocess element, and have a bound child; a boundary takes no inbound flows and at least one
     /// outbound flow; a catch boundary (timer/message/signal) binds a listener child while an error
     /// boundary binds none and must be interrupting; a host carries at most one error boundary; a boundary
@@ -674,7 +674,7 @@ public sealed class BpmnGraph
             if (inboundByTarget[boundary.ElementId].Any())
                 throw new BpmnExecutionException($"BPMN boundary event '{boundary.ElementId}' cannot have inbound sequence flows; it is entered by its host's activation.");
 
-            // spec 124: a compensation boundary inverts the outbound rule — it has zero outbound flows (its
+            // A compensation boundary inverts the outbound rule — it has zero outbound flows (its
             // "outbound" is the association to its handler); every other boundary needs at least one.
             var isCompensationBoundary = BpmnElementFamilies.IsCompensationBoundary(boundary);
             if (isCompensationBoundary)
@@ -692,7 +692,7 @@ public sealed class BpmnGraph
 
             if (isCompensationBoundary)
             {
-                // spec 124 rule 1: a compensation boundary binds no listener child (CancelActivity is ignored);
+                // A compensation boundary binds no listener child (CancelActivity is ignored);
                 // its host must not carry loop characteristics (multi-instance host compensation is a stated cut).
                 // The handler reference is validated in ValidateCompensation.
                 if (boundary.ChildNodeId is not null)
@@ -713,7 +713,7 @@ public sealed class BpmnGraph
             }
             else if (BpmnElementFamilies.IsCancelBoundary(boundary))
             {
-                // spec 125: a cancel boundary is dormant (no listener child, like error/compensation) and routes its
+                // A cancel boundary is dormant (no listener child, like error/compensation) and routes its
                 // outbound flows (≥1, already enforced above) when the transaction completes Cancelled. CancelActivity
                 // is ignored (the host is already finished when it fires). The host-is-a-transaction and
                 // at-most-one-per-host rules live in ValidateTransaction.
@@ -722,7 +722,7 @@ public sealed class BpmnGraph
             }
             else if (BpmnElementFamilies.IsEscalationBoundary(boundary))
             {
-                // spec 127: an escalation boundary is dormant (no listener child) and routes its outbound flows
+                // An escalation boundary is dormant (no listener child) and routes its outbound flows
                 // (≥1, already enforced above) when a matching escalation notification arrives. CancelActivity is
                 // honored (interrupting and non-interrupting are both meaningful). The host-must-be-a-subprocess,
                 // distinct-codes, and single-catch-all rules live in ValidateEscalation.
@@ -737,7 +737,7 @@ public sealed class BpmnGraph
     }
 
     /// <summary>
-    /// Escalation rules (spec 127 D1). An escalation throw (intermediate) or end event must carry a non-empty
+    /// Escalation rules. An escalation throw (intermediate) or end event must carry a non-empty
     /// escalation <c>code</c> (a throw must say what it escalates) and bind no child. An escalation boundary must
     /// bind no child (already enforced in <see cref="ValidateBoundaryEvents"/>), attach to a <c>subProcess</c>-family
     /// host (a task host is dead by construction — a task's bound child is a leaf that can never escalate), and per
@@ -783,7 +783,7 @@ public sealed class BpmnGraph
         }
     }
 
-    /// <summary>The non-empty escalation code an escalation throw/end/boundary declares (spec 127), or <c>null</c> when absent/blank (a code-less boundary is the catch-all).</summary>
+    /// <summary>The non-empty escalation code an escalation throw/end/boundary declares, or <c>null</c> when absent/blank (a code-less boundary is the catch-all).</summary>
     private static string? ReadEscalationCode(BpmnElement element) =>
         element.EventDefinitions.SingleOrDefault() is { } definition
         && definition.Properties.TryGetValue(BpmnEventDefinitionProperties.Code, out var code)
@@ -792,7 +792,7 @@ public sealed class BpmnGraph
             : null;
 
     /// <summary>
-    /// Message throw/end rules (spec 135). A message throw/end event is a bound-child send: its single message event
+    /// Message throw/end rules. A message throw/end event is a bound-child send: its single message event
     /// definition must carry a non-empty <c>name</c> (a send must say what it publishes), and it binds a synthesized
     /// <c>PublishEvent</c> child (the bound-child requirement is enforced in the per-family switch above). Rejects
     /// deterministically with the offending element named.
@@ -814,7 +814,7 @@ public sealed class BpmnGraph
             : null;
 
     /// <summary>
-    /// Compensation rules (spec 124 D1). Compensation boundaries reference an existing handler; handlers are
+    /// Compensation rules. Compensation boundaries reference an existing handler; handlers are
     /// task-family/subProcess elements that bind a child, take zero sequence flows, carry no loop characteristics,
     /// host no boundary, and are referenced by exactly one compensation boundary (orphans rejected); compensate
     /// throw events bind no child; an <c>activityRef</c> on a compensate throw/end names an existing element with
@@ -878,7 +878,7 @@ public sealed class BpmnGraph
         foreach (var element in elements.Where(element => element.CompensationHandlerElementId is not null && !BpmnElementFamilies.IsCompensationBoundary(element)))
             throw new BpmnExecutionException($"BPMN element '{element.ElementId}' declares a compensation-handler reference but is not a compensation boundary event.");
 
-        // spec 135: a message throw (also an intermediateThrowEvent) IS a bound-child send, so this compensate-only
+        // A message throw (also an intermediateThrowEvent) IS a bound-child send, so this compensate-only
         // rule is scoped to compensate throws; escalation throws are handled by ValidateEscalation.
         foreach (var throwEvent in elements.Where(element => StringComparer.Ordinal.Equals(element.ElementType, BpmnElementTypes.IntermediateThrowEvent) && BpmnElementFamilies.HasCompensateDefinition(element)))
         {
@@ -909,7 +909,7 @@ public sealed class BpmnGraph
     }
 
     /// <summary>
-    /// Transaction rules (spec 125 D1). An <c>IsTransaction</c> element must be a <c>subProcess</c>-family element
+    /// Transaction rules. An <c>IsTransaction</c> element must be a <c>subProcess</c>-family element
     /// with a bound child and must not carry loop characteristics (MI transactions are a stated cut). A cancel end
     /// event is valid only inside a transaction structure. A cancel boundary may only attach to an
     /// <c>IsTransaction</c> host, and a transaction host carries at most one cancel boundary. Each rule rejects
@@ -959,7 +959,7 @@ public sealed class BpmnGraph
         BpmnElementFamilies.HasCompensateDefinition(element);
 
     /// <summary>
-    /// Event-based gateway rules (spec 119 D1): at least two outbound flows; every outbound flow targets an
+    /// Event-based gateway rules: at least two outbound flows; every outbound flow targets an
     /// intermediate catch event whose only inbound flow is this gateway's; the gateway's outbound flows carry
     /// no outcome condition and no default (the race is decided by stimulus arrival, not by a condition, so an
     /// authored condition/default is rejected rather than silently ignored).
@@ -998,7 +998,7 @@ public sealed class BpmnGraph
 
 }
 
-/// <summary>The trigger kind of an event subprocess (spec 128/134): the two dormant-catcher triggers (escalation/error) plus the three tier-2 external-trigger listeners (message/signal/timer).</summary>
+/// <summary>The trigger kind of an event subprocess: the two dormant-catcher triggers (escalation/error) plus the three tier-2 external-trigger listeners (message/signal/timer).</summary>
 public enum BpmnEventSubprocessTriggerKind
 {
     /// <summary>An escalation-triggered event subprocess (interrupting or non-interrupting), matched by code (exact beats code-less catch-all).</summary>
@@ -1007,21 +1007,21 @@ public enum BpmnEventSubprocessTriggerKind
     /// <summary>An error-triggered event subprocess (interrupting only, per BPMN), catch-all (no error-code matching this slice).</summary>
     Error,
 
-    /// <summary>A message-triggered event subprocess (spec 134): armed as a scope listener at scope start, fired by a named-event stimulus.</summary>
+    /// <summary>A message-triggered event subprocess: armed as a scope listener at scope start, fired by a named-event stimulus.</summary>
     Message,
 
-    /// <summary>A signal-triggered event subprocess (spec 134): armed as a scope listener at scope start, fired by a named-event stimulus.</summary>
+    /// <summary>A signal-triggered event subprocess: armed as a scope listener at scope start, fired by a named-event stimulus.</summary>
     Signal,
 
-    /// <summary>A timer-triggered event subprocess (spec 134): armed as a scope listener at scope start (a one-shot <c>Delay</c>), re-armed per non-interrupting fire for repetition.</summary>
+    /// <summary>A timer-triggered event subprocess: armed as a scope listener at scope start (a one-shot <c>Delay</c>), re-armed per non-interrupting fire for repetition.</summary>
     Timer
 }
 
 /// <summary>
-/// A graph-derived event-subprocess catcher (spec 128/134): a scope's <c>TriggeredByEvent</c> subprocess indexed by
+/// A graph-derived event-subprocess catcher: a scope's <c>TriggeredByEvent</c> subprocess indexed by
 /// its body start-event trigger. Escalation/error catchers are dormant (no arming — resolved from the graph when their
 /// signal occurs); message/signal/timer catchers carry a <see cref="ListenerNodeId"/> and are armed as scope listeners
-/// at scope start (spec 134). <see cref="BodyStartElementId"/> is the single event-start element the body is seeded from
+/// at scope start. <see cref="BodyStartElementId"/> is the single event-start element the body is seeded from
 /// via the scheduled-start hint; <see cref="Interrupting"/> is the body start event's <c>isInterrupting</c> flag.
 /// </summary>
 public sealed record BpmnEventSubprocessCatcher(
@@ -1033,7 +1033,7 @@ public sealed record BpmnEventSubprocessCatcher(
     bool Interrupting,
     string? ListenerNodeId = null)
 {
-    /// <summary>True when this catcher is an external-trigger listener (message/signal/timer, spec 134): armed at scope start with a suspending <see cref="ListenerNodeId"/> child. Escalation/error catchers are dormant.</summary>
+    /// <summary>True when this catcher is an external-trigger listener (message/signal/timer): armed at scope start with a suspending <see cref="ListenerNodeId"/> child. Escalation/error catchers are dormant.</summary>
     public bool IsExternalTrigger =>
         TriggerKind is BpmnEventSubprocessTriggerKind.Message or BpmnEventSubprocessTriggerKind.Signal or BpmnEventSubprocessTriggerKind.Timer;
 }

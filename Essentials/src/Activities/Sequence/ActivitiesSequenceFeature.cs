@@ -25,8 +25,8 @@ public class ActivitiesSequenceFeature : IShellFeature
         services.AddSingleton<IActivityStructureHandler, SequenceStructureHandler>();
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IOperatorActivitySchedulingCapabilityProvider, SequenceOperatorActivitySchedulingCapabilityProvider>());
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IOperatorActivitySchedulingPolicy, SequenceOperatorActivitySchedulingPolicy>());
-        // spec 123 D2 (ADR 0047 resolution #1): a sequence successor is single-predecessor by construction; this
-        // probe lets the ReplaySafe fused completion pump prove it via the spec-119 routing memo.
+        // A sequence successor is single-predecessor by construction; this
+        // probe lets the ReplaySafe fused completion pump prove it via the routing memo.
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IReplaySafeSuccessorRoutingProbe, SequenceReplaySafeSuccessorRoutingProbe>());
     }
 }

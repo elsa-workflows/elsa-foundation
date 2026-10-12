@@ -9,7 +9,7 @@ namespace Elsa.Activities.If.Internal;
 /// <summary>
 /// Design-side handler that projects and compiles the <c>If</c> activity's <c>Then</c> / <c>Else</c>
 /// named branch slots. Lives in the activity module (which references <c>Elsa.Workflows.Design.Core</c>);
-/// the runtime <c>If</c> activity class references no Design types, preserving the Elsa §E2.2 split.
+/// the runtime <c>If</c> activity class references no Design types, preserving the runtime/design split.
 /// </summary>
 internal sealed class IfStructureHandler : IActivityStructureHandler
 {

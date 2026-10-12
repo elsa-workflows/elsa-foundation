@@ -89,8 +89,7 @@ public sealed class ClrActivityActivatorTests : IAsyncDisposable
     [Fact]
     public async Task A_value_withheld_because_its_policy_requires_encryption_is_refused_before_the_activity_is_created()
     {
-        // Such a value cannot be recovered, so hydrating would have to invent one; a composed resolver changes nothing
-        // (spec 188, T008, T018).
+        // Such a value cannot be recovered, so hydrating would have to invent one; a composed resolver changes nothing.
         var exception = await Assert.ThrowsAsync<WithheldValueException>(() =>
             SecretActivator().ActivateAsync(WithheldRequest(new WithheldValue(WithheldValueKind.PolicyRequiresEncryption))).AsTask());
 
@@ -102,7 +101,7 @@ public sealed class ClrActivityActivatorTests : IAsyncDisposable
     [Fact]
     public async Task A_secret_reference_in_a_host_without_a_resolver_is_refused_as_a_missing_capability()
     {
-        // A missing resolver is a composition fault, which parks the activity, not a resolution failure (T031). The
+        // A missing resolver is a composition fault, which parks the activity, not a resolution failure. The
         // runtime composes the activator's secret input collaborator without a resolver.
         var activator = NoResolverActivator();
 
@@ -134,7 +133,7 @@ public sealed class ClrActivityActivatorTests : IAsyncDisposable
     public async Task A_withheld_input_is_refused_for_a_strategy_that_does_not_hydrate_inputs()
     {
         // A strategy that skips hydration (graph activation) never reads the input, so only the activator's own
-        // refusal stops a withheld value from passing silently, even with a resolver composed (spec 188, T008).
+        // refusal stops a withheld value from passing silently, even with a resolver composed.
         var strategy = new NonHydratingStrategy();
         var activator = new ActivityActivator([strategy], new ActivityInputHydrator(), ResolvingSecretInputResolver(_partition));
         var contract = Contract(typeof(ServiceBearingActivity), "message");
@@ -169,9 +168,8 @@ public sealed class ClrActivityActivatorTests : IAsyncDisposable
     [Fact]
     public async Task A_withheld_secret_on_an_any_typed_input_is_converted_with_its_canonical_any_plan_and_hydrated()
     {
-        // An input whose catalog version declares a canonical any alias is compiled with a CanonicalAny plan from text
-        // (research R11). Activation converts the resolved text with that plan, and the text reaches the activity
-        // (spec 188, User Story 1, scenario 1).
+        // An input whose catalog version declares a canonical any alias is compiled with a CanonicalAny plan from text.
+        // Activation converts the resolved text with that plan, and the text reaches the activity.
         var anyType = new ValueTypeDescriptor("Elsa.Any");
         var plan = new ValueConversionPlan(
             ValueConversionPlan.CurrentSchemaVersion,
@@ -301,7 +299,7 @@ public sealed class ClrActivityActivatorTests : IAsyncDisposable
     }
 
     /// <summary>
-    /// T075 (spec 188, FR-012): each resolved value is registered with the mask under the activity execution being
+    /// Each resolved value is registered with the mask under the activity execution being
     /// activated as soon as it resolves, so a later reference that fails in the same activation finds it registered,
     /// and it is registered for that execution only.
     /// </summary>
@@ -347,7 +345,7 @@ public sealed class ClrActivityActivatorTests : IAsyncDisposable
     [Fact]
     public async Task A_conversion_failure_reports_ConversionFailed_and_drops_the_conversion_message()
     {
-        // Publish pins no plan from text that can fail on a string, so only a double reaches this branch (T031).
+        // Publish pins no plan from text that can fail on a string, so only a double reaches this branch.
         const string conversionDetail = "rejected the resolved text";
         _conversions.Failure = plan => new RuntimeValueConversionException(plan, conversionDetail);
 
@@ -484,7 +482,7 @@ public sealed class ClrActivityActivatorTests : IAsyncDisposable
 
         // Nothing ran: the activation failed, and the message says so.
         Assert.StartsWith("Activity activation and activation disposal both failed.", exception.Message, StringComparison.Ordinal);
-        // The fault recorder reads retryability and the code through the classification contract (T032).
+        // The fault recorder reads retryability and the code through the classification contract.
         var classification = Assert.IsAssignableFrom<IRuntimeFaultClassification>(exception);
         Assert.True(classification.IsRetryable);
         Assert.Equal("StoreUnavailable", classification.FailureCode);
@@ -833,7 +831,7 @@ public sealed class ClrActivityActivatorTests : IAsyncDisposable
 
     /// <summary>
     /// The handlers' cancellation cleanup, <c>ActivityActivationLeaseDisposer.DisposeAfterCancellationAsync</c>. It is
-    /// internal to the runtime, and constitution section 2.23.3 allows no InternalsVisibleTo, so it is invoked by name.
+    /// internal to the runtime, and the framework allows no InternalsVisibleTo, so it is invoked by name.
     /// </summary>
     private static ValueTask<Exception?> DisposeAfterCancellationAsync(ActivityActivationLease lease, OperationCanceledException cancellation) =>
         (ValueTask<Exception?>)typeof(ActivityActivator).Assembly

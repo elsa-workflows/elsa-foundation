@@ -27,7 +27,7 @@ public static class ActivityProblemDetails
     }
 
     /// <summary>
-    /// A schema write refusal (spec 180, FR-016a): a 409 whose error code is the refusal's stable code, and whose detail
+    /// A schema write refusal: a 409 whose error code is the refusal's stable code, and whose detail
     /// names the family and both versions.
     /// </summary>
     public static ActivityProblemDetailsView SchemaWriteRefused(SchemaWriteRefusedException refusal, HttpContext context) => new(

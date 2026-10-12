@@ -10,7 +10,7 @@ namespace Elsa.Activities.Bpmn.Internal;
 /// inbound flow and minting one merged token at the gateway. Every other element is an implicit XOR
 /// merge: tokens pass through independently and never park here.
 /// <para>
-/// Arrivals are grouped by <c>(element, iteration key)</c> (spec 122), so a join that is revisited across
+/// Arrivals are grouped by <c>(element, iteration key)</c>, so a join that is revisited across
 /// loop iterations never conflates iteration <c>N</c> with iteration <c>N+1</c>: each group is a separate
 /// join firing whose merged token inherits the group's iteration key. In an acyclic graph every iteration
 /// key is <c>null</c>, so the grouping collapses to the pre-cycle by-element behavior.
@@ -64,7 +64,7 @@ public sealed class BpmnTokenCoordinator
             return inboundFlows.All(flow => arrivedFlowIds.Contains(flow.FlowId));
 
         // Inclusive join: activation-aware. Wait only while an un-arrived inbound flow can still be
-        // reached by a live token of THIS iteration (spec 122: a different-iteration token that reaches the
+        // reached by a live token of THIS iteration (a different-iteration token that reaches the
         // source arrives under its own key, forming a different group, so it must not hold this group open).
         foreach (var inboundFlow in inboundFlows)
         {

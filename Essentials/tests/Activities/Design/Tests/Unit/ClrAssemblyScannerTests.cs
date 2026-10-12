@@ -22,7 +22,7 @@ using Elsa.Testing;
 namespace Elsa.Activities.Design.Tests.Unit;
 
 /// <summary>
-/// Resilient-scan tests for <see cref="ClrAssemblyScanner"/> (FR-023, §2.23.2). Each case lays a
+/// Resilient-scan tests for <see cref="ClrAssemblyScanner"/>. Each case lays a
 /// real folder of DLLs and asserts the scanner discovers activity-bearing assemblies, skips the
 /// rest silently, and never aborts on an unreadable file.
 /// </summary>
@@ -116,7 +116,7 @@ public sealed class ClrAssemblyScannerTests
     [Fact]
     public void RefusesSecretBinding_DoesNotReachTheCatalogOrItsHash()
     {
-        // Spec 188, T099: publication reads [RefusesSecretBinding] by reflection; the scanner never writes it, so
+        // Publication reads [RefusesSecretBinding] by reflection; the scanner never writes it, so
         // annotating a built-in changes no catalog hash. The two fixtures differ only by the declarations and their
         // names (type name and display name), so once the name is normalized every scanned field that feeds the catalog
         // hash, the descriptor included, must be identical.
@@ -136,7 +136,7 @@ public sealed class ClrAssemblyScannerTests
     [Fact]
     public void SensitivityDeclaration_IsRead_AndACredentialIsAlsoSensitive()
     {
-        // Spec 188, T040: the flags reach the catalog only where declared; an undeclared input keeps both null, and a
+        // The flags reach the catalog only where declared; an undeclared input keeps both null, and a
         // credential declared without IsSensitive is normalized to sensitive.
         using var folder = TempAssemblyFolder.WithCopyOf(typeof(SensitivityFixtureActivity).Assembly);
         var inputs = CreateScanner().Scan(folder.Path)
@@ -153,7 +153,7 @@ public sealed class ClrAssemblyScannerTests
 
     public static TheoryData<Type, string> UndeclaredCatalogHashes => new()
     {
-        // Captured before the sensitivity flags existed (spec 188, slice 5): an activity that declares nothing must keep
+        // Captured before the sensitivity flags existed: an activity that declares nothing must keep
         // its catalog hash, or reconciling an existing catalog throws ActivityVersionHashMismatchException. Both values
         // were re-derived independently on unmodified main at df02ece3c and matched.
         { typeof(PlainFixtureActivity), "41ADAB509FABBD50A14009DB8FD9D1BCA14B7C4ED67E86725937D1C6B2ABC87E" },
@@ -759,7 +759,7 @@ public sealed class ClrAssemblyScannerTests
     [Fact]
     public void SendHttpRequest_DeclaresOnlyAuthorizationAsASensitiveCredential_WithNoDefault()
     {
-        // Spec 188, T105 (research R17): the one built-in credential input. A credential is also sensitive, accepts
+        // The one built-in credential input. A credential is also sensitive, accepts
         // only a secret reference, and never carries a default; every other SendHttpRequest input stays undeclared.
         using var folder = TempAssemblyFolder.WithCopyOf(typeof(SendHttpRequest).Assembly);
         var inputs = CreateScanner().Scan(folder.Path)

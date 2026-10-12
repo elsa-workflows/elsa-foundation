@@ -3,7 +3,7 @@ using System.Text.Json.Serialization;
 namespace Elsa.Activities.Bpmn.Models;
 
 /// <summary>
-/// One in-flight compensation replay (spec 124). A compensate throw/end token becomes the run coordinator
+/// One in-flight compensation replay. A compensate throw/end token becomes the run coordinator
 /// (stays <c>AwaitingChild</c>) while its claimed handlers run one at a time in reverse registration order.
 /// <see cref="RunId"/> is <c>comprun:N</c> from <c>BpmnExecutionState.Sequence</c>; the only mutation home is
 /// <c>BpmnStateMutator</c>. The record is dropped when the last handler completes (the throw then routes/consumes)

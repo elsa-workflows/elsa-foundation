@@ -20,9 +20,9 @@ public record HttpEndpointOptions
     /// <summary>
     /// The maximum request body size, in bytes, the middleware will read and forward as stimulus input. Bodies
     /// exceeding it are rejected with <c>413 Content Too Large</c> before any dispatch. This is a conservative
-    /// transport guard: the stimulus payload is persisted durably on the started instance (spec 089 A), so an
-    /// unbounded body would become unbounded durable state. Per-endpoint authored limits arrive with spec 089
-    /// sub-unit C. Defaults to 1 MiB.
+    /// transport guard: the stimulus payload is persisted durably on the started instance, so an
+    /// unbounded body would become unbounded durable state. An endpoint's authored <c>RequestSizeLimit</c>
+    /// overrides it. Defaults to 1 MiB.
     /// </summary>
     public long MaxRequestBodyBytes { get; init; } = 1024 * 1024;
 }

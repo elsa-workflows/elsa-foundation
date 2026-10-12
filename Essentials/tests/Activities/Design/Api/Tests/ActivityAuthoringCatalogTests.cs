@@ -102,7 +102,7 @@ public sealed class ActivityAuthoringCatalogTests
     [Fact]
     public async Task Input_sensitivity_is_always_on_the_wire_and_false_where_nothing_is_declared()
     {
-        // Spec 188, T041: Studio reads the declaration from the catalog. Both flags are written for every input, false
+        // Studio reads the declaration from the catalog. Both flags are written for every input, false
         // for an undeclared input and for every engine-intrinsic input; a credential input is sensitive too.
         var definition = new ActivityDefinition { Id = "def-declared", ActivityTypeKey = DeclaredActivityTypeKey, Category = "Acme", DisplayName = "Call Service" };
         var version = new ActivityDefinitionVersion("1.0.0", definition.Id)

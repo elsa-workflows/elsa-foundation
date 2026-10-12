@@ -7,7 +7,7 @@ namespace Elsa.Activities.Flowchart.Internal;
 /// records. Every builder here bumps <see cref="FlowchartExecutionState.Sequence"/>, and <see cref="NewId"/>
 /// derives every record id (<c>path:N</c>, <c>scope:N</c>, <c>arrival:N</c>, <c>diag:N</c>) from that
 /// sequence. Keeping all sequence-bumping mutation in one place is what makes the persisted id stream a pure,
-/// stable function of mutation order and count (the byte-shape the golden fixtures pin, §E6/#382). This is a
+/// stable function of mutation order and count (the byte-shape the golden fixtures pin, #382). This is a
 /// mechanical extraction of the former private helpers on <see cref="FlowchartExecutionEngine"/> — behavior,
 /// order, and the sequence formula are unchanged.
 /// </summary>

@@ -8,7 +8,7 @@ namespace Elsa.Activities.Flowchart.Internal;
 /// <summary>
 /// Loads and stages the <see cref="FlowchartExecutionState"/> blob and owns the #382 prune-on-save
 /// behavior. Serializes with <see cref="JsonSerializerDefaults.Web"/> and no string-enum converter, so all
-/// state enums persist as ordinals — the frozen §E6 wire surface pinned by the golden fixtures. The persisted
+/// state enums persist as ordinals — the frozen wire surface pinned by the golden fixtures. The persisted
 /// blob is carried as one typed, versioned structural private-state document. The runtime folds that state
 /// into the same checkpoint as the structural continuation and
 /// its child schedule intents; this service never commits state independently.
@@ -66,7 +66,7 @@ public sealed class FlowchartStatePersister
     /// <item><b>Arrivals:</b> <see cref="FlowchartArrivalStatus.Consumed"/> arrivals are dropped
     /// unconditionally — every arrival reader (<see cref="FlowchartJoinCoordinator.PendingArrivals"/>) skips
     /// them. <see cref="FlowchartArrivalStatus.Dead"/> arrivals are dropped once their execution scope is no
-    /// longer live (ADR 0064): a dead arrival is retained only while some Active/Waiting path or active child
+    /// longer live: a dead arrival is retained only while some Active/Waiting path or active child
     /// still sits in its scope, which is what keeps a loop from accumulating one stranded dead arrival per
     /// iteration. Dropping one early is safe for the same reason its iteration key is: the join it was owed to
     /// can no longer fire in that scope, and a later iteration mints a fresh key it could not have matched
@@ -154,7 +154,7 @@ public sealed class FlowchartStatePersister
     /// Extends the retained scope set with each retained scope's ancestors, stopping at (and including) the
     /// first <see cref="ExecutionScopeKind.LoopIteration"/> one.
     /// <para>
-    /// ADR 0064 derives a path's iteration key by walking up to its nearest enclosing loop iteration, so
+    /// The join semantics derive a path's iteration key by walking up to its nearest enclosing loop iteration, so
     /// that walk must not run off a pruned parent. Without this, a live path inside a race scope nested in a
     /// loop iteration would keep its own scope but lose the loop scope above it, and the derived key would
     /// silently read <c>null</c>. Stopping at the first loop iteration is what keeps this bounded: iteration

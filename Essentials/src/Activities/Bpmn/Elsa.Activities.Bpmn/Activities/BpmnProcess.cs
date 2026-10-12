@@ -35,7 +35,7 @@ public sealed class BpmnProcess(BpmnExecutionEngine executionEngine) : Structura
     public const string StructureSchemaVersion = "1.0.0";
 
     /// <summary>
-    /// Whether this process may be started from an event-defined start element's stimulus (spec 117). Defaults to
+    /// Whether this process may be started from an event-defined start element's stimulus. Defaults to
     /// <c>true</c> (root-process identity). A <c>BpmnProcess</c> bound as a child inside another workflow/process
     /// sets it to <c>false</c> so its event-defined start events register no start triggers — the publish-time
     /// trigger provider skips it. Root position is not recoverable from the published node alone, so this is the

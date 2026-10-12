@@ -22,9 +22,9 @@ namespace Elsa.Activities.Http.Tests;
 
 /// <summary>
 /// In-process execution coverage for <see cref="HttpEndpoint"/> through the real workflow agent on the shared
-/// <see cref="WorkflowExecutionHarness"/>. Covers Result resolution (spec 089 sub-unit A, FR-002 — the live
+/// <see cref="WorkflowExecutionHarness"/>. Covers Result resolution (the live
 /// request travels on the dedicated stimulus-input channel; the workflow-inputs bag can neither supply nor forge
-/// it) and the start-vs-mid-flow decision (spec 089 sub-unit D, D-D1/D-D2 — the endpoint completes with the
+/// it) and the start-vs-mid-flow decision (the endpoint completes with the
 /// stimulus when it is the run's trigger node or a start-capable direct run, otherwise suspends with one bookmark
 /// per supported method).
 /// </summary>
@@ -61,7 +61,7 @@ public sealed class HttpEndpointExecutionTests
     [Fact]
     public async Task DerivesParsedContentOutput_FromJsonBody_ViaTheParserSeam()
     {
-        // Spec 089 efficiency #9: ParsedContent is derived at the activity from Body + the Content-Type header,
+        // ParsedContent is derived at the activity from Body + the Content-Type header,
         // not carried on the wire model. A JSON body surfaces as the parsed object on the ParsedContent output.
         await using var harness = NewHarness();
         var liveRequest = new HttpRequestModel(
@@ -82,7 +82,7 @@ public sealed class HttpEndpointExecutionTests
     [Fact]
     public async Task DerivesParsedContent_ExplicitJsonNull_AsJsonNullElement_NotNoContent()
     {
-        // Spec 089 #16: an explicit JSON `null` body is present content — it surfaces as a JsonElement of kind
+        // An explicit JSON `null` body is present content — it surfaces as a JsonElement of kind
         // Null, deliberately distinct from the CLR-null "no content" case (empty body) below.
         await using var harness = NewHarness();
         var liveRequest = new HttpRequestModel(
@@ -102,7 +102,7 @@ public sealed class HttpEndpointExecutionTests
     [Fact]
     public async Task DerivesParsedContent_EmptyBody_AsNoContent()
     {
-        // Spec 089 #16: an empty body is "no content" → the activity sets CLR null on the ParsedContent output.
+        // An empty body is "no content" → the activity sets CLR null on the ParsedContent output.
         await using var harness = NewHarness();
         var liveRequest = new HttpRequestModel(
             Path: "orders/webhook",
@@ -170,7 +170,7 @@ public sealed class HttpEndpointExecutionTests
     [Fact]
     public async Task WorkflowInputsBag_CannotForgeTheStimulusInput()
     {
-        // Regression pin for the spec-089 review: a caller-supplied workflow input (the execute API's inputs
+        // Regression pin: a caller-supplied workflow input (the execute API's inputs
         // bag) named like the old well-known key must NOT surface as the endpoint's Result — the stimulus
         // travels on its own channel, so the activity falls back to the authored route.
         await using var harness = NewHarness();
@@ -192,7 +192,7 @@ public sealed class HttpEndpointExecutionTests
     [Fact]
     public async Task StartPath_CompletesWithStimulus_WhenTriggerNodeIdMatchesOwnNode()
     {
-        // D-D1 start path: the run carries this node's id as the trigger identity → the endpoint completes with the
+        // Start path: the run carries this node's id as the trigger identity → the endpoint completes with the
         // live request from the stimulus channel (it does NOT suspend).
         await using var harness = NewHarness();
         var liveRequest = new HttpRequestModel("orders/webhook", "POST", new Dictionary<string, string[]>(), new Dictionary<string, string[]>(), """{"id":9}""");
@@ -211,7 +211,7 @@ public sealed class HttpEndpointExecutionTests
     [Fact]
     public async Task MidFlow_Suspends_AndCreatesOneBookmarkPerMethod_WithHashesAndOptionMetadata()
     {
-        // D-D2: a mid-flow endpoint (another node triggered the run — here a foreign node id) suspends with one
+        // A mid-flow endpoint (another node triggered the run — here a foreign node id) suspends with one
         // bookmark per supported method, each carrying the per-method hash and the full binding-parity metadata
         // (template + method + endpoint options), and does NOT complete.
         await using var harness = NewHarness();
@@ -259,9 +259,9 @@ public sealed class HttpEndpointExecutionTests
     [Fact]
     public async Task MidFlow_StampsResponseModeSync_OnBookmarkMetadata()
     {
-        // Spec 089 E-D1: an authored ResponseMode = Sync rides the bookmark metadata for free — the activity's
+        // An authored ResponseMode = Sync rides the bookmark metadata for free — the activity's
         // ReadOptions folds it into HttpEndpointStimulus.Describe, exactly as for a trigger binding — so the
-        // middleware reads the mode off a resume-only match (scenario 5.5).
+        // middleware reads the mode off a resume-only match.
         await using var harness = NewHarness();
         var node = NewEndpointExecutableWithResponseMode("callbacks/{id}", ResponseMode.Sync);
 
@@ -288,7 +288,7 @@ public sealed class HttpEndpointExecutionTests
     [Fact]
     public async Task DirectRun_CanStartTrue_Completes_ViaAuthoredRouteFallback()
     {
-        // D-D1 exception: a start-capable endpoint on a direct run (no trigger identity) keeps A's authored-route
+        // Exception: a start-capable endpoint on a direct run (no trigger identity) keeps the authored-route
         // fallback and completes.
         await using var harness = NewHarness();
 
@@ -333,7 +333,7 @@ public sealed class HttpEndpointExecutionTests
     [Fact]
     public async Task DirectRun_CanStartFalse_AlwaysSuspends()
     {
-        // D-D1: a CanStartWorkflow = false endpoint ALWAYS suspends, even on a direct run (the US4 independent test
+        // A CanStartWorkflow = false endpoint ALWAYS suspends, even on a direct run (the mid-flow resume test
         // starts a workflow directly and must suspend at the mid-flow endpoint).
         await using var harness = NewHarness();
 
@@ -348,13 +348,13 @@ public sealed class HttpEndpointExecutionTests
     [Fact]
     public async Task Resume_SetsResultRouteDataAndParsedContent_FromTheResumeInput()
     {
-        // T008 (D-D3): suspend at a mid-flow endpoint, then resume it with a matching request on the resume-input
+        // Suspend at a mid-flow endpoint, then resume it with a matching request on the resume-input
         // channel — the [ResumeTarget] reads the request and sets Result/RouteData/ParsedContent.
         await using var harness = NewHarness();
         var mid = await harness.RunAsync(NewEndpointExecutable("callbacks/{id}", methods: ["GET"], canStartWorkflow: null), JsonSerializer.SerializeToElement("x"), triggerNodeId: "other");
         Assert.False(CompletedEndpoint(mid));
 
-        // ParsedContent is derived at the activity from Body + the Content-Type header (spec 089 #9), not carried
+        // ParsedContent is derived at the activity from Body + the Content-Type header, not carried
         // on the wire model — so the resume request carries the JSON body and content type, and the derived value
         // is asserted off the ParsedContent output.
         var resumeRequest = new HttpRequestModel(
@@ -383,7 +383,7 @@ public sealed class HttpEndpointExecutionTests
     [Fact]
     public async Task Resume_FallsBackToAuthoredRoute_WhenResumeInputIsMalformed()
     {
-        // D-D7: the resume input is produced by our own middleware, so a missing/malformed payload is a defensive
+        // The resume input is produced by our own middleware, so a missing/malformed payload is a defensive
         // path — the resume target falls back to the authored-route model rather than faulting.
         await using var harness = NewHarness();
         var mid = await harness.RunAsync(NewEndpointExecutable("callbacks/{id}", methods: ["GET"], canStartWorkflow: null), JsonSerializer.SerializeToElement("x"), triggerNodeId: "other");
@@ -448,8 +448,8 @@ public sealed class HttpEndpointExecutionTests
             .WithFeature(services => new SerializationFeature().ConfigureServices(services))
             .WithFeature(services => new ActivitiesPrimitivesFeature().ConfigureServices(services))
             .WithFeature(services => new ActivitiesHttpFeature().ConfigureServices(services))
-            // The HttpEndpoint activity derives ParsedContent from the raw body via IHttpRequestBodyParser (spec
-            // 089 efficiency #9). Full CShells composition registers it through ActivitiesHttp's DependsOn "Http";
+            // The HttpEndpoint activity derives ParsedContent from the raw body via IHttpRequestBodyParser.
+            // Full CShells composition registers it through ActivitiesHttp's DependsOn "Http";
             // this manual harness composes only the named feature, so register the seam it consumes directly.
             .WithFeature(services => services.AddSingleton<IHttpRequestBodyParser, HttpRequestBodyParser>())
             .Build("actexec-http-endpoint");

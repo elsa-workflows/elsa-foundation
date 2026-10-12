@@ -68,7 +68,7 @@ public sealed class RuntimeOutputCaptureProjector
             if (projected.Presence == ValuePresence.Absent)
                 continue;
             var targetsVariable = capture.ValueId.StartsWith(RuntimeWorkflowStateSeed.VariableValueIdPrefix, StringComparison.Ordinal);
-            // A result whose policy requires encryption is withheld by the completion projector (spec 188, FR-010) and
+            // A result whose policy requires encryption is withheld by the completion projector and
             // holds no value to capture; a present projection whose policy requires encryption, which only a projection
             // built outside the completion projector can carry, is treated the same. Neither reaches a storage driver.
             // A workflow variable has a withheld form: the capture writes the marker into the variable frame, as Set

@@ -6,12 +6,11 @@ namespace Elsa.Activities.Design.Core.Models;
 /// <summary>
 /// Design-time canvas description of a single argument on an activity. Sibling records
 /// <see cref="InputDefinition"/> and <see cref="OutputDefinition"/> carry the same structural
-/// shape by FR-030 (signature-clarity duplication).
+/// shape by design (signature-clarity duplication).
 /// </summary>
 /// <remarks>
 /// <see cref="PropertyInfo"/> and <see cref="UISpecifications"/> are opaque, Studio-authored UI metadata
-/// held as a verbatim <see cref="JsonElement"/> — never a CLR-typed <c>object</c> graph (ADR 0035 D3, amends
-/// constitution §E2.9).
+/// held as a verbatim <see cref="JsonElement"/> — never a CLR-typed <c>object</c> graph.
 /// </remarks>
 public sealed record ArgumentDefinition(
     string ReferenceKey,

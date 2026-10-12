@@ -3,7 +3,7 @@ using Elsa.Activities.Runtime.Core.Models;
 namespace Elsa.Activities.Runtime.Core.Attributes;
 
 /// <summary>
-/// Declares a CLR activity's replay/side-effect profile (ADR 0032 R1). Absence is equivalent to
+/// Declares a CLR activity's replay/side-effect profile. Absence is equivalent to
 /// <see cref="SideEffectProfile.External"/> — the fail-safe default that keeps the mandatory pre-activation
 /// durability boundary. Apply <c>[ActivitySideEffectProfile(SideEffectProfile.ReplaySafe)]</c> only to an
 /// activity that is pure/deterministic between checkpoint boundaries (in-workflow routing, compute, variable

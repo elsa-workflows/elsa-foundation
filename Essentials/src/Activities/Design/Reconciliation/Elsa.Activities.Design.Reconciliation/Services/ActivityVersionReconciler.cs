@@ -19,8 +19,7 @@ using Microsoft.Extensions.Options;
 namespace Elsa.Activities.Design.Reconciliation.Services;
 
 /// <summary>
-/// Model X reconciliation policy (Unit C 2026-05-28; pending 2026-06-01 architecture
-/// review). For each candidate version contributed by source modules:
+/// Model X reconciliation policy (provisional, pending architecture review). For each candidate version contributed by source modules:
 ///
 /// 1. Find the parent definition by its surrogate Id or by the natural key
 ///    <c>(SourceKind, SourceId, ActivityTypeKey)</c>.
@@ -144,7 +143,7 @@ public sealed class ActivityVersionReconciler(
         }
 
         // Definition exists. Lookup the specific version by (DefinitionId, Version) — build-metadata-
-        // insensitive (FR-013) by matching on the normalised sort key, so 1.0.0 and 1.0.0+build are
+        // insensitive by matching on the normalised sort key, so 1.0.0 and 1.0.0+build are
         // the same logical version.
         var incomingSortKey = SemVer.ToSortKey(incomingVersion.Version);
         var existingVersion = versionIndex.Find(definition.Id, incomingSortKey);

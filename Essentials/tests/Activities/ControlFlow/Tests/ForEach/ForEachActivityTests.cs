@@ -35,7 +35,7 @@ public sealed class ForEachActivityTests : IDisposable
         var request = Assert.Single(context.GetChildActivityScheduleRequests());
         Assert.Equal(BodyNodeId, request.ExecutableNodeId);
         Assert.Equal(ForEachExecutionId, request.SchedulingActivityExecutionId);
-        // ADR 0028 step 3: the body is scheduled under a distinct per-pass IterationId.
+        // The body is scheduled under a distinct per-pass IterationId.
         Assert.Equal($"{ForEachExecutionId}:foreach-iteration:0", request.SchedulingProvenance.IterationId);
         Assert.Equal("0", request.Metadata["foreach.iterationIndex"]);
         Assert.True(continuation.IsDeferred);

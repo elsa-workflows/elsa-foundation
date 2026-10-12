@@ -128,7 +128,7 @@ public sealed class EventTriggerStimulusProviderTests
     [Fact]
     public void Describe_ReturnsRecognizedEmpty_WhenCanStartWorkflowIsFalse()
     {
-        // A mid-flow wait node (spec 116) is recognized but declares itself a non-start: not indexed,
+        // A mid-flow wait node is recognized but declares itself a non-start: not indexed,
         // no publish failure — and the literal-event-name rule does not apply to it.
         var node = EventNode(eventName: null, canStartWorkflow: false);
 

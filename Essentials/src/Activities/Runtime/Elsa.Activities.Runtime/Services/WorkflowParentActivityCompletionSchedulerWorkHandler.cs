@@ -80,7 +80,7 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandler : Runti
     {
         var activityExecutionStateStore = serviceProvider.GetRequiredService<IActivityExecutionStateStore>();
 
-        // spec 111: burst-cached pinned-executable read.
+        // Burst-cached pinned-executable read.
         var executable = await PinnedExecutableRead.FindAsync(serviceProvider, payload.PinnedExecutable.ArtifactId, cancellationToken);
         if (executable is null)
             throw new WorkflowExecutableNotFoundException(payload.PinnedExecutable.ArtifactId);
@@ -115,7 +115,7 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandler : Runti
         if (ActivityAttemptActivationClaimer.WasParentCompletionProcessed(completedChildState))
             return;
 
-        // spec 112 FR-8: a completion evaluation for a child this parent already cancelled is late by
+        // A completion evaluation for a child this parent already cancelled is late by
         // definition — ack it without invoking the structural callback.
         if (completedChildState.Status == ActivityExecutionStatus.Cancelled)
             return;
@@ -126,11 +126,11 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandler : Runti
         var inspectionAccumulator = serviceProvider.GetService<IRuntimeActivityExecutionInspectionAccumulator>();
         var activityFaultIncidentRecorder = serviceProvider.GetRequiredService<ActivityFaultIncidentRecorder>();
         var payloadCapturePolicy = serviceProvider.GetService<IRuntimePayloadCapturePolicy>() ?? new DefaultRuntimePayloadCapturePolicy();
-        // Released once the outcome is recorded, after every fault boundary below has masked its text (spec 188, FR-012).
+        // Released once the outcome is recorded, after every fault boundary below has masked its text.
         using var faultMasking = ActivityFaultMasking.For(serviceProvider, payload.ActivityExecutionId);
 
         // One scope service serves both the self-owner scope built for the child-completion evaluation below
-        // and the completed-scope evidence capture on the completion path (ADR 0027/0030).
+        // and the completed-scope evidence capture on the completion path.
         var scopeService = new RuntimeContainerScopeService(
             activityExecutionStateStore,
             serviceProvider.GetRequiredService<IWorkflowExecutionStateStore>());
@@ -206,14 +206,14 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandler : Runti
 
             if (callbackBypassParentState is null)
             {
-                // spec 119 D4: a parent that races sibling children (the BPMN event-based gateway) needs its
+                // A parent that races sibling children (the BPMN event-based gateway) needs its
                 // direct, non-terminal children's activity-execution ids to stage seam-A subtree cancellations.
                 // This parent-scoped read is opt-in (marker-gated), so non-consumer structural activities pay nothing.
                 var liveChildActivities = parentActivity is IRuntimeLiveChildActivityConsumer
                     ? await StructuralParentEvaluationSupport.LoadLiveChildActivitiesAsync(activityExecutionStateStore, workItem.WorkflowExecutionId, payload.ActivityExecutionId, cancellationToken)
                     : [];
 
-                // spec 123 D1: populate the scoped-variable read seam for a marker consumer (the BpmnProcess) from
+                // Populate the scoped-variable read seam for a marker consumer (the BpmnProcess) from
                 // committed frame state so a collection-mode multi-instance host can read its collection variable
                 // during a child-completion propagation that reaches the loop-start element.
                 var scopedVariableEnvelopes = await scopeService.ProjectScopedVariablesForReaderAsync(
@@ -281,7 +281,7 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandler : Runti
                 if (absorptionPlan is not null)
                     subtreeCancellationPlans = [.. subtreeCancellationPlans, absorptionPlan];
 
-                // spec 126 seam C: a structural child evaluating its own children may itself notify ITS parent
+                // Seam C: a structural child evaluating its own children may itself notify ITS parent
                 // (bubbling is the consumer's recursion). Harvest those staged notifications and commit them
                 // atomically with this evaluation's continuation. Root staging or a Fault/Cancel continuation with
                 // staged notifications faults the evaluation here (inside the callback boundary).
@@ -557,7 +557,7 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandler : Runti
 
             // A completing container's scope is no longer live for runtime expressions; mark it completed
             // and retain its final variable values as inspection evidence only through the configured
-            // capture/retention policy (ADR 0027, #210).
+            // capture/retention policy (#210).
             containerVariableSnapshots = RuntimeContainerVariableEvidence.Capture(
                 payloadCapturePolicy, scopeService, parentExecutableNode, currentParentState,
                 workItem.WorkflowExecutionId, payload.ActivityExecutionId, workItem.WorkItemId, TimeProvider.GetUtcNow());
@@ -569,7 +569,7 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandler : Runti
                 completedAt);
 
             // Only a container that actually owns scoped variables gets its scope marked completed; this
-            // keeps the completion of ordinary containers untouched (ADR 0027, #210).
+            // keeps the completion of ordinary containers untouched (#210).
             if (completedParentState.VariableFrame is not null || completedParentState.IterationVariableFrame is not null)
                 completedParentState = RuntimeContainerScopeService.CloseOwnedFrames(completedParentState);
         }
@@ -619,7 +619,7 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandler : Runti
     }
 
     /// <summary>
-    /// Validates and plans the child-fault absorption the structural callback staged (spec 115):
+    /// Validates and plans the child-fault absorption the structural callback staged:
     /// the evaluation's incident resolves and the faulted child's leftover subtree is reclaimed,
     /// riding the same commit as the continuation. Returns <see langword="null"/> when nothing was
     /// staged; an already-terminal incident is a legal redelivery race and only skips the resolution.

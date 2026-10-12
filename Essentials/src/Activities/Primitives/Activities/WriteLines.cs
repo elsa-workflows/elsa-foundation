@@ -13,7 +13,7 @@ namespace Elsa.Activities.Primitives.Activities;
 /// The runtime hydrates <see cref="Lines"/> from the invocation's committed input snapshot before
 /// execution. The activity owns no argument wrapper or value address.
 /// </remarks>
-// ReplaySafe (ADR 0032 R1, #2581): as WriteLine, console lines from its materialized input and a constant transition.
+// ReplaySafe (#2581): as WriteLine, console lines from its materialized input and a constant transition.
 // A crash before the next commit writes the lines again; no workflow state differs.
 [ActivitySideEffectProfile(SideEffectProfile.ReplaySafe)]
 public sealed class WriteLines : Activity<ActivityUnit>

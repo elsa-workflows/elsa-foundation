@@ -14,7 +14,7 @@ using EventActivity = Elsa.Activities.Primitives.Activities.Event;
 namespace Elsa.Activities.Bpmn.Tests;
 
 /// <summary>
-/// End-to-end coverage for spec 128 event subprocesses (tier 1: escalation + error triggers). Covers own-scope
+/// End-to-end coverage for event subprocesses (tier 1: escalation + error triggers). Covers own-scope
 /// sibling escalation (interrupting stops the other branch, non-interrupting runs both), child-thrown escalation
 /// caught by the parent scope's event subprocess via seam C, the notification-side specificity ladder (boundary vs
 /// event subprocess), error absorption via seam B, repeated non-interrupting activations, body fault → composite
@@ -271,7 +271,7 @@ public sealed class BpmnEventSubprocessTests
 
     // ---- Error trigger -----------------------------------------------------------------------------------------
 
-    // spec 132 (FR-4): the error event subprocess absorbs a host child fault via seam B and then activates its body —
+    // The error event subprocess absorbs a host child fault via seam B and then activates its body —
     // a scheduled child, so the fault evaluation DEFERS. Executable since the runtime deferred-seam-B metadata-leak fix
     // (#989) landed: the named incident resolves, the scope's other live work is interrupted, the body runs, and the
     // scope completes normally.

@@ -18,7 +18,7 @@ using Xunit;
 namespace Elsa.Activities.Runtime.Tests;
 
 /// <summary>
-/// Shared arrangements for activation-time secret resolution (spec 188, slice 3): a secret read as publish compiles it,
+/// Shared arrangements for activation-time secret resolution: a secret read as publish compiles it,
 /// the withheld envelope it leaves in the snapshot, a resolver double, and activities that record the value their
 /// secret-bound input was hydrated with.
 /// </summary>

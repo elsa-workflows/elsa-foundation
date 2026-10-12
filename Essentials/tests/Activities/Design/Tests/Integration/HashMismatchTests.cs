@@ -9,7 +9,7 @@ using Xunit;
 namespace Elsa.Activities.Design.Tests.Integration;
 
 /// <summary>
-/// US5 test (SC-004). The Model X duplicate path: when a second pass contributes the same
+/// The Model X duplicate path: when a second pass contributes the same
 /// <c>(DefinitionId, Version)</c> as an already-persisted row, the reconciler compares the
 /// incoming content hash to the persisted one.
 /// - Different content (here, a changed <c>Description</c>) → <see cref="ActivityVersionHashMismatchException"/>,

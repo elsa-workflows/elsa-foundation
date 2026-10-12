@@ -45,7 +45,7 @@ public sealed class JsonReconciliationTests : IDisposable
         var writeLine = store.Definitions.Single(d => d.ActivityTypeKey == "Acme.Activities.WriteLine");
         Assert.Equal("2.0.0", store.Versions.Single(v => v.DefinitionId == writeLine.Id).Version);
 
-        // Re-run with the same file → idempotent (SC-003, DuplicateHandling.Skip).
+        // Re-run with the same file → idempotent (DuplicateHandling.Skip).
         await reconciler.Reconcile(CancellationToken.None);
         Assert.Equal(2, store.Versions.Count);
     }
@@ -93,7 +93,7 @@ public sealed class JsonReconciliationTests : IDisposable
     [Fact]
     public async Task JsonSource_RefusesAnEntryThatDeclaresACredentialInput()
     {
-        // Spec 188, research R5: in phase 0 only [ActivityInput(IsCredential = true)] on a CLR activity declares a
+        // For now only [ActivityInput(IsCredential = true)] on a CLR activity declares a
         // credential, because only CLR reconciliation checks the input could be bound to a secret reference.
         var file = WriteTempJson("[" + WriteLineJson() + "," + SendEmailJson(DeclaredInputJson("isCredential")) + "]");
 

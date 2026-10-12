@@ -18,7 +18,7 @@ namespace Elsa.Activities.Http.IntegrationTests;
 /// asserts the other half of that equivalence — that <see cref="ActivitiesHttpFeature"/> actually implements the
 /// CShells middleware seam <see cref="IMiddlewareShellFeature"/>, and that its <c>UseMiddleware</c> mounts the
 /// inbound <see cref="HttpEndpointMiddleware"/> into the shell pipeline. Together they prove the end-to-end wiring
-/// matches what a real shell composition performs (spec 089 FR-003), without the weight of a full CShells host.
+/// matches what a real shell composition performs, without the weight of a full CShells host.
 /// </summary>
 public sealed class ActivitiesHttpFeatureMiddlewareSeamTests
 {
@@ -47,7 +47,7 @@ public sealed class ActivitiesHttpFeatureMiddlewareSeamTests
         services.AddSingleton<Elsa.Http.Core.Contracts.IRouteMatcher, TestRouteMatcher>();
         services.AddSingleton<Elsa.Http.Core.Contracts.IRouteTable, FakeRouteTable>();
         services.AddSingleton<Elsa.Workflows.Runtime.Core.Contracts.IWorkflowTriggerBindingStore, Elsa.Workflows.Runtime.Services.Triggers.InMemoryWorkflowTriggerBindingStore>();
-        // The middleware also resolves waiting-bookmark options for resume-only matches (spec 089 D) via the
+        // The middleware also resolves waiting-bookmark options for resume-only matches via the
         // cross-execution lookup — contributed in production by WorkflowsRuntimeTriggers; supplied here (empty store).
         services.AddSingleton<IBookmarkStimulusIndex, Elsa.Workflows.Runtime.Services.Bookmarks.InMemoryBookmarkStateStore>();
         services.AddSingleton<IGlobalBookmarkStimulusLookup, Elsa.Workflows.Runtime.Services.Bookmarks.GlobalBookmarkStimulusLookup>();

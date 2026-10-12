@@ -8,8 +8,8 @@ using Xunit;
 namespace Elsa.Activities.Bpmn.Interchange.Tests;
 
 /// <summary>
-/// Spec 118: importing timer/message/signal event definitions on event-defined start events (spec 117)
-/// and intermediate catch events (spec 116). Start events import as pure elements carrying a populated
+/// Importing timer/message/signal event definitions on event-defined start events
+/// and intermediate catch events. Start events import as pure elements carrying a populated
 /// <see cref="BpmnEventDefinition"/>; catch events also synthesize a bound suspending child.
 /// </summary>
 public sealed class BpmnEventDefinitionImportTests
@@ -63,7 +63,7 @@ public sealed class BpmnEventDefinitionImportTests
 
         var start = structure.Elements.Single(element => element.ElementId == "start-msg");
         Assert.Equal(BpmnElementTypes.StartEvent, start.ElementType);
-        Assert.Null(start.ChildNodeId); // event-defined start is a pure element (spec 117)
+        Assert.Null(start.ChildNodeId); // event-defined start is a pure element
         var definition = Assert.Single(start.EventDefinitions);
         Assert.Equal(BpmnEventDefinitionTypes.Message, definition.Type);
         Assert.Equal("order-placed", definition.Properties[BpmnEventDefinitionProperties.Name]);

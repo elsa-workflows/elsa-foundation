@@ -13,7 +13,7 @@ using Microsoft.Extensions.Logging;
 namespace Elsa.Activities.Runtime.Tasks;
 
 /// <summary>
-/// Startup pass (FR-004b, research D8 revised) that registers — into the runtime
+/// Startup pass that registers — into the runtime
 /// <see cref="IWellKnownTypeRegistry"/> under the shared <see cref="TypeAliasConvention"/> — the CLR types
 /// reachable from the loaded activities:
 /// <list type="bullet">
@@ -51,7 +51,7 @@ namespace Elsa.Activities.Runtime.Tasks;
 /// <para>
 /// One CLR type is registered per alias, and the alias carries no version, so every node bound to an activity runs the
 /// class of the release the shell composes, the newest one after an upgrade, whichever catalog version the node pins
-/// (spec 004 leaves loading several versions of one CLR type out of scope). A release must therefore stay input-compatible
+/// (loading several versions of one CLR type is out of scope). A release must therefore stay input-compatible
 /// with the versions workflows are pinned to.
 /// </para>
 /// <para>
@@ -79,7 +79,7 @@ public sealed class RegisterActivityTypesStartupTask : IStartupTask
     }
 
     // Test seam: lets a unit test substitute the baseline (runtime-loaded) assembly source so the
-    // IFeatureAssemblyProvider path can be exercised in isolation from the host AppDomain (§2.23.3).
+    // IFeatureAssemblyProvider path can be exercised in isolation from the host AppDomain.
     public RegisterActivityTypesStartupTask(
         IWellKnownTypeRegistry wellKnownTypeRegistry,
         IEnumerable<IFeatureAssemblyProvider> assemblyProviders,

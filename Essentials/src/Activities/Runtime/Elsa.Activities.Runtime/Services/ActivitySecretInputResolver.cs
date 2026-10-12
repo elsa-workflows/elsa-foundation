@@ -14,7 +14,7 @@ namespace Elsa.Activities.Runtime.Services;
 /// Each value is registered with <see cref="IRuntimeSecretMask"/> under the activity execution being activated as soon
 /// as it is resolved, before the next reference is resolved, before it is converted and before the activity is
 /// hydrated, so when any of those fails, or the activity itself does, the work handler's fault boundary masks the value
-/// in the message, stack trace and inner exception chain it records (spec 188, FR-012). Only <see cref="IRuntimeSecretResolver"/> is optional: a host that composes none
+/// in the message, stack trace and inner exception chain it records. Only <see cref="IRuntimeSecretResolver"/> is optional: a host that composes none
 /// parks the activity with the missing-resolver activation failure instead of faulting it. A host that composes more
 /// than one does not start: <see cref="RuntimeSecretResolverCompositionValidator"/> fails its shell activation.
 /// </remarks>

@@ -20,10 +20,10 @@ using EventActivity = Elsa.Activities.Primitives.Activities.Event;
 namespace Elsa.Activities.Bpmn.Tests;
 
 /// <summary>
-/// End-to-end coverage for spec 121 multi-instance activities (cardinality mode): a host runs its bound
+/// End-to-end coverage for multi-instance activities (cardinality mode): a host runs its bound
 /// child N times sequentially (one at a time) or in parallel (N concurrent same-node instances), each with
 /// its own <c>loopIndex</c> frame; the loop routes the host's outbound flows once the last instance
-/// completes. Composition with spec 120 boundary/error teardown: cancelling a multi-instance host cancels
+/// completes. Composition with boundary/error teardown: cancelling a multi-instance host cancels
 /// all live instances, and an error boundary absorbs an instance fault.
 /// </summary>
 public sealed class BpmnMultiInstanceTests
@@ -222,7 +222,7 @@ public sealed class BpmnMultiInstanceTests
         return await fixture.GetBpmnStateAsync();
     }
 
-    // ---- spec 123: collection-mode multi-instance ----
+    // ---- Collection-mode multi-instance ----
 
     private const string CollectionVariable = "items";
 
@@ -602,7 +602,7 @@ public sealed class BpmnMultiInstanceTests
             metadata: new Dictionary<string, string>());
 }
 
-/// <summary>A leaf body activity that reads its multi-instance <c>loopIndex</c> frame value and completes capturing it (spec 121 per-iteration frame proof).</summary>
+/// <summary>A leaf body activity that reads its multi-instance <c>loopIndex</c> frame value and completes capturing it (per-iteration frame proof).</summary>
 public sealed class BpmnLoopIndexCaptureActivity : Activity<BpmnLoopCaptureResult>
 {
     [ActivityInput]
@@ -613,7 +613,7 @@ public sealed class BpmnLoopIndexCaptureActivity : Activity<BpmnLoopCaptureResul
             Value.ToString(System.Globalization.CultureInfo.InvariantCulture))));
 }
 
-/// <summary>A leaf body activity that reads its multi-instance collection <c>item</c> frame value and completes capturing it (spec 123 per-instance item proof).</summary>
+/// <summary>A leaf body activity that reads its multi-instance collection <c>item</c> frame value and completes capturing it (per-instance item proof).</summary>
 public sealed class BpmnItemCaptureActivity : Activity<BpmnLoopCaptureResult>
 {
     [ActivityInput]

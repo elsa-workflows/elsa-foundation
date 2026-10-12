@@ -75,7 +75,7 @@ public sealed class SendHttpRequest(
     public IDictionary<string, string>? RequestHeaders { get; set; }
 
     /// <summary>
-    /// Optional credential for the request's <c>Authorization</c> header. A credential input (spec 188): an author
+    /// Optional credential for the request's <c>Authorization</c> header. A credential input: an author
     /// binds a stored secret to it and writes no literal, so the definition holds the secret reference and the value is
     /// resolved when the activity runs. A value with non-whitespace content is sent verbatim as the whole header value
     /// (for example <c>Bearer</c>, a space and a token), because the activity adds no scheme, and it replaces an

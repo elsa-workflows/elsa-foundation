@@ -77,14 +77,14 @@ public sealed class BpmnElement
     public IReadOnlyDictionary<string, string> Properties { get; }
 
     /// <summary>
-    /// The host element id a <c>boundaryEvent</c> is attached to (spec 120); <c>null</c> on every
+    /// The host element id a <c>boundaryEvent</c> is attached to; <c>null</c> on every
     /// non-boundary element. A boundary reacts to a stimulus while its host runs.
     /// </summary>
     [JsonPropertyName("attachedToRef")]
     public string? AttachedToRef { get; }
 
     /// <summary>
-    /// Whether a <c>boundaryEvent</c> interrupts its host when it fires (spec 120): <c>true</c> (the BPMN
+    /// Whether a <c>boundaryEvent</c> interrupts its host when it fires: <c>true</c> (the BPMN
     /// default) tears the host down and routes the boundary path; <c>false</c> runs the boundary path
     /// alongside the still-running host. Meaningful only on boundaries.
     /// </summary>
@@ -92,14 +92,14 @@ public sealed class BpmnElement
     public bool CancelActivity { get; }
 
     /// <summary>
-    /// The multi-instance loop characteristics of this element (spec 121); <c>null</c> on every
+    /// The multi-instance loop characteristics of this element; <c>null</c> on every
     /// non-multi-instance element. Valid only on a task-family or <c>subProcess</c> host that binds a child.
     /// </summary>
     [JsonPropertyName("loopCharacteristics")]
     public BpmnLoopCharacteristics? LoopCharacteristics { get; }
 
     /// <summary>
-    /// Marks a <b>compensation handler</b> element (spec 124): a task-family or <c>subProcess</c> element that
+    /// Marks a <b>compensation handler</b> element: a task-family or <c>subProcess</c> element that
     /// binds a child, participates in <b>no</b> sequence flows, and is invoked only by the compensation replay
     /// (never by normal token flow). <c>false</c> on every ordinary element.
     /// </summary>
@@ -109,14 +109,14 @@ public sealed class BpmnElement
     /// <summary>
     /// Set only on a <b>compensation boundary event</b> (a <c>boundaryEvent</c> whose single event definition is
     /// <see cref="BpmnEventDefinitionTypes.Compensation"/>): the element id of its
-    /// <see cref="IsForCompensation"/> handler (spec 124). This models the BPMN boundary→handler association;
+    /// <see cref="IsForCompensation"/> handler. This models the BPMN boundary→handler association;
     /// <c>null</c> on every other element.
     /// </summary>
     [JsonPropertyName("compensationHandlerElementId")]
     public string? CompensationHandlerElementId { get; }
 
     /// <summary>
-    /// Marks a <b>transaction subprocess</b> (spec 125): a <c>subProcess</c> element that binds a nested
+    /// Marks a <b>transaction subprocess</b>: a <c>subProcess</c> element that binds a nested
     /// process which may be cancelled from within by a cancel end event. Valid only on a <c>subProcess</c>-family
     /// element with a bound child; a transaction element may not carry loop characteristics. Independent of the
     /// nested structure's own transaction flag (isolation): this element-side flag drives cancel-boundary
@@ -126,7 +126,7 @@ public sealed class BpmnElement
     public bool IsTransaction { get; }
 
     /// <summary>
-    /// Marks a <b>event subprocess</b> (spec 128/134): a flow-less <c>subProcess</c>-family element that binds a
+    /// Marks a <b>event subprocess</b>: a flow-less <c>subProcess</c>-family element that binds a
     /// nested body whose single event-start (an escalation/error start event, or a message/signal/timer start event
     /// with a <see cref="ListenerNodeId"/> scope listener) activates the body when its trigger occurs while the
     /// enclosing scope is active. Valid only on a <c>subProcess</c>-family element with a
@@ -137,7 +137,7 @@ public sealed class BpmnElement
     public bool TriggeredByEvent { get; }
 
     /// <summary>
-    /// The authored node id of the synthesized scope-listener child (spec 134): a suspending <c>Delay</c> (timer) or
+    /// The authored node id of the synthesized scope-listener child: a suspending <c>Delay</c> (timer) or
     /// <c>Event</c> (message/signal) armed at scope start for a message/signal/timer-triggered event subprocess. It is a
     /// second bound-child channel alongside <see cref="ChildNodeId"/> (the body). <b>Required</b> on a
     /// <see cref="TriggeredByEvent"/> element whose body-start trigger is message/signal/timer (the external triggers need
@@ -159,7 +159,7 @@ public static class BpmnElementTypes
     public const string EndEvent = "endEvent";
     public const string IntermediateCatchEvent = "intermediateCatchEvent";
 
-    /// <summary>An intermediate throw event (spec 124); this slice wires it for the compensation definition only.</summary>
+    /// <summary>An intermediate throw event; this slice wires it for the compensation definition only.</summary>
     public const string IntermediateThrowEvent = "intermediateThrowEvent";
     public const string Task = "task";
     public const string UserTask = "userTask";
@@ -171,10 +171,10 @@ public static class BpmnElementTypes
     public const string ReceiveTask = "receiveTask";
 
     /// <summary>
-    /// A call activity (spec 133): a task-family element that invokes a separately published Elsa workflow by
+    /// A call activity: a task-family element that invokes a separately published Elsa workflow by
     /// binding a <c>Elsa.DispatchWorkflow</c> child. Resolves to the task family (behaviors stay semantics-unaware);
-    /// its only behavioral distinction is the engine-side failure-outcome translation (spec 133 D3) and its
-    /// interchange fidelity (D5).
+    /// its only behavioral distinction is the engine-side failure-outcome translation and its
+    /// interchange fidelity.
     /// </summary>
     public const string CallActivity = "callActivity";
     public const string SubProcess = "subProcess";

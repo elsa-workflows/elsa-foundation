@@ -8,7 +8,7 @@ namespace Elsa.Activities.ControlFlow.Loops;
 /// <summary>
 /// Identifies one loop activity to the shared <see cref="LoopNavigator"/> and <see cref="LoopStructureHandler"/>.
 /// The loops differ only in when they run another pass, which their activity classes decide; their structure is
-/// the same optional body in one named child slot (ADR 0028), told apart by structure kind.
+/// the same optional body in one named child slot, told apart by structure kind.
 /// </summary>
 internal sealed record LoopKind(string Name, string StructureKind, string StructureSchemaVersion, string BodySlotName)
 {

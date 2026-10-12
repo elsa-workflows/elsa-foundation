@@ -27,14 +27,14 @@ namespace Elsa.Activities.ForEach.Activities;
 /// </summary>
 /// <remarks>
 /// The current item and index are loop-owned per-pass state realized through the shared loop-scope
-/// durable frame primitive (<see cref="VariableFrameState"/>, ADR 0028). For each pass the loop chooses a
+/// durable frame primitive (<see cref="VariableFrameState"/>). For each pass the loop chooses a
 /// distinct <c>IterationId</c> and schedules the body child with that <c>IterationId</c> in
 /// <see cref="ActivitySchedulingProvenance.IterationId"/>, carrying the pass's item/index in the body's
 /// typed scheduler request. When the runtime starts the body it activates a fresh per-pass iteration frame
 /// (item + optional index) as the
 /// innermost scope on the body's visible chain, so the body resolves the current item through the real
 /// expression evaluator. The runtime activity references only the runtime contract surface; the
-/// design-side structure handler references <c>Elsa.Workflows.Design.Core</c> (Elsa §E2.2).
+/// design-side structure handler references <c>Elsa.Workflows.Design.Core</c>.
 /// </remarks>
 [RefusesSecretBinding(nameof(Collection), SecretBindingRefusalReason.PersistedByActivity)]
 [ActivityStructure("elsa.foreach.structure", "1.0.0")]
@@ -139,7 +139,7 @@ public sealed class ForEach : StructuralActivity, IRuntimeStructuralActivity, IR
         if (ExposeIndex)
             values[CurrentIndexVariableName] = ToEnvelope(index, new ValueTypeDescriptor("Int32"), ValueProtectionPolicy.InstanceInline);
 
-        // ADR 0028 contract step 3: schedule the body under that same IterationId (also carried in the
+        // Schedule the body under that same IterationId (also carried in the
         // provenance metadata) so the body execution's iteration identity agrees with its scope.
         runtimeContext.ScheduleChildActivity(
             body.ExecutableNodeId,

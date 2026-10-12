@@ -9,7 +9,7 @@ using BpmnProcessActivity = Elsa.Activities.Bpmn.Activities.BpmnProcess;
 namespace Elsa.Activities.Bpmn.Tests;
 
 /// <summary>
-/// Spec 128 D1 validation: a valid event-subprocess graph (a flow-less <c>triggeredByEvent</c> subprocess whose
+/// Event-subprocess validation: a valid event-subprocess graph (a flow-less <c>triggeredByEvent</c> subprocess whose
 /// body declares exactly one escalation/error start) builds cleanly and indexes the catcher, and every rule rejects
 /// deterministically — element-level shape (no flows, no loop, no boundary host, not a compensation handler, not a
 /// transaction), body shape (exactly one start with one supported trigger, no nested event subprocess), the
@@ -49,7 +49,7 @@ public sealed class BpmnEventSubprocessValidationTests
     [Fact]
     public void ValidErrorEventSubprocess_BuildsCleanly_AndIndexesCatcher()
     {
-        // spec 132: an error-triggered event subprocess is executable (deferred seam-B absorption, #989 fix). It is a
+        // An error-triggered event subprocess is executable (deferred seam-B absorption, #989 fix). It is a
         // catch-all (no error-code matching this slice) and always interrupting.
         var graph = BpmnGraph.From(Node(
             DefaultElements(),
@@ -120,7 +120,7 @@ public sealed class BpmnEventSubprocessValidationTests
 
     [Fact]
     public void EventSubprocess_BodyWithUnsupportedTrigger_IsRejected() =>
-        // spec 134: message/signal/timer joined escalation/error as supported ES triggers; a compensation-triggered
+        // Message/signal/timer joined escalation/error as supported ES triggers; a compensation-triggered
         // body start remains an unsupported event-subprocess trigger.
         AssertRejects(
             DefaultElements(),
@@ -130,7 +130,7 @@ public sealed class BpmnEventSubprocessValidationTests
 
     [Fact]
     public void NonInterruptingErrorEventSubprocess_IsRejected() =>
-        // spec 132: error events are always interrupting per BPMN; a non-interrupting error start is a malformed shape.
+        // Error events are always interrupting per BPMN; a non-interrupting error start is a malformed shape.
         AssertRejects(
             DefaultElements(),
             DefaultFlows(),
@@ -176,7 +176,7 @@ public sealed class BpmnEventSubprocessValidationTests
     [Fact]
     public void ErrorEventSubprocess_AlongsideEscalationSibling_BuildsBothCatchers()
     {
-        // spec 132: an error event subprocess coexists with an escalation event subprocess in the same scope; both
+        // An error event subprocess coexists with an escalation event subprocess in the same scope; both
         // catchers are indexed.
         var graph = BpmnGraph.From(Node(
             [
@@ -201,7 +201,7 @@ public sealed class BpmnEventSubprocessValidationTests
 
     [Fact]
     public void TwoErrorEventSubprocesses_SameScope_IsRejected() =>
-        // spec 132: a scope may carry at most one error event subprocess (catch-all, no error-code disambiguation).
+        // A scope may carry at most one error event subprocess (catch-all, no error-code disambiguation).
         AssertRejects(
             [
                 BpmnRuntimeFixture.StartEvent(),
@@ -218,7 +218,7 @@ public sealed class BpmnEventSubprocessValidationTests
             ],
             "at most one");
 
-    // ---- spec 134: message/signal/timer scope-listener validation ----------------------------------------------
+    // ---- Message/signal/timer scope-listener validation --------------------------------------------------------
 
     [Theory]
     [InlineData(BpmnEventDefinitionTypes.Message)]

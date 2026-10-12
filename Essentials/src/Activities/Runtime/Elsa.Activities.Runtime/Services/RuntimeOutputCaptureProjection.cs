@@ -82,7 +82,7 @@ public static class RuntimeWorkflowVariableCaptureWriteBack
 
             // The frame keeps the DECLARED type; the value's policy reflects where the payload actually
             // lives (a custom driver may externalize, which the envelope represents natively). A withheld
-            // capture (spec 188, FR-010) is written as its marker, with the policy that required it, as Set
+            // capture is written as its marker, with the policy that required it, as Set
             // writes one.
             var envelope = encoding switch
             {

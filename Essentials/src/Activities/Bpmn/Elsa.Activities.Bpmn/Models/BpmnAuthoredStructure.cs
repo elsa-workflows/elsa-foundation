@@ -52,7 +52,7 @@ public sealed class BpmnAuthoredStructure
 
     /// <summary>
     /// Container-scoped variables declared by this BPMN process, visible to its descendant activities
-    /// (scoped variable model, ADR 0027).
+    /// (scoped variable model).
     /// </summary>
     [JsonPropertyName("variables")]
     public IReadOnlyCollection<VariableDefinition> Variables { get; }
@@ -61,7 +61,7 @@ public sealed class BpmnAuthoredStructure
     public JsonElement? Diagram { get; }
 
     /// <summary>
-    /// Whether this authored process is a <b>transaction</b> (spec 125). Set by the importer from a
+    /// Whether this authored process is a <b>transaction</b>. Set by the importer from a
     /// <c>&lt;transaction&gt;</c> and by authoring; carried forward onto the compiled executable
     /// <see cref="BpmnStructure.IsTransaction"/>, which drives cancel-end validation and the structure-dependent
     /// <c>Cancelled</c> outcome declaration.
@@ -70,7 +70,7 @@ public sealed class BpmnAuthoredStructure
     public bool IsTransaction { get; }
 
     /// <summary>
-    /// Cross-pool message-flow wiring documentation (spec 136): the resolved <c>&lt;messageFlow&gt;</c> endpoints
+    /// Cross-pool message-flow wiring documentation: the resolved <c>&lt;messageFlow&gt;</c> endpoints
     /// whose send or receive side lives in this process's pool. Authored-side metadata only — the engine delivers
     /// by name (the name-keyed stimulus fabric) and never reads this, the graph validator ignores it, and it is
     /// stripped from the compiled executable <see cref="BpmnStructure"/>.

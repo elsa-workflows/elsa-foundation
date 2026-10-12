@@ -17,7 +17,7 @@ namespace Elsa.Activities.Design.Tests.Api.Support;
 
 /// <summary>
 /// Real TestServer host for the post-migration owner. The mapper is resolved by reflection so this
-/// scaffold compiles before T019 adds the production mapper and fails with an explicit missing-owner
+/// scaffold compiles before the production mapper exists and fails with an explicit missing-owner
 /// diagnostic instead of introducing a test-only production dependency.
 /// </summary>
 public sealed class ActivitiesDesignMinimalApiHost(IHost host) : IAsyncDisposable

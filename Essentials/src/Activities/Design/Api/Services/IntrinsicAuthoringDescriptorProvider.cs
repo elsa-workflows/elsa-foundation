@@ -8,7 +8,7 @@ namespace Elsa.Activities.Design.Api.Services;
 /// <summary>
 /// Surfaces the engine's author-facing intrinsics as built-in authoring-catalog descriptors so the designer
 /// palette can offer them (#929, #1113). The runtime already performs these operations through engine
-/// intrinsics (<c>WorkflowIntrinsicExecutor</c>); per ADR 0045 they are engine-owned and are never CLR
+/// intrinsics (<c>WorkflowIntrinsicExecutor</c>); they are engine-owned and are never CLR
 /// activities. Each descriptor carries an <see cref="ActivityAuthoringIntrinsicView"/> so the authoring
 /// client materializes an <c>AuthoredWorkflowIntrinsic</c> node rather than a catalog activity reference.
 /// </summary>

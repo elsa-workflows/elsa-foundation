@@ -9,7 +9,7 @@ using static Elsa.Activities.Flowchart.Tests.FlowchartConformanceCorpus;
 namespace Elsa.Activities.Flowchart.Tests;
 
 /// <summary>
-/// The determinism byte-lock for the shipping join semantics (ADR 0064), over the same multi-feature run
+/// The determinism byte-lock for the shipping join semantics, over the same multi-feature run
 /// <see cref="FlowchartExecutionDeterminismCharacterizationTests"/> pins for the reachability one: a loop
 /// iteration, a named-outcome decision, and a fork with an implicit join, in one graph.
 /// <para>

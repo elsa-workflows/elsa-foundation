@@ -8,7 +8,7 @@ namespace Elsa.Activities.Runtime.Services;
 
 /// <summary>
 /// Builds the scheduler work items that carry a still-running structural child's staged notifications to its
-/// own committed parent for evaluation (spec 126, seam C). Sibling of <see cref="ChildFaultParentEvaluation"/>:
+/// own committed parent for evaluation (seam C). Sibling of <see cref="ChildFaultParentEvaluation"/>:
 /// the target is derived from the notifying child's committed <c>ParentActivityExecutionId</c> — never named by
 /// the child — and each item routes to <c>WorkflowNotifyParentActivitySchedulerWorkHandler</c> as a dedicated
 /// <see cref="WorkflowExecutionCommandKind.NotifyParentActivity"/> command. Emitted as post-commit intents on the

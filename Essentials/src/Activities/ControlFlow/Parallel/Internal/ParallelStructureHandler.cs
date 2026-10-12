@@ -9,7 +9,7 @@ namespace Elsa.Activities.Parallel.Internal;
 /// <summary>
 /// Design-side handler that projects and compiles the <c>Parallel</c> activity's per-branch child slots.
 /// Lives in the activity module (which references <c>Elsa.Workflows.Design.Core</c>); the runtime
-/// <c>Parallel</c> activity class references no Design types, preserving the Elsa §E2.2 split.
+/// <c>Parallel</c> activity class references no Design types, preserving the runtime/design split.
 /// </summary>
 internal sealed class ParallelStructureHandler : IActivityStructureHandler
 {

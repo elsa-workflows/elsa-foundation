@@ -9,7 +9,7 @@ using Xunit;
 namespace Elsa.Activities.Design.Tests.Unit;
 
 /// <summary>
-/// US4 — IActivityDefinitionHasher behaviour. Determinism, property-order independence,
+/// IActivityDefinitionHasher behaviour. Determinism, property-order independence,
 /// and exclusion of fields that would defeat the hash's purpose.
 /// </summary>
 public sealed class HasherTests

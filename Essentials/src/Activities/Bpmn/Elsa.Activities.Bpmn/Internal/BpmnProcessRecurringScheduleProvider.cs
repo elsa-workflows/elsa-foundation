@@ -6,7 +6,7 @@ using BpmnProcessActivity = Elsa.Activities.Bpmn.Activities.BpmnProcess;
 namespace Elsa.Activities.Bpmn.Internal;
 
 /// <summary>
-/// The <see cref="IRecurringTriggerScheduleProvider"/> for BPMN <b>timer</b> start events (spec 117 D3). It
+/// The <see cref="IRecurringTriggerScheduleProvider"/> for BPMN <b>timer</b> start events. It
 /// recognizes published <see cref="BpmnProcessActivity"/> nodes and emits one <see cref="RecurringScheduleDescriptor"/>
 /// per timer start element, each with the same <c>(StimulusType, StimulusHash)</c> pair
 /// <see cref="BpmnProcessTriggerStimulusProvider"/> emits for that element — so the recurring-trigger pump's

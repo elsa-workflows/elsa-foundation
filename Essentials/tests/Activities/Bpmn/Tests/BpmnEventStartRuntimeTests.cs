@@ -6,7 +6,7 @@ using static Elsa.Activities.Bpmn.Tests.BpmnRuntimeFixture;
 namespace Elsa.Activities.Bpmn.Tests;
 
 /// <summary>
-/// Runtime start-semantics tests for BPMN event-defined start events (spec 117 D6): trigger-delivery vs
+/// Runtime start-semantics tests for BPMN event-defined start events: trigger-delivery vs
 /// direct-invocation seeding and the two deterministic <c>bpmn.start.*</c> faults. Each event start routes through
 /// a probe task so the executed branch is observable and the process persists an intermediate state.
 /// </summary>

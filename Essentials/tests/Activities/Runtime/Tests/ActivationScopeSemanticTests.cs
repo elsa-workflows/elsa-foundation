@@ -12,11 +12,11 @@ using Xunit;
 namespace Elsa.Activities.Runtime.Tests;
 
 /// <summary>
-/// Activation-scope semantics of the production CLR activation path, which ADR 0045 fixed as one fresh activity in one
-/// owned child DI scope per invocation attempt. Moved from the retired activation benchmark (#1668, ADR 0073), whose
+/// Activation-scope semantics of the production CLR activation path, which is fixed as one fresh activity in one
+/// owned child DI scope per invocation attempt. Moved from the retired activation benchmark (#1668), whose
 /// semantic tests asserted these invariants against its own strategy models; these run against
 /// <see cref="ActivityActivator"/> over <see cref="ClrActivityActivator"/>. The benchmark's burst-only and conditional
-/// fast-path candidates were rejected by ADR 0045 and never shipped, so their assertions are not carried over.
+/// fast-path candidates were rejected and never shipped, so their assertions are not carried over.
 /// </summary>
 public sealed class ActivationScopeSemanticTests : IAsyncDisposable
 {

@@ -9,7 +9,7 @@ namespace Elsa.Activities.Flowchart.Tests;
 
 /// <summary>
 /// Regression pins for backward-edge classification when a parallel fork/implicit-join lives inside a loop
-/// body (surfaced during spec 122, BPMN cyclic flows). A correct classifier marks only the single loop-closing
+/// body (surfaced during the BPMN cyclic-flow work). A correct classifier marks only the single loop-closing
 /// edge of a cycle as backward — mirroring the standard compiler back-edge (BpmnGraph.ComputeBackwardFlowIds).
 /// The historical naive rule (<c>CanReach(target, source)</c>) marks EVERY edge of a cycle as backward: because
 /// every node in a cycle reaches every other, <c>fork → branch</c> and <c>branch → join</c> all classify as
@@ -59,7 +59,7 @@ public sealed class FlowchartCyclicJoinTests
     }
 
     /// <summary>
-    /// ADR 0064 WU-1: the join predicate walks the graph's forward projection, not the whole connection set.
+    /// The join predicate walks the graph's forward projection, not the whole connection set.
     /// The cyclic walk cannot distinguish "a token can still get there" from "both nodes sit in the same
     /// loop" — inside a cycle every node reaches every other, in both directions. Removing the loop-closing
     /// edge makes the projection acyclic, so the answer becomes directional again.

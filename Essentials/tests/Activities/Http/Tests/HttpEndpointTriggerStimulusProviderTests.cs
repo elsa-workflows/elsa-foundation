@@ -211,8 +211,8 @@ public sealed class HttpEndpointTriggerStimulusProviderTests
     [Fact]
     public void Describe_ResponseModeSyncLiteral_StampsSyncMode_OnEveryDescriptor()
     {
-        // Spec 089 E-D1: a literal ResponseMode = "Sync" is read via ReadLiteralEnum and rides the binding metadata
-        // on every method descriptor (so a resumed endpoint gets its mode for free — scenario 5.5).
+        // A literal ResponseMode = "Sync" is read via ReadLiteralEnum and rides the binding metadata
+        // on every method descriptor (so a resumed endpoint gets its mode for free).
         var bindings = new Dictionary<string, RuntimeInputBinding>(StringComparer.OrdinalIgnoreCase)
         {
             [nameof(HttpEndpoint.Path)] = LiteralBinding(nameof(HttpEndpoint.Path), "orders/{id}"),
@@ -296,7 +296,7 @@ public sealed class HttpEndpointTriggerStimulusProviderTests
     [Fact]
     public void Describe_CanStartWorkflowFalse_IsRecognizedButYieldsNoDescriptors()
     {
-        // Spec 089 D (T006): a mid-flow endpoint declares itself a non-start — the provider recognizes it (so the
+        // A mid-flow endpoint declares itself a non-start — the provider recognizes it (so the
         // extractor does NOT fail the publish) but produces zero descriptors (so no trigger bindings are indexed).
         var bindings = new Dictionary<string, RuntimeInputBinding>(StringComparer.OrdinalIgnoreCase)
         {

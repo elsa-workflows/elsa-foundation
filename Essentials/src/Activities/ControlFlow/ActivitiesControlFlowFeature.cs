@@ -36,7 +36,7 @@ public class ActivitiesControlFlowFeature : IShellFeature
         services.AddSingleton<IActivityStructureHandler>(new LoopStructureHandler(LoopKind.Do));
         services.AddSingleton<IActivityStructureHandler, ParallelStructureHandler>();
 
-        // Activity-owned Draft validator (FR-034): surfaces duplicate Switch case match values as a
+        // Activity-owned Draft validator: surfaces duplicate Switch case match values as a
         // design-time validation error. Does not block saving; the promotion gate blocks publish.
         services.AddScoped<IDraftValidator, SwitchDuplicateCaseValidator>();
     }

@@ -8,7 +8,7 @@ namespace Elsa.Activities.Design.Reconciliation.Clr.Services;
 
 /// <summary>
 /// An <see cref="IActivityReconciliationSource"/> that contributes activity-version rows read from
-/// CLR assemblies on disk (§2.6.1). The reconciler resolves this from DI alongside every other
+/// CLR assemblies on disk. The reconciler resolves this from DI alongside every other
 /// source and calls <see cref="Read"/>; the scan is driven lazily per call so a re-run picks up
 /// folder changes.
 /// </summary>

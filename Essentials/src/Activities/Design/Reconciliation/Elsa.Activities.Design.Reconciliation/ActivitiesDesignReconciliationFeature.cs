@@ -15,8 +15,8 @@ namespace Elsa.Activities.Design.Reconciliation;
 /// startup task that drives a pass, and the universal <see cref="CollectActivityVersions"/>
 /// that resolves every registered <see cref="IActivityReconciliationSource"/> from DI. Source
 /// modules (CLR scanner, JSON catalog, …) contribute by registering their own
-/// <see cref="IActivityReconciliationSource"/> via their own feature (§2.6.1) — this feature
-/// owns none and is no longer extended by inheritance (FR-021, gate G13).
+/// <see cref="IActivityReconciliationSource"/> via their own feature — this feature
+/// owns none and is no longer extended by inheritance.
 /// </summary>
 [ManifestRuntimeKind(ElsaRuntimeKinds.Server)]
 [ManifestFeatureCategory("Activities")]

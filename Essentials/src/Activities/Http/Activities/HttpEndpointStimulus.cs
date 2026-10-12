@@ -15,7 +15,7 @@ namespace Elsa.Activities.Http.Activities;
 /// the same routing key.
 /// </summary>
 /// <remarks>
-/// The hash is computed over the normalized route template <em>and</em> the lowercased HTTP method (spec 089 B):
+/// The hash is computed over the normalized route template <em>and</em> the lowercased HTTP method:
 /// a node that declares several supported methods yields one descriptor — and therefore one routing key — per
 /// method, so a request only matches the method it was published for. Template normalization is case- and
 /// slash-insensitive on <em>literal</em> segments and parameter names, so <c>orders/{Id}</c> and
@@ -112,7 +112,7 @@ public static partial class HttpEndpointStimulus
     /// republishing the same endpoint produces a stable binding set.
     /// </summary>
     /// <remarks>
-    /// The optional <paramref name="options"/> (authorize/policy/timeout/size-limit, spec 089 C) are stamped onto
+    /// The optional <paramref name="options"/> (authorize/policy/timeout/size-limit) are stamped onto
     /// every descriptor's metadata under the <see cref="HttpEndpointRouting"/> option keys, but they are
     /// <b>non-identity</b>: they never enter <see cref="Hash"/>, so two endpoints that differ only in options
     /// resolve to the same routing key. Absent/default options are omitted from the metadata to keep bindings lean.

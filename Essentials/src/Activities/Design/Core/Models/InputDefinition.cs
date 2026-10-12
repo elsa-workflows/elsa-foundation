@@ -5,7 +5,7 @@ using Elsa.Primitives.Models;
 namespace Elsa.Activities.Design.Core.Models;
 
 /// <summary>
-/// Design-time canvas description of an activity input. Standalone sealed record by FR-030
+/// Design-time canvas description of an activity input. Standalone sealed record by design
 /// — duplicates the structural shape of <see cref="ArgumentDefinition"/> rather than inheriting,
 /// keeping the input signature clear and decoupled.
 /// </summary>
@@ -13,8 +13,7 @@ namespace Elsa.Activities.Design.Core.Models;
 /// <para>
 /// <see cref="PropertyInfo"/> and <see cref="UISpecifications"/> are opaque, Studio-authored UI metadata
 /// held as a verbatim <see cref="JsonElement"/> — never a CLR-typed <c>object</c> graph. Keeping them opaque
-/// removes the last open-object-polymorphism dependency from the canonical StateSource (ADR 0035 D3, amends
-/// constitution §E2.9).
+/// removes the last open-object-polymorphism dependency from the canonical StateSource.
 /// </para>
 /// <para>
 /// <see cref="IsSensitive"/> and <see cref="IsCredential"/> carry the activity's sensitivity declaration

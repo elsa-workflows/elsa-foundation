@@ -43,7 +43,7 @@ public sealed class HttpEndpointTriggerStimulusProvider : IActivityTriggerStimul
             return ActivityTriggerStimulusResult.NotRecognized;
 
         // A mid-flow endpoint (CanStartWorkflow = false or unauthored) is recognized but declares itself a non-start:
-        // no bindings, and — because the result is Recognized rather than NotRecognized — no publish failure (spec 089 D).
+        // no bindings, and — because the result is Recognized rather than NotRecognized — no publish failure.
         // Starting is opt-in: only an explicit true proceeds to validate and describe the routing literals.
         if (ReadLiteralBool(node, CanStartWorkflowInput) is not true)
             return ActivityTriggerStimulusResult.Recognized([]);
@@ -198,7 +198,7 @@ public sealed class HttpEndpointTriggerStimulusProvider : IActivityTriggerStimul
                 throw new ArgumentException(
                     $"HTTP endpoint trigger node '{node.ExecutableNodeId}' has a literal '{inputName}' that is not a TimeSpan.");
 
-            // Review C2: a non-positive timeout would arm CancelAfter with an invalid value at request time
+            // A non-positive timeout would arm CancelAfter with an invalid value at request time
             // (or cancel every request instantly) — an authoring error, so the publish fails here.
             if (parsed <= TimeSpan.Zero)
                 throw new ArgumentException(
@@ -221,7 +221,7 @@ public sealed class HttpEndpointTriggerStimulusProvider : IActivityTriggerStimul
                 throw new ArgumentException(
                     $"HTTP endpoint trigger node '{node.ExecutableNodeId}' has a literal '{inputName}' that is not an integer.");
 
-            // Review C2 (companion): a non-positive size limit is meaningless and would otherwise be silently
+            // Likewise, a non-positive size limit is meaningless and would otherwise be silently
             // dropped by the read side's strict parse — fail the publish where the authoring error is made.
             if (value <= 0)
                 throw new ArgumentException(

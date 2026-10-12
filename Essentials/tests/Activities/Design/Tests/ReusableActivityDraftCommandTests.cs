@@ -906,8 +906,8 @@ public sealed class ReusableActivityDraftCommandTests
     }
 
     /// <summary>
-    /// A schema write refusal saved nothing, so its outcome is known: it leaves as itself, for the API to answer 409
-    /// (spec 180, FR-016a), and is never the 500 of an apply whose outcome is unknown.
+    /// A schema write refusal saved nothing, so its outcome is known: it leaves as itself, for the API to answer 409,
+    /// and is never the 500 of an apply whose outcome is unknown.
     /// </summary>
     [Fact]
     public async Task Fork_apply_lets_a_schema_write_refusal_leave_as_itself()

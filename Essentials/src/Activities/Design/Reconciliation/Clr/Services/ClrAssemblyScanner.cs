@@ -16,13 +16,13 @@ using System.Text.Json;
 namespace Elsa.Activities.Design.Reconciliation.Clr.Services;
 
 /// <summary>
-/// Reflection-only scanner (R5) that reads activity-bearing assemblies from a folder via a
+/// Reflection-only scanner that reads activity-bearing assemblies from a folder via a
 /// <see cref="MetadataLoadContext"/> and produces one <see cref="ActivityVersionReconciliationModel"/>
 /// per discovered <c>IActivity</c> implementation. No type is loaded into the execution context, so
 /// scanning never runs author code or pollutes the default <see cref="AssemblyLoadContext"/>.
 /// </summary>
 /// <remarks>
-/// Resilient scan (FR-023): a DLL that exposes no activities is skipped silently; a DLL that fails
+/// Resilient scan: a DLL that exposes no activities is skipped silently; a DLL that fails
 /// to load or reflect is logged and skipped; the pass never aborts wholesale. Per-activity faults —
 /// an invalid <c>[Version]</c> or an unresolvable assembly version — still throw (the
 /// <see cref="ActivityTypeVersionResolver"/> raises a domain exception) so a misconfigured activity is
@@ -853,7 +853,7 @@ public sealed class ClrAssemblyScanner(
     // registry can't resolve them. The element alias is produced by the shared TypeAliasConvention —
     // a reserved bare alias for BCL primitives (string→"String", int→"Int32"), else the dotted FullName.
     // The framework's runtime registration pass registers activity I/O CLR types under the SAME
-    // convention, so these aliases resolve back to the real CLR type at compile time (FR-004b).
+    // convention, so these aliases resolve back to the real CLR type at compile time.
     private static TypeReference ToTypeReference(Type? valueType) =>
         valueType is null
             ? new TypeReference("Object")

@@ -6,9 +6,9 @@ using Elsa.Workflows.Runtime.Core.Models;
 namespace Elsa.Activities.Bpmn.Internal;
 
 /// <summary>
-/// Well-known trigger-binding metadata keys the BPMN start-trigger surface stamps (spec 117). The extractor
+/// Well-known trigger-binding metadata keys the BPMN start-trigger surface stamps. The extractor
 /// carries <see cref="TriggerStimulusDescriptor.Metadata"/> verbatim onto <c>WorkflowTriggerBinding.Metadata</c>,
-/// which the stimulus router forwards through the start path (D4) so <c>BpmnExecutionEngine.StartAsync</c> can
+/// which the stimulus router forwards through the start path so <c>BpmnExecutionEngine.StartAsync</c> can
 /// resolve which event-defined start element a trigger delivery targeted.
 /// </summary>
 public static class BpmnStartTrigger
@@ -18,7 +18,7 @@ public static class BpmnStartTrigger
 }
 
 /// <summary>
-/// Derives the stimulus identity of a BPMN <b>message/signal</b> start element (spec 117 D2). A message/signal
+/// Derives the stimulus identity of a BPMN <b>message/signal</b> start element. A message/signal
 /// start collapses onto the engine's named-event routing pair so <b>one</b> event delivery both starts matching
 /// processes and resumes waiting catch events. The derivation is intentionally identical to
 /// <c>Elsa.Activities.Primitives.Activities.EventStimulus</c> — the same <c>StimulusType</c> and SHA-256 hash of
@@ -62,7 +62,7 @@ public static class BpmnMessageStartStimulus
 }
 
 /// <summary>
-/// Derives the stimulus identity and recurring-schedule spec of a BPMN <b>timer</b> start element (spec 117 D3).
+/// Derives the stimulus identity and recurring-schedule spec of a BPMN <b>timer</b> start element.
 /// Timer stimuli are pump-internal (never externally sent), so the element id is folded into the hash to give
 /// per-element uniqueness within a process, under a BPMN-owned <see cref="StimulusType"/> that fully isolates it
 /// from the <c>Timer</c>/<c>Cron</c> activities. The stimulus provider (trigger binding) and the recurring
@@ -78,7 +78,7 @@ public static class BpmnTimerStartStimulus
     public readonly record struct Spec(RecurringScheduleKind Kind, string Expression);
 
     /// <summary>
-    /// Resolves a timer start element's recurrence spec from its event-definition properties (spec 117 D3):
+    /// Resolves a timer start element's recurrence spec from its event-definition properties:
     /// exactly one of <see cref="BpmnEventDefinitionProperties.Interval"/> (ISO-8601 duration) xor
     /// <see cref="BpmnEventDefinitionProperties.Cron"/>. Missing-both or both-present throws, failing the publish.
     /// </summary>

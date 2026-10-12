@@ -10,15 +10,15 @@ namespace Elsa.Activities.Design.Reconciliation.Json.Services;
 
 /// <summary>
 /// An <see cref="IActivityReconciliationSource"/> that contributes activity-version rows read from one
-/// or more JSON files on disk (§2.6.1). The reconciler resolves this from DI alongside every other
+/// or more JSON files on disk. The reconciler resolves this from DI alongside every other
 /// source and calls <see cref="Read"/>; files are read lazily per call so a re-run picks up edits.
 /// </summary>
 /// <remarks>
 /// The either/or shape of <see cref="JsonReconciliationOptions"/> (a single <c>FilePath</c> or an
 /// ordered <c>Files</c> list) and the required <c>SourceId</c> are validated by
 /// <see cref="JsonActivityReconciliationFeature"/> at registration, so this source can assume a valid
-/// configuration and simply read whichever was supplied. An entry whose input declares <c>isCredential</c> is refused
-/// (spec 188, research R5): in phase 0 the credential declaration is reserved for
+/// configuration and simply read whichever was supplied. An entry whose input declares <c>isCredential</c> is refused:
+/// for now the credential declaration is reserved for
 /// <c>[ActivityInput(IsCredential = true)]</c> on a CLR activity, which CLR reconciliation checks can be bound to a
 /// secret reference, and a JSON entry has no such check. The refusal, the shared
 /// <see cref="CredentialInputDeclaration"/> check, is made here rather than in the replaceable

@@ -1,6 +1,6 @@
 namespace Elsa.Activities.Primitives.Activities;
 
-/// <summary>Stable wire identifiers owned by the <see cref="PublishEvent"/> durable-first publish surface (spec 135).</summary>
+/// <summary>Stable wire identifiers owned by the <see cref="PublishEvent"/> durable-first publish surface.</summary>
 public static class PublishStimulusConstants
 {
     /// <summary>The runtime post-commit intent kind a staged <see cref="PublishEvent"/> rides to deliver its stimulus after commit.</summary>

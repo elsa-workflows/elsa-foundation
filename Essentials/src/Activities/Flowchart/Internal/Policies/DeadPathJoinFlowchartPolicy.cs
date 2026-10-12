@@ -4,7 +4,7 @@ using Elsa.Activities.Flowchart.Models;
 namespace Elsa.Activities.Flowchart.Internal.Policies;
 
 /// <summary>
-/// ADR 0064's join semantics: a target waits until <b>every</b> inbound connection has an arrival for its
+/// The dead-path join semantics: a target waits until <b>every</b> inbound connection has an arrival for its
 /// <c>(node, scope, iteration)</c> key, live or dead, and is scheduled when at least one of them is live.
 /// <para>
 /// Note what this does not consult: no graph walk, no live-work set, no execution scope beyond the key the

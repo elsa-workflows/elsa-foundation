@@ -14,7 +14,7 @@ using Xunit;
 namespace Elsa.Activities.Runtime.Tests;
 
 /// <summary>
-/// Durable-first coverage for the <see cref="PublishEvent"/> send surface (spec 135): the activity stages a publish
+/// Durable-first coverage for the <see cref="PublishEvent"/> send surface: the activity stages a publish
 /// intent on its own commit and completes immediately (fire-and-continue) — it never routes in-execution; the staging
 /// buffer builds a <c>PublishStimulusIntentKind</c> intent carrying the shared <c>Event</c> stimulus identity; and the
 /// post-commit handler routes it in <see cref="StimulusRoutingMode.StartAndResume"/> mode with the carried values.

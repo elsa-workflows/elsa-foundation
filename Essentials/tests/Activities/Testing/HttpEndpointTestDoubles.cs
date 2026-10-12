@@ -89,7 +89,7 @@ public sealed class FakeRouteTable : IRouteTable, IRouteTableSnapshotProvider
 /// A minimal test authentication scheme (the standard ASP.NET test-handler pattern) honoring an
 /// <c>Authorization: Test &lt;name&gt;</c> header: any such header authenticates a caller named <c>&lt;name&gt;</c>;
 /// its absence yields no result (anonymous). It stands in for the shell's authentication stack so the real
-/// <c>AuthenticationBasedHttpEndpointAuthorizationHandler</c> can resolve a principal (spec 089 C, T010). Hoisted
+/// <c>AuthenticationBasedHttpEndpointAuthorizationHandler</c> can resolve a principal. Hoisted
 /// out of the integration fixture so it can be shared (#592 item 18).
 /// </summary>
 public sealed class TestAuthHandler(

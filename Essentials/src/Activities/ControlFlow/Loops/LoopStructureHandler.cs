@@ -7,7 +7,7 @@ namespace Elsa.Activities.ControlFlow.Loops;
 /// <summary>
 /// Design-side handler that projects and compiles a loop activity's single body slot, registered once per
 /// <see cref="LoopKind"/>. Lives in the activity module (which references <c>Elsa.Workflows.Design.Core</c>); the
-/// runtime loop activity classes reference no Design types, preserving the Elsa §E2.2 split.
+/// runtime loop activity classes reference no Design types, preserving the runtime/design split.
 /// </summary>
 internal sealed class LoopStructureHandler(LoopKind loop) : IActivityStructureHandler
 {

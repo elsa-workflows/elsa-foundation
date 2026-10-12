@@ -28,7 +28,7 @@ public sealed class FlowchartAuthoredStructure
 
     /// <summary>
     /// Container-scoped variables declared by this Flowchart, visible to its descendant activities
-    /// (scoped variable model, ADR 0027).
+    /// (scoped variable model).
     /// </summary>
     [JsonPropertyName("variables")]
     public IReadOnlyCollection<VariableDefinition> Variables { get; }

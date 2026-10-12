@@ -22,7 +22,7 @@ namespace Elsa.Activities.Http;
 /// contributes the <see cref="HttpEndpoint"/> start-trigger's stimulus provider to the publish-time trigger
 /// extractor, and mounts the inbound <see cref="HttpEndpointMiddleware"/> into the shell's request pipeline
 /// through the CShells middleware seam (<see cref="IMiddlewareShellFeature"/>) — enabling the feature is all a
-/// host needs; no manual <c>UseMiddleware</c> call (spec 089 FR-003).
+/// host needs; no manual <c>UseMiddleware</c> call.
 /// </summary>
 /// <remarks>
 /// Depends on <c>WorkflowsRuntimeHttp</c> (not just <c>Http</c>): that feature contributes the route-table
@@ -66,7 +66,7 @@ public sealed class ActivitiesHttpFeature : IShellFeature, IMiddlewareShellFeatu
             // the workflow's cancellation token; the ambient client timeout is disabled to avoid double-timeout.
             .ConfigureHttpClient(client => client.Timeout = System.Threading.Timeout.InfiniteTimeSpan)
             // The factory's default logging handlers carry raw request and response header values as structured state
-            // at Trace, where a state-serializing sink would print an Authorization value (spec 188 FR-019). They are
+            // at Trace, where a state-serializing sink would print an Authorization value. They are
             // replaced by one logger that writes the same request lines without any header.
             .RemoveAllLoggers()
             .AddLogger<HttpActivityClientLogger>();
@@ -104,7 +104,7 @@ public sealed class ActivitiesHttpFeature : IShellFeature, IMiddlewareShellFeatu
     /// <c>HttpContext.User</c> before this shell branch executes. Because there is no shell-pipeline auth
     /// middleware to order against, an explicit <c>Order</c> would buy nothing here; the authorization handler
     /// (<c>AuthenticationBasedHttpEndpointAuthorizationHandler</c>) additionally authenticates explicitly rather
-    /// than assuming that ordering (spec 089 sub-unit C, T008). Give this feature an explicit order only if a
+    /// than assuming that ordering. Give this feature an explicit order only if a
     /// second shell <em>middleware feature</em> is added that must run before or after the endpoint middleware.
     /// </para>
     /// </summary>

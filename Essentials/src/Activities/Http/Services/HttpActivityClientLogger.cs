@@ -7,7 +7,7 @@ namespace Elsa.Activities.Http.Services;
 
 /// <summary>
 /// The one logger of the named <see cref="HttpActivityConstants.HttpClientName"/> client, which replaces the
-/// factory's default logging handlers (spec 188 FR-019, research R17). It writes the request lines those handlers
+/// factory's default logging handlers. It writes the request lines those handlers
 /// wrote, minus every header: the method and the URI on start, the status code and elapsed time on a response, and the
 /// elapsed time and exception type name on a failure. It never logs a header, a header value, an exception message or
 /// an exception object, so a header value enters neither its message text nor its structured state.

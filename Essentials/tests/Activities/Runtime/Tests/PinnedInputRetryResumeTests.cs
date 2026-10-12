@@ -59,7 +59,7 @@ public sealed partial class WorkflowInvokeActivitySchedulerWorkHandlerTests
     }
 
     /// <summary>
-    /// A secret-bound input is resolved at each activation and never restored from persisted state (spec 188, T019):
+    /// A secret-bound input is resolved at each activation and never restored from persisted state:
     /// invoke delivers the value, the persisted snapshot keeps only the withheld reference, and a value changed while
     /// the activity was suspended reaches it on resume.
     /// </summary>
@@ -98,7 +98,7 @@ public sealed partial class WorkflowInvokeActivitySchedulerWorkHandlerTests
 
     /// <summary>
     /// A resolver that throws instead of returning a result faults the activity with <c>ResolverFailed</c>, and nothing
-    /// it threw reaches the persisted fault or the incident (spec 188, FR-003). A cancellation-typed exception from the
+    /// it threw reaches the persisted fault or the incident. A cancellation-typed exception from the
     /// resolver's own timeout is no exception: the activation's token is live, so it is not the activation's cancellation.
     /// </summary>
     [Theory]

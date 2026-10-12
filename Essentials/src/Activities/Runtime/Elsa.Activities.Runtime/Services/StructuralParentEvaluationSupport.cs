@@ -14,8 +14,8 @@ using Microsoft.Extensions.DependencyInjection;
 namespace Elsa.Activities.Runtime.Services;
 
 /// <summary>
-/// Shared machinery for the structural parent-evaluation handlers (child completion/fault — spec 112/115 —
-/// and child→parent notification — spec 126). Consolidates the transient reconstruction of a structural
+/// Shared machinery for the structural parent-evaluation handlers (child completion/fault
+/// and child→parent notification). Consolidates the transient reconstruction of a structural
 /// parent from its pinned snapshot and the seam-A child-subtree cancellation planning + single-commit
 /// change-set projection, so the completion handler and the notification handler share one mutation home
 /// (DRY; no duplicated validation or terminalization logic).
@@ -38,7 +38,7 @@ internal static class StructuralParentEvaluationSupport
     /// bookmark-resume evaluations do not), the inputs are re-materialized from live committed variable
     /// frames and the activity is re-activated on the fresh snapshot, so a loop condition observes state the
     /// completed child mutated (issue #977). The fresh snapshot is transient — the pinned
-    /// <c>state.InputSnapshot</c> is never rewritten (ADR 0045).
+    /// <c>state.InputSnapshot</c> is never rewritten.
     /// </summary>
     public static async ValueTask<ConstructedActivity> ConstructActivityAsync(
         IServiceProvider serviceProvider,
@@ -112,7 +112,7 @@ internal static class StructuralParentEvaluationSupport
     }
 
     /// <summary>
-    /// Loads a structural parent's direct, non-terminal child executions (spec 119 D4) for an opt-in
+    /// Loads a structural parent's direct, non-terminal child executions for an opt-in
     /// <c>IRuntimeLiveChildActivityConsumer</c> parent, so its structural callback can resolve a losing
     /// sibling's node id (and iteration id) to its live activity-execution id before staging a seam-A subtree
     /// cancellation. Terminal children are excluded — they are never cancellation targets.
@@ -135,7 +135,7 @@ internal static class StructuralParentEvaluationSupport
     }
 
     /// <summary>
-    /// Validates and plans the seam-A (spec 112) child-subtree cancellations a structural callback staged.
+    /// Validates and plans the seam-A child-subtree cancellations a structural callback staged.
     /// Structural misuse (unknown target, non-child target, duplicate, terminal continuation) faults the
     /// evaluation; a target that is already terminal is a legal first-completion-wins race and is skipped.
     /// The exact validation and message text are preserved from the child-completion handler so seam-A
@@ -208,7 +208,7 @@ internal static class StructuralParentEvaluationSupport
     }
 
     /// <summary>
-    /// Projects planned subtree cancellations (spec 112) onto the typed change-set slots of the one commit
+    /// Projects planned subtree cancellations onto the typed change-set slots of the one commit
     /// that also persists the parent's continuation (single-commit atomicity).
     /// </summary>
     public static async ValueTask<SubtreeCancellationCommitChanges> BuildSubtreeCancellationChangesAsync(

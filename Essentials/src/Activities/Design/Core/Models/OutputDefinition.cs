@@ -5,14 +5,13 @@ using Elsa.Primitives.Models;
 namespace Elsa.Activities.Design.Core.Models;
 
 /// <summary>
-/// Design-time canvas description of an activity output. Standalone sealed record by FR-030
+/// Design-time canvas description of an activity output. Standalone sealed record by design
 /// — duplicates the structural shape of <see cref="ArgumentDefinition"/> rather than inheriting,
 /// keeping the output signature clear and decoupled.
 /// </summary>
 /// <remarks>
 /// <see cref="PropertyInfo"/> and <see cref="UISpecifications"/> are opaque, Studio-authored UI metadata
-/// held as a verbatim <see cref="JsonElement"/> — never a CLR-typed <c>object</c> graph (ADR 0035 D3, amends
-/// constitution §E2.9).
+/// held as a verbatim <see cref="JsonElement"/> — never a CLR-typed <c>object</c> graph.
 /// </remarks>
 public sealed record OutputDefinition(
     string ReferenceKey,

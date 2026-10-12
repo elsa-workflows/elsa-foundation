@@ -10,7 +10,7 @@ namespace Elsa.Activities.Switch.Internal;
 /// Design-side handler that projects and compiles the <c>Switch</c> activity's per-case branch slots and
 /// its <c>Default</c> branch slot. Lives in the activity module (which references
 /// <c>Elsa.Workflows.Design.Core</c>); the runtime <c>Switch</c> activity class references no Design
-/// types, preserving the Elsa §E2.2 split.
+/// types, preserving the runtime/design split.
 /// </summary>
 internal sealed class SwitchStructureHandler : IActivityStructureHandler
 {

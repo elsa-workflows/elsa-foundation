@@ -10,7 +10,7 @@ using BpmnProcessActivity = Elsa.Activities.Bpmn.Activities.BpmnProcess;
 namespace Elsa.Activities.Bpmn.Tests;
 
 /// <summary>
-/// Validation coverage for spec 125 transactions: the transaction placement rules (subprocess-only, bound child,
+/// Validation coverage for transactions: the transaction placement rules (subprocess-only, bound child,
 /// no loop characteristics), the cancel-end placement rule (only inside a transaction), and the cancel-boundary
 /// rules (transaction host only, at most one per host). A valid transaction — nested (cancel end) and parent
 /// (transaction element + cancel boundary) — validates cleanly.

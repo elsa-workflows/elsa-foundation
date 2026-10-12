@@ -16,10 +16,10 @@ namespace Elsa.Activities.Runtime.Tests;
 
 /// <summary>
 /// The evaluated-value evidence record of an activity input, end to end from materialization to the run inspector's
-/// view (spec 188, T070). Studio shows an evaluated value only when that record is not flagged sensitive, so an input
+/// view. Studio shows an evaluated value only when that record is not flagged sensitive, so an input
 /// whose effective policy is sensitive, or requires encryption, must be flagged, and the value must reach neither the
 /// view nor the inspection projection. A sensitive input that is not a credential may hold its value in the input
-/// snapshot (spec FR-009); a value that requires encryption is persisted nowhere (FR-010).
+/// snapshot; a value that requires encryption is persisted nowhere.
 /// </summary>
 public sealed class ActivityInputEvidenceSensitivityTests : IAsyncDisposable
 {

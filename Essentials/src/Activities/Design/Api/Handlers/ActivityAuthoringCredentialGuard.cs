@@ -5,7 +5,7 @@ using Elsa.Primitives.Diagnostics;
 namespace Elsa.Activities.Design.Api.Handlers;
 
 /// <summary>
-/// Refuses a credential declaration on an activity version added through this API (spec 188, research R5), with the
+/// Refuses a credential declaration on an activity version added through this API, with the
 /// shared <see cref="CredentialInputDeclaration"/> check raised as an <see cref="ActivityAuthoringException"/>. A
 /// sensitive declaration is accepted.
 /// </summary>

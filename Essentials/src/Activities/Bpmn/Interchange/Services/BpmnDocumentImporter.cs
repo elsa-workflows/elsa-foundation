@@ -48,16 +48,16 @@ public sealed class BpmnDocumentImporter : IBpmnDocumentImporter
     /// <summary>Placeholder activity version id for a message/signal catch event's synthesized <c>Event</c> child (matches <c>Event.ActivityType</c>).</summary>
     public const string DefaultEventActivityVersionId = "Elsa.Event";
 
-    /// <summary>Placeholder activity version id for a bound call activity's synthesized <c>DispatchWorkflow</c> child (spec 133 D5; matches <c>DispatchWorkflow.ActivityType</c>). Hosts resolve the real catalog row later.</summary>
+    /// <summary>Placeholder activity version id for a bound call activity's synthesized <c>DispatchWorkflow</c> child (matches <c>DispatchWorkflow.ActivityType</c>). Hosts resolve the real catalog row later.</summary>
     public const string DefaultDispatchWorkflowActivityVersionId = "Elsa.DispatchWorkflow";
 
-    /// <summary>Placeholder activity version id for a message throw/end or sendTask's synthesized <c>PublishEvent</c> child (spec 135; matches <c>PublishEvent.ActivityType</c>). Hosts resolve the real catalog row later.</summary>
+    /// <summary>Placeholder activity version id for a message throw/end or sendTask's synthesized <c>PublishEvent</c> child (matches <c>PublishEvent.ActivityType</c>). Hosts resolve the real catalog row later.</summary>
     public const string DefaultPublishEventActivityVersionId = "Elsa.PublishEvent";
 
-    /// <summary>The element property key carrying a call activity's foreign BPMN <c>calledElement</c> id (spec 133 D5).</summary>
+    /// <summary>The element property key carrying a call activity's foreign BPMN <c>calledElement</c> id.</summary>
     public const string CalledElementPropertyKey = LibInterchange.BpmnXmlReader.CalledElementPropertyKey;
 
-    /// <summary>The element property key carrying a sendTask/receiveTask's resolved message name (spec 135).</summary>
+    /// <summary>The element property key carrying a sendTask/receiveTask's resolved message name.</summary>
     public const string MessageNamePropertyKey = LibInterchange.BpmnXmlReader.MessageNamePropertyKey;
 
     /// <summary>The Elsa extension attribute naming the workflow definition a bound call activity dispatches.</summary>

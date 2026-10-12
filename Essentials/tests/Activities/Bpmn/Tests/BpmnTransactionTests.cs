@@ -14,8 +14,8 @@ using BpmnProcessActivity = Elsa.Activities.Bpmn.Activities.BpmnProcess;
 namespace Elsa.Activities.Bpmn.Tests;
 
 /// <summary>
-/// End-to-end coverage for spec 125 transactions + cancel events: a cancel end event stops other live work,
-/// replays the scope's registered compensables newest-first (riding the spec-124 machinery), and completes the
+/// End-to-end coverage for transactions + cancel events: a cancel end event stops other live work,
+/// replays the scope's registered compensables newest-first (riding the compensation machinery), and completes the
 /// process with the distinguishable <c>Cancelled</c> outcome; an empty log completes immediately; the parent maps
 /// a transaction child's Cancelled completion to its cancel boundary (or faults when none is attached); a
 /// transaction completing Done behaves like a plain subprocess; a handler fault mid-cancel faults the composite;
@@ -260,7 +260,7 @@ public sealed class BpmnTransactionTests
     [Fact]
     public async Task DoneTransaction_WithCompensationBoundary_RegistersCompensable_AndComposesWithSpec124()
     {
-        // spec-124 composition: a transaction element carrying its OWN compensation boundary registers a
+        // Compensation composition: a transaction element carrying its OWN compensation boundary registers a
         // compensable on Done completion (a completed transaction is compensable as a unit). start → txn(Done,
         // compensation boundary cb-txn → handler-txn) → throw(compensate) → end; the throw replays handler-txn.
         await using var fixture = await CreateFixtureAsync(idCount: 20);

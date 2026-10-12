@@ -13,7 +13,7 @@ using Xunit;
 namespace Elsa.Activities.Runtime.Tests;
 
 /// <summary>
-/// How the masking test activities fail (spec 188, slice 8): at which step, and whether they throw the exception
+/// How the masking test activities fail: at which step, and whether they throw the exception
 /// <see cref="Exception"/> builds, or return the fault <see cref="Fault"/> builds, from the value their secret-bound
 /// input was hydrated with. By default the exception's message and its inner exception's message carry the value, and so
 /// does the fault's message. Once <see cref="Cancellation"/> is set they cancel the work instead, and once

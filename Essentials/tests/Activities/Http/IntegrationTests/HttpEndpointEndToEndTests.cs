@@ -9,7 +9,7 @@ using Elsa.Workflows.Runtime.Http.Exceptions;
 namespace Elsa.Activities.Http.IntegrationTests;
 
 /// <summary>
-/// Acceptance for spec 089 sub-unit A User Story 1 (HTTP endpoint parity, async/202 baseline), proven at the
+/// Acceptance for HTTP endpoint parity (async/202 baseline), proven at the
 /// host level over a real ASP.NET Core pipeline (see <see cref="HttpEndpointHostFixture"/>). These tests exercise
 /// the full inbound path — request → <c>HttpEndpointMiddleware</c> → real stimulus router → real start dispatcher
 /// → in-process agent → durable state — with no fakes, and assert both the 202/404/pass-through response contract
@@ -29,7 +29,7 @@ public sealed class HttpEndpointEndToEndTests : IAsyncLifetime
     [Fact]
     public async Task MatchingRequest_StartsWorkflow_RepliesAccepted_AndTheRunObservesTheLiveRequest()
     {
-        // SupportedMethods is routing-significant now (spec 089 B): a POST endpoint must author ["POST"] or it
+        // SupportedMethods is routing-significant now: a POST endpoint must author ["POST"] or it
         // 404s under the GET default.
         await _fixture.PublishHttpEndpointWorkflowAsync("artifact-orders", Path, ResultOutputName, "POST");
 
@@ -79,7 +79,7 @@ public sealed class HttpEndpointEndToEndTests : IAsyncLifetime
     [Fact]
     public async Task TemplatedEndpoint_MatchingMethodAndPath_Starts_AndTheRunObservesExtractedRouteData()
     {
-        // Spec US2: publish orders/{id} for GET,DELETE. A GET on a concrete path matches, the run starts, and the
+        // Publish orders/{id} for GET,DELETE. A GET on a concrete path matches, the run starts, and the
         // durable Result carries the extracted route value id=42.
         await _fixture.PublishHttpEndpointWorkflowAsync("artifact-templated", "orders/{id}", ResultOutputName, "GET", "DELETE");
 
@@ -108,7 +108,7 @@ public sealed class HttpEndpointEndToEndTests : IAsyncLifetime
     [Fact]
     public async Task TwoWorkflowsOnTheSameTemplateAndMethod_FailsTheSecondPublish_PreWrite_AndFirstKeepsServing()
     {
-        // Spec US2 + issue #592 item 2: a (template, GET) claimed by two distinct workflow definitions is an
+        // Issue #592 item 2: a (template, GET) claimed by two distinct workflow definitions is an
         // authoring error caught at PUBLISH time, on the indexer's PRE-write validation seam — the second
         // publish fails with the durable index untouched, rather than the collision persisting and only
         // surfacing as a request-time 409.
@@ -127,7 +127,7 @@ public sealed class HttpEndpointEndToEndTests : IAsyncLifetime
         Assert.Single(await ReadStartedIdsAsync(response));
     }
 
-    // ---- Spec 089 sub-unit C (T010): authorization, ParsedContent, per-endpoint size limit end to end ----
+    // ---- Authorization, ParsedContent, per-endpoint size limit end to end ----
 
     [Fact]
     public async Task AuthorizedEndpoint_AnonymousRequest_Replies401_AndStartsNoInstance()
@@ -172,7 +172,7 @@ public sealed class HttpEndpointEndToEndTests : IAsyncLifetime
         Assert.Equal(HttpStatusCode.Accepted, response.StatusCode);
         var workflowExecutionId = Assert.Single(await ReadStartedIdsAsync(response));
 
-        // The Result carries the raw body; ParsedContent is no longer persisted on it (spec 089 efficiency #9).
+        // The Result carries the raw body; ParsedContent is no longer persisted on it.
         var capturedResult = await _fixture.ReadResultProjectionAsync(workflowExecutionId, "Request");
         var model = HttpEndpointHostFixture.DeserializeRequest(capturedResult);
         Assert.Equal("""{"orderId":7,"customer":"acme"}""", model.Body);
@@ -187,7 +187,7 @@ public sealed class HttpEndpointEndToEndTests : IAsyncLifetime
     [Fact]
     public async Task ExplicitJsonNullBody_SurfacesParsedContentAsAJsonNull_DistinctFromNoContent()
     {
-        // Spec 089 #16: an explicit JSON `null` body must stay distinguishable from "no content". The activity
+        // An explicit JSON `null` body must stay distinguishable from "no content". The activity
         // derives it to a JsonElement of kind Null (a present value), not CLR null.
         await _fixture.PublishHttpEndpointWorkflowAsync("artifact-parse-null", "parse/null", ResultOutputName, "POST");
 

@@ -9,7 +9,7 @@ using BpmnProcessActivity = Elsa.Activities.Bpmn.Activities.BpmnProcess;
 namespace Elsa.Activities.Bpmn.Tests;
 
 /// <summary>
-/// spec 122: backward (loop-back) edge classification on <see cref="BpmnGraph"/>. A backward edge is the
+/// Backward (loop-back) edge classification on <see cref="BpmnGraph"/>. A backward edge is the
 /// standard DFS back edge (an edge to a node still on the DFS stack), so only the loop-closing flow is
 /// classified — never the forward edges of the cycle — and the set is deterministic and start-order stable.
 /// Also covers that the pre-existing structural rules still constrain where a loop-back may land.

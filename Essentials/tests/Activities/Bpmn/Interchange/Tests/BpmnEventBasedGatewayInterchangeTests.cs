@@ -12,7 +12,7 @@ using BpmnProcessActivity = Elsa.Activities.Bpmn.Activities.BpmnProcess;
 namespace Elsa.Activities.Bpmn.Interchange.Tests;
 
 /// <summary>
-/// Spec 119 D6 — interchange for the event-based gateway: the element round-trips through export→import
+/// Interchange for the event-based gateway: the element round-trips through export→import
 /// (the exporter's local-name fallback emits <c>&lt;eventBasedGateway&gt;</c> and the importer maps it back),
 /// and the graph validation rules surface on the analyze/commit path when an imported gateway targets a
 /// non-catch element.

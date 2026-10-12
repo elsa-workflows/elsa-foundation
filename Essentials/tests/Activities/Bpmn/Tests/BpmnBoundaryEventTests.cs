@@ -16,7 +16,7 @@ using EventActivity = Elsa.Activities.Primitives.Activities.Event;
 namespace Elsa.Activities.Bpmn.Tests;
 
 /// <summary>
-/// End-to-end coverage for spec 120 boundary events: a timer/message/signal boundary arms a suspending
+/// End-to-end coverage for boundary events: a timer/message/signal boundary arms a suspending
 /// listener child alongside the host's bound child (host-completes-first tears the listener down, an
 /// interrupting listener tears the host down, a non-interrupting listener runs alongside it), and an error
 /// boundary absorbs the host's child fault through seam B instead of faulting the composite.
@@ -198,10 +198,10 @@ public sealed class BpmnBoundaryEventTests
     [Fact]
     public async Task ErrorBoundary_RoutesToTask_AbsorbsFault_TaskRunsAndCompletes()
     {
-        // spec 132 (FR-5): the SHIPPED spec-120 latent bug — an error boundary whose outbound routes to a TASK (not
+        // The SHIPPED latent bug — an error boundary whose outbound routes to a TASK (not
         // an end event) schedules that task, so the fault evaluation DEFERS. Before the #989 metadata-leak fix this
         // misattributed the original fault to the newly scheduled boundary task and faulted the composite; every
-        // shipped spec-120 test routed the boundary to an end event, hiding it. Now: fault absorbed, boundary task
+        // shipped boundary test routed the boundary to an end event, hiding it. Now: fault absorbed, boundary task
         // runs and completes, process completes.
         await using var fixture = await CreateFixtureAsync("actexec-bpmn", "actexec-fault", "actexec-recover");
         var executable = fixture.NewExecutable(

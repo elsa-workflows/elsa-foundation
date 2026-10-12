@@ -182,8 +182,8 @@ public sealed class ActivityCompletionProjector(IExternalPayloadStore? externalP
         var effectivePolicy = ValuePolicyCombiner.ToProtectionPolicy(policy);
         if (value.ValueKind is JsonValueKind.Null or JsonValueKind.Undefined)
             return ValueEnvelope.Null(type, effectivePolicy);
-        // A value whose policy requires encryption is withheld before the inline or external decision (spec 188,
-        // FR-010), so it is never written to external payload storage, and the completion and its projections carry
+        // A value whose policy requires encryption is withheld before the inline or external decision,
+        // so it is never written to external payload storage, and the completion and its projections carry
         // the marker instead of the value.
         var inline = ValueEnvelope.Inline(type, value, effectivePolicy);
         if (RuntimeEncryptionWithholding.TryWithhold(inline, effectivePolicy, out var withheld))

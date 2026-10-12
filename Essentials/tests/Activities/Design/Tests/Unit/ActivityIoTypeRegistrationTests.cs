@@ -16,7 +16,7 @@ using Xunit;
 namespace Elsa.Activities.Design.Tests.Unit;
 
 /// <summary>
-/// The proof for the revised FR-004 (research D8): an activity with a complex-typed AND an enum-typed input,
+/// The proof that an activity's input types resolve to their real CLR types: an activity with a complex-typed AND an enum-typed input,
 /// run through the reflection-only scanner → the runtime registration startup pass → the compiler's resolution
 /// logic, resolves each input back to its REAL CLR type — NOT <c>object</c> — with the stored token being an
 /// alias only (never an assembly-qualified name). Also covers the dynamically-loaded package path:

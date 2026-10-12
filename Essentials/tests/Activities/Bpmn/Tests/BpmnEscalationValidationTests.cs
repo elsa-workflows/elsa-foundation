@@ -9,7 +9,7 @@ using BpmnProcessActivity = Elsa.Activities.Bpmn.Activities.BpmnProcess;
 namespace Elsa.Activities.Bpmn.Tests;
 
 /// <summary>
-/// Spec 127 D1 validation: a valid escalation graph (subprocess host + escalation boundary + escalation throw)
+/// Escalation validation: a valid escalation graph (subprocess host + escalation boundary + escalation throw)
 /// builds cleanly, and every escalation rule rejects deterministically with the offending element named — throw/end
 /// code-required + no-child, escalation-boundary host-must-be-a-subprocess + no-child, and per-host distinct codes
 /// with at most one code-less catch-all.

@@ -3,7 +3,7 @@ using System.Text.Json.Serialization;
 namespace Elsa.Activities.Bpmn.Models;
 
 /// <summary>
-/// Multi-instance loop characteristics (spec 121) authored on a task-family or <c>subProcess</c> host
+/// Multi-instance loop characteristics authored on a task-family or <c>subProcess</c> host
 /// element that binds a child: the bound child runs <see cref="Cardinality"/> times (cardinality mode) or
 /// once per item of <see cref="CollectionVariable"/> (collection mode), either <see cref="IsSequential"/>
 /// (one instance at a time) or in parallel (all instances up front). Exactly one of
