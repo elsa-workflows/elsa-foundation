@@ -824,8 +824,8 @@ on: every drain runs in a session, Durable included. `WorkflowsRuntimeApiFeature
 features registered their stores; a direct `AddWorkflowRuntime()` composition must call it after its stores are
 registered, and without it refuses to drain. It swaps the policy to `CoalescingRuntimeCheckpointPersistencePolicy` and
 layers ambient-session decorators over the checkpoint commit store, scheduler queue, post-commit outbox, and state
-stores (including a durable-baseline read memo over the inspection store — spec 131). The decorators pass through
-unchanged outside a drain. See [Persistence modes](../../../../../website/docs/essentials/persistence-modes.md),
+stores, and wraps the outbox lookup. The inspection store's wrapper serves the projection the session already
+recorded for an activity. The decorators pass through unchanged outside a drain. See [Persistence modes](../../../../../website/docs/essentials/persistence-modes.md),
 [`docs/runtime-durable-resumption.md`](../../../../../docs/runtime-durable-resumption.md#persistence-modes-and-the-deferred-flush-window)
 and the [benchmark results](../../../../../docs/reports/elsa-4-architecture-review-2026-07/w9-checkpoint-coalescing-benchmark.md).
 

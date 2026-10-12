@@ -408,14 +408,12 @@ every mode.
 serves the projection the session already recorded for that activity, so a later checkpoint in the segment merges onto
 it as it would onto a committed one; building from the durable baseline instead dropped what the earlier checkpoint
 recorded, such as the outcome of a root activity that completed in the same commit as its workflow. An activity the
-segment has not recorded yet is served from a per-drain memo of the **durable baseline**, invalidated at every
-durable flush. `PersistenceModeOptions.CoalesceInspectionReads` (default on) turns the memo off, back to a durable read
-for each such build.
+session has not recorded yet is read from the durable store, so each activity's durable row is read at most once per
+drain.
 
 **Durable-value page reuse** (spec 197) avoids repeated reads of unchanged provider pages within one eligible
 folding drain. `WorkflowsRuntimeCheckpointPersistence.CoalesceDurableValueReads` defaults to `true`; set it to
-`false` to compare the same mode without page reuse. This switch is independent of `CoalesceInspectionReads` and
-does not change any run's mode.
+`false` to compare the same mode without page reuse. This switch does not change any run's mode.
 
 Reuse requires an unambiguous first-party EF backend that still owns its effective registrations, the shared
 singleton built-in HMAC continuation codec, and the same live ordinary persistence scope. Unsupported, custom,

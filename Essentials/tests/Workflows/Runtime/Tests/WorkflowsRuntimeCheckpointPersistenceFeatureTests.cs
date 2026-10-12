@@ -136,20 +136,12 @@ public sealed class WorkflowsRuntimeCheckpointPersistenceFeatureTests
     }
 
     [Theory]
-    [InlineData(false, false)]
-    [InlineData(false, true)]
-    [InlineData(true, false)]
-    [InlineData(true, true)]
-    public async Task SessionUsesTheHostCapAndBothReadSettings(
-        bool coalesceDurableValueReads,
-        bool coalesceInspectionReads)
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task SessionUsesTheHostCapAndReadSetting(bool coalesceDurableValueReads)
     {
         var services = CreateRuntimeServices();
-        services.AddPersistenceModes(options =>
-        {
-            options.CoalesceInspectionReads = coalesceInspectionReads;
-            options.CoalesceDurableValueReads = coalesceDurableValueReads;
-        });
+        services.AddPersistenceModes(options => options.CoalesceDurableValueReads = coalesceDurableValueReads);
 
         using var provider = services.BuildServiceProvider();
         var hostOptions = provider.GetRequiredService<PersistenceModeOptions>();
@@ -158,9 +150,7 @@ public sealed class WorkflowsRuntimeCheckpointPersistenceFeatureTests
 
         Assert.Equal(hostOptions.MaxActivitiesPerCommit, scope.Session.MaxActivitiesPerCommit);
         Assert.Equal(coalesceDurableValueReads, scope.Session.CoalesceDurableValueReads);
-        Assert.Equal(coalesceInspectionReads, scope.Session.CoalesceInspectionReads);
         Assert.Equal(coalesceDurableValueReads, hostOptions.CoalesceDurableValueReads);
-        Assert.Equal(coalesceInspectionReads, hostOptions.CoalesceInspectionReads);
     }
 
     [Fact]

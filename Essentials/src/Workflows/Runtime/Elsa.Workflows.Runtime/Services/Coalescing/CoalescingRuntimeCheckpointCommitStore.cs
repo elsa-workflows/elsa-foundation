@@ -60,7 +60,6 @@ public sealed class CoalescingRuntimeCheckpointCommitStore(
             var flushResult = await CommitInnerAsync(session, commit, decision, cancellationToken);
             try
             {
-                session.InvalidateInspectionBaselines();
                 await session.ReconcileDurablyPersistedOutboxAsync(commit.Checkpoint.OccurredAt, cancellationToken);
                 await session.AdvanceInnerQueueAsync(consumeInFlightClaims: true, cancellationToken);
             }
@@ -141,7 +140,6 @@ public sealed class CoalescingRuntimeCheckpointCommitStore(
             await CommitInnerAsync(session, foldedCommit, ImmediateDecision, cancellationToken);
             try
             {
-                session.InvalidateInspectionBaselines();
                 if (capFold)
                 {
                     // The trailing commit's outbox items stay overlay-delivered for the next segment; the flush persisted
@@ -180,7 +178,6 @@ public sealed class CoalescingRuntimeCheckpointCommitStore(
         var passthrough = await CommitInnerAsync(session, commit, decision, cancellationToken);
         try
         {
-            session.InvalidateInspectionBaselines();
             if (continueAfterBoundary)
                 session.RecordDurableBoundaryState(commit.StateChanges);
             await session.ReconcileDurablyPersistedOutboxAsync(commit.Checkpoint.OccurredAt, cancellationToken);
