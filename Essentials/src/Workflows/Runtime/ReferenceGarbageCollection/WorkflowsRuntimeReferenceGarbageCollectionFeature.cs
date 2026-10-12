@@ -34,7 +34,7 @@ namespace Elsa.Workflows.Runtime.ReferenceGarbageCollection;
 [ShellFeature(
     name: "WorkflowsRuntimeReferenceGarbageCollection",
     DisplayName = "Workflows Runtime Reference Garbage Collection",
-    Description = "Background pump that periodically prunes expired/retired workflow-executable source references and the content-addressed artifacts no live reference points at any more (ADR 0040). Compose alongside the Tasks feature.",
+    Description = "Background pump that periodically prunes expired/retired workflow-executable source references and the content-addressed artifacts no live reference points at any more. Compose alongside the Tasks feature.",
     DependsOn = new object[] { "Tasks" })]
 public sealed class WorkflowsRuntimeReferenceGarbageCollectionFeature : IShellFeature
 {

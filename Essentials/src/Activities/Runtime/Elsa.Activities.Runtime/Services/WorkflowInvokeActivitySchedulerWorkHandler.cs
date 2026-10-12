@@ -294,9 +294,9 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : RuntimeSchedule
             if (structuralContinuation?.IsDeferred == true && childScheduleRequests.Count == 0)
                 throw new InvalidOperationException("An initial structural execution cannot defer without scheduling at least one child activity.");
             if (context.GetChildSubtreeCancellationRequests().Count > 0)
-                throw new InvalidOperationException("An initial structural execution cannot cancel child subtrees; cancellation requests are only valid during a child-completion evaluation (spec 112).");
+                throw new InvalidOperationException("An initial structural execution cannot cancel child subtrees; cancellation requests are only valid during a child-completion evaluation.");
             if (context.GetChildFaultAbsorptionRequests().Count > 0)
-                throw new InvalidOperationException("An initial structural execution cannot absorb child faults; absorption requests are only valid during a child-fault evaluation (spec 115).");
+                throw new InvalidOperationException("An initial structural execution cannot absorb child faults; absorption requests are only valid during a child-fault evaluation.");
 
             // Seam C: a non-root structural child may notify its own parent during its initial
             // structural execution. Harvest the staged notifications now so a root staging or a Fault/Cancel

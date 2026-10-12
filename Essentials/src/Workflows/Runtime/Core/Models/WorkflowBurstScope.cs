@@ -113,7 +113,7 @@ public sealed class WorkflowBurstScope(string workflowExecutionId) : IAsyncDispo
         if (value is DurableValueState or DurableValueExternalReference)
             throw new InvalidOperationException(
                 "A value that must survive the run (DurableValueState/DurableValueExternalReference) was published to the burst-scoped cache. " +
-                "The cache is reconstructible-only; write must-survive values to durable storage instead (ADR 0031).");
+                "The cache is reconstructible-only; write must-survive values to durable storage instead.");
 #endif
     }
 }

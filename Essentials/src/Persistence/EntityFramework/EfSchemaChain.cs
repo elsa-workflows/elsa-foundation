@@ -121,7 +121,7 @@ public sealed class EfSchemaChain
     {
         if (Defects.Count > 0)
             throw new InvalidOperationException(
-                $"Schema family '{Family}' declares an upcaster chain this build refuses to register (spec 180, FR-005): " +
+                $"Schema family '{Family}' declares an upcaster chain this build refuses to register: " +
                 string.Join(" ", Defects));
     }
 
@@ -192,8 +192,8 @@ public sealed class EfSchemaChain
             throw new InvalidOperationException(
                 $"A read of schema family '{Family}' passes content columns {EfSchemaRowContent.Names(row.Columns.Keys)} of {row.Entity.Name}, " +
                 $"but the family declares {(declared is null ? "no content columns for that table" : EfSchemaRowContent.Names(declared))}. " +
-                "A read upcasts every declared content column of a row together, and no other column, so a row is never upcast in part " +
-                "(spec 180, FR-009; #2144).");
+                "A read upcasts every declared content column of a row together, and no other column, so a row is never upcast in part: " +
+                "pass exactly the content columns the family declares for this table.");
 
         var value = row;
         for (var step = position; step < _upcasters.Length; step++)

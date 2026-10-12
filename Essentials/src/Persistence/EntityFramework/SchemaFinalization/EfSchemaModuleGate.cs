@@ -692,7 +692,7 @@ public sealed class EfSchemaModuleGate : IEfSchemaModuleGate
                 if (next.WritesRefused && previous is not { WritesRefused: true })
                     _logger.LogError(
                         "Schema family {Family} of EF module {Module} is finalized at {Finalized}, which this host cannot read (it reads {Readable}). " +
-                        "Every write to the family is refused (spec 181, FR-012).",
+                        "Every write to the family is refused until this host runs a release that reads that version.",
                         chain.Family, Module, record.FinalizedVersion, string.Join(", ", chain.ReadableVersions));
                 RecordObservation(chain.Family, identity, next.WriteVersion);
             }
