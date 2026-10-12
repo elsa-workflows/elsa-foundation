@@ -42,9 +42,10 @@ public sealed class RuntimeCheckpointCoalescingTests(ITestOutputHelper output)
         Assert.IsType<CoalescingRuntimeCheckpointCommitStore>(provider.GetRequiredService<IRuntimeCheckpointCommitStore>());
         Assert.IsType<CoalescingWorkflowSchedulerWorkQueue>(provider.GetRequiredService<IWorkflowSchedulerWorkQueue>());
         Assert.IsType<CoalescingRuntimePostCommitOutboxStore>(provider.GetRequiredService<IRuntimePostCommitOutboxStore>());
+        // The lookup the runtime registered is wrapped, not replaced.
         Assert.Same(
-            provider.GetRequiredService<IRuntimePostCommitOutboxStore>(),
-            provider.GetRequiredService<IPostCommitOutboxLookupStore>());
+            provider.GetRequiredService<InMemoryRuntimeCheckpointCommitStore>(),
+            provider.GetRequiredService<CoalescingInner<IPostCommitOutboxLookupStore>>().Value);
         Assert.IsType<CoalescingWorkflowExecutionStateStore>(provider.GetRequiredService<IWorkflowExecutionStateStore>());
         Assert.IsType<CoalescingActivityExecutionStateStore>(provider.GetRequiredService<IActivityExecutionStateStore>());
         Assert.IsType<CoalescingDurableValueStateStore>(provider.GetRequiredService<IDurableValueStateStore>());
