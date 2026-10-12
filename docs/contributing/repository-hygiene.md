@@ -94,3 +94,23 @@ Run the sweep locally in report mode, which changes nothing:
 ```bash
 GITHUB_REPOSITORY=elsa-workflows/elsa-foundation bash tools/repo-hygiene/hygiene.sh report
 ```
+
+## Claims
+
+Moved from `AGENTS.md` (#2578); `AGENTS.md` keeps the short form.
+
+Several agent sessions run against this repository at once, in separate worktrees. Two sessions that pick the same unit will not see each other in git: a branch does not exist anywhere shared until it is pushed, so a clean check at session start proves nothing about what another session began a minute later.
+
+Claim the unit on its issue before writing code when one of these is true:
+
+- The task names an issue or PR number.
+- The task is one slice of a unit that was split into slices, whether or not the other slices are assigned.
+- The user says another session is working on a related slice. Ask what else that session owns before starting.
+
+The claim is one comment naming the worktree and the exact scope being taken. Before posting it, read the issue's comments and the open PRs that reference it. If another session already claimed that scope, stop and tell the user rather than building a second copy. See [Issue tracker](../agents/issue-tracker.md) for the commands.
+
+Release the claim when the session ends: comment when the work ships, and comment when it is abandoned, so the next session does not read a stale claim as live work.
+
+Re-check for competing work before committing, not only at session start. That check is the backstop that catches a session which started after you did.
+
+A claim is advisory. It narrows the window rather than closing it, and two sessions starting within the same minute still race. When a unit is split into slices, prefer giving one session the whole stack, or naming an owner per slice in the issue, over relying on claims alone.

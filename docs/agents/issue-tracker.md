@@ -15,7 +15,7 @@ Infer the repo from `git remote -v` - `gh` does this automatically when run insi
 
 ## Claiming a unit before working on it
 
-See "Concurrent work claims" in [AGENTS.md](../../AGENTS.md) for when this applies.
+See "Concurrent work claims" in [AGENTS.md](../../AGENTS.md#concurrent-work-claims) and [Claims](../contributing/repository-hygiene.md#claims) for when this applies.
 
 - **Check for an existing claim**: `gh issue view <number> --comments`, then list the PRs whose branch names the issue:
 
@@ -31,7 +31,7 @@ See "Concurrent work claims" in [AGENTS.md](../../AGENTS.md) for when this appli
 
 ## Keeping an issue current
 
-An issue in a program is the record of progress, so comment at each transition rather than only at the end. See "Program bookkeeping" in [AGENTS.md](../../AGENTS.md).
+An issue in a program is the record of progress, so comment at each transition rather than only at the end. See [Program bookkeeping](../contributing/merging.md#program-bookkeeping).
 
 - Implementation started: branch name and the scope being taken.
 - PR opened: the link.

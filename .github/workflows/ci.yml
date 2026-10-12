@@ -435,7 +435,7 @@ jobs:
 
   # Freshness gate for the committed maps under docs/maps/, the generated findings reports and the generated
   # solution filters (Elsa.Server.*.slnf). It regenerates each into a scratch directory and byte-compares the
-  # result with what is committed. Generation itself stays manually initiated (AGENTS.md); this job only
+  # result with what is committed. Generation itself stays manually initiated (docs/contributing/generated-maps.md); this job only
   # reports. It exists because the committed maps once went three projects stale and carried 25 corrupted
   # rows with nothing objecting.
   #
@@ -447,7 +447,7 @@ jobs:
   # added a spec directory without regenerating, main went stale silently, and the next three unrelated PRs
   # (#1243, #1247, #1248) went red on a check none of them had broken.
   #
-  # Notify rather than auto-regenerate. Auto-regenerating and opening a PR would contradict AGENTS.md
+  # Notify rather than auto-regenerate. Auto-regenerating and opening a PR would contradict docs/contributing/generated-maps.md
   # ("Generated maps are committed snapshots and are never refreshed automatically"), would skip the
   # findings-report review a refresh is supposed to trigger, and would need a third-party pull-request
   # action, which the org Actions allow-list gates (see the POLICY DEPENDENCY note in docker.yml).
