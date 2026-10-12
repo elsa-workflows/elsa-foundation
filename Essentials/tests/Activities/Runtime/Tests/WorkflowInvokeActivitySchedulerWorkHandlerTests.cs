@@ -290,7 +290,7 @@ public sealed partial class WorkflowInvokeActivitySchedulerWorkHandlerTests
     }
 
     /// <summary>
-    /// T073 (spec 188, FR-012): the value resolved for the execution is masked in the fault the handler records, and the
+    /// The value resolved for the execution is masked in the fault the handler records, and the
     /// handler releases it from the mask once the fault is recorded, so the scope's mask does not keep it any longer.
     /// </summary>
     [Fact]
@@ -327,7 +327,7 @@ public sealed partial class WorkflowInvokeActivitySchedulerWorkHandlerTests
 
     /// <summary>
     /// A cancellation whose lease disposal fails leaves the handler as the cancellation followed by the disposal
-    /// failure, as slice 3 shaped it, and the disposal failure's text is masked like a fault's.
+    /// failure, and the disposal failure's text is masked like a fault's.
     /// </summary>
     [Fact]
     public async Task HandleAsync_ExecutionCanceledAfterASecretResolvedWhileDisposalFails_ReportsTheDisposalFailureMasked()
@@ -614,7 +614,7 @@ public sealed partial class WorkflowInvokeActivitySchedulerWorkHandlerTests
     public async Task HandleAsync_CheckpointParticipantHandedAWithheldInput_FaultsWithTheWithheldInputCode()
     {
         // Publication refuses a secret reference on a checkpoint participant; this is the backstop for an artifact
-        // that skipped publication. The participant must never receive the input (spec 188, T007/T008).
+        // that skipped publication. The participant must never receive the input.
         var activity = new CheckpointParticipantStructuralActivity();
         var executable = NewTypedExecutable();
         var type = new Elsa.Primitives.Models.ValueTypeDescriptor("String");

@@ -83,7 +83,7 @@ public sealed class ActivityContract
     public ActivityActivationRequirement Activation { get; }
 
     /// <summary>
-    /// Author-declared replay/side-effect classification (ADR 0032 R1). Part of the pinned, fingerprinted
+    /// Author-declared replay/side-effect classification. Part of the pinned, fingerprinted
     /// contract: it gates whether the pre-activation attempt-claim checkpoint may be deferred under a
     /// coalescing cadence. <see cref="SideEffectProfile.External"/> is the fail-safe default — an unmarked
     /// activity keeps the mandatory pre-activation durability boundary. Omitted from the serialized shape
@@ -111,8 +111,8 @@ public sealed class ActivityContract
 
         var node = JsonNode.Parse(JsonSerializer.Serialize(payload))!.AsObject();
 
-        // The side-effect profile participates in the fingerprint only when it departs from the default
-        // (spec 107 fingerprint decision): a change to ReplaySafe is a contract change and must move the
+        // The side-effect profile participates in the fingerprint only when it departs from the default:
+        // a change to ReplaySafe is a contract change and must move the
         // fingerprint, while every existing default-External contract keeps a byte-identical canonical shape
         // so no pinned executable, golden, or fixture churns.
         if (SideEffectProfile != SideEffectProfile.External)
@@ -375,7 +375,7 @@ public sealed record ActivityValuePolicy(
         RequiresEncryption: false);
 
     /// <summary>
-    /// True when inspection must not show a value under this policy: it is sensitive or requires encryption (spec 188).
+    /// True when inspection must not show a value under this policy: it is sensitive or requires encryption.
     /// The same rule for a runtime value's policy is <c>ValueProtectionPolicy.HidesValue</c>; this is its twin for the
     /// declared policy type, because the two types do not convert into each other without the runtime's combiner.
     /// </summary>
@@ -398,7 +398,7 @@ public enum ActivityValueStorage
 }
 
 /// <summary>
-/// Author-declared replay/side-effect classification of a CLR activity (ADR 0032 R1). Governs whether the
+/// Author-declared replay/side-effect classification of a CLR activity. Governs whether the
 /// runtime may defer the pre-activation attempt-claim durability boundary under a coalescing checkpoint cadence.
 /// </summary>
 public enum SideEffectProfile

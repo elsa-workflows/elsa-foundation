@@ -22,7 +22,7 @@ public sealed class ActivityDefinitionVersion(string version, string definitionI
     /// Persistence-only normalised key whose ordinal ordering equals SemVer precedence
     /// (computed once at construction via <see cref="SemVer.ToSortKey(string)"/>). Drives DB-side
     /// ORDER BY for version listings and "latest version" resolution. A real CLR property, not an
-    /// EF shadow — it is a domain shadow (§2.9.1): invisible to other domains via the interface,
+    /// EF shadow — it is a domain shadow: invisible to other domains via the interface,
     /// present on the entity for persistence. Write-once.
     /// </summary>
     public string SemVerSortKey { get; init; } = SemVer.ToSortKey(version);

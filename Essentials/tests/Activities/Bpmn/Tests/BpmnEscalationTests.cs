@@ -13,7 +13,7 @@ using EventActivity = Elsa.Activities.Primitives.Activities.Event;
 namespace Elsa.Activities.Bpmn.Tests;
 
 /// <summary>
-/// End-to-end coverage for spec 127 escalation, riding runtime seam C: an escalation throw/end inside a nested
+/// End-to-end coverage for escalation, riding runtime seam C: an escalation throw/end inside a nested
 /// <c>BpmnProcess</c> signals upward; the escalation boundary on the hosting subprocess in the parent scope
 /// catches it by code (specific beats catch-all), non-interrupting (nested keeps running) or interrupting (the
 /// parent tears the nested process down via seam A); an unmatched escalation bubbles level by level; a
@@ -486,7 +486,7 @@ public sealed class BpmnEscalationTests
     {
         // A multi-instance subprocess host runs two nested-process instances (each forks a keeper + a trigger). One
         // instance's trigger is resumed, raising escalation; the interrupting boundary resolves the instance via
-        // (node, iteration), cancels the loop coordinator, and the spec-121 cascade tears every instance down.
+        // (node, iteration), cancels the loop coordinator, and the multi-instance cascade tears every instance down.
         await using var fixture = await CreateFixtureAsync(idCount: 80);
         var executable = fixture.NewExecutable(
             children: [NestedForkKeeperAndThrower("node-nested-mi", "esc-1"), fixture.NewProbeNode("node-bnd")],
@@ -518,7 +518,7 @@ public sealed class BpmnEscalationTests
         var triggerBookmark = (await fixture.BookmarksAsync()).First(candidate => candidate.ExecutableNodeId == "node-trig");
 
         // Resuming one instance's trigger raises escalation; the interrupting boundary cancels the coordinator, the
-        // spec-121 cascade tears every instance down, and the boundary path routes.
+        // multi-instance cascade tears every instance down, and the boundary path routes.
         var resumed = await fixture.ResumeAsync(triggerBookmark, JsonSerializer.SerializeToElement(new EventReceived("trigger")));
 
         resumed.AssertCompleted(BpmnRuntimeFixture.ProcessNodeId);

@@ -9,7 +9,7 @@ namespace Elsa.Activities.ControlFlow.Tests;
 /// <summary>
 /// The loops copy these inputs into their persisted iteration state (ForEach writes each collection item into its
 /// iteration frame; For walks a persisted index from Start by Step to End), so each declares that it refuses a secret
-/// reference and publication refuses one there (spec 188, T099; research R3a IP14).
+/// reference and publication refuses one there.
 /// </summary>
 public sealed class SecretBindingRefusalTests
 {

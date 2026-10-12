@@ -45,7 +45,7 @@ public class ActivitiesRuntimeFeature : IShellFeature
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IWorkflowSchedulerWorkHandler, WorkflowNotifyParentActivitySchedulerWorkHandler>());
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IWorkflowSchedulerWorkHandler, WorkflowResumeBookmarkSchedulerWorkHandler>());
 
-        // Startup pass (FR-004b / research D8 revised): register the activity CLR types — the activity types
+        // Startup pass: register the activity CLR types — the activity types
         // themselves AND their input/output element types — under the shared TypeAliasConvention. This lets the
         // CLR construction descriptor resolve an activity's stable alias back to its real type (no
         // Assembly.Load(name, version)), and a complex- or enum-typed input resolve to its real CLR type at

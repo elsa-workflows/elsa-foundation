@@ -6,8 +6,8 @@ using Xunit;
 namespace Elsa.Activities.Flowchart.Tests;
 
 /// <summary>
-/// Wire-safety lock for the persisted <see cref="FlowchartExecutionState"/> blob (#382 / W32, constitution
-/// §E6). The engine serializes the state with <see cref="JsonSerializerDefaults.Web"/> and <b>no string-enum
+/// Wire-safety lock for the persisted <see cref="FlowchartExecutionState"/> blob (#382 / W32).
+/// The engine serializes the state with <see cref="JsonSerializerDefaults.Web"/> and <b>no string-enum
 /// converter</b>, so all four state enums are persisted as <b>ordinals</b>: the member order of
 /// <see cref="ExecutionPathStatus"/>, <see cref="FlowchartArrivalStatus"/>, <see cref="ExecutionScopeKind"/>,
 /// <see cref="ExecutionScopeStatus"/> and <see cref="FlowchartDiagnosticKind"/> is frozen wire surface, not
@@ -15,8 +15,8 @@ namespace Elsa.Activities.Flowchart.Tests;
 /// including the W32 <see cref="FlowchartExecutionState.LoopIterationCounters"/> field (last serialized
 /// member). It is deliberately built from an <b>unpruned</b> state (terminal paths, a consumed arrival, a
 /// dead one) so the round-trip test also proves any unpruned state deserializes losslessly — pruning narrows
-/// what is written, never what can be read. <see cref="FlowchartArrivalStatus.Dead"/> is pinned at ordinal 2
-/// (ADR 0064): it was appended, so the two older members keep their encodings and a blob written before it
+/// what is written, never what can be read. <see cref="FlowchartArrivalStatus.Dead"/> is pinned at ordinal 2:
+/// it was appended, so the two older members keep their encodings and a blob written before it
 /// existed still reads back unchanged.
 /// </summary>
 public sealed class FlowchartExecutionStateGoldenTests

@@ -18,7 +18,7 @@ using BpmnProcessActivity = Elsa.Activities.Bpmn.Activities.BpmnProcess;
 namespace Elsa.Activities.Bpmn.Tests;
 
 /// <summary>
-/// Publish-time extraction and schedule tests for the BPMN event-defined start surface (spec 117 D1/D2/D3).
+/// Publish-time extraction and schedule tests for the BPMN event-defined start surface.
 /// </summary>
 public sealed class BpmnEventStartTriggerTests
 {
@@ -75,7 +75,7 @@ public sealed class BpmnEventStartTriggerTests
     public void Extract_IntentionallyNonStarting_WhenNestedProcessCannotStart()
     {
         // A BpmnProcess bound as a child sets CanStartWorkflow = false, so its event-defined starts register
-        // no bindings even though the extractor still classifies the node as a trigger (spec 117 D1).
+        // no bindings even though the extractor still classifies the node as a trigger.
         var executable = TriggerExecutable(
             elements: [MessageStart("msg-start", "order-placed"), End("end")],
             flows: [Flow("f1", "msg-start", "end")],
@@ -104,7 +104,7 @@ public sealed class BpmnEventStartTriggerTests
     public void Describe_RefusesASecretReadCanStartWorkflowWithTheFixedPublishCode()
     {
         // Publication refuses the binding first (BpmnProcess declares the input); this backstop keeps an artifact that
-        // skipped publication from reading a secret as an unauthored CanStartWorkflow (spec 188, T099).
+        // skipped publication from reading a secret as an unauthored CanStartWorkflow.
         var node = TriggerNode(
             [MessageStart("msg-start", "order-placed"), End("end")],
             [Flow("f1", "msg-start", "end")],
@@ -211,7 +211,7 @@ public sealed class BpmnEventStartTriggerTests
     [Fact]
     public void MessageStartStimulus_MatchesEventStimulus_ForRoutingParity()
     {
-        // The whole point of D2: one raised Event delivery both starts BPMN message/signal processes and resumes
+        // The whole point of the shared stimulus: one raised Event delivery both starts BPMN message/signal processes and resumes
         // catch events. The BPMN derivation MUST resolve to the same (type, hash) EventStimulus produces.
         Assert.Equal(EventStimulus.StimulusType, BpmnMessageStartStimulus.StimulusType);
         Assert.Equal(EventStimulus.Hash("order-placed"), BpmnMessageStartStimulus.Hash("order-placed"));

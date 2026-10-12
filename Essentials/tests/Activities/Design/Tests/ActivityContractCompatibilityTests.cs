@@ -26,7 +26,7 @@ public sealed class ActivityContractCompatibilityTests
         Assert.Contains(typeof(InputDefinition).GetMethods(), method =>
             method.Name == "Deconstruct" && method.GetParameters().Length == 19);
 
-        // The sensitivity declaration (spec 188) is optional and null when absent, so an undeclared input keeps its hash.
+        // The sensitivity declaration is optional and null when absent, so an undeclared input keeps its hash.
         var declaration = parameters
             .Where(parameter => parameter.Name is nameof(InputDefinition.IsSensitive) or nameof(InputDefinition.IsCredential))
             .ToArray();

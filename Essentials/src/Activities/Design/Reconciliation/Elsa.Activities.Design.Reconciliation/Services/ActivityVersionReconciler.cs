@@ -144,7 +144,7 @@ public sealed class ActivityVersionReconciler(
         }
 
         // Definition exists. Lookup the specific version by (DefinitionId, Version) — build-metadata-
-        // insensitive (FR-013) by matching on the normalised sort key, so 1.0.0 and 1.0.0+build are
+        // insensitive by matching on the normalised sort key, so 1.0.0 and 1.0.0+build are
         // the same logical version.
         var incomingSortKey = SemVer.ToSortKey(incomingVersion.Version);
         var existingVersion = versionIndex.Find(definition.Id, incomingSortKey);

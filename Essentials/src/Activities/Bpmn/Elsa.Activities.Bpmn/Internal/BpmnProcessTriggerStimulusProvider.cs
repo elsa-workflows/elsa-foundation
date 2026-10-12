@@ -9,7 +9,7 @@ using BpmnProcessActivity = Elsa.Activities.Bpmn.Activities.BpmnProcess;
 namespace Elsa.Activities.Bpmn.Internal;
 
 /// <summary>
-/// The <see cref="IActivityTriggerStimulusProvider"/> for the BPMN event-defined start surface (spec 117 D1/D2).
+/// The <see cref="IActivityTriggerStimulusProvider"/> for the BPMN event-defined start surface.
 /// It recognizes published <see cref="BpmnProcessActivity"/> nodes and emits one start-trigger descriptor per
 /// event-defined start element: message/signal via <see cref="BpmnMessageStartStimulus"/> (named-event stimulus,
 /// shared with <c>Event</c>), timer via <see cref="BpmnTimerStartStimulus"/> (BPMN-owned pump-internal stimulus,
@@ -37,7 +37,7 @@ public sealed class BpmnProcessTriggerStimulusProvider : IActivityTriggerStimulu
         if (!StringComparer.Ordinal.Equals(node.ActivityType, typeof(BpmnProcessActivity).FullName))
             return ActivityTriggerStimulusResult.NotRecognized;
 
-        // Opt-out for a nested BpmnProcess (spec 117 D1): only an explicit literal false suppresses the start
+        // Opt-out for a nested BpmnProcess: only an explicit literal false suppresses the start
         // trigger surface; unauthored/true preserves the root-process identity. Recognized-but-empty, no failure.
         if (BpmnStartTriggerNodeInputs.ReadCanStartWorkflow(node) is false)
             return ActivityTriggerStimulusResult.Recognized([]);
@@ -72,13 +72,13 @@ public sealed class BpmnProcessTriggerStimulusProvider : IActivityTriggerStimulu
                 $"BPMN process node '{node.ExecutableNodeId}' has an invalid structure: {exception.Message}", exception);
         }
 
-        // spec 128: an escalation/error start is an event-subprocess body start seeded via the scheduled-start hint,
+        // An escalation/error start is an event-subprocess body start seeded via the scheduled-start hint,
         // not an externally-triggered start — only timer/message/signal starts register a publish-time start trigger.
         return graph.StartEvents.Where(BpmnElementFamilies.IsExternalStartTrigger).ToArray();
     }
 }
 
-/// <summary>Reads the <see cref="BpmnProcessActivity.CanStartWorkflow"/> literal off a published BPMN process node (spec 117).</summary>
+/// <summary>Reads the <see cref="BpmnProcessActivity.CanStartWorkflow"/> literal off a published BPMN process node.</summary>
 internal static class BpmnStartTriggerNodeInputs
 {
     private const string CanStartWorkflowInput = nameof(BpmnProcessActivity.CanStartWorkflow);

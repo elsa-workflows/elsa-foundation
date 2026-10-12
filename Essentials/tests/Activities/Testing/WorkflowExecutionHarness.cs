@@ -94,15 +94,15 @@ public sealed class WorkflowExecutionHarness : IAsyncDisposable
         RunAsync(executable, allowPendingWorkOnTerminalCompletion: false, inputs: inputs);
 
     /// <summary>
-    /// Runs with a stimulus payload on the start command's dedicated stimulus-input channel (spec 089 A),
+    /// Runs with a stimulus payload on the start command's dedicated stimulus-input channel,
     /// mirroring how the stimulus router's start path delivers a trigger's payload.
     /// </summary>
     public Task<WorkflowExecutionRun> RunAsync(WorkflowExecutable executable, JsonElement stimulusInput) =>
         RunAsync(executable, allowPendingWorkOnTerminalCompletion: false, stimulusInput: stimulusInput);
 
     /// <summary>
-    /// Runs with a stimulus payload AND the matched trigger's node id on the start command's dedicated channels
-    /// (spec 089 A/D), mirroring how the stimulus router's start path delivers the payload and the trigger-node
+    /// Runs with a stimulus payload AND the matched trigger's node id on the start command's dedicated channels,
+    /// mirroring how the stimulus router's start path delivers the payload and the trigger-node
     /// identity for a trigger-started run. Lets an activity that plays both start-trigger and mid-flow roles
     /// (e.g. <c>HttpEndpoint</c>) tell whether it is the node that triggered the run.
     /// </summary>
@@ -111,7 +111,7 @@ public sealed class WorkflowExecutionHarness : IAsyncDisposable
 
     /// <summary>
     /// Runs as a trigger-started run carrying the matched trigger binding's node id and metadata map on the start
-    /// command's reserved channels (spec 117 D4), mirroring how the stimulus router forwards <c>binding.Metadata</c>
+    /// command's reserved channels, mirroring how the stimulus router forwards <c>binding.Metadata</c>
     /// so a structural trigger activity (e.g. <c>BpmnProcess</c>) can resolve which start element the delivery
     /// targeted. Seed only the metadata a real binding would carry — it is spoof-proof state, not user input.
     /// </summary>
@@ -188,7 +188,7 @@ public sealed class WorkflowExecutionHarness : IAsyncDisposable
     /// Dispatches a <c>ResumeBookmark</c> command against the same in-process agent and drains it, mirroring how a
     /// matched stimulus resumes a waiting bookmark. Use after a <see cref="RunAsync"/> that suspended: the executable
     /// and durable state persist on the shared provider, so start → suspend → resume is a real round-trip. The
-    /// resume input rides the dedicated resume-input channel (spec 089 D).
+    /// resume input rides the dedicated resume-input channel.
     /// </summary>
     public async Task<WorkflowExecutionRun> ResumeAsync(
         WorkflowExecutableIdentity pinnedExecutable,
@@ -247,8 +247,8 @@ public sealed class WorkflowExecutionHarness : IAsyncDisposable
     public static readonly WorkflowExecutionPartition Partition = new("partition-test");
 
     /// <summary>
-    /// Saves an executable together with the live Published source reference the start dispatcher gates on
-    /// (ADR 0040), returning the reference so it can be started through <see cref="StartPublishedAsync"/>.
+    /// Saves an executable together with the live Published source reference the start dispatcher gates on,
+    /// returning the reference so it can be started through <see cref="StartPublishedAsync"/>.
     /// Applies the same CLR contract pinning <see cref="RunAsync(WorkflowExecutable)"/> does, so a hand-built
     /// graph of CLR activities needs no contract of its own.
     /// </summary>
@@ -497,7 +497,7 @@ public sealed class WorkflowExecutionHarness : IAsyncDisposable
         NewProbeNode(nodeId, typeof(ProbeActivity), nameof(ProbeActivity.Outcomes), outcomes);
 
     /// <summary>
-    /// Builds a leaf probe node whose pinned contract declares <see cref="SideEffectProfile.ReplaySafe"/> (spec 123).
+    /// Builds a leaf probe node whose pinned contract declares <see cref="SideEffectProfile.ReplaySafe"/>.
     /// Behaviorally identical to <see cref="NewProbeNode(string, IReadOnlyCollection{string})"/>, but eligible for the
     /// ReplaySafe hop-fusion pass so fusion guardrails can drive a shape whose leaves actually resolve ReplaySafe.
     /// </summary>
@@ -748,7 +748,7 @@ public sealed class WorkflowExecutionHarness : IAsyncDisposable
                     outcomes.Add(value);
         }
 
-        // spec 125: a BPMN transaction subprocess declares the additional "Cancelled" outcome (structure-dependent,
+        // A BPMN transaction subprocess declares the additional "Cancelled" outcome (structure-dependent,
         // the same FlowSwitch/VF-ACT-006 pattern). Mirror ExecutableNodeCompiler.ResolveOutcomes for test graphs.
         if (StringComparer.Ordinal.Equals(node.Structure?.Kind, "elsa.bpmn.structure") &&
             node.Structure.Payload.TryGetProperty("isTransaction", out var isTransaction) &&
@@ -812,7 +812,7 @@ public sealed class WorkflowExecutionHarness : IAsyncDisposable
             new ActivityResultContract(NewValueType(resultType), true, ActivityValuePolicy.Default, projections),
             outcomes,
             new ActivityActivationRequirement(descriptor.Kind, alias),
-            // Mirror ExecutableNodeCompiler.ResolveSideEffectProfile (ADR 0032 R1 / spec 107): unmarked ⇒ External.
+            // Mirror ExecutableNodeCompiler.ResolveSideEffectProfile: unmarked ⇒ External.
             sideEffectProfile: activityType.GetCustomAttribute<ActivitySideEffectProfileAttribute>(inherit: true)?.Profile
                 ?? SideEffectProfile.External);
     }
@@ -886,9 +886,9 @@ public sealed class WorkflowExecutionHarness : IAsyncDisposable
         }
 
         /// <summary>
-        /// Drives the harness under the opt-in burst-coalescing checkpoint persistence policy (ADR 0032 / spec 115)
+        /// Drives the harness under the opt-in burst-coalescing checkpoint persistence policy
         /// instead of the default Immediate cadence, so intra-drain checkpoints fold into one atomic commit at
-        /// quiescence — the mode a ReplaySafe hop-fusion pass engages inside (spec 123 research §2). Applied after the
+        /// quiescence — the mode a ReplaySafe hop-fusion pass engages inside. Applied after the
         /// runtime feature registration (which the ctor seeds first), so the coalescing decorators capture the runtime
         /// stores. Optionally caps the per-segment checkpoint count (models a mid-drain fold-and-flush).
         /// </summary>

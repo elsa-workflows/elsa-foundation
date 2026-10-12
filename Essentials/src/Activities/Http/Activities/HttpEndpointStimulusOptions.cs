@@ -4,8 +4,8 @@ using Elsa.Http.Core;
 namespace Elsa.Activities.Http.Activities;
 
 /// <summary>
-/// The non-identity endpoint options an <see cref="HttpEndpoint"/> stamps onto its trigger-binding metadata
-/// (spec 089 sub-unit C): authorization flag/policy, per-request timeout, and per-request body size limit. These
+/// The non-identity endpoint options an <see cref="HttpEndpoint"/> stamps onto its trigger-binding metadata:
+/// authorization flag/policy, per-request timeout, and per-request body size limit. These
 /// ride the binding metadata for the middleware to read, but they never participate in
 /// <see cref="HttpEndpointStimulus.Hash"/> — two endpoints that differ only in options share a routing key.
 /// </summary>
@@ -49,7 +49,7 @@ public sealed record HttpEndpointStimulusOptions(
             metadata[HttpEndpointRouting.RequestSizeLimitMetadataKey] = sizeLimit.ToString(CultureInfo.InvariantCulture);
 
         // Omit the response mode when Async (the default) so an async endpoint round-trips to the same empty
-        // metadata as before E landed (spec 089 E-D1). Only a Sync endpoint contributes a key.
+        // metadata as before response modes existed. Only a Sync endpoint contributes a key.
         if (ResponseMode != ResponseMode.Async)
             metadata[HttpEndpointRouting.ResponseModeMetadataKey] = ResponseMode.ToString();
 
@@ -58,7 +58,7 @@ public sealed record HttpEndpointStimulusOptions(
 
     /// <summary>
     /// Fail-closed merge of the endpoint options across every waiting bookmark that matches a resume-only
-    /// (template, method) — see <see cref="MergedHttpEndpointOptions"/> and spec 089 D, D-D5. Options are excluded
+    /// (template, method) — see <see cref="MergedHttpEndpointOptions"/>. Options are excluded
     /// from the stimulus hash by design, so multiple waiting bookmarks on the same identity can carry <em>divergent</em>
     /// options; enforcing the strictest of each field prevents one lax bookmark from defeating a strict sibling.
     /// <list type="bullet">
@@ -66,8 +66,8 @@ public sealed record HttpEndpointStimulusOptions(
     /// <item><c>Policies</c> is the union of all distinct non-empty policies (each must pass — enforced by the caller).</item>
     /// <item><c>RequestSizeLimit</c> is the MIN of the specified limits (an absent limit never relaxes a specified one).</item>
     /// <item><c>RequestTimeout</c> is the MIN of the specified timeouts.</item>
-    /// <item><c>ResponseMode</c> is <see cref="ResponseMode.Sync"/> if ANY matching bookmark requests Sync (spec 089
-    /// E-D6). The HTTP response is per-request, not per-identity: a sync-authored waiting endpoint must get its
+    /// <item><c>ResponseMode</c> is <see cref="ResponseMode.Sync"/> if ANY matching bookmark requests Sync.
+    /// The HTTP response is per-request, not per-identity: a sync-authored waiting endpoint must get its
     /// same-exchange reply even when an async sibling shares the (template, method) identity. This is a deliberate
     /// any-Sync rule rather than the fail-closed all-must-agree treatment of the enforcement fields — Sync is the
     /// more capable delivery, and degrading it to 202 (which every Sync dispatch already does on suspend/no-write)
@@ -127,8 +127,8 @@ public sealed record HttpEndpointStimulusOptions(
                 && long.TryParse(sizeLimit, NumberStyles.None, CultureInfo.InvariantCulture, out var parsedSizeLimit)
                     ? parsedSizeLimit
                     : null,
-            // Absent or unparseable ⇒ Async (the default): an endpoint published before E, or a garbled key,
-            // preserves today's async/202 contract rather than silently opting into a live write (spec 089 E-D1).
+            // Absent or unparseable ⇒ Async (the default): an endpoint published before response modes, or a garbled key,
+            // preserves today's async/202 contract rather than silently opting into a live write.
             // Enum.TryParse accepts bare numeric strings (e.g. "99") as undefined values, so IsDefined guards them.
             ResponseMode: metadata.TryGetValue(HttpEndpointRouting.ResponseModeMetadataKey, out var responseMode)
                 && Enum.TryParse<ResponseMode>(responseMode, ignoreCase: false, out var parsedResponseMode)
@@ -141,7 +141,7 @@ public sealed record HttpEndpointStimulusOptions(
 /// <summary>
 /// The enforcement-side view of an HTTP endpoint's options once resolved for a request — either from the trigger
 /// claimant binding(s) or, for a resume-only match, from the fail-closed merge across all matching waiting bookmarks
-/// (<see cref="HttpEndpointStimulusOptions.MergeForResume"/>, spec 089 D, D-D5). It differs from
+/// (<see cref="HttpEndpointStimulusOptions.MergeForResume"/>). It differs from
 /// <see cref="HttpEndpointStimulusOptions"/> in one load-bearing way: it carries a <em>set</em> of
 /// <see cref="Policies"/> rather than a single policy, because a resume-only match can span several waiting bookmarks
 /// each declaring a distinct policy and the middleware must require EVERY distinct policy to pass (fail closed).
@@ -150,9 +150,9 @@ public sealed record HttpEndpointStimulusOptions(
 /// <param name="Policies">The distinct non-empty policies to enforce; empty means an authorize-only check (no named policy).</param>
 /// <param name="RequestSizeLimit">The strictest (minimum) per-endpoint body size limit, or null to fall back to the global default.</param>
 /// <param name="RequestTimeout">The strictest (minimum) per-endpoint request timeout, or null for no per-endpoint timeout.</param>
-/// <param name="ResponseMode">How the resolved endpoint delivers the workflow-authored response (spec 089 E). For a
+/// <param name="ResponseMode">How the resolved endpoint delivers the workflow-authored response. For a
 /// resume-only match this is <see cref="ResponseMode.Sync"/> if ANY matching waiting bookmark requested Sync
-/// (<see cref="HttpEndpointStimulusOptions.MergeForResume"/>, E-D6); for the claimant path it is the claimant's own
+/// (<see cref="HttpEndpointStimulusOptions.MergeForResume"/>); for the claimant path it is the claimant's own
 /// mode (<see cref="FromClaimant"/>). <see cref="None"/> defaults to <see cref="ResponseMode.Async"/>.</param>
 public sealed record MergedHttpEndpointOptions(
     bool Authorize,
@@ -167,7 +167,7 @@ public sealed record MergedHttpEndpointOptions(
     /// <summary>
     /// Projects a single resolved <see cref="HttpEndpointStimulusOptions"/> (the trigger-claimant path) into the
     /// merged enforcement view: a lone policy becomes a one-element <see cref="Policies"/> set, the claimant's
-    /// <see cref="HttpEndpointStimulusOptions.ResponseMode"/> is carried through (D-D5 claimant-wins, consistent
+    /// <see cref="HttpEndpointStimulusOptions.ResponseMode"/> is carried through (the claimant wins, consistent
     /// with the other fields), and <paramref name="authorizeOverride"/> lets the caller substitute the strongest
     /// Authorize claim across sibling claimants. The claimant path is otherwise unchanged.
     /// </summary>

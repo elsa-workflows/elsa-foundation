@@ -83,7 +83,7 @@ public sealed class HttpEndpointStimulusOptionsTests
         Assert.False(metadata.ContainsKey(Elsa.Http.Core.HttpEndpointRouting.RequestSizeLimitMetadataKey));
     }
 
-    // ---- E-D1 response-mode round-trip ----
+    // ---- Response-mode round-trip ----
 
     [Fact]
     public void ResponseModeAsync_ContributesNoMetadataKey()
@@ -123,7 +123,7 @@ public sealed class HttpEndpointStimulusOptionsTests
         Assert.Equal(ResponseMode.Async, HttpEndpointStimulusOptions.FromMetadata(new Dictionary<string, string>()).ResponseMode);
     }
 
-    // ---- D-D5 fail-closed merge across divergent waiting bookmarks ----
+    // ---- Fail-closed merge across divergent waiting bookmarks ----
 
     [Fact]
     public void MergeForResume_Empty_YieldsDefaults()
@@ -201,12 +201,12 @@ public sealed class HttpEndpointStimulusOptionsTests
         Assert.Equal(TimeSpan.FromSeconds(10), merged.RequestTimeout);
     }
 
-    // ---- E-D6 response-mode merge (any-Sync) ----
+    // ---- Response-mode merge (any-Sync) ----
 
     [Fact]
     public void MergeForResume_ResponseMode_IsSyncIfAnyBookmarkRequestsSync()
     {
-        // E-D6: the response is per-request. A sync-authored waiting endpoint gets its same-exchange reply even
+        // The response is per-request. A sync-authored waiting endpoint gets its same-exchange reply even
         // when an async sibling shares the identity — Sync wins if ANY matching bookmark asks for it.
         var merged = HttpEndpointStimulusOptions.MergeForResume(
         [
@@ -236,7 +236,7 @@ public sealed class HttpEndpointStimulusOptionsTests
         Assert.Equal(ResponseMode.Async, MergedHttpEndpointOptions.None.ResponseMode);
     }
 
-    // ---- FromClaimant projects the claimant's mode (D-D5 claimant-wins) ----
+    // ---- FromClaimant projects the claimant's mode (claimant wins) ----
 
     [Theory]
     [InlineData(ResponseMode.Async)]

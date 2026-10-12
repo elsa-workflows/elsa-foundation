@@ -13,7 +13,7 @@ using Xunit;
 namespace Elsa.Activities.Runtime.Tests;
 
 /// <summary>
-/// <see cref="IRuntimeSecretMask"/> is a replacement contract (framework constitution §2.6.2, spec 188 T074): the runtime
+/// <see cref="IRuntimeSecretMask"/> is a replacement contract: the runtime
 /// registers one scoped default, a host replaces it rather than adding a second, and a host that composes more than one
 /// does not start, whatever order they were registered in, naming every registration.
 /// </summary>
@@ -24,7 +24,7 @@ public sealed class SecretMaskCompositionTests
 
     public SecretMaskCompositionTests() => new ActivitiesRuntimeFeature().ConfigureServices(_services);
 
-    // Kept beside the composition test (§2.23.1): lifetime and uniqueness, one scoped default mask, which the single-mask startup check relies on.
+    // Kept beside the composition test: lifetime and uniqueness, one scoped default mask, which the single-mask startup check relies on.
     [Fact]
     public void The_runtime_registers_one_scoped_default_mask()
     {
@@ -64,7 +64,7 @@ public sealed class SecretMaskCompositionTests
         Assert.IsType<FirstSecretMask>(scope.ServiceProvider.GetRequiredService<IRuntimeSecretMask>());
     }
 
-    // Kept beside the composition test (§2.23.1): idempotence, composing twice registers the check once.
+    // Kept beside the composition test: idempotence, composing twice registers the check once.
     [Fact]
     public async Task Composing_the_runtime_twice_registers_the_check_once()
     {

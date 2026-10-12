@@ -16,7 +16,7 @@ using Xunit;
 namespace Elsa.Activities.Design.Tests.Integration;
 
 /// <summary>
-/// US1 independent test (FR-020, SC-003). Drives the real <see cref="ClrActivityReconciliationSource"/>
+/// Independent end-to-end test of CLR reconciliation. Drives the real <see cref="ClrActivityReconciliationSource"/>
 /// (with the real scanner + version resolver), the real <see cref="CollectActivityVersions"/>,
 /// and the real <see cref="ActivityVersionReconciler"/> against an in-memory catalog. The fixture
 /// assembly is versioned <c>2.1.0</c> and contains one un-annotated activity (→ assembly version) and
@@ -44,7 +44,7 @@ public sealed class ClrReconciliationTests
         // (abstract bases and the abstract invalid credential fixtures are excluded).
         Assert.Equal(18, store.Versions.Count);
 
-        // Re-run: same content + same versions → zero new rows (SC-003 idempotency, DuplicateHandling.Skip).
+        // Re-run: same content + same versions → zero new rows (idempotency, DuplicateHandling.Skip).
         var idsBeforeRerun = store.Versions.Select(v => v.Id).OrderBy(id => id).ToArray();
         await reconciler.Reconcile(CancellationToken.None);
         Assert.Equal(18, store.Versions.Count);

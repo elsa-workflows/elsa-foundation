@@ -34,7 +34,7 @@ namespace Elsa.Activities.Runtime.Tests;
 /// the activity state is Faulted, and an <c>IncidentState</c> is persisted for inspection/intervention.
 /// </summary>
 /// <remarks>
-/// It also guards masking (spec 188, slice 8: T073, T094): a value resolved from a secret for an activity execution
+/// It also guards masking: a value resolved from a secret for an activity execution
 /// never reaches that execution's recorded fault or incident, whether activity code throws it or returns it in a fault,
 /// on the invoke, bookmark resume, parent completion and parent notification paths. The text shows
 /// <c>[secret:&lt;name&gt;]</c> instead, the original exception type name is kept, and masking changes neither a
@@ -225,7 +225,7 @@ public sealed class FaultIncidentExecutionTests
     }
 
     /// <summary>
-    /// T094 (research R9): masking replaces text, never classification. The first input resolves, so its value is
+    /// Masking replaces text, never classification. The first input resolves, so its value is
     /// registered and the second input's failure is masked; it still records as retryable, with its code and its type.
     /// </summary>
     [Fact]
@@ -298,7 +298,7 @@ public sealed class FaultIncidentExecutionTests
     }
 
     /// <summary>
-    /// A missing durable-value storage driver is a deployment problem that parks the activity (constitution §E2.6.1),
+    /// A missing durable-value storage driver is a deployment problem that parks the activity,
     /// classified by its exception type. A registered value must not turn it into a fault by masking it away.
     /// </summary>
     [Fact]

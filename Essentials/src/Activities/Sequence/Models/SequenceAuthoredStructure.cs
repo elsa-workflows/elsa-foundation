@@ -20,7 +20,7 @@ public sealed class SequenceAuthoredStructure
 
     /// <summary>
     /// Container-scoped variables declared by this Sequence. They are owned by the declaring
-    /// Sequence node and visible to its descendant activities (scoped variable model, ADR 0027).
+    /// Sequence node and visible to its descendant activities (scoped variable model).
     /// </summary>
     [JsonPropertyName("variables")]
     public IReadOnlyCollection<VariableDefinition> Variables { get; }

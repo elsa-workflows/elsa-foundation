@@ -11,7 +11,7 @@ using BpmnProcessActivity = Elsa.Activities.Bpmn.Activities.BpmnProcess;
 namespace Elsa.Activities.Bpmn.Interchange.Tests;
 
 /// <summary>
-/// Spec 128 D7 — interchange for event subprocesses: a flow-less <c>subProcess triggeredByEvent="true"</c> whose body
+/// Interchange for event subprocesses: a flow-less <c>subProcess triggeredByEvent="true"</c> whose body
 /// declares an escalation/error start (with isInterrupting) imports as a <c>TriggeredByEvent</c> element and round-trips
 /// through export→import with trigger/interrupting fidelity; unsupported/malformed shapes (no/multiple start, unsupported
 /// trigger, non-interrupting error, per-scope code collisions / duplicate error) Drop with specific findings, so the
@@ -114,7 +114,7 @@ public sealed class BpmnEventSubprocessInterchangeTests
 
     [Fact]
     public void TimeCycleTimer_Degrades() =>
-        // spec 134: a timer event subprocess needs a one-shot <timeDuration>; a recurring <timeCycle> (or cron) is a
+        // A timer event subprocess needs a one-shot <timeDuration>; a recurring <timeCycle> (or cron) is a
         // module-wide cut — the body start degrades to a none start and the event subprocess is dropped, so the
         // importer never emits a validator-rejected graph.
         AssertDrops(
@@ -203,7 +203,7 @@ public sealed class BpmnEventSubprocessInterchangeTests
     [Fact]
     public void ErrorEventSubprocess_RoundTripsThroughExportImport_WithFidelity()
     {
-        // spec 132: an error-triggered event subprocess is executable (deferred seam-B absorption, #989 fix); it
+        // An error-triggered event subprocess is executable (deferred seam-B absorption, #989 fix); it
         // imports as a TriggeredByEvent element and round-trips through export→import as an (always interrupting)
         // error trigger, indexing the error catcher.
         var imported = _importer.Import(ErrorDocument).ProcessNode;
@@ -227,7 +227,7 @@ public sealed class BpmnEventSubprocessInterchangeTests
 
     [Fact]
     public void NonInterruptingError_Degrades() =>
-        // spec 132: error events are always interrupting per BPMN, so a non-interrupting error start is a genuinely
+        // Error events are always interrupting per BPMN, so a non-interrupting error start is a genuinely
         // malformed shape — it degrades (dropped with a finding) so the importer never emits a validator-rejected graph.
         AssertDrops(
             EventSubprocessDoc("es", body: "<startEvent id=\"s\" isInterrupting=\"false\"><errorEventDefinition /></startEvent>"),

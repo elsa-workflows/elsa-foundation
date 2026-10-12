@@ -13,7 +13,7 @@ namespace Elsa.Activities.Flowchart.Internal;
 /// Decides whether an inbound branch must wait at an implicit join, releases waiting joins once every
 /// required branch has answered, fires the join (or a plain continuation) by consuming arrivals, completing
 /// the waiting paths and scheduling the target, and — under a join policy that propagates dead paths — routes
-/// the untaken half of a completion (ADR 0064).
+/// the untaken half of a completion.
 /// <para>
 /// The <em>decision</em> lives in the configured <see cref="IFlowchartJoinPolicy"/>
 /// (<see cref="FlowchartOptions.JoinPolicyKind"/>); this type owns only the mechanics around it, so the two
@@ -173,7 +173,7 @@ public sealed class FlowchartJoinCoordinator(IFlowchartPolicyRegistry policyRegi
     {
         var connectionId = graph.GetConnectionId(connection);
 
-        // Absorption at the loop boundary — the failure mode ADR 0064 says to test hardest. A backward edge is
+        // Absorption at the loop boundary — the failure mode to test hardest. A backward edge is
         // where the next iteration begins, and its target is a loop head, which by the ambiguous-loopback rule
         // has exactly one inbound and therefore never joins. Emitting here would either mint an iteration scope
         // for an iteration that is not happening, or leave a dead arrival keyed to a future iteration where a

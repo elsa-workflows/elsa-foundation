@@ -15,7 +15,7 @@ using Xunit;
 namespace Elsa.Activities.Bpmn.Tests;
 
 /// <summary>
-/// End-to-end coverage for spec 124 compensation: a compensation boundary registers a host's successful
+/// End-to-end coverage for compensation: a compensation boundary registers a host's successful
 /// completion in a reverse-order log; a compensate throw/end replays the registered handlers most-recently-first,
 /// one at a time; <c>activityRef</c> targets one host; an empty log is a no-op; a cycle registers per pass; a
 /// handler fault faults the composite; concurrent throws claim disjoint targets; and the comp:/comprun:/token id

@@ -18,7 +18,7 @@ using FlowchartActivity = Elsa.Activities.Flowchart.Activities.Flowchart;
 namespace Elsa.Activities.Runtime.Tests;
 
 /// <summary>
-/// Spec 123 guardrail 1 (ADR 0047): ReplaySafe hop fusion is a pure dispatch-locality optimization — a run with fusion
+/// Fusion equivalence guardrail: ReplaySafe hop fusion is a pure dispatch-locality optimization — a run with fusion
 /// ENABLED commits byte-identical durable state to a run with it DISABLED, for every shape, and never changes
 /// <c>External</c>/unmarked behavior. Every shape is driven twice over the same in-memory durable substrate under the
 /// coalescing policy (fusion only engages inside a live burst): once fusion-ON (the shipped default) and once
@@ -56,13 +56,13 @@ public sealed class ReplaySafeFusionGuardrailTests
         Assert.True(enabled.Dispatches < disabled.Dispatches,
             $"Expected ON dispatches ({enabled.Dispatches}) < OFF dispatches ({disabled.Dispatches}).");
 
-        // D2 engaged too: the completion cascade between fused spans was pumped inline, not drained per item.
+        // The inline cascade engaged too: the completion cascade between fused spans was pumped inline, not drained per item.
         Assert.True(enabled.InlineCascadeDispatches > 0,
             $"Expected the D2 pump to dispatch cascade items inline in the ON run, saw {enabled.InlineCascadeDispatches}.");
         Assert.Equal(0, disabled.InlineCascadeDispatches);
     }
 
-    // D1-only variant: the completion-cascade dial OFF (D1 fused schedule→start→invoke, discrete cascade) must also be
+    // Fused-dispatch-only variant: the completion-cascade dial OFF (fused schedule→start→invoke, discrete cascade) must also be
     // byte-identical to no-fusion — the benchmark's middle column is a correctness point, not just a measurement.
     [Fact]
     public async Task StraightLineReplaySafeHotLoop_D1OnlyVersusDisabled_IsByteIdentical()
@@ -78,7 +78,7 @@ public sealed class ReplaySafeFusionGuardrailTests
     }
 
     // Shape (b): a multi-outcome branch — one ReplaySafe node forking to two single-predecessor ReplaySafe tails.
-    // Every successor edge is provably single-predecessor, so the D2 pump carries both branches inline (FIFO, exactly
+    // Every successor edge is provably single-predecessor, so the fused pump carries both branches inline (FIFO, exactly
     // the discrete order) and no edge is treated as a join.
     [Fact]
     public async Task MultiOutcomeBranch_EnabledVersusDisabled_IsByteIdentical_AndCascadePumpsInline()
@@ -105,8 +105,8 @@ public sealed class ReplaySafeFusionGuardrailTests
             $"Expected ON dispatches ({enabled.Dispatches}) < OFF dispatches ({disabled.Dispatches}).");
     }
 
-    // Shape (c): a fan-in join (diamond). The join node's ScheduleActivity has two inbound edges, so the D2 pump MUST
-    // hand it back to the discrete cascade (ADR 0047 resolution #1) — proven via the join-fallback counter — and the
+    // Shape (c): a fan-in join (diamond). The join node's ScheduleActivity has two inbound edges, so the fused pump MUST
+    // hand it back to the discrete cascade — proven via the join-fallback counter — and the
     // committed durable state must still be byte-identical.
     [Fact]
     public async Task FanInJoin_EnabledVersusDisabled_IsByteIdentical_AndJoinEdgeFallsBackToDiscreteCascade()
@@ -298,7 +298,7 @@ public sealed class ReplaySafeFusionGuardrailTests
             .ConfigureServices(services =>
             {
                 // AddSingleton (not TryAdd) supersedes the runtime's default registration for GetService resolution —
-                // the same A/B lever the spec-109 fast-path guardrail uses.
+                // the same A/B lever the in-process-hop fast-path guardrail uses.
                 services.AddSingleton(fusionOptions);
                 services.Replace(ServiceDescriptor.Singleton<TimeProvider>(new FakeTimeProvider(FixedNow)));
             })

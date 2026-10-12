@@ -3,7 +3,7 @@ using System.Text.Json.Serialization;
 namespace Elsa.Activities.Bpmn.Models;
 
 /// <summary>
-/// One durable compensation-log entry (spec 124): a host element's successful child completion that carries an
+/// One durable compensation-log entry: a host element's successful child completion that carries an
 /// attached compensation boundary is registered here so a later compensate throw/end can replay its handler.
 /// <see cref="CompensableId"/> is <c>comp:N</c> from <c>BpmnExecutionState.Sequence</c> (registration order —
 /// total and deterministic; reverse replay = descending id). Written via <c>BpmnStateMutator</c> only. Records

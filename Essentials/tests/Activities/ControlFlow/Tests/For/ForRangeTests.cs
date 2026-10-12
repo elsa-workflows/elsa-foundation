@@ -5,7 +5,7 @@ using Xunit;
 namespace Elsa.Activities.For.Tests;
 
 /// <summary>
-/// Focused unit coverage for the counted-loop range arithmetic (§2.23). Locks the documented boundary
+/// Focused unit coverage for the counted-loop range arithmetic. Locks the documented boundary
 /// semantics — start inclusive, end exclusive/inclusive, step direction, zero/negative step, empty range,
 /// and overflow-safe advance — independently of the runtime.
 /// </summary>

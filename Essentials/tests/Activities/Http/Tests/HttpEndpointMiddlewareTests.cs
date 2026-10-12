@@ -21,7 +21,7 @@ using Xunit;
 namespace Elsa.Activities.Http.Tests;
 
 /// <summary>
-/// Unit coverage for the inbound <see cref="HttpEndpointMiddleware"/> (spec 089 B, method-aware/templated routes).
+/// Unit coverage for the inbound <see cref="HttpEndpointMiddleware"/> (method-aware/templated routes).
 /// It drives the middleware with a <see cref="DefaultHttpContext"/>, a fake <see cref="IStimulusRouter"/>, a
 /// production-delegating <see cref="FakeRouteTable"/> seeded with the published templates, a real-semantics
 /// <see cref="TestRouteMatcher"/>, and the real <see cref="InMemoryWorkflowTriggerBindingStore"/> seeded with the
@@ -49,7 +49,7 @@ public sealed class HttpEndpointMiddlewareTests
         Assert.Equal(StatusCodes.Status202Accepted, context.Response.StatusCode);
 
         // The request maps to the matched template + method via the shared hashing scheme, dispatched in
-        // StartAndResume mode (spec 089 D) so it both starts triggers and resumes waiting instances. A concrete
+        // StartAndResume mode so it both starts triggers and resumes waiting instances. A concrete
         // (parameter-free) template carries no RouteData.
         var dispatched = Assert.Single(router.Requests);
         Assert.Equal(HttpEndpointStimulus.StimulusType, dispatched.StimulusType);
@@ -61,7 +61,7 @@ public sealed class HttpEndpointMiddlewareTests
         var payload = JsonDocument.Parse(await ReadResponse(context)).RootElement;
         var started = payload.GetProperty("started");
         Assert.Equal("wf-exec-42", started[0].GetString());
-        // The response now carries a (here empty) resumed array alongside started (spec 089 D, D-D6).
+        // The response now carries a (here empty) resumed array alongside started.
         Assert.Empty(payload.GetProperty("resumed").EnumerateArray());
     }
 
@@ -268,7 +268,7 @@ public sealed class HttpEndpointMiddlewareTests
     [Fact]
     public async Task SiblingPathSharingThePrefixText_PassesThroughToNext()
     {
-        // Spec 089 review V1: '/workflows/httpstatus' shares the prefix TEXT of '/workflows/http' but is a
+        // '/workflows/httpstatus' shares the prefix TEXT of '/workflows/http' but is a
         // different path segment — it must never be captured as an endpoint route.
         var router = new RecordingStimulusRouter();
         var middleware = Middleware(router, new InMemoryWorkflowTriggerBindingStore(), "foo");
@@ -288,7 +288,7 @@ public sealed class HttpEndpointMiddlewareTests
     [Fact]
     public async Task WhitespaceOnlyEndpointPath_PassesThroughToNext()
     {
-        // Spec 089 review V2: '/workflows/http/%20' decodes to a whitespace-only route; it must pass through
+        // '/workflows/http/%20' decodes to a whitespace-only route; it must pass through
         // cleanly before any template resolution runs.
         var router = new RecordingStimulusRouter();
         var middleware = Middleware(router, new InMemoryWorkflowTriggerBindingStore(), "foo");
@@ -308,7 +308,7 @@ public sealed class HttpEndpointMiddlewareTests
     [Fact]
     public async Task EmptyBasePath_DisablesTheMiddleware_EverythingPassesThrough()
     {
-        // Spec 089 review V4: an empty/root base path must never turn the middleware into a host-wide
+        // An empty/root base path must never turn the middleware into a host-wide
         // catch-all that 404s unrelated routes.
         var router = new RecordingStimulusRouter();
         var middleware = Middleware(router, new InMemoryWorkflowTriggerBindingStore(), "health", basePath: "/");
@@ -328,7 +328,7 @@ public sealed class HttpEndpointMiddlewareTests
     [Fact]
     public async Task LowercaseHttpMethod_IsUppercasedOnTheRequestModel()
     {
-        // Spec 089 review V7: the documented contract is an uppercase method; raw clients may send
+        // The documented contract is an uppercase method; raw clients may send
         // non-standard casing and Kestrel forwards the verb token verbatim.
         var router = new RecordingStimulusRouter(StimulusStartOutcome.Started("binding-1", "artifact-1", "wf-exec-1"));
         var store = await StoreWith(Binding("artifact-1", "orders/webhook", "POST"));
@@ -344,7 +344,7 @@ public sealed class HttpEndpointMiddlewareTests
     [Fact]
     public async Task BodyLargerThanTheCap_IsRejectedWith413_BeforeAnyDispatch()
     {
-        // Spec 089 review V9: the stimulus payload becomes durable state on the started instance, so the
+        // The stimulus payload becomes durable state on the started instance, so the
         // transport bounds it. The template must be in the table so the request reaches the body/model stage.
         var router = new RecordingStimulusRouter(StimulusStartOutcome.Started("binding-1", "artifact-1", "wf-exec-1"));
         var store = await StoreWith(Binding("artifact-1", "orders/webhook", "POST"));
@@ -357,7 +357,7 @@ public sealed class HttpEndpointMiddlewareTests
         Assert.Empty(router.Requests);
     }
 
-    // ---- Spec 089 sub-unit C (T009): authorization, per-endpoint size limit, ParsedContent, faults ----
+    // ---- Authorization, per-endpoint size limit, ParsedContent, faults ----
 
     [Fact]
     public async Task Authorize_WithNoRequestServices_Replies401_FailClosed_RouterUntouched_BodyUnread()
@@ -448,7 +448,7 @@ public sealed class HttpEndpointMiddlewareTests
     [Fact]
     public async Task DispatchedInput_CarriesTheRawBody_ButNotAReEncodedParsedContentCopy()
     {
-        // Spec 089 efficiency #9: parsed content is no longer persisted on the wire model — the activity derives
+        // Parsed content is no longer persisted on the wire model — the activity derives
         // it from Body at execution time — so the durable stimulus payload carries the body exactly once, with no
         // re-encoded ParsedContent copy doubling it.
         var router = new RecordingStimulusRouter(StimulusStartOutcome.Started("binding-1", "artifact-1", "wf-exec-1"));
@@ -544,7 +544,7 @@ public sealed class HttpEndpointMiddlewareTests
         Assert.Contains(faultHandler.LastContext!.Exceptions, e => e is InvalidOperationException);
     }
 
-    // ---- Spec 089 sub-unit D (T011): StartAndResume — resume-only matches, merged body, bookmark-metadata options ----
+    // ---- StartAndResume — resume-only matches, merged body, bookmark-metadata options ----
 
     [Fact]
     public async Task ResumeOnlyMatch_NoClaimant_Replies202_WithResumedIds()
@@ -591,7 +591,7 @@ public sealed class HttpEndpointMiddlewareTests
     public async Task NeitherStartedNorResumed_Replies404()
     {
         // The template resolves (in the table) but the router neither starts nor resumes anything → 404, requiring
-        // BOTH zero starts and zero dispatched resumes (spec 089 D, D-D6).
+        // BOTH zero starts and zero dispatched resumes.
         var router = new RecordingStimulusRouter();
         var store = await StoreWith(Binding("artifact-1", "callbacks", "POST"));
         var middleware = Middleware(router, store, "callbacks");
@@ -623,7 +623,7 @@ public sealed class HttpEndpointMiddlewareTests
     public async Task ResumeOnly_BookmarkMetadataAuthorize_FailingHandler_Replies401_BeforeBodyRead()
     {
         // No trigger claimant, but the waiting bookmark's metadata marks the endpoint authorize=true — enforcement
-        // uses the bookmark's options (D-D5) and fails closed before the body is read or anything dispatched.
+        // uses the bookmark's options and fails closed before the body is read or anything dispatched.
         var router = RecordingStimulusRouter.WithOutcomes(
             resumes: new[] { new StimulusResumeOutcome("wf-1", BookmarkResumeDispatchStatus.Dispatched) });
         var bookmarks = await BookmarkLookupWith(WaitingBookmark("wf-1", "secure", "POST", authorize: true, policy: "admins"));
@@ -646,7 +646,7 @@ public sealed class HttpEndpointMiddlewareTests
     public async Task ResumeOnly_BookmarkMetadataSizeLimit_OversizedBody_Replies413()
     {
         // No trigger claimant; the waiting bookmark's metadata sets a per-endpoint size limit smaller than the
-        // global cap, and an oversized body 413s before dispatch (D-D5 enforcement applies to resume-only matches).
+        // global cap, and an oversized body 413s before dispatch (enforcement applies to resume-only matches).
         var router = RecordingStimulusRouter.WithOutcomes(
             resumes: new[] { new StimulusResumeOutcome("wf-1", BookmarkResumeDispatchStatus.Dispatched) });
         var bookmarks = await BookmarkLookupWith(WaitingBookmark("wf-1", "sized", "POST", requestSizeLimit: 16));
@@ -659,7 +659,7 @@ public sealed class HttpEndpointMiddlewareTests
         Assert.Empty(router.Requests);
     }
 
-    // ---- D-D5 fail-closed merge: divergent options across multiple waiting bookmarks on one (template, method) ----
+    // ---- Fail-closed merge: divergent options across multiple waiting bookmarks on one (template, method) ----
 
     [Fact]
     public async Task ResumeOnly_DivergentAuthorize_AcrossBookmarks_FailsClosed_AnonymousDenied()
@@ -836,7 +836,7 @@ public sealed class HttpEndpointMiddlewareTests
     public async Task ClaimantWins_OverBookmarkMetadata_WhenBothExist()
     {
         // Both a trigger claimant and a waiting bookmark exist for the (template, method), and their options DIFFER:
-        // the claimant does NOT authorize, the bookmark WOULD. D-D5 says the claimant wins — so no auth runs and the
+        // the claimant does NOT authorize, the bookmark WOULD. The claimant wins — so no auth runs and the
         // request dispatches (202) even though the bookmark's metadata alone would have demanded authorization.
         var router = RecordingStimulusRouter.WithOutcomes(
             starts: new[] { StimulusStartOutcome.Started("binding-1", "artifact-1", "wf-started-1") });
@@ -935,7 +935,7 @@ public sealed class HttpEndpointMiddlewareTests
         Assert.Equal(StatusCodes.Status200OK, context.Response.StatusCode);
     }
 
-    // ---- Spec 089 sub-unit E (T006): synchronous same-exchange responses + 202 degrade ----
+    // ---- Synchronous same-exchange responses + 202 degrade ----
 
     [Fact]
     public async Task Sync_WorkflowAuthorsResponse_MiddlewareReturnsWithoutWriting_No202Stomp()
@@ -992,7 +992,7 @@ public sealed class HttpEndpointMiddlewareTests
     [Fact]
     public async Task Sync_Dispatch_CarriesRequestServicesAsAmbientServices_SameInstance()
     {
-        // The sync dispatch must carry the request's RequestServices as ambient services (spec-069 chain), so the
+        // The sync dispatch must carry the request's RequestServices as ambient services, so the
         // inline drain builds the activity context with them and WriteHttpResponse resolves THIS sink.
         var (services, sink) = SyncServices();
         var router = new RecordingStimulusRouter(StimulusStartOutcome.Started("binding-1", "artifact-1", "wf-exec-1"));
@@ -1032,7 +1032,7 @@ public sealed class HttpEndpointMiddlewareTests
     [Fact]
     public async Task Sync_ResumeOnlyMatch_BookmarkMetadataSync_TakesSyncPath()
     {
-        // A purely mid-flow endpoint whose waiting bookmark authored responseMode=Sync (E-D6 any-Sync). No trigger
+        // A purely mid-flow endpoint whose waiting bookmark authored responseMode=Sync (any-Sync). No trigger
         // claimant, so the mode comes from the bookmark merge; the sync path is taken — ambient services attached,
         // sink populated, and the callback's live write returned without a 202 stomp.
         var (services, sink) = SyncServices();

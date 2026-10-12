@@ -19,15 +19,15 @@ using Xunit;
 namespace Elsa.Activities.Runtime.Tests;
 
 /// <summary>
-/// The input paths of research R3a that activation-time secret resolution owns (spec 188, T091): structural parent
-/// evaluation (IP5), child-completion re-materialization (IP6), the boundary retry (IP9) and the operator reschedule
-/// (IP10), whose successor is invoked through the real scheduler work handlers. Each path that activates a CLR activity
+/// The input paths that activation-time secret resolution owns: structural parent
+/// evaluation, child-completion re-materialization, the boundary retry and the operator reschedule,
+/// whose successor is invoked through the real scheduler work handlers. Each path that activates a CLR activity
 /// resolves the reference again, and none persists a value. Invoke and
-/// bookmark resume (IP3, IP4) are covered by <see cref="ClrActivityActivatorTests"/> and
+/// bookmark resume are covered by <see cref="ClrActivityActivatorTests"/> and
 /// <see cref="WorkflowInvokeActivitySchedulerWorkHandlerTests"/>. On the bookmark resume, structural parent evaluation
 /// and re-materialization paths, an activation canceled while its lease disposal fails stays a cancellation, as the
 /// invoke path's does; once a secret resolved for the execution, the disposal failure reported with the cancellation is
-/// masked (spec 188, slice 8).
+/// masked.
 /// </summary>
 public sealed class SecretInputPathCoverageTests
 {

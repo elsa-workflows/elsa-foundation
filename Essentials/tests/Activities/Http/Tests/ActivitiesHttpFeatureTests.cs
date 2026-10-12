@@ -19,7 +19,7 @@ using Xunit;
 namespace Elsa.Activities.Http.Tests;
 
 /// <summary>
-/// Feature-registration coverage for <see cref="ActivitiesHttpFeature"/> (constitution §2.23.1). The HTTP
+/// Feature-registration coverage for <see cref="ActivitiesHttpFeature"/>. The HTTP
 /// activities are transiently activated from their compiled CLR contracts, so the feature registers no per-type
 /// activity instances; it does own the outbound transport (the named client), contributes the
 /// <see cref="HttpEndpoint"/> start-trigger's stimulus provider on the W7 seam, and registers the inbound
@@ -55,7 +55,7 @@ public sealed class ActivitiesHttpFeatureTests
     [Fact]
     public async Task MountsTheEndpointMiddleware_ThroughTheCShellsMiddlewareSeam()
     {
-        // Spec 089 FR-003: enabling the feature is all a host needs — the feature itself is the
+        // Enabling the feature is all a host needs — the feature itself is the
         // IMiddlewareShellFeature that mounts HttpEndpointMiddleware into the shell pipeline. Proven
         // behaviorally: a request under the endpoints base path is answered by the mounted middleware
         // (404: no matching trigger) instead of reaching the terminal sentinel.
@@ -72,7 +72,7 @@ public sealed class ActivitiesHttpFeatureTests
         services.AddSingleton<IRouteTable>(new FakeRouteTable("orders/webhook"));
         services.AddSingleton<IRouteMatcher, TestRouteMatcher>();
         services.AddSingleton<IWorkflowTriggerBindingStore, Elsa.Workflows.Runtime.Services.Triggers.InMemoryWorkflowTriggerBindingStore>();
-        // The middleware also resolves waiting-bookmark options for resume-only matches (spec 089 D) via the
+        // The middleware also resolves waiting-bookmark options for resume-only matches via the
         // cross-execution lookup — contributed in production by WorkflowsRuntimeTriggers (in ActivitiesHttp's
         // DependsOn closure); the bare container stands in for that guarantee with an empty bookmark store.
         services.AddSingleton<IBookmarkStimulusIndex, Elsa.Workflows.Runtime.Services.Bookmarks.InMemoryBookmarkStateStore>();

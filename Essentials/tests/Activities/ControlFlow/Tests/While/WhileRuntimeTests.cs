@@ -22,7 +22,7 @@ namespace Elsa.Activities.While.Tests;
 /// <c>While</c> opts into <c>IRuntimeRematerializeInputsOnChildCompletion</c> (issue #977): its inputs are
 /// re-materialized from live committed variable frames before every child-completion evaluation, so a body
 /// that mutates the condition variable (via a <c>Set</c> intrinsic) terminates the loop. The pinned
-/// invocation snapshot itself stays immutable (ADR 0045); the per-pass re-read is transient. A body
+/// invocation snapshot itself stays immutable; the per-pass re-read is transient. A body
 /// <c>Break</c> outcome remains the explicit early-exit that ends the loop before the condition re-check.
 /// </summary>
 public sealed class WhileRuntimeTests
@@ -95,7 +95,7 @@ public sealed class WhileRuntimeTests
     [Fact]
     public async Task BodySetOfContainerScopedConditionVariable_TerminatesUnderCoalescing()
     {
-        // The fused/coalesced drain (ADR 0032 / ADR 0047) routes parent-completion evaluation through the
+        // The fused/coalesced drain routes parent-completion evaluation through the
         // same handler, so the per-pass re-materialization must observe the body's frame write there too.
         await using var harness = NewHarness(
             coalescing: true, "actexec-root", "actexec-scope", "actexec-while", "actexec-set-0");

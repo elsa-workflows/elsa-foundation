@@ -12,7 +12,7 @@ namespace Elsa.Activities.Flowchart.Tests;
 
 /// <summary>
 /// Flowchart container-scoped variables (#208): a Flowchart owns container-scoped variable
-/// declarations and uses the same generic scope semantics as a Sequence (ADR 0027).
+/// declarations and uses the same generic scope semantics as a Sequence.
 /// </summary>
 public sealed class FlowchartScopedVariableTests
 {

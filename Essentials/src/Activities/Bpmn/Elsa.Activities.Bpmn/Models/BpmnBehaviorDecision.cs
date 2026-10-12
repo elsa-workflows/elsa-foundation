@@ -80,14 +80,14 @@ public enum BpmnBehaviorCommandKind
     Fault,
 
     /// <summary>
-    /// Replay the compensation log (spec 124): a compensate throw/end token requests the engine to claim and
+    /// Replay the compensation log: a compensate throw/end token requests the engine to claim and
     /// run the registered compensation handlers (reverse registration order), then route/consume when done.
     /// The behavior stays decision-only — registration, ordering, claiming, and replay are engine-owned.
     /// </summary>
     TriggerCompensation,
 
     /// <summary>
-    /// Cancel the enclosing transaction (spec 125): a cancel end event requests the engine to stop all other
+    /// Cancel the enclosing transaction: a cancel end event requests the engine to stop all other
     /// live work in the scope, replay every registered compensable (reverse registration order), and then
     /// complete the process with the <c>Cancelled</c> outcome. The behavior stays decision-only — stopping,
     /// claiming, replay, and completion are engine-owned.
@@ -95,7 +95,7 @@ public enum BpmnBehaviorCommandKind
     CancelTransaction,
 
     /// <summary>
-    /// Raise an escalation (spec 127): an escalation throw/end event requests the engine to signal its parent
+    /// Raise an escalation: an escalation throw/end event requests the engine to signal its parent
     /// scope through seam C (<c>RequestParentNotification</c>) — or, at a root process, to record a no-op
     /// diagnostic. Companion to the throw's routing command (<c>EmitTokens</c> on an intermediate throw,
     /// <c>ConsumeToken</c> on an end event), which routes/consumes as usual. The behavior stays decision-only —

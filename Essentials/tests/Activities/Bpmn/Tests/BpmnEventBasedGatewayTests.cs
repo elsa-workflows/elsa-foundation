@@ -16,9 +16,9 @@ using EventActivity = Elsa.Activities.Primitives.Activities.Event;
 namespace Elsa.Activities.Bpmn.Tests;
 
 /// <summary>
-/// End-to-end coverage for spec 119 event-based gateways: a token forks into a race of intermediate catch
+/// End-to-end coverage for event-based gateways: a token forks into a race of intermediate catch
 /// events; the first to fire wins and routes, and every losing sibling's token AND its armed child subtree
-/// are cancelled (the first BPMN consumer of the spec 112 seam-A subtree cancellation).
+/// are cancelled (the first BPMN consumer of seam-A subtree cancellation).
 /// </summary>
 public sealed class BpmnEventBasedGatewayTests
 {
@@ -193,8 +193,8 @@ public sealed class BpmnEventBasedGatewayTests
     public async Task WinnerRoutingFault_DoesNotStageCancellations_AndSurfacesTheRoutingFault()
     {
         // The winning catch's own outbound flow is conditioned on an outcome its child never reports, so the
-        // winner routing faults bpmn.flow.none-taken. Per D3 the loser cancellations must NOT be staged in that
-        // evaluation — the process faults on the routing fault, not on a seam-112 "cannot also cancel" error.
+        // winner routing faults bpmn.flow.none-taken. The loser cancellations must NOT be staged in that
+        // evaluation — the process faults on the routing fault, not on a seam-A "cannot also cancel" error.
         await using var fixture = await CreateFixtureAsync("actexec-bpmn", "actexec-wait", "actexec-delay");
         var executable = fixture.NewExecutable(
             children: [NewEventWaitNode("node-wait", "order-shipped"), NewDelayNode("node-delay", TimeSpan.FromMinutes(5))],
@@ -240,7 +240,7 @@ public sealed class BpmnEventBasedGatewayTests
     {
         // One parallel branch waits on a "kill" event; the other opens a live race. Resuming "kill" routes to a
         // terminate end event: terminate's CancelLiveWork logically cancels the live race members and ends the
-        // process, but stages NO seam-A subtree cancellation (D5). The losing race children therefore stay
+        // process, but stages NO seam-A subtree cancellation. The losing race children therefore stay
         // suspended with their bookmarks intact — the observable proof that no runtime teardown happened.
         await using var fixture = await CreateFixtureAsync("actexec-bpmn", "actexec-kill", "actexec-a", "actexec-b");
         var executable = fixture.NewExecutable(

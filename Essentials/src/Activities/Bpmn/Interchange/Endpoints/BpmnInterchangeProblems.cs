@@ -40,7 +40,7 @@ internal sealed class BpmnInterchangeProblemWriter : IEndpointProblemWriter
 
 /// <summary>
 /// Maps interchange failures to the owner's legacy 400, exactly as the catch ladders did, and a schema write refusal to
-/// a 409 in the same envelope (spec 180, FR-016a). The refusal is answered here rather than left to translation because
+/// a 409 in the same envelope. The refusal is answered here rather than left to translation because
 /// <see cref="BpmnInterchangeProblemWriter"/> keeps only a problem's first message, which would drop its code.
 /// </summary>
 internal sealed class BpmnInterchangeFaultRenderer : IEndpointFaultRenderer

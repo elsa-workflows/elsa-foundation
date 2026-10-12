@@ -9,13 +9,13 @@ using Microsoft.Extensions.DependencyInjection;
 namespace Elsa.Activities.Http.IntegrationTests;
 
 /// <summary>
-/// Acceptance for spec 089 sub-unit E (synchronous HTTP responses) — User Story 5 acceptance 5.1-5.5 and FR-021 —
+/// Acceptance for synchronous HTTP responses,
 /// proven at the host level over the real ASP.NET Core pipeline (see <see cref="HttpEndpointHostFixture"/>). These
 /// are the first tests to exercise the WHOLE sync-response chain end to end with no fakes: a sync-mode endpoint
 /// the in-process actor drains INLINE on the caller's async flow → a <c>WriteHttpResponse</c> the run reaches
 /// commits one typed instruction → the request-owned delivery adapter writes that result in the SAME exchange → the middleware returns the
 /// workflow-authored status/headers/body rather than the 202 baseline. The degrade path (suspend-first, timeout),
-/// the async baseline's bit-identical 202, the mid-flow (D+E) resume-writes-response scenario, and the FR-021
+/// the async baseline's bit-identical 202, the mid-flow resume-writes-response scenario, and the
 /// ambient-services purity sweep are all covered here.
 /// </summary>
 public sealed class HttpEndpointSyncResponseEndToEndTests : IAsyncLifetime
@@ -31,7 +31,7 @@ public sealed class HttpEndpointSyncResponseEndToEndTests : IAsyncLifetime
     [Fact]
     public async Task SyncEndpoint_WorkflowWritesResponse_SameExchangeReturnsAuthoredResponse_AndRecordsTheDurableArtifact()
     {
-        // Scenario 5.1: a sync endpoint whose workflow writes a custom status/body/content-type/header returns THAT
+        // A sync endpoint whose workflow writes a custom status/body/content-type/header returns THAT
         // response in the same exchange (NOT 202), and the durable HttpResponseInstruction artifact is still recorded.
         await _fixture.PublishSyncEndpointWithWriteResponseWorkflowAsync(
             artifactId: "artifact-sync-write",
@@ -52,7 +52,7 @@ public sealed class HttpEndpointSyncResponseEndToEndTests : IAsyncLifetime
         Assert.StartsWith("application/json", response.Content.Headers.ContentType!.ToString());
         Assert.Equal("yes", Assert.Single(response.Headers.GetValues("X-Elsa-Sync")));
 
-        // The durable artifact is recorded alongside the live write (E-D3: the artifact is unconditional).
+        // The durable artifact is recorded alongside the live write (the artifact is unconditional).
         var artifact = await ReadArtifactForSingleRunAsync();
         Assert.Equal(201, artifact.GetProperty("statusCode").GetInt32());
         Assert.Equal("""{"id":42}""", artifact.GetProperty("body").GetString());
@@ -62,7 +62,7 @@ public sealed class HttpEndpointSyncResponseEndToEndTests : IAsyncLifetime
     [Fact]
     public async Task SyncEndpoint_SuspendsBeforeWritingResponse_DegradesTo202WithExecutionId()
     {
-        // Scenario 5.2: a sync endpoint whose run suspends at a mid-flow endpoint BEFORE any WriteHttpResponse. No
+        // A sync endpoint whose run suspends at a mid-flow endpoint BEFORE any WriteHttpResponse. No
         // live response was written, so the middleware degrades to the 202 baseline with the started execution id.
         await _fixture.PublishSyncSuspendBeforeResponseWorkflowAsync(
             artifactId: "artifact-sync-suspend",
@@ -85,7 +85,7 @@ public sealed class HttpEndpointSyncResponseEndToEndTests : IAsyncLifetime
     [Fact]
     public async Task SyncEndpoint_RequestTimeoutExceeded_Replies408_AndTheInstanceRemainsValid()
     {
-        // Scenario 5.3: a sync endpoint with a short RequestTimeout whose workflow stalls past it. The inline drain
+        // A sync endpoint with a short RequestTimeout whose workflow stalls past it. The inline drain
         // stalls on the timeout token; the middleware maps the OperationCanceledException to 408. The instance's
         // durable state remains valid (the run was persisted before the stall and stays inspectable).
         await _fixture.PublishSyncStallThenResponseWorkflowAsync(
@@ -127,7 +127,7 @@ public sealed class HttpEndpointSyncResponseEndToEndTests : IAsyncLifetime
     [Fact]
     public async Task AsyncEndpoint_SameWriteResponseWorkflow_RepliesBitIdentical202Baseline_AndRecordsTheArtifact()
     {
-        // Scenario 5.4: the SAME WriteHttpResponse workflow authored Async (the default). The response is the
+        // The SAME WriteHttpResponse workflow authored Async (the default). The response is the
         // bit-identical 202 baseline {started:[...],resumed:[...]}; the live response was NOT written by the workflow;
         // the durable artifact is still recorded.
         await _fixture.PublishSyncEndpointWithWriteResponseWorkflowAsync(
@@ -163,7 +163,7 @@ public sealed class HttpEndpointSyncResponseEndToEndTests : IAsyncLifetime
     [Fact]
     public async Task MidFlowSyncEndpoint_ResumingRequestReceivesTheWorkflowsSubsequentWriteResponse_InTheSameExchange()
     {
-        // Scenario 5.5 — the whole reason the D+E composition exists. A workflow started DIRECTLY suspends at a
+        // The whole reason mid-flow resume and synchronous responses compose. A workflow started DIRECTLY suspends at a
         // mid-flow endpoint authored Sync; the RESUMING request drains the subsequent WriteHttpResponse INLINE on its
         // own fresh scope, so that request receives the workflow-authored response in the same exchange (fresh ambient
         // context on resume — the resume dispatch carries the resuming request's own RequestServices).
@@ -199,7 +199,7 @@ public sealed class HttpEndpointSyncResponseEndToEndTests : IAsyncLifetime
     [Fact]
     public async Task SyncDispatch_PersistedState_CarriesNoLiveServiceReferences_FR021()
     {
-        // FR-021: after a sync dispatch (which passed the request services as ambient services), sweep the persisted
+        // After a sync dispatch (which passed the request services as ambient services), sweep the persisted
         // state stores accessible via the fixture's service provider and assert NO live-service references crossed
         // into durable state — the ambient services are a live, request-affine reference that must never serialize.
         await _fixture.PublishSyncEndpointWithWriteResponseWorkflowAsync(
@@ -217,7 +217,7 @@ public sealed class HttpEndpointSyncResponseEndToEndTests : IAsyncLifetime
 
         // Sweep every persisted store's serialized JSON for a service-provider fingerprint. The runtime persists
         // envelopes/checkpoints as opaque state; a leaked IServiceProvider would surface as a provider type name in
-        // the serialized payload. (Mirrors the T003 integration purity assertion at the HTTP E2E level.)
+        // the serialized payload. (Mirrors the integration purity assertion at the HTTP E2E level.)
         var services = _fixture.Services;
         var executions = await services.GetRequiredService<IWorkflowExecutionStateStore>().ListAllAsync();
         var runId = Assert.Single(executions).WorkflowExecutionId;

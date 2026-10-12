@@ -12,7 +12,7 @@ public sealed class ClrReconciliationOptions
 
     /// <summary>
     /// The source identity recorded on every contributed row. When unset it defaults to the
-    /// normalised <see cref="FolderPath"/> (R3), so two distinct folders are distinct sources.
+    /// normalised <see cref="FolderPath"/>, so two distinct folders are distinct sources.
     /// </summary>
     public string? SourceId { get; set; }
 

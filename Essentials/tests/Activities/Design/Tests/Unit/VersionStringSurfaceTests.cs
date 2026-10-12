@@ -15,7 +15,7 @@ using Xunit;
 namespace Elsa.Activities.Design.Tests.Unit;
 
 /// <summary>
-/// US2 surface test (SC-001). A persisted version carries the author's full SemVer 2.0.0 string —
+/// Version-string surface test. A persisted version carries the author's full SemVer 2.0.0 string —
 /// including prerelease + build metadata — and that exact string surfaces verbatim on every read
 /// path: the <see cref="IActivityDefinitionVersion"/> read contract, the <see cref="ListDefinitionVersions"/>
 /// projection/handler, and the API <see cref="ActivityDefinitionVersionDetailsView"/>.

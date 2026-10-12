@@ -10,8 +10,8 @@ using BpmnProcessActivity = Elsa.Activities.Bpmn.Activities.BpmnProcess;
 namespace Elsa.Activities.Bpmn.Interchange.Tests;
 
 /// <summary>
-/// Spec 125 D4 — interchange for transactions. A &lt;transaction&gt; with a cancel end, a cancel boundary, and an
-/// inner spec-124 compensation construct round-trips import→export→import; a cancel end outside a transaction
+/// Interchange for transactions. A &lt;transaction&gt; with a cancel end, a cancel boundary, and an
+/// inner compensation construct round-trips import→export→import; a cancel end outside a transaction
 /// degrades to a none end, a cancel boundary on a non-transaction host drops (flow cascade), and a duplicate
 /// cancel boundary drops — each with a specific finding. The importer never emits a graph the validator rejects.
 /// </summary>
@@ -71,7 +71,7 @@ public sealed class BpmnTransactionInterchangeTests
         Assert.True(nested.IsTransaction);
         var cancelEnd = nested.Elements.Single(element => element.ElementId == "tcancel");
         Assert.Equal(BpmnEventDefinitionTypes.Cancel, cancelEnd.EventDefinitions.Single().Type);
-        // The inner spec-124 compensation boundary/handler still resolved inside the transaction.
+        // The inner compensation boundary/handler still resolved inside the transaction.
         Assert.Equal("thandler", nested.Elements.Single(element => element.ElementId == "tcb").CompensationHandlerElementId);
         Assert.True(nested.Elements.Single(element => element.ElementId == "thandler").IsForCompensation);
 

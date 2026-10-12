@@ -7,7 +7,7 @@ using Xunit;
 namespace Elsa.Activities.Behavioral;
 
 /// <summary>
-/// Pins the side-effect profile of every shipped activity (ADR 0032 R1). A ReplaySafe activity's attempt claim may be
+/// Pins the side-effect profile of every shipped activity. A ReplaySafe activity's attempt claim may be
 /// deferred, so a crash before the next commit runs its body again. Nothing at runtime notices an activity that should
 /// not have been marked; it just commits less. So the ReplaySafe set is a reviewed list that changes in the same commit
 /// as the attribute, and every shipped activity not on it stays External.

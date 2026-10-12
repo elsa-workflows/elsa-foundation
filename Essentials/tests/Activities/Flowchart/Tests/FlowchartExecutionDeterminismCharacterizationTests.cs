@@ -28,7 +28,7 @@ public sealed class FlowchartExecutionDeterminismCharacterizationTests
 {
     /// <summary>
     /// These byte-locks were frozen against the pre-decomposition engine and their value is that they stay
-    /// green on a revert of #275. ADR 0064 moved the shipping default to the dead-path join, which emits
+    /// green on a revert of #275. The shipping default moved to the dead-path join, which emits
     /// arrivals on untaken edges and so legitimately mints a different id stream — re-freezing them under it
     /// would quietly retire the green-on-revert property they exist for. They stay pinned to the semantics
     /// they characterize; <see cref="FlowchartDeadPathDeterminismTests"/> carries the equivalent lock for the

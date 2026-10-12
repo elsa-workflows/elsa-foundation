@@ -516,7 +516,7 @@ public sealed class EfActivityManagementProjectionRetention(ActivitiesDesignDbCo
     /// embed a checkpoint in its own transaction. Keeping the delete tracked makes a second writer
     /// that touched a closed revision fail here instead of losing the row in silence, and the only
     /// thing the set-based form would buy is throughput, which this repository does not measure or
-    /// gate (#1668, ADR 0073).
+    /// gate (#1668).
     /// </para>
     /// </remarks>
     private async Task DeleteInBatchesAsync<TEntity>(DbSet<TEntity> set, System.Linq.Expressions.Expression<Func<TEntity, bool>> predicate, CancellationToken token)

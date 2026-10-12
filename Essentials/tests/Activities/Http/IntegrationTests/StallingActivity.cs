@@ -8,7 +8,7 @@ namespace Elsa.Activities.Http.IntegrationTests;
 /// A deterministic leaf activity that stalls the inline drain for a fixed <see cref="Duration"/>, observing the
 /// activity's <see cref="ActivityExecutionContext.CancellationToken"/> — the very token the sync-endpoint
 /// middleware's per-endpoint <c>RequestTimeout</c> linked CTS cancels. It exists so a synchronous endpoint
-/// (spec 089 sub-unit E, scenario 5.3) can be driven past its timeout: the stall throws
+/// can be driven past its timeout: the stall throws
 /// <see cref="OperationCanceledException"/> on the cancelled token, which propagates out of <c>RouteAsync</c> and
 /// the middleware maps to <c>408</c>.
 /// </summary>

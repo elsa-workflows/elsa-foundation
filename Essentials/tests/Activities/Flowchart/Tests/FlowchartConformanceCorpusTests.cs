@@ -10,7 +10,7 @@ using static Elsa.Activities.Flowchart.Tests.FlowchartConformanceCorpus;
 namespace Elsa.Activities.Flowchart.Tests;
 
 /// <summary>
-/// The ADR 0064 conformance corpus: the routing scenarios whose answers define what "the same semantics"
+/// The join conformance corpus: the routing scenarios whose answers define what "the same semantics"
 /// means for a Flowchart, run against the real engine.
 /// <para>
 /// It exists to be the <b>instrument</b>, so it lands before the semantics change it measures. Every scenario
@@ -20,8 +20,7 @@ namespace Elsa.Activities.Flowchart.Tests;
 /// assertion is blind to both.
 /// </para>
 /// <para>
-/// The scenarios are the ones ADR 0064 names, plus the loop shape that stresses the part the ADR calls
-/// subtle: a join inside a loop body whose live inbound branch <em>alternates</em> between iterations, so a
+/// The scenarios are the canonical join shapes, plus the loop shape that stresses the subtle part: a join inside a loop body whose live inbound branch <em>alternates</em> between iterations, so a
 /// dead path from iteration <i>n</i> that leaked into iteration <i>n+1</i> would fire that join early and
 /// change this corpus's answer.
 /// </para>
@@ -119,7 +118,7 @@ public sealed class FlowchartConformanceCorpusTests
     /// a Flowchart loop head must have exactly one inbound connection, so an inner loop head — which needs one
     /// inbound from the outer body plus its own loop-closing edge — is rejected at start by
     /// <see cref="FlowchartReachabilityAnalyzer.ValidateNoAmbiguousLoopbacks"/>. Two consequences worth pinning:
-    /// nested iteration is <c>ForEach</c>'s job, not the graph's (ADR 0064's "collection iteration stays
+    /// nested iteration is <c>ForEach</c>'s job, not the graph's ("collection iteration stays
     /// ForEach"), and no join semantics can be blamed for it, because the rejection happens before any token
     /// moves. That is why this row is structural rather than executed — it must read the same under either
     /// join policy, and it does so by construction.
@@ -160,7 +159,7 @@ public sealed class FlowchartConformanceCorpusTests
 
     /// <summary>
     /// C4 — a join inside a loop whose live inbound branch alternates per iteration. This is the corpus row
-    /// ADR 0064 says to test hardest: in every iteration exactly <em>one</em> of the join's two inbound
+    /// most worth testing hard: in every iteration exactly <em>one</em> of the join's two inbound
     /// branches runs, so a join that could be satisfied by the other branch's leftover from the previous
     /// iteration would fire early and produce a different order here. Three iterations, alternating
     /// left/right/left, so a one-iteration leak in either direction is visible.

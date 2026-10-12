@@ -7,7 +7,7 @@ using Xunit;
 namespace Elsa.Activities.Runtime.Tests;
 
 /// <summary>
-/// The work handlers' masking of an activity execution's failure text (spec 188, T076): an exception is replaced only
+/// The work handlers' masking of an activity execution's failure text: an exception is replaced only
 /// while a value is registered for the execution, whether or not its text holds one, and never when it is an activation
 /// failure; a returned fault keeps everything but its masked message; disposing releases the execution's values.
 /// </summary>

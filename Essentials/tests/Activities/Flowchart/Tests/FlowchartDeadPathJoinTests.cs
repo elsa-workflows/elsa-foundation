@@ -10,7 +10,7 @@ using static Elsa.Activities.Flowchart.Tests.FlowchartConformanceCorpus;
 namespace Elsa.Activities.Flowchart.Tests;
 
 /// <summary>
-/// The mechanism behind ADR 0064's join semantics, as opposed to the observable behaviour the conformance
+/// The mechanism behind the dead-path join semantics, as opposed to the observable behaviour the conformance
 /// corpus pins. The corpus proves the two policies agree; these prove the dead-path policy agrees for the
 /// stated reason — that it really represents deadness rather than quietly falling back on the search — and
 /// that the absorption rules the ADR calls the subtle part actually hold.
@@ -87,7 +87,7 @@ public sealed class FlowchartDeadPathJoinTests
     }
 
     /// <summary>
-    /// The failure mode ADR 0064 says to test hardest, driven long enough to see it. A join inside a loop whose
+    /// The failure mode most worth testing hard, driven long enough to see it. A join inside a loop whose
     /// live branch alternates gets a dead arrival from the other branch every iteration; if one of those ever
     /// survived into the next iteration, the join would fire before its own live branch had run. Six iterations
     /// alternating left/right, asserting the join ran exactly once per iteration, always after its own branch,

@@ -8,7 +8,7 @@ using Xunit;
 namespace Elsa.Activities.Design.Tests.Unit;
 
 /// <summary>
-/// Provider-neutral conversion (T070) of the privileged-access forwarding objective from the
+/// Provider-neutral conversion of the privileged-access forwarding objective from the
 /// EF-referencing <c>ActivityDefinitionLookupTests</c>. <see cref="ActivityDefinitionLookup"/> is a Core
 /// service; this pins that <c>tenantAgnostic</c> reaches <see cref="ActivityDefinitionFilter.TenantAgnostic"/>
 /// (issue #392) using a recording store — no persistence provider is involved. The search-term lookup

@@ -6,7 +6,7 @@ namespace Elsa.Activities.Bpmn.Internal.Behaviors;
 
 /// <summary>
 /// Start event (none / timer / message / signal): pass the arriving token straight onto every outbound sequence
-/// flow. All four start families share this token behavior — an event-defined start (spec 117) differs only in
+/// flow. All four start families share this token behavior — an event-defined start differs only in
 /// how its instance is *started* (a publish-time trigger binding + dispatch seeds the token), never in how the
 /// seeded token routes. Registered once per start family so diagnostics keep the family's display name.
 /// </summary>
@@ -20,10 +20,10 @@ public sealed class StartEventBehavior(string elementFamily, string displayName)
     public static StartEventBehavior Message() => new(BpmnElementFamilies.StartEventMessage, "Start Event (Message)");
     public static StartEventBehavior Signal() => new(BpmnElementFamilies.StartEventSignal, "Start Event (Signal)");
 
-    /// <summary>The escalation event-subprocess body start (spec 128): once seeded via the scheduled-start hint, routes outbound like a none start.</summary>
+    /// <summary>The escalation event-subprocess body start: once seeded via the scheduled-start hint, routes outbound like a none start.</summary>
     public static StartEventBehavior Escalation() => new(BpmnElementFamilies.StartEventEscalation, "Start Event (Escalation)");
 
-    /// <summary>The error event-subprocess body start (spec 128): once seeded via the scheduled-start hint, routes outbound like a none start.</summary>
+    /// <summary>The error event-subprocess body start: once seeded via the scheduled-start hint, routes outbound like a none start.</summary>
     public static StartEventBehavior Error() => new(BpmnElementFamilies.StartEventError, "Start Event (Error)");
 
     public BpmnBehaviorDecision OnTokenArrived(IBpmnBehaviorContext context) =>
@@ -47,7 +47,7 @@ public sealed class NoneEndEventBehavior : IBpmnElementBehavior
 }
 
 /// <summary>
-/// Intermediate catch event (timer/message/signal, spec 116): parks the arriving token and schedules
+/// Intermediate catch event (timer/message/signal): parks the arriving token and schedules
 /// the element's bound suspending child (e.g. <c>Delay</c> for timer, a waiting <c>Event</c> for
 /// message/signal). The child holds the durable timer/bookmark through the runtime's existing
 /// suspension surface; its completion is an ordinary child completion that routes outbound flows by
@@ -74,7 +74,7 @@ public sealed class CatchEventBehavior : IBpmnElementBehavior
 }
 
 /// <summary>
-/// Compensate intermediate throw event (spec 124): on token arrival, emit the single
+/// Compensate intermediate throw event: on token arrival, emit the single
 /// <see cref="BpmnBehaviorCommandKind.TriggerCompensation"/> command and nothing else. The engine owns target
 /// selection, claiming, and the sequential handler replay; when the replay finishes it routes the throw token's
 /// outbound flows through normal task-flow selection. The behavior stays semantics-unaware.
@@ -92,7 +92,7 @@ public sealed class CompensationThrowEventBehavior : IBpmnElementBehavior
 }
 
 /// <summary>
-/// Compensate end event (spec 124): on token arrival, emit the single
+/// Compensate end event: on token arrival, emit the single
 /// <see cref="BpmnBehaviorCommandKind.TriggerCompensation"/> command; when the replay finishes the engine
 /// consumes the token (none-end semantics). The behavior stays semantics-unaware.
 /// </summary>
@@ -109,7 +109,7 @@ public sealed class CompensationEndEventBehavior : IBpmnElementBehavior
 }
 
 /// <summary>
-/// Cancel end event (spec 125): on token arrival, emit the single
+/// Cancel end event: on token arrival, emit the single
 /// <see cref="BpmnBehaviorCommandKind.CancelTransaction"/> command and nothing else. The engine owns the
 /// stop-then-claim-then-replay sequencing and the <c>Cancelled</c> completion; the behavior stays
 /// semantics-unaware. Valid only inside a transaction (enforced by graph validation).
@@ -127,7 +127,7 @@ public sealed class CancelEndEventBehavior : IBpmnElementBehavior
 }
 
 /// <summary>
-/// Escalation intermediate throw event (spec 127): on token arrival, emit a <see cref="BpmnBehaviorCommandKind.RaiseEscalation"/>
+/// Escalation intermediate throw event: on token arrival, emit a <see cref="BpmnBehaviorCommandKind.RaiseEscalation"/>
 /// command followed by <see cref="BpmnBehaviorCommandKind.EmitTokens"/> over its selected outbound flows — the
 /// throw signals its parent scope and continues immediately (fire-and-continue; escalation is non-blocking). The
 /// engine reads the escalation code from the element and owns the seam-C staging (or the root no-op); the
@@ -148,7 +148,7 @@ public sealed class EscalationThrowEventBehavior : IBpmnElementBehavior
 }
 
 /// <summary>
-/// Escalation end event (spec 127): on token arrival, emit a <see cref="BpmnBehaviorCommandKind.RaiseEscalation"/>
+/// Escalation end event: on token arrival, emit a <see cref="BpmnBehaviorCommandKind.RaiseEscalation"/>
 /// command followed by <see cref="BpmnBehaviorCommandKind.ConsumeToken"/> (none-end semantics) — the throw signals
 /// its parent scope and consumes its token. The engine owns the seam-C staging (or the root no-op); the behavior
 /// stays semantics-unaware.
@@ -166,7 +166,7 @@ public sealed class EscalationEndEventBehavior : IBpmnElementBehavior
 }
 
 /// <summary>
-/// Message intermediate throw event (spec 135): a bound-child send. On token arrival it schedules the synthesized
+/// Message intermediate throw event: a bound-child send. On token arrival it schedules the synthesized
 /// <c>PublishEvent</c> child; the child stages a durable-first publish and completes immediately (fire-and-continue),
 /// which is an ordinary child completion that routes the throw token's outbound flows by the shared task selection
 /// rules. The send itself lands post-commit — the behavior stays semantics-unaware. Graph validation guarantees the
@@ -193,7 +193,7 @@ public sealed class MessageThrowEventBehavior : IBpmnElementBehavior
 }
 
 /// <summary>
-/// Message end event (spec 135): a bound-child send with none-end semantics. On token arrival it schedules the
+/// Message end event: a bound-child send with none-end semantics. On token arrival it schedules the
 /// synthesized <c>PublishEvent</c> child; when the child completes (fire-and-continue) the token is consumed. The send
 /// lands post-commit — the behavior stays semantics-unaware. Graph validation guarantees the bound child exists.
 /// </summary>

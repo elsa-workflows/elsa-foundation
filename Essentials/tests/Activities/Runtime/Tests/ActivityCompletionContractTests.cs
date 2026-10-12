@@ -143,8 +143,8 @@ public sealed class ActivityCompletionContractTests
     }
 
     /// <summary>
-    /// Producer withholding on the completion path (spec 188, FR-010): a hand-built or imported contract can declare a
-    /// result policy that requires encryption (research R13). The result is withheld before the inline or external
+    /// Producer withholding on the completion path: a hand-built or imported contract can declare a
+    /// result policy that requires encryption. The result is withheld before the inline or external
     /// decision, so nothing reaches external payload storage, and the completion and its projections carry the marker.
     /// </summary>
     [Fact]

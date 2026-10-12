@@ -8,7 +8,7 @@ using Elsa.Workflows.Runtime.Core.Models;
 namespace Elsa.Activities.Primitives.Activities;
 
 /// <summary>
-/// The message send surface (spec 135): publishes a named-event stimulus <b>durably-first</b> and continues
+/// The message send surface: publishes a named-event stimulus <b>durably-first</b> and continues
 /// immediately (fire-and-continue). It is the sibling of <see cref="Event"/> — they share the exact
 /// <see cref="EventStimulus"/> routing pair (type <c>"Event"</c>, name-only SHA-256 hash), so one send both
 /// <b>starts</b> every published workflow whose message start listens on the name and <b>resumes</b> every waiting

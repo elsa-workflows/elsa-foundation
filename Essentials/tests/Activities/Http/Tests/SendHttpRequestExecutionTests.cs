@@ -20,7 +20,7 @@ namespace Elsa.Activities.Http.Tests;
 /// </summary>
 public sealed class SendHttpRequestExecutionTests
 {
-    // Spec 188, T105 (research R17, FR-019). Values are built at run time from a Guid so no credential-shaped
+    // Values are built at run time from a Guid so no credential-shaped
     // literal sits in source; the stub answers without repeating any request header.
     private readonly string _authorizationValue = NewHeaderValue();
     private readonly string _headersEntryValue = NewHeaderValue("Basic");

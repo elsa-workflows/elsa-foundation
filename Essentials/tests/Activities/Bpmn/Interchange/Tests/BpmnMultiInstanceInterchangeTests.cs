@@ -7,7 +7,7 @@ using Xunit;
 namespace Elsa.Activities.Bpmn.Interchange.Tests;
 
 /// <summary>
-/// Spec 121 D4 — interchange for multi-instance loop characteristics: a cardinality
+/// Interchange for multi-instance loop characteristics: a cardinality
 /// <c>multiInstanceLoopCharacteristics</c> on a bound subprocess host imports with
 /// <c>isSequential</c>/<c>loopCardinality</c> fidelity and round-trips through export→import. Collection mode,
 /// a non-integer cardinality, or a host that binds no child on import (a plain task) degrade to a host WITHOUT
@@ -119,7 +119,7 @@ public sealed class BpmnMultiInstanceInterchangeTests
         Assert.Null(structure.Elements.Single(element => element.ElementId == "mi-seq").LoopCharacteristics);
     }
 
-    // spec 123 D3: a collection-mode loop over a declared container-scoped variable imports as a real loop and
+    // A collection-mode loop over a declared container-scoped variable imports as a real loop and
     // round-trips; an undeclared variable or a reserved item variable degrades.
     private const string CollectionLoopDocument = """
         <definitions xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:elsa="https://elsa-workflows.io/schemas/bpmn" id="defs" targetNamespace="https://example.org">

@@ -15,7 +15,7 @@ using F = Elsa.Activities.Bpmn.Tests.BpmnRuntimeFixture;
 namespace Elsa.Activities.Bpmn.Tests;
 
 /// <summary>
-/// End-to-end coverage for spec 134 event subprocesses (tier 2: message/signal/timer scope listeners). Covers arming
+/// End-to-end coverage for event subprocesses (tier 2: message/signal/timer scope listeners). Covers arming
 /// at scope start (the process still completes when real work ends — teardown-then-complete), non-interrupting fire +
 /// re-arm (the repeat-fire pin), interrupting fire (other work + sibling listeners drained), timer repetition via
 /// re-arm, deadlock-detector consistency under the filtered liveness view, and interplay (terminate / interrupting

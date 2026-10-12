@@ -14,10 +14,10 @@ public sealed record RuntimeSecretResolverComposition(IServiceCollection Service
 /// then parks with the missing-resolver activation failure.
 /// </summary>
 /// <remarks>
-/// Framework constitution §2.6.2 requires a replacement-contract conflict to be prevented at registration time or
+/// A replacement-contract conflict must be prevented at registration time or
 /// detected at startup. A registration sees only what was registered before it, so this check reads the composed
 /// service collection once every feature has registered. It counts registrations rather than resolving them: this is
-/// detection, not a contribution-style consumer of the contract, which §2.6.2 forbids.
+/// detection, not a contribution-style consumer of the contract, which the framework forbids.
 /// </remarks>
 public sealed class RuntimeSecretResolverCompositionValidator(RuntimeSecretResolverComposition composition) : IShellInitializer
 {

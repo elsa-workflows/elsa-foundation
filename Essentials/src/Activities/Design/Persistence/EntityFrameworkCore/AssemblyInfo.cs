@@ -4,7 +4,7 @@ using Elsa.Activities.Design.Persistence.EntityFrameworkCore.Entities;
 using Elsa.Persistence.EntityFramework;
 using Elsa.Specifications.PackageManifest.Generator.Hints;
 
-// The single, discoverable declaration of this module (ADR 0076 D2). EfModuleCatalog.Discover reads this,
+// The single, discoverable declaration of this module. EfModuleCatalog.Discover reads this,
 // and EfModuleBinding.For derives the registration class's binding from it (#1872).
 [assembly: EfModule(
     "Activities.Design",
@@ -16,17 +16,17 @@ using Elsa.Specifications.PackageManifest.Generator.Hints;
     MySql = typeof(ActivitiesDesignMySqlDbContext),
     DisplayName = "Activities Design")]
 
-// Mirrors the [EfModule] name above into elsa-package.json's extensions.efModules (spec 171 slice 11,
-// #1881); EfModuleDescriptorTests guards that the two never drift apart.
+// Mirrors the [EfModule] name above into elsa-package.json's extensions.efModules
+// (#1881); EfModuleDescriptorTests guards that the two never drift apart.
 [assembly: ManifestExtension("efModules", "Activities.Design")]
 
-// The schema family this module owns (spec 180, FR-001), at the version its skew check reads. A host's readability
-// report is derived from it alone (spec 183, FR-020); every family the stores check must be declared here, at the
+// The schema family this module owns, at the version its skew check reads. A host's readability
+// report is derived from it alone; every family the stores check must be declared here, at the
 // version they read; that holds by review until #2606 restores a compiled check.
 [assembly: EfSchemaFamily(ActivitiesDesignEfModule.SchemaFamily, "Activities.Design", ActivitiesDesignEfModule.SchemaVersion)]
 
-// Content and integrity columns: see Essentials/src/Persistence/EntityFramework/EXTENSION_POINTS.md, "Content and integrity columns" (spec 180, FR-008, FR-009
-// and FR-014). EF materializes this context's rows directly, so the family declares no upcasters (same section).
+// Content and integrity columns: see Essentials/src/Persistence/EntityFramework/EXTENSION_POINTS.md, "Content and integrity columns".
+// EF materializes this context's rows directly, so the family declares no upcasters (same section).
 // An atomic write's receipt replays its authoritative result, deserialized, and compares its mutated units with the
 // replayed request's serialization; an upgrade plan and its apply receipt are deserialized and compared with the
 // serialization of the plan being applied. Each is content, so each comparison is between two documents in one format
@@ -61,7 +61,7 @@ using Elsa.Specifications.PackageManifest.Generator.Hints;
 [assembly: EfSchemaContent(ActivitiesDesignEfModule.SchemaFamily, typeof(ActivityUpgradePlanRecord), nameof(ActivityUpgradePlanRecord.PlanJson))]
 [assembly: EfSchemaContent(ActivitiesDesignEfModule.SchemaFamily, typeof(ActivityUpgradeApplyReceiptRecord), nameof(ActivityUpgradeApplyReceiptRecord.ReceiptJson))]
 
-// The management projection's derived authority tokens are integrity columns (spec 180, FR-008): the context derives
+// The management projection's derived authority tokens are integrity columns: the context derives
 // them from the content authority when it saves the row, and only provider SQL reads them, re-deriving the row's
 // validity from the stored bytes (ActivityAuthorityValiditySql). No store code deserializes them (#2140).
 [assembly: EfSchemaIntegrity(ActivitiesDesignEfModule.SchemaFamily, typeof(ActivityDefinitionManagementProjectionRevision),

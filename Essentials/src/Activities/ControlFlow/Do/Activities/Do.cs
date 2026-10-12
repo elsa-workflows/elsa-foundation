@@ -24,7 +24,7 @@ namespace Elsa.Activities.Do.Activities;
 /// <remarks>
 /// <para>
 /// Each pass is scheduled with a distinct engine <see cref="ActivitySchedulingProvenance.IterationId"/>
-/// (ADR 0028 / #259): the loop owner publishes a per-pass iteration identity and threads it through the
+/// (#259): the loop owner publishes a per-pass iteration identity and threads it through the
 /// body child's scheduling provenance, so the body execution's
 /// <see cref="ActivityExecutionState.IterationId"/> is distinct for every pass. <c>Do</c> is a
 /// condition-only loop with no current item or index, so it declares no per-iteration item variable; the
@@ -40,7 +40,7 @@ namespace Elsa.Activities.Do.Activities;
 /// composite's inputs before every condition re-evaluation, drawing them from persisted runtime state.
 /// So the condition terminates the loop when it reads state the body actually <em>persists</em> per pass:
 /// an <b>activity output</b> the body produces (e.g. a counter activity whose output the condition
-/// compares), or a <b>container-scoped variable</b> the body mutates (ADR 0027 scope mutations are
+/// compares), or a <b>container-scoped variable</b> the body mutates (scope mutations are
 /// written back and re-projected each pass). For example, a body that produces output <c>count</c> with a
 /// condition <c>count &lt; 3</c> runs three times and then stops.
 /// </para>
@@ -149,7 +149,7 @@ public sealed class Do : StructuralActivity, IRuntimeStructuralActivity, IRuntim
     /// Builds a per-pass iteration identity that is distinct for every pass and derivable statelessly
     /// from the composite execution id plus the completed child's execution id (the first pass uses the
     /// fixed <c>:iter:0</c> seed). Every body execution has a unique activity-execution id, so successive
-    /// passes never share an iteration id (ADR 0028: a distinct <c>IterationId</c> per pass).
+    /// passes never share an iteration id (a distinct <c>IterationId</c> per pass).
     /// </summary>
     private static string NewIterationId(string compositeExecutionId, string? completedChildActivityExecutionId) =>
         $"{compositeExecutionId}:iter:{completedChildActivityExecutionId ?? "0"}";

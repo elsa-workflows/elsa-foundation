@@ -43,7 +43,7 @@ public sealed class HttpEndpointTriggerStimulusProvider : IActivityTriggerStimul
             return ActivityTriggerStimulusResult.NotRecognized;
 
         // A mid-flow endpoint (CanStartWorkflow = false or unauthored) is recognized but declares itself a non-start:
-        // no bindings, and — because the result is Recognized rather than NotRecognized — no publish failure (spec 089 D).
+        // no bindings, and — because the result is Recognized rather than NotRecognized — no publish failure.
         // Starting is opt-in: only an explicit true proceeds to validate and describe the routing literals.
         if (ReadLiteralBool(node, CanStartWorkflowInput) is not true)
             return ActivityTriggerStimulusResult.Recognized([]);

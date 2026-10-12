@@ -26,7 +26,7 @@ internal static class BpmnStateMutator
         new(NewId(state, "token"), atElementId, flowId, parentTokenId, status, producingActivityExecutionId, iterationKey, kind);
 
     /// <summary>
-    /// The loop-iteration key minted when a token traverses a backward (loop-back) sequence flow (spec 122):
+    /// The loop-iteration key minted when a token traverses a backward (loop-back) sequence flow:
     /// <c>"{loopEntryElementId}#{Sequence+1}"</c>. It is a pure function of mutation order — <see cref="NewId"/>
     /// derives the loop-entry token's id from the same <c>Sequence+1</c>, so the key number and its token id
     /// number coincide — globally unique across the process (<see cref="BpmnExecutionState.Sequence"/> is
@@ -108,7 +108,7 @@ internal static class BpmnStateMutator
     public static BpmnLoopState? FindLoopByCoordinator(BpmnExecutionState state, string coordinatorTokenId) =>
         state.Loops.FirstOrDefault(loop => StringComparer.Ordinal.Equals(loop.TokenId, coordinatorTokenId));
 
-    /// <summary>Appends a <c>Registered</c> compensation-log entry (spec 124); <c>comp:N</c> derives from <see cref="BpmnExecutionState.Sequence"/> so registration order is total and deterministic.</summary>
+    /// <summary>Appends a <c>Registered</c> compensation-log entry; <c>comp:N</c> derives from <see cref="BpmnExecutionState.Sequence"/> so registration order is total and deterministic.</summary>
     public static (BpmnExecutionState State, BpmnCompensable Compensable) AddCompensable(
         BpmnExecutionState state, string hostElementId, string handlerElementId)
     {
@@ -125,7 +125,7 @@ internal static class BpmnStateMutator
             Sequence = state.Sequence + 1
         };
 
-    /// <summary>Opens a compensation replay run (spec 124); <c>comprun:N</c> derives from <see cref="BpmnExecutionState.Sequence"/>.</summary>
+    /// <summary>Opens a compensation replay run; <c>comprun:N</c> derives from <see cref="BpmnExecutionState.Sequence"/>.</summary>
     public static (BpmnExecutionState State, BpmnCompensationRun Run) AddCompensationRun(
         BpmnExecutionState state, string throwTokenId, IReadOnlyList<string> pendingCompensableIds)
     {

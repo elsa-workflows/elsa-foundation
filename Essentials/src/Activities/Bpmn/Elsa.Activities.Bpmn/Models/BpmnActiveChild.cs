@@ -33,7 +33,7 @@ public sealed record BpmnActiveChild
     public string SchedulingCause { get; init; }
 
     /// <summary>
-    /// The iteration id the child was scheduled with (spec 121 multi-instance instance children); <c>null</c>
+    /// The iteration id the child was scheduled with (multi-instance instance children); <c>null</c>
     /// for ordinary single-run children. A teardown resolves this child's live activity-execution id from the
     /// <c>(NodeId, IterationId)</c> live-child map so N concurrent same-node instances resolve distinctly.
     /// </summary>

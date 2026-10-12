@@ -7,8 +7,8 @@ namespace Elsa.Activities.Http.IntegrationTests;
 /// <summary>
 /// A synchronous HTTP endpoint workflow over an isolated EF Core SQLite database returns the same live response,
 /// completes, and records the same durable <c>HttpResponseInstruction</c> artifact under every checkpoint persistence
-/// policy. Split from the spec 090 write-amplification acceptance when performance measurement was retired by owner
-/// decision (#1668, ADR 0073): physical checkpoint-commit counts and their comparison are no longer asserted. The
+/// policy. Split from the write-amplification acceptance when performance measurement was retired by owner
+/// decision (#1668): physical checkpoint-commit counts and their comparison are no longer asserted. The
 /// mandatory durability boundaries that bounded those counts are covered by <c>RuntimeCheckpointCoalescingPolicyTests</c>.
 /// </summary>
 public sealed class HttpEndpointCheckpointPolicyEquivalenceTests

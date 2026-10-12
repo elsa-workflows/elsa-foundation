@@ -18,7 +18,7 @@ namespace Elsa.Activities.For.Activities;
 /// Counted-loop composite. Runs its body once for each index in the numeric range
 /// <c>[<see cref="Start"/>, <see cref="End"/>)</c> (end exclusive by default; closed when
 /// <see cref="EndInclusive"/> is true), advancing by <see cref="Step"/> each pass. Each pass exposes the
-/// current index to the body as a per-iteration scoped variable (#259, ADR 0028) and is scheduled with a
+/// current index to the body as a per-iteration scoped variable (#259) and is scheduled with a
 /// distinct engine <c>IterationId</c> that encodes the index. When the range is exhausted (or empty) the
 /// composite completes with the <see cref="ActivityOutcomes.Done"/> outcome.
 /// </summary>
@@ -138,7 +138,7 @@ public sealed class For : StructuralActivity, IRuntimeStructuralActivity, IRunti
             JsonSerializer.SerializeToElement(index),
             ValueProtectionPolicy.InstanceInline);
 
-        // ADR 0028 / #259: publish this pass's iteration variable in the body child's scheduling
+        // #259: publish this pass's iteration variable in the body child's scheduling
         // provenance. The runtime (RuntimeContainerScopeService) reads these keys to layer a fresh
         // per-iteration variable scope — exposing the current index under `index` — as the innermost
         // scope on top of the body's enclosing container chain, so the body's input expressions resolve

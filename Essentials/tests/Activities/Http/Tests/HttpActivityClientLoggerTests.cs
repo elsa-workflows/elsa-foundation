@@ -7,7 +7,7 @@ using Xunit;
 namespace Elsa.Activities.Http.Tests;
 
 /// <summary>
-/// Spec 188 FR-019, research R17: the lines <see cref="HttpActivityClientLogger"/> itself writes, read through a
+/// The lines <see cref="HttpActivityClientLogger"/> itself writes, read through a
 /// recording <see cref="ILoggerFactory"/>: the redacted URI, and each line's category, event id, level, rendered text
 /// and structured state. Every request and response carries a header whose value no line may hold.
 /// </summary>

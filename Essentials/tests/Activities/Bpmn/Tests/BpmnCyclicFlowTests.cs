@@ -17,7 +17,7 @@ using EventActivity = Elsa.Activities.Primitives.Activities.Event;
 namespace Elsa.Activities.Bpmn.Tests;
 
 /// <summary>
-/// End-to-end coverage for spec 122 cyclic sequence flows. A loop-back sequence flow mints a fresh token
+/// End-to-end coverage for cyclic sequence flows. A loop-back sequence flow mints a fresh token
 /// iteration key; forward propagation inherits it; parallel/inclusive joins group arrivals by
 /// <c>(element, iteration key)</c>. These tests exercise a do-while count loop, a parallel fork/join inside a
 /// loop body (the conflation-regression case), a catch event in a loop (re-arming + distinct keys), a
@@ -348,7 +348,7 @@ public sealed class BpmnCyclicFlowTests
 }
 
 /// <summary>
-/// A test decision activity for bounded loops (spec 122): it emits <see cref="LoopBack"/> for the first
+/// A test decision activity for bounded loops: it emits <see cref="LoopBack"/> for the first
 /// <see cref="BpmnLoopDecisionCounter.LoopBackCount"/> invocations, then <see cref="Exit"/>. The count is held
 /// on an injected singleton keyed by invocation id, so it is idempotent under replay and deterministic across
 /// runs (mirroring the Flowchart #382 stateful loop-once policy).

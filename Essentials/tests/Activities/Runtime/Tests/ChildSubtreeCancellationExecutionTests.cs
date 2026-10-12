@@ -13,7 +13,7 @@ using Xunit;
 namespace Elsa.Activities.Runtime.Tests;
 
 /// <summary>
-/// Spec 112: a structural parent stages child-subtree cancellations during a child-completion
+/// A structural parent stages child-subtree cancellations during a child-completion
 /// evaluation; the runtime terminalizes the subtree, cleans up its bookmarks and queued work, and
 /// suppresses its incidents in the same checkpoint commit as the parent's continuation.
 /// </summary>
@@ -288,7 +288,7 @@ public sealed class ChildSubtreeCancellationExecutionTests
         }
     }
 
-    /// <summary>Illegally stages a cancellation during initial structural execution (spec 112 FR-2).</summary>
+    /// <summary>Illegally stages a cancellation during initial structural execution.</summary>
     public sealed class InitialCancellationStructuralActivity(SubtreeCancellationDirective directive) : StructuralActivity,
         IRuntimeStructuralActivity,
         IRuntimeActivityChildCompletionHandler

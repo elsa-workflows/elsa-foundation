@@ -5,7 +5,7 @@ using static Elsa.Activities.Http.Tests.SendHttpRequestTestSupport;
 namespace Elsa.Activities.Http.Tests;
 
 /// <summary>
-/// Spec 188, T115 (research R17, spec Assumptions): <c>SendHttpRequest</c> goes through the named client that
+/// <c>SendHttpRequest</c> goes through the named client that
 /// <see cref="ActivitiesHttpFeature"/> configures with default <c>HttpActivityOptions</c> (automatic redirects on), so a
 /// redirect is followed by the real redirect logic of that primary handler. Over loopback servers on OS-assigned
 /// ports, the original request carries the <c>Authorization</c> value and the redirect target, same-origin or

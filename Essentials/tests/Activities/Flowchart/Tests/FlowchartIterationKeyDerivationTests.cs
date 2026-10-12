@@ -7,7 +7,7 @@ using static Elsa.Activities.Flowchart.Tests.FlowchartConformanceCorpus;
 namespace Elsa.Activities.Flowchart.Tests;
 
 /// <summary>
-/// ADR 0064 WU-4: a path's loop-iteration identity is derived from the scope tree — the
+/// A path's loop-iteration identity is derived from the scope tree — the
 /// <see cref="ExecutionScope.LoopIterationKey"/> of its nearest enclosing
 /// <see cref="ExecutionScopeKind.LoopIteration"/> ancestor — rather than copied down from the path that
 /// emitted it. Two records of one fact can disagree; one cannot.

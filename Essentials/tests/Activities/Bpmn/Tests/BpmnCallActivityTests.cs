@@ -15,8 +15,8 @@ using Xunit;
 namespace Elsa.Activities.Bpmn.Tests;
 
 /// <summary>
-/// End-to-end coverage for spec 133 call activities. The genuinely new engine piece is the failure-outcome
-/// translation (D3): a call activity's bound <c>DispatchWorkflow</c> child COMPLETES with an outcome
+/// End-to-end coverage for call activities. The genuinely new engine piece is the failure-outcome
+/// translation: a call activity's bound <c>DispatchWorkflow</c> child COMPLETES with an outcome
 /// (Faulted/DispatchFailed/Cancelled) rather than faulting, and the engine routes that terminal outcome through
 /// BPMN error handling — a host error boundary, else the scope's error event subprocess, else a deterministic
 /// composite fault — with no seam-B incident. These tests drive the ladder with a probe leaf that emits the
@@ -45,11 +45,11 @@ public sealed class BpmnCallActivityTests
             : await fixture.GetBpmnStateAsync();
     }
 
-    // ---- FR-2 / FR-4: non-failure outcomes route normal outbound -----------------------------------------------
+    // ---- Non-failure outcomes route normal outbound ------------------------------------------------------------
 
     [Theory]
-    [InlineData("Completed")] // FR-2: a waited call activity that completed routes normal outbound.
-    [InlineData("Dispatched")] // FR-4: fire-and-forget routes normal outbound immediately.
+    [InlineData("Completed")] // A waited call activity that completed routes normal outbound.
+    [InlineData("Dispatched")] // Fire-and-forget routes normal outbound immediately.
     public async Task NonFailureOutcome_RoutesNormalOutbound(string outcome)
     {
         await using var fixture = await CreateFixtureAsync("actexec-bpmn", "actexec-call", "actexec-after");
@@ -80,7 +80,7 @@ public sealed class BpmnCallActivityTests
     [Fact]
     public async Task CompletedOutcome_DiscriminatedByConditionOutcomeFlow()
     {
-        // FR-2: a conditionOutcome flow can still discriminate the (untouched) Completed outcome.
+        // A conditionOutcome flow can still discriminate the (untouched) Completed outcome.
         await using var fixture = await CreateFixtureAsync("actexec-bpmn", "actexec-call", "actexec-ok", "actexec-other");
         var executable = fixture.NewExecutable(
             children: [fixture.NewProbeNode("node-call", ["Completed"]), fixture.NewProbeNode("node-ok"), fixture.NewProbeNode("node-other")],
@@ -113,7 +113,7 @@ public sealed class BpmnCallActivityTests
     [Fact]
     public async Task TwoCallActivities_InOneProcess_BothRoute()
     {
-        // FR-2: two call activities coexist in one process and both route their normal outbound.
+        // Two call activities coexist in one process and both route their normal outbound.
         await using var fixture = await CreateFixtureAsync("actexec-bpmn", "actexec-a", "actexec-b");
         var executable = fixture.NewExecutable(
             children: [fixture.NewProbeNode("node-a", ["Completed"]), fixture.NewProbeNode("node-b", ["Completed"])],
@@ -139,7 +139,7 @@ public sealed class BpmnCallActivityTests
         Assert.Equal(ActivityExecutionStatus.Completed, run.State("node-b").Status);
     }
 
-    // ---- FR-3 tier 1: host error boundary ----------------------------------------------------------------------
+    // ---- Tier 1: host error boundary ---------------------------------------------------------------------------
 
     [Theory]
     [InlineData("Faulted")]
@@ -214,7 +214,7 @@ public sealed class BpmnCallActivityTests
         Assert.Empty(await fixture.BookmarksAsync());
     }
 
-    // ---- FR-3 tier 2: scope error event subprocess -------------------------------------------------------------
+    // ---- Tier 2: scope error event subprocess ------------------------------------------------------------------
 
     [Fact]
     public async Task Failure_NoBoundary_ButErrorEventSubprocess_ActivatesInterrupting()
@@ -250,7 +250,7 @@ public sealed class BpmnCallActivityTests
             .ListAsync(WorkflowExecutionHarness.WorkflowExecutionId));
     }
 
-    // ---- FR-3 tier 3: no catcher → deterministic composite fault -----------------------------------------------
+    // ---- Tier 3: no catcher → deterministic composite fault ----------------------------------------------------
 
     [Theory]
     [InlineData("Faulted", BpmnExecutionEngine.CallActivityFaultedFaultCode)]
@@ -283,12 +283,12 @@ public sealed class BpmnCallActivityTests
             diagnostic.Kind == BpmnDiagnosticKind.Faulted && diagnostic.Message.Contains("call", StringComparison.Ordinal) && diagnostic.Message.Contains(outcome, StringComparison.Ordinal));
     }
 
-    // ---- FR-5: multi-instance composition ----------------------------------------------------------------------
+    // ---- Multi-instance composition ----------------------------------------------------------------------------
 
     [Fact]
     public async Task MultiInstanceCallActivity_InstanceFailure_FiresBoundary_InterruptsCoordinator()
     {
-        // FR-5: a failing MI call activity instance rides the D3 ladder composed with the spec-121 coordinator
+        // A failing MI call activity instance rides the failure-outcome ladder composed with the multi-instance coordinator
         // cascade — the host error boundary fires and interrupts the loop, so remaining instances never run.
         await using var fixture = await CreateFixtureAsync(Ids(30));
         var executable = fixture.NewExecutable(
@@ -324,7 +324,7 @@ public sealed class BpmnCallActivityTests
     [Fact]
     public async Task MultiInstanceCallActivity_AllInstancesComplete_RoutesCoordinatorOutbound()
     {
-        // FR-2/FR-5: a non-failing MI call activity runs every instance and routes the coordinator's outbound.
+        // A non-failing MI call activity runs every instance and routes the coordinator's outbound.
         await using var fixture = await CreateFixtureAsync(Ids(30));
         var executable = fixture.NewExecutable(
             children: [fixture.NewProbeNode("node-call", ["Completed"]), fixture.NewProbeNode("node-after")],
@@ -350,7 +350,7 @@ public sealed class BpmnCallActivityTests
         Assert.Equal(ActivityExecutionStatus.Completed, run.State("node-after").Status);
     }
 
-    // ---- FR-7: determinism -------------------------------------------------------------------------------------
+    // ---- Determinism -------------------------------------------------------------------------------------------
 
     [Fact]
     public async Task IdenticalRuns_ProduceIdenticalTokenIds()

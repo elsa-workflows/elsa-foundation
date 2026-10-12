@@ -11,7 +11,7 @@ using BpmnProcessActivity = Elsa.Activities.Bpmn.Activities.BpmnProcess;
 namespace Elsa.Activities.Bpmn.Interchange.Tests;
 
 /// <summary>
-/// Spec 136 — collaboration/pool/message-flow import. A multi-pool document imports every <c>&lt;process&gt;</c>
+/// Collaboration/pool/message-flow import. A multi-pool document imports every <c>&lt;process&gt;</c>
 /// into <c>ProcessNodes</c> (the primary stays <c>ProcessNode</c>), populates <c>BpmnPool</c> from
 /// <c>&lt;participant&gt;</c> (lanes gain their pool id), and records <c>&lt;messageFlow&gt;</c> wiring on the
 /// involved structures with matched/mismatch/black-box/unresolvable findings. Interchange/model-layer only — the
@@ -74,7 +74,7 @@ public sealed class BpmnCollaborationInterchangeTests
     {
         var result = _importer.Import(TwoPoolDocument);
 
-        // FR-1: both pools imported; the primary (first executable) is Buyer and equals ProcessNodes[0].Node.
+        // Both pools imported; the primary (first executable) is Buyer and equals ProcessNodes[0].Node.
         Assert.Equal(["buyer", "seller"], result.ProcessNodes.Select(process => process.ProcessId));
         Assert.Same(result.ProcessNode, result.ProcessNodes[0].Node);
 
@@ -86,13 +86,13 @@ public sealed class BpmnCollaborationInterchangeTests
         var buyerStructure = StructureOf(buyer.Node);
         var sellerStructure = StructureOf(seller.Node);
 
-        // FR-2: pools populated from participants; lanes stamped with the (unambiguous) pool id.
+        // Pools populated from participants; lanes stamped with the (unambiguous) pool id.
         var buyerPool = Assert.Single(buyerStructure.Pools);
         Assert.Equal(("pool-buyer", "Buyer", "buyer"), (buyerPool.PoolId, buyerPool.Name, buyerPool.ProcessRef));
         Assert.Equal("pool-buyer", Assert.Single(buyerStructure.Lanes).PoolId);
         Assert.Equal("pool-seller", Assert.Single(sellerStructure.Pools).PoolId);
 
-        // FR-3: both flows matched and recorded on BOTH involved structures (throw→start and sendTask→catch).
+        // Both flows matched and recorded on BOTH involved structures (throw→start and sendTask→catch).
         var order = Assert.Single(buyerStructure.MessageFlows, flow => flow.FlowId == "mf-order");
         Assert.Equal(("buyer-throw", "pool-buyer", "seller-start", "pool-seller", "order-placed"),
             (order.SourceElementId, order.SourcePoolId, order.TargetElementId, order.TargetPoolId, order.MessageName));

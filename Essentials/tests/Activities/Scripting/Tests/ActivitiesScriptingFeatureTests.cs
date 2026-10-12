@@ -5,7 +5,7 @@ using Xunit;
 namespace Elsa.Activities.Scripting.Tests;
 
 /// <summary>
-/// Feature-registration coverage for <see cref="ActivitiesScriptingFeature"/> (constitution §2.23.1). The
+/// Feature-registration coverage for <see cref="ActivitiesScriptingFeature"/>. The
 /// <c>RunJavaScript</c> activity is transiently DI-activated and constructor-injected with the isolated script
 /// evaluator, so the feature registers no per-type activity services of its own; its manifest dependency on the
 /// JavaScript Jint engine supplies that evaluator when the shell is composed.

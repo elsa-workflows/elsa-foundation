@@ -9,7 +9,7 @@ namespace Elsa.Activities.Runtime.Tests;
 
 public sealed class ActivitiesRuntimeFeatureTests
 {
-    // Kept beside the composition test (§2.23.1): scope validation. CShells builds shell providers without ValidateScopes,
+    // Kept beside the composition test: scope validation. CShells builds shell providers without ValidateScopes,
     // so only this test catches a captive dependency in the activator chain (the resolver consumes a scoped store).
     [Fact]
     public async Task ComposesTheActivatorWithItsSecretInputResolver()

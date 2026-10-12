@@ -7,7 +7,7 @@ using Microsoft.Extensions.DependencyInjection;
 namespace Elsa.Activities.Runtime.Services;
 
 /// <summary>
-/// One scheduler work handler's masking of the failure text of the activity execution it handles (spec 188, FR-012):
+/// One scheduler work handler's masking of the failure text of the activity execution it handles:
 /// the values that activation resolved from secrets for that execution, as <see cref="IRuntimeSecretMask"/> holds them,
 /// are masked in the message, stack trace and inner exception chain of the exception the handler's fault boundaries
 /// record, in the message of the returned <see cref="ActivityFault"/>, and in the aggregate its cancellation arms report

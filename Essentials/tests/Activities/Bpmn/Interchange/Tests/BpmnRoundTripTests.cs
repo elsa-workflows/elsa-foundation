@@ -70,7 +70,7 @@ public sealed class BpmnRoundTripTests
     [Fact]
     public void CyclicProcess_ImportsClean_AndRoundTrips()
     {
-        // spec 122: a loop-back sequence flow (gw --again--> body) is executable, so a cyclic document
+        // A loop-back sequence flow (gw --again--> body) is executable, so a cyclic document
         // imports with NO cycle degradation finding and round-trips through export → import unchanged.
         var authored = new BpmnAuthoredStructure(
             elements:
@@ -186,7 +186,7 @@ public sealed class BpmnRoundTripTests
         var reimported = ExportImport(authored);
 
         var start = reimported.Elements.Single(element => element.ElementId == "start-evt");
-        Assert.Null(start.ChildNodeId); // pure element (spec 117)
+        Assert.Null(start.ChildNodeId); // pure element
         var definition = Assert.Single(start.EventDefinitions);
         Assert.Equal(type, definition.Type);
         Assert.Equal(propertyValue, definition.Properties[propertyKey]);

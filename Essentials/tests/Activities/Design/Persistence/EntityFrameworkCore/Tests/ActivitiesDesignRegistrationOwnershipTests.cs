@@ -51,7 +51,7 @@ public sealed class ActivitiesDesignRegistrationOwnershipTests
         AssertDescriptorsUnchanged(before, services);
     }
 
-    // Kept beside the composition test (§2.23.1): ordering, pre-registered host identity survives, repeat is a no-op.
+    // Kept beside the composition test: ordering, pre-registered host identity survives, repeat is a no-op.
     [Fact]
     public void Pre_registered_host_identity_survives_registration_and_repeat()
     {
@@ -68,7 +68,7 @@ public sealed class ActivitiesDesignRegistrationOwnershipTests
         Assert.Same(hostIdentity, services.Single(descriptor => descriptor.ServiceType == typeof(ElsaIdentityGenerator)).ImplementationInstance);
     }
 
-    // Kept beside the composition test (§2.23.1): conditional registration, provider selects the Sqlite context.
+    // Kept beside the composition test: conditional registration, provider selects the Sqlite context.
     [Fact]
     public void Ef_registration_resolves_one_sqlite_context_and_one_definition_store()
     {

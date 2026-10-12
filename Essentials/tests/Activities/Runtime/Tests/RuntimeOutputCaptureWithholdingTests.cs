@@ -12,7 +12,7 @@ using Xunit;
 namespace Elsa.Activities.Runtime.Tests;
 
 /// <summary>
-/// An output capture of an activity result whose policy requires encryption (spec 188, FR-010). The completion projector
+/// An output capture of an activity result whose policy requires encryption. The completion projector
 /// withholds such a result, so the capture has no value to write, and no storage driver encodes anything. A capture into a
 /// workflow variable writes the withheld marker into the variable, as <c>Set</c> does; a capture into a durable output,
 /// which has no withheld form, is refused with <c>VF-ACT-010</c>. A present projection whose policy requires encryption,

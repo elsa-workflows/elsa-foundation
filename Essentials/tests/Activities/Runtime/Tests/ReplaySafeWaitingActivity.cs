@@ -6,7 +6,7 @@ using Elsa.Workflows.Runtime.Core.Constants;
 namespace Elsa.Activities.Runtime.Tests;
 
 /// <summary>
-/// A ReplaySafe-marked leaf that suspends on a bookmark (spec 123 fusion shape (d)). Fusion engages at its
+/// A ReplaySafe-marked leaf that suspends on a bookmark (fusion shape (d)). Fusion engages at its
 /// <c>ScheduleActivity</c> (ReplaySafe leaf in a burst); the inline invoke stage runs the body which suspends, so the
 /// fused span exits mid-way at the suspension commit — which must be byte-identical to the discrete suspend because
 /// fusion dispatches the unchanged invoke handler inline. Mirrors <see cref="WaitingActivity"/> but ReplaySafe.

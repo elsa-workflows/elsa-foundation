@@ -7,7 +7,7 @@ using EventActivity = Elsa.Activities.Primitives.Activities.Event;
 namespace Elsa.Activities.Bpmn.Tests;
 
 /// <summary>
-/// End-to-end coverage for the spec 135 BPMN message send surface: a message throw event schedules its bound
+/// End-to-end coverage for the BPMN message send surface: a message throw event schedules its bound
 /// <see cref="PublishEvent"/> send child and routes onward on the child's fire-and-continue completion (the send
 /// landing as a durable post-commit intent, not an in-execution route); a message end event consumes its token; a
 /// sendTask sends and routes; and a receiveTask suspends on the shipped <c>Event</c> bookmark and resumes on delivery.

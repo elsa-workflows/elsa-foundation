@@ -10,7 +10,7 @@ using Xunit;
 namespace Elsa.Activities.Design.Tests.Unit;
 
 /// <summary>
-/// Branch-covered unit tests for <see cref="ActivityTypeVersionResolver"/> (FR-020, §2.23.2). The
+/// Branch-covered unit tests for <see cref="ActivityTypeVersionResolver"/>. The
 /// resolver now reads its own metadata from a <see cref="Type"/> + <see cref="Assembly"/>, so each
 /// precedence branch is driven by a real reflection-only input rather than hand-fed strings:
 /// <list type="bullet">

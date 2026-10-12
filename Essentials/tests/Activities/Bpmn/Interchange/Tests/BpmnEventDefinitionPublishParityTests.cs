@@ -11,7 +11,7 @@ using BpmnProcessActivity = Elsa.Activities.Bpmn.Activities.BpmnProcess;
 namespace Elsa.Activities.Bpmn.Interchange.Tests;
 
 /// <summary>
-/// Spec 118 D6 — publish parity: a document imported with event-defined starts and a catch event must
+/// Publish parity: a document imported with event-defined starts and a catch event must
 /// satisfy the runtime seams specs 116/117 froze with no hand editing. The imported structure is bridged
 /// to a runtime <see cref="ExecutableNode"/> and run through the real
 /// <see cref="WorkflowTriggerBindingExtractor"/> (which itself validates the graph via

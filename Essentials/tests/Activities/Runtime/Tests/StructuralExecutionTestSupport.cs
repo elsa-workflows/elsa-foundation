@@ -12,7 +12,7 @@ using Xunit;
 namespace Elsa.Activities.Runtime.Tests;
 
 /// <summary>
-/// Shared graph builders and structural test activities for the spec 112/115 structural-evaluation
+/// Shared graph builders and structural test activities for the structural-evaluation
 /// tests (child-subtree cancellation, child-fault absorption).
 /// </summary>
 internal static class StructuralExecutionTestSupport
@@ -98,7 +98,7 @@ public sealed class PassthroughStructuralActivity : StructuralActivity,
         ValueTask.FromResult(RuntimeStructuralContinuation.Defer);
 }
 
-/// <summary>Collects the notifications delivered to a <see cref="NotificationConsumingParentActivity"/> for assertions (spec 126).</summary>
+/// <summary>Collects the notifications delivered to a <see cref="NotificationConsumingParentActivity"/> for assertions.</summary>
 public sealed class ParentNotificationRecorder
 {
     private readonly List<RecordedParentNotification> _notifications = [];
@@ -113,7 +113,7 @@ public sealed record RecordedParentNotification(
     string NotifyingChildExecutableNodeId,
     string? NotifyingChildIterationId);
 
-/// <summary>What a <see cref="NotifyingStructuralChildActivity"/> stages toward its parent (spec 126, seam C).</summary>
+/// <summary>What a <see cref="NotifyingStructuralChildActivity"/> stages toward its parent (seam C).</summary>
 public sealed record ParentNotificationDirective
 {
     /// <summary>Notification codes staged during the child's initial structural execution.</summary>
@@ -125,14 +125,14 @@ public sealed record ParentNotificationDirective
     /// <summary>Optional JSON payload attached to every staged notification.</summary>
     public JsonElement? Payload { get; init; }
 
-    /// <summary>Return a <c>Fault</c> continuation after staging (spec 126: Fault + staged notification faults the evaluation).</summary>
+    /// <summary>Return a <c>Fault</c> continuation after staging (Fault + staged notification faults the evaluation).</summary>
     public bool FaultInsteadOfDefer { get; init; }
 
     /// <summary>Stage the notification from the ROOT structural activity (no parent) to exercise the root-reject rule.</summary>
     public bool StageFromRoot { get; init; }
 }
 
-/// <summary>How a <see cref="NotificationConsumingParentActivity"/> responds to a child notification (spec 126).</summary>
+/// <summary>How a <see cref="NotificationConsumingParentActivity"/> responds to a child notification.</summary>
 public sealed record ParentNotificationConsumerDirective
 {
     public bool CancelNotifyingChildOnNotify { get; init; }
@@ -141,7 +141,7 @@ public sealed record ParentNotificationConsumerDirective
 }
 
 /// <summary>
-/// A structural child (spec 126) that stages parent notifications during its own evaluations, then schedules
+/// A structural child that stages parent notifications during its own evaluations, then schedules
 /// its single leaf and defers (or faults per the directive). On the leaf's completion it optionally stages one
 /// more notification and completes.
 /// </summary>
@@ -172,7 +172,7 @@ public sealed class NotifyingStructuralChildActivity(ParentNotificationDirective
 
 /// <summary>
 /// The ROOT structural activity variant that stages a notification during its own initial execution — it has no
-/// committed parent, so the runtime rejects the staging (spec 126 root-reject rule).
+/// committed parent, so the runtime rejects the staging (root-reject rule).
 /// </summary>
 public sealed class RootNotifyingStructuralActivity(ParentNotificationDirective directive) : StructuralActivity,
     IRuntimeStructuralActivity,
@@ -191,7 +191,7 @@ public sealed class RootNotifyingStructuralActivity(ParentNotificationDirective 
 }
 
 /// <summary>
-/// A structural parent (spec 126) that consumes a child notification: it records the delivered code/payload/child
+/// A structural parent that consumes a child notification: it records the delivered code/payload/child
 /// identity and, per its directive, defers (keeps running), completes, faults, or stages a seam-A subtree
 /// cancellation of the notifying child (interrupting escalation). Completes when its child completes.
 /// </summary>
@@ -232,7 +232,7 @@ public sealed class NotificationConsumingParentActivity(ParentNotificationRecord
     }
 }
 
-/// <summary>A parent that never implements <c>IRuntimeActivityChildNotificationHandler</c>: notifications to it are silently acked (spec 126).</summary>
+/// <summary>A parent that never implements <c>IRuntimeActivityChildNotificationHandler</c>: notifications to it are silently acked.</summary>
 public sealed class NonNotificationConsumingParentActivity : StructuralActivity,
     IRuntimeStructuralActivity,
     IRuntimeActivityChildCompletionHandler

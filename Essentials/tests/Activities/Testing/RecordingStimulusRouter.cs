@@ -38,7 +38,7 @@ public sealed class RecordingStimulusRouter : IStimulusRouter
         _onRoute = onRoute;
     }
 
-    /// <summary>Routes the given start AND resume outcomes on every call (spec 089 D StartAndResume).</summary>
+    /// <summary>Routes the given start AND resume outcomes on every call (StartAndResume).</summary>
     public static RecordingStimulusRouter WithOutcomes(
         IEnumerable<StimulusStartOutcome>? starts = null,
         IEnumerable<StimulusResumeOutcome>? resumes = null) =>
@@ -47,7 +47,7 @@ public sealed class RecordingStimulusRouter : IStimulusRouter
     /// <summary>
     /// Routes the given outcomes but first invokes <paramref name="onRoute"/> during <see cref="RouteAsync"/>, so a
     /// test can simulate the inline drain writing the live response / marking the sync sink before the router returns
-    /// (spec 089 E, the synchronous same-exchange path).
+    /// (the synchronous same-exchange path).
     /// </summary>
     public static RecordingStimulusRouter WithCallback(
         Func<StimulusDispatchRequest, ValueTask> onRoute,

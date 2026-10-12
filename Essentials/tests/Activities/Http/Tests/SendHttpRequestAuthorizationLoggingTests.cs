@@ -12,7 +12,7 @@ using static Elsa.Activities.Http.Tests.SendHttpRequestTestSupport;
 namespace Elsa.Activities.Http.Tests;
 
 /// <summary>
-/// Spec 188, T106 (research R17, FR-019): the outbound request goes through the named <see cref="IHttpClientFactory"/>
+/// The outbound request goes through the named <see cref="IHttpClientFactory"/>
 /// client, whose default logging handlers carry raw header values as structured state at <see cref="LogLevel.Trace"/>.
 /// <see cref="ActivitiesHttpFeature"/> replaces them with one logger that writes no header. Captures every log call and
 /// scope the host's logging produces at <see cref="LogLevel.Trace"/> while <c>SendHttpRequest</c> sends an

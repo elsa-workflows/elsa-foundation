@@ -21,7 +21,7 @@ namespace Elsa.Activities.ForEach.Tests;
 /// In-process execution coverage for the <c>ForEach</c> composite running through the real workflow
 /// agent. Built on the shared <see cref="WorkflowExecutionHarness"/>: the body is a probe leaf that
 /// records one execution state per pass, so the test asserts the body runs once per item, that each pass
-/// carries a distinct engine iteration id (ADR 0028), that completion drains, and that an empty/null
+/// carries a distinct engine iteration id, that completion drains, and that an empty/null
 /// collection short-circuits without scheduling the body.
 /// </summary>
 [Collection("ConsoleCapture")]

@@ -16,7 +16,7 @@ namespace Elsa.Activities.Design.Persistence.EntityFrameworkCore.Stores;
 /// and the management projection, committed in one Activities Design transaction.
 /// </summary>
 /// <remarks>
-/// This transaction is the linearization point of the ordered publication (ADR 0066): the publication is done
+/// This transaction is the linearization point of the ordered publication: the publication is done
 /// exactly when it commits. The draft, the authoring state and both derived projections move under their own
 /// optimistic concurrency tokens, so a concurrent publication loses here as it would in one transaction.
 /// Every refusal is an <see cref="InvalidOperationException"/>; nothing is left tracked afterwards. The narrower

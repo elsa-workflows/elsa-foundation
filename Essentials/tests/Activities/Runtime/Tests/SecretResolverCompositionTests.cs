@@ -11,9 +11,9 @@ using Xunit;
 namespace Elsa.Activities.Runtime.Tests;
 
 /// <summary>
-/// <see cref="IRuntimeSecretResolver"/> is a replacement contract (framework constitution §2.6.2): a host that composes
-/// more than one does not start, whatever order they were registered in, and the diagnostic names every registration
-/// (spec 188, T027). A host that composes one, or none, starts.
+/// <see cref="IRuntimeSecretResolver"/> is a replacement contract: a host that composes
+/// more than one does not start, whatever order they were registered in, and the diagnostic names every registration.
+/// A host that composes one, or none, starts.
 /// </summary>
 public sealed class SecretResolverCompositionTests
 {
@@ -51,7 +51,7 @@ public sealed class SecretResolverCompositionTests
     [Fact]
     public async Task No_composed_resolver_starts() => await InitializeAsync();
 
-    // Kept beside the composition test (§2.23.1): idempotence, composing twice registers the check once.
+    // Kept beside the composition test: idempotence, composing twice registers the check once.
     [Fact]
     public async Task Composing_the_runtime_twice_registers_the_check_once()
     {

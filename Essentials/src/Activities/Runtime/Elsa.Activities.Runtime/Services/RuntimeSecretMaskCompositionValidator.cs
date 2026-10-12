@@ -14,7 +14,7 @@ public sealed record RuntimeSecretMaskComposition(IServiceCollection Services);
 /// that replaces it with <c>services.Replace(...)</c>, or registers its own before the runtime does, composes one.
 /// </summary>
 /// <remarks>
-/// Framework constitution §2.6.2 requires a replacement-contract conflict to be prevented at registration time or
+/// A replacement-contract conflict must be prevented at registration time or
 /// detected at startup. The activator registers resolved values with the mask and the work handlers mask with it, each
 /// resolving the one registration; a second registration would make one of them win by registration order. This check
 /// reads the composed service collection once every feature has registered, and counts registrations rather than

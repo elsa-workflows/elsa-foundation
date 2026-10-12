@@ -5,7 +5,7 @@ using Xunit;
 namespace Elsa.Activities.Design.Tests.Unit;
 
 /// <summary>
-/// US6 — Read-contract surface pinning. Under the Model X reconciliation policy (Unit C
+/// Read-contract surface pinning. Under the Model X reconciliation policy (Unit C
 /// 2026-05-28), the parent <see cref="IActivityDefinition"/> exposes identity + creation
 /// provenance + display only; per-pass mutating reconciliation state (LastSeenAt, IsStale,
 /// RemovedAt, etc.) does NOT exist anywhere in the domain because reconciliation is one-shot
@@ -79,7 +79,7 @@ public sealed class ReadContractSurfaceTests
     [Fact]
     public void IActivityDefinitionVersion_Version_IsStringSemVer()
     {
-        // FR-017: the read contract exposes the author-controlled semver as a string, never
+        // The read contract exposes the author-controlled semver as a string, never
         // the legacy int. A regression that re-types it would break semver ordering and the
         // assembly-attribute source.
         var versionProperty = typeof(IActivityDefinitionVersion)
@@ -104,7 +104,7 @@ public sealed class ReadContractSurfaceTests
         Assert.Equal(typeof(JsonElement), descriptorPayload!.PropertyType);
     }
 
-    [Fact] // T042 (SC-002) — the deleted 005 descriptor surface must not reappear on the read contract.
+    [Fact] // The deleted descriptor surface must not reappear on the read contract.
     public void IActivityDefinitionVersion_DoesNotExposeImplementationKindOrDescriptor()
     {
         var properties = typeof(IActivityDefinitionVersion).GetProperties();

@@ -30,17 +30,17 @@ using Xunit;
 namespace Elsa.Activities.Design.Tests.Registration;
 
 /// <summary>
-/// Provider-neutral conversion (T070) of the §2.23.1 feature-composition rows that lived in the
+/// Provider-neutral conversion of the feature-composition rows that lived in the
 /// EF-referencing <c>FeatureRegistrationTests</c>. Every feature exercised here — the runtime,
 /// reconciliation, API, and CLR-source features — is provider-agnostic, so its registration contract is
-/// unaffected by the EF store removal (T072/T073). Only the SQLite EF shell-feature row from the
+/// unaffected by the EF store removal. Only the SQLite EF shell-feature row from the
 /// original file is genuinely EF-mechanism and is dispositioned separately. Each test composes the
 /// feature into a real <see cref="ServiceCollection"/>, pre-registers the minimal cross-feature
 /// prerequisites, builds the provider, and asserts the feature's claimed services resolve cleanly.
 /// </summary>
 public sealed class ActivityDesignFeatureCompositionTests
 {
-    // Kept beside the composition test (§2.23.1): idempotence, registering twice adds the refresh once.
+    // Kept beside the composition test: idempotence, registering twice adds the refresh once.
     [Fact]
     public void ActivitiesDesignApiFeature_Registers_Dynamic_ApiExplorer_Refresh_Once()
     {
@@ -193,7 +193,7 @@ public sealed class ActivityDesignFeatureCompositionTests
             managementCodec.Decode(managementCodec.Encode(new("scope", 25, -1))));
     }
 
-    // Kept beside the composition test (§2.23.1): resolves with its optional dependencies absent, which the composition test never exercises.
+    // Kept beside the composition test: resolves with its optional dependencies absent, which the composition test never exercises.
     [Fact]
     public void ActivitiesDesignApiFeature_RegistersActivityFeatureAttributionResolver()
     {

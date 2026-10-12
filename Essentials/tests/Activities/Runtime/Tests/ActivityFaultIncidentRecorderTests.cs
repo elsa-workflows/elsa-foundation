@@ -86,7 +86,7 @@ public sealed class ActivityFaultIncidentRecorderTests
     [InlineData(false)]
     public async Task CommitAsync_ReadsRetryabilityAndCodeFromAnyClassifiedException(bool isRetryable)
     {
-        // A test-only exception type: the recorder reads the classification contract, never a concrete type (spec 188, T032).
+        // A test-only exception type: the recorder reads the classification contract, never a concrete type.
         await new ActivityFaultIncidentRecorder(TimeProvider.System).CommitAsync(NewRequest(new ClassifiedException("StoreUnavailable", isRetryable)));
 
         var state = CapturedActivityState();
@@ -124,8 +124,8 @@ public sealed class ActivityFaultIncidentRecorderTests
     [Fact]
     public async Task CommitAsync_ParksTheActivityWithAnActivationFailureIncidentWhenNoSecretResolverIsComposed()
     {
-        // A host without a secret resolver is missing a module, which must not destroy executability (constitution
-        // §E2.6.1): the activity waits for the deployment to be corrected instead of faulting (spec 188, A06).
+        // A host without a secret resolver is missing a module, which must not destroy executability:
+        // the activity waits for the deployment to be corrected instead of faulting.
         await new ActivityFaultIncidentRecorder(TimeProvider.System).CommitAsync(NewRequest(new RuntimeSecretResolverNotFoundException("token")));
 
         var state = CapturedActivityState();
@@ -143,7 +143,7 @@ public sealed class ActivityFaultIncidentRecorderTests
     {
         // #1031: a dispatched child's work-item and activity-execution ids both embed 'dispatch:v1:<sha-256>'
         // shapes, which pushed the raw-concatenation incident id past the 128-char 'by-incident-id' projection
-        // column (GW-PHYSICAL-037) and poisoned the fault-recording checkpoint. The derived id must stay
+        // column and poisoned the fault-recording checkpoint. The derived id must stay
         // bounded regardless of how long those source ids grow.
         var activityExecutionId = $"dispatch:v1:{new string('a', 64)}:activity:root";
         var workItemId = $"{new string('b', 16)}:invoke:{activityExecutionId}";

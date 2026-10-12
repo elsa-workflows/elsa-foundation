@@ -28,12 +28,12 @@ public sealed class BpmnStructure
     [JsonPropertyName("sequenceFlows")]
     public IReadOnlyCollection<BpmnSequenceFlow> SequenceFlows { get; }
 
-    /// <summary>Container-scoped variable declarations materialized for the runtime (ADR 0027).</summary>
+    /// <summary>Container-scoped variable declarations materialized for the runtime.</summary>
     [JsonPropertyName("variables")]
     public IReadOnlyCollection<VariableDefinition> Variables { get; }
 
     /// <summary>
-    /// Whether this nested process is a <b>transaction</b> (spec 125): its scope may be cancelled from within by a
+    /// Whether this nested process is a <b>transaction</b>: its scope may be cancelled from within by a
     /// cancel end event, and its published contract declares the additional <c>Cancelled</c> outcome. Independent
     /// of the parent element's transaction flag (isolation); drives cancel-end validation and the
     /// structure-dependent outcome declaration.

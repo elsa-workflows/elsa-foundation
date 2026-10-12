@@ -10,8 +10,8 @@ namespace Elsa.Activities.Design.Api.Handlers;
 
 /// <summary>
 /// Picker handler. Delegates the catalog query — including the reconciliation-state
-/// visibility filter — to <see cref="IActivityDefinitionLookup"/>. Per spec FR-007 and SC-009,
-/// the catalog store is the single source of truth; no live-provider enumeration path remains.
+/// visibility filter — to <see cref="IActivityDefinitionLookup"/>.
+/// The catalog store is the single source of truth; no live-provider enumeration path remains.
 /// </summary>
 public sealed class ListDefinitionsRequestHandler(
     IActivityDefinitionLookup lookup,

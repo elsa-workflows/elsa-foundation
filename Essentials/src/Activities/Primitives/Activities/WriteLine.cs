@@ -6,7 +6,7 @@ namespace Elsa.Activities.Primitives.Activities;
 /// <summary>
 /// Writes one hydrated line of text and returns one atomic unit result.
 /// </summary>
-// ReplaySafe (ADR 0032 R1, #2581): the body writes one console line from its materialized input and returns a constant
+// ReplaySafe (#2581): the body writes one console line from its materialized input and returns a constant
 // transition. A crash before the next commit runs it again and writes the line twice; no workflow state differs.
 [ActivityOutcome("Done")]
 [ActivitySideEffectProfile(SideEffectProfile.ReplaySafe)]

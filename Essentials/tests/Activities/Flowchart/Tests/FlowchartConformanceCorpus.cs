@@ -8,7 +8,7 @@ using Microsoft.Extensions.DependencyInjection;
 namespace Elsa.Activities.Flowchart.Tests;
 
 /// <summary>
-/// Shared rig for the ADR 0064 conformance corpus: builds a routing scenario, runs it on the real engine, and
+/// Shared rig for the join conformance corpus: builds a routing scenario, runs it on the real engine, and
 /// reports the two things the corpus asserts — the <b>order</b> nodes executed in and the terminal workflow
 /// status. Kept separate from the scenarios themselves so the corpus file reads as a table of graphs and
 /// expectations rather than a pile of harness plumbing.

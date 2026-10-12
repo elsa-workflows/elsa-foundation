@@ -5,7 +5,7 @@ using Elsa.Workflows.Runtime.Core.Constants;
 namespace Elsa.Activities.Primitives.Activities;
 
 /// <summary>
-/// A named-event trigger with a dual role (start half; spec 116 adds the mid-flow wait form):
+/// A named-event trigger with a dual role, start trigger and mid-flow wait:
 /// as a start trigger, the publish-time trigger extractor reads its <see cref="EventName"/> and records a
 /// durable trigger binding keyed by the event's stimulus so the stimulus router starts a new instance when a
 /// matching event arrives; scheduled mid-flow, it suspends with a typed trigger registration on the same

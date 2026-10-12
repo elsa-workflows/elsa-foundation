@@ -7,7 +7,7 @@ using Xunit;
 namespace Elsa.Activities.Scheduling.Tests;
 
 /// <summary>
-/// Feature-registration coverage for <see cref="ActivitiesSchedulingFeature"/> (constitution §2.23.1). The
+/// Feature-registration coverage for <see cref="ActivitiesSchedulingFeature"/>. The
 /// activity types themselves are transiently activated from compiled CLR contracts, so the feature registers
 /// no per-type activity instances; it does register the Timer/Cron publish-time providers (trigger stimulus +
 /// recurring schedule), and pins the shell metadata that brings the durable timer store (Delay) and the

@@ -285,7 +285,7 @@ public sealed class ActivityForkService(
             throw;
         }
         // A schema write refusal saved nothing, since the apply is one transaction, so its outcome is known: it leaves as
-        // itself and is answered 409 (spec 180, FR-016a), never reported as an apply whose outcome is unknown.
+        // itself and is answered 409, never reported as an apply whose outcome is unknown.
         catch (Exception exception) when (exception is not SchemaWriteRefusedException)
         {
             var reconciled = await forkStore.FindReceiptAsync(ReceiptId(command.IdempotencyKey), cancellationToken);

@@ -9,8 +9,8 @@ using FlowchartActivity = Elsa.Activities.Flowchart.Activities.Flowchart;
 namespace Elsa.Activities.Flowchart.Tests;
 
 /// <summary>
-/// ADR 0047 D3 guardrail. Proves the publish-time routing index that <see cref="FlowchartGraph"/> builds at
-/// materialization routes byte-for-byte identically to the pre-D3 linear-scan walk it replaced — the D3
+/// Routing-index guardrail. Proves the publish-time routing index that <see cref="FlowchartGraph"/> builds at
+/// materialization routes byte-for-byte identically to the linear-scan walk it replaced — the
 /// non-negotiable: "the routing DECISIONS must be exactly identical — same successors, same order, same behavior
 /// on no-match/terminal." Every representative Flowchart shape (straight-line, multi-outcome branch, fan-in join,
 /// parallel fork, ordered multi-target, empty) is routed through BOTH the index-backed

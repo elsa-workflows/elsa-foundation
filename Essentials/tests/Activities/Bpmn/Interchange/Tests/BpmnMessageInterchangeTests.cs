@@ -11,7 +11,7 @@ using BpmnProcessActivity = Elsa.Activities.Bpmn.Activities.BpmnProcess;
 namespace Elsa.Activities.Bpmn.Interchange.Tests;
 
 /// <summary>
-/// Spec 135 — interchange for the message send surface: a message throw/end event and a sendTask/receiveTask
+/// Interchange for the message send surface: a message throw/end event and a sendTask/receiveTask
 /// (resolving a <c>messageRef</c> to a root <c>&lt;message&gt;</c> declaration's name) import bound — synthesizing a
 /// <c>PublishEvent</c> send child (throw/end/sendTask) or an <c>Event</c> catch child (receiveTask) — and round-trip
 /// through export→import; a name-less message throw Drops, a name-less message end degrades to a none end, a name-less

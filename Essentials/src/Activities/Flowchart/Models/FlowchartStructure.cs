@@ -24,7 +24,7 @@ public sealed class FlowchartStructure
     public IReadOnlyCollection<FlowchartConnection> Connections { get; }
 
     /// <summary>
-    /// Container-scoped variable declarations materialized for the runtime (ADR 0027).
+    /// Container-scoped variable declarations materialized for the runtime.
     /// </summary>
     [JsonPropertyName("variables")]
     public IReadOnlyCollection<VariableDefinition> Variables { get; }

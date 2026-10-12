@@ -11,7 +11,7 @@ using BpmnProcessActivity = Elsa.Activities.Bpmn.Activities.BpmnProcess;
 namespace Elsa.Activities.Bpmn.Interchange.Tests;
 
 /// <summary>
-/// Spec 124 D4 — interchange for compensation. A compensation boundary + isForCompensation handler resolved via
+/// Interchange for compensation. A compensation boundary + isForCompensation handler resolved via
 /// an association, a compensate throw (± activityRef), and a compensate end round-trip import→export→import; a
 /// boundary with no association, an orphan isForCompensation activity, and an unresolvable activityRef degrade or
 /// drop with specific findings; and the importer never emits a graph the validator rejects.

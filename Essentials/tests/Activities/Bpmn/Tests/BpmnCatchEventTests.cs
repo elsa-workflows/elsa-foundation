@@ -14,7 +14,7 @@ using EventActivity = Elsa.Activities.Primitives.Activities.Event;
 namespace Elsa.Activities.Bpmn.Tests;
 
 /// <summary>
-/// End-to-end coverage for spec 116 intermediate catch events: a timer catch event waits on a bound
+/// End-to-end coverage for intermediate catch events: a timer catch event waits on a bound
 /// <see cref="Delay"/> child (durable timer + bookmark) and message/signal catch events wait on a bound
 /// mid-flow <see cref="EventActivity"/> child; resuming the child's bookmark routes the parked token.
 /// </summary>

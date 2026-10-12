@@ -7,7 +7,7 @@ using SwitchActivity = Elsa.Activities.Switch.Activities.Switch;
 namespace Elsa.Activities.Switch.Internal;
 
 /// <summary>
-/// Activity-owned Draft validator (FR-034). Surfaces duplicate <c>Switch</c> case match values as a
+/// Activity-owned Draft validator. Surfaces duplicate <c>Switch</c> case match values as a
 /// design-time <see cref="ValidationError"/> so authors see them in the designer. Recording the error
 /// does not block saving the Draft; the promotion gate (<c>PromoteDraftToVersion</c>) refuses to publish
 /// a Draft that carries any validation error, so a duplicate-case <c>Switch</c> can be authored and saved

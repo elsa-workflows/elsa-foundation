@@ -6,7 +6,7 @@ namespace Elsa.Activities.Flowchart.Models;
 /// reachability oracle.
 /// <para>
 /// The oracle is a parameter rather than a fact of the model on purpose. It is what the reachability join
-/// needs and what the dead-path join does not — ADR 0064's whole claim is that a join can be decided from
+/// needs and what the dead-path join does not — the dead-path join's whole claim is that a join can be decided from
 /// arrivals the target already holds, so the policy that ignores this argument is the one making the point.
 /// </para>
 /// </summary>

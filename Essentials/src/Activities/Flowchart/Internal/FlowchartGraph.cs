@@ -11,7 +11,7 @@ public sealed class FlowchartGraph
     private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web);
     private readonly IReadOnlyDictionary<string, ExecutableNode> _nodesById;
     private readonly IReadOnlyCollection<FlowchartConnection> _connections;
-    // ADR 0047 D3: publish-time routing indexes. The outcome→successor relation is precomputed at graph
+    // Publish-time routing indexes. The outcome→successor relation is precomputed at graph
     // materialization so per-completion routing is a dictionary lookup on the source node id rather than a linear
     // scan of every connection. Each group preserves connection declaration order (the scan's order), so the
     // index is byte-for-byte equivalent to the retained SelectOutboundConnectionsByScan reference walk.
@@ -132,7 +132,7 @@ public sealed class FlowchartGraph
     }
 
     /// <summary>
-    /// ADR 0047 D3: routes a completed child's outcomes to its outbound connections by an O(1) lookup on the
+    /// Routes a completed child's outcomes to its outbound connections by an O(1) lookup on the
     /// precomputed <c>source node id → outbound connections</c> index, then filtering to the matching outcome
     /// ports. Order is the connection declaration order (the index preserves it), identical to
     /// <see cref="SelectOutboundConnectionsByScan"/>.
@@ -155,7 +155,7 @@ public sealed class FlowchartGraph
     }
 
     /// <summary>
-    /// ADR 0047 D3 differential-guardrail reference: the pre-D3 linear scan over the full connection set,
+    /// Differential-guardrail reference: the linear scan over the full connection set that the routing index replaced,
     /// retained callable so the index-backed <see cref="SelectOutboundConnections"/> can be proven byte-for-byte
     /// equivalent (same connections, same order) across a representative corpus. Not used on the hot path.
     /// </summary>
@@ -178,7 +178,7 @@ public sealed class FlowchartGraph
     /// Every outbound connection of <paramref name="sourceNodeId"/> in declaration order, regardless of which
     /// outcome port it hangs off. <see cref="SelectOutboundConnections"/> answers "which edges did this
     /// completion take"; this answers "which edges exist", which is what routing the <em>untaken</em> half of a
-    /// completion needs (ADR 0064).
+    /// completion needs.
     /// </summary>
     public IReadOnlyCollection<FlowchartConnection> GetOutboundConnections(string sourceNodeId)
     {
@@ -197,7 +197,7 @@ public sealed class FlowchartGraph
     }
 
     /// <summary>
-    /// ADR 0047 D3 differential-guardrail reference: the pre-D3 linear scan for inbound connections, retained
+    /// Differential-guardrail reference: the pre-index linear scan for inbound connections, retained
     /// callable so <see cref="GetInboundConnections"/>'s index path can be proven equivalent.
     /// </summary>
     public IReadOnlyCollection<FlowchartConnection> GetInboundConnectionsByScan(string targetNodeId)
@@ -260,7 +260,7 @@ public sealed class FlowchartGraph
     /// classifies as backward. The projection is acyclic by construction (removing the DFS back-edge set
     /// removes every cycle), so this answers the question a join actually asks — can a token at
     /// <paramref name="sourceNodeId"/> still arrive at <paramref name="targetNodeId"/> <em>within this
-    /// iteration</em> — instead of collapsing to "both are somewhere in the same loop" (ADR 0064).
+    /// iteration</em> — instead of collapsing to "both are somewhere in the same loop".
     /// </summary>
     public bool CanReachForward(string sourceNodeId, string targetNodeId) =>
         CanReach(sourceNodeId, targetNodeId, forwardOnly: true);
@@ -325,8 +325,7 @@ public sealed class FlowchartGraph
     /// marks every edge of a cycle as backward (so a fork/join inside a loop body would split its branches
     /// into divergent iteration scopes that never reconverge). Roots are the start node first, then every
     /// remaining node ordinal-sorted; each node's outbound connections are ordinal-sorted by connection id, so
-    /// the result is stable regardless of authoring order. Mirrors <c>BpmnGraph.ComputeBackwardFlowIds</c>
-    /// (spec 122).
+    /// the result is stable regardless of authoring order. Mirrors <c>BpmnGraph.ComputeBackwardFlowIds</c>.
     /// </summary>
     private IReadOnlySet<(string Source, string Target)> ComputeBackwardEdges()
     {

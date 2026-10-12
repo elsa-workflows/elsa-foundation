@@ -13,11 +13,10 @@ using Xunit;
 namespace Elsa.Activities.Runtime.Tests;
 
 /// <summary>
-/// An activity whose result policy requires encryption (spec 188, FR-010), with its output captured into a workflow
+/// An activity whose result policy requires encryption, with its output captured into a workflow
 /// variable, end to end through the invoke handler and the commit. The capture writes the withheld marker into the root
 /// variable frame, as <c>Set</c> does, and the activity completes; nothing committed carries the value, and a reader of
-/// the variable refuses the marker with <c>VF-ACT-010</c>. A hand-built or imported contract can declare such a policy
-/// (research R13).
+/// the variable refuses the marker with <c>VF-ACT-010</c>. A hand-built or imported contract can declare such a policy.
 /// </summary>
 public sealed class OutputCaptureVariableWithholdingRunTests : IAsyncDisposable
 {

@@ -15,7 +15,7 @@ public sealed class BpmnGraphValidationTests
     [Fact]
     public void CyclicGraph_IsAccepted_AndClassifiesTheLoopBackFlow()
     {
-        // spec 122: a loop-back sequence flow is executable. The graph builds, and only the loop-closing
+        // A loop-back sequence flow is executable. The graph builds, and only the loop-closing
         // edge (task-b → task-a) is classified backward — the cycle's forward edge (task-a → task-b) is not.
         var node = NewExecutableNode(
             elements:
@@ -86,7 +86,7 @@ public sealed class BpmnGraphValidationTests
     [Fact]
     public void CallActivity_ResolvesToTaskFamily_BoundChildAndBoundaryHostAndMultiInstance_AreLegal()
     {
-        // spec 133 D1: a call activity validates as a task-family boundary-host element and may carry
+        // A call activity validates as a task-family boundary-host element and may carry
         // multi-instance loop characteristics — bound child, attached error boundary, MI all accepted.
         var node = NewExecutableNode(
             children: [WorkflowChild("node-call")],
@@ -115,7 +115,7 @@ public sealed class BpmnGraphValidationTests
     [Fact]
     public void ChildlessCallActivity_IsLegalAtValidation()
     {
-        // spec 133 D1: a childless call activity is legal (the unbound import shape); its normal childless-element
+        // A childless call activity is legal (the unbound import shape); its normal childless-element
         // treatment applies (dead if never reached), like a task.
         var node = NewExecutableNode(
             elements:
@@ -520,7 +520,7 @@ public sealed class BpmnGraphValidationTests
             ],
             children: catchElement.ChildNodeId is null ? [] : [WorkflowChild(catchElement.ChildNodeId)]);
 
-    // ---- spec 121: multi-instance loop-characteristics validation ----
+    // ---- Multi-instance loop-characteristics validation ----
 
     [Fact]
     public void MultiInstance_OnChildlessHost_IsRejected()
@@ -595,7 +595,7 @@ public sealed class BpmnGraphValidationTests
     [Fact]
     public void MultiInstance_CollectionMode_DeclaredVariable_IsAccepted()
     {
-        // spec 123 D2/FR-3: the stated collection-mode cut (spec 121 D1 rule 5) is removed — a collection loop
+        // The earlier collection-mode cut is removed — a collection loop
         // over a declared container-scoped variable validates cleanly.
         var node = NewMultiInstanceNode(
             new BpmnLoopCharacteristics(collectionVariable: "items"),
@@ -611,7 +611,7 @@ public sealed class BpmnGraphValidationTests
     [Fact]
     public void MultiInstance_CollectionMode_ReservedItemVariable_IsRejected()
     {
-        // spec 123 D2/FR-3: the item key must not collide with the reserved zero-based loopIndex key.
+        // The item key must not collide with the reserved zero-based loopIndex key.
         var node = NewMultiInstanceNode(
             new BpmnLoopCharacteristics(collectionVariable: "items", itemVariable: BpmnLoopCharacteristics.LoopIndexVariable),
             variables: [new VariableDefinition("items", "items", new TypeReference("String", CollectionKind.List), null, null)]);

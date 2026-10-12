@@ -11,7 +11,7 @@ using BpmnProcessActivity = Elsa.Activities.Bpmn.Activities.BpmnProcess;
 namespace Elsa.Activities.Bpmn.Interchange.Tests;
 
 /// <summary>
-/// Spec 127 D4 — interchange for escalation: a nested escalation throw + escalation end (resolving an
+/// Interchange for escalation: a nested escalation throw + escalation end (resolving an
 /// <c>escalationRef</c> to a root <c>&lt;escalation&gt;</c> declaration's code) and parent escalation boundaries
 /// (interrupting + non-interrupting + code-less catch-all) attached to a subprocess host import cleanly and
 /// round-trip through export→import with code/cancelActivity fidelity; ref-less throws Drop, ref-less ends degrade

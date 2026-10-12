@@ -9,8 +9,8 @@ using Microsoft.Extensions.DependencyInjection;
 namespace Elsa.Activities.Design.Reconciliation.Clr;
 
 /// <summary>
-/// Registers the CLR assembly-scanning reconciliation source. This is a standalone source feature
-/// (§2.6.1): it does NOT derive from <c>ActivitiesDesignReconciliationFeature</c> — it only
+/// Registers the CLR assembly-scanning reconciliation source. This is a standalone source feature:
+/// it does NOT derive from <c>ActivitiesDesignReconciliationFeature</c> — it only
 /// contributes an <see cref="IActivityReconciliationSource"/> that the reconciliation feature's
 /// universal handler discovers from DI. Add both features to a shell to scan a folder.
 /// </summary>

@@ -50,7 +50,7 @@ public class ActivitiesBpmnFeature : IShellFeature
         services.AddSingleton<IBpmnElementBehavior, BoundaryEventBehavior>();
         services.AddSingleton<IBpmnBehaviorRegistry, BpmnBehaviorRegistry>();
 
-        // Publish-time start-trigger surface (spec 117): the process node registers one trigger binding per
+        // Publish-time start-trigger surface: the process node registers one trigger binding per
         // event-defined start element, and — for timer starts — one recurring schedule per element.
         services.AddSingleton<IActivityTriggerStimulusProvider, BpmnProcessTriggerStimulusProvider>();
         services.AddSingleton<IRecurringTriggerScheduleProvider, BpmnProcessRecurringScheduleProvider>();

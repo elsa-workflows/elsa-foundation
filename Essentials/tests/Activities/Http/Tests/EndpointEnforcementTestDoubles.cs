@@ -7,8 +7,8 @@ namespace Elsa.Activities.Http.Tests;
 
 /// <summary>
 /// An <see cref="IStimulusRouter"/> whose <see cref="RouteAsync"/> can delay (respecting the passed
-/// cancellation token) or throw, so the middleware's per-endpoint timeout + fault-mapping paths (spec 089 C,
-/// FR-013/FR-014) can be exercised. The plain recording router (<c>RecordingStimulusRouter</c>) only returns a
+/// cancellation token) or throw, so the middleware's per-endpoint timeout + fault-mapping paths
+/// can be exercised. The plain recording router (<c>RecordingStimulusRouter</c>) only returns a
 /// fixed outcome; these behaviours are what the fault tests need on top of that.
 /// </summary>
 internal sealed class BehaviourStimulusRouter : IStimulusRouter
@@ -66,7 +66,7 @@ internal sealed class FakeAuthorizationHandler : IHttpEndpointAuthorizationHandl
 
     /// <summary>
     /// A handler whose decision depends on the policy being evaluated — used to prove that when several distinct
-    /// policies are merged from divergent waiting bookmarks (D-D5), EVERY one is evaluated and any single failure
+    /// policies are merged from divergent waiting bookmarks, EVERY one is evaluated and any single failure
     /// denies the request.
     /// </summary>
     public static FakeAuthorizationHandler PerPolicy(Func<string?, bool> decide) => new(decide);

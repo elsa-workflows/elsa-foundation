@@ -5,7 +5,7 @@ namespace Elsa.Activities.For.Internal;
 /// <summary>
 /// The counted-loop range a <c>For</c> activity walks: a start value, a (configurable inclusive/exclusive)
 /// end value, and a non-zero step. Pure, allocation-free iteration arithmetic with no runtime dependency,
-/// so the boundary semantics are unit-testable in isolation (§2.23).
+/// so the boundary semantics are unit-testable in isolation.
 /// </summary>
 /// <remarks>
 /// <para><b>Boundary semantics.</b></para>

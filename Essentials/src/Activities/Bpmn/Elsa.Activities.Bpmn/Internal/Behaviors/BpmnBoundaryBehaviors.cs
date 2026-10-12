@@ -4,7 +4,7 @@ using Elsa.Activities.Bpmn.Models;
 namespace Elsa.Activities.Bpmn.Internal.Behaviors;
 
 /// <summary>
-/// Boundary event (spec 120). A single behavior serves both boundary kinds; the interrupt/absorption
+/// Boundary event. A single behavior serves both boundary kinds; the interrupt/absorption
 /// semantics are owned entirely by <c>BpmnExecutionEngine</c>, so this behavior only routes the
 /// boundary's outbound flows when it fires:
 /// <list type="bullet">

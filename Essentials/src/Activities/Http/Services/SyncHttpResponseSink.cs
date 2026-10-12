@@ -28,7 +28,7 @@ public sealed class SyncHttpResponseSink
     /// <summary>
     /// Whether a <see cref="WriteHttpResponse"/> has written the live response in this scope. The middleware reads
     /// this after the inline drain returns to decide between returning (the workflow authored the response) and
-    /// degrading to <c>202 Accepted</c> (E-D5).
+    /// degrading to <c>202 Accepted</c>.
     /// </summary>
     public bool ResponseWritten { get; private set; }
 

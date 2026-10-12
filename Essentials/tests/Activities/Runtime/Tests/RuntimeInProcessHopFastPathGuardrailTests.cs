@@ -15,7 +15,7 @@ using FlowchartActivity = Elsa.Activities.Flowchart.Activities.Flowchart;
 namespace Elsa.Activities.Runtime.Tests;
 
 /// <summary>
-/// WU-3 (spec 109, ADR 0031 follow-up item (c)): the memory-is-never-correctness guardrail for the in-process-hop
+/// The memory-is-never-correctness guardrail for the in-process-hop
 /// payload short-circuit. The same deterministic multi-hop workflow is driven to completion twice over the same
 /// in-memory durable substrate — once with the fast path ENABLED (the shipped default, so a live drain's checkpoint
 /// committer publishes each continuation onto the drain-scoped carrier and the scheduler intent dispatcher takes it

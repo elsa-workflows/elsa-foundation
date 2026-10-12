@@ -18,7 +18,7 @@ namespace Elsa.Activities.Design.Api.Endpoints;
 /// <c>"Unexpected error occurred."</c> — with the trailing period the pipeline's generic message
 /// lacks, which is why the generic fallback cannot serve these routes. Authoring endpoints render
 /// <see cref="ActivityProblemDetailsView"/> exactly as the hand-written catch ladders did. Either shape
-/// answers a schema write refusal with a 409 carrying its code (spec 180, FR-016a).
+/// answers a schema write refusal with a 409 carrying its code.
 /// </remarks>
 internal sealed class ActivitiesDesignFaultRenderer : IEndpointFaultRenderer
 {

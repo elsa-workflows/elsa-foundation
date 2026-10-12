@@ -9,7 +9,7 @@ using Microsoft.Extensions.DependencyInjection;
 namespace Elsa.Activities.Design.Reconciliation.Json;
 
 /// <summary>
-/// Registers the JSON-file reconciliation source. This is a standalone source feature (§2.6.1): it
+/// Registers the JSON-file reconciliation source. This is a standalone source feature: it
 /// does NOT derive from <c>ActivitiesDesignReconciliationFeature</c> — it only contributes an
 /// <see cref="IActivityReconciliationSource"/> that the reconciliation feature's universal handler
 /// discovers from DI. Add both features to a shell to reconcile from a JSON file.
@@ -18,7 +18,7 @@ namespace Elsa.Activities.Design.Reconciliation.Json;
 /// Every collaborator is registered against its contract, so an inheriting feature can override a
 /// single piece (e.g. a different file layout) by calling <c>base.ConfigureServices</c> and
 /// re-registering just that contract afterwards. The options instance is the only singleton — it is
-/// an application-wide static value; everything else "just executes" and is therefore scoped (§2.5.1).
+/// an application-wide static value; everything else "just executes" and is therefore scoped.
 /// </remarks>
 [ManifestRuntimeKind(ElsaRuntimeKinds.Server)]
 [ManifestFeatureCategory("Activities")]

@@ -15,10 +15,10 @@ namespace Elsa.Activities.Primitives.Activation;
 /// <c>ActivitiesPrimitives</c> and <c>GraphActivitiesRuntime</c> advertised only one of them.
 /// </para>
 /// <para>
-/// The consequence was not cosmetic: the import gate (FR-B-005a) and the publishing preflight both read this
+/// The consequence was not cosmetic: the import gate and the publishing preflight both read this
 /// registry, so a fully-featured engine reported <c>activity consumer 'elsa.clr-activity' schema '1' is not
 /// installed</c> and refused to import artifacts it was perfectly able to run. It stayed hidden because nothing
-/// enumerated the registry until spec 151 added that gate.
+/// enumerated the registry until the import gate was added.
 /// </para>
 /// <para>
 /// A distinct type per capability keeps <c>TryAddEnumerable</c>'s idempotency — composing a feature twice still

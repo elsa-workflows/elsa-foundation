@@ -20,7 +20,7 @@ internal static class FlowchartScopeResolver
     /// <see cref="ExecutionScopeKind.LoopIteration"/> scope, walking up the scope tree, or <c>null</c> outside
     /// a loop.
     /// <para>
-    /// ADR 0064: the key used to be copied from the emitting path onto every new one, which made the scope
+    /// The key used to be copied from the emitting path onto every new one, which made the scope
     /// tree and the key two independent records of the same fact — and two records of one fact can disagree.
     /// Deriving it means a path's iteration identity is whatever its scope says it is, by construction. This
     /// changes where the key comes from, not what it is: numbering still comes from the monotonic per-owner

@@ -11,7 +11,7 @@ using BpmnProcessActivity = Elsa.Activities.Bpmn.Activities.BpmnProcess;
 namespace Elsa.Activities.Bpmn.Interchange.Tests;
 
 /// <summary>
-/// Spec 133 D5 — interchange for call activities. A <c>&lt;callActivity&gt;</c> carrying the Elsa extension
+/// Interchange for call activities. A <c>&lt;callActivity&gt;</c> carrying the Elsa extension
 /// attribute <c>elsa:workflowDefinitionId</c> imports bound (a synthesized <c>DispatchWorkflow</c> child, honoring
 /// <c>elsa:waitForCompletion="false"</c>); a plain <c>calledElement</c> imports unbound with an Info finding and a
 /// <c>bpmn.calledElement</c> passthrough. Both round-trip through export→import, and the importer never emits a

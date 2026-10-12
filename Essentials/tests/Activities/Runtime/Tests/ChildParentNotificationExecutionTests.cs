@@ -10,7 +10,7 @@ using Xunit;
 namespace Elsa.Activities.Runtime.Tests;
 
 /// <summary>
-/// Spec 126 (seam C): a still-running structural child raises a coded, durable notification to its own
+/// Seam C: a still-running structural child raises a coded, durable notification to its own
 /// committed parent; the parent — iff it implements <see cref="IRuntimeActivityChildNotificationHandler"/> —
 /// receives it and may respond with any continuation (including a seam-A subtree cancellation), while the child
 /// keeps running.

@@ -75,7 +75,7 @@ public static class ClrActivityContractTestBuilder
                 .DefaultIfEmpty(ActivityOutcomes.Done)
                 .ToArray(),
             new ActivityActivationRequirement(descriptorType, alias),
-            // Mirror ExecutableNodeCompiler.ResolveSideEffectProfile (ADR 0032 R1 / spec 107): unmarked ⇒ External.
+            // Mirror ExecutableNodeCompiler.ResolveSideEffectProfile: unmarked ⇒ External.
             sideEffectProfile: activityType.GetCustomAttribute<ActivitySideEffectProfileAttribute>(inherit: true)?.Profile
                 ?? SideEffectProfile.External);
     }

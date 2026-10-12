@@ -33,7 +33,7 @@ internal static class ActivityAttemptActivationClaimer
 
     /// <summary>
     /// Claims the target parent's activation for a structural callback, whether it rides a completion command
-    /// (child completion/fault evaluation) or a spec 126 seam-C parent notification.
+    /// (child completion/fault evaluation) or a seam-C parent notification.
     /// </summary>
     public static ValueTask<ActivityAttemptActivationClaim> ClaimStructuralCallbackAsync(
         RuntimeCheckpointCommitter checkpointCommitter,
@@ -343,7 +343,7 @@ internal static class ActivityAttemptActivationClaimer
             [RuntimeMetadataKeys.SchedulerWorkItemId] = workItem.WorkItemId,
             [RuntimeMetadataKeys.CommandId] = workItem.CommandId,
             [RuntimeMetadataKeys.CheckpointReason] = payload.Reason,
-            // ADR 0032 R2: the claim boundary stays Mandatory (IsMandatoryCheckpoint forbids only Skip, never
+            // The claim boundary stays Mandatory (IsMandatoryCheckpoint forbids only Skip, never
             // Deferred), so the committer's guardrail is preserved for both profiles while ReplaySafe still
             // permits the coalescing policy to Defer this flush. The resolved profile rides as transport so the
             // policy can make that decision; the contract remains the source of truth.

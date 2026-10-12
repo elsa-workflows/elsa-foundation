@@ -110,7 +110,7 @@ public sealed class FixturePayload
 /// An activity carrying a complex-typed AND an enum-typed input (plus a primitive control). Exercises the
 /// alias-only end-to-end seam: the reflection-only scanner emits <c>CanonicalAlias</c> (the dotted
 /// <c>FullName</c>) for these non-primitive element types, and the runtime registration pass registers those
-/// same aliases so they resolve back to the real CLR type instead of <c>object</c> (FR-004b).
+/// same aliases so they resolve back to the real CLR type instead of <c>object</c>.
 /// </summary>
 public sealed class ComplexInputFixtureActivity : FixtureActivity
 {
@@ -264,7 +264,7 @@ public sealed record PlainFixtureResult(
 
 /// <summary>
 /// Declares that two of its inputs refuse a secret reference. <see cref="SecretAcceptingFixtureActivity"/> is the same
-/// activity without the declarations: the scanner must reconcile both to the same catalog content (spec 188, T099).
+/// activity without the declarations: the scanner must reconcile both to the same catalog content.
 /// </summary>
 [RefusesSecretBinding(nameof(Persisted), SecretBindingRefusalReason.PersistedByActivity)]
 [RefusesSecretBinding(nameof(Echoed), SecretBindingRefusalReason.EchoedToOutput)]
@@ -296,7 +296,7 @@ public sealed class SecretAcceptingFixtureActivity : Activity<SecretFixtureResul
 public sealed record SecretFixtureResult([property: Output] string Result);
 
 /// <summary>
-/// Declares a sensitive input, a credential input and an undeclared input (spec 188, T039). The type names another input
+/// Declares a sensitive input, a credential input and an undeclared input. The type names another input
 /// in <c>[RefusesSecretBinding]</c>, which leaves its credential input bindable: the scanner refuses a credential
 /// declaration only on the input the attribute names.
 /// </summary>
