@@ -307,3 +307,10 @@ the colliding version, refusing to lower an entry, resetting `last_publish_commi
 one that is not, and the end-to-end acceptance — a repair followed by a publish that succeeds at one past the feed's
 version. `PublishRepairWorkflowTests` holds `publish-repair.yml` to running from `main` only and joining the
 `publish-state` concurrency group without cancelling a run in progress (FR-020).
+
+## Merge245 incident recovery
+
+The manual, default read-only exact20 recovery path for consolidation M4 is documented in
+[the recovery runbook](recovery/README.md). It uses original pinned artifacts and the shared
+`publish-state` workflow lock; installing the mechanism does not authorize publication or restart
+the normal publishers. This incident path does not change the normal computation/repair rules above.
