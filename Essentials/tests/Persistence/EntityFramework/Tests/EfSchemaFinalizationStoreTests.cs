@@ -494,7 +494,7 @@ public sealed class EfSchemaFinalizationStoreTests : IAsyncLifetime
     }
 
     /// <summary>
-    /// Both ways: a claim names a target at the standing completion, to audit it, or after it, to
+    /// The claim's target, both ways: a claim names a target at the standing completion, to audit it, or after it, to
     /// upgrade past it, and never one before it or past the finalized version. A refused claim writes nothing.
     /// </summary>
     [Fact]
@@ -551,7 +551,7 @@ public sealed class EfSchemaFinalizationStoreTests : IAsyncLifetime
     }
 
     /// <summary>
-    /// Both ways: a withdrawal moves a claim that still holds onto itself, so the worker that
+    /// The claim after a withdrawal, both ways: a withdrawal moves a claim that still holds onto itself, so the worker that
     /// found the straggler goes on with the family and the others stay off it; a claim that has expired is not carried.
     /// </summary>
     [Theory]
@@ -569,7 +569,7 @@ public sealed class EfSchemaFinalizationStoreTests : IAsyncLifetime
     }
 
     /// <summary>
-    /// Both ways: a worker releases its own claim, held or expired, wherever it is held, so another may
+    /// The release, both ways: a worker releases its own claim, held or expired, wherever it is held, so another may
     /// take the family over at once; a worker cannot release a claim it does not hold, and that refusal writes nothing.
     /// </summary>
     [Fact]
@@ -595,7 +595,7 @@ public sealed class EfSchemaFinalizationStoreTests : IAsyncLifetime
     }
 
     /// <summary>
-    /// Both ways, in the store itself rather than in its callers' discipline: while another worker's
+    /// The claim, both ways, in the store itself rather than in its callers' discipline: while another worker's
     /// claim holds, neither a completion nor a withdrawal is written, whether the writer is a worker with a claim of its own
     /// or one that keeps none, and the refusal writes nothing. The worker that holds the claim withdraws, and keeps its
     /// claim on the withdrawal; once that claim has expired, a writer that keeps none records the completion.

@@ -9,7 +9,7 @@ namespace Elsa.Persistence.EntityFramework.Tooling;
 /// <c>Provider</c> setting of its own.
 /// </summary>
 /// <remarks>
-/// <see cref="DeclaresProvider"/> is the distinction two rules turn on, and the two rules look
+/// <see cref="DeclaresProvider"/> is the distinction the agreement check's two rules turn on, and they look
 /// alike without being alike: a feature that declares the setting and leaves it unset is compared, as
 /// <c>Sqlite</c>; a feature that declares no such setting at all is skipped entirely, because the provider
 /// of the contexts it reads is decided by whichever features register those contexts' migrations.
@@ -65,7 +65,7 @@ public sealed record EfCapabilitySelectionDisagreement(IReadOnlyList<string> Opt
 /// </para>
 /// <para>
 /// Nothing here instantiates a feature: the feature's own default for an unset setting is taken from
-/// the fixed rule (<c>Sqlite</c>) rather than by constructing the class, which would run module code purely
+/// the rule that an unset setting is <c>Sqlite</c>, rather than by constructing the class, which would run module code purely
 /// to read a default.
 /// </para>
 /// </remarks>

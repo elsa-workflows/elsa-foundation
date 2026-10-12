@@ -13,7 +13,7 @@ internal sealed record EfFeatureModuleViolation(Type Feature, string Module, str
 }
 
 /// <summary>
-/// The guard that a shell feature that depends on an EF module says so with
+/// The guard that makes every shell feature depending on an EF module say so with
 /// <see cref="UsesEfModuleAttribute"/>, so the feature inventory cannot silently grow a feature the
 /// provider-agreement check and the activation guard never see.
 /// </summary>

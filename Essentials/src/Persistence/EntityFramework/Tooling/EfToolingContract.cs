@@ -14,8 +14,8 @@ namespace Elsa.Persistence.EntityFramework.Tooling;
 /// <para>
 /// Frozen means closed, not unchanging: an additive optional field does not move <see cref="Version"/>. A request field is
 /// sent only to a host build that declares it, as the worker does for <see cref="EfToolingRequest.CapabilitySelection"/>,
-/// <see cref="EfToolingRequest.SkewAllowance"/> and <see cref="EfToolingRequest.SqliteMigrationLockStaleAfter"/>. The 2026-09-29
-/// additions, all optional and all on <c>status</c>: the request's <c>skewAllowance</c>, the response's
+/// <see cref="EfToolingRequest.SkewAllowance"/> and <see cref="EfToolingRequest.SqliteMigrationLockStaleAfter"/>. The additions
+/// made since, all optional and all on <c>status</c>: the request's <c>skewAllowance</c>, the response's
 /// <c>finalization.cluster</c> (with its <c>availability</c> marker) and each pending version's <c>waitsFor</c>.
 /// </para>
 /// </remarks>

@@ -98,7 +98,7 @@ public sealed class EfSchemaBackfillTests : IAsyncLifetime
     }
 
     /// <summary>
-    /// Both ways: a row at the target is skipped, and a rerun, on this host or another, writes no row and leaves the
+    /// A rerun, both ways: a row at the target is skipped, and a rerun, on this host or another, writes no row and leaves the
     /// proof as it was. This host's rerun writes nothing at all; the other host's first round audits the completion under
     /// its claim, and its claim and the release of it, once the audit has found nothing, are all it writes.
     /// </summary>
@@ -297,7 +297,7 @@ public sealed class EfSchemaBackfillTests : IAsyncLifetime
         Assert.Equal("2", (await database.RecordAsync()).Finish!.CompletionVersion);
     }
 
-    /// <summary>Both ways: skew and corruption are reported, never rewritten or skipped silently, and block completion until resolved.</summary>
+    /// <summary>Skew and corruption, both ways: they are reported, never rewritten or skipped silently, and block completion until resolved.</summary>
     [Fact]
     public async Task Rows_with_a_missing_or_unreadable_stamp_and_rows_that_fail_to_upcast_are_reported_and_block_completion()
     {
@@ -1555,7 +1555,7 @@ public sealed class EfSchemaBackfillTests : IAsyncLifetime
     }
 
     /// <summary>
-    /// Both ways: a family blocked by a row an operator repairs in place is surveyed again at the
+    /// The repairable interval, both ways: a family blocked by a row an operator repairs in place is surveyed again at the
     /// shorter repairable interval, not the audit interval, so a repair is seen within minutes; before that interval it is
     /// left alone.
     /// </summary>

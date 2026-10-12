@@ -20,7 +20,8 @@ namespace Elsa.Persistence.EntityFrameworkCore.Migrations.Tests;
 /// The rule reads two explicit declarations, the entity's marker and its family's list, and fails when they disagree in
 /// either direction. It infers nothing from a table's name, so a renamed table keeps its declaration, and a table copied
 /// from a content-addressed one carries the marker into a family that must then name it. <see cref="ExecutableTables"/>
-/// pins the executable and executable activity template tables, and fails when one of them stops being a stamped table rather than passing on a stale name.
+/// pins the executable, executable activity template and template hash claim tables, and fails when one of them stops
+/// being a stamped table rather than passing on a stale name.
 /// </remarks>
 public sealed class EfSchemaContentAddressedDeclarationTests
 {
