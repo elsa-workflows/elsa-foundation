@@ -41,6 +41,12 @@ docker compose -p elsa-first-workflow -f docker-compose.images.yml up --detach
 
 Continue only if configuration validation and the pull succeed. Wait for Workbench to become ready and Studio to start. Open [Studio on localhost](http://localhost:14000) and sign in with the demo account, username `admin` and password `Password123!`.
 
+After sign-in, Studio opens on its workspace. The Workflow Definitions list looks like this once you have created a workflow:
+
+![Elsa Studio signed in, showing the workspace navigation and the Workflow Definitions list](../assets/elsa4/elsa4-03-workflow-definitions_studio-7cb2f2c2_act-4.0.4-preview.png)
+
+*Elsa Studio after sign-in (Studio rev `7cb2f2c2`, activities `4.0.4-preview`.)*
+
 Continue with [Your first workflow](first-workflow.md). If startup or sign-in fails, inspect the services:
 
 ```bash

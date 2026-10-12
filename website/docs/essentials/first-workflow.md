@@ -13,11 +13,31 @@ You will publish a workflow containing one Write Line activity, run that publish
 3. Set **Text** to a recognizable message, such as `Hello from my first Elsa workflow`.
 4. Choose **Review & publish**, then **Publish** in the dialog. Note the published artifact identifier.
 
+![Studio Workflow Definitions list showing one draft workflow named Hello first workflow](../assets/elsa4/elsa4-03-workflow-definitions_studio-7cb2f2c2_act-4.0.4-preview.png)
+
+*The Workflow Definitions list with the new draft (Studio rev `7cb2f2c2`, activities `4.0.4-preview`.)*
+
+![Studio designer with a Flowchart containing a single Write Line activity marked as the start](../assets/elsa4/elsa4-04-designer_studio-7cb2f2c2_act-4.0.4-preview.png)
+
+*The designer with one Write Line activity (Studio rev `7cb2f2c2`, activities `4.0.4-preview`.)*
+
+![Review and publish dialog showing the default publication channel, version and captured changes](../assets/elsa4/elsa4-05-review-and-publish_studio-7cb2f2c2_act-4.0.4-preview.png)
+
+*The Review and publish dialog (Studio rev `7cb2f2c2`, activities `4.0.4-preview`.)*
+
 ## Run the published workflow
 
 Open **Workflows → Executables** and run the artifact you just published. The editor's Run action starts a draft test run; use Executables to follow this published-workflow journey.
 
+![Studio Executables list showing the published artifact with Inspect, Run and Export actions](../assets/elsa4/elsa4-06-executables_studio-7cb2f2c2_act-4.0.4-preview.png)
+
+*The published artifact in Executables (Studio rev `7cb2f2c2`, activities `4.0.4-preview`.)*
+
 Open the resulting run in history. Check that it belongs to the published artifact and has status **Completed**. Its timeline should contain exactly one completed Write Line activity. Open the activity's **Activity** tab and the **Issues** tab; the run should have zero incidents and an empty Issues view.
+
+![Completed run with the Write Line activity marked Completed and a timeline listing Flowchart and Write Line as OK](../assets/elsa4/elsa4-07-run-timeline_studio-7cb2f2c2_act-4.0.4-preview.png)
+
+*A completed run and its timeline (Studio rev `7cb2f2c2`, activities `4.0.4-preview`.)*
 
 In your demo terminal, inspect the Workbench output:
 
