@@ -76,7 +76,7 @@ public sealed class CoalescingRuntimeCheckpointCommitStore(
 
         var forceImmediate = HasBoundaryState(commit);
         var deferrable = decision.Mode == RuntimeCheckpointPersistenceMode.Deferred && !forceImmediate;
-        var capReached = session.WouldExceedActivityCap(commit);
+        var capReached = !IsAttemptClaim(commit) && session.WouldExceedActivityCap(commit);
 
         // Deferrable, non-boundary, under cap: buffer into the overlay working set and acknowledge this commit's own
         // outbox items so the committer's post-commit count assertion is satisfied without durably persisting anything.
@@ -262,6 +262,13 @@ public sealed class CoalescingRuntimeCheckpointCommitStore(
             lastFailureMessage: item.LastFailureMessage,
             metadata: item.Metadata,
             deliveryFencingToken: item.DeliveryFencingToken);
+
+    // A claim is taken just before the claimed work runs, and the work item that runs it can exist only in the session's
+    // memory: a parent re-claimed to evaluate its finished child runs from such an item. A cap fold at the claim would
+    // commit the claim but nothing that runs the work again, so a crash before the queue is advanced left the parent
+    // Running with nothing queued. The cap therefore waits for the next checkpoint, which records what the work did.
+    private static bool IsAttemptClaim(RuntimeCheckpointCommit commit) =>
+        StringComparer.Ordinal.Equals(commit.Checkpoint.Name, RuntimeCheckpointNames.ActivityAttemptClaimed);
 
     private static bool CanContinueAfterBoundary(
         RuntimeCheckpointCommit commit,
