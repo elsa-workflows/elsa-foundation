@@ -425,7 +425,7 @@ Behavioral guards worth reading alongside the code:
 - Retention, resolution APIs, and the operator surfaces that act on an incident once it exists.
 - The drain and claim protocol itself. See [durable resumption](runtime-durable-resumption.md) for
   crash windows and redelivery, ADR 0029 for the execution pipeline, ADR 0031 for the burst drain, and
-  ADR 0032 for checkpoint cadence.
+  [persistence modes](../website/docs/essentials/persistence-modes.md) for when checkpoints are committed.
 - Cancellation. A cancel is not a fault on either path and is committed by its own checkpoint service.
 - Child-fault propagation to a parent fork/join. The invoke handler rides a parent-evaluation work item
   on the incident checkpoint so a join resolves deterministically instead of waiting for a completion

@@ -20,8 +20,8 @@ Two contract-shaped surfaces live in the engine package rather than `.Core`, del
 
 - **`IRuntimeCoalescingSessionAccessor` + `IRuntimeCoalescingDrainScopeFactory`** (namespace
   `Elsa.Workflows.Runtime.Contracts`) expose the concrete `RuntimeCoalescingSession` engine
-  working state. Their only consumers are the opt-in coalescing composition in Runtime.Api and its
-  tests.
+  working state. Their only consumers are the persistence-mode composition in Runtime.Api
+  (`AddPersistenceModes`) and its tests.
 - **`ActivityRuntimePipelineBuilder` + `WorkflowRuntimePipelineBuilder`** (namespace
   `Elsa.Workflows.Runtime.Builders`) bake concrete engine middleware and the concrete
   `RuntimeCheckpointCommitter` into their default plans. The declarative slot machinery remains in
@@ -155,8 +155,8 @@ adapters validate and translate the selected context at their own persistence bo
 - **Kind:** Replacement (one policy decides how checkpoints flush in a runtime composition).
 - **Signature:** `DecideAsync(RuntimeCheckpoint checkpoint, CancellationToken cancellationToken = default)`.
 - **Usage:** separates checkpoint semantics from persistence timing. The checkpoint name says what changed; the policy decides immediate, deferred, or skipped flush.
-- **Default implementation:** `ImmediateRuntimeCheckpointPersistencePolicy` *(intra-domain default)*.
-- **Alternative implementation:** `CoalescingRuntimeCheckpointPersistencePolicy` *(opt-in, W9/E3-6/RT-10)* — burst-coalescing folding of intra-drain checkpoints into one flush at quiescence; enable with `services.AddCoalescingRuntimeCheckpointPersistence()` (see the Coalescing checkpoint persistence section below).
+- **Default implementation:** `ImmediateRuntimeCheckpointPersistencePolicy` *(intra-domain default)*, registered by `AddWorkflowRuntime`; a composition that never adds the persistence modes runs every workflow Durable.
+- **Alternative implementation:** `CoalescingRuntimeCheckpointPersistencePolicy` *(W9/E3-6/RT-10)* — folds intra-drain checkpoints of a Balanced or Ephemeral run into one flush at a boundary or quiescence; registered by `services.AddPersistenceModes()`, which `WorkflowsRuntimeApiFeature` calls for every shell (see the Persistence modes section below). A Durable run on such a host has no folding session, so every one of its checkpoints is still committed immediately.
 
 ### `IRuntimeCheckpointWriter` *(Core — `Elsa.Workflows.Runtime.Core`)*
 - **Kind:** Replacement (one writer owns persistence of checkpoint envelopes for a runtime composition).
@@ -774,8 +774,8 @@ Cursor failures carry the cursor class, boundary/query/access binding results, a
 - **Usage:** RT-4; renamed from `AddWorkflowRuntimeCore` when the composition root moved to the engine package (ADR 0033). Registers the full hosting-agnostic runtime (stores, scheduler queue/drainer, checkpoint committer, pipelines + built-in middleware, dispatcher, ownership fencing, post-commit outbox) so a worker or test harness can compose and drive a drain **without** the API feature. `WorkflowsRuntimeApiFeature` composes it and adds only the API/endpoint concerns. All registrations use `TryAdd`, so a durable provider overrides any store. Reference in-memory state is process-global; persistence-consuming operation graphs are scoped. Host-lifetime actor mailboxes and recurring tasks open and dispose a fresh scope per command or tick (see the composition-root XML docs and `docs/runtime-durable-resumption.md`).
 
 ### `WorkflowsRuntimeCheckpointPersistenceFeature` *(Runtime.Api — `Elsa.Workflows.Runtime.Api`)*
-- **Kind:** Shell-scoped policy selector and post-provider decorator.
-- **Usage:** Configure `Mode` as `Immediate` (default/pass-through) or `Coalesced`, with a positive `MaxSegmentCheckpoints` (default 50). The feature implements `IPostConfigureShellServices` so provider packages first replace the runtime stores and coalescing then wraps the selected implementations. Duplicate composition is idempotent. See `docs/runtime-durable-resumption.md` for the latency, replay, and cap trade-offs.
+- **Kind:** Shell-scoped persistence-mode settings.
+- **Usage:** Configure the host default `Mode` as `Durable`, `Balanced` (default) or `Ephemeral`, a positive `MaxActivitiesPerCommit` (default 50, checked in every mode because a workflow can choose Balanced on a Durable host) and `RecordCompletion` (default `true`, read by Ephemeral only). The feature only registers `PersistenceModeOptions`; `WorkflowsRuntimeApiFeature` implements `IPostConfigureShellServices` and calls `AddPersistenceModes()`, which wraps whichever runtime stores the shell's provider registered and keeps these options whichever feature CShells composes first. A shell that does not list the feature runs with the defaults. See [Persistence modes](../../../../../website/docs/essentials/persistence-modes.md) for the user guide and `docs/runtime-durable-resumption.md` for the replay and cap mechanics.
 
 ### `ResumeTargetAttribute` *(Core — `Elsa.Activities.Runtime.Core`)*
 - **Kind:** Declaration surface (activity author contract).
@@ -811,41 +811,41 @@ Cursor failures carry the cursor class, boundary/query/access binding results, a
 
 ---
 
-## Coalescing checkpoint persistence *(opt-in — W9 / E3-6 / RT-10)*
+## Persistence modes *(W9 / E3-6 / RT-10)*
 
-The burst-coalescing persistence policy is an **opt-in** durability/throughput trade, enabled with
-`services.AddCoalescingRuntimeCheckpointPersistence()` (in `Elsa.Workflows.Runtime.Api.Coalescing`). It is
-**not** registered by default: the default runtime keeps `ImmediateRuntimeCheckpointPersistencePolicy` and
-the contracts/decorators below are absent, so the default path is byte-identical. When enabled, it swaps the
-policy to `CoalescingRuntimeCheckpointPersistencePolicy` and layers ambient-session decorators over the
-checkpoint commit store, scheduler queue, post-commit outbox, and state stores (including a durable-baseline
-read memo over the inspection store — spec 131). See
-[`docs/runtime-durable-resumption.md`](../../../../../docs/runtime-durable-resumption.md#coalescing-checkpoint-persistence--the-deferred-flush-window-e3-6--rt-10)
+`services.AddPersistenceModes()` (in `Elsa.Workflows.Runtime.Api.Coalescing`) registers what the Balanced and
+Ephemeral modes need. `WorkflowsRuntimeApiFeature` calls it for every shell after all features registered their
+stores; a direct `AddWorkflowRuntime()` composition without it runs Durable and refuses a run that resolves to
+another mode. It swaps the policy to `CoalescingRuntimeCheckpointPersistencePolicy` and layers ambient-session
+decorators over the checkpoint commit store, scheduler queue, post-commit outbox, and state stores (including a
+durable-baseline read memo over the inspection store — spec 131). The decorators pass through unchanged for a
+Durable run. See [Persistence modes](../../../../../website/docs/essentials/persistence-modes.md),
+[`docs/runtime-durable-resumption.md`](../../../../../docs/runtime-durable-resumption.md#persistence-modes-and-the-deferred-flush-window)
 and the [benchmark results](../../../../../docs/reports/elsa-4-architecture-review-2026-07/w9-checkpoint-coalescing-benchmark.md).
 
 > **Documented ADR 0033 deviation.** The two coalescing interfaces below moved to the
 > `Elsa.Workflows.Runtime` engine package instead of staying in `.Core` with the other contracts:
 > both expose the concrete `RuntimeCoalescingSession` (engine working state) on their signatures, so
-> they cannot stand ahead of the engine, and their only consumers are the opt-in coalescing
+> they cannot stand ahead of the engine, and their only consumers are the persistence-mode
 > composition in `Runtime.Api` plus its tests. Their namespace, `Elsa.Workflows.Runtime.Contracts`,
 > follows that package. This canonical catalog covers both the contracts and engine-hosted deviations.
 
 ### `IRuntimeCoalescingSessionAccessor` *(engine — `Elsa.Workflows.Runtime`)*
 - **Kind:** Replacement (one ambient accessor exposes the active coalescing session to the decorators).
 - **Signature:** `RuntimeCoalescingSession? Current { get; }`, `IDisposable Push(RuntimeCoalescingSession? session)`.
-- **Usage:** an `AsyncLocal` push/pop stack that makes the current drain segment's in-memory working set ambient to the coalescing store/queue/outbox decorators, mirroring the existing ambient ownership-scope resolution. Only registered by the opt-in extension.
-- **Default implementation:** `AsyncLocalRuntimeCoalescingSessionAccessor` *(opt-in only)*.
+- **Usage:** an `AsyncLocal` push/pop stack that makes the current drain segment's in-memory working set ambient to the coalescing store/queue/outbox decorators, mirroring the existing ambient ownership-scope resolution. Registered by `AddPersistenceModes`.
+- **Default implementation:** `AsyncLocalRuntimeCoalescingSessionAccessor` *(registered with the persistence modes)*.
 
 ### `IRuntimeCoalescingDrainScopeFactory` *(engine — `Elsa.Workflows.Runtime`)*
 - **Kind:** Replacement (one factory opens the per-drain coalescing scope and performs the quiescence flush).
-- **Signature:** `IRuntimeCoalescingDrainScope Begin(string workflowExecutionId, int? maxSegmentCheckpoints = null)`; scope exposes `RuntimeCoalescingSession Session` and `ValueTask FlushAtQuiescenceAsync(CancellationToken)`. The optional cap overrides the host-configured `MaxSegmentCheckpoints` for that run (ADR 0032 R5 per-workflow authored cadence).
-- **Usage:** `WorkflowDrainOrchestrator` opens a scope around a drain when the factory is registered (greediest resolvable ctor), buffers intra-drain checkpoints in the session, and flushes one folded atomic commit at quiescence through `RuntimeCheckpointCommitter.CommitAsync` (so W5 ownership fencing still gates it). Per execution, the orchestrator first consults `IRuntimeCheckpointCadenceResolver` (per-run stamp > authored-on-executable cadence > host default) and skips the scope entirely for an authored-Immediate run. Only registered by the opt-in extension.
-- **Default implementation:** `RuntimeCoalescingDrainScopeFactory` *(opt-in only)*.
+- **Signature:** `IRuntimeCoalescingDrainScope Begin(string workflowExecutionId, ResolvedPersistenceMode mode)`; scope exposes `RuntimeCoalescingSession Session` and `ValueTask FlushAtQuiescenceAsync(CancellationToken)`. The mode is Balanced or Ephemeral and says whether the run already has a durable record; the activity cap and `RecordCompletion` come from the host's `PersistenceModeOptions`.
+- **Usage:** per execution, `WorkflowDrainOrchestrator` resolves the run's mode through `IRuntimePersistenceModeResolver` (per-run stamp > the workflow's choice on the pinned executable > host default). A Durable run skips the scope entirely. A Balanced or Ephemeral run opens one around the drain, buffers intra-drain checkpoints in the session, and flushes one folded atomic commit at boundaries and at quiescence through `RuntimeCheckpointCommitter.CommitAsync` (so W5 ownership fencing still gates it); without the factory such a run is refused with an exception naming the mode. Registered by `AddPersistenceModes`.
+- **Default implementation:** `RuntimeCoalescingDrainScopeFactory` *(registered with the persistence modes)*.
 
 ### `IRuntimeLiveDrainDeliveryAccessor` *(engine — `Elsa.Workflows.Runtime`)*
 - **Kind:** Replacement (one ambient accessor marks the live drain that owns an execution's post-commit intent delivery — WU-2, spec 105-runtime-live-drain-delivery).
 - **Signature:** `RuntimeLiveDrainDeliveryScope? Current { get; }`, `IDisposable Push(RuntimeLiveDrainDeliveryScope? scope)`.
-- **Usage:** an `AsyncLocal` push/pop stack, mirroring `IRuntimeCoalescingSessionAccessor`. `WorkflowDrainOrchestrator.DrainCoreAsync` pushes a scope on the Immediate (no coalescing scope factory) branch, bounded by the RT-2 single-writer lease. While the scope is ambient, `RuntimePostCommitOutboxProcessor` delivers `EnqueueSchedulerWork` intents for the owning execution in-memory — idempotent `EnqueueAsync` plus a direct `Pending -> Delivered` mark via the existing non-claim recording contract — skipping the durable claim round-trip. It never engages while a coalescing session is active (the overlay is authoritative) and leaves other intent kinds, other executions, and unmarked callers (recovery sweep, v1 stores) on the durable claim path. The scope is not exclusive: the sweep can still take the owning execution's continuation (#1798). The drain then treats it as its own until it is delivered and drained (#2225, see `IWorkflowDrainOrchestrator`). Registered by default because Immediate is the default cost model.
+- **Usage:** an `AsyncLocal` push/pop stack, mirroring `IRuntimeCoalescingSessionAccessor`. `WorkflowDrainOrchestrator.DrainCoreAsync` pushes a scope on the Durable branch, bounded by the RT-2 single-writer lease. While the scope is ambient, `RuntimePostCommitOutboxProcessor` delivers `EnqueueSchedulerWork` intents for the owning execution in-memory — idempotent `EnqueueAsync` plus a direct `Pending -> Delivered` mark via the existing non-claim recording contract — skipping the durable claim round-trip. It never engages while a coalescing session is active (the overlay is authoritative) and leaves other intent kinds, other executions, and unmarked callers (recovery sweep, v1 stores) on the durable claim path. The scope is not exclusive: the sweep can still take the owning execution's continuation (#1798). The drain then treats it as its own until it is delivered and drained (#2225, see `IWorkflowDrainOrchestrator`). Registered by default; Durable runs use it.
 - **Default implementation:** `AsyncLocalRuntimeLiveDrainDeliveryAccessor`.
 
 ## Cross-references
