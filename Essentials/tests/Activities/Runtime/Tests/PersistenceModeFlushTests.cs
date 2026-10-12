@@ -259,8 +259,7 @@ public sealed class PersistenceModeFlushTests
         // memory. Every commit this node makes after that is refused, so nothing of the pass reaches the store and the
         // queued work stays for the new owner, which runs those activities again and completes the run once. That holds
         // for a completion Ephemeral would drop too: dropping it touches the durable queue, so it checks ownership first.
-        // Durable is not covered: there a node that lost the run records the refused work item as poison and removes it
-        // from the queue, leaving the new owner nothing to run. That predates the persistence modes.
+        // Durable commits the first activity before the steal, so it has a test of its own below.
         LeaseStealingReplaySafeActivity.Reset();
         await using var harness = NewHarness(mode, recordCompletion);
         var executable = WorkflowExecutionHarness.NewExecutable(NewSequence(
@@ -296,6 +295,54 @@ public sealed class PersistenceModeFlushTests
             .ListAllAsync(new RuntimeSchedulerWorkQuery(harness.ExecutionId)));
         Assert.Equal(2, CountingReplaySafeActivity.Executions);
     }
+
+    [Fact]
+    public async Task Under_Durable_a_node_that_loses_ownership_keeps_what_it_committed_and_a_peer_completes_the_run_once()
+    {
+        // Durable commits the first activity when the next one starts, so that commit lands before another node takes
+        // the run, together with the continuation that schedules the next activity. The commit that would record the
+        // stealing activity is refused. That refusal is not a fault of the work this node was running: nothing is
+        // recorded as poison, and the committed continuation is still pending, so the new owner delivers it, runs the
+        // rest without running the committed activity again, and completes the run once.
+        LeaseStealingReplaySafeActivity.Reset();
+        await using var harness = NewHarness(PersistenceMode.Durable, recordCompletion: true);
+        var executable = WorkflowExecutionHarness.NewExecutable(NewSequence(
+            "node-sequence",
+            NewCountingNode(),
+            NewClrNode("node-steal", typeof(LeaseStealingReplaySafeActivity)),
+            WorkflowExecutionHarness.NewReplaySafeProbeNode("node-after")));
+
+        await Assert.ThrowsAnyAsync<Exception>(() => harness.RunAsync(executable));
+
+        var commits = harness.Services.GetRequiredService<InMemoryRuntimeCheckpointCommitStore>();
+        Assert.Contains(commits.ListCommits(), commit => RecordsCompleted(commit.Commit, CountingNodeId));
+        Assert.DoesNotContain(commits.ListCommits(), commit => RecordsCompleted(commit.Commit, "node-steal"));
+        Assert.Empty(await harness.Services.GetRequiredService<IWorkflowSchedulerPoisonStore>().ListAsync(harness.ExecutionId));
+        Assert.Contains(
+            await commits.GetDeliverableAsync(new RuntimePostCommitOutboxQuery(DateTimeOffset.MaxValue, limit: 10, harness.ExecutionId)),
+            item => item.Intent.Kind == RuntimePostCommitIntentKinds.EnqueueSchedulerWork);
+
+        // The new owner recovers the run the way the resumption sweep does: it delivers the run's pending continuations,
+        // then drains the run's queued work.
+        await using (var scope = harness.Services.CreateAsyncScope())
+            await scope.ServiceProvider.GetRequiredService<IRuntimePostCommitOutboxProcessor>()
+                .ProcessAsync(new RuntimePostCommitOutboxProcessRequest(limit: 10));
+        await DeliverAsync(harness, WorkflowExecutionCommandKind.RunSchedulerWork, WorkflowExecutionActorActivationReason.Recovery);
+
+        var run = await harness.ReadRunAsync(harness.ExecutionId);
+        Assert.Equal(WorkflowExecutionStatus.Completed, run.WorkflowState?.Status);
+        Assert.Equal(1, commits.ListCommits().Count(commit => commit.Commit.Checkpoint.Name == RuntimeCheckpointNames.WorkflowCompleted));
+        Assert.Empty(await harness.Services.GetRequiredService<IWorkflowSchedulerPoisonStore>().ListAsync(harness.ExecutionId));
+        Assert.Empty(await harness.Services.GetRequiredService<IWorkflowSchedulerWorkQueue>()
+            .ListAllAsync(new RuntimeSchedulerWorkQuery(harness.ExecutionId)));
+        Assert.Equal(1, CountingReplaySafeActivity.Executions);
+    }
+
+    private static bool RecordsCompleted(RuntimeCheckpointCommit commit, string executableNodeId) =>
+        commit.StateChanges.ActivityExecutions.Any(change =>
+            change.Operation == RuntimeStateChangeOperation.Upsert &&
+            change.State.Status == ActivityExecutionStatus.Completed &&
+            StringComparer.Ordinal.Equals(change.State.Execution.ExecutableNodeId, executableNodeId));
 
     private const string PoisonedNodeId = "node-poisoned";
 

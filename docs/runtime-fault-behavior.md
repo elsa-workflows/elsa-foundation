@@ -154,7 +154,7 @@ already attached. That non-null outcome is what makes both downstream observers 
 
 ### Where it is caught
 
-`WorkflowSchedulerDrainer.DispatchAsync`, in the general `catch (Exception)` arm. Three exception
+`WorkflowSchedulerDrainer.DispatchAsync`, in the general `catch (Exception)` arm. Four exception
 types are filtered out ahead of it and re-thrown untouched, because none of them is a decided outcome
 about this item:
 
@@ -162,6 +162,8 @@ about this item:
 - `RuntimeSchedulerWorkClaimLostException`, so a successor may own the work. Never ack, never poison.
 - `RuntimeSchedulerWorkConsumeConflictException`, where the atomic commit's fence-checked consume lost to a
   successor; the commit rolled back and persisted nothing.
+- `RuntimeStaleFencingTokenException`, where a commit was refused because another node now owns the run. The work
+  is the new owner's to run, so this node neither acks nor poisons it.
 
 A dispatch that breaches `RuntimeSchedulerWorkClaimOptions.MaxDispatchDuration` deliberately throws a
 `RuntimeSchedulerDispatchDeadlineExceededException`, which is neither of the above and therefore lands
@@ -382,7 +384,7 @@ Changing the catalog default only affects workflows published afterwards.
 | `FaultWorkflow` keeps the incident blocking and faults the workflow; `ContinueWithIncidents` opens it and does not | `Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Incidents/IncidentResolutionActions.cs` |
 | the default strategy is `Fault/1` | `Essentials/src/Workflows/Runtime/Core/Models/IncidentStrategyCatalogOptions.cs`, `Essentials/src/Workflows/Publishing/Elsa.Workflows.Publishing/Services/WorkflowExecutableCompiler.cs` (`ResolveIncidentStrategy`), `Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Incidents/FaultIncidentStrategy.cs` |
 | the fault observer skips terminal workflows, decided incidents, and activation failures; it faults non-terminal ancestors | `Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Incidents/BlockingIncidentWorkflowFaultObserver.cs` |
-| handler faults are caught in the dispatch arm, with claim-lost / consume-conflict / cancellation excluded | `Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Scheduler/WorkflowSchedulerDrainer.cs` (`DispatchAsync`) |
+| handler faults are caught in the dispatch arm, with claim-lost / consume-conflict / stale-fence / cancellation excluded | `Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Scheduler/WorkflowSchedulerDrainer.cs` (`DispatchAsync`) |
 | ack-before-poison, and the retry-mode ladder | `WorkflowSchedulerDrainer.HandleHandlerCrashAsync` |
 | the poison store is required by construction, so an ack-deleted fault always leaves a record | `WorkflowSchedulerDrainer` constructor (`ArgumentNullException.ThrowIfNull(poisonStore)`) |
 | the dispatch deadline is routed into the poison ladder on purpose | `WorkflowSchedulerDrainer.RenewClaimUntilStoppedAsync`, `RuntimeSchedulerDispatchDeadlineExceededException` |
