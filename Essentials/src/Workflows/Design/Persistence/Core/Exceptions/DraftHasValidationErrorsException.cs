@@ -3,7 +3,7 @@ using Elsa.Workflows.Design.Validations.Core.Models;
 namespace Elsa.Workflows.Design.Persistence.Core.Exceptions;
 
 /// <summary>
-/// Thrown by <c>IPromoteDraftToVersionCommand</c> (Unit D's allocation) when called against a
+/// Thrown by <c>IPromoteDraftToVersionCommand</c> when called against a
 /// <c>WorkflowDefinitionDraft</c> for which the in-lock validation gate re-derives a non-empty
 /// error set. Validation errors are compile errors for a workflow definition;
 /// promotion is a compile-success precondition. Errors are derived state (not persisted) — the
