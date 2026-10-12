@@ -23,7 +23,7 @@ namespace Elsa.Workflows.Runtime.Api.Coalescing;
     DisplayName = "Workflows Runtime Checkpoint Persistence",
     Description = "Sets the default persistence mode (Durable, Balanced or Ephemeral), how much work Balanced folds into one commit, and whether Ephemeral records completions.",
     DependsOn = new object[] { "WorkflowsRuntimeApi" })]
-public sealed class WorkflowsRuntimeCheckpointPersistenceFeature : IShellFeature
+public class WorkflowsRuntimeCheckpointPersistenceFeature : IShellFeature
 {
     [ManifestSetting(
         DisplayName = "Persistence mode",
@@ -53,26 +53,14 @@ public sealed class WorkflowsRuntimeCheckpointPersistenceFeature : IShellFeature
         DefaultValue = "true")]
     public bool CoalesceDurableValueReads { get; set; } = true;
 
-    public void ConfigureServices(IServiceCollection services)
+    public virtual void ConfigureServices(IServiceCollection services)
     {
         ArgumentNullException.ThrowIfNull(services);
 
-        // Refuse a bad setting while the shell is composed. A workflow can choose Balanced on a Durable host, so the cap
-        // is checked whatever the default mode is.
-        if (!Enum.IsDefined(Mode))
-        {
-            throw new InvalidOperationException(
-                $"Feature 'WorkflowsRuntimeCheckpointPersistence' received unsupported persistence mode '{(int)Mode}'.");
-        }
-
-        if (MaxActivitiesPerCommit <= 0)
-        {
-            throw new InvalidOperationException(
-                $"Feature 'WorkflowsRuntimeCheckpointPersistence': {nameof(MaxActivitiesPerCommit)} must be greater than zero.");
-        }
-
-        // Only the options are registered here. The runtime API feature wraps the stores after every feature has
-        // registered its own, and keeps these options because they are already present.
+        // Only the options are registered here, and registering them refuses a bad setting while the shell is composed.
+        // A workflow can choose Balanced on a Durable host, so the cap is checked whatever the default mode is. The
+        // runtime API feature wraps the stores after every feature has registered its own, and keeps these options
+        // because they are already present.
         services.AddPersistenceModeOptions(new PersistenceModeOptions
         {
             Mode = Mode,

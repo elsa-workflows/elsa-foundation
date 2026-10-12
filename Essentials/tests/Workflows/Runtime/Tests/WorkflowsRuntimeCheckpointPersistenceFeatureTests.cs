@@ -173,8 +173,31 @@ public sealed class WorkflowsRuntimeCheckpointPersistenceFeatureTests
 
         var exception = Assert.Throws<InvalidOperationException>(() => feature.ConfigureServices(CreateRuntimeServices()));
 
-        Assert.Contains("WorkflowsRuntimeCheckpointPersistence", exception.Message);
         Assert.Contains("999", exception.Message);
+        Assert.Contains("Durable, Balanced, Ephemeral", exception.Message);
+    }
+
+    [Fact]
+    public void A_feature_that_extends_it_registers_the_settings_and_its_own_services()
+    {
+        var services = CreateRuntimeServices();
+
+        new ExtendedCheckpointPersistenceFeature { Mode = PersistenceMode.Ephemeral }.ConfigureServices(services);
+
+        using var provider = services.BuildServiceProvider();
+        Assert.Equal(PersistenceMode.Ephemeral, provider.GetRequiredService<PersistenceModeOptions>().Mode);
+        Assert.NotNull(provider.GetService<ExtendedCheckpointPersistenceFeature.Marker>());
+    }
+
+    private sealed class ExtendedCheckpointPersistenceFeature : WorkflowsRuntimeCheckpointPersistenceFeature
+    {
+        public override void ConfigureServices(IServiceCollection services)
+        {
+            base.ConfigureServices(services);
+            services.AddSingleton<Marker>();
+        }
+
+        public sealed class Marker;
     }
 
     [Theory]
