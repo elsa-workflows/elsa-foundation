@@ -7,7 +7,7 @@ Records direct test-project references and test source-file inventory; it does n
 ## Summary
 
 - Test projects: 140
-- Source projects directly referenced by at least one test project: 175
+- Source projects directly referenced by at least one test project: 137
 - Source projects not directly referenced by test projects: 4
 
 ## Test Projects
