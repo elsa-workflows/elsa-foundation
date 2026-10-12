@@ -1387,7 +1387,9 @@ public sealed class ResponseReplaySafetyProcessTests
         Assert.Equal(artifactId, payload.PinnedExecutable.ArtifactId);
         Assert.Equal(artifactHash, payload.PinnedExecutable.ArtifactHash);
         Assert.Equal(schedulerWorkItemId, EfRelationalIdentity.Decode(scheduler.Row.WorkItemId));
-        // A folding session dispatches in memory; the durable invoke remains unclaimed as redrive work.
+        // Every drain runs in a persistence-mode session, whatever the mode, and while it folds it dispatches the invoke
+        // from its in-memory working set. The durable invoke row therefore stays unclaimed: it is the redrive work a
+        // crash at this point leaves behind.
         Assert.Null(scheduler.Row.ClaimOwnerId);
         Assert.Equal(0, scheduler.Row.ClaimToken);
         Assert.Null(scheduler.Row.ClaimedAtUtcTicks);
