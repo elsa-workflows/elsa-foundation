@@ -56,17 +56,27 @@ public sealed class EfReplaySafeFusionCapRecoveryTests
     // trip the cap. The inner gate counts durable commits; the outer gate also counts commits the segment buffered, so
     // the same cut has a different occurrence on each side.
 
+    // Durable's cap is always one activity, so every cap-1 case runs under Durable as well as under Balanced at that cap.
+    public static TheoryData<CheckpointCommitGatePlacement, int, PersistenceMode> CapOfOneCuts() => new()
+    {
+        { CheckpointCommitGatePlacement.InnerStoreReturn, 1, PersistenceMode.Balanced },
+        { CheckpointCommitGatePlacement.CoalescingDecoratorReturn, 2, PersistenceMode.Balanced },
+        { CheckpointCommitGatePlacement.InnerStoreReturn, 1, PersistenceMode.Durable },
+        { CheckpointCommitGatePlacement.CoalescingDecoratorReturn, 2, PersistenceMode.Durable }
+    };
+
     // With a cap of one, the child's ActivityScheduled trips the fold. It is the first checkpoint of the child's fused
     // span, so the fold must make the in-flight Schedule anchor durable before it lands.
     [Theory]
-    [InlineData(CheckpointCommitGatePlacement.InnerStoreReturn, 1)]
-    [InlineData(CheckpointCommitGatePlacement.CoalescingDecoratorReturn, 2)]
+    [MemberData(nameof(CapOfOneCuts))]
     public Task ActivityScheduled_cap_fold_can_recover_a_typed_replaysafe_schedule(
         CheckpointCommitGatePlacement gatePlacement,
-        int targetOccurrence) =>
+        int targetOccurrence,
+        PersistenceMode mode) =>
         RunCutAndRecoverAsync(
             _output,
             CutPoint.At(RuntimeCheckpointNames.ActivityScheduled),
+            mode,
             maxActivitiesPerCommit: 1,
             () => NewSequenceExecutable(WorkflowExecutionHarness.NewReplaySafeProbeNode(ChildA)),
             new CutExpectation(
@@ -78,14 +88,15 @@ public sealed class EfReplaySafeFusionCapRecoveryTests
             gatePlacement);
 
     [Theory]
-    [InlineData(CheckpointCommitGatePlacement.InnerStoreReturn, 1)]
-    [InlineData(CheckpointCommitGatePlacement.CoalescingDecoratorReturn, 2)]
+    [MemberData(nameof(CapOfOneCuts))]
     public Task ActivityScheduled_cap_fold_can_recover_a_fusable_intrinsic_schedule(
         CheckpointCommitGatePlacement gatePlacement,
-        int targetOccurrence) =>
+        int targetOccurrence,
+        PersistenceMode mode) =>
         RunCutAndRecoverAsync(
             _output,
             CutPoint.At(RuntimeCheckpointNames.ActivityScheduled),
+            mode,
             maxActivitiesPerCommit: 1,
             () => NewSequenceExecutable(NewSetOutputIntrinsicNode()),
             new CutExpectation(
@@ -105,14 +116,15 @@ public sealed class EfReplaySafeFusionCapRecoveryTests
     // continues from, cut before the durable queue is advanced and after. On the decorator side the child's own
     // buffered completion is the first match, so the durable one is the second.
     [Theory]
-    [InlineData(CheckpointCommitGatePlacement.InnerStoreReturn, 1)]
-    [InlineData(CheckpointCommitGatePlacement.CoalescingDecoratorReturn, 2)]
+    [MemberData(nameof(CapOfOneCuts))]
     public Task The_first_durable_commit_recording_a_finished_child_can_be_recovered_from(
         CheckpointCommitGatePlacement gatePlacement,
-        int targetOccurrence) =>
+        int targetOccurrence,
+        PersistenceMode mode) =>
         RunCutAndRecoverAsync(
             _output,
             new CutPoint("commit recording the first child Completed", commit => RecordsCompleted(commit, ChildA)),
+            mode,
             maxActivitiesPerCommit: 1,
             NewTwoChildSequenceExecutable,
             new CutExpectation(
@@ -148,6 +160,7 @@ public sealed class EfReplaySafeFusionCapRecoveryTests
         RunCutAndRecoverAsync(
             _output,
             CutPoint.At(RuntimeCheckpointNames.ActivityScheduled),
+            PersistenceMode.Balanced,
             maxActivitiesPerCommit: 2,
             NewReplaySafeSequenceExecutable,
             new CutExpectation(
@@ -162,8 +175,10 @@ public sealed class EfReplaySafeFusionCapRecoveryTests
             targetOccurrence,
             gatePlacement);
 
-    [Fact]
-    public async Task Persisted_outbox_delivery_between_anchor_enqueue_and_session_refresh_is_reconciled()
+    [Theory]
+    [InlineData(PersistenceMode.Balanced)]
+    [InlineData(PersistenceMode.Durable)]
+    public async Task Persisted_outbox_delivery_between_anchor_enqueue_and_session_refresh_is_reconciled(PersistenceMode mode)
     {
         var databasePath = Path.Join(Path.GetTempPath(), $"elsa-replaysafe-cap-outbox-interleave-{Guid.NewGuid():N}.db");
         var queueOperations = new QueueOperationRecorder();
@@ -177,6 +192,7 @@ public sealed class EfReplaySafeFusionCapRecoveryTests
             await using (var source = await StartGenerationAsync(
                              databasePath,
                              gate,
+                             mode: mode,
                              maxActivitiesPerCommit: 1,
                              activityExecutionIds: Enumerable.Range(1, 8).Select(index => $"actexec-replaysafe-cap-interleave-{index}").ToArray(),
                              schedulerQueueDecorator: inner => new CountingSchedulerWorkQueue(inner, queueOperations)))
@@ -532,6 +548,7 @@ public sealed class EfReplaySafeFusionCapRecoveryTests
     private static async Task RunCutAndRecoverAsync(
         ITestOutputHelper output,
         CutPoint cutPoint,
+        PersistenceMode mode,
         int maxActivitiesPerCommit,
         Func<WorkflowExecutable> executableFactory,
         CutExpectation expected,
@@ -559,6 +576,7 @@ public sealed class EfReplaySafeFusionCapRecoveryTests
             await using (var source = await StartGenerationAsync(
                              sourceDatabasePath,
                              gate,
+                             mode: mode,
                              maxActivitiesPerCommit: maxActivitiesPerCommit,
                              activityExecutionIds: sourceActivityExecutionIds,
                              gatePlacement: gatePlacement,
@@ -691,6 +709,7 @@ public sealed class EfReplaySafeFusionCapRecoveryTests
                 recoveryDatabasePath,
                 gate: null,
                 timeProvider: new FixedTimeProvider(DateTimeOffset.UtcNow.AddMinutes(10)),
+                mode: mode,
                 maxActivitiesPerCommit: maxActivitiesPerCommit,
                 activityExecutionIds: recoveryIds,
                 executionIdGenerator: new NamespacedRuntimeExecutionIdGenerator(WorkflowExecutionId, recoveryIds, recoveryIdentityNamespace));
@@ -742,6 +761,7 @@ public sealed class EfReplaySafeFusionCapRecoveryTests
         string databasePath,
         CheckpointCommitGate? gate,
         TimeProvider? timeProvider = null,
+        PersistenceMode mode = PersistenceMode.Balanced,
         int maxActivitiesPerCommit = 2,
         IReadOnlyCollection<string>? activityExecutionIds = null,
         IRuntimeExecutionIdGenerator? executionIdGenerator = null,
@@ -766,7 +786,7 @@ public sealed class EfReplaySafeFusionCapRecoveryTests
                     services.AddSingleton(timeProvider);
             })
             .WithFeature(services => new ActivitiesSequenceFeature().ConfigureServices(services))
-            .WithPersistenceMode(maxActivitiesPerCommit: maxActivitiesPerCommit);
+            .WithPersistenceMode(mode, maxActivitiesPerCommit: maxActivitiesPerCommit);
 
         if (gate is not null)
             builder = builder.ConfigureServices(services => AddCheckpointCommitGate(services, gate, gatePlacement));
