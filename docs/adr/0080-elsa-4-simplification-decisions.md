@@ -165,6 +165,11 @@ unit, ratification, phase-owned) does not appear in product docs or type names.
   design choice goes straight to `ready-for-agent`. Proposals to simplify, replace or remove UI stay
   `needs-triage`. Every run appends what worked and what it filed to the `ux-qa-ledger` issue. The fixer routine
   takes the `ready-for-agent` ones, Studio's included, and their PRs always get a human merge.
+- A **product scout** routine runs weekly. It mines feature requests, discussions and workarounds in
+  elsa-core, elsa-studio and elsa-foundation, the UX QA ledger, deferred specs and Elsa 3 parity gaps, using other
+  engines' public docs only as prior art. It files at most two evidence-backed proposals, labelled
+  `needs-triage` and `auto-product` and never `ready-for-agent`. Deciding what gets built stays a maintainer
+  decision. Each run records its candidates and near misses on the `product-scout-ledger` issue.
 - Program metrics (public types, projects, test LOC, EF commands per reference workflow, glossary size,
   `[Obsolete]` count, code citations) are reported weekly. If fewer than half of the filed issues are promoted
   after four weeks, or the metrics do not move, the routines are paused and their prompts revised.
