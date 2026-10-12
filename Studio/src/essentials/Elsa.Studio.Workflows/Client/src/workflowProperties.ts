@@ -3,6 +3,7 @@ import type {
   ArgumentValue,
   CollectionKind,
   IncidentStrategyReference,
+  PersistenceMode,
   VariableDefinition,
   VariableTypeDescriptor,
   WorkflowInput,
@@ -48,6 +49,31 @@ export function updateIncidentStrategyReference(
       ? { ...storedReference, ...incidentStrategy }
       : null
   };
+}
+
+export const persistenceModes: readonly PersistenceMode[] = ["Durable", "Balanced", "Ephemeral"];
+
+export function isPersistenceMode(value: unknown): value is PersistenceMode {
+  return typeof value === "string" && (persistenceModes as readonly string[]).includes(value);
+}
+
+// The stored value as authored, recognized or not, so a value this Studio does not know can be shown and kept until
+// the author picks another. Publishing accepts only the exact mode names.
+export function readStoredPersistenceMode(strategyOptions: unknown): string | null {
+  if (!isPlainRecord(strategyOptions)) return null;
+  const { persistenceMode } = strategyOptions;
+  return typeof persistenceMode === "string" && persistenceMode.trim().length > 0 ? persistenceMode : null;
+}
+
+export function readPersistenceMode(strategyOptions: unknown): PersistenceMode | null {
+  const stored = readStoredPersistenceMode(strategyOptions);
+  return isPersistenceMode(stored) ? stored : null;
+}
+
+// Choosing the host default removes the field rather than storing null, so the workflow carries no choice at all.
+export function updatePersistenceMode(strategyOptions: unknown, mode: PersistenceMode | null): WorkflowStrategyOptions {
+  const { persistenceMode: _previous, ...others } = isPlainRecord(strategyOptions) ? strategyOptions : {};
+  return mode ? { ...others, persistenceMode: mode } : others;
 }
 
 export function isCollectionKind(value: unknown): value is CollectionKind {

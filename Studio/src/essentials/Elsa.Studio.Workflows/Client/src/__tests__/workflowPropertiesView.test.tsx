@@ -212,6 +212,63 @@ describe("properties view", () => {
     expect(getJson).toHaveBeenNthCalledWith(2, "/expressions/variable-types");
   });
 
+  it("writes the chosen persistence mode while preserving sibling strategy options", () => {
+    const workflow = draft();
+    workflow.state.strategyOptions = {
+      futureOption: { preserve: true },
+      incidentStrategy: { alias: "Fault", version: "1" }
+    };
+    const onStateChange = vi.fn();
+    const container = render(
+      <WorkflowPropertiesView details={details()} draft={workflow} context={rejectingContext} onStateChange={onStateChange} />
+    );
+
+    const select = container.querySelector<HTMLSelectElement>("select[aria-label='Persistence mode']")!;
+    expect(select.value).toBe("");
+    expect([...select.options].map(option => option.value)).toEqual(["", "Durable", "Balanced", "Ephemeral"]);
+    setSelectValue(select, "Ephemeral");
+
+    const producer = onStateChange.mock.calls[0][0] as (state: WorkflowDraft["state"]) => WorkflowDraft["state"];
+    expect(producer(workflow.state).strategyOptions).toEqual({
+      futureOption: { preserve: true },
+      incidentStrategy: { alias: "Fault", version: "1" },
+      persistenceMode: "Ephemeral"
+    });
+  });
+
+  it("removes the persistence mode when the host default is chosen", () => {
+    const workflow = draft();
+    workflow.state.strategyOptions = { futureOption: 1, persistenceMode: "Durable" };
+    const onStateChange = vi.fn();
+    const container = render(
+      <WorkflowPropertiesView details={details()} draft={workflow} context={rejectingContext} onStateChange={onStateChange} />
+    );
+
+    const select = container.querySelector<HTMLSelectElement>("select[aria-label='Persistence mode']")!;
+    expect(select.value).toBe("Durable");
+    expect(container.querySelector("#wf-persistence-mode-help")?.textContent).toContain("Commits after every activity");
+    setSelectValue(select, "");
+
+    const producer = onStateChange.mock.calls[0][0] as (state: WorkflowDraft["state"]) => WorkflowDraft["state"];
+    expect(producer(workflow.state).strategyOptions).toEqual({ futureOption: 1 });
+  });
+
+  it("shows an unrecognized stored mode and keeps it until another is chosen", () => {
+    const workflow = draft();
+    workflow.state.strategyOptions = { persistenceMode: "Coalesced" };
+    const onStateChange = vi.fn();
+    const container = render(
+      <WorkflowPropertiesView details={details()} draft={workflow} context={rejectingContext} onStateChange={onStateChange} />
+    );
+
+    const select = container.querySelector<HTMLSelectElement>("select[aria-label='Persistence mode']")!;
+    expect(select.value).toBe("Coalesced");
+    const stored = [...select.options].find(option => option.value === "Coalesced")!;
+    expect(stored.disabled).toBe(true);
+    expect(stored.textContent).toBe("Coalesced (unrecognized)");
+    expect(onStateChange).not.toHaveBeenCalled();
+  });
+
   it("pins the exact advertised incident strategy while preserving sibling strategy options", async () => {
     const workflow = draft();
     workflow.state.strategyOptions = {

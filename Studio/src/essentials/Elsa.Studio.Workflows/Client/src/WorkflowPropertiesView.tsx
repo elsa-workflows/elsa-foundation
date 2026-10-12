@@ -4,6 +4,7 @@ import type { StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import { listVariableTypeDescriptors } from "./api/expressions";
 import { formatDate } from "./workflowFormatting";
 import { IncidentStrategySection } from "./IncidentStrategySection";
+import { PersistenceModeSection } from "./PersistenceModeSection";
 import {
   argumentNameKeys,
   createInput,
@@ -22,6 +23,7 @@ import {
   updateInput,
   updateIncidentStrategyReference,
   updateOutput,
+  updatePersistenceMode,
   updateVariable,
   variableNameKeys
 } from "./workflowProperties";
@@ -620,6 +622,14 @@ export function WorkflowPropertiesView({ details, draft, context, onStateChange,
         onChange={incidentStrategy => onStateChange(state => ({
           ...state,
           strategyOptions: updateIncidentStrategyReference(state.strategyOptions, incidentStrategy)
+        }))}
+      />
+
+      <PersistenceModeSection
+        strategyOptions={draft.state.strategyOptions}
+        onChange={persistenceMode => onStateChange(state => ({
+          ...state,
+          strategyOptions: updatePersistenceMode(state.strategyOptions, persistenceMode)
         }))}
       />
 
