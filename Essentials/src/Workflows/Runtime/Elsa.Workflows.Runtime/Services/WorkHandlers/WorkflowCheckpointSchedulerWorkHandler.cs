@@ -74,7 +74,7 @@ public sealed class WorkflowCheckpointSchedulerWorkHandler : IWorkflowSchedulerW
         await _checkpointCommitter.CommitAsync(commit, cancellationToken);
     }
 
-    /// <summary>Pipeline dispatch (Move 2): build the commit in the Invoke slot and stage it for the Checkpoint slot.</summary>
+    /// <summary>Pipeline dispatch: build the commit in the Invoke slot and stage it for the Checkpoint slot.</summary>
     public async ValueTask HandleAsync(RuntimeSchedulerWorkItem workItem, IRuntimePipelineContext pipelineContext, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(workItem);

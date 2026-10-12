@@ -35,10 +35,10 @@ public sealed class RuntimeSchedulerDispatchDiagnostics
     /// <summary>Records a single engaged ReplaySafe fused span.</summary>
     public void RecordFusedSpan() => Interlocked.Increment(ref _fusedSpans);
 
-    /// <summary>Records a single completion-cascade work item dispatched inline by the D2 fused pump.</summary>
+    /// <summary>Records a single completion-cascade work item dispatched inline by the fused completion pump.</summary>
     public void RecordInlineCascadeDispatch() => Interlocked.Increment(ref _inlineCascadeDispatches);
 
-    /// <summary>Records a successor edge the D2 pump handed back to the discrete cascade as a fan-in/join fallback.</summary>
+    /// <summary>Records a successor edge the fused completion pump handed back to the discrete cascade as a fan-in/join fallback.</summary>
     public void RecordCascadeJoinFallback() => Interlocked.Increment(ref _cascadeJoinFallbacks);
 
     /// <summary>Resets all counters (test/benchmark isolation between runs sharing a provider).</summary>

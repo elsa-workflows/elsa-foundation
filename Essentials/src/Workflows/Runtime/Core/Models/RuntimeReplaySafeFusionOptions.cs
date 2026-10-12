@@ -24,8 +24,8 @@ public sealed class RuntimeReplaySafeFusionOptions
     /// the drain loop would use, eliding only the per-item drain hop. A fusable successor re-enters the fused pass;
     /// join (fan-in) edges, child-fault evaluations, non-ReplaySafe parents, and the workflow tail
     /// (<c>ContinuationScheduling</c>/<c>Checkpoint</c>) always fall back to the discrete drain loop. Setting this to
-    /// <see langword="false"/> keeps the fused schedule → start → invoke pass with the discrete cascade (the benchmark's
-    /// fused-pass-only column), and MUST also commit byte-identical durable state.
+    /// <see langword="false"/> keeps the fused schedule → start → invoke pass but runs the completion cascade through
+    /// the discrete drain loop, and MUST also commit byte-identical durable state.
     /// </summary>
     public bool FuseCompletionCascade { get; set; } = true;
 }

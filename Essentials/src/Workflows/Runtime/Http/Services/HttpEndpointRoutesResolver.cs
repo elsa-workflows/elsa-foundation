@@ -104,7 +104,7 @@ public sealed class HttpEndpointRoutesResolver(
 
         // (2) Union in the templates of every waiting, non-expired HttpEndpoint bookmark (mid-flow suspensions).
         // The lookup returns full BookmarkState snapshots incl. Metadata, from which the durable template is read.
-        // Bookmarks are instance-scoped and are NOT run through the cross-definition uniqueness check (D-D5).
+        // Bookmarks are instance-scoped and are NOT run through the cross-definition uniqueness check.
         var waiting = await bookmarkStimulusLookup.FindWaitingByTypeAsync(
             new GlobalBookmarkStimulusTypeLookupRequest(HttpEndpointRouting.StimulusType, DateTimeOffset.UtcNow),
             cancellationToken);

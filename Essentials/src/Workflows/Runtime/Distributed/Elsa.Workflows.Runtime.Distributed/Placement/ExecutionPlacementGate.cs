@@ -27,8 +27,8 @@ namespace Elsa.Workflows.Runtime.Distributed.Placement;
 /// check: stopping it would turn a membership outage into an execution outage.
 /// </para>
 /// <para>
-/// A member whose writes to a family of the Runtime EF module are refused claims and renews nothing
-/// either, so the pump hands what it holds off: it cannot commit a checkpoint anyway.
+/// A member also claims and renews nothing while the schema finalization gate refuses its writes to a family of the
+/// Runtime EF module, so the pump hands what it holds off: it cannot commit a checkpoint anyway.
 /// </para>
 /// </remarks>
 public sealed class ExecutionPlacementGate

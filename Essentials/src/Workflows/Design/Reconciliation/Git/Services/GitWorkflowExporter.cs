@@ -240,7 +240,7 @@ public sealed class GitWorkflowExporter(
     private async Task PushAsync(CancellationToken cancellationToken)
     {
         // No --force: git refuses a non-fast-forward push by default, so a divergent remote is rejected
-        // (surfaced, never forced or merged — the D7 single-writer gate).
+        // (surfaced, never forced or merged). That refusal is what keeps the export branch single-writer.
         LogPush(ExportBranch);
         await workspace.RunRemoteAsync(cancellationToken, "push", "origin", $"HEAD:{ExportBranch}");
     }

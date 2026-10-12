@@ -4,10 +4,8 @@ using Elsa.Workflows.Design.Persistence.Core.Models;
 namespace Elsa.Workflows.Design.Persistence.Core.Contracts;
 
 /// <summary>
-/// Placeholder contract — implementation is Unit D's allocation. Promotes a
-/// <c>WorkflowDefinitionDraft</c> to a new <c>WorkflowDefinitionVersion</c>. Unit C declares
-/// the marker and the gate contract; Unit D names the command finally (cardinality semantics
-/// may shift the verb) and ships the implementation.
+/// Promotes a <c>WorkflowDefinitionDraft</c> to a new <c>WorkflowDefinitionVersion</c>. The EF Core
+/// persistence module registers the default implementation.
 /// </summary>
 /// <remarks>
 /// <para>

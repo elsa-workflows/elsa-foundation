@@ -10,7 +10,7 @@ namespace Elsa.Workflows.Design.Reconciliation.Models;
 /// <param name="ContentHash">
 /// Optional canonical content hash (hex) of <paramref name="State"/> the source carries ahead of a
 /// persisted home (persisted provenance/hash fields do not exist yet).
-/// The reconciler's content-mismatch check recomputes from <see cref="State"/>, so this is
+/// The reconciler's Model X content-mismatch check recomputes from <see cref="State"/>, so this is
 /// forward-compat metadata rather than a required input today.
 /// </param>
 /// <param name="Deleted">

@@ -8,8 +8,8 @@ namespace Elsa.Workflows.Runtime.Core.Models;
 /// <remarks>
 /// The originating <see cref="WorkItem"/> is always present. The typed runtime state is optional:
 /// no full state is loaded at the scheduler dispatch point, some dispatches (e.g. workflow start) precede state
-/// creation, and populating <see cref="WorkflowExecution"/>/<see cref="Scheduler"/> is the <c>LoadState</c> slot's
-/// responsibility.
+/// creation, and populating <see cref="WorkflowExecution"/>/<see cref="Scheduler"/> belongs to the <c>LoadState</c> slot.
+/// The built-in <c>LoadState</c> middleware is a pass-through placeholder today, so both stay null.
 /// </remarks>
 public sealed record WorkflowRuntimePipelineContext(
     RuntimeSchedulerWorkItem WorkItem,
@@ -27,10 +27,10 @@ public sealed record WorkflowRuntimePipelineContext(
 /// Context passed through the activity runtime execution pipeline for one drained work item.
 /// </summary>
 /// <remarks>
-/// The originating <see cref="WorkItem"/> is always present. The typed runtime state is optional in Move 1 for the
+/// The originating <see cref="WorkItem"/> is always present. The typed runtime state is optional for the
 /// same reasons as <see cref="WorkflowRuntimePipelineContext"/>; <see cref="ActivityExecution"/> is additionally not
-/// derivable at the dispatch point without per-kind payload parsing, so it is left null until the <c>LoadState</c>
-/// slot populates it in Move 2.
+/// derivable at the dispatch point without per-kind payload parsing. Populating it belongs to the <c>LoadState</c>
+/// slot, whose built-in middleware is a pass-through placeholder today, so it stays null.
 /// </remarks>
 public sealed record ActivityRuntimePipelineContext(
     RuntimeSchedulerWorkItem WorkItem,

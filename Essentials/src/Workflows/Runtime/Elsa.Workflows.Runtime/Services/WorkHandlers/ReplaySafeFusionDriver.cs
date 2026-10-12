@@ -100,7 +100,7 @@ public sealed class ReplaySafeFusionDriver
     /// dispatches the invoke stage inline. If the start stage declines to fuse (not a fresh Scheduled ReplaySafe leaf —
     /// e.g. a redelivery), the <c>StartActivity</c> work item is enqueued so the discrete chain handles it; the item is
     /// never dropped and never enqueued on the successful fused path. A top-level span (one entered from the drain
-    /// loop, not from the pump itself) then pumps the completion cascade inline (D2).
+    /// loop, not from the pump itself) then pumps the completion cascade inline.
     /// </summary>
     // Keep the established non-generic ValueTask API; the schedule-aware path uses the core result to release its anchor.
     public async ValueTask ContinueFusedSpanAsync(RuntimeSchedulerWorkItem startWorkItem, CancellationToken cancellationToken = default)
@@ -151,7 +151,7 @@ public sealed class ReplaySafeFusionDriver
         _diagnostics?.RecordFusedSpan();
 
         // A fusable intrinsic has no invoke stage — its start stage already executed and committed the completion, whose
-        // continuation rides the same post-commit intent the discrete path emits. Go straight to the D2 pump.
+        // continuation rides the same post-commit intent the discrete path emits. Go straight to the completion pump.
         if (startResult.InvokeWorkItem is { } invokeWorkItem)
         {
             // Dispatch the invoke stage through the existing, unchanged handler inline. Its terminal
@@ -166,7 +166,7 @@ public sealed class ReplaySafeFusionDriver
     }
 
     /// <summary>
-    /// The D2 inline completion pump: the drain loop's deliver-outbox → next-item → dispatch cycle run inline inside
+    /// The inline completion pump: the drain loop's deliver-outbox → next-item → dispatch cycle run inline inside
     /// the original <c>ScheduleActivity</c> dispatch, on the same coalescing overlay queue and outbox, stopping at the
     /// first item it cannot prove belongs to a ReplaySafe single-predecessor cascade. The overlay queue's strict-FIFO
     /// claim contract keeps the drain loop's head claim (the span's originating item) live for the whole span, so the
@@ -177,7 +177,8 @@ public sealed class ReplaySafeFusionDriver
     private async ValueTask PumpCompletionCascadeAsync(string workflowExecutionId, CancellationToken cancellationToken)
     {
         // Re-entrancy guard: a fused successor dispatched by the pump re-enters ContinueFusedSpanAsync; that nested
-        // span is D1-only and the top pump owns the loop (iterative, not recursive, on long hot loops).
+        // span runs only the fused schedule → start → invoke pass and the top pump owns the loop (iterative, not
+        // recursive, on long hot loops).
         if (_pumping || !_options.Enabled || !_options.FuseCompletionCascade)
             return;
 

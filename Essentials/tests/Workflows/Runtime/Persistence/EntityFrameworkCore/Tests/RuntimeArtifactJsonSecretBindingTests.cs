@@ -12,7 +12,7 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests;
 
 /// <summary>
 /// A secret read binding, the withheld envelope that stands in for its value and a pinned credential
-/// input declaration (slice 5), round-tripped through the options the EF stores persist runtime artifacts with: enums by
+/// input declaration, round-tripped through the options the EF stores persist runtime artifacts with: enums by
 /// name, strings framed as UTF-16.
 /// </summary>
 public sealed class RuntimeArtifactJsonSecretBindingTests

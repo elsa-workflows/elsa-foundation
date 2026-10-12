@@ -236,7 +236,7 @@ public sealed class WorkflowsVersionReconcilerTests
     [Fact]
     public async Task Incoming_live_undeletes_soft_deleted_definition()
     {
-        // R10: definition.json latest-wins — a source reporting a source-owned definition live clears DeletedAt.
+        // definition.json is latest-wins: a source reporting a source-owned definition live clears DeletedAt.
         var incoming = BuildIncomingVersion(definitionId: "wf-undel", version: "1.0.0", name: "Same", deleted: false);
         var existingDef = new WorkflowDefinition { Id = "wf-undel", Name = "Same", DeletedAt = DateTimeOffset.UtcNow.AddDays(-1), IsSourceOwned = true };
         var existingVersion = new WorkflowDefinitionVersion("wf-undel", "1.0.0");

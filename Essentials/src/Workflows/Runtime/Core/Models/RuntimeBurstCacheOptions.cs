@@ -8,7 +8,8 @@ namespace Elsa.Workflows.Runtime.Core.Models;
 /// </summary>
 /// <remarks>
 /// When <see cref="Enabled"/> is <see langword="false"/> the router never establishes a burst scope, so every
-/// drain-path executable read takes the durable path and the cache-off arm of the ADR guardrail is exercised. Because
+/// drain-path executable read takes the durable path and the cache-off arm of the guardrail (committed durable state
+/// is byte-identical with the cache on and off) is exercised. Because
 /// the cached artifact is immutable and content-addressed, toggling this option changes only read counts and
 /// wall time — never committed durable state (the load-bearing "memory is cache, never a correctness dependency"
 /// invariant).

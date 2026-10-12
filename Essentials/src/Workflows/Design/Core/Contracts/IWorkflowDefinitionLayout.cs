@@ -31,8 +31,8 @@ public interface IDesignMetadataRecord
     double? Height { get; }
 
     /// <summary>
-    /// Opaque, Studio-authored per-node layout metadata, stored verbatim as a <see cref="JsonElement"/>
-    /// — read as JSON, never indexed as a CLR dictionary.
+    /// Opaque, Studio-authored per-node layout metadata, stored verbatim as a <see cref="JsonElement"/>.
+    /// It is read as JSON, never indexed as a CLR dictionary.
     /// </summary>
     JsonElement? AdditionalProperties { get; }
 }

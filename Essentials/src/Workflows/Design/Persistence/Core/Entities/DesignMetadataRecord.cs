@@ -12,8 +12,8 @@ namespace Elsa.Workflows.Design.Persistence.Core.Entities;
 /// <see cref="AdditionalProperties"/> is opaque, Studio-authored per-node layout metadata held as a
 /// verbatim <see cref="JsonElement"/> — never a CLR-typed <c>object</c> graph. Keeping it opaque removes
 /// the last open-object-polymorphism dependency from serialized design content, so the author's bytes are
-/// stored as-received (never key-sorted/canonicalized) and become safe to hash/diff (the treatment StateSource
-/// already gets, extended to layout).
+/// stored as-received (never key-sorted/canonicalized) and become safe to hash/diff (the treatment the designer bags
+/// inside StateSource, such as <c>UISpecifications</c>, already get, extended to layout).
 /// </remarks>
 public sealed record DesignMetadataRecord(
     string NodeId,

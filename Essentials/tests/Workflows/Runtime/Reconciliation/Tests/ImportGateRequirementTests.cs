@@ -8,8 +8,9 @@ using Xunit;
 namespace Elsa.Workflows.Runtime.Reconciliation.Tests;
 
 /// <summary>
-/// The requirements gate, including the third axis that neither of the two declared axes covers: an artifact this
-/// runtime cannot execute is refused <b>at import</b>, with a diagnostic that names what is missing.
+/// The requirements gate, including the third axis that neither the declared consumer/schema requirements check nor
+/// the per-node activity-type presence check covers: an artifact this runtime cannot execute is refused
+/// <b>at import</b>, with a diagnostic that names what is missing.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -128,7 +129,8 @@ public sealed class ImportGateRequirementTests : IDisposable
         // the identity — so an envelope carrying the unpinned form parses, validates, hashes to its own id and
         // (before this gate) activated cleanly, only to fault at *first execution* with
         // UnknownActivityConsumerException. That is precisely the production surprise the gate exists to prevent, on an
-        // axis the two declared axes do not check. Building the node unpinned here is deliberate, not an oversight.
+        // axis that neither the declared consumer/schema requirements check nor the activity-type presence check
+        // covers. Building the node unpinned here is deliberate, not an oversight.
         await using var harness = ArtifactImportHarness.Build(_mount);
         var unpinned = WorkflowExecutionHarness.NewProbeNode("node-root");
         Assert.Equal(typeof(ClrActivityDescriptor).FullName, unpinned.DescriptorType);

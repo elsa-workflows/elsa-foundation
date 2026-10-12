@@ -85,8 +85,8 @@ public sealed class RuntimeInProcessHopFastPathTests
         Assert.Equal(["work-DURABLE"], enqueued.Items.Select(item => item.WorkItemId));
     }
 
-    // A live-drain scope for a DIFFERENT execution must not divert this execution's delivery to the cache (as with
-    // live-drain delivery itself): the durable payload is deserialized.
+    // A live-drain scope applies only to the execution that owns it, so a scope for a DIFFERENT execution must not
+    // divert this execution's delivery to the cache: the durable payload is deserialized.
     [Fact]
     public async Task DifferentExecutionScope_DoesNotConsumeCache_Deserializes()
     {

@@ -329,7 +329,7 @@ public sealed class HttpEndpointRoutesResolverTests
     [Fact]
     public async Task ProjectsMethodSpecificEntries_SharedByMultipleMethodBookmarks()
     {
-        // One suspended instance holds one bookmark per method (D-D2); security stays method-accurate.
+        // One suspended instance holds one bookmark per method; security stays method-accurate.
         await _bookmarks.SaveAsync(Bookmarks.HttpEndpoint("wf1", "callbacks/{id}", "GET"));
         await _bookmarks.SaveAsync(Bookmarks.HttpEndpoint("wf1", "callbacks/{id}", "POST"));
 

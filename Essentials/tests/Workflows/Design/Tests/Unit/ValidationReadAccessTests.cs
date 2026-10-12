@@ -24,8 +24,8 @@ public sealed class ValidationReadAccessTests
     [Fact]
     public void Errors_grouped_by_Path_and_Type_pair()
     {
-        // Two missing required inputs on the same activity collapse to one (Path, Type) group
-        // even though the messages differ — matches ValidationError's "multiple errors may share the same scope".
+        // Two missing required inputs on the same activity share a Type but not a Path, so they form two
+        // (Path, Type) groups rather than one; with the node-level and workflow-scope errors that makes four.
         IReadOnlyList<ValidationError> errors = [
             new("n1/inputs/body",   "InputOutput/MissingRequired", "body is required"),
             new("n1/inputs/header", "InputOutput/MissingRequired", "header is required"),

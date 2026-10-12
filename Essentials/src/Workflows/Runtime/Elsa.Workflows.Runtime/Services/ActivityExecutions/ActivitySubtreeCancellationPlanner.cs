@@ -125,7 +125,7 @@ public sealed class ActivitySubtreeCancellationPlanner(
 /// One subtree-cancellation's exact state effects; applied by the caller in one atomic checkpoint
 /// commit. <see cref="IncidentChanges"/> holds the incident upserts the plan carries — the planner
 /// emits suppressions for the subtree's non-terminal incidents, and a caller may amend the list
-/// (e.g. swaps the absorbed incident's suppression for a resolution).
+/// (e.g. child-fault absorption swaps the absorbed incident's suppression for a resolution).
 /// </summary>
 public sealed record ActivitySubtreeCancellationPlan(
     string RootActivityExecutionId,

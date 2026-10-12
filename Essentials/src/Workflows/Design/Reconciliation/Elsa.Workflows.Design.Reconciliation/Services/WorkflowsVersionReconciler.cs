@@ -20,7 +20,7 @@ namespace Elsa.Workflows.Design.Reconciliation.Services;
 /// <summary>
 /// Workflow-side reconciler. Each pass publishes <see cref="WorkflowVersionsReconciling"/>
 /// to gather candidate versions from source modules, then upserts the catalog. Mirrors the
-/// Activities-side reconciler pattern. Full content-hash enforcement waits on persisted
+/// Activities-side reconciler pattern. Full content-hash enforcement of the Model X reconciliation policy waits on persisted
 /// provenance/hash fields; until they land, duplicate detection falls back to
 /// the configured <see cref="DuplicateHandling"/> mode, and a same-<c>(id, version)</c>-different-content
 /// case is <em>surfaced</em> by recomputing and comparing the canonical serialization of the incoming
@@ -244,8 +244,8 @@ public sealed class WorkflowsVersionReconciler(
     }
 
     /// <summary>
-    /// Content-mismatch safety net: a same-<c>(id, version)</c> whose
-    /// incoming canonical state differs from the stored one is a broken source. Until the version persists a
+    /// Content-mismatch safety net (the Model X reconciliation policy): a same-<c>(id, version)</c> whose
+    /// incoming canonical state differs from the stored one is a broken source. Until versions carry a persisted
     /// content hash to compare against, this recomputes the canonical serialization of both the incoming
     /// and stored state and <em>logs</em> a warning on divergence (a throw arrives with the persisted
     /// hash). Best-effort: a stored version whose state can't be loaded is skipped silently.
