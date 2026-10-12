@@ -6,8 +6,8 @@ namespace Elsa.Workflows.Runtime.Core.Contracts;
 /// Ambient, explicitly-scoped accessor for the burst-scoped reconstructible cache that currently owns one drain of one
 /// workflow execution. Mirrors the push/pop shape of
 /// <see cref="IRuntimeLiveDrainDeliveryAccessor"/> and <c>IRuntimeCoalescingSessionAccessor</c>: the scheduler command
-/// router establishes a burst scope for the duration of a drain (spanning BOTH the Immediate and Coalesced cadence
-/// branches — unlike the cadence-specific live-drain/coalescing accessors), and drain-path consumers resolve it to
+/// router establishes a burst scope for the duration of a drain (spanning BOTH the Durable and folding persistence
+/// branches — unlike the branch-specific live-drain/coalescing accessors), and drain-path consumers resolve it to
 /// serve reconstructible reads from memory instead of re-reading durable state on every hop.
 /// </summary>
 /// <remarks>

@@ -45,7 +45,7 @@ public sealed class CoalescingInspectionReadTests
     public async Task WithoutActiveSession_OverlayIsPassThrough_EvenWithMemoEnabled()
     {
         var durable = new InMemoryActivityExecutionInspectionStore();
-        var options = new CoalescingRuntimeCheckpointPersistenceOptions { CoalesceInspectionReads = true };
+        var options = new PersistenceModeOptions { CoalesceInspectionReads = true };
         var session = new RuntimeCoalescingSession(WorkflowExecutionId, new InMemoryWorkflowSchedulerWorkQueue(), options);
         session.Deactivate();
         var counting = new CountingInspectionStore(durable);
@@ -67,7 +67,7 @@ public sealed class CoalescingInspectionReadTests
         var durableInspections = new InMemoryActivityExecutionInspectionStore();
         var countingInspections = new CountingInspectionStore(durableInspections);
         var innerCommits = new InMemoryRuntimeCheckpointCommitStore(activityExecutionInspectionWriter: durableInspections);
-        var options = new CoalescingRuntimeCheckpointPersistenceOptions { CoalesceInspectionReads = coalesceInspectionReads };
+        var options = new PersistenceModeOptions { CoalesceInspectionReads = coalesceInspectionReads };
         var session = new RuntimeCoalescingSession(WorkflowExecutionId, new InMemoryWorkflowSchedulerWorkQueue(), options);
         var accessor = new FixedCoalescingSessionAccessor(session);
         var commitStore = new CoalescingRuntimeCheckpointCommitStore(

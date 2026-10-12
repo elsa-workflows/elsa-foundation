@@ -69,7 +69,7 @@ public sealed class ReplaySafeFusionDriver
     /// <summary>
     /// Whether a fresh <c>ScheduleActivity</c> targeting <paramref name="node"/> should fuse: the toggle is on, a live
     /// coalescing session owns this execution (fusion is a burst-only locality optimization; outside a burst the
-    /// in-process-hop carrier / Immediate path stands and every hop is discrete), and the node is one of
+    /// in-process-hop carrier / Durable path stands and every hop is discrete), and the node is one of
     /// <list type="bullet">
     /// <item>a ReplaySafe typed CLR leaf (the original population), or</item>
     /// <item>an engine intrinsic whose kind is fusable per <see cref="WorkflowIntrinsicFusion"/>. An intrinsic has no

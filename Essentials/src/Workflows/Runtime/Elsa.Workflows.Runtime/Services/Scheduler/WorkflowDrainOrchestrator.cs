@@ -28,7 +28,7 @@ public sealed class WorkflowDrainOrchestrator : IWorkflowDrainOrchestrator
     private readonly IPersistenceOperationScopeFactory? _heartbeatScopeFactory;
     private readonly IRuntimeCoalescingDrainScopeFactory? _coalescingScopeFactory;
     private readonly IRuntimeLiveDrainDeliveryAccessor? _liveDrainDeliveryAccessor;
-    private readonly IRuntimeCheckpointCadenceResolver? _cadenceResolver;
+    private readonly IRuntimePersistenceModeResolver? _persistenceModeResolver;
     private readonly IRuntimePostCommitOutboxClaimStore _claimStore;
     private readonly IPostCommitOutboxLookupStore _outboxLookupStore;
     private readonly IWorkflowSchedulerWorkQueue _schedulerWorkQueue;
@@ -62,7 +62,7 @@ public sealed class WorkflowDrainOrchestrator : IWorkflowDrainOrchestrator
         WorkflowDrainOrchestratorOptions? options = null,
         IRuntimeCoalescingDrainScopeFactory? coalescingScopeFactory = null,
         IRuntimeLiveDrainDeliveryAccessor? liveDrainDeliveryAccessor = null,
-        IRuntimeCheckpointCadenceResolver? cadenceResolver = null,
+        IRuntimePersistenceModeResolver? persistenceModeResolver = null,
         TimeProvider? timeProvider = null)
         : this(
             schedulerDrainer,
@@ -77,7 +77,7 @@ public sealed class WorkflowDrainOrchestrator : IWorkflowDrainOrchestrator
             options,
             coalescingScopeFactory,
             liveDrainDeliveryAccessor,
-            cadenceResolver,
+            persistenceModeResolver,
             timeProvider,
             heartbeatScopeFactory: null)
     {
@@ -101,7 +101,7 @@ public sealed class WorkflowDrainOrchestrator : IWorkflowDrainOrchestrator
         WorkflowDrainOrchestratorOptions? options = null,
         IRuntimeCoalescingDrainScopeFactory? coalescingScopeFactory = null,
         IRuntimeLiveDrainDeliveryAccessor? liveDrainDeliveryAccessor = null,
-        IRuntimeCheckpointCadenceResolver? cadenceResolver = null,
+        IRuntimePersistenceModeResolver? persistenceModeResolver = null,
         TimeProvider? timeProvider = null)
     {
         ArgumentNullException.ThrowIfNull(heartbeatScopeFactory);
@@ -118,7 +118,7 @@ public sealed class WorkflowDrainOrchestrator : IWorkflowDrainOrchestrator
             options,
             coalescingScopeFactory,
             liveDrainDeliveryAccessor,
-            cadenceResolver,
+            persistenceModeResolver,
             timeProvider,
             heartbeatScopeFactory);
     }
@@ -136,7 +136,7 @@ public sealed class WorkflowDrainOrchestrator : IWorkflowDrainOrchestrator
         WorkflowDrainOrchestratorOptions? options,
         IRuntimeCoalescingDrainScopeFactory? coalescingScopeFactory,
         IRuntimeLiveDrainDeliveryAccessor? liveDrainDeliveryAccessor,
-        IRuntimeCheckpointCadenceResolver? cadenceResolver,
+        IRuntimePersistenceModeResolver? persistenceModeResolver,
         TimeProvider? timeProvider,
         IPersistenceOperationScopeFactory? heartbeatScopeFactory)
     {
@@ -169,7 +169,7 @@ public sealed class WorkflowDrainOrchestrator : IWorkflowDrainOrchestrator
         _heartbeatScopeFactory = heartbeatScopeFactory;
         _coalescingScopeFactory = coalescingScopeFactory;
         _liveDrainDeliveryAccessor = liveDrainDeliveryAccessor;
-        _cadenceResolver = cadenceResolver;
+        _persistenceModeResolver = persistenceModeResolver;
         _claimStore = outboxClaimStore;
         _outboxLookupStore = outboxLookupStore;
         _schedulerWorkQueue = schedulerWorkQueue;
@@ -329,28 +329,26 @@ public sealed class WorkflowDrainOrchestrator : IWorkflowDrainOrchestrator
         RuntimeSchedulerDrainRequest request,
         CancellationToken cancellationToken)
     {
-        // Default path: no coalescing scope factory registered, so the drain runs with Immediate persistence.
+        // No folding machinery registered: the drain runs Durable.
         if (_coalescingScopeFactory is null)
             return await DrainImmediateAsync(envelope, request, cancellationToken);
 
-        // Coalescing host, but cadence is resolved per execution. A workflow that authored Immediate must
-        // run Immediate even though the host default is Coalesced: skip establishing the session entirely and take the
-        // immediate path, so no relaxable checkpoint is deferred for this run. The mandatory-boundary set is unaffected
-        // either way — those flush immediately under both policies. Authored cadence is read off the pinned executable
-        // (or the run's own per-run stamp on resume); when no resolver is registered the host default (coalesce) stands.
-        var cadence = _cadenceResolver is not null
-            ? await _cadenceResolver.ResolveAsync(envelope, cancellationToken)
+        // The mode is resolved per execution. A workflow that chose Durable runs Durable even though the host default
+        // is Balanced: skip the session entirely so no checkpoint is deferred for this run. Boundary checkpoints flush
+        // immediately either way. The choice is read off the pinned executable, or the mode the run recorded at start on
+        // later drains; when no resolver is registered the host default (Balanced) stands.
+        var resolved = _persistenceModeResolver is not null
+            ? await _persistenceModeResolver.ResolveAsync(envelope, cancellationToken)
             : null;
 
-        if (cadence is { Coalesced: false })
+        if (resolved is { Mode: PersistenceMode.Durable })
             return await DrainImmediateAsync(envelope, request, cancellationToken);
 
-        // Coalescing path: establish the ambient session for the drain, then fold-and-flush the buffered segment at
-        // quiescence. The flush runs inside the active ownership scope so single-writer fencing gates the single durable write. If
-        // the drain throws, the flush is skipped and the scope is disposed with its buffer discarded, so a crash
-        // mid-segment replays from the last flushed state plus durable scheduler-queue redelivery. A null cadence (no
-        // resolver registered) coalesces with the host-configured cap, byte-identical to pre-R5 behavior.
-        await using var scope = _coalescingScopeFactory.Begin(request.WorkflowExecutionId, cadence?.MaxSegmentCheckpoints);
+        // Folding path: establish the ambient session for the drain, then fold-and-flush the buffered segment at
+        // quiescence. The flush runs inside the active ownership scope so single-writer fencing gates the single durable
+        // write. If the drain throws, the flush is skipped and the scope is disposed with its buffer discarded, so a crash
+        // mid-segment replays from the last flushed state plus durable scheduler-queue redelivery.
+        await using var scope = _coalescingScopeFactory.Begin(request.WorkflowExecutionId);
         scope.Session.BindDurableValuePageReuseCancellationToken(cancellationToken);
         // Drain cancellation also covers ownership-lease loss. This callback fences only the memo's synchronized state;
         // the existing overlay and session cancellation behavior remain on the normal drain path.
@@ -363,12 +361,12 @@ public sealed class WorkflowDrainOrchestrator : IWorkflowDrainOrchestrator
         return drainResult;
     }
 
-    // Immediate persistence for a single drain. While this live drain owns the execution (bounded by the
+    // Durable persistence for a single drain. While this live drain owns the execution (bounded by the
     // single-writer lease), push a delivery scope so the post-commit outbox processor delivers EnqueueSchedulerWork
     // intents in-memory (idempotent enqueue + direct Delivered mark) instead of taking the durable claim round-trip.
-    // Deliberately NOT used on the coalescing path: there the overlay session is authoritative and folds
-    // continuations itself. Reused both when no coalescing factory is registered and when a per-run authored Immediate
-    // cadence opts this run out of coalescing on an otherwise-coalesced host.
+    // Deliberately NOT used on the folding path: there the overlay session is authoritative and folds continuations
+    // itself. Reused both when no folding machinery is registered and when a run resolves to Durable on a host that
+    // has it.
     private async ValueTask<RuntimeSchedulerDrainResult> DrainImmediateAsync(
         WorkflowExecutionCommandEnvelope envelope,
         RuntimeSchedulerDrainRequest request,

@@ -112,9 +112,9 @@ public class WorkflowsRuntimeApiFeature : IWebShellFeature
 
         services.TryAddScoped<IActivityInspectionContextAsync>(sp => sp.GetRequiredService<HttpContextActivityExecutionInspectionAuthorizationContext>());
         services.EnsureReplacementContract<IActivityInspectionContextAsync, HttpContextActivityExecutionInspectionAuthorizationContext>();
-        // Resolves the host's effective checkpoint cadence for the instance detail view. Reads the
-        // coalescing options optionally (via IEnumerable), so it is Immediate unless the persistence feature enabled Coalesced.
-        services.TryAddScoped<RuntimeCheckpointCadenceInspector>();
+        // Resolves the persistence mode for the instance detail view. Reads the host options optionally (via
+        // IEnumerable), so a run that recorded no mode reports Durable unless the host registered the persistence modes.
+        services.TryAddScoped<RuntimePersistenceModeInspector>();
         services.TryAddScoped<ActivityExecutionHierarchyReader>();
         services.TryAddScoped<IActivityExecutionDescendantsReader>(sp => sp.GetRequiredService<ActivityExecutionHierarchyReader>());
         services.TryAddScoped<ActivityExecutionLayoutReader>();

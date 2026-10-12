@@ -468,12 +468,12 @@ internal static class CoalescingRuntimeStorePageMerger
 /// fresh durable read (serving buffered state would flip the accumulator's FromState/Merge branch and change the
 /// flushed projection document). The memo is invalidated at every durable flush; the single-writer ownership lease
 /// guarantees the durable rows cannot change between flushes. Disabled (per-hop pass-through) via
-/// <see cref="CoalescingRuntimeCheckpointPersistenceOptions.CoalesceInspectionReads"/>.
+/// <see cref="PersistenceModeOptions.CoalesceInspectionReads"/>.
 /// </summary>
 public sealed class CoalescingActivityExecutionInspectionStore(
     CoalescingInner<IActivityExecutionInspectionStore> inner,
     IRuntimeCoalescingSessionAccessor sessionAccessor,
-    CoalescingRuntimeCheckpointPersistenceOptions options) : IActivityExecutionInspectionStore
+    PersistenceModeOptions options) : IActivityExecutionInspectionStore
 {
     private readonly IActivityExecutionInspectionStore _inner = inner.Value;
 

@@ -374,7 +374,7 @@ internal static class ResponseReplayHost
                 services.AddEfModuleMigrations<RuntimeDbContext>("Sqlite");
                 new WorkflowsRuntimeCheckpointPersistenceFeature
                 {
-                    Mode = CheckpointPersistenceMode.Coalesced,
+                    Mode = PersistenceMode.Balanced,
                     MaxSegmentCheckpoints = 50
                 }.PostConfigureServices(services);
             });

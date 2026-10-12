@@ -1,4 +1,4 @@
-// EF command budgets: how many EF commands each reference workflow may cost, per checkpoint persistence mode, on
+// EF command budgets: how many EF commands each reference workflow may cost, per persistence mode, on
 // SQLite. The count is deterministic and is a correctness gate, not a performance measurement; nothing here is timed.
 //
 // The budgets live in ef-command-budgets.json next to this file. Lowering a budget is a normal change. Raising one
@@ -26,7 +26,7 @@ using Xunit.Abstractions;
 namespace Elsa.Activities.Http.IntegrationTests;
 
 /// <summary>
-/// Runs each reference workflow on a fresh SQLite database under each checkpoint persistence mode and fails when the
+/// Runs each reference workflow on a fresh SQLite database under each persistence mode and fails when the
 /// EF commands it costs exceed the committed budget. Only the run itself is counted: host start, schema installation
 /// and publication come before the count, and the assertions that check the outcome come after it.
 /// </summary>
@@ -53,18 +53,18 @@ public sealed class EfCommandBudgetTests(ITestOutputHelper output)
             ["fork-join-resume"] = RunForkJoinResumeAsync
         };
 
-    public static TheoryData<string, CheckpointPersistenceMode> Cases()
+    public static TheoryData<string, PersistenceMode> Cases()
     {
-        var cases = new TheoryData<string, CheckpointPersistenceMode>();
+        var cases = new TheoryData<string, PersistenceMode>();
         foreach (var workflow in Workflows.Keys)
-        foreach (var mode in Enum.GetValues<CheckpointPersistenceMode>())
+        foreach (var mode in Enum.GetValues<PersistenceMode>())
             cases.Add(workflow, mode);
         return cases;
     }
 
     [Theory]
     [MemberData(nameof(Cases))]
-    public async Task Reference_workflow_stays_within_its_EF_command_budget(string workflow, CheckpointPersistenceMode mode)
+    public async Task Reference_workflow_stays_within_its_EF_command_budget(string workflow, PersistenceMode mode)
     {
         var actual = await MeasureAsync(workflow, mode);
 
@@ -82,7 +82,7 @@ public sealed class EfCommandBudgetTests(ITestOutputHelper output)
     [Fact]
     public void Every_budget_names_a_reference_workflow_and_a_persistence_mode()
     {
-        var modes = Enum.GetNames<CheckpointPersistenceMode>();
+        var modes = Enum.GetNames<PersistenceMode>();
         foreach (var (workflow, budgets) in ReadBudgets())
         {
             Assert.True(Workflows.ContainsKey(workflow), $"{BudgetFile} budgets unknown workflow '{workflow}'.");
@@ -91,7 +91,7 @@ public sealed class EfCommandBudgetTests(ITestOutputHelper output)
         }
     }
 
-    private static async Task<int> MeasureAsync(string workflow, CheckpointPersistenceMode mode)
+    private static async Task<int> MeasureAsync(string workflow, PersistenceMode mode)
     {
         var capture = new CommandCaptureInterceptor();
         await using var fixture = await HttpEndpointHostFixture.StartDurableSqliteAsync(mode, MaxSegmentCheckpoints, services =>

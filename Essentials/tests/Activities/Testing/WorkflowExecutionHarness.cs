@@ -489,7 +489,7 @@ public sealed class WorkflowExecutionHarness : IAsyncDisposable
             runtimeRequirements: null,
             storageDriverRequirements: null,
             incidentStrategy: IncidentStrategyBuiltIns.FaultReference,
-            checkpointCadence: null,
+            persistenceMode: null,
             workflowVariables: workflowVariables);
 
     /// <summary>Builds a leaf probe node that records execution and emits the given outcomes (default <c>Done</c>).</summary>
@@ -572,7 +572,7 @@ public sealed class WorkflowExecutionHarness : IAsyncDisposable
             runtimeRequirements: null,
             storageDriverRequirements: null,
             incidentStrategy: executable.IncidentStrategy,
-            checkpointCadence: executable.CheckpointCadence,
+            persistenceMode: executable.PersistenceMode,
             workflowVariables: executable.WorkflowVariables);
 
     private ExecutableNode PinClrActivityContract(ExecutableNode node)
@@ -894,7 +894,7 @@ public sealed class WorkflowExecutionHarness : IAsyncDisposable
         /// </summary>
         public Builder WithCoalescing(int? maxSegmentCheckpoints = null)
         {
-            _featureConfigurators.Add(services => services.AddCoalescingRuntimeCheckpointPersistence(options =>
+            _featureConfigurators.Add(services => services.AddPersistenceModes(options =>
             {
                 if (maxSegmentCheckpoints is { } cap)
                     options.MaxSegmentCheckpoints = cap;

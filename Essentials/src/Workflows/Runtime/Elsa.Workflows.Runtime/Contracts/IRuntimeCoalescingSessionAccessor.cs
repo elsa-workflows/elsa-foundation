@@ -7,7 +7,7 @@ namespace Elsa.Workflows.Runtime.Contracts;
 /// push/pop shape of <see cref="IRuntimeExecutionOwnershipContextAccessor"/>: the drain coordinator establishes a
 /// coalescing session for the duration of a drain, and the coalescing store/queue/outbox/state-store decorators
 /// resolve it to redirect reads and writes onto the in-memory working set instead of the durable stores. When no
-/// session is active (the default, Immediate policy), every decorator is a byte-for-byte pass-through to its inner
+/// session is active (a Durable run), every decorator is a byte-for-byte pass-through to its inner
 /// durable store.
 /// </summary>
 public interface IRuntimeCoalescingSessionAccessor

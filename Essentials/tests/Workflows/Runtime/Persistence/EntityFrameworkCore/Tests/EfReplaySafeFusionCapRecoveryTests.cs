@@ -260,7 +260,7 @@ public sealed class EfReplaySafeFusionCapRecoveryTests
             var session = new RuntimeCoalescingSession(
                 WorkflowExecutionId,
                 queue,
-                new CoalescingRuntimeCheckpointPersistenceOptions());
+                new PersistenceModeOptions());
             await session.EnsureQueueSeededAsync(CancellationToken.None);
             Assert.Equal("seeded-first", (await session.DequeueOverlayAsync(CancellationToken.None))?.WorkItemId);
             await session.EnqueueOverlayAsync(NewQueueWorkItem("continuation-early", 5, timestamp), CancellationToken.None);

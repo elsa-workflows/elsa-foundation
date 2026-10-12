@@ -1069,7 +1069,7 @@ internal static class ResponseReplayPublicationHost
         {
             [ShellWebRoutingPathKey] = "",
             ["CShells:Shells:default:Features:ClrActivityReconciliation:Options:FolderPath"] = AppContext.BaseDirectory,
-            ["CShells:Shells:default:Features:WorkflowsRuntimeCheckpointPersistence:Mode"] = "Coalesced",
+            ["CShells:Shells:default:Features:WorkflowsRuntimeCheckpointPersistence:Mode"] = "Balanced",
             ["CShells:Shells:default:Features:WorkflowsRuntimeCheckpointPersistence:MaxSegmentCheckpoints"] = maxSegmentCheckpoints.ToString(System.Globalization.CultureInfo.InvariantCulture),
             ["CShells:Shells:default:Features:WorkflowsRuntimeEntityFrameworkCore:Provider"] = "Sqlite",
             ["CShells:Shells:default:Features:WorkflowsRuntimeEntityFrameworkCore:ConnectionString"] = connectionString,

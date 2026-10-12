@@ -1,5 +1,6 @@
 using Elsa.Workflows.Runtime.Contracts;
 using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Services.Coalescing;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -7,20 +8,20 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 namespace Elsa.Workflows.Runtime.Api.Coalescing;
 
 /// <summary>
-/// Opt-in wiring for the burst-coalescing checkpoint persistence policy. Call this after the workflows
-/// runtime services are registered to trade a bounded crash-replay window for Elsa-3-style single-write-per-burst
-/// durability on straight-line segments. The default runtime keeps the Immediate policy, so this is a deliberate,
-/// reversible selection; when it is not called every runtime store is a byte-for-byte pass-through as before.
+/// Registers the services that let a run fold checkpoints in memory (the Balanced persistence mode). Call this after
+/// the workflows runtime services and their persistence provider are registered, because it wraps the stores that are
+/// registered at that point. A run that resolves to Durable still takes the per-checkpoint path: without an active
+/// folding session every wrapped store passes through unchanged.
 /// </summary>
-public static class CoalescingRuntimeCheckpointPersistenceExtensions
+public static class PersistenceModeServiceCollectionExtensions
 {
     /// <summary>
-    /// Replaces the Immediate checkpoint persistence policy with the coalescing policy and decorates the runtime
-    /// checkpoint/queue/outbox/state stores so intra-drain checkpoints fold into one atomic commit at quiescence.
+    /// Replaces the per-checkpoint persistence policy with the folding policy and wraps the runtime
+    /// checkpoint/queue/outbox/state stores so a run's intra-drain checkpoints fold into one atomic commit at quiescence.
     /// </summary>
-    public static IServiceCollection AddCoalescingRuntimeCheckpointPersistence(
+    public static IServiceCollection AddPersistenceModes(
         this IServiceCollection services,
-        Action<CoalescingRuntimeCheckpointPersistenceOptions>? configureOptions = null)
+        Action<PersistenceModeOptions>? configureOptions = null)
     {
         ArgumentNullException.ThrowIfNull(services);
 
@@ -30,16 +31,16 @@ public static class CoalescingRuntimeCheckpointPersistenceExtensions
         var durableValueReuse = RuntimeCoalescingDurableValuePageReuseRegistration.CaptureBeforeDecoration(services);
         var decorations = new List<RuntimeCoalescingDurableValuePageReuseRegistration.ServiceDecoration>();
 
-        var options = new CoalescingRuntimeCheckpointPersistenceOptions();
+        var options = new PersistenceModeOptions();
         configureOptions?.Invoke(options);
 
-        services.RemoveAll<CoalescingRuntimeCheckpointPersistenceOptions>();
+        services.RemoveAll<PersistenceModeOptions>();
         services.AddSingleton(options);
 
         services.TryAddSingleton(TimeProvider.System);
         services.TryAddSingleton<IRuntimeCoalescingSessionAccessor, AsyncLocalRuntimeCoalescingSessionAccessor>();
 
-        // Select the coalescing policy in place of the Immediate default.
+        // Select the folding policy in place of the per-checkpoint default.
         services.RemoveAll<IRuntimeCheckpointPersistencePolicy>();
         services.AddSingleton<IRuntimeCheckpointPersistencePolicy, CoalescingRuntimeCheckpointPersistencePolicy>();
 
@@ -82,7 +83,7 @@ public static class CoalescingRuntimeCheckpointPersistenceExtensions
     {
         var descriptor = services.LastOrDefault(d => d.ServiceType == typeof(TService))
             ?? throw new InvalidOperationException(
-                $"Cannot enable checkpoint coalescing: no registration found for '{typeof(TService)}'. Register the workflows runtime services before calling AddCoalescingRuntimeCheckpointPersistence.");
+                $"Cannot register the persistence modes: no registration found for '{typeof(TService)}'. Register the workflows runtime services before calling {nameof(AddPersistenceModes)}.");
 
         services.Remove(descriptor);
 

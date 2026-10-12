@@ -671,7 +671,7 @@ public sealed class CoalescingDurableValuePageReuseTests
     private static RuntimeCoalescingSession NewSession() => new(
         WorkflowExecutionId,
         new InMemoryWorkflowSchedulerWorkQueue(),
-        new CoalescingRuntimeCheckpointPersistenceOptions());
+        new PersistenceModeOptions());
 
     private static DurableValueStatePageQuery Query() => new(WorkflowExecutionId, limit: 10);
 
@@ -921,12 +921,12 @@ public sealed class CoalescingDurableValuePageReuseTests
         public bool SessionWasCreated { get; private set; }
         public RuntimeCoalescingSession? Session { get; private set; }
 
-        public IRuntimeCoalescingDrainScope Begin(string workflowExecutionId, int? maxSegmentCheckpoints = null)
+        public IRuntimeCoalescingDrainScope Begin(string workflowExecutionId)
         {
             var session = new RuntimeCoalescingSession(
                 workflowExecutionId,
                 new InMemoryWorkflowSchedulerWorkQueue(),
-                new CoalescingRuntimeCheckpointPersistenceOptions());
+                new PersistenceModeOptions());
             SessionWasCreated = true;
             Session = session;
             return new CapturedDrainScope(session, sessionAccessor.Push(session));

@@ -52,7 +52,7 @@ public sealed class RuntimeCoalescingSession
     public RuntimeCoalescingSession(
         string workflowExecutionId,
         IWorkflowSchedulerWorkQueue innerQueue,
-        CoalescingRuntimeCheckpointPersistenceOptions options,
+        PersistenceModeOptions options,
         IRuntimePostCommitOutboxStore? innerOutboxStore = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(workflowExecutionId);

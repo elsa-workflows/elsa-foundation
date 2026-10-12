@@ -3,6 +3,7 @@ using Elsa.Workflows.Runtime.Api;
 using Elsa.Workflows.Runtime.Api.Coalescing;
 using Elsa.Workflows.Runtime.Contracts;
 using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Services.Checkpoints;
 using Elsa.Workflows.Runtime.Services.Coalescing;
 using Microsoft.Extensions.DependencyInjection;
@@ -34,18 +35,18 @@ public sealed class WorkflowsRuntimeCheckpointPersistenceFeatureTests
     }
 
     [Fact]
-    public void DefaultsToImmediateModeCapFiftyAndDurableReadReuse()
+    public void DefaultsToDurableModeCapFiftyAndDurableReadReuse()
     {
         var feature = new WorkflowsRuntimeCheckpointPersistenceFeature();
 
-        Assert.Equal(CheckpointPersistenceMode.Immediate, feature.Mode);
+        Assert.Equal(PersistenceMode.Durable, feature.Mode);
         Assert.Equal(50, feature.MaxSegmentCheckpoints);
         Assert.True(feature.CoalesceDurableValueReads);
-        Assert.True(new CoalescingRuntimeCheckpointPersistenceOptions().CoalesceDurableValueReads);
+        Assert.True(new PersistenceModeOptions().CoalesceDurableValueReads);
     }
 
     [Fact]
-    public void ImmediateModeLeavesSelectedProviderUntouched()
+    public void DurableModeLeavesSelectedProviderUntouched()
     {
         var services = CreateRuntimeServices();
         var selectedProvider = ReplaceCheckpointProvider(services);
@@ -56,18 +57,18 @@ public sealed class WorkflowsRuntimeCheckpointPersistenceFeatureTests
         using var provider = services.BuildServiceProvider();
         Assert.IsType<ImmediateRuntimeCheckpointPersistencePolicy>(provider.GetRequiredService<IRuntimeCheckpointPersistencePolicy>());
         Assert.Same(selectedProvider, provider.GetRequiredService<IRuntimeCheckpointCommitStore>());
-        Assert.Null(provider.GetService<CoalescingRuntimeCheckpointPersistenceOptions>());
+        Assert.Null(provider.GetService<PersistenceModeOptions>());
     }
 
     [Theory]
     [InlineData(true)]
     [InlineData(false)]
-    public void CoalescedModeCapturesPostConfiguredProviderAndReadSetting(bool coalesceDurableValueReads)
+    public void BalancedModeCapturesPostConfiguredProviderAndReadSetting(bool coalesceDurableValueReads)
     {
         var services = CreateRuntimeServices();
         var feature = new WorkflowsRuntimeCheckpointPersistenceFeature
         {
-            Mode = CheckpointPersistenceMode.Coalesced,
+            Mode = PersistenceMode.Balanced,
             MaxSegmentCheckpoints = 7,
             CoalesceDurableValueReads = coalesceDurableValueReads
         };
@@ -78,8 +79,8 @@ public sealed class WorkflowsRuntimeCheckpointPersistenceFeatureTests
 
         using var provider = services.BuildServiceProvider();
         Assert.IsType<CoalescingRuntimeCheckpointPersistencePolicy>(provider.GetRequiredService<IRuntimeCheckpointPersistencePolicy>());
-        Assert.Equal(7, provider.GetRequiredService<CoalescingRuntimeCheckpointPersistenceOptions>().MaxSegmentCheckpoints);
-        Assert.Equal(coalesceDurableValueReads, provider.GetRequiredService<CoalescingRuntimeCheckpointPersistenceOptions>().CoalesceDurableValueReads);
+        Assert.Equal(7, provider.GetRequiredService<PersistenceModeOptions>().MaxSegmentCheckpoints);
+        Assert.Equal(coalesceDurableValueReads, provider.GetRequiredService<PersistenceModeOptions>().CoalesceDurableValueReads);
         Assert.Same(selectedProvider, provider.GetRequiredService<CoalescingInner<IRuntimeCheckpointCommitStore>>().Value);
     }
 
@@ -88,24 +89,23 @@ public sealed class WorkflowsRuntimeCheckpointPersistenceFeatureTests
     [InlineData(false, true)]
     [InlineData(true, false)]
     [InlineData(true, true)]
-    public async Task AuthoredCapUsesSessionCapAndPreservesBothReadSettingsWithoutChangingHostOptions(
+    public async Task SessionUsesTheHostCapAndBothReadSettings(
         bool coalesceDurableValueReads,
         bool coalesceInspectionReads)
     {
         var services = CreateRuntimeServices();
-        services.AddCoalescingRuntimeCheckpointPersistence(options =>
+        services.AddPersistenceModes(options =>
         {
             options.CoalesceInspectionReads = coalesceInspectionReads;
             options.CoalesceDurableValueReads = coalesceDurableValueReads;
         });
 
         using var provider = services.BuildServiceProvider();
-        var hostOptions = provider.GetRequiredService<CoalescingRuntimeCheckpointPersistenceOptions>();
+        var hostOptions = provider.GetRequiredService<PersistenceModeOptions>();
         var factory = provider.GetRequiredService<IRuntimeCoalescingDrainScopeFactory>();
-        await using var scope = factory.Begin("wf-authored-cap", maxSegmentCheckpoints: 7);
+        await using var scope = factory.Begin("wf-host-settings");
 
-        Assert.Equal(7, scope.Session.MaxSegmentCheckpoints);
-        Assert.Equal(50, hostOptions.MaxSegmentCheckpoints);
+        Assert.Equal(hostOptions.MaxSegmentCheckpoints, scope.Session.MaxSegmentCheckpoints);
         Assert.Equal(coalesceDurableValueReads, scope.Session.CoalesceDurableValueReads);
         Assert.Equal(coalesceInspectionReads, scope.Session.CoalesceInspectionReads);
         Assert.Equal(coalesceDurableValueReads, hostOptions.CoalesceDurableValueReads);
@@ -117,7 +117,7 @@ public sealed class WorkflowsRuntimeCheckpointPersistenceFeatureTests
     {
         var feature = new WorkflowsRuntimeCheckpointPersistenceFeature
         {
-            Mode = (CheckpointPersistenceMode)999
+            Mode = (PersistenceMode)999
         };
 
         var exception = Assert.Throws<InvalidOperationException>(() =>
@@ -132,11 +132,11 @@ public sealed class WorkflowsRuntimeCheckpointPersistenceFeatureTests
     [Theory]
     [InlineData(0)]
     [InlineData(-1)]
-    public void NonPositiveCoalescedCapFailsDuringPostConfiguration(int cap)
+    public void NonPositiveBalancedCapFailsDuringPostConfiguration(int cap)
     {
         var feature = new WorkflowsRuntimeCheckpointPersistenceFeature
         {
-            Mode = CheckpointPersistenceMode.Coalesced,
+            Mode = PersistenceMode.Balanced,
             MaxSegmentCheckpoints = cap
         };
 
@@ -156,7 +156,7 @@ public sealed class WorkflowsRuntimeCheckpointPersistenceFeatureTests
         var selectedProvider = ReplaceCheckpointProvider(services);
         var feature = new WorkflowsRuntimeCheckpointPersistenceFeature
         {
-            Mode = CheckpointPersistenceMode.Coalesced
+            Mode = PersistenceMode.Balanced
         };
 
         feature.PostConfigureServices(services);

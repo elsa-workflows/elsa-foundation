@@ -49,7 +49,7 @@
           },
           "WorkflowsRuntimeResumption": {},
           "WorkflowsRuntimeCheckpointPersistence": {
-            "Mode": "Coalesced",
+            "Mode": "Balanced",
             "MaxSegmentCheckpoints": 50
           },
           "WorkflowsRuntimeTriggers": {},

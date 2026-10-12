@@ -399,7 +399,7 @@ public enum ActivityValueStorage
 
 /// <summary>
 /// Author-declared replay/side-effect classification of a CLR activity. Governs whether the
-/// runtime may defer the pre-activation attempt-claim durability boundary under a coalescing checkpoint cadence.
+/// runtime may defer the pre-activation attempt-claim durability boundary when the run folds checkpoints.
 /// </summary>
 public enum SideEffectProfile
 {

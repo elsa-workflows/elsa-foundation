@@ -34,7 +34,7 @@ public sealed class WorkflowExecutableHasher : IWorkflowExecutableHasher
         ExecutableNode rootActivity,
         WorkflowExecutableInputContract inputContract,
         IReadOnlyCollection<WorkflowExecutableDependency> dependencies,
-        WorkflowExecutableCheckpointCadence? checkpointCadence = null,
+        PersistenceMode? persistenceMode = null,
         IReadOnlyCollection<RuntimeVariableDeclaration>? workflowVariables = null,
         IncidentStrategyReference? incidentStrategy = null)
     {
@@ -49,7 +49,7 @@ public sealed class WorkflowExecutableHasher : IWorkflowExecutableHasher
                 rootActivity,
                 inputContract,
                 dependencies,
-                checkpointCadence,
+                persistenceMode,
                 workflowVariables,
                 incidentStrategy ?? IncidentStrategyBuiltIns.FaultReference);
 
@@ -213,7 +213,7 @@ public sealed class WorkflowExecutableHasher : IWorkflowExecutableHasher
         ExecutableNode rootActivity,
         WorkflowExecutableInputContract inputContract,
         IReadOnlyCollection<WorkflowExecutableDependency> dependencies,
-        WorkflowExecutableCheckpointCadence? checkpointCadence,
+        PersistenceMode? persistenceMode,
         IReadOnlyCollection<RuntimeVariableDeclaration>? workflowVariables,
         IncidentStrategyReference incidentStrategy)
     {
@@ -226,17 +226,11 @@ public sealed class WorkflowExecutableHasher : IWorkflowExecutableHasher
         writer.WriteString("version", incidentStrategy.Version);
         writer.WriteEndObject();
 
-        // Authored checkpoint cadence is behavioral content: it changes the artifact's durability
-        // behavior, so equal-hash must imply equal cadence. Written only when authored, so a workflow that authors no
-        // cadence hashes byte-identically to before this field existed — existing artifact ids and goldens are stable.
-        if (checkpointCadence is not null)
-        {
-            writer.WriteStartObject("checkpointCadence");
-            writer.WriteString("mode", checkpointCadence.Mode);
-            if (checkpointCadence.MaxSegmentCheckpoints is { } maxSegmentCheckpoints)
-                writer.WriteNumber("maxSegmentCheckpoints", maxSegmentCheckpoints);
-            writer.WriteEndObject();
-        }
+        // The chosen persistence mode is behavioral content: it changes when the run's state becomes durable, so equal
+        // hash must imply equal mode. Written only when the workflow chose one, so a workflow that did not hashes
+        // byte-identically to one compiled before the field existed.
+        if (persistenceMode is { } mode)
+            writer.WriteString("persistenceMode", mode.ToString());
 
         // Workflow-scope variable declarations are behavioral content (#972): they define the root variable
         // frame's key set, types, and defaults, so equal-hash must imply an equal workflow scope. Written only

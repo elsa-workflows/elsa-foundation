@@ -844,7 +844,7 @@ public sealed class WorkflowArtifactReconciler(
                 member.RootActivity,
                 member.InputContract,
                 member.Dependencies,
-                member.CheckpointCadence,
+                member.PersistenceMode,
                 member.WorkflowVariables,
                 member.IncidentStrategy);
         }

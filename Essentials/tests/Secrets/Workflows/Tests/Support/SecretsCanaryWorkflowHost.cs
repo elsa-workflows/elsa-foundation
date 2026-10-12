@@ -78,7 +78,7 @@ public enum CanaryStartMode
     Discrete,
 
     /// <summary>
-    /// Coalesced checkpoint persistence, under which the runtime fuses a ReplaySafe leaf's schedule, start and invoke
+    /// The Balanced persistence mode, under which the runtime fuses a ReplaySafe leaf's schedule, start and invoke
     /// stages into one dispatch.
     /// </summary>
     Fused
@@ -262,7 +262,7 @@ public sealed class SecretsCanaryWorkflowHost : IAsyncDisposable
             [$"{features}Secrets:EncryptionKey"] = GeneratedKey()
         };
         if (mode == CanaryStartMode.Fused)
-            settings[$"{features}WorkflowsRuntimeCheckpointPersistence:Mode"] = "Coalesced";
+            settings[$"{features}WorkflowsRuntimeCheckpointPersistence:Mode"] = "Balanced";
 
         foreach (var feature in Features.Concat(withHttpActivities ? HttpFeatures : []))
             settings.TryAdd($"{features}{feature}", null);

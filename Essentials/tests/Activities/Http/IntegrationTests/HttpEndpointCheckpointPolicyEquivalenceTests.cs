@@ -27,21 +27,21 @@ public sealed class HttpEndpointCheckpointPolicyEquivalenceTests
         ContentType);
 
     [Fact]
-    public void Immediate_remains_the_default_checkpoint_persistence_mode()
+    public void Durable_remains_the_default_persistence_mode()
     {
         Assert.Equal(
-            CheckpointPersistenceMode.Immediate,
+            PersistenceMode.Durable,
             new WorkflowsRuntimeCheckpointPersistenceFeature().Mode);
     }
 
     [Theory]
-    [InlineData(CheckpointPersistenceMode.Immediate)]
-    [InlineData(CheckpointPersistenceMode.Coalesced)]
-    public async Task Sync_endpoint_returns_completes_and_persists_the_same_result_under_each_checkpoint_policy(
-        CheckpointPersistenceMode mode)
+    [InlineData(PersistenceMode.Durable)]
+    [InlineData(PersistenceMode.Balanced)]
+    public async Task Sync_endpoint_returns_completes_and_persists_the_same_result_under_each_persistence_mode(
+        PersistenceMode mode)
     {
         await using var fixture = await HttpEndpointHostFixture.StartDurableSqliteAsync(
-            checkpointPersistenceMode: mode,
+            persistenceMode: mode,
             maxSegmentCheckpoints: 50);
         var policy = mode.ToString().ToLowerInvariant();
         var path = $"checkpoint-policy/{policy}";

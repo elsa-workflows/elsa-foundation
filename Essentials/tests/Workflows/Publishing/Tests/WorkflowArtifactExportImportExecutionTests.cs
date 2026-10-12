@@ -280,7 +280,7 @@ public sealed class WorkflowArtifactExportImportExecutionTests
             executable.RootActivity,
             inputContract,
             executable.Dependencies,
-            executable.CheckpointCadence,
+            executable.PersistenceMode,
             executable.WorkflowVariables,
             executable.IncidentStrategy);
         var identity = new WorkflowExecutableIdentity(
@@ -301,7 +301,7 @@ public sealed class WorkflowArtifactExportImportExecutionTests
             executable.RuntimeRequirements,
             executable.StorageDriverRequirements,
             executable.IncidentStrategy,
-            executable.CheckpointCadence,
+            executable.PersistenceMode,
             executable.WorkflowVariables);
     }
 }

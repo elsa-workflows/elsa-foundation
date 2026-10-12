@@ -129,7 +129,7 @@ public sealed class RuntimeCheckpointCommitStatefulContractTests
         {
             // Seeded straight into the overlay: a segment never defers a dispatch, but a session must apply the rule to any
             // claim it owns.
-            session = new RuntimeCoalescingSession(pending.ParentWorkflowExecutionId, backend.Queue, new CoalescingRuntimeCheckpointPersistenceOptions(), backend.Delivery);
+            session = new RuntimeCoalescingSession(pending.ParentWorkflowExecutionId, backend.Queue, new PersistenceModeOptions(), backend.Delivery);
             session.RecordCapFlushState(new RuntimeCheckpointStateChangeSet(
                 null, null, [], [], [], [], [], [DispatchChange(started)], postCommitOutbox: [Change(start.OutboxItemId, start)]));
         }

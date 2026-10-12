@@ -640,7 +640,7 @@ public sealed class RuntimePostCommitOutboxProcessorTests
         var dispatcher = new RecordingDispatcher();
         var liveDrain = new AsyncLocalRuntimeLiveDrainDeliveryAccessor();
         var coalescing = new FixedCoalescingSessionAccessor(new RuntimeCoalescingSession(
-            "wfexec-1", new InMemoryWorkflowSchedulerWorkQueue(), new CoalescingRuntimeCheckpointPersistenceOptions()));
+            "wfexec-1", new InMemoryWorkflowSchedulerWorkQueue(), new PersistenceModeOptions()));
         var processor = NewLiveDrainProcessor(store, dispatcher, _now, liveDrain, coalescing);
         await store.AddPendingForTestingAsync(NewOutboxItem("outbox-1", "intent-1", "wfexec-1", kind: RuntimePostCommitIntentKinds.EnqueueSchedulerWork));
 

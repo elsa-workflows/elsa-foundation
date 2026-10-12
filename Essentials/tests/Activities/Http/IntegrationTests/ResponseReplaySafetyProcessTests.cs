@@ -489,7 +489,7 @@ public sealed class ResponseReplaySafetyProcessTests
             var attemptId = AssertNonEmpty(claim.GetProperty("attemptId").GetString());
 
             var durableClaim = await ReadIndependentRuntimeStateAsync(databasePath, executionId);
-            AssertEffectiveCoalescedCadence(durableClaim.Execution, useExternalBodyPayload ? "2" : "50");
+            AssertRecordedBalancedMode(durableClaim.Execution);
             var claimLease = AssertDurableRequestAndClaim(
                 durableClaim, candidateArtifactId, candidateArtifactHash, routePath, correlationId,
                 endpointActivityExecutionId, schedulerWorkItemId, commandId, attemptId, childOwnerId);
@@ -499,7 +499,7 @@ public sealed class ResponseReplaySafetyProcessTests
             using var responseMessage = await ReadGateMessageAsync(reader, TimeSpan.FromMinutes(2), gateEvidencePath);
             var response = responseMessage.RootElement.GetProperty("payload");
             var durableWindow = await ReadIndependentRuntimeStateAsync(databasePath, executionId);
-            AssertEffectiveCoalescedCadence(durableWindow.Execution, useExternalBodyPayload ? "2" : "50");
+            AssertRecordedBalancedMode(durableWindow.Execution);
 
             RuntimeExecutionLease windowLease;
             ExternalBodyReferenceSnapshot? externalBodyReference = null;
@@ -602,11 +602,7 @@ public sealed class ResponseReplaySafetyProcessTests
             Assert.NotEqual(0, killedChild.ExitCode);
 
             var afterKill = await ReadIndependentRuntimeStateAsync(databasePath, executionId);
-            AssertEffectiveCoalescedCadence(afterKill.Execution, useExternalBodyPayload ? "2" : "50");
-            Assert.Equal(durableWindow.Execution.SystemMetadata[RuntimeMetadataKeys.CheckpointCadence],
-                afterKill.Execution.SystemMetadata[RuntimeMetadataKeys.CheckpointCadence]);
-            Assert.Equal(durableWindow.Execution.SystemMetadata[RuntimeMetadataKeys.CheckpointMaxSegmentCheckpoints],
-                afterKill.Execution.SystemMetadata[RuntimeMetadataKeys.CheckpointMaxSegmentCheckpoints]);
+            AssertRecordedBalancedMode(afterKill.Execution);
             RuntimeExecutionLease killedOwnerLease;
             if (useExternalBodyPayload)
             {
@@ -641,7 +637,7 @@ public sealed class ResponseReplaySafetyProcessTests
                 await Task.Delay(waitForOwnerLease);
 
             var eligibleState = await ReadIndependentRuntimeStateAsync(databasePath, executionId);
-            AssertEffectiveCoalescedCadence(eligibleState.Execution, useExternalBodyPayload ? "2" : "50");
+            AssertRecordedBalancedMode(eligibleState.Execution);
             RuntimeExecutionLease eligibleOwnerLease;
             if (useExternalBodyPayload)
             {
@@ -694,11 +690,7 @@ public sealed class ResponseReplaySafetyProcessTests
 
             var finalState = await ReadIndependentRuntimeStateAsync(databasePath, executionId);
             AssertDurableRequestAndTrigger(finalState, candidateArtifactId, candidateArtifactHash, routePath, correlationId);
-            AssertEffectiveCoalescedCadence(finalState.Execution, useExternalBodyPayload ? "2" : "50");
-            Assert.Equal(durableWindow.Execution.SystemMetadata[RuntimeMetadataKeys.CheckpointCadence],
-                finalState.Execution.SystemMetadata[RuntimeMetadataKeys.CheckpointCadence]);
-            Assert.Equal(durableWindow.Execution.SystemMetadata[RuntimeMetadataKeys.CheckpointMaxSegmentCheckpoints],
-                finalState.Execution.SystemMetadata[RuntimeMetadataKeys.CheckpointMaxSegmentCheckpoints]);
+            AssertRecordedBalancedMode(finalState.Execution);
             Assert.Equal(WorkflowExecutionStatus.Completed, finalState.Execution.Status);
             Assert.Equal("Alice", ReadStringVariable(finalState.Execution.RootVariableFrame!, "content", "firstName"));
             Assert.Equal("Smith", ReadStringVariable(finalState.Execution.RootVariableFrame!, "content", "lastName"));
@@ -1371,15 +1363,8 @@ public sealed class ResponseReplaySafetyProcessTests
         await connection;
     }
 
-    private static void AssertEffectiveCoalescedCadence(
-        WorkflowExecutionState execution,
-        string expectedMaxSegmentCheckpoints = "50")
-    {
-        Assert.Equal(WorkflowExecutableCheckpointCadence.CoalescedMode,
-            execution.SystemMetadata[RuntimeMetadataKeys.CheckpointCadence]);
-        Assert.Equal(expectedMaxSegmentCheckpoints,
-            execution.SystemMetadata[RuntimeMetadataKeys.CheckpointMaxSegmentCheckpoints]);
-    }
+    private static void AssertRecordedBalancedMode(WorkflowExecutionState execution) =>
+        Assert.Equal(nameof(PersistenceMode.Balanced), execution.SystemMetadata[RuntimeMetadataKeys.PersistenceMode]);
 
     private static ChildProcessSession StartChildProcess(
         string childDll,

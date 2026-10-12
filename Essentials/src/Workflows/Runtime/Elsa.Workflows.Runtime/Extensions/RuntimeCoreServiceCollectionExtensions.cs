@@ -220,9 +220,9 @@ public static class RuntimeCoreServiceCollectionExtensions
         // Scoped transport shared by the same-scope drainer and checkpoint committer so a checkpoint
         // commit can fold the claimed work item's acknowledgement into its unit-of-work.
         services.TryAddScoped<IRuntimeConsumedSchedulerWorkClaimAccessor, RuntimeConsumedSchedulerWorkClaimAccessor>();
-        // Live-drain delivery marker. Always registered because Immediate is the default cost model: the drain
-        // orchestrator pushes a scope while it owns an execution so the post-commit outbox processor delivers
-        // EnqueueSchedulerWork intents in-memory. The coalescing feature leaves this untouched; it never pushes a scope.
+        // Live-drain delivery marker. Always registered because Durable runs need it on any host: the drain
+        // orchestrator pushes a scope while it owns a Durable execution so the post-commit outbox processor delivers
+        // EnqueueSchedulerWork intents in-memory. The folding path never pushes a scope.
         services.TryAddSingleton<IRuntimeLiveDrainDeliveryAccessor, AsyncLocalRuntimeLiveDrainDeliveryAccessor>();
         services.TryAddScoped<IRuntimeExecutionOwnershipService>(serviceProvider =>
             new RuntimeExecutionOwnershipService(
@@ -297,7 +297,7 @@ public static class RuntimeCoreServiceCollectionExtensions
         // Explicit factory (not greedy ctor selection): the coalescing drain scope factory is only registered when the
         // coalescing feature is enabled, so which collaborators the orchestrator received used to depend on which
         // constructor the container could satisfy. The factory injects each optional collaborator with GetService so the
-        // live-drain accessor and the cadence resolver are wired in every configuration (C1, #1227).
+        // live-drain accessor and the persistence-mode resolver are wired in every configuration (C1, #1227).
         services.TryAddScoped<IWorkflowDrainOrchestrator>(serviceProvider =>
             WorkflowDrainOrchestrator.CreateScoped(
                 serviceProvider.GetRequiredService<IPersistenceOperationScopeFactory>(),
@@ -313,7 +313,7 @@ public static class RuntimeCoreServiceCollectionExtensions
                 serviceProvider.GetRequiredService<WorkflowDrainOrchestratorOptions>(),
                 serviceProvider.GetService<IRuntimeCoalescingDrainScopeFactory>(),
                 serviceProvider.GetService<IRuntimeLiveDrainDeliveryAccessor>(),
-                serviceProvider.GetService<IRuntimeCheckpointCadenceResolver>(),
+                serviceProvider.GetService<IRuntimePersistenceModeResolver>(),
                 serviceProvider.GetRequiredService<TimeProvider>()));
         services.TryAddScoped<WorkflowSchedulerCommandRouter>();
         services.TryAddSingleton<IWorkflowExecutionCommandExecutor, ScopedWorkflowExecutionCommandExecutor>();
@@ -373,7 +373,7 @@ public static class RuntimeCoreServiceCollectionExtensions
                 serviceProvider.GetRequiredService<IRuntimeAdmissionLoadSignal>()));
         services.TryAddSingleton<IWorkflowSchedulerDrainPolicy, ImmediateWorkflowSchedulerDrainPolicy>();
         services.TryAddSingleton<IRuntimeCheckpointPersistencePolicy, ImmediateRuntimeCheckpointPersistencePolicy>();
-        services.TryAddScoped<IRuntimeCheckpointCadenceResolver, RuntimeCheckpointCadenceResolver>();
+        services.TryAddScoped<IRuntimePersistenceModeResolver, RuntimePersistenceModeResolver>();
         services.TryAddScoped<IRuntimePostCommitIntentDispatcher, RuntimePostCommitIntentDispatcher>();
         services.AddRuntimePostCommitIntentHandler<RuntimeSchedulerPostCommitIntentDispatcher>(
             RuntimePostCommitIntentKinds.EnqueueSchedulerWork,

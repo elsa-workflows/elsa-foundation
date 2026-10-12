@@ -12,8 +12,8 @@ namespace Elsa.Workflows.Runtime.Services.Coalescing;
 /// single atomic durable commit at a flush boundary (attempt activation, suspension/fault/cancellation/completion, an
 /// operational or bookmark write, the per-segment hop cap, or the end-of-drain quiescence flush). A durable attempt
 /// boundary and a cap-hit fold-and-flush each start another coalesced segment in the same drain; when no session is
-/// active, Deferred decisions are normalized to Immediate because there is no working set to flush later. The
-/// default Immediate path forwards the original decision unchanged.
+/// active (a Durable run), Deferred decisions are normalized to Immediate because there is no working set to flush
+/// later; any other decision is forwarded unchanged.
 /// </summary>
 /// <remarks>
 /// This decorator never bypasses single-writer ownership fencing: the folded flush is routed back through
