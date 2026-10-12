@@ -157,11 +157,14 @@ public sealed class HttpEndpointHostFixture : IAsyncDisposable
         });
         services.AddEfModuleMigrations<RuntimeDbContext>("Sqlite");
 
+        // The two steps a composed shell takes: the settings feature registers the host's mode, then the runtime API
+        // feature adds the persistence-mode services after every store is registered.
         new WorkflowsRuntimeCheckpointPersistenceFeature
         {
             Mode = persistenceMode,
             MaxActivitiesPerCommit = maxActivitiesPerCommit
-        }.PostConfigureServices(services);
+        }.ConfigureServices(services);
+        new WorkflowsRuntimeApiFeature().PostConfigureServices(services);
     }
 
     private static async Task<HttpEndpointHostFixture> StartAsync(

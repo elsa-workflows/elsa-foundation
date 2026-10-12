@@ -23,11 +23,13 @@ using Elsa.Tasks;
 using Elsa.Workflows.Runtime.Api;
 using Elsa.Workflows.Runtime.Api.Handlers;
 using Elsa.Workflows.Runtime.Api.Requests;
+using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.DependencyInjection;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores;
 using Elsa.Workflows.Runtime.Resumption;
+using Elsa.Workflows.Runtime.Services.Coalescing;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
@@ -197,7 +199,11 @@ public sealed class EmbeddedFixtureHostEvidenceTests : IDisposable
         var started = await scope.ServiceProvider.GetRequiredService<IWorkflowExecutionStartService>()
             .ExecuteAsync(new ExecuteWorkflow(executable.Identity.ArtifactId), CancellationToken.None);
         var executionStore = scope.ServiceProvider.GetRequiredService<IWorkflowExecutionStateStore>();
-        Assert.IsType<EfWorkflowExecutionStateStore>(executionStore);
+        // The shell lists no persistence-mode settings, yet runs Balanced: the runtime API wraps the provider's stores
+        // after every feature registered them, and the run records the mode it ran under.
+        Assert.IsType<CoalescingWorkflowExecutionStateStore>(executionStore);
+        Assert.IsType<EfWorkflowExecutionStateStore>(scope.ServiceProvider.GetRequiredService<CoalescingInner<IWorkflowExecutionStateStore>>().Value);
+        Assert.Equal(PersistenceMode.Balanced, scope.ServiceProvider.GetRequiredService<PersistenceModeOptions>().Mode);
         var initialExecution = await executionStore.FindAsync(started.WorkflowExecutionId);
         Assert.True(
             started.CommandDispatchStatus == "Accepted",
@@ -234,7 +240,9 @@ public sealed class EmbeddedFixtureHostEvidenceTests : IDisposable
         Assert.Equal(ActivityExecutionStatus.Completed, Assert.Single(await scope.ServiceProvider
             .GetRequiredService<IActivityExecutionStateStore>()
             .ListAllAsync(started.WorkflowExecutionId)).Status);
-        Assert.Equal(WorkflowExecutionStatus.Completed, (await executionStore.FindAsync(started.WorkflowExecutionId))?.Status);
+        var completed = await executionStore.FindAsync(started.WorkflowExecutionId);
+        Assert.Equal(WorkflowExecutionStatus.Completed, completed?.Status);
+        Assert.Equal(nameof(PersistenceMode.Balanced), completed!.SystemMetadata[RuntimeMetadataKeys.PersistenceMode]);
     }
 
     public void Dispose()

@@ -27,11 +27,10 @@ public sealed class HttpEndpointCheckpointPolicyEquivalenceTests
         ContentType);
 
     [Fact]
-    public void Durable_remains_the_default_persistence_mode()
+    public void Balanced_is_the_default_persistence_mode()
     {
-        Assert.Equal(
-            PersistenceMode.Durable,
-            new WorkflowsRuntimeCheckpointPersistenceFeature().Mode);
+        Assert.Equal(PersistenceMode.Balanced, new WorkflowsRuntimeCheckpointPersistenceFeature().Mode);
+        Assert.Equal(PersistenceMode.Balanced, new PersistenceModeOptions().Mode);
     }
 
     [Theory]

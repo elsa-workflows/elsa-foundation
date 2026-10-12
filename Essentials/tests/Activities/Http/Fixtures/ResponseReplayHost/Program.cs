@@ -376,7 +376,8 @@ internal static class ResponseReplayHost
                 {
                     Mode = PersistenceMode.Balanced,
                     MaxActivitiesPerCommit = 50
-                }.PostConfigureServices(services);
+                }.ConfigureServices(services);
+                new WorkflowsRuntimeApiFeature().PostConfigureServices(services);
             });
             webHost.Configure(app =>
             {

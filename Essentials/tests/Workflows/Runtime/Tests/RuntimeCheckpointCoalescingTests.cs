@@ -900,6 +900,41 @@ public sealed class RuntimeCheckpointCoalescingTests(ITestOutputHelper output)
     }
 
     [Fact]
+    public async Task ChosenBalanced_UnderDurableHost_FoldsIntoOneCommit_AndRecordsBalanced()
+    {
+        // The workflow's choice wins in both directions. A Durable host default must not turn a workflow that chose
+        // Balanced into per-checkpoint commits: that would look like a working run while ignoring the choice.
+        var durableHost = await DriveAsync(coalescing: true, hostMode: PersistenceMode.Durable);
+        var chosenBalanced = await DriveAsync(coalescing: true, chosenMode: PersistenceMode.Balanced, hostMode: PersistenceMode.Durable);
+
+        Assert.Equal(nameof(PersistenceMode.Durable), durableHost.State!.SystemMetadata[RuntimeMetadataKeys.PersistenceMode]);
+        Assert.True(durableHost.CommitCount > 1, $"Expected the Durable host default to commit per checkpoint, but saw {durableHost.CommitCount}.");
+        Assert.Equal(durableHost.Snapshot, chosenBalanced.Snapshot);
+        Assert.Equal(WorkflowExecutionStatus.Completed, chosenBalanced.State?.Status);
+        Assert.Equal(1, chosenBalanced.CommitCount);
+        Assert.Equal(nameof(PersistenceMode.Balanced), chosenBalanced.State!.SystemMetadata[RuntimeMetadataKeys.PersistenceMode]);
+    }
+
+    [Fact]
+    public async Task ChosenBalanced_OnAHostWithoutPersistenceModes_IsRefusedBeforeAnythingRuns()
+    {
+        // A direct composition that never added the persistence-mode services cannot fold. Running the workflow Durable
+        // instead would hide that its choice was ignored, so the drain refuses it, naming the mode and the fix.
+        var services = new ServiceCollection();
+        new WorkflowsRuntimeApiFeature().ConfigureServices(services);
+        using var provider = services.BuildServiceProvider();
+        await SeedAsync(provider, PersistenceMode.Balanced);
+
+        var refusal = await Assert.ThrowsAsync<InvalidOperationException>(async () => await EnqueueStartAsync(provider));
+
+        Assert.Contains("'Balanced'", refusal.Message, StringComparison.Ordinal);
+        Assert.Contains("AddPersistenceModes()", refusal.Message, StringComparison.Ordinal);
+        Assert.Empty(provider.GetRequiredService<InMemoryRuntimeCheckpointCommitStore>().ListCommits());
+        Assert.Null(await provider.GetRequiredService<IWorkflowExecutionStateStore>().FindAsync("wfexec-1"));
+        Assert.Empty(await SnapshotAsync(provider));
+    }
+
+    [Fact]
     public async Task ChosenBalanced_MandatoryBookmarkBoundary_StillFlushesImmediately()
     {
         // Precedence guardrail: the boundary checkpoints are never relaxable by any chosen mode. A BookmarkCreated
@@ -1248,13 +1283,14 @@ public sealed class RuntimeCheckpointCoalescingTests(ITestOutputHelper output)
 
     private static async Task<(IReadOnlyList<(string NodeId, ActivityExecutionStatus Status)> Snapshot, int CommitCount, WorkflowExecutionState? State)> DriveAsync(
         bool coalescing,
-        PersistenceMode? chosenMode = null)
+        PersistenceMode? chosenMode = null,
+        PersistenceMode hostMode = PersistenceMode.Balanced)
     {
         var services = new ServiceCollection();
         new WorkflowsRuntimeApiFeature().ConfigureServices(services);
         if (coalescing)
         {
-            services.AddPersistenceModes();
+            services.AddPersistenceModes(options => options.Mode = hostMode);
         }
 
         using var provider = services.BuildServiceProvider();

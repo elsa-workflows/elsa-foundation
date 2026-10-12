@@ -6,9 +6,10 @@ using Microsoft.Extensions.DependencyInjection;
 namespace Elsa.Workflows.Runtime.Api.Coalescing;
 
 /// <summary>
-/// Selects the shell's default persistence mode after all runtime persistence providers have registered their
-/// stores. Durable commits every checkpoint; Balanced folds checkpoints between commits and accepts that the
-/// activities since the last commit run again after a crash.
+/// The shell's persistence-mode settings. Durable commits every checkpoint; Balanced folds checkpoints between commits
+/// and accepts that the activities since the last commit run again after a crash. The services that run each mode come
+/// with the runtime API itself, so a shell that does not list this feature still runs Balanced with these defaults;
+/// list it to choose a different default or cap.
 /// </summary>
 [ManifestRuntimeKind(ElsaRuntimeKinds.Server)]
 [ManifestFeatureCategory("Workflows")]
@@ -17,16 +18,16 @@ namespace Elsa.Workflows.Runtime.Api.Coalescing;
 [ShellFeature(
     name: "WorkflowsRuntimeCheckpointPersistence",
     DisplayName = "Workflows Runtime Checkpoint Persistence",
-    Description = "Selects the default persistence mode (Durable or Balanced) after the shell's runtime provider is configured.",
+    Description = "Sets the default persistence mode (Durable or Balanced) and how much work Balanced folds into one commit.",
     DependsOn = new object[] { "WorkflowsRuntimeApi" })]
-public sealed class WorkflowsRuntimeCheckpointPersistenceFeature : IShellFeature, IPostConfigureShellServices
+public sealed class WorkflowsRuntimeCheckpointPersistenceFeature : IShellFeature
 {
     [ManifestSetting(
         DisplayName = "Persistence mode",
-        Description = "Durable commits every checkpoint; Balanced folds checkpoints and commits at suspension, fault, completion, the end of each execution pass and after a bounded amount of work.",
+        Description = "The mode a run uses when its workflow does not choose one. Durable commits every checkpoint; Balanced folds checkpoints and commits at suspension, fault, completion, the end of each execution pass and after a bounded amount of work.",
         Category = "Runtime",
-        DefaultValue = "Durable")]
-    public PersistenceMode Mode { get; set; } = PersistenceMode.Durable;
+        DefaultValue = "Balanced")]
+    public PersistenceMode Mode { get; set; } = PersistenceMode.Balanced;
 
     [ManifestSetting(
         DisplayName = "Maximum activities per commit",
@@ -45,32 +46,28 @@ public sealed class WorkflowsRuntimeCheckpointPersistenceFeature : IShellFeature
     public void ConfigureServices(IServiceCollection services)
     {
         ArgumentNullException.ThrowIfNull(services);
-    }
 
-    public void PostConfigureServices(IServiceCollection services)
-    {
-        ArgumentNullException.ThrowIfNull(services);
-
+        // Refuse a bad setting while the shell is composed. A workflow can choose Balanced on a Durable host, so the cap
+        // is checked whatever the default mode is.
         if (!Enum.IsDefined(Mode))
         {
             throw new InvalidOperationException(
                 $"Feature 'WorkflowsRuntimeCheckpointPersistence' received unsupported persistence mode '{(int)Mode}'.");
         }
 
-        if (Mode == PersistenceMode.Durable)
-            return;
-
         if (MaxActivitiesPerCommit <= 0)
         {
             throw new InvalidOperationException(
-                $"{nameof(MaxActivitiesPerCommit)} must be greater than zero when the persistence mode is Balanced.");
+                $"Feature 'WorkflowsRuntimeCheckpointPersistence': {nameof(MaxActivitiesPerCommit)} must be greater than zero.");
         }
 
-        services.AddPersistenceModes(options =>
+        // Only the options are registered here. The runtime API feature wraps the stores after every feature has
+        // registered its own, and keeps these options because they are already present.
+        services.AddPersistenceModeOptions(new PersistenceModeOptions
         {
-            options.Mode = Mode;
-            options.MaxActivitiesPerCommit = MaxActivitiesPerCommit;
-            options.CoalesceDurableValueReads = CoalesceDurableValueReads;
+            Mode = Mode,
+            MaxActivitiesPerCommit = MaxActivitiesPerCommit,
+            CoalesceDurableValueReads = CoalesceDurableValueReads
         });
     }
 }

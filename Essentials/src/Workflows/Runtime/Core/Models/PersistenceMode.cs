@@ -17,7 +17,8 @@ public enum PersistenceMode
 
     /// <summary>
     /// Folds checkpoints in memory and commits on suspension, fault, completion, at the end of each execution pass and
-    /// after a bounded amount of work. After a crash the activities since the last commit run again.
+    /// after a bounded amount of work. After a crash the activities since the last commit run again. The default when
+    /// neither the workflow nor the host chooses a mode.
     /// </summary>
     Balanced
 }

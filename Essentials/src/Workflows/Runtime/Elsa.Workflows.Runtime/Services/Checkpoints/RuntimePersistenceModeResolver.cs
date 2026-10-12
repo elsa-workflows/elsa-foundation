@@ -6,9 +6,10 @@ using Elsa.Workflows.Runtime.Services.Scheduler;
 namespace Elsa.Workflows.Runtime.Services.Checkpoints;
 
 /// <summary>
-/// Default <see cref="IRuntimePersistenceModeResolver"/>. The workflow's chosen mode wins over the host default. The host
-/// default is signalled by the registered <see cref="PersistenceModeOptions"/>: absent means the shell runs Durable, so a
-/// workflow that chose Balanced is clamped to Durable because no folding machinery is registered to honour it.
+/// Default <see cref="IRuntimePersistenceModeResolver"/>. The mode a run recorded at start wins; before that, the
+/// workflow's chosen mode wins over the host default. The host default comes from the registered
+/// <see cref="PersistenceModeOptions"/>, and is Durable on a host that composes the runtime without them. A chosen mode
+/// is never replaced by another: a host that cannot run it refuses at drain instead.
 /// </summary>
 public sealed class RuntimePersistenceModeResolver(
     IWorkflowExecutableStore executableStore,
@@ -41,14 +42,7 @@ public sealed class RuntimePersistenceModeResolver(
         return new(Resolve(executable));
     }
 
-    public PersistenceMode Resolve(WorkflowExecutable? executable)
-    {
-        if (executable?.PersistenceMode is not { } chosen)
-            return HostDefault();
-
-        // A chosen Balanced is only reachable when the host registered the folding machinery.
-        return _hostOptions is null ? PersistenceMode.Durable : chosen;
-    }
+    public PersistenceMode Resolve(WorkflowExecutable? executable) => executable?.PersistenceMode ?? HostDefault();
 
     private PersistenceMode HostDefault() => _hostOptions?.Mode ?? PersistenceMode.Durable;
 

@@ -295,7 +295,7 @@ public static class RuntimeCoreServiceCollectionExtensions
                 serviceProvider.GetService<ILogger<RuntimeAdmissionController>>()));
         services.TryAddScoped<CheckpointRuleViolationWorkflowFaulter>();
         // Explicit factory (not greedy ctor selection): the coalescing drain scope factory is only registered when the
-        // coalescing feature is enabled, so which collaborators the orchestrator received used to depend on which
+        // persistence modes are added, so which collaborators the orchestrator received used to depend on which
         // constructor the container could satisfy. The factory injects each optional collaborator with GetService so the
         // live-drain accessor and the persistence-mode resolver are wired in every configuration (C1, #1227).
         services.TryAddScoped<IWorkflowDrainOrchestrator>(serviceProvider =>

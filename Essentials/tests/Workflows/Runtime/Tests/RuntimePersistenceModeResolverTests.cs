@@ -37,22 +37,26 @@ public sealed class RuntimePersistenceModeResolverTests
         Assert.Equal(PersistenceMode.Durable, Resolver(hostMode: PersistenceMode.Durable).Resolve(Executable(null)));
     }
 
-    [Fact]
-    public void ChosenDurable_OverridesBalancedHost()
+    public static TheoryData<PersistenceMode?, PersistenceMode> HostAndChosenModes()
     {
-        Assert.Equal(PersistenceMode.Durable, Resolver(hostMode: PersistenceMode.Balanced).Resolve(Executable(PersistenceMode.Durable)));
+        var data = new TheoryData<PersistenceMode?, PersistenceMode>();
+        foreach (var host in new PersistenceMode?[] { null }.Concat(Enum.GetValues<PersistenceMode>().Cast<PersistenceMode?>()))
+        foreach (var chosen in Enum.GetValues<PersistenceMode>())
+            data.Add(host, chosen);
+        return data;
     }
 
-    [Fact]
-    public void ChosenBalanced_OnBalancedHost_IsBalanced()
+    [Theory]
+    [MemberData(nameof(HostAndChosenModes))]
+    public async Task TheWorkflowsChoiceWinsOverEveryHostDefault(PersistenceMode? hostMode, PersistenceMode chosen)
     {
-        Assert.Equal(PersistenceMode.Balanced, Resolver(hostMode: PersistenceMode.Balanced).Resolve(Executable(PersistenceMode.Balanced)));
-    }
+        // A null host is one that composed the runtime without the persistence modes. The resolver still reports the
+        // workflow's choice there; the drain, not the resolver, refuses a mode the host cannot run, so the choice is
+        // never silently replaced.
+        await _executableStore.SaveAsync(Executable(chosen));
 
-    [Fact]
-    public void ChosenBalanced_OnHostWithoutPersistenceModes_ClampsToDurable()
-    {
-        Assert.Equal(PersistenceMode.Durable, Resolver(hostMode: null).Resolve(Executable(PersistenceMode.Balanced)));
+        Assert.Equal(chosen, Resolver(hostMode).Resolve(Executable(chosen)));
+        Assert.Equal(new ResolvedPersistenceMode(chosen), await Resolver(hostMode).ResolveAsync(Envelope(artifactIdMetadata: "artifact-1")));
     }
 
     [Fact]

@@ -34,7 +34,7 @@ namespace Elsa.Workflows.Runtime.Api;
     Description = "Runtime workflow execution endpoints for published WorkflowExecutable artifacts.",
     DependsOn = new object[] { "ApiCapabilities" }
 )]
-public class WorkflowsRuntimeApiFeature : IWebShellFeature
+public class WorkflowsRuntimeApiFeature : IWebShellFeature, IPostConfigureShellServices
 {
     /// <summary>
     /// Persistent HMAC key for restart- and multi-instance-stable hierarchy cursors. Configure at least 32 UTF-8 bytes
@@ -113,7 +113,8 @@ public class WorkflowsRuntimeApiFeature : IWebShellFeature
         services.TryAddScoped<IActivityInspectionContextAsync>(sp => sp.GetRequiredService<HttpContextActivityExecutionInspectionAuthorizationContext>());
         services.EnsureReplacementContract<IActivityInspectionContextAsync, HttpContextActivityExecutionInspectionAuthorizationContext>();
         // Resolves the persistence mode for the instance detail view. Reads the host options optionally (via
-        // IEnumerable), so a run that recorded no mode reports Durable unless the host registered the persistence modes.
+        // IEnumerable), so a run that recorded no mode reports the host default, or Durable on a host that composes the
+        // runtime without the persistence modes.
         services.TryAddScoped<RuntimePersistenceModeInspector>();
         services.TryAddScoped<ActivityExecutionHierarchyReader>();
         services.TryAddScoped<IActivityExecutionDescendantsReader>(sp => sp.GetRequiredService<ActivityExecutionHierarchyReader>());
@@ -129,6 +130,14 @@ public class WorkflowsRuntimeApiFeature : IWebShellFeature
         services.AddApiCapabilitySource<RuntimeAlterationCapabilitySource>();
         services.AddPermissionContributor<WorkflowRuntimePermissionContributor>();
     }
+
+    /// <summary>
+    /// Adds the services that run every persistence mode, so a shell runs Balanced by default without listing another
+    /// feature, and a workflow that chooses a mode always gets it. This runs after every feature's ConfigureServices
+    /// because it wraps the runtime stores the shell's persistence provider registered, and it keeps the options the
+    /// WorkflowsRuntimeCheckpointPersistence feature registered, whichever of the two features CShells composes first.
+    /// </summary>
+    public virtual void PostConfigureServices(IServiceCollection services) => services.AddPersistenceModes();
 
     public virtual void MapEndpoints(IEndpointRouteBuilder endpoints, IHostEnvironment? environment) =>
         WorkflowsRuntimeApi.MapWorkflowsRuntimeApi(endpoints);

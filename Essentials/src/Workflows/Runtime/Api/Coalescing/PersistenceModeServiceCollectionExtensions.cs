@@ -8,34 +8,47 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 namespace Elsa.Workflows.Runtime.Api.Coalescing;
 
 /// <summary>
-/// Registers the services that let a run fold checkpoints in memory (the Balanced persistence mode). Call this after
-/// the workflows runtime services and their persistence provider are registered, because it wraps the stores that are
-/// registered at that point. A run that resolves to Durable still takes the per-checkpoint path: without an active
-/// folding session every wrapped store passes through unchanged.
+/// Registers the services that let a run use every persistence mode. Call this after the workflows runtime services
+/// and their persistence provider are registered, because it wraps the stores that are registered at that point. A run
+/// that resolves to Durable still takes the per-checkpoint path: without an active folding session every wrapped store
+/// passes through unchanged. Every shell that composes the runtime API gets these services, so only a host that composes
+/// the runtime directly can lack them, and such a host refuses to drain a run that needs them.
 /// </summary>
 public static class PersistenceModeServiceCollectionExtensions
 {
     /// <summary>
     /// Replaces the per-checkpoint persistence policy with the folding policy and wraps the runtime
-    /// checkpoint/queue/outbox/state stores so a run's intra-drain checkpoints fold into one atomic commit at quiescence.
+    /// checkpoint/queue/outbox/state stores so a Balanced run's checkpoints fold into one atomic commit at quiescence.
+    /// Safe to call more than once: the stores are wrapped on the first call only.
     /// </summary>
+    /// <param name="services">The service collection.</param>
+    /// <param name="configureOptions">
+    /// Sets the host's persistence-mode options, replacing any registered before. Without it the options already
+    /// registered (for example by the WorkflowsRuntimeCheckpointPersistence feature) stay, and a host that registered
+    /// none gets the defaults, so the order in which a shell's features add these services does not matter.
+    /// </param>
     public static IServiceCollection AddPersistenceModes(
         this IServiceCollection services,
         Action<PersistenceModeOptions>? configureOptions = null)
     {
         ArgumentNullException.ThrowIfNull(services);
 
+        if (configureOptions is not null)
+        {
+            var options = new PersistenceModeOptions();
+            configureOptions(options);
+            services.AddPersistenceModeOptions(options);
+        }
+        else
+        {
+            services.TryAddSingleton(new PersistenceModeOptions());
+        }
+
         if (services.Any(descriptor => descriptor.ServiceType == typeof(CoalescingRegistrationMarker)))
             return services;
 
         var durableValueReuse = RuntimeCoalescingDurableValuePageReuseRegistration.CaptureBeforeDecoration(services);
         var decorations = new List<RuntimeCoalescingDurableValuePageReuseRegistration.ServiceDecoration>();
-
-        var options = new PersistenceModeOptions();
-        configureOptions?.Invoke(options);
-
-        services.RemoveAll<PersistenceModeOptions>();
-        services.AddSingleton(options);
 
         services.TryAddSingleton(TimeProvider.System);
         services.TryAddSingleton<IRuntimeCoalescingSessionAccessor, AsyncLocalRuntimeCoalescingSessionAccessor>();
@@ -58,9 +71,8 @@ public static class PersistenceModeServiceCollectionExtensions
         decorations.Add(services.DecorateWithCoalescing<ISchedulerStateStore, CoalescingSchedulerStateStore>());
         decorations.Add(services.DecorateWithCoalescing<IActivityExecutionInspectionStore, CoalescingActivityExecutionInspectionStore>());
 
-        // The drain scope factory presence is what makes the drain orchestrator take its coalescing path: the
-        // orchestrator has one constructor and its DI factory resolves this factory with GetService, so registering it
-        // here is the whole selection mechanism.
+        // The drain scope factory is what lets the drain orchestrator fold: its DI factory resolves this with GetService,
+        // and a run that resolves to Balanced on a host without it is refused rather than run Durable.
         services.TryAddScoped<IRuntimeCoalescingDrainScopeFactory, RuntimeCoalescingDrainScopeFactory>();
         var markerDescriptor = new ServiceDescriptor(
             typeof(CoalescingRegistrationMarker),
@@ -71,6 +83,27 @@ public static class PersistenceModeServiceCollectionExtensions
         services.Add(reuseRegistrationDescriptor);
         durableValueReuse.CaptureAfterDecoration(decorations, markerDescriptor, reuseRegistrationDescriptor);
 
+        return services;
+    }
+
+    /// <summary>
+    /// Registers <paramref name="options"/> as the host's persistence-mode options, replacing any registered before. A
+    /// mode that is not defined or a cap below one is refused here, so a misconfigured host fails when it is composed
+    /// rather than when its first run drains.
+    /// </summary>
+    public static IServiceCollection AddPersistenceModeOptions(this IServiceCollection services, PersistenceModeOptions options)
+    {
+        ArgumentNullException.ThrowIfNull(services);
+        ArgumentNullException.ThrowIfNull(options);
+
+        if (!Enum.IsDefined(options.Mode))
+            throw new InvalidOperationException($"Persistence mode '{(int)options.Mode}' is not supported. Use one of: {string.Join(", ", Enum.GetNames<PersistenceMode>())}.");
+
+        if (options.MaxActivitiesPerCommit <= 0)
+            throw new InvalidOperationException($"{nameof(PersistenceModeOptions.MaxActivitiesPerCommit)} must be greater than zero.");
+
+        services.RemoveAll<PersistenceModeOptions>();
+        services.AddSingleton(options);
         return services;
     }
 

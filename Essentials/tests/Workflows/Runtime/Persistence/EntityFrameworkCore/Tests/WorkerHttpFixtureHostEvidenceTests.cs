@@ -33,6 +33,7 @@ using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.DependencyInjection;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores;
 using Elsa.Workflows.Runtime.Resumption;
+using Elsa.Workflows.Runtime.Services.Coalescing;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
@@ -176,7 +177,9 @@ public sealed class WorkerHttpFixtureHostEvidenceTests : IDisposable
             Assert.Equal(ActivityExecutionStatus.Suspended, Assert.Single(await scope.ServiceProvider
                 .GetRequiredService<IActivityExecutionStateStore>()
                 .ListAllAsync(workflowExecutionId)).Status);
-            Assert.IsType<EfWorkflowExecutionStateStore>(scope.ServiceProvider.GetRequiredService<IWorkflowExecutionStateStore>());
+            // The provider's workflow store sits under the persistence-mode wrapper every shell gets with the runtime API.
+            Assert.IsType<CoalescingWorkflowExecutionStateStore>(scope.ServiceProvider.GetRequiredService<IWorkflowExecutionStateStore>());
+            Assert.IsType<EfWorkflowExecutionStateStore>(scope.ServiceProvider.GetRequiredService<CoalescingInner<IWorkflowExecutionStateStore>>().Value);
             Assert.IsType<EfBookmarkStateStore>(scope.ServiceProvider.GetRequiredService<IBookmarkStateStore>());
         }
 

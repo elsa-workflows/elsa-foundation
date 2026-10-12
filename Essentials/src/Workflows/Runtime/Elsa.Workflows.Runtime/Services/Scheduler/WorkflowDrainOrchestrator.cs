@@ -329,20 +329,25 @@ public sealed class WorkflowDrainOrchestrator : IWorkflowDrainOrchestrator
         RuntimeSchedulerDrainRequest request,
         CancellationToken cancellationToken)
     {
-        // No folding machinery registered: the drain runs Durable.
+        // The mode is resolved per execution: the mode the run recorded at start on later drains, otherwise the pinned
+        // workflow's choice, otherwise the host default. A Durable run skips the session entirely so no checkpoint is
+        // deferred for it, even on a host whose default is Balanced. Without a resolver the composition decides: with the
+        // folding services the host default is Balanced, without them Durable.
+        var mode = _persistenceModeResolver is not null
+            ? (await _persistenceModeResolver.ResolveAsync(envelope, cancellationToken)).Mode
+            : _coalescingScopeFactory is null ? PersistenceMode.Durable : PersistenceMode.Balanced;
+
+        if (mode == PersistenceMode.Durable)
+            return await DrainImmediateAsync(envelope, request, cancellationToken);
+
+        // Running a Balanced run Durable instead would look like success while committing on a different schedule than
+        // the workflow chose, so a host that cannot fold refuses the run before it executes anything.
         if (_coalescingScopeFactory is null)
-            return await DrainImmediateAsync(envelope, request, cancellationToken);
-
-        // The mode is resolved per execution. A workflow that chose Durable runs Durable even though the host default
-        // is Balanced: skip the session entirely so no checkpoint is deferred for this run. Boundary checkpoints flush
-        // immediately either way. The choice is read off the pinned executable, or the mode the run recorded at start on
-        // later drains; when no resolver is registered the host default (Balanced) stands.
-        var resolved = _persistenceModeResolver is not null
-            ? await _persistenceModeResolver.ResolveAsync(envelope, cancellationToken)
-            : null;
-
-        if (resolved is { Mode: PersistenceMode.Durable })
-            return await DrainImmediateAsync(envelope, request, cancellationToken);
+        {
+            throw new InvalidOperationException(
+                $"Workflow execution '{request.WorkflowExecutionId}' runs in persistence mode '{mode}', but this host has no persistence-mode services. " +
+                "Call AddPersistenceModes() after the workflows runtime and its persistence provider are registered, or compose the WorkflowsRuntimeApi feature, which adds them.");
+        }
 
         // Folding path: establish the ambient session for the drain, then fold-and-flush the buffered segment at
         // quiescence. The flush runs inside the active ownership scope so single-writer fencing gates the single durable
