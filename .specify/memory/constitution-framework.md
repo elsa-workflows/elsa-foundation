@@ -147,7 +147,7 @@ An external-system integration and each consumption-shape adapting it (an activi
 
 Before grouping features into a module or moving a type between layers, weigh the cost of undoing it: preserve NuGet identity wherever possible, justify any identity change against every consumer's break, and prefer the finer-grained split when in doubt.
 
-**§2.16.1 Minimum-viable-project guidance.** No minimum size. A *new* Layer-3 project under about **100 lines** records one sentence on why it earns its own identity, unless merging it away would (a) violate another gate or (b) collapse a real capability boundary. The enumerated cases of (a) and (b) are a (1) contracts-only `.Core` seam, (2) primitives or constants project, (3) provider leaf, (4) migration or compatibility boundary, (5) Layer-2 helper or adapter, or (6) independently composable feature unit or cross-domain contribution seam ([detail](../../docs/reference/framework-examples.md#minimum-viable-project-exemption-classes)). Merging one that fits none stays discretionary.
+**§2.16.1 Minimum-viable-project guidance.** No minimum size. A *new* Layer-3 project under about **100 lines** records one sentence on why it earns its own identity, unless merging it away would (a) violate another gate or (b) collapse a real capability boundary. The enumerated cases of (a) and (b) are: (1) a contracts-only `.Core` seam, (2) primitives or constants project, (3) provider leaf, (4) migration or compatibility boundary, (5) Layer-2 helper or adapter, or (6) independently composable feature unit or cross-domain contribution seam ([detail](../../docs/reference/framework-examples.md#minimum-viable-project-exemption-classes)). Merging one that fits none stays discretionary.
 
 ### §2.17 Duplication beats dependency
 

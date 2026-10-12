@@ -44,6 +44,6 @@ The constitution gates that no test or analyzer checks. A reviewer, or a plan's 
 - **§E2.5** `ElsaDbContextBase` stays opt-in; no contract requires it.
 - **§E2.6** A published artifact always runs; the runtime needs no design-side data.
 - **§E2.8** The picker reads only the activity catalog.
-- **§E2.9 (provisional)** `WorkflowDefinitionState` gains no out-of-scope member; `ActivityNode` gets no generic child collection, connection list, start-child member or executable mirror (§E2.9.1); State, read models and `WorkflowExecutable` stay separate (§E2.9.3); draft mutation stays one diff-based command.
-- **§E5** One version line until GA; `Elsa.Server` stays reserved; Nuplane promotes a domain's `.Core` within its subtree, never host-pinned.
+- **§E2.9 (provisional)** `WorkflowDefinitionState` gains no out-of-scope member; `ActivityNode` gets no generic child collection, connection list, start-child member or executable mirror (§E2.9.1); State, read models and `WorkflowExecutable` stay separate (§E2.9.3); draft mutation stays one diff-based command; workflow-definition reconciliation follows Model X and no workflow-design entity gains per-pass mutating fields (§E2.9.5).
+- **§E5** One version line until GA; `Elsa.Server` stays reserved; Nuplane promotes a domain's `.Core` within its subtree, never host-pinned. Until the magnitude gate is built, a change to a package's public API is compared by hand with the last released baseline, and the bump must cover the delta (§4.2).
 - **§E6** New or renamed Elsa-owned types follow R1–R8.
