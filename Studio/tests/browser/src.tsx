@@ -91,6 +91,8 @@ const activityInspectorTabsFixture = searchParams.get("mode") === "activity-insp
 const publicationReviewFixture = searchParams.get("mode") === "publication-review";
 const activityGraphAuthoringFixture = searchParams.get("mode") === "activity-definition-graph-authoring";
 const activityIconsFixture = searchParams.get("mode") === "activity-icons";
+const navPlacementFixture = searchParams.get("mode") === "nav-placement";
+const navBeforeFixture = searchParams.get("mode") === "nav-before";
 const expressionCodeIntelligenceFixture = searchParams.get("mode") === "expression-code-intelligence";
 const expressionToolingUnavailable = searchParams.get("tooling") === "unavailable";
 const expressionFieldCount = Math.max(1, Math.min(50, Number(searchParams.get("fields") ?? 1)));
@@ -1587,13 +1589,15 @@ function browserVersion(
 // `?theme=dark` is the second visual variant the specs cover. The fixture has no ThemeProvider, so it
 // writes Meridian's dark palette onto <html> itself, the way the provider does at runtime.
 const darkVariant = searchParams.get("theme") === "dark";
-document.documentElement.dataset.theme = "meridian";
-document.documentElement.dataset.themeLayout = "classic";
-document.documentElement.dataset.themeMode = darkVariant ? "dark" : "light";
-if (darkVariant) {
-  const palette = getTheme("meridian")!.dark;
-  for (const token of themeTokenNames) {
-    document.documentElement.style.setProperty(`--${token.replace(/([A-Z])/g, "-$1").toLowerCase()}`, palette[token]);
+if (!navPlacementFixture && !navBeforeFixture) {
+  document.documentElement.dataset.theme = "meridian";
+  document.documentElement.dataset.themeLayout = "classic";
+  document.documentElement.dataset.themeMode = darkVariant ? "dark" : "light";
+  if (darkVariant) {
+    const palette = getTheme("meridian")!.dark;
+    for (const token of themeTokenNames) {
+      document.documentElement.style.setProperty(`--${token.replace(/([A-Z])/g, "-$1").toLowerCase()}`, palette[token]);
+    }
   }
 }
 if (activityIconsFixture && searchParams.get("host-override") === "1") {
@@ -1602,8 +1606,23 @@ if (activityIconsFixture && searchParams.get("host-override") === "1") {
   document.documentElement.style.setProperty("--studio-wf-activity-runtime", "rgb(234, 88, 12)");
   document.documentElement.style.setProperty("--studio-wf-activity-trigger", "rgb(219, 39, 119)");
 }
-createRoot(document.getElementById("root")!).render(
-  searchParams.get("mode") === "workflow-toolbar"
+
+const root = createRoot(document.getElementById("root")!);
+
+async function renderRequestedFixture() {
+  if (navBeforeFixture) {
+    const { NavBeforeFixture } = await import("./navBeforeFixture");
+    root.render(<NavBeforeFixture />);
+    return;
+  }
+  if (navPlacementFixture) {
+    const { NavPlacementFixture } = await import("./navPlacementFixture");
+    root.render(<NavPlacementFixture />);
+    return;
+  }
+
+  root.render(
+    searchParams.get("mode") === "workflow-toolbar"
     ? <WorkflowToolbarFixture />
     : activityIconsFixture
     ? <ActivityIconsFixture />
@@ -1632,4 +1651,7 @@ createRoot(document.getElementById("root")!).render(
             : moveDefinitionsFixture
               ? <MoveDefinitionsFixture />
               : <Fixture />
-);
+  );
+}
+
+void renderRequestedFixture();
