@@ -11,6 +11,7 @@ using Elsa.Activities.Design.Reconciliation.Handlers;
 using Elsa.Activities.Design.Reconciliation.Options;
 using Elsa.Activities.Design.Reconciliation.Services;
 using Elsa.Events.Core.Contracts;
+using Elsa.Serialization.Testing;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Design.Persistence.Core.Models;
@@ -19,7 +20,6 @@ using Elsa.Primitives.Enums;
 using Elsa.Primitives.Persistence;
 using Elsa.Primitives.Hosting.Services;
 using Elsa.Serialization.Core;
-using Elsa.Serialization.SystemText.Services;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 
@@ -42,7 +42,7 @@ internal static class InMemoryReconcilerHarness
     {
         var identityGenerator = new GuidIdentityGenerator();
         var hasher = new DefaultActivityDefinitionHasher();
-        var serializer = new JsonPayloadSerializer(new JsonPayloadConverterRegistry());
+        var serializer = SerializationServices.PayloadSerializer();
         var definitionFactory = new ActivityDefinitionFactory(identityGenerator);
         var versionFactory = new ActivityDefinitionVersionFactory(identityGenerator, hasher);
 

@@ -1,3 +1,4 @@
+using Elsa.Serialization.Testing;
 using Elsa.Workflows.Publishing.Api.Services;
 using System.Text.Json;
 using Elsa.Activities.Runtime.Core.Contracts;
@@ -7,7 +8,6 @@ using Elsa.Activities.Runtime.Services;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Serialization.Core;
-using Elsa.Serialization.SystemText.Services;
 using Elsa.Workflows.Runtime.Services.Executables;
 using Elsa.Workflows.Runtime.Services.Incidents;
 using Elsa.Workflows.Runtime.Services.Values;
@@ -56,7 +56,7 @@ public sealed class RuntimeRequirementPreflightTests
             references,
             executables,
             templates,
-            new RuntimeRequirementChecker(consumers, drivers, TestWellKnownTypeRegistry.Create(), new JsonPayloadSerializer(new JsonPayloadConverterRegistry())),
+            new RuntimeRequirementChecker(consumers, drivers, TestWellKnownTypeRegistry.Create(), SerializationServices.PayloadSerializer()),
             new FakeTimeProvider(Now));
 
         var result = await service.RunAsync(RuntimeRequirementPreflight.ActiveRetainedArtifactsScope, null);
@@ -98,7 +98,7 @@ public sealed class RuntimeRequirementPreflightTests
                 consumers,
                 new RuntimeDurableValueStorageDriverRegistry([]),
                 TestWellKnownTypeRegistry.Create(),
-                new JsonPayloadSerializer(new JsonPayloadConverterRegistry())),
+                SerializationServices.PayloadSerializer()),
             new FakeTimeProvider(Now));
 
         var selected = await service.RunAsync(

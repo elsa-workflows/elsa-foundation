@@ -1,5 +1,5 @@
 using Elsa.Serialization.Core;
-using Elsa.Serialization.SystemText.Services;
+using Elsa.Serialization.Testing;
 
 namespace Elsa.Activities.Testing;
 
@@ -8,5 +8,5 @@ public static class TestPayloadSerializers
 {
     /// <summary>A fresh <see cref="IPayloadSerializer"/> backed by an empty converter registry.</summary>
     public static IPayloadSerializer NewPayloadSerializer()
-        => new JsonPayloadSerializer(new JsonPayloadConverterRegistry());
+        => SerializationServices.PayloadSerializer();
 }

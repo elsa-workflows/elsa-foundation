@@ -9,7 +9,7 @@ using Elsa.Activities.Runtime.Services;
 using Elsa.Activities.Testing;
 using Elsa.Primitives.Models;
 using Elsa.Serialization.Core;
-using Elsa.Serialization.SystemText.Services;
+using Elsa.Serialization.Testing;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Exceptions;
@@ -796,7 +796,7 @@ public sealed class ClrActivityActivatorTests : IAsyncDisposable
         Assert.Equal("payloads/message", Assert.Single(store.Reads).Locator);
     }
 
-    private static readonly JsonPayloadSerializer Serializer = new(new JsonPayloadConverterRegistry());
+    private static readonly IPayloadSerializer Serializer = SerializationServices.PayloadSerializer();
 
     /// <summary>A request whose single input, <c>message</c>, is stored externally.</summary>
     private static ActivityActivationRequest ExternalInputRequest(ActivityContract contract)
@@ -861,7 +861,7 @@ public sealed class ClrActivityActivatorTests : IAsyncDisposable
 
     private static ClrActivityActivator ClrStrategy(IServiceProvider services)
     {
-        var registry = new WellKnownTypeRegistry();
+        var registry = SerializationServices.TypeRegistry();
         foreach (var activityType in new[] { typeof(ServiceBearingActivity), typeof(TwoInputActivity) })
             registry.RegisterType(activityType, activityType.FullName!);
         return new ClrActivityActivator(services.GetRequiredService<IServiceScopeFactory>(), registry, Serializer, FixedPersistenceAccess.Unbound);

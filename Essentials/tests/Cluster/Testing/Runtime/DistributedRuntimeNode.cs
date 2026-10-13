@@ -1,7 +1,7 @@
 using Elsa.Activities.Runtime.Core.Contracts;
 using Elsa.Cluster.Core.Contracts;
 using Elsa.Serialization.Core;
-using Elsa.Serialization.SystemText.Services;
+using Elsa.Serialization.Testing;
 using Elsa.Tasks.Core;
 using Elsa.Workflows.Runtime.Attention;
 using Elsa.Workflows.Runtime.Core.Contracts;
@@ -43,7 +43,7 @@ public sealed class DistributedRuntimeNodeSetup
     public HashSet<string> StorageDrivers { get; } = new(StringComparer.Ordinal);
 
     /// <summary>The type registry the member resolves activity type aliases through.</summary>
-    public IWellKnownTypeRegistry TypeRegistry { get; set; } = new WellKnownTypeRegistry();
+    public IWellKnownTypeRegistry TypeRegistry { get; set; } = SerializationServices.TypeRegistry();
 
     /// <summary>The placement and transport lease duration. Longer than a membership liveness window by default, so a
     /// test proves that reclaim, not a lease's own expiry, freed a lease.</summary>
@@ -112,7 +112,7 @@ public sealed class DistributedRuntimeNode : IAsyncDisposable
             sp.GetServices<IRuntimeActivityConsumerCapability>(),
             sp.GetRequiredService<IRuntimeDurableValueStorageDriverRegistry>(),
             sp.GetRequiredService<IWellKnownTypeRegistry>(),
-            new JsonPayloadSerializer(new JsonPayloadConverterRegistry())));
+            SerializationServices.PayloadSerializer()));
         services.AddSingleton(sp => new FencedCommandExecutor(
             new RuntimeExecutionOwnershipService(shared.Liveness, clock, sp.GetRequiredService<RuntimeExecutionOwnershipOptions>()),
             shared.Executions));

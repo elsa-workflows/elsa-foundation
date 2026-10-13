@@ -1,5 +1,5 @@
 using System.Text;
-using Elsa.Serialization.SystemText.Services;
+using Elsa.Serialization.Testing;
 using Elsa3.Mapping;
 using Elsa3.Mapping.Mappings;
 using Elsa3.Models;
@@ -16,7 +16,7 @@ public sealed class LegacyClrTypeResolverTests
     [Fact]
     public void Resolve_RegisteredAlias_ReturnsRegisteredType()
     {
-        var registry = new WellKnownTypeRegistry();
+        var registry = SerializationServices.TypeRegistry();
         registry.RegisterType(typeof(string), "String");
 
         Assert.Equal(typeof(string), LegacyClrTypeResolver.Resolve(registry, "String"));
@@ -25,7 +25,7 @@ public sealed class LegacyClrTypeResolverTests
     [Fact]
     public void Resolve_UnregisteredButLoadableClrName_ResolvesViaTypeGetType()
     {
-        var registry = new WellKnownTypeRegistry();
+        var registry = SerializationServices.TypeRegistry();
 
         // Not registered as an alias; resolvable by full name because it lives in the core library.
         Assert.Equal(typeof(StringBuilder), LegacyClrTypeResolver.Resolve(registry, typeof(StringBuilder).FullName!));
@@ -34,7 +34,7 @@ public sealed class LegacyClrTypeResolverTests
     [Fact]
     public void Resolve_UnresolvableName_FallsBackToObject()
     {
-        var registry = new WellKnownTypeRegistry();
+        var registry = SerializationServices.TypeRegistry();
 
         Assert.Equal(typeof(object), LegacyClrTypeResolver.Resolve(registry, "No.Such.Type, No.Such.Assembly"));
     }
@@ -67,7 +67,7 @@ public sealed class LegacyClrTypeResolverTests
 
     private static Elsa3ArgumentDefinitionToInputOutput CreateArgumentMapper()
     {
-        var registry = new WellKnownTypeRegistry();
+        var registry = SerializationServices.TypeRegistry();
         registry.RegisterType(typeof(int), "Int32");
         registry.RegisterType(typeof(string), "String");
         return new(registry);

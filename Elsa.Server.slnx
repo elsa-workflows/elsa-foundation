@@ -589,6 +589,7 @@
     <Project Path="Essentials/tests/Studio/Preferences/Persistence/EntityFrameworkCore/Tests/Elsa.Studio.Preferences.Persistence.EntityFrameworkCore.Tests.csproj" />
   </Folder>
   <Folder Name="/Essentials/tests/Serialization/">
+    <Project Path="Essentials/tests/Serialization/Testing/Elsa.Serialization.Testing.csproj" />
     <Project Path="Essentials/tests/Serialization/Tests/Elsa.Serialization.Tests.csproj" />
   </Folder>
   <Folder Name="/Essentials/tests/Tasks/">

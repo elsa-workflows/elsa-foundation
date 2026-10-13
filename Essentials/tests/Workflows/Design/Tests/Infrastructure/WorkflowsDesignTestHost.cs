@@ -4,6 +4,7 @@ using Elsa.Activities.Design.Reconciliation;
 using Elsa.Events;
 using Elsa.Events.Core.Contracts;
 using Elsa.Locking.Core;
+using Elsa.Serialization.Testing;
 using Elsa.Workflows.Design.Persistence.Core.Models;
 using Elsa.Persistence.EntityFramework;
 using Elsa.Workflows.Design.Persistence.EntityFrameworkCore;
@@ -11,7 +12,6 @@ using Elsa.Workflows.Design.Persistence.EntityFrameworkCore.DependencyInjection;
 using Elsa.Primitives.Contracts;
 using Elsa.Primitives.Hosting;
 using Elsa.Serialization.Core;
-using Elsa.Serialization.SystemText.Services;
 using Elsa.Workflows.Design.Core.Contracts;
 using Elsa.Workflows.Design.Core.Services;
 using Elsa.Workflows.Design.Persistence.Core.Contracts;
@@ -106,7 +106,7 @@ internal sealed class WorkflowsDesignTestHost : IDisposable
 
         // Serializer used by the design stores to (de)serialize the authored WorkflowDefinitionState.
         services.AddSingleton<JsonPayloadConverterRegistry>();
-        services.AddSingleton<IPayloadSerializer, JsonPayloadSerializer>();
+        services.AddSingleton(sp => SerializationServices.PayloadSerializer(sp.GetRequiredService<JsonPayloadConverterRegistry>()));
 
         // The design store families compose their capability declarations against the events + design
         // feature services, so mirror the design-conformance fixture's feature set.
