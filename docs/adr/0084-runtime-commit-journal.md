@@ -16,7 +16,9 @@ the journal would save 3 of the 80 measured round trips of a Balanced run of 10 
 Durable one (11%). Cheaper, local changes save more: turning off EF's automatic savepoints in the commit store removes
 the 4 and 48 savepoint round trips measured in those runs, and answering a run's reads of its own rows from its session
 would save about 30 in both modes. All three savings are projections over measured cost sources. The journal adds a second
-representation of the per-activity tables, a projector, a tail merge and a retention question.
+representation of the per-activity tables, a projector, a tail merge and a retention question. If PostgreSQL server
+work rather than round trips becomes the concern, holding one connection per drain, which removes the pooled-connection
+reset that precedes almost every command today, is the cheaper change to try first (see Alternatives).
 
 Revisit it when one of these holds:
 
@@ -52,6 +54,13 @@ writes no activity row at all.
 
 The SQLite counts equal the committed EF command budgets (`ef-command-budgets.json`): 321, 99 and 99 for
 `writeline-sequence`, 196, 102 and 102 for `http-reference`, 242, 175 and 175 for `fork-join-resume`.
+
+On PostgreSQL EF opens the connection for each command outside a transaction and closes it after, so almost every
+such command takes a pooled connection, and Npgsql resets a pooled connection with `DISCARD ALL` when it is next
+used. Measured: 68 resets in a Balanced run of 10 WriteLines (75
+commands) and 187 in a Durable run (261 commands), 3 and 13 per WriteLine. Npgsql writes the reset together with the
+next command, so it costs no round trip, but the server runs it, and it discards the session's state, prepared
+statements included. Not measured: what the resets cost the server, and whether prepared statements would help.
 
 On SQLite, which runs one statement per command, the row writes are about a fifth of a Balanced run and grow by 2 per
 activity. On PostgreSQL EF already batches them into the commit's single write round trip, so they cost nothing extra
@@ -223,24 +232,37 @@ preview databases. No dual-write period.
 
 ## Alternatives considered
 
-- **Automatic savepoints off, one `SaveChangesAsync`, no marker lookup.** Local changes to the commit store. On
-  PostgreSQL they save 4, 1 and 1 round trips per commit: 6 per Balanced run and 72 per Durable run of 10 WriteLines,
-  twice what the journal saves for Durable. **Recommended before anything in this ADR.**
-- **Session-authoritative reads.** A run answers reads of its own rows from its session. Removes the 3 handler reads per
-  activity in both modes, about 30 round trips per run of 10 WriteLines. Measured on a prototype before #2585; it needs
-  alterations to take the ownership lease first. Recommended regardless of this ADR.
+Each figure is marked measured, a count from the runs on #2564, or projected, arithmetic over measured counts.
+
+- **Automatic savepoints off, one `SaveChangesAsync`, no marker lookup.** Local changes to the commit store. Measured:
+  per commit, EF's savepoints cost 4 round trips, the second `SaveChangesAsync` (the marker insert) 1, and the marker
+  lookup before the commit 1. Projected: removing them saves 6 round trips per Balanced run and 72 per Durable run of
+  10 WriteLines, twice what the journal would save for Durable. **Recommended before anything in this ADR.**
+- **Session-authoritative reads.** A run answers reads of its own rows from its session. Measured: the handler reads
+  are 3 per activity in both modes, 33 per run of 10 WriteLines. Projected: about 30 round trips saved per run, after
+  the few first loads a session still makes, taken from a prototype measured before #2585. It needs alterations to take
+  the ownership lease first. Recommended regardless of this ADR.
+- **One connection per drain.** Outside a transaction EF opens the connection for each command and closes it after,
+  so each command takes a pooled connection and pays a reset. Measured: 68 `DISCARD ALL` per Balanced run of 10
+  WriteLines and 187 per Durable run. Projected: a drain that opens one connection and keeps it open for its stores'
+  contexts sends none of those resets; round trips stay the same, because each reset already travels with the next
+  command. Not measured: the server work saved, and whether Npgsql's automatic preparation (off by default) would then
+  pay off on the reused connection. It changes how the EF stores obtain their connection, not what they write, so it
+  is likely cheaper than the journal; it is the first thing to try if PostgreSQL server work matters.
 - **SQLite multi-row inserts, no journal.** The commit store writes the two activity tables with one multi-row
-  `INSERT` each instead of EF's per-row inserts. Balanced 10x WriteLine on SQLite goes from 99 to about 79 commands.
-  Does nothing for PostgreSQL. Only worth doing if SQLite command counts start to matter, which the owner's decision
-  rules out for production.
+  `INSERT` each instead of EF's per-row inserts. Measured: 22 per-row inserts per Balanced run of 10 WriteLines on
+  SQLite. Projected: the run goes from 99 to about 79 commands. Does nothing for PostgreSQL. Only worth doing if SQLite
+  command counts start to matter, which the owner's decision rules out for production.
 - **Slimmer inspection records.** Fewer bytes per row, the same number of statements and round trips: inspection rows
-  are one per activity row either way. Helps write volume only.
-- **Dropping inspection rows when no observer is attached.** Removes, on today's code, 11 inserts and 11 reads per
-  Balanced 10x WriteLine run (22 SQLite commands, 11 PostgreSQL round trips); after session-authoritative reads only
-  the inserts remain, and on PostgreSQL they cost no round trip because they are batched. Inspection is the run's history (ADR
-  0001), so a run nobody watched could not be inspected later. Acceptable only as an explicit per-workflow setting,
-  like `RecordCompletion`.
+  are one per activity row either way (measured: 11 inspection inserts per Balanced run of 10 WriteLines, as many as
+  activity-row inserts). Helps write volume only, which was not measured.
+- **Dropping inspection rows when no observer is attached.** Measured: 11 inspection inserts and 11 inspection reads
+  per Balanced run of 10 WriteLines. Projected: dropping them removes 22 SQLite commands and 11 PostgreSQL round
+  trips; after session-authoritative reads only the inserts remain, and on PostgreSQL they cost no round trip because
+  they are batched. Inspection is the run's history (ADR 0001), so a run nobody watched could not be inspected later.
+  Acceptable only as an explicit per-workflow setting, like `RecordCompletion`.
 - **Event-sourcing the whole run.** The journal as the only truth for every run table. Too large a change before GA.
+  No figures.
 
 ## Risks
 
