@@ -6,9 +6,9 @@ The per-domain catalog (framework §2.22.1). Anchored at `Elsa.Activities.Design
 
 ## Implementable contributor interfaces
 
-### `IActivityReconciliationSource` *(Feature contract — `Elsa.Activities.Design.Reconciliation`)*
+### `IActivityReconciliationSource` *(Core contract — `Elsa.Activities.Design.Core`)*
 - **Kind:** Source (returns reconciliation models — pull pattern).
-- **Contract defined in:** `Elsa.Activities.Design.Reconciliation` (this feature project, not a `.Core`). Implementing it requires a reference to this feature.
+- **Contract defined in:** `Elsa.Activities.Design.Core` (namespace `Elsa.Activities.Design.Core.Reconciliation`). Implementing a source needs only that package; this feature supplies the handler that consumes it.
 - **Signature:**
   ```
   string SourceId { get; }
@@ -18,11 +18,12 @@ The per-domain catalog (framework §2.22.1). Anchored at `Elsa.Activities.Design
 - **`SourceId`:** a unique, stable identifier for this source (e.g. a file path, assembly name, remote URL).
 - **`SourceKind`:** the category of the source (e.g. `"clr"`, `"json"`, `"http"`).
 - **Register:** `services.AddScoped<IActivityReconciliationSource, MySource>()`.
+- **Stable ids:** `ActivityCatalogStableIds` (same package) computes the definition and version ids the handler assigns to an entry, so a source can reference an activity it contributes before reconciliation runs.
 - **Consumed by:** `CollectActivityVersions : IEventHandler<ActivityVersionsReconciling>` (this feature), which injects all sources, reads each, and reconciles the returned activity versions against the catalog.
 
 **Known implementations (shipped):**
 - `ClrActivityReconciliationSource` (`Elsa.Activities.Design.Reconciliation.Clr`, `SourceKind = "CLR"`) — scans a configured assembly folder, reads each activity's author-controlled SemVer (the `[Version]` attribute, falling back to the declaring assembly version), and contributes one reconciliation model per discovered activity. Registered as a **standalone source feature** (`ClrActivityReconciliationFeature : IShellFeature`) that does *not* derive from the reconciliation feature — it only adds an `IActivityReconciliationSource` to DI, which the universal handler discovers. Add both features to a shell to scan a folder.
-- `Elsa3.Activities.Design.Import` — *(cross-domain — imports activity definitions from Elsa3 JSON; provides IActivityCollectionJsonSource-backed reconciliation)* — verify exact class name in that project.
+- `JsonActivityReconciliationSource` (`Elsa.Activities.Design.Reconciliation.Json`, `SourceKind = "Json"`) — reads activity definitions from configured JSON files. Registered by the standalone `JsonActivityReconciliationFeature`, which likewise does *not* derive from the reconciliation feature.
 
 ---
 
