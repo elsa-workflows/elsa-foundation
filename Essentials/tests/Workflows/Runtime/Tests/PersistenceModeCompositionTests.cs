@@ -20,21 +20,22 @@ public sealed class PersistenceModeCompositionTests
 {
     private readonly IServiceCollection _services = new ServiceCollection().AddWorkflowRuntime();
 
-    [Fact]
-    public void A_policy_a_host_registered_before_the_persistence_modes_is_refused_naming_both()
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void A_policy_a_host_registered_before_the_persistence_modes_is_refused_naming_both(bool registeredBeforeTheRuntime)
     {
-        var registeredFirst = new ServiceCollection();
-        registeredFirst.AddSingleton<IRuntimeCheckpointPersistencePolicy, HostPolicy>();
-        registeredFirst.AddWorkflowRuntime();
-        _services.AddSingleton<IRuntimeCheckpointPersistencePolicy, HostPolicy>();
+        var services = new ServiceCollection();
+        if (registeredBeforeTheRuntime)
+            services.AddSingleton<IRuntimeCheckpointPersistencePolicy, HostPolicy>();
+        services.AddWorkflowRuntime();
+        if (!registeredBeforeTheRuntime)
+            services.AddSingleton<IRuntimeCheckpointPersistencePolicy, HostPolicy>();
 
-        foreach (var services in new[] { registeredFirst, _services })
-        {
-            var refusal = Assert.Throws<InvalidOperationException>(() => services.AddPersistenceModes());
+        var refusal = Assert.Throws<InvalidOperationException>(() => services.AddPersistenceModes());
 
-            Assert.Contains(typeof(HostPolicy).FullName!, refusal.Message, StringComparison.Ordinal);
-            Assert.Contains(typeof(CoalescingRuntimeCheckpointPersistencePolicy).FullName!, refusal.Message, StringComparison.Ordinal);
-        }
+        Assert.Contains(typeof(HostPolicy).FullName!, refusal.Message, StringComparison.Ordinal);
+        Assert.Contains(typeof(CoalescingRuntimeCheckpointPersistencePolicy).FullName!, refusal.Message, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -69,7 +70,7 @@ public sealed class PersistenceModeCompositionTests
     [Fact]
     public async Task A_clean_composition_starts_also_when_the_modes_are_added_twice_and_the_resolver_was_replaced()
     {
-        _services.Replace(ServiceDescriptor.Scoped<IRuntimePersistenceModeResolver, HostResolver>());
+        _services.Replace(ServiceDescriptor.Singleton<IRuntimePersistenceModeResolver>(new FixedPersistenceModeResolver(PersistenceMode.Durable)));
         _services.AddPersistenceModes();
         _services.AddPersistenceModes(options => options.Mode = PersistenceMode.Durable);
 
@@ -91,13 +92,14 @@ public sealed class PersistenceModeCompositionTests
     [Fact]
     public async Task A_second_persistence_mode_resolver_fails_activation_naming_both()
     {
+        var runtimeResolver = Assert.Single(_services, descriptor => descriptor.ServiceType == typeof(IRuntimePersistenceModeResolver)).ImplementationType!;
         _services.AddPersistenceModes();
-        _services.AddScoped<IRuntimePersistenceModeResolver, HostResolver>();
+        _services.AddSingleton<IRuntimePersistenceModeResolver>(new FixedPersistenceModeResolver(PersistenceMode.Durable));
 
         var refusal = await Assert.ThrowsAsync<InvalidOperationException>(InitializeAsync);
 
-        Assert.Contains(typeof(HostResolver).FullName!, refusal.Message, StringComparison.Ordinal);
-        Assert.Contains("Elsa.Workflows.Runtime.Services.Checkpoints.RuntimePersistenceModeResolver'", refusal.Message, StringComparison.Ordinal);
+        Assert.Contains($"an instance of '{typeof(FixedPersistenceModeResolver).FullName}'", refusal.Message, StringComparison.Ordinal);
+        Assert.Contains($"'{runtimeResolver.FullName}'", refusal.Message, StringComparison.Ordinal);
     }
 
     /// <summary>Runs the shell initializers the composed services register, as shell activation does.</summary>
@@ -118,13 +120,5 @@ public sealed class PersistenceModeCompositionTests
     {
         public ValueTask<RuntimePostCommitOutboxItem?> FindAsync(string outboxItemId, CancellationToken cancellationToken = default) =>
             ValueTask.FromResult<RuntimePostCommitOutboxItem?>(outboxItemId == item.OutboxItemId ? item : null);
-    }
-
-    private sealed class HostResolver : IRuntimePersistenceModeResolver
-    {
-        public ValueTask<ResolvedPersistenceMode> ResolveAsync(WorkflowExecutionCommandEnvelope envelope, CancellationToken cancellationToken = default) =>
-            ValueTask.FromResult(new ResolvedPersistenceMode(PersistenceMode.Durable, RunHasRecord: true));
-
-        public PersistenceMode Resolve(WorkflowExecutable executable) => PersistenceMode.Durable;
     }
 }

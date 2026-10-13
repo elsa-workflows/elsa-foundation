@@ -16,7 +16,7 @@ internal sealed class NonFoldingDrainScopeFactory : IRuntimeCoalescingDrainScope
     public static NonFoldingDrainScopeFactory Instance { get; } = new();
 
     /// <summary>Resolves every run as a Durable run that has a record, for the same tests.</summary>
-    public static IRuntimePersistenceModeResolver Resolver { get; } = new DurableRunResolver();
+    public static IRuntimePersistenceModeResolver Resolver { get; } = new FixedPersistenceModeResolver(PersistenceMode.Durable);
 
     public IRuntimeCoalescingDrainScope Begin(string workflowExecutionId, ResolvedPersistenceMode mode) =>
         new Scope(new RuntimeCoalescingSession(workflowExecutionId, new InMemoryWorkflowSchedulerWorkQueue(), new PersistenceModeOptions(), mode: mode));
@@ -28,13 +28,5 @@ internal sealed class NonFoldingDrainScopeFactory : IRuntimeCoalescingDrainScope
         public ValueTask FlushAtQuiescenceAsync(CancellationToken cancellationToken = default) => ValueTask.CompletedTask;
 
         public ValueTask DisposeAsync() => ValueTask.CompletedTask;
-    }
-
-    private sealed class DurableRunResolver : IRuntimePersistenceModeResolver
-    {
-        public ValueTask<ResolvedPersistenceMode> ResolveAsync(WorkflowExecutionCommandEnvelope envelope, CancellationToken cancellationToken = default) =>
-            ValueTask.FromResult(new ResolvedPersistenceMode(PersistenceMode.Durable, RunHasRecord: true));
-
-        public PersistenceMode Resolve(WorkflowExecutable executable) => PersistenceMode.Durable;
     }
 }

@@ -639,7 +639,7 @@ public sealed class RuntimeWorkflowExecutionStartDispatchTests
         await ActivateAsync();
         var callerMetadata = new Dictionary<string, string> { [RuntimeMetadataKeys.PersistenceMode] = nameof(PersistenceMode.Durable) };
 
-        await NewDispatcher(new FixedModeResolver(PersistenceMode.Ephemeral)).DispatchAsync(
+        await NewDispatcher(new FixedPersistenceModeResolver(PersistenceMode.Ephemeral)).DispatchAsync(
             new WorkflowExecutionStartDispatchRequest(artifactId: "artifact-1", requestedBy: "test", metadata: callerMetadata));
         await _dispatcher.DispatchAsync(
             new WorkflowExecutionStartDispatchRequest(artifactId: "artifact-1", requestedBy: "test", metadata: callerMetadata));
@@ -848,14 +848,6 @@ public sealed class RuntimeWorkflowExecutionStartDispatchTests
             workflowDispatchStore: null,
             workflowExecutionStateStore: null,
             persistenceModeResolver);
-
-    private sealed class FixedModeResolver(PersistenceMode mode) : IRuntimePersistenceModeResolver
-    {
-        public ValueTask<ResolvedPersistenceMode> ResolveAsync(WorkflowExecutionCommandEnvelope envelope, CancellationToken cancellationToken = default) =>
-            ValueTask.FromResult(new ResolvedPersistenceMode(mode, RunHasRecord: false));
-
-        public PersistenceMode Resolve(WorkflowExecutable executable) => mode;
-    }
 
     private WorkflowStartDispatcher NewDispatcher(IWorkflowExecutableStartPolicy policy) =>
         new(

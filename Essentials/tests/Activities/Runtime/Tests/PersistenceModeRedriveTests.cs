@@ -1,5 +1,4 @@
 using System.Collections.Concurrent;
-using System.Text.Json;
 using Elsa.Activities.Testing;
 using Elsa.Workflows.Runtime.Contracts;
 using Elsa.Workflows.Runtime.Core.Constants;
@@ -9,6 +8,7 @@ using Elsa.Workflows.Runtime.Services.Checkpoints;
 using Elsa.Workflows.Runtime.Services.Coalescing;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
+using static Elsa.Activities.Runtime.Tests.PersistenceModeTestRuns;
 
 namespace Elsa.Activities.Runtime.Tests;
 
@@ -71,7 +71,7 @@ public sealed class PersistenceModeRedriveTests
         Assert.Empty(commits.ListCommits());
         Assert.NotEmpty(await QueuedWorkAsync(harness));
 
-        await RedriveAsync(harness);
+        await DeliverAsync(harness, WorkflowExecutionCommandKind.RunSchedulerWork, WorkflowExecutionActorActivationReason.Recovery);
 
         // Both passes ran the mode the workflow chose.
         Assert.Equal([chosen, chosen], _drainModes);
@@ -91,54 +91,11 @@ public sealed class PersistenceModeRedriveTests
         Assert.Empty(await QueuedWorkAsync(harness));
     }
 
-    // Drives the run again the way the resumption sweep does: a RunSchedulerWork command carrying only its source, through
-    // a recovery activation.
-    private static async Task RedriveAsync(WorkflowExecutionHarness harness)
-    {
-        var agent = await harness.Services.GetRequiredService<IWorkflowExecutionActorProvider>().GetAgentAsync(
-            new WorkflowExecutionActorActivationRequest(
-                workflowExecutionId: harness.ExecutionId,
-                reason: WorkflowExecutionActorActivationReason.Recovery,
-                requestedAt: WorkflowExecutionHarness.Timestamp,
-                requestedBy: "runtime-resumption",
-                requiredCapabilities: WorkflowExecutionActorCapabilities.InProcessMailbox));
-        var metadata = new Dictionary<string, string> { ["source"] = "runtime-resumption" };
-        var dispatch = await agent.EnqueueAsync(new WorkflowExecutionCommandEnvelope(
-            envelopeId: "envelope-redrive",
-            workflowExecutionId: harness.ExecutionId,
-            command: new WorkflowExecutionCommand(
-                CommandId: "command-redrive",
-                WorkflowExecutionId: harness.ExecutionId,
-                Kind: WorkflowExecutionCommandKind.RunSchedulerWork,
-                EnqueuedAt: WorkflowExecutionHarness.Timestamp,
-                Payload: null,
-                Metadata: metadata),
-            idempotencyKey: $"runtime-resumption:{harness.ExecutionId}:envelope-redrive",
-            deliveryMode: WorkflowExecutionCommandDeliveryMode.AtLeastOnce,
-            enqueuedAt: WorkflowExecutionHarness.Timestamp,
-            metadata: metadata));
-        Assert.Equal(WorkflowExecutionCommandDispatchStatus.Accepted, dispatch.Status);
-    }
-
     // Records the mode each drain's session runs in, around the scope factory every drain begins its session from.
     private void RecordDrainModes(IServiceCollection services) =>
         services.AddScoped<IRuntimeCoalescingDrainScopeFactory>(serviceProvider => new ModeRecordingDrainScopeFactory(
             ActivatorUtilities.CreateInstance<RuntimeCoalescingDrainScopeFactory>(serviceProvider),
             _drainModes));
-
-    private static Task<IReadOnlyCollection<RuntimeSchedulerWorkItem>> QueuedWorkAsync(WorkflowExecutionHarness harness) =>
-        harness.Services.GetRequiredService<IWorkflowSchedulerWorkQueue>().ListAllAsync(harness.ExecutionId).AsTask();
-
-    private static ExecutableNode NewClrNode(string nodeId, Type activityType) =>
-        new(
-            executableNodeId: nodeId,
-            authoredActivityId: $"authored-{nodeId}",
-            activityType: activityType.FullName!,
-            activityTypeVersion: "1.0.0",
-            descriptorType: "test",
-            descriptorPayload: JsonSerializer.SerializeToElement(new { }),
-            inputBindings: new Dictionary<string, RuntimeInputBinding>(),
-            metadata: new Dictionary<string, string>());
 
     private sealed class ModeRecordingDrainScopeFactory(
         IRuntimeCoalescingDrainScopeFactory inner,

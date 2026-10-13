@@ -12,6 +12,7 @@ using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Services.Checkpoints;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
+using static Elsa.Activities.Runtime.Tests.PersistenceModeTestRuns;
 using SequenceActivity = Elsa.Activities.Sequence.Activities.Sequence;
 
 namespace Elsa.Activities.Runtime.Tests;
@@ -338,41 +339,6 @@ public sealed class PersistenceModeFlushTests
 
     private const string PoisonedNodeId = "node-poisoned";
 
-    // Delivers one command to the run's agent, the way an operator (Cancel) or the recovery sweep (RunSchedulerWork)
-    // reaches a run that is already started.
-    private static async Task DeliverAsync(
-        WorkflowExecutionHarness harness,
-        WorkflowExecutionCommandKind kind,
-        WorkflowExecutionActorActivationReason reason)
-    {
-        var agent = await harness.Services.GetRequiredService<IWorkflowExecutionActorProvider>().GetAgentAsync(
-            new WorkflowExecutionActorActivationRequest(
-                workflowExecutionId: harness.ExecutionId,
-                reason: reason,
-                requestedAt: WorkflowExecutionHarness.Timestamp,
-                requestedBy: "persistence-mode-test",
-                requiredCapabilities: WorkflowExecutionActorCapabilities.InProcessMailbox));
-        var envelopeId = $"envelope-{kind}";
-        var dispatch = await agent.EnqueueAsync(new WorkflowExecutionCommandEnvelope(
-            envelopeId: envelopeId,
-            workflowExecutionId: harness.ExecutionId,
-            command: new WorkflowExecutionCommand(
-                CommandId: $"command-{kind}",
-                WorkflowExecutionId: harness.ExecutionId,
-                Kind: kind,
-                EnqueuedAt: WorkflowExecutionHarness.Timestamp,
-                Payload: null,
-                Metadata: new Dictionary<string, string>()),
-            idempotencyKey: $"{harness.ExecutionId}:{envelopeId}",
-            deliveryMode: WorkflowExecutionCommandDeliveryMode.AtLeastOnce,
-            enqueuedAt: WorkflowExecutionHarness.Timestamp,
-            metadata: new Dictionary<string, string>()));
-        Assert.Equal(WorkflowExecutionCommandDispatchStatus.Accepted, dispatch.Status);
-    }
-
-    private static Task<IReadOnlyCollection<RuntimeSchedulerWorkItem>> QueuedWorkAsync(WorkflowExecutionHarness harness) =>
-        harness.Services.GetRequiredService<IWorkflowSchedulerWorkQueue>().ListAllAsync(harness.ExecutionId).AsTask();
-
     // Nothing is left queued that would run the workflow again.
     private static async Task AssertNothingQueuedAsync(WorkflowExecutionHarness harness) =>
         Assert.Empty(await QueuedWorkAsync(harness));
@@ -435,17 +401,6 @@ public sealed class PersistenceModeFlushTests
             incidentStrategy: IncidentStrategyBuiltIns.FaultReference);
 
     private static ExecutableNode NewCountingNode() => NewClrNode(CountingNodeId, typeof(CountingReplaySafeActivity));
-
-    private static ExecutableNode NewClrNode(string nodeId, Type activityType) =>
-        new(
-            executableNodeId: nodeId,
-            authoredActivityId: $"authored-{nodeId}",
-            activityType: activityType.FullName!,
-            activityTypeVersion: "1.0.0",
-            descriptorType: "test",
-            descriptorPayload: JsonSerializer.SerializeToElement(new { }),
-            inputBindings: new Dictionary<string, RuntimeInputBinding>(),
-            metadata: new Dictionary<string, string>());
 
     private static ExecutableNode NewSequence(string nodeId, params ExecutableNode[] activities) =>
         new(
