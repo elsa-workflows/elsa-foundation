@@ -10,8 +10,8 @@ namespace Elsa.Workflows.Runtime.Services.Checkpoints;
 /// Default <see cref="IRuntimePersistenceModeResolver"/>. A run's mode is decided once, when it is started: the
 /// workflow's choice wins over the host default, and the start dispatcher writes the result onto the start command,
 /// which the scheduler queue keeps, as first delivered, until the run's first commit. From that commit on, the mode
-/// recorded on the run decides. Every drain of a run therefore finds the same mode, whichever command starts it, including a drain that
-/// runs the run again after its first pass ended before anything was committed.
+/// recorded on the run decides. Every drain of a run therefore finds the same mode, whichever command starts it,
+/// including a drain that runs the run again after its first pass ended before anything was committed.
 /// </summary>
 internal sealed class RuntimePersistenceModeResolver(
     IWorkflowExecutableStore executableStore,
