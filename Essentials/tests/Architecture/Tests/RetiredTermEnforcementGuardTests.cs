@@ -13,12 +13,14 @@ namespace Elsa.Architecture.Tests;
 /// way to lower them, skip a file, or scope a term to nothing would otherwise read as "nothing to report".
 /// </summary>
 /// <remarks>
-/// Three routes are closed. The analyzer configuration the compiler resolves for each production file, from every
-/// .editorconfig and global config, may not lower the diagnostics below error, by their ids, by the Naming category or by a
-/// blanket analyzer severity, and may not mark an ordinary source file as generated code, which analyzers skip. A section
-/// that activates retired terms must match production source the analyzer compiles. And no source or build file may name
-/// the diagnostics, which is how a pragma, a <c>SuppressMessage</c>, a <c>NoWarn</c> or a ruleset would silence them, and
-/// no build file may turn analyzers off.
+/// Four routes are closed. Every production project must compile with the analyzer: MSBuild's own evaluation of each
+/// production project has to list the analyzer reference, and no build file other than the root
+/// <c>Directory.Build.props</c> may decide which projects get it. The analyzer configuration the compiler resolves for each
+/// production file, from every .editorconfig and global config, may not lower the diagnostics below error, by their ids, by
+/// the Naming category or by a blanket analyzer severity, and may not mark an ordinary source file as generated code, which
+/// analyzers skip. A section that activates retired terms must match production source the analyzer compiles. And no
+/// source or build file may name the diagnostics, which is how a pragma, a <c>SuppressMessage</c>, a <c>NoWarn</c> or a
+/// ruleset would silence them, and no build file may turn analyzers off.
 /// </remarks>
 public sealed partial class RetiredTermEnforcementGuardTests
 {
@@ -35,6 +37,42 @@ public sealed partial class RetiredTermEnforcementGuardTests
             .Select(match => match.Value)
             .Distinct(StringComparer.Ordinal)
     ];
+
+    /// <summary>
+    /// MSBuild evaluates every production project, with this repository's build files, and each evaluation must carry the
+    /// analyzer reference. That catches every way to drop it: a project setting <c>ElsaIsProductionProject</c> to false, a
+    /// <c>ProjectReference Remove</c>, an imported file that does either, or a nested <c>Directory.Build.props</c> that never
+    /// imports the root one.
+    /// </summary>
+    [Fact]
+    public void Every_production_project_compiles_with_the_analyzer()
+    {
+        var analyzer = ProjectGraph.BuildWideProjectReferences(RepoRoot).Single();
+        var production = ModuleRoots.Resolve(RepoRoot, ModuleRoots.Production)
+            .SelectMany(root => Directory.EnumerateFiles(root, "*.csproj", SearchOption.AllDirectories))
+            .Where(path => !IsBuildOutput(path))
+            .Select(Path.GetFullPath)
+            .Order(StringComparer.Ordinal)
+            .ToArray();
+        var evaluated = AnalyzerReferences(production);
+
+        var missing = production
+            .Where(project => !evaluated.TryGetValue(project, out var analyzers) || !analyzers.Contains(analyzer, StringComparer.Ordinal))
+            .Select(project => $"{Relative(RepoRoot, project)} does not compile with {Relative(RepoRoot, analyzer)}")
+            .ToArray();
+
+        Assert.True(production.Length > 100, $"Only {production.Length} production projects were found; the sweep has stopped finding them.");
+        Assert.True(evaluated.Count == production.Length, $"MSBuild evaluated {evaluated.Count} of {production.Length} production projects.");
+        Assert.True(missing.Length == 0, string.Join(Environment.NewLine, missing));
+    }
+
+    [Fact]
+    public void Only_the_root_build_file_decides_which_projects_get_the_analyzer()
+    {
+        var violations = WiringOverrides(RepoRoot);
+
+        Assert.True(violations.Count == 0, string.Join(Environment.NewLine, violations));
+    }
 
     [Fact]
     public void No_analyzer_config_lowers_the_retired_term_diagnostics_or_marks_source_as_generated()
@@ -114,6 +152,9 @@ public sealed partial class RetiredTermEnforcementGuardTests
         sandbox.File("Essentials/src/Tasks/Elsa.Tasks/Suppressed.cs", "#pragma warning disable ELSANAME001\nnamespace Elsa.Tasks;");
         sandbox.File("Essentials/src/Tasks/Elsa.Tasks/Elsa.Tasks.csproj",
             """<Project><PropertyGroup><NoWarn>$(NoWarn);ELSANAME002</NoWarn><RunAnalyzers>false</RunAnalyzers></PropertyGroup></Project>""");
+        sandbox.File("Essentials/src/Events/Elsa.Events/Elsa.Events.csproj",
+            """<Project><PropertyGroup><ElsaIsProductionProject>false</ElsaIsProductionProject></PropertyGroup></Project>""");
+        sandbox.File("Directory.Build.props", """<Project><PropertyGroup><ElsaIsProductionProject>true</ElsaIsProductionProject></PropertyGroup></Project>""");
 
         var configs = FindConfigFiles(sandbox.Root);
         var sources = ProductionSourceFiles(sandbox.Root);
@@ -139,6 +180,9 @@ public sealed partial class RetiredTermEnforcementGuardTests
             "Essentials/src/Tasks/Elsa.Tasks/Suppressed.cs names ELSANAME, which suppresses the retired-term diagnostics there",
         ],
             SuppressionViolations(sandbox.Root));
+        Assert.Equal(
+            ["Essentials/src/Events/Elsa.Events/Elsa.Events.csproj sets ElsaIsProductionProject, which only the root Directory.Build.props may decide"],
+            WiringOverrides(sandbox.Root));
     }
 
     /// <summary>
@@ -239,6 +283,83 @@ public sealed partial class RetiredTermEnforcementGuardTests
         }
     }
 
+    /// <summary>
+    /// Every build file other than the root <c>Directory.Build.props</c> that sets one of the properties the analyzer
+    /// wiring reads.
+    /// </summary>
+    private static IReadOnlyList<string> WiringOverrides(string repoRoot)
+    {
+        string[] wiring = ["ElsaIsProductionProject", "_ElsaNamingAnalyzerProject", "_ElsaProjectDirectoryFromRoot"];
+        var root = Path.GetFullPath(Path.Join(repoRoot, "Directory.Build.props"));
+
+        return
+        [
+            .. SweptFiles(repoRoot, exemptAnalyzerAndGuards: false)
+                .Where(path => Path.GetExtension(path) is ".csproj" or ".props" or ".targets")
+                .Where(path => !string.Equals(Path.GetFullPath(path), root, StringComparison.Ordinal))
+                .SelectMany(path => XDocument.Load(path).Descendants()
+                    .Where(element => wiring.Contains(element.Name.LocalName))
+                    .Select(element => $"{Relative(repoRoot, path)} sets {element.Name.LocalName}, which only the root Directory.Build.props may decide"))
+                .Distinct(StringComparer.Ordinal)
+                .Order(StringComparer.Ordinal)
+        ];
+    }
+
+    /// <summary>
+    /// The analyzer references MSBuild evaluates for each of <paramref name="projects"/>: their <c>ProjectReference</c>
+    /// items marked <c>OutputItemType="Analyzer"</c>, as full paths. One <c>dotnet msbuild</c> run evaluates all of them, with
+    /// a listing target injected through <c>CustomAfterMicrosoftCommonTargets</c>; nothing is built or restored.
+    /// </summary>
+    private static IReadOnlyDictionary<string, string[]> AnalyzerReferences(IReadOnlyList<string> projects)
+    {
+        var scratch = Directory.CreateTempSubdirectory("elsa-analyzer-wiring-");
+        try
+        {
+            var listing = Path.Join(scratch.FullName, "ListAnalyzerReferences.targets");
+            var output = Path.Join(scratch.FullName, "analyzers.txt");
+            var traversal = Path.Join(scratch.FullName, "Evaluate.proj");
+            File.WriteAllText(listing, """
+                <Project>
+                  <Target Name="ElsaListAnalyzerReferences" Returns="@(_ElsaEvaluated)">
+                    <ItemGroup>
+                      <_ElsaAnalyzerReference Include="@(ProjectReference->WithMetadataValue('OutputItemType', 'Analyzer')->'%(FullPath)')" />
+                      <_ElsaEvaluated Include="$(MSBuildProjectFullPath)" Analyzers="@(_ElsaAnalyzerReference)" />
+                    </ItemGroup>
+                  </Target>
+                </Project>
+                """);
+            File.WriteAllText(traversal, $"""
+                <Project>
+                  <ItemGroup>
+                    {string.Concat(projects.Select(project => $"<ElsaProject Include=\"{project}\" />"))}
+                  </ItemGroup>
+                  <Target Name="Evaluate">
+                    <MSBuild Projects="@(ElsaProject)" Targets="ElsaListAnalyzerReferences" BuildInParallel="true"
+                             Properties="CustomAfterMicrosoftCommonTargets={listing}">
+                      <Output TaskParameter="TargetOutputs" ItemName="_Evaluated" />
+                    </MSBuild>
+                    <WriteLinesToFile File="{output}" Lines="@(_Evaluated->'%(Identity)|%(Analyzers)')" Overwrite="true" />
+                  </Target>
+                </Project>
+                """);
+
+            var (exitCode, log) = ChildProcess.Dotnet(
+                ["msbuild", traversal, "-t:Evaluate", "-m", "-nologo", "-nodeReuse:false", "-v:q"], timeout: TimeSpan.FromMinutes(10));
+            Assert.True(exitCode == 0, $"Evaluating the production projects failed with exit {exitCode}:{Environment.NewLine}{log}");
+
+            return File.ReadAllLines(output)
+                .Select(line => line.Split('|', 2))
+                .ToDictionary(
+                    parts => Path.GetFullPath(parts[0]),
+                    parts => parts[1].Split(';', StringSplitOptions.RemoveEmptyEntries).Select(Path.GetFullPath).ToArray(),
+                    StringComparer.Ordinal);
+        }
+        finally
+        {
+            scratch.Delete(recursive: true);
+        }
+    }
+
     private static IReadOnlyList<string> SuppressionViolations(string repoRoot)
     {
         var files = SweptFiles(repoRoot).ToArray();
@@ -259,10 +380,10 @@ public sealed partial class RetiredTermEnforcementGuardTests
     /// Source, build and ruleset files the analyzer's diagnostics could be suppressed from: the repository-root build files
     /// and everything under Essentials and Extensions, except the analyzer itself and the tests that exercise and guard it.
     /// </summary>
-    private static IEnumerable<string> SweptFiles(string repoRoot)
+    private static IEnumerable<string> SweptFiles(string repoRoot, bool exemptAnalyzerAndGuards = true)
     {
         string[] extensions = [".cs", ".csproj", ".props", ".targets", ".ruleset"];
-        string[] exempt = ["Essentials/build/Analyzers/", "Essentials/tests/Architecture/"];
+        string[] exempt = exemptAnalyzerAndGuards ? ["Essentials/build/Analyzers/", "Essentials/tests/Architecture/"] : [];
 
         return Directory.EnumerateFiles(repoRoot, "*.*", SearchOption.TopDirectoryOnly)
             .Concat(new[] { "Essentials", "Extensions" }
