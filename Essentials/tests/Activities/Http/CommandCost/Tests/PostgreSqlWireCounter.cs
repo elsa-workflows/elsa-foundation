@@ -10,11 +10,18 @@ namespace Elsa.Activities.Http.CommandCost;
 /// <param name="Connections">Physical connections opened.</param>
 /// <param name="HandshakeRoundTrips">Round trips spent opening connections, up to the server's first ReadyForQuery.</param>
 /// <param name="RoundTrips">
-/// Round trips after the handshake: each time the client sent and then waited for the server to answer. Messages the
-/// client writes together, such as the pooled-connection reset Npgsql prepends to the next command, share one.
+/// Round trips after the handshake. One starts when the client sends a Sync or a simple Query while no earlier one is
+/// unanswered, and ends with the ReadyForQuery that answers the last one outstanding. Requests the client writes
+/// together, such as the pooled-connection reset Npgsql prepends to the next command, share one; a server that flushes
+/// part of an answer early does not add one. Exact while the client waits only for ReadyForQuery, which holds as long as
+/// <paramref name="Flushes"/> is zero.
 /// </param>
 /// <param name="Responses">ReadyForQuery messages after the handshake: one per simple query and per extended-protocol Sync.</param>
 /// <param name="Executes">Extended-protocol Execute messages: one per statement the client ran that way.</param>
+/// <param name="Flushes">
+/// Extended-protocol Flush messages. A client that sends one may wait for an answer without a ReadyForQuery, which
+/// <paramref name="RoundTrips"/> would not count.
+/// </param>
 /// <param name="SimpleQueries">Simple-protocol Query messages, by their text up to the first 40 characters.</param>
 internal sealed record PostgreSqlWireCounts(
     int Connections,
@@ -22,9 +29,10 @@ internal sealed record PostgreSqlWireCounts(
     int RoundTrips,
     int Responses,
     int Executes,
+    int Flushes,
     IReadOnlyDictionary<string, int> SimpleQueries)
 {
-    public static readonly PostgreSqlWireCounts Zero = new(0, 0, 0, 0, 0, new Dictionary<string, int>());
+    public static readonly PostgreSqlWireCounts Zero = new(0, 0, 0, 0, 0, 0, new Dictionary<string, int>());
 
     public int SimpleQueryCount => SimpleQueries.Values.Sum();
 
@@ -34,6 +42,7 @@ internal sealed record PostgreSqlWireCounts(
         RoundTrips + sign * other.RoundTrips,
         Responses + sign * other.Responses,
         Executes + sign * other.Executes,
+        Flushes + sign * other.Flushes,
         SimpleQueries.Keys.Union(other.SimpleQueries.Keys)
             .Select(text => (Text: text, Count: SimpleQueries.GetValueOrDefault(text) + sign * other.SimpleQueries.GetValueOrDefault(text)))
             .Where(entry => entry.Count != 0)
@@ -65,6 +74,7 @@ internal sealed class PostgreSqlWireCounter : IAsyncDisposable
     private int _roundTrips;
     private int _responses;
     private int _executes;
+    private int _flushes;
 
     public PostgreSqlWireCounter(string upstreamHost, int upstreamPort)
     {
@@ -82,6 +92,7 @@ internal sealed class PostgreSqlWireCounter : IAsyncDisposable
         Volatile.Read(ref _roundTrips),
         Volatile.Read(ref _responses),
         Volatile.Read(ref _executes),
+        Volatile.Read(ref _flushes),
         _simpleQueries.ToDictionary(entry => entry.Key, entry => entry.Value, StringComparer.Ordinal));
 
     public async ValueTask DisposeAsync()
@@ -148,8 +159,10 @@ internal sealed class PostgreSqlWireCounter : IAsyncDisposable
 
     /// <summary>
     /// The protocol state of one connection. Messages are counted from the bytes as they pass, whatever TCP segments
-    /// carry them. A round trip completes when the server answers after the client sent something; the client never
-    /// sends again before that answer, so this counts each wait once however many messages the client wrote together.
+    /// carry them. During the handshake the client and server alternate, so each answer after a client write is one
+    /// round trip. After it, the client's requests end in a Sync or a simple Query, each answered by exactly one
+    /// ReadyForQuery; a round trip runs from the request that finds none outstanding to the ReadyForQuery that leaves
+    /// none outstanding.
     /// </summary>
     private sealed class Connection(PostgreSqlWireCounter counter)
     {
@@ -158,13 +171,16 @@ internal sealed class PostgreSqlWireCounter : IAsyncDisposable
         private readonly Lock _gate = new();
         private int _pendingSingleByteAnswers;
         private bool _handshakeDone;
-        private bool _awaitingAnswer;
+        private bool _awaitingHandshakeAnswer;
+        private int _outstanding;
 
         public void ReadClient(ReadOnlyMemory<byte> bytes)
         {
             lock (_gate)
             {
-                _awaitingAnswer = true;
+                if (!_handshakeDone)
+                    _awaitingHandshakeAnswer = true;
+
                 foreach (var message in _client.Read(bytes.Span))
                 {
                     if (message.Type == 0)
@@ -175,10 +191,22 @@ internal sealed class PostgreSqlWireCounter : IAsyncDisposable
                         continue;
                     }
 
-                    if (message.Type == (byte)'E')
-                        Interlocked.Increment(ref counter._executes);
-                    else if (message.Type == (byte)'Q')
-                        counter._simpleQueries.AddOrUpdate(message.Text!, 1, (_, count) => count + 1);
+                    switch (message.Type)
+                    {
+                        case (byte)'E':
+                            Interlocked.Increment(ref counter._executes);
+                            break;
+                        case (byte)'H':
+                            Interlocked.Increment(ref counter._flushes);
+                            break;
+                        case (byte)'Q':
+                            counter._simpleQueries.AddOrUpdate(message.Text!, 1, (_, count) => count + 1);
+                            Request();
+                            break;
+                        case (byte)'S':
+                            Request();
+                            break;
+                    }
                 }
             }
         }
@@ -187,10 +215,10 @@ internal sealed class PostgreSqlWireCounter : IAsyncDisposable
         {
             lock (_gate)
             {
-                if (_awaitingAnswer)
+                if (_awaitingHandshakeAnswer)
                 {
-                    _awaitingAnswer = false;
-                    Interlocked.Increment(ref _handshakeDone ? ref counter._roundTrips : ref counter._handshakeRoundTrips);
+                    _awaitingHandshakeAnswer = false;
+                    Interlocked.Increment(ref counter._handshakeRoundTrips);
                 }
 
                 var span = bytes.Span;
@@ -204,11 +232,23 @@ internal sealed class PostgreSqlWireCounter : IAsyncDisposable
                 {
                     if (message.Type != (byte)'Z')
                         continue;
-                    if (_handshakeDone)
-                        Interlocked.Increment(ref counter._responses);
-                    _handshakeDone = true;
+                    if (!_handshakeDone)
+                    {
+                        _handshakeDone = true;
+                        continue;
+                    }
+
+                    Interlocked.Increment(ref counter._responses);
+                    if (_outstanding > 0)
+                        _outstanding--;
                 }
             }
+        }
+
+        private void Request()
+        {
+            if (_outstanding++ == 0)
+                Interlocked.Increment(ref counter._roundTrips);
         }
     }
 

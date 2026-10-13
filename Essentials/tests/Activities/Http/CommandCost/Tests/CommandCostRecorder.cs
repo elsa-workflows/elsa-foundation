@@ -37,13 +37,17 @@ internal sealed record CommandCostCounts(
     int TransactionsRolledBack,
     int SavepointsCreated,
     int SavepointsReleased,
+    int SavepointsRolledBack,
     int Drains,
     int Dispatches,
     int CheckpointsImmediate,
     int CheckpointsDeferred,
     int CheckpointsSkipped)
 {
-    public static readonly CommandCostCounts Zero = new(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+    public static readonly CommandCostCounts Zero = new(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+
+    /// <summary>Statements EF sends around savepoints without passing through the command interceptor.</summary>
+    public int SavepointStatements => SavepointsCreated + SavepointsReleased + SavepointsRolledBack;
 
     public CommandCostCounts Plus(CommandCostCounts other, int sign = 1) => new(
         Commands + sign * other.Commands,
@@ -52,6 +56,7 @@ internal sealed record CommandCostCounts(
         TransactionsRolledBack + sign * other.TransactionsRolledBack,
         SavepointsCreated + sign * other.SavepointsCreated,
         SavepointsReleased + sign * other.SavepointsReleased,
+        SavepointsRolledBack + sign * other.SavepointsRolledBack,
         Drains + sign * other.Drains,
         Dispatches + sign * other.Dispatches,
         CheckpointsImmediate + sign * other.CheckpointsImmediate,
@@ -81,6 +86,7 @@ internal sealed class CommandCostRecorder : DbCommandInterceptor, IDbTransaction
     private int _transactionsRolledBack;
     private int _savepointsCreated;
     private int _savepointsReleased;
+    private int _savepointsRolledBack;
     private int _drains;
     private int _dispatches;
     private int _checkpointsImmediate;
@@ -116,6 +122,7 @@ internal sealed class CommandCostRecorder : DbCommandInterceptor, IDbTransaction
         Volatile.Read(ref _transactionsRolledBack),
         Volatile.Read(ref _savepointsCreated),
         Volatile.Read(ref _savepointsReleased),
+        Volatile.Read(ref _savepointsRolledBack),
         Volatile.Read(ref _drains),
         Volatile.Read(ref _dispatches),
         Volatile.Read(ref _checkpointsImmediate),
@@ -182,6 +189,14 @@ internal sealed class CommandCostRecorder : DbCommandInterceptor, IDbTransaction
     public Task ReleasedSavepointAsync(DbTransaction transaction, TransactionEventData eventData, CancellationToken cancellationToken = default)
     {
         Interlocked.Increment(ref _savepointsReleased);
+        return Task.CompletedTask;
+    }
+
+    public void RolledBackToSavepoint(DbTransaction transaction, TransactionEventData eventData) => Interlocked.Increment(ref _savepointsRolledBack);
+
+    public Task RolledBackToSavepointAsync(DbTransaction transaction, TransactionEventData eventData, CancellationToken cancellationToken = default)
+    {
+        Interlocked.Increment(ref _savepointsRolledBack);
         return Task.CompletedTask;
     }
 

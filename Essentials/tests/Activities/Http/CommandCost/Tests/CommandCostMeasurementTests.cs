@@ -1,6 +1,7 @@
 // Measures where each EF command of a workflow run comes from. Opt-in: every test skips unless ELSA_COMMAND_COST_OUT
 // names a directory, where the measured runs, one TSV of commands per run and summary.md are written. See README.md.
 using Elsa.Activities.Http.IntegrationTests;
+using Xunit.Abstractions;
 
 [assembly: CollectionBehavior(DisableTestParallelization = true)]
 
@@ -23,7 +24,7 @@ public sealed class CommandCostCollection : ICollectionFixture<CommandCostPostgr
 
 [Collection(CommandCostCollection.Name)]
 [Trait("Category", "Measurement")]
-public sealed class CommandCostMeasurementTests(CommandCostPostgreSqlServer postgreSql)
+public sealed class CommandCostMeasurementTests(CommandCostPostgreSqlServer postgreSql, ITestOutputHelper output)
 {
     [SkippableFact]
     public Task Measures_the_reference_workflows_and_the_WriteLine_series_on_SQLite() =>
@@ -33,12 +34,12 @@ public sealed class CommandCostMeasurementTests(CommandCostPostgreSqlServer post
     public Task Measures_the_reference_workflows_and_the_WriteLine_series_on_PostgreSQL() =>
         MeasureAsync(new PostgreSqlDatabase(postgreSql));
 
-    private static async Task MeasureAsync(IMeasuredDatabase database)
+    private async Task MeasureAsync(IMeasuredDatabase database)
     {
-        var output = CommandCostMeasurement.OutputDirectory;
-        Skip.If(output is null, $"Set {CommandCostMeasurement.OutputVariable} to an output directory to measure EF command cost.");
+        var directory = CommandCostMeasurement.OutputDirectory;
+        Skip.If(directory is null, $"Set {CommandCostMeasurement.OutputVariable} to an output directory to measure EF command cost.");
 
-        CommandCostReport.ClearRuns(output!, database.Provider);
+        CommandCostReport.ClearRuns(directory!, database.Provider);
         var runs = new List<CommandCostRun>();
         foreach (var mode in CommandCostMode.All)
         {
@@ -49,8 +50,8 @@ public sealed class CommandCostMeasurementTests(CommandCostPostgreSqlServer post
         }
 
         foreach (var run in runs)
-            await CommandCostReport.WriteRunAsync(output!, run);
-        await File.WriteAllTextAsync(Path.Join(output, "summary.md"), CommandCostReport.Render(CommandCostReport.ReadRuns(output!)));
+            await CommandCostReport.WriteRunAsync(directory!, run);
+        await File.WriteAllTextAsync(Path.Join(directory, "summary.md"), CommandCostReport.Render(CommandCostReport.ReadRuns(directory!)));
 
         // Every command names the Elsa caller that issued it; a command without one would fall into a cost source no code owns.
         Assert.All(runs, run => Assert.True(run.Commands.All(command => command.Caller != "?"),
@@ -62,20 +63,33 @@ public sealed class CommandCostMeasurementTests(CommandCostPostgreSqlServer post
             $"{run.Provider} {run.Workflow} {run.Mode} {run.Activities}: {run.CommitMarkers} commit markers were written in " +
             $"{CommandCostReport.CommitTransactions(run).Count} distinct transaction ids."));
 
-        // Every statement on the wire is one the EF context sent, or a savepoint EF set or released around a save inside
-        // an open transaction, which Npgsql runs without passing through the command interceptor. Every round trip is one
-        // command, one COMMIT or one of those savepoint statements; Npgsql writes BEGIN and the reset of a pooled
-        // connection together with the next command. Any other difference means traffic the attribution misses, and
-        // the report's counts would not add up.
-        Assert.All(runs.Where(run => run.Wire is not null), run =>
+        // The rollback probe adds the rollback traffic no reference workflow produces, so the accounting below covers it.
+        // It is not a workflow and is left out of the report.
+        var probe = await CommandCostScenarios.MeasureAsync(database, CommandCostScenarios.RollbackProbe, CommandCostMode.Balanced);
+        Assert.True(probe is { Counts: { TransactionsRolledBack: 1, SavepointsCreated: 1, SavepointsRolledBack: 1 }, Commands.Count: 1 },
+            $"The rollback probe did not roll back as designed: {probe.Counts}, {probe.Commands.Count} commands.");
+        output.WriteLine($"Rollback probe, {probe.Provider}: {probe.Commands.Count} command, {probe.Counts.TransactionsRolledBack} rollback, " +
+                         $"{probe.Counts.SavepointStatements} savepoint statements" + (probe.Wire is { } wire
+                             ? $"; wire: {wire.RoundTrips} round trips, {wire.Executes} extended statements, simple queries " +
+                               string.Join(", ", wire.SimpleQueries.Select(query => $"'{query.Key}' x{query.Value}"))
+                             : "") + ".");
+
+        // Every statement on the wire is one the EF context sent, or a savepoint EF set, released or rolled back to, which
+        // Npgsql runs without passing through the command interceptor. Every round trip is one command, one COMMIT, one
+        // ROLLBACK or one of those savepoint statements; Npgsql writes BEGIN and the reset of a pooled connection together
+        // with the next request. A Flush would let the client wait without a ReadyForQuery, which the relay's round trips
+        // would miss. Any other difference means traffic the attribution misses, and the report's counts would not add up.
+        Assert.All(runs.Append(probe).Where(run => run.Wire is not null), run =>
         {
-            var savepointStatements = run.Counts.SavepointsCreated + run.Counts.SavepointsReleased;
-            Assert.True(run.Wire!.Executes == run.Statements + savepointStatements,
-                $"{run.Provider} {run.Workflow} {run.Mode} {run.Activities}: the wire carried {run.Wire.Executes} statements; the EF context sent " +
-                $"{run.Statements} and {savepointStatements} savepoint statements.");
-            Assert.True(run.Wire.RoundTrips == run.Commands.Count + run.Counts.TransactionsCommitted + savepointStatements,
-                $"{run.Provider} {run.Workflow} {run.Mode} {run.Activities}: {run.Wire.RoundTrips} round trips; the EF context sent " +
-                $"{run.Commands.Count} commands, {run.Counts.TransactionsCommitted} commits and {savepointStatements} savepoint statements.");
+            var name = $"{run.Provider} {run.Workflow} {run.Mode} {run.Activities}";
+            var savepointStatements = run.Counts.SavepointStatements;
+            var transactionEnds = run.Counts.TransactionsCommitted + run.Counts.TransactionsRolledBack;
+            Assert.True(run.Wire!.Flushes == 0, $"{name}: the client sent {run.Wire.Flushes} Flush messages.");
+            Assert.True(run.Wire.Executes == run.Statements + savepointStatements,
+                $"{name}: the wire carried {run.Wire.Executes} statements; the EF context sent {run.Statements} and {savepointStatements} savepoint statements.");
+            Assert.True(run.Wire.RoundTrips == run.Commands.Count + transactionEnds + savepointStatements,
+                $"{name}: {run.Wire.RoundTrips} round trips; the EF context sent {run.Commands.Count} commands, " +
+                $"{transactionEnds} commits and rollbacks and {savepointStatements} savepoint statements.");
         });
     }
 }

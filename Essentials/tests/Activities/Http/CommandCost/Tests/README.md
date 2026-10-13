@@ -54,8 +54,18 @@ Each measured call, each request of the measured host and each engine span start
 the runs measured in October 2026, every PostgreSQL statement was attributed to the same caller as the matching SQLite
 statement.
 
-The run checks its own accounting: every statement on the PostgreSQL wire must be one the EF context sent or one of
-EF's automatic savepoints, and every round trip one command, one COMMIT or one savepoint statement.
+A round trip on the relay starts when the client sends a Sync or a simple Query while no earlier one is unanswered,
+and ends with the ReadyForQuery that answers the last one outstanding. Requests written together, such as the
+`DISCARD ALL` and `BEGIN` Npgsql prepends to the next command, share one round trip, and a server that flushes part of
+an answer early adds none. The rule is exact while the client waits only for ReadyForQuery, so the run fails if the
+client ever sends a Flush message.
+
+The run checks its own accounting: every statement on the PostgreSQL wire must be one the EF context sent, or a
+savepoint EF set, released or rolled back to, and every round trip one command, one COMMIT, one ROLLBACK or one of
+those savepoint statements. No reference workflow rolls anything back, so each provider's measurement also runs a
+rollback probe, outside the report: one transaction that sets a savepoint, runs `SELECT 1`, rolls back to the savepoint
+and rolls back. On PostgreSQL it costs 4 round trips. It also fails a run whose commit markers were written in fewer
+transactions than there are markers.
 
 ## Output
 

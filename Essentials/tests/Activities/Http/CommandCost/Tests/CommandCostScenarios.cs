@@ -91,6 +91,12 @@ internal sealed class PostgreSqlDatabase(CommandCostPostgreSqlServer server) : I
 /// </summary>
 internal static class CommandCostScenarios
 {
+    /// <summary>
+    /// Not a workflow: one transaction that sets a savepoint, runs a statement, rolls back to the savepoint and rolls
+    /// back. No reference workflow rolls anything back, so this checks the wire accounting for rollbacks.
+    /// </summary>
+    public const string RollbackProbe = "rollback-probe";
+
     public static async Task<CommandCostRun> MeasureAsync(IMeasuredDatabase database, string workflow, CommandCostMode mode, int writeLines = 10)
     {
         using var recorder = new CommandCostRecorder();
@@ -103,7 +109,10 @@ internal static class CommandCostScenarios
         });
 
         var window = new MeasurementWindow(recorder, database.Wire);
-        await ReferenceWorkflowRuns.RunAsync(workflow, fixture, window.MeasureAsync, writeLines, mode.RecordCompletion);
+        if (workflow == RollbackProbe)
+            await window.MeasureAsync(() => RunRollbackProbeAsync(fixture));
+        else
+            await ReferenceWorkflowRuns.RunAsync(workflow, fixture, window.MeasureAsync, writeLines, mode.RecordCompletion);
 
         return new CommandCostRun(database.Provider, workflow, mode.Name, Activities(workflow, writeLines), window.Commands, window.Counts, window.Wire);
     }
@@ -114,8 +123,20 @@ internal static class CommandCostScenarios
         ReferenceWorkflowRuns.WriteLineSequence => writeLines + 1,
         ReferenceWorkflowRuns.HttpReference => 4,
         ReferenceWorkflowRuns.ForkJoinResume => 3,
+        RollbackProbe => 0,
         _ => throw new ArgumentOutOfRangeException(nameof(workflow), workflow, "Unknown reference workflow.")
     };
+
+    private static async Task RunRollbackProbeAsync(HttpEndpointHostFixture fixture)
+    {
+        await using var scope = fixture.Services.CreateAsyncScope();
+        var context = scope.ServiceProvider.GetRequiredService<RuntimeDbContext>();
+        await using var transaction = await context.Database.BeginTransactionAsync();
+        await transaction.CreateSavepointAsync("probe");
+        await context.Database.ExecuteSqlRawAsync("SELECT 1");
+        await transaction.RollbackToSavepointAsync("probe");
+        await transaction.RollbackAsync();
+    }
 
     /// <summary>
     /// Gives each request of the measured host a stack memory before any middleware runs. TestServer runs a request
