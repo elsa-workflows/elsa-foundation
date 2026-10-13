@@ -679,7 +679,7 @@ public sealed class IdentityProviderConfigurationEntityFrameworkCoreBehaviorTest
     private static IdentityProviderConfigurationSqliteDbContext CreateContext(string databasePath, IInterceptor? interceptor = null)
     {
         var builder = new DbContextOptionsBuilder<IdentityProviderConfigurationSqliteDbContext>()
-            .UseSqlite($"Data Source={databasePath};Default Timeout=5");
+            .UseSqlite(ConnectionTo(databasePath));
         if (interceptor is not null)
             builder.AddInterceptors(interceptor);
         return new IdentityProviderConfigurationSqliteDbContext(builder.Options);
@@ -694,7 +694,9 @@ public sealed class IdentityProviderConfigurationEntityFrameworkCoreBehaviorTest
     private static string TemporaryDatabasePath() =>
         Path.Join(Path.GetTempPath(), $"elsa-identity-provider-config-{Guid.NewGuid():N}.db");
 
-    private static void DeleteDatabaseFiles(string databasePath) => TemporarySqliteDatabase.ClearPoolAndDeleteFiles(databasePath);
+    private static string ConnectionTo(string databasePath) => $"Data Source={databasePath};Default Timeout=5";
+
+    private static void DeleteDatabaseFiles(string databasePath) => TemporarySqliteDatabase.ClearPoolAndDeleteFiles(ConnectionTo(databasePath));
 
     private sealed class FileFixture(
         string databasePath,

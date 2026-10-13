@@ -96,7 +96,6 @@ internal sealed class ActivityUpgradeDatabase : IAsyncDisposable
 
     public ValueTask DisposeAsync()
     {
-        SqliteConnection.ClearAllPools();
         foreach (var suffix in new[] { "", "-wal", "-shm" })
             File.Delete(path + suffix);
         return ValueTask.CompletedTask;

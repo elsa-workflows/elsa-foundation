@@ -4,7 +4,6 @@ using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Extensions;
 using Elsa.Workflows.Runtime.Resumption;
-using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
@@ -26,7 +25,6 @@ public sealed class EfPersistenceModeRedriveTests : IDisposable
 
     public void Dispose()
     {
-        SqliteConnection.ClearAllPools();
         foreach (var file in new[] { _databasePath, $"{_databasePath}-wal", $"{_databasePath}-shm" })
             File.Delete(file);
     }

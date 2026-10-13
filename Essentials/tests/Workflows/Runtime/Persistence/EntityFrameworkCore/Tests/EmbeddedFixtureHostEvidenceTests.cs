@@ -30,7 +30,6 @@ using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.DependencyInjection
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores;
 using Elsa.Workflows.Runtime.Resumption;
 using Elsa.Workflows.Runtime.Services.Coalescing;
-using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -247,7 +246,6 @@ public sealed class EmbeddedFixtureHostEvidenceTests : IDisposable
 
     public void Dispose()
     {
-        SqliteConnection.ClearAllPools();
         foreach (var path in new[] { databasePath, $"{databasePath}-wal", $"{databasePath}-shm" })
             File.Delete(path);
         if (Directory.Exists(locksFolderPath))

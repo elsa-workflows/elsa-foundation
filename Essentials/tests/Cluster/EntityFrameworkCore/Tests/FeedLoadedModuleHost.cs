@@ -32,10 +32,12 @@ internal sealed class FeedLoadedModuleHost : IAsyncDisposable
     private readonly ServiceProvider _root;
     private readonly IShell _shell;
     private readonly IShellScope _scope;
+    private readonly string _connectionString;
 
-    private FeedLoadedModuleHost(ServiceProvider root, IShell shell, PackageLoadContext package, Assembly module)
+    private FeedLoadedModuleHost(ServiceProvider root, IShell shell, PackageLoadContext package, Assembly module, string connectionString)
     {
         _root = root;
+        _connectionString = connectionString;
         _shell = shell;
         _scope = shell.BeginScope();
         Package = package;
@@ -108,7 +110,7 @@ internal sealed class FeedLoadedModuleHost : IAsyncDisposable
         try
         {
             var shell = await root.GetRequiredService<IShellRegistry>().GetOrActivateAsync(ShellName, CancellationToken.None);
-            return new FeedLoadedModuleHost(root, shell, package, module);
+            return new FeedLoadedModuleHost(root, shell, package, module, connectionString);
         }
         catch
         {
@@ -139,7 +141,7 @@ internal sealed class FeedLoadedModuleHost : IAsyncDisposable
         await (await _root.GetRequiredService<IShellRegistry>().DrainAsync(_shell)).WaitAsync();
         await _root.DisposeAsync();
         Package.Dispose();
-        SqliteConnection.ClearAllPools();
+        SqliteConnection.ClearPool(new SqliteConnection(_connectionString));
     }
 
     /// <summary>The fixture's database on SQLite.</summary>

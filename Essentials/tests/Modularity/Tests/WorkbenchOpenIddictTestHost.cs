@@ -1,5 +1,6 @@
 using Elsa.Workbench;
 using Elsa.Workbench.OpenIddict;
+using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using OpenIddict.Abstractions;
@@ -17,10 +18,18 @@ internal static class WorkbenchOpenIddictTestHost
             .AddInMemoryCollection(new Dictionary<string, string?>
             {
                 ["CShells:Shells:default:Features:FoundationIdentityOpenIddict:IsDevelopmentOrDemo"] = "false",
-                ["CShells:Shells:default:Features:FoundationIdentityOpenIddict:ConnectionString"] = $"Data Source={databasePath}",
+                ["CShells:Shells:default:Features:FoundationIdentityOpenIddict:ConnectionString"] = ConnectionTo(databasePath),
                 ["CShells:Shells:default:Features:FoundationIdentityOpenIddict:AutoMigrate"] = autoMigrate.ToString()
             })
             .Build();
+
+    private static string ConnectionTo(string databasePath) => $"Data Source={databasePath}";
+
+    /// <summary>
+    /// Clears the pool of the durable store at <paramref name="databasePath"/>, and no other: clearing every pool can dispose
+    /// the native handle of a connection another test is opening (#2185).
+    /// </summary>
+    internal static void ClearStorePool(string databasePath) => SqliteConnection.ClearPool(new SqliteConnection(ConnectionTo(databasePath)));
 
     internal static ServiceProvider CreateProvider(IConfiguration configuration, bool withMigrationPolicy = false, Action<IServiceCollection>? configure = null)
     {
