@@ -9783,6 +9783,25 @@
       ]
     },
     {
+      "path": "Essentials/tests/Activities/Design/Fixtures/ClrIconFixture/Elsa.Activities.Design.Tests.ClrIconFixture.csproj",
+      "name": "Elsa.Activities.Design.Tests.ClrIconFixture",
+      "kind": "test",
+      "domain": "Elsa.Activities",
+      "sub_domain": "Design.Tests.ClrIconFixture",
+      "role": "test",
+      "declared_target_framework": null,
+      "packable": false,
+      "package_id": null,
+      "line": null,
+      "edges": [
+        {
+          "type": "internal",
+          "id": "Elsa.Activities.Runtime.Core",
+          "path": "Essentials/src/Activities/Runtime/Core/Elsa.Activities.Runtime.Core.csproj"
+        }
+      ]
+    },
+    {
       "path": "Essentials/tests/Activities/Design/Persistence/EntityFrameworkCore/ProviderTests/Elsa.Activities.Design.Persistence.EntityFrameworkCore.ProviderTests.csproj",
       "name": "Elsa.Activities.Design.Persistence.EntityFrameworkCore.ProviderTests",
       "kind": "test",
@@ -10041,6 +10060,11 @@
           "type": "internal",
           "id": "Elsa.Activities.Design.Tests.ClrFixture",
           "path": "Essentials/tests/Activities/Design/Fixtures/ClrFixture/Elsa.Activities.Design.Tests.ClrFixture.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Activities.Design.Tests.ClrIconFixture",
+          "path": "Essentials/tests/Activities/Design/Fixtures/ClrIconFixture/Elsa.Activities.Design.Tests.ClrIconFixture.csproj"
         },
         {
           "type": "internal",

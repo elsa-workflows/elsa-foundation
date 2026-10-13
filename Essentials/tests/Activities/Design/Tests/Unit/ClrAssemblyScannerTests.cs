@@ -8,6 +8,7 @@ using Elsa.Activities.Design.Reconciliation.Clr.Services;
 using Elsa.Activities.Design.Core.Reconciliation.Models;
 using Elsa.Activities.Design.Persistence.Core.Services;
 using Elsa.Activities.Design.Tests.ClrFixture;
+using Elsa.Activities.Design.Tests.ClrIconFixture;
 using Elsa.Activities.Runtime.Core;
 using Elsa.Activities.Runtime.Core.Attributes;
 using Elsa.Activities.Runtime.Core.Models;

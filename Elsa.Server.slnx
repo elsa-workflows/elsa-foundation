@@ -382,6 +382,7 @@
   </Folder>
   <Folder Name="/Essentials/tests/Activities/Design/Fixtures/">
     <Project Path="Essentials/tests/Activities/Design/Fixtures/ClrFixture/Elsa.Activities.Design.Tests.ClrFixture.csproj" />
+    <Project Path="Essentials/tests/Activities/Design/Fixtures/ClrIconFixture/Elsa.Activities.Design.Tests.ClrIconFixture.csproj" />
   </Folder>
   <Folder Name="/Essentials/tests/Activities/Design/Persistence/" />
   <Folder Name="/Essentials/tests/Activities/Design/Persistence/EntityFrameworkCore/">
