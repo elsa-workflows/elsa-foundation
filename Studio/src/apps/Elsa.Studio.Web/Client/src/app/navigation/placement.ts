@@ -100,11 +100,13 @@ export function isNavigationRequirementMet(
   return needed.every(value => available.has(normalizeRequirement(value)));
 }
 
+/** Pass `navigation` so unset children inherit placement before the admin/settings gate runs. */
 export function isNavigationItemAccessible(
   item: StudioNavigationContribution,
-  access: NavigationAccess = {}
+  access: NavigationAccess = {},
+  navigation: readonly StudioNavigationContribution[] = []
 ): boolean {
-  const placement = getNavigationPlacement(item);
+  const placement = resolveNavigationPlacement(item, navigation);
   if ((placement === "admin" || placement === "settings") && access.canReadAdmin === false) {
     return false;
   }
@@ -125,11 +127,32 @@ export function isNavigationItemAccessible(
   return true;
 }
 
+/** Gates against the full tree, then drops children whose parent was filtered out. */
 export function filterAccessibleNavigation(
   navigation: StudioNavigationContribution[],
   access: NavigationAccess = {}
 ): StudioNavigationContribution[] {
-  return navigation.filter(item => isNavigationItemAccessible(item, access));
+  const allowed = navigation.filter(item => isNavigationItemAccessible(item, access, navigation));
+  const allowedIds = new Set(allowed.map(item => item.id));
+  const originalById = new Map(navigation.map(item => [item.id, item]));
+  return allowed.filter(item => ancestorsAreAccessible(item, allowedIds, originalById));
+}
+
+function ancestorsAreAccessible(
+  item: StudioNavigationContribution,
+  allowedIds: ReadonlySet<string>,
+  originalById: ReadonlyMap<string, StudioNavigationContribution>
+): boolean {
+  let parentId = item.parentId;
+  const seen = new Set<string>();
+  while (parentId && originalById.has(parentId) && !seen.has(parentId)) {
+    if (!allowedIds.has(parentId)) {
+      return false;
+    }
+    seen.add(parentId);
+    parentId = originalById.get(parentId)?.parentId;
+  }
+  return true;
 }
 
 export function getTopLevelNavigationItems(navigation: StudioNavigationContribution[], section: StudioNavigationSection) {

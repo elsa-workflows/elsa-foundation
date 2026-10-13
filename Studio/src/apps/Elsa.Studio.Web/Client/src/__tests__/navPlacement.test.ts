@@ -86,6 +86,22 @@ describe("navigation placement", () => {
     expect(getChildNavigationItems(navigation, parent).map(item => item.id)).not.toContain("executables");
   });
 
+  it("hides an unset child of an Administration item when the parent is gated out", () => {
+    const navigation: StudioNavigationContribution[] = [
+      { id: "modules", label: "Modules", path: "/modules", placement: "admin" },
+      { id: "mod-logs", label: "Module logs", path: "/modules/logs", parentId: "modules" }
+    ];
+
+    const visible = filterAccessibleNavigation(navigation, { authenticated: true, canReadAdmin: false });
+    expect(visible.map(item => item.id)).toEqual([]);
+    expect(getTopLevelNavigationItemsByPlacement(visible, "more").map(item => item.id)).toEqual([]);
+
+    const allowed = filterAccessibleNavigation(navigation, { authenticated: true, canReadAdmin: true });
+    expect(allowed.map(item => item.id)).toEqual(["modules", "mod-logs"]);
+    expect(getTopLevelNavigationItemsByPlacement(allowed, "admin").map(item => item.id)).toEqual(["modules"]);
+    expect(getChildNavigationItems(allowed, navigation[0]).map(item => item.id)).toEqual(["mod-logs"]);
+  });
+
   it("hides settings placement without host-control read, the same gate as admin", () => {
     const appearance: StudioNavigationContribution = { id: "appearance", label: "Appearance", path: "/settings/appearance", placement: "settings" };
     expect(isNavigationItemAccessible(appearance, { canReadAdmin: false })).toBe(false);
