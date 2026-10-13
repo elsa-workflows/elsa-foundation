@@ -1,8 +1,9 @@
 # EF command cost measurement
 
 An opt-in tool that measures where every EF command of a workflow run comes from, on SQLite and on PostgreSQL. It
-runs the same composition and reference workflows as the [EF command budgets](../../IntegrationTests/CommandBudgets/README.md)
-and reproduces their counts exactly, but records each command instead of only counting it. Nothing is timed.
+runs the [EF command budgets](../../IntegrationTests/CommandBudgets/README.md)' own composition and runners, compiled in from
+`ReferenceWorkflowRuns.cs`, and reproduces their counts exactly, but records each command instead of only counting it.
+Nothing is timed.
 
 ## Running it
 
@@ -20,18 +21,19 @@ The PostgreSQL test starts a `postgres:16-alpine` container through Testcontaine
 
 ## What it measures
 
-Each provider measures the three reference workflows under three persistence modes, and a Sequence of 5, 10, 20 and
-40 WriteLine activities under two of them:
+Each provider measures the three reference workflows, and a Sequence of 5, 10, 20 and 40 WriteLine activities, under
+four configurations. Every one keeps the default `MaxActivitiesPerCommit` of 50, which no measured run reaches.
 
 | Mode | Configuration |
 |---|---|
-| Durable | Today's `Immediate` mode: every checkpoint commits. |
-| Balanced | Today's `Coalesced` mode with a segment cap no run reaches, which is what Balanced does with a per-commit activity cap above the run length. |
-| Coalesced-50 | Today's `Coalesced` mode with its default cap of 50 checkpoints. |
+| Durable | `PersistenceMode.Durable`: one commit per activity. |
+| Balanced | `PersistenceMode.Balanced`: folds checkpoints and commits at suspension, completion, the end of a pass, before an activity that is not safe to repeat, and every 50 activities. |
+| Ephemeral | `PersistenceMode.Ephemeral` with `RecordCompletion` on, the default. |
+| Ephemeral-NoRecord | `PersistenceMode.Ephemeral` with `RecordCompletion` off: a run that was never committed leaves no record. |
 
 For every command it records the statements in it (verb and table), whether it ran in a transaction, the engine phase
 it ran in, taken from the runtime's own tracing spans (the work item being dispatched, the checkpoint being committed
-and the persistence mode the policy chose), and the first Elsa frame past the persistence infrastructure, with its
+and what the persistence policy decided for it), and the first Elsa frame past the persistence infrastructure, with its
 file and line. On PostgreSQL every connection goes through a relay that reads the wire protocol and counts round trips,
 statements and simple queries.
 
@@ -47,7 +49,5 @@ EF's automatic savepoints, and every round trip one command, one COMMIT or one s
 | `runs/*.json` | The measured runs the summary is built from. |
 
 A cost source is per activity when it grows with the number of WriteLines in Balanced, where the commit count is fixed,
-per commit when it grows only in Durable, where every activity commits, and per run when it grows in neither.
-
-The Durable runs raise the drain orchestrator's cycle bound: with the default of 64, a Durable run of 20 or more
-WriteLines stops with `DrainCycleLimitExceededException`. The bound only limits the loop and changes no count.
+per commit when it grows only in Durable, where every activity commits, and per run when it grows in neither. The
+series is fitted in every mode; the cost sources table compares Balanced with Durable.

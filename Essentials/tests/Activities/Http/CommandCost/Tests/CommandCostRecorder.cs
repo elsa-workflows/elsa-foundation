@@ -12,7 +12,7 @@ namespace Elsa.Activities.Http.CommandCost;
 
 /// <summary>One EF command as it started: its statements, its transaction, the engine phase it ran in and its caller.</summary>
 /// <param name="Dispatch">The command kind of the scheduler work item being dispatched, or <c>-</c> outside a dispatch.</param>
-/// <param name="Checkpoint">The checkpoint being committed and the persistence mode the policy chose, or <c>-</c>.</param>
+/// <param name="Checkpoint">The checkpoint being committed and what the persistence policy decided for it, or <c>-</c>.</param>
 /// <param name="Store">The first Elsa frame on the stack: the store or boundary that issued the command.</param>
 /// <param name="Caller">The first Elsa frame that is not persistence or coalescing infrastructure.</param>
 internal sealed record CommandCostEntry(
@@ -39,9 +39,10 @@ internal sealed record CommandCostCounters(
     int Drains,
     int Dispatches,
     int CheckpointsImmediate,
-    int CheckpointsDeferred)
+    int CheckpointsDeferred,
+    int CheckpointsSkipped)
 {
-    public static readonly CommandCostCounters Zero = new(0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+    public static readonly CommandCostCounters Zero = new(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
 
     public CommandCostCounters Plus(CommandCostCounters other, int sign = 1) => new(
         Commands + sign * other.Commands,
@@ -53,7 +54,8 @@ internal sealed record CommandCostCounters(
         Drains + sign * other.Drains,
         Dispatches + sign * other.Dispatches,
         CheckpointsImmediate + sign * other.CheckpointsImmediate,
-        CheckpointsDeferred + sign * other.CheckpointsDeferred);
+        CheckpointsDeferred + sign * other.CheckpointsDeferred,
+        CheckpointsSkipped + sign * other.CheckpointsSkipped);
 }
 
 /// <summary>
@@ -94,6 +96,7 @@ internal sealed partial class CommandCostRecorder : DbCommandInterceptor, IDbTra
     private int _dispatches;
     private int _checkpointsImmediate;
     private int _checkpointsDeferred;
+    private int _checkpointsSkipped;
 
     public CommandCostRecorder()
     {
@@ -121,7 +124,8 @@ internal sealed partial class CommandCostRecorder : DbCommandInterceptor, IDbTra
         Volatile.Read(ref _drains),
         Volatile.Read(ref _dispatches),
         Volatile.Read(ref _checkpointsImmediate),
-        Volatile.Read(ref _checkpointsDeferred));
+        Volatile.Read(ref _checkpointsDeferred),
+        Volatile.Read(ref _checkpointsSkipped));
 
     public void Dispose()
     {
@@ -225,7 +229,7 @@ internal sealed partial class CommandCostRecorder : DbCommandInterceptor, IDbTra
             switch (activity.OperationName)
             {
                 case WorkflowEngineTelemetry.CheckpointCommitSpanName:
-                    checkpoint ??= $"{activity.GetTagItem(CheckpointNameTag)}/{activity.GetTagItem(WorkflowEngineTelemetry.CheckpointPersistenceModeTag) ?? "undecided"}";
+                    checkpoint ??= $"{activity.GetTagItem(CheckpointNameTag)}/{activity.GetTagItem(WorkflowEngineTelemetry.CheckpointPersistenceDecisionTag) ?? "undecided"}";
                     break;
                 case WorkflowEngineTelemetry.DispatchSpanName:
                     dispatch ??= activity.GetTagItem(WorkflowEngineTelemetry.CommandKindTag) as string;
@@ -250,10 +254,18 @@ internal sealed partial class CommandCostRecorder : DbCommandInterceptor, IDbTra
                 Interlocked.Increment(ref _dispatches);
                 break;
             case WorkflowEngineTelemetry.CheckpointCommitSpanName:
-                if (activity.GetTagItem(WorkflowEngineTelemetry.CheckpointPersistenceModeTag) as string == nameof(RuntimeCheckpointPersistenceMode.Deferred))
-                    Interlocked.Increment(ref _checkpointsDeferred);
-                else
-                    Interlocked.Increment(ref _checkpointsImmediate);
+                switch (activity.GetTagItem(WorkflowEngineTelemetry.CheckpointPersistenceDecisionTag) as string)
+                {
+                    case nameof(RuntimeCheckpointPersistenceMode.Deferred):
+                        Interlocked.Increment(ref _checkpointsDeferred);
+                        break;
+                    case nameof(RuntimeCheckpointPersistenceMode.Skip):
+                        Interlocked.Increment(ref _checkpointsSkipped);
+                        break;
+                    default:
+                        Interlocked.Increment(ref _checkpointsImmediate);
+                        break;
+                }
                 break;
         }
     }

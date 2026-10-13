@@ -23,7 +23,7 @@
     <FrameworkReference Include="Microsoft.AspNetCore.App" />
   </ItemGroup>
 
-  <!-- The same composition as the EF command budgets, whose host fixture and reference workflows are compiled in below. -->
+  <!-- The same composition as the EF command budgets, whose host fixture, reference workflows and runners are compiled in below. -->
   <ItemGroup>
     <ProjectReference Include="..\..\..\..\..\src\Activities\Http\Elsa.Activities.Http.csproj" />
     <ProjectReference Include="..\..\..\..\..\src\Workflows\Runtime\Http\Elsa.Workflows.Runtime.Http.csproj" />
@@ -53,6 +53,7 @@
     <Compile Include="../../IntegrationTests/SequenceShape.cs" Link="Budget/SequenceShape.cs" />
     <Compile Include="../../IntegrationTests/StallingActivity.cs" Link="Budget/StallingActivity.cs" />
     <Compile Include="../../IntegrationTests/CommandBudgets/ReferenceWorkflows.cs" Link="Budget/ReferenceWorkflows.cs" />
+    <Compile Include="../../IntegrationTests/CommandBudgets/ReferenceWorkflowRuns.cs" Link="Budget/ReferenceWorkflowRuns.cs" />
   </ItemGroup>
 
 </Project>

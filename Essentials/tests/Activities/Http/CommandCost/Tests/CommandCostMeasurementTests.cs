@@ -1,5 +1,7 @@
 // Measures where each EF command of a workflow run comes from. Opt-in: every test skips unless ELSA_COMMAND_COST_OUT
 // names a directory, where the measured runs, one TSV of commands per run and summary.md are written. See README.md.
+using Elsa.Activities.Http.IntegrationTests;
+
 [assembly: CollectionBehavior(DisableTestParallelization = true)]
 
 namespace Elsa.Activities.Http.CommandCost;
@@ -23,9 +25,6 @@ public sealed class CommandCostCollection : ICollectionFixture<CommandCostPostgr
 [Trait("Category", "Measurement")]
 public sealed class CommandCostMeasurementTests(CommandCostPostgreSqlServer postgreSql)
 {
-    private static readonly CommandCostMode[] ReferenceModes = [CommandCostMode.Durable, CommandCostMode.Coalesced50, CommandCostMode.Balanced];
-    private static readonly CommandCostMode[] SeriesModes = [CommandCostMode.Durable, CommandCostMode.Balanced];
-
     [SkippableFact]
     public Task Measures_the_reference_workflows_and_the_WriteLine_series_on_SQLite() =>
         MeasureAsync(new SqliteCommandCostDatabase());
@@ -40,13 +39,13 @@ public sealed class CommandCostMeasurementTests(CommandCostPostgreSqlServer post
         Skip.If(output is null, $"Set {CommandCostMeasurement.OutputVariable} to an output directory to measure EF command cost.");
 
         var runs = new List<CommandCostRun>();
-        foreach (var mode in ReferenceModes)
-        foreach (var workflow in new[] { CommandCostScenarios.WriteLineSequence, CommandCostScenarios.HttpReference, CommandCostScenarios.ForkJoinResume })
-            runs.Add(await CommandCostScenarios.MeasureAsync(database, workflow, mode));
-
-        foreach (var mode in SeriesModes)
-        foreach (var writeLines in CommandCostReport.WriteLineSeries.Where(count => count != 10))
-            runs.Add(await CommandCostScenarios.MeasureAsync(database, CommandCostScenarios.WriteLineSequence, mode, writeLines));
+        foreach (var mode in CommandCostMode.All)
+        {
+            foreach (var workflow in ReferenceWorkflowRuns.Workflows)
+                runs.Add(await CommandCostScenarios.MeasureAsync(database, workflow, mode));
+            foreach (var writeLines in CommandCostReport.WriteLineSeries.Where(count => count != 10))
+                runs.Add(await CommandCostScenarios.MeasureAsync(database, ReferenceWorkflowRuns.WriteLineSequence, mode, writeLines));
+        }
 
         foreach (var run in runs)
             await CommandCostReport.WriteRunAsync(output!, run);

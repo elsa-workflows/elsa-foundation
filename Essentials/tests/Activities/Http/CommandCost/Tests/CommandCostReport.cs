@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Text;
 using System.Text.Json;
+using Elsa.Activities.Http.IntegrationTests;
 
 namespace Elsa.Activities.Http.CommandCost;
 
@@ -202,7 +203,7 @@ internal static class CommandCostReport
     private sealed record SeriesRuns(string Provider, string Mode, IReadOnlyList<CommandCostRun> Runs);
 
     private static IEnumerable<SeriesRuns> Series(IReadOnlyList<CommandCostRun> runs) =>
-        runs.Where(run => run.Workflow == CommandCostScenarios.WriteLineSequence)
+        runs.Where(run => run.Workflow == ReferenceWorkflowRuns.WriteLineSequence)
             .GroupBy(run => (run.Provider, run.Mode))
             .Where(group => group.Select(run => run.Activities - 1).Distinct().Count() >= 2)
             .OrderBy(group => group.Key.Provider).ThenBy(group => group.Key.Mode)

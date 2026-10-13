@@ -1,17 +1,4 @@
-using System.Net;
-using System.Text;
-using System.Text.Json;
-using Elsa.Activities.ControlFlow;
 using Elsa.Activities.Http.IntegrationTests;
-using Elsa.Activities.Primitives.Activities;
-using Elsa.Expressions.JavaScript;
-using Elsa.Expressions.JavaScript.Jint;
-using Elsa.Persistence.EntityFramework.SchemaBackfill;
-using Elsa.Persistence.EntityFramework.SchemaFinalization;
-using Elsa.Workflows.Runtime.Api.Coalescing;
-using Elsa.Workflows.Runtime.Core.Configuration;
-using Elsa.Workflows.Runtime.Core.Contracts;
-using Elsa.Workflows.Runtime.Core.Diagnostics;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
@@ -21,15 +8,18 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 namespace Elsa.Activities.Http.CommandCost;
 
 /// <summary>
-/// A persistence mode as the measurement names it. Durable is today's Immediate mode. Balanced is today's Coalesced
-/// mode with a segment cap no run reaches, which is what Balanced with a per-commit activity cap above the run length
-/// does. Coalesced-50 is today's Coalesced default, whose cap counts checkpoints rather than activities.
+/// A persistence mode as the measurement names it: the host's mode and its RecordCompletion setting, which only
+/// Ephemeral reads. Balanced folds up to <see cref="ReferenceWorkflowRuns.MaxActivitiesPerCommit"/> activities into one
+/// commit, the production default, which no measured run reaches.
 /// </summary>
-internal sealed record CommandCostMode(string Name, CheckpointPersistenceMode Mode, int MaxSegmentCheckpoints)
+internal sealed record CommandCostMode(string Name, PersistenceMode Mode, bool RecordCompletion = true)
 {
-    public static readonly CommandCostMode Durable = new("Durable", CheckpointPersistenceMode.Immediate, 50);
-    public static readonly CommandCostMode Balanced = new("Balanced", CheckpointPersistenceMode.Coalesced, 100_000);
-    public static readonly CommandCostMode Coalesced50 = new("Coalesced-50", CheckpointPersistenceMode.Coalesced, 50);
+    public static readonly CommandCostMode Durable = new("Durable", PersistenceMode.Durable);
+    public static readonly CommandCostMode Balanced = new("Balanced", PersistenceMode.Balanced);
+    public static readonly CommandCostMode Ephemeral = new("Ephemeral", PersistenceMode.Ephemeral);
+    public static readonly CommandCostMode EphemeralNoRecord = new("Ephemeral-NoRecord", PersistenceMode.Ephemeral, RecordCompletion: false);
+
+    public static readonly IReadOnlyList<CommandCostMode> All = [Durable, Balanced, Ephemeral, EphemeralNoRecord];
 }
 
 /// <summary>One measured run: what it cost, command by command, and in total.</summary>
@@ -44,7 +34,7 @@ internal sealed record CommandCostRun(
 {
     public int Statements => Commands.Sum(command => command.Statements.Count);
 
-    /// <summary>Durable checkpoint commits: each one writes exactly one commit marker row.</summary>
+    /// <summary>Durable store commits: each one writes exactly one commit marker row.</summary>
     public int CommitMarkers => Commands.Sum(command => command.Statements.Count(statement => statement is { Kind: "INSERT", Table: "checkpoint_commit" }));
 }
 
@@ -67,7 +57,7 @@ internal sealed class SqliteCommandCostDatabase : ICommandCostDatabase
     public PostgresWireCounter? Wire => null;
 
     public Task<HttpEndpointHostFixture> StartHostAsync(CommandCostMode mode, Action<IServiceCollection> configureServices) =>
-        HttpEndpointHostFixture.StartDurableSqliteAsync(mode.Mode, mode.MaxSegmentCheckpoints, configureServices);
+        HttpEndpointHostFixture.StartDurableSqliteAsync(mode.Mode, ReferenceWorkflowRuns.MaxActivitiesPerCommit, configureServices, mode.RecordCompletion);
 
     public void AddInterceptor(IServiceCollection services, CommandCostRecorder recorder) =>
         services.ConfigureDbContext<RuntimeSqliteDbContext>(builder => builder.AddInterceptors(recorder));
@@ -80,142 +70,49 @@ internal sealed class PostgreSqlCommandCostDatabase(CommandCostPostgreSqlServer 
     public PostgresWireCounter? Wire => server.Wire;
 
     public async Task<HttpEndpointHostFixture> StartHostAsync(CommandCostMode mode, Action<IServiceCollection> configureServices) =>
-        await HttpEndpointHostFixture.StartDurableAsync("PostgreSql", await server.CreateDatabaseAsync(), mode.Mode, mode.MaxSegmentCheckpoints, configureServices);
+        await HttpEndpointHostFixture.StartDurableAsync(
+            "PostgreSql",
+            await server.CreateDatabaseAsync(),
+            mode.Mode,
+            ReferenceWorkflowRuns.MaxActivitiesPerCommit,
+            configureServices,
+            mode.RecordCompletion);
 
     public void AddInterceptor(IServiceCollection services, CommandCostRecorder recorder) =>
         services.ConfigureDbContext<RuntimePostgreSqlDbContext>(builder => builder.AddInterceptors(recorder));
 }
 
 /// <summary>
-/// The reference workflows of the EF command budgets, plus a WriteLine sequence of any length to fit the cost per
-/// activity. Each scenario counts exactly what the budgets count: the run, not host start, schema installation,
-/// publication or the assertions on the outcome.
+/// The reference workflows of the EF command budgets, run by the budgets' own runners, with the WriteLine sequence at any
+/// length to fit the cost per activity. Each scenario counts exactly what the budgets count: the run, not host start,
+/// schema installation, publication or the assertions on the outcome.
 /// </summary>
 internal static class CommandCostScenarios
 {
-    public const string WriteLineSequence = "writeline-sequence";
-    public const string HttpReference = "http-reference";
-    public const string ForkJoinResume = "fork-join-resume";
-
-    /// <summary>
-    /// What runs on a timer instead of because of the workflow, as in the budgets: lease and claim renewals and the EF
-    /// schema gate's checks. A period no run reaches keeps the count a property of the workflow alone.
-    /// </summary>
-    private static readonly TimeSpan BeyondAnyRun = TimeSpan.FromHours(1);
-
     public static async Task<CommandCostRun> MeasureAsync(ICommandCostDatabase database, string workflow, CommandCostMode mode, int writeLines = 10)
     {
         using var recorder = new CommandCostRecorder();
         await using var fixture = await database.StartHostAsync(mode, services =>
         {
-            new ActivitiesControlFlowFeature().ConfigureServices(services);
-            new JavaScriptFeature().ConfigureServices(services);
-            new JintFeature().ConfigureServices(services);
+            ReferenceWorkflowRuns.ComposeHost(services);
             database.AddInterceptor(services, recorder);
             services.Replace(ServiceDescriptor.Singleton(recorder.Tracer));
-            // The default bound of 64 drain cycles stops a Durable run of 20 or more WriteLines with
-            // DrainCycleLimitExceededException. The bound only limits the loop; it changes no count.
-            services.Replace(ServiceDescriptor.Singleton(new WorkflowDrainOrchestratorOptions(maxDrainCycles: 100_000)));
-            services.Replace(ServiceDescriptor.Singleton(new RuntimeExecutionOwnershipOptions { LeaseDuration = BeyondAnyRun }));
-            services.Replace(ServiceDescriptor.Singleton(new RuntimeSchedulerWorkClaimOptions { VisibilityTimeout = BeyondAnyRun }));
-            services.Configure<WorkflowExecutableGarbageCollectionOptions>(options => options.RootWriteLeaseDuration = BeyondAnyRun);
-            services.Configure<EfSchemaFinalizationOptions>(options =>
-            {
-                options.RefreshInterval = BeyondAnyRun;
-                options.EvaluationInterval = BeyondAnyRun;
-            });
-            services.Configure<EfSchemaBackfillOptions>(options => options.CheckInterval = BeyondAnyRun);
         });
 
         var window = new MeasurementWindow(recorder, database.Wire);
-        var activities = workflow switch
-        {
-            WriteLineSequence => await RunWriteLineSequenceAsync(fixture, window, writeLines),
-            HttpReference => await RunHttpReferenceAsync(fixture, window),
-            ForkJoinResume => await RunForkJoinResumeAsync(fixture, window),
-            _ => throw new ArgumentOutOfRangeException(nameof(workflow), workflow, "Unknown reference workflow.")
-        };
-        await AssertSettledAsync(fixture);
+        await ReferenceWorkflowRuns.RunAsync(workflow, fixture, window.MeasureAsync, writeLines, mode.RecordCompletion);
 
-        return new CommandCostRun(database.Provider, workflow, mode.Name, activities, window.Commands, window.Counters, window.Wire);
+        return new CommandCostRun(database.Provider, workflow, mode.Name, Activities(workflow, writeLines), window.Commands, window.Counters, window.Wire);
     }
 
-    /// <summary>A Sequence of <paramref name="writeLines"/> WriteLine activities: <paramref name="writeLines"/> + 1 activity executions.</summary>
-    private static async Task<int> RunWriteLineSequenceAsync(HttpEndpointHostFixture fixture, MeasurementWindow window, int writeLines)
+    /// <summary>The activity executions of a run: the Sequence and its WriteLines, the four HTTP activities, or the Parallel and its two branches.</summary>
+    private static int Activities(string workflow, int writeLines) => workflow switch
     {
-        var executable = ReferenceWorkflows.Executable(
-            $"writeline-sequence-{writeLines}",
-            ReferenceWorkflows.Sequence("sequence", Enumerable.Range(1, writeLines)
-                .Select(line => ReferenceWorkflows.Clr($"write-{line}", typeof(WriteLine), [("text", $"line {line}")]))
-                .ToArray()));
-        await fixture.PublishAsync(executable);
-
-        var executionId = string.Empty;
-        await window.MeasureAsync(async () => executionId = await fixture.StartWorkflowDirectlyAsync(executable.Identity.ArtifactId));
-
-        Assert.Equal(WorkflowExecutionStatus.Completed, (await fixture.WorkflowExecutionAsync(executionId)).Status);
-        return writeLines + 1;
-    }
-
-    private static async Task<int> RunHttpReferenceAsync(HttpEndpointHostFixture fixture, MeasurementWindow window)
-    {
-        await fixture.PublishAsync(ReferenceWorkflows.HttpReference());
-
-        HttpResponseMessage? response = null;
-        await window.MeasureAsync(async () =>
-        {
-            using var body = new StringContent("""{"firstName":"Alice","lastName":"Smith"}""", Encoding.UTF8, "application/json");
-            response = await fixture.Client.PostAsync($"/workflows/http/{ReferenceWorkflows.HttpPath}", body);
-        });
-
-        using (response)
-        {
-            Assert.Equal(HttpStatusCode.OK, response!.StatusCode);
-            Assert.Equal("Alice Smith", await response.Content.ReadAsStringAsync());
-        }
-        Assert.Equal(WorkflowExecutionStatus.Completed, (await fixture.SingleWorkflowExecutionAsync()).Status);
-        return 4;
-    }
-
-    private static async Task<int> RunForkJoinResumeAsync(HttpEndpointHostFixture fixture, MeasurementWindow window)
-    {
-        var executable = ReferenceWorkflows.ForkJoinResume();
-        await fixture.PublishAsync(executable);
-
-        var executionId = string.Empty;
-        await window.MeasureAsync(async () => executionId = await fixture.StartWorkflowDirectlyAsync(executable.Identity.ArtifactId));
-
-        var bookmark = Assert.Single(await fixture.ListBookmarksAsync(executionId));
-        Assert.Equal(WorkflowExecutionStatus.Running, (await fixture.WorkflowExecutionAsync(executionId)).Status);
-
-        BookmarkResumeDispatchResult? resumed = null;
-        await window.MeasureAsync(async () =>
-        {
-            await using var scope = fixture.Services.CreateAsyncScope();
-            resumed = await scope.ServiceProvider.GetRequiredService<IBookmarkResumeDispatcher>().DispatchAsync(
-                new BookmarkResumeDispatchRequest(
-                    workflowExecutionId: executionId,
-                    stimulusType: bookmark.StimulusType,
-                    stimulusHash: bookmark.StimulusHash,
-                    input: JsonSerializer.SerializeToElement(new EventReceived(ReferenceWorkflows.EventName))));
-        });
-
-        Assert.Equal(BookmarkResumeDispatchStatus.Dispatched, resumed!.Status);
-        Assert.Equal(WorkflowExecutionStatus.Completed, (await fixture.WorkflowExecutionAsync(executionId)).Status);
-        return 3;
-    }
-
-    /// <summary>The run left nothing for a background pump to do after the count was taken, which the count would miss.</summary>
-    private static async Task AssertSettledAsync(HttpEndpointHostFixture fixture)
-    {
-        await using var scope = fixture.Services.CreateAsyncScope();
-        var context = scope.ServiceProvider.GetRequiredService<RuntimeDbContext>();
-        Assert.Empty(await context.SchedulerWorkItems.AsNoTracking().ToArrayAsync());
-        Assert.All(
-            await context.RuntimePostCommitOutbox.AsNoTracking().Select(item => item.Status).ToArrayAsync(),
-            status => Assert.Equal(RuntimePostCommitOutboxStatus.Delivered, (RuntimePostCommitOutboxStatus)status));
-        Assert.Empty(await context.IncidentStates.AsNoTracking().ToArrayAsync());
-    }
+        ReferenceWorkflowRuns.WriteLineSequence => writeLines + 1,
+        ReferenceWorkflowRuns.HttpReference => 4,
+        ReferenceWorkflowRuns.ForkJoinResume => 3,
+        _ => throw new ArgumentOutOfRangeException(nameof(workflow), workflow, "Unknown reference workflow.")
+    };
 
     /// <summary>Accumulates what one or more measured spans of a run cost; the gaps between spans are not counted.</summary>
     private sealed class MeasurementWindow(CommandCostRecorder recorder, PostgresWireCounter? wire)
