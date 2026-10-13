@@ -58,7 +58,10 @@ public sealed class SecretBindingInputPathRefusalTests
         { typeof(Fault), "code", Echoed },
         { typeof(Fault), "message", Echoed },
         { typeof(Fault), "category", Echoed },
-        { typeof(Fault), "faultType", Echoed }
+        { typeof(Fault), "faultType", Echoed },
+        // Written to the console, where the resolved value would leave the workflow.
+        { typeof(WriteLine), "text", Echoed },
+        { typeof(WriteLines), nameof(WriteLines.Lines), Echoed }
     };
 
     [Theory]

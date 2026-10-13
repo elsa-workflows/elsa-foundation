@@ -15,6 +15,8 @@ namespace Elsa.Activities.Primitives.Activities;
 /// </remarks>
 // ReplaySafe (#2581): as WriteLine, console lines from its materialized input and a constant transition.
 // A crash before the next commit writes the lines again; no workflow state differs.
+// The lines leave the workflow on the console, so a secret binding is refused, as on Inline.
+[RefusesSecretBinding(nameof(Lines), SecretBindingRefusalReason.EchoedToOutput)]
 [ActivitySideEffectProfile(SideEffectProfile.ReplaySafe)]
 public sealed class WriteLines : Activity<ActivityUnit>
 {
