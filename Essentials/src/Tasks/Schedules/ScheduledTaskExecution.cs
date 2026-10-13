@@ -3,7 +3,7 @@ using Microsoft.Extensions.Logging;
 
 namespace Elsa.Tasks.Schedules;
 
-public sealed class ScheduledTaskExecution : IScheduledTaskExecution, IDisposable, IAsyncDisposable
+internal sealed class ScheduledTaskExecution : IScheduledTaskExecution, IDisposable, IAsyncDisposable
 {
     private readonly Func<Task> _action;
     private readonly Func<TimeSpan> _interval;

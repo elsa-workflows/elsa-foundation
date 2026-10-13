@@ -29,7 +29,7 @@ public class MemoryCacheFeature : IShellFeature
             .AddMemoryCache()
             .Configure<CachingOptions>(o => o.CacheDuration = CacheDuration)
             .AddSingleton<ICacheManager, CacheManager>()
-            .AddSingleton<IChangeTokenSignalInvoker, ChangeTokenSignalInvoker>()
-            .AddSingleton<IChangeTokenSignaler, ChangeTokenSignaler>();
+            .AddSingleton<ChangeTokenSignalInvoker>()
+            .AddSingleton<ChangeTokenSignaler>();
     }
 }

@@ -592,6 +592,7 @@
     <Project Path="Essentials/tests/Serialization/Tests/Elsa.Serialization.Tests.csproj" />
   </Folder>
   <Folder Name="/Essentials/tests/Tasks/">
+    <Project Path="Essentials/tests/Tasks/Testing/Elsa.Tasks.Testing.csproj" />
     <Project Path="Essentials/tests/Tasks/Tests/Elsa.Tasks.Tests.csproj" />
   </Folder>
   <Folder Name="/Essentials/tests/Workbench/">

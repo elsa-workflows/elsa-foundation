@@ -1,6 +1,6 @@
 using Elsa.Locking.Core;
 
-namespace Elsa.Tasks.Tests;
+namespace Elsa.Locking.Tests;
 
 public sealed class DistributedLockRunnerTests
 {

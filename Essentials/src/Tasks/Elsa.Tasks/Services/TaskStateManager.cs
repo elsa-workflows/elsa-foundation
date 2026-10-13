@@ -4,8 +4,7 @@ using Microsoft.Extensions.Logging;
 
 namespace Elsa.Tasks.Services;
 
-public sealed class TaskStateManager(ILogger<TaskStateManager> logger, CancellationTokenSource cancellationTokenSource)
-    : ITaskStateManager
+internal sealed class TaskStateManager(ILogger<TaskStateManager> logger, CancellationTokenSource cancellationTokenSource)
 {
     // SemaphoreSlim only allocates a kernel handle when AvailableWaitHandle is accessed.
     // Since we exclusively use WaitAsync(), no kernel handle is ever created and disposal is a no-op.
@@ -19,12 +18,6 @@ public sealed class TaskStateManager(ILogger<TaskStateManager> logger, Cancellat
     public CancellationTokenSource? CancellationTokenSource { get; internal set; } = cancellationTokenSource;
 
     internal CancellationToken GetCancellationToken() => CancellationTokenSource?.Token ?? CancellationToken.None;
-
-    IEnumerable<IRecurringTask> ITaskStateManager.RecurringTasks => RecurringTasks;
-
-    IEnumerable<IScheduledTaskExecution> ITaskStateManager.ScheduledTaskExecutions => ScheduledTaskExecutions;
-
-    IEnumerable<Task> ITaskStateManager.RunningBackgroundTasks => RunningBackgroundTasks;
 
     public async ValueTask Stop()
     {

@@ -4,4 +4,8 @@
     <ElsaTrackPublicApi>true</ElsaTrackPublicApi>
   </PropertyGroup>
 
+  <ItemGroup>
+    <InternalsVisibleTo Include="Elsa.Locking.Tests" />
+  </ItemGroup>
+
 </Project>

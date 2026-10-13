@@ -12,13 +12,13 @@ namespace Elsa.Workflows.Runtime.Resumption;
 
 /// <summary>
 /// Recurring background pump that drives <see cref="IRuntimeResumptionService"/>. Each tick runs one
-/// bounded sweep. Whole-sweep failure backoff comes from <see cref="BackoffSweepPumpTask"/>; on top of
+/// bounded sweep. Whole-sweep failure backoff comes from <see cref="BackoffSweepWorkerTask"/>; on top of
 /// it this pump parks individual executions: an execution whose re-drive faults or is rejected is
 /// excluded for a geometrically growing window, so a single poisoned execution cannot occupy a re-drive
 /// slot on every tick and starve healthy executions out of the per-sweep cap
 /// (<see cref="RuntimeResumptionOptions.MaxExecutionsPerSweep"/>).
 /// </summary>
-public sealed class RuntimeResumptionPumpTask : BackoffSweepPumpTask
+public sealed class RuntimeResumptionPumpTask : BackoffSweepWorkerTask
 {
     private static readonly IReadOnlySet<string> EmptyExcluded = new HashSet<string>(StringComparer.Ordinal);
 

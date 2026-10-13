@@ -30,16 +30,16 @@ public sealed class DatabaseLockingFeatureTests
     }
 
     [Theory]
-    [InlineData("PostgreSql", DatabaseLockEngine.PostgreSql)]
-    [InlineData("postgres", DatabaseLockEngine.PostgreSql)]
-    [InlineData(" Npgsql ", DatabaseLockEngine.PostgreSql)]
-    [InlineData("SqlServer", DatabaseLockEngine.SqlServer)]
-    [InlineData("sql server", DatabaseLockEngine.SqlServer)]
-    [InlineData("mssql", DatabaseLockEngine.SqlServer)]
-    [InlineData("MySql", DatabaseLockEngine.MySql)]
-    [InlineData("my sql", DatabaseLockEngine.MySql)]
-    public void Maps_each_provider_name_and_alias_to_its_engine(string provider, DatabaseLockEngine engine) =>
-        Assert.Equal(engine, DatabaseLockingFeature.ParseProvider(provider));
+    [InlineData("PostgreSql", nameof(DatabaseLockEngine.PostgreSql))]
+    [InlineData("postgres", nameof(DatabaseLockEngine.PostgreSql))]
+    [InlineData(" Npgsql ", nameof(DatabaseLockEngine.PostgreSql))]
+    [InlineData("SqlServer", nameof(DatabaseLockEngine.SqlServer))]
+    [InlineData("sql server", nameof(DatabaseLockEngine.SqlServer))]
+    [InlineData("mssql", nameof(DatabaseLockEngine.SqlServer))]
+    [InlineData("MySql", nameof(DatabaseLockEngine.MySql))]
+    [InlineData("my sql", nameof(DatabaseLockEngine.MySql))]
+    public void Maps_each_provider_name_and_alias_to_its_engine(string provider, string engine) =>
+        Assert.Equal(Enum.Parse<DatabaseLockEngine>(engine), DatabaseLockingFeature.ParseProvider(provider));
 
     [Theory]
     [InlineData("Oracle")]
@@ -50,11 +50,11 @@ public sealed class DatabaseLockingFeatureTests
         Assert.Throws<InvalidOperationException>(() => DatabaseLockingFeature.ParseProvider(provider));
 
     [Theory]
-    [InlineData(DatabaseLockEngine.PostgreSql, typeof(PostgresDistributedSynchronizationProvider), "Host=localhost;Database=elsa")]
-    [InlineData(DatabaseLockEngine.SqlServer, typeof(SqlDistributedSynchronizationProvider), "Server=localhost;Database=elsa")]
-    [InlineData(DatabaseLockEngine.MySql, typeof(MySqlDistributedSynchronizationProvider), "Server=localhost;Database=elsa")]
-    public void Builds_the_medallion_provider_of_each_engine(DatabaseLockEngine engine, Type expected, string connectionString) =>
-        Assert.IsType(expected, DatabaseLockingFeature.CreateEngineProvider(engine, connectionString));
+    [InlineData(nameof(DatabaseLockEngine.PostgreSql), typeof(PostgresDistributedSynchronizationProvider), "Host=localhost;Database=elsa")]
+    [InlineData(nameof(DatabaseLockEngine.SqlServer), typeof(SqlDistributedSynchronizationProvider), "Server=localhost;Database=elsa")]
+    [InlineData(nameof(DatabaseLockEngine.MySql), typeof(MySqlDistributedSynchronizationProvider), "Server=localhost;Database=elsa")]
+    public void Builds_the_medallion_provider_of_each_engine(string engine, Type expected, string connectionString) =>
+        Assert.IsType(expected, DatabaseLockingFeature.CreateEngineProvider(Enum.Parse<DatabaseLockEngine>(engine), connectionString));
 
     [Fact]
     public void Refuses_an_engine_it_does_not_know() =>

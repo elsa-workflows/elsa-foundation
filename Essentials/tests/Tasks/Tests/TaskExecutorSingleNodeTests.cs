@@ -9,7 +9,7 @@ using Elsa.Tasks.Services;
 using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
 
-namespace Elsa.Architecture;
+namespace Elsa.Tasks.Tests;
 
 /// <summary>
 /// What <c>[SingleNodeTask]</c> means since #2192: one at a time, at shell start. A node waits for the lock, bounded by the
@@ -20,7 +20,7 @@ namespace Elsa.Architecture;
 public sealed class TaskExecutorSingleNodeTests
 {
     private const string ShellName = "tenant-a";
-    private const string SpyTaskKey = "elsa:single-node-task:tenant-a:Elsa.Architecture.TaskExecutorSingleNodeTests+SingleNodeSpyTask";
+    private const string SpyTaskKey = "elsa:single-node-task:tenant-a:Elsa.Tasks.Tests.TaskExecutorSingleNodeTests+SingleNodeSpyTask";
 
     private readonly List<string> _calls = [];
     private readonly FakeDistributedLockProvider _locks;
@@ -77,7 +77,7 @@ public sealed class TaskExecutorSingleNodeTests
 
         Assert.True(_task.Executed);
         Assert.Equal(
-            ("elsa:single-node-task:tenant-b:Elsa.Architecture.TaskExecutorSingleNodeTests+SingleNodeSpyTask", (TimeSpan?)TimeSpan.Zero),
+            ("elsa:single-node-task:tenant-b:Elsa.Tasks.Tests.TaskExecutorSingleNodeTests+SingleNodeSpyTask", (TimeSpan?)TimeSpan.Zero),
             Assert.Single(_locks.Attempts));
     }
 
@@ -169,7 +169,7 @@ public sealed class TaskExecutorSingleNodeTests
         await Executor().ExecuteTaskAsync(task, CancellationToken.None);
 
         Assert.True(task.Executed);
-        Assert.Equal(["dormancy", "lock:elsa:single-node-task:tenant-a:Elsa.Architecture.TaskExecutorSingleNodeTests+DormancyAwareSpyTask"], _calls);
+        Assert.Equal(["dormancy", "lock:elsa:single-node-task:tenant-a:Elsa.Tasks.Tests.TaskExecutorSingleNodeTests+DormancyAwareSpyTask"], _calls);
     }
 
     [Fact]
@@ -212,7 +212,7 @@ public sealed class TaskExecutorSingleNodeTests
         _locks.Acquire = (_, timeout) => timeout == TimeSpan.Zero ? null : new FakeHandle();
         var task = new SingleNodeBackgroundSpyTask();
 
-        await ((IBackgroundTaskStarter)Executor()).StartAsync(task, CancellationToken.None);
+        await Executor().StartAsync(task, CancellationToken.None);
 
         Assert.True(task.Started);
         Assert.Equal(0, _locks.BlockingAcquireCallCount);
@@ -225,9 +225,9 @@ public sealed class TaskExecutorSingleNodeTests
         var task = new DormancyAwareBackgroundTask();
         var executor = Executor();
 
-        await ((IBackgroundTaskStarter)executor).StartAsync(task, CancellationToken.None);
+        await executor.StartAsync(task, CancellationToken.None);
         _dormancy.Dormant = false;
-        await ((IBackgroundTaskStarter)executor).StopAsync(task, CancellationToken.None);
+        await executor.StopAsync(task, CancellationToken.None);
 
         Assert.False(task.Started);
         Assert.False(task.Stopped);
@@ -238,7 +238,7 @@ public sealed class TaskExecutorSingleNodeTests
     {
         _dormancy.Dormant = true;
         var task = new DormancyAwareBackgroundTask();
-        var executor = (IBackgroundTaskStarter)Executor();
+        var executor = Executor();
 
         await executor.StartAsync(task, CancellationToken.None);
         _dormancy.Dormant = false;
@@ -255,10 +255,10 @@ public sealed class TaskExecutorSingleNodeTests
         var task = new DormancyAwareBackgroundTask();
         var executor = Executor();
 
-        await ((IBackgroundTaskStarter)executor).StartAsync(task, CancellationToken.None);
+        await executor.StartAsync(task, CancellationToken.None);
         _dormancy.Dormant = true;
         _calls.Clear();
-        await ((IBackgroundTaskStarter)executor).StopAsync(task, CancellationToken.None);
+        await executor.StopAsync(task, CancellationToken.None);
 
         Assert.True(task.Started);
         Assert.True(task.Stopped);

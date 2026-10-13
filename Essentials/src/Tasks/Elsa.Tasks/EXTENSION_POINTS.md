@@ -1,6 +1,6 @@
 # Extension points — Tasks domain
 
-The per-domain catalog (framework §2.22.1). Anchored at `Elsa.Tasks` — the composition root where `TasksFeature` registers `TaskManager`, `TaskExecutor`, and `TopologicalTaskSorter`. Two sections apply.
+The per-domain catalog (framework §2.22.1). Anchored at `Elsa.Tasks`, the composition root where `TasksFeature` registers `TaskManager`, `TaskExecutor` and `TopologicalTaskSorter`, all internal to it. Two sections apply.
 
 ---
 
@@ -15,10 +15,9 @@ The per-domain catalog (framework §2.22.1). Anchored at `Elsa.Tasks` — the co
   `StopShellTasksTerminator` stops them at the mirrored `Start`-phase teardown point, before later
   terminators flush stores and before the shell provider is disposed. `TaskManager.DisposeAsync`
   awaits the same idempotent stop operation as a fallback.
-- **Override:** `services.Replace(ServiceDescriptor.Singleton<ITaskManager, MyManager>())`. Implement
-  `IStoppableTaskManager` as an additive capability when the replacement owns shell-lifetime work that
-  must stop before provider disposal; existing `ITaskManager` implementations remain compatible and
-  otherwise keep their previous DI-disposal behavior.
+- **Override:** `services.Replace(ServiceDescriptor.Singleton<ITaskManager, MyManager>())`. A replacement implements
+  both members: `StartExecutingRegisteredTasks` when the shell activates, and `StopExecutingRegisteredTasks`, which
+  `StopShellTasksTerminator` calls before the shell provider is disposed.
 
 ### `ITaskExecutor` *(Core — `Elsa.Tasks.Core`)*
 - **Default impl:** `TaskExecutor` (this feature). It applies what a task class declares, in this order:
@@ -33,7 +32,11 @@ The per-domain catalog (framework §2.22.1). Anchored at `Elsa.Tasks` — the co
   determined at this seam because only the executor observes that the node is dormant for the task. A
   single-node lock that is never acquired, or lost while the task runs, is `failed`; only a cancellation
   of the shell's own token is `cancelled`.
-- **Override:** `services.Replace(...)`.
+- **Override:** `services.Replace(ServiceDescriptor.Singleton<ITaskExecutor, MyExecutor>())`. A replacement runs what
+  `TaskManager` executes: every startup task, each background task's `ExecuteAsync`, and every recurring run. It does not
+  see the starts and stops. A background task's `StartAsync` always goes through the internal `TaskExecutor`, so the
+  dormancy check and `[SingleNodeTask]` gate it there whatever the replacement does; a background task's `StopAsync` and
+  a recurring task's `StartAsync` and `StopAsync` are called on the task directly, with no gating.
 
 ### `[SingleNodeTask]`: one at a time, at shell start
 The whole guarantee, and nothing more (#2192):
@@ -61,11 +64,10 @@ The whole guarantee, and nothing more (#2192):
 - It is meant for startup tasks. On a background or recurring task, each start, run and stop takes the lock the same
   way, which serializes the calls but elects no leader.
 
-### `ITopologicalTaskSorter` *(Core — `Elsa.Tasks.Core`)*
-- **Default impl:** `TopologicalTaskSorter` (this feature) — orders startup tasks respecting `[TaskDependency]` + `[Order]` attributes.
-- **Override:** `services.Replace(...)` to provide a custom ordering strategy.
-
-> **Note:** `ITaskStateManager` is created internally by `TaskManager` and is not DI-registered — it is not an override seam.
+### Startup task order
+`TaskManager` orders startup tasks by `[Order]`, then by `[TaskDependency]` through the internal `TopologicalTaskSorter`,
+which it requires: without the sorter's registration, starting the tasks fails instead of running them unordered. The
+order is not an override seam, and neither is `TaskStateManager`, which `TaskManager` creates for itself.
 
 ---
 
@@ -86,9 +88,9 @@ The whole guarantee, and nothing more (#2192):
 - `Elsa.Workflows.Design.Reconciliation.Git` — `GitWorkflowExportStartupTask` *(cross-domain; runs on every Writer node without a lock, because its fence is the fast-forward-only push, #2197)*
 
 ### `IRecurringTask : ITask` *(Core — `Elsa.Tasks.Core`)*
-- **Kind:** Contributor — run on a schedule. Configure schedule via `ITaskSchedule` (`Elsa.Tasks.Schedules`).
+- **Kind:** Contributor, run on the schedule its `GetSchedule()` returns, an `ITaskSchedule` (`Elsa.Tasks.Core`).
 - **Signature:** `ValueTask ExecuteAsync(CancellationToken cancellationToken);`
-- **Register:** `services.AddScoped<IRecurringTask, MyTask>()`. Configure interval via `RecurringTaskSchedule.ConfigureTask<T>(TimeSpan)` / `(string cronExpression)`.
+- **Register:** `services.AddScoped<IRecurringTask, MyTask>()`. For the schedule, derive from `BackoffSweepWorkerTask`, whose interval widens on failure, or implement `ITaskSchedule`; the schedule classes in `Elsa.Tasks.Schedules` are internal.
 
 ### `IBackgroundTask : ITask` *(Core — `Elsa.Tasks.Core`)*
 - **Kind:** Contributor — long-running background work (hosted service lifecycle).
@@ -97,9 +99,9 @@ The whole guarantee, and nothing more (#2192):
 **Known implementations:**
 - `Elsa.Events` — `BackgroundEventPublisher` *(cross-domain — background event dispatch worker)*
 
-## Writing a bounded-sweep pump (`BackoffSweepPumpTask`)
+## Writing a bounded-sweep worker (`BackoffSweepWorkerTask`)
 
-A recurring background pump that runs one bounded sweep per tick derives from `BackoffSweepPumpTask`
+A recurring background worker that runs one bounded sweep per tick derives from `BackoffSweepWorkerTask`
 (project `Elsa.Tasks.Schedules`) instead of implementing `IRecurringTask` and re-carrying the failure
 skeleton. The base owns it once: `ExecuteAsync` runs the derived `SweepAsync`, resets the failure count
 on success, and on any handled exception increments it and reports through `OnSweepFailed` without
@@ -109,18 +111,19 @@ rethrowing (so a failing sweep cannot crash the host); `CurrentSweepInterval` wi
 A derivation supplies the sweep, its failure log message, and optionally: which exceptions feed the
 backoff (`IsHandledSweepException`; everything by default — override to let fatal exceptions escape),
 and which cancellations escape (`ShouldRethrowCancellation`; every `OperationCanceledException` by
-default — override to narrow to the pump's own token so a dependency's unrelated timeout backs off
+default; override it to narrow to the worker's own token so a dependency's unrelated timeout backs off
 instead). The protected `ComputeBackoff` is reusable for per-item parking maps.
 
-All six shipped pumps are cross-domain consumers: `RuntimeResumptionPumpTask`, `DurableTimerPumpTask`,
-`RecurringTriggerPumpTask`, `WorkflowExecutableReferenceGarbageCollectionPumpTask`,
-`ExecutionPlacementPumpTask`, and `WorkflowAlterationOrchestrationPumpTask` *(all cross-domain — the
-pumps live in `Elsa.Workflows.Runtime.*` projects, which already reference `Elsa.Tasks.Schedules`)*.
+The eight shipped workers live in other domains: `RuntimeResumptionPumpTask`, `DurableTimerPumpTask`,
+`RecurringTriggerPumpTask`, `WorkflowExecutableReferenceGarbageCollectionPumpTask`, `ExecutionPlacementPumpTask`,
+`WorkflowAlterationOrchestrationPumpTask` and `HttpEndpointRouteTableConvergencePumpTask` in the
+`Elsa.Workflows.Runtime.*` projects, which keep the `…PumpTask` name until that domain's rename, and
+`ExpiredImportCollectionSweepTask` in the Elsa 3 import extension.
 
 ---
 
 ## Cross-references
 
-- `ITaskSchedule` for recurring task schedules lives in `Elsa.Tasks.Schedules`.
-- Repo-wide index: [`../../EXTENSION_POINTS.md`](../../EXTENSION_POINTS.md).
+- `ITaskSchedule` lives in `Elsa.Tasks.Core`; the schedule classes in `Elsa.Tasks.Schedules` are internal.
+- Repo-wide index: [`EXTENSION_POINTS.md`](../../../../EXTENSION_POINTS.md).
 - Constitutional basis: §2.6.1 + §2.6.2 + §2.22.1.

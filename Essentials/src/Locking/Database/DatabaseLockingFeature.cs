@@ -68,7 +68,7 @@ public class DatabaseLockingFeature : IShellFeature
     }
 
     /// <summary>Builds Medallion's provider for <paramref name="engine"/>; an engine this feature does not know is refused.</summary>
-    public static Medallion.Threading.IDistributedLockProvider CreateEngineProvider(DatabaseLockEngine engine, string connectionString) =>
+    internal static Medallion.Threading.IDistributedLockProvider CreateEngineProvider(DatabaseLockEngine engine, string connectionString) =>
         engine switch
         {
             DatabaseLockEngine.PostgreSql => new PostgresDistributedSynchronizationProvider(connectionString),
@@ -81,7 +81,7 @@ public class DatabaseLockingFeature : IShellFeature
     /// Maps a <c>Provider</c> setting to its engine, accepting each engine's usual aliases case-insensitively. SQLite and any
     /// unknown or missing name are refused with an explanation, never mapped to a default engine.
     /// </summary>
-    public static DatabaseLockEngine ParseProvider(string? provider) =>
+    internal static DatabaseLockEngine ParseProvider(string? provider) =>
         provider?.Trim().ToLowerInvariant() switch
         {
             "postgresql" or "postgres" or "npgsql" => DatabaseLockEngine.PostgreSql,
