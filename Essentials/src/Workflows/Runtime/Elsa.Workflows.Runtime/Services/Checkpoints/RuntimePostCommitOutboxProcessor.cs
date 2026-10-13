@@ -192,10 +192,12 @@ public sealed class RuntimePostCommitOutboxProcessor : IRuntimePostCommitOutboxP
     private static bool IsContinuation(RuntimePostCommitOutboxClaim claim) =>
         StringComparer.Ordinal.Equals(claim.Item.Intent.Kind, RuntimePostCommitIntentKinds.EnqueueSchedulerWork);
 
-    // The live-drain fast path engages only when: a live drain owns this exact execution's delivery, the request
-    // targets EnqueueSchedulerWork intents (every other kind stays on the durable claim path, condition (e)), and no
-    // coalescing session is active (the coalescing overlay is authoritative, condition (c) — the drain orchestrator
-    // never pushes a live-drain scope on the coalescing path, and this guard defends against direct callers).
+    // The live-drain fast path engages only when a live drain owns this exact execution's delivery, the request targets
+    // EnqueueSchedulerWork intents (every other kind stays on the durable claim path), and the drain's session has
+    // stopped folding. Every drain pushes a live-drain scope beside its session. While the session folds, its overlay is
+    // authoritative and delivers the continuations itself; once it stops (at a boundary that ends it, or from the start
+    // on a queue that cannot delete by identity), the rest of the drain commits checkpoint by checkpoint and this path
+    // delivers those continuations.
     private bool DeliversInMemory(RuntimePostCommitOutboxProcessRequest request) =>
         _liveDrainDeliveryAccessor?.Current is { } scope &&
         scope.AppliesTo(request.WorkflowExecutionId) &&

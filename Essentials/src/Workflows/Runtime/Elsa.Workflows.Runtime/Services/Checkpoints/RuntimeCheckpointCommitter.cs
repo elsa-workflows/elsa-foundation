@@ -173,8 +173,8 @@ public sealed class RuntimeCheckpointCommitter
 
     // Publishes each committed EnqueueSchedulerWork continuation's materialized work item onto the owning live drain's
     // in-process-hop carrier. Guards (all must hold): the fast path is enabled; a live-drain delivery scope owns THIS
-    // execution (so the dispatcher will look here rather than deserialize); and no coalescing session owns the execution
-    // (the coalescing overlay is authoritative on continuation delivery). When any guard
+    // execution (so the dispatcher will look here rather than deserialize); and the drain's session for the execution
+    // has stopped folding (while it folds, its overlay is authoritative on continuation delivery). When any guard
     // fails the carrier stays empty and delivery deserializes the durable payload — byte-identical result either way.
     private void PublishInProcessHopWorkItems(RuntimeCheckpointCommit commit)
     {
