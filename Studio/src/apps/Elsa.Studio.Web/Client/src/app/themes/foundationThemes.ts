@@ -164,7 +164,8 @@ const geistTypography: ThemeTypography = {
 
 // Classic: Elsa 3's default (elsa-studio-react `data-elsa-theme="classic"`) rebuilt on the
 // `--studio-*` contract. Sky-500 (#0EA5E9, hue 237) is the identity; Light darkens the solid
-// fill so white button text meets AA, the same way Signal deepens its lime on a pale ground.
+// fill to L 0.51 so primary-as-text meets 4.5:1 on muted, wash and accent-soft, the same way
+// Signal deepens its lime on a pale ground.
 // Surfaces follow the source slate ladder (white page, slate-50 sidebar/cards, slate-200
 // hairlines). Dim and High contrast are derived: Dim lifts the dark slate, High contrast uses
 // the shared black-ground recipe with a bright sky accent.
@@ -182,7 +183,7 @@ const classic = definition(
     light: mode({
       scheme: "light", hue: 250, chroma: 0.012,
       background: 1, card: 0.984, muted: 0.97, border: 0.929, input: 0.929, sidebar: 0.984, foreground: 0.208, mutedForeground: 0.48,
-      primary: oklch(0.54, 0.148, skyHue), primaryForeground: white,
+      primary: oklch(0.51, 0.148, skyHue), primaryForeground: white,
       wash: oklch(0.954, 0.018, 239), activeForeground: oklch(0.4, 0.14, skyHue),
       overrides: { success: classicEmerald(0.54) }
     }),

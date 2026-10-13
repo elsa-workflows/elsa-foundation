@@ -133,6 +133,32 @@ public sealed class ElsaThemeStoreApiTests : IAsyncLifetime
     }
 
     [Theory]
+    [InlineData("classic")]
+    [InlineData("meridian")]
+    public async Task SavingACustomThemeWithABuiltInIdIsRejected(string themeId)
+    {
+        var theme = CustomTheme() with { Id = themeId };
+        var response = await _client.PutAsJsonAsync($"/_elsa/theme-store/themes/{themeId}", theme);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task DirectoryThemeThatReusesABuiltInIdIsDropped()
+    {
+        var theme = CustomTheme() with { Id = "classic", Name = "Not Classic" };
+        var themesFile = Path.Combine(_contentRoot, "clash-themes.json");
+        await File.WriteAllTextAsync(
+            themesFile,
+            JsonSerializer.Serialize(new { themes = new[] { theme } }, new JsonSerializerOptions(JsonSerializerDefaults.Web)));
+        _themeConfig.ThemesDirectory = themesFile;
+
+        var store = await GetStoreAsync();
+
+        Assert.DoesNotContain(store.Themes, item => item.Id == "classic");
+    }
+
+    [Theory]
     [InlineData("supported-mode-without-palette")]
     [InlineData("font-stack-breakout")]
     [InlineData("radius-with-expression")]

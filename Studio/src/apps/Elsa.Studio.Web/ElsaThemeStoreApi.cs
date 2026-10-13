@@ -21,7 +21,7 @@ internal static class ElsaThemeStoreApi
     private static readonly string[] ThemeModeNames = ["light", "dark", "dim", "high-contrast"];
     // Mirrors studioThemeLayouts in the SDK's themeLayout.ts.
     private static readonly string[] ThemeLayoutNames = ["classic", "floating", "workbench", "editorial"];
-    private static readonly HashSet<string> BuiltInThemeIds = new(StringComparer.OrdinalIgnoreCase)
+    internal static readonly HashSet<string> BuiltInThemeIds = new(StringComparer.OrdinalIgnoreCase)
     {
         "classic",
         "meridian",
@@ -419,9 +419,12 @@ internal static class ElsaThemeStoreApi
         // Load custom themes from configured directory if available
         var configResult = await themeService.LoadThemesAsync(cancellationToken);
         var persistedThemes = store.Themes ?? [];
-        var customThemes = persistedThemes.Where(t => t.Source == "custom").ToList();
+        var customThemes = persistedThemes
+            .Where(t => t.Source == "custom" && !BuiltInThemeIds.Contains(t.Id))
+            .ToList();
 
-        // Merge directory themes with persisted themes (directory themes take precedence by ID)
+        // Merge directory themes with persisted themes (directory themes take precedence by ID).
+        // Reserved built-in IDs are dropped earlier in ThemeConfigurationService with a warning.
         var directoryThemeIds = new HashSet<string>(configResult.Themes.Select(t => t.Id), StringComparer.OrdinalIgnoreCase);
         customThemes = customThemes.Where(t => !directoryThemeIds.Contains(t.Id)).Concat(configResult.Themes).ToList();
 
@@ -484,6 +487,8 @@ internal static class ElsaThemeStoreApi
             return "Only custom themes can be saved in the Studio Theme Store.";
         if (string.IsNullOrWhiteSpace(theme.Id) || !ThemeIdPattern.IsMatch(theme.Id))
             return "Theme ID must be kebab-case and between 3 and 64 characters.";
+        if (BuiltInThemeIds.Contains(theme.Id))
+            return "Theme ID is reserved for a built-in theme.";
         if (string.IsNullOrWhiteSpace(theme.Name))
             return "Theme name is required.";
         if (theme.Modes is null)

@@ -108,6 +108,23 @@ describe("theme presets", () => {
     expect(store.themes.filter(theme => theme.enabled).length).toBeGreaterThan(0);
   });
 
+  it("rejects a custom theme whose id is reserved for a built-in, and drops it so the built-in wins", () => {
+    const clash = createCustomThemeFrom(builtInThemeDefinitions[0], "classic", "Not Classic");
+
+    expect(validateThemeDefinition(clash).valid).toBe(false);
+    expect(validateThemeDefinition(clash).issues.some(issue => issue.message.includes("reserved"))).toBe(true);
+
+    const store = normalizeThemeStore({
+      defaultThemeId: "classic",
+      themes: [{ ...clash, published: true, enabled: true }]
+    });
+    const classic = store.themes.filter(theme => theme.id === "classic");
+
+    expect(classic).toHaveLength(1);
+    expect(classic[0].source).toBe("built-in");
+    expect(classic[0].name).toBe("Classic");
+  });
+
   it("normalizes store-shaped mutation responses with built-in themes", async () => {
     const custom = createCustomThemeFrom(builtInThemeDefinitions[0], "custom-theme", "Custom Theme");
     const context = {

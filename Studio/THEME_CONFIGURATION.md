@@ -71,7 +71,9 @@ The eight signature themes offer all four modes (Light, Dark, Dim and High contr
 - `"signal"` - Instrument panel: hairline borders, tight corners, mono legends, one phosphor-lime accent
 - `"dusk"` - Dim-first violet slate with an amber highlight, for long low-light sessions
 
-These eight are the only built-in themes. Retired IDs — most recently `"black-glass"`, `"stone"`,
+These eight are the only built-in themes. Their IDs are reserved: a custom or directory theme
+that reuses one (`"classic"`, `"meridian"`, …) is rejected on save and skipped on load, with a
+warning, so the built-in wins. Retired IDs — most recently `"black-glass"`, `"stone"`,
 `"blueprint"` and `"brass-instrument"` — are treated like any unknown ID: a configured or persisted
 default falls back to Classic, a user who had one selected lands on the default theme, and a
 hidden-theme entry for one is dropped. Custom themes duplicated from them earlier keep working
