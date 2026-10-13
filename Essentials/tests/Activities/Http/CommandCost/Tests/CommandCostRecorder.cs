@@ -29,7 +29,7 @@ internal sealed record CommandCostEntry(
     string Sql);
 
 /// <summary>Transaction and engine-phase counts at one point of a measurement, to subtract one point from another.</summary>
-internal sealed record CommandCostCounters(
+internal sealed record CommandCostCounts(
     int Commands,
     int TransactionsStarted,
     int TransactionsCommitted,
@@ -42,9 +42,9 @@ internal sealed record CommandCostCounters(
     int CheckpointsDeferred,
     int CheckpointsSkipped)
 {
-    public static readonly CommandCostCounters Zero = new(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+    public static readonly CommandCostCounts Zero = new(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
 
-    public CommandCostCounters Plus(CommandCostCounters other, int sign = 1) => new(
+    public CommandCostCounts Plus(CommandCostCounts other, int sign = 1) => new(
         Commands + sign * other.Commands,
         TransactionsStarted + sign * other.TransactionsStarted,
         TransactionsCommitted + sign * other.TransactionsCommitted,
@@ -114,7 +114,7 @@ internal sealed partial class CommandCostRecorder : DbCommandInterceptor, IDbTra
 
     public IReadOnlyList<CommandCostEntry> Commands => _commands.ToArray();
 
-    public CommandCostCounters Counters => new(
+    public CommandCostCounts Counts => new(
         Volatile.Read(ref _commandCount),
         Volatile.Read(ref _transactionsStarted),
         Volatile.Read(ref _transactionsCommitted),

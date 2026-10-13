@@ -29,8 +29,8 @@ internal sealed record CommandCostRun(
     string Mode,
     int Activities,
     IReadOnlyList<CommandCostEntry> Commands,
-    CommandCostCounters Counters,
-    PostgresWireCounts? Wire)
+    CommandCostCounts Counts,
+    PostgreSqlWireCounts? Wire)
 {
     public int Statements => Commands.Sum(command => command.Statements.Count);
 
@@ -39,22 +39,22 @@ internal sealed record CommandCostRun(
 }
 
 /// <summary>A database a measured host runs on: a SQLite file per run, or a PostgreSQL database per run behind the wire counter.</summary>
-internal interface ICommandCostDatabase
+internal interface IMeasuredDatabase
 {
     string Provider { get; }
 
-    PostgresWireCounter? Wire { get; }
+    PostgreSqlWireCounter? Wire { get; }
 
     Task<HttpEndpointHostFixture> StartHostAsync(CommandCostMode mode, Action<IServiceCollection> configureServices);
 
     void AddInterceptor(IServiceCollection services, CommandCostRecorder recorder);
 }
 
-internal sealed class SqliteCommandCostDatabase : ICommandCostDatabase
+internal sealed class SqliteDatabase : IMeasuredDatabase
 {
     public string Provider => "Sqlite";
 
-    public PostgresWireCounter? Wire => null;
+    public PostgreSqlWireCounter? Wire => null;
 
     public Task<HttpEndpointHostFixture> StartHostAsync(CommandCostMode mode, Action<IServiceCollection> configureServices) =>
         HttpEndpointHostFixture.StartDurableSqliteAsync(mode.Mode, ReferenceWorkflowRuns.MaxActivitiesPerCommit, configureServices, mode.RecordCompletion);
@@ -63,11 +63,11 @@ internal sealed class SqliteCommandCostDatabase : ICommandCostDatabase
         services.ConfigureDbContext<RuntimeSqliteDbContext>(builder => builder.AddInterceptors(recorder));
 }
 
-internal sealed class PostgreSqlCommandCostDatabase(CommandCostPostgreSqlServer server) : ICommandCostDatabase
+internal sealed class PostgreSqlDatabase(CommandCostPostgreSqlServer server) : IMeasuredDatabase
 {
     public string Provider => "PostgreSql";
 
-    public PostgresWireCounter? Wire => server.Wire;
+    public PostgreSqlWireCounter? Wire => server.Wire;
 
     public async Task<HttpEndpointHostFixture> StartHostAsync(CommandCostMode mode, Action<IServiceCollection> configureServices) =>
         await HttpEndpointHostFixture.StartDurableAsync(
@@ -89,7 +89,7 @@ internal sealed class PostgreSqlCommandCostDatabase(CommandCostPostgreSqlServer 
 /// </summary>
 internal static class CommandCostScenarios
 {
-    public static async Task<CommandCostRun> MeasureAsync(ICommandCostDatabase database, string workflow, CommandCostMode mode, int writeLines = 10)
+    public static async Task<CommandCostRun> MeasureAsync(IMeasuredDatabase database, string workflow, CommandCostMode mode, int writeLines = 10)
     {
         using var recorder = new CommandCostRecorder();
         await using var fixture = await database.StartHostAsync(mode, services =>
@@ -102,7 +102,7 @@ internal static class CommandCostScenarios
         var window = new MeasurementWindow(recorder, database.Wire);
         await ReferenceWorkflowRuns.RunAsync(workflow, fixture, window.MeasureAsync, writeLines, mode.RecordCompletion);
 
-        return new CommandCostRun(database.Provider, workflow, mode.Name, Activities(workflow, writeLines), window.Commands, window.Counters, window.Wire);
+        return new CommandCostRun(database.Provider, workflow, mode.Name, Activities(workflow, writeLines), window.Commands, window.Counts, window.Wire);
     }
 
     /// <summary>The activity executions of a run: the Sequence and its WriteLines, the four HTTP activities, or the Parallel and its two branches.</summary>
@@ -115,25 +115,25 @@ internal static class CommandCostScenarios
     };
 
     /// <summary>Accumulates what one or more measured spans of a run cost; the gaps between spans are not counted.</summary>
-    private sealed class MeasurementWindow(CommandCostRecorder recorder, PostgresWireCounter? wire)
+    private sealed class MeasurementWindow(CommandCostRecorder recorder, PostgreSqlWireCounter? wire)
     {
         private readonly List<CommandCostEntry> _commands = [];
 
         public IReadOnlyList<CommandCostEntry> Commands => _commands;
-        public CommandCostCounters Counters { get; private set; } = CommandCostCounters.Zero;
-        public PostgresWireCounts? Wire { get; private set; } = wire is null ? null : PostgresWireCounts.Zero;
+        public CommandCostCounts Counts { get; private set; } = CommandCostCounts.Zero;
+        public PostgreSqlWireCounts? Wire { get; private set; } = wire is null ? null : PostgreSqlWireCounts.Zero;
 
         public async Task MeasureAsync(Func<Task> run)
         {
-            var countersBefore = recorder.Counters;
+            var countsBefore = recorder.Counts;
             var wireBefore = wire?.Counts;
             await run();
-            var countersAfter = recorder.Counters;
+            var countsAfter = recorder.Counts;
 
             _commands.AddRange(recorder.Commands
-                .Where(command => command.Ordinal > countersBefore.Commands && command.Ordinal <= countersAfter.Commands)
+                .Where(command => command.Ordinal > countsBefore.Commands && command.Ordinal <= countsAfter.Commands)
                 .OrderBy(command => command.Ordinal));
-            Counters = Counters.Plus(countersAfter).Plus(countersBefore, sign: -1);
+            Counts = Counts.Plus(countsAfter).Plus(countsBefore, sign: -1);
             if (wire is not null)
                 Wire = Wire!.Plus(wire.Counts).Plus(wireBefore!, sign: -1);
         }

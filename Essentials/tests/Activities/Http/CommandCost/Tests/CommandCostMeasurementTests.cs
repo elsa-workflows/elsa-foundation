@@ -27,17 +27,18 @@ public sealed class CommandCostMeasurementTests(CommandCostPostgreSqlServer post
 {
     [SkippableFact]
     public Task Measures_the_reference_workflows_and_the_WriteLine_series_on_SQLite() =>
-        MeasureAsync(new SqliteCommandCostDatabase());
+        MeasureAsync(new SqliteDatabase());
 
     [SkippableFact]
     public Task Measures_the_reference_workflows_and_the_WriteLine_series_on_PostgreSQL() =>
-        MeasureAsync(new PostgreSqlCommandCostDatabase(postgreSql));
+        MeasureAsync(new PostgreSqlDatabase(postgreSql));
 
-    private static async Task MeasureAsync(ICommandCostDatabase database)
+    private static async Task MeasureAsync(IMeasuredDatabase database)
     {
         var output = CommandCostMeasurement.OutputDirectory;
         Skip.If(output is null, $"Set {CommandCostMeasurement.OutputVariable} to an output directory to measure EF command cost.");
 
+        CommandCostReport.ClearRuns(output!, database.Provider);
         var runs = new List<CommandCostRun>();
         foreach (var mode in CommandCostMode.All)
         {
@@ -64,13 +65,13 @@ public sealed class CommandCostMeasurementTests(CommandCostPostgreSqlServer post
         // the report's counts would not add up.
         Assert.All(runs.Where(run => run.Wire is not null), run =>
         {
-            var savepointStatements = run.Counters.SavepointsCreated + run.Counters.SavepointsReleased;
+            var savepointStatements = run.Counts.SavepointsCreated + run.Counts.SavepointsReleased;
             Assert.True(run.Wire!.Executes == run.Statements + savepointStatements,
                 $"{run.Provider} {run.Workflow} {run.Mode} {run.Activities}: the wire carried {run.Wire.Executes} statements; the EF context sent " +
                 $"{run.Statements} and {savepointStatements} savepoint statements.");
-            Assert.True(run.Wire.RoundTrips == run.Commands.Count + run.Counters.TransactionsCommitted + savepointStatements,
+            Assert.True(run.Wire.RoundTrips == run.Commands.Count + run.Counts.TransactionsCommitted + savepointStatements,
                 $"{run.Provider} {run.Workflow} {run.Mode} {run.Activities}: {run.Wire.RoundTrips} round trips; the EF context sent " +
-                $"{run.Commands.Count} commands, {run.Counters.TransactionsCommitted} commits and {savepointStatements} savepoint statements.");
+                $"{run.Commands.Count} commands, {run.Counts.TransactionsCommitted} commits and {savepointStatements} savepoint statements.");
         });
     }
 }

@@ -6,7 +6,7 @@ using System.Text;
 
 namespace Elsa.Activities.Http.CommandCost;
 
-/// <summary>What a PostgreSQL client and server exchanged through <see cref="PostgresWireCounter"/>.</summary>
+/// <summary>What a PostgreSQL client and server exchanged through <see cref="PostgreSqlWireCounter"/>.</summary>
 /// <param name="Connections">Physical connections opened.</param>
 /// <param name="HandshakeRoundTrips">Round trips spent opening connections, up to the server's first ReadyForQuery.</param>
 /// <param name="RoundTrips">
@@ -16,7 +16,7 @@ namespace Elsa.Activities.Http.CommandCost;
 /// <param name="Responses">ReadyForQuery messages after the handshake: one per simple query and per extended-protocol Sync.</param>
 /// <param name="Executes">Extended-protocol Execute messages: one per statement the client ran that way.</param>
 /// <param name="SimpleQueries">Simple-protocol Query messages, by their text up to the first 40 characters.</param>
-internal sealed record PostgresWireCounts(
+internal sealed record PostgreSqlWireCounts(
     int Connections,
     int HandshakeRoundTrips,
     int RoundTrips,
@@ -24,11 +24,11 @@ internal sealed record PostgresWireCounts(
     int Executes,
     IReadOnlyDictionary<string, int> SimpleQueries)
 {
-    public static readonly PostgresWireCounts Zero = new(0, 0, 0, 0, 0, new Dictionary<string, int>());
+    public static readonly PostgreSqlWireCounts Zero = new(0, 0, 0, 0, 0, new Dictionary<string, int>());
 
     public int SimpleQueryCount => SimpleQueries.Values.Sum();
 
-    public PostgresWireCounts Plus(PostgresWireCounts other, int sign = 1) => new(
+    public PostgreSqlWireCounts Plus(PostgreSqlWireCounts other, int sign = 1) => new(
         Connections + sign * other.Connections,
         HandshakeRoundTrips + sign * other.HandshakeRoundTrips,
         RoundTrips + sign * other.RoundTrips,
@@ -47,7 +47,7 @@ internal sealed record PostgresWireCounts(
 /// through the relay, so it also sees traffic the EF interceptor does not, such as COMMIT, savepoints and the reset of a
 /// pooled connection.
 /// </summary>
-internal sealed class PostgresWireCounter : IAsyncDisposable
+internal sealed class PostgreSqlWireCounter : IAsyncDisposable
 {
     private const int SslRequestCode = 80877103;
     private const int GssEncRequestCode = 80877104;
@@ -66,7 +66,7 @@ internal sealed class PostgresWireCounter : IAsyncDisposable
     private int _responses;
     private int _executes;
 
-    public PostgresWireCounter(string upstreamHost, int upstreamPort)
+    public PostgreSqlWireCounter(string upstreamHost, int upstreamPort)
     {
         _upstreamHost = upstreamHost;
         _upstreamPort = upstreamPort;
@@ -76,7 +76,7 @@ internal sealed class PostgresWireCounter : IAsyncDisposable
 
     public int Port => ((IPEndPoint)_listener.LocalEndpoint).Port;
 
-    public PostgresWireCounts Counts => new(
+    public PostgreSqlWireCounts Counts => new(
         Volatile.Read(ref _connections),
         Volatile.Read(ref _handshakeRoundTrips),
         Volatile.Read(ref _roundTrips),
@@ -151,7 +151,7 @@ internal sealed class PostgresWireCounter : IAsyncDisposable
     /// carry them. A round trip completes when the server answers after the client sent something; the client never
     /// sends again before that answer, so this counts each wait once however many messages the client wrote together.
     /// </summary>
-    private sealed class Connection(PostgresWireCounter counter)
+    private sealed class Connection(PostgreSqlWireCounter counter)
     {
         private readonly MessageReader _client = new(untypedUntilStartup: true);
         private readonly MessageReader _server = new(untypedUntilStartup: false);

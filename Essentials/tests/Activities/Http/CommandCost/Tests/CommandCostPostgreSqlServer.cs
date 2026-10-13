@@ -5,7 +5,7 @@ namespace Elsa.Activities.Http.CommandCost;
 
 /// <summary>
 /// One PostgreSQL server for every measurement in the run, with each measured host on an empty database of its own and
-/// its connections routed through <see cref="PostgresWireCounter"/>. Starts on the first database a measurement asks for.
+/// its connections routed through <see cref="PostgreSqlWireCounter"/>. Starts on the first database a measurement asks for.
 /// Set <c>ELSA_COMMAND_COST_POSTGRESQL_CONNECTION_STRING</c> to measure against an existing server instead of a container.
 /// </summary>
 public sealed class CommandCostPostgreSqlServer : IAsyncLifetime
@@ -14,10 +14,10 @@ public sealed class CommandCostPostgreSqlServer : IAsyncLifetime
 
     private PostgreSqlContainer? _container;
     private string? _adminConnectionString;
-    private PostgresWireCounter? _wire;
+    private PostgreSqlWireCounter? _wire;
     private readonly SemaphoreSlim _starting = new(1, 1);
 
-    internal PostgresWireCounter Wire => _wire ?? throw new InvalidOperationException("The PostgreSQL server was not started.");
+    internal PostgreSqlWireCounter Wire => _wire ?? throw new InvalidOperationException("The PostgreSQL server was not started.");
 
     public Task InitializeAsync() => Task.CompletedTask;
 
@@ -42,7 +42,7 @@ public sealed class CommandCostPostgreSqlServer : IAsyncLifetime
             }
 
             var admin = new NpgsqlConnectionStringBuilder(_adminConnectionString);
-            _wire = new PostgresWireCounter(admin.Host!, admin.Port);
+            _wire = new PostgreSqlWireCounter(admin.Host!, admin.Port);
         }
         finally
         {

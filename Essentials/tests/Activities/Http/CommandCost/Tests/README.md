@@ -46,7 +46,7 @@ EF's automatic savepoints, and every round trip one command, one COMMIT or one s
 |---|---|
 | `summary.md` | Totals per run, the linear fit of every count over the WriteLine series, and every cost source ranked with the scaling class the fit shows. Regenerated from every run in the directory, so the second provider's test produces the combined report. |
 | `commands/<provider>-<workflow>-<mode>-<activities>.tsv` | One line per command, with its frames and the start of its SQL. |
-| `runs/*.json` | The measured runs the summary is built from. |
+| `runs/*.json` | The measured runs the summary is built from. A provider's measurement first deletes that provider's earlier runs and command files, so the summary never mixes in a stale run. |
 
 A cost source is per activity when it grows with the number of WriteLines in Balanced, where the commit count is fixed,
 per commit when it grows only in Durable, where every activity commits, and per run when it grows in neither. The

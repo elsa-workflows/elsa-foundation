@@ -60,13 +60,35 @@ internal static class CommandCostReport
         await File.WriteAllLinesAsync(Path.Join(directory, "commands", $"{name}.tsv"), lines);
     }
 
+    /// <summary>
+    /// Deletes what an earlier measurement of <paramref name="provider"/> left in <paramref name="directory"/>, so the
+    /// summary is built from this measurement's runs and the other provider's latest, never from a stale run.
+    /// </summary>
+    public static void ClearRuns(string directory, string provider)
+    {
+        foreach (var (folder, extension) in new[] { ("runs", "json"), ("commands", "tsv") })
+        {
+            var path = Path.Join(directory, folder);
+            if (Directory.Exists(path))
+                foreach (var file in Directory.GetFiles(path, $"{provider}-*.{extension}"))
+                    File.Delete(file);
+        }
+    }
+
     public static IReadOnlyList<CommandCostRun> ReadRuns(string directory) =>
         Directory.Exists(Path.Join(directory, "runs"))
             ? Directory.GetFiles(Path.Join(directory, "runs"), "*.json")
                 .Order(StringComparer.Ordinal)
-                .Select(file => JsonSerializer.Deserialize<CommandCostRun>(File.ReadAllText(file), Json)!)
+                .Select(ReadRun)
                 .ToArray()
             : [];
+
+    /// <summary>A run file an older version of the tool wrote lacks fields this version reads; say so rather than render nonsense.</summary>
+    private static CommandCostRun ReadRun(string file) =>
+        JsonSerializer.Deserialize<CommandCostRun>(File.ReadAllText(file), Json) is { Counts: not null, Commands: not null } run
+            ? run
+            : throw new InvalidDataException(
+                $"{file} was written by another version of the command-cost tool. Measure both providers again into an empty directory.");
 
     public static string Render(IReadOnlyList<CommandCostRun> runs)
     {
@@ -88,7 +110,7 @@ internal static class CommandCostReport
         {
             report.AppendLine(
                 $"| {run.Provider} | {run.Workflow} | {run.Mode} | {run.Activities} | {run.Commands.Count} | {run.Statements} | {run.CommitMarkers} | " +
-                $"{run.Counters.TransactionsCommitted} | {run.Counters.SavepointsCreated} | {Wire(run, wire => wire.RoundTrips)} | {Wire(run, wire => wire.Responses)} | " +
+                $"{run.Counts.TransactionsCommitted} | {run.Counts.SavepointsCreated} | {Wire(run, wire => wire.RoundTrips)} | {Wire(run, wire => wire.Responses)} | " +
                 $"{Wire(run, wire => wire.Executes)} | {Wire(run, wire => wire.SimpleQueryCount)} | {Wire(run, wire => wire.Connections)} |");
         }
 
@@ -124,7 +146,7 @@ internal static class CommandCostReport
                 ("commands", run => run.Commands.Count),
                 ("statements", run => run.Statements),
                 ("commits", run => run.CommitMarkers),
-                ("transactions", run => run.Counters.TransactionsCommitted)
+                ("transactions", run => run.Counts.TransactionsCommitted)
             };
             if (series.Runs.All(run => run.Wire is not null))
                 measures.Add(("round trips", run => run.Wire!.RoundTrips));
@@ -222,7 +244,7 @@ internal static class CommandCostReport
         return (slope, intercept, residual);
     }
 
-    private static string Wire(CommandCostRun run, Func<PostgresWireCounts, int> select) =>
+    private static string Wire(CommandCostRun run, Func<PostgreSqlWireCounts, int> select) =>
         run.Wire is { } wire ? select(wire).ToString(CultureInfo.InvariantCulture) : "-";
 
     private static string Number(double value) =>
