@@ -1,4 +1,4 @@
-import { isThemeMode, type ThemeMode } from "./presets";
+import { isThemeMode, themeModeLabels, type ThemeMode } from "./presets";
 import { isNavModePreference, navModeStorageKey, type NavModePreference } from "./navMode";
 
 /**
@@ -23,6 +23,42 @@ export const appearanceStorageKeys = {
   mode: "elsa-studio-theme-mode",
   navigation: navModeStorageKey
 } as const;
+
+/** Sidebar and dock keys Reset also clears. These are chrome, not theme/mode/nav preferences. */
+export const appearanceChromeStorageKeys = {
+  sidebarCollapsed: "elsa-studio-sidebar-collapsed",
+  bottomPanelCollapsed: "elsa-studio-bottom-panel-collapsed",
+  bottomPanelHeight: "elsa-studio-bottom-panel-height",
+  bottomPanelMaximized: "elsa-studio-bottom-panel-maximized",
+  activeBottomPanel: "elsa-studio-active-bottom-panel"
+} as const;
+
+/** Every key `resetAppearancePreferences` removes. Spec and code must stay in lockstep (8 keys). */
+export const appearanceResetStorageKeys = [
+  appearanceStorageKeys.themeId,
+  appearanceStorageKeys.mode,
+  appearanceStorageKeys.navigation,
+  appearanceChromeStorageKeys.sidebarCollapsed,
+  appearanceChromeStorageKeys.bottomPanelCollapsed,
+  appearanceChromeStorageKeys.bottomPanelHeight,
+  appearanceChromeStorageKeys.bottomPanelMaximized,
+  appearanceChromeStorageKeys.activeBottomPanel
+] as const;
+
+export const appearanceResetEventName = "elsa-studio:appearance-reset";
+
+export const themeModePreferenceLabels: Record<ThemeModePreference, string> = {
+  system: "System",
+  ...themeModeLabels
+};
+
+export const appearanceModePreferences: readonly ThemeModePreference[] = [
+  "system",
+  "light",
+  "dark",
+  "dim",
+  "high-contrast"
+];
 
 export const defaultAppearancePreferences: AppearancePreferences = {
   themeId: null,
@@ -85,10 +121,13 @@ export function writeAppearancePreferences(
   }, undefined);
 }
 
-/** Removes every stored appearance preference so the defaults apply again. */
+/** Removes every stored appearance preference and chrome key so the defaults apply again. */
 export function resetAppearancePreferences(storage: PreferenceStorage | undefined = defaultStorage()): AppearancePreferences {
   if (storage) {
-    safely(() => Object.values(appearanceStorageKeys).forEach(key => storage.removeItem(key)), undefined);
+    safely(() => appearanceResetStorageKeys.forEach(key => storage.removeItem(key)), undefined);
+  }
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new CustomEvent(appearanceResetEventName));
   }
   return { ...defaultAppearancePreferences };
 }

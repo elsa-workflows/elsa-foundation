@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
+  appearanceChromeStorageKeys,
+  appearanceResetStorageKeys,
   appearanceStorageKeys,
   defaultAppearancePreferences,
   getSystemThemeMode,
@@ -47,10 +49,31 @@ describe("appearance model", () => {
     expect(storage.data.has(appearanceStorageKeys.themeId)).toBe(false);
   });
 
-  it("reset removes every stored preference and returns the defaults", () => {
-    const storage = memoryStorage({ "elsa-studio-theme": "drift", "elsa-studio-theme-mode": "dark", "elsa-studio-nav-mode": "left" });
+  it("reset removes every listed appearance and chrome key and returns the defaults", () => {
+    expect(appearanceResetStorageKeys).toHaveLength(8);
+    expect([...appearanceResetStorageKeys]).toEqual([
+      appearanceStorageKeys.themeId,
+      appearanceStorageKeys.mode,
+      appearanceStorageKeys.navigation,
+      appearanceChromeStorageKeys.sidebarCollapsed,
+      appearanceChromeStorageKeys.bottomPanelCollapsed,
+      appearanceChromeStorageKeys.bottomPanelHeight,
+      appearanceChromeStorageKeys.bottomPanelMaximized,
+      appearanceChromeStorageKeys.activeBottomPanel
+    ]);
+    const storage = memoryStorage({
+      "elsa-studio-theme": "drift",
+      "elsa-studio-theme-mode": "dark",
+      "elsa-studio-nav-mode": "left",
+      "elsa-studio-sidebar-collapsed": "true",
+      "elsa-studio-bottom-panel-collapsed": "false",
+      "elsa-studio-bottom-panel-height": "320",
+      "elsa-studio-bottom-panel-maximized": "true",
+      "elsa-studio-active-bottom-panel": "console",
+      "elsa-studio-unrelated": "keep"
+    });
     expect(resetAppearancePreferences(storage)).toEqual(defaultAppearancePreferences);
-    expect(storage.data.size).toBe(0);
+    expect([...storage.data.keys()]).toEqual(["elsa-studio-unrelated"]);
   });
 
   it("does not throw when storage fails", () => {

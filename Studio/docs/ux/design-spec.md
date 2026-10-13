@@ -13,7 +13,7 @@ code.
 | Tag | Meaning |
 |---|---|
 | `exists` | True on `main` today. |
-| `target, phase N` | Not true yet. `N` is the phase in [ux-polish-plan.md](../ux-polish-plan.md) (1 texture, 2 empty/error, 3 motion/finish, 4 structural). Phase 4 also covers remaining Appearance UI (pick System, Reset, Settings › Appearance), which that plan does not schedule. |
+| `target, phase N` | Not true yet. `N` is the phase in [ux-polish-plan.md](../ux-polish-plan.md) (1 texture, 2 empty/error, 3 motion/finish, 4 structural). Settings › Appearance, System as a pickable mode, and Reset now `exists`. |
 
 ## Principles
 
@@ -43,7 +43,8 @@ code.
 4. **Every theme, every mode.** `exists` as a review rule. Each change is checked in Classic
    Light and one dark theme, and must not break Dim or High contrast. Concrete modes are `light`,
    `dark`, `dim` and `high-contrast`. `system` exists as a stored preference (follows the OS, live)
-   and is the default; the ThemeSwitcher has no System control yet (`target, phase 4`).
+   and is the default. Settings › Appearance offers System; the ThemeSwitcher still lists the
+   four concrete modes (`exists`).
 5. **Quiet typography.** `target, phase 1` Sentence case for labels, tabs and panel titles.
    Uppercase mono is reserved for page eyebrows and table headers.
 
@@ -52,7 +53,8 @@ code.
 | Region | Status | Rule |
 |---|---|---|
 | Shell | `exists` | Sidebar or top menubar (theme or user choice). The top bar holds the page title, global actions and the theme control (`ThemeSwitcher`). |
-| Navigation placement | `exists` | Each nav contribution may declare `placement` (`main` \| `more` \| `settings` \| `admin`), `order`, `requiresFeature` and `requiresRole` / `requiresPermission`. Unset `placement` is `more` at the top level; a child inherits its parent unless it declares a different placement, in which case it renders there. Main holds Home, Workflows, Runs and Tasks (Tasks only when the user-tasks feature is enabled). Extensions land under **More tools** (open state in `elsa-studio.ui.nav.more`). Admin and `settings` items share the host-control read gate and render in a gated **Administration** group until the Settings shell (S4) exists. That group stays visible to anonymous/demo users because the server allows admin calls when sign-in is off. Disabled features contribute nothing; role-gated items are hidden. Home points at the existing dashboard/home route until the customizable Home lands. |
+| Navigation placement | `exists` | Each nav contribution may declare `placement` (`main` \| `more` \| `settings` \| `admin`), `order`, `requiresFeature` and `requiresRole` / `requiresPermission`. Unset `placement` is `more` at the top level; a child inherits its parent unless it declares a different placement, in which case it renders there. Main holds Home, Workflows, Runs and Tasks (Tasks only when the user-tasks feature is enabled). Extensions land under **More tools** (open state in `elsa-studio.ui.nav.more`). Admin and `settings` items share the host-control read gate and render in the Settings shell (`/settings`): `settings` under Studio, `admin` under Administration. The sidebar keeps one Settings entry; searching still reveals the individual sections. Anonymous/demo sessions still see these sections when sign-in is off. Disabled features contribute nothing; role-gated items are hidden. Home points at the existing dashboard/home route until the customizable Home lands. |
+| Settings shell | `exists` | `/settings` is a two-pane shell (section list + content). Sections are deep-linkable as `/settings/<id>`. Original admin paths (`/modules`, `/theme-builder`, …) still open the same shell. The route is lazy-loaded. |
 | User menu | `target, phase 4` | See [User menu and sign-out](#user-menu-and-sign-out). Live has none. |
 | Bottom dock | `exists` | Remembers the user's last state in `elsa-studio-bottom-panel-collapsed`, `elsa-studio-bottom-panel-height`, `elsa-studio-bottom-panel-maximized` and `elsa-studio-active-bottom-panel`. With no stored value the dock is **open** on desktop (`collapsed=false`) and collapsed at ≤640px. |
 | Bottom dock default | `target, phase 1` | Collapsed by default when no stored value, including on desktop. |
@@ -92,14 +94,16 @@ owns the live state; this module owns the shape, defaults, persistence and resol
 | Mode | `exists` | `system`, `light`, `dark`, `dim`, `high-contrast` | `system` (follows OS colour scheme and contrast, live) | `elsa-studio-theme-mode` |
 | Navigation | `exists` | `theme`, `left`, `top` | `theme` | `elsa-studio-nav-mode` |
 
-- The topbar `ThemeSwitcher` edits theme, the four concrete modes and nav today (`exists`). It
-  does not offer **System** (`target, phase 4`). A Settings › Appearance page is also
-  `target, phase 4`; `/settings` has no Studio route. When it exists, both surfaces edit the
-  same model and neither keeps its own state.
-- `resetAppearancePreferences()` / `resetAppearance` exist (`exists`) and clear the three
-  appearance keys: `elsa-studio-theme`, `elsa-studio-theme-mode`, `elsa-studio-nav-mode`. There
-  is no Reset control in the UI (`target, phase 4`).
-- When Reset is exposed it should also clear the sidebar and dock keys (`target, phase 4`):
+- The topbar `ThemeSwitcher` edits theme, the four concrete modes and nav today (`exists`).
+  Settings › Appearance (`exists`) edits the same model: theme (Classic default, plus the other
+  built-in and custom themes), mode (System, Light, Dark, and the theme's optional modes),
+  navigation, and a link to the Theme Builder. Density is not in the model. Neither surface
+  keeps its own state.
+- `resetAppearancePreferences()` / `resetAppearance` exist (`exists`) and **Reset appearance**
+  on Settings › Appearance exposes them. Reset clears these eight keys (`exists`):
+  - `elsa-studio-theme`
+  - `elsa-studio-theme-mode`
+  - `elsa-studio-nav-mode`
   - `elsa-studio-sidebar-collapsed`
   - `elsa-studio-bottom-panel-collapsed`
   - `elsa-studio-bottom-panel-height`

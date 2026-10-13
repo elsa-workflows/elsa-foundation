@@ -154,10 +154,21 @@ describe("navigation sections", () => {
       </ThemeProvider>
     );
 
-    const administration = container.querySelector('nav.nav-section[aria-label="Administration"]');
-    expect(administration?.textContent).toContain("Tools");
+    const settings = container.querySelector('nav.nav-section[aria-label="Settings"]');
+    expect(settings?.textContent).toContain("Settings");
+    expect(settings?.textContent).not.toContain("Tools");
     expect(container.querySelector('nav.nav-section[aria-label="Main"]')?.textContent ?? "").not.toContain("Tools");
-    expect(administration?.querySelector('[data-testid="tools-icon"]')?.getAttribute("width")).toBe("18");
+    expect(container.querySelector('nav.nav-section[aria-label="Administration"]')).toBeNull();
+
+    const search = container.querySelector<HTMLInputElement>('input[aria-label="Search modules"]')!;
+    flushSync(() => {
+      const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!;
+      setter.call(search, "tools");
+      search.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    const settingsResults = container.querySelector('nav.nav-section[aria-label="Settings"]');
+    expect(settingsResults?.textContent).toContain("Tools");
+    expect(settingsResults?.querySelector('[data-testid="tools-icon"]')?.getAttribute("width")).toBe("18");
 
     await unmount();
   });

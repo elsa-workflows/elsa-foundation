@@ -548,4 +548,54 @@ describe("ThemeProvider and ThemeSwitcher", () => {
     expect(navMode()).toBe("top");
     expect(navItems()[2].getAttribute("aria-checked")).toBe("true");
   });
+
+  it("follows a live OS colour-scheme change while System mode is selected", async () => {
+    const previous = window.matchMedia;
+    const media = installLiveMatchMedia({ "(prefers-color-scheme: dark)": false, "(prefers-contrast: more)": false });
+    try {
+      await render();
+      await act(() => api!.setModePreference("system"));
+
+      expect(document.documentElement.getAttribute("data-theme-mode")).toBe("light");
+      expect(api!.modePreference).toBe("system");
+
+      media.set("(prefers-color-scheme: dark)", true);
+      await act(() => {});
+
+      expect(document.documentElement.getAttribute("data-theme-mode")).toBe("dark");
+      expect(document.documentElement.getAttribute("data-theme-appearance")).toBe("dark");
+      expect(api!.modePreference).toBe("system");
+    } finally {
+      window.matchMedia = previous;
+    }
+  });
 });
+
+function installLiveMatchMedia(initial: Record<string, boolean>) {
+  const matches = { ...initial };
+  const listeners = new Map<string, Set<EventListener>>();
+  window.matchMedia = ((query: string) => {
+    const mediaQuery = {
+      get matches() {
+        return matches[query] ?? false;
+      },
+      media: query,
+      addEventListener: (_type: string, listener: EventListener) => {
+        const bucket = listeners.get(query) ?? new Set();
+        bucket.add(listener);
+        listeners.set(query, bucket);
+      },
+      removeEventListener: (_type: string, listener: EventListener) => {
+        listeners.get(query)?.delete(listener);
+      }
+    };
+    return mediaQuery as MediaQueryList;
+  }) as typeof window.matchMedia;
+
+  return {
+    set(query: string, value: boolean) {
+      matches[query] = value;
+      listeners.get(query)?.forEach(listener => listener(new Event("change")));
+    }
+  };
+}

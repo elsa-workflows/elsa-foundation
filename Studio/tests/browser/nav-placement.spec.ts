@@ -17,18 +17,20 @@ test.describe("navigation placement", () => {
     await expect(page.getByRole("navigation", { name: "Main" }).getByRole("link", { name: "Runs" })).toBeVisible();
     await expect(page.getByRole("button", { name: "More tools" })).toHaveAttribute("aria-expanded", "false");
     await expect(page.getByRole("link", { name: "Executables" })).toHaveCount(0);
-    await expect(page.getByRole("navigation", { name: "Administration" }).getByRole("link", { name: "Modules" })).toBeVisible();
+    await expect(page.getByRole("navigation", { name: "Settings" }).getByRole("link", { name: "Settings" })).toBeVisible();
+    await expect(page.getByRole("navigation", { name: "Administration" })).toHaveCount(0);
   });
 
-  test("expands More tools and keeps admin items in the gated Administration group", async ({ page }) => {
+  test("expands More tools and keeps admin items out of the sidebar", async ({ page }) => {
     await page.goto("/?mode=nav-placement&more=open");
     await expect(page.getByRole("button", { name: "More tools" })).toHaveAttribute("aria-expanded", "true");
     await expect(page.getByRole("link", { name: "Executables" })).toBeVisible();
     await expect(page.getByRole("link", { name: "Activity definitions" })).toBeVisible();
     await expect(page.getByRole("link", { name: "Secrets" })).toBeVisible();
     await expect(page.getByRole("link", { name: "Diagnostics", exact: true })).toBeVisible();
-    await expect(page.getByRole("navigation", { name: "Administration" }).getByRole("link", { name: "Features" })).toBeVisible();
-    await expect(page.getByRole("navigation", { name: "Administration" }).getByRole("link", { name: "Theme builder" })).toBeVisible();
+    await expect(page.getByRole("navigation", { name: "Settings" }).getByRole("link", { name: "Settings" })).toBeVisible();
+    await expect(page.getByRole("link", { name: "Features" })).toHaveCount(0);
+    await expect(page.getByRole("link", { name: "Theme builder" })).toHaveCount(0);
   });
 
   test("captures Classic light screenshots when asked", async ({ page }) => {
