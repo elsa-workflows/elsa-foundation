@@ -1500,6 +1500,15 @@
     },
     {
       "product": "foundation",
+      "source": null,
+      "target": "Essentials/tests/Activities/Http/CommandCost/Tests/Elsa.Activities.Http.CommandCost.Tests.csproj",
+      "project_name": "Elsa.Activities.Http.CommandCost.Tests",
+      "package_id": "Elsa.Activities.Http.CommandCost.Tests",
+      "assembly_name": "Elsa.Activities.Http.CommandCost.Tests",
+      "explicit_is_packable": null
+    },
+    {
+      "product": "foundation",
       "source": "tests/essentials/Activities/Http/IntegrationTests/Elsa.Activities.Http.IntegrationTests.csproj",
       "target": "Essentials/tests/Activities/Http/IntegrationTests/Elsa.Activities.Http.IntegrationTests.csproj",
       "project_name": "Elsa.Activities.Http.IntegrationTests",

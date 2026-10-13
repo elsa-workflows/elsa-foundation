@@ -1,0 +1,64 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Opt-in measurement of where each EF command of a workflow run comes from, on SQLite and on PostgreSQL. Every
+       test skips unless ELSA_COMMAND_COST_OUT names an output directory or ELSA_COMMAND_COST_REQUIRE_MEASUREMENT is
+       armed, which the nightly EF container leg does; the fast lane never measures. See README.md. -->
+  <PropertyGroup>
+    <IsTestProject>true</IsTestProject>
+    <!-- Attribution reads stack frames, and tiered compilation inlines a method only once it is hot, so the frames of one
+         call depended on how warm the process was: the second provider measured in a process lost frames the first
+         kept. Without tiering every method is compiled once, fully optimized, so a frame is inlined in every run or in
+         none. This writes System.Runtime.TieredCompilation=false into this project's runtimeconfig only. -->
+    <TieredCompilation>false</TieredCompilation>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" />
+    <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" />
+    <PackageReference Include="Testcontainers.PostgreSql" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="Microsoft.AspNetCore.TestHost" />
+    <PackageReference Include="Xunit.SkippableFact" />
+    <PackageReference Include="xunit" />
+    <PackageReference Include="xunit.runner.visualstudio" />
+    <PackageReference Include="coverlet.collector" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+  <!-- The same composition as the EF command budgets, whose host fixture, reference workflows and runners are compiled in below. -->
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\..\..\src\Activities\Http\Elsa.Activities.Http.csproj" />
+    <ProjectReference Include="..\..\..\..\..\src\Workflows\Runtime\Http\Elsa.Workflows.Runtime.Http.csproj" />
+    <ProjectReference Include="..\..\..\..\..\src\Http\Elsa.Http\Elsa.Http.csproj" />
+    <ProjectReference Include="..\..\..\..\..\src\Activities\Runtime\Elsa.Activities.Runtime\Elsa.Activities.Runtime.csproj" />
+    <ProjectReference Include="..\..\..\..\..\src\Activities\Runtime\Core\Elsa.Activities.Runtime.Core.csproj" />
+    <ProjectReference Include="..\..\..\..\..\src\Activities\Primitives\Elsa.Activities.Primitives.csproj" />
+    <ProjectReference Include="..\..\..\..\..\src\Activities\Sequence\Elsa.Activities.Sequence.csproj" />
+    <ProjectReference Include="..\..\..\..\..\src\Activities\ControlFlow\Elsa.Activities.ControlFlow.csproj" />
+    <ProjectReference Include="..\..\..\..\..\src\Events\Elsa.Events\Elsa.Events.csproj" />
+    <ProjectReference Include="..\..\..\..\..\src\Expressions\Elsa.Expressions\Elsa.Expressions.csproj" />
+    <ProjectReference Include="..\..\..\..\..\src\Expressions\JavaScript\Elsa.Expressions.JavaScript\Elsa.Expressions.JavaScript.csproj" />
+    <ProjectReference Include="..\..\..\..\..\src\Expressions\JavaScript\Jint\Elsa.Expressions.JavaScript.Jint.csproj" />
+    <ProjectReference Include="..\..\..\..\..\src\Serialization\SystemText\Elsa.Serialization.SystemText.csproj" />
+    <ProjectReference Include="..\..\..\..\..\src\Primitives\Primitives\Elsa.Primitives.csproj" />
+    <ProjectReference Include="..\..\..\..\..\src\Workflows\Runtime\Api\Elsa.Workflows.Runtime.Api.csproj" />
+    <ProjectReference Include="..\..\..\..\..\src\Workflows\Runtime\Persistence\EntityFrameworkCore\Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.csproj" />
+    <ProjectReference Include="..\..\..\Testing\Elsa.Activities.Testing.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="Xunit" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Include="../../IntegrationTests/HttpEndpointHostFixture.cs" Link="Budget/HttpEndpointHostFixture.cs" />
+    <Compile Include="../../IntegrationTests/SequenceShape.cs" Link="Budget/SequenceShape.cs" />
+    <Compile Include="../../IntegrationTests/StallingActivity.cs" Link="Budget/StallingActivity.cs" />
+    <Compile Include="../../IntegrationTests/CommandBudgets/ReferenceWorkflows.cs" Link="Budget/ReferenceWorkflows.cs" />
+    <Compile Include="../../IntegrationTests/CommandBudgets/ReferenceWorkflowRuns.cs" Link="Budget/ReferenceWorkflowRuns.cs" />
+  </ItemGroup>
+
+</Project>

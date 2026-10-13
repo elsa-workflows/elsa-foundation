@@ -1,51 +1,73 @@
-# Elsa Foundation Architecture Tour
+# Elsa Foundation architecture tour
 
-This is the short orientation path. It explains where things are and why they exist without requiring a full constitution read.
+A short orientation for developers new to this repository: what Elsa 4 is made of, the few patterns that hold it together, and where to go next. You do not need to read the project's rulebooks (the "constitution", explained below) first.
 
-## The repo shape
+## What Elsa 4 is made of
 
-`elsa-foundation` is the transitional Elsa foundation workspace:
+Elsa is being rebuilt as a set of **modular domains**. Each domain publishes its contracts in a `.Core` library, keeps its implementations behind those contracts, and talks to other domains only through a handful of approved patterns, never by reaching into another domain's implementation.
 
-- `src/` contains foundation libraries and default implementations.
-- `Essentials/apps/Elsa.Workbench/Program.cs` is the process entry point; it composes the libraries into shells from `Essentials/apps/Elsa.Workbench/shells.json`. [How a workflow executes](how-a-workflow-executes.md) follows one request from there to a durable checkpoint.
-- `tests/` contains focused tests for foundation behavior.
-- `specs/` contains Speckit work units and feature plans.
-- `.specify/` contains Speckit templates, workflows, extensions, and the two-layer constitution.
-- `docs/` contains lookup knowledge: glossary, skills, maps, reports, reference docs, and program-goal buckets.
-- `docs/program-goals/` contains the shared backlog, mid-term goal bucket registry, and roadmap notes.
-- `.claude/` contains Claude-specific Speckit adapters.
+The biggest split is between **designing** workflows and **running** them:
 
-## The architecture in one pass
+```mermaid
+flowchart LR
+    subgraph Design["Workflows.Design (authoring)"]
+        D[Definitions, drafts, versions]
+    end
+    subgraph Runtime["Workflows.Runtime (execution)"]
+        E[Executions, bookmarks, checkpoints]
+    end
+    D -->|publish| X[Published executable]
+    X --> E
+```
 
-Elsa is being refactored into modular domains. Each domain exposes contracts through `.Core` libraries, keeps implementations behind those contracts, and composes with other domains through sanctioned patterns instead of direct implementation coupling.
+- `Elsa.Workflows.Design.*` owns authoring and saved workflow definitions.
+- `Elsa.Workflows.Runtime.*` owns execution.
+- Runtime must not depend on Design directly. The **published executable** is the boundary between them: Design produces it, Runtime runs it.
 
-The main patterns to recognize:
+A running server is a **shell**: a service container built from a list of **features** named in configuration. The reference server, the Workbench, reads that list from its `shells.json`. A feature that is not listed registers nothing. [How a workflow executes](how-a-workflow-executes.md) follows one request through the Workbench to a saved checkpoint.
 
-- **Feature inheritance:** a feature may build on another feature when the relationship is explicit and stable.
-- **Replacement:** a consumer replaces one default implementation of a contract.
-- **Contribution:** a consumer adds implementations that a single owner-owned handler aggregates.
-- **Events:** one `IEvent` concept, with delivery strategy defining behavior.
-- **Startup tasks:** startup-time composition and registry population.
-- **Adapters and bridges:** integration code sits above the sides it connects.
-- **Provider modules:** provider-specific implementations stay in provider-suffixed packages.
+Generated maps track the current Design/Runtime reference signals. Known, deferred exceptions are recorded in reports, not here. For a worked example of how two domains connect, read [seams and bridges](seams.md).
 
-## Workflows.Design and Workflows.Runtime
+## The patterns to recognise
 
-`Elsa.Workflows.Design.*` owns authoring and persisted workflow definitions. `Elsa.Workflows.Runtime.*` owns execution. Runtime must not depend directly on Design. Published/executable artifacts are the intended boundary between them.
-
-Generated maps track current design/runtime reference signals, and known deferred exceptions belong in reports rather than in this tour.
-
-For the detailed worked example, read [seams and bridges](seams.md).
+| Pattern | In one line | Example |
+|---|---|---|
+| **Feature inheritance** | A feature builds on another when the relationship is explicit and stable. | The database runtime feature depends on the resumption feature, so choosing database storage always brings the recovery pump. |
+| **Replacement** | A consumer swaps the one default implementation of a contract. | The EF Core feature replaces the in-memory work queue with a database queue. |
+| **Contribution** | Consumers add implementations; one owner aggregates them. | Each activity module contributes its scheduler work handlers; the drain picks the one that accepts each work item. |
+| **Events** | One `IEvent` concept; the delivery strategy defines how it is delivered. | A domain publishes an event without knowing who listens. |
+| **Startup tasks** | Composition and registry population that happen at start-up. | Filling a registry from contributed descriptors when the shell starts. |
+| **Adapters and bridges** | Integration code sits *above* the two sides it connects. | See [seams and bridges](seams.md). |
+| **Provider modules** | Provider-specific code lives in provider-suffixed packages. | `...EntityFrameworkCore` packages hold the database stores. |
 
 ## Extension points
 
-The repo-wide extension-point index is [../EXTENSION_POINTS.md](../EXTENSION_POINTS.md). Per-domain catalogs live beside the owning feature project. They answer: what can be replaced, what can be contributed, and which events are published.
+Every domain documents what you can replace, what you can contribute, and which events it publishes. The repo-wide index is [EXTENSION_POINTS.md](../EXTENSION_POINTS.md); each domain's own catalog sits beside its feature project.
+
+## Working in this repo
+
+| Folder | What is in it |
+|---|---|
+| `Essentials/apps/` | Runnable hosts. `Elsa.Workbench` is the reference server and the process entry point. |
+| `Essentials/src/` | The core libraries and default implementations. |
+| `Essentials/tests/` | Focused tests for that behaviour. |
+| `Extensions/` | Optional modules. |
+| `Studio/` | The Studio front end. |
+| `docs/` | Lookup knowledge: glossary, skills, maps, reports, reference docs and programme goals. |
+| `docs/program-goals/` | The shared backlog, the registry of mid-term goal buckets, and roadmap notes. |
+| `specs/` | Work units and feature plans written with **Speckit**, the spec-driven planning tool this repo uses. |
+| `.specify/` | Speckit's templates, workflows and extensions, plus the **constitution**. |
+| `.claude/` | Speckit adapters for the Claude coding agent. |
+
+> **What is the "constitution"?** Two rule files under `.specify/memory/` (`constitution-framework.md` for framework-wide rules, `constitution.md` for Elsa-specific ones). They hold the enforceable architecture gates, the rules a change must pass. You only need them when a review points you at a specific gate.
 
 ## How to go deeper
 
-- Need a definition? Use [glossary/root.md](glossary/root.md) or [glossary/elsa.md](glossary/elsa.md).
-- Need to perform a task? Use [skills/catalog.md](skills/catalog.md).
-- Need active priorities? Start with [program-goals/README.md](program-goals/README.md), including the named buckets and the `none/free-flow` state.
-- Need generated facts? Use [maps/README.md](maps/README.md).
-- Need current gaps? Use [reports/unfinished-work.md](reports/unfinished-work.md).
-- Need enforceable gates? Use the two constitution files under `.specify/memory/`.
+| You need… | Go to |
+|---|---|
+| A definition | [Root glossary](glossary/root.md) or [Elsa glossary](glossary/elsa.md) |
+| To perform a task | [Skills catalog](skills/catalog.md) |
+| Current priorities | [Programme goals](program-goals/README.md), including the named buckets and the `none/free-flow` state |
+| Generated facts | [Maps](maps/README.md) |
+| Known gaps | [Unfinished work](reports/unfinished-work.md) |
+| Enforceable gates | The two constitution files under `.specify/memory/` |

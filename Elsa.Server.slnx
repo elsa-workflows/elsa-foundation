@@ -365,6 +365,9 @@
     <Project Path="Essentials/tests/Activities/Http/IntegrationTests/Elsa.Activities.Http.IntegrationTests.csproj" />
     <Project Path="Essentials/tests/Activities/Http/Tests/Elsa.Activities.Http.Tests.csproj" />
   </Folder>
+  <Folder Name="/Essentials/tests/Activities/Http/CommandCost/">
+    <Project Path="Essentials/tests/Activities/Http/CommandCost/Tests/Elsa.Activities.Http.CommandCost.Tests.csproj" />
+  </Folder>
   <Folder Name="/Essentials/tests/Activities/Http/Fixtures/">
     <Project Path="Essentials/tests/Activities/Http/Fixtures/ResponseReplayHost/ResponseReplayHost.csproj" />
   </Folder>
