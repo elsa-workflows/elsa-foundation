@@ -51,6 +51,12 @@ public sealed class CommandCostMeasurementTests(CommandCostPostgreSqlServer post
             await CommandCostReport.WriteRunAsync(output!, run);
         await File.WriteAllTextAsync(Path.Join(output, "summary.md"), CommandCostReport.Render(CommandCostReport.ReadRuns(output!)));
 
+        // Every durable commit writes one commit marker inside a transaction of its own, so the transactions that wrote a
+        // marker are as many as the markers. Fewer means two real transactions were given one id.
+        Assert.All(runs, run => Assert.True(CommandCostReport.CommitTransactions(run).Count == run.CommitMarkers,
+            $"{run.Provider} {run.Workflow} {run.Mode} {run.Activities}: {run.CommitMarkers} commit markers were written in " +
+            $"{CommandCostReport.CommitTransactions(run).Count} distinct transaction ids."));
+
         // Every statement on the wire is one the EF context sent, or a savepoint EF set or released around a save inside
         // an open transaction, which Npgsql runs without passing through the command interceptor. Every round trip is one
         // command, one COMMIT or one of those savepoint statements; Npgsql writes BEGIN and the reset of a pooled

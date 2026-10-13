@@ -158,19 +158,19 @@ internal sealed partial class CommandCostRecorder : DbCommandInterceptor, IDbTra
     public ValueTask<DbTransaction> TransactionUsedAsync(DbConnection connection, TransactionEventData eventData, DbTransaction result, CancellationToken cancellationToken = default) =>
         ValueTask.FromResult(Started(result));
 
-    public void TransactionCommitted(DbTransaction transaction, TransactionEndEventData eventData) => Interlocked.Increment(ref _transactionsCommitted);
+    public void TransactionCommitted(DbTransaction transaction, TransactionEndEventData eventData) => Ended(transaction, ref _transactionsCommitted);
 
     public Task TransactionCommittedAsync(DbTransaction transaction, TransactionEndEventData eventData, CancellationToken cancellationToken = default)
     {
-        Interlocked.Increment(ref _transactionsCommitted);
+        Ended(transaction, ref _transactionsCommitted);
         return Task.CompletedTask;
     }
 
-    public void TransactionRolledBack(DbTransaction transaction, TransactionEndEventData eventData) => Interlocked.Increment(ref _transactionsRolledBack);
+    public void TransactionRolledBack(DbTransaction transaction, TransactionEndEventData eventData) => Ended(transaction, ref _transactionsRolledBack);
 
     public Task TransactionRolledBackAsync(DbTransaction transaction, TransactionEndEventData eventData, CancellationToken cancellationToken = default)
     {
-        Interlocked.Increment(ref _transactionsRolledBack);
+        Ended(transaction, ref _transactionsRolledBack);
         return Task.CompletedTask;
     }
 
@@ -194,6 +194,17 @@ internal sealed partial class CommandCostRecorder : DbCommandInterceptor, IDbTra
     {
         _transactions.GetOrAdd(transaction, _ => Interlocked.Increment(ref _transactionsStarted));
         return transaction;
+    }
+
+    /// <summary>
+    /// Counts a transaction's end and forgets its object. Npgsql hands out the same <c>NpgsqlTransaction</c> for every
+    /// transaction on one physical connection, so an id keyed by the object must end with the transaction, or the next
+    /// transaction on that connection would inherit it.
+    /// </summary>
+    private void Ended(DbTransaction transaction, ref int counter)
+    {
+        _transactions.TryRemove(transaction, out _);
+        Interlocked.Increment(ref counter);
     }
 
     private T Record<T>(DbCommand command, T result)
