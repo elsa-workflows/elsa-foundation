@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
+import React, { lazy, Suspense, useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import {
   Activity,
   ChevronDown,
@@ -55,6 +55,10 @@ import { WeaverSurface } from "./weaver";
 import "./styles.css";
 import "./agent/agent.css";
 import "./weaver/weaver.css";
+
+const DevDisclosurePage = import.meta.env.DEV
+  ? lazy(() => import("./ui/disclosure/DisclosureFixturePage").then(module => ({ default: module.DisclosureFixturePage })))
+  : null;
 
 type LoadState = "loading" | "ready" | "failed";
 type NavigationSection = StudioNavigationSection;
@@ -345,8 +349,13 @@ function AppContent({ authManager }: { authManager: AuthProviderManager | null }
         {path === "/package-feeds" ? <PackageFeedsPage api={api!} /> : null}
         {path === "/diagnostics" ? <Diagnostics api={api!} /> : null}
         {path === "/diagnostics/modules" ? <ModuleDiagnostics api={api!} /> : null}
+        {DevDisclosurePage && path === "/dev/disclosure" ? (
+          <Suspense fallback={null}>
+            <DevDisclosurePage />
+          </Suspense>
+        ) : null}
         {ActiveComponent ? <ActiveComponent navigate={navigateTo} /> : null}
-        {!ActiveComponent && path !== "/modules" && !themeBuilderPath && path !== "/package-feeds" && path !== "/diagnostics" && path !== "/diagnostics/modules" ? (
+        {!ActiveComponent && path !== "/modules" && !themeBuilderPath && path !== "/package-feeds" && path !== "/diagnostics" && path !== "/diagnostics/modules" && !(DevDisclosurePage && path === "/dev/disclosure") ? (
           <div className="empty-state">
             {owningFeatureArea
               ? `${owningFeatureArea.title} owns ${path}, but no route component is registered for it.`

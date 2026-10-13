@@ -32,7 +32,8 @@ code.
    Colour lint is only partly true today: `pnpm lint:css` (`elsa/no-raw-color-literal`) covers
    `src/essentials/*/Client/src/**/*.css` and `Extensions/*/studio/*/Client/src/**/*.css`.
    `.stylelintrc.json` ignores `**/Elsa.Studio.Web/Client/**`, so the app shell, `ui/forms`,
-   `ui/layout`, `ui/feedback` and `app/styles.css` are **not** colour-linted. Module colour:
+   `ui/layout`, `ui/feedback` and `app/styles.css` are **not** colour-linted. The disclosure kit
+   CSS (`ui/disclosure/**/*.css`) is linted via `.stylelintrc.disclosure.json`. Module colour:
    `exists`. Shell/`ui` colour: review-only until coverage is extended (`target, phase 4`).
    Radius, shadow and type: `target, phase 1`.
    **Check:** the diff uses only `--studio-radius-sm`, `--studio-radius`, `--studio-radius-md`,
@@ -77,6 +78,7 @@ code.
 | Feedback | `exists` (primitives) / `target, phase 2` (rich pattern) | `EmptyState`, `SkeletonRows` and `StudioAlert` exist. The richer pattern — icon, title, one-line hint, optional action — is the phase 2 target. |
 | Overlays | `target, phase 3` | Popovers and dialogs animate in (fade + 4px slide/scale, ≤ 150ms) and honour `prefers-reduced-motion`. |
 | Icons | `exists` | lucide, 16px in controls, 20px in nodes and tiles. |
+| Disclosure kit | `exists` | `ui/disclosure/*`: `AddOption`, `RevealToggle`, `AdvancedSection`, `TechnicalDetails`, `OverflowMenu`, `ExpressionToggle`, `PeerViewSwitch`. Shared `persistKey` / `forceOpen`. A non-default, bound or invalid field is never hidden. Motion ≤ 150ms via `--studio-disclosure-duration`, honours `prefers-reduced-motion`. Keyboard + `aria-expanded` / `aria-controls`. Fixture at `/dev/disclosure` in dev builds only (`import.meta.env.DEV`) and `tests/browser/disclosure.html`. Not adopted on inspector, settings or other surfaces yet. |
 
 ## Appearance
 
@@ -163,8 +165,9 @@ shared `activity` / `Boxes` icon if the descriptor supplied one.
 - [ ] One surface; no unrelated refactors.
 - [ ] Before/after screenshots at 1600×1000 @2x, Classic Light and one dark theme.
 - [ ] Only `--studio-*` tokens. `pnpm lint:css` passes for module CSS it actually covers
-      (`essentials` and `Extensions` Client CSS). Shell / `ui` colour is review-only until
-      `Elsa.Studio.Web/Client` is no longer in `.stylelintrc.json` `ignoreFiles`.
+      (`essentials` and `Extensions` Client CSS, plus `ui/disclosure/**/*.css`). Shell / other
+      `ui` colour is review-only until `Elsa.Studio.Web/Client` is no longer in
+      `.stylelintrc.json` `ignoreFiles`.
 - [ ] Keyboard and focus behaviour unchanged or better.
 - [ ] Axe: `pnpm test:browser -- expression-code-intelligence-accessibility.spec.ts` (Chromium
       project in `Studio/playwright.config.ts`) passes (it fails on any critical/serious

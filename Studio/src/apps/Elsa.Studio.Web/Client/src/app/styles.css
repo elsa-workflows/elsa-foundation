@@ -1,4 +1,5 @@
 @import "./ui/tokens.css";
+@import "./ui/disclosure/disclosure.css";
 @import "./themes/fonts.css";
 @import "./themes/layouts.css";
 @import "./themes/elsaCloud.css";
