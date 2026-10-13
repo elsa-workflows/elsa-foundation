@@ -3,7 +3,7 @@ import { mkdir } from "node:fs/promises";
 import { resolve } from "node:path";
 import axe from "axe-core";
 
-const screenshotDir = resolve(process.cwd(), process.env.SETTINGS_SCREENSHOT_DIR ?? "../docs/pr-assets/settings-shell");
+const screenshotDir = resolve(process.cwd(), process.env.SETTINGS_SCREENSHOT_DIR ?? "../docs/pr-assets/2720");
 
 async function expectNoSeriousAxeViolations(page: import("@playwright/test").Page) {
   await page.addScriptTag({ content: axe.source });
