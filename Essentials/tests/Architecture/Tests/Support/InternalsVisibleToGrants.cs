@@ -56,6 +56,14 @@ internal static class InternalsVisibleToGrants
             .Select(project => $"{AssemblyName(project)}: no compiled assembly at {Relative(repoRoot, BuiltAssemblyPath(project, configuration)!)}; " +
                                "build it first (the Architecture tests build every production project), because its grants are read from it");
 
+        var stale = ProductionProjects(repoRoot)
+            .Select(project => (Project: project, Assembly: BuiltAssemblyPath(project, configuration)!))
+            .Where(built => File.Exists(built.Assembly))
+            .Select(built => (built.Project, built.Assembly, Newest: NewestInput(repoRoot, built.Project)))
+            .Where(built => File.GetLastWriteTimeUtc(built.Newest) > File.GetLastWriteTimeUtc(built.Assembly))
+            .Select(built => $"{AssemblyName(built.Project)}: the compiled assembly at {Relative(repoRoot, built.Assembly)} is older than " +
+                             $"{Relative(repoRoot, built.Newest)}; build it again, because a stale assembly can hide a grant or report one that is gone");
+
         var compiled = FindCompiled(repoRoot, configuration)
             .Where(grant => !exceptions.Contains((grant.Project, grant.Target!)))
             .Select(grant => Judge(grant with { DeclaredIn = DeclarationOf(grant, declared) }, assemblies))
@@ -72,7 +80,7 @@ internal static class InternalsVisibleToGrants
             .Where(path => MsBuildGrantTargets(XDocument.Load(path)).Any())
             .Select(path => $"{Relative(repoRoot, path)} declares InternalsVisibleTo for every project that imports it; declare it in the granting project instead");
 
-        return [.. unbuilt.Concat(compiled).Concat(testProjectGrants).Concat(sharedViolations).Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal)];
+        return [.. unbuilt.Concat(stale).Concat(compiled).Concat(testProjectGrants).Concat(sharedViolations).Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal)];
     }
 
     /// <summary>The assemblies a built assembly opens its internals to, read from its metadata without loading it.</summary>
@@ -234,6 +242,38 @@ internal static class InternalsVisibleToGrants
         return items.Concat(attributes)
             .Select(target => target.Split(',')[0].Trim())
             .Where(target => target.Length > 0);
+    }
+
+    /// <summary>
+    /// The newest of a project's compile inputs this guard can see cheaply: its project file and the C# files in its own
+    /// tree that its <c>Compile Remove</c> patterns do not exclude. A compiled assembly older than it is stale.
+    /// </summary>
+    private static string NewestInput(string repoRoot, string projectPath)
+    {
+        var projectDirectory = Path.GetDirectoryName(projectPath)!;
+        var removed = XDocument.Load(projectPath).Descendants()
+            .Where(element => element.Name.LocalName == "Compile")
+            .Select(element => element.Attribute("Remove")?.Value)
+            .OfType<string>()
+            .SelectMany(patterns => patterns.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+            .Select(GlobPattern)
+            .ToArray();
+
+        return SourceFiles(repoRoot, projectPath)
+            .Where(source => !removed.Any(pattern => pattern.IsMatch(Path.GetRelativePath(projectDirectory, source).Replace('\\', '/'))))
+            .Append(projectPath)
+            .MaxBy(File.GetLastWriteTimeUtc)!;
+    }
+
+    /// <summary>An MSBuild item glob (<c>**</c>, <c>*</c>, <c>?</c>, either separator) as a regular expression over a relative path.</summary>
+    private static System.Text.RegularExpressions.Regex GlobPattern(string glob)
+    {
+        var pattern = System.Text.RegularExpressions.Regex.Escape(glob.Replace('\\', '/'))
+            .Replace(@"\*\*/", "(?:.*/)?", StringComparison.Ordinal)
+            .Replace(@"\*\*", ".*", StringComparison.Ordinal)
+            .Replace(@"\*", "[^/]*", StringComparison.Ordinal)
+            .Replace(@"\?", "[^/]", StringComparison.Ordinal);
+        return new System.Text.RegularExpressions.Regex($"^{pattern}$");
     }
 
     /// <summary>The project's own source files: its directory tree, without build output or a nested project's tree.</summary>

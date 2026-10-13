@@ -11727,6 +11727,11 @@
         },
         {
           "type": "internal",
+          "id": "dotnet-elsa",
+          "path": "Essentials/src/Cli/Elsa.Cli/Elsa.Cli.csproj"
+        },
+        {
+          "type": "internal",
           "id": "Elsa.Cli.Worker",
           "path": "Essentials/src/Cli/Worker/Elsa.Cli.Worker.csproj"
         },

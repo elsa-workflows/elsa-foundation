@@ -34,6 +34,36 @@ public sealed partial class ArchitectureGuardTests
             string.Join(Environment.NewLine, violations));
     }
 
+    /// <summary>
+    /// The guard reads every production project's compiled assembly, so building this suite has to build every production
+    /// project; otherwise a clean checkout would fail the guard for a project nothing built, or a stale build would pass
+    /// it. A production project outside this suite's reference graph, directly or transitively, fails here by name.
+    /// </summary>
+    [Fact]
+    public void Every_production_project_is_built_before_the_architecture_tests()
+    {
+        var built = new HashSet<string>(StringComparer.Ordinal);
+        var pending = new Stack<string>([Path.GetFullPath(Path.Join(RepoRoot, "Essentials", "tests", "Architecture", "Tests", "Elsa.Architecture.Tests.csproj"))]);
+        while (pending.TryPop(out var project))
+        {
+            if (built.Add(project))
+                foreach (var reference in ProjectGraph.ReferencedProjectPaths(project))
+                    pending.Push(reference);
+        }
+
+        var production = ModuleRoots.Resolve(RepoRoot, ModuleRoots.Production)
+            .SelectMany(root => Directory.EnumerateFiles(root, "*.csproj", SearchOption.AllDirectories))
+            .Where(path => !IsBuildOutput(path))
+            .Select(Path.GetFullPath)
+            .ToArray();
+        var unbuilt = production.Where(project => !built.Contains(project)).Select(project => Path.GetRelativePath(RepoRoot, project)).Order(StringComparer.Ordinal).ToArray();
+
+        Assert.True(production.Length > 100, $"Only {production.Length} production projects were found; the sweep has stopped finding them.");
+        Assert.True(unbuilt.Length == 0,
+            "Add each as a build-only reference (ReferenceOutputAssembly=\"false\") to Elsa.Architecture.Tests.csproj:" + Environment.NewLine +
+            string.Join(Environment.NewLine, unbuilt));
+    }
+
     /// <summary>Pins that the guard reads the real compiled grants, so its going green means "checked".</summary>
     [Fact]
     public void The_compiled_grant_sweep_finds_the_repositorys_existing_grants()
@@ -138,11 +168,18 @@ public sealed partial class ArchitectureGuardTests
 
         sandbox.File("Directory.Build.props", """<Project><ItemGroup><InternalsVisibleTo Include="Elsa.Tasks.Tests" /></ItemGroup></Project>""");
 
+        // A source changed after the last build, so the compiled assembly no longer says what the source declares.
+        sandbox.Project("Essentials/src/Caching/Core/Elsa.Caching.Core.csproj");
+        var stale = sandbox.Assembly("Essentials/src/Caching/Core/bin/Release/net10.0/Elsa.Caching.Core.dll", "internal static class Cache { }");
+        sandbox.File("Essentials/src/Caching/Core/Cache.cs", "internal static class Cache { }");
+        File.SetLastWriteTimeUtc(Path.Join(sandbox.Root, "Essentials/src/Caching/Core/Cache.cs"), File.GetLastWriteTimeUtc(stale).AddHours(1));
+
         var violations = InternalsVisibleToGrants.Violations(sandbox.Root, "Release", InternalsVisibleToExceptions);
 
         Assert.Equal(
         [
             "Directory.Build.props declares InternalsVisibleTo for every project that imports it; declare it in the granting project instead",
+            "Elsa.Caching.Core: the compiled assembly at Essentials/src/Caching/Core/bin/Release/net10.0/Elsa.Caching.Core.dll is older than Essentials/src/Caching/Core/Cache.cs; build it again, because a stale assembly can hide a grant or report one that is gone",
             "Elsa.Events -> Elsa.Tasks (Essentials/src/Events/Elsa.Events/AssemblyInfo.cs, computed argument): Essentials/src/Tasks/Elsa.Tasks/Elsa.Tasks.csproj is not a test project; a project never opens its internals to another production project",
             "Elsa.Locking.Core: no compiled assembly at Essentials/src/Locking/Core/bin/Release/net10.0/Elsa.Locking.Core.dll; build it first (the Architecture tests build every production project), because its grants are read from it",
             "Elsa.Tasks -> Elsa.Events.Tests (compiled into Essentials/src/Tasks/Elsa.Tasks/bin/Release/net10.0/Elsa.Tasks.dll; not declared in the project file or its own sources, so a linked file, an imported build file or a computed argument): Essentials/tests/Events/Tests/Elsa.Events.Tests.csproj tests domain 'Events', not the granting project's domain 'Tasks'",
