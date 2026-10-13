@@ -31,8 +31,11 @@ public sealed class CommandCostMeasurementTests(CommandCostPostgreSqlServer post
         MeasureAsync(new SqliteDatabase());
 
     [SkippableFact]
-    public Task Measures_the_reference_workflows_and_the_WriteLine_series_on_PostgreSQL() =>
-        MeasureAsync(new PostgreSqlDatabase(postgreSql));
+    public async Task Measures_the_reference_workflows_and_the_WriteLine_series_on_PostgreSQL()
+    {
+        await MeasureAsync(new PostgreSqlDatabase(postgreSql));
+        Assert.Equal(0, await postgreSql.CountRunDatabasesAsync());
+    }
 
     private async Task MeasureAsync(IMeasuredDatabase database)
     {

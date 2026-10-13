@@ -47,7 +47,7 @@ internal interface IMeasuredDatabase
 
     PostgreSqlWireCounter? Wire { get; }
 
-    Task<HttpEndpointHostFixture> StartHostAsync(CommandCostMode mode, Action<IServiceCollection> configureServices);
+    Task<MeasuredHost> StartHostAsync(CommandCostMode mode, Action<IServiceCollection> configureServices);
 
     void AddInterceptor(IServiceCollection services, CommandCostRecorder recorder);
 }
@@ -58,8 +58,8 @@ internal sealed class SqliteDatabase : IMeasuredDatabase
 
     public PostgreSqlWireCounter? Wire => null;
 
-    public Task<HttpEndpointHostFixture> StartHostAsync(CommandCostMode mode, Action<IServiceCollection> configureServices) =>
-        HttpEndpointHostFixture.StartDurableSqliteAsync(mode.Mode, ReferenceWorkflowRuns.MaxActivitiesPerCommit, configureServices, mode.RecordCompletion);
+    public async Task<MeasuredHost> StartHostAsync(CommandCostMode mode, Action<IServiceCollection> configureServices) =>
+        new(await HttpEndpointHostFixture.StartDurableSqliteAsync(mode.Mode, ReferenceWorkflowRuns.MaxActivitiesPerCommit, configureServices, mode.RecordCompletion));
 
     public void AddInterceptor(IServiceCollection services, CommandCostRecorder recorder) =>
         services.ConfigureDbContext<RuntimeSqliteDbContext>(builder => builder.AddInterceptors(recorder));
@@ -71,17 +71,43 @@ internal sealed class PostgreSqlDatabase(CommandCostPostgreSqlServer server) : I
 
     public PostgreSqlWireCounter? Wire => server.Wire;
 
-    public async Task<HttpEndpointHostFixture> StartHostAsync(CommandCostMode mode, Action<IServiceCollection> configureServices) =>
-        await HttpEndpointHostFixture.StartDurableAsync(
-            "PostgreSql",
-            await server.CreateDatabaseAsync(),
-            mode.Mode,
-            ReferenceWorkflowRuns.MaxActivitiesPerCommit,
-            configureServices,
-            mode.RecordCompletion);
+    public async Task<MeasuredHost> StartHostAsync(CommandCostMode mode, Action<IServiceCollection> configureServices)
+    {
+        var database = await server.CreateDatabaseAsync();
+        try
+        {
+            return new MeasuredHost(
+                await HttpEndpointHostFixture.StartDurableAsync(
+                    "PostgreSql",
+                    database.ConnectionString,
+                    mode.Mode,
+                    ReferenceWorkflowRuns.MaxActivitiesPerCommit,
+                    configureServices,
+                    mode.RecordCompletion),
+                database);
+        }
+        catch
+        {
+            await database.DisposeAsync();
+            throw;
+        }
+    }
 
     public void AddInterceptor(IServiceCollection services, CommandCostRecorder recorder) =>
         services.ConfigureDbContext<RuntimePostgreSqlDbContext>(builder => builder.AddInterceptors(recorder));
+}
+
+/// <summary>A measured host; disposing it stops the host and then tears down its database, if that needs anything.</summary>
+internal sealed class MeasuredHost(HttpEndpointHostFixture fixture, IAsyncDisposable? database = null) : IAsyncDisposable
+{
+    public HttpEndpointHostFixture Fixture => fixture;
+
+    public async ValueTask DisposeAsync()
+    {
+        await fixture.DisposeAsync();
+        if (database is not null)
+            await database.DisposeAsync();
+    }
 }
 
 /// <summary>
@@ -100,7 +126,7 @@ internal static class CommandCostScenarios
     public static async Task<CommandCostRun> MeasureAsync(IMeasuredDatabase database, string workflow, CommandCostMode mode, int writeLines = 10)
     {
         using var recorder = new CommandCostRecorder();
-        await using var fixture = await database.StartHostAsync(mode, services =>
+        await using var host = await database.StartHostAsync(mode, services =>
         {
             ReferenceWorkflowRuns.ComposeHost(services);
             database.AddInterceptor(services, recorder);
@@ -108,6 +134,7 @@ internal static class CommandCostScenarios
             services.AddSingleton<IStartupFilter>(new FlowPerRequest(recorder));
         });
 
+        var fixture = host.Fixture;
         var window = new MeasurementWindow(recorder, database.Wire);
         if (workflow == RollbackProbe)
             await window.MeasureAsync(() => RunRollbackProbeAsync(fixture));

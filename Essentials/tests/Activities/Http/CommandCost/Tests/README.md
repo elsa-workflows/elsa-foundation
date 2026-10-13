@@ -17,7 +17,9 @@ ELSA_COMMAND_COST_OUT=/tmp/command-cost \
 
 The PostgreSQL test starts a `postgres:16-alpine` container through Testcontainers, so it needs Docker. Set
 `ELSA_COMMAND_COST_POSTGRESQL_CONNECTION_STRING` to an existing server to use that instead. Filter with
-`--filter "FullyQualifiedName~SQLite"` or `~PostgreSQL` to measure one provider.
+`--filter "FullyQualifiedName~SQLite"` or `~PostgreSQL` to measure one provider. Each run gets a database of its own,
+named `command_cost_<guid>`; after the run its pooled connections are closed and the database is dropped, and the
+PostgreSQL test fails if any such database is left on the server.
 
 ## What it measures
 
