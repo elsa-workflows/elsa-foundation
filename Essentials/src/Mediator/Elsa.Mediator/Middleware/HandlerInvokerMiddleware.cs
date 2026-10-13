@@ -1,4 +1,4 @@
-using Elsa.Mediator.Core.Contracts;
+using Elsa.Mediator.Pipeline;
 using Elsa.Pipelines.Core.Contracts;
 using JetBrains.Annotations;
 using Microsoft.Extensions.DependencyInjection;
@@ -15,7 +15,7 @@ namespace Elsa.Mediator.Middleware;
 /// every handler in the container on every dispatch.
 /// </summary>
 [UsedImplicitly]
-public sealed class HandlerInvokerMiddleware(PipelineDelegate<IMessageContext> next) : IMessageMiddleware
+internal sealed class HandlerInvokerMiddleware(PipelineDelegate<IMessageContext> next) : IMessageMiddleware
 {
     // The closed IHandler<TMessage, TResult> type is stable per (message, result, family) key; cache it
     // so a hot dispatch path doesn't reconstruct it via reflection on every call.

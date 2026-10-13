@@ -34,11 +34,11 @@ public class EventHandlerInvokerCacheTests
     [Fact]
     public void GetInvokerReturnsSameCachedDelegatePerEventType()
     {
-        var first = EventHandlerHelper.GetInvoker(typeof(TestEvent));
-        var second = EventHandlerHelper.GetInvoker(typeof(TestEvent));
+        var first = EventHandlerInvoker.GetInvoker(typeof(TestEvent));
+        var second = EventHandlerInvoker.GetInvoker(typeof(TestEvent));
 
         Assert.Same(first, second); // built once, cached — no per-call rebuild
-        Assert.NotSame(first, EventHandlerHelper.GetInvoker(typeof(OtherEvent))); // keyed by event type
+        Assert.NotSame(first, EventHandlerInvoker.GetInvoker(typeof(OtherEvent))); // keyed by event type
     }
 
     [Fact]

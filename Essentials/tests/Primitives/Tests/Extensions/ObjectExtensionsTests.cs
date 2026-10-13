@@ -2,7 +2,7 @@ using System.Collections;
 using Elsa.Primitives.Extensions;
 using Xunit;
 
-namespace Elsa.Expressions.Tests.Unit;
+namespace Elsa.Primitives.Tests.Extensions;
 
 public class ObjectExtensionsTests
 {

@@ -1,4 +1,4 @@
-namespace Elsa.Mediator.Core.Contracts;
+namespace Elsa.Mediator.Pipeline;
 
 /// <summary>
 /// The unified dispatch context shared by both the command and request pipelines. A command and a
@@ -8,7 +8,7 @@ namespace Elsa.Mediator.Core.Contracts;
 /// <see cref="HandlerServiceTypeDefinition"/> selects which handler family to resolve and
 /// <see cref="MessageKind"/> labels error messages.
 /// </summary>
-public interface IMessageContext
+internal interface IMessageContext
 {
     /// <summary>The command or request instance being dispatched.</summary>
     object Message { get; }

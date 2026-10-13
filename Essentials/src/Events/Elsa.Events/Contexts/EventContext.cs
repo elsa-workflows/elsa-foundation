@@ -3,7 +3,7 @@ using Elsa.Events.Core.Contracts;
 namespace Elsa.Events.Contexts;
 
 /// <inheritdoc cref="IEventContext" />
-public sealed class EventContext(
+internal sealed class EventContext(
     IEvent @event,
     IEventPublishingStrategy strategy,
     IServiceProvider serviceProvider,

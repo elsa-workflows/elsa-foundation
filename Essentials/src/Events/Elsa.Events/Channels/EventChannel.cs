@@ -4,7 +4,7 @@ using System.Threading.Channels;
 namespace Elsa.Events.Channels;
 
 /// <inheritdoc />
-public sealed class EventChannel : IEventChannel
+internal sealed class EventChannel : IEventChannel
 {
     private readonly Channel<IEventContext> _channel = Channel.CreateUnbounded<IEventContext>(
         new UnboundedChannelOptions
