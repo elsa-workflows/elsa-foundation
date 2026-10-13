@@ -97,9 +97,9 @@ The whole guarantee, and nothing more (#2192):
 **Known implementations:**
 - `Elsa.Events` — `BackgroundEventPublisher` *(cross-domain — background event dispatch worker)*
 
-## Writing a bounded-sweep pump (`BackoffSweepPumpTask`)
+## Writing a bounded-sweep worker (`BackoffSweepWorkerTask`)
 
-A recurring background pump that runs one bounded sweep per tick derives from `BackoffSweepPumpTask`
+A recurring background worker that runs one bounded sweep per tick derives from `BackoffSweepWorkerTask`
 (project `Elsa.Tasks.Schedules`) instead of implementing `IRecurringTask` and re-carrying the failure
 skeleton. The base owns it once: `ExecuteAsync` runs the derived `SweepAsync`, resets the failure count
 on success, and on any handled exception increments it and reports through `OnSweepFailed` without
@@ -109,13 +109,14 @@ rethrowing (so a failing sweep cannot crash the host); `CurrentSweepInterval` wi
 A derivation supplies the sweep, its failure log message, and optionally: which exceptions feed the
 backoff (`IsHandledSweepException`; everything by default — override to let fatal exceptions escape),
 and which cancellations escape (`ShouldRethrowCancellation`; every `OperationCanceledException` by
-default — override to narrow to the pump's own token so a dependency's unrelated timeout backs off
+default; override it to narrow to the worker's own token so a dependency's unrelated timeout backs off
 instead). The protected `ComputeBackoff` is reusable for per-item parking maps.
 
-All six shipped pumps are cross-domain consumers: `RuntimeResumptionPumpTask`, `DurableTimerPumpTask`,
-`RecurringTriggerPumpTask`, `WorkflowExecutableReferenceGarbageCollectionPumpTask`,
-`ExecutionPlacementPumpTask`, and `WorkflowAlterationOrchestrationPumpTask` *(all cross-domain — the
-pumps live in `Elsa.Workflows.Runtime.*` projects, which already reference `Elsa.Tasks.Schedules`)*.
+The eight shipped workers live in other domains: `RuntimeResumptionPumpTask`, `DurableTimerPumpTask`,
+`RecurringTriggerPumpTask`, `WorkflowExecutableReferenceGarbageCollectionPumpTask`, `ExecutionPlacementPumpTask`,
+`WorkflowAlterationOrchestrationPumpTask` and `HttpEndpointRouteTableConvergencePumpTask` in the
+`Elsa.Workflows.Runtime.*` projects, which keep the `…PumpTask` name until that domain's rename, and
+`ExpiredImportCollectionSweepTask` in the Elsa 3 import extension.
 
 ---
 

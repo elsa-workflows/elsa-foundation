@@ -4,68 +4,68 @@ using Xunit;
 
 namespace Elsa.Tasks.Tests;
 
-public sealed class BackoffSweepPumpTaskTests
+public sealed class BackoffSweepWorkerTaskTests
 {
     [Fact]
     public void Constructor_WhenLoggerIsNull_Throws()
     {
-        Assert.Throws<ArgumentNullException>(() => new NullLoggerPump());
+        Assert.Throws<ArgumentNullException>(() => new NullLoggerWorker());
     }
 
     [Fact]
     public async Task ExecuteAsync_HandledFailure_WidensThenCleanSweepResets()
     {
-        var pump = new TestPump { Fail = () => new InvalidOperationException("boom") };
+        var worker = new TestWorker { Fail = () => new InvalidOperationException("boom") };
 
-        Assert.Equal(TimeSpan.FromSeconds(1), pump.CurrentSweepInterval);
-        await pump.ExecuteAsync(CancellationToken.None);
-        Assert.Equal(TimeSpan.FromSeconds(1), pump.CurrentSweepInterval);
-        Assert.Equal(1, pump.FailuresReported);
-        await pump.ExecuteAsync(CancellationToken.None);
-        Assert.Equal(TimeSpan.FromSeconds(2), pump.CurrentSweepInterval);
+        Assert.Equal(TimeSpan.FromSeconds(1), worker.CurrentSweepInterval);
+        await worker.ExecuteAsync(CancellationToken.None);
+        Assert.Equal(TimeSpan.FromSeconds(1), worker.CurrentSweepInterval);
+        Assert.Equal(1, worker.FailuresReported);
+        await worker.ExecuteAsync(CancellationToken.None);
+        Assert.Equal(TimeSpan.FromSeconds(2), worker.CurrentSweepInterval);
 
-        pump.Fail = null;
-        await pump.ExecuteAsync(CancellationToken.None);
-        Assert.Equal(TimeSpan.FromSeconds(1), pump.CurrentSweepInterval);
+        worker.Fail = null;
+        await worker.ExecuteAsync(CancellationToken.None);
+        Assert.Equal(TimeSpan.FromSeconds(1), worker.CurrentSweepInterval);
     }
 
     [Fact]
     public async Task ExecuteAsync_UnhandledException_Escapes()
     {
-        var pump = new TestPump
+        var worker = new TestWorker
         {
             Fail = () => new InvalidOperationException("fatal"),
             Handles = _ => false
         };
 
-        await Assert.ThrowsAsync<InvalidOperationException>(() => pump.ExecuteAsync(CancellationToken.None));
-        Assert.Equal(0, pump.FailuresReported);
+        await Assert.ThrowsAsync<InvalidOperationException>(() => worker.ExecuteAsync(CancellationToken.None));
+        Assert.Equal(0, worker.FailuresReported);
     }
 
     [Fact]
     public async Task ExecuteAsync_Cancellation_RethrowsByDefault()
     {
-        var pump = new TestPump { Fail = () => new OperationCanceledException() };
+        var worker = new TestWorker { Fail = () => new OperationCanceledException() };
 
-        await Assert.ThrowsAsync<OperationCanceledException>(() => pump.ExecuteAsync(CancellationToken.None));
-        Assert.Equal(0, pump.FailuresReported);
+        await Assert.ThrowsAsync<OperationCanceledException>(() => worker.ExecuteAsync(CancellationToken.None));
+        Assert.Equal(0, worker.FailuresReported);
     }
 
     [Fact]
     public async Task ExecuteAsync_ForeignCancellation_FeedsBackoffWhenNarrowed()
     {
-        var pump = new TestPump
+        var worker = new TestWorker
         {
             Fail = () => new OperationCanceledException(),
             RethrowCancellation = (_, token) => token.IsCancellationRequested
         };
 
-        // The pump's own token is not cancelled, so the narrowed pump treats the foreign
+        // The worker's own token is not cancelled, so the narrowed worker treats the foreign
         // cancellation as an ordinary sweep failure.
-        await pump.ExecuteAsync(CancellationToken.None);
+        await worker.ExecuteAsync(CancellationToken.None);
 
-        Assert.Equal(1, pump.FailuresReported);
-        Assert.Equal(TimeSpan.FromSeconds(1), pump.CurrentSweepInterval);
+        Assert.Equal(1, worker.FailuresReported);
+        Assert.Equal(TimeSpan.FromSeconds(1), worker.CurrentSweepInterval);
     }
 
     [Theory]
@@ -75,7 +75,7 @@ public sealed class BackoffSweepPumpTaskTests
     [InlineData(1, 60, 40, 60)] // large failure counts clamp instead of overflowing
     public void ComputeBackoff_CoversClampBranches(int baseSeconds, int maxSeconds, int failures, int expectedSeconds)
     {
-        var actual = TestPump.Backoff(
+        var actual = TestWorker.Backoff(
             TimeSpan.FromSeconds(baseSeconds),
             TimeSpan.FromSeconds(maxSeconds),
             failures);
@@ -83,7 +83,7 @@ public sealed class BackoffSweepPumpTaskTests
         Assert.Equal(TimeSpan.FromSeconds(expectedSeconds), actual);
     }
 
-    private sealed class NullLoggerPump() : BackoffSweepPumpTask(null!)
+    private sealed class NullLoggerWorker() : BackoffSweepWorkerTask(null!)
     {
         protected override TimeSpan SweepInterval => TimeSpan.FromSeconds(1);
         protected override TimeSpan MaxBackoffInterval => TimeSpan.FromSeconds(60);
@@ -93,7 +93,7 @@ public sealed class BackoffSweepPumpTaskTests
         }
     }
 
-    private sealed class TestPump() : BackoffSweepPumpTask(NullLogger.Instance)
+    private sealed class TestWorker() : BackoffSweepWorkerTask(NullLogger.Instance)
     {
         public Func<Exception>? Fail { get; set; }
         public Func<Exception, bool>? Handles { get; init; }

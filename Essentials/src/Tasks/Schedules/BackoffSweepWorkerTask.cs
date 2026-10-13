@@ -4,18 +4,18 @@ using Microsoft.Extensions.Logging;
 namespace Elsa.Tasks.Schedules;
 
 /// <summary>
-/// Recurring background pump that runs one bounded sweep per tick and owns the whole-sweep failure
-/// backoff every pump previously re-implemented: a sweep that throws is caught, reported through
+/// Recurring background worker that runs one bounded sweep per tick and owns the whole-sweep failure
+/// backoff every worker previously re-implemented: a sweep that throws is caught, reported through
 /// <see cref="OnSweepFailed"/>, and never rethrown (so it cannot crash the host); consecutive failures
 /// widen the schedule interval geometrically up to <see cref="MaxBackoffInterval"/>, and the first
 /// clean sweep resets it. Derivations own the sweep itself, its scope plumbing, and any per-item
 /// backoff (for which <see cref="ComputeBackoff"/> is shared).
 /// </summary>
-public abstract class BackoffSweepPumpTask : IRecurringTask
+public abstract class BackoffSweepWorkerTask : IRecurringTask
 {
     private int _consecutiveSweepFailures;
 
-    protected BackoffSweepPumpTask(ILogger logger)
+    protected BackoffSweepWorkerTask(ILogger logger)
     {
         ArgumentNullException.ThrowIfNull(logger);
         Logger = logger;
@@ -78,8 +78,8 @@ public abstract class BackoffSweepPumpTask : IRecurringTask
     protected virtual bool IsHandledSweepException(Exception exception) => true;
 
     /// <summary>
-    /// Whether a cancellation escapes the pump. Every <see cref="OperationCanceledException"/> by
-    /// default; a pump whose sweep calls dependencies that surface unrelated cancellations (timeouts)
+    /// Whether a cancellation escapes the worker. Every <see cref="OperationCanceledException"/> by
+    /// default; a worker whose sweep calls dependencies that surface unrelated cancellations (timeouts)
     /// can narrow this to its own token, letting foreign cancellations feed the backoff instead.
     /// </summary>
     protected virtual bool ShouldRethrowCancellation(OperationCanceledException exception, CancellationToken cancellationToken) => true;

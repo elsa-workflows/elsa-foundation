@@ -221,7 +221,11 @@ dotnet_diagnostic.CA1515.severity = none
 #
 # The value is a comma-separated list of entries; an entry lists a term's spellings separated by "|", then "=" and
 # the replacement the error message suggests. A spelling matches whole PascalCase words of a type or namespace name.
-# No domain is activated yet.
+
+# Tasks: Pump is retired here first. The Workflows.Runtime *PumpTask workers keep their names until their own domain's
+# change, which extends the ban to its folder.
+[Essentials/src/Tasks/**.cs]
+elsa_naming.retired_terms = Pump|Pumps=Worker
 
 #### Generated code ####
 

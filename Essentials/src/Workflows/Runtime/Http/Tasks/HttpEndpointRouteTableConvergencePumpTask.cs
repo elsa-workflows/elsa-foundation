@@ -12,7 +12,7 @@ namespace Elsa.Workflows.Runtime.Http.Tasks;
 /// on the node that made the change, so every node runs this pump: each tick calls
 /// <see cref="IHttpEndpointRouteTableSynchronizer.ConvergeAsync"/>, which reads the stimulus identities alone and rebuilds
 /// the table only when they no longer match what it was built from. Failure backoff comes from
-/// <see cref="BackoffSweepPumpTask"/>.
+/// <see cref="BackoffSweepWorkerTask"/>.
 /// </summary>
 /// <remarks>
 /// Only this pump's own cancellation (the shell stopping) escapes as cancellation. Any other
@@ -22,7 +22,7 @@ namespace Elsa.Workflows.Runtime.Http.Tasks;
 public sealed class HttpEndpointRouteTableConvergencePumpTask(
     IHttpEndpointRouteTableSynchronizer synchronizer,
     IOptions<HttpEndpointRouteTableConvergenceOptions> options,
-    ILogger<HttpEndpointRouteTableConvergencePumpTask> logger) : BackoffSweepPumpTask(logger)
+    ILogger<HttpEndpointRouteTableConvergencePumpTask> logger) : BackoffSweepWorkerTask(logger)
 {
     protected override TimeSpan SweepInterval => options.Value.Interval;
 
