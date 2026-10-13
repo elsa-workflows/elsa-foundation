@@ -37,6 +37,23 @@ and what the persistence policy decided for it), and the first Elsa frame past t
 file and line. On PostgreSQL every connection goes through a relay that reads the wire protocol and counts round trips,
 statements and simple queries.
 
+### How a command's caller is found
+
+A command's caller is the first Elsa frame past the persistence infrastructure (stores, decorators, coalescing
+overlays, paging extensions). The `attribution` column of the command files and the summary's attribution table say
+how it was found:
+
+| Attribution | Meaning |
+|---|---|
+| `stack` | The stack the command was issued on reaches the caller. Every SQLite command is attributed this way, because SQLite's asynchronous calls complete synchronously and never lose a stack. |
+| `save-changes` | The command ran inside `SaveChanges` after an asynchronous hop, so no Elsa frame was left on its stack. It is attributed to the `SaveChanges` call site, captured when `SaveChanges` was entered. On PostgreSQL this covers the batched writes and commit-marker inserts after the savepoint round trip: a batch carries the rows of several participants and has no single Elsa caller, so the call site that saved them owns it. |
+| `stitched` | A store method resumed after real I/O, so its stack holds the store but not the store's caller. The stack is completed with the latest whole stack of the same asynchronous flow that ran through the same store frame, normally the store's own earlier command or the opening of its connection. `<~` in the frames marks the seam. |
+| `none` | No caller was found. The run fails if any command ends up here. |
+
+Each measured call, each request of the measured host and each engine span starts a flow's memory of whole stacks. On
+the runs measured in October 2026, every PostgreSQL statement was attributed to the same caller as the matching SQLite
+statement.
+
 The run checks its own accounting: every statement on the PostgreSQL wire must be one the EF context sent or one of
 EF's automatic savepoints, and every round trip one command, one COMMIT or one savepoint statement.
 

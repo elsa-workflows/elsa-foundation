@@ -52,6 +52,10 @@ public sealed class CommandCostMeasurementTests(CommandCostPostgreSqlServer post
             await CommandCostReport.WriteRunAsync(output!, run);
         await File.WriteAllTextAsync(Path.Join(output, "summary.md"), CommandCostReport.Render(CommandCostReport.ReadRuns(output!)));
 
+        // Every command names the Elsa caller that issued it; a command without one would fall into a cost source no code owns.
+        Assert.All(runs, run => Assert.True(run.Commands.All(command => command.Caller != "?"),
+            $"{run.Provider} {run.Workflow} {run.Mode} {run.Activities}: {run.Commands.Count(command => command.Caller == "?")} commands have no Elsa caller."));
+
         // Every durable commit writes one commit marker inside a transaction of its own, so the transactions that wrote a
         // marker are as many as the markers. Fewer means two real transactions were given one id.
         Assert.All(runs, run => Assert.True(CommandCostReport.CommitTransactions(run).Count == run.CommitMarkers,

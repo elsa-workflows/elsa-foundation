@@ -1,4 +1,6 @@
 using Elsa.Activities.Http.IntegrationTests;
+using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Hosting;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
@@ -97,6 +99,7 @@ internal static class CommandCostScenarios
             ReferenceWorkflowRuns.ComposeHost(services);
             database.AddInterceptor(services, recorder);
             services.Replace(ServiceDescriptor.Singleton(recorder.Tracer));
+            services.AddSingleton<IStartupFilter>(new FlowPerRequest(recorder));
         });
 
         var window = new MeasurementWindow(recorder, database.Wire);
@@ -114,6 +117,23 @@ internal static class CommandCostScenarios
         _ => throw new ArgumentOutOfRangeException(nameof(workflow), workflow, "Unknown reference workflow.")
     };
 
+    /// <summary>
+    /// Gives each request of the measured host a stack memory before any middleware runs. TestServer runs a request
+    /// without the caller's execution context, so the memory the measurement window began does not reach it.
+    /// </summary>
+    private sealed class FlowPerRequest(CommandCostRecorder recorder) : IStartupFilter
+    {
+        public Action<IApplicationBuilder> Configure(Action<IApplicationBuilder> next) => app =>
+        {
+            app.Use((context, nextMiddleware) =>
+            {
+                recorder.BeginFlow();
+                return nextMiddleware(context);
+            });
+            next(app);
+        };
+    }
+
     /// <summary>Accumulates what one or more measured spans of a run cost; the gaps between spans are not counted.</summary>
     private sealed class MeasurementWindow(CommandCostRecorder recorder, PostgreSqlWireCounter? wire)
     {
@@ -127,6 +147,7 @@ internal static class CommandCostScenarios
         {
             var countsBefore = recorder.Counts;
             var wireBefore = wire?.Counts;
+            recorder.BeginFlow();
             await run();
             var countsAfter = recorder.Counts;
 
