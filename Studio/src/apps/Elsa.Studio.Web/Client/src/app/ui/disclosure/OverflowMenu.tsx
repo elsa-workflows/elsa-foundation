@@ -1,5 +1,6 @@
-import React, { useId, useMemo, useRef, useState } from "react";
+import React, { useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { AnchoredPopover } from "../overlay/AnchoredPopover";
+import { enabledMenuIndexes, focusIndexedItem, stepEnabledIndex } from "./menuNavigation";
 import { type DisclosureControlProps, type OverflowMenuItem } from "./types";
 
 export interface OverflowMenuProps extends DisclosureControlProps {
@@ -35,28 +36,30 @@ export function OverflowMenu({
   const [open, setOpen] = useState(defaultOpen);
   const [activeIndex, setActiveIndex] = useState(0);
   const ordered = useMemo(() => orderOverflowMenuItems(items), [items]);
-  const actionIndexes = ordered
-    .map((item, index) => isAction(item) && !item.disabled ? index : -1)
-    .filter(index => index >= 0);
+  const actionIndexes = useMemo(
+    () => enabledMenuIndexes(ordered.map(item => !isAction(item) || Boolean(item.disabled))),
+    [ordered]
+  );
+
+  useLayoutEffect(() => {
+    if (!open) return;
+    focusIndexedItem(menuId, activeIndex);
+  }, [open, activeIndex, menuId]);
 
   function close() {
     setOpen(false);
     triggerRef.current?.focus();
   }
 
+  function openAt(index: number) {
+    setActiveIndex(index);
+    setOpen(true);
+  }
+
   function activate(item: Extract<OverflowMenuItem, { id: string }>) {
     if (item.disabled) return;
     item.onSelect();
     close();
-  }
-
-  function move(delta: number) {
-    if (actionIndexes.length === 0) return;
-    const current = actionIndexes.indexOf(actionIndexes.find(index => index >= activeIndex) ?? actionIndexes[0]);
-    const next = actionIndexes[(current + delta + actionIndexes.length) % actionIndexes.length];
-    setActiveIndex(next);
-    const option = document.getElementById(`${menuId}-item-${next}`);
-    option?.focus();
   }
 
   return (
@@ -68,13 +71,18 @@ export function OverflowMenu({
         aria-label={ariaLabel}
         aria-haspopup="menu"
         aria-expanded={open}
-        aria-controls={menuId}
-        onClick={() => setOpen(current => !current)}
+        aria-controls={open ? menuId : undefined}
+        onClick={() => {
+          if (open) close();
+          else openAt(actionIndexes[0] ?? 0);
+        }}
         onKeyDown={event => {
           if (event.key === "ArrowDown" && !open) {
             event.preventDefault();
-            setOpen(true);
-            setActiveIndex(actionIndexes[0] ?? 0);
+            openAt(actionIndexes[0] ?? 0);
+          } else if (event.key === "ArrowUp" && !open) {
+            event.preventDefault();
+            openAt(actionIndexes[actionIndexes.length - 1] ?? 0);
           }
         }}
       >
@@ -98,10 +106,10 @@ export function OverflowMenu({
               close();
             } else if (event.key === "ArrowDown") {
               event.preventDefault();
-              move(1);
+              setActiveIndex(current => stepEnabledIndex(actionIndexes, current, 1));
             } else if (event.key === "ArrowUp") {
               event.preventDefault();
-              move(-1);
+              setActiveIndex(current => stepEnabledIndex(actionIndexes, current, -1));
             } else if (event.key === "Home") {
               event.preventDefault();
               setActiveIndex(actionIndexes[0] ?? 0);

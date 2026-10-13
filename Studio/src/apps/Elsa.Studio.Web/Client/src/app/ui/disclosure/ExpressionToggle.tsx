@@ -36,7 +36,7 @@ export function ExpressionToggle({
   return (
     <div className="studio-expression-field" data-mode={value} data-visible={visible ? "true" : "false"}>
       <div className="studio-expression-field-header">
-        {label ? <span className="studio-expression-field-label">{label}</span> : null}
+        {label ? <span id={`${baseId}-label`} className="studio-expression-field-label">{label}</span> : null}
         <div
           className="studio-expression-toggle"
           role="tablist"
@@ -64,7 +64,11 @@ export function ExpressionToggle({
           })}
         </div>
       </div>
-      {children}
+      {React.Children.map(children, child => {
+        if (!React.isValidElement<{ "aria-label"?: string; "aria-labelledby"?: string }>(child)) return child;
+        if (!label || child.props["aria-label"] || child.props["aria-labelledby"]) return child;
+        return React.cloneElement(child, { "aria-labelledby": `${baseId}-label` });
+      })}
     </div>
   );
 }

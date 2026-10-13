@@ -39,12 +39,15 @@ export function RevealToggle({
           <span className="studio-reveal-switch-thumb" aria-hidden="true" />
         </button>
       </div>
-      {revealed ? (
-        <div id={groupId} className="studio-reveal-toggle-group" data-ignored={ignored ? "true" : undefined}>
-          {ignored ? <p className="studio-reveal-toggle-note">{ignoredNote}</p> : null}
-          {children}
-        </div>
-      ) : null}
+      <div
+        id={groupId}
+        className="studio-reveal-toggle-group"
+        hidden={!revealed}
+        data-ignored={ignored ? "true" : undefined}
+      >
+        {ignored ? <p className="studio-reveal-toggle-note">{ignoredNote}</p> : null}
+        {children}
+      </div>
     </div>
   );
 }

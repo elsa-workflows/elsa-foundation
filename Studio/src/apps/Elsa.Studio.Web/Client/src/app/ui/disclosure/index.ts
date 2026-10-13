@@ -7,3 +7,4 @@ export * from "./TechnicalDetails";
 export * from "./OverflowMenu";
 export * from "./ExpressionToggle";
 export * from "./PeerViewSwitch";
+export * from "./menuNavigation";

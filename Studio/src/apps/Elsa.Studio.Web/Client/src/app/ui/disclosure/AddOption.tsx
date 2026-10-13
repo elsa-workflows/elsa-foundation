@@ -1,8 +1,9 @@
-import React, { useId, useMemo, useRef, useState } from "react";
+import React, { useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { StudioButton } from "../forms/Button";
 import { StudioSearchInput } from "../forms/SearchInput";
 import { EmptyState } from "../feedback/FeedbackStates";
 import { AnchoredPopover } from "../overlay/AnchoredPopover";
+import { enabledMenuIndexes, focusIndexedItem, stepEnabledIndex } from "./menuNavigation";
 import { type DisclosureControlProps, type DisclosureOption, shouldForceReveal } from "./types";
 
 const searchThreshold = 8;
@@ -46,6 +47,7 @@ export function AddOption({
   const triggerRef = useRef<HTMLButtonElement>(null);
   const [pickerOpen, setPickerOpen] = useState(defaultPickerOpen);
   const [query, setQuery] = useState("");
+  const [activeIndex, setActiveIndex] = useState(0);
   const [internalAdded, setInternalAdded] = useState<string[]>([]);
   const resolvedAdded = useMemo(
     () => new Set(addedIds ?? internalAdded),
@@ -60,13 +62,32 @@ export function AddOption({
     const haystack = `${item.label} ${item.description ?? ""}`.toLowerCase();
     return haystack.includes(query.trim().toLowerCase());
   });
+  const actionIndexes = useMemo(() => enabledMenuIndexes(filtered.map(() => false)), [filtered]);
+
+  useLayoutEffect(() => {
+    if (!pickerOpen) return;
+    if (searchable) {
+      document.getElementById(listId)?.querySelector<HTMLInputElement>("[role='searchbox']")?.focus();
+      return;
+    }
+    focusIndexedItem(listId, activeIndex);
+  }, [pickerOpen, listId, searchable]); // eslint-disable-line react-hooks/exhaustive-deps -- focus the first item or search only when the menu opens
+
+  function closePicker() {
+    setPickerOpen(false);
+    setQuery("");
+    triggerRef.current?.focus();
+  }
+
+  function openPicker() {
+    setActiveIndex(0);
+    setPickerOpen(true);
+  }
 
   function add(id: string) {
     if (!addedIds) setInternalAdded(current => current.includes(id) ? current : [...current, id]);
     onAdd?.(id);
-    setPickerOpen(false);
-    setQuery("");
-    triggerRef.current?.focus();
+    closePicker();
   }
 
   function remove(id: string) {
@@ -103,10 +124,13 @@ export function AddOption({
             variant="ghost"
             size="sm"
             className="studio-add-option-trigger"
-            aria-haspopup="listbox"
+            aria-haspopup="menu"
             aria-expanded={pickerOpen}
-            aria-controls={listId}
-            onClick={() => setPickerOpen(current => !current)}
+            aria-controls={pickerOpen ? listId : undefined}
+            onClick={() => {
+              if (pickerOpen) closePicker();
+              else openPicker();
+            }}
           >
             {addLabel}
           </StudioButton>
@@ -116,27 +140,59 @@ export function AddOption({
             open={pickerOpen}
             className="studio-add-option-popover"
             minWidth={220}
-            onDismiss={() => {
-              setPickerOpen(false);
-              setQuery("");
-            }}
+            onDismiss={closePicker}
           >
-            <div className="studio-add-option-menu" role="listbox" aria-labelledby={labelId}>
+            <div
+              className="studio-add-option-menu"
+              role="menu"
+              aria-labelledby={labelId}
+              onKeyDown={event => {
+                const targetIsSearch = event.target instanceof HTMLElement && event.target.getAttribute("role") === "searchbox";
+                const moveTo = (index: number) => {
+                  setActiveIndex(index);
+                  focusIndexedItem(listId, index);
+                };
+                if (event.key === "Escape") {
+                  event.preventDefault();
+                  closePicker();
+                } else if (event.key === "ArrowDown") {
+                  event.preventDefault();
+                  moveTo(targetIsSearch ? (actionIndexes[0] ?? 0) : stepEnabledIndex(actionIndexes, activeIndex, 1));
+                } else if (event.key === "ArrowUp") {
+                  event.preventDefault();
+                  moveTo(targetIsSearch ? (actionIndexes[actionIndexes.length - 1] ?? 0) : stepEnabledIndex(actionIndexes, activeIndex, -1));
+                } else if (event.key === "Home") {
+                  event.preventDefault();
+                  moveTo(actionIndexes[0] ?? 0);
+                } else if (event.key === "End") {
+                  event.preventDefault();
+                  moveTo(actionIndexes[actionIndexes.length - 1] ?? 0);
+                } else if (event.key === "Enter" && filtered[activeIndex] && !targetIsSearch) {
+                  event.preventDefault();
+                  add(filtered[activeIndex].id);
+                }
+              }}
+            >
               <span id={labelId} className="studio-add-option-menu-title">Add option</span>
               {searchable ? (
                 <StudioSearchInput
                   value={query}
                   placeholder={searchPlaceholder}
                   aria-label={searchPlaceholder}
-                  onChange={event => setQuery(event.target.value)}
+                  onChange={event => {
+                    setQuery(event.target.value);
+                    setActiveIndex(0);
+                  }}
                 />
               ) : null}
-              {filtered.length === 0 ? <p className="studio-add-option-empty">No matching options</p> : filtered.map(item => (
+              {filtered.length === 0 ? <p className="studio-add-option-empty">No matching options</p> : filtered.map((item, index) => (
                 <button
                   key={item.id}
+                  id={`${listId}-item-${index}`}
                   type="button"
-                  role="option"
+                  role="menuitem"
                   className="studio-add-option-choice"
+                  tabIndex={index === activeIndex ? 0 : -1}
                   onClick={() => add(item.id)}
                 >
                   <span>{item.label}</span>

@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { AddOption, isAddOptionVisible } from "../AddOption";
 import { AdvancedSection, isAdvancedSectionForced } from "../AdvancedSection";
 import { ExpressionToggle, isExpressionToggleVisible } from "../ExpressionToggle";
+import { enabledMenuIndexes, stepEnabledIndex } from "../menuNavigation";
 import { OverflowMenu, orderOverflowMenuItems } from "../OverflowMenu";
 import { PeerViewSwitch } from "../PeerViewSwitch";
 import { RevealToggle } from "../RevealToggle";
@@ -109,11 +110,52 @@ describe("AddOption", () => {
     );
 
     expect(host.textContent).toContain("No options set");
-    expect(host.querySelector("[aria-expanded='true']")).not.toBeNull();
-    const timeout = Array.from(document.body.querySelectorAll<HTMLButtonElement>("[role='option']"))
+    const trigger = host.querySelector<HTMLButtonElement>(".studio-add-option-trigger")!;
+    expect(trigger.getAttribute("aria-expanded")).toBe("true");
+    expect(trigger.getAttribute("aria-haspopup")).toBe("menu");
+    expect(trigger.getAttribute("aria-controls")).toBeTruthy();
+    const timeout = Array.from(document.body.querySelectorAll<HTMLButtonElement>("[role='menuitem']"))
       .find(button => button.textContent?.includes("Timeout"));
     flushSync(() => timeout!.dispatchEvent(new MouseEvent("click", { bubbles: true })));
     expect(added).toEqual(["timeout"]);
+  });
+
+  it("opens a menu with arrow, Home, End and Escape, and drops aria-controls while closed", () => {
+    const added: string[] = [];
+    const host = mount(
+      <AddOption
+        options={[{ id: "timeout", label: "Timeout" }, { id: "proxy", label: "Proxy" }, { id: "retry", label: "Retry" }]}
+        addedIds={[]}
+        onAdd={id => added.push(id)}
+      />
+    );
+    const trigger = host.querySelector<HTMLButtonElement>(".studio-add-option-trigger")!;
+    expect(trigger.getAttribute("aria-controls")).toBeNull();
+    flushSync(() => trigger.dispatchEvent(new MouseEvent("click", { bubbles: true })));
+    expect(trigger.getAttribute("aria-expanded")).toBe("true");
+    expect(trigger.getAttribute("aria-controls")).toBeTruthy();
+
+    const items = () => Array.from(document.body.querySelectorAll<HTMLButtonElement>("[role='menuitem']"));
+    const menu = document.body.querySelector<HTMLElement>("[role='menu']")!;
+    expect(document.activeElement).toBe(items()[0]);
+
+    flushSync(() => menu.dispatchEvent(new KeyboardEvent("keydown", { key: "End", bubbles: true })));
+    expect(document.activeElement).toBe(items()[2]);
+    flushSync(() => menu.dispatchEvent(new KeyboardEvent("keydown", { key: "Home", bubbles: true })));
+    expect(document.activeElement).toBe(items()[0]);
+    flushSync(() => menu.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })));
+    expect(trigger.getAttribute("aria-expanded")).toBe("false");
+    expect(trigger.getAttribute("aria-controls")).toBeNull();
+    expect(document.activeElement).toBe(trigger);
+
+    flushSync(() => trigger.dispatchEvent(new MouseEvent("click", { bubbles: true })));
+    const openMenu = document.body.querySelector<HTMLElement>("[role='menu']")!;
+    flushSync(() => openMenu.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true })));
+    expect(document.activeElement).toBe(items()[1]);
+    flushSync(() => openMenu.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true })));
+    expect(added).toEqual(["proxy"]);
+    expect(trigger.getAttribute("aria-expanded")).toBe("false");
+    expect(document.activeElement).toBe(trigger);
   });
 
   it("never hides a non-default option and remove announces a reset", () => {
@@ -165,14 +207,32 @@ describe("RevealToggle", () => {
     expect(host.textContent).not.toContain("will be ignored");
   });
 
-  it("hides the group when off and not forced", () => {
+  it("keeps the group mounted and hidden when off and not forced", () => {
     const host = mount(
       <RevealToggle label="Send query" checked={false} onCheckedChange={() => undefined}>
         <span>Query fields</span>
       </RevealToggle>
     );
-    expect(host.textContent).not.toContain("Query fields");
-    expect(host.querySelector("[role='switch']")?.getAttribute("aria-expanded")).toBe("false");
+    const toggle = host.querySelector<HTMLButtonElement>("[role='switch']")!;
+    const group = host.querySelector<HTMLElement>(".studio-reveal-toggle-group")!;
+    expect(toggle.getAttribute("aria-expanded")).toBe("false");
+    expect(toggle.getAttribute("aria-controls")).toBe(group.id);
+    expect(group.hasAttribute("hidden")).toBe(true);
+    expect(group.textContent).toContain("Query fields");
+  });
+
+  it("marks a forced-off group as ignored without fading it", () => {
+    const host = mount(
+      <RevealToggle label="Send query" checked={false} onCheckedChange={() => undefined} forceOpen>
+        <span>Query fields</span>
+      </RevealToggle>
+    );
+    const group = host.querySelector<HTMLElement>(".studio-reveal-toggle-group")!;
+    const note = host.querySelector<HTMLElement>(".studio-reveal-toggle-note")!;
+    expect(group.getAttribute("data-ignored")).toBe("true");
+    expect(group.style.opacity).toBe("");
+    expect(note.textContent).toBe("will be ignored");
+    expect(note.style.opacity).toBe("");
   });
 });
 
@@ -277,13 +337,37 @@ describe("OverflowMenu", () => {
     );
     const trigger = host.querySelector<HTMLButtonElement>(".studio-overflow-menu-trigger")!;
     expect(trigger.getAttribute("aria-expanded")).toBe("false");
+    expect(trigger.getAttribute("aria-controls")).toBeNull();
     flushSync(() => trigger.dispatchEvent(new MouseEvent("click", { bubbles: true })));
     expect(trigger.getAttribute("aria-expanded")).toBe("true");
+    expect(trigger.getAttribute("aria-controls")).toBeTruthy();
 
+    const items = () => Array.from(document.body.querySelectorAll<HTMLButtonElement>("[role='menuitem']"));
     const menu = document.body.querySelector<HTMLElement>("[role='menu']")!;
+    expect(document.activeElement).toBe(items()[0]);
     expect(menu.querySelector("[data-destructive='true']")?.textContent).toBe("Cancel");
+
+    flushSync(() => menu.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true })));
+    expect(document.activeElement).toBe(items()[1]);
+    flushSync(() => menu.dispatchEvent(new KeyboardEvent("keydown", { key: "Home", bubbles: true })));
+    expect(document.activeElement).toBe(items()[0]);
+    flushSync(() => menu.dispatchEvent(new KeyboardEvent("keydown", { key: "End", bubbles: true })));
+    expect(document.activeElement).toBe(items()[1]);
     flushSync(() => menu.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })));
     expect(trigger.getAttribute("aria-expanded")).toBe("false");
+    expect(trigger.getAttribute("aria-controls")).toBeNull();
+    expect(document.activeElement).toBe(trigger);
+  });
+});
+
+describe("menuNavigation", () => {
+  it("skips disabled entries and wraps when stepping", () => {
+    expect(enabledMenuIndexes([false, true, false])).toEqual([0, 2]);
+    expect(enabledMenuIndexes([{ disabled: false }, { disabled: true }, {}])).toEqual([0, 2]);
+    expect(stepEnabledIndex([0, 2], 0, 1)).toBe(2);
+    expect(stepEnabledIndex([0, 2], 2, 1)).toBe(0);
+    expect(stepEnabledIndex([0, 2], 0, -1)).toBe(2);
+    expect(stepEnabledIndex([0, 2], 1, 1)).toBe(0);
   });
 });
 
@@ -298,6 +382,10 @@ describe("ExpressionToggle", () => {
     expect(host.querySelector("[role='tablist']")).not.toBeNull();
     expect(tabs[1].getAttribute("aria-selected")).toBe("true");
     expect(host.querySelector(".studio-expression-toggle")?.getAttribute("data-visible")).toBe("true");
+    const input = host.querySelector("input")!;
+    const labelId = host.querySelector(".studio-expression-field-label")?.id;
+    expect(labelId).toBeTruthy();
+    expect(input.getAttribute("aria-labelledby")).toBe(labelId);
   });
 });
 

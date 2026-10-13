@@ -6,7 +6,7 @@ import "../../src/apps/Elsa.Studio.Web/Client/src/app/styles.css";
 
 const searchParams = new URLSearchParams(window.location.search);
 const mode = searchParams.get("mode") === "dark" ? "dark" : "light";
-const theme = getTheme("meridian")!;
+const theme = getTheme("classic")!;
 const palette = mode === "dark" ? theme.dark : theme.light;
 
 document.documentElement.dataset.theme = "classic";

@@ -300,12 +300,19 @@
 }
 
 .studio-reveal-toggle-group[data-ignored="true"] {
-  opacity: 0.55;
+  padding: 8px;
+  border: 1px dashed var(--studio-border);
+  border-radius: var(--studio-radius);
+  color: var(--studio-text-muted);
+}
+
+.studio-reveal-toggle-group[data-ignored="true"] :is(.studio-field-label strong, .studio-field small, input, textarea, select) {
+  color: var(--studio-text-muted);
 }
 
 .studio-reveal-toggle-note {
   margin: 0 0 6px;
-  color: var(--studio-text-muted);
+  color: var(--studio-text);
   font-size: var(--studio-label-size);
 }
 
