@@ -14,8 +14,8 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\..\src\Tasks\Elsa.Tasks\Elsa.Tasks.csproj" />
-    <!-- The type under test lives here; it also arrives transitively through Elsa.Tasks, and an
-         implicit dependency would let a future reference removal silently drop this coverage. -->
+    <!-- The lock contracts the executor tests fake live here; they also arrive transitively through Elsa.Tasks,
+         and an implicit dependency would let a future reference removal silently drop this coverage. -->
     <ProjectReference Include="..\..\..\src\Locking\Core\Elsa.Locking.Core.csproj" />
     <!-- [RequiresSchemaVersion], which the executor reads from a task class (#2192). -->
     <ProjectReference Include="..\..\..\src\Cluster\Core\Elsa.Cluster.Core.csproj" />

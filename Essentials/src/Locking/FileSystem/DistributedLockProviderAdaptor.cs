@@ -5,7 +5,7 @@ using Microsoft.Extensions.Options;
 namespace Elsa.Locking.FileSystem;
 
 /// <inheritdoc />
-public sealed class DistributedLockProviderAdaptor(IDistributedLockProvider distributedLockProvider, IOptions<DistributedLockingOptions> options) : Elsa.Locking.Core.IDistributedLockProvider
+internal sealed class DistributedLockProviderAdaptor(IDistributedLockProvider distributedLockProvider, IOptions<DistributedLockingOptions> options) : Elsa.Locking.Core.IDistributedLockProvider
 {
     public async ValueTask<Elsa.Locking.Core.IDistributedSynchronizationHandle> AcquireLockAsync(string name, TimeSpan? timeout = null, CancellationToken cancellationToken = default)
     {
