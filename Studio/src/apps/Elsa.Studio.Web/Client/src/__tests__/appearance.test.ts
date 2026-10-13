@@ -83,6 +83,28 @@ describe("appearance model", () => {
     expect(() => resetAppearancePreferences(broken)).not.toThrow();
   });
 
+  it("still clears later reset keys when one removeItem throws", () => {
+    const storage = memoryStorage({
+      "elsa-studio-theme": "drift",
+      "elsa-studio-theme-mode": "dark",
+      "elsa-studio-nav-mode": "left",
+      "elsa-studio-sidebar-collapsed": "true",
+      "elsa-studio-bottom-panel-collapsed": "false",
+      "elsa-studio-bottom-panel-height": "320",
+      "elsa-studio-bottom-panel-maximized": "true",
+      "elsa-studio-active-bottom-panel": "console"
+    });
+    const originalRemove = storage.removeItem.bind(storage);
+    storage.removeItem = (key: string) => {
+      if (key === "elsa-studio-theme") throw new Error("denied");
+      originalRemove(key);
+    };
+    expect(() => resetAppearancePreferences(storage)).not.toThrow();
+    expect(storage.data.get("elsa-studio-theme")).toBe("drift");
+    expect(storage.data.has("elsa-studio-theme-mode")).toBe(false);
+    expect(storage.data.has("elsa-studio-active-bottom-panel")).toBe(false);
+  });
+
   it("resolves system mode from the OS, high contrast first", () => {
     expect(getSystemThemeMode(media({}))).toBe("light");
     expect(getSystemThemeMode(media({ "(prefers-color-scheme: dark)": true }))).toBe("dark");

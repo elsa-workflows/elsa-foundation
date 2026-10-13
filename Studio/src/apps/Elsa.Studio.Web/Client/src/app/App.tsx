@@ -116,8 +116,8 @@ const navIconColors = {
 } as const;
 
 const builtInNavigation: StudioNavigationContribution[] = [
-  { id: "modules", label: "Modules", path: "/modules", order: 10, iconColor: navIconColors.modules, placement: "admin" },
-  { id: "package-feeds", label: "Package feeds", path: "/package-feeds", order: 30, iconColor: navIconColors.feeds, placement: "admin" },
+  { id: "modules", label: "Modules", path: "/modules", activePathPrefix: "/modules", order: 10, iconColor: navIconColors.modules, placement: "admin" },
+  { id: "package-feeds", label: "Package feeds", path: "/package-feeds", activePathPrefix: "/package-feeds", order: 30, iconColor: navIconColors.feeds, placement: "admin" },
   { id: "diagnostics", label: "Diagnostics", path: "/diagnostics", activePathPrefix: "/diagnostics", order: 60, iconColor: navIconColors.diagnostics, placement: "more" }
 ];
 
@@ -125,6 +125,7 @@ const themeBuilderNavigation: StudioNavigationContribution = {
   id: "theme-builder",
   label: "Theme builder",
   path: "/theme-builder",
+  activePathPrefix: "/theme-builder",
   order: 20,
   iconColor: navIconColors.themes,
   placement: "admin"
@@ -134,6 +135,7 @@ const appearanceNavigation: StudioNavigationContribution = {
   id: "appearance",
   label: "Appearance",
   path: "/settings/appearance",
+  activePathPrefix: "/settings/appearance",
   order: 10,
   iconColor: navIconColors.themes,
   placement: "settings"
@@ -357,7 +359,7 @@ function AppContent({ authManager }: { authManager: AuthProviderManager | null }
   );
   const access = useShellNavigationAccess(enabledFeatures);
   const settingsGroups = getSettingsSectionGroups(navigation, access);
-  const settingsSurface = isSettingsSurfacePath(path, settingsGroups);
+  const settingsSurface = isSettingsSurfacePath(path, navigation);
 
   if (state === "loading") {
     return (
@@ -379,7 +381,6 @@ function AppContent({ authManager }: { authManager: AuthProviderManager | null }
     );
   }
 
-  const themeBuilderPath = themeCapabilities.managementEnabled && path === "/theme-builder";
   const activeRoute = findRouteForPath(routes, path);
   const ActiveComponent = activeRoute?.component;
   const owningFeatureArea = findFeatureAreaForPath(featureAreas, path);
@@ -405,6 +406,7 @@ function AppContent({ authManager }: { authManager: AuthProviderManager | null }
       >
         {settingsSurface ? (
           <Suspense fallback={<SkeletonRows rows={8} label="Loading settings" />}>
+            {/* Legacy /modules, /package-feeds and /theme-builder URLs must stay on this surface so the host-control gate applies. */}
             <SettingsRoute
               path={path}
               navigation={navigation}
@@ -414,9 +416,6 @@ function AppContent({ authManager }: { authManager: AuthProviderManager | null }
             />
           </Suspense>
         ) : null}
-        {!settingsSurface && path === "/modules" ? <ModuleManagementPage api={api!} /> : null}
-        {!settingsSurface && themeBuilderPath ? <ThemeBuilderPage api={api!} /> : null}
-        {!settingsSurface && path === "/package-feeds" ? <PackageFeedsPage api={api!} /> : null}
         {path === "/diagnostics" ? <Diagnostics api={api!} /> : null}
         {path === "/diagnostics/modules" ? <ModuleDiagnostics api={api!} /> : null}
         {DevDisclosurePage && path === "/dev/disclosure" ? (
@@ -425,7 +424,7 @@ function AppContent({ authManager }: { authManager: AuthProviderManager | null }
           </Suspense>
         ) : null}
         {!settingsSurface && ActiveComponent ? <ActiveComponent navigate={navigateTo} /> : null}
-        {!settingsSurface && !ActiveComponent && path !== "/modules" && !themeBuilderPath && path !== "/package-feeds" && path !== "/diagnostics" && path !== "/diagnostics/modules" && !(DevDisclosurePage && path === "/dev/disclosure") ? (
+        {!settingsSurface && !ActiveComponent && path !== "/diagnostics" && path !== "/diagnostics/modules" && !(DevDisclosurePage && path === "/dev/disclosure") ? (
           <div className="empty-state">
             {owningFeatureArea
               ? `${owningFeatureArea.title} owns ${path}, but no route component is registered for it.`
@@ -537,7 +536,7 @@ export function ShellFrame({
   const settingsGroups = getSettingsSectionGroups(visibleNavigation);
   const searchableSettingsItems = [...settingsItems, ...adminItems];
   const showSettingsEntry = hasSettingsSections(settingsGroups) && (!query || "settings".includes(query));
-  const settingsActive = isSettingsSurfacePath(path, settingsGroups);
+  const settingsActive = isSettingsSurfacePath(path, navigation);
   const moreToolsExpanded = moreToolsOpen || Boolean(query);
   const hasNavResults = mainItems.length + moreItems.length + searchableSettingsItems.length + (showSettingsEntry ? 1 : 0) > 0;
 

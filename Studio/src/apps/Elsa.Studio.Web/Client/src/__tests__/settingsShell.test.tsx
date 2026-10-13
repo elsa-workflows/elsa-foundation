@@ -2,10 +2,13 @@ import React from "react";
 import { flushSync } from "react-dom";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { AuthContext } from "../auth/AuthContext";
+import type { AuthContextValue } from "../auth/types";
 import { ShellFrame, getStudioNavigation } from "../app/App";
 import { ThemeProvider, useTheme } from "../app/components/ThemeProvider";
 import { AppearancePage } from "../app/settings/AppearancePage";
 import { SettingsRoute } from "../app/settings/SettingsRoute";
+import { isSettingsSurfacePath, settingsAccessDeniedMessage } from "../app/settings/settingsSections";
 import type { StudioNavigationContribution } from "../sdk";
 
 describe("settings shell and appearance", () => {
@@ -42,6 +45,18 @@ describe("settings shell and appearance", () => {
     { id: "home", label: "Home", path: "/dashboard", placement: "main" },
     { id: "modules", label: "Modules", path: "/modules", placement: "admin" }
   ];
+
+  it("owns legacy admin paths on getStudioNavigation items, including sub-paths", () => {
+    const items = getStudioNavigation(navigation, { includeThemeBuilder: true });
+    expect(items.find(item => item.id === "modules")?.activePathPrefix).toBe("/modules");
+    expect(items.find(item => item.id === "package-feeds")?.activePathPrefix).toBe("/package-feeds");
+    expect(items.find(item => item.id === "theme-builder")?.activePathPrefix).toBe("/theme-builder");
+    expect(items.find(item => item.id === "appearance")?.activePathPrefix).toBe("/settings/appearance");
+    expect(isSettingsSurfacePath("/modules", items)).toBe(true);
+    expect(isSettingsSurfacePath("/modules/logs", items)).toBe(true);
+    expect(isSettingsSurfacePath("/package-feeds", items)).toBe(true);
+    expect(isSettingsSurfacePath("/theme-builder/preview", items)).toBe(true);
+  });
 
   it("puts a Settings entry in the sidebar and keeps Administration out of it", async () => {
     await act(() => root.render(
@@ -131,4 +146,78 @@ describe("settings shell and appearance", () => {
     await act(() => container.querySelector<HTMLAnchorElement>("a.settings-builder-link")!.click());
     expect(visited).toEqual(["/settings/theme-builder"]);
   });
+
+  it("gates legacy admin URLs for an authenticated user without module-management.read", async () => {
+    const rendered: string[] = [];
+    await act(() => root.render(
+      <AuthContext.Provider value={authenticatedWithoutHostControl()}>
+        <ThemeProvider>
+          <SettingsRoute
+            path="/modules"
+            navigation={getStudioNavigation(navigation, { includeThemeBuilder: true })}
+            onNavigate={() => {}}
+            renderSection={section => {
+              rendered.push(section.id);
+              return <div>Host {section.label}</div>;
+            }}
+          />
+        </ThemeProvider>
+      </AuthContext.Provider>
+    ));
+
+    const sectionNav = container.querySelector('nav[aria-label="Settings sections"]')!;
+    expect(sectionNav.textContent).toContain("Appearance");
+    expect(sectionNav.textContent).not.toContain("Modules");
+    expect(sectionNav.textContent).not.toContain("Theme builder");
+    expect(container.textContent).toContain(settingsAccessDeniedMessage);
+    expect(container.textContent).not.toContain("Host Modules");
+    expect(container.querySelector(".modules-page")).toBeNull();
+    expect(rendered).toEqual([]);
+
+    await act(() => root.render(
+      <AuthContext.Provider value={authenticatedWithoutHostControl()}>
+        <ThemeProvider>
+          <SettingsRoute
+            path="/package-feeds"
+            navigation={getStudioNavigation(navigation, { includeThemeBuilder: true })}
+            onNavigate={() => {}}
+            renderSection={section => {
+              rendered.push(section.id);
+              return <div>Host {section.label}</div>;
+            }}
+          />
+        </ThemeProvider>
+      </AuthContext.Provider>
+    ));
+    expect(container.textContent).toContain(settingsAccessDeniedMessage);
+    expect(rendered).toEqual([]);
+
+    await act(() => root.render(
+      <AuthContext.Provider value={authenticatedWithoutHostControl()}>
+        <ThemeProvider>
+          <SettingsRoute
+            path="/theme-builder"
+            navigation={getStudioNavigation(navigation, { includeThemeBuilder: true })}
+            onNavigate={() => {}}
+            renderSection={section => {
+              rendered.push(section.id);
+              return <div>Host {section.label}</div>;
+            }}
+          />
+        </ThemeProvider>
+      </AuthContext.Provider>
+    ));
+    expect(container.textContent).toContain(settingsAccessDeniedMessage);
+    expect(rendered).toEqual([]);
+  });
 });
+
+function authenticatedWithoutHostControl(): AuthContextValue {
+  return {
+    session: { status: "authenticated", subject: "designer", roles: ["designer"], permissions: [] },
+    capabilities: null,
+    login: async () => undefined,
+    logout: async () => undefined,
+    refresh: async () => ({ status: "authenticated", roles: [], permissions: [] })
+  };
+}

@@ -65,6 +65,18 @@ test.describe("settings shell", () => {
     await expectNoSeriousAxeViolations(page);
   });
 
+  test("moves through the section list with Tab and Enter", async ({ page }) => {
+    await page.goto("/settings/appearance?mode=settings");
+    const sections = page.getByRole("navigation", { name: "Settings sections" });
+    await sections.getByRole("link", { name: "Appearance" }).focus();
+    await page.keyboard.press("Tab");
+    await expect(sections.getByRole("link", { name: "Modules" })).toBeFocused();
+    await page.keyboard.press("Enter");
+    await expect(page).toHaveURL(/\/settings\/modules/);
+    await expect(page.getByRole("heading", { name: "Modules" })).toBeVisible();
+    await expect(sections.getByRole("link", { name: "Modules" })).toHaveAttribute("aria-current", "page");
+  });
+
   test("moves through Appearance radios with the keyboard", async ({ page }) => {
     await page.goto("/settings/appearance?mode=settings");
     const system = page.getByRole("radiogroup", { name: "Colour mode" }).getByRole("radio", { name: /System/ });

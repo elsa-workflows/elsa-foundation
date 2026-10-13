@@ -5,7 +5,9 @@ import { AppearancePage } from "./AppearancePage";
 import { SettingsShell } from "./SettingsShell";
 import {
   getSettingsSectionGroups,
-  resolveSettingsSection,
+  resolveSettingsPane,
+  settingsAccessDeniedMessage,
+  settingsEmptyMessage,
   settingsPathFor
 } from "./settingsSections";
 
@@ -24,15 +26,17 @@ export function SettingsRoute({
 }) {
   const access = useShellNavigationAccess(enabledFeatures);
   const groups = getSettingsSectionGroups(navigation, access);
-  const section = resolveSettingsSection(path, groups);
+  const pane = resolveSettingsPane(path, groups, navigation);
   const themeBuilder = groups
     .flatMap(group => group.sections)
     .find(item => item.id === "theme-builder" || item.path === "/theme-builder");
 
   let content: React.ReactNode;
-  if (!section) {
-    content = <div className="empty-state">No settings sections are available.</div>;
-  } else if (section.id === "appearance") {
+  if (pane.status === "empty") {
+    content = <div className="empty-state">{settingsEmptyMessage}</div>;
+  } else if (pane.status === "forbidden") {
+    content = <div className="empty-state" role="status">{settingsAccessDeniedMessage}</div>;
+  } else if (pane.section.id === "appearance") {
     content = (
       <AppearancePage
         themeBuilderHref={themeBuilder ? settingsPathFor(themeBuilder) : undefined}
@@ -40,13 +44,13 @@ export function SettingsRoute({
       />
     );
   } else {
-    content = renderSection(section) ?? (
-      <div className="empty-state">No Studio route is registered for {section.path}.</div>
+    content = renderSection(pane.section) ?? (
+      <div className="empty-state">No Studio route is registered for {pane.section.path}.</div>
     );
   }
 
   return (
-    <SettingsShell groups={groups} activeId={section?.id} onNavigate={onNavigate}>
+    <SettingsShell groups={groups} activeId={pane.status === "ok" ? pane.section.id : undefined} onNavigate={onNavigate}>
       {content}
     </SettingsShell>
   );

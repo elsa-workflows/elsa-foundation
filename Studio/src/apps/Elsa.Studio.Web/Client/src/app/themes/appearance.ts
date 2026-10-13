@@ -124,7 +124,7 @@ export function writeAppearancePreferences(
 /** Removes every stored appearance preference and chrome key so the defaults apply again. */
 export function resetAppearancePreferences(storage: PreferenceStorage | undefined = defaultStorage()): AppearancePreferences {
   if (storage) {
-    safely(() => appearanceResetStorageKeys.forEach(key => storage.removeItem(key)), undefined);
+    appearanceResetStorageKeys.forEach(key => safely(() => storage.removeItem(key), undefined));
   }
   if (typeof window !== "undefined") {
     window.dispatchEvent(new CustomEvent(appearanceResetEventName));
