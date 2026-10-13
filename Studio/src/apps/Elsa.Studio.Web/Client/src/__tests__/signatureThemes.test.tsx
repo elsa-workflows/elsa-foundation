@@ -70,10 +70,11 @@ const signatureModes = foundationThemeIds.flatMap(id =>
   allThemeModes.map(mode => [id, mode, getThemeModeDefinition(getTheme(id)!, mode)!] as const));
 
 describe("signature themes", () => {
-  it("are the built-in list, with Meridian as the out-of-box default", () => {
+  it("are the built-in list, with Classic as the out-of-box default", () => {
     expect(builtInThemeDefinitions.map(theme => theme.id)).toEqual([...foundationThemeIds]);
-    expect(foundationThemeIds[0]).toBe("meridian");
-    expect(normalizeThemeStore().defaultThemeId).toBe("meridian");
+    expect(foundationThemeIds[0]).toBe("classic");
+    expect(normalizeThemeStore().defaultThemeId).toBe("classic");
+    expect(getTheme("meridian")).toBeDefined();
   });
 
   it.each(foundationThemeIds)("%s defines all four modes, its typography and shape, and validates", id => {
@@ -109,7 +110,7 @@ describe("signature themes", () => {
   });
 
   it("gives each signature theme its layout", () => {
-    expect(foundationThemeIds.map(id => getTheme(id)!.layout)).toEqual(["classic", "floating", "workbench", "editorial", "classic", "classic", "classic"]);
+    expect(foundationThemeIds.map(id => getTheme(id)!.layout)).toEqual(["classic", "classic", "floating", "workbench", "editorial", "classic", "classic", "classic"]);
   });
 
   it.each(foundationThemeIds)("%s high contrast is black-grounded with a bright accent", id => {
@@ -221,7 +222,7 @@ describe("ThemeProvider and ThemeSwitcher", () => {
   const storeWithDefault = (defaultThemeId: string) =>
     contextServing(async () => ({ themes: [twoModeTheme()], defaultThemeId, assets: [] }));
   // The store adds the two-mode custom theme to the built-ins, so the provider can switch to it.
-  const storeContext = storeWithDefault("meridian");
+  const storeContext = storeWithDefault("classic");
 
   function Probe() {
     api = useTheme();
@@ -293,7 +294,7 @@ describe("ThemeProvider and ThemeSwitcher", () => {
     /** Renders against the store and waits until it has loaded and the theme has settled on <html> and in storage. */
     async function expectSettledTheme(storedThemeId: string, expectedThemeId: string) {
       localStorage.setItem("elsa-studio-theme", storedThemeId);
-      // The store default deliberately differs from the first built-in (Meridian), so a fallback proves which one won.
+      // The store default deliberately differs from the first built-in (Classic), so a fallback proves which one won.
       await render(storeWithDefault("atelier"));
       await vi.waitFor(() => {
         expect(api!.availableThemes.some(theme => theme.id === "two-mode")).toBe(true);
@@ -321,18 +322,18 @@ describe("ThemeProvider and ThemeSwitcher", () => {
       await vi.waitFor(() => expect(getJson).toHaveBeenCalled());
       await act(() => {});
 
-      expect(document.documentElement.getAttribute("data-theme")).toBe("meridian");
+      expect(document.documentElement.getAttribute("data-theme")).toBe("classic");
       expect(localStorage.getItem("elsa-studio-theme")).toBe("two-mode");
     });
   });
 
-  it("renders Meridian by default and applies its typography and shape", async () => {
+  it("renders Classic by default and applies its typography and shape", async () => {
     await render();
     const html = document.documentElement;
 
-    expect(html.getAttribute("data-theme")).toBe("meridian");
+    expect(html.getAttribute("data-theme")).toBe("classic");
     expect(html.style.getPropertyValue("--font-sans")).toContain("Geist Variable");
-    expect(html.style.getPropertyValue("--radius")).toBe("7px");
+    expect(html.style.getPropertyValue("--radius")).toBe("8px");
   });
 
   it("keeps data-theme-mode as the colour scheme and exposes the exact mode as data-theme-appearance", async () => {
@@ -353,7 +354,7 @@ describe("ThemeProvider and ThemeSwitcher", () => {
 
     expect(api!.mode).toBe("dark");
     expect(api!.preferredMode).toBe("dim");
-    // The two-mode theme sets no typography, so Meridian's stack must not linger on <html>.
+    // The two-mode theme sets no typography, so Classic's stack must not linger on <html>.
     expect(document.documentElement.style.getPropertyValue("--font-sans")).toBe("");
 
     await act(() => api!.setTheme("drift"));

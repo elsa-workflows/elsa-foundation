@@ -50,8 +50,8 @@ Optionally supply `--font-display` (title face; defaults to `--font-sans`).
 ### Modes and the `<html>` attributes
 
 Studio offers four modes: `light`, `dark`, `dim` and `high-contrast`. Every theme defines Light
-and Dark; Dim and High contrast are optional per theme (the seven signature themes — Meridian,
-Drift, Schematic, Atelier, Elsa Cloud, Signal, Dusk — define all four). ThemeProvider sets two attributes:
+and Dark; Dim and High contrast are optional per theme (the eight signature themes — Classic,
+Meridian, Drift, Schematic, Atelier, Elsa Cloud, Signal, Dusk — define all four). ThemeProvider sets two attributes:
 
 | Attribute | Values | Meaning |
 | --- | --- | --- |
@@ -214,7 +214,7 @@ Texture/grid: `--studio-material-texture`, `--studio-material-texture-size`,
    `[data-theme-appearance="high-contrast"]` for a High-contrast-only adjustment the tokens
    cannot express, and `[data-theme-layout="…"]` for arrangement (see [Modes and the `<html>` attributes](#modes-and-the-html-attributes)).
 4. **Gate every material treatment on `[data-theme-material]`.** Flat themes — every built-in:
-   `meridian`, `drift`, `schematic`, `atelier`, `elsa-cloud`, `signal`, `dusk` — must stay flat. Any rule
+   `classic`, `meridian`, `drift`, `schematic`, `atelier`, `elsa-cloud`, `signal`, `dusk` — must stay flat. Any rule
    consuming a `--studio-material-*` token belongs inside an `html[data-theme-material] …`
    guard.
 5. **A new material token gets a neutral fallback, and recipes stay per theme.** Any new

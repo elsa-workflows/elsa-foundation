@@ -39,7 +39,7 @@ code.
    `--studio-radius-lg` and `--studio-shadow-sm` (see [design-tokens.md](../design-tokens.md)).
    Fail if changed CSS adds a raw `px` radius, a hex/rgba `box-shadow`, or a token outside that
    set. Type sizes must be the `--studio-*-size` tokens from the same contract.
-4. **Every theme, every mode.** `exists` as a review rule. Each change is checked in Meridian
+4. **Every theme, every mode.** `exists` as a review rule. Each change is checked in Classic
    Light and one dark theme, and must not break Dim or High contrast. Concrete modes are `light`,
    `dark`, `dim` and `high-contrast`. `system` exists as a stored preference (follows the OS, live)
    and is the default; the ThemeSwitcher has no System control yet (`target, phase 4`).
@@ -161,7 +161,7 @@ shared `activity` / `Boxes` icon if the descriptor supplied one.
 ## Review checklist for UX PRs
 
 - [ ] One surface; no unrelated refactors.
-- [ ] Before/after screenshots at 1600×1000 @2x, Meridian Light and one dark theme.
+- [ ] Before/after screenshots at 1600×1000 @2x, Classic Light and one dark theme.
 - [ ] Only `--studio-*` tokens. `pnpm lint:css` passes for module CSS it actually covers
       (`essentials` and `Extensions` Client CSS). Shell / `ui` colour is review-only until
       `Elsa.Studio.Web/Client` is no longer in `.stylelintrc.json` `ignoreFiles`.
