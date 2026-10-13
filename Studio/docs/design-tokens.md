@@ -142,6 +142,12 @@ so titles don't render in faux bold — read it as `var(--studio-title-weight, 7
 `--studio-radius-sm`, `--studio-radius`, `--studio-radius-md`, `--studio-radius-lg`,
 `--studio-shadow-sm`.
 
+### Motion
+
+`--studio-disclosure-duration` (150ms) and `--studio-disclosure-distance` (4px) are the
+shared enter/expand recipe for disclosure primitives. `@media (prefers-reduced-motion: reduce)`
+zeroes both.
+
 ### Compatibility aliases (STABLE, thin)
 
 For modules bundled before the `--studio-*` layer existed: `--surface`, `--text`, `--muted`,

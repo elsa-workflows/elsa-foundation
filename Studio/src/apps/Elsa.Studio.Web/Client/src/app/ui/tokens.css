@@ -67,6 +67,10 @@
   --studio-body-size: 13px;
   --studio-label-size: 12px;
 
+  /* Disclosure motion. Caps enter/expand animation at 150ms; reduced-motion zeroes both. */
+  --studio-disclosure-duration: 150ms;
+  --studio-disclosure-distance: 4px;
+
   /* Compatibility aliases for independently bundled Studio modules. */
   --surface: var(--studio-surface);
   --text: var(--studio-text);
@@ -228,6 +232,13 @@ html[data-theme="elsa-cloud"][data-theme-mode="dark"] {
  * lift specificity above every per-theme dark-scheme block, which High contrast also matches, so
  * the result does not depend on source order.
  */
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --studio-disclosure-duration: 0ms;
+    --studio-disclosure-distance: 0px;
+  }
+}
+
 html[data-theme][data-theme-mode][data-theme-appearance="high-contrast"] {
   --shadow-sm: 0 0 0 0 transparent;
   --shadow-md: 0 0 0 0 transparent;

@@ -42,6 +42,7 @@ import { QueryProvider } from "./providers/QueryProvider";
 import { useStudioManifest } from "./hooks/useStudioManifest";
 import { getHealthErrorMessage } from "./hooks/useHostHealth";
 import { DialogHost } from "./ui/dialog/DialogHost";
+import { DisclosureFixturePage } from "./ui/disclosure/DisclosureFixturePage";
 import { SkeletonRows } from "./ui/feedback/FeedbackStates";
 import { registerBuiltInSettingEditors } from "./ui/shared";
 import { tabElementIds, useTablistKeyboard } from "./ui/layout/Tabs";
@@ -345,8 +346,9 @@ function AppContent({ authManager }: { authManager: AuthProviderManager | null }
         {path === "/package-feeds" ? <PackageFeedsPage api={api!} /> : null}
         {path === "/diagnostics" ? <Diagnostics api={api!} /> : null}
         {path === "/diagnostics/modules" ? <ModuleDiagnostics api={api!} /> : null}
+        {path === "/dev/disclosure" ? <DisclosureFixturePage /> : null}
         {ActiveComponent ? <ActiveComponent navigate={navigateTo} /> : null}
-        {!ActiveComponent && path !== "/modules" && !themeBuilderPath && path !== "/package-feeds" && path !== "/diagnostics" && path !== "/diagnostics/modules" ? (
+        {!ActiveComponent && path !== "/modules" && !themeBuilderPath && path !== "/package-feeds" && path !== "/diagnostics" && path !== "/diagnostics/modules" && path !== "/dev/disclosure" ? (
           <div className="empty-state">
             {owningFeatureArea
               ? `${owningFeatureArea.title} owns ${path}, but no route component is registered for it.`
