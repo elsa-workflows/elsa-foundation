@@ -1,6 +1,6 @@
 import React from "react";
 import { Handle, Position, type NodeProps } from "@xyflow/react";
-import { renderActivityIcon } from "../workflowFormatting";
+import { renderActivityIcon } from "../activityIconView";
 import { NodeSlotBadges } from "../workflow-editor/NodeSlotBadges";
 import { RuntimeIncidentAction } from "../workflow-editor/RuntimeIncidentAction";
 import { bpmnElementTypes, bpmnElementTypeLabel, isEventElementType, isGatewayElementType, isTerminateEndEvent } from "./bpmnTypes";
@@ -71,7 +71,7 @@ function renderBpmnShape(nodeData: BpmnNodeData) {
     <span className={["wf-bpmn-task", element.elementType === bpmnElementTypes.subProcess ? "wf-bpmn-subprocess" : ""].filter(Boolean).join(" ")}>
       {bound ? (
         <>
-          <span className="wf-node-icon" aria-hidden="true">{renderActivityIcon(bound.icon)}</span>
+          <span className="wf-node-icon" data-tone={bound.iconTone ?? "accent"} aria-hidden="true">{renderActivityIcon(bound.icon)}</span>
           <span className="wf-bpmn-task-copy">
             <strong>{element.name?.trim() || bound.label}</strong>
             <small>{bpmnElementTypeLabel(element)}</small>

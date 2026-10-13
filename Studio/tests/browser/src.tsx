@@ -1,3 +1,4 @@
+import { ActivityIconsFixture } from "./activityIconsFixture";
 import { ActivityInputEvidenceFixture } from "./activityInputEvidenceFixture";
 import React, { lazy, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
@@ -89,6 +90,7 @@ const versionChangeFixture = searchParams.get("mode") === "version-change";
 const activityInspectorTabsFixture = searchParams.get("mode") === "activity-inspector-tabs";
 const publicationReviewFixture = searchParams.get("mode") === "publication-review";
 const activityGraphAuthoringFixture = searchParams.get("mode") === "activity-definition-graph-authoring";
+const activityIconsFixture = searchParams.get("mode") === "activity-icons";
 const expressionCodeIntelligenceFixture = searchParams.get("mode") === "expression-code-intelligence";
 const expressionToolingUnavailable = searchParams.get("tooling") === "unavailable";
 const expressionFieldCount = Math.max(1, Math.min(50, Number(searchParams.get("fields") ?? 1)));
@@ -1586,6 +1588,7 @@ function browserVersion(
 // writes Meridian's dark palette onto <html> itself, the way the provider does at runtime.
 const darkVariant = searchParams.get("theme") === "dark";
 document.documentElement.dataset.theme = "meridian";
+document.documentElement.dataset.themeLayout = "classic";
 document.documentElement.dataset.themeMode = darkVariant ? "dark" : "light";
 if (darkVariant) {
   const palette = getTheme("meridian")!.dark;
@@ -1593,9 +1596,17 @@ if (darkVariant) {
     document.documentElement.style.setProperty(`--${token.replace(/([A-Z])/g, "-$1").toLowerCase()}`, palette[token]);
   }
 }
+if (activityIconsFixture && searchParams.get("host-override") === "1") {
+  document.documentElement.style.setProperty("--studio-wf-activity-terminal", "rgb(255, 17, 0)");
+  document.documentElement.style.setProperty("--studio-wf-activity-composite", "rgb(124, 58, 237)");
+  document.documentElement.style.setProperty("--studio-wf-activity-runtime", "rgb(234, 88, 12)");
+  document.documentElement.style.setProperty("--studio-wf-activity-trigger", "rgb(219, 39, 119)");
+}
 createRoot(document.getElementById("root")!).render(
   searchParams.get("mode") === "workflow-toolbar"
     ? <WorkflowToolbarFixture />
+    : activityIconsFixture
+    ? <ActivityIconsFixture />
     : publicationReviewFixture
     ? <PublicationReviewFixture />
     : activityGraphAuthoringFixture

@@ -10,8 +10,10 @@ import { bpmnStructureKind } from "./bpmn/bpmnTypes";
 import { buildIntrinsicWireBlock, readIntrinsicDescriptor } from "./intrinsicActivities";
 import { getActivityDisplay } from "./activityDisplay";
 import { indexActivityPresentation, resolveActivityLabel } from "./activityPresentation";
+import type { ActivityIconTone, WorkflowNodeIcon } from "./activityIcons";
 
 export { getActivityDisplay } from "./activityDisplay";
+export type { ActivityIconTone, WorkflowNodeIcon } from "./activityIcons";
 
 export const sequenceStructureKind = "elsa.sequence.structure";
 export {
@@ -33,6 +35,7 @@ export interface WorkflowNodeData extends Record<string, unknown> {
   summary?: string;
   activityDefinitionVersion?: string;
   icon?: WorkflowNodeIcon;
+  iconTone?: ActivityIconTone;
   childSlots: ChildSlot[];
   acceptsInbound: boolean;
   sourcePorts: WorkflowPortDescriptor[];
@@ -41,6 +44,11 @@ export interface WorkflowNodeData extends Record<string, unknown> {
   /** Runtime activity identity for canvases whose visible node id is a different domain element id. */
   runtimeNodeId?: string;
   description?: string;
+  /** Catalog identity used at render time so reusable activities resolve without an eager icon table. */
+  activityDefinitionId?: string;
+  /** Raw catalog `icon` / `iconName`; the canvas resolves them so `activityIcons` stays off the entry. */
+  catalogIcon?: string | null;
+  catalogIconName?: string | null;
   /** True for the Flowchart activity execution enters first, so the canvas can say which node starts. */
   isStartNode?: boolean;
   /** True when this activity can start a workflow (its `CanStartWorkflow` input is a literal true). */
@@ -53,8 +61,6 @@ export interface WorkflowNodeData extends Record<string, unknown> {
 }
 
 export type WorkflowNodeSummaryFormatter = (activity: ActivityNode, catalogItem: ActivityCatalogItem) => string | undefined;
-
-export type WorkflowNodeIcon = "activity" | "flowchart" | "sequence" | "terminal" | "runtime" | "trigger" | "reusable";
 
 export interface WorkflowPortDescriptor {
   name: string;
@@ -859,7 +865,9 @@ function createWorkflowNode(
       summary: catalogItem && formatSummary ? formatSummary(activity, catalogItem) : undefined,
       description: presentation?.description ?? undefined,
       activityDefinitionVersion: catalogItem?.activityDefinitionVersion,
-      icon: resolveActivityIcon(catalogItem),
+      activityDefinitionId: catalogItem?.activityDefinitionId,
+      catalogIcon: catalogItem?.icon,
+      catalogIconName: catalogItem?.iconName,
       childSlots: getChildSlots(activity, catalogItem),
       acceptsInbound: activityAcceptsInbound(activity, catalogItem),
       sourcePorts: options.suppressFlowPorts ? [] : getActivitySourcePorts(activity, catalogItem),
@@ -868,37 +876,6 @@ function createWorkflowNode(
       canStartWorkflow: activityCanStartWorkflow(activity)
     }
   };
-}
-
-export function resolveActivityIcon(activity: ActivityCatalogItem | undefined): WorkflowNodeIcon {
-  if (!activity) return "activity";
-  if (activity.activityDefinitionId) return "reusable";
-
-  const configuredIcon = normalizeWorkflowNodeIcon(activity.icon);
-  if (configuredIcon) return configuredIcon;
-
-  const typeKey = activity.activityTypeKey.toLowerCase();
-  const displayName = getActivityDisplay(activity).toLowerCase();
-  const category = activity.category?.toLowerCase() ?? "";
-  const executionType = activity.executionType?.toLowerCase() ?? "";
-
-  if (typeKey.endsWith(".flowchart") || displayName === "flowchart") return "flowchart";
-  if (typeKey.endsWith(".sequence") || displayName === "sequence") return "sequence";
-  if (typeKey.includes("writeline") || displayName.includes("write line")) return "terminal";
-  if (category.includes("runtime")) return "runtime";
-  if (executionType === "trigger") return "trigger";
-  return "activity";
-}
-
-function normalizeWorkflowNodeIcon(icon: string | null | undefined): WorkflowNodeIcon | null {
-  if (!icon) return null;
-
-  const normalized = icon.trim().toLowerCase();
-  if (["activity", "flowchart", "sequence", "terminal", "runtime", "trigger", "reusable"].includes(normalized)) {
-    return normalized as WorkflowNodeIcon;
-  }
-
-  return null;
 }
 
 function isFlowchartCatalogItem(activity: ActivityCatalogItem | undefined) {

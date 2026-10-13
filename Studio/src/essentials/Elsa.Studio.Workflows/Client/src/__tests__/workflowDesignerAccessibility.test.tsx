@@ -165,6 +165,22 @@ describe("activity palette version chip", () => {
     // The activity name must remain visible alongside the compact chip.
     expect(container.querySelector(".wf-palette-activity-text strong")?.textContent).toBe("Write Line");
   });
+
+  it("shows a per-activity palette icon coloured by category tone", () => {
+    const writeLine = activity("write-line", "Write Line");
+    const sendEmail = { ...activity("send-email", "Send Email"), category: "Email" };
+
+    flushSync(() => root.render(<PaletteHarness activities={[writeLine, sendEmail]} onInsert={() => {}} />));
+
+    const icons = [...container.querySelectorAll<HTMLElement>(".wf-palette-activity .wf-activity-icon")];
+    expect(icons).toHaveLength(2);
+    expect(icons[0].getAttribute("data-icon")).toBe("terminal");
+    expect(icons[0].getAttribute("data-tone")).toBe("terminal");
+    expect(icons[1].getAttribute("data-icon")).toBe("email");
+    expect(icons[1].getAttribute("data-tone")).toBe("trigger");
+    expect(icons[0].querySelector("svg")).toBeTruthy();
+    expect(icons[1].querySelector("svg")).toBeTruthy();
+  });
 });
 
 function PaletteHarness({ activities, onInsert }: { activities: ActivityCatalogItem[]; onInsert(activity: ActivityCatalogItem): void }) {

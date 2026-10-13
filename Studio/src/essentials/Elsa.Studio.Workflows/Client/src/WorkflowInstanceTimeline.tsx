@@ -1,8 +1,9 @@
 import { useMemo } from "react";
 import { resolveActivityLabel } from "./activityPresentation";
 import { findExecutableNodeFacts, type ExecutableActivityGraph } from "./executableGraph";
-import { resolveActivityIcon } from "./workflowAdapter";
-import { formatDuration, renderActivityIcon, shortTypeName } from "./workflowFormatting";
+import { resolveActivityIcon } from "./activityIcons";
+import { renderActivityIcon } from "./activityIconView";
+import { formatDuration, shortTypeName } from "./workflowFormatting";
 import type { ActivityCatalogItem, ActivityExecutionStateSummary } from "./workflowTypes";
 
 export function WorkflowExecutionTimeline({ activities, activityCatalog, executableGraph, selectedEvidenceId = null, onSelectEvidence }: {

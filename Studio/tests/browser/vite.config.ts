@@ -7,7 +7,8 @@ export default defineConfig({
   plugins: [react()],
   resolve: {
     alias: {
-      "@elsa-workflows/studio-sdk": resolve(__dirname, "../../src/apps/Elsa.Studio.Web/Client/src/sdk/index.ts")
+      "@elsa-workflows/studio-sdk": resolve(__dirname, "../../src/apps/Elsa.Studio.Web/Client/src/sdk/index.ts"),
+      "@xyflow/react": resolve(__dirname, "../../src/essentials/Elsa.Studio.Workflows/Client/node_modules/@xyflow/react")
     }
   },
   server: {
