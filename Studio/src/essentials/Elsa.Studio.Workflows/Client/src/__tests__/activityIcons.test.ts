@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { knownLucideExportNames, resolveActivityIcon, resolveActivityIconTone } from "../activityIcons";
+import {
+  knownLucideExportNames,
+  resolveActivityIcon,
+  resolveActivityIconFallback,
+  resolveActivityIconTone,
+  toActivityIconAssetUrl
+} from "../activityIcons";
 import { mappedLucideExportNames } from "../activityIconGlyphs";
 import type { ActivityCatalogItem } from "../workflowTypes";
 import { writeLine } from "./fixtures";
@@ -16,29 +22,36 @@ describe("resolveActivityIcon", () => {
   it("renders a descriptor-supplied lucide iconName instead of the generic Boxes kind", () => {
     expect(resolveActivityIcon(catalog({ iconName: "GitBranch" }))).toBe("GitBranch");
     expect(resolveActivityIcon(catalog({ iconName: "git-branch" }))).toBe("GitBranch");
+    expect(resolveActivityIcon(catalog({ iconName: "Rocket" }))).toBe("Rocket");
   });
 
-  it("ignores an unmapped iconName and continues to type and category fallbacks", () => {
+  it("accepts asset: and ext: catalog values", () => {
+    expect(resolveActivityIcon(catalog({ iconName: "asset:Acme.Slack/icons/slack.svg" }))).toBe("asset:Acme.Slack/icons/slack.svg");
+    expect(resolveActivityIcon(catalog({ iconName: "ext:slack" }))).toBe("ext:slack");
+    expect(toActivityIconAssetUrl("asset:Acme.Slack/icons/slack.svg")).toBe("/_content/Acme.Slack/icons/slack.svg");
+  });
+
+  it("ignores an unsafe or malformed iconName and continues to type and category fallbacks", () => {
     expect(resolveActivityIcon(catalog({
-      iconName: "Rocket",
+      iconName: "asset:../secrets/key.svg",
       activityTypeKey: "Elsa.Activities.Email.Activities.SendEmail",
       displayName: "Send Email",
       category: "Email"
     }))).toBe("email");
     expect(resolveActivityIcon(catalog({
-      icon: "rocket",
+      icon: "javascript:alert(1)",
       activityTypeKey: "Acme.Activities.Custom.UnknownHttpCall",
       displayName: "Unknown HTTP Call",
       category: "HTTP"
     }))).toBe("http");
     expect(resolveActivityIcon(catalog({
-      iconName: "NotARealIcon",
+      iconName: "not a name",
       activityTypeKey: "Acme.Activities.Custom.OddThing",
       displayName: "Odd Thing",
       category: "Uncategorised",
       executionType: "Trigger"
     }))).toBe("trigger");
-    expect(resolveActivityIcon(catalog({
+    expect(resolveActivityIconFallback(catalog({
       iconName: "Rocket",
       activityTypeKey: "Acme.Activities.Custom.OddThing",
       displayName: "Odd Thing",

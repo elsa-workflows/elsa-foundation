@@ -711,6 +711,33 @@ public sealed class ClrAssemblyScannerTests
         Assert.Contains("BaseOutcome", portNames);
     }
 
+    [Theory]
+    [InlineData(typeof(LucideIconFixtureActivity), "Rocket")]
+    [InlineData(typeof(KebabLucideIconFixtureActivity), "git-branch")]
+    [InlineData(typeof(AssetIconFixtureActivity), "asset:Acme.Slack/icons/slack.svg")]
+    [InlineData(typeof(ExtensionIconFixtureActivity), "ext:slack")]
+    [InlineData(typeof(InheritedIconFixtureActivity), "Boxes")]
+    public void ActivityIcon_MapsToDesignFacet(Type activityType, string expectedIcon)
+    {
+        using var folder = TempAssemblyFolder.WithCopyOf(activityType.Assembly);
+
+        var model = CreateScanner().Scan(folder.Path).Single(candidate => candidate.ActivityTypeKey == activityType.FullName);
+        var facet = Assert.Single(model.DesignFacets, candidate => candidate.Kind == ActivityIconName.FacetKind);
+
+        Assert.Equal(ActivityIconName.FacetSchemaVersion, facet.SchemaVersion);
+        Assert.Equal(expectedIcon, facet.Payload.GetProperty(ActivityIconName.PayloadProperty).GetString());
+    }
+
+    [Fact]
+    public void InvalidActivityIcon_DoesNotEmitAFacet()
+    {
+        using var folder = TempAssemblyFolder.WithCopyOf(typeof(InvalidIconFixtureActivity).Assembly);
+
+        var model = CreateScanner().Scan(folder.Path).Single(candidate => candidate.ActivityTypeKey == typeof(InvalidIconFixtureActivity).FullName);
+
+        Assert.DoesNotContain(model.DesignFacets, facet => facet.Kind == ActivityIconName.FacetKind);
+    }
+
     [Fact]
     public void ActivityWithoutOutcomeAttributes_HasNoOutcomeFacet()
     {

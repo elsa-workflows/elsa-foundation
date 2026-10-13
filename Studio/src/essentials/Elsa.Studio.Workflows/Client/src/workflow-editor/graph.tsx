@@ -3,7 +3,7 @@ import { BaseEdge, EdgeLabelRenderer, Handle, Position, getBezierPath, getSmooth
 import { useStudioThemeLayout, type StudioThemeLayout } from "@elsa-workflows/studio-sdk";
 import { AlertTriangle, Flag, Plus, Trash2 } from "lucide-react";
 import type { ActivityCatalogItem } from "../workflowTypes";
-import { resolveActivityIcon, resolveActivityIconTone } from "../activityIcons";
+import { resolveActivityIcon, resolveActivityIconFallback, resolveActivityIconTone } from "../activityIcons";
 import { renderActivityIcon } from "../activityIconView";
 import { getActivityDisplay, type WorkflowNodeData } from "../workflowAdapter";
 import { getAvailabilityStateLabel } from "../activityAvailability";
@@ -31,13 +31,14 @@ function resolveNodeActivityVisual(nodeData: WorkflowNodeData) {
   };
   return {
     icon: nodeData.icon ?? resolveActivityIcon(source),
+    fallback: resolveActivityIconFallback(source),
     tone: nodeData.iconTone ?? resolveActivityIconTone(source)
   };
 }
 
 export function WorkflowActivityNode({ id, data, selected }: NodeProps) {
   const nodeData = data as WorkflowNodeData;
-  const { icon, tone } = resolveNodeActivityVisual(nodeData);
+  const { icon, fallback, tone } = resolveNodeActivityVisual(nodeData);
   const runtime = nodeData.runtime;
   const showFlowPorts = !nodeData.suppressFlowPorts;
   const sourcePorts = showFlowPorts
@@ -69,7 +70,7 @@ export function WorkflowActivityNode({ id, data, selected }: NodeProps) {
         </span>
       ) : null}
       <div className="wf-node-content">
-        <span className="wf-node-icon" aria-hidden="true">{renderActivityIcon(icon)}</span>
+        <span className="wf-node-icon" aria-hidden="true">{renderActivityIcon(icon, fallback)}</span>
         <span className="wf-node-copy">
           <strong title={nodeData.label}>{nodeData.label}</strong>
           {nodeData.ghost ? <small className="wf-node-ghost-note">Not available in this environment</small> : subtitle.text ? <small title={subtitle.title}>{subtitle.text}</small> : null}

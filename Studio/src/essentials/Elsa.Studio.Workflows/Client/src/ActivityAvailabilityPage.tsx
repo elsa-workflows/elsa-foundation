@@ -61,7 +61,7 @@ function getSwitchLockTitle(effective: EffectiveActivityAvailability): string | 
 }
 
 function ActivityIconChip({ icon }: { icon: ReturnType<typeof resolveActivityIcon> }) {
-  return <span className="wf-activity-icon" data-icon={icon} aria-hidden="true">{renderActivityIcon(icon)}</span>;
+  return <span className="wf-activity-icon" data-icon={icon} aria-hidden="true">{renderActivityIcon(icon, "activity")}</span>;
 }
 
 export function ActivityAvailabilityPage({ context }: { context: StudioEndpointContext }) {

@@ -3,6 +3,7 @@ import {
   createAiContributionApi,
   createContributionRegistry,
   createDashboardWidgetRegistry,
+  registerActivityIcons,
   studioSlots,
   type ElsaStudioHostContext,
   type ElsaStudioModuleApi,
@@ -67,7 +68,8 @@ export function createStudioRegistry(
     workflowDesigner: {
       nodeRenderers: createContributionRegistry({ slot: studioSlots.workflowDesignerNodeRenderers }),
       toolboxItems: createContributionRegistry({ slot: studioSlots.workflowDesignerToolboxItems }),
-      panels: createContributionRegistry({ slot: studioSlots.workflowDesignerPanels })
+      panels: createContributionRegistry({ slot: studioSlots.workflowDesignerPanels }),
+      registerActivityIcons
     },
     ai: createAiContributionApi(),
     dialogs: dialogController.api,

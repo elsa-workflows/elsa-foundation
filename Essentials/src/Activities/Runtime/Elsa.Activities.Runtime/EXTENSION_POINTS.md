@@ -29,6 +29,12 @@ The per-domain catalog (framework §2.22.1). Anchored at `Elsa.Activities.Runtim
 - **Usage:** declares a stable runtime resume target ID. Workflow compile/publish can copy the ID into a runtime executable artifact's resume-target table. Durable bookmarks store this ID, not the C# method name.
 - **Related runtime seam:** `IBookmarkResumeResolver` in `Elsa.Workflows.Runtime.Core`.
 
+### `ActivityAttribute` *(Core — `Elsa.Activities.Runtime.Core`)*
+- **Kind:** Declaration surface (activity author contract).
+- **Signature:** `[Activity(Icon = "Rocket" | "git-branch" | "asset:Package.Id/icons/name.svg" | "ext:slack")]` on an activity class.
+- **Usage:** optional designer icon. CLR reconciliation copies a valid value onto an `elsa.activity-icon` design facet; the authoring catalog exposes it as `iconName`. Accepted forms are a lucide export or kebab name, `asset:<package>/<path>` for a static web asset in the extension package, or `ext:<name>` for a React icon registered on the Studio client via `registerActivityIcons`. An unknown, empty or unsafe value is ignored so the designer keeps its type/category fallback.
+- **Related design seam:** `ActivityIconName` in `Elsa.Activities.Design.Core`; Studio `registerActivityIcons` in `@elsa-workflows/studio-sdk`.
+
 ### `TriggerActivityAttribute` *(Core — `Elsa.Activities.Runtime.Core`)*
 - **Kind:** Declaration surface (activity author contract).
 - **Signature:** `[TriggerActivity]` on an activity class that can start a workflow from an external stimulus.

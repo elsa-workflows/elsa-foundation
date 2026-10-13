@@ -1589,14 +1589,16 @@ function browserVersion(
 }
 
 // `?theme=dark` is the second visual variant the specs cover. The fixture has no ThemeProvider, so it
-// writes Meridian's dark palette onto <html> itself, the way the provider does at runtime.
+// writes the chosen theme palette onto <html> itself, the way the provider does at runtime.
+// Activity-icon shots default to Classic light — Studio 4's default theme.
 const darkVariant = searchParams.get("theme") === "dark";
+const fixtureTheme = activityIconsFixture ? "classic" : "meridian";
 if (!navPlacementFixture && !navBeforeFixture && !settingsBeforeFixture && !settingsFixture) {
-  document.documentElement.dataset.theme = "meridian";
+  document.documentElement.dataset.theme = fixtureTheme;
   document.documentElement.dataset.themeLayout = "classic";
   document.documentElement.dataset.themeMode = darkVariant ? "dark" : "light";
-  if (darkVariant) {
-    const palette = getTheme("meridian")!.dark;
+  if (darkVariant || activityIconsFixture) {
+    const palette = getTheme(fixtureTheme)![darkVariant ? "dark" : "light"];
     for (const token of themeTokenNames) {
       document.documentElement.style.setProperty(`--${token.replace(/([A-Z])/g, "-$1").toLowerCase()}`, palette[token]);
     }

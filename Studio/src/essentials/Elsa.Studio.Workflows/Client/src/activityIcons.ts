@@ -5,9 +5,10 @@ import type { ActivityCatalogItem } from "./workflowTypes";
  * timeline. One mapping: catalog metadata first, then type, then category. Do not add a second
  * palette- or node-only table.
  *
- * `icon` is the historical kind token. `iconName` is a lucide name from the descriptor (design
- * spec: when set and mapped, render that lucide icon). An unknown `icon` / `iconName` is ignored
- * so type → category → trigger → generic still run; `Boxes` is only the last resort.
+ * `icon` is the historical kind token. `iconName` is the descriptor-supplied designer icon: any
+ * lucide export or kebab name, `asset:<package>/<path>` for a static web asset, or `ext:<name>`
+ * for a component registered through `registerActivityIcons`. An unknown or unsafe value is
+ * ignored so type → category → trigger → generic still run; `Boxes` is only the last resort.
  */
 
 export const knownWorkflowNodeIcons = [
@@ -180,6 +181,18 @@ export function resolveActivityIcon(activity: ActivityIconSource | undefined): W
   return "activity";
 }
 
+/** Category / type fallback used when a configured icon is unknown or fails to load. */
+export function resolveActivityIconFallback(activity: ActivityIconSource | undefined): WorkflowNodeIcon {
+  if (!activity) return "activity";
+  return resolveActivityIcon({
+    activityTypeKey: activity.activityTypeKey,
+    displayName: activity.displayName,
+    category: activity.category,
+    executionType: activity.executionType,
+    activityDefinitionId: activity.activityDefinitionId
+  });
+}
+
 export function resolveActivityIconTone(activity: ActivityIconSource | undefined): ActivityIconTone {
   if (!activity) return "accent";
 
@@ -193,17 +206,39 @@ export function resolveActivityIconTone(activity: ActivityIconSource | undefined
   return categoryToneByName[category] ?? "accent";
 }
 
+const assetIconPattern = /^asset:([A-Za-z0-9](?:[A-Za-z0-9._-]*[A-Za-z0-9])?)\/([A-Za-z0-9._-]+(?:\/[A-Za-z0-9._-]+)*)$/;
+const extensionIconPattern = /^ext:([A-Za-z][A-Za-z0-9_-]*)$/;
+const lucideKebabPattern = /^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/;
+
 function normalizeConfiguredIcon(icon: string | null | undefined): WorkflowNodeIcon | null {
   if (!icon) return null;
   const trimmed = icon.trim();
-  if (!trimmed) return null;
+  if (!trimmed || trimmed.includes("://") || trimmed.includes("\\") || trimmed.includes("..")) return null;
 
   const kind = trimmed.toLowerCase();
   if (knownIconSet.has(kind)) return kind as KnownWorkflowNodeIcon;
 
+  if (assetIconPattern.test(trimmed) || extensionIconPattern.test(trimmed)) return trimmed;
+
   const lucideName = toLucideExportName(trimmed);
-  if (lucideName && isKnownLucideExportName(lucideName)) return lucideName;
+  if (lucideName && (/^[A-Z][A-Za-z0-9]*$/.test(trimmed) || lucideKebabPattern.test(trimmed))) return lucideName;
   return null;
+}
+
+/** Turns a persisted `asset:package/path` value into the hosted static-web-asset URL. */
+export function toActivityIconAssetUrl(icon: string): string | null {
+  const match = icon.trim().match(assetIconPattern);
+  if (!match) return null;
+  const [, packageId, path] = match;
+  return `/_content/${encodeURIComponent(packageId)}/${path.split("/").map(encodeURIComponent).join("/")}`;
+}
+
+export function isActivityIconAsset(icon: string): boolean {
+  return assetIconPattern.test(icon.trim());
+}
+
+export function isActivityIconExtension(icon: string): boolean {
+  return extensionIconPattern.test(icon.trim());
 }
 
 function iconFromTypeKey(typeKey: string | undefined, displayName: string | undefined): KnownWorkflowNodeIcon | null {

@@ -51,6 +51,35 @@ Known host-owned Slot IDs:
 - `studio.ai.proposal-renderers`
 - `studio.ai.surfaces`
 
+## Activity icons
+
+Third-party activity packages can supply a designer icon without growing the Workflows
+entry bundle. The catalog field is `iconName`, written from `[Activity(Icon = …)]` on the
+CLR activity. Accepted values:
+
+| Value | Renders as |
+|---|---|
+| A lucide export or kebab name (`Rocket`, `git-branch`) | That lucide glyph, loaded on demand when it is not already in the shared table |
+| `asset:<package>/<path>` | An `<img>` of the package's static web asset at `/_content/<package>/<path>` |
+| `ext:<name>` | The React component registered under that name |
+
+Register `ext:` icons from the extension module. Use `currentColor` so the icon follows
+`--studio-wf-activity-*` tone tokens:
+
+```ts
+import { registerActivityIcons, type ElsaStudioModuleApi } from "@elsa-workflows/studio-sdk";
+import { SlackIcon } from "./SlackIcon";
+
+export function register(api: ElsaStudioModuleApi) {
+  registerActivityIcons({ slack: SlackIcon });
+  // equivalent: api.workflowDesigner.registerActivityIcons({ slack: SlackIcon });
+}
+```
+
+Then declare `[Activity(Icon = "ext:slack")]` on the activity. An unknown, invalid or
+failed value falls back to the existing category / placeholder icon and never crashes the
+palette or canvas.
+
 ## Expression editor Contributions
 
 Expression descriptors carry one required semantic `editingMode`: `literal`,
