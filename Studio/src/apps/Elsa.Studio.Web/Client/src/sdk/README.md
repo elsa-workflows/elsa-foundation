@@ -59,12 +59,14 @@ CLR activity. Accepted values:
 
 | Value | Renders as |
 |---|---|
-| A lucide export or kebab name (`Rocket`, `git-branch`) | That lucide glyph, loaded on demand when it is not already in the shared table |
-| `asset:<package>/<path>` | An `<img>` of the package's static web asset at `/_content/<package>/<path>` |
-| `ext:<name>` | The React component registered under that name |
+| A lucide export or kebab name (`Rocket`, `git-branch`) | That lucide glyph, loaded on demand when it is not already in the shared table. An unknown name shows the category placeholder briefly while the lazy import resolves, then the glyph or the fallback. |
+| `asset:<package>/<path>` | An `<img>` of the package's static web asset at `{studio-base}/_content/<package>/<path>`. Images do not follow `--studio-wf-activity-*` tone tokens. |
+| `ext:<name>` | The React component registered under that name. Names match case-insensitively. |
 
-Register `ext:` icons from the extension module. Use `currentColor` so the icon follows
-`--studio-wf-activity-*` tone tokens:
+Register `ext:` icons from the extension module's `register()`. A late registration
+re-renders mounted glyphs, so the icon appears without a remount. Use `currentColor` on
+lucide and `ext:` icons so they follow `--studio-wf-activity-*` tone tokens
+(`asset:` `<img>` values cannot):
 
 ```ts
 import { registerActivityIcons, type ElsaStudioModuleApi } from "@elsa-workflows/studio-sdk";
@@ -78,7 +80,9 @@ export function register(api: ElsaStudioModuleApi) {
 
 Then declare `[Activity(Icon = "ext:slack")]` on the activity. An unknown, invalid or
 failed value falls back to the existing category / placeholder icon and never crashes the
-palette or canvas.
+palette or canvas. `Icon` is presentation only: the `elsa.activity-icon` facet is excluded
+from the descriptor hash, so adding or changing it does not throw
+`ActivityVersionHashMismatchException`.
 
 ## Expression editor Contributions
 

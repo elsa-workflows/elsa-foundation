@@ -49,6 +49,16 @@ describe("ActivityIconGlyph extension contract", () => {
     expect(container.querySelector("[data-testid='slack-icon']")).toBeTruthy();
   });
 
+  it("matches ext: names case-insensitively and re-renders a late registration", () => {
+    flushSync(() => root.render(<ActivityIconGlyph icon="ext:Slack" fallback="email" />));
+    expect(container.querySelector("[data-testid='slack-icon']")).toBeNull();
+
+    flushSync(() => registerActivityIcons({ Slack: SlackIcon }));
+
+    expect(getRegisteredActivityIcon("ext:SLACK")).toBe(SlackIcon);
+    expect(container.querySelector("[data-testid='slack-icon']")).toBeTruthy();
+  });
+
   it("falls back to the category icon when ext: is unknown", () => {
     flushSync(() => root.render(<ActivityIconGlyph icon="ext:missing" fallback="email" />));
 

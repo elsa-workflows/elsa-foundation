@@ -16,6 +16,7 @@ public static partial class ActivityIconName
     public const string PayloadProperty = "iconName";
     public const string AssetPrefix = "asset:";
     public const string ExtensionPrefix = "ext:";
+    public const int MaxLength = 256;
 
     /// <summary>
     /// Returns the trimmed icon when <paramref name="value"/> is a lucide name, an <c>asset:</c>
@@ -28,6 +29,8 @@ public static partial class ActivityIconName
             return false;
 
         var trimmed = value.Trim();
+        if (trimmed.Length > MaxLength)
+            return false;
         if (trimmed.Contains("://", StringComparison.Ordinal) || trimmed.Contains('\\', StringComparison.Ordinal))
             return false;
 
@@ -83,7 +86,9 @@ public static partial class ActivityIconName
             return false;
         var package = remainder[..separator];
         var path = remainder[(separator + 1)..];
-        return PackageIdRegex().IsMatch(package) && AssetPathRegex().IsMatch(path) && !path.Contains("..", StringComparison.Ordinal);
+        if (!PackageIdRegex().IsMatch(package) || !AssetPathRegex().IsMatch(path))
+            return false;
+        return !path.Split('/').Any(segment => segment is "." or "..");
     }
 
     private static bool IsExtension(string value)

@@ -13,6 +13,8 @@ namespace Elsa.Activities.Runtime.Core.Attributes;
 /// <item><c>ext:&lt;name&gt;</c> — a React icon registered on the Studio client via <c>registerActivityIcons</c>.</item>
 /// </list>
 /// An unknown, empty or unsafe value is ignored so the designer keeps its type/category fallback.
+/// <see cref="Icon"/> is presentation only: the <c>elsa.activity-icon</c> facet is excluded from the
+/// descriptor hash, so adding or changing it does not throw <c>ActivityVersionHashMismatchException</c>.
 /// </remarks>
 [AttributeUsage(AttributeTargets.Class, AllowMultiple = false, Inherited = true)]
 public sealed class ActivityAttribute : Attribute

@@ -25,7 +25,7 @@ import {
   Zap,
   type LucideIcon
 } from "lucide-react";
-import { getRegisteredActivityIcon } from "@elsa-workflows/studio-sdk";
+import { getRegisteredActivityIcon, subscribeActivityIcons } from "@elsa-workflows/studio-sdk";
 import {
   isActivityIconAsset,
   isActivityIconExtension,
@@ -184,6 +184,8 @@ function ActivityAssetIcon({ src, fallback: Fallback }: { src: string; fallback:
 }
 
 function RegisteredActivityIcon({ name, fallback: Fallback }: { name: string; fallback: LucideIcon }) {
+  const [, setGeneration] = useState(0);
+  useEffect(() => subscribeActivityIcons(() => setGeneration(value => value + 1)), []);
   const Icon = getRegisteredActivityIcon(name) as ComponentType<{ size?: number }> | undefined;
   if (!Icon) return <Fallback size={15} />;
   return <Icon size={15} />;

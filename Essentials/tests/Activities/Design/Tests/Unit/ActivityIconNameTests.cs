@@ -34,6 +34,9 @@ public sealed class ActivityIconNameTests
     [InlineData("javascript:alert(1)")]
     [InlineData("Not a name")]
     [InlineData("asset:Acme.Slack\\icons\\slack.svg")]
+    [InlineData("asset:Acme.Slack/./slack.svg")]
+    [InlineData("asset:Acme.Slack/icons/.")]
+    [InlineData("asset:Acme.Slack/icons/../secret.svg")]
     public void TryNormalize_RejectsUnknownOrUnsafeValues(string? value)
     {
         Assert.False(ActivityIconName.TryNormalize(value, out var normalized));
@@ -60,5 +63,19 @@ public sealed class ActivityIconNameTests
 
         Assert.Null(ActivityIconName.ReadFromFacets([facet]));
         Assert.Null(ActivityIconName.ToFacet("asset:../x.svg"));
+    }
+
+    [Fact]
+    public void TryNormalize_RejectsAValueLongerThan256Characters()
+    {
+        var oversize = "asset:Acme.Slack/" + new string('a', 250) + ".svg";
+
+        Assert.True(oversize.Length > ActivityIconName.MaxLength);
+        Assert.False(ActivityIconName.TryNormalize(oversize, out var normalized));
+        Assert.Null(normalized);
+
+        var atLimit = "asset:A/" + new string('b', ActivityIconName.MaxLength - "asset:A/".Length);
+        Assert.Equal(ActivityIconName.MaxLength, atLimit.Length);
+        Assert.True(ActivityIconName.TryNormalize(atLimit, out _));
     }
 }

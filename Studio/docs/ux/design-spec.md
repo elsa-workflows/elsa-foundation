@@ -165,15 +165,18 @@ well-formed lucide / asset / extension name, or is unsafe is ignored so the late
 still run. `renderActivityIcon` (in `activityIconView.tsx`) lazy-loads the lucide table from
 `activityIconGlyphs.tsx` so the Workflows entry and landing paths stay inside the bundle
 budget; a rejected chunk load or a throwing glyph keeps the placeholder. Unmapped lucide
-names load on demand; `asset:` values render as an `<img>`; `ext:` values resolve through
-the public `registerActivityIcons` registry in `@elsa-workflows/studio-sdk` (also on
-`api.workflowDesigner.registerActivityIcons`). A failed load falls back to the category /
-type icon and never takes down the palette or canvas. CLR activities set the catalog value
-with `[Activity(Icon = …)]`.
+names load on demand and show the category placeholder briefly while the import resolves;
+`asset:` values render as an `<img>` (they cannot follow tone tokens) resolved against the
+Studio host base path; `ext:` values resolve through the public `registerActivityIcons`
+registry in `@elsa-workflows/studio-sdk` (also on `api.workflowDesigner.registerActivityIcons`),
+matching names case-insensitively and re-rendering if the icon is registered after first paint.
+A failed load falls back to the category / type icon and never takes down the palette or canvas.
+CLR activities set the catalog value with `[Activity(Icon = …)]`. The facet is presentation
+only and is excluded from the descriptor hash.
 Palette rows and canvas nodes set `data-tone` from `resolveActivityIconTone` and colour
 through `--wf-activity-*`, which honour the host override `--studio-wf-activity-*` and then
-`--studio-success` / `--studio-accent` / `--studio-warning` / `--studio-danger`. Registered
-React icons should use `currentColor` so they follow those tone tokens.
+`--studio-success` / `--studio-accent` / `--studio-warning` / `--studio-danger`. Lucide and
+registered React icons should use `currentColor` so they follow those tone tokens.
 
 `target, phase 4`: `iconColor` from the catalog is still unused; category tone wins so icons
 track the theme instead of a per-descriptor hex.

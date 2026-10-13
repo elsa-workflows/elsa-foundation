@@ -1,9 +1,11 @@
 import { describe, expect, it } from "vitest";
 import {
+  activityIconMaxLength,
   knownLucideExportNames,
   resolveActivityIcon,
   resolveActivityIconFallback,
   resolveActivityIconTone,
+  resolveStudioHostBase,
   toActivityIconAssetUrl
 } from "../activityIcons";
 import { mappedLucideExportNames } from "../activityIconGlyphs";
@@ -29,6 +31,34 @@ describe("resolveActivityIcon", () => {
     expect(resolveActivityIcon(catalog({ iconName: "asset:Acme.Slack/icons/slack.svg" }))).toBe("asset:Acme.Slack/icons/slack.svg");
     expect(resolveActivityIcon(catalog({ iconName: "ext:slack" }))).toBe("ext:slack");
     expect(toActivityIconAssetUrl("asset:Acme.Slack/icons/slack.svg")).toBe("/_content/Acme.Slack/icons/slack.svg");
+  });
+
+  it("builds an asset: URL from the Studio host base path", () => {
+    expect(toActivityIconAssetUrl("asset:Acme.Slack/icons/slack.svg", "https://host.example/elsa/studio/workflows"))
+      .toBe("/elsa/_content/Acme.Slack/icons/slack.svg");
+    expect(toActivityIconAssetUrl("asset:Acme.Slack/icons/slack.svg", "https://host.example/studio/workflows"))
+      .toBe("/_content/Acme.Slack/icons/slack.svg");
+    expect(resolveStudioHostBase("https://host.example/elsa/studio/workflows")).toBe("https://host.example/elsa/");
+  });
+
+  it("rejects an oversize, dot-segment, or parent-segment asset iconName", () => {
+    const oversize = `asset:Acme.Slack/${"a".repeat(250)}.svg`;
+    expect(oversize.length).toBeGreaterThan(activityIconMaxLength);
+    expect(resolveActivityIcon(catalog({
+      iconName: oversize,
+      activityTypeKey: "Acme.Activities.Custom.UnknownHttpCall",
+      displayName: "Unknown HTTP Call",
+      category: "HTTP"
+    }))).toBe("http");
+    expect(toActivityIconAssetUrl(oversize)).toBeNull();
+    expect(resolveActivityIcon(catalog({
+      iconName: "asset:Acme.Slack/./slack.svg",
+      activityTypeKey: "Acme.Activities.Custom.UnknownHttpCall",
+      displayName: "Unknown HTTP Call",
+      category: "HTTP"
+    }))).toBe("http");
+    expect(toActivityIconAssetUrl("asset:Acme.Slack/./slack.svg")).toBeNull();
+    expect(toActivityIconAssetUrl("asset:Acme.Slack/icons/../secret.svg")).toBeNull();
   });
 
   it("ignores an unsafe or malformed iconName and continues to type and category fallbacks", () => {

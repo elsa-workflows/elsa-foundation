@@ -206,19 +206,25 @@ export function resolveActivityIconTone(activity: ActivityIconSource | undefined
   return categoryToneByName[category] ?? "accent";
 }
 
+export const activityIconMaxLength = 256;
 const assetIconPattern = /^asset:([A-Za-z0-9](?:[A-Za-z0-9._-]*[A-Za-z0-9])?)\/([A-Za-z0-9._-]+(?:\/[A-Za-z0-9._-]+)*)$/;
 const extensionIconPattern = /^ext:([A-Za-z][A-Za-z0-9_-]*)$/;
 const lucideKebabPattern = /^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/;
 
+function hasDotOnlyAssetSegment(path: string): boolean {
+  return path.split("/").some(segment => segment === "." || segment === "..");
+}
+
 function normalizeConfiguredIcon(icon: string | null | undefined): WorkflowNodeIcon | null {
   if (!icon) return null;
   const trimmed = icon.trim();
-  if (!trimmed || trimmed.includes("://") || trimmed.includes("\\") || trimmed.includes("..")) return null;
+  if (!trimmed || trimmed.length > activityIconMaxLength || trimmed.includes("://") || trimmed.includes("\\")) return null;
+  if (hasDotOnlyAssetSegment(trimmed)) return null;
 
   const kind = trimmed.toLowerCase();
   if (knownIconSet.has(kind)) return kind as KnownWorkflowNodeIcon;
 
-  if (assetIconPattern.test(trimmed) || extensionIconPattern.test(trimmed)) return trimmed;
+  if (isActivityIconAsset(trimmed) || isActivityIconExtension(trimmed)) return trimmed;
 
   const lucideName = toLucideExportName(trimmed);
   if (lucideName && (/^[A-Z][A-Za-z0-9]*$/.test(trimmed) || lucideKebabPattern.test(trimmed))) return lucideName;
@@ -226,19 +232,40 @@ function normalizeConfiguredIcon(icon: string | null | undefined): WorkflowNodeI
 }
 
 /** Turns a persisted `asset:package/path` value into the hosted static-web-asset URL. */
-export function toActivityIconAssetUrl(icon: string): string | null {
-  const match = icon.trim().match(assetIconPattern);
+export function toActivityIconAssetUrl(icon: string, baseHref?: string): string | null {
+  const trimmed = icon.trim();
+  if (trimmed.length > activityIconMaxLength) return null;
+  const match = trimmed.match(assetIconPattern);
   if (!match) return null;
   const [, packageId, path] = match;
-  return `/_content/${encodeURIComponent(packageId)}/${path.split("/").map(encodeURIComponent).join("/")}`;
+  if (hasDotOnlyAssetSegment(path)) return null;
+  const relative = `_content/${encodeURIComponent(packageId)}/${path.split("/").map(encodeURIComponent).join("/")}`;
+  return new URL(relative, resolveStudioHostBase(baseHref)).pathname;
+}
+
+/** Host origin + PathBase. `/studio/...` is the SPA mount, so `_content` sits beside it. */
+export function resolveStudioHostBase(baseHref?: string): string {
+  const source = baseHref
+    ?? (typeof document !== "undefined" ? document.baseURI : "http://localhost/");
+  const url = new URL(source, "http://localhost/");
+  const studio = url.pathname.indexOf("/studio");
+  const prefix = studio >= 0 ? url.pathname.slice(0, studio) : url.pathname;
+  url.pathname = `${prefix.replace(/\/+$/, "")}/`;
+  url.search = "";
+  url.hash = "";
+  return url.toString();
 }
 
 export function isActivityIconAsset(icon: string): boolean {
-  return assetIconPattern.test(icon.trim());
+  const trimmed = icon.trim();
+  if (trimmed.length > activityIconMaxLength) return false;
+  const match = trimmed.match(assetIconPattern);
+  return Boolean(match && !hasDotOnlyAssetSegment(match[2] ?? ""));
 }
 
 export function isActivityIconExtension(icon: string): boolean {
-  return extensionIconPattern.test(icon.trim());
+  const trimmed = icon.trim();
+  return trimmed.length <= activityIconMaxLength && extensionIconPattern.test(trimmed);
 }
 
 function iconFromTypeKey(typeKey: string | undefined, displayName: string | undefined): KnownWorkflowNodeIcon | null {
