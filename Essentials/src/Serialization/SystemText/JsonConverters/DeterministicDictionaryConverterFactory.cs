@@ -35,7 +35,7 @@ namespace Elsa.Serialization.SystemText.JsonConverters;
 /// <see cref="Dictionary{TKey,TValue}"/>.</item>
 /// </list>
 /// </remarks>
-public sealed class DeterministicDictionaryConverterFactory : JsonConverterFactory
+internal sealed class DeterministicDictionaryConverterFactory : JsonConverterFactory
 {
     /// <inheritdoc />
     public override bool CanConvert(Type typeToConvert)

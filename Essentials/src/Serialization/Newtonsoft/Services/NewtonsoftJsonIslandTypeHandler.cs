@@ -3,7 +3,7 @@ using Newtonsoft.Json.Linq;
 
 namespace Elsa.Serialization.Newtonsoft.Services;
 
-public sealed class NewtonsoftJsonIslandTypeHandler : IJsonIslandTypeHandler
+internal sealed class NewtonsoftJsonIslandTypeHandler : IJsonIslandTypeHandler
 {
     public bool CanHandle(Type type) => type == typeof(JObject) || type == typeof(JArray);
 
