@@ -3,6 +3,7 @@ import { flushSync } from "react-dom";
 import { createRoot } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { Diagnostics, getNavigationSection, getStudioNavigation, getTopLevelNavigationItems, isDashboardPath, ShellFrame } from "../app/App";
+import { moreToolsStorageKey } from "../app/navigation/placement";
 import { ThemeProvider } from "../app/components/ThemeProvider";
 import type { ElsaStudioModuleApi, StudioBackendManagementStatus, StudioDiagnosticsWidgetContribution, StudioDiagnosticsWidgetProps, StudioNavigationContribution } from "../sdk";
 import { withQueryClient } from "./queryTestUtils";
@@ -158,6 +159,32 @@ describe("navigation sections", () => {
     expect(container.querySelector('nav.nav-section[aria-label="Main"]')?.textContent ?? "").not.toContain("Tools");
     expect(administration?.querySelector('[data-testid="tools-icon"]')?.getAttribute("width")).toBe("18");
 
+    await unmount();
+  });
+
+  it("renders a child with a different placement under that placement instead of hiding it", async () => {
+    window.localStorage.setItem(moreToolsStorageKey, "true");
+    const navigation: StudioNavigationContribution[] = [
+      { id: "workflows", label: "Workflows", path: "/workflows/definitions", placement: "main" },
+      { id: "definitions", label: "Definitions", path: "/workflows/definitions/list", parentId: "workflows" },
+      { id: "executables", label: "Executables", path: "/workflows/executables", parentId: "workflows", placement: "more" }
+    ];
+    const { container, unmount } = await renderComponent(
+      <ThemeProvider>
+        <ShellFrame navigation={navigation} panels={[]} path="/workflows/definitions" title="Workflows" backendBaseUrl="https://backend.example/" onNavigate={() => {}}>
+          <div>content</div>
+        </ShellFrame>
+      </ThemeProvider>
+    );
+
+    const main = container.querySelector('nav.nav-section[aria-label="Main"]');
+    const more = container.querySelector('nav.nav-section[aria-label="More tools"]');
+    expect(main?.textContent).toContain("Workflows");
+    expect(main?.textContent).toContain("Definitions");
+    expect(main?.textContent).not.toContain("Executables");
+    expect(more?.textContent).toContain("Executables");
+
+    window.localStorage.removeItem(moreToolsStorageKey);
     await unmount();
   });
 

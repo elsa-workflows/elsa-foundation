@@ -22,10 +22,9 @@ const moduleNavigation: StudioNavigationContribution[] = [
   { id: "feature-management", label: "Features", path: "/features", order: 40, placement: "admin" }
 ];
 
-writeAppearancePreferences({ themeId: "classic", mode: "light", navigation: "left" });
-window.localStorage.setItem(moreToolsStorageKey, String(moreOpen));
-
 export function NavPlacementFixture() {
+  writeAppearancePreferences({ themeId: "classic", mode: "light", navigation: "left" });
+  window.localStorage.setItem(moreToolsStorageKey, String(moreOpen));
   const navigation = getStudioNavigation(moduleNavigation, { includeThemeBuilder: true });
 
   useEffect(() => {

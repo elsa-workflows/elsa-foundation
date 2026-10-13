@@ -186,8 +186,12 @@ export type StudioNavigationSection = "workspace" | "settings";
 
 /**
  * Where a nav contribution appears in the Studio sidebar.
- * Unset defaults to `more` (extensions land under More tools). `section: "settings"` still maps to `admin`
- * so older modules keep their Settings grouping until they declare `placement`.
+ * Unset defaults to `more` at the top level (extensions land under More tools). A child with no
+ * placement inherits its parent's resolved placement so it stays visible; a child that declares a
+ * different placement is listed there instead of vanishing. `section: "settings"` still maps to
+ * `admin` so older modules keep their Settings grouping until they declare `placement`.
+ * `admin` and `settings` stay visible to anonymous/demo users because the server allows admin
+ * calls when sign-in is off; authenticated users need host-control read.
  */
 export type StudioNavigationPlacement = "main" | "more" | "settings" | "admin";
 
@@ -213,7 +217,8 @@ export interface StudioNavigationContribution {
   /**
    * Sidebar placement. `main` is the curated Home / Workflows / Runs / Tasks list; `more` is More tools;
    * `settings` is a settings page (not a sidebar row until the Settings shell lands); `admin` is the
-   * gated Administration group. Unset defaults to `more`.
+   * gated Administration group. Unset defaults to `more` at the top level, or to the parent placement
+   * when this item is a child. `admin` and `settings` use the same host-control read gate.
    */
   placement?: StudioNavigationPlacement;
   /** Hide the item when any listed feature is disabled. The contributing module's own gate still applies. */

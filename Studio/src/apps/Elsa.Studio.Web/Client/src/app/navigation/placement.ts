@@ -20,7 +20,12 @@ export interface NavigationAccess {
   permissions?: readonly string[];
   /** Authenticated users are held to role/permission gates; demo/anonymous is not. */
   authenticated?: boolean;
-  /** Host-control read (module-management). Admin placement is hidden without it. */
+  /**
+   * Host-control read (module-management). `admin` and `settings` are hidden without it.
+   * Anonymous/demo stays allowed: when sign-in is off the session is never authenticated, the
+   * server accepts admin calls anonymously, and `useHostControlAccess` therefore reports
+   * `canReadModuleManagement: true`. Only an authenticated user is held to the permission.
+   */
   canReadAdmin?: boolean;
 }
 
@@ -43,13 +48,22 @@ export function getNavigationSection(item: Pick<StudioNavigationContribution, "i
   return "workspace";
 }
 
+type NavigationPlacementFields = Pick<StudioNavigationContribution, "id" | "path" | "section" | "placement" | "parentId">;
+
 /**
  * Resolves sidebar placement. Declared `placement` wins. Older `section: "settings"` and the host's
  * own admin paths stay under Administration so modules that have not declared placement keep working.
- * Everything else defaults to More tools.
+ * A child with no placement inherits its parent when `navigation` is supplied, so it does not vanish.
+ * A child that declares a different placement is listed under that placement. Top-level items with
+ * no placement default to More tools.
  */
-export function getNavigationPlacement(
-  item: Pick<StudioNavigationContribution, "id" | "path" | "section" | "placement">
+export function getNavigationPlacement(item: NavigationPlacementFields): StudioNavigationPlacement {
+  return resolveNavigationPlacement(item);
+}
+
+export function resolveNavigationPlacement(
+  item: NavigationPlacementFields,
+  navigation: readonly NavigationPlacementFields[] = []
 ): StudioNavigationPlacement {
   if (item.placement) {
     return item.placement;
@@ -57,6 +71,13 @@ export function getNavigationPlacement(
 
   if (getNavigationSection(item) === "settings") {
     return "admin";
+  }
+
+  if (item.parentId) {
+    const parent = navigation.find(candidate => candidate.id === item.parentId);
+    if (parent && parent.id !== item.id) {
+      return resolveNavigationPlacement({ ...parent, parentId: undefined }, navigation);
+    }
   }
 
   return defaultStudioNavigationPlacement;
@@ -84,7 +105,7 @@ export function isNavigationItemAccessible(
   access: NavigationAccess = {}
 ): boolean {
   const placement = getNavigationPlacement(item);
-  if (placement === "admin" && access.canReadAdmin === false) {
+  if ((placement === "admin" || placement === "settings") && access.canReadAdmin === false) {
     return false;
   }
 
@@ -122,8 +143,28 @@ export function getTopLevelNavigationItemsByPlacement(
 ) {
   const ids = new Set(navigation.map(item => item.id));
   return navigation
-    .filter(item => getNavigationPlacement(item) === placement && (!item.parentId || !ids.has(item.parentId)))
+    .filter(item => {
+      if (resolveNavigationPlacement(item, navigation) !== placement) {
+        return false;
+      }
+      const parent = item.parentId ? navigation.find(candidate => candidate.id === item.parentId) : undefined;
+      if (!parent || !ids.has(parent.id)) {
+        return true;
+      }
+      return resolveNavigationPlacement(item, navigation) !== resolveNavigationPlacement(parent, navigation);
+    })
     .sort(compareNavigationItems);
+}
+
+/** Children that share the parent's resolved placement. Differently placed children are top-level instead. */
+export function getChildNavigationItems(
+  navigation: readonly StudioNavigationContribution[],
+  parent: NavigationPlacementFields
+) {
+  const parentPlacement = resolveNavigationPlacement(parent, navigation);
+  return navigation.filter(item =>
+    item.parentId === parent.id && resolveNavigationPlacement(item, navigation) === parentPlacement
+  );
 }
 
 export function compareNavigationItems(

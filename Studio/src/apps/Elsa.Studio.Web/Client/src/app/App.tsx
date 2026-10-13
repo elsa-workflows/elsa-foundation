@@ -57,6 +57,7 @@ import { registerBuiltInPropertyEditors } from "./propertyEditors";
 import {
   compareNavigationItems,
   filterAccessibleNavigation,
+  getChildNavigationItems,
   getNavigationPlacement,
   getNavigationSection as resolveNavigationSection,
   getTopLevelNavigationItems as resolveTopLevelNavigationItems,
@@ -543,7 +544,7 @@ export function ShellFrame({
               <NavItemGroup
                 key={item.id}
                 item={item}
-                childItems={childItemsFor(item, childrenByParentId, query, matchesQuery)}
+                childItems={childItemsFor(item, visibleNavigation, query, matchesQuery)}
                 path={path}
                 collapsed={navCollapsed}
                 onNavigate={onNavigate}
@@ -574,7 +575,7 @@ export function ShellFrame({
                   <NavItemGroup
                     key={item.id}
                     item={item}
-                    childItems={childItemsFor(item, childrenByParentId, query, matchesQuery)}
+                    childItems={childItemsFor(item, visibleNavigation, query, matchesQuery)}
                     path={path}
                     collapsed={navCollapsed}
                     onNavigate={onNavigate}
@@ -592,7 +593,7 @@ export function ShellFrame({
               <NavItemGroup
                 key={item.id}
                 item={item}
-                childItems={childItemsFor(item, childrenByParentId, query, matchesQuery)}
+                childItems={childItemsFor(item, visibleNavigation, query, matchesQuery)}
                 path={path}
                 collapsed={navCollapsed}
                 onNavigate={onNavigate}
@@ -603,12 +604,13 @@ export function ShellFrame({
 
         {adminItems.length > 0 ? (
           <nav className="nav-section" aria-label="Administration">
+            {/* Visible to anonymous/demo: the server allows admin calls when sign-in is off. */}
             <span className="nav-heading">Administration</span>
             {adminItems.map(item => (
               <NavItemGroup
                 key={item.id}
                 item={item}
-                childItems={childItemsFor(item, childrenByParentId, query, matchesQuery)}
+                childItems={childItemsFor(item, visibleNavigation, query, matchesQuery)}
                 path={path}
                 collapsed={navCollapsed}
                 onNavigate={onNavigate}
@@ -1030,19 +1032,18 @@ function useShellNavigationAccess(enabledFeatures?: ReadonlySet<string> | readon
     roles: session?.roles,
     permissions: session?.permissions,
     authenticated: session?.status === "authenticated",
+    // Anonymous/demo: host-control read is true because the server allows admin calls when sign-in is off.
     canReadAdmin: hostAccess.canReadModuleManagement
   };
 }
 
 function childItemsFor(
   item: StudioNavigationContribution,
-  childrenByParentId: Map<string, StudioNavigationContribution[]>,
+  navigation: StudioNavigationContribution[],
   query: string,
   matchesQuery: (item: StudioNavigationContribution) => boolean
 ) {
-  const placement = getNavigationPlacement(item);
-  return (childrenByParentId.get(item.id) ?? [])
-    .filter(child => getNavigationPlacement(child) === placement)
+  return getChildNavigationItems(navigation, item)
     .filter(child => !query || matchesQuery(item) || matchesQuery(child));
 }
 

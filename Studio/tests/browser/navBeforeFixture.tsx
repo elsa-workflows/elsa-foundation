@@ -38,8 +38,6 @@ const navigation: StudioNavigationContribution[] = [
   { id: "extension-builder", label: "Extension Builder", path: "/extension-builder", order: 50, section: "settings" }
 ];
 
-writeAppearancePreferences({ themeId: "classic", mode: "light", navigation: "left" });
-
 export function NavBeforeFixture() {
   const childrenByParentId = new Map<string, StudioNavigationContribution[]>();
   for (const item of navigation) {
@@ -55,6 +53,7 @@ export function NavBeforeFixture() {
   ].filter(section => section.items.length > 0);
 
   useEffect(() => {
+    writeAppearancePreferences({ themeId: "classic", mode: "light", navigation: "left" });
     document.documentElement.setAttribute("data-theme", "classic");
     document.documentElement.setAttribute("data-theme-mode", "light");
     document.documentElement.setAttribute("data-theme-appearance", "light");

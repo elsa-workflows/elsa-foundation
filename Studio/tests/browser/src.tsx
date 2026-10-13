@@ -1,7 +1,5 @@
 import { ActivityIconsFixture } from "./activityIconsFixture";
 import { ActivityInputEvidenceFixture } from "./activityInputEvidenceFixture";
-import { NavBeforeFixture } from "./navBeforeFixture";
-import { NavPlacementFixture } from "./navPlacementFixture";
 import React, { lazy, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -1608,12 +1606,23 @@ if (activityIconsFixture && searchParams.get("host-override") === "1") {
   document.documentElement.style.setProperty("--studio-wf-activity-runtime", "rgb(234, 88, 12)");
   document.documentElement.style.setProperty("--studio-wf-activity-trigger", "rgb(219, 39, 119)");
 }
-createRoot(document.getElementById("root")!).render(
-  navBeforeFixture
-    ? <NavBeforeFixture />
-    : navPlacementFixture
-    ? <NavPlacementFixture />
-    : searchParams.get("mode") === "workflow-toolbar"
+
+const root = createRoot(document.getElementById("root")!);
+
+async function renderRequestedFixture() {
+  if (navBeforeFixture) {
+    const { NavBeforeFixture } = await import("./navBeforeFixture");
+    root.render(<NavBeforeFixture />);
+    return;
+  }
+  if (navPlacementFixture) {
+    const { NavPlacementFixture } = await import("./navPlacementFixture");
+    root.render(<NavPlacementFixture />);
+    return;
+  }
+
+  root.render(
+    searchParams.get("mode") === "workflow-toolbar"
     ? <WorkflowToolbarFixture />
     : activityIconsFixture
     ? <ActivityIconsFixture />
@@ -1642,4 +1651,7 @@ createRoot(document.getElementById("root")!).render(
             : moveDefinitionsFixture
               ? <MoveDefinitionsFixture />
               : <Fixture />
-);
+  );
+}
+
+void renderRequestedFixture();

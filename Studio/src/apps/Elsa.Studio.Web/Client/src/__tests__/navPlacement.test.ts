@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   filterAccessibleNavigation,
+  getChildNavigationItems,
   getNavigationOrder,
   getNavigationPlacement,
   getTopLevelNavigationItemsByPlacement,
@@ -49,7 +50,7 @@ describe("navigation placement", () => {
     expect(isNavigationItemAccessible(tasks)).toBe(true);
   });
 
-  it("hides role-gated items from authenticated users without the role, and hides admin without host-control read", () => {
+  it("hides role-gated items from authenticated users without the role, and hides admin and settings without host-control read", () => {
     expect(isNavigationItemAccessible(adminOnly, { authenticated: true, roles: ["designer"], canReadAdmin: true })).toBe(false);
     expect(isNavigationItemAccessible(adminOnly, { authenticated: true, roles: ["administrator"], canReadAdmin: true })).toBe(true);
     expect(isNavigationItemAccessible(adminOnly, { authenticated: false, canReadAdmin: true })).toBe(true);
@@ -65,6 +66,31 @@ describe("navigation placement", () => {
     expect(getTopLevelNavigationItemsByPlacement(navigation, "main").map(item => item.id)).toEqual(["home", "workflows", "tasks"]);
     expect(getTopLevelNavigationItemsByPlacement(navigation, "more").map(item => item.id)).toEqual(["diagnostics", "weather"]);
     expect(getTopLevelNavigationItemsByPlacement(navigation, "admin").map(item => item.id)).toEqual(["modules"]);
+  });
+
+  it("lifts a child whose placement differs from its parent and keeps unset children nested", () => {
+    const parent: StudioNavigationContribution = { id: "workflows", label: "Workflows", path: "/workflows/definitions", placement: "main" };
+    const nested: StudioNavigationContribution = { id: "definitions", label: "Definitions", path: "/workflows/definitions/list", parentId: "workflows" };
+    const lifted: StudioNavigationContribution = {
+      id: "executables",
+      label: "Executables",
+      path: "/workflows/executables",
+      parentId: "workflows",
+      placement: "more"
+    };
+    const navigation = [parent, nested, lifted];
+
+    expect(getTopLevelNavigationItemsByPlacement(navigation, "main").map(item => item.id)).toEqual(["workflows"]);
+    expect(getChildNavigationItems(navigation, parent).map(item => item.id)).toEqual(["definitions"]);
+    expect(getTopLevelNavigationItemsByPlacement(navigation, "more").map(item => item.id)).toEqual(["executables"]);
+    expect(getChildNavigationItems(navigation, parent).map(item => item.id)).not.toContain("executables");
+  });
+
+  it("hides settings placement without host-control read, the same gate as admin", () => {
+    const appearance: StudioNavigationContribution = { id: "appearance", label: "Appearance", path: "/settings/appearance", placement: "settings" };
+    expect(isNavigationItemAccessible(appearance, { canReadAdmin: false })).toBe(false);
+    expect(isNavigationItemAccessible(appearance, { canReadAdmin: true })).toBe(true);
+    expect(isNavigationItemAccessible(appearance, { authenticated: false, canReadAdmin: true })).toBe(true);
   });
 
   it("remembers More tools open/closed through the appearance-style storage helper", () => {
