@@ -1,6 +1,6 @@
 # Extension points — Mediator domain
 
-The per-domain catalog (framework §2.22.1). Anchored at `Elsa.Mediator` — the composition root where `MediatorFeature` builds the command and request pipelines. Command and request dispatch share **one** unified pipeline/context/middleware/invoker mechanism (`MessagePipeline`, `IMessageContext`, `IMessageMiddleware`, `HandlerInvokerMiddleware`), all internal to `Elsa.Mediator`; the `ICommand*`/`IRequest*` families are thin intent-signalling contracts over it. One section applies: the handler contracts. The pipeline is not an extension point (see below).
+The per-domain catalog (framework §2.22.1). Anchored at `Elsa.Mediator`, the composition root where `MediatorFeature` builds the command and request pipelines. Command and request dispatch share **one** unified pipeline/context/middleware/invoker mechanism (`MessagePipeline`, `IMessageContext`, `IMessageMiddleware`, `HandlerInvokerMiddleware`), all internal to `Elsa.Mediator`; the `ICommand*`/`IRequest*` families are thin intent-signalling contracts over it. One section applies: the handler contracts. The pipeline is not an extension point (see below).
 
 ---
 
@@ -36,11 +36,11 @@ The command and request pipeline is internal to `Elsa.Mediator`, so mediator mid
 
 > **`Setup()` semantic = REPLACE.** Each call to `MessagePipeline.Setup()` composes a **fresh** pipeline from a new `PipelineBuilder<IMessageContext>`, discarding any prior composition. This is the one documented Setup semantic across the codebase's pipelines (command, request, and event). The default composition is built once and cached on first dispatch.
 
-For the base `IMiddleware` shape and the shared builder, see [`Elsa.Pipelines.Core/EXTENSION_POINTS.md`](../Elsa.Pipelines.Core/EXTENSION_POINTS.md).
+For the base `IMiddleware` shape and the shared builder, see [`Pipelines/Core/EXTENSION_POINTS.md`](../../Pipelines/Core/EXTENSION_POINTS.md).
 
 ---
 
 ## Cross-references
 
-- Repo-wide index: [`../../EXTENSION_POINTS.md`](../../EXTENSION_POINTS.md).
+- Repo-wide index: [`EXTENSION_POINTS.md`](../../../../EXTENSION_POINTS.md).
 - Constitutional basis: §2.6.1 + §2.22.1.

@@ -14,7 +14,7 @@ internal abstract class MessagePipeline(IServiceProvider serviceProvider)
 {
     private volatile PipelineDelegate<IMessageContext>? _pipeline;
 
-    /// <summary>The composed delegate. Lazily initialised to the default pipeline on first read.</summary>
+    /// <summary>The composed delegate. Lazily initialized to the default pipeline on first read.</summary>
     public PipelineDelegate<IMessageContext> Pipeline => _pipeline ??= CreateDefaultPipeline();
 
     /// <summary>
