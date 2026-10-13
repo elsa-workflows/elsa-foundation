@@ -30,6 +30,10 @@ public sealed class PermissionCatalogOwnershipLifecycleTests
             Assert.Equal(StudioPreferencesPermissions.OwnerId, permission.OwnerId);
             Assert.Equal(typeof(StudioPreferencesPermissionContributor).FullName, permission.ContributorType);
         });
+        var manageDefaults = catalog.Find(StudioPreferencesPermissions.ManageDefaults);
+        Assert.NotNull(manageDefaults);
+        Assert.Equal(StudioPreferencesPermissions.OwnerId, manageDefaults.OwnerId);
+        Assert.Equal(typeof(StudioPreferencesPermissionContributor).FullName, manageDefaults.ContributorType);
     }
 
     [Fact]

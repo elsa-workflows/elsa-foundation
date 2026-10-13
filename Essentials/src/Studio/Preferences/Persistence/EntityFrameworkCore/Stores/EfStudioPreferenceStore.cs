@@ -116,6 +116,22 @@ public sealed class EfStudioPreferenceStore(StudioPreferencesDbContext context) 
         }
     }
 
+    public async ValueTask<bool> DeleteAsync(StudioPreferenceKey key, CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        ArgumentNullException.ThrowIfNull(key);
+        var id = CreateId(key);
+        var record = await context.Preferences.SingleOrDefaultAsync(
+            row => row.Id == id,
+            cancellationToken);
+        if (record is null || !MatchesKey(record, id, key))
+            return false;
+
+        context.Preferences.Remove(record);
+        await context.SaveChangesAsync(cancellationToken);
+        return true;
+    }
+
     private static StudioPreferenceStoreWriteResult Saved(
         string namespaceName,
         StudioPreferenceWrite write,

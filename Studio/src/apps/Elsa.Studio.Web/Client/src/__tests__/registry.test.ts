@@ -87,6 +87,7 @@ describe("studio registry", () => {
     });
 
     expect(api.dashboardWidgets.list()[0]).toMatchObject({ moduleId: "Elsa.Studio.Workflows.Dashboard", defaultSize: "wide", permissions: ["workflows:read"] });
+    expect(api.homeWidgets).toBe(api.dashboardWidgets);
   });
 
   it("supports module-owned nested Slots", () => {

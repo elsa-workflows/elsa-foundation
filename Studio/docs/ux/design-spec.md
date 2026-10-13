@@ -53,7 +53,7 @@ code.
 | Region | Status | Rule |
 |---|---|---|
 | Shell | `exists` | Sidebar or top menubar (theme or user choice). The top bar holds the page title, global actions and the theme control (`ThemeSwitcher`). |
-| Navigation placement | `exists` | Each nav contribution may declare `placement` (`main` \| `more` \| `settings` \| `admin`), `order`, `requiresFeature` and `requiresRole` / `requiresPermission`. Unset `placement` is `more` at the top level; a child inherits its parent unless it declares a different placement, in which case it renders there. Main holds Home, Workflows, Runs and Tasks (Tasks only when the user-tasks feature is enabled). Extensions land under **More tools** (open state in `elsa-studio.ui.nav.more`). `settings` items (Appearance) render under Studio in the Settings shell and stay visible to every session. `admin` items render under Administration and use the host-control read gate. The sidebar keeps one Settings entry; searching still reveals the individual sections. Anonymous/demo sessions still see Administration when sign-in is off. Disabled features contribute nothing; role-gated items are hidden. Home points at the existing dashboard/home route until the customizable Home lands. |
+| Navigation placement | `exists` | Each nav contribution may declare `placement` (`main` \| `more` \| `settings` \| `admin`), `order`, `requiresFeature` and `requiresRole` / `requiresPermission`. Unset `placement` is `more` at the top level; a child inherits its parent unless it declares a different placement, in which case it renders there. Main holds Home, Workflows, Runs and Tasks (Tasks only when the user-tasks feature is enabled). Extensions land under **More tools** (open state in `elsa-studio.ui.nav.more`). `settings` items (Appearance) render under Studio in the Settings shell and stay visible to every session. `admin` items render under Administration and use the host-control read gate. The sidebar keeps one Settings entry; searching still reveals the individual sections. Anonymous/demo sessions still see Administration when sign-in is off. Disabled features contribute nothing; role-gated items are hidden. Home is the customizable landing page at `/`, `/dashboard` and `/overview`; there is no separate Dashboard entry. |
 | Settings shell | `exists` | `/settings` is a two-pane shell (section list + content). Sections are deep-linkable as `/settings/<id>`. Original admin paths (`/modules`, `/theme-builder`, …) open the same shell and the same gate; a signed-in user without host-control read sees those sections as unavailable. The route is lazy-loaded. |
 | User menu | `target, phase 4` | See [User menu and sign-out](#user-menu-and-sign-out). Live has none. |
 | Bottom dock | `exists` | Remembers the user's last state in `elsa-studio-bottom-panel-collapsed`, `elsa-studio-bottom-panel-height`, `elsa-studio-bottom-panel-maximized` and `elsa-studio-active-bottom-panel`. With no stored value the dock is **open** on desktop (`collapsed=false`) and collapsed at ≤640px. |
@@ -146,12 +146,30 @@ completed actions become toasts.
 | Save-state indicator | `exists` | `.wf-editor-save-status` in the Designer header (pending spinner / saved check). |
 | Node toolbar | `target, phase 3` | Hover/selection toolbar on the node (not a permanent chrome bar). |
 
+## Home
+
+`exists`: Home replaces Dashboard at `/`, `/dashboard` and `/overview`. Modules contribute
+widgets with `registerHomeWidget` (id, title, size, lazy component, optional
+`requiresFeature`). The layout is a 12-column widget grid. Signed-in users persist it at
+`/_elsa/studio/home-layout`; admins persist the default at `/_elsa/studio/home-layout/default`.
+Reset deletes the user layout. Anonymous/demo sessions use `localStorage` or the built-in
+default.
+
+**Get started** ticks Create a workflow / Run it / See what happened from real state, hides
+when every step is done or dismissed, and can be restored from Add widget.
+
+**Edit home** is a tinted mode with add, remove, reorder, Add widget, Reset to default, and
+(for `studio-preferences.manage-defaults`) Save as server default. Normal view collapses
+per-widget chrome into `OverflowMenu`. Add widget moves focus into the dialog, closes on
+Escape, and returns focus to the trigger. Reorder keeps focus on the moved widget and
+announces the new position.
+
 ## Dashboard widget chrome
 
-`exists`: `WidgetFrame` always shows move, size, settings, refresh and hide in
-`.dashboard-widget-actions`.
+`exists`: normal Home view shows one ⋯ `OverflowMenu` per widget (Refresh, Options, Resize,
+Remove). Edit home shows move, size, settings, refresh and hide in `.dashboard-widget-actions`.
 
-`target, phase 1`: those controls are hidden until the widget is hovered or focused. Title,
+`target, phase 1`: remaining chrome stays hidden until the widget is hovered or focused. Title,
 description, pinned mark and body stay visible (content first).
 
 ## Activity icons

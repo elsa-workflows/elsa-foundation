@@ -235,6 +235,65 @@ export interface StudioNavigationContribution {
 }
 
 export type StudioDashboardWidgetSize = "small" | "medium" | "wide" | "full";
+export type StudioHomeWidgetSizeAlias = "S" | "M" | "L";
+export type StudioHomeWidgetSize = StudioDashboardWidgetSize | StudioHomeWidgetSizeAlias;
+
+export const homeWidgetIds = {
+  getStarted: "home.get-started",
+  recentWorkflows: "home.recent-workflows",
+  needsAttention: "home.needs-attention",
+  recentRuns: "home.recent-runs"
+} as const;
+
+export const homeRunDetailOpenedStorageKey = "elsa-studio.ui.home.run-detail-opened";
+
+export function normalizeHomeWidgetSize(size?: string): StudioDashboardWidgetSize {
+  switch (size) {
+    case "S":
+    case "small":
+      return "small";
+    case "M":
+    case "medium":
+      return "medium";
+    case "wide":
+      return "wide";
+    case "L":
+    case "full":
+      return "full";
+    default:
+      return "medium";
+  }
+}
+
+export function recordHomeRunDetailOpened(storage: Pick<Storage, "setItem"> | undefined = defaultHomeStorage()) {
+  try {
+    storage?.setItem(homeRunDetailOpenedStorageKey, "true");
+  } catch {
+    /* device storage is best effort */
+  }
+}
+
+export function hasHomeRunDetailOpened(storage: Pick<Storage, "getItem"> | undefined = defaultHomeStorage()) {
+  try {
+    return storage?.getItem(homeRunDetailOpenedStorageKey) === "true";
+  } catch {
+    return false;
+  }
+}
+
+function defaultHomeStorage(): Storage | undefined {
+  try {
+    return typeof window === "undefined" ? undefined : window.localStorage;
+  } catch {
+    return undefined;
+  }
+}
+
+/** True when `path` is a workflow run detail (`/workflows/instances/:id`), not the Runs list. */
+export function isHomeRunDetailPath(path: string) {
+  const segments = path.split("/").filter(Boolean);
+  return segments.length === 3 && segments[0] === "workflows" && segments[1] === "instances" && segments[2] !== "";
+}
 
 export interface StudioDashboardWidgetLoadContext<TSettings> {
   settings: TSettings;
@@ -270,6 +329,10 @@ export interface StudioDashboardWidgetContribution<TSnapshot = unknown, TSetting
   defaultSize: StudioDashboardWidgetSize;
   supportedSizes: StudioDashboardWidgetSize[];
   permissions?: string[];
+  /** Hide the widget unless every listed feature/capability is enabled on the host. */
+  requiresFeature?: string | readonly string[];
+  /** Core widgets may appear on the server default Home layout. */
+  core?: boolean;
   minimumRefreshIntervalMs?: number;
   cacheLifetimeMs?: number;
   timeoutMs?: number;
@@ -278,6 +341,29 @@ export interface StudioDashboardWidgetContribution<TSnapshot = unknown, TSetting
   isEmpty?(snapshot: TSnapshot | undefined, settings: TSettings): boolean;
   emptyState?: StudioDashboardWidgetEmptyState;
   component: ComponentType<StudioDashboardWidgetBodyProps<TSnapshot, TSettings>>;
+}
+
+export interface StudioHomeWidgetContribution<TSnapshot = unknown, TSettings = unknown>
+  extends Omit<StudioDashboardWidgetContribution<TSnapshot, TSettings>, "defaultSize" | "supportedSizes" | "defaultVisible"> {
+  defaultSize?: StudioHomeWidgetSize;
+  supportedSizes?: StudioHomeWidgetSize[];
+  defaultVisible?: boolean;
+}
+
+export function registerHomeWidget<TSnapshot = unknown, TSettings = unknown>(
+  api: Pick<ElsaStudioModuleApi, "dashboardWidgets" | "homeWidgets">,
+  contribution: StudioHomeWidgetContribution<TSnapshot, TSettings>
+) {
+  const defaultSize = normalizeHomeWidgetSize(contribution.defaultSize);
+  const supportedSizes = (contribution.supportedSizes?.length ? contribution.supportedSizes : [defaultSize])
+    .map(normalizeHomeWidgetSize);
+  const widget: StudioDashboardWidgetContribution<TSnapshot, TSettings> = {
+    ...contribution,
+    defaultVisible: contribution.defaultVisible ?? true,
+    defaultSize,
+    supportedSizes
+  };
+  (api.homeWidgets ?? api.dashboardWidgets).add(widget);
 }
 
 export type StudioDiagnosticsWidgetMode = "snapshot" | "live";
@@ -1486,6 +1572,8 @@ export interface StudioRuntimeSettings {
     widgetTimeoutMs?: number;
     pinnedWidgetIds?: string[];
   };
+  /** Loaded module ids and capabilities. Home widgets with `requiresFeature` consult this list. */
+  enabledFeatures?: readonly string[];
 }
 
 export const studioNavigationRequestedEvent = "elsa:studio-navigation-requested";
@@ -1629,6 +1717,8 @@ export interface ElsaStudioModuleApi {
   readonly navigation: StudioContributionRegistry<StudioNavigationContribution>;
   readonly routes: StudioContributionRegistry<StudioRouteContribution>;
   readonly dashboardWidgets: StudioDashboardWidgetRegistry;
+  /** Alias of {@link dashboardWidgets}. Modules should prefer {@link registerHomeWidget}. */
+  readonly homeWidgets: StudioDashboardWidgetRegistry;
   readonly diagnosticsWidgets: StudioContributionRegistry<StudioDiagnosticsWidgetContribution>;
   readonly panels: StudioContributionRegistry<StudioPanelContribution>;
   readonly toolbarActions: StudioContributionRegistry<unknown>;

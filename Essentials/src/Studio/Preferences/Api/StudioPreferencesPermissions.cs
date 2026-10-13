@@ -8,6 +8,7 @@ public static class StudioPreferencesPermissions
 
     public const string Read = "studio.preferences.read";
     public const string Write = "studio.preferences.write";
+    public const string ManageDefaults = "studio-preferences.manage-defaults";
 }
 
 public sealed class StudioPreferencesPermissionContributor : IPermissionContributor
@@ -22,6 +23,11 @@ public sealed class StudioPreferencesPermissionContributor : IPermissionContribu
             "Write Studio preferences",
             "Studio",
             "Create and update personal Studio preference documents.",
-            new HashSet<string> { StudioPreferencesPermissions.Read })
+            new HashSet<string> { StudioPreferencesPermissions.Read }),
+        new(
+            StudioPreferencesPermissions.ManageDefaults,
+            "Manage Studio preference defaults",
+            "Studio",
+            "Read and write the admin default Home layout for a tenant and host.")
     ];
 }

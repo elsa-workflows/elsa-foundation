@@ -93,6 +93,7 @@ const activityGraphAuthoringFixture = searchParams.get("mode") === "activity-def
 const activityIconsFixture = searchParams.get("mode") === "activity-icons";
 const navPlacementFixture = searchParams.get("mode") === "nav-placement";
 const navBeforeFixture = searchParams.get("mode") === "nav-before";
+const homeFixture = searchParams.get("mode") === "home" || searchParams.get("mode") === "home-before";
 const settingsBeforeFixture = searchParams.get("mode") === "settings-before";
 const settingsFixture = searchParams.get("mode") === "settings";
 const expressionCodeIntelligenceFixture = searchParams.get("mode") === "expression-code-intelligence";
@@ -1593,7 +1594,7 @@ function browserVersion(
 // Activity-icon shots default to Classic light — Studio 4's default theme.
 const darkVariant = searchParams.get("theme") === "dark";
 const fixtureTheme = activityIconsFixture ? "classic" : "meridian";
-if (!navPlacementFixture && !navBeforeFixture && !settingsBeforeFixture && !settingsFixture) {
+if (!navPlacementFixture && !navBeforeFixture && !settingsBeforeFixture && !settingsFixture && !homeFixture) {
   document.documentElement.dataset.theme = fixtureTheme;
   document.documentElement.dataset.themeLayout = "classic";
   document.documentElement.dataset.themeMode = darkVariant ? "dark" : "light";
@@ -1632,6 +1633,11 @@ async function renderRequestedFixture() {
   if (navPlacementFixture) {
     const { NavPlacementFixture } = await import("./navPlacementFixture");
     root.render(<NavPlacementFixture />);
+    return;
+  }
+  if (homeFixture) {
+    const { HomeFixture } = await import("./homeFixture");
+    root.render(<HomeFixture />);
     return;
   }
 

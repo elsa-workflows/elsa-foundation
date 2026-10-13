@@ -37,6 +37,33 @@ public sealed class StudioPreferencesApiContractTests
             .ToArray();
 
         Assert.Equal(["GET", "PUT"], endpoints.Select(GetMethod).ToArray());
+        AssertOwned(endpoints);
+
+        var homeLayout = routes.DataSources
+            .SelectMany(source => source.Endpoints)
+            .OfType<RouteEndpoint>()
+            .Where(endpoint => endpoint.RoutePattern.RawText is "/_elsa/studio/home-layout" or "/_elsa/studio/home-layout/default")
+            .Select(endpoint => $"{GetMethod(endpoint)} {endpoint.RoutePattern.RawText}")
+            .OrderBy(value => value, StringComparer.Ordinal)
+            .ToArray();
+
+        Assert.Equal(
+            [
+                "DELETE /_elsa/studio/home-layout",
+                "GET /_elsa/studio/home-layout",
+                "GET /_elsa/studio/home-layout/default",
+                "PUT /_elsa/studio/home-layout",
+                "PUT /_elsa/studio/home-layout/default"
+            ],
+            homeLayout);
+        AssertOwned(routes.DataSources
+            .SelectMany(source => source.Endpoints)
+            .OfType<RouteEndpoint>()
+            .Where(endpoint => endpoint.RoutePattern.RawText?.StartsWith("/_elsa/studio/home-layout", StringComparison.Ordinal) == true));
+    }
+
+    private static void AssertOwned(IEnumerable<RouteEndpoint> endpoints)
+    {
         Assert.All(endpoints, endpoint =>
         {
             var owner = Assert.IsType<EndpointOwnershipMetadata>(endpoint.Metadata.GetMetadata<EndpointOwnershipMetadata>());
