@@ -29,7 +29,7 @@ public sealed class WorkflowCheckpointSchedulerWorkHandler : IWorkflowSchedulerW
     /// Constructs the handler. <paramref name="workflowExecutionStateStore"/> is optional: when supplied (the
     /// DI default — it is a registered service), the handler preserves durable instance fields (correlation id,
     /// parent, tenant) across the workflow-started/completed transitions; when null it falls back to the prior
-    /// behaviour of rebuilding workflow state from the checkpoint payload alone. <paramref name="sessionAccessor"/>
+    /// behavior of rebuilding workflow state from the checkpoint payload alone. <paramref name="sessionAccessor"/>
     /// gives the persistence mode the drain runs in, which the workflow-started checkpoint records on the run.
     /// </summary>
     public WorkflowCheckpointSchedulerWorkHandler(
