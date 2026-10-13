@@ -9,23 +9,37 @@ no checkout, no build. For building the images yourself or the full PostgreSQL c
 | Elsa Workbench | `elsaworkflows/elsa-workbench` | http://localhost:13000 | —                        |
 | Elsa Studio    | `elsaworkflows/elsa-studio`    | http://localhost:14000 | `admin` / `Password123!` |
 
-Both images publish `latest`, `4.0.0-preview.<n>` and `sha-<short-commit>` on every push to `main`.
-There are no `4` / `4.0` / `4.0.0` release tags yet — to pin, use a preview or commit tag.
+> **Image tags.** Both images publish `latest`, `4.0.0-preview.<n>` and `sha-<short-commit>` on every push to `main`. There are no `4` / `4.0` / `4.0.0` release tags yet; to pin a version, use a preview or commit tag.
 
-The login is the demo admin seeded by the image's built-in `shells.json` (Development posture).
-Demo credentials and API key throughout — do not expose this setup beyond your machine.
+> **Demo only.** The login is the demo admin seeded by the image's built-in `shells.json` (Development posture). The credentials and API key on this page are demo values: do not expose this setup beyond your machine.
 
 ## Quickstart
 
 The examples on this page use Bash syntax (macOS/Linux). For the Compose path with macOS/Linux and Windows PowerShell instructions, use the
 [Compose quick start](../docker/compose/README.md#quick-start--published-images-no-clone-or-build).
 
-Before starting, confirm ports `13000` and `14000` are free; if either is occupied, wait until it is
-free without stopping another process. Check `docker container ls --all`,
-`docker network ls`, and `docker volume ls`: the container names `elsa-workbench` and `elsa-studio`,
-network `elsa-demo`, and volumes `elsa-workbench-packages` and `elsa-data` must be unused. If any of those resources already
-exist, use a separate, uniquely named Compose project instead (the same ports must still be free); do not reuse or remove someone
-else's resources. The cleanup below assumes these resources were created by this walkthrough.
+### Before you start
+
+This walkthrough creates the resources below. Make sure none of them is already in use:
+
+| Resource | Name | How to check |
+|---|---|---|
+| Ports | `13000`, `14000` | nothing listening on them |
+| Containers | `elsa-workbench`, `elsa-studio` | `docker container ls --all` |
+| Network | `elsa-demo` | `docker network ls` |
+| Volumes | `elsa-workbench-packages`, `elsa-data` | `docker volume ls` |
+
+Or check the Docker names in one go (no output means all are free):
+
+```bash
+docker container ls --all --format '{{.Names}}' | grep -xE 'elsa-workbench|elsa-studio'
+docker network ls --format '{{.Name}}' | grep -x elsa-demo
+docker volume ls --format '{{.Name}}' | grep -xE 'elsa-workbench-packages|elsa-data'
+```
+
+If a port is taken by something else, wait until it is free rather than stopping another process. If any of the names already exist, they belong to someone else: use a separate, uniquely named Compose project instead (the ports must still be free), and do not reuse or remove those resources. The clean-up below assumes this walkthrough created them.
+
+### Start the containers
 
 ```bash
 docker network create elsa-demo
