@@ -224,6 +224,13 @@ html[data-theme="elsa-cloud"][data-theme-mode="dark"] {
   --studio-accent-soft: color-mix(in srgb, var(--primary) 16%, transparent);
 }
 
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --studio-disclosure-duration: 0ms;
+    --studio-disclosure-distance: 0px;
+  }
+}
+
 /*
  * High contrast — applies to every theme that defines the mode. Depth comes from borders, never
  * from shadow; focus is the solid ring colour; tinted-chip text is brightened to stay >= 7:1 on
@@ -232,13 +239,6 @@ html[data-theme="elsa-cloud"][data-theme-mode="dark"] {
  * lift specificity above every per-theme dark-scheme block, which High contrast also matches, so
  * the result does not depend on source order.
  */
-@media (prefers-reduced-motion: reduce) {
-  :root {
-    --studio-disclosure-duration: 0ms;
-    --studio-disclosure-distance: 0px;
-  }
-}
-
 html[data-theme][data-theme-mode][data-theme-appearance="high-contrast"] {
   --shadow-sm: 0 0 0 0 transparent;
   --shadow-md: 0 0 0 0 transparent;

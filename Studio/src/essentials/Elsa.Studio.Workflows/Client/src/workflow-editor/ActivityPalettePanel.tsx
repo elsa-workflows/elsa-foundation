@@ -1,7 +1,7 @@
 import React, { useId, useRef, useState } from "react";
 import { ChevronDown, ChevronRight, GripVertical, Search } from "lucide-react";
 import type { ActivityCatalogItem } from "../workflowTypes";
-import { resolveActivityIcon, resolveActivityIconTone } from "../activityIcons";
+import { resolveActivityIcon, resolveActivityIconFallback, resolveActivityIconTone } from "../activityIcons";
 import { renderActivityIcon } from "../activityIconView";
 import { getActivityDisplay } from "../workflowAdapter";
 import { formatActivityVersion } from "../workflowFormatting";
@@ -169,7 +169,7 @@ export function ActivityPalettePanel({
                       }}
                     >
                       <span className="wf-activity-icon" data-icon={icon} data-tone={tone} aria-hidden="true">
-                        {renderActivityIcon(icon)}
+                        {renderActivityIcon(icon, resolveActivityIconFallback(activity))}
                       </span>
                       <span className="wf-palette-activity-text">
                         <strong>{displayName}</strong>

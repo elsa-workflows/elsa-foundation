@@ -1,5 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { knownLucideExportNames, resolveActivityIcon, resolveActivityIconTone } from "../activityIcons";
+import {
+  activityIconMaxLength,
+  knownLucideExportNames,
+  resolveActivityIcon,
+  resolveActivityIconFallback,
+  resolveActivityIconTone,
+  resolveStudioHostBase,
+  toActivityIconAssetUrl
+} from "../activityIcons";
 import { mappedLucideExportNames } from "../activityIconGlyphs";
 import type { ActivityCatalogItem } from "../workflowTypes";
 import { writeLine } from "./fixtures";
@@ -16,29 +24,64 @@ describe("resolveActivityIcon", () => {
   it("renders a descriptor-supplied lucide iconName instead of the generic Boxes kind", () => {
     expect(resolveActivityIcon(catalog({ iconName: "GitBranch" }))).toBe("GitBranch");
     expect(resolveActivityIcon(catalog({ iconName: "git-branch" }))).toBe("GitBranch");
+    expect(resolveActivityIcon(catalog({ iconName: "Rocket" }))).toBe("Rocket");
   });
 
-  it("ignores an unmapped iconName and continues to type and category fallbacks", () => {
+  it("accepts asset: and ext: catalog values", () => {
+    expect(resolveActivityIcon(catalog({ iconName: "asset:Acme.Slack/icons/slack.svg" }))).toBe("asset:Acme.Slack/icons/slack.svg");
+    expect(resolveActivityIcon(catalog({ iconName: "ext:slack" }))).toBe("ext:slack");
+    expect(toActivityIconAssetUrl("asset:Acme.Slack/icons/slack.svg")).toBe("/_content/Acme.Slack/icons/slack.svg");
+  });
+
+  it("builds an asset: URL from the Studio host base path", () => {
+    expect(toActivityIconAssetUrl("asset:Acme.Slack/icons/slack.svg", "https://host.example/elsa/studio/workflows"))
+      .toBe("/elsa/_content/Acme.Slack/icons/slack.svg");
+    expect(toActivityIconAssetUrl("asset:Acme.Slack/icons/slack.svg", "https://host.example/studio/workflows"))
+      .toBe("/_content/Acme.Slack/icons/slack.svg");
+    expect(resolveStudioHostBase("https://host.example/elsa/studio/workflows")).toBe("https://host.example/elsa/");
+  });
+
+  it("rejects an oversize, dot-segment, or parent-segment asset iconName", () => {
+    const oversize = `asset:Acme.Slack/${"a".repeat(250)}.svg`;
+    expect(oversize.length).toBeGreaterThan(activityIconMaxLength);
     expect(resolveActivityIcon(catalog({
-      iconName: "Rocket",
+      iconName: oversize,
+      activityTypeKey: "Acme.Activities.Custom.UnknownHttpCall",
+      displayName: "Unknown HTTP Call",
+      category: "HTTP"
+    }))).toBe("http");
+    expect(toActivityIconAssetUrl(oversize)).toBeNull();
+    expect(resolveActivityIcon(catalog({
+      iconName: "asset:Acme.Slack/./slack.svg",
+      activityTypeKey: "Acme.Activities.Custom.UnknownHttpCall",
+      displayName: "Unknown HTTP Call",
+      category: "HTTP"
+    }))).toBe("http");
+    expect(toActivityIconAssetUrl("asset:Acme.Slack/./slack.svg")).toBeNull();
+    expect(toActivityIconAssetUrl("asset:Acme.Slack/icons/../secret.svg")).toBeNull();
+  });
+
+  it("ignores an unsafe or malformed iconName and continues to type and category fallbacks", () => {
+    expect(resolveActivityIcon(catalog({
+      iconName: "asset:../secrets/key.svg",
       activityTypeKey: "Elsa.Activities.Email.Activities.SendEmail",
       displayName: "Send Email",
       category: "Email"
     }))).toBe("email");
     expect(resolveActivityIcon(catalog({
-      icon: "rocket",
+      icon: "javascript:alert(1)",
       activityTypeKey: "Acme.Activities.Custom.UnknownHttpCall",
       displayName: "Unknown HTTP Call",
       category: "HTTP"
     }))).toBe("http");
     expect(resolveActivityIcon(catalog({
-      iconName: "NotARealIcon",
+      iconName: "not a name",
       activityTypeKey: "Acme.Activities.Custom.OddThing",
       displayName: "Odd Thing",
       category: "Uncategorised",
       executionType: "Trigger"
     }))).toBe("trigger");
-    expect(resolveActivityIcon(catalog({
+    expect(resolveActivityIconFallback(catalog({
       iconName: "Rocket",
       activityTypeKey: "Acme.Activities.Custom.OddThing",
       displayName: "Odd Thing",

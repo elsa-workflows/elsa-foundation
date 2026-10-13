@@ -1,3 +1,4 @@
+import { useEffect, useState, type ComponentType } from "react";
 import {
   Activity,
   AlertTriangle,
@@ -24,12 +25,19 @@ import {
   Zap,
   type LucideIcon
 } from "lucide-react";
-import { toLucideExportName, type WorkflowNodeIcon } from "./activityIcons";
+import { getRegisteredActivityIcon, subscribeActivityIcons } from "@elsa-workflows/studio-sdk";
+import {
+  isActivityIconAsset,
+  isActivityIconExtension,
+  toActivityIconAssetUrl,
+  toLucideExportName,
+  type WorkflowNodeIcon
+} from "./activityIcons";
 
 /**
  * Lazy glyph registry for activity icons. Keep this module off the Workflows entry and landing
- * paths — load it through `loadActivityIconRegistry` / `renderActivityIcon`. A later PR can register
- * extension glyphs (including any lucide name) via `registerActivityIconGlyphs`.
+ * paths — load it through `loadActivityIconRegistry` / `renderActivityIcon`. Extension modules
+ * register React icons with `registerActivityIcons`; unmapped lucide names load on demand.
  */
 
 export type ActivityIconGlyphResolver = (icon: string) => LucideIcon | undefined;
@@ -88,6 +96,7 @@ const kindIcons: Record<string, LucideIcon> = {
 };
 
 const extensionResolvers: ActivityIconGlyphResolver[] = [];
+const lucideLoaderCache = new Map<string, Promise<LucideIcon | undefined>>();
 
 export const mappedLucideExportNames = Object.keys(lucideByExportName);
 
@@ -107,7 +116,101 @@ export function resolveActivityIconGlyph(icon: WorkflowNodeIcon | undefined): Lu
   return Boxes;
 }
 
-export function ActivityIconGlyph({ icon }: { icon?: WorkflowNodeIcon }) {
+function toLucideKebabName(exportName: string): string {
+  return exportName
+    .replace(/([a-z0-9])([A-Z])/g, "$1-$2")
+    .replace(/([A-Z])([A-Z][a-z])/g, "$1-$2")
+    .replace(/([a-zA-Z])(\d+)/g, "$1-$2")
+    .toLowerCase();
+}
+
+function loadLucideIcon(exportName: string): Promise<LucideIcon | undefined> {
+  const cached = lucideLoaderCache.get(exportName);
+  if (cached) return cached;
+
+  const pending = import("lucide-react/dynamicIconImports")
+    .then(module => {
+      const loaders = module.default as Record<string, () => Promise<{ default: LucideIcon }>>;
+      const loader = loaders[toLucideKebabName(exportName)];
+      return loader ? loader().then(loaded => loaded.default) : undefined;
+    })
+    .catch(() => undefined);
+
+  lucideLoaderCache.set(exportName, pending);
+  return pending;
+}
+
+function LazyLucideGlyph({ name, fallback: Fallback }: { name: string; fallback: LucideIcon }) {
+  const [Icon, setIcon] = useState<LucideIcon | null>(null);
+  const [failed, setFailed] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    setIcon(null);
+    setFailed(false);
+    loadLucideIcon(name)
+      .then(loaded => {
+        if (cancelled) return;
+        // Store the component behind a wrapper so React does not call it as a setState updater.
+        if (loaded) setIcon(() => loaded);
+        else setFailed(true);
+      })
+      .catch(() => {
+        if (!cancelled) setFailed(true);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [name]);
+
+  const Glyph = failed || !Icon ? Fallback : Icon;
+  return <Glyph size={15} />;
+}
+
+function ActivityAssetIcon({ src, fallback: Fallback }: { src: string; fallback: LucideIcon }) {
+  const [failed, setFailed] = useState(false);
+  if (failed) return <Fallback size={15} />;
+  return (
+    <img
+      className="wf-activity-icon-asset"
+      src={src}
+      alt=""
+      width={15}
+      height={15}
+      draggable={false}
+      onError={() => setFailed(true)}
+    />
+  );
+}
+
+function RegisteredActivityIcon({ name, fallback: Fallback }: { name: string; fallback: LucideIcon }) {
+  const [, setGeneration] = useState(0);
+  useEffect(() => subscribeActivityIcons(() => setGeneration(value => value + 1)), []);
+  const Icon = getRegisteredActivityIcon(name) as ComponentType<{ size?: number }> | undefined;
+  if (!Icon) return <Fallback size={15} />;
+  return <Icon size={15} />;
+}
+
+export function ActivityIconGlyph({ icon, fallback }: { icon?: WorkflowNodeIcon; fallback?: WorkflowNodeIcon }) {
+  const Fallback = resolveActivityIconGlyph(fallback);
+
+  if (icon && isActivityIconAsset(icon)) {
+    const src = toActivityIconAssetUrl(icon);
+    if (src) return <ActivityAssetIcon src={src} fallback={Fallback} />;
+    return <Fallback size={15} />;
+  }
+
+  if (icon && isActivityIconExtension(icon)) {
+    return <RegisteredActivityIcon name={icon} fallback={Fallback} />;
+  }
+
+  if (icon && !kindIcons[icon]) {
+    const lucideName = toLucideExportName(icon);
+    if (lucideName && !lucideByExportName[lucideName]) {
+      return <LazyLucideGlyph name={lucideName} fallback={Fallback} />;
+    }
+  }
+
   const Icon = resolveActivityIconGlyph(icon);
   return <Icon size={15} />;
 }

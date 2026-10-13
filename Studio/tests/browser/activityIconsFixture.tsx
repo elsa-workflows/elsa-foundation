@@ -8,7 +8,10 @@ import { resolveActivityIcon, resolveActivityIconTone } from "../../src/essentia
 import type { WorkflowNodeData } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/workflowAdapter";
 import type { ActivityCatalogItem } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/workflowTypes";
 
+const omitCustomIcons = new URLSearchParams(window.location.search).get("legacy") === "1";
+
 const catalog: ActivityCatalogItem[] = [
+  item("notify-slack", "Acme.Activities.Slack.NotifySlack", "Notify Slack", "Acme", "Posts a message to Slack.", "Action", omitCustomIcons ? undefined : "Rocket"),
   item("write-line", "Elsa.Activities.Primitives.Activities.WriteLine", "Write Line", "Primitives", "Writes text to the console."),
   item("fault", "Elsa.Activities.Primitives.Activities.Fault", "Fault", "Primitives", "Faults the workflow."),
   item("if", "Elsa.Activities.ControlFlow.Activities.If", "If", "Control Flow", "Branches on a condition."),
@@ -26,7 +29,7 @@ const catalog: ActivityCatalogItem[] = [
 ];
 
 const canvasActivities = catalog.filter(activity =>
-  ["Write Line", "If", "For Each", "Fault", "HTTP Endpoint", "Timer", "Run JavaScript", "Send Email"].includes(activity.displayName)
+  ["Notify Slack", "Write Line", "If", "For Each", "Fault", "HTTP Endpoint", "Timer", "Run JavaScript"].includes(activity.displayName)
 );
 
 export function ActivityIconsFixture() {
@@ -110,7 +113,8 @@ function item(
   displayName: string,
   category: string,
   description: string,
-  executionType = "Action"
+  executionType = "Action",
+  iconName?: string
 ): ActivityCatalogItem {
   return {
     activityVersionId: `${id}-v1`,
@@ -120,6 +124,7 @@ function item(
     displayName,
     description,
     executionType,
+    iconName,
     inputs: [],
     outputs: [],
     designFacets: [],

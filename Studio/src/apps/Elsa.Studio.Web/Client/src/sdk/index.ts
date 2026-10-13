@@ -1,7 +1,9 @@
 import type { ComponentType } from "react";
+import type { StudioActivityIconComponent } from "./activityIcons";
 
 export * from "../auth";
 export * from "./themeLayout";
+export * from "./activityIcons";
 
 export type StudioModuleStatus = "available" | "loaded" | "disabled" | "incompatible" | "failed";
 
@@ -1641,6 +1643,8 @@ export interface ElsaStudioModuleApi {
     readonly nodeRenderers: StudioContributionRegistry<unknown>;
     readonly toolboxItems: StudioContributionRegistry<unknown>;
     readonly panels: StudioContributionRegistry<StudioWorkflowDesignerPanelContribution>;
+    /** Optional host alias of the standalone `registerActivityIcons` export. Callers must guard when it is missing. */
+    registerActivityIcons?: (icons: Record<string, StudioActivityIconComponent | null | undefined>) => void;
   };
   readonly ai: StudioAiContributionApi;
   readonly dialogs: StudioDialogApi;
