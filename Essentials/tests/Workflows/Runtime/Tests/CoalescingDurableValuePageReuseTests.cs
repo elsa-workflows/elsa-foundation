@@ -597,7 +597,8 @@ public sealed class CoalescingDurableValuePageReuseTests
             checkpointStore,
             checkpointStore,
             new InMemoryWorkflowSchedulerWorkQueue(),
-            coalescingScopeFactory: drainScopeFactory);
+            coalescingScopeFactory: drainScopeFactory,
+            persistenceModeResolver: NonFoldingDrainScopeFactory.Resolver);
         using var cancellation = new CancellationTokenSource();
 
         var drain = orchestrator.DrainAsync(NewEnvelope(), new RuntimeSchedulerDrainRequest(WorkflowExecutionId), cancellation.Token).AsTask();
@@ -635,7 +636,8 @@ public sealed class CoalescingDurableValuePageReuseTests
             checkpointStore,
             checkpointStore,
             new InMemoryWorkflowSchedulerWorkQueue(),
-            coalescingScopeFactory: drainScopeFactory);
+            coalescingScopeFactory: drainScopeFactory,
+            persistenceModeResolver: NonFoldingDrainScopeFactory.Resolver);
 
         var drain = orchestrator.DrainAsync(
             NewEnvelope(),

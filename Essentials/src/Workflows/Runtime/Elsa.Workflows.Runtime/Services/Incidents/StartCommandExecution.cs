@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 
@@ -57,7 +58,7 @@ internal static class StartCommandExecution
             payload.CorrelationId,
             payload.ParentWorkflowExecutionId,
             payload.TenantId,
-            new Dictionary<string, string>())
+            PersistenceModeOf(envelope.Command))
         {
             RunKind = payload.RunKind,
             PinnedSource = payload.PinnedSource,
@@ -67,6 +68,12 @@ internal static class StartCommandExecution
             TestScope = payload.TestScope
         };
     }
+
+    // The mode the start dispatcher decided for the run goes with it, as its first commit would have recorded it.
+    private static Dictionary<string, string> PersistenceModeOf(WorkflowExecutionCommand command) =>
+        command.Metadata.TryGetValue(RuntimeMetadataKeys.PersistenceMode, out var mode)
+            ? new Dictionary<string, string> { [RuntimeMetadataKeys.PersistenceMode] = mode }
+            : new Dictionary<string, string>();
 
     /// <summary>
     /// Whether a dispatched child may be faulted into existence. The ordinary enrichers project its dispatch and resume its

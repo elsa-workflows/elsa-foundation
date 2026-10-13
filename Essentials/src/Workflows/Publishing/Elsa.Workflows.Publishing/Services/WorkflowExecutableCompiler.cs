@@ -470,7 +470,7 @@ public sealed class WorkflowExecutableCompiler(
             return Enum.Parse<PersistenceMode>(authored);
 
         throw new ArgumentException(
-            $"Persistence mode '{authored}' is not recognised. Use one of: {string.Join(", ", names.Select(name => $"'{name}'"))}.");
+            $"Persistence mode '{authored}' is not recognized. Use one of: {string.Join(", ", names.Select(name => $"'{name}'"))}.");
     }
 
     private static IncidentStrategyReference ResolveIncidentStrategy(

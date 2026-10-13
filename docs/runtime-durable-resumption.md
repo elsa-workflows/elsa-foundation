@@ -331,9 +331,12 @@ Every run folds the named checkpoints above of a *drain segment* into one atomic
 a segment grows. Durable ends a segment at each activity, so it commits once per activity; Balanced ends one after the
 host's activity cap; Ephemeral only at boundaries and at the end of the pass. Every shell that composes the runtime API
 has the machinery for this (`AddPersistenceModes`, called by `WorkflowsRuntimeApiFeature` after every feature
-registered its stores); the run's mode, resolved once per drain from the mode it recorded at start, its workflow's
-choice or the host default, decides the segment size. A host composed without the machinery cannot run any mode, so it
-refuses the run before anything runs.
+registered its stores); the run's mode decides the segment size. It is decided once, when the run is started: the start
+dispatcher writes the workflow's choice, or the host default when it chose none, onto the start command, which the
+scheduler queue keeps until the run's first commit records the mode on the run. Every drain resolves the mode from that
+record, or before it from the start the queue holds, so a run driven again before anything was committed keeps its
+mode. The queue holds a start's first delivery, so a start delivered again with another mode does not change it. A host
+composed without the machinery cannot run any mode, so it refuses the run before anything runs.
 
 **Governing invariant — the durable scheduler queue never advances past the last flushed state.** Within a
 segment, checkpoints are buffered in an ambient in-memory working set (an overlay over the real state stores,
@@ -378,8 +381,9 @@ durable attempt boundary), so a replayable hot loop longer than the cap keeps fo
 instead of degrading to per-checkpoint persistence. The cap bounds both replay cost (a crash re-runs at most one window past the last flush) and memory.
 Continuation outbox items persisted durably by a cap flush keep delivering from the overlay for the next segment; the
 session writes their overlay outcome back to the durable outbox store at the next flush, so no durable `Pending`
-residue survives the drain to be redelivered by a later sweep. Ephemeral has no cap: a long run that never suspends,
-faults or completes holds its working set in memory.
+residue survives the drain to be redelivered by a later sweep. Ephemeral has no cap: a long pass that meets none of its
+commit points (a suspension, fault or cancellation, an incident or alteration, a child dispatch, an activity that is not safe to repeat, the end of
+the pass) holds its working set in memory.
 
 **The crash-replay window and at-least-once semantics.** A crash mid-segment loses the buffered-but-unflushed
 checkpoints, but they are **replayable from the last flushed commit + durable queue redelivery** — the honest
@@ -408,14 +412,12 @@ every mode.
 serves the projection the session already recorded for that activity, so a later checkpoint in the segment merges onto
 it as it would onto a committed one; building from the durable baseline instead dropped what the earlier checkpoint
 recorded, such as the outcome of a root activity that completed in the same commit as its workflow. An activity the
-segment has not recorded yet is served from a per-drain memo of the **durable baseline**, invalidated at every
-durable flush. `PersistenceModeOptions.CoalesceInspectionReads` (default on) turns the memo off, back to a durable read
-for each such build.
+session has not recorded yet is read from the durable store, so each activity's durable row is read at most once per
+drain.
 
 **Durable-value page reuse** (spec 197) avoids repeated reads of unchanged provider pages within one eligible
 folding drain. `WorkflowsRuntimeCheckpointPersistence.CoalesceDurableValueReads` defaults to `true`; set it to
-`false` to compare the same mode without page reuse. This switch is independent of `CoalesceInspectionReads` and
-does not change any run's mode.
+`false` to compare the same mode without page reuse. This switch does not change any run's mode.
 
 Reuse requires an unambiguous first-party EF backend that still owns its effective registrations, the shared
 singleton built-in HMAC continuation codec, and the same live ordinary persistence scope. Unsupported, custom,
@@ -493,7 +495,7 @@ Two ambients remain **by deliberate design**, and neither is a drain-path servic
 - `IRuntimeExecutionOwnershipContextAccessor` — a runtime-internal AsyncLocal lease scope (RT-2/W5
   fencing) that carries the active lease from the drain coordinator to the single commit funnel.
 - `IRuntimeCoalescingSessionAccessor` (**W9**) — an **ambient session flag**, not service
-  location: it marks that a folding session is active for a Balanced or Ephemeral run so the decorators buffer
+  location: it marks the folding session every drain runs in, whatever the run's mode, so the decorators buffer
   intra-drain checkpoints into the in-memory working set. It is registered by `AddPersistenceModes`
   and its gating semantics are preserved exactly ("the durable scheduler queue never advances past the
   last flushed state"). It is a documented exception to "no AsyncLocal in the drain path", distinct in

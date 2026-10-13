@@ -28,10 +28,7 @@ public sealed class WorkflowInstanceServicesTests
 
     private WorkflowInstanceDetailsService NewGetInstanceHandler(RuntimePersistenceModeInspector? persistenceModeInspector = null) =>
         new(_workflowStore, _inspectionStore, _incidentStore, _durableValueStore, new DefaultRuntimePayloadCapturePolicy(), AllowAll,
-            persistenceModeInspector ?? HostWithoutPersistenceModes());
-
-    private static RuntimePersistenceModeInspector HostWithoutPersistenceModes() =>
-        new([]);
+            persistenceModeInspector ?? HostDefaulting(PersistenceMode.Durable));
 
     private static RuntimePersistenceModeInspector HostDefaulting(PersistenceMode mode) =>
         new([new PersistenceModeOptions { Mode = mode }]);
@@ -644,13 +641,26 @@ public sealed class WorkflowInstanceServicesTests
     public async Task GetWorkflowInstance_OnDurableHost_ReportsActivityLevelInspection()
     {
         await _workflowStore.SaveAsync(Workflow("wf-1", WorkflowExecutionStatus.Completed, "definition-1"));
-        var handler = NewGetInstanceHandler(HostWithoutPersistenceModes());
+        var handler = NewGetInstanceHandler(HostDefaulting(PersistenceMode.Durable));
 
         var result = await handler.GetAsync(new GetWorkflowInstance("wf-1"), CancellationToken.None);
 
         Assert.NotNull(result);
         Assert.Equal("Durable", result!.PersistenceMode);
         Assert.Equal("activity-level", result!.InspectionGranularity);
+    }
+
+    [Fact]
+    public async Task GetWorkflowInstance_OnAHostWithoutPersistenceModeOptions_HasNoDefaultToReport()
+    {
+        // A host that never added the persistence modes cannot run any mode, so a run without a recorded mode is not
+        // reported as Durable.
+        await _workflowStore.SaveAsync(Workflow("wf-1", WorkflowExecutionStatus.Completed, "definition-1"));
+        var handler = NewGetInstanceHandler(new RuntimePersistenceModeInspector([]));
+
+        var refusal = await Assert.ThrowsAsync<InvalidOperationException>(() => handler.GetAsync(new GetWorkflowInstance("wf-1"), CancellationToken.None));
+
+        Assert.Contains("AddPersistenceModes()", refusal.Message, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -691,7 +701,7 @@ public sealed class WorkflowInstanceServicesTests
     [Theory]
     [InlineData("Balanced")]
     [InlineData("Ephemeral")]
-    public async Task GetWorkflowInstance_ReportsARecordedFoldingRun_EvenOnAHostWithoutPersistenceModes(string recordedMode)
+    public async Task GetWorkflowInstance_ReportsARecordedFoldingRun_EvenOnADurableHost(string recordedMode)
     {
         await _workflowStore.SaveAsync(Workflow(
             "wf-1",
@@ -701,7 +711,7 @@ public sealed class WorkflowInstanceServicesTests
             {
                 [Elsa.Workflows.Runtime.Core.Constants.RuntimeMetadataKeys.PersistenceMode] = recordedMode
             }));
-        var handler = NewGetInstanceHandler(HostWithoutPersistenceModes());
+        var handler = NewGetInstanceHandler(HostDefaulting(PersistenceMode.Durable));
 
         var result = await handler.GetAsync(new GetWorkflowInstance("wf-1"), CancellationToken.None);
 

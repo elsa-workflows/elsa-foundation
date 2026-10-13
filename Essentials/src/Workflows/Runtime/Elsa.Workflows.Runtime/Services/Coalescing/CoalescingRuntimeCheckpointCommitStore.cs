@@ -10,8 +10,8 @@ namespace Elsa.Workflows.Runtime.Services.Coalescing;
 /// Coalescing decorator for <see cref="IRuntimeCheckpointCommitStore"/>. While a coalescing session owns
 /// the target workflow execution, deferred checkpoints are buffered into an in-memory working set and folded into a
 /// single atomic durable commit at a flush boundary (attempt activation, suspension/fault/cancellation/completion, an
-/// operational or bookmark write, the per-segment activity cap of Durable or Balanced, or the end-of-drain quiescence
-/// flush).
+/// operational, incident, bookmark, alteration-job, child-dispatch or dispatch-cancellation write, the per-segment
+/// activity cap of Durable or Balanced, or the end-of-drain quiescence flush).
 /// The one boundary that may be dropped instead is the completion of an Ephemeral run that has no record, on a host
 /// that turned completion records off (see <see cref="RuntimeCoalescingSession.CanDiscardCompletion"/>). A durable attempt
 /// boundary and a cap-hit fold-and-flush each start another coalesced segment in the same drain; when no session is
@@ -60,7 +60,6 @@ public sealed class CoalescingRuntimeCheckpointCommitStore(
             var flushResult = await CommitInnerAsync(session, commit, decision, cancellationToken);
             try
             {
-                session.InvalidateInspectionBaselines();
                 await session.ReconcileDurablyPersistedOutboxAsync(commit.Checkpoint.OccurredAt, cancellationToken);
                 await session.AdvanceInnerQueueAsync(consumeInFlightClaims: true, cancellationToken);
             }
@@ -141,7 +140,6 @@ public sealed class CoalescingRuntimeCheckpointCommitStore(
             await CommitInnerAsync(session, foldedCommit, ImmediateDecision, cancellationToken);
             try
             {
-                session.InvalidateInspectionBaselines();
                 if (capFold)
                 {
                     // The trailing commit's outbox items stay overlay-delivered for the next segment; the flush persisted
@@ -180,7 +178,6 @@ public sealed class CoalescingRuntimeCheckpointCommitStore(
         var passthrough = await CommitInnerAsync(session, commit, decision, cancellationToken);
         try
         {
-            session.InvalidateInspectionBaselines();
             if (continueAfterBoundary)
                 session.RecordDurableBoundaryState(commit.StateChanges);
             await session.ReconcileDurablyPersistedOutboxAsync(commit.Checkpoint.OccurredAt, cancellationToken);

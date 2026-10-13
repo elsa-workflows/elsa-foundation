@@ -313,11 +313,11 @@ public static class WorkflowIntrinsicInputKeys
 /// <b>On <see cref="WorkflowIntrinsicKind.SetOutput"/>, which an earlier revision held back.</b> The stated reason was
 /// that a workflow output is "published for the caller" and so belongs on the mandatory-checkpoint side. That conflated two
 /// independent dials. <em>When</em> an output becomes durable is decided by the checkpoint persistence policy, and
-/// <c>IntrinsicCompleted</c> is not in <c>CoalescingRuntimeCheckpointPersistencePolicy.MandatoryFlushCheckpointNames</c>
-/// — so under coalescing a <c>SetOutput</c> already deferred and folded into the segment flush, with or without fusion.
-/// Fusion decides only <em>how many dispatches</em> the node costs. Excluding it therefore protected nothing about
-/// output visibility and bought only hops. A workflow that needs an output durable the instant it is written selects
-/// the Durable persistence mode; that lever is unchanged here.
+/// <c>IntrinsicCompleted</c> is not in <c>CoalescingRuntimeCheckpointPersistencePolicy.MandatoryFlushCheckpointNames</c>,
+/// so in every persistence mode a <c>SetOutput</c> already deferred and folded into the next commit, with or without
+/// fusion. Fusion decides only <em>how many dispatches</em> the node costs. Excluding it therefore protected nothing
+/// about output visibility and bought only hops. Under Durable that next commit comes when the next activity is
+/// scheduled or the pass ends, the earliest any mode makes an output durable; that is unchanged here.
 /// </para>
 /// </remarks>
 public static class WorkflowIntrinsicFusion

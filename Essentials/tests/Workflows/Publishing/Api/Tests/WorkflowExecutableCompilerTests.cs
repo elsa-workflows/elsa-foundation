@@ -387,7 +387,7 @@ public sealed class WorkflowExecutableCompilerTests
     [InlineData("1")]
     [InlineData("Immediate")]
     [InlineData("Coalesced")]
-    public async Task Unrecognised_persistence_mode_fails_publication(string persistenceMode)
+    public async Task Unrecognized_persistence_mode_fails_publication(string persistenceMode)
     {
         var compiler = Compiler(WorkflowVersionWithPersistenceMode(Node("write-one", Text("hello")), persistenceMode));
 

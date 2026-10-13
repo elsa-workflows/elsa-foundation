@@ -253,19 +253,19 @@ describe("properties view", () => {
     expect(producer(workflow.state).strategyOptions).toEqual({ futureOption: 1 });
   });
 
-  it("shows an unrecognized stored mode and keeps it until another is chosen", () => {
+  it.each(["Coalesced", "balanced"])("shows the unrecognized stored mode %s and keeps it until another is chosen", storedMode => {
     const workflow = draft();
-    workflow.state.strategyOptions = { persistenceMode: "Coalesced" };
+    workflow.state.strategyOptions = { persistenceMode: storedMode };
     const onStateChange = vi.fn();
     const container = render(
       <WorkflowPropertiesView details={details()} draft={workflow} context={rejectingContext} onStateChange={onStateChange} />
     );
 
     const select = container.querySelector<HTMLSelectElement>("select[aria-label='Persistence mode']")!;
-    expect(select.value).toBe("Coalesced");
-    const stored = [...select.options].find(option => option.value === "Coalesced")!;
+    expect(select.value).toBe(storedMode);
+    const stored = [...select.options].find(option => option.value === storedMode)!;
     expect(stored.disabled).toBe(true);
-    expect(stored.textContent).toBe("Coalesced (unrecognized)");
+    expect(stored.textContent).toBe(`${storedMode} (unrecognized)`);
     expect(onStateChange).not.toHaveBeenCalled();
   });
 

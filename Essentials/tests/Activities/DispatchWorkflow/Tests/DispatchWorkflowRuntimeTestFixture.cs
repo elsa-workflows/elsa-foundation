@@ -9,6 +9,7 @@ using Elsa.Activities.Runtime.Core;
 using Elsa.Activities.Runtime.Core.Attributes;
 using Elsa.Activities.Runtime.Core.Contracts;
 using Elsa.Activities.Runtime.Core.Models;
+using Elsa.Activities.Testing;
 using Elsa.Primitives.Models;
 using Elsa.Serialization.Core;
 using Elsa.Serialization.SystemText;
@@ -769,15 +770,8 @@ internal sealed class CheckpointRecorder
     internal RuntimeCheckpointCommit SingleIntentCommit(string intentKind)
     {
         lock (_gate)
-            return _commits.Single(commit => IntentsOf(commit).Any(intent => intent.Kind == intentKind));
+            return _commits.Single(commit => CheckpointCommitIntents.IntentsOf(commit).Any(intent => intent.Kind == intentKind));
     }
-
-    // A commit carries an intent its own checkpoint decided, or, when a persistence mode folded earlier checkpoints
-    // into it, as an outbox item among its state changes; a commit can carry the same intent both ways.
-    internal static IEnumerable<RuntimePostCommitIntent> IntentsOf(RuntimeCheckpointCommit commit) =>
-        commit.PostCommitIntents
-            .Concat(commit.StateChanges.PostCommitOutbox.Select(change => change.State.Intent))
-            .DistinctBy(intent => intent.IntentId);
 }
 
 internal sealed class RecordingRuntimeCheckpointCommitStore(

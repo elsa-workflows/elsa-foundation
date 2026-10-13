@@ -51,21 +51,8 @@ public sealed class CoalescingRuntimePostCommitOutboxStore(
 
     public ValueTask<RuntimePostCommitOutboxItem?> FindAsync(
         string outboxItemId,
-        CancellationToken cancellationToken = default)
-    {
-        ArgumentException.ThrowIfNullOrWhiteSpace(outboxItemId);
-        cancellationToken.ThrowIfCancellationRequested();
-
-        if (sessionAccessor.Current is { IsActive: true } session &&
-            session.TryFindOutboxItem(outboxItemId, out var overlayItem))
-        {
-            return new ValueTask<RuntimePostCommitOutboxItem?>(overlayItem);
-        }
-
-        return (_innerLookupStore ?? throw new InvalidOperationException(
-            "The configured post-commit outbox store does not provide exact-item lookup support."))
-            .FindAsync(outboxItemId, cancellationToken);
-    }
+        CancellationToken cancellationToken = default) =>
+        CoalescingPostCommitOutboxLookupStore.FindAsync(sessionAccessor, _innerLookupStore, outboxItemId, cancellationToken);
 
     public ValueTask<IReadOnlyCollection<RuntimePostCommitOutboxClaim>> ClaimAsync(
         RuntimePostCommitOutboxClaimRequest request,
