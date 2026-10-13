@@ -125,8 +125,9 @@ public sealed class RetiredTermAnalyzerTests
 
     /// <summary>
     /// Holds the committed configuration to the grammar: every .editorconfig in the repository, as the compiler would
-    /// combine them, is resolved for a file in every production folder, and none of them may produce a setting the
-    /// analyzer refuses to parse.
+    /// combine them, is resolved for a file in every production folder that holds C# source, nested ones included, so a
+    /// section scoped to a sub-folder such as <c>Essentials/src/Workflows/Runtime/**</c> is resolved too. None of them may
+    /// produce a setting the analyzer refuses to parse.
     /// </summary>
     [Fact]
     public async Task Every_committed_retired_term_setting_parses()
@@ -138,16 +139,23 @@ public sealed class RetiredTermAnalyzerTests
             .Select(path => AnalyzerConfig.Parse(File.ReadAllText(path), path))
             .ToImmutableArray());
         var probes = new[] { "Essentials/src", "Essentials/apps" }
-            .SelectMany(root => Directory.EnumerateDirectories(Path.Join(repoRoot, root)))
+            .Select(root => Path.Join(repoRoot, root))
             .Concat(Directory.EnumerateDirectories(Path.Join(repoRoot, "Extensions"))
                 .Select(extension => Path.Join(extension, "src"))
                 .Where(Directory.Exists))
+            .SelectMany(root => Directory.EnumerateFiles(root, "*.cs", SearchOption.AllDirectories))
+            .Where(path => !IsBuildOutput(repoRoot, path))
+            .Select(Path.GetDirectoryName)
+            .OfType<string>()
+            .Distinct(StringComparer.Ordinal)
             .Select(directory => (Path: Path.Join(directory, "Probe.cs"), Source: "namespace Probe; internal sealed class Probe { }"))
             .ToArray();
 
         var diagnostics = await AnalyzeAsync(configs, probes);
 
-        Assert.True(probes.Length > 20, $"Only {probes.Length} production folders were probed; the sweep has stopped finding them.");
+        Assert.True(probes.Length > 500, $"Only {probes.Length} production folders were probed; the sweep has stopped finding them.");
+        Assert.Contains(probes, probe => probe.Path.Contains(
+            $"{Path.DirectorySeparatorChar}Workflows{Path.DirectorySeparatorChar}Runtime{Path.DirectorySeparatorChar}", StringComparison.Ordinal));
         Assert.DoesNotContain(diagnostics, diagnostic => diagnostic.Id == RetiredTermAnalyzer.InvalidConfigurationId);
     }
 
@@ -168,6 +176,10 @@ public sealed class RetiredTermAnalyzerTests
 
         return await compilation.WithAnalyzers([new RetiredTermAnalyzer()], options).GetAnalyzerDiagnosticsAsync();
     }
+
+    private static bool IsBuildOutput(string repoRoot, string path) =>
+        $"/{Path.GetRelativePath(repoRoot, path).Replace(Path.DirectorySeparatorChar, '/')}" is var relative &&
+        (relative.Contains("/bin/", StringComparison.Ordinal) || relative.Contains("/obj/", StringComparison.Ordinal));
 
     private static string FindRepoRoot()
     {
