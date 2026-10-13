@@ -9,7 +9,7 @@ using Elsa.Persistence.EntityFramework;
 using Elsa.Workflows.Design.Persistence.EntityFrameworkCore;
 using Elsa.Workflows.Design.Persistence.EntityFrameworkCore.DependencyInjection;
 using Elsa.Primitives.Contracts;
-using Elsa.Primitives.Hosting.Services;
+using Elsa.Primitives.Hosting;
 using Elsa.Serialization.Core;
 using Elsa.Serialization.SystemText.Services;
 using Elsa.Workflows.Design.Core.Contracts;
@@ -98,7 +98,7 @@ internal sealed class WorkflowsDesignTestHost : IDisposable
     {
         var services = new ServiceCollection();
         services.AddSingleton(typeof(ILogger<>), typeof(NullLogger<>));
-        services.AddSingleton<ISystemClock, SystemClock>();
+        new PrimitivesFeature().ConfigureServices(services);
         services.AddSingleton<IIdentityGenerator, GuidIdentityGenerator>();
 
         // Real activity structure projection (flattening) — the command-driven tests depend on it.

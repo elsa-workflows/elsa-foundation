@@ -2,7 +2,7 @@
 
 namespace Elsa.Primitives.Extensions;
 
-public static class ObjectExtensions
+internal static class ObjectExtensions
 {
     public static object ConvertIEnumerableToArray(this object? obj)
     {

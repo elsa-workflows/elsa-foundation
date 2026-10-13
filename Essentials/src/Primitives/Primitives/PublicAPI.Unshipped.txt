@@ -62,10 +62,6 @@ Elsa.Primitives.Exceptions.SchemaWriteRefusedException.RequiredVersion.get -> st
 Elsa.Primitives.Exceptions.SchemaWriteRefusedException.SchemaWriteRefusedException(string! family, string! writeVersion, string! requiredVersion, string! message) -> void
 Elsa.Primitives.Exceptions.SchemaWriteRefusedException.SchemaWriteRefusedException(string! family, string! writeVersion, string! requiredVersion, string! message, string! code) -> void
 Elsa.Primitives.Exceptions.SchemaWriteRefusedException.WriteVersion.get -> string!
-Elsa.Primitives.Extensions.CollectionExtensions
-Elsa.Primitives.Extensions.ObjectExtensions
-Elsa.Primitives.Extensions.PropertyAccessorExtensions
-Elsa.Primitives.Extensions.QueryableExtensions
 Elsa.Primitives.Extensions.StringExtensions
 Elsa.Primitives.Extensions.TypeExtensions
 Elsa.Primitives.Identity.GuidIdentityGenerator
@@ -174,17 +170,6 @@ Elsa.Primitives.Persistence.Page<T>.Items.init -> void
 Elsa.Primitives.Persistence.Page<T>.Page(System.Collections.Generic.ICollection<T>! Items, long TotalCount) -> void
 Elsa.Primitives.Persistence.Page<T>.TotalCount.get -> long
 Elsa.Primitives.Persistence.Page<T>.TotalCount.init -> void
-Elsa.Primitives.Persistence.PageArgs
-Elsa.Primitives.Persistence.PageArgs.<Clone>$() -> Elsa.Primitives.Persistence.PageArgs!
-Elsa.Primitives.Persistence.PageArgs.Equals(Elsa.Primitives.Persistence.PageArgs? other) -> bool
-Elsa.Primitives.Persistence.PageArgs.Limit.get -> int?
-Elsa.Primitives.Persistence.PageArgs.Limit.set -> void
-Elsa.Primitives.Persistence.PageArgs.Next() -> Elsa.Primitives.Persistence.PageArgs!
-Elsa.Primitives.Persistence.PageArgs.Offset.get -> int?
-Elsa.Primitives.Persistence.PageArgs.Offset.set -> void
-Elsa.Primitives.Persistence.PageArgs.Page.get -> int?
-Elsa.Primitives.Persistence.PageArgs.PageArgs() -> void
-Elsa.Primitives.Persistence.PageArgs.PageSize.get -> int?
 Elsa.Primitives.Versioning.SemVer
 Elsa.Primitives.Versioning.SemVer.BuildMetadata.get -> string?
 Elsa.Primitives.Versioning.SemVer.CompareTo(Elsa.Primitives.Versioning.SemVer other) -> int
@@ -195,9 +180,6 @@ Elsa.Primitives.Versioning.SemVer.Patch.get -> int
 Elsa.Primitives.Versioning.SemVer.Prerelease.get -> string?
 Elsa.Primitives.Versioning.SemVer.SemVer() -> void
 Elsa.Primitives.Versioning.SemVer.ToSortKey() -> string!
-Elsa.Primitives.Versioning.SemVerComparer
-Elsa.Primitives.Versioning.SemVerComparer.Compare(Elsa.Primitives.Versioning.SemVer x, Elsa.Primitives.Versioning.SemVer y) -> int
-Elsa.Primitives.Versioning.SemVerComparer.SemVerComparer() -> void
 override Elsa.Primitives.Models.ClrActivityDescriptor.Equals(object? obj) -> bool
 override Elsa.Primitives.Models.ClrActivityDescriptor.GetHashCode() -> int
 override Elsa.Primitives.Models.ClrActivityDescriptor.ToString() -> string!
@@ -213,20 +195,12 @@ override Elsa.Primitives.Models.ValueTypeDescriptor.ToString() -> string!
 override Elsa.Primitives.Persistence.Page<T>.Equals(object? obj) -> bool
 override Elsa.Primitives.Persistence.Page<T>.GetHashCode() -> int
 override Elsa.Primitives.Persistence.Page<T>.ToString() -> string!
-override Elsa.Primitives.Persistence.PageArgs.Equals(object? obj) -> bool
-override Elsa.Primitives.Persistence.PageArgs.GetHashCode() -> int
-override Elsa.Primitives.Persistence.PageArgs.ToString() -> string!
 override Elsa.Primitives.Versioning.SemVer.Equals(object? obj) -> bool
 override Elsa.Primitives.Versioning.SemVer.GetHashCode() -> int
 override Elsa.Primitives.Versioning.SemVer.ToString() -> string!
 static Elsa.Primitives.Diagnostics.ObservationalTelemetryScope.Start(System.Diagnostics.ActivitySource! source, string! name) -> Elsa.Primitives.Diagnostics.ObservationalTelemetryScope!
 static Elsa.Primitives.Diagnostics.ObservationalTelemetryScope.Start(System.Func<System.Diagnostics.ActivitySource!>! sourceFactory, string! name) -> Elsa.Primitives.Diagnostics.ObservationalTelemetryScope!
 static Elsa.Primitives.Exceptions.EntityNotFoundException.ForEntity(System.Type! entityType, string! id) -> Elsa.Primitives.Exceptions.EntityNotFoundException!
-static Elsa.Primitives.Extensions.CollectionExtensions.RemoveWhere<T>(this System.Collections.Generic.ICollection<T>! collection, System.Func<T, bool>! predicate) -> void
-static Elsa.Primitives.Extensions.ObjectExtensions.ConvertIEnumerableToArray(this object? obj) -> object!
-static Elsa.Primitives.Extensions.PropertyAccessorExtensions.GetProperty<T, TProperty>(this System.Linq.Expressions.Expression<System.Func<T, TProperty>!>! expression) -> System.Reflection.PropertyInfo?
-static Elsa.Primitives.Extensions.QueryableExtensions.OrderBy<T, TOrderBy>(this System.Linq.IQueryable<T>! queryable, Elsa.Primitives.Persistence.OrderDefinition<T, TOrderBy>! order) -> System.Linq.IQueryable<T>!
-static Elsa.Primitives.Extensions.QueryableExtensions.Paginate<T>(this System.Linq.IQueryable<T>! queryable, Elsa.Primitives.Persistence.PageArgs? pageArgs) -> System.Linq.IQueryable<T>!
 static Elsa.Primitives.Extensions.StringExtensions.Camelize(this string! value) -> string!
 static Elsa.Primitives.Extensions.StringExtensions.GetLoadedType(this string! typeName) -> System.Type!
 static Elsa.Primitives.Extensions.StringExtensions.Humanize(this string! value) -> string!
@@ -263,12 +237,6 @@ static Elsa.Primitives.Persistence.Page.Empty<T>() -> Elsa.Primitives.Persistenc
 static Elsa.Primitives.Persistence.Page.Of<T>(System.Collections.Generic.ICollection<T>! items, long totalCount) -> Elsa.Primitives.Persistence.Page<T>!
 static Elsa.Primitives.Persistence.Page<T>.operator !=(Elsa.Primitives.Persistence.Page<T>? left, Elsa.Primitives.Persistence.Page<T>? right) -> bool
 static Elsa.Primitives.Persistence.Page<T>.operator ==(Elsa.Primitives.Persistence.Page<T>? left, Elsa.Primitives.Persistence.Page<T>? right) -> bool
-static Elsa.Primitives.Persistence.PageArgs.All.get -> Elsa.Primitives.Persistence.PageArgs!
-static Elsa.Primitives.Persistence.PageArgs.From(int? page, int? pageSize, int? offset, int? limit) -> Elsa.Primitives.Persistence.PageArgs!
-static Elsa.Primitives.Persistence.PageArgs.FromPage(int? page, int? pageSize) -> Elsa.Primitives.Persistence.PageArgs!
-static Elsa.Primitives.Persistence.PageArgs.FromRange(int? offset, int? limit) -> Elsa.Primitives.Persistence.PageArgs!
-static Elsa.Primitives.Persistence.PageArgs.operator !=(Elsa.Primitives.Persistence.PageArgs? left, Elsa.Primitives.Persistence.PageArgs? right) -> bool
-static Elsa.Primitives.Persistence.PageArgs.operator ==(Elsa.Primitives.Persistence.PageArgs? left, Elsa.Primitives.Persistence.PageArgs? right) -> bool
 static Elsa.Primitives.Versioning.SemVer.operator !=(Elsa.Primitives.Versioning.SemVer left, Elsa.Primitives.Versioning.SemVer right) -> bool
 static Elsa.Primitives.Versioning.SemVer.operator <(Elsa.Primitives.Versioning.SemVer left, Elsa.Primitives.Versioning.SemVer right) -> bool
 static Elsa.Primitives.Versioning.SemVer.operator <=(Elsa.Primitives.Versioning.SemVer left, Elsa.Primitives.Versioning.SemVer right) -> bool
@@ -277,5 +245,4 @@ static Elsa.Primitives.Versioning.SemVer.operator >(Elsa.Primitives.Versioning.S
 static Elsa.Primitives.Versioning.SemVer.operator >=(Elsa.Primitives.Versioning.SemVer left, Elsa.Primitives.Versioning.SemVer right) -> bool
 static Elsa.Primitives.Versioning.SemVer.ToSortKey(string! version) -> string!
 static Elsa.Primitives.Versioning.SemVer.TryParse(string? value, out Elsa.Primitives.Versioning.SemVer result) -> bool
-static Elsa.Primitives.Versioning.SemVerComparer.Instance.get -> Elsa.Primitives.Versioning.SemVerComparer!
 static readonly Elsa.Primitives.Models.TypeAliasConvention.ReservedBareAliases -> System.Collections.Generic.IReadOnlySet<string!>!

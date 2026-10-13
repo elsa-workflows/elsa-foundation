@@ -4,4 +4,8 @@
     <ElsaTrackPublicApi>true</ElsaTrackPublicApi>
   </PropertyGroup>
 
+  <ItemGroup>
+    <InternalsVisibleTo Include="Elsa.Primitives.Tests" />
+  </ItemGroup>
+
 </Project>
