@@ -1,0 +1,184 @@
+import {
+  defaultStudioNavigationOrder,
+  defaultStudioNavigationPlacement,
+  type StudioNavigationContribution,
+  type StudioNavigationPlacement,
+  type StudioNavigationRequirement,
+  type StudioNavigationSection
+} from "../../sdk";
+
+/** Browser key for the More tools disclosure. Same `elsa-studio.ui.*` namespace as the disclosure plan. */
+export const moreToolsStorageKey = "elsa-studio.ui.nav.more";
+
+const hostAdminPaths = new Set(["/modules", "/theme-builder", "/package-feeds", "/features"]);
+const hostAdminIds = new Set(["modules", "theme-builder", "package-feeds", "feature-management"]);
+
+export interface NavigationAccess {
+  /** Loaded module ids and capabilities. When omitted, `requiresFeature` is not enforced. */
+  enabledFeatures?: ReadonlySet<string> | readonly string[];
+  roles?: readonly string[];
+  permissions?: readonly string[];
+  /** Authenticated users are held to role/permission gates; demo/anonymous is not. */
+  authenticated?: boolean;
+  /** Host-control read (module-management). Admin placement is hidden without it. */
+  canReadAdmin?: boolean;
+}
+
+export function asRequirementList(value: StudioNavigationRequirement | undefined): string[] {
+  if (!value) return [];
+  return (typeof value === "string" ? [value] : [...value])
+    .map(item => item.trim())
+    .filter(Boolean);
+}
+
+export function getNavigationSection(item: Pick<StudioNavigationContribution, "id" | "path" | "section">): StudioNavigationSection {
+  if (item.section) {
+    return item.section;
+  }
+
+  if (hostAdminPaths.has(item.path) || hostAdminIds.has(item.id)) {
+    return "settings";
+  }
+
+  return "workspace";
+}
+
+/**
+ * Resolves sidebar placement. Declared `placement` wins. Older `section: "settings"` and the host's
+ * own admin paths stay under Administration so modules that have not declared placement keep working.
+ * Everything else defaults to More tools.
+ */
+export function getNavigationPlacement(
+  item: Pick<StudioNavigationContribution, "id" | "path" | "section" | "placement">
+): StudioNavigationPlacement {
+  if (item.placement) {
+    return item.placement;
+  }
+
+  if (getNavigationSection(item) === "settings") {
+    return "admin";
+  }
+
+  return defaultStudioNavigationPlacement;
+}
+
+export function getNavigationOrder(item: Pick<StudioNavigationContribution, "order">): number {
+  return item.order ?? defaultStudioNavigationOrder;
+}
+
+export function isNavigationRequirementMet(
+  required: StudioNavigationRequirement | undefined,
+  granted: Iterable<string> | undefined
+): boolean {
+  const needed = asRequirementList(required);
+  if (needed.length === 0) {
+    return true;
+  }
+
+  const available = new Set([...(granted ?? [])].map(normalizeRequirement));
+  return needed.every(value => available.has(normalizeRequirement(value)));
+}
+
+export function isNavigationItemAccessible(
+  item: StudioNavigationContribution,
+  access: NavigationAccess = {}
+): boolean {
+  const placement = getNavigationPlacement(item);
+  if (placement === "admin" && access.canReadAdmin === false) {
+    return false;
+  }
+
+  if (access.enabledFeatures && !isNavigationRequirementMet(item.requiresFeature, access.enabledFeatures)) {
+    return false;
+  }
+
+  if (access.authenticated) {
+    if (!isNavigationRequirementMet(item.requiresRole, access.roles)) {
+      return false;
+    }
+    if (!isNavigationRequirementMet(item.requiresPermission, access.permissions)) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
+export function filterAccessibleNavigation(
+  navigation: StudioNavigationContribution[],
+  access: NavigationAccess = {}
+): StudioNavigationContribution[] {
+  return navigation.filter(item => isNavigationItemAccessible(item, access));
+}
+
+export function getTopLevelNavigationItems(navigation: StudioNavigationContribution[], section: StudioNavigationSection) {
+  const ids = new Set(navigation.map(item => item.id));
+  return navigation.filter(item => getNavigationSection(item) === section && (!item.parentId || !ids.has(item.parentId)));
+}
+
+export function getTopLevelNavigationItemsByPlacement(
+  navigation: StudioNavigationContribution[],
+  placement: StudioNavigationPlacement
+) {
+  const ids = new Set(navigation.map(item => item.id));
+  return navigation
+    .filter(item => getNavigationPlacement(item) === placement && (!item.parentId || !ids.has(item.parentId)))
+    .sort(compareNavigationItems);
+}
+
+export function compareNavigationItems(
+  a: Pick<StudioNavigationContribution, "id" | "label" | "order">,
+  b: Pick<StudioNavigationContribution, "id" | "label" | "order">
+) {
+  const orderComparison = getNavigationOrder(a) - getNavigationOrder(b);
+  if (orderComparison !== 0) {
+    return orderComparison;
+  }
+
+  return a.label.localeCompare(b.label) || a.id.localeCompare(b.id);
+}
+
+export function readMoreToolsOpen(storage: PreferenceStorage | undefined = defaultStorage(), fallback = false): boolean {
+  if (!storage) {
+    return fallback;
+  }
+
+  return safely(() => {
+    const value = storage.getItem(moreToolsStorageKey);
+    return value === null ? fallback : value === "true";
+  }, fallback);
+}
+
+export function writeMoreToolsOpen(open: boolean, storage: PreferenceStorage | undefined = defaultStorage()) {
+  if (!storage) {
+    return;
+  }
+
+  safely(() => storage.setItem(moreToolsStorageKey, String(open)), undefined);
+}
+
+interface PreferenceStorage {
+  getItem(key: string): string | null;
+  setItem(key: string, value: string): void;
+  removeItem(key: string): void;
+}
+
+function defaultStorage(): PreferenceStorage | undefined {
+  try {
+    return typeof window === "undefined" ? undefined : window.localStorage;
+  } catch {
+    return undefined;
+  }
+}
+
+function safely<T>(action: () => T, fallback: T): T {
+  try {
+    return action();
+  } catch {
+    return fallback;
+  }
+}
+
+function normalizeRequirement(value: string) {
+  return value.trim().toLowerCase();
+}

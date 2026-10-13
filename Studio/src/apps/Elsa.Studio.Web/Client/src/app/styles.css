@@ -666,6 +666,47 @@ textarea:focus {
   color: var(--sidebar-foreground);
 }
 
+.nav-section-more {
+  gap: 2px;
+}
+
+.nav-disclosure {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+  min-height: 34px;
+  border: 0;
+  border-radius: var(--radius);
+  background: transparent;
+  color: var(--sidebar-foreground);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  padding: 6px 10px;
+  cursor: pointer;
+  text-align: left;
+}
+
+.nav-disclosure:hover,
+.nav-disclosure.open {
+  background: var(--sidebar-active);
+}
+
+.nav-disclosure:focus-visible {
+  outline: 2px solid var(--studio-focus);
+  outline-offset: 2px;
+}
+
+.nav-disclosure .nav-label {
+  flex: 1;
+}
+
+.nav-disclosure-panel {
+  display: grid;
+  gap: 2px;
+}
+
 .sidebar-footer {
   display: grid;
   grid-template-columns: 8px minmax(0, 1fr);
@@ -777,6 +818,7 @@ textarea:focus {
   .sidebar-collapsed .sidebar .nav-label,
   .sidebar-collapsed .sidebar .nav-heading,
   .sidebar-collapsed .sidebar .nav-children,
+  .sidebar-collapsed .sidebar .nav-disclosure svg:last-child,
   .sidebar-collapsed .sidebar-footer span:last-child {
     display: none;
   }
@@ -789,7 +831,8 @@ textarea:focus {
     gap: var(--spacing-sm);
   }
 
-  .sidebar-collapsed .nav-section a {
+  .sidebar-collapsed .nav-section a,
+  .sidebar-collapsed .nav-disclosure {
     justify-content: center;
     padding: 6px;
   }
@@ -2963,7 +3006,8 @@ textarea:focus {
     border-left: 1px solid var(--border);
   }
 
-  .nav-section a {
+  .nav-section a,
+  .nav-disclosure {
     flex: 0 0 auto;
   }
 

@@ -52,6 +52,7 @@ code.
 | Region | Status | Rule |
 |---|---|---|
 | Shell | `exists` | Sidebar or top menubar (theme or user choice). The top bar holds the page title, global actions and the theme control (`ThemeSwitcher`). |
+| Navigation placement | `exists` | Each nav contribution may declare `placement` (`main` \| `more` \| `settings` \| `admin`), `order`, `requiresFeature` and `requiresRole` / `requiresPermission`. Unset `placement` is `more`. Main holds Home, Workflows, Runs and Tasks (Tasks only when the user-tasks feature is enabled). Extensions land under **More tools** (open state in `elsa-studio.ui.nav.more`). Admin items render in a gated **Administration** group until the Settings shell (S4) exists. Disabled features contribute nothing; role-gated items are hidden. Home points at the existing dashboard/home route until the customizable Home lands. |
 | User menu | `target, phase 4` | See [User menu and sign-out](#user-menu-and-sign-out). Live has none. |
 | Bottom dock | `exists` | Remembers the user's last state in `elsa-studio-bottom-panel-collapsed`, `elsa-studio-bottom-panel-height`, `elsa-studio-bottom-panel-maximized` and `elsa-studio-active-bottom-panel`. With no stored value the dock is **open** on desktop (`collapsed=false`) and collapsed at ≤640px. |
 | Bottom dock default | `target, phase 1` | Collapsed by default when no stored value, including on desktop. |

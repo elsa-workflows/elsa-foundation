@@ -340,11 +340,43 @@ describe("studio registry", () => {
     ]);
     expect(api.navigation.list()).toEqual([
       expect.objectContaining({ id: "workflows", path: "/workflows/definitions", activePathPrefix: "/workflows" }),
-      expect.objectContaining({ id: "workflows-definitions", path: "/workflows/definitions", parentId: "workflows" }),
       expect.objectContaining({ id: "workflows-instances", path: "/workflows/instances", parentId: "workflows" })
     ]);
     expect(api.routes.list().map(route => route.id)).toEqual(["workflows-definitions", "workflows-instances"]);
     expect(findFeatureAreaForPath(api.featureAreas.list(), "/workflows/instances/42")?.id).toBe("workflows");
+  });
+
+  it("copies placement metadata and lifts children that declare their own placement", () => {
+    const api = createStudioRegistry({
+      hostVersion: "1.0.0",
+      sdkVersion: "1.0.0",
+      ...createEndpointContext("https://studio.example/")
+    });
+
+    api.featureAreas.add({
+      id: "workflows",
+      title: "Workflows",
+      ownedPaths: ["/workflows"],
+      order: 20,
+      nav: {
+        title: "Workflows",
+        path: "/workflows/definitions",
+        placement: "main",
+        items: [
+          { title: "Definitions", path: "/workflows/definitions", placement: "main", order: 20 },
+          { title: "Runs", path: "/workflows/instances", placement: "main", order: 30 },
+          { title: "Executables", path: "/workflows/executables", placement: "more", order: 10, requiresFeature: "executables" }
+        ]
+      },
+      routes: []
+    });
+
+    expect(api.navigation.list()).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: "workflows", placement: "main", path: "/workflows/definitions" }),
+      expect.objectContaining({ id: "workflows-runs", placement: "main", parentId: undefined }),
+      expect.objectContaining({ id: "workflows-executables", placement: "more", requiresFeature: "executables", parentId: undefined })
+    ]));
+    expect(api.navigation.list()).toHaveLength(3);
   });
 
   it("tracks AI contributions and dispatches prompts", () => {

@@ -152,6 +152,24 @@ export function testApi(): ElsaStudioModuleApi {
   } as unknown as ElsaStudioModuleApi;
 }
 
+function copyPlacementMetadata(nav: {
+  placement?: string;
+  requiresFeature?: string;
+  requiresRole?: string;
+  requiresPermission?: string;
+}) {
+  return {
+    ...(nav.placement ? { placement: nav.placement } : {}),
+    ...(nav.requiresFeature ? { requiresFeature: nav.requiresFeature } : {}),
+    ...(nav.requiresRole ? { requiresRole: nav.requiresRole } : {}),
+    ...(nav.requiresPermission ? { requiresPermission: nav.requiresPermission } : {})
+  };
+}
+
+function slug(value: string) {
+  return value.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+}
+
 function featureAreaRegistry(navigation: ReturnType<typeof registry>, routes: ReturnType<typeof registry>) {
   const featureAreas = registry();
 
@@ -159,22 +177,29 @@ function featureAreaRegistry(navigation: ReturnType<typeof registry>, routes: Re
     ...featureAreas,
     add(featureArea: any) {
       featureAreas.add(featureArea);
+      const parentId = featureArea.nav.id ?? featureArea.id;
       navigation.add({
-        id: featureArea.id,
+        id: parentId,
         label: featureArea.nav.title,
         path: featureArea.nav.path,
         activePathPrefix: featureArea.ownedPaths[0],
-        order: featureArea.order,
-        iconColor: featureArea.nav.iconColor
+        order: featureArea.nav.order ?? featureArea.order,
+        iconColor: featureArea.nav.iconColor,
+        ...copyPlacementMetadata(featureArea.nav)
       });
-      for (const item of featureArea.nav.items ?? []) {
+      for (const [index, item] of (featureArea.nav.items ?? []).entries()) {
+        if (item.path === featureArea.nav.path) {
+          continue;
+        }
         navigation.add({
-          id: item.id ?? `${featureArea.id}-${item.title.toLowerCase()}`,
+          id: item.id ?? `${featureArea.id}-${slug(item.title)}`,
           label: item.title,
           path: item.path,
-          parentId: featureArea.id,
+          parentId: item.placement ? undefined : parentId,
           activePathPrefix: item.path,
-          iconColor: item.iconColor ?? featureArea.nav.iconColor
+          order: item.order ?? (featureArea.order ?? 500) + index + 1,
+          iconColor: item.iconColor ?? featureArea.nav.iconColor,
+          ...copyPlacementMetadata(item)
         });
       }
       for (const route of featureArea.routes) {

@@ -184,6 +184,18 @@ export interface StudioRouteContribution {
 /** The sidebar sections the Studio host groups navigation into. */
 export type StudioNavigationSection = "workspace" | "settings";
 
+/**
+ * Where a nav contribution appears in the Studio sidebar.
+ * Unset defaults to `more` (extensions land under More tools). `section: "settings"` still maps to `admin`
+ * so older modules keep their Settings grouping until they declare `placement`.
+ */
+export type StudioNavigationPlacement = "main" | "more" | "settings" | "admin";
+
+export const defaultStudioNavigationPlacement: StudioNavigationPlacement = "more";
+export const defaultStudioNavigationOrder = 1000;
+
+export type StudioNavigationRequirement = string | readonly string[];
+
 export interface StudioNavigationContribution {
   id: string;
   label: string;
@@ -195,8 +207,21 @@ export interface StudioNavigationContribution {
   /**
    * The sidebar section the item is listed under. When omitted the host infers it: its own settings-style paths
    * (modules, feeds, features, themes) land under Settings and everything else under Workspace.
+   * Prefer `placement` for new contributions.
    */
   section?: StudioNavigationSection;
+  /**
+   * Sidebar placement. `main` is the curated Home / Workflows / Runs / Tasks list; `more` is More tools;
+   * `settings` is a settings page (not a sidebar row until the Settings shell lands); `admin` is the
+   * gated Administration group. Unset defaults to `more`.
+   */
+  placement?: StudioNavigationPlacement;
+  /** Hide the item when any listed feature is disabled. The contributing module's own gate still applies. */
+  requiresFeature?: StudioNavigationRequirement;
+  /** Hide the item from authenticated users who lack every listed role. */
+  requiresRole?: StudioNavigationRequirement;
+  /** Hide the item from authenticated users who lack every listed permission. `admin` implies host-control read. */
+  requiresPermission?: StudioNavigationRequirement;
   /** The icon rendered in the item's navigation tile. When omitted the host picks one from the item id. */
   icon?: ComponentType<{ size?: number }>;
 }
@@ -354,6 +379,11 @@ export interface StudioFeatureAreaNavLeaf {
   path: string;
   iconColor?: string;
   placeholder?: boolean;
+  placement?: StudioNavigationPlacement;
+  order?: number;
+  requiresFeature?: StudioNavigationRequirement;
+  requiresRole?: StudioNavigationRequirement;
+  requiresPermission?: StudioNavigationRequirement;
 }
 
 export interface StudioFeatureAreaNavParent {
@@ -362,6 +392,11 @@ export interface StudioFeatureAreaNavParent {
   path: string;
   iconColor?: string;
   items: StudioFeatureAreaNavLeaf[];
+  placement?: StudioNavigationPlacement;
+  order?: number;
+  requiresFeature?: StudioNavigationRequirement;
+  requiresRole?: StudioNavigationRequirement;
+  requiresPermission?: StudioNavigationRequirement;
 }
 
 export type StudioFeatureAreaNavContribution = StudioFeatureAreaNavLeaf | StudioFeatureAreaNavParent;

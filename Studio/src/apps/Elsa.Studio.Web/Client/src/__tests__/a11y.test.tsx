@@ -214,10 +214,10 @@ describe("StudioDataGrid semantics", () => {
 
 describe("sidebar search filtering", () => {
   const navigation = [
-    { id: "dashboard", label: "Dashboard", path: "/dashboard" },
+    { id: "home", label: "Home", path: "/dashboard", placement: "main" as const },
     { id: "extension-builder", label: "Extension Builder", path: "/extension-builder" },
-    { id: "modules", label: "Modules", path: "/modules" },
-    { id: "package-feeds", label: "Package feeds", path: "/package-feeds" }
+    { id: "modules", label: "Modules", path: "/modules", placement: "admin" as const },
+    { id: "package-feeds", label: "Package feeds", path: "/package-feeds", placement: "admin" as const }
   ];
 
   function renderShell() {
@@ -263,7 +263,7 @@ describe("sidebar search filtering", () => {
 
       expect(container.querySelector(".studio-shell.sidebar-collapsed")).not.toBeNull();
       expect(searchInput()).not.toBeNull();
-      expect(navLinkLabels()).toContain("Dashboard");
+      expect(navLinkLabels()).toContain("Home");
     } finally {
       if (previous === null) localStorage.removeItem(key);
       else localStorage.setItem(key, previous);
@@ -273,7 +273,7 @@ describe("sidebar search filtering", () => {
   it("marks the active nav link with aria-current=page", () => {
     renderShell();
     const active = container.querySelector('.nav-section a[aria-current="page"]');
-    expect(active?.textContent).toContain("Dashboard");
+    expect(active?.textContent).toContain("Home");
     // Exactly one current link.
     expect(container.querySelectorAll('.nav-section a[aria-current="page"]')).toHaveLength(1);
   });
@@ -283,7 +283,7 @@ describe("sidebar search filtering", () => {
     type("mod");
     const labels = navLinkLabels();
     expect(labels.some(label => label?.includes("Modules"))).toBe(true);
-    expect(labels.some(label => label?.includes("Dashboard"))).toBe(false);
+    expect(labels.some(label => label?.includes("Home"))).toBe(false);
     expect(labels.some(label => label?.includes("Extension Builder"))).toBe(false);
   });
 
@@ -294,13 +294,22 @@ describe("sidebar search filtering", () => {
     expect(container.querySelectorAll(".nav-section").length).toBe(0);
   });
 
+  it("keeps More tools items reachable from search while the group is collapsed", () => {
+    renderShell();
+    expect(navLinkLabels().some(label => label?.includes("Extension Builder"))).toBe(false);
+
+    type("ext");
+    expect(navLinkLabels().some(label => label?.includes("Extension Builder"))).toBe(true);
+    expect(container.querySelector("[aria-controls='studio-nav-more-tools']")?.getAttribute("aria-expanded")).toBe("true");
+  });
+
   it("clears the query when Escape is pressed", () => {
     renderShell();
     type("mod");
-    expect(navLinkLabels().some(label => label?.includes("Dashboard"))).toBe(false);
+    expect(navLinkLabels().some(label => label?.includes("Home"))).toBe(false);
 
     fireKey(searchInput(), "Escape");
     expect(searchInput().value).toBe("");
-    expect(navLinkLabels().some(label => label?.includes("Dashboard"))).toBe(true);
+    expect(navLinkLabels().some(label => label?.includes("Home"))).toBe(true);
   });
 });

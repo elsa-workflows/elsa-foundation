@@ -102,13 +102,13 @@ describe("diagnostics", () => {
 });
 
 describe("navigation sections", () => {
-  it("accepts Dashboard navigation from its dedicated module", () => {
+  it("accepts Home navigation from the dashboard module", () => {
     const navigation = getStudioNavigation([
-      { id: "dashboard", label: "Dashboard", path: "/dashboard", order: 0 },
+      { id: "home", label: "Home", path: "/dashboard", order: 10, placement: "main" },
       { id: "weather", label: "Weather", path: "/weather", order: 20 }
     ]);
 
-    expect(navigation.filter(item => item.path === "/dashboard").map(item => item.id)).toEqual(["dashboard"]);
+    expect(navigation.filter(item => item.path === "/dashboard").map(item => item.id)).toEqual(["home"]);
     expect(navigation.map(item => item.id)).not.toContain("overview");
     expect(navigation.map(item => item.id)).toContain("weather");
   });
@@ -142,7 +142,7 @@ describe("navigation sections", () => {
 
   it("lists a contribution under its declared section and renders its own icon", async () => {
     const navigation: StudioNavigationContribution[] = [
-      { id: "dashboard", label: "Dashboard", path: "/dashboard" },
+      { id: "dashboard", label: "Dashboard", path: "/dashboard", placement: "main" },
       { id: "tools", label: "Tools", path: "/tools", section: "settings", icon: ({ size }) => <svg data-testid="tools-icon" width={size} /> }
     ];
     const { container, unmount } = await renderComponent(
@@ -153,10 +153,10 @@ describe("navigation sections", () => {
       </ThemeProvider>
     );
 
-    const settings = container.querySelector('nav.nav-section[aria-label="Settings"]');
-    expect(settings?.textContent).toContain("Tools");
-    expect(container.querySelector('nav.nav-section[aria-label="Workspace"]')?.textContent).not.toContain("Tools");
-    expect(settings?.querySelector('[data-testid="tools-icon"]')?.getAttribute("width")).toBe("18");
+    const administration = container.querySelector('nav.nav-section[aria-label="Administration"]');
+    expect(administration?.textContent).toContain("Tools");
+    expect(container.querySelector('nav.nav-section[aria-label="Main"]')?.textContent ?? "").not.toContain("Tools");
+    expect(administration?.querySelector('[data-testid="tools-icon"]')?.getAttribute("width")).toBe("18");
 
     await unmount();
   });

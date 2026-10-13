@@ -2,13 +2,16 @@ import React, { lazy, Suspense, useCallback, useEffect, useId, useMemo, useRef, 
 import {
   Activity,
   ChevronDown,
+  ChevronRight,
   ChevronUp,
+  Ellipsis,
   ExternalLink,
   FileText,
   Gauge,
   GitBranch,
   Github,
-  LayoutDashboard,
+  House,
+  ListChecks,
   Maximize2,
   Minimize2,
   Paintbrush,
@@ -16,6 +19,7 @@ import {
   PackageSearch,
   PanelLeftClose,
   PanelLeftOpen,
+  PlayCircle,
   RefreshCw,
   Search
 } from "lucide-react";
@@ -26,6 +30,7 @@ import type {
   StudioDiagnosticsWidgetState,
   StudioModulesResponse,
   StudioNavigationContribution,
+  StudioNavigationPlacement,
   StudioNavigationSection,
   StudioPanelContribution
 } from "../sdk";
@@ -49,6 +54,19 @@ import { ModuleManagementPage } from "./modules/ModuleManagementPage";
 import { PackageFeedsPage } from "./modules/PackageFeedsPage";
 import { ThemeBuilderPage } from "./modules/ThemeBuilderPage";
 import { registerBuiltInPropertyEditors } from "./propertyEditors";
+import {
+  compareNavigationItems,
+  filterAccessibleNavigation,
+  getNavigationPlacement,
+  getNavigationSection as resolveNavigationSection,
+  getTopLevelNavigationItems as resolveTopLevelNavigationItems,
+  getTopLevelNavigationItemsByPlacement,
+  readMoreToolsOpen,
+  writeMoreToolsOpen,
+  type NavigationAccess
+} from "./navigation/placement";
+import { useHostControlAccess } from "./useHostControlAccess";
+import { AuthContext } from "../auth/AuthContext";
 import elsaLogo from "../assets/images/icon.png";
 import { AgentLauncher, createAgentClient, createWorkflowAgentContextProvider, type AgentSessionIndicatorSession, workflowAgentCapabilities, workflowPromptStarters } from "./agent";
 import { WeaverSurface } from "./weaver";
@@ -86,17 +104,18 @@ const navIconColors = {
 } as const;
 
 const builtInNavigation: StudioNavigationContribution[] = [
-  { id: "modules", label: "Modules", path: "/modules", order: 80, iconColor: navIconColors.modules },
-  { id: "package-feeds", label: "Package feeds", path: "/package-feeds", order: 90, iconColor: navIconColors.feeds },
-  { id: "diagnostics", label: "Diagnostics", path: "/diagnostics", activePathPrefix: "/diagnostics", order: 900, iconColor: navIconColors.diagnostics }
+  { id: "modules", label: "Modules", path: "/modules", order: 10, iconColor: navIconColors.modules, placement: "admin" },
+  { id: "package-feeds", label: "Package feeds", path: "/package-feeds", order: 30, iconColor: navIconColors.feeds, placement: "admin" },
+  { id: "diagnostics", label: "Diagnostics", path: "/diagnostics", activePathPrefix: "/diagnostics", order: 60, iconColor: navIconColors.diagnostics, placement: "more" }
 ];
 
 const themeBuilderNavigation: StudioNavigationContribution = {
   id: "theme-builder",
-  label: "Theme Builder",
+  label: "Theme builder",
   path: "/theme-builder",
-  order: 85,
-  iconColor: navIconColors.themes
+  order: 20,
+  iconColor: navIconColors.themes,
+  placement: "admin"
 };
 
 const ModulesChangedEventName = "elsa-studio:modules-changed";
@@ -293,6 +312,16 @@ function AppContent({ authManager }: { authManager: AuthProviderManager | null }
   }, [authManager, backendBaseUrl, manifestQuery.data, manifestQuery.isError, manifestQuery.error, manifestQuery.isPending, moduleRegistryRevision, shellBaseUrl]);
 
   const routes = useMemo(() => api?.routes.list() ?? [], [api, state]);
+  const enabledFeatures = useMemo(() => {
+    const features = new Set<string>();
+    for (const module of manifestQuery.data?.modules ?? []) {
+      features.add(module.id);
+      for (const capability of module.capabilities ?? []) {
+        features.add(capability);
+      }
+    }
+    return features;
+  }, [manifestQuery.data]);
   const navigation = useMemo(
     () => getStudioNavigation(api?.navigation.list() ?? [], { includeThemeBuilder: themeCapabilities.managementEnabled }),
     [api, state, themeCapabilities.managementEnabled]
@@ -309,7 +338,7 @@ function AppContent({ authManager }: { authManager: AuthProviderManager | null }
   if (state === "loading") {
     return (
       <ThemeProvider storeContext={shellContext}>
-        <ShellFrame navigation={navigation} panels={[]} path={path} title="Loading modules" onNavigate={navigateTo} backendBaseUrl={backendBaseUrl}>
+        <ShellFrame navigation={navigation} panels={[]} path={path} title="Loading modules" onNavigate={navigateTo} backendBaseUrl={backendBaseUrl} enabledFeatures={enabledFeatures}>
           <SkeletonRows rows={8} label="Loading Studio modules" />
         </ShellFrame>
       </ThemeProvider>
@@ -319,7 +348,7 @@ function AppContent({ authManager }: { authManager: AuthProviderManager | null }
   if (state === "failed") {
     return (
       <ThemeProvider storeContext={shellContext}>
-        <ShellFrame navigation={navigation} panels={[]} path={path} title="Startup failed" onNavigate={navigateTo} backendBaseUrl={backendBaseUrl}>
+        <ShellFrame navigation={navigation} panels={[]} path={path} title="Startup failed" onNavigate={navigateTo} backendBaseUrl={backendBaseUrl} enabledFeatures={enabledFeatures}>
           <div className="error-state">{error}</div>
         </ShellFrame>
       </ThemeProvider>
@@ -341,6 +370,7 @@ function AppContent({ authManager }: { authManager: AuthProviderManager | null }
         title={pageTitle}
         onNavigate={navigateTo}
         backendBaseUrl={backendBaseUrl}
+        enabledFeatures={enabledFeatures}
         assistantAction={<AgentLauncher open={assistantOpen} sessions={agentSessions} onClick={() => setAssistantOpen(current => !current)} />}
         themeAction={themeCapabilities.pickerEnabled ? <ThemeSwitcher /> : null}
       >
@@ -391,6 +421,7 @@ export function ShellFrame({
   backendBaseUrl,
   assistantAction,
   themeAction,
+  enabledFeatures,
   onNavigate,
   children
 }: {
@@ -401,19 +432,27 @@ export function ShellFrame({
   backendBaseUrl: string;
   assistantAction?: React.ReactNode;
   themeAction?: React.ReactNode;
+  enabledFeatures?: ReadonlySet<string> | readonly string[];
   onNavigate: (path: string) => void;
   children: React.ReactNode;
 }) {
   const [navQuery, setNavQuery] = useState("");
   const [navCollapsed, setNavCollapsed] = useState(() => getInitialBoolean(sidebarCollapsedStorageKey, false));
+  const [moreToolsOpen, setMoreToolsOpen] = useState(() => readMoreToolsOpen());
   // The top navigation mode turns the sidebar into a menubar and moves backend status into a
   // status bar; the icon-rail collapse has no meaning there, so it is ignored (not forgotten).
   const topNav = useNavMode() === "top";
   const backendHost = new URL(backendBaseUrl).host;
+  const access = useShellNavigationAccess(enabledFeatures);
+  const visibleNavigation = filterAccessibleNavigation(navigation, access);
 
   useEffect(() => {
     window.localStorage.setItem(sidebarCollapsedStorageKey, String(navCollapsed));
   }, [navCollapsed]);
+
+  useEffect(() => {
+    writeMoreToolsOpen(moreToolsOpen);
+  }, [moreToolsOpen]);
 
   function toggleNavCollapsed() {
     setNavCollapsed(current => {
@@ -428,7 +467,7 @@ export function ShellFrame({
   }
 
   const childrenByParentId = new Map<string, StudioNavigationContribution[]>();
-  for (const item of navigation) {
+  for (const item of visibleNavigation) {
     if (!item.parentId) {
       continue;
     }
@@ -445,11 +484,12 @@ export function ShellFrame({
   const itemVisible = (item: StudioNavigationContribution) =>
     !query || matchesQuery(item) || (childrenByParentId.get(item.id) ?? []).some(matchesQuery);
 
-  const navigationSections = [
-    { id: "workspace", label: "Workspace", items: getTopLevelNavigationItems(navigation, "workspace").filter(itemVisible) },
-    { id: "settings", label: "Settings", items: getTopLevelNavigationItems(navigation, "settings").filter(itemVisible) }
-  ].filter(section => section.items.length > 0);
-  const hasNavResults = navigationSections.length > 0;
+  const mainItems = getTopLevelNavigationItemsByPlacement(visibleNavigation, "main").filter(itemVisible);
+  const moreItems = getTopLevelNavigationItemsByPlacement(visibleNavigation, "more").filter(itemVisible);
+  const settingsItems = getTopLevelNavigationItemsByPlacement(visibleNavigation, "settings").filter(itemVisible);
+  const adminItems = getTopLevelNavigationItemsByPlacement(visibleNavigation, "admin").filter(itemVisible);
+  const moreToolsExpanded = moreToolsOpen || Boolean(query);
+  const hasNavResults = mainItems.length + moreItems.length + settingsItems.length + adminItems.length > 0;
 
   return (
     <div className={navCollapsed && !topNav ? "studio-shell sidebar-collapsed" : "studio-shell"}>
@@ -497,59 +537,85 @@ export function ShellFrame({
           <p className="sidebar-search-empty" role="status">No modules match "{navQuery.trim()}".</p>
         ) : null}
 
-        {navigationSections.map(section => (
-          <nav key={section.id} className="nav-section" aria-label={section.label}>
-            <span className="nav-heading">{section.label}</span>
-            {section.items.map(item => {
-              const childItems = (childrenByParentId.get(item.id) ?? [])
-                .filter(child => getNavigationSection(child) === section.id)
-                // When the parent matched the search directly, keep all of its children; otherwise only
-                // the children that match, so a filtered group doesn't reveal unrelated siblings.
-                .filter(child => !query || matchesQuery(item) || matchesQuery(child));
-              const hasActiveChild = childItems.some(child => isNavigationItemActive(child, path));
-              const itemActive = isNavigationItemActive(item, path);
-              return (
-                <div className="nav-item-group" key={item.id}>
-                  <a
-                    className={[itemActive ? "active" : "", hasActiveChild ? "has-active-child" : ""].filter(Boolean).join(" ")}
-                    href={item.path}
-                    aria-current={itemActive ? "page" : undefined}
-                    aria-label={item.label}
-                    title={navCollapsed ? item.label : undefined}
-                    onClick={event => {
-                      event.preventDefault();
-                      onNavigate(item.path);
-                    }}
-                  >
-                    <NavIconTile item={item} />
-                    <span className="nav-label">{item.label}</span>
-                  </a>
-                  {childItems.length > 0 ? (
-                    <div className="nav-children">
-                      {childItems.map(child => {
-                        const childActive = isNavigationItemActive(child, path);
-                        return (
-                          <a
-                            key={child.id}
-                            className={childActive ? "active nav-child" : "nav-child"}
-                            href={child.path}
-                            aria-current={childActive ? "page" : undefined}
-                            onClick={event => {
-                              event.preventDefault();
-                              onNavigate(child.path);
-                            }}
-                          >
-                            {child.label}
-                          </a>
-                        );
-                      })}
-                    </div>
-                  ) : null}
-                </div>
-              );
-            })}
+        {mainItems.length > 0 ? (
+          <nav className="nav-section" aria-label="Main">
+            {mainItems.map(item => (
+              <NavItemGroup
+                key={item.id}
+                item={item}
+                childItems={childItemsFor(item, childrenByParentId, query, matchesQuery)}
+                path={path}
+                collapsed={navCollapsed}
+                onNavigate={onNavigate}
+              />
+            ))}
           </nav>
-        ))}
+        ) : null}
+
+        {moreItems.length > 0 ? (
+          <nav className="nav-section nav-section-more" aria-label="More tools">
+            <button
+              type="button"
+              className={["nav-disclosure", moreToolsExpanded ? "open" : ""].filter(Boolean).join(" ")}
+              aria-expanded={moreToolsExpanded}
+              aria-controls="studio-nav-more-tools"
+              title={navCollapsed ? "More tools" : undefined}
+              onClick={() => setMoreToolsOpen(current => !current)}
+            >
+              <span className="nav-icon-tile" aria-hidden="true">
+                <Ellipsis size={18} />
+              </span>
+              <span className="nav-label">More tools</span>
+              {moreToolsExpanded ? <ChevronDown size={14} aria-hidden="true" /> : <ChevronRight size={14} aria-hidden="true" />}
+            </button>
+            {moreToolsExpanded ? (
+              <div id="studio-nav-more-tools" className="nav-disclosure-panel">
+                {moreItems.map(item => (
+                  <NavItemGroup
+                    key={item.id}
+                    item={item}
+                    childItems={childItemsFor(item, childrenByParentId, query, matchesQuery)}
+                    path={path}
+                    collapsed={navCollapsed}
+                    onNavigate={onNavigate}
+                  />
+                ))}
+              </div>
+            ) : null}
+          </nav>
+        ) : null}
+
+        {settingsItems.length > 0 && query ? (
+          <nav className="nav-section" aria-label="Settings">
+            <span className="nav-heading">Settings</span>
+            {settingsItems.map(item => (
+              <NavItemGroup
+                key={item.id}
+                item={item}
+                childItems={childItemsFor(item, childrenByParentId, query, matchesQuery)}
+                path={path}
+                collapsed={navCollapsed}
+                onNavigate={onNavigate}
+              />
+            ))}
+          </nav>
+        ) : null}
+
+        {adminItems.length > 0 ? (
+          <nav className="nav-section" aria-label="Administration">
+            <span className="nav-heading">Administration</span>
+            {adminItems.map(item => (
+              <NavItemGroup
+                key={item.id}
+                item={item}
+                childItems={childItemsFor(item, childrenByParentId, query, matchesQuery)}
+                path={path}
+                collapsed={navCollapsed}
+                onNavigate={onNavigate}
+              />
+            ))}
+          </nav>
+        ) : null}
 
         <div className="sidebar-footer" aria-label="Backend API status">
           <span className="sidebar-status-dot" aria-hidden="true" />
@@ -955,14 +1021,95 @@ function compareOrderedContributions(a: { id: string; title?: string; order?: nu
   return (a.title ?? a.id).localeCompare(b.title ?? b.id) || a.id.localeCompare(b.id);
 }
 
+function useShellNavigationAccess(enabledFeatures?: ReadonlySet<string> | readonly string[]): NavigationAccess {
+  const auth = React.useContext(AuthContext);
+  const hostAccess = useHostControlAccess();
+  const session = auth?.session;
+  return {
+    enabledFeatures,
+    roles: session?.roles,
+    permissions: session?.permissions,
+    authenticated: session?.status === "authenticated",
+    canReadAdmin: hostAccess.canReadModuleManagement
+  };
+}
+
+function childItemsFor(
+  item: StudioNavigationContribution,
+  childrenByParentId: Map<string, StudioNavigationContribution[]>,
+  query: string,
+  matchesQuery: (item: StudioNavigationContribution) => boolean
+) {
+  const placement = getNavigationPlacement(item);
+  return (childrenByParentId.get(item.id) ?? [])
+    .filter(child => getNavigationPlacement(child) === placement)
+    .filter(child => !query || matchesQuery(item) || matchesQuery(child));
+}
+
+function NavItemGroup({
+  item,
+  childItems,
+  path,
+  collapsed,
+  onNavigate
+}: {
+  item: StudioNavigationContribution;
+  childItems: StudioNavigationContribution[];
+  path: string;
+  collapsed: boolean;
+  onNavigate: (path: string) => void;
+}) {
+  const hasActiveChild = childItems.some(child => isNavigationItemActive(child, path));
+  const itemActive = isNavigationItemActive(item, path);
+  return (
+    <div className="nav-item-group">
+      <a
+        className={[itemActive ? "active" : "", hasActiveChild ? "has-active-child" : ""].filter(Boolean).join(" ")}
+        href={item.path}
+        aria-current={itemActive ? "page" : undefined}
+        aria-label={item.label}
+        title={collapsed ? item.label : undefined}
+        onClick={event => {
+          event.preventDefault();
+          onNavigate(item.path);
+        }}
+      >
+        <NavIconTile item={item} />
+        <span className="nav-label">{item.label}</span>
+      </a>
+      {childItems.length > 0 ? (
+        <div className="nav-children">
+          {childItems.map(child => {
+            const childActive = isNavigationItemActive(child, path);
+            return (
+              <a
+                key={child.id}
+                className={childActive ? "active nav-child" : "nav-child"}
+                href={child.path}
+                aria-current={childActive ? "page" : undefined}
+                onClick={event => {
+                  event.preventDefault();
+                  onNavigate(child.path);
+                }}
+              >
+                {child.label}
+              </a>
+            );
+          })}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 function NavIcon({ id, icon: Icon }: Pick<StudioNavigationContribution, "id" | "icon">) {
   // A contribution that names its own icon wins; the id-substring matches below are the host's defaults.
   if (Icon) {
     return <Icon size={18} />;
   }
 
-  if (id.includes("dashboard")) {
-    return <LayoutDashboard size={18} />;
+  if (id === "home" || id.includes("dashboard")) {
+    return <House size={18} />;
   }
 
   if (id.includes("weather")) {
@@ -971,6 +1118,14 @@ function NavIcon({ id, icon: Icon }: Pick<StudioNavigationContribution, "id" | "
 
   if (id.includes("diagnostics")) {
     return <FileText size={18} />;
+  }
+
+  if (id.includes("run") || id.includes("instance")) {
+    return <PlayCircle size={18} />;
+  }
+
+  if (id.includes("task")) {
+    return <ListChecks size={18} />;
   }
 
   if (id.includes("workflow")) {
@@ -1015,7 +1170,7 @@ function getDefaultNavIconColor(id: string) {
 }
 
 function isNavigationItemActive(item: StudioNavigationContribution, path: string) {
-  if (item.id === "dashboard" && isDashboardPath(path)) return true;
+  if ((item.id === "dashboard" || item.id === "home") && isDashboardPath(path)) return true;
   if (path === item.path) return true;
   if (!item.activePathPrefix) return false;
   return path === item.activePathPrefix || path.startsWith(`${item.activePathPrefix}/`);
@@ -1029,26 +1184,19 @@ export function getStudioNavigation(moduleNavigation: StudioNavigationContributi
   const hostNavigation = options.includeThemeBuilder ? [...builtInNavigation, themeBuilderNavigation] : builtInNavigation;
   return [...hostNavigation, ...moduleNavigation]
     .filter((item, index, items) => items.findIndex(candidate => candidate.id === item.id) === index)
-    .sort((a, b) => (a.order ?? 500) - (b.order ?? 500));
+    .sort(compareNavigationItems);
 }
 
 export function getNavigationSection(item: Pick<StudioNavigationContribution, "id" | "path" | "section">): NavigationSection {
-  // A contribution that declares its section wins; the path/id matches below are the host's own settings pages.
-  if (item.section) {
-    return item.section;
-  }
+  return resolveNavigationSection(item);
+}
 
-  const settingsPaths = new Set(["/modules", "/theme-builder", "/package-feeds", "/features"]);
-  if (settingsPaths.has(item.path) || item.id === "modules" || item.id === "theme-builder" || item.id === "package-feeds" || item.id === "feature-management") {
-    return "settings";
-  }
-
-  return "workspace";
+export function getNavigationPlacementForItem(item: Pick<StudioNavigationContribution, "id" | "path" | "section" | "placement">): StudioNavigationPlacement {
+  return getNavigationPlacement(item);
 }
 
 export function getTopLevelNavigationItems(navigation: StudioNavigationContribution[], section: NavigationSection) {
-  const ids = new Set(navigation.map(item => item.id));
-  return navigation.filter(item => getNavigationSection(item) === section && (!item.parentId || !ids.has(item.parentId)));
+  return resolveTopLevelNavigationItems(navigation, section);
 }
 
 function normalizePath(path: string) {
