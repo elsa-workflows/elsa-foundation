@@ -1,5 +1,84 @@
-import { Boxes, GitBranch, Layers3, ListTree, Play, Terminal, Zap } from "lucide-react";
+import {
+  Activity,
+  AlertTriangle,
+  Boxes,
+  Braces,
+  Clock,
+  Code2,
+  Database,
+  FlagTriangleRight,
+  GitBranch,
+  GitFork,
+  GitMerge,
+  Globe,
+  Layers3,
+  ListTree,
+  Mail,
+  Play,
+  Repeat,
+  Square,
+  Terminal,
+  Timer,
+  Variable,
+  Workflow,
+  Zap,
+  type LucideIcon
+} from "lucide-react";
+import { toLucideExportName, type WorkflowNodeIcon } from "./activityIcons";
 import type { WorkflowNodeData } from "./workflowAdapter";
+
+const lucideByExportName: Record<string, LucideIcon> = {
+  Activity,
+  AlertTriangle,
+  Boxes,
+  Braces,
+  Clock,
+  Code2,
+  Database,
+  FlagTriangleRight,
+  GitBranch,
+  GitFork,
+  GitMerge,
+  Globe,
+  Layers3,
+  ListTree,
+  Mail,
+  Play,
+  Repeat,
+  Square,
+  Terminal,
+  Timer,
+  Variable,
+  Workflow,
+  Zap
+};
+
+const kindIcons: Record<string, LucideIcon> = {
+  flowchart: GitBranch,
+  sequence: ListTree,
+  terminal: Terminal,
+  runtime: Play,
+  trigger: Zap,
+  reusable: Layers3,
+  branch: GitBranch,
+  fork: GitFork,
+  join: GitMerge,
+  loop: Repeat,
+  timer: Timer,
+  clock: Clock,
+  scripting: Code2,
+  email: Mail,
+  http: Globe,
+  variable: Variable,
+  start: Play,
+  finish: Square,
+  event: Zap,
+  database: Database,
+  bpmn: Workflow,
+  fault: AlertTriangle,
+  correlate: Braces,
+  activity: Boxes
+};
 
 /** Shared presentational formatters used across the workflow editor and instance views. */
 
@@ -97,21 +176,15 @@ export function formatActivityDefinitionDate(value?: string | null) {
   return date.toLocaleDateString();
 }
 
-export function renderActivityIcon(icon: WorkflowNodeData["icon"]) {
-  switch (icon) {
-    case "flowchart":
-      return <GitBranch size={15} />;
-    case "sequence":
-      return <ListTree size={15} />;
-    case "terminal":
-      return <Terminal size={15} />;
-    case "runtime":
-      return <Play size={15} />;
-    case "trigger":
-      return <Zap size={15} />;
-    case "reusable":
-      return <Layers3 size={15} />;
-    default:
-      return <Boxes size={15} />;
-  }
+export function renderActivityIcon(icon: WorkflowNodeData["icon"] | WorkflowNodeIcon | undefined) {
+  const Icon = resolveLucideIcon(icon);
+  return <Icon size={15} />;
+}
+
+function resolveLucideIcon(icon: WorkflowNodeData["icon"] | WorkflowNodeIcon | undefined): LucideIcon {
+  if (!icon) return Boxes;
+  if (kindIcons[icon]) return kindIcons[icon];
+  const lucideName = toLucideExportName(icon);
+  if (lucideName && lucideByExportName[lucideName]) return lucideByExportName[lucideName];
+  return Boxes;
 }

@@ -149,14 +149,17 @@ description, pinned mark and body stay visible (content first).
 
 ## Activity icons
 
-`exists`: `ActivityCatalogItem.icon` is a **kind** token (`flowchart`, `sequence`, `terminal`,
-`runtime`, `trigger`, `reusable`, `activity`). `resolveActivityIcon` in `workflowAdapter.ts`
-prefers that token, otherwise infers from type key, category or `executionType`.
-`renderActivityIcon` in `workflowFormatting.tsx` maps the kind to a shared lucide icon (default
-`Boxes`). Catalog fields `iconName` and `iconColor` exist on the wire and are unused.
+`exists`: one resolver, `resolveActivityIcon` in `activityIcons.ts` (re-exported from
+`workflowAdapter.ts`), used by the designer palette, canvas nodes, and the run-view timeline.
+Order: catalog `icon` kind token, then catalog `iconName` (a lucide export or kebab name), then
+the activity type key, then the category icon, then `executionType === trigger`.
+`renderActivityIcon` maps the resolved kind or lucide name to a lucide glyph (default `Boxes`
+only when nothing was supplied). Palette rows and canvas nodes set `data-tone` from
+`resolveActivityIconTone` and colour through `--studio-success` / `--studio-accent` /
+`--studio-warning` / `--studio-danger`.
 
-`target, phase 4`: when `iconName` is set, render that lucide icon. Never fall back to the
-shared `activity` / `Boxes` icon if the descriptor supplied one.
+`target, phase 4`: `iconColor` from the catalog is still unused; category tone wins so icons
+track the theme instead of a per-descriptor hex.
 
 ## Review checklist for UX PRs
 

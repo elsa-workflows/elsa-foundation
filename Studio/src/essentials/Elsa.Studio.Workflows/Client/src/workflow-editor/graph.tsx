@@ -33,6 +33,7 @@ export function WorkflowActivityNode({ id, data, selected }: NodeProps) {
       data-start-node={nodeData.isStartNode ? "true" : undefined}
       data-trigger-enabled={nodeData.canStartWorkflow ? "true" : undefined}
       data-icon={nodeData.icon ?? "activity"}
+      data-tone={nodeData.iconTone ?? "accent"}
       data-runtime-node-id={nodeData.runtimeNodeId ?? id}
       title={[nodeData.label, nodeData.description].filter(Boolean).join(" — ")}
       aria-description={nodeData.description}

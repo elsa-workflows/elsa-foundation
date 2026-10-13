@@ -26,6 +26,7 @@ import {
   getActivitySourcePorts,
   getChildSlots,
   resolveActivityIcon,
+  resolveActivityIconTone,
   type WorkflowNodeData
 } from "../workflowAdapter";
 import { computeAutoLayout } from "../workflowLayout";
@@ -198,6 +199,7 @@ export function useGraphCanvasInteractions({
           category: activity.category,
           executionType: activity.executionType,
           icon: resolveActivityIcon(activity),
+          iconTone: resolveActivityIconTone(activity),
           childSlots: getChildSlots(activityNode, activity),
           acceptsInbound: String(activity.executionType ?? "").toLowerCase() !== "trigger",
           sourcePorts: getActivitySourcePorts(activityNode, activity)
