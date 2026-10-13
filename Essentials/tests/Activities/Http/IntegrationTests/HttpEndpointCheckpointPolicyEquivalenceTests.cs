@@ -6,8 +6,8 @@ namespace Elsa.Activities.Http.IntegrationTests;
 
 /// <summary>
 /// A synchronous HTTP endpoint workflow over an isolated EF Core SQLite database returns the same live response,
-/// completes, and records the same durable <c>HttpResponseInstruction</c> artifact under every checkpoint persistence
-/// policy. Split from the write-amplification acceptance when performance measurement was retired by owner
+/// completes, and records the same durable <c>HttpResponseInstruction</c> artifact under every persistence mode.
+/// Split from the write-amplification acceptance when performance measurement was retired by owner
 /// decision (#1668): physical checkpoint-commit counts and their comparison are no longer asserted. The
 /// mandatory durability boundaries that bounded those counts are covered by <c>RuntimeCheckpointCoalescingPolicyTests</c>.
 /// </summary>
@@ -27,23 +27,28 @@ public sealed class HttpEndpointCheckpointPolicyEquivalenceTests
         ContentType);
 
     [Fact]
-    public void Immediate_remains_the_default_checkpoint_persistence_mode()
+    public void Balanced_is_the_default_persistence_mode()
     {
-        Assert.Equal(
-            CheckpointPersistenceMode.Immediate,
-            new WorkflowsRuntimeCheckpointPersistenceFeature().Mode);
+        Assert.Equal(PersistenceMode.Balanced, new WorkflowsRuntimeCheckpointPersistenceFeature().Mode);
+        Assert.Equal(PersistenceMode.Balanced, new PersistenceModeOptions().Mode);
     }
 
+    // An HTTP endpoint is not safe to repeat, so it is committed before it runs: even Ephemeral without completion
+    // records keeps this run.
     [Theory]
-    [InlineData(CheckpointPersistenceMode.Immediate)]
-    [InlineData(CheckpointPersistenceMode.Coalesced)]
-    public async Task Sync_endpoint_returns_completes_and_persists_the_same_result_under_each_checkpoint_policy(
-        CheckpointPersistenceMode mode)
+    [InlineData(PersistenceMode.Durable, true)]
+    [InlineData(PersistenceMode.Balanced, true)]
+    [InlineData(PersistenceMode.Ephemeral, true)]
+    [InlineData(PersistenceMode.Ephemeral, false)]
+    public async Task Sync_endpoint_returns_completes_and_persists_the_same_result_under_each_persistence_mode(
+        PersistenceMode mode,
+        bool recordCompletion)
     {
         await using var fixture = await HttpEndpointHostFixture.StartDurableSqliteAsync(
-            checkpointPersistenceMode: mode,
-            maxSegmentCheckpoints: 50);
-        var policy = mode.ToString().ToLowerInvariant();
+            persistenceMode: mode,
+            maxActivitiesPerCommit: 50,
+            recordCompletion: recordCompletion);
+        var policy = $"{mode}-{recordCompletion}".ToLowerInvariant();
         var path = $"checkpoint-policy/{policy}";
         await fixture.PublishSyncEndpointWithWriteResponseWorkflowAsync(
             artifactId: $"artifact-checkpoint-policy-{policy}",

@@ -19,7 +19,7 @@ using Xunit;
 namespace Elsa.ExtensionBuilder.Api.Tests;
 
 /// <summary>
-/// The HTTP surface as the Studio relay sees it (studio ADR 0037): the routes under <c>/_elsa/extension-builder</c>, the
+/// The HTTP surface as the Studio relay sees it: the routes under <c>/_elsa/extension-builder</c>, the
 /// management-key filter in front of every one of them, and the trusted-caller filter in front of every one but
 /// <c>/capabilities</c>. The surface is pinned because the relay's allowlist names these routes, and a mapper edit that
 /// dropped or renamed one would otherwise surface only as a Studio page that stopped working.

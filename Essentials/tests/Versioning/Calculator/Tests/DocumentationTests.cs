@@ -3,13 +3,13 @@ using Elsa.Versioning.Calculator.Tests.Support;
 namespace Elsa.Versioning.Calculator.Tests;
 
 /// <summary>
-/// Spec 150 FR-002a and SC-009: a file that does not contribute to the package does not advance it, and the exclusion
+/// A file that does not contribute to the package does not advance it, and the exclusion
 /// is by effect — a document a build file ships is package-affecting, and a file only a build convention reads is
 /// never mistaken for documentation.
 /// </summary>
 public sealed class DocumentationTests : SyntheticHistory
 {
-    /// <summary>SC-009, and the edge case of documentation inside a project directory.</summary>
+    /// <summary>A documentation-only commit advances nothing, documentation inside a project directory included.</summary>
     [Fact]
     public void A_documentation_only_commit_advances_nothing()
     {
@@ -24,8 +24,8 @@ public sealed class DocumentationTests : SyntheticHistory
     }
 
     /// <summary>
-    /// The spec's worked example and its kin: once a build file ships or compiles a document, editing it advances the
-    /// package. Each shape is declared, published, and then only the document is edited.
+    /// The shapes that make a document package-affecting: once a build file ships or compiles a document, editing it
+    /// advances the package. Each shape is declared, published, and then only the document is edited.
     /// </summary>
     [Theory]
     [InlineData("""  <PropertyGroup><PackageReadmeFile>README.md</PackageReadmeFile></PropertyGroup><ItemGroup><None Include="README.md" Pack="true" PackagePath="\" /></ItemGroup>""")]

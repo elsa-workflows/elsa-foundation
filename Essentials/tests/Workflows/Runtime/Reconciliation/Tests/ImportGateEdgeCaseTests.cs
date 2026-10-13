@@ -496,7 +496,7 @@ public sealed class ImportGateEdgeCaseTests : IDisposable
             runtimeRequirements: executable.RuntimeRequirements,
             storageDriverRequirements: executable.StorageDriverRequirements,
             incidentStrategy: executable.IncidentStrategy,
-            checkpointCadence: executable.CheckpointCadence,
+            persistenceMode: executable.PersistenceMode,
             workflowVariables: executable.WorkflowVariables);
 
     private static ExecutableNode WithSideEffectProfile(ExecutableNode node, SideEffectProfile profile)

@@ -146,7 +146,7 @@ public sealed class EfApplicationStore(
         (nameof(entity.AllowedGrantTypesJson), entity.AllowedGrantTypesJson),
         (nameof(entity.ScopesJson), entity.ScopesJson)));
 
-    /// <summary>The application <paramref name="entity"/> holds, its two sets read from its content columns upcast together (spec 180, FR-009; #2144).</summary>
+    /// <summary>The application <paramref name="entity"/> holds, its two sets read from its content columns upcast together (#2144).</summary>
     private static ApplicationRecord Map(ApplicationEntity entity, EfSchemaRowContent content) =>
         new(
             entity.ApplicationId,

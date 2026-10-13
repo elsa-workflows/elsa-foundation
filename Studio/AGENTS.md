@@ -12,9 +12,9 @@ Current Studio work is tracked in `elsa-workflows/elsa-foundation`. Follow the F
 
 Use only labels defined by the active Foundation issue or workflow. The standalone Studio label list in `docs/agents/triage-labels.md` is historical; do not assume those labels exist in Foundation.
 
-### UX fix routine
+### Fixes
 
-For current fixes, follow Foundation's [Quality Fix Routine](../docs/skills/catalog.md#quality-fix-routine) and claim work on the Foundation issue using the root rules above. The standalone Studio routine in `docs/agents/ux-fix-routine.md` is retained as a historical record.
+Follow Foundation's [Quality Fix Routine](../docs/skills/catalog.md#quality-fix-routine), which also takes the `auto-qa` issues the UX QA routine files, and claim work on the Foundation issue using the root rules above.
 
 ### Domain docs
 

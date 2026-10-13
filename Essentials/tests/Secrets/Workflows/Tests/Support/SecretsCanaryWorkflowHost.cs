@@ -74,12 +74,15 @@ namespace Elsa.Secrets.Workflows.Tests.Support;
 /// <summary>How the runtime runs a canary activity's schedule, start and invoke stages.</summary>
 public enum CanaryStartMode
 {
-    /// <summary>Immediate checkpoint persistence: each stage is its own dispatch and its own commit.</summary>
+    /// <summary>
+    /// The Durable persistence mode with ReplaySafe fusion turned off, so each stage is its own dispatch, as every stage
+    /// of an activity that is not ReplaySafe is.
+    /// </summary>
     Discrete,
 
     /// <summary>
-    /// Coalesced checkpoint persistence, under which the runtime fuses a ReplaySafe leaf's schedule, start and invoke
-    /// stages into one dispatch (ADR 0047 D1).
+    /// The Balanced persistence mode, under which the runtime fuses a ReplaySafe leaf's schedule, start and invoke
+    /// stages into one dispatch.
     /// </summary>
     Fused
 }
@@ -98,7 +101,7 @@ public enum CanaryCaller
 public sealed record CanaryPublication(string DefinitionId, string VersionId, string ArtifactId, string SourceReferenceId);
 
 /// <summary>
-/// The canary host (spec 188, T079): one CShells web host on a test server whose one shell composes what the canary
+/// The canary host: one CShells web host on a test server whose one shell composes what the canary
 /// reads its eight surfaces from. Workflow design, its validations and its EF persistence and the activity catalog
 /// with CLR reconciliation, on SQLite files under <see cref="DesignDirectory"/>; publishing; the runtime, its EF
 /// persistence on a SQLite file under <see cref="RuntimeDirectory"/>, its engine tracing, its triggers and its API with
@@ -261,8 +264,11 @@ public sealed class SecretsCanaryWorkflowHost : IAsyncDisposable
             [$"{features}WorkflowsDesignGitReconciliation:Role"] = "Writer",
             [$"{features}Secrets:EncryptionKey"] = GeneratedKey()
         };
-        if (mode == CanaryStartMode.Fused)
-            settings[$"{features}WorkflowsRuntimeCheckpointPersistence:Mode"] = "Coalesced";
+        // A shell runs Balanced unless told otherwise, so the discrete host names Durable explicitly, and turns fusion off
+        // so the canary's stages are their own dispatches.
+        settings[$"{features}WorkflowsRuntimeCheckpointPersistence:Mode"] = mode == CanaryStartMode.Fused ? "Balanced" : "Durable";
+        settings[$"{features}{SecretsCanaryInjectionFeature.Name}:{nameof(SecretsCanaryInjectionFeature.FuseReplaySafeStages)}"] =
+            mode == CanaryStartMode.Fused ? "true" : "false";
 
         foreach (var feature in Features.Concat(withHttpActivities ? HttpFeatures : []))
             settings.TryAdd($"{features}{feature}", null);

@@ -5,8 +5,8 @@ using Xunit;
 namespace Elsa.Cli.Tests;
 
 /// <summary>
-/// A host whose modules arrive as packages rather than in its own dependency file (spec 171 User Story 2,
-/// FR-006): the module assembly exists only under a <c>--packages</c> root, and is resolved by booting the
+/// A host whose modules arrive as packages rather than in its own dependency file:
+/// the module assembly exists only under a <c>--packages</c> root, and is resolved by booting the
 /// host's own Nuplane loader rather than by anything this tool implements itself.
 /// </summary>
 /// <remarks>
@@ -46,7 +46,7 @@ public sealed class NuplanePackageRootTests : IDisposable
     }
 
     /// <summary>
-    /// The manifest states where each version came from (FR-049), and the two sources appear side by side
+    /// The manifest states where each version came from, and the two sources appear side by side
     /// here: the engine out of the host's dependency file, the module out of the package it resolved from.
     /// </summary>
     [Fact]
@@ -107,9 +107,9 @@ public sealed class NuplanePackageRootTests : IDisposable
     }
 
     /// <summary>
-    /// An extraction that never completed is treated as not installed, not as a corrupt install (User Story
-    /// 2, scenario 3) — and with nothing else installed, the root is empty, which is exit 3 rather than a
-    /// download (ADR 0076 D10).
+    /// An extraction that never completed is treated as not installed, not as a corrupt install — and with
+    /// nothing else installed, the root is empty, which is exit 3 rather than a
+    /// download.
     /// </summary>
     [Fact]
     public void An_install_with_no_completion_marker_is_not_part_of_the_set()
@@ -123,7 +123,7 @@ public sealed class NuplanePackageRootTests : IDisposable
     }
 
     /// <summary>
-    /// The other shape User Story 2's own Independent Test names: a host whose <c>--packages</c> root
+    /// The other packaged-host shape: a host whose <c>--packages</c> root
     /// carries a <c>store-state.json</c> recording the active set, rather than relying on completion
     /// markers alone. The install here is deliberately left without its <c>.nuplane-ready</c> marker, so
     /// <see cref="NuplaneInstallRoot.Probe"/> — the marker-based fallback — cannot find it; only

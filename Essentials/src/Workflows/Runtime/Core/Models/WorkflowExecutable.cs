@@ -92,7 +92,7 @@ public sealed class WorkflowExecutable
         IReadOnlyCollection<RuntimeRequirement>? runtimeRequirements,
         IReadOnlyCollection<RuntimeStorageDriverRequirement>? storageDriverRequirements,
         IncidentStrategyReference incidentStrategy,
-        WorkflowExecutableCheckpointCadence? checkpointCadence = null,
+        PersistenceMode? persistenceMode = null,
         IReadOnlyCollection<RuntimeVariableDeclaration>? workflowVariables = null)
     {
         ArgumentNullException.ThrowIfNull(identity);
@@ -110,7 +110,7 @@ public sealed class WorkflowExecutable
         ResumeTargets = new ReadOnlyDictionary<string, WorkflowExecutableResumeTarget>(resumeTargets.ToDictionary(target => target.Key, target => target.Value, StringComparer.Ordinal));
         InputContract = inputContract;
         Dependencies = SnapshotDependencies(dependencies, NodesById);
-        CheckpointCadence = checkpointCadence;
+        PersistenceMode = persistenceMode;
         WorkflowVariables = SnapshotWorkflowVariables(workflowVariables);
         IncidentStrategy = incidentStrategy;
         CreatedAt = createdAt;
@@ -140,11 +140,11 @@ public sealed class WorkflowExecutable
     public IReadOnlyCollection<WorkflowExecutableDependency> Dependencies { get; }
 
     /// <summary>
-    /// The authored per-workflow checkpoint cadence compiled into this artifact, or <see langword="null"/>
-    /// when the workflow authored none and the host default applies. Part of the behavioral content hash: a cadence
-    /// change is a distinct executable identity, so it can never be silently aliased onto a same-graph artifact.
+    /// The persistence mode the workflow chose, compiled into this artifact, or <see langword="null"/> when it chose
+    /// none and the host default applies. Part of the behavioral content hash: a mode change is a distinct executable
+    /// identity, so it can never be silently aliased onto a same-graph artifact.
     /// </summary>
-    public WorkflowExecutableCheckpointCadence? CheckpointCadence { get; }
+    public PersistenceMode? PersistenceMode { get; }
 
     /// <summary>
     /// The workflow-scope variable declarations compiled from the authored definition's

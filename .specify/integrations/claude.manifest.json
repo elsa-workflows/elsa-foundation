@@ -19,6 +19,7 @@
     ".claude/skills/elsa-feature-dependency-map/SKILL.md": "66d79022c12244b5aa74f647238e631f7199cfb3c02643f48c40227d5f407559",
     ".claude/skills/elsa-glossary-lookup/SKILL.md": "2493c036925ddca78c49fd6df7598c5eb7b2ef6ab54b8dec2d6fe1e45773e22e",
     ".claude/skills/elsa-initialize-agent-preferences/SKILL.md": "44bf1ebb3643df234acc6e1cc96a9e7e090da0143bcfe9ef861a38a1ee38f719",
+    ".claude/skills/elsa-product-scout/SKILL.md": "4e58ece94590801d6c9ca55aaf9fcef1d0fe628fa29212758a75ecce60da4402",
     ".claude/skills/elsa-program-goal-drift-review/SKILL.md": "d9640da4039eb15c6f767930a8421652593de484c3124740856811bbc71ca80a",
     ".claude/skills/elsa-quality-fix/SKILL.md": "0e4779ff762196721afe0fe22a0bab265cffff6a051d3d117e224c7d8fbe94f6",
     ".claude/skills/elsa-quality-review/SKILL.md": "082ee69fd9d9b4ecd648156ff144cea20a8a167630eb5a8561254a5937f55002",

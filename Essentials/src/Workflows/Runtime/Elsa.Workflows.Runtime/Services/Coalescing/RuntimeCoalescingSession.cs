@@ -31,6 +31,7 @@ public sealed class RuntimeCoalescingSession
     private bool _queueSeeded;
 
     private readonly List<RuntimeCheckpointStateChangeSet> _bufferedChangeSets = [];
+    private readonly HashSet<string> _segmentActivityIds = new(StringComparer.Ordinal);
 
     private WorkflowExecutionState? _workflowExecution;
     private SchedulerState? _scheduler;
@@ -39,7 +40,6 @@ public sealed class RuntimeCoalescingSession
     private readonly Dictionary<string, DurableValueState> _durableValueUpserts = new(StringComparer.Ordinal);
     private readonly HashSet<string> _durableValueTombstones = new(StringComparer.Ordinal);
     private readonly Dictionary<string, ActivityExecutionInspectionProjection> _inspectionUpserts = new(StringComparer.Ordinal);
-    private readonly Dictionary<string, ActivityExecutionInspectionProjection?> _inspectionBaselines = new(StringComparer.Ordinal);
     private readonly Dictionary<string, WorkflowDispatchRecord> _workflowDispatchUpserts = new(StringComparer.Ordinal);
 
     private readonly List<string> _outboxOrder = [];
@@ -49,34 +49,73 @@ public sealed class RuntimeCoalescingSession
     private readonly IRuntimePostCommitOutboxStore? _innerOutboxStore;
     private readonly RuntimeCoalescingDurableValuePageMemo? _durableValuePageMemo;
 
+    /// <param name="workflowExecutionId">The run this session folds for.</param>
+    /// <param name="innerQueue">The durable scheduler queue the overlay is seeded from and advanced into.</param>
+    /// <param name="options">The host's persistence-mode settings.</param>
+    /// <param name="innerOutboxStore">The durable post-commit outbox store.</param>
+    /// <param name="mode">
+    /// The run's resolved mode. Without one the session folds as Balanced and assumes the run has a record, which never
+    /// drops a completion.
+    /// </param>
     public RuntimeCoalescingSession(
         string workflowExecutionId,
         IWorkflowSchedulerWorkQueue innerQueue,
-        CoalescingRuntimeCheckpointPersistenceOptions options,
-        IRuntimePostCommitOutboxStore? innerOutboxStore = null)
+        PersistenceModeOptions options,
+        IRuntimePostCommitOutboxStore? innerOutboxStore = null,
+        ResolvedPersistenceMode? mode = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(workflowExecutionId);
         ArgumentNullException.ThrowIfNull(innerQueue);
         ArgumentNullException.ThrowIfNull(options);
 
-        if (options.MaxSegmentCheckpoints <= 0)
-            throw new ArgumentOutOfRangeException(nameof(options), "MaxSegmentCheckpoints must be greater than zero.");
+        if (options.MaxActivitiesPerCommit <= 0)
+            throw new ArgumentOutOfRangeException(nameof(options), "MaxActivitiesPerCommit must be greater than zero.");
+
+        mode ??= new ResolvedPersistenceMode(PersistenceMode.Balanced, RunHasRecord: true);
+        if (!Enum.IsDefined(mode.Mode))
+            throw new ArgumentException($"Persistence mode '{(int)mode.Mode}' is not supported.", nameof(mode));
 
         WorkflowExecutionId = workflowExecutionId;
         _innerQueue = innerQueue;
         _innerOutboxStore = innerOutboxStore;
-        MaxSegmentCheckpoints = options.MaxSegmentCheckpoints;
+        Mode = mode.Mode;
+        HasDurableRecord = mode.RunHasRecord;
+        RecordCompletion = options.RecordCompletion;
+        // Durable commits once per activity whatever the host's Balanced cap is. Ephemeral has no cap: it commits only at
+        // boundaries, however many activities it folds.
+        MaxActivitiesPerCommit = Mode switch
+        {
+            PersistenceMode.Durable => 1,
+            PersistenceMode.Ephemeral => null,
+            _ => options.MaxActivitiesPerCommit
+        };
         CoalesceDurableValueReads = options.CoalesceDurableValueReads;
-        CoalesceInspectionReads = options.CoalesceInspectionReads;
         _durableValuePageMemo = options.CoalesceDurableValueReads
             ? new RuntimeCoalescingDurableValuePageMemo()
             : null;
     }
 
     public string WorkflowExecutionId { get; }
-    public int MaxSegmentCheckpoints { get; }
+
+    /// <summary>The run's mode.</summary>
+    public PersistenceMode Mode { get; }
+
+    /// <summary>
+    /// The most activities one segment folds before the next new activity forces an intermediate commit: one under
+    /// Durable, the host's setting under Balanced, and <see langword="null"/> under Ephemeral, whose intermediate commits
+    /// come only from boundaries, never from a count of activities.
+    /// </summary>
+    public int? MaxActivitiesPerCommit { get; }
+
+    /// <summary>The host's <see cref="PersistenceModeOptions.RecordCompletion"/> setting.</summary>
+    public bool RecordCompletion { get; }
+
+    /// <summary>
+    /// Whether the durable store holds a record of this run: it did when the drain began, or a commit through this
+    /// session has landed since. Once true it stays true, so the run's completion is always committed.
+    /// </summary>
+    public bool HasDurableRecord { get; private set; }
     public bool CoalesceDurableValueReads { get; }
-    public bool CoalesceInspectionReads { get; }
     internal RuntimeCoalescingDurableValuePageMemo? DurableValuePageMemo => _durableValuePageMemo;
 
     /// <summary>
@@ -86,7 +125,8 @@ public sealed class RuntimeCoalescingSession
     /// </summary>
     public bool IsActive { get; private set; } = true;
 
-    public int HopCount { get; private set; }
+    /// <summary>How many distinct activity executions the current segment's buffered checkpoints touched.</summary>
+    public int ActivityCount => _segmentActivityIds.Count;
     public bool HasBufferedChanges => _bufferedChangeSets.Count > 0;
 
     public void Deactivate()
@@ -121,8 +161,69 @@ public sealed class RuntimeCoalescingSession
 
         ApplyToOverlay(commit.StateChanges, includeOutbox: true);
         _bufferedChangeSets.Add(commit.StateChanges);
-        HopCount++;
+        foreach (var activityExecutionId in ActivityExecutionIdsOf(commit))
+            _segmentActivityIds.Add(activityExecutionId);
     }
+
+    /// <summary>
+    /// Whether buffering <paramref name="commit"/> would make the segment hold more than
+    /// <see cref="MaxActivitiesPerCommit"/> activities. A checkpoint of an activity the segment already holds never trips
+    /// the cap, so the cap counts activities, not the several checkpoints each activity produces. An empty segment
+    /// always takes the commit, even one that touches more activities than the cap: a single commit is never split, and
+    /// the intermediate commit exists to flush work already buffered, not to write one checkpoint on its own.
+    /// </summary>
+    public bool WouldExceedActivityCap(RuntimeCheckpointCommit commit)
+    {
+        ArgumentNullException.ThrowIfNull(commit);
+        if (MaxActivitiesPerCommit is not { } cap || !HasBufferedChanges)
+            return false;
+
+        var added = ActivityExecutionIdsOf(commit).Count(id => !_segmentActivityIds.Contains(id));
+        return ActivityCount + added > cap;
+    }
+
+    /// <summary>Records that a commit for this run reached the durable store.</summary>
+    internal void MarkDurableRecord() => HasDurableRecord = true;
+
+    /// <summary>
+    /// Whether <paramref name="completion"/> may be dropped instead of committed: the one exception to committing a
+    /// completion. It holds only for an Ephemeral run on a host with <see cref="RecordCompletion"/> off that has never
+    /// been committed, and only when nothing in the folded segment outlives the run: no bookmark, incident, dispatch or
+    /// dispatch cancellation, alteration outcome, operational change, acknowledged queue item, and no outbox item still
+    /// waiting for delivery (a parent to resume, an event to publish). Anything else is committed as usual.
+    /// </summary>
+    public bool CanDiscardCompletion(
+        RuntimeCheckpointCommit completion,
+        IReadOnlyCollection<RuntimeStateChange<RuntimePostCommitOutboxItem>> remainingPendingOutbox)
+    {
+        ArgumentNullException.ThrowIfNull(completion);
+        ArgumentNullException.ThrowIfNull(remainingPendingOutbox);
+
+        if (Mode != PersistenceMode.Ephemeral || RecordCompletion || HasDurableRecord)
+            return false;
+
+        if (!StringComparer.Ordinal.Equals(completion.Checkpoint.Name, RuntimeCheckpointNames.WorkflowCompleted) ||
+            completion.StateChanges.WorkflowExecution?.State.Status != WorkflowExecutionStatus.Completed)
+            return false;
+
+        if (remainingPendingOutbox.Count > 0 || completion.StateChanges.PostCommitOutbox.Count > 0 || _durablyPersistedOutboxIds.Count > 0)
+            return false;
+
+        var folded = FoldBufferedStateChangesWith(completion.StateChanges);
+        return folded.Bookmarks.Count == 0 &&
+               folded.Incidents.Count == 0 &&
+               folded.Operational.Count == 0 &&
+               folded.WorkflowDispatches.Count == 0 &&
+               folded.WorkflowDispatchCancellations.Count == 0 &&
+               folded.AlterationJobTerminalChange is null &&
+               folded.ConsumedSchedulerWorkItems.Count == 0;
+    }
+
+    // An activity can appear on the checkpoint, in the activity states the commit writes, or both.
+    private static IEnumerable<string> ActivityExecutionIdsOf(RuntimeCheckpointCommit commit) =>
+        commit.Checkpoint.ActivityExecutionIds
+            .Concat(commit.StateChanges.ActivityExecutions.Select(change => change.StateId))
+            .Distinct(StringComparer.Ordinal);
 
     /// <summary>
     /// Advances the state overlay to a boundary that has already committed durably. Boundary-owned outbox items remain
@@ -331,26 +432,16 @@ public sealed class RuntimeCoalescingSession
         _outboxOrder.Add(item.OutboxItemId);
     }
 
-    // ---- Inspection durable-baseline memo --------------------------------------------------------------------------
-    // Store-read coalescing for IActivityExecutionInspectionStore.FindAsync: the memo holds what the
-    // durable store returned (a cached null records a durable miss), never the buffered overlay state, so a memoized
-    // read is byte-identical to a fresh durable read. Validity rests on the single-writer ownership lease: while the
-    // session is active, the only path that can change durable inspection rows is this session's own flush, and every
-    // flush invalidates the memo via InvalidateInspectionBaselines.
-
-    /// <summary>Returns a memoized durable-baseline inspection read. A hit may carry <see langword="null"/> (a cached durable miss).</summary>
-    public bool TryGetInspectionBaseline(string activityExecutionId, out ActivityExecutionInspectionProjection? projection) =>
-        _inspectionBaselines.TryGetValue(activityExecutionId, out projection);
-
-    /// <summary>Memoizes the result of a durable inspection read (including a null miss) until the next durable flush.</summary>
-    public void CacheInspectionBaseline(string activityExecutionId, ActivityExecutionInspectionProjection? projection)
+    /// <summary>
+    /// Returns the inspection projection this session last recorded for an activity execution, which is what a commit
+    /// of every checkpoint would have stored by now.
+    /// </summary>
+    public bool TryGetInspection(string activityExecutionId, out ActivityExecutionInspectionProjection? projection)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(activityExecutionId);
-        _inspectionBaselines[activityExecutionId] = projection;
+        var found = _inspectionUpserts.TryGetValue(activityExecutionId, out var recorded);
+        projection = recorded;
+        return found;
     }
-
-    /// <summary>Drops all memoized baselines. Must be called whenever a durable checkpoint commit lands for this session.</summary>
-    public void InvalidateInspectionBaselines() => _inspectionBaselines.Clear();
 
     // ---- State overlay reads ---------------------------------------------------------------------------------------
 
@@ -802,7 +893,7 @@ public sealed class RuntimeCoalescingSession
     public void ClearBuffer()
     {
         _bufferedChangeSets.Clear();
-        HopCount = 0;
+        _segmentActivityIds.Clear();
     }
 
     /// <summary>

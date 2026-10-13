@@ -106,7 +106,7 @@ internal static class ArtifactClosureFixture
             runtimeRequirements: null,
             storageDriverRequirements: null,
             incidentStrategy: executable.IncidentStrategy,
-            checkpointCadence: executable.CheckpointCadence,
+            persistenceMode: executable.PersistenceMode,
             workflowVariables: executable.WorkflowVariables);
 
     private static ExecutableNode Rebuild(ExecutableNode node, IReadOnlyDictionary<string, string>? metadata) =>
@@ -153,7 +153,7 @@ internal static class ArtifactClosureFixture
             rootActivity,
             inputContract,
             dependencies,
-            checkpointCadence: null,
+            persistenceMode: null,
             workflowVariables: workflowVariables,
             incidentStrategy: IncidentStrategyBuiltIns.FaultReference);
 
@@ -175,7 +175,7 @@ internal static class ArtifactClosureFixture
             runtimeRequirements: runtimeRequirements,
             storageDriverRequirements: storageDriverRequirements,
             incidentStrategy: IncidentStrategyBuiltIns.FaultReference,
-            checkpointCadence: null,
+            persistenceMode: null,
             workflowVariables: workflowVariables);
     }
 

@@ -156,10 +156,10 @@ liveness) and a list of `RuntimePostCommitIntent` continuations. Nothing is writ
 
 `Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Checkpoints/RuntimeCheckpointCommitter.cs` commits it. In order: run the
 `IRuntimeCheckpointCommitEnricher` set, stamp the ownership lease as `ExpectedFence`, ask
-`IRuntimeCheckpointPersistencePolicy` whether to persist now (`ImmediateRuntimeCheckpointPersistencePolicy` by
-default; the `WorkflowsRuntimeCheckpointPersistence` feature in `shells.json` switches to `Coalesced`), fold the
-post-commit intents into an outbox and the claimed work item's deletion into the same change set, and call
-`IRuntimeCheckpointCommitStore.CommitAsync`.
+`IRuntimeCheckpointPersistencePolicy` whether to persist now or fold the checkpoint into the run's next commit (which
+one depends on the run's [persistence mode](../website/docs/essentials/persistence-modes.md): Balanced by default,
+Durable or Ephemeral when the host or the workflow chooses them), fold the post-commit intents into an outbox and the
+claimed work item's deletion into the same change set, and call `IRuntimeCheckpointCommitStore.CommitAsync`.
 
 `IRuntimeCheckpointCommitStore` (`Essentials/src/Workflows/Runtime/Core/Contracts/IRuntimeCheckpointCommitStore.cs`)
 has two implementations in this repository:
@@ -174,16 +174,19 @@ has two implementations in this repository:
 In the Workbench the provider is SQLite (each EF module's `Provider` in `shells.json`, falling back to
 `ConnectionStrings:Elsa`); the file is `Essentials/apps/Elsa.Workbench/elsa.db`.
 
-**What Immediate cadence costs on SQLite.** Under `Immediate`, every hop commits: a checkpoint per scheduler
-boundary, plus single-statement commits around the scheduler queue (enqueue, claim, delete) and the outbox
-("Delivered"). The 4-activity HTTP reference workflow measured about 106 commits on the runtime database per request,
-plus about 24 on the diagnostics database. SQLite allows one writer and, at its default `synchronous=FULL`, each commit
-is an fsync, so requests queue behind each other's fsyncs. On a cloud VM disk this one workflow plateaus at two
-concurrent clients, about one request per second. The attribution is measured, not inferred: fsyncs counted per
-request, and injecting 5 ms into every fsync locally reproduced the runner's plateau
-([#2553](https://github.com/elsa-workflows/elsa-foundation/issues/2553#issuecomment-6102950881)). Treat SQLite with
-`Immediate` as a development or single-user composition; for throughput use `Coalesced` or PostgreSQL. Reducing the
-commit count itself is tracked in epic [#2564](https://github.com/elsa-workflows/elsa-foundation/issues/2564)
+**What Durable costs on SQLite.** Under `Durable`, a run commits once per activity: the checkpoints an activity
+produces are held in memory and committed together when the next activity is scheduled, plus the boundaries every mode
+commits (suspension, fault, completion, and the claim before an activity that is not safe to repeat). The EF command
+budgets in `Essentials/tests/Activities/Http/IntegrationTests/CommandBudgets/ef-command-budgets.json` record what each
+reference workflow costs on the runtime database: ten WriteLine activities cost 320 commands under `Durable` and 98
+under `Balanced`, and the 4-activity HTTP reference workflow 195 and 101. SQLite allows one writer and, at its default
+`synchronous=FULL`, each commit is an fsync, so requests queue behind each other's fsyncs. When `Durable` still committed
+every scheduler hop, about 106 commits per request of the HTTP reference workflow, that workflow plateaued at two
+concurrent clients on a cloud VM disk, about one request per second; the attribution was measured, not inferred: fsyncs
+counted per request, and injecting 5 ms into every fsync locally reproduced the runner's plateau
+([#2553](https://github.com/elsa-workflows/elsa-foundation/issues/2553#issuecomment-6102950881)). That plateau has not
+been measured again for the per-activity `Durable`. For throughput use the default `Balanced` or PostgreSQL. Reducing the
+commit count further is tracked in epic [#2564](https://github.com/elsa-workflows/elsa-foundation/issues/2564)
 (ADR 0080 D2).
 
 ### 7. Suspending on a bookmark and resuming

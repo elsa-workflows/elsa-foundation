@@ -23,7 +23,7 @@ public static class ElsaEndpointsServiceCollectionExtensions
     /// <para>
     /// It also adds one translator for every owner, unkeyed so each owner's own translators are asked
     /// first: a schema write refusal becomes <see cref="SchemaWriteRefusalProblem.For"/>'s 409, which
-    /// the owner's problem writer then writes in its own envelope (spec 180, FR-016a).
+    /// the owner's problem writer then writes in its own envelope.
     /// </para>
     /// </remarks>
     public static IServiceCollection AddElsaEndpoints(this IServiceCollection services)

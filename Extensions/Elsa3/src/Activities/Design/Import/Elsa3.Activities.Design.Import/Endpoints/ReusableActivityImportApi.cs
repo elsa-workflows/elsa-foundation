@@ -71,7 +71,7 @@ public static class ReusableActivityImportHttp
             ReusableActivityImportCollisionException => (409, "elsa3.import.identity-collision", "Import identity collision"),
             ReusableActivityImportValidationException => (422, "elsa3.import.validation-failed", "Elsa 3 import validation failed"),
             ReusableActivityImportPayloadException => (400, "elsa3.import.payload-invalid", "Elsa 3 import payload invalid"),
-            // Spec 180, FR-016a: the refusal's own stable code, and a detail naming the family and both versions.
+            // The refusal's own stable code, and a detail naming the family and both versions.
             SchemaWriteRefusedException refusal => (SchemaWriteRefusalProblem.StatusCode, refusal.Code, "Schema write refused"),
             ArgumentException => (400, "elsa3.import.request-invalid", "Elsa 3 import request invalid"),
             _ => (500, "elsa3.import.unexpected", "Elsa 3 import failed")

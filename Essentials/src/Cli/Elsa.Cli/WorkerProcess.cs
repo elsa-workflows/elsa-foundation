@@ -6,7 +6,7 @@ namespace Elsa.Cli;
 
 /// <summary>
 /// Launches the worker inside the target host's dependency closure and exchanges one request for one
-/// response with it (FR-002, FR-003).
+/// response with it.
 /// </summary>
 /// <remarks>
 /// <para>

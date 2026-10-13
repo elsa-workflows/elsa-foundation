@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Text.Json;
+using Elsa.Workflows.Runtime.Contracts;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
@@ -20,7 +21,7 @@ public sealed class WorkflowCheckpointSchedulerWorkHandler : IWorkflowSchedulerW
     private readonly IRuntimeActivityExecutionInspectionAccumulator? _inspectionAccumulator;
     private readonly IWorkflowExecutionStateStore? _workflowExecutionStateStore;
     private readonly IWorkflowExecutableStore? _workflowExecutableStore;
-    private readonly IRuntimeCheckpointCadenceResolver? _cadenceResolver;
+    private readonly IRuntimeCoalescingSessionAccessor? _sessionAccessor;
     private readonly TimeProvider _timeProvider;
     private readonly IWorkflowExecutableReader? _executableReader;
 
@@ -28,7 +29,8 @@ public sealed class WorkflowCheckpointSchedulerWorkHandler : IWorkflowSchedulerW
     /// Constructs the handler. <paramref name="workflowExecutionStateStore"/> is optional: when supplied (the
     /// DI default — it is a registered service), the handler preserves durable instance fields (correlation id,
     /// parent, tenant) across the workflow-started/completed transitions; when null it falls back to the prior
-    /// behaviour of rebuilding workflow state from the checkpoint payload alone.
+    /// behavior of rebuilding workflow state from the checkpoint payload alone. <paramref name="sessionAccessor"/>
+    /// gives the persistence mode the drain runs in, which the workflow-started checkpoint records on the run.
     /// </summary>
     public WorkflowCheckpointSchedulerWorkHandler(
         IActivityExecutionStateStore activityExecutionStateStore,
@@ -37,7 +39,7 @@ public sealed class WorkflowCheckpointSchedulerWorkHandler : IWorkflowSchedulerW
         TimeProvider timeProvider,
         IWorkflowExecutionStateStore? workflowExecutionStateStore = null,
         IWorkflowExecutableStore? workflowExecutableStore = null,
-        IRuntimeCheckpointCadenceResolver? cadenceResolver = null,
+        IRuntimeCoalescingSessionAccessor? sessionAccessor = null,
         IWorkflowExecutableReader? executableReader = null)
     {
         ArgumentNullException.ThrowIfNull(activityExecutionStateStore);
@@ -49,7 +51,7 @@ public sealed class WorkflowCheckpointSchedulerWorkHandler : IWorkflowSchedulerW
         _inspectionAccumulator = inspectionAccumulator;
         _workflowExecutionStateStore = workflowExecutionStateStore;
         _workflowExecutableStore = workflowExecutableStore;
-        _cadenceResolver = cadenceResolver;
+        _sessionAccessor = sessionAccessor;
         _timeProvider = timeProvider;
         _executableReader = executableReader;
     }
@@ -150,10 +152,12 @@ public sealed class WorkflowCheckpointSchedulerWorkHandler : IWorkflowSchedulerW
             ? await PinnedExecutableRead.FindAsync(_executableReader, _workflowExecutableStore, payload.PinnedExecutable.ArtifactId, cancellationToken)
             : null;
 
-        // At start, resolve the effective cadence (authored-on-executable over host default) and stamp it
-        // onto the durable instance so the read model reports the cadence this run actually executed under, not the
-        // host's current setting. On other checkpoints the stamp is carried forward via PreserveSystemMetadata.
-        var resolvedCadence = executable is not null ? _cadenceResolver?.Resolve(executable) : null;
+        // At start, record the mode this drain runs the run in on the durable instance. Later drains read it back so the
+        // run keeps its mode, and the read model reports the mode the run actually used. Other checkpoints carry it
+        // forward via PreserveSystemMetadata.
+        var persistenceMode = StringComparer.Ordinal.Equals(payload.CheckpointName, RuntimeCheckpointNames.WorkflowStarted)
+            ? DrainModeOf(workItem.WorkflowExecutionId)
+            : null;
 
         return new RuntimeCheckpointCommit(
             CommitId: commitId,
@@ -165,7 +169,7 @@ public sealed class WorkflowCheckpointSchedulerWorkHandler : IWorkflowSchedulerW
                 ActivityExecutionIds: payload.ActivityExecutionIds,
                 Metadata: checkpointMetadata),
             StateChanges: new RuntimeCheckpointStateChangeSet(
-                workflowExecution: BuildWorkflowExecutionStateChange(workItem, payload, occurredAt, priorWorkflowState, executable, resolvedCadence),
+                workflowExecution: BuildWorkflowExecutionStateChange(workItem, payload, occurredAt, priorWorkflowState, executable, persistenceMode),
                 scheduler: null,
                 activityExecutions: activityStateChanges.ToArray(),
                 bookmarks: [],
@@ -220,10 +224,10 @@ public sealed class WorkflowCheckpointSchedulerWorkHandler : IWorkflowSchedulerW
         DateTimeOffset occurredAt,
         WorkflowExecutionState? priorWorkflowState,
         WorkflowExecutable? executable,
-        ResolvedCheckpointCadence? resolvedCadence)
+        PersistenceMode? persistenceMode)
     {
         if (StringComparer.Ordinal.Equals(payload.CheckpointName, RuntimeCheckpointNames.WorkflowStarted))
-            return BuildWorkflowStartedStateChange(workItem, payload, occurredAt, priorWorkflowState, executable, resolvedCadence);
+            return BuildWorkflowStartedStateChange(workItem, payload, occurredAt, priorWorkflowState, executable, persistenceMode);
 
         if (StringComparer.Ordinal.Equals(payload.CheckpointName, RuntimeCheckpointNames.WorkflowCompleted))
             return BuildWorkflowCompletedStateChange(workItem, payload, occurredAt, priorWorkflowState);
@@ -237,7 +241,7 @@ public sealed class WorkflowCheckpointSchedulerWorkHandler : IWorkflowSchedulerW
         DateTimeOffset occurredAt,
         WorkflowExecutionState? priorWorkflowState,
         WorkflowExecutable? executable,
-        ResolvedCheckpointCadence? resolvedCadence)
+        PersistenceMode? persistenceMode)
     {
         var startedAt = ReadWorkflowStartedAt(workItem) ?? occurredAt;
         var state = new WorkflowExecutionState(
@@ -252,11 +256,11 @@ public sealed class WorkflowCheckpointSchedulerWorkHandler : IWorkflowSchedulerW
             CorrelationId: priorWorkflowState?.CorrelationId ?? payload.CorrelationId,
             ParentWorkflowExecutionId: priorWorkflowState?.ParentWorkflowExecutionId ?? payload.ParentWorkflowExecutionId,
             TenantId: priorWorkflowState?.TenantId ?? payload.TenantId,
-            SystemMetadata: RuntimeModelMetadata.Snapshot(PreserveSystemMetadata(StampCheckpointCadence(new Dictionary<string, string>
+            SystemMetadata: RuntimeModelMetadata.Snapshot(PreserveSystemMetadata(RecordPersistenceMode(new Dictionary<string, string>
             {
                 [RuntimeMetadataKeys.CheckpointReason] = payload.Reason,
                 [RuntimeMetadataKeys.SchedulerWorkItemId] = workItem.WorkItemId
-            }, resolvedCadence), priorWorkflowState, workItem)))
+            }, persistenceMode), priorWorkflowState, workItem)))
         {
             RunKind = priorWorkflowState?.RunKind ?? payload.RunKind,
             PinnedSource = priorWorkflowState?.PinnedSource ?? payload.PinnedSource,
@@ -286,36 +290,29 @@ public sealed class WorkflowCheckpointSchedulerWorkHandler : IWorkflowSchedulerW
         else if (workItem?.CommandMetadata.TryGetValue(RuntimeMetadataKeys.SourceReferenceId, out var sourceReferenceId) == true)
             metadata[RuntimeMetadataKeys.SourceReferenceId] = sourceReferenceId;
 
-        // Carry the per-run cadence stamp forward across every state rebuild that does not itself resolve
-        // it (e.g. the workflow-completed transition), unless this rebuild is stamping a freshly-resolved cadence.
-        if (!metadata.ContainsKey(RuntimeMetadataKeys.CheckpointCadence) &&
-            priorWorkflowState?.SystemMetadata.TryGetValue(RuntimeMetadataKeys.CheckpointCadence, out var cadenceMode) == true)
-        {
-            metadata[RuntimeMetadataKeys.CheckpointCadence] = cadenceMode;
-            if (priorWorkflowState.SystemMetadata.TryGetValue(RuntimeMetadataKeys.CheckpointMaxSegmentCheckpoints, out var maxSegment))
-                metadata[RuntimeMetadataKeys.CheckpointMaxSegmentCheckpoints] = maxSegment;
-        }
+        // Carry the run's recorded persistence mode forward across every state rebuild that does not resolve it itself
+        // (e.g. the workflow-completed transition), unless this rebuild is recording a freshly resolved mode.
+        if (!metadata.ContainsKey(RuntimeMetadataKeys.PersistenceMode) &&
+            priorWorkflowState?.SystemMetadata.TryGetValue(RuntimeMetadataKeys.PersistenceMode, out var persistenceMode) == true)
+            metadata[RuntimeMetadataKeys.PersistenceMode] = persistenceMode;
 
         return metadata;
     }
 
-    // Writes the resolved per-run cadence onto the workflow-started system metadata. Absent when no
-    // resolver is registered, leaving the read model to fall back to the host projection for that run.
-    private static Dictionary<string, string> StampCheckpointCadence(
-        Dictionary<string, string> metadata,
-        ResolvedCheckpointCadence? resolvedCadence)
-    {
-        if (resolvedCadence is null)
-            return metadata;
+    // Every drain runs in a session for its run, whatever its mode, so the session's mode is the one the run runs in.
+    private PersistenceMode? DrainModeOf(string workflowExecutionId) =>
+        _sessionAccessor?.Current is { } session && StringComparer.Ordinal.Equals(session.WorkflowExecutionId, workflowExecutionId)
+            ? session.Mode
+            : null;
 
-        if (resolvedCadence.Coalesced)
-        {
-            metadata[RuntimeMetadataKeys.CheckpointCadence] = WorkflowExecutableCheckpointCadence.CoalescedMode;
-            if (resolvedCadence.MaxSegmentCheckpoints is { } max)
-                metadata[RuntimeMetadataKeys.CheckpointMaxSegmentCheckpoints] = max.ToString(CultureInfo.InvariantCulture);
-        }
-        else
-            metadata[RuntimeMetadataKeys.CheckpointCadence] = WorkflowExecutableCheckpointCadence.ImmediateMode;
+    // Records the mode the drain runs the run in on the workflow-started system metadata. Absent only when the handler is
+    // driven outside a drain, where no session gives a mode.
+    private static Dictionary<string, string> RecordPersistenceMode(
+        Dictionary<string, string> metadata,
+        PersistenceMode? persistenceMode)
+    {
+        if (persistenceMode is { } mode)
+            metadata[RuntimeMetadataKeys.PersistenceMode] = mode.ToString();
 
         return metadata;
     }

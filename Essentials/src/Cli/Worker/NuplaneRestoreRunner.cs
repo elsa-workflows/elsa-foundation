@@ -17,7 +17,7 @@ namespace Elsa.Cli.Worker;
 /// </para>
 /// <para>
 /// This is the one place in the tool that writes under the host's directories, and only when the operator
-/// asked (ADR 0076 D10's opt-in exception). What one pass writes is bounded by Nuplane:
+/// asked. What one pass writes is bounded by Nuplane:
 /// <c>store-state.json</c>, the store lock file beside it, and extracted packages plus a <c>.tmp</c>
 /// staging directory under the install root. It deletes no installed package.
 /// </para>
@@ -76,7 +76,7 @@ internal static class NuplaneRestoreRunner
             // (NuplaneInstallRoot.DefaultStateFile) and a restore that wrote anywhere else would report
             // success and leave the very next step unable to find it.
             StateFilePath = target.StateFile,
-            // D10's opt-in exception buys a populated host, not a moving target: a restored artifact must
+            // The opt-in restore buys a populated host, not a moving target: a restored artifact must
             // equal the one a started host produces for the same pins, so anything that does not name a
             // single version refuses before a byte is downloaded.
             RequirePinnedVersions = true

@@ -9,13 +9,13 @@ using Xunit;
 namespace Elsa.Workbench.Tests;
 
 /// <summary>
-/// Host-side evidence for spec 177 T010. The private CShells blueprint can show effective configuration, but the
-/// public readiness and authenticated reload contracts expose only lifecycle/generation data.
+/// Host-side evidence for the composition host's attestation. The private CShells blueprint can show effective
+/// configuration, but the public readiness and authenticated reload contracts expose only lifecycle/generation data.
 /// </summary>
 public sealed class CompositionHostAttestationProbeTests
 {
     private const string FeatureSetting = "WorkflowsRuntimeCheckpointPersistence";
-    private const string ReceiptOverrideKey = "CShells:Shells:default:Features:WorkflowsRuntimeCheckpointPersistence:MaxSegmentCheckpoints";
+    private const string ReceiptOverrideKey = "CShells:Shells:default:Features:WorkflowsRuntimeCheckpointPersistence:MaxActivitiesPerCommit";
     // A distinctive valid integer avoids matching unrelated numbers in lifecycle JSON during redaction checks.
     private const string ProcessValue = "73190483";
     private const string Canary = "host-attestation-secret-canary-2039";
@@ -351,7 +351,7 @@ public sealed class CompositionHostAttestationProbeTests
     [Fact]
     public async Task All_six_bundle_files_and_process_override_have_no_generation_bound_marker()
     {
-        var overrideKey = $"CShells:Shells:default:Features:{FeatureSetting}:MaxSegmentCheckpoints";
+        var overrideKey = $"CShells:Shells:default:Features:{FeatureSetting}:MaxActivitiesPerCommit";
         var shell = WorkbenchShell.Development with
         {
             Settings = new Dictionary<string, string> { [overrideKey] = ProcessValue }
@@ -472,7 +472,7 @@ public sealed class CompositionHostAttestationProbeTests
 
     private static void WriteSetting(string path, int value) =>
         WorkbenchConfigurationFile.WriteValue(
-            path, ["CShells", "Shells", "default", "Features", FeatureSetting, "MaxSegmentCheckpoints"], value);
+            path, ["CShells", "Shells", "default", "Features", FeatureSetting, "MaxActivitiesPerCommit"], value);
 
     private static string CreateBundle()
     {

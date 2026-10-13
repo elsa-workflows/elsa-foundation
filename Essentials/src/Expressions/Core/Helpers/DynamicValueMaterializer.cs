@@ -5,7 +5,7 @@ namespace Elsa.Expressions.Core.Helpers;
 
 /// <summary>
 /// Materializes a dynamic (<c>Any</c>) value into its canonical runtime representation — a mutable
-/// <see cref="JsonNode"/> (ADR 0036).
+/// <see cref="JsonNode"/>.
 /// </summary>
 /// <remarks>
 /// A schemaless <c>Any</c> value is stored as opaque JSON and round-trips through the durable store as a
@@ -14,7 +14,7 @@ namespace Elsa.Expressions.Core.Helpers;
 /// element is lifted to a <see cref="JsonNode"/> once at the engine binding seam. A value that is already a
 /// <see cref="JsonNode"/> (for example a freshly parsed HTTP payload) or a concrete CLR type passes through
 /// unchanged. The lift is a structural copy, never a re-serialization of the author's bytes, so it does not
-/// disturb the stored opaque JSON (ADR 0035 D3).
+/// disturb the stored opaque JSON.
 /// </remarks>
 public static class DynamicValueMaterializer
 {

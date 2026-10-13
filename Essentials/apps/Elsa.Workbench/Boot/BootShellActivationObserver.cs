@@ -4,15 +4,15 @@ using CShells.Lifecycle;
 namespace Elsa.Workbench.Boot;
 
 /// <summary>
-/// Times the lazy shell-activation wall from the host side (spec 129). CShells activates each shell on its first
+/// Times the lazy shell-activation wall from the host side. CShells activates each shell on its first
 /// matching request and drives every shell through <see cref="ShellLifecycleState"/> transitions; subscribing to
 /// the shell registry is the one host-observable seam for that cliff. This records the wall between a shell first
 /// entering <see cref="ShellLifecycleState.Initializing"/> and reaching <see cref="ShellLifecycleState.Active"/>.
 ///
 /// It intentionally cannot attribute time to individual <c>IShellInitializer</c> instances: CShells resolves each
 /// initializer by its concrete registered type and invokes <c>InitializeAsync</c> internally, giving the host no
-/// interception point between registrations. That per-initializer gap is the key finding gating program unit 2
-/// (see docs/reports/cold-start-readiness-2026-07.md).
+/// interception point between registrations. That per-initializer gap is the key finding of
+/// docs/reports/cold-start-readiness-2026-07.md.
 /// </summary>
 public sealed class BootShellActivationObserver(BootPhaseTimeline timeline) : IShellLifecycleSubscriber
 {

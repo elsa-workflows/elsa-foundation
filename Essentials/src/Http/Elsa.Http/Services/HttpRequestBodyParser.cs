@@ -15,7 +15,7 @@ namespace Elsa.Http.Services;
 /// (they read from <c>HttpResponseParserContext.Content</c>), they return <see cref="object"/> driven
 /// by a caller-supplied <c>ReturnType</c>, and they depend on <c>IObjectConverter</c>/<c>IPayloadSerializer</c>.
 /// The inbound path has a different shape entirely — the body is already a string and the only
-/// legal output is wire-safe <see cref="JsonElement"/> (ADR 0035/0036: no <see cref="object"/> graph,
+/// legal output is wire-safe <see cref="JsonElement"/> (no <see cref="object"/> graph,
 /// no <c>ExpandoObject</c>). Adapting the response set to this shape would mean synthesising a stream,
 /// a fake return type, and discarding the converter/serializer pipeline — more coupling, not less.
 /// So we share the response set's <em>selection intent</em> (content-type dispatch, json/text priority)

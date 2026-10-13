@@ -18,6 +18,16 @@ These repositories develop the Elsa 4 preview. Elsa 3 uses the separate [elsa-co
 - **Contribute to the server:** follow the [Elsa Foundation contribution guide](CONTRIBUTING.md).
 - **Contribute to Studio:** follow the [Elsa Foundation Studio contribution guide](Studio/CONTRIBUTING.md).
 
+## Screenshots
+
+Elsa Studio running against Workbench from the [published Docker images](docker/compose/README.md#quick-start--published-images-no-clone-or-build). Captured with Studio rev `7cb2f2c2`; Write Line `4.0.5-preview`, Flowchart `4.0.3-preview`; the preview UI may change.
+
+| Designer | Completed run |
+| --- | --- |
+| <img src="website/docs/assets/elsa4/elsa4-04-designer_studio-7cb2f2c2_act-4.0.5-preview.png" alt="Studio designer with one Write Line activity" width="420"> | <img src="website/docs/assets/elsa4/elsa4-07-run-timeline_studio-7cb2f2c2_act-4.0.5-preview.png" alt="Completed run 14J7GJS3fOg with execution timeline" width="420"> |
+
+See [Your first workflow](website/docs/essentials/first-workflow.md) for the full walkthrough.
+
 ## Philosophy
 
 Elsa Foundation should be a thin protocol, not a fat one.

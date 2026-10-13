@@ -7,16 +7,19 @@ import {
   descriptorAlias,
   friendlyTypeLabel,
   generateUniqueName,
+  isPersistenceMode,
   literalDefault,
   makeArgumentType,
   readArgumentType,
   readIncidentStrategyReference,
+  readStoredPersistenceMode,
   readStringField,
   readVariableDefault,
   shortenTypeName,
   updateInput,
   updateIncidentStrategyReference,
   updateOutput,
+  updatePersistenceMode,
   updateVariable
 } from "../workflowProperties";
 import type { VariableDefinition, VariableTypeDescriptor } from "../workflowTypes";
@@ -51,6 +54,37 @@ describe("incident strategy options", () => {
         futureReferenceField: { preserve: true }
       }
     });
+  });
+});
+
+describe("persistence mode option", () => {
+  it("recognizes only the exact mode names and keeps the raw stored value readable", () => {
+    expect(isPersistenceMode(readStoredPersistenceMode({ persistenceMode: "Ephemeral" }))).toBe(true);
+    expect(isPersistenceMode(readStoredPersistenceMode({ persistenceMode: "balanced" }))).toBe(false);
+    expect(readStoredPersistenceMode({ persistenceMode: "Coalesced" })).toBe("Coalesced");
+    expect(readStoredPersistenceMode({})).toBeNull();
+    expect(readStoredPersistenceMode(null)).toBeNull();
+  });
+
+  it("sets a mode without losing sibling strategy options", () => {
+    const existing = {
+      futureOption: { preserve: true },
+      incidentStrategy: { alias: "Fault", version: "1" },
+      persistenceMode: "Durable"
+    };
+
+    expect(updatePersistenceMode(existing, "Ephemeral")).toEqual({
+      futureOption: { preserve: true },
+      incidentStrategy: { alias: "Fault", version: "1" },
+      persistenceMode: "Ephemeral"
+    });
+  });
+
+  it("removes the field for the host default instead of storing null", () => {
+    const updated = updatePersistenceMode({ futureOption: 1, persistenceMode: "Balanced" }, null);
+
+    expect(updated).toEqual({ futureOption: 1 });
+    expect("persistenceMode" in updated).toBe(false);
   });
 });
 

@@ -2,7 +2,7 @@ using System.Text.Json;
 
 namespace Elsa.Cli.Worker;
 
-/// <summary>Where a package id and version were determined from (FR-049).</summary>
+/// <summary>Where a package id and version were determined from.</summary>
 public static class PackageSource
 {
     public const string HostDepsFile = "host-deps-file";
@@ -15,7 +15,7 @@ public sealed record PackageFacts(string Id, string Version, string Source);
 /// <summary>
 /// The host's own <c>.deps.json</c>, read as what it is: the one statement of what this host pins. The
 /// worker cannot ask the runtime "which package did this assembly come from" — that mapping exists only
-/// here — and <c>EfToolingHost</c> deliberately refuses to invent it (FR-049), so this reader is what turns
+/// here — and <c>EfToolingHost</c> deliberately refuses to invent it, so this reader is what turns
 /// a loaded assembly into a manifest entry.
 /// </summary>
 /// <remarks>

@@ -43,7 +43,7 @@ public sealed class EfCoreIdentityUserStore(
     private const string RecoveryCodeTokenName = "RecoveryCodes";
     private const int AmbiguousEmailTake = 2;
     private const int MaximumMaterializedRelationshipEntries = 512;
-    // Identity keeps its budget of 3 (spec 095, bounded retry for lockout transitions).
+    // Identity keeps its budget of 3 (bounded retry for lockout transitions).
     private static readonly EfWriteRetry LockoutTransitions = new(3, EfWriteConflict.Concurrency);
 
     private readonly IIdentityEmailUniquenessPolicy emailPolicy =

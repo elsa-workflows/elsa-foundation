@@ -9,7 +9,7 @@ using static Elsa.Cluster.EntityFrameworkCore.Tests.FoundationHostComposition;
 namespace Elsa.Cluster.EntityFrameworkCore.Tests;
 
 /// <summary>
-/// #2151's acceptance on SQLite, which serves several processes on one machine (spec 183, FR-033): the scenario of
+/// #2151's acceptance on SQLite, which serves several processes on one machine: the scenario of
 /// <see cref="FoundationHostClusterScenario"/> over one database file, and the two controls that only make sense there.
 /// </summary>
 /// <remarks>
@@ -41,7 +41,7 @@ public sealed class FoundationHostClusterBootTests(FoundationHostFeed feed) : Fo
     }
 
     /// <summary>
-    /// The control: the same two hosts with the provider left off. Each is a cluster of one (spec 183, FR-018a), so the newer
+    /// The control: the same two hosts with the provider left off. Each is a cluster of one, so the newer
     /// host finalizes version 2 at activation while the older one, which cannot read it, is still running. This is what the
     /// scenario shows membership preventing.
     /// </summary>
@@ -61,7 +61,7 @@ public sealed class FoundationHostClusterBootTests(FoundationHostFeed feed) : Fo
 
     /// <summary>
     /// A host that meant to join a cluster and silently stayed a cluster of one is the failure that looks like success, so
-    /// both half-configured shapes refuse to start, naming the key to set (spec 183, FR-003a; FR-018a).
+    /// both half-configured shapes refuse to start, naming the key to set.
     /// </summary>
     [Theory]
     [InlineData(nameof(ClusterMembershipOptions.HostId))]

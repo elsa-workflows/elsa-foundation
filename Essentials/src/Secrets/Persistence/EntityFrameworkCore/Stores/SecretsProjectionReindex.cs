@@ -4,7 +4,7 @@ using Microsoft.EntityFrameworkCore;
 namespace Elsa.Secrets.Persistence.EntityFrameworkCore.Stores;
 
 /// <summary>
-/// The first <see cref="IEfPostMigrationAction"/> (ADR 0076 D8, FR-057): the Secrets projection reindex,
+/// The first <see cref="IEfPostMigrationAction"/>: the Secrets projection reindex,
 /// declared on this module's <c>[EfModule]</c> instead of hand-wired into a startup hook and a separate
 /// tooling executable. It only wraps the audit/repair pair <see cref="SecretsProjectionContract"/> already
 /// owns — the rule it enforces is unchanged (audit at startup, fail closed, repair only when an operator

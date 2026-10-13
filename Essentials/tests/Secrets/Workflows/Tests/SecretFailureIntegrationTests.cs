@@ -13,8 +13,7 @@ namespace Elsa.Secrets.Workflows.Tests;
 /// <summary>
 /// A secret the Secrets module refuses faults the activity naming the reference and the code, with no value and no store
 /// detail, retryable only when its store, the payload store or the secret repository, was unavailable, and permanent for
-/// a repository row that cannot be served; a host without the bridge parks the activity instead (spec 188, T027, T037;
-/// FR-003, SC-006, A05, A06).
+/// a repository row that cannot be served; a host without the bridge parks the activity instead.
 /// </summary>
 public sealed class SecretFailureIntegrationTests : IAsyncLifetime
 {

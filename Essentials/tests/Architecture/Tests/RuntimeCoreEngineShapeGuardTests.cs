@@ -8,7 +8,7 @@ using Xunit;
 namespace Elsa.Architecture.Tests;
 
 /// <summary>
-/// ADR 0033 semantic guard: <c>Elsa.Workflows.Runtime.Core</c> is a contracts/models layer and must
+/// Semantic guard: <c>Elsa.Workflows.Runtime.Core</c> is a contracts/models layer and must
 /// not silently re-absorb engine logic. The mechanical dependency-envelope guards cannot catch this
 /// class of drift (the original breach compiled cleanly), so this test asserts the *shape* of the
 /// assembly: no concrete engine-role types in <c>.Core</c>.
@@ -23,7 +23,7 @@ namespace Elsa.Architecture.Tests;
 /// </remarks>
 public sealed class RuntimeCoreEngineShapeGuardTests
 {
-    /// <summary>Engine role suffixes per ADR 0033's guardrail clause.</summary>
+    /// <summary>The engine role suffixes no concrete class in <c>.Core</c> may carry.</summary>
     private static readonly string[] EngineRoleSuffixes =
     [
         "Service",

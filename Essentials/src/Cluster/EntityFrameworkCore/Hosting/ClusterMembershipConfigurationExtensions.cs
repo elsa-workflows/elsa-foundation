@@ -8,10 +8,9 @@ using Microsoft.Extensions.DependencyInjection;
 namespace Elsa.Cluster.Hosting;
 
 /// <summary>
-/// Selects a host's membership provider from its configuration, once, on the host container (spec 183, FR-024; ADR
-/// 0078, amended). Nothing is registered unless configuration enables the EF provider, so a host that configures nothing
-/// keeps the in-process default: a cluster of one that costs nothing (FR-017, FR-018). A cluster declares itself only
-/// this way (FR-018a).
+/// Selects a host's membership provider from its configuration, once, on the host container. Nothing is registered
+/// unless configuration enables the EF provider, so a host that configures nothing keeps the in-process default: a
+/// cluster of one that costs nothing. A cluster declares itself only this way.
 /// </summary>
 /// <remarks>
 /// <para>

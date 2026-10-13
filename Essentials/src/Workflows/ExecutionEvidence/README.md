@@ -437,8 +437,8 @@ loop {
   the record's presence.
 - **The enricher runs before the persistence decision.** A `Skip` decision records a fact whose checkpoint
   was never persisted, as does a checkpoint whose store call subsequently fails. This matters in practice:
-  `Elsa.Workbench` runs `WorkflowsRuntimeCheckpointPersistence` in `"Mode": "Coalesced"`, where checkpoints
-  are folded and a `CoalescedSegmentFlush` kind appears in the stream. Replay is handled by checkpoint-id
+  every shell runs the Balanced persistence mode by default, where checkpoints are folded and a
+  `CoalescedSegmentFlush` kind appears in the stream. Replay is handled by checkpoint-id
   dedupe; skip is knowingly over-recorded. A durable implementation would observe the commit store instead.
 - **The replay-dedupe window is bounded** by `MaxTrackedCheckpointsPerWorkflow`. A replayed checkpoint older
   than that window can be recorded twice.

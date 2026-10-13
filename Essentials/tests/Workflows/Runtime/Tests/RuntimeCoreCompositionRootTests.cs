@@ -292,6 +292,7 @@ public sealed class RuntimeCoreCompositionRootTests : RuntimePipelineTestSupport
         services.AddSingleton(observations);
         services.RemoveAll<IWorkflowSchedulerWorkQueue>();
         services.AddScoped<IWorkflowSchedulerWorkQueue, ScopeTrackingSchedulerWorkQueue>();
+        services.AddPersistenceModes();
 
         await using var provider = services.BuildServiceProvider(new ServiceProviderOptions
         {

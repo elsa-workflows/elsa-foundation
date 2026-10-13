@@ -2,8 +2,8 @@ namespace Elsa.Cluster.Core.Models;
 
 /// <summary>
 /// Declares that a shell feature needs schema family <see cref="Family"/> at version <see cref="Version"/> or later: a
-/// dormancy requirement (spec 182, FR-001). Until this host observes that version as finalized, and, with
-/// <see cref="RequiresCompleteness"/>, until the family's finish record says no row below it remains (FR-005), the
+/// dormancy requirement. Until this host observes that version as finalized, and, with
+/// <see cref="RequiresCompleteness"/>, until the family's finish record says no row below it remains, the
 /// feature is dormant: composed and running, listed as enabled, but its operations that need the new data are refused.
 /// </summary>
 /// <remarks>
@@ -14,7 +14,7 @@ namespace Elsa.Cluster.Core.Models;
 /// families; it is dormant until every requirement is met.
 /// </para>
 /// <para>
-/// Declaring it changes nothing about composition (FR-006). The feature's services are registered and its endpoints
+/// Declaring it changes nothing about composition. The feature's services are registered and its endpoints
 /// mapped exactly as without it. What reads it is the feature catalog, Attention and the operations themselves, each
 /// through the one shared dormancy check.
 /// </para>
@@ -34,8 +34,8 @@ public sealed class RequiresSchemaVersionAttribute(string family, string version
 
     /// <summary>
     /// Whether the feature also needs every row of the family to carry that version's data, as a query or lookup over a
-    /// projection introduced at that version does (FR-005). Such a feature stays dormant after finalization until the
-    /// family's completeness is established by the post-finalization backfill's finish record (spec 186).
+    /// projection introduced at that version does. Such a feature stays dormant after finalization until the
+    /// family's completeness is established by the post-finalization backfill's finish record.
     /// </summary>
     public bool RequiresCompleteness { get; init; }
 }

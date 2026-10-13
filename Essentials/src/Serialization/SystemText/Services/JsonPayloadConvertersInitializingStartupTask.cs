@@ -6,8 +6,8 @@ using Elsa.Tasks.Core.Attributes;
 namespace Elsa.Serialization.SystemText.Services;
 
 /// <summary>
-/// Startup task that drives the framework §2.6.1 Registry + StartUp Task sub-pattern for
-/// JSON payload converters (Elsa §E3.3 worked example). On execute:
+/// Startup task that drives the Registry + StartUp Task sub-pattern for
+/// JSON payload converters. On execute:
 ///
 /// 1. Publishes <see cref="JsonPayloadConvertersInitializing"/> through the mediator.
 /// 2. Awaits the single <c>RegisterJsonConverters</c> handler, which resolves every
@@ -28,7 +28,7 @@ namespace Elsa.Serialization.SystemText.Services;
 /// race it deserializes with an empty converter set: no <c>JsonStringEnumConverter</c>, so enums written as
 /// strings at request time cannot be read back at boot.
 /// <para>
-/// That is not hypothetical. Spec 151's artifact reconciler hit exactly this on a real server — an exported
+/// That is not hypothetical. The artifact reconciler hit exactly this on a real server — an exported
 /// closure imported at startup failed with "the JSON value could not be converted to ActivityValuePolicy",
 /// because the export happened at request time with a populated registry and the import happened at boot without
 /// one. It was invisible to every in-process test, which resolves a fully initialised serializer.

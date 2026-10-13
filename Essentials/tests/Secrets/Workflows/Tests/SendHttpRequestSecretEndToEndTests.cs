@@ -12,14 +12,14 @@ using static Elsa.Secrets.Workflows.Tests.Support.SecretsCanaryWorkflowHost;
 namespace Elsa.Secrets.Workflows.Tests;
 
 /// <summary>
-/// <c>SendHttpRequest</c> consumes a secret end to end (spec 188, slice 11, T108, FR-019, SC-001, A23), on the canary
+/// <c>SendHttpRequest</c> consumes a secret end to end, on the canary
 /// host with the HTTP activities composed and the named client's primary handler replaced by the canary's local
 /// endpoint. A workflow definition binds a stored secret to the activity's <c>Authorization</c> credential input and
 /// publishes; the run sends the secret's value as the request's <c>Authorization</c> header and completes on <c>Done</c>;
 /// after the secret is rotated, a second run of the same publication sends the new value; a literal on the input is
 /// refused at draft save with <c>Inputs/CredentialLiteral</c>. Then, after each surface's precondition, the encoded
 /// scanner finds neither header value on any of the eight surfaces. The endpoint answers without repeating a header, so
-/// the scan covers the activity's own recording and not a server that reflects its input (spec Assumptions). Scope: the
+/// the scan covers the activity's own recording and not a server that reflects its input. Scope: the
 /// <c>Authorization</c> input is named like a credential, so the name-based redactors (the snapshot factory's, the
 /// OpenTelemetry bridge's) would hide it by name whatever the protections beneath do; the canary scenarios of
 /// <see cref="WorkflowSecretCanaryTests"/> use names those redactors do not match, and this test proves the shipped

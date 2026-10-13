@@ -84,8 +84,8 @@ public sealed class ActivityContract
 
     /// <summary>
     /// Author-declared replay/side-effect classification. Part of the pinned, fingerprinted
-    /// contract: it gates whether the pre-activation attempt-claim checkpoint may be deferred under a
-    /// coalescing cadence. <see cref="SideEffectProfile.External"/> is the fail-safe default — an unmarked
+    /// contract: it gates whether the pre-activation attempt-claim checkpoint may be deferred into a later commit, in
+    /// every persistence mode. <see cref="SideEffectProfile.External"/> is the fail-safe default: an unmarked
     /// activity keeps the mandatory pre-activation durability boundary. Omitted from the serialized shape
     /// when it is the default so a default-External contract's document is byte-identical to before this
     /// unit (consistent with the fingerprint, which also only carries the non-default profile).
@@ -399,7 +399,7 @@ public enum ActivityValueStorage
 
 /// <summary>
 /// Author-declared replay/side-effect classification of a CLR activity. Governs whether the
-/// runtime may defer the pre-activation attempt-claim durability boundary under a coalescing checkpoint cadence.
+/// runtime may defer the pre-activation attempt-claim durability boundary when the run folds checkpoints.
 /// </summary>
 public enum SideEffectProfile
 {
@@ -414,8 +414,9 @@ public enum SideEffectProfile
     /// <summary>
     /// The activity is pure/deterministic between checkpoint boundaries (in-workflow routing, compute, variable
     /// transforms): re-executing it on replay produces byte-identical state and no observable effect. Its
-    /// attempt-claim checkpoint may be deferred and folded forward into the next flushed commit under a
-    /// coalescing cadence, so a hot loop of such activities collapses to a single coalesced commit.
+    /// attempt-claim checkpoint may be deferred and folded forward into the next commit in every persistence mode, so
+    /// a hot loop of such activities folds into one commit per cap's worth of activities under Balanced, and into a
+    /// single commit under Ephemeral when nothing else in the loop commits.
     /// </summary>
     ReplaySafe
 }

@@ -347,7 +347,7 @@ public sealed class RuntimeContainerScopeServiceTests
             runtimeRequirements: null,
             storageDriverRequirements: null,
             incidentStrategy: IncidentStrategyBuiltIns.FaultReference,
-            checkpointCadence: null,
+            persistenceMode: null,
             workflowVariables: workflowVariables);
 
     private static ExecutableNode DeclNode(string id, IReadOnlyCollection<ExecutableChildSlot> childSlots, params (string Key, string Name)[] variables) =>

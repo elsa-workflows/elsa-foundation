@@ -4,7 +4,7 @@ using Elsa.Cluster.Core.Models;
 namespace Elsa.Testing;
 
 /// <summary>
-/// Spec 182's shared <see cref="IObservedSchemaFinalization"/> double: a test sets an observation directly, optionally
+/// The shared <see cref="IObservedSchemaFinalization"/> double: a test sets an observation directly, optionally
 /// with the blockers an operator's status would carry as a pending version's counted members, and the fake counts what
 /// asks it to refresh a stale observation or read a fresh status.
 /// </summary>

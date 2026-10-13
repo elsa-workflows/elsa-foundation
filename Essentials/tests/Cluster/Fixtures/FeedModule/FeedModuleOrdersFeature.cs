@@ -12,7 +12,7 @@ using Microsoft.Extensions.Hosting;
 namespace Elsa.Cluster.Fixtures.FeedModule;
 
 /// <summary>
-/// A feature whose data only the family's version 2 holds (spec 182, FR-001): dormant until this host observes 2 as
+/// A feature whose data only the family's version 2 holds: dormant until this host observes 2 as
 /// finalized. It is composed and mapped like any other; what it serves asks the shared dormancy check first.
 /// </summary>
 [ShellFeature(name: FeedModule.OrdersFeature, DisplayName = "Feed module fixture orders", DependsOn = new object[] { FeedModule.EntityFrameworkCoreFeature })]
@@ -38,7 +38,7 @@ public sealed class FeedModuleOrdersFeature : IWebShellFeature
 
 /// <summary>
 /// Where the feature accepts data only version 2 holds: it asks the host's shared dormancy check before any row changes,
-/// as spec 182's FR-002 has every such operation do.
+/// as every such operation must.
 /// </summary>
 /// <exception cref="SchemaDormancyRefusedException">The feature is dormant.</exception>
 public sealed class FeedModuleOrders(ISchemaDormancyCheck check)

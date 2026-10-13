@@ -1,7 +1,7 @@
 namespace Elsa.Cluster.Core.Models;
 
 /// <summary>
-/// Why a member query is asked. The two purposes consider different members on purpose (FR-016): a wrong routing
+/// Why a member query is asked. The two purposes consider different members on purpose: a wrong routing
 /// decision is harmless because the fence at the commit rejects a stale writer, while a premature finalization is not.
 /// </summary>
 public enum MemberQueryPurpose

@@ -5,8 +5,8 @@ using static Elsa.Architecture.Tests.RepoPaths;
 namespace Elsa.Architecture.Tests;
 
 /// <summary>
-/// Owns the ADR 0072 Secrets EF pilot allowlist: the exact project and source-file inventory under the pilot's paths.
-/// ADR 0073 supersedes ADR 0072's bounded policy but preserves its admitted implementation as the
+/// Owns the Secrets EF pilot allowlist: the exact project and source-file inventory under the pilot's paths.
+/// The pilot's bounded policy is superseded, but its admitted implementation stays as the
 /// reviewed starting surface; later EF replacements must extend the ratchet with their own evidence.
 /// </summary>
 /// <remarks>

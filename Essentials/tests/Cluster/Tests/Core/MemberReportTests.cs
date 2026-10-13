@@ -55,7 +55,7 @@ public sealed class MemberReportTests
         Assert.ThrowsAny<ArgumentException>(() => new ReadabilityEntry("orders", "OrdersModule", ["1"], observedFinalizedVersion: " "));
     }
 
-    /// <summary>A family shared by no single EF module (spec 180, FR-001) reports <see langword="null"/> rather than
+    /// <summary>A family shared by no single EF module reports <see langword="null"/> rather than
     /// throwing: the null-module invariant is "blank is refused", not "absent is refused".</summary>
     [Fact]
     public void An_entry_may_name_no_module_for_a_family_shared_by_none()

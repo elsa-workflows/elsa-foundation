@@ -298,8 +298,8 @@ public sealed class EfStructuredLogStore : IStructuredLogStore, IDiagnosticsPers
                 // the current format (fingerprint, above), so comparing that against the stored string across a
                 // version boundary would reject a legitimate replay. Once the row is at the current version the raw
                 // comparison is exact and cheapest; otherwise recompute the stored side's fingerprint over the
-                // payloads the chain already upcast into the current format (FR-009: content is compared only after
-                // it is brought to one common format, never mixed across versions the way FR-008's stored-bytes
+                // payloads the chain already upcast into the current format (content is compared only after
+                // it is brought to one common format, never mixed across versions the way the stored-bytes
                 // checks compare within one).
                 var storedFingerprint = string.Equals(existingOperation.SchemaVersion, StructuredLogsEfModule.Chain.CurrentVersion, StringComparison.Ordinal)
                     ? existingOperation.Fingerprint
@@ -524,7 +524,7 @@ public sealed class EfStructuredLogStore : IStructuredLogStore, IDiagnosticsPers
             {
                 throw;
             }
-            // Skew is not an operation failure, so it leaves as itself (ADR 0077).
+            // Skew is not an operation failure, so it leaves as itself.
             catch (EfSchemaVersionSkewException)
             {
                 throw;

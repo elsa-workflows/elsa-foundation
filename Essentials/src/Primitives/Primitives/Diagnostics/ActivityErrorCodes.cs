@@ -14,7 +14,7 @@ namespace Elsa.Primitives.Diagnostics;
 /// domains — Activities/Design, Workflows/Publishing and Workflows/Runtime. The apparently natural home,
 /// <c>Elsa.Activities.Design.Core</c>, is not available: <c>Elsa.Workflows.Runtime</c> would have to reference it,
 /// and the Design↔Runtime seam is enforced by <c>ArchitectureGuardTests</c>. <c>Elsa.Primitives</c> is
-/// zero-dependency by §2.3 and satisfies the §2.17 shared-helper bar (three or more consumers, no new external
+/// zero-dependency and meets the bar for a shared helper (three or more consumers, no new external
 /// dependency).
 /// </para>
 /// <para>

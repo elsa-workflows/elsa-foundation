@@ -28,11 +28,13 @@ namespace Elsa.Workflows.Runtime.Core.Models;
 /// keyed by post-commit intent id. The checkpoint committer publishes each continuation the moment its commit lands
 /// (<see cref="PublishHopWorkItem"/>); the scheduler post-commit intent dispatcher takes it back
 /// (<see cref="TryTakeHopWorkItem"/>) instead of deserializing the durable intent payload. The carrier is bounded by
-/// this scope's lifetime — the drain orchestrator pushes it for the duration of one Immediate live drain and pops it at
-/// drain end, discarding the carrier and every entry with it — so entries are never read after a crash, redrive, or
-/// cross-drain hand-off. The durable outbox payload stays authoritative: if the carrier has no entry (fast path off,
-/// coalescing active, sweep delivery, or a durable store that stripped the in-memory object) the dispatcher takes the
-/// deserialize path and produces an identical work item. Memory is a cache; the serialized form is truth.</para>
+/// this scope's lifetime: the drain orchestrator pushes it around every drain and pops it at drain end, discarding the
+/// carrier and every entry with it, so entries are never read after a crash, redrive, or cross-drain hand-off. It
+/// engages only once the drain's persistence-mode session has stopped folding (a boundary ended it, or the queue cannot
+/// delete by identity); while the session folds, its overlay delivers continuations. The durable outbox payload stays
+/// authoritative: if the carrier has no entry (fast path off, a folding session, sweep delivery, or a durable store that
+/// stripped the in-memory object) the dispatcher takes the deserialize path and produces an identical work item. Memory
+/// is a cache; the serialized form is truth.</para>
 /// </summary>
 public sealed class RuntimeLiveDrainDeliveryScope
 {

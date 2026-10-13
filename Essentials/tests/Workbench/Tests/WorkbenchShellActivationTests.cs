@@ -47,7 +47,7 @@ public sealed class WorkbenchShellActivationTests
         // ActivitiesHttp depends on its route-table projection by feature name, and a name cannot make an assembly
         // that is absent from the host discoverable. A shell that does not list it gets it as a dependency.
         "WorkflowsRuntimeHttp",
-        // File-based workflow deployment (spec 147) is opt-in: it needs a source and a path to register.
+        // File-based workflow deployment is opt-in: it needs a source and a path to register.
         "JsonWorkflowReconciliation"
     ];
 
@@ -116,8 +116,8 @@ public sealed class WorkbenchShellActivationTests
 
         // The stock shells run the burst-coalesced checkpoint policy and the bounded executable cache that the HTTP
         // workflow performance budget is measured against.
-        AssertSetting(catalog, "WorkflowsRuntimeCheckpointPersistence", "Mode", "Coalesced");
-        AssertSetting(catalog, "WorkflowsRuntimeCheckpointPersistence", "MaxSegmentCheckpoints", "50");
+        AssertSetting(catalog, "WorkflowsRuntimeCheckpointPersistence", "Mode", "Balanced");
+        AssertSetting(catalog, "WorkflowsRuntimeCheckpointPersistence", "MaxActivitiesPerCommit", "50");
         AssertSetting(catalog, "WorkflowsRuntimeEntityFrameworkCore", "CacheWorkflowExecutables", "true");
         AssertSetting(catalog, "WorkflowsRuntimeEntityFrameworkCore", "WorkflowExecutableCacheCapacity", "256");
     }

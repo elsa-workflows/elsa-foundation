@@ -8,7 +8,7 @@ namespace Elsa.Modularity.Tests;
 
 /// <summary>
 /// Verifies that the module-management and Extension Builder features contribute their coarse
-/// host-control permissions to the shared permission catalog per ADR 0037, with <c>manage</c> implying
+/// host-control permissions to the shared permission catalog, with <c>manage</c> implying
 /// <c>read</c>, and that the aggregated catalog resolves them alongside the default identity permissions.
 /// </summary>
 public sealed class HostControlPermissionContributionTests

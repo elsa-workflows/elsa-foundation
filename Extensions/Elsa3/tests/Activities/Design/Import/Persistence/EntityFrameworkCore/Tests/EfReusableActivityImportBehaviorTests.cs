@@ -441,8 +441,8 @@ public sealed class EfReusableActivityImportBehaviorTests : IAsyncLifetime
     }
 
     /// <summary>
-    /// A row written by a module version this build does not run is not damaged data. Before ADR 0077 the
-    /// import codec fused the two and reported skew as an unsupported-envelope failure, which sent an
+    /// A row written by a module version this build does not run is not damaged data. Before skew was told apart from
+    /// corruption, the import codec fused the two and reported skew as an unsupported-envelope failure, which sent an
     /// operator looking for corruption during what was a deploy-sequencing mistake (#1950).
     /// </summary>
     /// <remarks>

@@ -232,7 +232,7 @@ public sealed class EfDurableValuePageReuseTests
                 Assert.NotNull(workflow);
                 Assert.Equal(WorkflowExecutionStatus.Completed, workflow!.Status);
                 Assert.NotNull(workflow.CompletedAt);
-                Assert.Equal(WorkflowExecutableCheckpointCadence.CoalescedMode, workflow.SystemMetadata[RuntimeMetadataKeys.CheckpointCadence]);
+                Assert.Equal(nameof(PersistenceMode.Balanced), workflow.SystemMetadata[RuntimeMetadataKeys.PersistenceMode]);
 
                 var activityStates = await scope.ServiceProvider.GetRequiredService<IActivityExecutionStateStore>().ListAllAsync(executionId);
                 Assert.Equal(3, activityStates.Count);
@@ -335,8 +335,8 @@ public sealed class EfDurableValuePageReuseTests
                 $"incidents=[{string.Join(";", incidents.Select(incident => $"{incident.FailureType}:{incident.Message}"))}].");
             Assert.NotNull(workflow.CompletedAt);
             Assert.Equal(
-                WorkflowExecutableCheckpointCadence.CoalescedMode,
-                workflow.SystemMetadata[RuntimeMetadataKeys.CheckpointCadence]);
+                nameof(PersistenceMode.Balanced),
+                workflow.SystemMetadata[RuntimeMetadataKeys.PersistenceMode]);
 
             Assert.Equal(3, activityStates.Count);
             Assert.All(activityStates, state => Assert.Equal(ActivityExecutionStatus.Completed, state.Status));
@@ -358,7 +358,7 @@ public sealed class EfDurableValuePageReuseTests
             var semanticSnapshot = JsonSerializer.Serialize(new
             {
                 Status = workflow.Status.ToString(),
-                Cadence = workflow.SystemMetadata[RuntimeMetadataKeys.CheckpointCadence],
+                PersistenceMode = workflow.SystemMetadata[RuntimeMetadataKeys.PersistenceMode],
                 Activities = new[] { first, second }.Select(activity => new
                 {
                     activity.Execution.ExecutableNodeId,
@@ -377,7 +377,7 @@ public sealed class EfDurableValuePageReuseTests
 
             var durableValueStore = scope.ServiceProvider.GetRequiredService<IDurableValueStateStore>();
             var sessionAccessor = scope.ServiceProvider.GetRequiredService<IRuntimeCoalescingSessionAccessor>();
-            var coalescingOptions = scope.ServiceProvider.GetRequiredService<CoalescingRuntimeCheckpointPersistenceOptions>();
+            var coalescingOptions = scope.ServiceProvider.GetRequiredService<PersistenceModeOptions>();
             Assert.Equal(coalesceDurableValueReads, coalescingOptions.CoalesceDurableValueReads);
             var invalidExecutionId = new string('x', RuntimeOperationalStateEfModule.IdentityMaximumLength + 1);
             var invalidIdentitySession = new RuntimeCoalescingSession(
@@ -468,8 +468,8 @@ public sealed class EfDurableValuePageReuseTests
             [$"ConnectionStrings:{ResourceName}"] = connectionString,
             [$"CShells:Shells:{ShellName}:Features:WorkflowsRuntimeEntityFrameworkCore:RecoveryContinuationSigningKey"] = RecoverySigningKey,
             [$"CShells:Shells:{ShellName}:Features:WorkflowsRuntimeEntityFrameworkCore:HierarchyCursorSigningKey"] = HierarchySigningKey,
-            [$"CShells:Shells:{ShellName}:Features:WorkflowsRuntimeCheckpointPersistence:Mode"] = "Coalesced",
-            [$"CShells:Shells:{ShellName}:Features:WorkflowsRuntimeCheckpointPersistence:MaxSegmentCheckpoints"] = "50",
+            [$"CShells:Shells:{ShellName}:Features:WorkflowsRuntimeCheckpointPersistence:Mode"] = "Balanced",
+            [$"CShells:Shells:{ShellName}:Features:WorkflowsRuntimeCheckpointPersistence:MaxActivitiesPerCommit"] = "50",
             [$"CShells:Shells:{ShellName}:Features:WorkflowsRuntimeCheckpointPersistence:CoalesceDurableValueReads"] = coalesceDurableValueReads.ToString()
         };
         foreach (var id in SelectedFeatureIds)
@@ -579,7 +579,7 @@ public sealed class EfDurableValuePageReuseTests
             runtimeRequirements: null,
             storageDriverRequirements: null,
             incidentStrategy: IncidentStrategyBuiltIns.FaultReference,
-            checkpointCadence: new WorkflowExecutableCheckpointCadence(WorkflowExecutableCheckpointCadence.CoalescedMode, 50),
+            persistenceMode: PersistenceMode.Balanced,
             workflowVariables: [variable]);
     }
 

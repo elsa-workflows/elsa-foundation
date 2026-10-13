@@ -1,5 +1,5 @@
 {
-  "writeline-sequence": { "Immediate": 1482, "Coalesced": 136 },
-  "http-reference": { "Immediate": 569, "Coalesced": 103 },
-  "fork-join-resume": { "Immediate": 507, "Coalesced": 180 }
+  "writeline-sequence": { "Durable": 321, "Balanced": 99, "Ephemeral": 99 },
+  "http-reference": { "Durable": 196, "Balanced": 102, "Ephemeral": 102 },
+  "fork-join-resume": { "Durable": 242, "Balanced": 175, "Ephemeral": 175 }
 }

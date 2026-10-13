@@ -2,6 +2,7 @@ using System.Text.Json;
 using Elsa.Activities.DispatchWorkflow.Runtime.Constants;
 using Elsa.Activities.DispatchWorkflow.Runtime.Models;
 using Elsa.Activities.DispatchWorkflow.Runtime.Services;
+using Elsa.Activities.Testing;
 using Elsa.Testing;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
@@ -150,7 +151,7 @@ public sealed class DispatchWorkflowEndToEndTests
         }
 
         var resumeIntent = Assert.Single(
-            fixture.Checkpoints.SingleIntentCommit(DispatchWorkflowConstants.ResumeParentIntentKind).PostCommitIntents,
+            CheckpointCommitIntents.IntentsOf(fixture.Checkpoints.SingleIntentCommit(DispatchWorkflowConstants.ResumeParentIntentKind)),
             intent => intent.Kind == DispatchWorkflowConstants.ResumeParentIntentKind);
         await using (var scope = fixture.Services.CreateAsyncScope())
             await scope.ServiceProvider.GetRequiredService<ParentResumeExecutor>().HandleAsync(resumeIntent);
@@ -337,7 +338,7 @@ public sealed class DispatchWorkflowEndToEndTests
             await fixture.ReplayAsync(terminalCommit);
 
         var resumeIntent = Assert.Single(
-            terminalCommit.PostCommitIntents,
+            CheckpointCommitIntents.IntentsOf(terminalCommit),
             intent => intent.Kind == DispatchWorkflowConstants.ResumeParentIntentKind);
         await using (var scope = fixture.Services.CreateAsyncScope())
         {

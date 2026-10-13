@@ -95,6 +95,19 @@ ADR 0073 D7 is amended: **deterministic** budgets on EF command counts per refer
 gates, not performance measurement, and run in CI. Wall-clock timing stays retired. The Runtime Throughput
 constraint against a default cadence flip is lifted.
 
+**Owner amendment, 12 October 2026:** three decisions taken while delivering D2
+([#2585](https://github.com/elsa-workflows/elsa-foundation/issues/2585)). `Durable` commits once per activity, not
+once per checkpoint: the checkpoints an activity produces are committed together, so the table's "after every
+activity" holds and the per-checkpoint drain is gone. `Ephemeral` keeps the attempt-claim commit before an activity
+that is not ReplaySafe (ADR 0032). The target of under 40 EF commands for ten WriteLine activities under `Balanced`
+moved to epic [#2564](https://github.com/elsa-workflows/elsa-foundation/issues/2564); the budgets in CI hold the
+measured counts. Not a decision, but a description of the result: as implemented, `Ephemeral` commits at more points
+than the table's row lists. Besides a suspension, a fault and completion, it commits a cancellation, a recorded or
+resolved incident and an alteration (as every mode does), that attempt claim before an activity that is not ReplaySafe,
+a child workflow dispatch, and the end of a pass that does not complete the run.
+"No trace" therefore applies only to a run that completes in one pass with none of those earlier commits: all its
+activities are ReplaySafe, it dispatches no child, and it is not cancelled, altered or given an incident.
+
 ### D3 — Internal by default
 
 - Implementations are `internal sealed`. Tests reach them through `InternalsVisibleTo` to their own test
@@ -165,6 +178,11 @@ unit, ratification, phase-owned) does not appear in product docs or type names.
   design choice goes straight to `ready-for-agent`. Proposals to simplify, replace or remove UI stay
   `needs-triage`. Every run appends what worked and what it filed to the `ux-qa-ledger` issue. The fixer routine
   takes the `ready-for-agent` ones, Studio's included, and their PRs always get a human merge.
+- A **product scout** routine runs weekly. It mines feature requests, discussions and workarounds in
+  elsa-core, elsa-studio and elsa-foundation, the UX QA ledger, deferred specs and Elsa 3 parity gaps, using other
+  engines' public docs only as prior art. It files at most two evidence-backed proposals, labelled
+  `needs-triage` and `auto-product` and never `ready-for-agent`. Deciding what gets built stays a maintainer
+  decision. Each run records its candidates and near misses on the `product-scout-ledger` issue.
 - Program metrics (public types, projects, test LOC, EF commands per reference workflow, glossary size,
   `[Obsolete]` count, code citations) are reported weekly. If fewer than half of the filed issues are promoted
   after four weeks, or the metrics do not move, the routines are paused and their prompts revised.

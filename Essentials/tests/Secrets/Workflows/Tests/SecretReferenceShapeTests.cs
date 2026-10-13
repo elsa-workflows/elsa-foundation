@@ -8,7 +8,7 @@ using Xunit;
 namespace Elsa.Secrets.Workflows.Tests;
 
 /// <summary>
-/// The authored secret reference payload (<see cref="SecretReferencePayload"/>, spec 188) accepts exactly the members the
+/// The authored secret reference payload (<see cref="SecretReferencePayload"/>) accepts exactly the members the
 /// reference models declare, the Secrets module's <see cref="SecretReference"/> and the runtime's
 /// <see cref="RuntimeSecretReference"/>, in the camelCase the Studio secret picker writes. A member added to a model and not
 /// to the payload definition (or the reverse) would make the credential-literal rule and publication refuse, or accept,

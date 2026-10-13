@@ -9,7 +9,7 @@ using Elsa.Workflows.Runtime.Core.Models;
 namespace Elsa.Canary.Fixtures;
 
 /// <summary>
-/// The canary's structural activity (spec 188, T078, scenario S4): it schedules its one child, and its child-completion
+/// The canary's structural activity (scenario S4): it schedules its one child, and its child-completion
 /// callback, which structural parent evaluation activates on its committed snapshot, throws an exception whose message
 /// holds the value <see cref="Primary"/> was hydrated with. <see cref="Companion"/> is undeclared and bound to a
 /// non-secret literal, as on <see cref="CanaryActivity"/>. It records what it was hydrated with, and does nothing else
@@ -42,7 +42,7 @@ public sealed class CanaryStructuralActivity(CanaryRecorder recorder) : Structur
 }
 
 /// <summary>
-/// The canary's notified structural activity (spec 188, scenario S4b): it schedules its one child, a
+/// The canary's notified structural activity (scenario S4b): it schedules its one child, a
 /// <see cref="CanaryNotifyingChildActivity"/>, and its child-notification callback, which the parent-notification handler
 /// activates on its committed snapshot, throws an exception whose message holds the value <see cref="Primary"/> was
 /// hydrated with. The child never completes, so the notification callback is the only callback of the parent the run

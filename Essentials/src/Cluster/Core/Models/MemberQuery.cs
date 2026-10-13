@@ -1,7 +1,7 @@
 namespace Elsa.Cluster.Core.Models;
 
 /// <summary>
-/// A request for the members that satisfy a list of requirements, for a stated purpose (FR-015, FR-016). Every provider
+/// A request for the members that satisfy a list of requirements, for a stated purpose. Every provider
 /// answers it the same way for the same fleet, through <see cref="Evaluate"/>.
 /// </summary>
 public sealed record MemberQuery
@@ -35,7 +35,7 @@ public sealed record MemberQuery
     /// each other member it considered, the first requirement that member failed.
     /// </summary>
     /// <remarks>
-    /// Runnability requirements are met jointly, by one entry of the member's runnability section (spec 184, FR-009),
+    /// Runnability requirements are met jointly, by one entry of the member's runnability section,
     /// so the requirement reported for a member that fails them is the first one no entry can meet together with the
     /// runnability requirements before it.
     /// </remarks>

@@ -52,7 +52,7 @@ public sealed class RuntimeCoalescingScopeRegistrationTests
             RecoveryContinuationSigningKey = RecoverySigningKey,
             HierarchyCursorSigningKey = HierarchySigningKey
         });
-        services.AddCoalescingRuntimeCheckpointPersistence();
+        services.AddPersistenceModes();
         return services;
     }
 

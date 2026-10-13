@@ -16,28 +16,18 @@ public sealed class RuntimeCoalescingDrainScopeFactory(
     RuntimeCheckpointCommitter checkpointCommitter,
     CoalescingInner<IWorkflowSchedulerWorkQueue> innerQueue,
     CoalescingInner<IRuntimePostCommitOutboxStore> innerOutboxStore,
-    CoalescingRuntimeCheckpointPersistenceOptions options,
+    PersistenceModeOptions options,
     TimeProvider timeProvider) : IRuntimeCoalescingDrainScopeFactory
 {
-    public IRuntimeCoalescingDrainScope Begin(string workflowExecutionId, int? maxSegmentCheckpoints = null)
+    public IRuntimeCoalescingDrainScope Begin(string workflowExecutionId, ResolvedPersistenceMode mode)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(workflowExecutionId);
+        ArgumentNullException.ThrowIfNull(mode);
 
         // A nested owner gets a fresh memo. The parent cannot resume reusing its old baseline after the child exits.
         sessionAccessor.Current?.DisableDurableValuePageReuse();
 
-        // A per-workflow authored segment cap overrides the host default for this run only; the host
-        // options singleton is left untouched. When unspecified (or equal) the shared host options are reused as-is.
-        var sessionOptions = maxSegmentCheckpoints is { } cap && cap != options.MaxSegmentCheckpoints
-            ? new CoalescingRuntimeCheckpointPersistenceOptions
-            {
-                MaxSegmentCheckpoints = cap,
-                CoalesceDurableValueReads = options.CoalesceDurableValueReads,
-                CoalesceInspectionReads = options.CoalesceInspectionReads,
-            }
-            : options;
-
-        var session = new RuntimeCoalescingSession(workflowExecutionId, innerQueue.Value, sessionOptions, innerOutboxStore.Value);
+        var session = new RuntimeCoalescingSession(workflowExecutionId, innerQueue.Value, options, innerOutboxStore.Value, mode);
         // A legacy provider may not support identity deletion. Never discover that after a folded commit has landed:
         // disable buffering before the drain begins, leaving queue operations and checkpoint writes durable.
         if (!innerQueue.Value.SupportsTargetedDeletion)

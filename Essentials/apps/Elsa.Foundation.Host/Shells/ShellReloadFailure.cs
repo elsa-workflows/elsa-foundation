@@ -23,7 +23,7 @@ namespace Elsa.Foundation.Host.Shells;
 /// </para>
 /// <para>
 /// Only a recognised refusal's message is carried: it is built from module, migration and version names and never from
-/// configuration (spec 171, FR-061). Any other failure is reported by its type, and its message is left to the host's log,
+/// configuration. Any other failure is reported by its type, and its message is left to the host's log,
 /// where the reload observer writes the whole exception.
 /// </para>
 /// </remarks>

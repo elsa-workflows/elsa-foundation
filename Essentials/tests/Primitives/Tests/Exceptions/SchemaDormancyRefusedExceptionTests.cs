@@ -4,8 +4,8 @@ using Xunit;
 namespace Elsa.Primitives.Tests.Exceptions;
 
 /// <summary>
-/// Spec 182, FR-013 and SC-006: the dormancy refusal is spec 180's write refusal, keeping its type and versions, but
-/// carrying its own stable code (Q17), plus the feature and a caller-neutral reason, and no filter that turns an
+/// The dormancy refusal is a schema write refusal, keeping its type and versions, but
+/// carrying its own stable code, plus the feature and a caller-neutral reason, and no filter that turns an
 /// exception into corruption or a 400 catches it.
 /// </summary>
 public sealed class SchemaDormancyRefusedExceptionTests
@@ -14,8 +14,8 @@ public sealed class SchemaDormancyRefusedExceptionTests
     private static readonly SchemaDormancyRefusedException Refusal = new("Orders", "1", "2", "OrdersApi", Reason);
 
     /// <remarks>
-    /// <c>InvalidDataException</c> is sealed, so no subtype of it can exist; it is listed because spec 182's FR-013 names
-    /// all six, and the assertion still pins that nobody unseals it and derives the refusal from it.
+    /// <c>InvalidDataException</c> is sealed, so no subtype of it can exist; it is listed to keep the set of
+    /// six whole, and the assertion still pins that nobody unseals it and derives the refusal from it.
     /// </remarks>
     [Theory]
     [InlineData(typeof(InvalidOperationException))]

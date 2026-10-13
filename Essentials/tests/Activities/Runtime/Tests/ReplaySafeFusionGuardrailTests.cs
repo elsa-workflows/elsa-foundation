@@ -294,7 +294,7 @@ public sealed class ReplaySafeFusionGuardrailTests
     {
         await using var harness = WorkflowExecutionHarness.Create()
             .WithFeature(services => new ActivitiesFlowchartFeature().ConfigureServices(services))
-            .WithCoalescing()
+            .WithPersistenceMode()
             .ConfigureServices(services =>
             {
                 // AddSingleton (not TryAdd) supersedes the runtime's default registration for GetService resolution —

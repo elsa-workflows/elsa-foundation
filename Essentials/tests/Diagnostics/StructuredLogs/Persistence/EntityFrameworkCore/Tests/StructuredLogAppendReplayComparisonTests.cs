@@ -17,7 +17,7 @@ namespace Elsa.Diagnostics.StructuredLogs.Persistence.EntityFrameworkCore.Tests;
 /// <remarks>
 /// <para>
 /// The real "StructuredLogs" family has shipped only <see cref="StructuredLogsEfModule.SchemaVersion"/> to date, so no
-/// row of it can be stamped at an older readable version, and spec 180, FR-002 requires every version check to name its
+/// row of it can be stamped at an older readable version, and every version check must name its
 /// family through its own module's <c>&lt;Module&gt;.Chain</c> handle - so <see cref="EfStructuredLogStore"/> cannot be
 /// given a second, synthetic version of its own chain from a test without breaking that rule or shipping a second real
 /// production version. A constructor seam that tried this (an <c>EfSchemaChain</c> parameter overriding

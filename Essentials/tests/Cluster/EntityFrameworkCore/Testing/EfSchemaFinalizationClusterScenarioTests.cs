@@ -10,7 +10,7 @@ using Xunit;
 namespace Elsa.Cluster.EntityFrameworkCore.Testing;
 
 /// <summary>
-/// Spec 181's finalization gate over the durable membership provider, on a controllable clock, over whichever engine
+/// The finalization gate over the durable membership provider, on a controllable clock, over whichever engine
 /// the deriving class supplies: several hosts share one database, each with a gate whose fleet is the real provider and
 /// whose record lives beside the membership table, exactly where a module's own would. Each test names the success
 /// criterion or scenario it proves.
@@ -110,7 +110,7 @@ public abstract class EfSchemaFinalizationClusterScenarioTests(EfClusterMembersh
     }
 
     /// <summary>
-    /// Spec 186, FR-012 and MR-001, over the durable provider on each engine, both ways: the backfill's settle condition
+    /// Over the durable provider on each engine, both ways: the backfill's settle condition
     /// does not hold while a counted member reports having observed an older finalized version, and names it; it holds
     /// once that member publishes the target, read fresh from the membership table. A member whose report speaks for
     /// another database is not waited for.
@@ -135,10 +135,10 @@ public abstract class EfSchemaFinalizationClusterScenarioTests(EfClusterMembersh
     }
 
     /// <summary>
-    /// Spec 186, FR-012, amended 2026-09-30 (#2153): the settle condition counts only members whose module is active for the
+    /// #2153: the settle condition counts only members whose module is active for the
     /// family. A member that loaded the family's declaration without activating its module reports no observed version
     /// for as long as it stays, and would hold every completion back; an active member that has not observed the target
-    /// still does. Readability keeps counting the loaded member, since its declaration says what it can read (spec 183, FR-022).
+    /// still does. Readability keeps counting the loaded member, since its declaration says what it can read.
     /// </summary>
     [SkippableFact]
     public async Task The_backfill_settle_condition_does_not_wait_for_a_member_that_loaded_the_family_without_activating_its_module()

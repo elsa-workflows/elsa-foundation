@@ -333,7 +333,7 @@ public sealed class FeatureManagementServiceTests
     }
 
     /// <summary>
-    /// Spec 171 FR-060: a refusal stops the save, so nothing is stored, no catalog is refreshed and no
+    /// A refusal stops the save, so nothing is stored, no catalog is refreshed and no
     /// shell is reloaded — and the guard saw the request before any of that could happen.
     /// </summary>
     [Fact]
@@ -397,7 +397,7 @@ public sealed class FeatureManagementServiceTests
     }
 
     /// <summary>
-    /// FR-061's premise, which the EF guard's redaction obligation rests on: RestoreSecrets runs before
+    /// The premise the EF guard's redaction obligation rests on: RestoreSecrets runs before
     /// validation, so a guard reads the request's real, unmasked values and not the placeholder a client
     /// round-tripped. A guard that assumed otherwise would probe a database with the placeholder as its
     /// password and report it as unreachable.
@@ -484,7 +484,7 @@ public sealed class FeatureManagementServiceTests
     }
 
     /// <summary>
-    /// FR-070: a host that composes no guard keeps today's ordering exactly — shells.json is written first,
+    /// A host that composes no guard keeps today's ordering exactly — shells.json is written first,
     /// and the shell's own Validate-policy check is what refuses later, after the save.
     /// </summary>
     [Fact]

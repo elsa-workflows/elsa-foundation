@@ -14,7 +14,7 @@ using Xunit;
 namespace Elsa.Cluster.EntityFrameworkCore.Testing;
 
 /// <summary>
-/// Spec 183's user stories 2 and 4 against the EF provider, on a controllable clock, over whichever engine the deriving
+/// The membership scenarios against the EF provider, on a controllable clock, over whichever engine the deriving
 /// class supplies. Each test is named after the acceptance scenario it proves. Members driven by the fixture show the
 /// fleet semantics deterministically; the graceful stop and the live duplicate run through real hosts, because what they
 /// prove is the provider's own lifecycle.
@@ -228,7 +228,7 @@ public abstract class EfClusterMembershipScenarioTests(EfClusterMembershipTestSt
     }
 
     /// <summary>
-    /// FR-004b's race: two joins in flight for one host id, with no earlier incarnation and with an expired one to
+    /// The join race: two joins in flight for one host id, with no earlier incarnation and with an expired one to
     /// displace. The unique index on the current incarnation and the compare-and-set on the displaced one let exactly one
     /// through; the other is refused and writes nothing.
     /// </summary>
@@ -339,11 +339,11 @@ public abstract class EfClusterMembershipScenarioTests(EfClusterMembershipTestSt
     }
 
     /// <summary>
-    /// FR-007, both ways, the case a member that only stays lapsed would hide: a host whose member finds itself displaced,
-    /// as a later incarnation's join marks it, stops, saying so as critical and recording why for its app's exit code,
-    /// rather than keep working under an identity the fleet no longer counts; a host whose member only lapsed, here because
-    /// its entry went missing, keeps running, records nothing, and rejoins as a new incarnation. Neither touches this
-    /// process's own exit code.
+    /// Displacement against a plain lapse, both ways, the case a member that only stays lapsed would hide: a host whose
+    /// member finds itself displaced, as a later incarnation's join marks it, stops, saying so as critical and
+    /// recording why for its app's exit code, rather than keep working under an identity the fleet no longer counts; a
+    /// host whose member only lapsed, here because its entry went missing, keeps running, records nothing, and rejoins
+    /// as a new incarnation. Neither touches this process's own exit code.
     /// </summary>
     [SkippableFact]
     public async Task FR007_a_host_whose_member_is_displaced_stops_and_one_whose_member_only_lapsed_keeps_running()
@@ -360,7 +360,7 @@ public abstract class EfClusterMembershipScenarioTests(EfClusterMembershipTestSt
 
         await Fixture.WithStoreAsync(async context =>
         {
-            // What a later incarnation's join writes over the earlier one (FR-004a), and an entry cleanup removed.
+            // What a later incarnation's join writes over the earlier one, and an entry cleanup removed.
             await context.Members.Where(row => row.HostId == displacedIdentity.HostId).ExecuteUpdateAsync(row => row.SetProperty(entity => entity.CurrentHostId, (string?)null));
             return await context.Members.Where(row => row.HostId == lapsedIdentity.HostId).ExecuteDeleteAsync();
         });
@@ -393,10 +393,11 @@ public abstract class EfClusterMembershipScenarioTests(EfClusterMembershipTestSt
     }
 
     /// <summary>
-    /// FR-007 with FR-039, the other way a running host learns that another process holds its host id: its member lapsed,
-    /// here because its entry went missing, and meanwhile a second live process joined under the same host id and keeps
-    /// renewing. The rejoin finds that live duplicate, and the host stops, saying so as critical and recording why for its
-    /// app's exit code, while this process's own exit code is left alone and the other process is undisturbed.
+    /// A lapse that meets a live duplicate, the other way a running host learns that another process holds its host id:
+    /// its member lapsed, here because its entry went missing, and meanwhile a second live process joined under the
+    /// same host id and keeps renewing. The rejoin finds that live duplicate, and the host stops, saying so as critical
+    /// and recording why for its app's exit code, while this process's own exit code is left alone and the other
+    /// process is undisturbed.
     /// </summary>
     [SkippableFact]
     public async Task FR007_and_FR039_a_host_whose_rejoin_finds_a_live_duplicate_stops_and_records_why()

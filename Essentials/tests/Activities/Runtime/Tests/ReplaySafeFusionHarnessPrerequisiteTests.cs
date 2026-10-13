@@ -58,7 +58,7 @@ public sealed class ReplaySafeFusionHarnessPrerequisiteTests
         var builder = WorkflowExecutionHarness.Create()
             .WithFeature(services => new ActivitiesFlowchartFeature().ConfigureServices(services));
         if (coalescing)
-            builder = builder.WithCoalescing();
+            builder = builder.WithPersistenceMode();
 
         await using var harness = builder.Build(ActivityExecutionIds);
 

@@ -424,8 +424,8 @@ public sealed class EfSchemaBackfill
         {
             if (run.Declaration.Rewriter is null)
                 blockers.Add(new EfSchemaBackfillBlocker(EfSchemaBackfillBlockerKind.NoRewriter, null, toUpgrade,
-                    $"{toUpgrade} row(s) of schema family '{family}' are below '{target}', and the family names no rewriter to upgrade them " +
-                    "(spec 186, FR-004): declare one with [EfSchemaFamily(..., Rewriter = typeof(...))]."));
+                    $"{toUpgrade} row(s) of schema family '{family}' are below '{target}', and the family names no rewriter to upgrade them: " +
+                    "declare one with [EfSchemaFamily(..., Rewriter = typeof(...))]."));
             else
                 await _passes.UpgradeAsync(scopes, run, blockers, cancellationToken);
         }
@@ -461,7 +461,7 @@ public sealed class EfSchemaBackfill
                 return await RecordAsync(scopes, run, verification, cancellationToken);
 
             _logger.LogInformation(
-                "The verification pass of schema family {Family} found {Found} row(s) below {Target} and rewrote them; it starts again (spec 186, FR-013).",
+                "The verification pass of schema family {Family} found {Found} row(s) below {Target} and rewrote them; it starts again.",
                 family, verification.Found, target);
         }
 

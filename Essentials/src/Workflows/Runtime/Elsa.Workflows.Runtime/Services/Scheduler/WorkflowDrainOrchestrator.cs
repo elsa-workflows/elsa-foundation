@@ -28,7 +28,7 @@ public sealed class WorkflowDrainOrchestrator : IWorkflowDrainOrchestrator
     private readonly IPersistenceOperationScopeFactory? _heartbeatScopeFactory;
     private readonly IRuntimeCoalescingDrainScopeFactory? _coalescingScopeFactory;
     private readonly IRuntimeLiveDrainDeliveryAccessor? _liveDrainDeliveryAccessor;
-    private readonly IRuntimeCheckpointCadenceResolver? _cadenceResolver;
+    private readonly IRuntimePersistenceModeResolver? _persistenceModeResolver;
     private readonly IRuntimePostCommitOutboxClaimStore _claimStore;
     private readonly IPostCommitOutboxLookupStore _outboxLookupStore;
     private readonly IWorkflowSchedulerWorkQueue _schedulerWorkQueue;
@@ -62,7 +62,7 @@ public sealed class WorkflowDrainOrchestrator : IWorkflowDrainOrchestrator
         WorkflowDrainOrchestratorOptions? options = null,
         IRuntimeCoalescingDrainScopeFactory? coalescingScopeFactory = null,
         IRuntimeLiveDrainDeliveryAccessor? liveDrainDeliveryAccessor = null,
-        IRuntimeCheckpointCadenceResolver? cadenceResolver = null,
+        IRuntimePersistenceModeResolver? persistenceModeResolver = null,
         TimeProvider? timeProvider = null)
         : this(
             schedulerDrainer,
@@ -77,7 +77,7 @@ public sealed class WorkflowDrainOrchestrator : IWorkflowDrainOrchestrator
             options,
             coalescingScopeFactory,
             liveDrainDeliveryAccessor,
-            cadenceResolver,
+            persistenceModeResolver,
             timeProvider,
             heartbeatScopeFactory: null)
     {
@@ -101,7 +101,7 @@ public sealed class WorkflowDrainOrchestrator : IWorkflowDrainOrchestrator
         WorkflowDrainOrchestratorOptions? options = null,
         IRuntimeCoalescingDrainScopeFactory? coalescingScopeFactory = null,
         IRuntimeLiveDrainDeliveryAccessor? liveDrainDeliveryAccessor = null,
-        IRuntimeCheckpointCadenceResolver? cadenceResolver = null,
+        IRuntimePersistenceModeResolver? persistenceModeResolver = null,
         TimeProvider? timeProvider = null)
     {
         ArgumentNullException.ThrowIfNull(heartbeatScopeFactory);
@@ -118,7 +118,7 @@ public sealed class WorkflowDrainOrchestrator : IWorkflowDrainOrchestrator
             options,
             coalescingScopeFactory,
             liveDrainDeliveryAccessor,
-            cadenceResolver,
+            persistenceModeResolver,
             timeProvider,
             heartbeatScopeFactory);
     }
@@ -136,7 +136,7 @@ public sealed class WorkflowDrainOrchestrator : IWorkflowDrainOrchestrator
         WorkflowDrainOrchestratorOptions? options,
         IRuntimeCoalescingDrainScopeFactory? coalescingScopeFactory,
         IRuntimeLiveDrainDeliveryAccessor? liveDrainDeliveryAccessor,
-        IRuntimeCheckpointCadenceResolver? cadenceResolver,
+        IRuntimePersistenceModeResolver? persistenceModeResolver,
         TimeProvider? timeProvider,
         IPersistenceOperationScopeFactory? heartbeatScopeFactory)
     {
@@ -169,7 +169,7 @@ public sealed class WorkflowDrainOrchestrator : IWorkflowDrainOrchestrator
         _heartbeatScopeFactory = heartbeatScopeFactory;
         _coalescingScopeFactory = coalescingScopeFactory;
         _liveDrainDeliveryAccessor = liveDrainDeliveryAccessor;
-        _cadenceResolver = cadenceResolver;
+        _persistenceModeResolver = persistenceModeResolver;
         _claimStore = outboxClaimStore;
         _outboxLookupStore = outboxLookupStore;
         _schedulerWorkQueue = schedulerWorkQueue;
@@ -329,28 +329,39 @@ public sealed class WorkflowDrainOrchestrator : IWorkflowDrainOrchestrator
         RuntimeSchedulerDrainRequest request,
         CancellationToken cancellationToken)
     {
-        // Default path: no coalescing scope factory registered, so the drain runs with Immediate persistence.
+        // Every run drains in a session, whatever its mode, so a host composed without the persistence-mode services
+        // cannot run any of them. It refuses before anything runs.
         if (_coalescingScopeFactory is null)
-            return await DrainImmediateAsync(envelope, request, cancellationToken);
+        {
+            throw new InvalidOperationException(
+                $"Workflow execution '{request.WorkflowExecutionId}' cannot drain because this host has no persistence-mode services. " +
+                "Call AddPersistenceModes() after the workflows runtime and its persistence provider are registered.");
+        }
 
-        // Coalescing host, but cadence is resolved per execution. A workflow that authored Immediate must
-        // run Immediate even though the host default is Coalesced: skip establishing the session entirely and take the
-        // immediate path, so no relaxable checkpoint is deferred for this run. The mandatory-boundary set is unaffected
-        // either way — those flush immediately under both policies. Authored cadence is read off the pinned executable
-        // (or the run's own per-run stamp on resume); when no resolver is registered the host default (coalesce) stands.
-        var cadence = _cadenceResolver is not null
-            ? await _cadenceResolver.ResolveAsync(envelope, cancellationToken)
-            : null;
+        // Nor can a run drain in a mode nothing resolved for it.
+        if (_persistenceModeResolver is null)
+        {
+            throw new InvalidOperationException(
+                $"Workflow execution '{request.WorkflowExecutionId}' cannot drain because this host has no persistence-mode resolver. " +
+                "AddWorkflowRuntime() registers one.");
+        }
 
-        if (cadence is { Coalesced: false })
-            return await DrainImmediateAsync(envelope, request, cancellationToken);
+        // The mode is resolved per execution: the mode the run recorded at its first commit, or before that the mode its
+        // start carries, whichever command starts this drain.
+        var resolved = await _persistenceModeResolver.ResolveAsync(envelope, cancellationToken);
 
-        // Coalescing path: establish the ambient session for the drain, then fold-and-flush the buffered segment at
-        // quiescence. The flush runs inside the active ownership scope so single-writer fencing gates the single durable write. If
-        // the drain throws, the flush is skipped and the scope is disposed with its buffer discarded, so a crash
-        // mid-segment replays from the last flushed state plus durable scheduler-queue redelivery. A null cadence (no
-        // resolver registered) coalesces with the host-configured cap, byte-identical to pre-R5 behavior.
-        await using var scope = _coalescingScopeFactory.Begin(request.WorkflowExecutionId, cadence?.MaxSegmentCheckpoints);
+        // The session folds the run's checkpoints between commits: one activity's into each commit under Durable, up to
+        // the host's cap under Balanced, and until a boundary under Ephemeral. Establish it for the drain, then
+        // fold-and-flush the buffered segment at quiescence. The flush runs inside the active ownership scope so
+        // single-writer fencing gates the single durable write. If the drain throws, the flush is skipped and the scope
+        // is disposed with its buffer discarded, so a crash mid-segment replays from the last flushed state plus durable
+        // scheduler-queue redelivery.
+        await using var scope = _coalescingScopeFactory.Begin(request.WorkflowExecutionId, resolved);
+        // A session that stops folding part-way through the drain (at a boundary that ends it, or on a queue that cannot
+        // delete by identity) commits the rest of the drain checkpoint by checkpoint. This drain owns the execution, so
+        // those continuations are delivered in memory rather than through a durable claim; while the session folds, its
+        // overlay delivers them and the live-drain scope does not engage.
+        using var liveDrainScope = _liveDrainDeliveryAccessor?.Push(new RuntimeLiveDrainDeliveryScope(request.WorkflowExecutionId));
         scope.Session.BindDurableValuePageReuseCancellationToken(cancellationToken);
         // Drain cancellation also covers ownership-lease loss. This callback fences only the memo's synchronized state;
         // the existing overlay and session cancellation behavior remain on the normal drain path.
@@ -361,25 +372,6 @@ public sealed class WorkflowDrainOrchestrator : IWorkflowDrainOrchestrator
         await scope.FlushAtQuiescenceAsync(cancellationToken);
         await NotifyObserversAsync(envelope, drainResult, cancellationToken);
         return drainResult;
-    }
-
-    // Immediate persistence for a single drain. While this live drain owns the execution (bounded by the
-    // single-writer lease), push a delivery scope so the post-commit outbox processor delivers EnqueueSchedulerWork
-    // intents in-memory (idempotent enqueue + direct Delivered mark) instead of taking the durable claim round-trip.
-    // Deliberately NOT used on the coalescing path: there the overlay session is authoritative and folds
-    // continuations itself. Reused both when no coalescing factory is registered and when a per-run authored Immediate
-    // cadence opts this run out of coalescing on an otherwise-coalesced host.
-    private async ValueTask<RuntimeSchedulerDrainResult> DrainImmediateAsync(
-        WorkflowExecutionCommandEnvelope envelope,
-        RuntimeSchedulerDrainRequest request,
-        CancellationToken cancellationToken)
-    {
-        using var liveDrainScope = _liveDrainDeliveryAccessor is { } accessor
-            ? accessor.Push(new RuntimeLiveDrainDeliveryScope(request.WorkflowExecutionId))
-            : null;
-        var plainResult = await DrainSchedulerAndPostCommitWorkAsync(request, cancellationToken);
-        await NotifyObserversAsync(envelope, plainResult, cancellationToken);
-        return plainResult;
     }
 
     private async ValueTask<RuntimeSchedulerDrainResult> DrainSchedulerAndPostCommitWorkAsync(

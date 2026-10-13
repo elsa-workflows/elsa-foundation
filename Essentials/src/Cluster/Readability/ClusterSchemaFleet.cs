@@ -8,21 +8,21 @@ using Microsoft.Extensions.Primitives;
 namespace Elsa.Cluster.Readability;
 
 /// <summary>
-/// The finalization gate's view of the fleet (spec 181, "Requirements on membership"), answered by the host's one
-/// membership provider. It adds no rule of its own: publishing is the provider's publish (MR-003, MR-004), and the
-/// counting query is the contract's <see cref="ReadsSchemaVersion"/> requirement over a fresh read (MR-007; spec 183,
-/// FR-023), which counts every live member whose report speaks for the database, a displaced-but-live one and one with
+/// The finalization gate's view of the fleet, answered by the host's one
+/// membership provider. It adds no rule of its own: publishing is the provider's publish, and the
+/// counting query is the contract's <see cref="ReadsSchemaVersion"/> requirement over a fresh read,
+/// which counts every live member whose report speaks for the database, a displaced-but-live one and one with
 /// an unknown report included. The backfill's settle condition counts fewer: only a member whose module is active for the
-/// family (<see cref="ReadabilityEntry.ModuleActive"/>; spec 186, FR-012).
+/// family (<see cref="ReadabilityEntry.ModuleActive"/>).
 /// </summary>
 /// <remarks>
-/// Under the in-process provider the fleet is this host alone, so a version this host reads finalizes at once
-/// (FR-021). Under a durable provider every live member that reports the family is counted.
+/// Under the in-process provider the fleet is this host alone, so a version this host reads finalizes at once.
+/// Under a durable provider every live member that reports the family is counted.
 /// </remarks>
 public sealed class ClusterSchemaFleet(IClusterMembership membership, IOptions<ClusterMembershipOptions>? options = null) : IEfSchemaFleet
 {
     /// <summary>
-    /// The membership expiry period plus the skew allowance (spec 186, FR-012; spec 183, FR-006), read when the backfill
+    /// The membership expiry period plus the skew allowance, read when the backfill
     /// asks rather than when the fleet is built: the finalization gate resolves the fleet at module activation, and reading
     /// the membership settings there would run the provider's own validation of them a second time, ahead of the provider.
     /// </summary>
@@ -79,8 +79,8 @@ public sealed class ClusterSchemaFleet(IClusterMembership membership, IOptions<C
     public IChangeToken GetChangeToken() => membership.GetChangeToken();
 
     /// <summary>
-    /// A counted member that has not observed the version yet, and what it has observed instead, for the backfill's status
-    /// (spec 186, FR-021): from the entries whose module is active, the only ones the settle condition counts.
+    /// A counted member that has not observed the version yet, and what it has observed instead, for the backfill's status:
+    /// from the entries whose module is active, the only ones the settle condition counts.
     /// </summary>
     private static string DescribeObserved(FleetMember member, string family, string databaseIdentity)
     {
@@ -93,7 +93,7 @@ public sealed class ClusterSchemaFleet(IClusterMembership membership, IOptions<C
         return $"{member.Identity} has observed [{string.Join(", ", observed)}]";
     }
 
-    /// <summary>A counted member that cannot read the version, and what it reads instead, for the gate's status (FR-022).</summary>
+    /// <summary>A counted member that cannot read the version, and what it reads instead, for the gate's status.</summary>
     private static string Describe(FleetMember member, string family, string databaseIdentity)
     {
         if (member.Report.IsUnknown || member.Report.Readability is null)

@@ -13,7 +13,7 @@ namespace Elsa.Cli.Tests;
 
 /// <summary>
 /// Binding the host's own tooling entry point, and the refusal for a host whose persistence build predates
-/// it (FR-010).
+/// it.
 /// </summary>
 public sealed class ToolingEntryPointTests : IDisposable
 {
@@ -65,7 +65,7 @@ public sealed class ToolingEntryPointTests : IDisposable
 
     /// <summary>
     /// The one constant the worker and the host's persistence assembly must spell identically while
-    /// referencing nothing of each other (ADR 0076 D1). A drift here would silently read an empty selection
+    /// referencing nothing of each other. A drift here would silently read an empty selection
     /// out of a host that plainly made one, which is the failure that looks like agreement.
     /// </summary>
     [Fact]
@@ -130,7 +130,7 @@ public sealed class ToolingEntryPointTests : IDisposable
     }
 
     /// <summary>
-    /// The version-skew probe (spec 172 FR-004). The tooling contract refuses an unmapped request property,
+    /// The version-skew probe. The tooling contract refuses an unmapped request property,
     /// so a build that predates the field must be found before the field is sent — and the refusal that
     /// follows names the key rather than reporting a malformed request.
     /// </summary>
@@ -378,7 +378,7 @@ public sealed class ToolingEntryPointTests : IDisposable
 
     /// <summary>
     /// The fixture module is a third-party one, and the entry point it is discovered through is the host's
-    /// own: nothing about this assembly is known to Elsa (spec 171 User Story 6).
+    /// own: nothing about this assembly is known to Elsa.
     /// </summary>
     [Fact]
     public void The_third_party_fixture_declares_a_module_the_hosts_own_catalog_discovers()

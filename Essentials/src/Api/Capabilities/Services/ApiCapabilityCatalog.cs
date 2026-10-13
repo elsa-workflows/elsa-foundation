@@ -90,7 +90,7 @@ public sealed class ApiCapabilityCatalog(
                 $"Capability '{capabilityId}' has incompatible contributions from features: {sources}.");
         }
 
-        // Spec 182, FR-007: one dormant contribution marks the whole capability dormant. The loud direction: a client told
+        // One dormant contribution marks the whole capability dormant. The loud direction: a client told
         // a capability is dormant explains a disabled control, while one told it is available calls an operation that is
         // refused.
         var dormantReasons = entries

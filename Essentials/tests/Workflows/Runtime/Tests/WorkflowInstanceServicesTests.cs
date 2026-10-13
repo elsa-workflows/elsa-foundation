@@ -26,15 +26,12 @@ public sealed class WorkflowInstanceServicesTests
     private WorkflowInstanceListService NewListInstanceHandler(IWorkflowExecutionStateStore? workflowStore = null) =>
         new(workflowStore ?? _workflowStore, _activityStore, _incidentStore, AllowAll);
 
-    private WorkflowInstanceDetailsService NewGetInstanceHandler(RuntimeCheckpointCadenceInspector? cadenceInspector = null) =>
+    private WorkflowInstanceDetailsService NewGetInstanceHandler(RuntimePersistenceModeInspector? persistenceModeInspector = null) =>
         new(_workflowStore, _inspectionStore, _incidentStore, _durableValueStore, new DefaultRuntimePayloadCapturePolicy(), AllowAll,
-            cadenceInspector ?? ImmediateCadenceInspector());
+            persistenceModeInspector ?? HostDefaulting(PersistenceMode.Durable));
 
-    private static RuntimeCheckpointCadenceInspector ImmediateCadenceInspector() =>
-        new([]);
-
-    private static RuntimeCheckpointCadenceInspector CoalescedCadenceInspector(int maxSegmentCheckpoints) =>
-        new([new CoalescingRuntimeCheckpointPersistenceOptions { MaxSegmentCheckpoints = maxSegmentCheckpoints }]);
+    private static RuntimePersistenceModeInspector HostDefaulting(PersistenceMode mode) =>
+        new([new PersistenceModeOptions { Mode = mode }]);
 
     private async Task SeedWorkflowInstancesAsync(int count)
     {
@@ -641,58 +638,70 @@ public sealed class WorkflowInstanceServicesTests
     }
 
     [Fact]
-    public async Task GetWorkflowInstance_OnImmediateHost_ReportsActivityLevelInspection()
+    public async Task GetWorkflowInstance_OnDurableHost_ReportsActivityLevelInspection()
     {
         await _workflowStore.SaveAsync(Workflow("wf-1", WorkflowExecutionStatus.Completed, "definition-1"));
-        var handler = NewGetInstanceHandler(ImmediateCadenceInspector());
+        var handler = NewGetInstanceHandler(HostDefaulting(PersistenceMode.Durable));
 
         var result = await handler.GetAsync(new GetWorkflowInstance("wf-1"), CancellationToken.None);
 
         Assert.NotNull(result);
-        Assert.Equal("Immediate", result!.CheckpointCadence);
-        Assert.Null(result!.MaxSegmentCheckpoints);
+        Assert.Equal("Durable", result!.PersistenceMode);
         Assert.Equal("activity-level", result!.InspectionGranularity);
     }
 
     [Fact]
-    public async Task GetWorkflowInstance_OnCoalescedHost_ReportsBoundaryLevelInspectionWithTheCap()
+    public async Task GetWorkflowInstance_OnAHostWithoutPersistenceModeOptions_HasNoDefaultToReport()
+    {
+        // A host that never added the persistence modes cannot run any mode, so a run without a recorded mode is not
+        // reported as Durable.
+        await _workflowStore.SaveAsync(Workflow("wf-1", WorkflowExecutionStatus.Completed, "definition-1"));
+        var handler = NewGetInstanceHandler(new RuntimePersistenceModeInspector([]));
+
+        var refusal = await Assert.ThrowsAsync<InvalidOperationException>(() => handler.GetAsync(new GetWorkflowInstance("wf-1"), CancellationToken.None));
+
+        Assert.Contains("AddPersistenceModes()", refusal.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task GetWorkflowInstance_OnBalancedHost_ReportsBoundaryLevelInspection()
     {
         await _workflowStore.SaveAsync(Workflow("wf-1", WorkflowExecutionStatus.Completed, "definition-1"));
-        var handler = NewGetInstanceHandler(CoalescedCadenceInspector(32));
+        var handler = NewGetInstanceHandler(HostDefaulting(PersistenceMode.Balanced));
 
         var result = await handler.GetAsync(new GetWorkflowInstance("wf-1"), CancellationToken.None);
 
         Assert.NotNull(result);
-        Assert.Equal("Coalesced", result!.CheckpointCadence);
-        Assert.Equal(32, result!.MaxSegmentCheckpoints);
+        Assert.Equal("Balanced", result!.PersistenceMode);
         Assert.Equal("boundary-level", result!.InspectionGranularity);
     }
 
     [Fact]
-    public async Task GetWorkflowInstance_PrefersThePerRunStamp_OverAReconfiguredCoalescedHost()
+    public async Task GetWorkflowInstance_PrefersTheRecordedMode_OverAReconfiguredHost()
     {
-        // Per-run cadence stamp: the run executed under Immediate cadence; the host was later reconfigured to
-        // Coalesced. The instance must report the cadence it actually ran under, not the host's current setting.
+        // The run executed under Durable; the host was later reconfigured to Balanced. The instance must report the
+        // mode it actually ran under, not the host's current setting.
         await _workflowStore.SaveAsync(Workflow(
             "wf-1",
             WorkflowExecutionStatus.Completed,
             "definition-1",
             systemMetadata: new Dictionary<string, string>
             {
-                [Elsa.Workflows.Runtime.Core.Constants.RuntimeMetadataKeys.CheckpointCadence] = "Immediate"
+                [Elsa.Workflows.Runtime.Core.Constants.RuntimeMetadataKeys.PersistenceMode] = "Durable"
             }));
-        var handler = NewGetInstanceHandler(CoalescedCadenceInspector(32));
+        var handler = NewGetInstanceHandler(HostDefaulting(PersistenceMode.Balanced));
 
         var result = await handler.GetAsync(new GetWorkflowInstance("wf-1"), CancellationToken.None);
 
         Assert.NotNull(result);
-        Assert.Equal("Immediate", result!.CheckpointCadence);
-        Assert.Null(result!.MaxSegmentCheckpoints);
+        Assert.Equal("Durable", result!.PersistenceMode);
         Assert.Equal("activity-level", result!.InspectionGranularity);
     }
 
-    [Fact]
-    public async Task GetWorkflowInstance_ReportsAStampedCoalescedRun_EvenOnAnImmediateHost()
+    [Theory]
+    [InlineData("Balanced")]
+    [InlineData("Ephemeral")]
+    public async Task GetWorkflowInstance_ReportsARecordedFoldingRun_EvenOnADurableHost(string recordedMode)
     {
         await _workflowStore.SaveAsync(Workflow(
             "wf-1",
@@ -700,16 +709,14 @@ public sealed class WorkflowInstanceServicesTests
             "definition-1",
             systemMetadata: new Dictionary<string, string>
             {
-                [Elsa.Workflows.Runtime.Core.Constants.RuntimeMetadataKeys.CheckpointCadence] = "Coalesced",
-                [Elsa.Workflows.Runtime.Core.Constants.RuntimeMetadataKeys.CheckpointMaxSegmentCheckpoints] = "8"
+                [Elsa.Workflows.Runtime.Core.Constants.RuntimeMetadataKeys.PersistenceMode] = recordedMode
             }));
-        var handler = NewGetInstanceHandler(ImmediateCadenceInspector());
+        var handler = NewGetInstanceHandler(HostDefaulting(PersistenceMode.Durable));
 
         var result = await handler.GetAsync(new GetWorkflowInstance("wf-1"), CancellationToken.None);
 
         Assert.NotNull(result);
-        Assert.Equal("Coalesced", result!.CheckpointCadence);
-        Assert.Equal(8, result!.MaxSegmentCheckpoints);
+        Assert.Equal(recordedMode, result!.PersistenceMode);
         Assert.Equal("boundary-level", result!.InspectionGranularity);
     }
 

@@ -9,9 +9,9 @@ using Microsoft.Extensions.Logging;
 namespace Elsa.Cluster.Readability.Tests;
 
 /// <summary>
-/// Spec 180's upcaster chain as a host reports it (spec 183, FR-019 to FR-021). The invariant: the versions a host
+/// The upcaster chain as a host reports it. The invariant: the versions a host
 /// reports for a family are exactly the versions its reads of that family accept, and never one whose chain step is
-/// missing, because B5's gate finalizes a version only when every member reports it.
+/// missing, because the finalization gate finalizes a version only when every member reports it.
 /// </summary>
 public sealed class EfSchemaChainReadabilityTests : IDisposable
 {
@@ -61,7 +61,7 @@ public sealed class EfSchemaChainReadabilityTests : IDisposable
         Assert.Contains("gap", error.Message, StringComparison.Ordinal);
     }
 
-    /// <summary>FR-005: the family's registration refuses a chain with a gap, while the host is still wiring itself up.</summary>
+    /// <summary>The family's registration refuses a chain with a gap, while the host is still wiring itself up.</summary>
     [Fact]
     public void Registering_a_module_whose_family_has_a_gap_is_refused_at_startup()
     {

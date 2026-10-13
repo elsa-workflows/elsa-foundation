@@ -82,7 +82,7 @@ public sealed class VariableTypeDescriptorCatalogTests
     }
 
     // The descriptors/variables endpoint host (Elsa.Workbench) is internal and only reachable via full
-    // hosting (out of scope per §2.23.6). This asserts the catalog → wire DTO mapping the handler
+    // hosting (out of scope here). This asserts the catalog → wire DTO mapping the handler
     // performs: only { alias, displayName, category, defaultEditor } reach the wire — never ClrType.
     [Fact]
     public void WireProjection_EmitsAliasDisplayNameCategoryDefaultEditorOnly()

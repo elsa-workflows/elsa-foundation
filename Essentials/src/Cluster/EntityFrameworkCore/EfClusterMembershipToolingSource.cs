@@ -8,7 +8,7 @@ namespace Elsa.Cluster.EntityFrameworkCore;
 
 /// <summary>
 /// What <c>dotnet elsa persistence status</c> reads the cluster's members with: the membership table of the database the
-/// command's connection reaches, read as any reader of the fleet reads it (spec 183, FR-012), so an entry this build cannot
+/// command's connection reaches, read as any reader of the fleet reads it, so an entry this build cannot
 /// interpret is listed and blocks every version rather than being dropped. The tool finds it beside the module, in this
 /// assembly (<see cref="IEfToolingFleetSource"/>).
 /// </summary>

@@ -7,16 +7,16 @@ using Microsoft.Extensions.Primitives;
 namespace Elsa.Cluster.InProcess;
 
 /// <summary>
-/// The default membership provider: a cluster of one, the host itself (FR-017, FR-018).
+/// The default membership provider: a cluster of one, the host itself.
 /// </summary>
 /// <remarks>
 /// Its fleet view is this host alone, live and active. Fresh and cached reads are the same, a publish is visible at
 /// once, and the member never lapses. It writes nothing durable and runs no heartbeat, hosted service or timer; its
 /// only state is the process's <see cref="InProcessMemberRecord"/>. Its host id is the configured one or, by default,
-/// the machine name (spec 183, Decisions, Q24).
+/// the machine name.
 /// <para>
-/// It never meets FR-037 to FR-042 (the lapse, displacement, duplicate-host-id, clock-skew, uninterpretable-entry and
-/// failed-fresh-read conditions): a cluster of one never lapses, is never displaced, never disagrees with another
+/// It never meets the lapse, displacement, duplicate-host-id, clock-skew, uninterpretable-entry and
+/// failed-fresh-read conditions: a cluster of one never lapses, is never displaced, never disagrees with another
 /// clock, and its fresh read never fails, so <see cref="FleetMember.Conditions"/> on its own entry is always empty.
 /// </para>
 /// </remarks>

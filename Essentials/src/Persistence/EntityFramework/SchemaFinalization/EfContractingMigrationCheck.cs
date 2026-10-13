@@ -204,7 +204,7 @@ public static class EfContractingMigrationCheck
             throw new InvalidOperationException(
                 $"EF module '{module}' was not migrated past '{first}': its migrations before that contracting migration do not " +
                 "create the finalization record table, so the record a contracting migration waits for cannot be created " +
-                "before it runs (spec 181, FR-002).");
+                "before it runs.");
 
         var store = new EfSchemaFinalizationStore(context);
         var creator = SchemaFinalizationActor.Of(MigratorMember(host));

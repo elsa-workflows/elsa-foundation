@@ -7,7 +7,7 @@ using Elsa.Workflows.Runtime.Core.Models;
 namespace Elsa.Cluster.Testing.Runtime;
 
 /// <summary>
-/// A command executor that models a drain committing one checkpoint under single-writer fencing (ADR 0078, invariant 2):
+/// A command executor that models a drain committing one checkpoint under single-writer fencing:
 /// it acquires the execution lease, which always issues a strictly greater fencing token, and commits only if that token
 /// is still current when the commit is reached. A drain can be held between the two, so a test can reclaim, re-drive and
 /// commit elsewhere while this member is mid-drain. A committed start command records the execution's durable state,

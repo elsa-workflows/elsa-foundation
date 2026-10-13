@@ -17,6 +17,7 @@ using Elsa.Workflows.Runtime.Api.Coalescing;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Workflows.Runtime.Extensions;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 
@@ -50,13 +51,19 @@ public sealed class WorkflowExecutionHarness : IAsyncDisposable
     private readonly ServiceProvider _provider;
     private readonly string _workflowExecutionId;
     private readonly WorkflowExecutableIdentity _identity;
+    private readonly PersistenceMode? _workflowPersistenceMode;
     private bool _activityTypesRegistered;
 
-    private WorkflowExecutionHarness(ServiceProvider provider, string workflowExecutionId, WorkflowExecutableIdentity identity)
+    private WorkflowExecutionHarness(
+        ServiceProvider provider,
+        string workflowExecutionId,
+        WorkflowExecutableIdentity identity,
+        PersistenceMode? workflowPersistenceMode)
     {
         _provider = provider;
         _workflowExecutionId = workflowExecutionId;
         _identity = identity;
+        _workflowPersistenceMode = workflowPersistenceMode;
     }
 
     /// <summary>The configured service provider (escape hatch for advanced assertions).</summary>
@@ -489,7 +496,7 @@ public sealed class WorkflowExecutionHarness : IAsyncDisposable
             runtimeRequirements: null,
             storageDriverRequirements: null,
             incidentStrategy: IncidentStrategyBuiltIns.FaultReference,
-            checkpointCadence: null,
+            persistenceMode: null,
             workflowVariables: workflowVariables);
 
     /// <summary>Builds a leaf probe node that records execution and emits the given outcomes (default <c>Done</c>).</summary>
@@ -572,7 +579,7 @@ public sealed class WorkflowExecutionHarness : IAsyncDisposable
             runtimeRequirements: null,
             storageDriverRequirements: null,
             incidentStrategy: executable.IncidentStrategy,
-            checkpointCadence: executable.CheckpointCadence,
+            persistenceMode: _workflowPersistenceMode ?? executable.PersistenceMode,
             workflowVariables: executable.WorkflowVariables);
 
     private ExecutableNode PinClrActivityContract(ExecutableNode node)
@@ -845,13 +852,15 @@ public sealed class WorkflowExecutionHarness : IAsyncDisposable
         IReadOnlyDictionary<string, string>? triggerMetadata = null)
     {
         var payload = new WorkflowExecutionStartCommandPayload(pinnedExecutable, pinnedExecutable.ArtifactId, inputs: inputs, stimulusInput: stimulusInput, triggerNodeId: triggerNodeId, triggerMetadata: triggerMetadata);
+        // The artifact id rides on the command and the envelope, as WorkflowStartDispatcher puts it there.
+        var metadata = new Dictionary<string, string> { ["runtime.artifactId"] = pinnedExecutable.ArtifactId };
         var command = new WorkflowExecutionCommand(
             CommandId: "command-start",
             WorkflowExecutionId: _workflowExecutionId,
             Kind: WorkflowExecutionCommandKind.Start,
             EnqueuedAt: Now,
             Payload: JsonSerializer.SerializeToElement(payload),
-            Metadata: new Dictionary<string, string>());
+            Metadata: metadata);
 
         return new WorkflowExecutionCommandEnvelope(
             envelopeId: "envelope-start",
@@ -861,13 +870,14 @@ public sealed class WorkflowExecutionHarness : IAsyncDisposable
             deliveryMode: WorkflowExecutionCommandDeliveryMode.AtLeastOnce,
             enqueuedAt: Now,
             sequence: 1,
-            metadata: new Dictionary<string, string>());
+            metadata: metadata);
     }
 
     /// <summary>Fluent configuration for a <see cref="WorkflowExecutionHarness"/>.</summary>
     public sealed class Builder
     {
         private readonly List<Action<IServiceCollection>> _featureConfigurators = [];
+        private PersistenceMode? _workflowPersistenceMode;
 
         internal Builder()
         {
@@ -886,19 +896,36 @@ public sealed class WorkflowExecutionHarness : IAsyncDisposable
         }
 
         /// <summary>
-        /// Drives the harness under the opt-in burst-coalescing checkpoint persistence policy
-        /// instead of the default Immediate cadence, so intra-drain checkpoints fold into one atomic commit at
-        /// quiescence — the mode a ReplaySafe hop-fusion pass engages inside. Applied after the
-        /// runtime feature registration (which the ctor seeds first), so the coalescing decorators capture the runtime
-        /// stores. Optionally caps the per-segment checkpoint count (models a mid-drain fold-and-flush).
+        /// Sets the host's persistence-mode options, with <paramref name="hostMode"/> as the default for workflows that
+        /// choose none. Applied after the runtime feature registration (which the ctor seeds first), so the folding
+        /// decorators capture the runtime stores. Without this the host default is Durable.
+        /// <paramref name="maxActivitiesPerCommit"/> lowers the cap to model an
+        /// intermediate commit mid-drain; <paramref name="recordCompletion"/> off lets an Ephemeral run that was never
+        /// committed finish without a record.
         /// </summary>
-        public Builder WithCoalescing(int? maxSegmentCheckpoints = null)
+        public Builder WithPersistenceMode(
+            PersistenceMode hostMode = PersistenceMode.Balanced,
+            int? maxActivitiesPerCommit = null,
+            bool recordCompletion = true)
         {
-            _featureConfigurators.Add(services => services.AddCoalescingRuntimeCheckpointPersistence(options =>
+            _featureConfigurators.Add(services => services.AddPersistenceModes(options =>
             {
-                if (maxSegmentCheckpoints is { } cap)
-                    options.MaxSegmentCheckpoints = cap;
+                options.Mode = hostMode;
+                options.RecordCompletion = recordCompletion;
+                if (maxActivitiesPerCommit is { } cap)
+                    options.MaxActivitiesPerCommit = cap;
             }));
+            return this;
+        }
+
+        /// <summary>
+        /// Makes every workflow this harness runs choose <paramref name="mode"/>, as an author does in the workflow's
+        /// settings. The choice is compiled into the executable and wins over the host default that
+        /// <see cref="WithPersistenceMode"/> sets.
+        /// </summary>
+        public Builder WithWorkflowPersistenceMode(PersistenceMode mode)
+        {
+            _workflowPersistenceMode = mode;
             return this;
         }
 
@@ -950,12 +977,18 @@ public sealed class WorkflowExecutionHarness : IAsyncDisposable
             foreach (var configurator in _featureConfigurators)
                 configurator(services);
 
+            // Every drain runs in a persistence-mode session, so the stores are wrapped last, after anything a test
+            // registered. A harness that chose no mode runs every workflow Durable.
+            if (!services.Any(descriptor => descriptor.ServiceType == typeof(PersistenceModeOptions)))
+                services.AddPersistenceModeOptions(new PersistenceModeOptions { Mode = PersistenceMode.Durable });
+            services.AddPersistenceModes();
+
             var provider = services.BuildServiceProvider();
 
             // Activity CLR types are registered into the well-known type registry lazily, on first RunAsync (see
             // EnsureActivityTypesRegistered), not here — the caller loads the activity assemblies via its graph
             // builders after Build() returns, so scanning them at Build() time would be order-dependent.
-            return new WorkflowExecutionHarness(provider, workflowExecutionId, identity);
+            return new WorkflowExecutionHarness(provider, workflowExecutionId, identity, _workflowPersistenceMode);
         }
     }
 }

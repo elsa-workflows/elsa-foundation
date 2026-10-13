@@ -10,10 +10,13 @@ namespace Elsa.Workflows.Runtime.Services.Coalescing;
 /// Coalescing decorator for <see cref="IRuntimeCheckpointCommitStore"/>. While a coalescing session owns
 /// the target workflow execution, deferred checkpoints are buffered into an in-memory working set and folded into a
 /// single atomic durable commit at a flush boundary (attempt activation, suspension/fault/cancellation/completion, an
-/// operational or bookmark write, the per-segment hop cap, or the end-of-drain quiescence flush). A durable attempt
+/// operational, incident, bookmark, alteration-job, child-dispatch or dispatch-cancellation write, the per-segment
+/// activity cap of Durable or Balanced, or the end-of-drain quiescence flush).
+/// The one boundary that may be dropped instead is the completion of an Ephemeral run that has no record, on a host
+/// that turned completion records off (see <see cref="RuntimeCoalescingSession.CanDiscardCompletion"/>). A durable attempt
 /// boundary and a cap-hit fold-and-flush each start another coalesced segment in the same drain; when no session is
-/// active, Deferred decisions are normalized to Immediate because there is no working set to flush later. The
-/// default Immediate path forwards the original decision unchanged.
+/// active (outside a drain, or once a boundary ended the session), Deferred decisions are normalized to Immediate
+/// because there is no working set to flush later; any other decision is forwarded unchanged.
 /// </summary>
 /// <remarks>
 /// This decorator never bypasses single-writer ownership fencing: the folded flush is routed back through
@@ -23,7 +26,8 @@ namespace Elsa.Workflows.Runtime.Services.Coalescing;
 /// </remarks>
 public sealed class CoalescingRuntimeCheckpointCommitStore(
     CoalescingInner<IRuntimeCheckpointCommitStore> inner,
-    IRuntimeCoalescingSessionAccessor sessionAccessor) : IRuntimeCheckpointCommitStore
+    IRuntimeCoalescingSessionAccessor sessionAccessor,
+    IRuntimeExecutionOwnershipService? ownershipService = null) : IRuntimeCheckpointCommitStore
 {
     private static readonly RuntimeCheckpointPersistenceDecision ImmediateDecision =
         new(RuntimeCheckpointPersistenceMode.Immediate, "Coalesced segment flush.");
@@ -56,7 +60,6 @@ public sealed class CoalescingRuntimeCheckpointCommitStore(
             var flushResult = await CommitInnerAsync(session, commit, decision, cancellationToken);
             try
             {
-                session.InvalidateInspectionBaselines();
                 await session.ReconcileDurablyPersistedOutboxAsync(commit.Checkpoint.OccurredAt, cancellationToken);
                 await session.AdvanceInnerQueueAsync(consumeInFlightClaims: true, cancellationToken);
             }
@@ -73,7 +76,7 @@ public sealed class CoalescingRuntimeCheckpointCommitStore(
 
         var forceImmediate = HasBoundaryState(commit);
         var deferrable = decision.Mode == RuntimeCheckpointPersistenceMode.Deferred && !forceImmediate;
-        var capReached = session.HopCount + 1 > session.MaxSegmentCheckpoints;
+        var capReached = !IsAttemptClaim(commit) && session.WouldExceedActivityCap(commit);
 
         // Deferrable, non-boundary, under cap: buffer into the overlay working set and acknowledge this commit's own
         // outbox items so the committer's post-commit count assertion is satisfied without durably persisting anything.
@@ -92,6 +95,30 @@ public sealed class CoalescingRuntimeCheckpointCommitStore(
         // advance the durable queue. A pre-activation attempt boundary starts a fresh segment so later replayable work
         // in the same drain can still coalesce without crossing the before-user-code durability guarantee.
         var remainingPendingOutbox = session.RemainingPendingOutboxChanges();
+
+        // The one completion that is not committed: an Ephemeral run, on a host that opted out of completion records,
+        // that was never committed and leaves nothing behind that outlives it. Nothing reaches the durable store, but
+        // the queued work the run consumed is still removed from it, so the finished run is not started again.
+        if (session.CanDiscardCompletion(commit, remainingPendingOutbox))
+        {
+            try
+            {
+                // Every other path proves this node still owns the run when the durable store checks the commit's
+                // fence. Nothing reaches the store here, so check the fence before touching the durable queue: a node
+                // that lost the run must not remove the work its new owner is about to run.
+                if (commit.ExpectedFence is { } fence && ownershipService is not null)
+                    await ownershipService.EnsureCurrentAsync(commit.WorkflowExecutionId, fence.FencingToken, cancellationToken);
+                await session.AdvanceInnerQueueAsync(consumeInFlightClaims: true, cancellationToken);
+            }
+            finally
+            {
+                session.ClearBuffer();
+                session.Deactivate();
+            }
+
+            return OwnOutbox(commit);
+        }
+
         var continueAfterBoundary = capFold || CanContinueAfterBoundary(commit, remainingPendingOutbox.Count);
         if (session.HasBufferedChanges)
         {
@@ -113,7 +140,6 @@ public sealed class CoalescingRuntimeCheckpointCommitStore(
             await CommitInnerAsync(session, foldedCommit, ImmediateDecision, cancellationToken);
             try
             {
-                session.InvalidateInspectionBaselines();
                 if (capFold)
                 {
                     // The trailing commit's outbox items stay overlay-delivered for the next segment; the flush persisted
@@ -152,7 +178,6 @@ public sealed class CoalescingRuntimeCheckpointCommitStore(
         var passthrough = await CommitInnerAsync(session, commit, decision, cancellationToken);
         try
         {
-            session.InvalidateInspectionBaselines();
             if (continueAfterBoundary)
                 session.RecordDurableBoundaryState(commit.StateChanges);
             await session.ReconcileDurablyPersistedOutboxAsync(commit.Checkpoint.OccurredAt, cancellationToken);
@@ -189,12 +214,21 @@ public sealed class CoalescingRuntimeCheckpointCommitStore(
         RuntimeCheckpointPersistenceDecision decision,
         CancellationToken cancellationToken)
     {
+        RuntimeCheckpointCommitStoreResult result;
         if (session?.DurableValuePageMemo is not { } memo)
-            return await _inner.CommitAsync(commit, decision, cancellationToken);
+        {
+            result = await _inner.CommitAsync(commit, decision, cancellationToken);
+        }
+        else
+        {
+            using var write = memo.BeginWrite();
+            result = await _inner.CommitAsync(commit, decision, cancellationToken);
+            write.Succeed();
+        }
 
-        using var write = memo.BeginWrite();
-        var result = await _inner.CommitAsync(commit, decision, cancellationToken);
-        write.Succeed();
+        // From here the run has a durable record, so its completion is always committed.
+        if (session is not null && StringComparer.Ordinal.Equals(session.WorkflowExecutionId, commit.WorkflowExecutionId))
+            session.MarkDurableRecord();
         return result;
     }
 
@@ -226,6 +260,13 @@ public sealed class CoalescingRuntimeCheckpointCommitStore(
             lastFailureMessage: item.LastFailureMessage,
             metadata: item.Metadata,
             deliveryFencingToken: item.DeliveryFencingToken);
+
+    // A claim is taken just before the claimed work runs, and the work item that runs it can exist only in the session's
+    // memory: a parent re-claimed to evaluate its finished child runs from such an item. A cap fold at the claim would
+    // commit the claim but nothing that runs the work again, so a crash before the queue is advanced left the parent
+    // Running with nothing queued. The cap therefore waits for the next checkpoint, which records what the work did.
+    private static bool IsAttemptClaim(RuntimeCheckpointCommit commit) =>
+        StringComparer.Ordinal.Equals(commit.Checkpoint.Name, RuntimeCheckpointNames.ActivityAttemptClaimed);
 
     private static bool CanContinueAfterBoundary(
         RuntimeCheckpointCommit commit,

@@ -321,103 +321,103 @@ sweep, the pump is bounded on two axes:
   throttles after consecutive sweep failures. One poisoned execution therefore cannot monopolise the
   sweep or block healthy executions.
 
-## Coalescing checkpoint persistence — the deferred-flush window (E3-6 / RT-10)
+## Persistence modes and the deferred-flush window
 
-Everything above describes the **default** `ImmediateRuntimeCheckpointPersistencePolicy`: every named
-checkpoint flushes to the durable store the moment it is decided. `AddCoalescingRuntimeCheckpointPersistence`
-swaps in `CoalescingRuntimeCheckpointPersistencePolicy` — an **opt-in** durability/throughput trade,
-selectable exactly like Elsa 3's commit strategies. It folds a *drain segment* of non-suspending intra-drain
-checkpoints into **one atomic flush commit at quiescence**, matching Elsa 3's one-write-per-burst behaviour.
-The default runtime keeps Immediate, so nothing below applies unless coalescing is explicitly enabled.
+[Persistence modes](../website/docs/essentials/persistence-modes.md) is the user guide: what Durable, Balanced
+(the default) and Ephemeral commit, how to choose one per host or per workflow, and what a crash costs in each. This
+section covers the mechanics behind them.
 
-Hosts select the policy through the provider-neutral `WorkflowsRuntimeCheckpointPersistence` shell feature. It
-runs after persistence-provider registration, so it decorates whichever runtime stores the shell selected:
-
-```json
-"WorkflowsRuntimeCheckpointPersistence": {
-  "Mode": "Coalesced",
-  "MaxSegmentCheckpoints": 50
-}
-```
-
-`Mode` is `Immediate` by default and is the configuration-only rollback switch. `Coalesced` reduces physical
-checkpoint writes and request latency for straight-line synchronous workflows, at the cost of replaying up to one
-unflushed segment after a crash. `MaxSegmentCheckpoints` (default 50, positive values only) bounds that replay and
-memory window; lower values flush more frequently, while higher values favor write reduction. The Elsa.Workbench
-reference composition explicitly selects `Coalesced` with cap 50; other hosts remain `Immediate` unless configured.
-
-**A workflow can author its own cadence.** The design draft carries it under
-`state.strategyOptions.checkpointCadence`, which publication compiles into the immutable executable:
-
-```json
-"state": {
-  "strategyOptions": {
-    "checkpointCadence": {
-      "mode": "Coalesced",
-      "maxSegmentCheckpoints": 8
-    }
-  }
-}
-```
-
-`mode` accepts `Immediate` or `Coalesced`; an absent or empty mode inherits the host default. Authored `Immediate`
-overrides a Coalesced host. Authored `Coalesced` overrides the host cap when it supplies a positive
-`maxSegmentCheckpoints`; when that cap is absent, the host cap applies. A Coalesced authoring on an Immediate host
-resolves to Immediate because that host has no coalescing session. Mandatory boundaries still flush immediately.
-Changing authored cadence requires publishing a new workflow version so the executable contains the change; editing
-the draft alone does not alter a published executable.
-
-At run start, the runtime stamps the effective cadence onto that execution's persisted state and includes the segment
-cap for Coalesced runs; it carries the stamp forward as the state is rebuilt. Instance detail reports
-`checkpointCadence`, `maxSegmentCheckpoints`, and `inspectionGranularity` for the cadence that run used. To verify
-persistence across host reconfiguration, capture the
-`workflowExecutionId` and these fields from a completed run, restart the host against the same database with a
-different host mode or cap, then issue the authenticated
-`GET /runtime/workflows/instances/{workflowExecutionId}` for that same ID. The three fields should still describe
-the original run; a new run with no authored cadence should resolve from the reconfigured host. The existing
-`e2e-tests/http/Capture-RuntimeDbPaging2392Reference.ps1` fixture prints the execution ID and performs the initial
-detail read. Its optional `-AuthoredCadence` and `-AuthoredMaxSegmentCheckpoints` inputs exercise the published
-authoring contract, while `-ExpectedMaxSegmentCheckpoints` checks an explicit effective cap. When the expected cadence
-is Coalesced and this parameter is omitted, an explicit authored cap becomes the expectation; otherwise it defaults
-to 50. When testing host-cap fallback on a Coalesced host with a cap other than 50, pass that host cap explicitly
-with `-ExpectedMaxSegmentCheckpoints`. Immediate expects a null cap. With no new parameters, the fixture keeps its existing Coalesced/50 expectation
-and no authored override. This #2392 SetVariable intrinsic reference remains representative and is not equivalent to
-the historical custom CLR transform.
-
-The [T09 normal-host verification](reports/runtime-db-access/cadence-verification.md) records six cadence cases,
-same-execution readback across host reconfiguration, and bookmark/incident persistence across a real process restart.
-
-For SQL diagnostics, temporarily set `Logging__LogLevel__Microsoft.EntityFrameworkCore.Database.Command=Information`, retain
-structured logs with scopes and UTC timestamps, and inspect EF command event 20101. Keep sensitive-data logging disabled. This counts command executions;
-it does not by itself count individual SQL statements. Keep diagnostic runs separate from timing runs, which use
-`Logging__LogLevel__Microsoft.EntityFrameworkCore.Database.Command=Warning`, then restore the host's normal logging configuration.
+Every run folds the named checkpoints above of a *drain segment* into one atomic commit; the modes differ in how large
+a segment grows. Durable ends a segment at each activity, so it commits once per activity; Balanced ends one after the
+host's activity cap; Ephemeral only at boundaries and at the end of the pass. Every shell that composes the runtime API
+has the machinery for this (`AddPersistenceModes`, called by `WorkflowsRuntimeApiFeature` after every feature
+registered its stores); the run's mode decides the segment size. It is decided once, when the run is started: the start
+dispatcher writes the workflow's choice, or the host default when it chose none, onto the start command, which the
+scheduler queue keeps until the run's first commit records the mode on the run. Every drain resolves the mode from that
+record, or before it from the start the queue holds, so a run driven again before anything was committed keeps its
+mode. The queue holds a start's first delivery, so a start delivered again with another mode does not change it. A host
+composed without the machinery cannot run any mode, so it refuses the run before anything runs.
 
 **Governing invariant — the durable scheduler queue never advances past the last flushed state.** Within a
-coalesced segment, intra-drain checkpoints are buffered in an ambient in-memory working set (an overlay over
-the real state stores, scheduler queue, and outbox). The segment-entry work item is **only** dequeued from the
-durable queue as part of the atomic flush commit — never durably dequeued before the flush lands. So at every
-instant the durable queue's frontier equals the last flushed checkpoint. A crash mid-segment discards the
-in-memory buffer and leaves the segment-entry item exactly where the last flush left it, so the standard Window
-B recovery (backlog discovery → re-drive) replays the entire segment from the last durable state.
+segment, checkpoints are buffered in an ambient in-memory working set (an overlay over the real state stores,
+scheduler queue, and outbox). The segment-entry work item is **only** dequeued from the durable queue as part of the
+atomic flush commit — never durably dequeued before the flush lands. So at every instant the durable queue's
+frontier equals the last flushed checkpoint. A crash mid-segment discards the in-memory buffer and leaves the
+segment-entry item exactly where the last flush left it, so the standard Window B recovery (backlog discovery →
+re-drive) replays the entire segment from the last durable state.
 
 **What is buffered.** Workflow-execution, activity-execution, durable-value and scheduler state writes, plus
 continuation intents (`EnqueueSchedulerWork`) which are consumed **in-segment** from the overlay so a folded
 segment does not durably re-record its own continuation. **What is never buffered** (condition E): W5's
 lease/heartbeat/ownership operational writes and `EnsureOwnershipAsync` fencing go straight to the operational
 store as today, and the single folded flush still goes through `RuntimeCheckpointCommitter.CommitAsync`, so
-ownership fencing gates the coalesced flush exactly as it gates an immediate commit — a stale writer is rejected
+ownership fencing gates the folded flush exactly as it gates an immediate commit — a stale writer is rejected
 before anything persists.
 
-**Inspection reads are memoized, not overlaid** (spec 131). The per-hop inspection-projection build reads
-`IActivityExecutionInspectionStore.FindAsync` to pick its merge branch; under coalescing the overlay serves a
-per-drain memo of the **durable baseline** (never the buffered state, which would change the flushed projection
-bytes), invalidated at every durable flush. `CoalescingRuntimeCheckpointPersistenceOptions.CoalesceInspectionReads`
-(default on) disables it back to per-hop durable reads.
+**Flush boundaries — mandatory checkpoints are never folded away.** The policy forces an immediate flush at
+every durability-critical boundary: `WorkflowSuspended`, `WorkflowCompleted`, `WorkflowFaulted`,
+`WorkflowCancelled`, `IncidentRecorded`, `ActivitySuspended`, `ActivityCancelled`, and `BookmarkCreated`; operational,
+incident, bookmark, dispatch and alteration changes force a flush on any checkpoint that carries them; and an
+activity that is not ReplaySafe has its attempt claim committed before its body runs. A bookmark-suspend (including
+`Delay`/timer-style suspensions) flushes so an external stimulus always finds a **durable** bookmark and can never
+race an in-memory-only one; a decided fault is durable at the moment it is decided. End-of-drain quiescence also
+flushes even when the workflow is still `Running`/waiting. A boundary-forced flush is **complete** (condition C): it
+atomically persists the folded state + the boundary checkpoint itself + any remaining unconsumed in-memory queue items
+(durably re-enqueued) + undelivered outbox intents. Nothing buffered is lost at a boundary.
+
+**The one boundary that may be dropped.** Under Ephemeral with `RecordCompletion` off, a `WorkflowCompleted`
+boundary is not committed when the run has no durable record (its workflow row did not exist when the drain began and
+nothing in this drain has been committed) and the folded segment carries nothing that outlives the run: no bookmark,
+incident, dispatch or dispatch cancellation, alteration outcome, operational change, acknowledged queue item, or outbox
+item still waiting for delivery. The durable queue is still advanced, after checking that this node still owns the
+run, so the finished run is not started again and a node that lost the run cannot remove its new owner's work.
+
+**Activity cap (Durable and Balanced).** Durable's cap is one activity, whatever the host's setting; Balanced's is
+`MaxActivitiesPerCommit` (default 50). The cap counts the distinct activity executions a segment touches, not
+checkpoints, and a ReplaySafe activity's attempt claim never trips it: the claim is taken just before the claimed work
+runs, so the next checkpoint, which records what the work did, takes the fold instead. A checkpoint that would bring
+another activity into a full segment forces an intermediate fold-and-flush and a **fresh segment starts** (like a
+durable attempt boundary), so a replayable hot loop longer than the cap keeps folding at one durable commit per window
+instead of degrading to per-checkpoint persistence. The cap bounds both replay cost (a crash re-runs at most one window past the last flush) and memory.
+Continuation outbox items persisted durably by a cap flush keep delivering from the overlay for the next segment; the
+session writes their overlay outcome back to the durable outbox store at the next flush, so no durable `Pending`
+residue survives the drain to be redelivered by a later sweep. Ephemeral has no cap: a long pass that meets none of its
+commit points (a suspension, fault or cancellation, an incident or alteration, a child dispatch, an activity that is not safe to repeat, the end of
+the pass) holds its working set in memory.
+
+**The crash-replay window and at-least-once semantics.** A crash mid-segment loses the buffered-but-unflushed
+checkpoints, but they are **replayable from the last flushed commit + durable queue redelivery** — the honest
+recovery generation re-drives the segment-entry item and re-executes the whole buffered segment. This means
+**in-segment activity re-execution after a crash is expected**: the crashed generation persisted no checkpoint,
+so activities in the lost segment run again on recovery. This is the same at-least-once-after-persist guarantee
+the enqueue side gives (§The idempotency / durability contract); folding sets the replay window to one segment,
+which under Durable is one activity. External-facing outbox intents are still delivered
+**only post-flush**, so an activity's external effect is never delivered before its durable commit. Convergence
+and the absence of duplicate *terminal* effects are proven by
+`CoalescingCrashConvergenceTests.Coalescing_CrashMidSegment_QueueRetainsSegmentEntry_ThenHonestSweepConvergesWithoutDuplicateEffects`
+(two generations over a shared store: gen-1 crashes mid-segment with the queue still holding the segment entry;
+gen-2's honest sweep converges to the crash-free control snapshot) and the queue-retention half by
+`RuntimeCheckpointCoalescingTests.CrashMidSegment_DurableQueueStillHoldsSegmentEntry_AndNoPartialCheckpointPersisted`.
+That a bookmark-suspend flushes its bookmark **durably** at the boundary — so W8's durable Delay/timer pump (which
+reads the durable bookmark store) can never race an in-memory-only bookmark — is proven by
+`RuntimeCheckpointCoalescingTests.Coalescing_BookmarkSuspend_FlushesDurableBookmarkImmediately`, and that
+the folding machinery never wraps W8's `IDurableTimerStore` or the `IBookmarkStateStore` (so a `Delay` suspension's
+timer *and* bookmark both persist directly, never through the buffer) by
+`RuntimeCheckpointCoalescingTests.Coalescing_DoesNotDecorateDurableTimerOrBookmarkStores_SoDelaySuspensionStaysDurable`.
+`PersistenceModeFlushTests` runs suspension, resume, fault, handler fault, cancellation and ownership loss under
+every mode.
+
+**Inspection reads see the segment's own projection first** (spec 131). The inspection-projection build reads
+`IActivityExecutionInspectionStore.FindAsync` to pick its merge branch. Under a folding session the overlay first
+serves the projection the session already recorded for that activity, so a later checkpoint in the segment merges onto
+it as it would onto a committed one; building from the durable baseline instead dropped what the earlier checkpoint
+recorded, such as the outcome of a root activity that completed in the same commit as its workflow. An activity the
+session has not recorded yet is read from the durable store, so each activity's durable row is read at most once per
+drain.
 
 **Durable-value page reuse** (spec 197) avoids repeated reads of unchanged provider pages within one eligible
-Coalesced drain. `WorkflowsRuntimeCheckpointPersistence.CoalesceDurableValueReads` defaults to `true`; set it to
-`false` to compare the same checkpoint cadence without page reuse. This switch is independent of
-`CoalesceInspectionReads` and does not enable Coalesced mode on an Immediate host.
+folding drain. `WorkflowsRuntimeCheckpointPersistence.CoalesceDurableValueReads` defaults to `true`; set it to
+`false` to compare the same mode without page reuse. This switch does not change any run's mode.
 
 Reuse requires an unambiguous first-party EF backend that still owns its effective registrations, the shared
 singleton built-in HMAC continuation codec, and the same live ordinary persistence scope. Unsupported, custom,
@@ -433,47 +433,23 @@ cancellation permanently disable that session's memo. The memo belongs to its dr
 weaken checkpoint durability or promise that every workflow issues fewer queries. The [verification evidence](../specs/197-bounded-durable-value-page-reuse/evidence/integration-verification.md)
 separates the measured EF fixture reduction from live correctness and outstanding delivery gates.
 
-**Flush boundaries — mandatory checkpoints are never coalesced away.** The policy forces an immediate flush at
-every durability-critical boundary: `WorkflowSuspended`, `WorkflowCompleted`, `WorkflowFaulted`,
-`WorkflowCancelled`, `IncidentRecorded`, `ActivitySuspended`, `ActivityCancelled`, and `BookmarkCreated`. A
-bookmark-suspend (including `Delay`/timer-style suspensions) flushes so an external stimulus always finds a
-**durable** bookmark and can never race an in-memory-only one; a decided fault is durable at the moment it is
-decided. End-of-drain quiescence also flushes even when the workflow is still `Running`/waiting. A
-boundary-forced flush is **complete** (condition C): it atomically persists the folded state + the boundary
-checkpoint itself + any remaining unconsumed in-memory queue items (durably re-enqueued) + undelivered outbox
-intents. Nothing buffered is lost at a boundary.
+**Verifying a run's mode across host reconfiguration.** At run start the runtime stamps the effective mode onto the
+execution's persisted state (`runtime.persistenceMode`) and carries it forward as the state is rebuilt. Instance
+detail reports `persistenceMode` and `inspectionGranularity` for the mode that run used. Capture the
+`workflowExecutionId` and these fields from a completed run, restart the host against the same database with a
+different host mode, then issue the authenticated `GET /runtime/workflows/instances/{workflowExecutionId}` for that
+same ID: both fields should still describe the original run, while a new run that chose no mode resolves from the
+reconfigured host. `e2e-tests/http/Capture-RuntimeDbPaging2392Reference.ps1` prints the execution ID and performs the
+initial detail read; its optional `-AuthoredPersistenceMode` input exercises the published authoring contract and
+`-ExpectedPersistenceMode` the effective mode. This #2392 SetVariable intrinsic reference remains representative and
+is not equivalent to the historical custom CLR transform. The [T09 normal-host verification](reports/runtime-db-access/cadence-verification.md)
+recorded the same readback across host reconfiguration, and bookmark/incident persistence across a real process
+restart, under the earlier Immediate/Coalesced names.
 
-**Segment cap.** `CoalescingRuntimeCheckpointPersistenceOptions.MaxSegmentCheckpoints` (default 50) counts buffered
-checkpoint records, not activities, nodes, or activity executions. It bounds a segment: once the buffered checkpoint
-count reaches the cap, an intermediate fold-and-flush is forced and a
-**fresh segment starts** (like a durable attempt boundary), so a replayable hot loop longer than the cap keeps
-coalescing at one durable commit per cap-sized window instead of degrading to per-checkpoint persistence for the
-remainder of the drain (ADR 0032's segment-cap follow-up). The cap's purpose is unchanged: it bounds both replay
-cost (a crash re-runs at most one cap-sized segment past the last folded flush) and memory (the working set
-buffers at most one segment). Continuation outbox items persisted durably by a cap flush keep delivering from
-the overlay for the next segment; the session writes their overlay outcome back to the durable outbox store at
-the next flush, so no durable `Pending` residue survives the drain to be redelivered by a later sweep. See the
-benchmark results doc for the replay-cost trade.
-
-**The crash-replay window and at-least-once semantics.** A crash mid-segment loses the buffered-but-unflushed
-checkpoints, but they are **replayable from the last flushed commit + durable queue redelivery** — the honest
-recovery generation re-drives the segment-entry item and re-executes the whole buffered segment. This means
-**in-segment activity re-execution after a crash is expected**: the crashed generation persisted no checkpoint,
-so activities in the lost segment run again on recovery. This is the same at-least-once-after-persist guarantee
-the Immediate path already gives on the enqueue side (§The idempotency / durability contract); coalescing simply
-widens the replay window from one checkpoint to one segment. External-facing outbox intents are still delivered
-**only post-flush**, so an activity's external effect is never delivered before its durable commit. Convergence
-and the absence of duplicate *terminal* effects are proven by
-`CoalescingCrashConvergenceTests.Coalescing_CrashMidSegment_QueueRetainsSegmentEntry_ThenHonestSweepConvergesWithoutDuplicateEffects`
-(two generations over a shared store: gen-1 crashes mid-segment with the queue still holding the segment entry;
-gen-2's honest sweep converges to the crash-free control snapshot) and the queue-retention half by
-`RuntimeCheckpointCoalescingTests.CrashMidSegment_DurableQueueStillHoldsSegmentEntry_AndNoPartialCheckpointPersisted`.
-That a bookmark-suspend flushes its bookmark **durably** at the boundary — so W8's durable Delay/timer pump (which
-reads the durable bookmark store) can never race an in-memory-only bookmark — is proven by
-`RuntimeCheckpointCoalescingTests.Coalescing_BookmarkSuspend_FlushesDurableBookmarkImmediately`, and that
-coalescing never wraps W8's `IDurableTimerStore` or the `IBookmarkStateStore` (so a `Delay` suspension's timer
-*and* bookmark both persist directly, never through the buffer) by
-`RuntimeCheckpointCoalescingTests.Coalescing_DoesNotDecorateDurableTimerOrBookmarkStores_SoDelaySuspensionStaysDurable`.
+For SQL diagnostics, temporarily set `Logging__LogLevel__Microsoft.EntityFrameworkCore.Database.Command=Information`, retain
+structured logs with scopes and UTC timestamps, and inspect EF command event 20101. Keep sensitive-data logging disabled. This counts command executions;
+it does not by itself count individual SQL statements. Keep diagnostic runs separate from timing runs, which use
+`Logging__LogLevel__Microsoft.EntityFrameworkCore.Database.Command=Warning`, then restore the host's normal logging configuration.
 
 ## Runtime composition root and lifetimes (RT-4)
 
@@ -496,8 +472,8 @@ scope per command, and recurring pumps open a fresh async scope per tick.
 - **Overridability is preserved.** Every Core registration uses `TryAdd*`, so a durable provider package
   can register its own store *before or after* `AddWorkflowRuntime` and win. Scoped durable stores no longer
   become captive dependencies of process-global runtime services.
-- **W9 coalescing decorators still wrap.** The opt-in `AddCoalescingRuntimeCheckpointPersistence`
-  decorates the commit store / queue / outbox / state stores registered here; the Core root does not
+- **W9 coalescing decorators still wrap.** `AddPersistenceModes` (added to every shell by the runtime API
+  feature) decorates the commit store / queue / outbox / state stores registered here; the Core root does not
   bypass the scope boundary, so those decorators keep composing within the active operation scope.
 - **Host-wide coordination state remains host-wide.** In-memory stores, actor mailboxes and their
   idempotency caches, clocks, options, and pure policies remain singletons. Only access-bound operation
@@ -518,9 +494,9 @@ Two ambients remain **by deliberate design**, and neither is a drain-path servic
 
 - `IRuntimeExecutionOwnershipContextAccessor` — a runtime-internal AsyncLocal lease scope (RT-2/W5
   fencing) that carries the active lease from the drain coordinator to the single commit funnel.
-- `IRuntimeCoalescingSessionAccessor` (**W9**) — an **opt-in ambient session flag**, not service
-  location: it marks that a coalescing session is active so the decorators buffer intra-drain checkpoints
-  into the in-memory working set. It is registered only by `AddCoalescingRuntimeCheckpointPersistence`
+- `IRuntimeCoalescingSessionAccessor` (**W9**) — an **ambient session flag**, not service
+  location: it marks the folding session every drain runs in, whatever the run's mode, so the decorators buffer
+  intra-drain checkpoints into the in-memory working set. It is registered by `AddPersistenceModes`
   and its gating semantics are preserved exactly ("the durable scheduler queue never advances past the
   last flushed state"). It is a documented exception to "no AsyncLocal in the drain path", distinct in
   kind from the removed service locators.

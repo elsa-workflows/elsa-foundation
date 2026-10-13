@@ -69,8 +69,11 @@ public static class WorkflowEngineTelemetry
     /// <summary>The committed checkpoint's id.</summary>
     public const string CheckpointIdTag = "elsa.checkpoint.id";
 
-    /// <summary>The persistence mode the policy decided for the checkpoint (e.g. Persist, Skip).</summary>
-    public const string CheckpointPersistenceModeTag = "elsa.checkpoint.persistence_mode";
+    /// <summary>
+    /// What the persistence policy decided for the checkpoint: <c>Immediate</c>, <c>Deferred</c> or <c>Skip</c>. Not the
+    /// run's persistence mode, which every checkpoint of a run shares.
+    /// </summary>
+    public const string CheckpointPersistenceDecisionTag = "elsa.checkpoint.persistence_decision";
 
     /// <summary>Whether the checkpoint is mandatory (cannot be skipped by the persistence policy).</summary>
     public const string CheckpointMandatoryTag = "elsa.checkpoint.mandatory";

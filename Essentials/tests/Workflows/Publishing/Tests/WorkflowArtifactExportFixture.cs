@@ -84,7 +84,7 @@ internal sealed class WorkflowArtifactExportFixture
             rootActivity,
             inputContract,
             dependencies,
-            checkpointCadence: null,
+            persistenceMode: null,
             workflowVariables: [],
             incidentStrategy: IncidentStrategyBuiltIns.FaultReference);
 
@@ -255,7 +255,7 @@ internal sealed class WorkflowArtifactExportFixture
             runtimeRequirements: null,
             storageDriverRequirements: null,
             incidentStrategy: IncidentStrategyBuiltIns.FaultReference,
-            checkpointCadence: null,
+            persistenceMode: null,
             workflowVariables: []);
 
     private sealed class VerifiedExecutableCompiler(WorkflowExecutable executable) : IWorkflowExecutableCompiler
@@ -274,7 +274,7 @@ internal sealed class WorkflowArtifactExportFixture
                 executable.RootActivity,
                 inputContract,
                 executable.Dependencies,
-                executable.CheckpointCadence,
+                executable.PersistenceMode,
                 executable.WorkflowVariables,
                 executable.IncidentStrategy);
             if (!StringComparer.Ordinal.Equals(computedHash, executable.Identity.ArtifactHash) ||

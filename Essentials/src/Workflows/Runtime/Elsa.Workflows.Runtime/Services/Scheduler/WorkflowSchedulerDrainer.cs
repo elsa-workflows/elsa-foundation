@@ -307,6 +307,12 @@ public sealed class WorkflowSchedulerDrainer : IWorkflowSchedulerDrainer
             // exactly like a lost claim — the commit rolled back and persisted nothing, so never acknowledge or poison it.
             throw;
         }
+        catch (RuntimeStaleFencingTokenException)
+        {
+            // A commit was refused because another node now owns the run. The work is the new owner's to run, so this
+            // node neither acknowledges it nor records it as poison, which would leave the new owner nothing to run.
+            throw;
+        }
         catch (Exception exception)
         {
             var faultInfo = _faultCapturePolicy.Capture(exception);

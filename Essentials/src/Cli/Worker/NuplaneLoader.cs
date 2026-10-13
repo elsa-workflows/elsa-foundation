@@ -12,14 +12,14 @@ namespace Elsa.Cli.Worker;
 /// <para>
 /// The worker compiles against Nuplane and ships none of it: the assemblies are excluded from its own
 /// output and resolve out of the host's deps file, so a Nuplane host loads exactly the copy it runs itself
-/// (ADR 0076 D1) and a host with no Nuplane never loads one at all. That only holds while no Nuplane type
+/// and a host with no Nuplane never loads one at all. That only holds while no Nuplane type
 /// is mentioned outside the files that are reached after a caller has decided a Nuplane host is present,
 /// because the runtime resolves a method's types when it compiles that method — which is why the caller
 /// decides whether there is a package set to load before calling in here. Three files carry that licence:
 /// this one, <see cref="NuplaneRestoreRunner"/>, and <see cref="NuplaneDirectoryFeeds"/>.
 /// </para>
 /// <para>
-/// Nothing on this path reconciles, downloads or writes (ADR 0076 D10). One reconcile pass writes the
+/// Nothing on this path reconciles, downloads or writes. One reconcile pass writes the
 /// host's <c>store-state.json</c> unconditionally, the store lock file beside it, and each acquired
 /// package's extracted contents plus a <c>.tmp</c> staging directory under the install root; it deletes no
 /// installed package — cleanup during a cycle records decisions and removes nothing, and the only deletes
@@ -37,7 +37,7 @@ internal static class NuplaneLoader
     private static readonly TimeSpan StateReadDelay = TimeSpan.FromMilliseconds(100);
 
     /// <summary>
-    /// The host's active package set, read through Nuplane's own reader and nothing else (FR-072). A state
+    /// The host's active package set, read through Nuplane's own reader and nothing else. A state
     /// file that is not there is an empty set, which is how the reader itself reports one.
     /// </summary>
     [MethodImpl(MethodImplOptions.NoInlining)]
@@ -46,7 +46,7 @@ internal static class NuplaneLoader
 
     /// <summary>
     /// Reads the host's active set through Nuplane's own reader and loads it through the entry point that
-    /// groups packages into graphs exactly as the host that wrote the state does (FR-005, FR-072, FR-073).
+    /// groups packages into graphs exactly as the host that wrote the state does.
     /// </summary>
     [MethodImpl(MethodImplOptions.NoInlining)]
     public static async Task<NuplaneLoadResult> FromStateAsync(string stateFile, CancellationToken cancellationToken,
@@ -67,7 +67,7 @@ internal static class NuplaneLoader
 
     /// <summary>
     /// Loads an already-assembled set — a <c>--packages</c> root with no state file — as one graph, which
-    /// groups by graph generation identity rather than by the state's activation records (FR-006).
+    /// groups by graph generation identity rather than by the state's activation records.
     /// </summary>
     [MethodImpl(MethodImplOptions.NoInlining)]
     public static async Task<NuplaneLoadResult> FromPackagesAsync(IReadOnlyList<InstalledPackage> installed, CancellationToken cancellationToken)

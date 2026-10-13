@@ -18,7 +18,7 @@ using Xunit;
 namespace Elsa.Modularity.Tests;
 
 /// <summary>
-/// Spec 182, User Story 1, FR-008 to FR-011 and SC-002: an enabled feature that declares a dormancy requirement stays in
+/// An enabled feature that declares a dormancy requirement stays in
 /// the catalog, enabled and dormant, with the reason and the finalization gate's status; Attention holds one informational
 /// item for it until it is available; and a family whose writes this host refuses is reported as critical.
 /// </summary>
@@ -113,7 +113,7 @@ public sealed class FeatureDormancyReportingTests
         Assert.Equal(0, _observed.StatusReads);
     }
 
-    /// <summary>User Story 1, acceptance 2 and 3.</summary>
+    /// <summary>Attention holds one informational item for a dormant feature, and none once it is available.</summary>
     [Fact]
     public async Task Attention_holds_one_info_item_for_a_dormant_feature_and_none_once_it_is_available()
     {
@@ -130,7 +130,7 @@ public sealed class FeatureDormancyReportingTests
         Assert.Empty((await AttentionAsync(await CatalogItemAsync(enabled: true))).Items);
     }
 
-    /// <summary>FR-010 and spec 181, FR-012: not dormancy, and never merely informational.</summary>
+    /// <summary>Not dormancy, and never merely informational.</summary>
     [Fact]
     public async Task Attention_reports_a_family_whose_writes_this_host_refuses_as_critical()
     {
@@ -144,7 +144,7 @@ public sealed class FeatureDormancyReportingTests
     }
 
     /// <summary>
-    /// Spec 186, FR-018, both ways: a completion the backfill's audit withdrew is critical, naming the family and the
+    /// A withdrawn completion, both ways: one the backfill's audit withdrew is critical, naming the family and the
     /// tables and counts it found; once a new verification pass records the completion again, the item is gone.
     /// </summary>
     [Fact]
@@ -164,7 +164,7 @@ public sealed class FeatureDormancyReportingTests
     }
 
     /// <summary>
-    /// Spec 186, FR-022: a feature waiting on completeness gets its reason from the backfill's status, and one whose family
+    /// A feature waiting on completeness gets its reason from the backfill's status, and one whose family
     /// keeps content-addressed rows below the version is told it cannot become available at all.
     /// </summary>
     [Fact]

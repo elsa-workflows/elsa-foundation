@@ -14,6 +14,7 @@ using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Diagnostics;
 using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Workflows.Runtime.Extensions;
 using Elsa.Workflows.Runtime.Diagnostics;
 using Elsa.Workflows.Runtime.Services.Incidents;
 using Microsoft.Extensions.DependencyInjection;
@@ -505,6 +506,7 @@ public sealed class FaultIncidentExecutionTests
         new WorkflowsRuntimeApiFeature().ConfigureServices(services);
         new ActivitiesRuntimeFeature().ConfigureServices(services);
         services.AddSingleton<IActivityActivator, FaultActivityActivator>();
+        services.AddPersistenceModes(options => options.Mode = PersistenceMode.Durable);
 
         return services.BuildServiceProvider();
     }

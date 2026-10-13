@@ -18,7 +18,7 @@ public abstract class DataProtectionKeysDbContext(DbContextOptions options) : Db
         // The host's optional schema; nothing changes when none is configured.
         modelBuilder.HasElsaDefaultSchema(this);
         modelBuilder.ApplyConfiguration(new DataProtectionKeyEntityConfiguration());
-        // After this module's own table, so the stamp index covers both finalization tables (spec 181, FR-002).
+        // After this module's own table, so the stamp index covers both finalization tables.
         modelBuilder.MapSchemaFinalization(DataProtectionKeysEfModule.HistoryModuleName);
         modelBuilder.IndexSchemaVersionStamps();
     }

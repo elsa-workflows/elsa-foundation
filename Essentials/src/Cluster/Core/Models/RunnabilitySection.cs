@@ -1,14 +1,14 @@
 namespace Elsa.Cluster.Core.Models;
 
 /// <summary>
-/// The member report section placement adds (spec 184, FR-008): what this host's workflow runtime can activate, one
+/// The member report section placement adds: what this host's workflow runtime can activate, one
 /// entry per shell in which the distributed runtime is active. It says "runnability" where older text says
 /// "capability", because the root glossary retires "Capability".
 /// </summary>
 /// <remarks>
 /// A placement-purpose member query with runnability requirements matches a member when one of its entries that applies
-/// to the queried database satisfies every requirement (FR-009). A member's own claims never read this section: the
-/// claimant checks its registries directly (FR-011), so a section that lags can mislead a diagnostic but never places
+/// to the queried database satisfies every requirement. A member's own claims never read this section: the
+/// claimant checks its registries directly, so a section that lags can mislead a diagnostic but never places
 /// work.
 /// </remarks>
 public sealed record RunnabilitySection : MemberReportSection
@@ -30,14 +30,14 @@ public sealed record RunnabilitySection : MemberReportSection
 }
 
 /// <summary>
-/// What one shell's workflow runtime can activate (spec 184, FR-008): the runtime consumer keys with the schema versions
+/// What one shell's workflow runtime can activate: the runtime consumer keys with the schema versions
 /// each supports, the durable-value storage-driver keys, and the activity type aliases its type registry resolves, plus
 /// the per-database identity of the finalization record the shell's runtime last read, or none yet. It is data only
 /// and carries no secret or configuration text.
 /// </summary>
 /// <remarks>
 /// Every list is normalized to ordinal order without duplicates, so a shell whose registries have not changed publishes
-/// an equal entry and a provider republishes only when something changed (FR-030). An entry that names no database
+/// an equal entry and a provider republishes only when something changed. An entry that names no database
 /// identity applies to every database, the conservative direction for a routing answer.
 /// </remarks>
 public sealed record RunnabilityEntry
@@ -85,7 +85,7 @@ public sealed record RunnabilityEntry
 
     public IReadOnlyList<string> ActivityTypes { get; }
 
-    /// <summary>The finalization record's per-database identity the shell's runtime last read (spec 181, FR-001), or
+    /// <summary>The finalization record's per-database identity the shell's runtime last read, or
     /// <see langword="null"/> before it has read one.</summary>
     public string? DatabaseIdentity { get; }
 
@@ -119,7 +119,7 @@ public sealed record RunnabilityEntry
     }
 }
 
-/// <summary>A runtime consumer key and the schema versions the shell's runtime activates it at (spec 184, FR-008).</summary>
+/// <summary>A runtime consumer key and the schema versions the shell's runtime activates it at.</summary>
 public sealed record RunnableConsumer
 {
     public RunnableConsumer(string consumerKey, IEnumerable<string> schemaVersions)

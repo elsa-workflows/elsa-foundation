@@ -4,7 +4,7 @@ namespace Elsa.Cli.Worker;
 
 /// <summary>
 /// The active package set a host resolves its modules and its provider engine from, once Nuplane's own
-/// loader has loaded it (FR-005, FR-006, ADR 0076 D1/D12).
+/// loader has loaded it.
 /// </summary>
 /// <remarks>
 /// Deliberately free of every Nuplane type, which all live in <see cref="NuplaneLoader"/>. The worker runs
@@ -24,7 +24,7 @@ internal sealed class NuplanePackageSet
         Failures = failures;
     }
 
-    /// <summary>The empty set, for a host that carries every module in its own deps file (FR-007).</summary>
+    /// <summary>The empty set, for a host that carries every module in its own deps file.</summary>
     public static NuplanePackageSet None { get; } = new([], new Dictionary<string, string>());
 
     /// <summary>Every package the loader could not load, by package id, so a missing module can be explained rather than merely absent.</summary>
@@ -48,8 +48,8 @@ internal sealed class NuplanePackageSet
 
     /// <summary>
     /// Loads the one package set this run resolves against. At most one load happens per process, because a
-    /// host-integrated load is irreversible for the process lifetime and holds a process-wide lock
-    /// (FR-073) — which is also why a run that would need two different kinds of load is refused rather
+    /// host-integrated load is irreversible for the process lifetime and holds a process-wide lock,
+    /// which is also why a run that would need two different kinds of load is refused rather
     /// than silently loading one of them.
     /// </summary>
     public static async Task<NuplanePackageSet> LoadAsync(IReadOnlyList<string> packageRoots, string hostDirectory,
@@ -90,7 +90,7 @@ internal sealed class NuplanePackageSet
 
     /// <summary>
     /// The state file is the only source that records which packages a host loads together, so it is read
-    /// through Nuplane's own reader and loaded through the entry point that keeps that grouping (FR-005).
+    /// through Nuplane's own reader and loaded through the entry point that keeps that grouping.
     /// </summary>
     private static async Task<NuplanePackageSet> FromStateAsync(string stateFile, CancellationToken cancellationToken,
         CandidateClosureObservation? observation)
@@ -113,7 +113,7 @@ internal sealed class NuplanePackageSet
 
     /// <summary>
     /// A root with no state file has no activation records to group by, so the set is assembled from the
-    /// completion markers on disk and handed to the loader as one graph (FR-006). Everything that can be
+    /// completion markers on disk and handed to the loader as one graph. Everything that can be
     /// decided without Nuplane is decided here, before the loader is ever reached.
     /// </summary>
     private static async Task<NuplanePackageSet> FromProbeAsync(IReadOnlyList<string> roots, CancellationToken cancellationToken,

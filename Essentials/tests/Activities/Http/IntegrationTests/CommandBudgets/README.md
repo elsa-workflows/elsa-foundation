@@ -1,6 +1,6 @@
 # EF command budgets
 
-`EfCommandBudgetTests` runs three reference workflows on a fresh SQLite database under each checkpoint persistence
+`EfCommandBudgetTests` runs three reference workflows on a fresh SQLite database under each persistence
 mode and counts the EF commands each run costs: every reader, non-query and scalar command the runtime's EF context
 executes, counted by `CommandCaptureInterceptor`. A count above its budget in `ef-command-budgets.json` fails the
 test. The counts are deterministic, so each budget is an exact baseline with no headroom. Nothing is timed.

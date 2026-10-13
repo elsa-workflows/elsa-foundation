@@ -10,7 +10,7 @@ public sealed record PlanConfigurationContext(string Source, string? Resource);
 
 /// <summary>
 /// The committed <c>migration-plan.json</c>, read as <c>script-check</c>'s own source of truth for what
-/// should be regenerated (FR-044): the provider, the schema, and the modules the artifact claims to
+/// should be regenerated: the provider, the schema, and the modules the artifact claims to
 /// describe — never a selection typed on the command line, which would let a check pass by checking
 /// something else.
 /// </summary>

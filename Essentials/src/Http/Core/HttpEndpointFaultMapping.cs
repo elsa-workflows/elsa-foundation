@@ -4,7 +4,7 @@ using Microsoft.AspNetCore.Http;
 namespace Elsa.Http.Core;
 
 /// <summary>
-/// The single owner of the endpoint dispatch-fault → HTTP status mapping (spec 089 sub-unit C). Both the default
+/// The single owner of the endpoint dispatch-fault → HTTP status mapping. Both the default
 /// <c>IHttpEndpointFaultHandler</c> implementation in <c>Elsa.Workflows.Runtime.Http</c> and the request
 /// middleware's inline fallback (used when the policy feature is absent) delegate here, so the two paths cannot
 /// drift: a timeout/cancellation maps to <c>408</c>, an <see cref="HttpBadRequestException"/> to <c>400</c>, and

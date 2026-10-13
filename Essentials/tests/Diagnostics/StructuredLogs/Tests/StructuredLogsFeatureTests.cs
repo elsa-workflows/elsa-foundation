@@ -11,7 +11,7 @@ namespace Elsa.Diagnostics.StructuredLogs.Tests;
 
 public sealed class StructuredLogsFeatureTests
 {
-    // Kept beside the composition test (§2.23.1): forwarding, the live feed and its publisher are one instance.
+    // Kept beside the composition test: forwarding, the live feed and its publisher are one instance.
     [Fact]
     public void RegistersResolvableDiagnosticsServices()
     {

@@ -2,7 +2,7 @@
 
 End-to-end durability tests: a suspended workflow's persisted state survives the checkpoint round-trip and a real
 **server-process restart**, then resumes correctly. These exercise the on-disk SQLite substrate + the
-`WorkflowsRuntimeResumption` / `WorkflowsRuntimeCheckpointPersistence` (Coalesced/50) pipeline the reference server
+`WorkflowsRuntimeResumption` / `WorkflowsRuntimeCheckpointPersistence` (Balanced) pipeline the reference server
 composes — the parts the in-process C# crash tests stub out (in-memory store + hand-driven sweep).
 
 | Script | What it exercises |

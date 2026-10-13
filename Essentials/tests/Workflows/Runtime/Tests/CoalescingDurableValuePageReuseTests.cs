@@ -597,7 +597,8 @@ public sealed class CoalescingDurableValuePageReuseTests
             checkpointStore,
             checkpointStore,
             new InMemoryWorkflowSchedulerWorkQueue(),
-            coalescingScopeFactory: drainScopeFactory);
+            coalescingScopeFactory: drainScopeFactory,
+            persistenceModeResolver: NonFoldingDrainScopeFactory.Resolver);
         using var cancellation = new CancellationTokenSource();
 
         var drain = orchestrator.DrainAsync(NewEnvelope(), new RuntimeSchedulerDrainRequest(WorkflowExecutionId), cancellation.Token).AsTask();
@@ -635,7 +636,8 @@ public sealed class CoalescingDurableValuePageReuseTests
             checkpointStore,
             checkpointStore,
             new InMemoryWorkflowSchedulerWorkQueue(),
-            coalescingScopeFactory: drainScopeFactory);
+            coalescingScopeFactory: drainScopeFactory,
+            persistenceModeResolver: NonFoldingDrainScopeFactory.Resolver);
 
         var drain = orchestrator.DrainAsync(
             NewEnvelope(),
@@ -671,7 +673,7 @@ public sealed class CoalescingDurableValuePageReuseTests
     private static RuntimeCoalescingSession NewSession() => new(
         WorkflowExecutionId,
         new InMemoryWorkflowSchedulerWorkQueue(),
-        new CoalescingRuntimeCheckpointPersistenceOptions());
+        new PersistenceModeOptions());
 
     private static DurableValueStatePageQuery Query() => new(WorkflowExecutionId, limit: 10);
 
@@ -921,12 +923,13 @@ public sealed class CoalescingDurableValuePageReuseTests
         public bool SessionWasCreated { get; private set; }
         public RuntimeCoalescingSession? Session { get; private set; }
 
-        public IRuntimeCoalescingDrainScope Begin(string workflowExecutionId, int? maxSegmentCheckpoints = null)
+        public IRuntimeCoalescingDrainScope Begin(string workflowExecutionId, ResolvedPersistenceMode mode)
         {
             var session = new RuntimeCoalescingSession(
                 workflowExecutionId,
                 new InMemoryWorkflowSchedulerWorkQueue(),
-                new CoalescingRuntimeCheckpointPersistenceOptions());
+                new PersistenceModeOptions(),
+                mode: mode);
             SessionWasCreated = true;
             Session = session;
             return new CapturedDrainScope(session, sessionAccessor.Push(session));

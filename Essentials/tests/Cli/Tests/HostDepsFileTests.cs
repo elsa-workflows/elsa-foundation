@@ -6,7 +6,7 @@ namespace Elsa.Cli.Tests;
 
 /// <summary>
 /// The deps file is the only statement of what a host pins, and the manifest's package facts are built from
-/// it (FR-049). Reading the wrong target, or mapping an assembly to the wrong package, would put a version
+/// it. Reading the wrong target, or mapping an assembly to the wrong package, would put a version
 /// in a deployment manifest that the host never loads.
 /// </summary>
 public sealed class HostDepsFileTests : IDisposable
