@@ -143,7 +143,7 @@ public sealed class CompositionFileSourceTests
         var refusal = Assert.Throws<CliRefusal>(() => reader.Read("private-path-canary", 4));
 
         Assert.Equal("composition-input-unreadable", refusal.Code);
-        Assert.DoesNotContain("private", refusal.ToString(), StringComparison.Ordinal);
+        AssertRefusalWithholds(refusal, "private-path-canary", "private-stream-canary");
         Assert.True(stream.Disposed);
     }
 
@@ -180,7 +180,7 @@ public sealed class CompositionFileSourceTests
         var refusal = Assert.Throws<CliRefusal>(() => reader.Read("private-path-canary", 4));
 
         Assert.Equal(failure == "limit" ? "candidate-capture-invalid" : "composition-input-unreadable", refusal.Code);
-        Assert.DoesNotContain("private", refusal.ToString(), StringComparison.Ordinal);
+        AssertRefusalWithholds(refusal, "private-path-canary", "private-code-canary", "private-message-canary");
     }
 
     [Fact]
@@ -208,7 +208,7 @@ public sealed class CompositionFileSourceTests
         var refusal = Assert.Throws<CliRefusal>(() => reader.Read("private-file-canary", 4));
 
         Assert.Equal("composition-input-unreadable", refusal.Code);
-        Assert.DoesNotContain("private-file-canary", refusal.ToString(), StringComparison.Ordinal);
+        AssertRefusalWithholds(refusal, "private-file-canary");
         Assert.Equal(failedCheck == 1 ? 0 : 1, opens);
         if (opens != 0)
             Assert.True(bytes.Disposed);
@@ -254,7 +254,7 @@ public sealed class CompositionFileSourceTests
         var refusal = Assert.Throws<CliRefusal>(() => reader.Read(path, FileLimit));
 
         Assert.Equal("composition-input-unreadable", refusal.Code);
-        Assert.DoesNotContain(path, refusal.ToString(), StringComparison.Ordinal);
+        AssertRefusalWithholds(refusal, path);
         Assert.False(openerReturned);
         Assert.Equal(1, checks);
     }
@@ -378,8 +378,7 @@ public sealed class CompositionFileSourceTests
         var refusal = Assert.Throws<CliRefusal>(() => reader.Read(path, FileLimit));
 
         Assert.Equal("composition-input-unreadable", refusal.Code);
-        Assert.DoesNotContain(path, refusal.ToString(), StringComparison.Ordinal);
-        Assert.DoesNotContain("private-canary", refusal.ToString(), StringComparison.Ordinal);
+        AssertRefusalWithholds(refusal, path, "private-canary");
         Assert.False(openerReturned);
         Assert.Equal(1, checks);
     }
@@ -416,7 +415,7 @@ public sealed class CompositionFileSourceTests
         var refusal = Assert.Throws<CliRefusal>(() => reader.Read(path, FileLimit));
 
         Assert.Equal("composition-input-unreadable", refusal.Code);
-        Assert.DoesNotContain("private-canary", refusal.ToString(), StringComparison.Ordinal);
+        AssertRefusalWithholds(refusal, "private-canary");
         Assert.False(openerReturned);
     }
 
@@ -488,7 +487,7 @@ public sealed class CompositionFileSourceTests
             var refusal = Assert.Throws<CliRefusal>(() => reader.Read(path, FileLimit));
 
             Assert.Equal("composition-input-unreadable", refusal.Code);
-            Assert.DoesNotContain("private-canary", refusal.ToString(), StringComparison.Ordinal);
+            AssertRefusalWithholds(refusal, "private-canary");
             Assert.False(openerReturned);
         }
         finally
@@ -666,7 +665,7 @@ public sealed class CompositionFileSourceTests
         var refusal = Assert.Throws<CliRefusal>(() => input.ReadText(invalidEncoding ? path : directory.File("private-canary.json")));
 
         Assert.Equal(invalidEncoding ? "composition-input-invalid" : "composition-input-unreadable", refusal.Code);
-        Assert.DoesNotContain("private-canary", refusal.Message, StringComparison.Ordinal);
+        AssertRefusalWithholds(refusal, "private-canary");
     }
 
     [Fact]
@@ -743,6 +742,15 @@ public sealed class CompositionFileSourceTests
         });
 
         Assert.Equal(intent ? "composition-input-unreadable" : "bridge-source-unreadable", refusal.Code);
+    }
+
+    // Match each canary value rather than a generic word: ToString() carries stack-trace frames whose source
+    // paths contain the checkout location (macOS clones under /private/tmp), and Details is not part of ToString().
+    private static void AssertRefusalWithholds(CliRefusal refusal, params string[] canaries)
+    {
+        var surface = string.Join('\n', [refusal.Code, refusal.ToString(), .. refusal.Details]);
+        foreach (var canary in canaries)
+            Assert.DoesNotContain(canary, surface, StringComparison.Ordinal);
     }
 
     private static CompositionFileSource CandidateSource(LocalFixture fixture, CompositionFileReader? reader = null) =>
