@@ -83,7 +83,7 @@ Studio:
 |---|---|---|
 | `Durable` | After every activity | Resumes at the last completed activity |
 | `Balanced` (default) | On suspend, fault, completion, end of burst, and every N activities | Activities since the last commit run again (at-least-once) |
-| `Ephemeral` | On suspend or fault, on a child dispatch, before an activity that is not ReplaySafe, at the end of a burst that does not complete the run, plus a completion record unless `RecordCompletion` is off | A run that completes in one burst with none of those earlier commits leaves only its completion record, or no trace with `RecordCompletion` off |
+| `Ephemeral` | Only on suspend or fault, plus a completion record unless `RecordCompletion` is off | A run that never suspended leaves only its completion record, or no trace with `RecordCompletion` off |
 
 `Immediate`/`Coalesced` and `CommitStrategyType` are removed. Suspend, bookmark and fault checkpoints are flushed
 in every mode (ADR 0032). The completion checkpoint is flushed in every mode, with one opt-in exception: under
@@ -99,10 +99,13 @@ constraint against a default cadence flip is lifted.
 ([#2585](https://github.com/elsa-workflows/elsa-foundation/issues/2585)). `Durable` commits once per activity, not
 once per checkpoint: the checkpoints an activity produces are committed together, so the table's "after every
 activity" holds and the per-checkpoint drain is gone. `Ephemeral` keeps the attempt-claim commit before an activity
-that is not ReplaySafe (ADR 0032), so "no trace" applies only to runs of ReplaySafe activities, and among those only
-to a run with no other earlier commit (a suspension, a fault or a child dispatch). The target of under 40 EF
-commands for ten WriteLine activities under `Balanced` moved to epic
-[#2564](https://github.com/elsa-workflows/elsa-foundation/issues/2564); the budgets in CI hold the measured counts.
+that is not ReplaySafe (ADR 0032). The target of under 40 EF commands for ten WriteLine activities under `Balanced`
+moved to epic [#2564](https://github.com/elsa-workflows/elsa-foundation/issues/2564); the budgets in CI hold the
+measured counts. Not a decision, but a description of the result: as implemented, `Ephemeral` commits at more points
+than the table's row lists. Besides a suspension, a fault and completion, it commits that attempt claim before an
+activity that is not ReplaySafe, a child workflow dispatch, and the end of a pass that does not complete the run.
+"No trace" therefore applies only to a run that completes in one pass with none of those earlier commits: all its
+activities are ReplaySafe and it dispatches no child.
 
 ### D3 — Internal by default
 
