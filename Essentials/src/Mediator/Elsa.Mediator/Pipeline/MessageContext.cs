@@ -1,6 +1,4 @@
-using Elsa.Mediator.Core.Contracts;
-
-namespace Elsa.Mediator.Core.Models;
+namespace Elsa.Mediator.Pipeline;
 
 /// <summary>
 /// The concrete dispatch context. One shape for commands and requests; the per-kind handler family
@@ -8,7 +6,7 @@ namespace Elsa.Mediator.Core.Models;
 /// result the sender reads back after the pipeline completes.
 /// </summary>
 /// <typeparam name="TResult">The result/response type.</typeparam>
-public sealed class MessageContext<TResult> : IMessageContext
+internal sealed class MessageContext<TResult> : IMessageContext
     where TResult : notnull
 {
     /// <summary>Constructor.</summary>

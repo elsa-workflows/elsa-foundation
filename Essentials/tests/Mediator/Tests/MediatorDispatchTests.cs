@@ -30,6 +30,26 @@ public class MediatorDispatchTests
         Assert.Equal("pong:hi", response);
     }
 
+    /// <summary>
+    /// A request and handler internal to the calling assembly dispatch through the composed feature: the assembly scan
+    /// finds the internal handler, and the compiled invoker calls it through a handler interface closed over a type the
+    /// mediator cannot see. Domains whose handlers turn internal rely on this.
+    /// </summary>
+    [Fact]
+    public async Task Internal_request_and_handler_dispatch_through_the_composed_feature()
+    {
+        var services = new ServiceCollection();
+        services.AddLogging();
+        new MediatorFeature().ConfigureServices(services);
+        services.AddRequestHandlersFrom(typeof(InternalPingRequest).Assembly);
+        await using var provider = services.BuildServiceProvider();
+
+        using var scope = provider.CreateScope();
+        var sender = scope.ServiceProvider.GetRequiredService<IRequestSender>();
+
+        Assert.Equal("internal:x", await sender.Send(new InternalPingRequest("x")));
+    }
+
     [Fact]
     public async Task Request_SingleHandler_ReturnsResponse()
     {

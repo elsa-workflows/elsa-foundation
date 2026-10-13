@@ -13,7 +13,7 @@ The per-domain catalog (framework §2.22.1). Anchored at `Elsa.Pipelines.Core` �
 - **Consumed by:** the pipeline delegate chain built by `BuildMiddlewareDelegate`. There is no single aggregating `IEventHandler`; the pipeline is a composed delegate, not an event-driven fan-in.
 
 **Sub-interfaces (domain-specific pipeline shapes):**
-- `IMessageMiddleware` *(Core — `Elsa.Mediator.Core`)* — middleware step in the unified Mediator command/request pipeline; see [`Elsa.Mediator/EXTENSION_POINTS.md`](../Elsa.Mediator/EXTENSION_POINTS.md). (Replaces the former separate `ICommandMiddleware`/`IRequestMiddleware`.)
+- `IMessageMiddleware` *(internal to `Elsa.Mediator`)* — middleware step in the unified Mediator command/request pipeline, which is closed to other projects; see [`Elsa.Mediator/EXTENSION_POINTS.md`](../Elsa.Mediator/EXTENSION_POINTS.md). (Replaces the former separate `ICommandMiddleware`/`IRequestMiddleware`.)
 - `IEventMiddleware` *(Core — `Elsa.Events.Core`)* — middleware step in the event pipeline; see [`Elsa.Events/EXTENSION_POINTS.md`](../Elsa.Events/EXTENSION_POINTS.md).
 
 **Known implementations (shipped):** see each domain-specific sub-interface's owning feature catalog.
