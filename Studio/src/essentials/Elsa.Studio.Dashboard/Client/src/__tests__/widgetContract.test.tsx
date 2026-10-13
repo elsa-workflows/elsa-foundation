@@ -15,14 +15,15 @@ describe("dashboard widget contract", () => {
     vi.unstubAllGlobals();
   });
 
-  it("drops unknown Home widget ids while keeping registered contributions", () => {
+  it("keeps unregistered Home widget ids in the saved layout", () => {
     const result = reconcileHomeLayout({
       widgets: [
         { id: "home.recent-runs", size: "full", visible: true },
-        { id: "unknown.widget", size: "small", visible: true }
+        { id: "weather.forecast", size: "medium", visible: true }
       ]
     }, [widget({ id: "home.recent-runs", title: "Recent runs", defaultSize: "full", supportedSizes: ["full"] })]);
-    expect(result.widgets.map(entry => entry.id)).toEqual(["home.recent-runs"]);
+    expect(result.widgets.map(entry => entry.id)).toEqual(["home.recent-runs", "weather.forecast"]);
+    expect(result.widgets[1]).toMatchObject({ id: "weather.forecast", size: "medium", visible: true });
   });
 
   it("registers Home routes and core widgets through registerHomeWidget", () => {

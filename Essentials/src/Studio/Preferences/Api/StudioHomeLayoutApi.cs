@@ -190,7 +190,7 @@ public static class StudioHomeLayoutApi
         {
             await CreateProblem(
                     httpContext,
-                    new StudioPreferenceValidationException("Home layout value must be an object with a widgets array of known widget ids."),
+                    new StudioPreferenceValidationException("Home layout value must be an object with a widgets array of valid widget ids."),
                     StatusCodes.Status422UnprocessableEntity)
                 .ExecuteAsync(httpContext);
             return;

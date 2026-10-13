@@ -4,7 +4,7 @@
 
 ## Widgets
 
-Modules contribute widgets with `registerHomeWidget` (or the `homeWidgets` / `dashboardWidgets` alias) in `@elsa-workflows/studio-sdk`. A widget is offered only when its `requiresFeature` list is enabled and the session holds any declared permissions.
+Modules contribute widgets with `registerHomeWidget` (or the `homeWidgets` / `dashboardWidgets` alias) in `@elsa-workflows/studio-sdk`. A widget is offered only when its `requiresFeature` list is enabled and the session holds any declared permissions. Unregistered ids (a disabled module, a widget the session cannot see) stay in the saved layout and are skipped at render time.
 
 ## Layout persistence
 

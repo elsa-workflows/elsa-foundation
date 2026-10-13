@@ -4,6 +4,7 @@ import { createRoot } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { AnonymousAuthProvider } from "@elsa-workflows/studio-sdk";
 import { HomePage } from "../HomePage";
+import { homeLayoutLocalStoragePrefix } from "../homeLayout";
 import { flush, seedHomeLayout, stubApi, waitUntil, widget } from "./testSupport";
 
 describe("HomePage", () => {
@@ -137,6 +138,28 @@ describe("HomePage", () => {
     expect(container.textContent).toContain("No Home widgets are visible.");
     expect(container.querySelectorAll("article.dashboard-widget")).toHaveLength(0);
     expect(container.querySelector("h2")?.textContent).toBe("Home");
+    flushSync(() => root.unmount());
+  });
+
+  it("skips an unregistered widget and keeps it in the saved layout", async () => {
+    const api = stubApi();
+    api.dashboardWidgets.add(widget({ id: "first", title: "First", component: () => <span>First body</span> }));
+    seedHomeLayout(api, ["first", "weather.forecast"]);
+    const { container, root } = render(api);
+    await waitUntil(() => container.querySelectorAll("article").length === 1);
+
+    expect(container.textContent).toContain("First body");
+    expect(container.querySelector('[data-widget-id="weather.forecast"]')).toBeNull();
+
+    clickText(container, "Edit home");
+    click(container, "Hide First");
+    const stored = JSON.parse(localStorage.getItem(`${homeLayoutLocalStoragePrefix}${encodeURIComponent(JSON.stringify({
+      studioHostId: "test",
+      backendBaseUrl: "https://backend.example",
+      subjectId: "anonymous",
+      tenantId: "default"
+    }))}`)!);
+    expect(stored.value.widgets.map((entry: { id: string }) => entry.id)).toEqual(["first", "weather.forecast"]);
     flushSync(() => root.unmount());
   });
 

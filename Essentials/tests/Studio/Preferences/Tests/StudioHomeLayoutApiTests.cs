@@ -173,7 +173,9 @@ public sealed class StudioHomeLayoutApiTests
     [InlineData("""{"schemaVersion":1,"value":{"widgets":[{"id":"home.recent-runs","visible":"yes"}]}}""")]
     [InlineData("""{"schemaVersion":1,"value":{"widgets":[{"id":"home.recent-runs","options":[]}]}}""")]
     [InlineData("""{"schemaVersion":1,"value":{"widgets":[{"id":"dup","size":"small"},{"id":"dup","size":"medium"}]}}""")]
-    [InlineData("""{"schemaVersion":1,"value":{"widgets":[{"id":"unknown.widget","size":"small"}]}}""")]
+    [InlineData("""{"schemaVersion":1,"value":{"widgets":[{"id":"Not.Valid","size":"small"}]}}""")]
+    [InlineData("""{"schemaVersion":1,"value":{"widgets":[{"id":"has space","size":"small"}]}}""")]
+    [InlineData("""{"schemaVersion":1,"value":{"widgets":[{"id":"-leading","size":"small"}]}}""")]
     public async Task Put_rejects_invalid_home_layout_shape(string body)
     {
         await using var host = await StudioPreferencesCanaryHost.StartMigratedAsync();
@@ -182,6 +184,38 @@ public sealed class StudioHomeLayoutApiTests
             "write",
             ifNoneMatch: "*",
             body: body));
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task Put_accepts_an_extension_widget_id()
+    {
+        await using var host = await StudioPreferencesCanaryHost.StartMigratedAsync();
+        using var response = await host.Client.SendAsync(Put(
+            StudioHomeLayoutApi.UserRoute,
+            "write",
+            ifNoneMatch: "*",
+            body: """{"schemaVersion":1,"value":{"widgets":[{"id":"weather.forecast","size":"medium"},{"id":"home.recent-runs","size":"full"}]}}"""));
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        Assert.Equal("weather.forecast", document.RootElement.GetProperty("value").GetProperty("widgets")[0].GetProperty("id").GetString());
+        Assert.Equal("home.recent-runs", document.RootElement.GetProperty("value").GetProperty("widgets")[1].GetProperty("id").GetString());
+    }
+
+    [Theory]
+    [InlineData("Not.Valid")]
+    [InlineData("has space")]
+    [InlineData("-leading")]
+    [InlineData(".dotted")]
+    [InlineData("two:colons:here")]
+    public async Task Put_rejects_pattern_invalid_widget_ids(string widgetId)
+    {
+        await using var host = await StudioPreferencesCanaryHost.StartMigratedAsync();
+        using var response = await host.Client.SendAsync(Put(
+            StudioHomeLayoutApi.UserRoute,
+            "write",
+            ifNoneMatch: "*",
+            body: $"{{\"schemaVersion\":1,\"value\":{{\"widgets\":[{{\"id\":\"{widgetId}\",\"size\":\"small\"}}]}}}}"));
         Assert.Equal(HttpStatusCode.UnprocessableEntity, response.StatusCode);
     }
 

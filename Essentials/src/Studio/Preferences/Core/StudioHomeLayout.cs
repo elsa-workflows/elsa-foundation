@@ -1,5 +1,6 @@
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using System.Text.RegularExpressions;
 
 namespace Elsa.Studio.Preferences.Core;
 
@@ -8,19 +9,21 @@ namespace Elsa.Studio.Preferences.Core;
 /// The reserved admin-default subject stores the tenant/host default; a missing user document
 /// falls back to that default, then to the built-in layout.
 /// </summary>
-public static class StudioHomeLayout
+public static partial class StudioHomeLayout
 {
     public const string DefaultSubjectId = "__admin_default__";
     public const int SchemaVersion = 1;
     public const int MaxWidgetCount = 50;
+    public const string WidgetIdPattern = "^[a-z0-9][a-z0-9._-]{0,63}(:[a-z0-9._-]{1,64})?$";
 
     public static readonly IReadOnlyList<string> AllowedSizes =
         ["small", "medium", "wide", "full", "S", "M", "L"];
 
     /// <summary>
-    /// First-party Home widget ids. PUT rejects any other id.
+    /// First-party Home widget ids used by the built-in layout. PUT accepts any id that
+    /// matches <see cref="WidgetIdPattern"/> so extension <c>registerHomeWidget</c> ids persist.
     /// </summary>
-    public static readonly IReadOnlySet<string> KnownWidgetIds = new HashSet<string>(StringComparer.Ordinal)
+    public static readonly IReadOnlySet<string> CoreWidgetIds = new HashSet<string>(StringComparer.Ordinal)
     {
         "home.get-started",
         "home.recent-workflows",
@@ -61,7 +64,7 @@ public static class StudioHomeLayout
             var widgetId = id.GetString();
             if (string.IsNullOrWhiteSpace(widgetId) || widgetId.Length > 128 || !seen.Add(widgetId))
                 return false;
-            if (!IsKnownWidgetId(widgetId))
+            if (!IsValidWidgetId(widgetId))
                 return false;
             if (entry.TryGetProperty("size", out var size))
             {
@@ -82,8 +85,11 @@ public static class StudioHomeLayout
         return true;
     }
 
-    public static bool IsKnownWidgetId(string? widgetId) =>
-        !string.IsNullOrWhiteSpace(widgetId) && KnownWidgetIds.Contains(widgetId);
+    public static bool IsValidWidgetId(string? widgetId) =>
+        !string.IsNullOrWhiteSpace(widgetId) && WidgetIdRegex().IsMatch(widgetId);
+
+    [GeneratedRegex(WidgetIdPattern, RegexOptions.CultureInvariant | RegexOptions.ExplicitCapture)]
+    private static partial Regex WidgetIdRegex();
 
     public static JsonElement Normalize(JsonElement value)
     {

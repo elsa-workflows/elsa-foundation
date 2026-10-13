@@ -22,7 +22,7 @@ Enable `StudioPreferences` for the core store, namespaces, service, and permissi
 
 Both routes use the Foundation Identity policy provider and evaluator. `studio.preferences.write` implies `studio.preferences.read`. `studio-preferences.manage-defaults` is a separate Studio-preferences permission (wildcard still grants it); it is not `module-management`. The authenticated subject and tenant plus `X-Elsa-Studio-Host-Id` form the scope; the reserved subject `__admin_default__` is rejected on the per-user route. PUT requires either `If-None-Match: *` for creation or one quoted `If-Match` revision for update.
 
-GET `/home-layout` returns the fallback document's `ETag` when the source is `default`. That ETag identifies the admin default, not a user revision: the first user PUT must still send `If-None-Match: *`. A builtin fallback has no ETag. PUT rejects malformed values, unknown widget ids, and more than 50 widgets with 422.
+GET `/home-layout` returns the fallback document's `ETag` when the source is `default`. That ETag identifies the admin default, not a user revision: the first user PUT must still send `If-None-Match: *`. A builtin fallback has no ETag. PUT rejects malformed values, duplicate ids, more than 50 widgets, and widget ids that do not match `^[a-z0-9][a-z0-9._-]{0,63}(:[a-z0-9._-]{1,64})?$` with 422. Extension `registerHomeWidget` ids that match the pattern are stored; the client skips widgets that are not registered (for example when the module is disabled) and keeps them in the saved layout.
 
 ## Registered services and contributors
 

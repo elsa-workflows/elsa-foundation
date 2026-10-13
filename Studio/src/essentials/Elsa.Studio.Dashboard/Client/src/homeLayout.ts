@@ -75,22 +75,23 @@ export function defaultHomeLayoutDocument(): HomeLayoutDocument {
 export function reconcileHomeLayout(
   layout: HomeLayoutValue,
   contributions: StudioDashboardWidgetContribution[],
-  excludedWidgetIds: ReadonlySet<string> = new Set()
+  _excludedWidgetIds: ReadonlySet<string> = new Set()
 ): HomeLayoutValue {
   const known = new Map(contributions.map(widget => [widget.id, widget]));
   const widgets: HomeWidgetLayoutEntry[] = [];
   const seen = new Set<string>();
 
   for (const entry of layout.widgets) {
-    if (seen.has(entry.id) || excludedWidgetIds.has(entry.id)) continue;
-    const widget = known.get(entry.id);
-    if (!widget) continue;
+    if (seen.has(entry.id)) continue;
     seen.add(entry.id);
+    const widget = known.get(entry.id);
     widgets.push({
       id: entry.id,
-      size: widget.supportedSizes.includes(normalizeHomeWidgetSize(entry.size))
-        ? normalizeHomeWidgetSize(entry.size)
-        : widget.defaultSize,
+      size: widget
+        ? (widget.supportedSizes.includes(normalizeHomeWidgetSize(entry.size))
+          ? normalizeHomeWidgetSize(entry.size)
+          : widget.defaultSize)
+        : normalizeHomeWidgetSize(entry.size),
       visible: entry.visible !== false,
       options: entry.options
     });
